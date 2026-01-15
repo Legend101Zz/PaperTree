@@ -1,0 +1,57 @@
+version: "3.8"
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: papertree-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - papertree-network
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: papertree-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./apps/api:/app
+      - ./apps/api/storage:/app/storage
+    environment:
+      - MONGO_URI=mongodb://mongo:27017
+      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_MODEL=openai/gpt-4o-mini
+    depends_on:
+      - mongo
+    networks:
+      - papertree-network
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: papertree-web
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - api
+    networks:
+      - papertree-network
+
+networks:
+  papertree-network:
+    driver: bridge
+
+volumes:
+  mongo_data:

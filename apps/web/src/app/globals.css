@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-rgb: 255, 255, 255;
+}
+
+.dark {
+  --foreground-rgb: 255, 255, 255;
+  --background-rgb: 23, 23, 23;
+}
+
+.sepia {
+  --foreground-rgb: 59, 43, 35;
+  --background-rgb: 248, 241, 231;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: rgb(var(--background-rgb));
+}
+
+/* PDF Viewer styles */
+.react-pdf__Page__canvas {
+  margin: 0 auto;
+}
+
+.react-pdf__Page__textContent {
+  user-select: text;
+}
+
+/* Highlight styles */
+.highlight-overlay {
+  background-color: rgba(255, 213, 0, 0.4);
+  position: absolute;
+  pointer-events: none;
+}
+
+.highlight-overlay.active {
+  animation: pulse 1s ease-in-out 3;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    background-color: rgba(255, 213, 0, 0.4);
+  }
+  50% {
+    background-color: rgba(255, 213, 0, 0.8);
+  }
+}
+
+/* Book mode highlight */
+.book-highlight {
+  background-color: rgba(255, 213, 0, 0.4);
+  padding: 2px 0;
+  border-radius: 2px;
+}
+
+.book-highlight.active {
+  animation: pulse 1s ease-in-out 3;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+/* React Flow custom styles */
+.react-flow__node {
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.react-flow__edge-path {
+  stroke-width: 2;
+}
