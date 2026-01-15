@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AuthGuard } from '@/components/auth/AuthGuard';
@@ -12,57 +12,80 @@ import { ExplanationPanel } from '@/components/reader/ExplanationPanel';
 import { HighlightPopup } from '@/components/reader/HighlightPopup';
 import { useReaderStore } from '@/store/readerStore';
 import { papersApi, highlightsApi, explanationsApi, canvasApi } from '@/lib/api';
-import { Highlight, Explanation } from '@/types';
+import { Highlight, Explanation, OutlineItem } from '@/types';
 
 export default function ReaderPage() {
     const params = useParams();
     const paperId = params.id as string;
     const queryClient = useQueryClient();
 
-    const {
-        settings,
-        highlights,
-        explanations,
-        activeHighlightId,
-        selectedText,
-        selectionPosition,
-        setHighlights,
-        setExplanations,
-        addHighlight,
-        addExplanation,
-        setActiveHighlight,
-        setSelection,
-        clearSelection,
-        updateExplanation,
-    } = useReaderStore();
+    // Track if we've synced data to avoid loops
+    const highlightsSynced = useRef(false);
+    const explanationsSynced = useRef(false);
+
+    // Get store state and actions separately to avoid re-render issues
+    const settings = useReaderStore((state) => state.settings);
+    const highlights = useReaderStore((state) => state.highlights);
+    const explanations = useReaderStore((state) => state.explanations);
+    const activeHighlightId = useReaderStore((state) => state.activeHighlightId);
+    const selectedText = useReaderStore((state) => state.selectedText);
+    const selectionPosition = useReaderStore((state) => state.selectionPosition);
+
+    // Get actions (these are stable references)
+    const setHighlights = useReaderStore((state) => state.setHighlights);
+    const setExplanations = useReaderStore((state) => state.setExplanations);
+    const addHighlight = useReaderStore((state) => state.addHighlight);
+    const addExplanation = useReaderStore((state) => state.addExplanation);
+    const setActiveHighlight = useReaderStore((state) => state.setActiveHighlight);
+    const setSelection = useReaderStore((state) => state.setSelection);
+    const clearSelection = useReaderStore((state) => state.clearSelection);
+    const updateExplanation = useReaderStore((state) => state.updateExplanation);
+    const resetReaderState = useReaderStore((state) => state.resetReaderState);
 
     const [pendingHighlight, setPendingHighlight] = useState<any>(null);
+    const [scrollToSection, setScrollToSection] = useState<OutlineItem | null>(null);
+    // Reset state when paper changes
+    useEffect(() => {
+        highlightsSynced.current = false;
+        explanationsSynced.current = false;
+        resetReaderState();
+    }, [paperId, resetReaderState]);
 
     // Fetch paper data
     const { data: paper, isLoading: paperLoading } = useQuery({
         queryKey: ['paper', paperId],
         queryFn: () => papersApi.get(paperId),
+        enabled: !!paperId,
     });
 
     // Fetch highlights
-    const { data: fetchedHighlights = [] } = useQuery({
+    const { data: fetchedHighlights } = useQuery({
         queryKey: ['highlights', paperId],
         queryFn: () => highlightsApi.list(paperId),
+        enabled: !!paperId,
     });
 
     // Fetch explanations
-    const { data: fetchedExplanations = [] } = useQuery({
+    const { data: fetchedExplanations } = useQuery({
         queryKey: ['explanations', paperId],
         queryFn: () => explanationsApi.list(paperId),
+        enabled: !!paperId,
     });
 
-    // Update stores when data is fetched
+    // Sync highlights to store (only once per fetch)
     useEffect(() => {
-        setHighlights(fetchedHighlights);
+        if (fetchedHighlights && !highlightsSynced.current) {
+            setHighlights(fetchedHighlights);
+            highlightsSynced.current = true;
+        }
     }, [fetchedHighlights, setHighlights]);
 
+    // Sync explanations to store (only once per fetch)
     useEffect(() => {
-        setExplanations(fetchedExplanations);
+        if (fetchedExplanations && !explanationsSynced.current) {
+            setExplanations(fetchedExplanations);
+            explanationsSynced.current = true;
+        }
     }, [fetchedExplanations, setExplanations]);
 
     // Create highlight mutation
@@ -71,7 +94,7 @@ export default function ReaderPage() {
             highlightsApi.create(paperId, data),
         onSuccess: (newHighlight) => {
             addHighlight(newHighlight);
-            queryClient.invalidateQueries({ queryKey: ['highlights', paperId] });
+            highlightsSynced.current = true; // Prevent re-sync
         },
     });
 
@@ -81,6 +104,7 @@ export default function ReaderPage() {
             explanationsApi.create(paperId, data),
         onSuccess: (newExplanation) => {
             addExplanation(newExplanation);
+            explanationsSynced.current = true; // Prevent re-sync
             queryClient.invalidateQueries({ queryKey: ['explanations', paperId] });
         },
     });
@@ -255,8 +279,6 @@ export default function ReaderPage() {
         if (!query.trim()) return;
         try {
             const results = await papersApi.search(paperId, query);
-            console.log('Search results:', results);
-            // TODO: Implement search result highlighting
             if (results.length > 0) {
                 alert(`Found ${results.length} matches for "${query}"`);
             } else {
@@ -317,6 +339,9 @@ export default function ReaderPage() {
                             outline={paper.outline || []}
                             onSectionClick={(section) => {
                                 console.log('Navigate to section:', section);
+                                setScrollToSection(section);
+                                // Clear after a short delay to allow re-clicking same section
+                                setTimeout(() => setScrollToSection(null), 100);
                             }}
                         />
                     </div>
@@ -335,8 +360,11 @@ export default function ReaderPage() {
                                 outline={paper.outline || []}
                                 highlights={highlights}
                                 onTextSelect={handleBookTextSelect}
+                                scrollToSection={scrollToSection}
                             />
                         )}
+
+
                     </div>
 
                     {/* Right panel - Explanations */}
@@ -375,4 +403,4 @@ export default function ReaderPage() {
             </div>
         </AuthGuard>
     );
-}
+} 

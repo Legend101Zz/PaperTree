@@ -9,7 +9,9 @@ interface ReaderState {
   activeHighlightId: string | null;
   selectedText: string | null;
   selectionPosition: { x: number; y: number } | null;
+}
 
+interface ReaderActions {
   // Settings actions
   setTheme: (theme: ReaderSettings["theme"]) => void;
   setFontSize: (size: number) => void;
@@ -33,23 +35,30 @@ interface ReaderState {
   setExplanations: (explanations: Explanation[]) => void;
   addExplanation: (explanation: Explanation) => void;
   updateExplanation: (id: string, updates: Partial<Explanation>) => void;
+
+  // Reset
+  resetReaderState: () => void;
 }
 
-export const useReaderStore = create<ReaderState>()(
+const initialState: ReaderState = {
+  settings: {
+    theme: "light",
+    fontSize: 16,
+    lineHeight: 1.6,
+    pageWidth: 800,
+    mode: "pdf",
+  },
+  highlights: [],
+  explanations: [],
+  activeHighlightId: null,
+  selectedText: null,
+  selectionPosition: null,
+};
+
+export const useReaderStore = create<ReaderState & ReaderActions>()(
   persist(
-    (set) => ({
-      settings: {
-        theme: "light",
-        fontSize: 16,
-        lineHeight: 1.6,
-        pageWidth: 800,
-        mode: "pdf",
-      },
-      highlights: [],
-      explanations: [],
-      activeHighlightId: null,
-      selectedText: null,
-      selectionPosition: null,
+    (set, get) => ({
+      ...initialState,
 
       setTheme: (theme) =>
         set((state) => ({ settings: { ...state.settings, theme } })),
@@ -66,7 +75,13 @@ export const useReaderStore = create<ReaderState>()(
       setMode: (mode) =>
         set((state) => ({ settings: { ...state.settings, mode } })),
 
-      setHighlights: (highlights) => set({ highlights }),
+      setHighlights: (highlights) => {
+        // Only update if actually different to prevent loops
+        const current = get().highlights;
+        if (JSON.stringify(current) !== JSON.stringify(highlights)) {
+          set({ highlights });
+        }
+      },
 
       addHighlight: (highlight) =>
         set((state) => ({ highlights: [...state.highlights, highlight] })),
@@ -79,7 +94,13 @@ export const useReaderStore = create<ReaderState>()(
       clearSelection: () =>
         set({ selectedText: null, selectionPosition: null }),
 
-      setExplanations: (explanations) => set({ explanations }),
+      setExplanations: (explanations) => {
+        // Only update if actually different to prevent loops
+        const current = get().explanations;
+        if (JSON.stringify(current) !== JSON.stringify(explanations)) {
+          set({ explanations });
+        }
+      },
 
       addExplanation: (explanation) =>
         set((state) => ({
@@ -92,6 +113,15 @@ export const useReaderStore = create<ReaderState>()(
             exp.id === id ? { ...exp, ...updates } : exp
           ),
         })),
+
+      resetReaderState: () =>
+        set({
+          highlights: [],
+          explanations: [],
+          activeHighlightId: null,
+          selectedText: null,
+          selectionPosition: null,
+        }),
     }),
     {
       name: "reader-settings",
