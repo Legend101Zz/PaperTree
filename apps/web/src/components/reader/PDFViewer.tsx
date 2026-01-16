@@ -7,10 +7,8 @@ import 'react-pdf/dist/esm/Page/TextLayer.css';
 import { useReaderStore } from '@/store/readerStore';
 import { Highlight } from '@/types';
 
-// Configure PDF.js worker - use the correct CDN URL
-// Try multiple worker sources
+// Configure PDF.js worker
 const setupWorker = () => {
-    // Option 1: Try unpkg with .js extension
     try {
         pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
     } catch (e) {
@@ -19,13 +17,13 @@ const setupWorker = () => {
             pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
         } catch (e2) {
             console.warn('Failed to set worker from unpkg, using legacy...');
-            // Fallback: disable worker (slower but works)
             pdfjs.GlobalWorkerOptions.workerSrc = '';
         }
     }
 };
 
 setupWorker();
+
 interface PDFViewerProps {
     fileUrl: string;
     highlights: Highlight[];
@@ -38,9 +36,13 @@ export function PDFViewer({ fileUrl, highlights, onTextSelect }: PDFViewerProps)
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const containerRef = useRef<HTMLDivElement>(null);
+
     const settings = useReaderStore((state) => state.settings);
     const activeHighlightId = useReaderStore((state) => state.activeHighlightId);
     const setActiveHighlight = useReaderStore((state) => state.setActiveHighlight);
+
+    // Get inversion setting
+    const invertPdf = settings.invertPdf || false;
 
     // Adjust page width on container resize
     useEffect(() => {
@@ -74,7 +76,6 @@ export function PDFViewer({ fileUrl, highlights, onTextSelect }: PDFViewerProps)
         const text = selection.toString().trim();
         if (!text || text.length < 3) return;
 
-        // Get selection rectangles
         const range = selection.getRangeAt(0);
         const rects = Array.from(range.getClientRects()).map(rect => ({
             x: rect.x,
@@ -88,7 +89,6 @@ export function PDFViewer({ fileUrl, highlights, onTextSelect }: PDFViewerProps)
         }
     }, [onTextSelect]);
 
-    // Get highlights for a specific page
     const getPageHighlights = (pageNumber: number) => {
         return highlights.filter(
             h => h.mode === 'pdf' && h.page_number === pageNumber
@@ -96,6 +96,9 @@ export function PDFViewer({ fileUrl, highlights, onTextSelect }: PDFViewerProps)
     };
 
     const getBackgroundColor = () => {
+        if (invertPdf) {
+            return '#1a1a1a';
+        }
         switch (settings.theme) {
             case 'dark': return '#171717';
             case 'sepia': return '#f8f1e7';
@@ -133,7 +136,7 @@ export function PDFViewer({ fileUrl, highlights, onTextSelect }: PDFViewerProps)
     return (
         <div
             ref={containerRef}
-            className="flex-1 overflow-auto p-6"
+            className={`flex-1 overflow-auto p-6 ${invertPdf ? 'pdf-inverted' : ''}`}
             style={{ backgroundColor: getBackgroundColor() }}
         >
             <Document
@@ -151,7 +154,10 @@ export function PDFViewer({ fileUrl, highlights, onTextSelect }: PDFViewerProps)
                 {numPages > 0 && Array.from(new Array(numPages), (_, index) => (
                     <div
                         key={`page_container_${index + 1}`}
-                        className="relative shadow-lg bg-white"
+                        className="relative shadow-lg"
+                        style={{
+                            backgroundColor: invertPdf ? '#1a1a1a' : 'white'
+                        }}
                     >
                         <Page
                             key={`page_${index + 1}`}
@@ -162,25 +168,33 @@ export function PDFViewer({ fileUrl, highlights, onTextSelect }: PDFViewerProps)
                             renderAnnotationLayer={true}
                             className="relative"
                             loading={
-                                <div className="flex items-center justify-center h-[800px] w-full bg-gray-100">
+                                <div
+                                    className="flex items-center justify-center h-[800px] w-full"
+                                    style={{ backgroundColor: invertPdf ? '#2a2a2a' : '#f3f4f6' }}
+                                >
                                     <div className="animate-pulse text-gray-400">Loading page {index + 1}...</div>
                                 </div>
                             }
                         />
-                        {/* Render highlight overlays */}
+                        {/* Render highlight overlays - note they need special handling when inverted */}
                         {getPageHighlights(index + 1).map(highlight => (
                             highlight.rects?.map((rect, rectIdx) => (
                                 <div
                                     key={`${highlight.id}-${rectIdx}`}
                                     className={`absolute pointer-events-auto cursor-pointer transition-colors ${activeHighlightId === highlight.id
-                                        ? 'bg-yellow-400/60 animate-pulse'
-                                        : 'bg-yellow-300/40 hover:bg-yellow-400/50'
+                                            ? 'animate-pulse'
+                                            : ''
                                         }`}
                                     style={{
                                         left: `${rect.x * 100}%`,
                                         top: `${rect.y * 100}%`,
                                         width: `${rect.w * 100}%`,
                                         height: `${rect.h * 100}%`,
+                                        backgroundColor: activeHighlightId === highlight.id
+                                            ? 'rgba(255, 213, 0, 0.6)'
+                                            : 'rgba(255, 213, 0, 0.4)',
+                                        // Counteract inversion for highlights
+                                        filter: invertPdf ? 'invert(1) hue-rotate(180deg)' : 'none',
                                     }}
                                     onClick={() => setActiveHighlight(highlight.id)}
                                 />
@@ -191,7 +205,7 @@ export function PDFViewer({ fileUrl, highlights, onTextSelect }: PDFViewerProps)
             </Document>
 
             {numPages > 0 && (
-                <div className="text-center text-sm text-gray-500 mt-4 pb-4">
+                <div className={`text-center text-sm mt-4 pb-4 ${invertPdf ? 'text-gray-400' : 'text-gray-500'}`}>
                     {numPages} page{numPages !== 1 ? 's' : ''}
                 </div>
             )}

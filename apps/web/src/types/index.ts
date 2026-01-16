@@ -114,3 +114,111 @@ export interface SearchResult {
   context_before: string;
   context_after: string;
 }
+
+// Structured content types for enhanced book mode
+export type ContentBlockType =
+  | "text"
+  | "heading"
+  | "math_block"
+  | "math_inline"
+  | "code"
+  | "list"
+  | "table"
+  | "figure"
+  | "blockquote"
+  | "references";
+
+export interface TextBlock {
+  type: "text";
+  content: string;
+}
+
+export interface HeadingBlock {
+  type: "heading";
+  level: number;
+  content: string;
+  id?: string;
+}
+
+export interface MathBlock {
+  type: "math_block";
+  latex?: string;
+  image_base64?: string;
+  alt_text?: string;
+}
+
+export interface MathInlineBlock {
+  type: "math_inline";
+  latex?: string;
+  image_base64?: string;
+  alt_text?: string;
+}
+
+export interface CodeBlockContent {
+  type: "code";
+  content: string;
+  language?: string;
+}
+
+export interface ListBlock {
+  type: "list";
+  ordered: boolean;
+  items: string[];
+}
+
+export interface TableBlock {
+  type: "table";
+  headers: string[];
+  rows: string[][];
+  caption?: string;
+}
+
+export interface FigureBlock {
+  type: "figure";
+  image_base64?: string;
+  caption?: string;
+  figure_number?: string;
+}
+
+export interface BlockQuoteBlock {
+  type: "blockquote";
+  content: string;
+}
+
+export interface ReferenceItem {
+  number?: string;
+  text: string;
+}
+
+export interface ReferencesBlock {
+  type: "references";
+  items: ReferenceItem[];
+}
+
+export type ContentBlock =
+  | TextBlock
+  | HeadingBlock
+  | MathBlock
+  | MathInlineBlock
+  | CodeBlockContent
+  | ListBlock
+  | TableBlock
+  | FigureBlock
+  | BlockQuoteBlock
+  | ReferencesBlock;
+
+export interface StructuredContent {
+  blocks: ContentBlock[];
+  metadata: {
+    title?: string;
+    author?: string;
+    subject?: string;
+  };
+}
+
+// Extended Paper type with structured content
+export interface PaperDetail extends Paper {
+  extracted_text?: string;
+  outline?: OutlineItem[];
+  structured_content?: StructuredContent;
+}

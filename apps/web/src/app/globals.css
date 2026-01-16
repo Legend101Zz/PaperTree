@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* KaTeX CSS import */
+@import "katex/dist/katex.min.css";
+
 :root {
   --foreground-rgb: 0, 0, 0;
   --background-rgb: 255, 255, 255;
@@ -29,6 +32,15 @@ body {
 
 .react-pdf__Page__textContent {
   user-select: text;
+}
+
+/* PDF Inversion Mode */
+.pdf-inverted .react-pdf__Page__canvas {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+.pdf-inverted .react-pdf__Page__textContent {
+  filter: invert(1) hue-rotate(180deg);
 }
 
 /* Highlight styles */
@@ -63,6 +75,159 @@ body {
   animation: pulse 1s ease-in-out 3;
 }
 
+/* Book Mode Typography */
+.book-content {
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.book-content.font-serif {
+  font-family: "Georgia", "Cambria", "Times New Roman", serif;
+}
+
+.book-content.font-sans {
+  font-family: "Inter", "Segoe UI", "Roboto", "Helvetica Neue", sans-serif;
+}
+
+.book-content.font-mono {
+  font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+}
+
+/* Book Mode Math Blocks */
+.math-block {
+  overflow-x: auto;
+  padding: 1rem 0;
+  margin: 1.5rem 0;
+  text-align: center;
+}
+
+.math-block .katex-display {
+  margin: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.math-inline .katex {
+  font-size: 1em;
+}
+
+/* KaTeX overrides for better reading */
+.book-content .katex {
+  font-size: 1.1em;
+}
+
+.book-content .katex-display > .katex {
+  font-size: 1.21em;
+}
+
+/* Figure blocks */
+.figure-block {
+  margin: 2rem auto;
+  text-align: center;
+}
+
+.figure-block img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.figure-block figcaption {
+  margin-top: 0.75rem;
+  font-size: 0.9em;
+  color: #666;
+  font-style: italic;
+}
+
+/* Code blocks */
+.code-block {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+  overflow-x: auto;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.9em;
+  line-height: 1.5;
+}
+
+.sepia .code-block {
+  background: #3d3225;
+  color: #e5d3b3;
+}
+
+/* References section */
+.references-section {
+  border-top: 1px solid currentColor;
+  margin-top: 3rem;
+  padding-top: 2rem;
+  opacity: 0.9;
+}
+
+.references-section h2 {
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.reference-item {
+  margin-bottom: 0.75rem;
+  padding-left: 2rem;
+  text-indent: -2rem;
+  font-size: 0.9em;
+  line-height: 1.6;
+}
+
+/* Blockquote styling */
+.book-blockquote {
+  border-left: 4px solid currentColor;
+  margin: 1.5rem 0;
+  padding: 0.5rem 1.5rem;
+  opacity: 0.9;
+  font-style: italic;
+}
+
+/* Table styling */
+.book-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  font-size: 0.95em;
+}
+
+.book-table th,
+.book-table td {
+  border: 1px solid currentColor;
+  padding: 0.75rem;
+  text-align: left;
+}
+
+.book-table th {
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.dark .book-table th {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sepia .book-table th {
+  background: rgba(93, 75, 55, 0.1);
+}
+
+/* List styling */
+.book-list {
+  margin: 1rem 0;
+  padding-left: 2rem;
+}
+
+.book-list li {
+  margin-bottom: 0.5rem;
+  line-height: 1.7;
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 8px;
@@ -90,4 +255,16 @@ body {
 
 .react-flow__edge-path {
   stroke-width: 2;
+}
+
+/* Equation images */
+.equation-image {
+  display: block;
+  margin: 1rem auto;
+  max-width: 100%;
+  height: auto;
+}
+
+.dark .equation-image {
+  filter: invert(1) hue-rotate(180deg);
 }

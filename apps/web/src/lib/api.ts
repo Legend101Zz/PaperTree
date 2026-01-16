@@ -2,7 +2,6 @@ import axios from "axios";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-// Create axios instance
 export const api = axios.create({
   baseURL: API_URL,
   headers: {
@@ -10,7 +9,6 @@ export const api = axios.create({
   },
 });
 
-// Add auth token to requests
 api.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
     const token = localStorage.getItem("token");
@@ -21,7 +19,6 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle auth errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -70,10 +67,14 @@ export const papersApi = {
     return response.data;
   },
   getFileUrl: (paperId: string) => {
-    // Return URL with token as query param for PDF.js compatibility
     const token =
       typeof window !== "undefined" ? localStorage.getItem("token") : "";
     return `${API_URL}/papers/${paperId}/file?token=${token}`;
+  },
+  getPageImageUrl: (paperId: string, pageNum: number) => {
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("token") : "";
+    return `${API_URL}/papers/${paperId}/page/${pageNum}/image?token=${token}`;
   },
   getText: async (paperId: string) => {
     const response = await api.get(`/papers/${paperId}/text`);

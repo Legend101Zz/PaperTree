@@ -1,14 +1,33 @@
 'use client';
 
 import { useCallback, useRef, useEffect, useMemo, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import remarkGfm from 'remark-gfm';
 import { useReaderStore } from '@/store/readerStore';
-import { Highlight, OutlineItem } from '@/types';
+import {
+    Highlight,
+    OutlineItem,
+    ContentBlock,
+    StructuredContent,
+    TextBlock,
+    HeadingBlock,
+    MathBlock,
+    ListBlock,
+    TableBlock,
+    FigureBlock,
+    ReferencesBlock,
+    CodeBlockContent,
+    BlockQuoteBlock,
+} from '@/types';
 import { getTextContext } from '@/lib/utils';
 
 interface BookViewerProps {
     text: string;
     outline: OutlineItem[];
     highlights: Highlight[];
+    structuredContent?: StructuredContent | null;
     onTextSelect: (text: string, anchor: {
         exact: string;
         prefix: string;
@@ -18,17 +37,11 @@ interface BookViewerProps {
     scrollToSection?: OutlineItem | null;
 }
 
-interface ContentBlock {
-    id: string;
-    type: 'heading' | 'paragraph' | 'list-item' | 'quote';
-    content: string;
-    level?: number;
-}
-
 export function BookViewer({
     text,
     outline,
     highlights,
+    structuredContent,
     onTextSelect,
     scrollToSection
 }: BookViewerProps) {
@@ -37,153 +50,8 @@ export function BookViewer({
     const activeHighlightId = useReaderStore((state) => state.activeHighlightId);
     const [currentSection, setCurrentSection] = useState<string>('');
 
-    // Parse and format the text into readable blocks
-    const formattedContent = useMemo((): ContentBlock[] => {
-        if (!text) return [];
-
-        const blocks: ContentBlock[] = [];
-
-        // Split into paragraphs (double newline or more)
-        const rawParagraphs = text.split(/\n\n+/);
-
-        rawParagraphs.forEach((para, idx) => {
-            const trimmed = para.trim();
-            if (!trimmed) return;
-
-            // Clean up the paragraph
-            let cleaned = trimmed
-                // Fix multiple spaces
-                .replace(/\s+/g, ' ')
-                // Fix common OCR/extraction issues
-                .replace(/([a-z])([A-Z])/g, '$1 $2') // camelCase -> camel Case (often missing spaces)
-                .trim();
-
-            // Skip very short meaningless content
-            if (cleaned.length < 3) return;
-
-            // Detect if this is a heading
-            const isHeading = detectHeading(cleaned, outline);
-
-            if (isHeading) {
-                blocks.push({
-                    id: `heading-${idx}`,
-                    type: 'heading',
-                    content: cleaned,
-                    level: isHeading.level,
-                });
-            } else if (cleaned.startsWith('•') || cleaned.startsWith('-') || /^\d+\.\s/.test(cleaned)) {
-                // List item
-                blocks.push({
-                    id: `list-${idx}`,
-                    type: 'list-item',
-                    content: cleaned.replace(/^[•\-]\s*/, '').replace(/^\d+\.\s*/, ''),
-                });
-            } else {
-                // Regular paragraph
-                blocks.push({
-                    id: `para-${idx}`,
-                    type: 'paragraph',
-                    content: cleaned,
-                });
-            }
-        });
-
-        return blocks;
-    }, [text, outline]);
-
-    // Detect if text is a heading
-    function detectHeading(text: string, outline: OutlineItem[]): { level: number } | null {
-        // Check against outline
-        const matchInOutline = outline.find(item =>
-            text.toLowerCase().includes(item.title.toLowerCase()) ||
-            item.title.toLowerCase().includes(text.toLowerCase())
-        );
-
-        if (matchInOutline) {
-            return { level: matchInOutline.level };
-        }
-
-        // Check common patterns
-        // Numbered: "1. Introduction", "2.1 Background"
-        if (/^\d+\.(\d+\.)*\s+[A-Z]/.test(text) && text.length < 80) {
-            const dots = (text.match(/\./g) || []).length;
-            return { level: Math.min(dots, 3) };
-        }
-
-        // All caps (but not too long)
-        if (/^[A-Z][A-Z\s]{2,50}$/.test(text)) {
-            return { level: 1 };
-        }
-
-        // Common section names
-        if (/^(Abstract|Introduction|Background|Methods?|Results?|Discussion|Conclusions?|References|Acknowledgm?ents?)$/i.test(text)) {
-            return { level: 1 };
-        }
-
-        return null;
-    }
-
-    // Render text with highlights
-    const renderWithHighlights = useCallback((content: string, blockId: string) => {
-        const bookHighlights = highlights.filter(h => h.mode === 'book');
-
-        // Find highlights in this content
-        const relevantHighlights = bookHighlights
-            .map(h => ({
-                ...h,
-                index: content.indexOf(h.selected_text)
-            }))
-            .filter(h => h.index !== -1)
-            .sort((a, b) => a.index - b.index);
-
-        if (relevantHighlights.length === 0) {
-            return content;
-        }
-
-        const elements: React.ReactNode[] = [];
-        let lastIndex = 0;
-
-        relevantHighlights.forEach((highlight, idx) => {
-            // Text before highlight
-            if (highlight.index > lastIndex) {
-                elements.push(
-                    <span key={`${blockId}-text-${idx}`}>
-                        {content.slice(lastIndex, highlight.index)}
-                    </span>
-                );
-            }
-
-            // Highlighted text
-            elements.push(
-                <mark
-                    key={`${blockId}-hl-${highlight.id}`}
-                    data-highlight-id={highlight.id}
-                    className={`
-            rounded px-0.5 cursor-pointer transition-all duration-200
-            ${activeHighlightId === highlight.id
-                            ? 'bg-yellow-400 ring-2 ring-yellow-500 ring-offset-1'
-                            : 'bg-yellow-200 hover:bg-yellow-300'
-                        }
-          `}
-                >
-                    {highlight.selected_text}
-                </mark>
-            );
-
-            lastIndex = highlight.index + highlight.selected_text.length;
-        });
-
-        // Remaining text
-        if (lastIndex < content.length) {
-            elements.push(
-                <span key={`${blockId}-text-end`}>
-                    {content.slice(lastIndex)}
-                </span>
-            );
-        }
-
-        return elements;
-    }, [highlights, activeHighlightId]);
+    // Check if we have structured content
+    const hasStructuredContent = structuredContent && structuredContent.blocks && structuredContent.blocks.length > 0;
 
     // Handle text selection
     const handleTextSelection = useCallback(() => {
@@ -241,11 +109,12 @@ export function BookViewer({
         switch (settings.theme) {
             case 'dark':
                 return {
-                    bg: 'bg-gray-900',
-                    text: 'text-gray-100',
+                    bg: 'bg-[#1a1a1a]',
+                    text: 'text-gray-200',
                     heading: 'text-white',
                     muted: 'text-gray-400',
                     border: 'border-gray-700',
+                    highlight: 'bg-yellow-500/30',
                 };
             case 'sepia':
                 return {
@@ -254,6 +123,7 @@ export function BookViewer({
                     heading: 'text-[#3d3225]',
                     muted: 'text-[#8b7355]',
                     border: 'border-[#d4c4a8]',
+                    highlight: 'bg-yellow-600/30',
                 };
             default:
                 return {
@@ -262,13 +132,339 @@ export function BookViewer({
                     heading: 'text-gray-900',
                     muted: 'text-gray-500',
                     border: 'border-gray-200',
+                    highlight: 'bg-yellow-300/50',
                 };
         }
     };
 
     const theme = getThemeStyles();
 
-    if (!text) {
+    const fontFamilyClass = {
+        serif: 'font-serif',
+        sans: 'font-sans',
+        mono: 'font-mono',
+    }[settings.fontFamily || 'serif'];
+
+    const marginClass = {
+        compact: 'px-4 sm:px-6',
+        normal: 'px-6 sm:px-8 md:px-12',
+        wide: 'px-8 sm:px-12 md:px-20',
+    }[settings.marginSize || 'normal'];
+
+    // Render highlight overlays on text
+    const renderTextWithHighlights = useCallback((content: string, blockId: string) => {
+        const bookHighlights = highlights.filter(h => h.mode === 'book');
+
+        const relevantHighlights = bookHighlights
+            .map(h => ({
+                ...h,
+                index: content.indexOf(h.selected_text)
+            }))
+            .filter(h => h.index !== -1)
+            .sort((a, b) => a.index - b.index);
+
+        if (relevantHighlights.length === 0) {
+            return content;
+        }
+
+        const elements: React.ReactNode[] = [];
+        let lastIndex = 0;
+
+        relevantHighlights.forEach((highlight, idx) => {
+            if (highlight.index > lastIndex) {
+                elements.push(
+                    <span key={`${blockId}-text-${idx}`}>
+                        {content.slice(lastIndex, highlight.index)}
+                    </span>
+                );
+            }
+
+            elements.push(
+                <mark
+                    key={`${blockId}-hl-${highlight.id}`}
+                    data-highlight-id={highlight.id}
+                    className={`
+                        rounded px-0.5 cursor-pointer transition-all duration-200
+                        ${activeHighlightId === highlight.id
+                            ? `${theme.highlight} ring-2 ring-yellow-500 ring-offset-1`
+                            : `${theme.highlight} hover:ring-1 hover:ring-yellow-400`
+                        }
+                    `}
+                >
+                    {highlight.selected_text}
+                </mark>
+            );
+
+            lastIndex = highlight.index + highlight.selected_text.length;
+        });
+
+        if (lastIndex < content.length) {
+            elements.push(
+                <span key={`${blockId}-text-end`}>
+                    {content.slice(lastIndex)}
+                </span>
+            );
+        }
+
+        return elements;
+    }, [highlights, activeHighlightId, theme.highlight]);
+
+    // Render a single content block
+    const renderBlock = useCallback((block: ContentBlock, index: number) => {
+        const blockId = `block-${index}`;
+
+        switch (block.type) {
+            case 'heading': {
+                const hb = block as HeadingBlock;
+                const Tag = `h${Math.min(hb.level, 6)}` as keyof JSX.IntrinsicElements;
+                const sizeClasses = {
+                    1: 'text-2xl sm:text-3xl font-bold mt-12 mb-6 pb-3 border-b',
+                    2: 'text-xl sm:text-2xl font-semibold mt-10 mb-4',
+                    3: 'text-lg sm:text-xl font-medium mt-8 mb-3',
+                    4: 'text-base font-medium mt-6 mb-2',
+                    5: 'text-sm font-medium mt-4 mb-2',
+                    6: 'text-sm font-medium mt-4 mb-2',
+                };
+                return (
+                    <Tag
+                        key={blockId}
+                        id={hb.id || blockId}
+                        data-section-title={hb.content}
+                        className={`${sizeClasses[hb.level as 1 | 2 | 3 | 4 | 5 | 6] || sizeClasses[3]} ${theme.heading} ${hb.level === 1 ? theme.border : ''}`}
+                    >
+                        {renderTextWithHighlights(hb.content, blockId)}
+                    </Tag>
+                );
+            }
+
+            case 'text': {
+                const tb = block as TextBlock;
+                return (
+                    <p
+                        key={blockId}
+                        className={`mb-5 leading-relaxed text-justify hyphens-auto ${theme.text}`}
+                    >
+                        {renderTextWithHighlights(tb.content, blockId)}
+                    </p>
+                );
+            }
+
+            case 'math_block': {
+                const mb = block as MathBlock;
+                if (mb.latex) {
+                    return (
+                        <div key={blockId} className="math-block">
+                            <ReactMarkdown
+                                remarkPlugins={[remarkMath]}
+                                rehypePlugins={[rehypeKatex]}
+                            >
+                                {`$$${mb.latex}$$`}
+                            </ReactMarkdown>
+                        </div>
+                    );
+                } else if (mb.image_base64) {
+                    return (
+                        <div key={blockId} className="math-block">
+                            <img
+                                src={`data:image/png;base64,${mb.image_base64}`}
+                                alt={mb.alt_text || 'Equation'}
+                                className="equation-image"
+                            />
+                        </div>
+                    );
+                } else if (mb.alt_text) {
+                    // Fallback: render as text
+                    return (
+                        <div key={blockId} className={`math-block ${theme.muted} font-mono text-sm`}>
+                            {mb.alt_text}
+                        </div>
+                    );
+                }
+                return null;
+            }
+
+            case 'math_inline': {
+                const mi = block as MathBlock;
+                if (mi.latex) {
+                    return (
+                        <span key={blockId} className="math-inline">
+                            <ReactMarkdown
+                                remarkPlugins={[remarkMath]}
+                                rehypePlugins={[rehypeKatex]}
+                            >
+                                {`$${mi.latex}$`}
+                            </ReactMarkdown>
+                        </span>
+                    );
+                }
+                return <span key={blockId} className="font-mono">{mi.alt_text}</span>;
+            }
+
+            case 'code': {
+                const cb = block as CodeBlockContent;
+                return (
+                    <pre key={blockId} className="code-block">
+                        <code>{cb.content}</code>
+                    </pre>
+                );
+            }
+
+            case 'list': {
+                const lb = block as ListBlock;
+                const ListTag = lb.ordered ? 'ol' : 'ul';
+                return (
+                    <ListTag
+                        key={blockId}
+                        className={`book-list ${lb.ordered ? 'list-decimal' : 'list-disc'} ${theme.text}`}
+                    >
+                        {lb.items.map((item, i) => (
+                            <li key={`${blockId}-item-${i}`}>
+                                {renderTextWithHighlights(item, `${blockId}-item-${i}`)}
+                            </li>
+                        ))}
+                    </ListTag>
+                );
+            }
+
+            case 'table': {
+                const tb = block as TableBlock;
+                return (
+                    <div key={blockId} className="overflow-x-auto">
+                        <table className={`book-table ${theme.text}`}>
+                            {tb.headers.length > 0 && (
+                                <thead>
+                                    <tr>
+                                        {tb.headers.map((h, i) => (
+                                            <th key={i}>{h}</th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                            )}
+                            <tbody>
+                                {tb.rows.map((row, ri) => (
+                                    <tr key={ri}>
+                                        {row.map((cell, ci) => (
+                                            <td key={ci}>{cell}</td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {tb.caption && (
+                            <p className={`text-sm ${theme.muted} mt-2 text-center italic`}>
+                                {tb.caption}
+                            </p>
+                        )}
+                    </div>
+                );
+            }
+
+            case 'figure': {
+                const fb = block as FigureBlock;
+                if (!fb.image_base64) return null;
+                return (
+                    <figure key={blockId} className="figure-block">
+                        <img
+                            src={`data:image/png;base64,${fb.image_base64}`}
+                            alt={fb.caption || 'Figure'}
+                        />
+                        {(fb.caption || fb.figure_number) && (
+                            <figcaption className={theme.muted}>
+                                {fb.figure_number && <strong>Figure {fb.figure_number}:</strong>}
+                                {fb.caption}
+                            </figcaption>
+                        )}
+                    </figure>
+                );
+            }
+
+            case 'blockquote': {
+                const bq = block as BlockQuoteBlock;
+                return (
+                    <blockquote key={blockId} className={`book-blockquote ${theme.text}`}>
+                        {renderTextWithHighlights(bq.content, blockId)}
+                    </blockquote>
+                );
+            }
+
+            case 'references': {
+                const rb = block as ReferencesBlock;
+                return (
+                    <section key={blockId} className={`references-section ${theme.text}`}>
+                        <h2 className={theme.heading}>References</h2>
+                        {rb.items.map((ref, i) => (
+                            <p key={i} className="reference-item">
+                                {ref.number && <span className="font-medium">[{ref.number}]</span>}
+                                {' '}{ref.text}
+                            </p>
+                        ))}
+                    </section>
+                );
+            }
+
+            default:
+                return null;
+        }
+    }, [theme, renderTextWithHighlights]);
+
+    // Fallback: Parse plain text into basic blocks
+    const fallbackBlocks = useMemo(() => {
+        if (hasStructuredContent) return [];
+        if (!text) return [];
+
+        const blocks: ContentBlock[] = [];
+        const paragraphs = text.split(/\n\n+/);
+
+        paragraphs.forEach((para, idx) => {
+            const trimmed = para.trim();
+            if (!trimmed) return;
+
+            // Simple heading detection
+            const numberedMatch = trimmed.match(/^(\d+\.(?:\d+\.)*)\s+(.+)$/);
+            if (numberedMatch && trimmed.length < 100) {
+                const level = numberedMatch[1].split('.').filter(Boolean).length;
+                blocks.push({
+                    type: 'heading',
+                    level: Math.min(level, 4),
+                    content: trimmed,
+                } as HeadingBlock);
+                return;
+            }
+
+            // All caps short = heading
+            if (trimmed.toUpperCase() === trimmed && trimmed.length < 60 && trimmed.length > 3) {
+                blocks.push({
+                    type: 'heading',
+                    level: 1,
+                    content: trimmed,
+                } as HeadingBlock);
+                return;
+            }
+
+            // Common section names
+            const commonSections = /^(abstract|introduction|background|methods?|results?|discussion|conclusion|references|acknowledgm?ents?)s?\.?$/i;
+            if (commonSections.test(trimmed)) {
+                blocks.push({
+                    type: 'heading',
+                    level: 1,
+                    content: trimmed,
+                } as HeadingBlock);
+                return;
+            }
+
+            // Regular paragraph
+            blocks.push({
+                type: 'text',
+                content: trimmed,
+            } as TextBlock);
+        });
+
+        return blocks;
+    }, [text, hasStructuredContent]);
+
+    const blocksToRender = hasStructuredContent ? structuredContent!.blocks : fallbackBlocks;
+
+    if (!text && !hasStructuredContent) {
         return (
             <div className={`flex-1 flex items-center justify-center ${theme.bg}`}>
                 <div className="text-center">
@@ -288,62 +484,29 @@ export function BookViewer({
             onMouseUp={handleTextSelection}
         >
             <article
-                className="mx-auto px-6 sm:px-8 md:px-12 py-8 md:py-12"
+                className={`book-content ${fontFamilyClass} mx-auto ${marginClass} py-8 md:py-12`}
                 style={{
                     maxWidth: Math.min(settings.pageWidth, 800),
                     fontSize: `${settings.fontSize}px`,
                     lineHeight: settings.lineHeight,
                 }}
             >
-                {/* Reading progress indicator could go here */}
+                {/* Paper metadata header if available */}
+                {hasStructuredContent && structuredContent!.metadata?.title && (
+                    <header className="mb-12 text-center">
+                        <h1 className={`text-3xl sm:text-4xl font-bold ${theme.heading} mb-4`}>
+                            {structuredContent!.metadata.title}
+                        </h1>
+                        {structuredContent!.metadata.author && (
+                            <p className={`${theme.muted} text-lg`}>
+                                {structuredContent!.metadata.author}
+                            </p>
+                        )}
+                    </header>
+                )}
 
-                {formattedContent.map((block, index) => {
-                    switch (block.type) {
-                        case 'heading':
-                            const HeadingTag = block.level === 1 ? 'h2' : block.level === 2 ? 'h3' : 'h4';
-                            const headingClasses = {
-                                1: `text-2xl sm:text-3xl font-bold mt-12 mb-6 pb-3 border-b ${theme.border} ${theme.heading}`,
-                                2: `text-xl sm:text-2xl font-semibold mt-10 mb-4 ${theme.heading}`,
-                                3: `text-lg sm:text-xl font-medium mt-8 mb-3 ${theme.heading}`,
-                            };
-
-                            return (
-                                <HeadingTag
-                                    key={block.id}
-                                    id={block.id}
-                                    data-section-title={block.content}
-                                    className={headingClasses[block.level as 1 | 2 | 3] || headingClasses[3]}
-                                >
-                                    {renderWithHighlights(block.content, block.id)}
-                                </HeadingTag>
-                            );
-
-                        case 'list-item':
-                            return (
-                                <div
-                                    key={block.id}
-                                    className={`flex gap-3 mb-2 pl-4 ${theme.text}`}
-                                >
-                                    <span className={theme.muted}>•</span>
-                                    <span>{renderWithHighlights(block.content, block.id)}</span>
-                                </div>
-                            );
-
-                        case 'paragraph':
-                        default:
-                            return (
-                                <p
-                                    key={block.id}
-                                    className={`mb-5 leading-relaxed text-justify hyphens-auto ${theme.text}`}
-                                    style={{
-                                        textIndent: index > 0 && formattedContent[index - 1]?.type === 'paragraph' ? '1.5em' : 0
-                                    }}
-                                >
-                                    {renderWithHighlights(block.content, block.id)}
-                                </p>
-                            );
-                    }
-                })}
+                {/* Render all blocks */}
+                {blocksToRender.map((block, index) => renderBlock(block, index))}
 
                 {/* Bottom spacing */}
                 <div className="h-32" />

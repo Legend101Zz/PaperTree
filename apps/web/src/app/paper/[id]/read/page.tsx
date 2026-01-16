@@ -12,7 +12,7 @@ import { ExplanationPanel } from '@/components/reader/ExplanationPanel';
 import { HighlightPopup } from '@/components/reader/HighlightPopup';
 import { useReaderStore } from '@/store/readerStore';
 import { papersApi, highlightsApi, explanationsApi, canvasApi } from '@/lib/api';
-import { Highlight, Explanation, OutlineItem } from '@/types';
+import { Highlight, Explanation, OutlineItem, PaperDetail } from '@/types';
 
 export default function ReaderPage() {
     const params = useParams();
@@ -44,6 +44,7 @@ export default function ReaderPage() {
 
     const [pendingHighlight, setPendingHighlight] = useState<any>(null);
     const [scrollToSection, setScrollToSection] = useState<OutlineItem | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
     // Reset state when paper changes
     useEffect(() => {
         highlightsSynced.current = false;
@@ -54,7 +55,7 @@ export default function ReaderPage() {
     // Fetch paper data
     const { data: paper, isLoading: paperLoading } = useQuery({
         queryKey: ['paper', paperId],
-        queryFn: () => papersApi.get(paperId),
+        queryFn: () => papersApi.get(paperId) as Promise<PaperDetail>,
         enabled: !!paperId,
     });
 
@@ -276,13 +277,15 @@ export default function ReaderPage() {
 
     // Handle search
     const handleSearch = useCallback(async (query: string) => {
-        if (!query.trim()) return;
+        if (!query.trim()) {
+            setSearchQuery('');
+            return;
+        }
+        setSearchQuery(query);
         try {
             const results = await papersApi.search(paperId, query);
             if (results.length > 0) {
-                alert(`Found ${results.length} matches for "${query}"`);
-            } else {
-                alert(`No matches found for "${query}"`);
+                // Scroll to first result (handled by BookViewer highlighting)
             }
         } catch (error) {
             console.error('Search failed:', error);
@@ -330,6 +333,8 @@ export default function ReaderPage() {
                     paperId={paperId}
                     paperTitle={paper.title}
                     onSearch={handleSearch}
+                    searchQuery={searchQuery}
+                    setSearchQuery={setSearchQuery}
                 />
 
                 <div className="flex-1 flex overflow-hidden">
@@ -359,11 +364,11 @@ export default function ReaderPage() {
                                 text={paper.extracted_text || ''}
                                 outline={paper.outline || []}
                                 highlights={highlights}
+                                structuredContent={paper.structured_content}  // ADD THIS LINE
                                 onTextSelect={handleBookTextSelect}
                                 scrollToSection={scrollToSection}
                             />
                         )}
-
 
                     </div>
 

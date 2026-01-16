@@ -2,8 +2,16 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { ReaderSettings, Highlight, Explanation } from "@/types";
 
+export type FontFamily = "serif" | "sans" | "mono";
+
+export interface ExtendedReaderSettings extends ReaderSettings {
+  fontFamily: FontFamily;
+  marginSize: "compact" | "normal" | "wide";
+  invertPdf: boolean;
+}
+
 interface ReaderState {
-  settings: ReaderSettings;
+  settings: ExtendedReaderSettings;
   highlights: Highlight[];
   explanations: Explanation[];
   activeHighlightId: string | null;
@@ -13,11 +21,14 @@ interface ReaderState {
 
 interface ReaderActions {
   // Settings actions
-  setTheme: (theme: ReaderSettings["theme"]) => void;
+  setTheme: (theme: ExtendedReaderSettings["theme"]) => void;
   setFontSize: (size: number) => void;
   setLineHeight: (height: number) => void;
   setPageWidth: (width: number) => void;
-  setMode: (mode: ReaderSettings["mode"]) => void;
+  setMode: (mode: ExtendedReaderSettings["mode"]) => void;
+  setFontFamily: (family: FontFamily) => void;
+  setMarginSize: (margin: "compact" | "normal" | "wide") => void;
+  setInvertPdf: (invert: boolean) => void;
 
   // Highlight actions
   setHighlights: (highlights: Highlight[]) => void;
@@ -43,10 +54,13 @@ interface ReaderActions {
 const initialState: ReaderState = {
   settings: {
     theme: "light",
-    fontSize: 16,
-    lineHeight: 1.6,
-    pageWidth: 800,
+    fontSize: 18,
+    lineHeight: 1.8,
+    pageWidth: 720,
     mode: "pdf",
+    fontFamily: "serif",
+    marginSize: "normal",
+    invertPdf: false,
   },
   highlights: [],
   explanations: [],
@@ -75,8 +89,16 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
       setMode: (mode) =>
         set((state) => ({ settings: { ...state.settings, mode } })),
 
+      setFontFamily: (fontFamily) =>
+        set((state) => ({ settings: { ...state.settings, fontFamily } })),
+
+      setMarginSize: (marginSize) =>
+        set((state) => ({ settings: { ...state.settings, marginSize } })),
+
+      setInvertPdf: (invertPdf) =>
+        set((state) => ({ settings: { ...state.settings, invertPdf } })),
+
       setHighlights: (highlights) => {
-        // Only update if actually different to prevent loops
         const current = get().highlights;
         if (JSON.stringify(current) !== JSON.stringify(highlights)) {
           set({ highlights });
@@ -95,7 +117,6 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
         set({ selectedText: null, selectionPosition: null }),
 
       setExplanations: (explanations) => {
-        // Only update if actually different to prevent loops
         const current = get().explanations;
         if (JSON.stringify(current) !== JSON.stringify(explanations)) {
           set({ explanations });

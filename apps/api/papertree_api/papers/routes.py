@@ -54,8 +54,8 @@ async def upload_paper(
             detail=f"Failed to save file: {str(e)}"
         )
     
-    # Extract content
-    extracted_text, outline, page_count = extract_pdf_content(file_path)
+    # Extract content (now includes structured content)
+    extracted_text, outline, page_count, structured_content = extract_pdf_content(file_path)
     
     # Get title from filename (without extension)
     title = os.path.splitext(original_name)[0]
@@ -69,7 +69,8 @@ async def upload_paper(
         "created_at": datetime.utcnow(),
         "extracted_text": extracted_text,
         "outline": outline,
-        "page_count": page_count
+        "page_count": page_count,
+        "structured_content": structured_content  # NEW
     }
     
     db = get_database()
@@ -83,7 +84,6 @@ async def upload_paper(
         created_at=paper_doc["created_at"],
         page_count=page_count
     )
-
 
 @router.get("", response_model=List[PaperResponse])
 async def list_papers(current_user: dict = Depends(get_current_user)):
@@ -105,7 +105,6 @@ async def list_papers(current_user: dict = Depends(get_current_user)):
         ))
     
     return papers
-
 
 @router.get("/{paper_id}", response_model=PaperDetailResponse)
 async def get_paper(
@@ -134,6 +133,16 @@ async def get_paper(
             detail="Paper not found"
         )
     
+    # Build structured content response
+    structured = paper.get("structured_content")
+    structured_response = None
+    if structured:
+        from .models import StructuredContent
+        try:
+            structured_response = StructuredContent(**structured)
+        except Exception:
+            structured_response = None
+    
     return PaperDetailResponse(
         id=str(paper["_id"]),
         user_id=paper["user_id"],
@@ -142,9 +151,9 @@ async def get_paper(
         created_at=paper["created_at"],
         extracted_text=paper.get("extracted_text"),
         outline=paper.get("outline", []),
+        structured_content=structured_response,
         page_count=paper.get("page_count")
     )
-
 
 @router.get("/{paper_id}/file")
 async def get_paper_file(
