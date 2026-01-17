@@ -1,72 +1,111 @@
+// apps/web/src/store/readerStore.ts
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { ReaderSettings, Highlight, Explanation } from "@/types";
+import { Highlight, Explanation } from "@/types";
 
-export type FontFamily = "serif" | "sans" | "mono";
-
-export interface ExtendedReaderSettings extends ReaderSettings {
-  fontFamily: FontFamily;
-  marginSize: "compact" | "normal" | "wide";
+export interface ReaderSettings {
+  theme: "light" | "dark" | "sepia";
+  fontSize: number;
+  lineHeight: number;
+  pageWidth: number;
+  mode: "pdf" | "book";
+  fontFamily: "serif" | "sans" | "mono";
+  minimapSize: "small" | "medium" | "large" | "hidden";
   invertPdf: boolean;
+  invertMinimap: boolean;
+}
+
+export interface PDFRegion {
+  page: number;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
 }
 
 interface ReaderState {
-  settings: ExtendedReaderSettings;
+  settings: ReaderSettings;
   highlights: Highlight[];
   explanations: Explanation[];
   activeHighlightId: string | null;
   selectedText: string | null;
   selectionPosition: { x: number; y: number } | null;
+
+  // Current view state
+  currentSectionId: string | null;
+  currentPdfPage: number;
+  currentPdfRegion: PDFRegion | null;
+
+  // Figure viewer
+  figureViewerOpen: boolean;
+  figureViewerPage: number;
+  figureViewerNote: string;
 }
 
 interface ReaderActions {
-  // Settings actions
-  setTheme: (theme: ExtendedReaderSettings["theme"]) => void;
+  setTheme: (theme: ReaderSettings["theme"]) => void;
   setFontSize: (size: number) => void;
   setLineHeight: (height: number) => void;
   setPageWidth: (width: number) => void;
-  setMode: (mode: ExtendedReaderSettings["mode"]) => void;
-  setFontFamily: (family: FontFamily) => void;
-  setMarginSize: (margin: "compact" | "normal" | "wide") => void;
+  setMode: (mode: ReaderSettings["mode"]) => void;
+  setFontFamily: (family: ReaderSettings["fontFamily"]) => void;
+  setMinimapSize: (size: ReaderSettings["minimapSize"]) => void;
   setInvertPdf: (invert: boolean) => void;
+  setInvertMinimap: (invert: boolean) => void;
 
-  // Highlight actions
   setHighlights: (highlights: Highlight[]) => void;
   addHighlight: (highlight: Highlight) => void;
   setActiveHighlight: (id: string | null) => void;
 
-  // Selection actions
   setSelection: (
     text: string | null,
-    position: { x: number; y: number } | null
+    position: { x: number; y: number } | null,
   ) => void;
   clearSelection: () => void;
 
-  // Explanation actions
   setExplanations: (explanations: Explanation[]) => void;
   addExplanation: (explanation: Explanation) => void;
   updateExplanation: (id: string, updates: Partial<Explanation>) => void;
 
-  // Reset
+  setCurrentSection: (
+    sectionId: string | null,
+    pdfPage: number,
+    region?: PDFRegion,
+  ) => void;
+
+  // Figure viewer
+  openFigureViewer: (page: number) => void;
+  closeFigureViewer: () => void;
+  setFigureNote: (note: string) => void;
+
   resetReaderState: () => void;
 }
 
+const initialSettings: ReaderSettings = {
+  theme: "light",
+  fontSize: 18,
+  lineHeight: 1.8,
+  pageWidth: 720,
+  mode: "book",
+  fontFamily: "serif",
+  minimapSize: "medium",
+  invertPdf: false,
+  invertMinimap: false,
+};
+
 const initialState: ReaderState = {
-  settings: {
-    theme: "light",
-    fontSize: 18,
-    lineHeight: 1.8,
-    pageWidth: 720,
-    mode: "pdf",
-    fontFamily: "serif",
-    marginSize: "normal",
-    invertPdf: false,
-  },
+  settings: initialSettings,
   highlights: [],
   explanations: [],
   activeHighlightId: null,
   selectedText: null,
   selectionPosition: null,
+  currentSectionId: null,
+  currentPdfPage: 0,
+  currentPdfRegion: null,
+  figureViewerOpen: false,
+  figureViewerPage: 0,
+  figureViewerNote: "",
 };
 
 export const useReaderStore = create<ReaderState & ReaderActions>()(
@@ -74,66 +113,60 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
     (set, get) => ({
       ...initialState,
 
-      setTheme: (theme) =>
-        set((state) => ({ settings: { ...state.settings, theme } })),
-
+      setTheme: (theme) => set((s) => ({ settings: { ...s.settings, theme } })),
       setFontSize: (fontSize) =>
-        set((state) => ({ settings: { ...state.settings, fontSize } })),
-
+        set((s) => ({ settings: { ...s.settings, fontSize } })),
       setLineHeight: (lineHeight) =>
-        set((state) => ({ settings: { ...state.settings, lineHeight } })),
-
+        set((s) => ({ settings: { ...s.settings, lineHeight } })),
       setPageWidth: (pageWidth) =>
-        set((state) => ({ settings: { ...state.settings, pageWidth } })),
-
-      setMode: (mode) =>
-        set((state) => ({ settings: { ...state.settings, mode } })),
-
+        set((s) => ({ settings: { ...s.settings, pageWidth } })),
+      setMode: (mode) => set((s) => ({ settings: { ...s.settings, mode } })),
       setFontFamily: (fontFamily) =>
-        set((state) => ({ settings: { ...state.settings, fontFamily } })),
-
-      setMarginSize: (marginSize) =>
-        set((state) => ({ settings: { ...state.settings, marginSize } })),
-
+        set((s) => ({ settings: { ...s.settings, fontFamily } })),
+      setMinimapSize: (minimapSize) =>
+        set((s) => ({ settings: { ...s.settings, minimapSize } })),
       setInvertPdf: (invertPdf) =>
-        set((state) => ({ settings: { ...state.settings, invertPdf } })),
+        set((s) => ({ settings: { ...s.settings, invertPdf } })),
+      setInvertMinimap: (invertMinimap) =>
+        set((s) => ({ settings: { ...s.settings, invertMinimap } })),
 
-      setHighlights: (highlights) => {
-        const current = get().highlights;
-        if (JSON.stringify(current) !== JSON.stringify(highlights)) {
-          set({ highlights });
-        }
-      },
-
+      setHighlights: (highlights) => set({ highlights }),
       addHighlight: (highlight) =>
-        set((state) => ({ highlights: [...state.highlights, highlight] })),
-
+        set((s) => ({ highlights: [...s.highlights, highlight] })),
       setActiveHighlight: (activeHighlightId) => set({ activeHighlightId }),
 
       setSelection: (selectedText, selectionPosition) =>
         set({ selectedText, selectionPosition }),
-
       clearSelection: () =>
         set({ selectedText: null, selectionPosition: null }),
 
-      setExplanations: (explanations) => {
-        const current = get().explanations;
-        if (JSON.stringify(current) !== JSON.stringify(explanations)) {
-          set({ explanations });
-        }
-      },
-
+      setExplanations: (explanations) => set({ explanations }),
       addExplanation: (explanation) =>
-        set((state) => ({
-          explanations: [...state.explanations, explanation],
-        })),
-
+        set((s) => ({ explanations: [...s.explanations, explanation] })),
       updateExplanation: (id, updates) =>
-        set((state) => ({
-          explanations: state.explanations.map((exp) =>
-            exp.id === id ? { ...exp, ...updates } : exp
+        set((s) => ({
+          explanations: s.explanations.map((e) =>
+            e.id === id ? { ...e, ...updates } : e,
           ),
         })),
+
+      setCurrentSection: (sectionId, pdfPage, region) => {
+        console.log("Setting current section:", sectionId, "page:", pdfPage);
+        set({
+          currentSectionId: sectionId,
+          currentPdfPage: pdfPage,
+          currentPdfRegion: region || null,
+        });
+      },
+
+      openFigureViewer: (page) =>
+        set({
+          figureViewerOpen: true,
+          figureViewerPage: page,
+          figureViewerNote: "",
+        }),
+      closeFigureViewer: () => set({ figureViewerOpen: false }),
+      setFigureNote: (note) => set({ figureViewerNote: note }),
 
       resetReaderState: () =>
         set({
@@ -142,11 +175,17 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
           activeHighlightId: null,
           selectedText: null,
           selectionPosition: null,
+          currentSectionId: null,
+          currentPdfPage: 0,
+          currentPdfRegion: null,
+          figureViewerOpen: false,
+          figureViewerPage: 0,
+          figureViewerNote: "",
         }),
     }),
     {
-      name: "reader-settings",
+      name: "reader-settings-v3",
       partialize: (state) => ({ settings: state.settings }),
-    }
-  )
+    },
+  ),
 );

@@ -34,5 +34,7 @@ npm-debug.log*
 apps/api/storage/papers/*
 !apps/api/storage/papers/.gitkeep
 
+storage
+
 # MongoDB data
 mongo_data/

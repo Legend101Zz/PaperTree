@@ -1,21 +1,40 @@
+# apps/api/papertree_api/papers/routes.py
 import os
 import uuid
 from datetime import datetime
 from typing import List, Optional
 
+import fitz  # PyMuPDF
 from bson import ObjectId
 from fastapi import (APIRouter, Depends, File, Header, HTTPException,
                      UploadFile, status)
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response
 from papertree_api.auth.utils import decode_token, get_current_user
 from papertree_api.config import get_settings
 from papertree_api.database import get_database
 
-from .models import PaperDetailResponse, PaperResponse, SearchResult
-from .services import extract_pdf_content, search_in_text
+from .llm_service import generate_book_content
+from .models import (BookContent, GenerateBookContentRequest,
+                     PaperDetailResponse, PaperResponse, PDFRegion,
+                     SearchResult, SmartOutlineItem)
 
 settings = get_settings()
 router = APIRouter()
+
+
+def extract_text_from_pdf(file_path: str) -> tuple[str, int]:
+    """Extract plain text and page count from PDF."""
+    doc = fitz.open(file_path)
+    page_count = len(doc)
+    
+    text_parts = []
+    for page in doc:
+        text = page.get_text("text", sort=True)
+        if text:
+            text_parts.append(f"[Page {page.number + 1}]\n{text}")
+    
+    doc.close()
+    return "\n\n".join(text_parts), page_count
 
 
 @router.post("/upload", response_model=PaperResponse)
@@ -23,54 +42,34 @@ async def upload_paper(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Upload a PDF paper.
-    Extracts text content and stores metadata.
-    """
-    # Validate file type
+    """Upload a PDF paper."""
     if not file.filename.endswith('.pdf'):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only PDF files are allowed"
-        )
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
     
-    # Generate unique filename
     file_id = str(uuid.uuid4())
-    original_name = file.filename
     safe_filename = f"{file_id}.pdf"
     file_path = os.path.join(settings.storage_path, safe_filename)
-    
-    # Ensure storage directory exists
     os.makedirs(settings.storage_path, exist_ok=True)
     
-    # Save file
-    try:
-        content = await file.read()
-        with open(file_path, "wb") as f:
-            f.write(content)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save file: {str(e)}"
-        )
+    content = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(content)
     
-    # Extract content (now includes structured content)
-    extracted_text, outline, page_count, structured_content = extract_pdf_content(file_path)
+    # Extract text for LLM
+    extracted_text, page_count = extract_text_from_pdf(file_path)
     
-    # Get title from filename (without extension)
-    title = os.path.splitext(original_name)[0]
+    title = os.path.splitext(file.filename)[0]
     
-    # Create paper document
     paper_doc = {
         "user_id": current_user["id"],
         "title": title,
-        "filename": original_name,
+        "filename": file.filename,
         "file_path": file_path,
         "created_at": datetime.utcnow(),
         "extracted_text": extracted_text,
-        "outline": outline,
         "page_count": page_count,
-        "structured_content": structured_content  # NEW
+        "book_content": None,  # Generated on demand
+        "smart_outline": [],
     }
     
     db = get_database()
@@ -80,16 +79,16 @@ async def upload_paper(
         id=str(result.inserted_id),
         user_id=current_user["id"],
         title=title,
-        filename=original_name,
+        filename=file.filename,
         created_at=paper_doc["created_at"],
-        page_count=page_count
+        page_count=page_count,
+        has_book_content=False
     )
+
 
 @router.get("", response_model=List[PaperResponse])
 async def list_papers(current_user: dict = Depends(get_current_user)):
-    """
-    List all papers for the current user.
-    """
+    """List all papers."""
     db = get_database()
     cursor = db.papers.find({"user_id": current_user["id"]}).sort("created_at", -1)
     
@@ -101,19 +100,16 @@ async def list_papers(current_user: dict = Depends(get_current_user)):
             title=paper["title"],
             filename=paper["filename"],
             created_at=paper["created_at"],
-            page_count=paper.get("page_count")
+            page_count=paper.get("page_count"),
+            has_book_content=paper.get("book_content") is not None
         ))
     
     return papers
 
+
 @router.get("/{paper_id}", response_model=PaperDetailResponse)
-async def get_paper(
-    paper_id: str,
-    current_user: dict = Depends(get_current_user)
-):
-    """
-    Get paper details including extracted text.
-    """
+async def get_paper(paper_id: str, current_user: dict = Depends(get_current_user)):
+    """Get paper details."""
     db = get_database()
     
     try:
@@ -121,27 +117,17 @@ async def get_paper(
             "_id": ObjectId(paper_id),
             "user_id": current_user["id"]
         })
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Paper not found"
-        )
+    except:
+        raise HTTPException(status_code=404, detail="Paper not found")
     
     if not paper:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Paper not found"
-        )
+        raise HTTPException(status_code=404, detail="Paper not found")
     
-    # Build structured content response
-    structured = paper.get("structured_content")
-    structured_response = None
-    if structured:
-        from .models import StructuredContent
-        try:
-            structured_response = StructuredContent(**structured)
-        except Exception:
-            structured_response = None
+    book_content = None
+    if paper.get("book_content"):
+        book_content = BookContent(**paper["book_content"])
+    
+    smart_outline = [SmartOutlineItem(**o) for o in paper.get("smart_outline", [])]
     
     return PaperDetailResponse(
         id=str(paper["_id"]),
@@ -149,11 +135,82 @@ async def get_paper(
         title=paper["title"],
         filename=paper["filename"],
         created_at=paper["created_at"],
+        page_count=paper.get("page_count"),
+        has_book_content=book_content is not None,
         extracted_text=paper.get("extracted_text"),
-        outline=paper.get("outline", []),
-        structured_content=structured_response,
-        page_count=paper.get("page_count")
+        book_content=book_content,
+        smart_outline=smart_outline
     )
+
+
+@router.post("/{paper_id}/generate-book")
+async def generate_book(
+    paper_id: str,
+    request: GenerateBookContentRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Generate LLM book content for a paper."""
+    import traceback
+    
+    db = get_database()
+    
+    try:
+        paper = await db.papers.find_one({
+            "_id": ObjectId(paper_id),
+            "user_id": current_user["id"]
+        })
+    except Exception as e:
+        print(f"Database error finding paper: {e}")
+        raise HTTPException(status_code=404, detail="Paper not found")
+    
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    
+    # Check if already generated
+    if paper.get("book_content") and not request.force_regenerate:
+        return {"message": "Book content already exists", "status": "exists"}
+    
+    extracted_text = paper.get("extracted_text", "")
+    page_count = paper.get("page_count", 1)
+    
+    if not extracted_text:
+        raise HTTPException(status_code=400, detail="No text extracted from PDF")
+    
+    print(f"Generating book content for paper {paper_id}")
+    print(f"Text length: {len(extracted_text)}, Page count: {page_count}")
+    
+    try:
+        result = await generate_book_content(extracted_text, page_count)
+        print(f"Generated result keys: {result.keys() if result else 'None'}")
+        
+        # Build smart outline from sections
+        smart_outline = []
+        for section in result.get("sections", []):
+            smart_outline.append({
+                "id": f"outline-{section.get('id', 'unknown')}",
+                "title": section.get("title", "Untitled"),
+                "level": section.get("level", 1),
+                "section_id": section.get("id", ""),
+                "pdf_page": section.get("pdf_pages", [0])[0] if section.get("pdf_pages") else 0,
+                "description": None
+            })
+        
+        # Store in database
+        update_result = await db.papers.update_one(
+            {"_id": ObjectId(paper_id)},
+            {"$set": {
+                "book_content": result,
+                "smart_outline": smart_outline
+            }}
+        )
+        print(f"Database update: matched={update_result.matched_count}, modified={update_result.modified_count}")
+        
+        return {"message": "Book content generated", "status": "success"}
+        
+    except Exception as e:
+        print(f"Error generating book content: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{paper_id}/file")
 async def get_paper_file(
@@ -161,181 +218,120 @@ async def get_paper_file(
     token: Optional[str] = None,
     authorization: Optional[str] = Header(None)
 ):
-    """
-    Get the PDF file for a paper.
-    Supports both query param token and Authorization header.
-    """
-    # Extract token from either source
-    auth_token = None
-    if authorization and authorization.startswith("Bearer "):
-        auth_token = authorization[7:]
-    elif token:
-        auth_token = token
+    """Get the PDF file."""
+    auth_token = token or (authorization[7:] if authorization and authorization.startswith("Bearer ") else None)
     
     if not auth_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required"
-        )
+        raise HTTPException(status_code=401, detail="Authentication required")
     
-    # Decode token
     payload = decode_token(auth_token)
     if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
-        )
-    
-    user_id = payload.get("sub")
+        raise HTTPException(status_code=401, detail="Invalid token")
     
     db = get_database()
+    paper = await db.papers.find_one({
+        "_id": ObjectId(paper_id),
+        "user_id": payload["sub"]
+    })
     
-    try:
-        paper = await db.papers.find_one({
-            "_id": ObjectId(paper_id),
-            "user_id": user_id
-        })
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Paper not found"
-        )
+    if not paper or not os.path.exists(paper["file_path"]):
+        raise HTTPException(status_code=404, detail="Paper not found")
     
-    if not paper:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Paper not found"
-        )
-    
-    file_path = paper["file_path"]
-    if not os.path.exists(file_path):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="File not found"
-        )
-    
-    # Return file with proper headers for PDF viewing
     return FileResponse(
-        file_path,
+        paper["file_path"],
         media_type="application/pdf",
-        filename=paper["filename"],
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Expose-Headers": "Content-Disposition"
-        }
+        filename=paper["filename"]
     )
 
 
-@router.get("/{paper_id}/text")
-async def get_paper_text(
+@router.get("/{paper_id}/page/{page_num}/image")
+async def get_page_image(
     paper_id: str,
-    current_user: dict = Depends(get_current_user)
+    page_num: int,
+    token: Optional[str] = None,
+    authorization: Optional[str] = Header(None),
+    # Region parameters (normalized 0-1)
+    x0: float = 0,
+    y0: float = 0,
+    x1: float = 1,
+    y1: float = 1,
+    scale: float = 2.0
 ):
     """
-    Get extracted text content of a paper.
+    Get a region of a PDF page as an image.
+    Used by the PDF minimap to show specific regions.
     """
-    db = get_database()
+    auth_token = token or (authorization[7:] if authorization and authorization.startswith("Bearer ") else None)
     
-    try:
-        paper = await db.papers.find_one({
-            "_id": ObjectId(paper_id),
-            "user_id": current_user["id"]
-        })
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Paper not found"
-        )
+    if not auth_token:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    payload = decode_token(auth_token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    db = get_database()
+    paper = await db.papers.find_one({
+        "_id": ObjectId(paper_id),
+        "user_id": payload["sub"]
+    })
     
     if not paper:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Paper not found"
-        )
+        raise HTTPException(status_code=404, detail="Paper not found")
     
-    return {
-        "text": paper.get("extracted_text", ""),
-        "outline": paper.get("outline", [])
-    }
+    try:
+        doc = fitz.open(paper["file_path"])
+        
+        if page_num < 0 or page_num >= len(doc):
+            raise HTTPException(status_code=400, detail="Invalid page number")
+        
+        page = doc[page_num]
+        page_rect = page.rect
+        
+        # Convert normalized coordinates to absolute
+        clip_rect = fitz.Rect(
+            page_rect.x0 + x0 * page_rect.width,
+            page_rect.y0 + y0 * page_rect.height,
+            page_rect.x0 + x1 * page_rect.width,
+            page_rect.y0 + y1 * page_rect.height
+        )
+        
+        # Render with scaling
+        mat = fitz.Matrix(scale, scale)
+        pix = page.get_pixmap(matrix=mat, clip=clip_rect)
+        
+        image_data = pix.tobytes("png")
+        doc.close()
+        
+        return Response(
+            content=image_data,
+            media_type="image/png",
+            headers={"Cache-Control": "max-age=3600"}
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.delete("/{paper_id}")
-async def delete_paper(
-    paper_id: str,
-    current_user: dict = Depends(get_current_user)
-):
-    """
-    Delete a paper and all associated data.
-    """
+async def delete_paper(paper_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a paper."""
     db = get_database()
     
-    try:
-        paper = await db.papers.find_one({
-            "_id": ObjectId(paper_id),
-            "user_id": current_user["id"]
-        })
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Paper not found"
-        )
+    paper = await db.papers.find_one({
+        "_id": ObjectId(paper_id),
+        "user_id": current_user["id"]
+    })
     
     if not paper:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Paper not found"
-        )
+        raise HTTPException(status_code=404, detail="Paper not found")
     
-    # Delete the file
     if os.path.exists(paper["file_path"]):
         os.remove(paper["file_path"])
     
-    # Delete associated data
     await db.highlights.delete_many({"paper_id": paper_id})
     await db.explanations.delete_many({"paper_id": paper_id})
     await db.canvases.delete_many({"paper_id": paper_id})
-    
-    # Delete the paper
     await db.papers.delete_one({"_id": ObjectId(paper_id)})
     
-    return {"message": "Paper deleted successfully"}
-
-
-@router.get("/{paper_id}/search", response_model=List[SearchResult])
-async def search_paper(
-    paper_id: str,
-    q: str,
-    current_user: dict = Depends(get_current_user)
-):
-    """
-    Search within a paper's text content.
-    """
-    if not q or len(q) < 2:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Search query must be at least 2 characters"
-        )
-    
-    db = get_database()
-    
-    try:
-        paper = await db.papers.find_one({
-            "_id": ObjectId(paper_id),
-            "user_id": current_user["id"]
-        })
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Paper not found"
-        )
-    
-    if not paper:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Paper not found"
-        )
-    
-    text = paper.get("extracted_text", "")
-    results = search_in_text(text, q)
-    
-    return [SearchResult(**r) for r in results]
+    return {"message": "Paper deleted"}

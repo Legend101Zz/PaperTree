@@ -77,7 +77,10 @@ body {
 
 /* Book Mode Typography */
 .book-content {
-  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  font-feature-settings:
+    "kern" 1,
+    "liga" 1,
+    "calt" 1;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -267,4 +270,67 @@ body {
 
 .dark .equation-image {
   filter: invert(1) hue-rotate(180deg);
+}
+
+/* Book mode typography */
+.book-content {
+  font-feature-settings:
+    "kern" 1,
+    "liga" 1,
+    "calt" 1;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.book-content.font-serif {
+  font-family: "Georgia", "Cambria", "Times New Roman", serif;
+}
+
+.book-content.font-sans {
+  font-family: "Inter", "Segoe UI", "Roboto", "Helvetica Neue", sans-serif;
+}
+
+.book-content.font-mono {
+  font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+}
+
+/* KaTeX improvements */
+.katex-display {
+  margin: 1em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.katex {
+  font-size: 1.1em;
+}
+
+/* Figure styling */
+.book-content figure {
+  margin: 2rem 0;
+}
+
+.book-content figcaption {
+  margin-top: 0.75rem;
+}
+
+/* Smooth scrolling */
+.book-content {
+  scroll-behavior: smooth;
+}
+
+/* Search highlight animation */
+@keyframes searchPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.search-highlight-active {
+  animation: searchPulse 1s ease-in-out 2;
 }

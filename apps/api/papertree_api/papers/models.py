@@ -1,147 +1,82 @@
+# apps/api/papertree_api/papers/models.py
 from datetime import datetime
-from typing import List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
+# ============ PDF Source Mapping ============
 
-class OutlineItem(BaseModel):
-    """Schema for paper outline/section item."""
+class PDFRegion(BaseModel):
+    """A region in the PDF that content maps to."""
+    page: int  # 0-indexed
+    # Normalized coordinates (0-1)
+    x0: float = 0
+    y0: float = 0
+    x1: float = 1
+    y1: float = 1
+    
+    def to_dict(self) -> dict:
+        return {"page": self.page, "x0": self.x0, "y0": self.y0, "x1": self.x1, "y1": self.y1}
+
+
+# ============ Book Content Blocks ============
+
+class BookSection(BaseModel):
+    """A section in the LLM-generated book content."""
+    id: str
     title: str
+    level: int  # 1-4
+    content: str  # Markdown with LaTeX and Mermaid
+    pdf_regions: List[PDFRegion] = []  # Which PDF regions this explains
+    figures: List[str] = []  # References to PDF figures like "Figure 1", "Table 2"
+
+
+class BookContent(BaseModel):
+    """LLM-generated book explanation of the paper."""
+    title: str
+    authors: Optional[str] = None
+    tldr: str  # One paragraph summary
+    sections: List[BookSection]
+    key_figures: List[Dict[str, Any]] = []  # {id, caption, pdf_region}
+    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    model: str = ""
+
+
+class SmartOutlineItem(BaseModel):
+    """Smart index item with clear titles."""
+    id: str
+    title: str  # LLM-generated clear title
     level: int
-    start_idx: int
-    end_idx: int
-    page: Optional[int] = None
+    section_id: str
+    pdf_page: int
+    description: Optional[str] = None  # Brief description
 
 
-# Structured content blocks for book mode
-class TextBlock(BaseModel):
-    type: Literal["text"] = "text"
-    content: str
-
-
-class HeadingBlock(BaseModel):
-    type: Literal["heading"] = "heading"
-    level: int  # 1-6
-    content: str
-    id: Optional[str] = None  # For anchor linking
-
-
-class MathBlock(BaseModel):
-    type: Literal["math_block"] = "math_block"
-    latex: Optional[str] = None  # If we recovered LaTeX
-    image_base64: Optional[str] = None  # Fallback: equation as image
-    alt_text: Optional[str] = None  # Raw text for accessibility/search
-
-
-class MathInline(BaseModel):
-    type: Literal["math_inline"] = "math_inline"
-    latex: Optional[str] = None
-    image_base64: Optional[str] = None
-    alt_text: Optional[str] = None
-
-
-class CodeBlock(BaseModel):
-    type: Literal["code"] = "code"
-    content: str
-    language: Optional[str] = None
-
-
-class ListBlock(BaseModel):
-    type: Literal["list"] = "list"
-    ordered: bool = False
-    items: List[str]
-
-
-class TableBlock(BaseModel):
-    type: Literal["table"] = "table"
-    headers: List[str]
-    rows: List[List[str]]
-    caption: Optional[str] = None
-
-
-class FigureBlock(BaseModel):
-    type: Literal["figure"] = "figure"
-    image_base64: Optional[str] = None
-    caption: Optional[str] = None
-    figure_number: Optional[str] = None
-
-
-class BlockQuoteBlock(BaseModel):
-    type: Literal["blockquote"] = "blockquote"
-    content: str
-
-
-class ReferenceItem(BaseModel):
-    number: Optional[str] = None
-    text: str
-
-
-class ReferencesBlock(BaseModel):
-    type: Literal["references"] = "references"
-    items: List[ReferenceItem]
-
-
-ContentBlock = Union[
-    TextBlock,
-    HeadingBlock,
-    MathBlock,
-    MathInline,
-    CodeBlock,
-    ListBlock,
-    TableBlock,
-    FigureBlock,
-    BlockQuoteBlock,
-    ReferencesBlock,
-]
-
-
-class StructuredContent(BaseModel):
-    """Full structured content for book mode."""
-    blocks: List[ContentBlock] = []
-    metadata: dict = {}  # title, authors, abstract, etc.
-
-
-class PaperCreate(BaseModel):
-    """Schema for paper creation (internal use)."""
-    title: str
-    filename: str
-    file_path: str
-
+# ============ Paper Models ============
 
 class PaperResponse(BaseModel):
-    """Schema for paper response."""
     id: str
     user_id: str
     title: str
     filename: str
     created_at: datetime
     page_count: Optional[int] = None
+    has_book_content: bool = False
 
 
 class PaperDetailResponse(PaperResponse):
-    """Schema for detailed paper response including text."""
     extracted_text: Optional[str] = None
-    outline: List[OutlineItem] = []
-    structured_content: Optional[StructuredContent] = None
+    book_content: Optional[BookContent] = None
+    smart_outline: List[SmartOutlineItem] = []
 
 
-class PaperInDB(BaseModel):
-    """Internal paper model."""
-    user_id: str
-    title: str
-    filename: str
-    file_path: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    extracted_text: Optional[str] = None
-    outline: List[OutlineItem] = []
-    structured_content: Optional[dict] = None
-    page_count: Optional[int] = None
+class GenerateBookContentRequest(BaseModel):
+    """Request to generate book content for a paper."""
+    force_regenerate: bool = False
 
 
 class SearchResult(BaseModel):
-    """Schema for search result."""
     text: str
-    start_idx: int
-    end_idx: int
-    context_before: str
-    context_after: str
+    section_id: str
+    context: str
+    pdf_region: Optional[PDFRegion] = None

@@ -1,3 +1,4 @@
+// apps/web/src/components/reader/PDFViewer.tsx
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -8,21 +9,9 @@ import { useReaderStore } from '@/store/readerStore';
 import { Highlight } from '@/types';
 
 // Configure PDF.js worker
-const setupWorker = () => {
-    try {
-        pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
-    } catch (e) {
-        console.warn('Failed to set worker from cdnjs, trying unpkg...');
-        try {
-            pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
-        } catch (e2) {
-            console.warn('Failed to set worker from unpkg, using legacy...');
-            pdfjs.GlobalWorkerOptions.workerSrc = '';
-        }
-    }
-};
-
-setupWorker();
+if (typeof window !== 'undefined') {
+    pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+}
 
 interface PDFViewerProps {
     fileUrl: string;
@@ -34,21 +23,19 @@ export function PDFViewer({ fileUrl, highlights, onTextSelect }: PDFViewerProps)
     const [numPages, setNumPages] = useState<number>(0);
     const [pageWidth, setPageWidth] = useState(800);
     const [error, setError] = useState<string | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
     const containerRef = useRef<HTMLDivElement>(null);
 
     const settings = useReaderStore((state) => state.settings);
     const activeHighlightId = useReaderStore((state) => state.activeHighlightId);
     const setActiveHighlight = useReaderStore((state) => state.setActiveHighlight);
 
-    // Get inversion setting
-    const invertPdf = settings.invertPdf || false;
+    const invertPdf = settings.invertPdf;
 
-    // Adjust page width on container resize
+    // Adjust page width on resize
     useEffect(() => {
         const updateWidth = () => {
             if (containerRef.current) {
-                const width = Math.min(settings.pageWidth, containerRef.current.clientWidth - 48);
+                const width = Math.min(settings.pageWidth + 100, containerRef.current.clientWidth - 48);
                 setPageWidth(width);
             }
         };
@@ -60,13 +47,6 @@ export function PDFViewer({ fileUrl, highlights, onTextSelect }: PDFViewerProps)
     const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
         setNumPages(numPages);
         setError(null);
-        setIsLoading(false);
-    };
-
-    const onDocumentLoadError = (error: Error) => {
-        console.error('PDF load error:', error);
-        setError(`Failed to load PDF: ${error.message}`);
-        setIsLoading(false);
     };
 
     const handleMouseUp = useCallback((pageNumber: number) => {
@@ -90,15 +70,11 @@ export function PDFViewer({ fileUrl, highlights, onTextSelect }: PDFViewerProps)
     }, [onTextSelect]);
 
     const getPageHighlights = (pageNumber: number) => {
-        return highlights.filter(
-            h => h.mode === 'pdf' && h.page_number === pageNumber
-        );
+        return highlights.filter(h => h.mode === 'pdf' && h.page_number === pageNumber);
     };
 
-    const getBackgroundColor = () => {
-        if (invertPdf) {
-            return '#1a1a1a';
-        }
+    const getBgColor = () => {
+        if (invertPdf) return '#111';
         switch (settings.theme) {
             case 'dark': return '#171717';
             case 'sepia': return '#f8f1e7';
@@ -108,22 +84,11 @@ export function PDFViewer({ fileUrl, highlights, onTextSelect }: PDFViewerProps)
 
     if (error) {
         return (
-            <div className="flex-1 flex items-center justify-center p-6" style={{ backgroundColor: getBackgroundColor() }}>
+            <div className="flex-1 flex items-center justify-center p-6" style={{ backgroundColor: getBgColor() }}>
                 <div className="text-center max-w-md">
-                    <div className="text-red-500 mb-4">
-                        <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                        <p className="font-medium">{error}</p>
-                    </div>
-                    <p className="text-gray-500 text-sm mb-4">
-                        Try switching to Book Mode to view the extracted text, or check if the PDF file is valid.
-                    </p>
+                    <p className="text-red-500 font-medium mb-4">{error}</p>
                     <button
-                        onClick={() => {
-                            setError(null);
-                            setIsLoading(true);
-                        }}
+                        onClick={() => setError(null)}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                     >
                         Retry
@@ -137,12 +102,12 @@ export function PDFViewer({ fileUrl, highlights, onTextSelect }: PDFViewerProps)
         <div
             ref={containerRef}
             className={`flex-1 overflow-auto p-6 ${invertPdf ? 'pdf-inverted' : ''}`}
-            style={{ backgroundColor: getBackgroundColor() }}
+            style={{ backgroundColor: getBgColor() }}
         >
             <Document
                 file={fileUrl}
                 onLoadSuccess={onDocumentLoadSuccess}
-                onLoadError={onDocumentLoadError}
+                onLoadError={(e) => setError(`Failed to load PDF: ${e.message}`)}
                 className="flex flex-col items-center gap-4"
                 loading={
                     <div className="flex flex-col items-center justify-center h-64">
@@ -151,39 +116,31 @@ export function PDFViewer({ fileUrl, highlights, onTextSelect }: PDFViewerProps)
                     </div>
                 }
             >
-                {numPages > 0 && Array.from(new Array(numPages), (_, index) => (
+                {numPages > 0 && Array.from({ length: numPages }, (_, index) => (
                     <div
-                        key={`page_container_${index + 1}`}
+                        key={`page_${index + 1}`}
                         className="relative shadow-lg"
-                        style={{
-                            backgroundColor: invertPdf ? '#1a1a1a' : 'white'
-                        }}
+                        style={{ backgroundColor: invertPdf ? '#1a1a1a' : 'white' }}
                     >
                         <Page
-                            key={`page_${index + 1}`}
                             pageNumber={index + 1}
                             width={pageWidth}
                             onMouseUp={() => handleMouseUp(index + 1)}
                             renderTextLayer={true}
                             renderAnnotationLayer={true}
-                            className="relative"
                             loading={
-                                <div
-                                    className="flex items-center justify-center h-[800px] w-full"
-                                    style={{ backgroundColor: invertPdf ? '#2a2a2a' : '#f3f4f6' }}
-                                >
+                                <div className="flex items-center justify-center h-[800px] w-full bg-gray-100 dark:bg-gray-800">
                                     <div className="animate-pulse text-gray-400">Loading page {index + 1}...</div>
                                 </div>
                             }
                         />
-                        {/* Render highlight overlays - note they need special handling when inverted */}
+
+                        {/* Highlight overlays */}
                         {getPageHighlights(index + 1).map(highlight => (
                             highlight.rects?.map((rect, rectIdx) => (
                                 <div
                                     key={`${highlight.id}-${rectIdx}`}
-                                    className={`absolute pointer-events-auto cursor-pointer transition-colors ${activeHighlightId === highlight.id
-                                            ? 'animate-pulse'
-                                            : ''
+                                    className={`absolute pointer-events-auto cursor-pointer transition-colors ${activeHighlightId === highlight.id ? 'animate-pulse' : ''
                                         }`}
                                     style={{
                                         left: `${rect.x * 100}%`,
@@ -193,7 +150,6 @@ export function PDFViewer({ fileUrl, highlights, onTextSelect }: PDFViewerProps)
                                         backgroundColor: activeHighlightId === highlight.id
                                             ? 'rgba(255, 213, 0, 0.6)'
                                             : 'rgba(255, 213, 0, 0.4)',
-                                        // Counteract inversion for highlights
                                         filter: invertPdf ? 'invert(1) hue-rotate(180deg)' : 'none',
                                     }}
                                     onClick={() => setActiveHighlight(highlight.id)}
