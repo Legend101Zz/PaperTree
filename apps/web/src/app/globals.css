@@ -43,6 +43,40 @@ body {
   filter: invert(1) hue-rotate(180deg);
 }
 
+/* Highlight interactions */
+.highlight-mark:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.highlight-badge:hover {
+  transform: scale(1.2) translateY(-1px);
+}
+
+.highlight-mark.active {
+  animation: highlightPulse 0.5s ease-out;
+}
+
+@keyframes highlightPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+/* Smooth highlight transitions */
+.highlight-wrapper {
+  display: inline;
+}
+
+.highlight-mark {
+  position: relative;
+  z-index: 1;
+}
+
 /* Highlight styles */
 .highlight-overlay {
   background-color: rgba(255, 213, 0, 0.4);
@@ -62,6 +96,26 @@ body {
   50% {
     background-color: rgba(255, 213, 0, 0.8);
   }
+}
+
+/* Highlight indicator animation - plays once when explanation is added */
+@keyframes pulse-once {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.7);
+  }
+  50% {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 6px rgba(234, 179, 8, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(234, 179, 8, 0);
+  }
+}
+
+.animate-pulse-once {
+  animation: pulse-once 0.6s ease-out;
 }
 
 /* Book mode highlight */
@@ -272,29 +326,6 @@ body {
   filter: invert(1) hue-rotate(180deg);
 }
 
-/* Book mode typography */
-.book-content {
-  font-feature-settings:
-    "kern" 1,
-    "liga" 1,
-    "calt" 1;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-.book-content.font-serif {
-  font-family: "Georgia", "Cambria", "Times New Roman", serif;
-}
-
-.book-content.font-sans {
-  font-family: "Inter", "Segoe UI", "Roboto", "Helvetica Neue", sans-serif;
-}
-
-.book-content.font-mono {
-  font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
-}
-
 /* KaTeX improvements */
 .katex-display {
   margin: 1em 0;
@@ -333,4 +364,56 @@ body {
 
 .search-highlight-active {
   animation: searchPulse 1s ease-in-out 2;
+}
+
+/* Inline explanation popup shadow */
+.inline-explanation-popup {
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.25),
+    0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+/* Highlight marker styles */
+mark[data-highlight-id] {
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+mark[data-highlight-id]:hover {
+  filter: brightness(0.95);
+}
+
+/* Prose content improvements */
+.prose-content p {
+  margin-bottom: 1em;
+}
+
+.prose-content > *:last-child {
+  margin-bottom: 0;
+}
+
+/* Inline elements in prose should flow naturally */
+.prose-content .inline {
+  display: inline;
+}
+
+/* Make sure markdown renders inline with highlights */
+.prose-content > p,
+.prose-content > div {
+  display: inline;
+}
+
+/* But block elements should still be blocks */
+.prose-content > pre,
+.prose-content > ul,
+.prose-content > ol,
+.prose-content > blockquote,
+.prose-content > table,
+.prose-content > h1,
+.prose-content > h2,
+.prose-content > h3,
+.prose-content > h4,
+.prose-content > h5,
+.prose-content > h6 {
+  display: block;
 }

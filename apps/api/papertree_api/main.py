@@ -53,8 +53,8 @@ app.add_middleware(
 # Include routers
 app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 app.include_router(papers_router, prefix="/papers", tags=["Papers"])
-app.include_router(highlights_router, tags=["Highlights"])
-app.include_router(explanations_router, tags=["Explanations"])
+app.include_router(highlights_router, prefix="/highlight",tags=["Highlights"])
+app.include_router(explanations_router,prefix="/explanations", tags=["Explanations"])
 app.include_router(canvas_router, tags=["Canvas"])
 
 

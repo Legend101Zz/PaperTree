@@ -1,56 +1,57 @@
 // apps/web/src/app/paper/[id]/read/page.tsx
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState, useCallback } from 'react';
+import { useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { ReaderToolbar } from '@/components/reader/ReaderToolbar';
 import { PDFViewer } from '@/components/reader/PDFViewer';
 import { BookViewer } from '@/components/reader/BookViewer';
 import { SmartOutlinePanel } from '@/components/reader/SmartOutlinePanel';
-import { ExplanationPanel } from '@/components/reader/ExplanationPanel';
 import { HighlightPopup } from '@/components/reader/HighlightPopup';
 import { PDFMinimap } from '@/components/reader/PDFMinimap';
 import { FigureViewer } from '@/components/reader/FigureViewer';
+import { InlineExplanation } from '@/components/reader/InlineExplanation';
+import { HighlightsPanel } from '@/components/reader/HighlightsPanel';
 import { useReaderStore } from '@/store/readerStore';
 import { papersApi, highlightsApi, explanationsApi } from '@/lib/api';
-import { PaperDetail } from '@/types';
+import { PaperDetail, Highlight, Explanation } from '@/types';
 import { Sparkles, Loader2 } from 'lucide-react';
 
 export default function ReaderPage() {
     const params = useParams();
-    const router = useRouter();
     const paperId = params.id as string;
     const queryClient = useQueryClient();
 
-    // Store
-    const settings = useReaderStore((state) => state.settings);
-    const highlights = useReaderStore((state) => state.highlights);
-    const explanations = useReaderStore((state) => state.explanations);
-    const selectedText = useReaderStore((state) => state.selectedText);
-    const selectionPosition = useReaderStore((state) => state.selectionPosition);
-    const activeHighlightId = useReaderStore((state) => state.activeHighlightId);
-    const currentPdfPage = useReaderStore((state) => state.currentPdfPage);
+    // Store state
+    const settings = useReaderStore((s) => s.settings);
+    const highlights = useReaderStore((s) => s.highlights);
+    const explanations = useReaderStore((s) => s.explanations);
+    const selectedText = useReaderStore((s) => s.selectedText);
+    const selectionPosition = useReaderStore((s) => s.selectionPosition);
+    const inlineExplanation = useReaderStore((s) => s.inlineExplanation);
 
-    const setHighlights = useReaderStore((state) => state.setHighlights);
-    const setExplanations = useReaderStore((state) => state.setExplanations);
-    const addHighlight = useReaderStore((state) => state.addHighlight);
-    const addExplanation = useReaderStore((state) => state.addExplanation);
-    const setSelection = useReaderStore((state) => state.setSelection);
-    const clearSelection = useReaderStore((state) => state.clearSelection);
-    const updateExplanation = useReaderStore((state) => state.updateExplanation);
-    const setActiveHighlight = useReaderStore((state) => state.setActiveHighlight);
-    const setCurrentSection = useReaderStore((state) => state.setCurrentSection);
-    const setMode = useReaderStore((state) => state.setMode);
-    const resetReaderState = useReaderStore((state) => state.resetReaderState);
-    const openFigureViewer = useReaderStore((state) => state.openFigureViewer);
+    // Store actions
+    const setHighlights = useReaderStore((s) => s.setHighlights);
+    const setExplanations = useReaderStore((s) => s.setExplanations);
+    const addHighlight = useReaderStore((s) => s.addHighlight);
+    const addExplanation = useReaderStore((s) => s.addExplanation);
+    const setSelection = useReaderStore((s) => s.setSelection);
+    const clearSelection = useReaderStore((s) => s.clearSelection);
+    const updateExplanation = useReaderStore((s) => s.updateExplanation);
+    const setCurrentSection = useReaderStore((s) => s.setCurrentSection);
+    const setMode = useReaderStore((s) => s.setMode);
+    const resetReaderState = useReaderStore((s) => s.resetReaderState);
+    const openFigureViewer = useReaderStore((s) => s.openFigureViewer);
+    const openInlineExplanation = useReaderStore((s) => s.openInlineExplanation);
+    const closeInlineExplanation = useReaderStore((s) => s.closeInlineExplanation);
 
     const [pendingHighlight, setPendingHighlight] = useState<any>(null);
     const [scrollToSectionId, setScrollToSectionId] = useState<string | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
 
-    // Reset on paper change
+    // Reset on mount
     useEffect(() => {
         resetReaderState();
     }, [paperId, resetReaderState]);
@@ -62,47 +63,84 @@ export default function ReaderPage() {
         enabled: !!paperId,
     });
 
-    // Fetch highlights & explanations
-    const { data: fetchedHighlights } = useQuery({
+    // Fetch highlights
+    const { data: fetchedHighlights, refetch: refetchHighlights } = useQuery({
         queryKey: ['highlights', paperId],
-        queryFn: () => highlightsApi.list(paperId),
+        queryFn: async () => {
+            const result = await highlightsApi.list(paperId);
+            console.log('API returned highlights:', result);
+            return result as Highlight[];
+        },
         enabled: !!paperId,
+        refetchOnWindowFocus: true,
     });
 
-    const { data: fetchedExplanations } = useQuery({
+    // Fetch explanations
+    const { data: fetchedExplanations, refetch: refetchExplanations } = useQuery({
         queryKey: ['explanations', paperId],
-        queryFn: () => explanationsApi.list(paperId),
+        queryFn: async () => {
+            const result = await explanationsApi.list(paperId);
+            console.log('API returned explanations:', result);
+            return result as Explanation[];
+        },
         enabled: !!paperId,
+        refetchInterval: inlineExplanation.isOpen ? 2000 : false,
     });
 
+    // Sync fetched data to store
     useEffect(() => {
-        if (fetchedHighlights) setHighlights(fetchedHighlights);
+        if (fetchedHighlights) {
+            console.log('Setting highlights in store:', fetchedHighlights.length);
+            setHighlights(fetchedHighlights);
+        }
     }, [fetchedHighlights, setHighlights]);
 
     useEffect(() => {
-        if (fetchedExplanations) setExplanations(fetchedExplanations);
+        if (fetchedExplanations) {
+            console.log('Setting explanations in store:', fetchedExplanations.length);
+            setExplanations(fetchedExplanations);
+        }
     }, [fetchedExplanations, setExplanations]);
 
-    // Mutations
+    // Create highlight mutation
     const createHighlightMutation = useMutation({
         mutationFn: (data: any) => highlightsApi.create(paperId, data),
-        onSuccess: (newHighlight) => addHighlight(newHighlight),
-    });
-
-    const createExplanationMutation = useMutation({
-        mutationFn: (data: any) => explanationsApi.create(paperId, data),
-        onSuccess: (newExplanation) => {
-            addExplanation(newExplanation);
-            queryClient.invalidateQueries({ queryKey: ['explanations', paperId] });
+        onSuccess: (newHighlight) => {
+            console.log('Created highlight:', newHighlight);
+            addHighlight(newHighlight);
+            // Refetch to ensure consistency
+            refetchHighlights();
         },
     });
 
+    // Create explanation mutation
+    const createExplanationMutation = useMutation({
+        mutationFn: (data: any) => explanationsApi.create(paperId, data),
+        onSuccess: (newExplanation) => {
+            console.log('Created explanation:', newExplanation);
+            addExplanation(newExplanation);
+            refetchExplanations();
+        },
+    });
+
+    // Update explanation mutation
     const updateExplanationMutation = useMutation({
         mutationFn: ({ id, data }: { id: string; data: any }) => explanationsApi.update(id, data),
         onSuccess: (updated) => updateExplanation(updated.id, updated),
     });
 
-    // Generate book content
+    // Delete highlight mutation
+    const deleteHighlightMutation = useMutation({
+        mutationFn: (highlightId: string) => highlightsApi.delete(highlightId),
+        onSuccess: (_, highlightId) => {
+            setHighlights(highlights.filter((h) => h.id !== highlightId));
+            setExplanations(explanations.filter((e) => e.highlight_id !== highlightId));
+            refetchHighlights();
+            refetchExplanations();
+        },
+    });
+
+    // Generate book
     const handleGenerateBook = async () => {
         setIsGenerating(true);
         try {
@@ -110,53 +148,55 @@ export default function ReaderPage() {
             await refetchPaper();
             setMode('book');
         } catch (error) {
-            console.error('Failed to generate book content:', error);
+            console.error('Failed to generate:', error);
             alert('Failed to generate. Please try again.');
         } finally {
             setIsGenerating(false);
         }
     };
 
-    // Section visibility - syncs minimap
+    // Handlers
     const handleSectionVisible = useCallback((sectionId: string, pdfPages: number[]) => {
-        const page = pdfPages[0] ?? 0;
-        setCurrentSection(sectionId, page);
+        setCurrentSection(sectionId, pdfPages[0] ?? 0);
     }, [setCurrentSection]);
 
-    // Figure click - opens figure viewer or syncs minimap
     const handleFigureClick = useCallback((figureId: string, pdfPage: number) => {
         openFigureViewer(pdfPage);
     }, [openFigureViewer]);
 
-    // Outline click
     const handleOutlineClick = useCallback((sectionId: string) => {
         setScrollToSectionId(sectionId);
         setTimeout(() => setScrollToSectionId(null), 100);
     }, []);
 
-    // PDF page click from outline
     const handlePdfPageClick = useCallback((page: number) => {
         setCurrentSection(null, page);
     }, [setCurrentSection]);
 
-    // Switch to PDF mode
     const handleSwitchToPDF = useCallback((page: number) => {
+        closeInlineExplanation();
         setCurrentSection(null, page);
         setMode('pdf');
-    }, [setMode, setCurrentSection]);
+    }, [setMode, setCurrentSection, closeInlineExplanation]);
 
-    // Book text selection
     const handleBookTextSelect = useCallback((text: string, sectionId: string, pdfPage: number) => {
-        if (!text.trim()) return;
+        if (!text.trim() || inlineExplanation.isOpen) return;
+
         const selection = window.getSelection();
         if (!selection || selection.rangeCount === 0) return;
+
         const range = selection.getRangeAt(0);
         const rect = range.getBoundingClientRect();
-        setSelection(text, { x: rect.right, y: rect.top });
-        setPendingHighlight({ mode: 'book', selected_text: text, section_id: sectionId, page_number: pdfPage });
-    }, [setSelection]);
 
-    // PDF text selection
+        setSelection(text, { x: rect.right, y: rect.top });
+        setPendingHighlight({
+            mode: 'book',
+            selected_text: text,
+            section_id: sectionId,
+            page_number: pdfPage + 1,
+        });
+    }, [setSelection, inlineExplanation.isOpen]);
+
     const handlePDFTextSelect = useCallback((text: string, pageNumber: number, rects: any[]) => {
         if (!text.trim()) return;
         const rect = rects[0];
@@ -165,7 +205,7 @@ export default function ReaderPage() {
             mode: 'pdf',
             selected_text: text,
             page_number: pageNumber,
-            rects: rects.map(r => ({
+            rects: rects.map((r) => ({
                 x: r.x / window.innerWidth,
                 y: r.y / window.innerHeight,
                 w: r.w / window.innerWidth,
@@ -174,45 +214,30 @@ export default function ReaderPage() {
         });
     }, [setSelection]);
 
-    // Ask AI
+    const handleHighlightClick = useCallback((highlightId: string, position: { x: number; y: number }) => {
+        window.getSelection()?.removeAllRanges();
+        clearSelection();
+        setPendingHighlight(null);
+        openInlineExplanation(highlightId, position);
+    }, [openInlineExplanation, clearSelection]);
+
     const handleAskAI = useCallback(async (question: string) => {
         if (!pendingHighlight) return;
+
         try {
             const highlight = await createHighlightMutation.mutateAsync(pendingHighlight);
-            await createExplanationMutation.mutateAsync({ highlight_id: highlight.id, question });
+
+            const selection = window.getSelection();
+            let position = { x: window.innerWidth / 2, y: 200 };
+            if (selection && selection.rangeCount > 0) {
+                const rect = selection.getRangeAt(0).getBoundingClientRect();
+                position = { x: rect.right, y: rect.bottom };
+            }
+
             clearSelection();
             setPendingHighlight(null);
-        } catch (error) {
-            console.error('Failed:', error);
-        }
-    }, [pendingHighlight, createHighlightMutation, createExplanationMutation, clearSelection]);
+            openInlineExplanation(highlight.id, position);
 
-    // Follow-up
-    const handleFollowUp = useCallback(async (parentId: string, question: string) => {
-        const parent = explanations.find(e => e.id === parentId);
-        if (!parent) return;
-        await createExplanationMutation.mutateAsync({
-            highlight_id: parent.highlight_id,
-            question,
-            parent_id: parentId,
-        });
-    }, [explanations, createExplanationMutation]);
-
-    // Save figure note
-    const handleSaveFigureNote = useCallback((page: number, note: string) => {
-        console.log('Save note for page', page, ':', note);
-        // Could save to backend or local storage
-    }, []);
-
-    // Ask about figure
-    const handleAskFigureQuestion = useCallback(async (page: number, question: string) => {
-        // Create a highlight for this figure question
-        try {
-            const highlight = await createHighlightMutation.mutateAsync({
-                mode: 'pdf',
-                selected_text: `[Figure on page ${page + 1}]`,
-                page_number: page + 1,
-            });
             await createExplanationMutation.mutateAsync({
                 highlight_id: highlight.id,
                 question,
@@ -220,7 +245,36 @@ export default function ReaderPage() {
         } catch (error) {
             console.error('Failed:', error);
         }
-    }, [createHighlightMutation, createExplanationMutation]);
+    }, [pendingHighlight, createHighlightMutation, createExplanationMutation, clearSelection, openInlineExplanation]);
+
+    const handleFollowUp = useCallback(async (parentId: string, question: string) => {
+        const parent = explanations.find((e) => e.id === parentId);
+        if (!parent) return;
+
+        await createExplanationMutation.mutateAsync({
+            highlight_id: parent.highlight_id,
+            question,
+            parent_id: parentId,
+        });
+    }, [explanations, createExplanationMutation]);
+
+    const handleGoToPdf = useCallback((page: number) => {
+        closeInlineExplanation();
+        setCurrentSection(null, page);
+        setMode('pdf');
+    }, [closeInlineExplanation, setCurrentSection, setMode]);
+
+    const handleDeleteHighlight = useCallback((highlightId: string) => {
+        if (confirm('Delete this highlight and all its explanations?')) {
+            deleteHighlightMutation.mutate(highlightId);
+        }
+    }, [deleteHighlightMutation]);
+
+    const handleExportToCanvas = useCallback((highlightIds: string[]) => {
+        // TODO: Implement canvas export
+        console.log('Export to canvas:', highlightIds);
+        alert(`Export ${highlightIds.length} highlights to Canvas - Coming soon!`);
+    }, []);
 
     // Apply theme
     useEffect(() => {
@@ -255,9 +309,8 @@ export default function ReaderPage() {
                 />
 
                 <div className="flex-1 flex overflow-hidden">
-                    {/* Left - Outline */}
-                    <div className="w-64 border-r border-gray-200 dark:border-gray-700 overflow-y-auto 
-                         hidden lg:block bg-white dark:bg-gray-900 flex-shrink-0">
+                    {/* Outline */}
+                    <div className="w-64 border-r border-gray-200 dark:border-gray-700 overflow-y-auto hidden lg:block bg-white dark:bg-gray-900 flex-shrink-0">
                         <SmartOutlinePanel
                             outline={paper.smart_outline || []}
                             onSectionClick={handleOutlineClick}
@@ -265,56 +318,47 @@ export default function ReaderPage() {
                         />
                     </div>
 
-                    {/* Main content */}
-                    <div className="flex-1 flex overflow-hidden">
+                    {/* Main */}
+                    <div className="flex-1 flex overflow-hidden relative">
                         <div className="flex-1 overflow-hidden">
                             {settings.mode === 'pdf' ? (
                                 <PDFViewer
                                     fileUrl={pdfUrl}
-                                    highlights={highlights.filter(h => h.mode === 'pdf')}
+                                    highlights={highlights.filter((h) => h.mode === 'pdf')}
                                     onTextSelect={handlePDFTextSelect}
                                 />
                             ) : hasBookContent ? (
                                 <BookViewer
                                     paperId={paperId}
                                     bookContent={paper.book_content!}
-                                    outline={paper.smart_outline || []}
                                     pageCount={paper.page_count || 1}
-                                    highlights={highlights.filter(h => h.mode === 'book')}
+                                    highlights={highlights.filter((h) => h.mode === 'book')}
+                                    explanations={explanations}
                                     onTextSelect={handleBookTextSelect}
                                     onSectionVisible={handleSectionVisible}
                                     onFigureClick={handleFigureClick}
+                                    onHighlightClick={handleHighlightClick}
                                     scrollToSectionId={scrollToSectionId}
                                 />
                             ) : (
                                 <div className="flex-1 flex items-center justify-center p-8">
                                     <div className="text-center max-w-md">
-                                        <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 
-                                   flex items-center justify-center mx-auto mb-6">
+                                        <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mx-auto mb-6">
                                             <Sparkles className="w-8 h-8 text-blue-500" />
                                         </div>
                                         <h2 className="text-xl font-semibold mb-3">Generate Book View</h2>
                                         <p className="text-gray-600 dark:text-gray-400 mb-6">
-                                            Create an AI-powered explanation that's easy to read with beautiful typography,
-                                            rendered equations, and generated diagrams.
+                                            Create an AI-powered explanation with beautiful typography and diagrams.
                                         </p>
                                         <button
                                             onClick={handleGenerateBook}
                                             disabled={isGenerating}
-                                            className="px-6 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-400
-                                text-white rounded-lg font-medium transition-colors
-                                flex items-center gap-2 mx-auto"
+                                            className="px-6 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-400 text-white rounded-lg font-medium flex items-center gap-2 mx-auto"
                                         >
                                             {isGenerating ? (
-                                                <>
-                                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                                    Generating...
-                                                </>
+                                                <><Loader2 className="w-5 h-5 animate-spin" /> Generating...</>
                                             ) : (
-                                                <>
-                                                    <Sparkles className="w-5 h-5" />
-                                                    Generate Book View
-                                                </>
+                                                <><Sparkles className="w-5 h-5" /> Generate Book View</>
                                             )}
                                         </button>
                                         <p className="text-xs text-gray-500 mt-4">Takes 30-60 seconds</p>
@@ -323,7 +367,7 @@ export default function ReaderPage() {
                             )}
                         </div>
 
-                        {/* PDF Minimap */}
+                        {/* Minimap */}
                         {settings.mode === 'book' && hasBookContent && paper.page_count && (
                             <PDFMinimap
                                 paperId={paperId}
@@ -332,51 +376,45 @@ export default function ReaderPage() {
                             />
                         )}
                     </div>
-
-                    {/* Right - Explanations */}
-                    <div className="w-80 border-l border-gray-200 dark:border-gray-700 overflow-y-auto 
-                         hidden xl:block bg-white dark:bg-gray-900 flex-shrink-0">
-                        <ExplanationPanel
-                            highlights={highlights}
-                            explanations={explanations}
-                            onFollowUp={handleFollowUp}
-                            onTogglePin={(id, isPinned) =>
-                                updateExplanationMutation.mutate({ id, data: { is_pinned: isPinned } })
-                            }
-                            onToggleResolved={(id, isResolved) =>
-                                updateExplanationMutation.mutate({ id, data: { is_resolved: isResolved } })
-                            }
-                            onSummarize={async (id) => {
-                                const result = await explanationsApi.summarize(id);
-                                alert(result.summary);
-                            }}
-                            onHighlightClick={setActiveHighlight}
-                            onSendToCanvas={() => { }}
-                            isLoading={createExplanationMutation.isPending}
-                            activeHighlightId={activeHighlightId}
-                        />
-                    </div>
                 </div>
 
-                {/* Highlight popup */}
-                {selectedText && selectionPosition && (
+                {/* Selection popup */}
+                {selectedText && selectionPosition && !inlineExplanation.isOpen && (
                     <HighlightPopup
                         position={selectionPosition}
                         onAskAI={handleAskAI}
-                        onClose={() => {
-                            clearSelection();
-                            setPendingHighlight(null);
-                        }}
+                        onClose={() => { clearSelection(); setPendingHighlight(null); }}
                         isLoading={createHighlightMutation.isPending || createExplanationMutation.isPending}
                     />
                 )}
 
-                {/* Figure Viewer Modal */}
+                {/* Inline explanation */}
+                <InlineExplanation
+                    highlights={highlights}
+                    explanations={explanations}
+                    onFollowUp={handleFollowUp}
+                    onTogglePin={(id, isPinned) => updateExplanationMutation.mutate({ id, data: { is_pinned: isPinned } })}
+                    onToggleResolved={(id, isResolved) => updateExplanationMutation.mutate({ id, data: { is_resolved: isResolved } })}
+                    onGoToPdf={handleGoToPdf}
+                    isLoading={createExplanationMutation.isPending}
+                />
+
+                {/* Highlights panel */}
+                <HighlightsPanel
+                    highlights={highlights}
+                    explanations={explanations}
+                    onHighlightClick={handleHighlightClick}
+                    onDeleteHighlight={handleDeleteHighlight}
+                    onGoToPdf={handleGoToPdf}
+                    onExportToCanvas={handleExportToCanvas}
+                />
+
+                {/* Figure viewer */}
                 <FigureViewer
                     paperId={paperId}
                     pageCount={paper.page_count || 1}
-                    onSaveNote={handleSaveFigureNote}
-                    onAskQuestion={handleAskFigureQuestion}
+                    onSaveNote={() => { }}
+                    onAskQuestion={() => { }}
                 />
             </div>
         </AuthGuard>

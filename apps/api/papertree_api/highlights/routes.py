@@ -1,10 +1,10 @@
 from datetime import datetime
 from typing import List
 
-from papertree_api.auth.utils import get_current_user
 from bson import ObjectId
-from papertree_api.database import get_database
 from fastapi import APIRouter, Depends, HTTPException, status
+from papertree_api.auth.utils import get_current_user
+from papertree_api.database import get_database
 
 from .models import HighlightCreate, HighlightResponse
 
@@ -26,7 +26,7 @@ async def create_highlight(
     try:
         paper = await db.papers.find_one({
             "_id": ObjectId(paper_id),
-            "user_id": current_user["id"]
+            "user_id": current_user["id"]  # ✅ String comparison
         })
     except:
         raise HTTPException(
@@ -81,7 +81,7 @@ async def get_highlights(
     try:
         paper = await db.papers.find_one({
             "_id": ObjectId(paper_id),
-            "user_id": current_user["id"]
+            "user_id": current_user["id"]  # ✅ String comparison
         })
     except:
         raise HTTPException(
@@ -130,7 +130,7 @@ async def delete_highlight(
     try:
         highlight = await db.highlights.find_one({
             "_id": ObjectId(highlight_id),
-            "user_id": current_user["id"]
+            "user_id": current_user["id"]  # ✅ String comparison
         })
     except:
         raise HTTPException(

@@ -23,6 +23,12 @@ export interface PDFRegion {
   y1: number;
 }
 
+export interface InlineExplanationState {
+  isOpen: boolean;
+  highlightId: string | null;
+  position: { x: number; y: number } | null;
+}
+
 interface ReaderState {
   settings: ReaderSettings;
   highlights: Highlight[];
@@ -30,16 +36,14 @@ interface ReaderState {
   activeHighlightId: string | null;
   selectedText: string | null;
   selectionPosition: { x: number; y: number } | null;
-
-  // Current view state
   currentSectionId: string | null;
   currentPdfPage: number;
   currentPdfRegion: PDFRegion | null;
-
-  // Figure viewer
   figureViewerOpen: boolean;
   figureViewerPage: number;
   figureViewerNote: string;
+  inlineExplanation: InlineExplanationState;
+  minimapWasVisible: boolean;
 }
 
 interface ReaderActions {
@@ -72,11 +76,17 @@ interface ReaderActions {
     pdfPage: number,
     region?: PDFRegion,
   ) => void;
+  setCurrentPdfPage: (page: number) => void;
 
-  // Figure viewer
   openFigureViewer: (page: number) => void;
   closeFigureViewer: () => void;
   setFigureNote: (note: string) => void;
+
+  openInlineExplanation: (
+    highlightId: string,
+    position: { x: number; y: number },
+  ) => void;
+  closeInlineExplanation: () => void;
 
   resetReaderState: () => void;
 }
@@ -106,6 +116,12 @@ const initialState: ReaderState = {
   figureViewerOpen: false,
   figureViewerPage: 0,
   figureViewerNote: "",
+  inlineExplanation: {
+    isOpen: false,
+    highlightId: null,
+    position: null,
+  },
+  minimapWasVisible: true,
 };
 
 export const useReaderStore = create<ReaderState & ReaderActions>()(
@@ -150,13 +166,26 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
           ),
         })),
 
+      // FIXED: Always update PDF page when section changes
       setCurrentSection: (sectionId, pdfPage, region) => {
-        console.log("Setting current section:", sectionId, "page:", pdfPage);
-        set({
-          currentSectionId: sectionId,
-          currentPdfPage: pdfPage,
-          currentPdfRegion: region || null,
-        });
+        const currentState = get();
+        // Only update if something actually changed
+        if (
+          currentState.currentSectionId !== sectionId ||
+          currentState.currentPdfPage !== pdfPage
+        ) {
+          console.log("Store: setCurrentSection", { sectionId, pdfPage });
+          set({
+            currentSectionId: sectionId,
+            currentPdfPage: pdfPage,
+            currentPdfRegion: region || null,
+          });
+        }
+      },
+
+      setCurrentPdfPage: (page) => {
+        console.log("Store: setCurrentPdfPage", page);
+        set({ currentPdfPage: page });
       },
 
       openFigureViewer: (page) =>
@@ -167,6 +196,42 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
         }),
       closeFigureViewer: () => set({ figureViewerOpen: false }),
       setFigureNote: (note) => set({ figureViewerNote: note }),
+
+      openInlineExplanation: (highlightId, position) => {
+        const state = get();
+        const wasVisible = state.settings.minimapSize !== "hidden";
+        console.log("Store: openInlineExplanation", { highlightId, position });
+        set({
+          inlineExplanation: {
+            isOpen: true,
+            highlightId,
+            position,
+          },
+          activeHighlightId: highlightId,
+          minimapWasVisible: wasVisible,
+          settings: {
+            ...state.settings,
+            minimapSize: "hidden",
+          },
+        });
+      },
+
+      closeInlineExplanation: () => {
+        const state = get();
+        console.log("Store: closeInlineExplanation");
+        set({
+          inlineExplanation: {
+            isOpen: false,
+            highlightId: null,
+            position: null,
+          },
+          activeHighlightId: null,
+          settings: {
+            ...state.settings,
+            minimapSize: state.minimapWasVisible ? "medium" : "hidden",
+          },
+        });
+      },
 
       resetReaderState: () =>
         set({
@@ -181,10 +246,16 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
           figureViewerOpen: false,
           figureViewerPage: 0,
           figureViewerNote: "",
+          inlineExplanation: {
+            isOpen: false,
+            highlightId: null,
+            position: null,
+          },
+          minimapWasVisible: true,
         }),
     }),
     {
-      name: "reader-settings-v3",
+      name: "reader-settings-v5",
       partialize: (state) => ({ settings: state.settings }),
     },
   ),

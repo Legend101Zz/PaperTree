@@ -165,6 +165,7 @@ export interface Highlight {
   mode: "pdf" | "book";
   selected_text: string;
   page_number?: number;
+  section_id?: string;
   rects?: Rect[];
   anchor?: TextAnchor;
   created_at: string;

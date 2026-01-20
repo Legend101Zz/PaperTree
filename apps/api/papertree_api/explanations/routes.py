@@ -15,7 +15,7 @@ settings = get_settings()
 router = APIRouter()
 
 
-@router.post("/papers/{paper_id}/explain", response_model=ExplanationResponse)
+@router.post("/papers/{paper_id}", response_model=ExplanationResponse)
 async def create_explanation(
     paper_id: str,
     explanation_data: ExplanationCreate,
@@ -125,7 +125,7 @@ async def create_explanation(
     )
 
 
-@router.get("/papers/{paper_id}/explanations", response_model=List[ExplanationResponse])
+@router.get("/papers/{paper_id}", response_model=List[ExplanationResponse])
 async def get_explanations(
     paper_id: str,
     current_user: dict = Depends(get_current_user)
@@ -159,7 +159,7 @@ async def get_explanations(
     return explanations
 
 
-@router.get("/explanations/{explanation_id}/thread", response_model=ExplanationThread)
+@router.get("/{explanation_id}/thread", response_model=ExplanationThread)
 async def get_explanation_thread(
     explanation_id: str,
     current_user: dict = Depends(get_current_user)
@@ -215,7 +215,7 @@ async def get_explanation_thread(
     return await build_thread(explanation_id)
 
 
-@router.patch("/explanations/{explanation_id}", response_model=ExplanationResponse)
+@router.patch("/{explanation_id}", response_model=ExplanationResponse)
 async def update_explanation(
     explanation_id: str,
     update_data: ExplanationUpdate,
@@ -274,7 +274,7 @@ async def update_explanation(
     )
 
 
-@router.post("/explanations/summarize")
+@router.post("/summarize")
 async def summarize_explanation_thread(
     request: SummarizeRequest,
     current_user: dict = Depends(get_current_user)

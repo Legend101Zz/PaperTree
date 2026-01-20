@@ -3,6 +3,30 @@ import axios from "axios";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+async function fetchApi<T>(
+  endpoint: string,
+  options?: RequestInit,
+): Promise<T> {
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+  const res = await fetch(`${API_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options?.headers,
+    },
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(error.detail || `API Error: ${res.status}`);
+  }
+
+  return res.json();
+}
+
 const getToken = () =>
   typeof window !== "undefined" ? localStorage.getItem("token") : "";
 
@@ -83,27 +107,92 @@ export const papersApi = {
     ).data,
 };
 
-// Highlights
+// Highlights API
 export const highlightsApi = {
-  create: async (paperId: string, data: any) =>
-    (await api.post(`/papers/${paperId}/highlights`, data)).data,
-  list: async (paperId: string) =>
-    (await api.get(`/papers/${paperId}/highlights`)).data,
-  delete: async (highlightId: string) =>
-    (await api.delete(`/highlights/${highlightId}`)).data,
+  list: async (paperId: string) => {
+    console.log("Fetching highlights for paper:", paperId);
+    const result = await fetchApi<any[]>(
+      `/highlight/papers/${paperId}/highlights`,
+    );
+    console.log("Highlights API response:", result);
+    return result;
+  },
+
+  create: async (
+    paperId: string,
+    data: {
+      mode: "pdf" | "book";
+      selected_text: string;
+      page_number?: number;
+      section_id?: string;
+      rects?: Array<{ x: number; y: number; w: number; h: number }>;
+    },
+  ) => {
+    console.log("Creating highlight:", data);
+    const result = await fetchApi<any>(
+      `/highlight/papers/${paperId}/highlights`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+    );
+    console.log("Created highlight response:", result);
+    return result;
+  },
+
+  delete: async (highlightId: string) => {
+    console.log("Deleting highlight:", highlightId);
+    return fetchApi<void>(`/highlight/highlights/${highlightId}`, {
+      method: "DELETE",
+    });
+  },
 };
 
-// Explanations
+// Explanations API
 export const explanationsApi = {
-  create: async (paperId: string, data: any) =>
-    (await api.post(`/papers/${paperId}/explain`, data)).data,
-  list: async (paperId: string) =>
-    (await api.get(`/papers/${paperId}/explanations`)).data,
-  update: async (explanationId: string, data: any) =>
-    (await api.patch(`/explanations/${explanationId}`, data)).data,
+  list: async (paperId: string) => {
+    console.log("Fetching explanations for paper:", paperId);
+    const result = await fetchApi<any[]>(`/explanations/papers/${paperId}`); // ✅
+    console.log("Explanations API response:", result);
+    return result;
+  },
+
+  create: async (
+    paperId: string,
+    data: {
+      highlight_id: string;
+      question: string;
+      parent_id?: string;
+    },
+  ) => {
+    console.log("Creating explanation:", data);
+    const result = await fetchApi<any>(`/explanations/papers/${paperId}`, {
+      // ✅
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    console.log("Created explanation response:", result);
+    return result;
+  },
+
+  update: async (
+    explanationId: string,
+    data: {
+      is_pinned?: boolean;
+      is_resolved?: boolean;
+    },
+  ) => {
+    return fetchApi<any>(`/explanations/${explanationId}`, {
+      // ✅
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+
   summarize: async (explanationId: string) =>
     (
       await api.post("/explanations/summarize", {
+        // ✅
         explanation_id: explanationId,
       })
     ).data,

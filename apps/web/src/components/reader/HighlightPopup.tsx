@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Sparkles, BookOpen, Code, Calculator, MessageSquare } from 'lucide-react';
+import { Loader2, Sparkles, BookOpen, Code, Calculator, MessageSquare } from 'lucide-react';
 
 interface HighlightPopupProps {
     position: { x: number; y: number };
@@ -30,6 +30,18 @@ export function HighlightPopup({ position, onAskAI, onClose, isLoading }: Highli
                 top: position.y + 10
             }}
         >
+            {/* Loading overlay - NEW */}
+            {isLoading && (
+                <div className="absolute inset-0 bg-white/95 dark:bg-gray-800/95 rounded-xl 
+                          flex items-center justify-center backdrop-blur-sm z-10">
+                    <div className="flex flex-col items-center gap-2">
+                        <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            AI is thinking...
+                        </span>
+                    </div>
+                </div>
+            )}
             <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                     Ask AI about this
