@@ -17,12 +17,15 @@ import { HighlightsPanel } from '@/components/reader/HighlightsPanel';
 import { useReaderStore } from '@/store/readerStore';
 import { papersApi, highlightsApi, explanationsApi } from '@/lib/api';
 import { PaperDetail, Highlight, Explanation } from '@/types';
-import { Sparkles, Loader2 } from 'lucide-react';
+import { Sparkles, Loader2, PanelLeftClose, PanelLeft } from 'lucide-react';
 
 export default function ReaderPage() {
     const params = useParams();
     const paperId = params.id as string;
     const queryClient = useQueryClient();
+
+    // Local state for sidebar
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
     // Store state
     const settings = useReaderStore((s) => s.settings);
@@ -51,6 +54,12 @@ export default function ReaderPage() {
     const [scrollToSectionId, setScrollToSectionId] = useState<string | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
 
+    // Calculate minimap width for layout
+    const minimapWidth = settings.minimapSize === 'hidden' ? 0
+        : settings.minimapSize === 'small' ? 200
+            : settings.minimapSize === 'large' ? 420
+                : 300;
+
     // Reset on mount
     useEffect(() => {
         resetReaderState();
@@ -68,7 +77,6 @@ export default function ReaderPage() {
         queryKey: ['highlights', paperId],
         queryFn: async () => {
             const result = await highlightsApi.list(paperId);
-            console.log('API returned highlights:', result);
             return result as Highlight[];
         },
         enabled: !!paperId,
@@ -80,7 +88,6 @@ export default function ReaderPage() {
         queryKey: ['explanations', paperId],
         queryFn: async () => {
             const result = await explanationsApi.list(paperId);
-            console.log('API returned explanations:', result);
             return result as Explanation[];
         },
         enabled: !!paperId,
@@ -90,46 +97,38 @@ export default function ReaderPage() {
     // Sync fetched data to store
     useEffect(() => {
         if (fetchedHighlights) {
-            console.log('Setting highlights in store:', fetchedHighlights.length);
             setHighlights(fetchedHighlights);
         }
     }, [fetchedHighlights, setHighlights]);
 
     useEffect(() => {
         if (fetchedExplanations) {
-            console.log('Setting explanations in store:', fetchedExplanations.length);
             setExplanations(fetchedExplanations);
         }
     }, [fetchedExplanations, setExplanations]);
 
-    // Create highlight mutation
+    // Mutations
     const createHighlightMutation = useMutation({
         mutationFn: (data: any) => highlightsApi.create(paperId, data),
         onSuccess: (newHighlight) => {
-            console.log('Created highlight:', newHighlight);
             addHighlight(newHighlight);
-            // Refetch to ensure consistency
             refetchHighlights();
         },
     });
 
-    // Create explanation mutation
     const createExplanationMutation = useMutation({
         mutationFn: (data: any) => explanationsApi.create(paperId, data),
         onSuccess: (newExplanation) => {
-            console.log('Created explanation:', newExplanation);
             addExplanation(newExplanation);
             refetchExplanations();
         },
     });
 
-    // Update explanation mutation
     const updateExplanationMutation = useMutation({
         mutationFn: ({ id, data }: { id: string; data: any }) => explanationsApi.update(id, data),
         onSuccess: (updated) => updateExplanation(updated.id, updated),
     });
 
-    // Delete highlight mutation
     const deleteHighlightMutation = useMutation({
         mutationFn: (highlightId: string) => highlightsApi.delete(highlightId),
         onSuccess: (_, highlightId) => {
@@ -271,7 +270,6 @@ export default function ReaderPage() {
     }, [deleteHighlightMutation]);
 
     const handleExportToCanvas = useCallback((highlightIds: string[]) => {
-        // TODO: Implement canvas export
         console.log('Export to canvas:', highlightIds);
         alert(`Export ${highlightIds.length} highlights to Canvas - Coming soon!`);
     }, []);
@@ -296,6 +294,7 @@ export default function ReaderPage() {
 
     const hasBookContent = !!paper.book_content;
     const pdfUrl = papersApi.getFileUrl(paperId);
+    const showMinimap = settings.mode === 'book' && hasBookContent && paper.page_count && settings.minimapSize !== 'hidden';
 
     return (
         <AuthGuard>
@@ -308,74 +307,108 @@ export default function ReaderPage() {
                     isGenerating={isGenerating}
                 />
 
-                <div className="flex-1 flex overflow-hidden">
-                    {/* Outline */}
-                    <div className="w-64 border-r border-gray-200 dark:border-gray-700 overflow-y-auto hidden lg:block bg-white dark:bg-gray-900 flex-shrink-0">
-                        <SmartOutlinePanel
-                            outline={paper.smart_outline || []}
-                            onSectionClick={handleOutlineClick}
-                            onPdfPageClick={handlePdfPageClick}
-                        />
+                <div className="flex-1 flex overflow-hidden relative">
+                    {/* Collapsible Sidebar */}
+                    <div
+                        className={`
+                            border-r border-gray-200 dark:border-gray-700 
+                            bg-white dark:bg-gray-900 
+                            flex-shrink-0 overflow-hidden
+                            transition-all duration-300 ease-in-out
+                            ${sidebarCollapsed ? 'w-0' : 'w-64'}
+                        `}
+                    >
+                        <div className="w-64 h-full overflow-y-auto">
+                            <SmartOutlinePanel
+                                outline={paper.smart_outline || []}
+                                onSectionClick={handleOutlineClick}
+                                onPdfPageClick={handlePdfPageClick}
+                            />
+                        </div>
                     </div>
 
-                    {/* Main */}
-                    <div className="flex-1 flex overflow-hidden relative">
-                        <div className="flex-1 overflow-hidden">
-                            {settings.mode === 'pdf' ? (
-                                <PDFViewer
-                                    fileUrl={pdfUrl}
-                                    highlights={highlights.filter((h) => h.mode === 'pdf')}
-                                    onTextSelect={handlePDFTextSelect}
-                                />
-                            ) : hasBookContent ? (
-                                <BookViewer
-                                    paperId={paperId}
-                                    bookContent={paper.book_content!}
-                                    pageCount={paper.page_count || 1}
-                                    highlights={highlights.filter((h) => h.mode === 'book')}
-                                    explanations={explanations}
-                                    onTextSelect={handleBookTextSelect}
-                                    onSectionVisible={handleSectionVisible}
-                                    onFigureClick={handleFigureClick}
-                                    onHighlightClick={handleHighlightClick}
-                                    scrollToSectionId={scrollToSectionId}
-                                />
-                            ) : (
-                                <div className="flex-1 flex items-center justify-center p-8">
-                                    <div className="text-center max-w-md">
-                                        <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mx-auto mb-6">
-                                            <Sparkles className="w-8 h-8 text-blue-500" />
-                                        </div>
-                                        <h2 className="text-xl font-semibold mb-3">Generate Book View</h2>
-                                        <p className="text-gray-600 dark:text-gray-400 mb-6">
-                                            Create an AI-powered explanation with beautiful typography and diagrams.
-                                        </p>
-                                        <button
-                                            onClick={handleGenerateBook}
-                                            disabled={isGenerating}
-                                            className="px-6 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-400 text-white rounded-lg font-medium flex items-center gap-2 mx-auto"
-                                        >
-                                            {isGenerating ? (
-                                                <><Loader2 className="w-5 h-5 animate-spin" /> Generating...</>
-                                            ) : (
-                                                <><Sparkles className="w-5 h-5" /> Generate Book View</>
-                                            )}
-                                        </button>
-                                        <p className="text-xs text-gray-500 mt-4">Takes 30-60 seconds</p>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+                    {/* Sidebar Toggle Button */}
+                    <button
+                        onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                        className={`
+                            absolute left-0 top-1/2 -translate-y-1/2 z-20
+                            p-2 rounded-r-lg 
+                            bg-white dark:bg-gray-800 
+                            border border-l-0 border-gray-200 dark:border-gray-700
+                            shadow-md hover:bg-gray-50 dark:hover:bg-gray-700
+                            transition-all duration-300
+                            ${sidebarCollapsed ? 'translate-x-0' : 'translate-x-64'}
+                        `}
+                        title={sidebarCollapsed ? 'Show outline' : 'Hide outline'}
+                    >
+                        {sidebarCollapsed ? (
+                            <PanelLeft className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                        ) : (
+                            <PanelLeftClose className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                        )}
+                    </button>
 
-                        {/* Minimap */}
-                        {settings.mode === 'book' && hasBookContent && paper.page_count && (
-                            <PDFMinimap
-                                paperId={paperId}
-                                pageCount={paper.page_count}
-                                onSwitchToPDF={handleSwitchToPDF}
+                    {/* Main Content Area - respects minimap width */}
+                    <div
+                        className="flex-1 overflow-hidden transition-all duration-300"
+                        style={{
+                            marginRight: showMinimap ? minimapWidth : 0
+                        }}
+                    >
+                        {settings.mode === 'pdf' ? (
+                            <PDFViewer
+                                fileUrl={pdfUrl}
+                                highlights={highlights.filter((h) => h.mode === 'pdf')}
+                                onTextSelect={handlePDFTextSelect}
                             />
+                        ) : hasBookContent ? (
+                            <BookViewer
+                                paperId={paperId}
+                                bookContent={paper.book_content!}
+                                pageCount={paper.page_count || 1}
+                                highlights={highlights.filter((h) => h.mode === 'book')}
+                                explanations={explanations}
+                                onTextSelect={handleBookTextSelect}
+                                onSectionVisible={handleSectionVisible}
+                                onFigureClick={handleFigureClick}
+                                onHighlightClick={handleHighlightClick}
+                                scrollToSectionId={scrollToSectionId}
+                            />
+                        ) : (
+                            <div className="flex-1 flex items-center justify-center p-8 h-full">
+                                <div className="text-center max-w-md">
+                                    <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mx-auto mb-6">
+                                        <Sparkles className="w-8 h-8 text-blue-500" />
+                                    </div>
+                                    <h2 className="text-xl font-semibold mb-3">Generate Book View</h2>
+                                    <p className="text-gray-600 dark:text-gray-400 mb-6">
+                                        Create an AI-powered explanation with beautiful typography and diagrams.
+                                    </p>
+                                    <button
+                                        onClick={handleGenerateBook}
+                                        disabled={isGenerating}
+                                        className="px-6 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-400 text-white rounded-lg font-medium flex items-center gap-2 mx-auto"
+                                    >
+                                        {isGenerating ? (
+                                            <><Loader2 className="w-5 h-5 animate-spin" /> Generating...</>
+                                        ) : (
+                                            <><Sparkles className="w-5 h-5" /> Generate Book View</>
+                                        )}
+                                    </button>
+                                    <p className="text-xs text-gray-500 mt-4">Takes 30-60 seconds</p>
+                                </div>
+                            </div>
                         )}
                     </div>
+
+                    {/* PDF Minimap - Fixed position, doesn't overlap content */}
+                    {showMinimap && (
+                        <PDFMinimap
+                            paperId={paperId}
+                            pageCount={paper.page_count!}
+                            onSwitchToPDF={handleSwitchToPDF}
+                        />
+                    )}
                 </div>
 
                 {/* Selection popup */}

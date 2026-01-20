@@ -23,6 +23,64 @@ interface InlineExplanationProps {
     isLoading: boolean;
 }
 
+/**
+ * Get theme-specific colors for the explanation popup
+ */
+function getThemeColors(theme: string) {
+    const themes = {
+        light: {
+            bg: 'bg-white',
+            border: 'border-gray-200',
+            text: 'text-gray-800',
+            muted: 'text-gray-500',
+            card: 'bg-gray-50',
+            cardHover: 'hover:bg-gray-100',
+            input: 'bg-white border-gray-300 focus:border-amber-400 focus:ring-amber-400/20',
+            accent: 'text-amber-600',
+            accentBg: 'bg-amber-50',
+            accentBorder: 'border-amber-200',
+            accentButton: 'bg-amber-500 hover:bg-amber-600',
+            headerBg: 'bg-gradient-to-r from-amber-50 to-yellow-50',
+            highlightBg: 'bg-amber-50/50',
+            shadow: 'shadow-xl shadow-amber-500/10'
+        },
+        dark: {
+            bg: 'bg-gray-900',
+            border: 'border-gray-700',
+            text: 'text-gray-100',
+            muted: 'text-gray-400',
+            card: 'bg-gray-800',
+            cardHover: 'hover:bg-gray-700',
+            input: 'bg-gray-800 border-gray-600 focus:border-cyan-400 focus:ring-cyan-400/20',
+            accent: 'text-cyan-400',
+            accentBg: 'bg-cyan-500/10',
+            accentBorder: 'border-cyan-500/30',
+            accentButton: 'bg-cyan-500 hover:bg-cyan-600',
+            headerBg: 'bg-gradient-to-r from-cyan-900/30 to-teal-900/30',
+            highlightBg: 'bg-cyan-500/10',
+            shadow: 'shadow-2xl shadow-cyan-500/20'
+        },
+        sepia: {
+            bg: 'bg-[#faf6ed]',
+            border: 'border-[#d4c4a8]',
+            text: 'text-[#5c4b37]',
+            muted: 'text-[#8b7355]',
+            card: 'bg-[#f0e6d3]',
+            cardHover: 'hover:bg-[#e8dcc8]',
+            input: 'bg-[#faf6ed] border-[#c9b896] focus:border-orange-500 focus:ring-orange-500/20',
+            accent: 'text-orange-700',
+            accentBg: 'bg-orange-100/50',
+            accentBorder: 'border-orange-300',
+            accentButton: 'bg-orange-600 hover:bg-orange-700',
+            headerBg: 'bg-gradient-to-r from-orange-100/50 to-amber-100/50',
+            highlightBg: 'bg-orange-100/30',
+            shadow: 'shadow-xl shadow-orange-500/10'
+        }
+    };
+
+    return themes[theme as keyof typeof themes] || themes.light;
+}
+
 export function InlineExplanation({
     highlights,
     explanations,
@@ -42,23 +100,12 @@ export function InlineExplanation({
     const settings = useReaderStore((state) => state.settings);
 
     const { isOpen, highlightId, position } = inlineExplanation;
+    const colors = getThemeColors(settings.theme);
 
     // Get the highlight and its explanations
     const highlight = highlights.find((h) => h.id === highlightId);
-
-    // FIXED: Get all explanations for this highlight
     const highlightExplanations = explanations.filter((e) => e.highlight_id === highlightId);
     const rootExplanations = highlightExplanations.filter((e) => !e.parent_id);
-
-    // Debug log
-    useEffect(() => {
-        if (isOpen && highlightId) {
-            console.log('InlineExplanation opened for highlight:', highlightId);
-            console.log('All explanations:', explanations);
-            console.log('Highlight explanations:', highlightExplanations);
-            console.log('Root explanations:', rootExplanations);
-        }
-    }, [isOpen, highlightId, explanations, highlightExplanations, rootExplanations]);
 
     // Click outside to close
     useEffect(() => {
@@ -69,7 +116,6 @@ export function InlineExplanation({
         };
 
         if (isOpen) {
-            // Delay to prevent immediate close
             const timer = setTimeout(() => {
                 document.addEventListener('mousedown', handleClickOutside);
             }, 100);
@@ -123,19 +169,6 @@ export function InlineExplanation({
         top = Math.max(padding, position.y - popupMaxHeight - 10);
     }
 
-    // Theme
-    const isDark = settings.theme === 'dark';
-    const isSepia = settings.theme === 'sepia';
-
-    const colors = {
-        bg: isDark ? 'bg-gray-900' : isSepia ? 'bg-[#faf6ed]' : 'bg-white',
-        border: isDark ? 'border-gray-700' : isSepia ? 'border-[#d4c4a8]' : 'border-gray-200',
-        text: isDark ? 'text-gray-100' : isSepia ? 'text-[#5c4b37]' : 'text-gray-800',
-        muted: isDark ? 'text-gray-400' : isSepia ? 'text-[#8b7355]' : 'text-gray-500',
-        card: isDark ? 'bg-gray-800' : isSepia ? 'bg-[#f0e6d3]' : 'bg-gray-50',
-        input: isDark ? 'bg-gray-800 border-gray-600' : isSepia ? 'bg-[#faf6ed] border-[#d4c4a8]' : 'bg-white border-gray-300',
-    };
-
     const renderExplanation = (exp: Explanation, depth: number = 0) => {
         const isExpanded = expanded.has(exp.id);
         const children = explanations.filter((e) => e.parent_id === exp.id);
@@ -145,7 +178,7 @@ export function InlineExplanation({
         return (
             <div
                 key={exp.id}
-                className={`${depth > 0 ? 'ml-3 pl-3 border-l-2 border-blue-300 dark:border-blue-700' : ''} mb-3`}
+                className={`${depth > 0 ? `ml-3 pl-3 border-l-2 ${colors.accentBorder}` : ''} mb-3`}
             >
                 <div className={`rounded-lg p-3 ${colors.card}`}>
                     {/* Question header */}
@@ -156,13 +189,15 @@ export function InlineExplanation({
                         <div className="flex items-center gap-0.5 flex-shrink-0">
                             <button
                                 onClick={() => onTogglePin(exp.id, !exp.is_pinned)}
-                                className={`p-1 rounded ${exp.is_pinned ? 'text-yellow-500' : colors.muted} hover:bg-gray-200 dark:hover:bg-gray-700`}
+                                className={`p-1 rounded transition-colors ${exp.is_pinned ? 'text-yellow-500' : colors.muted
+                                    } ${colors.cardHover}`}
                             >
                                 <Pin className="w-3.5 h-3.5" />
                             </button>
                             <button
                                 onClick={() => onToggleResolved(exp.id, !exp.is_resolved)}
-                                className={`p-1 rounded ${exp.is_resolved ? 'text-green-500' : colors.muted} hover:bg-gray-200 dark:hover:bg-gray-700`}
+                                className={`p-1 rounded transition-colors ${exp.is_resolved ? 'text-green-500' : colors.muted
+                                    } ${colors.cardHover}`}
                             >
                                 <Check className="w-3.5 h-3.5" />
                             </button>
@@ -183,7 +218,7 @@ export function InlineExplanation({
                     {hasMore && (
                         <button
                             onClick={() => toggleExpand(exp.id)}
-                            className={`text-xs mt-2 flex items-center gap-1 text-blue-500 hover:text-blue-600`}
+                            className={`text-xs mt-2 flex items-center gap-1 ${colors.accent} hover:underline`}
                         >
                             {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                             {isExpanded ? 'Show less' : 'Show more'}
@@ -193,7 +228,7 @@ export function InlineExplanation({
                     {/* Follow-up toggle */}
                     <button
                         onClick={() => setActiveFollowUp(activeFollowUp === exp.id ? null : exp.id)}
-                        className={`text-xs mt-2 flex items-center gap-1 ${colors.muted} hover:text-blue-500`}
+                        className={`text-xs mt-2 flex items-center gap-1 ${colors.muted} hover:${colors.accent}`}
                     >
                         <MessageSquare className="w-3 h-3" />
                         Ask follow-up
@@ -207,7 +242,7 @@ export function InlineExplanation({
                                 value={followUpText}
                                 onChange={(e) => setFollowUpText(e.target.value)}
                                 placeholder="Ask a follow-up..."
-                                className={`flex-1 px-3 py-1.5 text-sm border rounded-lg ${colors.input}`}
+                                className={`flex-1 px-3 py-1.5 text-sm border rounded-lg ${colors.input} focus:outline-none focus:ring-2`}
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter' && followUpText.trim()) {
                                         handleFollowUp(exp.id);
@@ -218,7 +253,7 @@ export function InlineExplanation({
                             <button
                                 onClick={() => handleFollowUp(exp.id)}
                                 disabled={!followUpText.trim() || isLoading}
-                                className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
+                                className={`p-2 ${colors.accentButton} text-white rounded-lg disabled:opacity-50 transition-colors`}
                             >
                                 {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                             </button>
@@ -239,7 +274,7 @@ export function InlineExplanation({
     return (
         <div
             ref={popupRef}
-            className={`fixed z-50 ${colors.bg} rounded-xl shadow-2xl border ${colors.border} overflow-hidden`}
+            className={`fixed z-50 ${colors.bg} rounded-xl ${colors.shadow} border ${colors.border} overflow-hidden`}
             style={{
                 left,
                 top,
@@ -248,19 +283,19 @@ export function InlineExplanation({
             }}
         >
             {/* Header */}
-            <div className={`flex items-center justify-between px-4 py-3 border-b ${colors.border} ${colors.card}`}>
+            <div className={`flex items-center justify-between px-4 py-3 border-b ${colors.border} ${colors.headerBg}`}>
                 <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-blue-500" />
+                    <Sparkles className={`w-4 h-4 ${colors.accent}`} />
                     <span className={`text-sm font-semibold ${colors.text}`}>
                         AI Explanation
                     </span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${colors.card} ${colors.muted} border ${colors.border}`}>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${colors.accentBg} ${colors.accent} border ${colors.accentBorder}`}>
                         {highlightExplanations.length}
                     </span>
                 </div>
                 <button
                     onClick={closeInlineExplanation}
-                    className={`p-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 ${colors.muted}`}
+                    className={`p-1.5 rounded-lg ${colors.cardHover} ${colors.muted} transition-colors`}
                 >
                     <X className="w-4 h-4" />
                 </button>
@@ -268,7 +303,7 @@ export function InlineExplanation({
 
             {/* Highlighted text */}
             {highlight && (
-                <div className={`px-4 py-3 border-b ${colors.border} ${colors.card}`}>
+                <div className={`px-4 py-3 border-b ${colors.border} ${colors.highlightBg}`}>
                     <p className={`text-xs font-medium ${colors.muted} mb-1`}>Selected text:</p>
                     <p className={`text-sm ${colors.text} italic line-clamp-2`}>
                         "{highlight.selected_text}"
@@ -276,7 +311,7 @@ export function InlineExplanation({
                     {highlight.page_number && (
                         <button
                             onClick={() => onGoToPdf(highlight.page_number! - 1)}
-                            className={`mt-2 text-xs flex items-center gap-1 ${colors.muted} hover:text-blue-500`}
+                            className={`mt-2 text-xs flex items-center gap-1 ${colors.muted} hover:${colors.accent} transition-colors`}
                         >
                             <FileText className="w-3 h-3" />
                             View in PDF (page {highlight.page_number})
@@ -291,7 +326,7 @@ export function InlineExplanation({
                     rootExplanations.map((exp) => renderExplanation(exp))
                 ) : isLoading ? (
                     <div className={`text-center py-8 ${colors.muted}`}>
-                        <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-blue-500" />
+                        <Loader2 className={`w-8 h-8 animate-spin mx-auto mb-3 ${colors.accent}`} />
                         <p className="text-sm font-medium">Generating explanation...</p>
                         <p className="text-xs mt-1">This may take a few seconds</p>
                     </div>

@@ -11,6 +11,7 @@ export interface ReaderSettings {
   mode: "pdf" | "book";
   fontFamily: "serif" | "sans" | "mono";
   minimapSize: "small" | "medium" | "large" | "hidden";
+  minimapWidth: number; // Actual width in pixels for layout calculations
   invertPdf: boolean;
   invertMinimap: boolean;
 }
@@ -44,6 +45,7 @@ interface ReaderState {
   figureViewerNote: string;
   inlineExplanation: InlineExplanationState;
   minimapWasVisible: boolean;
+  sidebarCollapsed: boolean;
 }
 
 interface ReaderActions {
@@ -54,8 +56,10 @@ interface ReaderActions {
   setMode: (mode: ReaderSettings["mode"]) => void;
   setFontFamily: (family: ReaderSettings["fontFamily"]) => void;
   setMinimapSize: (size: ReaderSettings["minimapSize"]) => void;
+  setMinimapWidth: (width: number) => void;
   setInvertPdf: (invert: boolean) => void;
   setInvertMinimap: (invert: boolean) => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
 
   setHighlights: (highlights: Highlight[]) => void;
   addHighlight: (highlight: Highlight) => void;
@@ -99,6 +103,7 @@ const initialSettings: ReaderSettings = {
   mode: "book",
   fontFamily: "serif",
   minimapSize: "medium",
+  minimapWidth: 300,
   invertPdf: false,
   invertMinimap: false,
 };
@@ -122,6 +127,15 @@ const initialState: ReaderState = {
     position: null,
   },
   minimapWasVisible: true,
+  sidebarCollapsed: false,
+};
+
+// Size presets for minimap
+const MINIMAP_SIZE_PRESETS = {
+  small: 200,
+  medium: 300,
+  large: 420,
+  hidden: 0,
 };
 
 export const useReaderStore = create<ReaderState & ReaderActions>()(
@@ -139,12 +153,25 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
       setMode: (mode) => set((s) => ({ settings: { ...s.settings, mode } })),
       setFontFamily: (fontFamily) =>
         set((s) => ({ settings: { ...s.settings, fontFamily } })),
+
       setMinimapSize: (minimapSize) =>
-        set((s) => ({ settings: { ...s.settings, minimapSize } })),
+        set((s) => ({
+          settings: {
+            ...s.settings,
+            minimapSize,
+            minimapWidth: MINIMAP_SIZE_PRESETS[minimapSize],
+          },
+        })),
+
+      setMinimapWidth: (minimapWidth) =>
+        set((s) => ({ settings: { ...s.settings, minimapWidth } })),
+
       setInvertPdf: (invertPdf) =>
         set((s) => ({ settings: { ...s.settings, invertPdf } })),
       setInvertMinimap: (invertMinimap) =>
         set((s) => ({ settings: { ...s.settings, invertMinimap } })),
+
+      setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
 
       setHighlights: (highlights) => set({ highlights }),
       addHighlight: (highlight) =>
@@ -166,15 +193,12 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
           ),
         })),
 
-      // FIXED: Always update PDF page when section changes
       setCurrentSection: (sectionId, pdfPage, region) => {
         const currentState = get();
-        // Only update if something actually changed
         if (
           currentState.currentSectionId !== sectionId ||
           currentState.currentPdfPage !== pdfPage
         ) {
-          console.log("Store: setCurrentSection", { sectionId, pdfPage });
           set({
             currentSectionId: sectionId,
             currentPdfPage: pdfPage,
@@ -183,10 +207,7 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
         }
       },
 
-      setCurrentPdfPage: (page) => {
-        console.log("Store: setCurrentPdfPage", page);
-        set({ currentPdfPage: page });
-      },
+      setCurrentPdfPage: (page) => set({ currentPdfPage: page }),
 
       openFigureViewer: (page) =>
         set({
@@ -200,7 +221,6 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
       openInlineExplanation: (highlightId, position) => {
         const state = get();
         const wasVisible = state.settings.minimapSize !== "hidden";
-        console.log("Store: openInlineExplanation", { highlightId, position });
         set({
           inlineExplanation: {
             isOpen: true,
@@ -212,13 +232,14 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
           settings: {
             ...state.settings,
             minimapSize: "hidden",
+            minimapWidth: 0,
           },
         });
       },
 
       closeInlineExplanation: () => {
         const state = get();
-        console.log("Store: closeInlineExplanation");
+        const restoreSize = state.minimapWasVisible ? "medium" : "hidden";
         set({
           inlineExplanation: {
             isOpen: false,
@@ -228,7 +249,8 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
           activeHighlightId: null,
           settings: {
             ...state.settings,
-            minimapSize: state.minimapWasVisible ? "medium" : "hidden",
+            minimapSize: restoreSize,
+            minimapWidth: MINIMAP_SIZE_PRESETS[restoreSize],
           },
         });
       },
@@ -255,8 +277,11 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
         }),
     }),
     {
-      name: "reader-settings-v5",
-      partialize: (state) => ({ settings: state.settings }),
+      name: "reader-settings-v6",
+      partialize: (state) => ({
+        settings: state.settings,
+        sidebarCollapsed: state.sidebarCollapsed,
+      }),
     },
   ),
 );

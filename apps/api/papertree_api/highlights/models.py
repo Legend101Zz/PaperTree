@@ -25,6 +25,7 @@ class HighlightCreate(BaseModel):
     mode: Literal["pdf", "book"]
     selected_text: str
     page_number: Optional[int] = None
+    section_id: Optional[str] = None  # NEW: Section ID for book mode
     rects: Optional[List[Rect]] = None
     anchor: Optional[TextAnchor] = None
 
@@ -37,6 +38,7 @@ class HighlightResponse(BaseModel):
     mode: str
     selected_text: str
     page_number: Optional[int] = None
+    section_id: Optional[str] = None  # NEW
     rects: Optional[List[Rect]] = None
     anchor: Optional[TextAnchor] = None
     created_at: datetime
@@ -49,6 +51,7 @@ class HighlightInDB(BaseModel):
     mode: str
     selected_text: str
     page_number: Optional[int] = None
+    section_id: Optional[str] = None  # NEW
     rects: Optional[List[dict]] = None
     anchor: Optional[dict] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)

@@ -26,7 +26,7 @@ async def create_highlight(
     try:
         paper = await db.papers.find_one({
             "_id": ObjectId(paper_id),
-            "user_id": current_user["id"]  # ✅ String comparison
+            "user_id": current_user["id"]
         })
     except:
         raise HTTPException(
@@ -47,6 +47,7 @@ async def create_highlight(
         "mode": highlight_data.mode,
         "selected_text": highlight_data.selected_text,
         "page_number": highlight_data.page_number,
+        "section_id": highlight_data.section_id,  # NEW
         "rects": [r.model_dump() for r in highlight_data.rects] if highlight_data.rects else None,
         "anchor": highlight_data.anchor.model_dump() if highlight_data.anchor else None,
         "created_at": datetime.utcnow()
@@ -61,6 +62,7 @@ async def create_highlight(
         mode=highlight_doc["mode"],
         selected_text=highlight_doc["selected_text"],
         page_number=highlight_doc["page_number"],
+        section_id=highlight_doc["section_id"],  # NEW
         rects=highlight_data.rects,
         anchor=highlight_data.anchor,
         created_at=highlight_doc["created_at"]
@@ -81,7 +83,7 @@ async def get_highlights(
     try:
         paper = await db.papers.find_one({
             "_id": ObjectId(paper_id),
-            "user_id": current_user["id"]  # ✅ String comparison
+            "user_id": current_user["id"]
         })
     except:
         raise HTTPException(
@@ -109,6 +111,7 @@ async def get_highlights(
             mode=highlight["mode"],
             selected_text=highlight["selected_text"],
             page_number=highlight.get("page_number"),
+            section_id=highlight.get("section_id"),  # NEW
             rects=highlight.get("rects"),
             anchor=highlight.get("anchor"),
             created_at=highlight["created_at"]
@@ -130,7 +133,7 @@ async def delete_highlight(
     try:
         highlight = await db.highlights.find_one({
             "_id": ObjectId(highlight_id),
-            "user_id": current_user["id"]  # ✅ String comparison
+            "user_id": current_user["id"]
         })
     except:
         raise HTTPException(

@@ -25,7 +25,7 @@ body {
   background: rgb(var(--background-rgb));
 }
 
-/* PDF Viewer styles */
+/* ============ PDF VIEWER STYLES ============ */
 .react-pdf__Page__canvas {
   margin: 0 auto;
 }
@@ -43,41 +43,118 @@ body {
   filter: invert(1) hue-rotate(180deg);
 }
 
-/* Highlight interactions */
-.highlight-mark:hover {
-  filter: brightness(1.1);
-  transform: translateY(-1px);
-}
+/* ============ HIGHLIGHT STYLES ============ */
 
-.highlight-badge:hover {
-  transform: scale(1.2) translateY(-1px);
-}
-
-.highlight-mark.active {
-  animation: highlightPulse 0.5s ease-out;
-}
-
-@keyframes highlightPulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.85;
-  }
-}
-
-/* Smooth highlight transitions */
+/* Highlight wrapper - must be inline to not break text flow */
 .highlight-wrapper {
   display: inline;
+  position: relative;
 }
 
+/* Highlight mark base styles */
 .highlight-mark {
+  cursor: pointer;
+  transition: all 0.2s ease;
   position: relative;
   z-index: 1;
 }
 
-/* Highlight styles */
+/* Light mode hover */
+.highlight-wrapper[data-theme="light"] .highlight-mark:hover {
+  filter: brightness(0.95);
+  box-shadow: 0 3px 12px rgba(234, 179, 8, 0.4) !important;
+}
+
+/* Dark mode hover - teal glow effect */
+.highlight-wrapper[data-theme="dark"] .highlight-mark:hover {
+  filter: brightness(1.15);
+  box-shadow:
+    0 3px 16px rgba(34, 211, 238, 0.5),
+    0 0 24px rgba(34, 211, 238, 0.2) !important;
+}
+
+/* Sepia mode hover */
+.highlight-wrapper[data-theme="sepia"] .highlight-mark:hover {
+  filter: brightness(0.95);
+  box-shadow: 0 3px 12px rgba(194, 65, 12, 0.35) !important;
+}
+
+/* Highlight badge (shows explanation count) */
+.highlight-badge {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  z-index: 2;
+}
+
+.highlight-badge:hover {
+  transform: scale(1.25) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Active highlight state */
+.highlight-mark.active {
+  z-index: 5;
+}
+
+/* Highlight pulse animation - plays once when created/clicked */
+@keyframes highlight-pulse-light {
+  0% {
+    box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(234, 179, 8, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(234, 179, 8, 0);
+  }
+}
+
+@keyframes highlight-pulse-dark {
+  0% {
+    box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.6);
+  }
+  50% {
+    box-shadow:
+      0 0 0 12px rgba(34, 211, 238, 0),
+      0 0 20px rgba(34, 211, 238, 0.3);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 211, 238, 0);
+  }
+}
+
+@keyframes highlight-pulse-sepia {
+  0% {
+    box-shadow: 0 0 0 0 rgba(194, 65, 12, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(194, 65, 12, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(194, 65, 12, 0);
+  }
+}
+
+/* Theme-specific pulse animations */
+.highlight-wrapper[data-theme="light"] .animate-pulse-once {
+  animation: highlight-pulse-light 0.7s ease-out;
+}
+
+.highlight-wrapper[data-theme="dark"] .animate-pulse-once {
+  animation: highlight-pulse-dark 0.8s ease-out;
+}
+
+.highlight-wrapper[data-theme="sepia"] .animate-pulse-once {
+  animation: highlight-pulse-sepia 0.7s ease-out;
+}
+
+/* Fallback pulse animation */
+.animate-pulse-once {
+  animation: highlight-pulse-light 0.7s ease-out;
+}
+
+/* PDF mode highlight overlays */
 .highlight-overlay {
   background-color: rgba(255, 213, 0, 0.4);
   position: absolute;
@@ -98,38 +175,7 @@ body {
   }
 }
 
-/* Highlight indicator animation - plays once when explanation is added */
-@keyframes pulse-once {
-  0% {
-    transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.7);
-  }
-  50% {
-    transform: scale(1.15);
-    box-shadow: 0 0 0 6px rgba(234, 179, 8, 0);
-  }
-  100% {
-    transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(234, 179, 8, 0);
-  }
-}
-
-.animate-pulse-once {
-  animation: pulse-once 0.6s ease-out;
-}
-
-/* Book mode highlight */
-.book-highlight {
-  background-color: rgba(255, 213, 0, 0.4);
-  padding: 2px 0;
-  border-radius: 2px;
-}
-
-.book-highlight.active {
-  animation: pulse 1s ease-in-out 3;
-}
-
-/* Book Mode Typography */
+/* ============ BOOK MODE TYPOGRAPHY ============ */
 .book-content {
   font-feature-settings:
     "kern" 1,
@@ -152,7 +198,7 @@ body {
   font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
 }
 
-/* Book Mode Math Blocks */
+/* ============ MATH/KATEX STYLES ============ */
 .math-block {
   overflow-x: auto;
   padding: 1rem 0;
@@ -170,7 +216,6 @@ body {
   font-size: 1em;
 }
 
-/* KaTeX overrides for better reading */
 .book-content .katex {
   font-size: 1.1em;
 }
@@ -179,7 +224,17 @@ body {
   font-size: 1.21em;
 }
 
-/* Figure blocks */
+.katex-display {
+  margin: 1em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.katex {
+  font-size: 1.1em;
+}
+
+/* ============ FIGURE/IMAGE STYLES ============ */
 .figure-block {
   margin: 2rem auto;
   text-align: center;
@@ -198,7 +253,26 @@ body {
   font-style: italic;
 }
 
-/* Code blocks */
+.book-content figure {
+  margin: 2rem 0;
+}
+
+.book-content figcaption {
+  margin-top: 0.75rem;
+}
+
+.equation-image {
+  display: block;
+  margin: 1rem auto;
+  max-width: 100%;
+  height: auto;
+}
+
+.dark .equation-image {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* ============ CODE STYLES ============ */
 .code-block {
   background: #1e1e1e;
   color: #d4d4d4;
@@ -216,7 +290,7 @@ body {
   color: #e5d3b3;
 }
 
-/* References section */
+/* ============ REFERENCES SECTION ============ */
 .references-section {
   border-top: 1px solid currentColor;
   margin-top: 3rem;
@@ -237,7 +311,7 @@ body {
   line-height: 1.6;
 }
 
-/* Blockquote styling */
+/* ============ BLOCKQUOTE ============ */
 .book-blockquote {
   border-left: 4px solid currentColor;
   margin: 1.5rem 0;
@@ -246,7 +320,7 @@ body {
   font-style: italic;
 }
 
-/* Table styling */
+/* ============ TABLE STYLES ============ */
 .book-table {
   width: 100%;
   border-collapse: collapse;
@@ -274,7 +348,7 @@ body {
   background: rgba(93, 75, 55, 0.1);
 }
 
-/* List styling */
+/* ============ LIST STYLES ============ */
 .book-list {
   margin: 1rem 0;
   padding-left: 2rem;
@@ -285,7 +359,35 @@ body {
   line-height: 1.7;
 }
 
-/* Scrollbar styling */
+/* ============ PROSE CONTENT ============ */
+.prose-content p {
+  margin-bottom: 1em;
+}
+
+.prose-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.prose-content .inline {
+  display: inline;
+}
+
+/* Block elements in prose */
+.prose-content > pre,
+.prose-content > ul,
+.prose-content > ol,
+.prose-content > blockquote,
+.prose-content > table,
+.prose-content > h1,
+.prose-content > h2,
+.prose-content > h3,
+.prose-content > h4,
+.prose-content > h5,
+.prose-content > h6 {
+  display: block;
+}
+
+/* ============ SCROLLBAR ============ */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -304,7 +406,7 @@ body {
   background: #666;
 }
 
-/* React Flow custom styles */
+/* ============ REACT FLOW (CANVAS) ============ */
 .react-flow__node {
   border-radius: 8px;
   font-size: 12px;
@@ -314,44 +416,14 @@ body {
   stroke-width: 2;
 }
 
-/* Equation images */
-.equation-image {
-  display: block;
-  margin: 1rem auto;
-  max-width: 100%;
-  height: auto;
+/* ============ INLINE EXPLANATION POPUP ============ */
+.inline-explanation-popup {
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.25),
+    0 0 0 1px rgba(0, 0, 0, 0.05);
 }
 
-.dark .equation-image {
-  filter: invert(1) hue-rotate(180deg);
-}
-
-/* KaTeX improvements */
-.katex-display {
-  margin: 1em 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-
-.katex {
-  font-size: 1.1em;
-}
-
-/* Figure styling */
-.book-content figure {
-  margin: 2rem 0;
-}
-
-.book-content figcaption {
-  margin-top: 0.75rem;
-}
-
-/* Smooth scrolling */
-.book-content {
-  scroll-behavior: smooth;
-}
-
-/* Search highlight animation */
+/* ============ SEARCH HIGHLIGHT ============ */
 @keyframes searchPulse {
   0%,
   100% {
@@ -366,54 +438,7 @@ body {
   animation: searchPulse 1s ease-in-out 2;
 }
 
-/* Inline explanation popup shadow */
-.inline-explanation-popup {
-  box-shadow:
-    0 25px 50px -12px rgba(0, 0, 0, 0.25),
-    0 0 0 1px rgba(0, 0, 0, 0.05);
-}
-
-/* Highlight marker styles */
-mark[data-highlight-id] {
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-mark[data-highlight-id]:hover {
-  filter: brightness(0.95);
-}
-
-/* Prose content improvements */
-.prose-content p {
-  margin-bottom: 1em;
-}
-
-.prose-content > *:last-child {
-  margin-bottom: 0;
-}
-
-/* Inline elements in prose should flow naturally */
-.prose-content .inline {
-  display: inline;
-}
-
-/* Make sure markdown renders inline with highlights */
-.prose-content > p,
-.prose-content > div {
-  display: inline;
-}
-
-/* But block elements should still be blocks */
-.prose-content > pre,
-.prose-content > ul,
-.prose-content > ol,
-.prose-content > blockquote,
-.prose-content > table,
-.prose-content > h1,
-.prose-content > h2,
-.prose-content > h3,
-.prose-content > h4,
-.prose-content > h5,
-.prose-content > h6 {
-  display: block;
+/* ============ SMOOTH SCROLLING ============ */
+.book-content {
+  scroll-behavior: smooth;
 }
