@@ -17,15 +17,12 @@ import { HighlightsPanel } from '@/components/reader/HighlightsPanel';
 import { useReaderStore } from '@/store/readerStore';
 import { papersApi, highlightsApi, explanationsApi } from '@/lib/api';
 import { PaperDetail, Highlight, Explanation } from '@/types';
-import { Sparkles, Loader2, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { Sparkles, Loader2, PanelLeftClose, PanelLeft, PanelRightClose, PanelRight } from 'lucide-react';
 
 export default function ReaderPage() {
     const params = useParams();
     const paperId = params.id as string;
     const queryClient = useQueryClient();
-
-    // Local state for sidebar
-    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
     // Store state
     const settings = useReaderStore((s) => s.settings);
@@ -34,6 +31,8 @@ export default function ReaderPage() {
     const selectedText = useReaderStore((s) => s.selectedText);
     const selectionPosition = useReaderStore((s) => s.selectionPosition);
     const inlineExplanation = useReaderStore((s) => s.inlineExplanation);
+    const sidebarCollapsed = useReaderStore((s) => s.sidebarCollapsed);
+    const minimapCollapsed = useReaderStore((s) => s.minimapCollapsed);
 
     // Store actions
     const setHighlights = useReaderStore((s) => s.setHighlights);
@@ -49,16 +48,12 @@ export default function ReaderPage() {
     const openFigureViewer = useReaderStore((s) => s.openFigureViewer);
     const openInlineExplanation = useReaderStore((s) => s.openInlineExplanation);
     const closeInlineExplanation = useReaderStore((s) => s.closeInlineExplanation);
+    const setSidebarCollapsed = useReaderStore((s) => s.setSidebarCollapsed);
+    const setMinimapCollapsed = useReaderStore((s) => s.setMinimapCollapsed);
 
     const [pendingHighlight, setPendingHighlight] = useState<any>(null);
     const [scrollToSectionId, setScrollToSectionId] = useState<string | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
-
-    // Calculate minimap width for layout
-    const minimapWidth = settings.minimapSize === 'hidden' ? 0
-        : settings.minimapSize === 'small' ? 200
-            : settings.minimapSize === 'large' ? 420
-                : 300;
 
     // Reset on mount
     useEffect(() => {
@@ -96,15 +91,11 @@ export default function ReaderPage() {
 
     // Sync fetched data to store
     useEffect(() => {
-        if (fetchedHighlights) {
-            setHighlights(fetchedHighlights);
-        }
+        if (fetchedHighlights) setHighlights(fetchedHighlights);
     }, [fetchedHighlights, setHighlights]);
 
     useEffect(() => {
-        if (fetchedExplanations) {
-            setExplanations(fetchedExplanations);
-        }
+        if (fetchedExplanations) setExplanations(fetchedExplanations);
     }, [fetchedExplanations, setExplanations]);
 
     // Mutations
@@ -294,11 +285,11 @@ export default function ReaderPage() {
 
     const hasBookContent = !!paper.book_content;
     const pdfUrl = papersApi.getFileUrl(paperId);
-    const showMinimap = settings.mode === 'book' && hasBookContent && paper.page_count && settings.minimapSize !== 'hidden';
+    const showMinimap = settings.mode === 'book' && hasBookContent && paper.page_count && !minimapCollapsed;
 
     return (
         <AuthGuard>
-            <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950">
+            <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-950 overflow-hidden">
                 <ReaderToolbar
                     paperId={paperId}
                     paperTitle={paper.title}
@@ -307,16 +298,18 @@ export default function ReaderPage() {
                     isGenerating={isGenerating}
                 />
 
+                {/* Main content area - proper flex layout */}
                 <div className="flex-1 flex overflow-hidden relative">
-                    {/* Collapsible Sidebar */}
-                    <div
+
+                    {/* LEFT: Collapsible Sidebar/Outline */}
+                    <aside
                         className={`
+                            flex-shrink-0 overflow-hidden
                             border-r border-gray-200 dark:border-gray-700 
                             bg-white dark:bg-gray-900 
-                            flex-shrink-0 overflow-hidden
                             transition-all duration-300 ease-in-out
-                            ${sidebarCollapsed ? 'w-0' : 'w-64'}
                         `}
+                        style={{ width: sidebarCollapsed ? 0 : 256 }}
                     >
                         <div className="w-64 h-full overflow-y-auto">
                             <SmartOutlinePanel
@@ -325,20 +318,20 @@ export default function ReaderPage() {
                                 onPdfPageClick={handlePdfPageClick}
                             />
                         </div>
-                    </div>
+                    </aside>
 
-                    {/* Sidebar Toggle Button */}
+                    {/* Sidebar Toggle */}
                     <button
                         onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
                         className={`
-                            absolute left-0 top-1/2 -translate-y-1/2 z-20
+                            absolute z-20 top-1/2 -translate-y-1/2
                             p-2 rounded-r-lg 
                             bg-white dark:bg-gray-800 
                             border border-l-0 border-gray-200 dark:border-gray-700
                             shadow-md hover:bg-gray-50 dark:hover:bg-gray-700
                             transition-all duration-300
-                            ${sidebarCollapsed ? 'translate-x-0' : 'translate-x-64'}
                         `}
+                        style={{ left: sidebarCollapsed ? 0 : 256 }}
                         title={sidebarCollapsed ? 'Show outline' : 'Hide outline'}
                     >
                         {sidebarCollapsed ? (
@@ -348,13 +341,8 @@ export default function ReaderPage() {
                         )}
                     </button>
 
-                    {/* Main Content Area - respects minimap width */}
-                    <div
-                        className="flex-1 overflow-hidden transition-all duration-300"
-                        style={{
-                            marginRight: showMinimap ? minimapWidth : 0
-                        }}
-                    >
+                    {/* CENTER: Main Content */}
+                    <main className="flex-1 min-w-0 overflow-hidden">
                         {settings.mode === 'pdf' ? (
                             <PDFViewer
                                 fileUrl={pdfUrl}
@@ -399,15 +387,45 @@ export default function ReaderPage() {
                                 </div>
                             </div>
                         )}
-                    </div>
+                    </main>
 
-                    {/* PDF Minimap - Fixed position, doesn't overlap content */}
-                    {showMinimap && (
-                        <PDFMinimap
-                            paperId={paperId}
-                            pageCount={paper.page_count!}
-                            onSwitchToPDF={handleSwitchToPDF}
-                        />
+                    {/* RIGHT: PDF Minimap - flex child, not fixed */}
+                    {settings.mode === 'book' && hasBookContent && paper.page_count && (
+                        <>
+                            {/* Minimap Toggle (visible when collapsed) */}
+                            {minimapCollapsed && (
+                                <button
+                                    onClick={() => setMinimapCollapsed(false)}
+                                    className="absolute z-20 right-0 top-1/2 -translate-y-1/2
+                                        p-2 rounded-l-lg 
+                                        bg-white dark:bg-gray-800 
+                                        border border-r-0 border-gray-200 dark:border-gray-700
+                                        shadow-md hover:bg-gray-50 dark:hover:bg-gray-700
+                                        transition-all"
+                                    title="Show PDF preview"
+                                >
+                                    <PanelRight className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                                </button>
+                            )}
+
+                            {/* Minimap Panel */}
+                            <aside
+                                className={`
+                                    flex-shrink-0 overflow-hidden
+                                    border-l border-gray-200 dark:border-gray-700
+                                    bg-white dark:bg-gray-900
+                                    transition-all duration-300 ease-in-out
+                                `}
+                                style={{ width: minimapCollapsed ? 0 : settings.minimapWidth }}
+                            >
+                                <PDFMinimap
+                                    paperId={paperId}
+                                    pageCount={paper.page_count}
+                                    onSwitchToPDF={handleSwitchToPDF}
+                                    onCollapse={() => setMinimapCollapsed(true)}
+                                />
+                            </aside>
+                        </>
                     )}
                 </div>
 

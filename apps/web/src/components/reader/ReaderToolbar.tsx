@@ -38,7 +38,7 @@ export function ReaderToolbar({
     const [showSettings, setShowSettings] = useState(false);
 
     return (
-        <div className="sticky top-0 z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+        <div className="sticky top-0 z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
             <div className="px-4 py-2 flex items-center justify-between gap-4">
                 {/* Left */}
                 <div className="flex items-center gap-2 min-w-0">
@@ -55,8 +55,8 @@ export function ReaderToolbar({
                             onClick={() => setMode('book')}
                             disabled={!hasBookContent}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-all ${settings.mode === 'book'
-                                    ? 'bg-white dark:bg-gray-700 shadow-sm'
-                                    : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                                ? 'bg-white dark:bg-gray-700 shadow-sm'
+                                : 'hover:bg-gray-200 dark:hover:bg-gray-700'
                                 } ${!hasBookContent ? 'opacity-50 cursor-not-allowed' : ''}`}
                             title={hasBookContent ? 'Book Mode' : 'Generate book content first'}
                         >
@@ -66,8 +66,8 @@ export function ReaderToolbar({
                         <button
                             onClick={() => setMode('pdf')}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-all ${settings.mode === 'pdf'
-                                    ? 'bg-white dark:bg-gray-700 shadow-sm'
-                                    : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                                ? 'bg-white dark:bg-gray-700 shadow-sm'
+                                : 'hover:bg-gray-200 dark:hover:bg-gray-700'
                                 }`}
                         >
                             <FileText className="w-4 h-4" />
@@ -81,7 +81,7 @@ export function ReaderToolbar({
                             onClick={onGenerateBook}
                             disabled={isGenerating}
                             className="flex items-center gap-2 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 
-                        text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-70"
+                                text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-70"
                         >
                             {isGenerating ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -99,8 +99,8 @@ export function ReaderToolbar({
                         <button
                             onClick={() => setInvertPdf(!settings.invertPdf)}
                             className={`p-2 rounded-lg transition-colors ${settings.invertPdf
-                                    ? 'bg-gray-800 text-yellow-400'
-                                    : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
+                                ? 'bg-gray-800 text-yellow-400'
+                                : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
                                 }`}
                             title={settings.invertPdf ? 'Light PDF' : 'Dark PDF'}
                         >
@@ -122,8 +122,8 @@ export function ReaderToolbar({
                                 key={value}
                                 onClick={() => setTheme(value)}
                                 className={`p-1.5 rounded-md transition-colors ${settings.theme === value
-                                        ? 'bg-white dark:bg-gray-700 shadow-sm'
-                                        : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                                    ? 'bg-white dark:bg-gray-700 shadow-sm'
+                                    : 'hover:bg-gray-200 dark:hover:bg-gray-700'
                                     }`}
                                 title={value}
                             >
@@ -149,7 +149,7 @@ export function ReaderToolbar({
                         </button>
                     </div>
 
-                    {/* Settings */}
+                    {/* Settings dropdown */}
                     <div className="relative">
                         <button
                             onClick={() => setShowSettings(!showSettings)}
@@ -162,7 +162,7 @@ export function ReaderToolbar({
                             <>
                                 <div className="fixed inset-0 z-40" onClick={() => setShowSettings(false)} />
                                 <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-gray-800 
-                               rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 p-4 z-50">
+                                    rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 p-4 z-50">
                                     <h3 className="font-semibold text-sm mb-4">Reading Settings</h3>
 
                                     {/* Font family */}
@@ -174,8 +174,8 @@ export function ReaderToolbar({
                                                     key={font}
                                                     onClick={() => setFontFamily(font)}
                                                     className={`flex-1 px-2 py-1.5 text-xs rounded-lg capitalize ${settings.fontFamily === font
-                                                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-600'
-                                                            : 'bg-gray-100 dark:bg-gray-700'
+                                                        ? 'bg-blue-100 dark:bg-blue-900 text-blue-600'
+                                                        : 'bg-gray-100 dark:bg-gray-700'
                                                         }`}
                                                 >
                                                     {font}
@@ -200,7 +200,7 @@ export function ReaderToolbar({
                                         />
                                     </div>
 
-                                    {/* Page width */}
+                                    {/* Content width */}
                                     <div className="mb-4">
                                         <label className="text-xs text-gray-500 block mb-2">
                                             Content Width: {settings.pageWidth}px

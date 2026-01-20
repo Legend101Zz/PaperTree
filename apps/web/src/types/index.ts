@@ -210,7 +210,7 @@ export interface Highlight {
   mode: "pdf" | "book";
   selected_text: string;
   page_number?: number;
-  section_id?: string; // Section ID for book mode highlights
+  section_id?: string;
   rects?: Rect[];
   anchor?: TextAnchor;
   created_at: string;
@@ -270,8 +270,7 @@ export interface ReaderSettings {
   pageWidth: number;
   mode: "pdf" | "book";
   fontFamily: "serif" | "sans" | "mono";
-  minimapSize: "small" | "medium" | "large" | "hidden";
-  minimapPosition?: "right" | "bottom";
-  invertPdf?: boolean;
-  invertMinimap?: boolean;
+  minimapWidth: number;
+  invertPdf: boolean;
+  invertMinimap: boolean;
 }

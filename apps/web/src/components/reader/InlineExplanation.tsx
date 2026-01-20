@@ -23,9 +23,6 @@ interface InlineExplanationProps {
     isLoading: boolean;
 }
 
-/**
- * Get theme-specific colors for the explanation popup
- */
 function getThemeColors(theme: string) {
     const themes = {
         light: {
@@ -102,7 +99,6 @@ export function InlineExplanation({
     const { isOpen, highlightId, position } = inlineExplanation;
     const colors = getThemeColors(settings.theme);
 
-    // Get the highlight and its explanations
     const highlight = highlights.find((h) => h.id === highlightId);
     const highlightExplanations = explanations.filter((e) => e.highlight_id === highlightId);
     const rootExplanations = highlightExplanations.filter((e) => !e.parent_id);

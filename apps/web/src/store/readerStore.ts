@@ -10,8 +10,7 @@ export interface ReaderSettings {
   pageWidth: number;
   mode: "pdf" | "book";
   fontFamily: "serif" | "sans" | "mono";
-  minimapSize: "small" | "medium" | "large" | "hidden";
-  minimapWidth: number; // Actual width in pixels for layout calculations
+  minimapWidth: number;
   invertPdf: boolean;
   invertMinimap: boolean;
 }
@@ -31,7 +30,12 @@ export interface InlineExplanationState {
 }
 
 interface ReaderState {
+  // Persisted settings
   settings: ReaderSettings;
+  sidebarCollapsed: boolean;
+  minimapCollapsed: boolean;
+
+  // Session state (not persisted)
   highlights: Highlight[];
   explanations: Explanation[];
   activeHighlightId: string | null;
@@ -44,37 +48,42 @@ interface ReaderState {
   figureViewerPage: number;
   figureViewerNote: string;
   inlineExplanation: InlineExplanationState;
-  minimapWasVisible: boolean;
-  sidebarCollapsed: boolean;
 }
 
 interface ReaderActions {
+  // Settings actions
   setTheme: (theme: ReaderSettings["theme"]) => void;
   setFontSize: (size: number) => void;
   setLineHeight: (height: number) => void;
   setPageWidth: (width: number) => void;
   setMode: (mode: ReaderSettings["mode"]) => void;
   setFontFamily: (family: ReaderSettings["fontFamily"]) => void;
-  setMinimapSize: (size: ReaderSettings["minimapSize"]) => void;
   setMinimapWidth: (width: number) => void;
   setInvertPdf: (invert: boolean) => void;
   setInvertMinimap: (invert: boolean) => void;
-  setSidebarCollapsed: (collapsed: boolean) => void;
 
+  // Layout actions
+  setSidebarCollapsed: (collapsed: boolean) => void;
+  setMinimapCollapsed: (collapsed: boolean) => void;
+
+  // Highlight actions
   setHighlights: (highlights: Highlight[]) => void;
   addHighlight: (highlight: Highlight) => void;
   setActiveHighlight: (id: string | null) => void;
 
+  // Selection actions
   setSelection: (
     text: string | null,
     position: { x: number; y: number } | null,
   ) => void;
   clearSelection: () => void;
 
+  // Explanation actions
   setExplanations: (explanations: Explanation[]) => void;
   addExplanation: (explanation: Explanation) => void;
   updateExplanation: (id: string, updates: Partial<Explanation>) => void;
 
+  // Navigation actions
   setCurrentSection: (
     sectionId: string | null,
     pdfPage: number,
@@ -82,16 +91,19 @@ interface ReaderActions {
   ) => void;
   setCurrentPdfPage: (page: number) => void;
 
+  // Figure viewer actions
   openFigureViewer: (page: number) => void;
   closeFigureViewer: () => void;
   setFigureNote: (note: string) => void;
 
+  // Inline explanation actions
   openInlineExplanation: (
     highlightId: string,
     position: { x: number; y: number },
   ) => void;
   closeInlineExplanation: () => void;
 
+  // Reset
   resetReaderState: () => void;
 }
 
@@ -102,22 +114,20 @@ const initialSettings: ReaderSettings = {
   pageWidth: 720,
   mode: "book",
   fontFamily: "serif",
-  minimapSize: "medium",
   minimapWidth: 300,
   invertPdf: false,
   invertMinimap: false,
 };
 
-const initialState: ReaderState = {
-  settings: initialSettings,
-  highlights: [],
-  explanations: [],
-  activeHighlightId: null,
-  selectedText: null,
-  selectionPosition: null,
-  currentSectionId: null,
+const initialSessionState = {
+  highlights: [] as Highlight[],
+  explanations: [] as Explanation[],
+  activeHighlightId: null as string | null,
+  selectedText: null as string | null,
+  selectionPosition: null as { x: number; y: number } | null,
+  currentSectionId: null as string | null,
   currentPdfPage: 0,
-  currentPdfRegion: null,
+  currentPdfRegion: null as PDFRegion | null,
   figureViewerOpen: false,
   figureViewerPage: 0,
   figureViewerNote: "",
@@ -125,17 +135,14 @@ const initialState: ReaderState = {
     isOpen: false,
     highlightId: null,
     position: null,
-  },
-  minimapWasVisible: true,
-  sidebarCollapsed: false,
+  } as InlineExplanationState,
 };
 
-// Size presets for minimap
-const MINIMAP_SIZE_PRESETS = {
-  small: 200,
-  medium: 300,
-  large: 420,
-  hidden: 0,
+const initialState: ReaderState = {
+  settings: initialSettings,
+  sidebarCollapsed: false,
+  minimapCollapsed: false,
+  ...initialSessionState,
 };
 
 export const useReaderStore = create<ReaderState & ReaderActions>()(
@@ -143,6 +150,7 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
     (set, get) => ({
       ...initialState,
 
+      // Settings
       setTheme: (theme) => set((s) => ({ settings: { ...s.settings, theme } })),
       setFontSize: (fontSize) =>
         set((s) => ({ settings: { ...s.settings, fontSize } })),
@@ -153,36 +161,30 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
       setMode: (mode) => set((s) => ({ settings: { ...s.settings, mode } })),
       setFontFamily: (fontFamily) =>
         set((s) => ({ settings: { ...s.settings, fontFamily } })),
-
-      setMinimapSize: (minimapSize) =>
-        set((s) => ({
-          settings: {
-            ...s.settings,
-            minimapSize,
-            minimapWidth: MINIMAP_SIZE_PRESETS[minimapSize],
-          },
-        })),
-
       setMinimapWidth: (minimapWidth) =>
         set((s) => ({ settings: { ...s.settings, minimapWidth } })),
-
       setInvertPdf: (invertPdf) =>
         set((s) => ({ settings: { ...s.settings, invertPdf } })),
       setInvertMinimap: (invertMinimap) =>
         set((s) => ({ settings: { ...s.settings, invertMinimap } })),
 
+      // Layout
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
+      setMinimapCollapsed: (minimapCollapsed) => set({ minimapCollapsed }),
 
+      // Highlights
       setHighlights: (highlights) => set({ highlights }),
       addHighlight: (highlight) =>
         set((s) => ({ highlights: [...s.highlights, highlight] })),
       setActiveHighlight: (activeHighlightId) => set({ activeHighlightId }),
 
+      // Selection
       setSelection: (selectedText, selectionPosition) =>
         set({ selectedText, selectionPosition }),
       clearSelection: () =>
         set({ selectedText: null, selectionPosition: null }),
 
+      // Explanations
       setExplanations: (explanations) => set({ explanations }),
       addExplanation: (explanation) =>
         set((s) => ({ explanations: [...s.explanations, explanation] })),
@@ -193,6 +195,7 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
           ),
         })),
 
+      // Navigation
       setCurrentSection: (sectionId, pdfPage, region) => {
         const currentState = get();
         if (
@@ -206,9 +209,9 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
           });
         }
       },
-
       setCurrentPdfPage: (page) => set({ currentPdfPage: page }),
 
+      // Figure viewer
       openFigureViewer: (page) =>
         set({
           figureViewerOpen: true,
@@ -218,9 +221,8 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
       closeFigureViewer: () => set({ figureViewerOpen: false }),
       setFigureNote: (note) => set({ figureViewerNote: note }),
 
+      // Inline explanation
       openInlineExplanation: (highlightId, position) => {
-        const state = get();
-        const wasVisible = state.settings.minimapSize !== "hidden";
         set({
           inlineExplanation: {
             isOpen: true,
@@ -228,18 +230,9 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
             position,
           },
           activeHighlightId: highlightId,
-          minimapWasVisible: wasVisible,
-          settings: {
-            ...state.settings,
-            minimapSize: "hidden",
-            minimapWidth: 0,
-          },
         });
       },
-
       closeInlineExplanation: () => {
-        const state = get();
-        const restoreSize = state.minimapWasVisible ? "medium" : "hidden";
         set({
           inlineExplanation: {
             isOpen: false,
@@ -247,40 +240,21 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
             position: null,
           },
           activeHighlightId: null,
-          settings: {
-            ...state.settings,
-            minimapSize: restoreSize,
-            minimapWidth: MINIMAP_SIZE_PRESETS[restoreSize],
-          },
         });
       },
 
+      // Reset session state (keeps persisted settings)
       resetReaderState: () =>
         set({
-          highlights: [],
-          explanations: [],
-          activeHighlightId: null,
-          selectedText: null,
-          selectionPosition: null,
-          currentSectionId: null,
-          currentPdfPage: 0,
-          currentPdfRegion: null,
-          figureViewerOpen: false,
-          figureViewerPage: 0,
-          figureViewerNote: "",
-          inlineExplanation: {
-            isOpen: false,
-            highlightId: null,
-            position: null,
-          },
-          minimapWasVisible: true,
+          ...initialSessionState,
         }),
     }),
     {
-      name: "reader-settings-v6",
+      name: "reader-settings-v7",
       partialize: (state) => ({
         settings: state.settings,
         sidebarCollapsed: state.sidebarCollapsed,
+        minimapCollapsed: state.minimapCollapsed,
       }),
     },
   ),
