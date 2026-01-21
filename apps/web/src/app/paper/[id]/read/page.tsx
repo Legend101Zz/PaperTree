@@ -311,7 +311,7 @@ export default function ReaderPage() {
                         `}
                         style={{ width: sidebarCollapsed ? 0 : 256 }}
                     >
-                        <div className="w-64 h-full overflow-y-auto">
+                        <div className="w-64 h-full overflow-y-auto overscroll-contain">
                             <SmartOutlinePanel
                                 outline={paper.smart_outline || []}
                                 onSectionClick={handleOutlineClick}
@@ -341,8 +341,8 @@ export default function ReaderPage() {
                         )}
                     </button>
 
-                    {/* CENTER: Main Content */}
-                    <main className="flex-1 min-w-0 overflow-hidden">
+                    {/* CENTER: Main Content - children handle their own scrolling */}
+                    <main className="flex-1 min-w-0 min-h-0 flex flex-col">
                         {settings.mode === 'pdf' ? (
                             <PDFViewer
                                 fileUrl={pdfUrl}
@@ -363,7 +363,7 @@ export default function ReaderPage() {
                                 scrollToSectionId={scrollToSectionId}
                             />
                         ) : (
-                            <div className="flex-1 flex items-center justify-center p-8 h-full">
+                            <div className="flex-1 flex items-center justify-center p-8 overflow-auto">
                                 <div className="text-center max-w-md">
                                     <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mx-auto mb-6">
                                         <Sparkles className="w-8 h-8 text-blue-500" />
@@ -411,7 +411,7 @@ export default function ReaderPage() {
                             {/* Minimap Panel */}
                             <aside
                                 className={`
-                                    flex-shrink-0 overflow-hidden
+                                    flex-shrink-0 min-h-0 overflow-hidden
                                     border-l border-gray-200 dark:border-gray-700
                                     bg-white dark:bg-gray-900
                                     transition-all duration-300 ease-in-out

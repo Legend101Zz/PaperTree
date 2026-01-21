@@ -44,15 +44,24 @@ export function SmartOutlinePanel({
             </h3>
 
             <nav className="space-y-1">
-                {outline.map((item, index) => {
+                {outline.map((item) => {
                     const isActive = currentSectionId === item.section_id;
 
                     return (
-                        <div key={item.id} className="group">
-                            <button
+                        <div key={item.id} className="group flex items-center">
+                            {/* Main clickable area for section navigation */}
+                            <div
+                                role="button"
+                                tabIndex={0}
                                 onClick={() => onSectionClick(item.section_id)}
-                                className={`w-full text-left px-2 py-2 rounded-lg transition-all duration-200
-                           flex items-start gap-2 ${isActive
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        onSectionClick(item.section_id);
+                                    }
+                                }}
+                                className={`flex-1 text-left px-2 py-2 rounded-lg transition-all duration-200
+                                    flex items-start gap-2 cursor-pointer ${isActive
                                         ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                                         : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'
                                     }`}
@@ -69,20 +78,20 @@ export function SmartOutlinePanel({
                                         </span>
                                     )}
                                 </div>
+                            </div>
 
-                                {/* Page indicator */}
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onPdfPageClick(item.pdf_page);
-                                    }}
-                                    className="opacity-0 group-hover:opacity-100 px-1.5 py-0.5 text-xs 
-                             bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 
-                             dark:hover:bg-gray-600 transition-all"
-                                    title="Go to PDF page"
-                                >
-                                    p.{item.pdf_page + 1}
-                                </button>
+                            {/* Page indicator - separate clickable element */}
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onPdfPageClick(item.pdf_page);
+                                }}
+                                className="opacity-0 group-hover:opacity-100 px-1.5 py-0.5 text-xs 
+                                    bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 
+                                    dark:hover:bg-gray-600 transition-all ml-1 flex-shrink-0"
+                                title="Go to PDF page"
+                            >
+                                p.{item.pdf_page + 1}
                             </button>
                         </div>
                     );
