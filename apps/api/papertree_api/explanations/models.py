@@ -1,7 +1,20 @@
+# apps/api/papertree_api/explanations/models.py
 from datetime import datetime
+from enum import Enum
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
+
+
+class AskMode(str, Enum):
+    """Ask modes for AI explanations."""
+    EXPLAIN_SIMPLY = "explain_simply"
+    EXPLAIN_MATH = "explain_math"
+    DERIVE_STEPS = "derive_steps"
+    INTUITION = "intuition"
+    PSEUDOCODE = "pseudocode"
+    DIAGRAM = "diagram"
+    CUSTOM = "custom"
 
 
 class ExplanationCreate(BaseModel):
@@ -9,6 +22,8 @@ class ExplanationCreate(BaseModel):
     highlight_id: str
     question: str
     parent_id: Optional[str] = None
+    ask_mode: AskMode = AskMode.EXPLAIN_SIMPLY
+    auto_add_to_canvas: bool = True  # NEW: Auto-create canvas node
 
 
 class ExplanationUpdate(BaseModel):
@@ -27,9 +42,11 @@ class ExplanationResponse(BaseModel):
     question: str
     answer_markdown: str
     model: str
+    ask_mode: AskMode = AskMode.EXPLAIN_SIMPLY
     created_at: datetime
     is_pinned: bool = False
     is_resolved: bool = False
+    canvas_node_id: Optional[str] = None  # NEW: Link to canvas node
 
 
 class ExplanationThread(BaseModel):
@@ -42,6 +59,7 @@ class ExplanationThread(BaseModel):
     question: str
     answer_markdown: str
     model: str
+    ask_mode: AskMode = AskMode.EXPLAIN_SIMPLY
     created_at: datetime
     is_pinned: bool = False
     is_resolved: bool = False

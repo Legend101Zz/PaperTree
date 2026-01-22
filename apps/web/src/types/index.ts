@@ -146,7 +146,7 @@ export interface BookSection {
   id: string;
   title: string;
   level: number;
-  content: string; // Markdown with LaTeX/Mermaid
+  content: string;
   pdf_pages: number[];
   figures: string[];
 }
@@ -216,6 +216,36 @@ export interface Highlight {
   created_at: string;
 }
 
+// ============ ASK MODES ============
+export type AskMode =
+  | "explain_simply"
+  | "explain_math"
+  | "derive_steps"
+  | "intuition"
+  | "pseudocode"
+  | "diagram"
+  | "custom";
+
+export const ASK_MODE_LABELS: Record<AskMode, string> = {
+  explain_simply: "Explain Simply",
+  explain_math: "Explain Mathematically",
+  derive_steps: "Derive Step-by-Step",
+  intuition: "Build Intuition",
+  pseudocode: "Convert to Pseudocode",
+  diagram: "Make a Diagram",
+  custom: "Custom Question",
+};
+
+export const ASK_MODE_ICONS: Record<AskMode, string> = {
+  explain_simply: "💡",
+  explain_math: "📐",
+  derive_steps: "📝",
+  intuition: "🧠",
+  pseudocode: "💻",
+  diagram: "📊",
+  custom: "💬",
+};
+
 // ============ EXPLANATION TYPES ============
 export interface Explanation {
   id: string;
@@ -226,39 +256,100 @@ export interface Explanation {
   question: string;
   answer_markdown: string;
   model: string;
+  ask_mode: AskMode;
   created_at: string;
   is_pinned: boolean;
   is_resolved: boolean;
+  canvas_node_id?: string;
   children?: Explanation[];
 }
 
-// ============ CANVAS TYPES ============
+// ============ CANVAS TYPES (ENHANCED) ============
+export type CanvasNodeType =
+  | "paper"
+  | "excerpt"
+  | "question"
+  | "answer"
+  | "followup"
+  | "note"
+  | "diagram";
+
+export type ContentType =
+  | "plain"
+  | "markdown"
+  | "latex"
+  | "mermaid"
+  | "code"
+  | "mixed";
+
+export interface SourceReference {
+  paper_id: string;
+  page_number?: number;
+  section_id?: string;
+  section_path?: string[];
+  highlight_id?: string;
+  block_id?: string;
+}
+
+export interface ExcerptContext {
+  selected_text: string;
+  expanded_text: string;
+  section_title?: string;
+  section_path?: string[];
+  nearby_equations?: string[];
+  nearby_figures?: string[];
+  paragraph_context?: string;
+}
+
+export interface CanvasNodeData {
+  label: string;
+  content?: string;
+  content_type: ContentType;
+  excerpt?: ExcerptContext;
+  question?: string;
+  ask_mode?: AskMode;
+  source?: SourceReference;
+  highlight_id?: string;
+  explanation_id?: string;
+  is_collapsed: boolean;
+  tags?: string[];
+  color?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CanvasNodePosition {
+  x: number;
+  y: number;
+}
+
 export interface CanvasNode {
   id: string;
-  type: "paper" | "highlight" | "explanation";
-  position: { x: number; y: number };
-  data: {
-    label: string;
-    content?: string;
-    highlightId?: string;
-    explanationId?: string;
-  };
+  type: CanvasNodeType;
+  position: CanvasNodePosition;
+  data: CanvasNodeData;
+  parent_id?: string;
+  children_ids?: string[];
 }
 
 export interface CanvasEdge {
   id: string;
   source: string;
   target: string;
+  label?: string;
+  edge_type?: "default" | "followup" | "reference";
+}
+
+export interface CanvasElements {
+  nodes: CanvasNode[];
+  edges: CanvasEdge[];
 }
 
 export interface Canvas {
   id: string;
   paper_id: string;
   user_id: string;
-  elements: {
-    nodes: CanvasNode[];
-    edges: CanvasEdge[];
-  };
+  elements: CanvasElements;
   updated_at: string;
 }
 

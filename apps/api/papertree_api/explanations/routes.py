@@ -1,3 +1,4 @@
+# apps/api/papertree_api/explanations/routes.py
 from datetime import datetime
 from typing import List
 
@@ -7,8 +8,8 @@ from papertree_api.auth.utils import get_current_user
 from papertree_api.config import get_settings
 from papertree_api.database import get_database
 
-from .models import (ExplanationCreate, ExplanationResponse, ExplanationThread,
-                     ExplanationUpdate, SummarizeRequest)
+from .models import (AskMode, ExplanationCreate, ExplanationResponse,
+                     ExplanationThread, ExplanationUpdate, SummarizeRequest)
 from .services import call_openrouter, summarize_thread
 
 settings = get_settings()
@@ -23,6 +24,7 @@ async def create_explanation(
 ):
     """
     Create a new AI explanation for a highlight.
+    Optionally auto-creates a canvas node.
     """
     db = get_database()
     
@@ -78,15 +80,22 @@ async def create_explanation(
     # Get section title from anchor if available
     if highlight.get("anchor") and highlight["anchor"].get("section_path"):
         section_title = " > ".join(highlight["anchor"]["section_path"])
+    elif highlight.get("section_id") and paper.get("book_content"):
+        sections = paper["book_content"].get("sections", [])
+        for section in sections:
+            if section.get("id") == highlight["section_id"]:
+                section_title = section.get("title", "")
+                break
     
-    # Call AI
+    # Call AI with ask mode
     try:
         answer = await call_openrouter(
             selected_text=selected_text,
             question=explanation_data.question,
             context_before=context_before,
             context_after=context_after,
-            section_title=section_title
+            section_title=section_title,
+            ask_mode=explanation_data.ask_mode.value
         )
     except Exception as e:
         raise HTTPException(
@@ -103,15 +112,53 @@ async def create_explanation(
         "question": explanation_data.question,
         "answer_markdown": answer,
         "model": settings.openrouter_model,
+        "ask_mode": explanation_data.ask_mode.value,
         "created_at": datetime.utcnow(),
         "is_pinned": False,
-        "is_resolved": False
+        "is_resolved": False,
+        "canvas_node_id": None
     }
     
     result = await db.explanations.insert_one(explanation_doc)
+    explanation_id = str(result.inserted_id)
+    
+    # Auto-create canvas node if requested
+    canvas_node_id = None
+    if explanation_data.auto_add_to_canvas:
+        try:
+            from papertree_api.canvas.models import AutoCreateNodeRequest
+            from papertree_api.canvas.routes import \
+                auto_create_node_from_explanation
+
+            # Create a mock request object
+            class MockUser:
+                def __init__(self, user_dict):
+                    self.user_dict = user_dict
+            
+            auto_request = AutoCreateNodeRequest(
+                highlight_id=explanation_data.highlight_id,
+                explanation_id=explanation_id
+            )
+            
+            canvas_node = await auto_create_node_from_explanation(
+                paper_id=paper_id,
+                request=auto_request,
+                current_user=current_user
+            )
+            
+            canvas_node_id = canvas_node.id
+            
+            # Update explanation with canvas node ID
+            await db.explanations.update_one(
+                {"_id": result.inserted_id},
+                {"$set": {"canvas_node_id": canvas_node_id}}
+            )
+        except Exception as e:
+            # Log but don't fail the explanation creation
+            print(f"Failed to auto-create canvas node: {e}")
     
     return ExplanationResponse(
-        id=str(result.inserted_id),
+        id=explanation_id,
         paper_id=paper_id,
         highlight_id=explanation_data.highlight_id,
         user_id=current_user["id"],
@@ -119,9 +166,11 @@ async def create_explanation(
         question=explanation_data.question,
         answer_markdown=answer,
         model=settings.openrouter_model,
+        ask_mode=explanation_data.ask_mode,
         created_at=explanation_doc["created_at"],
         is_pinned=False,
-        is_resolved=False
+        is_resolved=False,
+        canvas_node_id=canvas_node_id
     )
 
 
@@ -151,9 +200,11 @@ async def get_explanations(
             question=exp["question"],
             answer_markdown=exp["answer_markdown"],
             model=exp["model"],
+            ask_mode=AskMode(exp.get("ask_mode", "explain_simply")),
             created_at=exp["created_at"],
             is_pinned=exp.get("is_pinned", False),
-            is_resolved=exp.get("is_resolved", False)
+            is_resolved=exp.get("is_resolved", False),
+            canvas_node_id=exp.get("canvas_node_id")
         ))
     
     return explanations
@@ -206,6 +257,7 @@ async def get_explanation_thread(
             question=exp["question"],
             answer_markdown=exp["answer_markdown"],
             model=exp["model"],
+            ask_mode=AskMode(exp.get("ask_mode", "explain_simply")),
             created_at=exp["created_at"],
             is_pinned=exp.get("is_pinned", False),
             is_resolved=exp.get("is_resolved", False),
@@ -268,9 +320,11 @@ async def update_explanation(
         question=updated_exp["question"],
         answer_markdown=updated_exp["answer_markdown"],
         model=updated_exp["model"],
+        ask_mode=AskMode(updated_exp.get("ask_mode", "explain_simply")),
         created_at=updated_exp["created_at"],
         is_pinned=updated_exp.get("is_pinned", False),
-        is_resolved=updated_exp.get("is_resolved", False)
+        is_resolved=updated_exp.get("is_resolved", False),
+        canvas_node_id=updated_exp.get("canvas_node_id")
     )
 
 

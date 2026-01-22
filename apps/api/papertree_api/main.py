@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="PaperTree API",
     description="Research paper reader with AI explanations",
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan
 )
 
@@ -53,15 +53,15 @@ app.add_middleware(
 # Include routers
 app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 app.include_router(papers_router, prefix="/papers", tags=["Papers"])
-app.include_router(highlights_router, prefix="/highlight",tags=["Highlights"])
-app.include_router(explanations_router,prefix="/explanations", tags=["Explanations"])
+app.include_router(highlights_router, prefix="/highlight", tags=["Highlights"])
+app.include_router(explanations_router, prefix="/explanations", tags=["Explanations"])
 app.include_router(canvas_router, tags=["Canvas"])
 
 
 @app.get("/")
 async def root():
     """Root endpoint - API health check."""
-    return {"message": "PaperTree API is running", "version": "1.0.0"}
+    return {"message": "PaperTree API is running", "version": "2.0.0"}
 
 
 @app.get("/health")

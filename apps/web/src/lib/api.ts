@@ -1,5 +1,13 @@
 // apps/web/src/lib/api.ts
 import axios from "axios";
+import {
+  AskMode,
+  CanvasElements,
+  CanvasNode,
+  CanvasNodeData,
+  CanvasNodePosition,
+  CanvasNodeType,
+} from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -148,11 +156,11 @@ export const highlightsApi = {
   },
 };
 
-// Explanations API
+// Explanations API (Enhanced with ask_mode)
 export const explanationsApi = {
   list: async (paperId: string) => {
     console.log("Fetching explanations for paper:", paperId);
-    const result = await fetchApi<any[]>(`/explanations/papers/${paperId}`); // ✅
+    const result = await fetchApi<any[]>(`/explanations/papers/${paperId}`);
     console.log("Explanations API response:", result);
     return result;
   },
@@ -163,13 +171,18 @@ export const explanationsApi = {
       highlight_id: string;
       question: string;
       parent_id?: string;
+      ask_mode?: AskMode;
+      auto_add_to_canvas?: boolean;
     },
   ) => {
     console.log("Creating explanation:", data);
     const result = await fetchApi<any>(`/explanations/papers/${paperId}`, {
-      // ✅
       method: "POST",
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        ...data,
+        ask_mode: data.ask_mode || "explain_simply",
+        auto_add_to_canvas: data.auto_add_to_canvas ?? true,
+      }),
     });
     console.log("Created explanation response:", result);
     return result;
@@ -183,7 +196,6 @@ export const explanationsApi = {
     },
   ) => {
     return fetchApi<any>(`/explanations/${explanationId}`, {
-      // ✅
       method: "PATCH",
       body: JSON.stringify(data),
     });
@@ -192,16 +204,69 @@ export const explanationsApi = {
   summarize: async (explanationId: string) =>
     (
       await api.post("/explanations/summarize", {
-        // ✅
         explanation_id: explanationId,
       })
     ).data,
 };
 
-// Canvas
+// Canvas API (Enhanced)
 export const canvasApi = {
   get: async (paperId: string) =>
     (await api.get(`/papers/${paperId}/canvas`)).data,
-  update: async (paperId: string, elements: any) =>
+
+  update: async (paperId: string, elements: CanvasElements) =>
     (await api.put(`/papers/${paperId}/canvas`, { elements })).data,
+
+  // Node operations
+  createNode: async (
+    paperId: string,
+    data: {
+      type: CanvasNodeType;
+      position: CanvasNodePosition;
+      data: CanvasNodeData;
+      parent_id?: string;
+    },
+  ) =>
+    (await api.post(`/papers/${paperId}/canvas/nodes`, data))
+      .data as CanvasNode,
+
+  updateNode: async (
+    paperId: string,
+    nodeId: string,
+    data: {
+      position?: CanvasNodePosition;
+      data?: Partial<CanvasNodeData>;
+      is_collapsed?: boolean;
+    },
+  ) =>
+    (await api.patch(`/papers/${paperId}/canvas/nodes/${nodeId}`, data))
+      .data as CanvasNode,
+
+  deleteNode: async (paperId: string, nodeId: string) =>
+    (await api.delete(`/papers/${paperId}/canvas/nodes/${nodeId}`)).data,
+
+  // Auto-create from explanation
+  autoCreateNode: async (
+    paperId: string,
+    data: {
+      highlight_id: string;
+      explanation_id: string;
+      position?: CanvasNodePosition;
+    },
+  ) =>
+    (await api.post(`/papers/${paperId}/canvas/auto-create`, data))
+      .data as CanvasNode,
+
+  // Layout
+  autoLayout: async (
+    paperId: string,
+    algorithm: "tree" | "force" | "grid" = "tree",
+    rootNodeId?: string,
+  ) =>
+    (
+      await api.post(`/papers/${paperId}/canvas/layout`, {
+        algorithm,
+        root_node_id: rootNodeId,
+      })
+    ).data,
 };

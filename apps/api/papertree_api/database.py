@@ -16,9 +16,13 @@ async def connect_to_mongo():
     # Create indexes
     await db.users.create_index("email", unique=True)
     await db.papers.create_index("user_id")
-    await db.paper_images.create_index([("paper_id", 1), ("user_id", 1)])  # NEW
+    await db.paper_images.create_index([("paper_id", 1), ("user_id", 1)])
     await db.highlights.create_index([("paper_id", 1), ("user_id", 1)])
+    await db.highlights.create_index([("section_id", 1)])  # NEW: For section-based lookups
     await db.explanations.create_index([("paper_id", 1), ("highlight_id", 1)])
+    await db.explanations.create_index([("highlight_id", 1)])  # NEW: For highlight lookups
+    await db.explanations.create_index([("parent_id", 1)])  # NEW: For thread traversal
+    await db.explanations.create_index([("canvas_node_id", 1)])  # NEW: For canvas sync
     await db.canvases.create_index([("paper_id", 1), ("user_id", 1)], unique=True)
     
     print("Connected to MongoDB")
