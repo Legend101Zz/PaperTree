@@ -107,10 +107,18 @@ export const papersApi = {
     return `${API_URL}/papers/${paperId}/page/${page}/image?${params}`;
   },
 
-  generateBook: async (paperId: string, force = false) =>
+  generateBook: async (paperId: string, force = false, generateAll = false) =>
     (
       await api.post(`/papers/${paperId}/generate-book`, {
         force_regenerate: force,
+        generate_all: generateAll,
+      })
+    ).data,
+
+  generatePages: async (paperId: string, pages: number[]) =>
+    (
+      await api.post(`/papers/${paperId}/generate-pages`, {
+        pages,
       })
     ).data,
 };

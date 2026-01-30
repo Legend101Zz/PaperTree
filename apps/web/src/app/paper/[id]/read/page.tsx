@@ -17,7 +17,7 @@ import { HighlightsPanel } from '@/components/reader/HighlightsPanel';
 import { useReaderStore } from '@/store/readerStore';
 import { papersApi, highlightsApi, explanationsApi } from '@/lib/api';
 import { PaperDetail, Highlight, Explanation } from '@/types';
-import { Sparkles, Loader2, PanelLeftClose, PanelLeft, PanelRightClose, PanelRight } from 'lucide-react';
+import { Sparkles, Loader2, PanelLeftClose, PanelLeft, PanelRight } from 'lucide-react';
 
 export default function ReaderPage() {
     const params = useParams();
@@ -33,6 +33,7 @@ export default function ReaderPage() {
     const inlineExplanation = useReaderStore((s) => s.inlineExplanation);
     const sidebarCollapsed = useReaderStore((s) => s.sidebarCollapsed);
     const minimapCollapsed = useReaderStore((s) => s.minimapCollapsed);
+    const currentPdfPage = useReaderStore((s) => s.currentPdfPage);
 
     // Store actions
     const setHighlights = useReaderStore((s) => s.setHighlights);
@@ -50,9 +51,12 @@ export default function ReaderPage() {
     const closeInlineExplanation = useReaderStore((s) => s.closeInlineExplanation);
     const setSidebarCollapsed = useReaderStore((s) => s.setSidebarCollapsed);
     const setMinimapCollapsed = useReaderStore((s) => s.setMinimapCollapsed);
-
+    const setVisiblePage = useReaderStore((s) => s.setVisiblePage);
+    const addGeneratingPage = useReaderStore((s) => s.addGeneratingPage);
+    const removeGeneratingPage = useReaderStore((s) => s.removeGeneratingPage);
+    const generatingPages = useReaderStore((s) => s.generatingPages);
     const [pendingHighlight, setPendingHighlight] = useState<any>(null);
-    const [scrollToSectionId, setScrollToSectionId] = useState<string | null>(null);
+    const [scrollToPage, setScrollToPage] = useState<number | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
 
     // Reset on mount
@@ -130,7 +134,7 @@ export default function ReaderPage() {
         },
     });
 
-    // Generate book
+    // Generate book (initial)
     const handleGenerateBook = async () => {
         setIsGenerating(true);
         try {
@@ -145,23 +149,52 @@ export default function ReaderPage() {
         }
     };
 
-    // Handlers
-    const handleSectionVisible = useCallback((sectionId: string, pdfPages: number[]) => {
-        setCurrentSection(sectionId, pdfPages[0] ?? 0);
-    }, [setCurrentSection]);
+    // Generate more pages
+    const generatePagesMutation = useMutation({
+        mutationFn: (pages: number[]) => papersApi.generatePages(paperId, pages),
+        onMutate: (pages) => {
+            pages.forEach(p => addGeneratingPage(p));
+        },
+        onSuccess: async () => {
+            await refetchPaper();
+        },
+        onSettled: (_, __, pages) => {
+            pages.forEach(p => removeGeneratingPage(p));
+        },
+        onError: (error) => {
+            console.error('Failed to generate pages:', error);
+            alert('Failed to generate pages. Please try again.');
+        },
+    });
+
+    const handleGenerateMorePages = useCallback((pages: number[]) => {
+        generatePagesMutation.mutate(pages);
+    }, [generatePagesMutation]);
+
+    // Page visibility change - sync PDF minimap
+    const handlePageVisible = useCallback((pageNum: number) => {
+        setVisiblePage(pageNum);
+        setCurrentSection(`page-${pageNum}`, pageNum);
+    }, [setVisiblePage, setCurrentSection]);
 
     const handleFigureClick = useCallback((figureId: string, pdfPage: number) => {
         openFigureViewer(pdfPage);
     }, [openFigureViewer]);
 
     const handleOutlineClick = useCallback((sectionId: string) => {
-        setScrollToSectionId(sectionId);
-        setTimeout(() => setScrollToSectionId(null), 100);
+        // sectionId is like "page-0", "page-1", etc.
+        const match = sectionId.match(/^page-(\d+)$/);
+        if (match) {
+            const pageNum = parseInt(match[1]);
+            setScrollToPage(pageNum);
+            setTimeout(() => setScrollToPage(null), 100);
+        }
     }, []);
 
     const handlePdfPageClick = useCallback((page: number) => {
-        setCurrentSection(null, page);
-    }, [setCurrentSection]);
+        setScrollToPage(page);
+        setTimeout(() => setScrollToPage(null), 100);
+    }, []);
 
     const handleSwitchToPDF = useCallback((page: number) => {
         closeInlineExplanation();
@@ -283,9 +316,8 @@ export default function ReaderPage() {
         );
     }
 
-    const hasBookContent = !!paper.book_content;
+    const hasBookContent = !!paper.book_content && (paper.book_content.page_summaries?.length > 0 || paper.book_content.sections?.length > 0);
     const pdfUrl = papersApi.getFileUrl(paperId);
-    const showMinimap = settings.mode === 'book' && hasBookContent && paper.page_count && !minimapCollapsed;
 
     return (
         <AuthGuard>
@@ -298,17 +330,13 @@ export default function ReaderPage() {
                     isGenerating={isGenerating}
                 />
 
-                {/* Main content area - proper flex layout */}
+                {/* Main content area */}
                 <div className="flex-1 flex overflow-hidden relative">
 
-                    {/* LEFT: Collapsible Sidebar/Outline */}
+                    {/* LEFT: Sidebar/Outline */}
                     <aside
-                        className={`
-                            flex-shrink-0 overflow-hidden
-                            border-r border-gray-200 dark:border-gray-700 
-                            bg-white dark:bg-gray-900 
-                            transition-all duration-300 ease-in-out
-                        `}
+                        className={`flex-shrink-0 overflow-hidden border-r border-gray-200 dark:border-gray-700 
+                        bg-white dark:bg-gray-900 transition-all duration-300 ease-in-out`}
                         style={{ width: sidebarCollapsed ? 0 : 256 }}
                     >
                         <div className="w-64 h-full overflow-y-auto overscroll-contain">
@@ -323,14 +351,9 @@ export default function ReaderPage() {
                     {/* Sidebar Toggle */}
                     <button
                         onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                        className={`
-                            absolute z-20 top-1/2 -translate-y-1/2
-                            p-2 rounded-r-lg 
-                            bg-white dark:bg-gray-800 
-                            border border-l-0 border-gray-200 dark:border-gray-700
-                            shadow-md hover:bg-gray-50 dark:hover:bg-gray-700
-                            transition-all duration-300
-                        `}
+                        className={`absolute z-20 top-1/2 -translate-y-1/2 p-2 rounded-r-lg 
+                        bg-white dark:bg-gray-800 border border-l-0 border-gray-200 dark:border-gray-700
+                        shadow-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-300`}
                         style={{ left: sidebarCollapsed ? 0 : 256 }}
                         title={sidebarCollapsed ? 'Show outline' : 'Hide outline'}
                     >
@@ -341,7 +364,7 @@ export default function ReaderPage() {
                         )}
                     </button>
 
-                    {/* CENTER: Main Content - children handle their own scrolling */}
+                    {/* CENTER: Main Content */}
                     <main className="flex-1 min-w-0 min-h-0 flex flex-col">
                         {settings.mode === 'pdf' ? (
                             <PDFViewer
@@ -357,10 +380,11 @@ export default function ReaderPage() {
                                 highlights={highlights.filter((h) => h.mode === 'book')}
                                 explanations={explanations}
                                 onTextSelect={handleBookTextSelect}
-                                onSectionVisible={handleSectionVisible}
+                                onPageVisible={handlePageVisible}
                                 onFigureClick={handleFigureClick}
                                 onHighlightClick={handleHighlightClick}
-                                scrollToSectionId={scrollToSectionId}
+                                onGenerateMorePages={handleGenerateMorePages}
+                                scrollToPage={scrollToPage}
                             />
                         ) : (
                             <div className="flex-1 flex items-center justify-center p-8 overflow-auto">
@@ -371,6 +395,7 @@ export default function ReaderPage() {
                                     <h2 className="text-xl font-semibold mb-3">Generate Book View</h2>
                                     <p className="text-gray-600 dark:text-gray-400 mb-6">
                                         Create an AI-powered explanation with beautiful typography and diagrams.
+                                        We'll generate the first 5 pages by default.
                                     </p>
                                     <button
                                         onClick={handleGenerateBook}
@@ -383,39 +408,33 @@ export default function ReaderPage() {
                                             <><Sparkles className="w-5 h-5" /> Generate Book View</>
                                         )}
                                     </button>
-                                    <p className="text-xs text-gray-500 mt-4">Takes 30-60 seconds</p>
+                                    <p className="text-xs text-gray-500 mt-4">
+                                        Takes ~30 seconds for first 5 pages
+                                    </p>
                                 </div>
                             </div>
                         )}
                     </main>
 
-                    {/* RIGHT: PDF Minimap - flex child, not fixed */}
+                    {/* RIGHT: PDF Minimap */}
                     {settings.mode === 'book' && hasBookContent && paper.page_count && (
                         <>
-                            {/* Minimap Toggle (visible when collapsed) */}
                             {minimapCollapsed && (
                                 <button
                                     onClick={() => setMinimapCollapsed(false)}
                                     className="absolute z-20 right-0 top-1/2 -translate-y-1/2
-                                        p-2 rounded-l-lg 
-                                        bg-white dark:bg-gray-800 
-                                        border border-r-0 border-gray-200 dark:border-gray-700
-                                        shadow-md hover:bg-gray-50 dark:hover:bg-gray-700
-                                        transition-all"
+                                    p-2 rounded-l-lg bg-white dark:bg-gray-800 
+                                    border border-r-0 border-gray-200 dark:border-gray-700
+                                    shadow-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
                                     title="Show PDF preview"
                                 >
                                     <PanelRight className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                                 </button>
                             )}
 
-                            {/* Minimap Panel */}
                             <aside
-                                className={`
-                                    flex-shrink-0 min-h-0 overflow-hidden
-                                    border-l border-gray-200 dark:border-gray-700
-                                    bg-white dark:bg-gray-900
-                                    transition-all duration-300 ease-in-out
-                                `}
+                                className={`flex-shrink-0 min-h-0 overflow-hidden border-l border-gray-200 dark:border-gray-700
+                                bg-white dark:bg-gray-900 transition-all duration-300 ease-in-out`}
                                 style={{ width: minimapCollapsed ? 0 : settings.minimapWidth }}
                             >
                                 <PDFMinimap

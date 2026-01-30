@@ -1,4 +1,3 @@
-# apps/api/papertree_api/papers/routes.py
 import os
 import uuid
 from datetime import datetime
@@ -13,10 +12,11 @@ from papertree_api.auth.utils import decode_token, get_current_user
 from papertree_api.config import get_settings
 from papertree_api.database import get_database
 
-from .llm_service import generate_book_content
+from .llm_service import (extract_page_text, generate_book_content,
+                          generate_multiple_pages)
 from .models import (BookContent, GenerateBookContentRequest,
-                     PaperDetailResponse, PaperResponse, PDFRegion,
-                     SearchResult, SmartOutlineItem)
+                     GeneratePagesRequest, PageSummary, PaperDetailResponse,
+                     PaperResponse, PDFRegion, SearchResult, SmartOutlineItem)
 
 settings = get_settings()
 router = APIRouter()
@@ -68,7 +68,7 @@ async def upload_paper(
         "created_at": datetime.utcnow(),
         "extracted_text": extracted_text,
         "page_count": page_count,
-        "book_content": None,  # Generated on demand
+        "book_content": None,
         "smart_outline": [],
     }
     
@@ -149,29 +149,28 @@ async def generate_book(
     request: GenerateBookContentRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """Generate LLM book content for a paper."""
+    """Generate book content for a paper (page-by-page)."""
     import traceback
     
     db = get_database()
-    
     try:
         paper = await db.papers.find_one({
             "_id": ObjectId(paper_id),
             "user_id": current_user["id"]
         })
     except Exception as e:
-        print(f"Database error finding paper: {e}")
         raise HTTPException(status_code=404, detail="Paper not found")
     
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
     
-    # Check if already generated
+    # Check if already generated and not forcing regeneration
     if paper.get("book_content") and not request.force_regenerate:
         return {"message": "Book content already exists", "status": "exists"}
     
     extracted_text = paper.get("extracted_text", "")
     page_count = paper.get("page_count", 1)
+    title = paper.get("title", "Untitled")
     
     if not extracted_text:
         raise HTTPException(status_code=400, detail="No text extracted from PDF")
@@ -180,37 +179,140 @@ async def generate_book(
     print(f"Text length: {len(extracted_text)}, Page count: {page_count}")
     
     try:
-        result = await generate_book_content(extracted_text, page_count)
-        print(f"Generated result keys: {result.keys() if result else 'None'}")
+        # Determine pages to generate
+        if request.generate_all:
+            default_pages = page_count
+        elif request.pages:
+            default_pages = len(request.pages)
+        else:
+            default_pages = 5  # Default: first 5 pages
         
-        # Build smart outline from sections
+        result = await generate_book_content(
+            paper_text=extracted_text,
+            page_count=page_count,
+            title=title,
+            default_pages=default_pages
+        )
+        
+        # Build smart outline from page summaries
         smart_outline = []
-        for section in result.get("sections", []):
+        for ps in result.get("page_summaries", []):
             smart_outline.append({
-                "id": f"outline-{section.get('id', 'unknown')}",
-                "title": section.get("title", "Untitled"),
-                "level": section.get("level", 1),
-                "section_id": section.get("id", ""),
-                "pdf_page": section.get("pdf_pages", [0])[0] if section.get("pdf_pages") else 0,
-                "description": None
+                "id": f"page-{ps['page']}",
+                "title": ps["title"],
+                "level": 1,
+                "section_id": f"page-{ps['page']}",
+                "pdf_page": ps["page"],
+                "description": ps["key_concepts"][0] if ps.get("key_concepts") else None
             })
         
         # Store in database
-        update_result = await db.papers.update_one(
+        await db.papers.update_one(
             {"_id": ObjectId(paper_id)},
             {"$set": {
                 "book_content": result,
                 "smart_outline": smart_outline
             }}
         )
-        print(f"Database update: matched={update_result.matched_count}, modified={update_result.modified_count}")
         
-        return {"message": "Book content generated", "status": "success"}
+        return {"message": "Book content generated", "status": "success", "pages_generated": len(result.get("page_summaries", []))}
         
     except Exception as e:
         print(f"Error generating book content: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{paper_id}/generate-pages")
+async def generate_pages(
+    paper_id: str,
+    request: GeneratePagesRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Generate summaries for specific pages."""
+    db = get_database()
+    
+    try:
+        paper = await db.papers.find_one({
+            "_id": ObjectId(paper_id),
+            "user_id": current_user["id"]
+        })
+    except:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    
+    extracted_text = paper.get("extracted_text", "")
+    page_count = paper.get("page_count", 1)
+    book_content = paper.get("book_content", {})
+    
+    if not extracted_text:
+        raise HTTPException(status_code=400, detail="No text extracted from PDF")
+    
+    # Filter out already generated pages
+    existing_pages = set()
+    if book_content and book_content.get("page_summaries"):
+        existing_pages = {ps["page"] for ps in book_content["page_summaries"]}
+    
+    pages_to_generate = [p for p in request.pages if p not in existing_pages and 0 <= p < page_count]
+    
+    if not pages_to_generate:
+        return {"message": "All requested pages already generated", "pages_generated": 0}
+    
+    try:
+        new_summaries = await generate_multiple_pages(
+            full_text=extracted_text,
+            total_pages=page_count,
+            pages_to_generate=pages_to_generate
+        )
+        
+        # Merge with existing summaries
+        all_summaries = list(book_content.get("page_summaries", []))
+        all_summaries.extend(new_summaries)
+        all_summaries.sort(key=lambda x: x["page"])
+        
+        # Update summary status
+        generated_pages = [ps["page"] for ps in all_summaries]
+        summary_status = {
+            "total_pages": page_count,
+            "generated_pages": generated_pages,
+            "default_limit": book_content.get("summary_status", {}).get("default_limit", 5)
+        }
+        
+        # Update smart outline
+        smart_outline = []
+        for ps in all_summaries:
+            smart_outline.append({
+                "id": f"page-{ps['page']}",
+                "title": ps["title"],
+                "level": 1,
+                "section_id": f"page-{ps['page']}",
+                "pdf_page": ps["page"],
+                "description": ps["key_concepts"][0] if ps.get("key_concepts") else None
+            })
+        
+        # Save to database
+        await db.papers.update_one(
+            {"_id": ObjectId(paper_id)},
+            {"$set": {
+                "book_content.page_summaries": all_summaries,
+                "book_content.summary_status": summary_status,
+                "smart_outline": smart_outline
+            }}
+        )
+        
+        return {
+            "message": "Pages generated",
+            "status": "success",
+            "pages_generated": len(new_summaries),
+            "new_summaries": new_summaries
+        }
+        
+    except Exception as e:
+        print(f"Error generating pages: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/{paper_id}/file")
 async def get_paper_file(
@@ -250,17 +352,13 @@ async def get_page_image(
     page_num: int,
     token: Optional[str] = None,
     authorization: Optional[str] = Header(None),
-    # Region parameters (normalized 0-1)
     x0: float = 0,
     y0: float = 0,
     x1: float = 1,
     y1: float = 1,
     scale: float = 2.0
 ):
-    """
-    Get a region of a PDF page as an image.
-    Used by the PDF minimap to show specific regions.
-    """
+    """Get a region of a PDF page as an image."""
     auth_token = token or (authorization[7:] if authorization and authorization.startswith("Bearer ") else None)
     
     if not auth_token:
@@ -288,7 +386,6 @@ async def get_page_image(
         page = doc[page_num]
         page_rect = page.rect
         
-        # Convert normalized coordinates to absolute
         clip_rect = fitz.Rect(
             page_rect.x0 + x0 * page_rect.width,
             page_rect.y0 + y0 * page_rect.height,
@@ -296,7 +393,6 @@ async def get_page_image(
             page_rect.y0 + y1 * page_rect.height
         )
         
-        # Render with scaling
         mat = fitz.Matrix(scale, scale)
         pix = page.get_pixmap(matrix=mat, clip=clip_rect)
         

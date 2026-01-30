@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     
     # OpenRouter
     openrouter_api_key: str = ""
-    openrouter_model: str = "google/gemini-3-flash-preview"
+    openrouter_model: str = "moonshotai/kimi-k2.5"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     
     # Storage

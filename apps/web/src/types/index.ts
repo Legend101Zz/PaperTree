@@ -1,5 +1,3 @@
-// apps/web/src/types/index.ts
-
 // ============ USER TYPES ============
 export interface User {
   id: string;
@@ -42,6 +40,25 @@ export interface TextAnchor {
   prefix: string;
   suffix: string;
   section_path: string[];
+}
+
+// ============ PAGE SUMMARY (NEW) ============
+export interface PageSummary {
+  page: number; // 0-indexed
+  title: string;
+  summary: string; // Markdown content
+  key_concepts: string[];
+  has_math: boolean;
+  has_figures: boolean;
+  generated_at: string;
+  model: string;
+  error?: boolean;
+}
+
+export interface PageSummaryStatus {
+  total_pages: number;
+  generated_pages: number[]; // 0-indexed
+  default_limit: number;
 }
 
 // ============ CONTENT BLOCKS ============
@@ -117,7 +134,7 @@ export interface SmartOutlineItem {
   id: string;
   title: string;
   level: number;
-  section_id: string;
+  section_id: string; // "page-0", "page-1", etc.
   pdf_page: number;
   description?: string;
 }
@@ -141,7 +158,7 @@ export interface StructuredContent {
   };
 }
 
-// ============ BOOK CONTENT (LLM-GENERATED) ============
+// ============ BOOK CONTENT (UPDATED) ============
 export interface BookSection {
   id: string;
   title: string;
@@ -155,7 +172,9 @@ export interface BookContent {
   title: string;
   authors?: string;
   tldr: string;
-  sections: BookSection[];
+  sections: BookSection[]; // Legacy
+  page_summaries: PageSummary[]; // NEW: page-by-page
+  summary_status?: PageSummaryStatus; // NEW
   key_figures: Array<{
     id: string;
     caption: string;

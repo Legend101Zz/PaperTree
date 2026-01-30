@@ -1,7 +1,6 @@
-// apps/web/src/store/readerStore.ts
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { Highlight, Explanation } from "@/types";
+import { Highlight, Explanation, PageSummary } from "@/types";
 
 export interface ReaderSettings {
   theme: "light" | "dark" | "sepia";
@@ -42,12 +41,17 @@ interface ReaderState {
   selectedText: string | null;
   selectionPosition: { x: number; y: number } | null;
   currentSectionId: string | null;
+  currentBlockId: string | null;
   currentPdfPage: number;
   currentPdfRegion: PDFRegion | null;
   figureViewerOpen: boolean;
   figureViewerPage: number;
   figureViewerNote: string;
   inlineExplanation: InlineExplanationState;
+
+  // Page generation state (NEW)
+  generatingPages: Set<number>;
+  visiblePage: number; // Currently visible page in book mode
 }
 
 interface ReaderActions {
@@ -90,6 +94,7 @@ interface ReaderActions {
     region?: PDFRegion,
   ) => void;
   setCurrentPdfPage: (page: number) => void;
+  setVisiblePage: (page: number) => void;
 
   // Figure viewer actions
   openFigureViewer: (page: number) => void;
@@ -102,6 +107,11 @@ interface ReaderActions {
     position: { x: number; y: number },
   ) => void;
   closeInlineExplanation: () => void;
+
+  // Page generation actions (NEW)
+  setGeneratingPages: (pages: number[]) => void;
+  addGeneratingPage: (page: number) => void;
+  removeGeneratingPage: (page: number) => void;
 
   // Reset
   resetReaderState: () => void;
@@ -126,6 +136,7 @@ const initialSessionState = {
   selectedText: null as string | null,
   selectionPosition: null as { x: number; y: number } | null,
   currentSectionId: null as string | null,
+  currentBlockId: null as string | null,
   currentPdfPage: 0,
   currentPdfRegion: null as PDFRegion | null,
   figureViewerOpen: false,
@@ -136,6 +147,8 @@ const initialSessionState = {
     highlightId: null,
     position: null,
   } as InlineExplanationState,
+  generatingPages: new Set<number>(),
+  visiblePage: 0,
 };
 
 const initialState: ReaderState = {
@@ -206,10 +219,14 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
             currentSectionId: sectionId,
             currentPdfPage: pdfPage,
             currentPdfRegion: region || null,
+            visiblePage: pdfPage,
           });
         }
       },
-      setCurrentPdfPage: (page) => set({ currentPdfPage: page }),
+      setCurrentPdfPage: (page) =>
+        set({ currentPdfPage: page, visiblePage: page }),
+      setVisiblePage: (page) =>
+        set({ visiblePage: page, currentPdfPage: page }),
 
       // Figure viewer
       openFigureViewer: (page) =>
@@ -243,14 +260,30 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
         });
       },
 
+      // Page generation (NEW)
+      setGeneratingPages: (pages) => set({ generatingPages: new Set(pages) }),
+      addGeneratingPage: (page) =>
+        set((s) => {
+          const newSet = new Set(s.generatingPages);
+          newSet.add(page);
+          return { generatingPages: newSet };
+        }),
+      removeGeneratingPage: (page) =>
+        set((s) => {
+          const newSet = new Set(s.generatingPages);
+          newSet.delete(page);
+          return { generatingPages: newSet };
+        }),
+
       // Reset session state (keeps persisted settings)
       resetReaderState: () =>
         set({
           ...initialSessionState,
+          generatingPages: new Set(),
         }),
     }),
     {
-      name: "reader-settings-v7",
+      name: "reader-settings-v8",
       partialize: (state) => ({
         settings: state.settings,
         sidebarCollapsed: state.sidebarCollapsed,

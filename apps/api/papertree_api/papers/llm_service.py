@@ -1,12 +1,13 @@
-# apps/api/papertree_api/papers/llm_service.py
 """
-LLM service for generating book-style explanations of papers.
+LLM service for generating page-by-page explanations of papers.
+Optimized for clarity, simplicity, and proper math/diagram rendering.
 """
 
 import json
 import re
 import uuid
-from typing import List, Optional, Tuple
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 from papertree_api.config import get_settings
@@ -14,128 +15,160 @@ from papertree_api.config import get_settings
 settings = get_settings()
 
 
-SYSTEM_PROMPT = """You are a world-class science communicator and academic tutor, capable of explaining the most complex topics using the "Feynman Technique". Your goal is to transform dense academic research into an engaging, "book-style" learning experience.
+# ============ OPTIMIZED PROMPTS ============
 
-### RESPONSE FORMAT
-You must respond with valid, parseable JSON. Do not include markdown formatting (like ```json) outside the JSON structure.
+PAGE_SUMMARY_SYSTEM_PROMPT = """You are an expert academic tutor who explains complex research papers using the Feynman Technique. Your explanations are:
 
-### CONTENT GUIDELINES
-1. **Tone:** Conversational, enthusiastic, and clear. Avoid jargon where possible; define it where necessary.
-2. **Structure:** Break the paper into logical "Chapters" (sections).
-3. **Analogies:** Use real-world analogies to explain abstract concepts.
-4. **Visuals:** - Use Mermaid JS for process flows or system architectures.
-   - Wrap Mermaid code in ```mermaid ... ``` blocks.
-5. **Math:** - Use LaTeX for equations. 
-   - CRITICAL: You must escape backslashes in the JSON string. 
-   - Example: write "$\\alpha$" as "${\\alpha}$" (double backslash).
+1. **Crystal clear** - A smart high schooler should understand
+2. **Concept-focused** - Focus on "what" and "why", not just "what happened"  
+3. **Practical** - Use real-world analogies and examples
+4. **Properly formatted** - Math and diagrams render correctly
 
-### JSON SCHEMA
-{
-  "title": "Engaging Title (not just the paper title)",
-  "authors": "Author names",
-  "tldr": "A 3-sentence hook: What is this, why does it matter, and what did they find?",
-  "sections": [
-    {
-      "id": "sec_1",
-      "title": "Chapter Title",
-      "level": 1,
-      "content": "Markdown text here. Use headers (##) for subsections. **Bold** for emphasis.",
-      "pdf_pages": [0, 1], 
-      "figures": ["Figure 1"]
-    }
-  ],
-  "key_figures": [
-    {"id": "fig1", "caption": "Simplified explanation of the figure", "pdf_page": 3}
-  ]
-}"""
+## FORMATTING RULES (CRITICAL)
 
-USER_PROMPT_TEMPLATE = """Transform the following research paper into a structured "mini-book".
+### Mathematics (LaTeX)
+- Inline math: `$x^2$` or `$\\alpha$`
+- Display math (centered, important equations):
+```
+$$
+E = mc^2
+$$
+```
+- ALWAYS double-escape backslashes in JSON: `$\\\\sum_{i=1}^n$`
+- Keep equations simple; explain the intuition in words
+- Example: "The loss function $L = \\\\frac{1}{n}\\\\sum_i (y_i - \\\\hat{y}_i)^2$ measures how wrong our predictions are—it's just the average squared error."
 
-Paper Text:
+### Diagrams (Mermaid)
+Use Mermaid for:
+- Process flows
+- System architectures  
+- Decision trees
+- Relationships
+
+Format:
+```mermaid
+graph TD
+    A[Input] --> B[Process]
+    B --> C[Output]
+```
+
+Keep diagrams simple (max 8-10 nodes). Label nodes clearly.
+
+### Text Formatting
+- Use **bold** for key terms (first mention only)
+- Use bullet points for lists of 3+ items
+- Use > blockquotes for important takeaways
+- Keep paragraphs short (3-4 sentences max)
+
+## RESPONSE FORMAT
+Respond with valid JSON only. No markdown code fences around the JSON."""
+
+
+PAGE_SUMMARY_USER_PROMPT = """Explain this page from a research paper in a way that builds understanding.
+
+## Page {page_num} of {total_pages}
 ---
-{paper_text}
----
-
-Total Pages: {page_count}
-
-### INSTRUCTIONS
-Create a response with exactly these 5 sections (map them to the 'sections' array in JSON):
-
-1. **The Hook & Context:** Start with the problem. Why was this research needed? What was the status quo?
-2. **Core Concepts:** Explain the fundamental theory or definitions needed to understand the work (Mental Models).
-3. ** The Methodology (The "How"):** How did they do it? Use a **Mermaid Flowchart** here to visualize their pipeline/process.
-4. **Key Results:** What actually happened? Use bullet points and context.
-5. **Implications:** Why should the reader care? What is the future impact?
-
-**CRITICAL FORMATTING RULES:**
-- Escape all double quotes inside strings (e.g., \\").
-- Escape all LaTeX backslashes (e.g., use $$\\sum$$ instead of $\sum$).
-- Do not output any text before or after the JSON object.
-"""
-
-USER_PROMPT_TEMPLATE = """Create a book-style explanation of this research paper.
-
-Paper text:
----
-{paper_text}
+{page_text}
 ---
 
-The paper has {page_count} pages.
+## Your Task
+Create a clear, educational explanation of this page's content.
 
-Create a comprehensive explanation with:
-1. Clear TL;DR
-2. Background/motivation
-3. Methodology explained simply
-4. Results with context
-5. Implications and limitations
+Respond with this exact JSON structure:
+{{
+  "title": "A clear, descriptive title for this page's content (not 'Page X')",
+  "summary": "Your explanation in markdown. Include:\\n- What this page is about\\n- Key concepts explained simply\\n- Any equations with intuition\\n- Mermaid diagrams if helpful for processes/architectures\\n- Real-world analogies where applicable",
+  "key_concepts": ["Concept 1", "Concept 2", "Concept 3"],
+  "has_math": true/false,
+  "has_figures": true/false
+}}
 
-Use LaTeX for math: $x^2$ for inline, $$\\sum_{{i=1}}^n x_i$$ for display
-Use Mermaid for helpful diagrams.
-Reference original figures as [Figure X].
-Map each section to approximate PDF page numbers (0-indexed).
+Remember:
+- Explain like teaching a curious friend
+- Math should have intuition, not just symbols
+- Diagrams should clarify, not complicate
+- Be concise but complete"""
 
-Respond ONLY with valid JSON, no other text."""
+
+PAPER_TLDR_SYSTEM_PROMPT = """You summarize research papers in one compelling paragraph. Your summaries:
+- Start with the problem being solved
+- Explain the key innovation in plain terms
+- End with why it matters
+
+Keep it under 100 words. No jargon without explanation."""
 
 
-async def generate_book_content(
-    paper_text: str,
-    page_count: int,
+PAPER_TLDR_USER_PROMPT = """Summarize this research paper in one paragraph:
+
+Title: {title}
+
+First few pages:
+{text_preview}
+
+Write a TL;DR that answers: What problem? What solution? Why care?"""
+
+
+# ============ EXTRACTION HELPERS ============
+
+def extract_page_text(full_text: str, page_num: int) -> str:
+    """Extract text for a specific page from the full extracted text."""
+    # Our extraction format uses [Page X] markers
+    pattern = rf'\[Page {page_num + 1}\]\n(.*?)(?=\[Page {page_num + 2}\]|\Z)'
+    match = re.search(pattern, full_text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    
+    # Fallback: split by page markers and index
+    pages = re.split(r'\[Page \d+\]\n?', full_text)
+    pages = [p.strip() for p in pages if p.strip()]
+    if 0 <= page_num < len(pages):
+        return pages[page_num]
+    
+    return ""
+
+
+def count_pages_in_text(full_text: str) -> int:
+    """Count how many pages are in the extracted text."""
+    matches = re.findall(r'\[Page (\d+)\]', full_text)
+    if matches:
+        return max(int(m) for m in matches)
+    return 1
+
+
+# ============ MAIN GENERATION FUNCTIONS ============
+
+async def generate_page_summary(
+    page_text: str,
+    page_num: int,
+    total_pages: int,
     model: Optional[str] = None
 ) -> dict:
-    """Generate book-style content for a paper using LLM."""
+    """Generate a summary for a single page."""
     model = model or settings.openrouter_model
+    if not page_text.strip():
+        return {
+            "page": page_num,
+            "title": f"Page {page_num + 1}",
+            "summary": "_This page appears to be empty or contains only figures/tables._",
+            "key_concepts": [],
+            "has_math": False,
+            "has_figures": True,
+            "generated_at": datetime.utcnow().isoformat(),
+            "model": model
+        }
     
-    print(f"Using model: {model}")
-    print(f"OpenRouter base URL: {settings.openrouter_base_url}")
-    print(f"API key present: {bool(settings.openrouter_api_key)}")
+    # Truncate if too long (keep ~4000 chars per page)
+    if len(page_text) > 5000:
+        page_text = page_text[:2500] + "\n...[content truncated]...\n" + page_text[-2500:]
     
-    # Truncate text if too long
-    max_chars = 60000
-    if len(paper_text) > max_chars:
-        # Keep beginning and end
-        half = max_chars // 2
-        paper_text = paper_text[:half] + "\n\n[... content truncated for length ...]\n\n" + paper_text[-half:]
-        print(f"Truncated text to {len(paper_text)} chars")
-    
-    user_prompt = USER_PROMPT_TEMPLATE.format(
-        paper_text=paper_text,
-        page_count=page_count
+    user_prompt = PAGE_SUMMARY_USER_PROMPT.format(
+        page_num=page_num + 1,
+        total_pages=total_pages,
+        page_text=page_text
     )
     
     try:
-        async with httpx.AsyncClient(timeout=180.0) as client:
-            print("Sending request to OpenRouter...")
-            
-            request_body = {
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt}
-                ],
-                "temperature": 0.7,
-                "max_tokens": 8000,
-            }
-            
+        async with httpx.AsyncClient(timeout=90.0) as client:
             response = await client.post(
                 f"{settings.openrouter_base_url}/chat/completions",
                 headers={
@@ -144,185 +177,268 @@ async def generate_book_content(
                     "HTTP-Referer": "http://localhost:3000",
                     "X-Title": "PaperTree"
                 },
-                json=request_body
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": PAGE_SUMMARY_SYSTEM_PROMPT},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 2500,
+                }
             )
-            
-            print(f"Response status: {response.status_code}")
-            
             if response.status_code != 200:
-                error_text = response.text
-                print(f"API Error: {error_text}")
-                raise Exception(f"OpenRouter API error: {response.status_code} - {error_text}")
+                raise Exception(f"API error: {response.status_code} - {response.text}")
             
             data = response.json()
-            
-            if "choices" not in data or len(data["choices"]) == 0:
-                print(f"Unexpected response format: {data}")
-                raise Exception("No choices in response")
-            
             content = data["choices"][0]["message"]["content"]
-            print(f"Raw content length: {len(content)}")
-            print(f"Content preview: {content[:500]}...")
             
-            # Try to parse JSON
-            result = _parse_llm_response(content, model)
+            # Parse the response
+            result = _parse_page_summary(content, page_num, model)
             return result
             
     except httpx.TimeoutException:
-        print("Request timed out")
-        raise Exception("Request timed out. The paper may be too long.")
-    except httpx.RequestError as e:
-        print(f"Request error: {e}")
-        raise Exception(f"Network error: {str(e)}")
+        raise Exception(f"Timeout generating summary for page {page_num + 1}")
     except Exception as e:
-        print(f"Unexpected error: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Error generating page {page_num + 1}: {e}")
         raise
 
 
-def _parse_llm_response(content: str, model: str) -> dict:
-    """Parse LLM response, handling various formats."""
+async def generate_paper_tldr(
+    title: str,
+    text_preview: str,
+    model: Optional[str] = None
+) -> str:
+    """Generate a TL;DR for the entire paper."""
+    model = model or settings.openrouter_model
     
-    # First, try direct JSON parse
+    # Use first ~3000 chars for TL;DR
+    if len(text_preview) > 4000:
+        text_preview = text_preview[:4000]
+    
+    user_prompt = PAPER_TLDR_USER_PROMPT.format(
+        title=title,
+        text_preview=text_preview
+    )
+    
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"{settings.openrouter_base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {settings.openrouter_api_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "http://localhost:3000",
+                    "X-Title": "PaperTree"
+                },
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": PAPER_TLDR_SYSTEM_PROMPT},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 300,
+                }
+            )
+            
+            if response.status_code != 200:
+                raise Exception(f"API error: {response.status_code}")
+            
+            data = response.json()
+            return data["choices"][0]["message"]["content"].strip()
+            
+    except Exception as e:
+        print(f"Error generating TL;DR: {e}")
+        return "Summary generation failed. Please try again."
+
+
+async def generate_multiple_pages(
+    full_text: str,
+    total_pages: int,
+    pages_to_generate: List[int],
+    model: Optional[str] = None
+) -> List[dict]:
+    """Generate summaries for multiple pages."""
+    results = []
+    
+    for page_num in pages_to_generate:
+        if page_num < 0 or page_num >= total_pages:
+            continue
+            
+        page_text = extract_page_text(full_text, page_num)
+        
+        try:
+            summary = await generate_page_summary(
+                page_text=page_text,
+                page_num=page_num,
+                total_pages=total_pages,
+                model=model
+            )
+            results.append(summary)
+        except Exception as e:
+            print(f"Failed to generate page {page_num}: {e}")
+            # Add error placeholder
+            results.append({
+                "page": page_num,
+                "title": f"Page {page_num + 1}",
+                "summary": f"_Failed to generate summary: {str(e)}_",
+                "key_concepts": [],
+                "has_math": False,
+                "has_figures": False,
+                "generated_at": datetime.utcnow().isoformat(),
+                "model": model or settings.openrouter_model,
+                "error": True
+            })
+    
+    return results
+
+
+# ============ LEGACY SUPPORT ============
+
+async def generate_book_content(
+    paper_text: str,
+    page_count: int,
+    title: str = "Untitled Paper",
+    model: Optional[str] = None,
+    default_pages: int = 5
+) -> dict:
+    """
+    Generate book content with page-by-page summaries.
+    By default, only generates first N pages.
+    """
+    model = model or settings.openrouter_model
+    
+    # Generate TL;DR first
+    tldr = await generate_paper_tldr(title, paper_text[:6000], model)
+    
+    # Generate first N pages by default
+    pages_to_generate = list(range(min(default_pages, page_count)))
+    page_summaries = await generate_multiple_pages(
+        full_text=paper_text,
+        total_pages=page_count,
+        pages_to_generate=pages_to_generate,
+        model=model
+    )
+    
+    # Build smart outline from page summaries
+    smart_outline = []
+    for ps in page_summaries:
+        smart_outline.append({
+            "id": f"page-{ps['page']}",
+            "title": ps["title"],
+            "level": 1,
+            "section_id": f"page-{ps['page']}",
+            "pdf_page": ps["page"],
+            "description": ps["key_concepts"][0] if ps.get("key_concepts") else None
+        })
+    
+    return {
+        "title": title,
+        "authors": None,
+        "tldr": tldr,
+        "sections": [],  # Legacy - empty
+        "page_summaries": page_summaries,
+        "summary_status": {
+            "total_pages": page_count,
+            "generated_pages": [ps["page"] for ps in page_summaries],
+            "default_limit": default_pages
+        },
+        "key_figures": [],
+        "generated_at": datetime.utcnow().isoformat(),
+        "model": model
+    }
+
+
+# ============ PARSING HELPERS ============
+
+def _parse_page_summary(content: str, page_num: int, model: str) -> dict:
+    """Parse LLM response for page summary."""
+    
+    # Try direct JSON parse
     try:
         result = json.loads(content)
-        return _validate_and_fix_result(result, model)
+        return _validate_page_summary(result, page_num, model)
     except json.JSONDecodeError:
         pass
     
-    # Try to extract JSON from markdown code blocks
-    json_patterns = [
+    # Try extracting JSON from markdown
+    patterns = [
         r'```json\s*([\s\S]*?)\s*```',
         r'```\s*([\s\S]*?)\s*```',
         r'\{[\s\S]*\}'
     ]
     
-    for pattern in json_patterns:
+    for pattern in patterns:
         match = re.search(pattern, content)
         if match:
             try:
                 json_str = match.group(1) if '```' in pattern else match.group(0)
                 result = json.loads(json_str)
-                return _validate_and_fix_result(result, model)
+                return _validate_page_summary(result, page_num, model)
             except (json.JSONDecodeError, IndexError):
                 continue
     
-    # Fallback: create minimal structure from content
-    print("Failed to parse JSON, using fallback")
-    return _create_fallback_content(content, model)
-
-
-def _validate_and_fix_result(result: dict, model: str) -> dict:
-    """Validate and fix the result structure."""
-    
-    # Ensure required fields
-    if "title" not in result:
-        result["title"] = "Untitled Paper"
-    
-    if "tldr" not in result:
-        result["tldr"] = "Summary not available."
-    
-    if "sections" not in result or not result["sections"]:
-        result["sections"] = [{
-            "id": "section-1",
-            "title": "Content",
-            "level": 1,
-            "content": "Content extraction failed. Please try again.",
-            "pdf_pages": [0],
-            "figures": []
-        }]
-    
-    # Fix sections
-    for i, section in enumerate(result["sections"]):
-        if "id" not in section:
-            section["id"] = f"section-{i+1}-{uuid.uuid4().hex[:6]}"
-        if "title" not in section:
-            section["title"] = f"Section {i+1}"
-        if "level" not in section:
-            section["level"] = 1
-        if "content" not in section:
-            section["content"] = ""
-        if "pdf_pages" not in section:
-            section["pdf_pages"] = [0]
-        if "figures" not in section:
-            section["figures"] = []
-    
-    if "key_figures" not in result:
-        result["key_figures"] = []
-    
-    result["model"] = model
-    
-    return result
-
-
-def _create_fallback_content(content: str, model: str) -> dict:
-    """Create fallback content when JSON parsing fails."""
-    
-    # Try to extract meaningful sections from the content
-    sections = []
-    
-    # Split by common section markers
-    parts = re.split(r'\n(?=#{1,3}\s|\*\*[A-Z])', content)
-    
-    for i, part in enumerate(parts):
-        if part.strip():
-            # Try to extract title
-            title_match = re.match(r'^#{1,3}\s*(.+?)(?:\n|$)', part)
-            if title_match:
-                title = title_match.group(1).strip()
-                content_text = part[title_match.end():].strip()
-            else:
-                title = f"Section {i+1}"
-                content_text = part.strip()
-            
-            sections.append({
-                "id": f"section-{i+1}",
-                "title": title,
-                "level": 1,
-                "content": content_text,
-                "pdf_pages": [0],
-                "figures": []
-            })
-    
-    if not sections:
-        sections = [{
-            "id": "section-1",
-            "title": "Paper Explanation",
-            "level": 1,
-            "content": content,
-            "pdf_pages": [0],
-            "figures": []
-        }]
-    
+    # Fallback: use content as-is
     return {
-        "title": "Paper Analysis",
-        "authors": None,
-        "tldr": sections[0]["content"][:500] + "..." if sections else "Summary not available.",
-        "sections": sections,
-        "key_figures": [],
+        "page": page_num,
+        "title": f"Page {page_num + 1}",
+        "summary": content,
+        "key_concepts": [],
+        "has_math": "$" in content,
+        "has_figures": "figure" in content.lower() or "```mermaid" in content,
+        "generated_at": datetime.utcnow().isoformat(),
         "model": model
     }
 
 
-async def generate_section_explanation(
-    section_text: str,
-    context: str,
-    question: Optional[str] = None,
+def _validate_page_summary(result: dict, page_num: int, model: str) -> dict:
+    """Validate and fix page summary structure."""
+    return {
+        "page": page_num,
+        "title": result.get("title", f"Page {page_num + 1}"),
+        "summary": result.get("summary", ""),
+        "key_concepts": result.get("key_concepts", [])[:5],  # Max 5
+        "has_math": result.get("has_math", False),
+        "has_figures": result.get("has_figures", False),
+        "generated_at": datetime.utcnow().isoformat(),
+        "model": model
+    }
+
+
+# ============ HIGHLIGHT EXPLANATION (EXISTING) ============
+
+async def generate_highlight_explanation(
+    selected_text: str,
+    question: str,
+    context_before: str = "",
+    context_after: str = "",
     model: Optional[str] = None
 ) -> str:
-    """Generate explanation for a specific section or answer a question."""
+    """Generate explanation for a highlighted text selection."""
     model = model or settings.openrouter_model
     
-    prompt = f"""Context from paper:
-{context[:2000]}
+    system_prompt = """You explain research paper content clearly and concisely.
 
-Section to explain:
-{section_text}
+Rules:
+- Be direct and helpful
+- Use LaTeX for math: $inline$ or $$display$$
+- Use Mermaid for diagrams if helpful
+- Keep explanations focused on the question
+- Use analogies to clarify complex ideas"""
+    
+    user_prompt = f"""Help me understand this text from a research paper.
 
-{"Question: " + question if question else "Please explain this section clearly."}
+{f'Context: ...{context_before[-200:]}' if context_before else ''}
 
-Use LaTeX for math ($inline$ or $$display$$) and Mermaid for diagrams if helpful."""
+**Selected text:**
+"{selected_text}"
+
+{f'...{context_after[:200]}...' if context_after else ''}
+
+**My question:** {question}
+
+Give a clear, helpful explanation."""
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -331,15 +447,17 @@ Use LaTeX for math ($inline$ or $$display$$) and Mermaid for diagrams if helpful
                 headers={
                     "Authorization": f"Bearer {settings.openrouter_api_key}",
                     "Content-Type": "application/json",
+                    "HTTP-Referer": "http://localhost:3000",
+                    "X-Title": "PaperTree"
                 },
                 json={
                     "model": model,
                     "messages": [
-                        {"role": "system", "content": "You are a helpful tutor explaining academic papers. Use LaTeX for math and Mermaid for diagrams."},
-                        {"role": "user", "content": prompt}
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
                     ],
                     "temperature": 0.7,
-                    "max_tokens": 2000
+                    "max_tokens": 1500
                 }
             )
             
