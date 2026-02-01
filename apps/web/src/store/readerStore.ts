@@ -1,6 +1,9 @@
+// apps/web/src/store/readerStore.ts
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { Highlight, Explanation, PageSummary } from "@/types";
+import { Highlight, Explanation } from "@/types";
+
+export type BookViewMode = "scroll" | "flip";
 
 export interface ReaderSettings {
   theme: "light" | "dark" | "sepia";
@@ -12,6 +15,7 @@ export interface ReaderSettings {
   minimapWidth: number;
   invertPdf: boolean;
   invertMinimap: boolean;
+  bookViewMode: BookViewMode; // NEW
 }
 
 export interface PDFRegion {
@@ -29,12 +33,9 @@ export interface InlineExplanationState {
 }
 
 interface ReaderState {
-  // Persisted settings
   settings: ReaderSettings;
   sidebarCollapsed: boolean;
   minimapCollapsed: boolean;
-
-  // Session state (not persisted)
   highlights: Highlight[];
   explanations: Explanation[];
   activeHighlightId: string | null;
@@ -48,14 +49,12 @@ interface ReaderState {
   figureViewerPage: number;
   figureViewerNote: string;
   inlineExplanation: InlineExplanationState;
-
-  // Page generation state (NEW)
   generatingPages: Set<number>;
-  visiblePage: number; // Currently visible page in book mode
+  visiblePage: number;
+  currentBookPage: number; // NEW: for flip mode
 }
 
 interface ReaderActions {
-  // Settings actions
   setTheme: (theme: ReaderSettings["theme"]) => void;
   setFontSize: (size: number) => void;
   setLineHeight: (height: number) => void;
@@ -65,29 +64,20 @@ interface ReaderActions {
   setMinimapWidth: (width: number) => void;
   setInvertPdf: (invert: boolean) => void;
   setInvertMinimap: (invert: boolean) => void;
-
-  // Layout actions
+  setBookViewMode: (mode: BookViewMode) => void; // NEW
   setSidebarCollapsed: (collapsed: boolean) => void;
   setMinimapCollapsed: (collapsed: boolean) => void;
-
-  // Highlight actions
   setHighlights: (highlights: Highlight[]) => void;
   addHighlight: (highlight: Highlight) => void;
   setActiveHighlight: (id: string | null) => void;
-
-  // Selection actions
   setSelection: (
     text: string | null,
     position: { x: number; y: number } | null,
   ) => void;
   clearSelection: () => void;
-
-  // Explanation actions
   setExplanations: (explanations: Explanation[]) => void;
   addExplanation: (explanation: Explanation) => void;
   updateExplanation: (id: string, updates: Partial<Explanation>) => void;
-
-  // Navigation actions
   setCurrentSection: (
     sectionId: string | null,
     pdfPage: number,
@@ -95,25 +85,18 @@ interface ReaderActions {
   ) => void;
   setCurrentPdfPage: (page: number) => void;
   setVisiblePage: (page: number) => void;
-
-  // Figure viewer actions
+  setCurrentBookPage: (page: number) => void; // NEW
   openFigureViewer: (page: number) => void;
   closeFigureViewer: () => void;
   setFigureNote: (note: string) => void;
-
-  // Inline explanation actions
   openInlineExplanation: (
     highlightId: string,
     position: { x: number; y: number },
   ) => void;
   closeInlineExplanation: () => void;
-
-  // Page generation actions (NEW)
   setGeneratingPages: (pages: number[]) => void;
   addGeneratingPage: (page: number) => void;
   removeGeneratingPage: (page: number) => void;
-
-  // Reset
   resetReaderState: () => void;
 }
 
@@ -127,6 +110,7 @@ const initialSettings: ReaderSettings = {
   minimapWidth: 300,
   invertPdf: false,
   invertMinimap: false,
+  bookViewMode: "scroll", // Default to scroll
 };
 
 const initialSessionState = {
@@ -149,6 +133,7 @@ const initialSessionState = {
   } as InlineExplanationState,
   generatingPages: new Set<number>(),
   visiblePage: 0,
+  currentBookPage: 0,
 };
 
 const initialState: ReaderState = {
@@ -180,6 +165,8 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
         set((s) => ({ settings: { ...s.settings, invertPdf } })),
       setInvertMinimap: (invertMinimap) =>
         set((s) => ({ settings: { ...s.settings, invertMinimap } })),
+      setBookViewMode: (bookViewMode) =>
+        set((s) => ({ settings: { ...s.settings, bookViewMode } })),
 
       // Layout
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
@@ -227,6 +214,8 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
         set({ currentPdfPage: page, visiblePage: page }),
       setVisiblePage: (page) =>
         set({ visiblePage: page, currentPdfPage: page }),
+      setCurrentBookPage: (page) =>
+        set({ currentBookPage: page, visiblePage: page, currentPdfPage: page }),
 
       // Figure viewer
       openFigureViewer: (page) =>
@@ -241,11 +230,7 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
       // Inline explanation
       openInlineExplanation: (highlightId, position) => {
         set({
-          inlineExplanation: {
-            isOpen: true,
-            highlightId,
-            position,
-          },
+          inlineExplanation: { isOpen: true, highlightId, position },
           activeHighlightId: highlightId,
         });
       },
@@ -260,7 +245,7 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
         });
       },
 
-      // Page generation (NEW)
+      // Page generation
       setGeneratingPages: (pages) => set({ generatingPages: new Set(pages) }),
       addGeneratingPage: (page) =>
         set((s) => {
@@ -275,15 +260,12 @@ export const useReaderStore = create<ReaderState & ReaderActions>()(
           return { generatingPages: newSet };
         }),
 
-      // Reset session state (keeps persisted settings)
+      // Reset
       resetReaderState: () =>
-        set({
-          ...initialSessionState,
-          generatingPages: new Set(),
-        }),
+        set({ ...initialSessionState, generatingPages: new Set() }),
     }),
     {
-      name: "reader-settings-v8",
+      name: "reader-settings-v9",
       partialize: (state) => ({
         settings: state.settings,
         sidebarCollapsed: state.sidebarCollapsed,
