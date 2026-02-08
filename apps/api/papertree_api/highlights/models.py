@@ -180,3 +180,37 @@ class HighlightSearchQuery(BaseModel):
     color: str = "#eab308"
     note: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    
+# ─── NEW: Paper-based highlight models (used by reader page) ───
+
+class PaperHighlightCreate(BaseModel):
+    """Create highlight using paper_id (from reader page)."""
+    mode: str = "book"  # "book" or "pdf"
+    selected_text: str
+    page_number: Optional[int] = None
+    section_id: Optional[str] = None
+    rects: Optional[List[dict]] = None
+    anchor: Optional[dict] = None
+    category: HighlightCategory = "none"
+    color: Optional[str] = None
+    note: Optional[str] = None
+
+
+class PaperHighlightResponse(BaseModel):
+    """Unified highlight response for reader page."""
+    id: str
+    paper_id: str
+    user_id: str
+    mode: str
+    selected_text: str
+    page_number: Optional[int] = None
+    section_id: Optional[str] = None
+    rects: Optional[List[dict]] = None
+    anchor: Optional[dict] = None
+    category: str = "none"
+    color: str = "#eab308"
+    note: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        json_encoders = {ObjectId: str}

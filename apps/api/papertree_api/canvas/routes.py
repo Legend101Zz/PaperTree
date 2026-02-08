@@ -20,7 +20,8 @@ from .models import (AddNoteRequest, AskFollowupRequest, AskFollowupResponse,
                      CanvasResponse, ExpandPageRequest, ExploreRequest,
                      ExploreResponse, NodePosition)
 from .services import (add_note, ask_followup, create_exploration,
-                       ensure_page_super_node, get_or_create_canvas)
+                       ensure_page_super_node, get_or_create_canvas,
+                       populate_canvas)
 
 # ──── Primary router: /papers/{paper_id}/canvas/* ────
 paper_canvas_router = APIRouter(tags=["paper-canvas"])
@@ -341,6 +342,33 @@ async def update_canvas_node(
         {"$set": {"elements.nodes": nodes, "updated_at": datetime.utcnow()}},
     )
     return node
+
+@paper_canvas_router.post("/papers/{paper_id}/canvas/populate")
+async def populate_paper_canvas(
+    paper_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Populate canvas with all pages + existing highlights/explanations.
+    Idempotent: safe to call multiple times.
+    """
+    db = get_database()
+    paper = await db.papers.find_one({
+        "_id": ObjectId(paper_id), "user_id": current_user["id"]
+    })
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    result = await populate_canvas(paper_id, current_user["id"])
+    canvas = result["canvas"]
+
+    return {
+        "id": str(canvas["_id"]),
+        "paper_id": paper_id,
+        "elements": canvas["elements"],
+        "pages_created": result["pages_created"],
+        "explorations_created": result["explorations_created"],
+    }
 
 
 # ──── Keep old router for backward compat (deprecated) ────

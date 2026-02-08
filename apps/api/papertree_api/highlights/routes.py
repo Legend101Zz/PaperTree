@@ -9,7 +9,8 @@ from ..database import get_database
 from ..services.ai import get_ai_service
 from .models import (CATEGORY_COLORS, HighlightCreate, HighlightExplanation,
                      HighlightExplanationCreate, HighlightInDB,
-                     HighlightSearchQuery, HighlightUpdate)
+                     HighlightSearchQuery, HighlightUpdate,
+                     PaperHighlightCreate, PaperHighlightResponse)
 
 router = APIRouter(prefix="/highlights", tags=["highlights"])
 
@@ -308,3 +309,125 @@ async def export_highlights(
             ])
         
         return {"content": output.getvalue(), "filename": f"highlights_{book_id}.csv"}
+
+# ─── NEW: Paper-based highlight routes (used by reader page) ───
+
+@router.get("/papers/{paper_id}", response_model=List[PaperHighlightResponse])
+async def list_paper_highlights(
+    paper_id: str,
+    user=Depends(get_current_user),
+    db=Depends(get_database),
+):
+    """List all highlights for a paper (new reader system)."""
+    user_id = user.get("id") or str(user.get("_id"))
+
+    # Query both old (book_id) and new (paper_id) field names
+    cursor = db.highlights.find({
+        "user_id": user_id,
+        "$or": [
+            {"paper_id": paper_id},
+            {"book_id": paper_id},
+        ],
+    }).sort("created_at", 1)
+
+    highlights = await cursor.to_list(length=1000)
+    results = []
+    for h in highlights:
+        results.append(PaperHighlightResponse(
+            id=str(h["_id"]),
+            paper_id=paper_id,
+            user_id=user_id,
+            mode=h.get("mode", "book"),
+            selected_text=h.get("selected_text") or h.get("text", ""),
+            page_number=h.get("page_number") or (h.get("position", {}).get("page_number")),
+            section_id=h.get("section_id"),
+            rects=h.get("rects") or (h.get("position", {}).get("rects")),
+            anchor=h.get("anchor"),
+            category=h.get("category", "none"),
+            color=h.get("color", CATEGORY_COLORS.get(h.get("category", "none"), "#eab308")),
+            note=h.get("note"),
+            created_at=h.get("created_at", datetime.utcnow()),
+        ))
+    return results
+
+
+@router.post("/papers/{paper_id}", response_model=PaperHighlightResponse)
+async def create_paper_highlight(
+    paper_id: str,
+    data: PaperHighlightCreate,
+    user=Depends(get_current_user),
+    db=Depends(get_database),
+):
+    """Create highlight using paper_id (new reader system)."""
+    user_id = user.get("id") or str(user.get("_id"))
+    now = datetime.utcnow()
+
+    color = data.color or CATEGORY_COLORS.get(data.category, "#eab308")
+
+    doc = {
+        "paper_id": paper_id,
+        "book_id": paper_id,  # backward compat
+        "user_id": user_id,
+        "mode": data.mode,
+        "selected_text": data.selected_text,
+        "text": data.selected_text,  # backward compat
+        "page_number": data.page_number,
+        "section_id": data.section_id,
+        "rects": data.rects,
+        "anchor": data.anchor,
+        "category": data.category,
+        "color": color,
+        "note": data.note,
+        # Legacy position field for backward compat
+        "position": {
+            "page_number": data.page_number or 0,
+            "rects": data.rects or [],
+            "text_start": 0,
+            "text_end": len(data.selected_text),
+        },
+        "tags": [],
+        "explanation_id": None,
+        "canvas_node_id": None,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+    result = await db.highlights.insert_one(doc)
+    return PaperHighlightResponse(
+        id=str(result.inserted_id),
+        paper_id=paper_id,
+        user_id=user_id,
+        mode=data.mode,
+        selected_text=data.selected_text,
+        page_number=data.page_number,
+        section_id=data.section_id,
+        rects=data.rects,
+        anchor=data.anchor,
+        category=data.category,
+        color=color,
+        note=data.note,
+        created_at=now,
+    )
+
+
+@router.delete("/papers/{paper_id}/{highlight_id}")
+async def delete_paper_highlight(
+    paper_id: str,
+    highlight_id: str,
+    user=Depends(get_current_user),
+    db=Depends(get_database),
+):
+    """Delete a highlight and its explanations."""
+    user_id = user.get("id") or str(user.get("_id"))
+
+    result = await db.highlights.delete_one({
+        "_id": ObjectId(highlight_id),
+        "user_id": user_id,
+    })
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Highlight not found")
+
+    # Also delete associated explanations
+    await db.explanations.delete_many({"highlight_id": highlight_id})
+
+    return {"deleted": True, "highlight_id": highlight_id}

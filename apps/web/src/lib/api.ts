@@ -190,6 +190,23 @@ export const explanationsApi = {
 // ============ Highlights API ============
 
 export const highlightsApi = {
+  // ─── NEW: Paper-based methods (used by reader page) ───
+
+  list: async (paperId: string): Promise<Highlight[]> => {
+    const { data } = await api.get(`/highlights/papers/${paperId}`);
+    return data;
+  },
+
+  create: async (paperId: string, input: any): Promise<Highlight> => {
+    const { data } = await api.post(`/highlights/papers/${paperId}`, input);
+    return data;
+  },
+
+  delete: async (highlightId: string): Promise<void> => {
+    // Use the legacy route which works for any highlight
+    await api.delete(`/highlights/${highlightId}`);
+  },
+
   getBookHighlights: async (
     bookId: string,
     page?: number,
@@ -351,4 +368,16 @@ export const canvasApi = {
         method: "DELETE",
       },
     ),
+
+  // ── Populate (auto-create page nodes + explanation branches) ──
+
+  populate: async (
+    paperId: string,
+  ): Promise<{
+    id: string;
+    paper_id: string;
+    elements: CanvasElements;
+    pages_created: number;
+    explorations_created: number;
+  }> => fetchApi(`/papers/${paperId}/canvas/populate`, { method: "POST" }),
 };

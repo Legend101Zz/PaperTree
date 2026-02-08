@@ -26,6 +26,7 @@ import type {
 import {
     Save, RefreshCw, Layout, Plus, Loader2, Maximize,
     Grid3X3, StickyNote,
+    Sparkles,
 } from 'lucide-react';
 
 // ──── Node type registry ────
@@ -270,7 +271,8 @@ export function PaperCanvas({
             const updated = await canvasApi.get(paperId);
             setStoreNodes(updated.elements.nodes as CanvasNodeType[]);
             setStoreEdges(updated.elements.edges as CanvasEdgeType[]);
-            setTimeout(() => fitView({ padding: 0.2 }), 100);
+            // Delay fitView to let ReactFlow render new positions
+            setTimeout(() => fitView({ padding: 0.3, duration: 600 }), 200);
         } catch (e) {
             console.error('Layout failed:', e);
         } finally {
@@ -303,12 +305,12 @@ export function PaperCanvas({
                 onNodeContextMenu={handleNodeContextMenu}
                 onClick={() => setAskState(null)}
                 onNodeClick={(_, node) => {
-                    const orig = storeNodes.find(n => n.id === node.id);
-                    if (orig) onNodeClick(node.id, orig.type, orig.data);
+                    // Single click = toggle collapse (not navigate)
+                    toggleNodeCollapse(node.id);
                 }}
                 nodeTypes={nodeTypes}
                 fitView
-                fitViewOptions={{ padding: 0.2 }}
+                fitViewOptions={{ padding: 0.3 }}
                 minZoom={0.1}
                 maxZoom={2}
                 className="bg-gray-50 dark:bg-gray-950"
@@ -375,6 +377,25 @@ export function PaperCanvas({
                         {nodes.length} nodes · {edges.length} connections
                     </div>
                 </Panel>
+                {/* Onboarding overlay — shows once when canvas has only page nodes (no explorations) */}
+                {nodes.length > 0 && nodes.length <= (nodes.filter(n => n.type === 'paper' || n.type === 'page_super').length + 1) && (
+                    <Panel position="top-center" className="pointer-events-none">
+                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 px-5 py-4 max-w-sm text-center animate-fade-in">
+                            <div className="flex justify-center mb-2">
+                                <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
+                                    <Sparkles className="w-5 h-5 text-indigo-500" />
+                                </div>
+                            </div>
+                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">
+                                Your Research Canvas
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                                Expand a page node to explore its content. Click "Ask AI" to create branches.
+                                Highlights from the reader will appear as branches automatically.
+                            </p>
+                        </div>
+                    </Panel>
+                )}
             </ReactFlow>
 
             {/* Inline ask overlay */}

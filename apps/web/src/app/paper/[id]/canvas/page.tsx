@@ -8,7 +8,9 @@ import { ReactFlowProvider } from 'reactflow';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { PaperCanvas } from '@/components/canvas/PaperCanvas';
 import { papersApi, canvasApi } from '@/lib/api';
-import { ChevronLeft, BookOpen, Loader2, Sparkles } from 'lucide-react';
+import {
+    ChevronLeft, BookOpen, Loader2, Sparkles, RefreshCw, LayoutGrid,
+} from 'lucide-react';
 import type { CanvasNode, CanvasEdge, Canvas, AskMode } from '@/types/canvas';
 import { useCanvasStore } from '@/store/canvasStore';
 
@@ -27,6 +29,8 @@ export default function CanvasPage() {
 
     const [isExploring, setIsExploring] = useState(false);
     const [explored, setExplored] = useState(false);
+    const [isPopulating, setIsPopulating] = useState(false);
+    const [hasPopulated, setHasPopulated] = useState(false);
 
     // Fetch paper
     const { data: paper, isLoading: paperLoading } = useQuery({
@@ -40,9 +44,34 @@ export default function CanvasPage() {
         queryFn: () => canvasApi.get(paperId),
     });
 
+    // ── Auto-populate canvas on first load ──
+    useEffect(() => {
+        if (canvasLoading || hasPopulated || isPopulating) return;
+
+        // Only populate if canvas is nearly empty (just root node)
+        const nodeCount = canvas?.elements?.nodes?.length || 0;
+        if (nodeCount <= 1 && paper?.page_count && paper.page_count > 0) {
+            setIsPopulating(true);
+            canvasApi.populate(paperId)
+                .then(async (result) => {
+                    if (result.pages_created > 0 || result.explorations_created > 0) {
+                        await refetchCanvas();
+                    }
+                    setHasPopulated(true);
+                })
+                .catch((e) => {
+                    console.error('Auto-populate failed:', e);
+                    setHasPopulated(true);
+                })
+                .finally(() => setIsPopulating(false));
+        } else {
+            setHasPopulated(true);
+        }
+    }, [canvasLoading, hasPopulated, isPopulating, canvas, paper, paperId, refetchCanvas]);
+
     // Auto-explore from URL params (highlight → canvas)
     useEffect(() => {
-        if (!highlightId || !pageNumber || explored || isExploring || canvasLoading) return;
+        if (!highlightId || !pageNumber || explored || isExploring || canvasLoading || !hasPopulated) return;
 
         const doExplore = async () => {
             setIsExploring(true);
@@ -54,14 +83,12 @@ export default function CanvasPage() {
                     page_number: parseInt(pageNumber),
                 });
 
-                // Add new nodes to store
                 const store = useCanvasStore.getState();
                 if (result.page_node) store.addNode(result.page_node);
                 store.addNode(result.exploration_node);
                 store.addNode(result.ai_node);
-                result.new_edges?.forEach(e => store.addEdge(e));
+                result.new_edges?.forEach((e: any) => store.addEdge(e));
 
-                // Refetch canvas to get updated state
                 await refetchCanvas();
                 setExplored(true);
             } catch (e) {
@@ -72,7 +99,7 @@ export default function CanvasPage() {
         };
 
         doExplore();
-    }, [highlightId, pageNumber, explored, isExploring, canvasLoading, paperId, question, askMode, refetchCanvas]);
+    }, [highlightId, pageNumber, explored, isExploring, canvasLoading, hasPopulated, paperId, question, askMode, refetchCanvas]);
 
     // Save mutation
     const saveMutation = useMutation({
@@ -94,6 +121,18 @@ export default function CanvasPage() {
             router.push(`/paper/${paperId}/read?page=${data.source_page}`);
         }
     }, [router, paperId]);
+
+    const handleRefreshCanvas = useCallback(async () => {
+        setIsPopulating(true);
+        try {
+            await canvasApi.populate(paperId);
+            await refetchCanvas();
+        } catch (e) {
+            console.error('Refresh failed:', e);
+        } finally {
+            setIsPopulating(false);
+        }
+    }, [paperId, refetchCanvas]);
 
     // Build initial nodes
     const initialNodes: CanvasNode[] = useMemo(() => {
@@ -147,24 +186,48 @@ export default function CanvasPage() {
                             <BookOpen className="w-4 h-4" />
                             Back to Reader
                         </button>
-                        <span className="text-gray-300 dark:text-gray-700">|</span>
-                        <h1 className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate max-w-md">
+                        <div className="h-4 w-px bg-gray-300 dark:bg-gray-700" />
+                        <h1 className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate max-w-[300px]">
                             {paper?.title || 'Canvas'}
                         </h1>
                     </div>
 
                     <div className="flex items-center gap-2">
+                        {/* Refresh / sync with highlights */}
+                        <button
+                            onClick={handleRefreshCanvas}
+                            disabled={isPopulating}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg
+                                bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400
+                                hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors
+                                disabled:opacity-50"
+                            title="Sync canvas with latest highlights & explanations"
+                        >
+                            <RefreshCw className={`w-3.5 h-3.5 ${isPopulating ? 'animate-spin' : ''}`} />
+                            {isPopulating ? 'Syncing...' : 'Sync Highlights'}
+                        </button>
+
                         {isExploring && (
-                            <span className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400">
-                                <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-                                Generating exploration...
-                            </span>
+                            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
+                                <span className="text-xs text-blue-600 dark:text-blue-400">Generating explanation...</span>
+                            </div>
                         )}
                     </div>
                 </div>
 
                 {/* Canvas */}
-                <div className="flex-1">
+                <div className="flex-1 relative">
+                    {isPopulating && !canvas?.elements?.nodes?.length && (
+                        <div className="absolute inset-0 z-10 flex items-center justify-center bg-gray-50/80 dark:bg-gray-950/80 backdrop-blur-sm">
+                            <div className="flex flex-col items-center gap-3 p-6 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-200 dark:border-gray-800">
+                                <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+                                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Building your research canvas...</p>
+                                <p className="text-xs text-gray-500">Creating page nodes and importing explanations</p>
+                            </div>
+                        </div>
+                    )}
+
                     <ReactFlowProvider>
                         <PaperCanvas
                             paperId={paperId}

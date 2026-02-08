@@ -18,6 +18,126 @@ from .models import (AskMode, CanvasEdge, CanvasElements, CanvasNode,
 
 settings = get_settings()
 
+# ────────────────────────────────────────────
+# Tree Layout Algorithm
+# ────────────────────────────────────────────
+
+def _tree_layout(nodes: list):
+    """
+    Smart tree layout — adapts spacing based on node type and collapse state.
+    Produces a clean, readable layout similar to Maxly/mindmap tools.
+    """
+    from collections import defaultdict
+
+    if not nodes:
+        return
+
+    children_map = defaultdict(list)
+    for n in nodes:
+        pid = n.get("parent_id")
+        if pid:
+            children_map[pid].append(n["id"])
+
+    roots = [n for n in nodes if not n.get("parent_id")]
+    node_map = {n["id"]: n for n in nodes}
+
+    # ── Spacing config per node type ──
+    # Horizontal space reserved for a leaf node
+    def h_space_for(node: dict) -> float:
+        ntype = node.get("type", "")
+        collapsed = node.get("data", {}).get("is_collapsed", True)
+        if ntype == "paper":
+            return 500
+        if ntype == "page_super":
+            return 420 if not collapsed else 300
+        if ntype == "ai_response":
+            return 480 if not collapsed else 320
+        if ntype == "exploration":
+            return 380 if not collapsed else 280
+        if ntype == "note":
+            return 300
+        return 380
+
+    # Vertical gap between parent and children
+    def v_gap_for(parent_type: str) -> float:
+        if parent_type == "paper":
+            return 200       # paper → pages: generous
+        if parent_type == "page_super":
+            return 220       # page → explorations
+        if parent_type == "exploration":
+            return 200       # exploration → AI answers
+        return 220            # AI → follow-ups
+
+    # Horizontal gap between sibling subtrees
+    def sibling_gap_for(parent_type: str) -> float:
+        if parent_type == "paper":
+            return 60         # pages spread out
+        if parent_type == "page_super":
+            return 50         # explorations under a page
+        return 40
+
+    def subtree_width(nid: str) -> float:
+        """Calculate the total width a subtree needs."""
+        node = node_map.get(nid)
+        if not node:
+            return 0
+        kids = children_map.get(nid, [])
+        if not kids:
+            return h_space_for(node)
+
+        ntype = node.get("type", "")
+        gap = sibling_gap_for(ntype)
+        total = sum(subtree_width(kid) for kid in kids) + gap * max(0, len(kids) - 1)
+        return max(total, h_space_for(node))
+
+    def layout_subtree(nid: str, x: float, y: float) -> float:
+        """Layout a subtree rooted at nid, starting at (x, y). Returns total width used."""
+        node = node_map.get(nid)
+        if not node:
+            return 0
+
+        kids = children_map.get(nid, [])
+        ntype = node.get("type", "")
+
+        if not kids:
+            # Leaf: place at x, centered in its space
+            node["position"] = {"x": x, "y": y}
+            return h_space_for(node)
+
+        # Calculate child positions
+        v_gap = v_gap_for(ntype)
+        sib_gap = sibling_gap_for(ntype)
+        child_y = y + v_gap
+
+        # First pass: compute widths
+        kid_widths = [(kid_id, subtree_width(kid_id)) for kid_id in kids]
+        total_children_width = sum(w for _, w in kid_widths) + sib_gap * max(0, len(kids) - 1)
+
+        # Second pass: place children
+        child_x = x
+        child_positions = []
+
+        for kid_id, kid_w in kid_widths:
+            actual_w = layout_subtree(kid_id, child_x, child_y)
+            kid_node = node_map.get(kid_id)
+            if kid_node:
+                child_positions.append(kid_node["position"]["x"])
+            child_x += max(actual_w, kid_w) + sib_gap
+
+        # Center parent above its children
+        if child_positions:
+            center_x = (child_positions[0] + child_positions[-1]) / 2
+        else:
+            center_x = x
+
+        node["position"] = {"x": center_x, "y": y}
+        return max(total_children_width, h_space_for(node))
+
+    # Layout each root
+    x_cursor = 80.0
+    for root in roots:
+        w = layout_subtree(root["id"], x_cursor, 60)
+        x_cursor += w + 120  # big gap between disconnected trees
 
 def _uid() -> str:
     return uuid.uuid4().hex[:12]
@@ -84,6 +204,211 @@ async def get_or_create_canvas(paper_id: str, user_id: str) -> dict:
     result = await db.canvases.insert_one(doc)
     doc["_id"] = result.inserted_id
     return doc
+
+async def populate_canvas(paper_id: str, user_id: str) -> dict:
+    """
+    Populate canvas with all pages (collapsed) and existing explanation branches.
+    Called on first canvas load. Idempotent — skips nodes that already exist.
+    Returns updated canvas doc.
+    """
+    db = get_database()
+    canvas = await get_or_create_canvas(paper_id, user_id)
+    nodes = canvas["elements"]["nodes"]
+    edges = canvas["elements"]["edges"]
+
+    paper = await db.papers.find_one({"_id": ObjectId(paper_id)})
+    if not paper:
+        return canvas
+
+    page_count = paper.get("page_count", 0)
+    book_content = paper.get("book_content") or {}
+    summaries = book_content.get("page_summaries", [])
+    summary_map = {ps["page"]: ps for ps in summaries}
+
+    paper_node_id = f"paper-{paper_id}"
+    existing_node_ids = {n["id"] for n in nodes}
+    now = _now()
+
+    # ── 1. Create page nodes for all pages ──
+    pages_created = 0
+    for page_num in range(page_count):
+        page_node_id = f"page-{paper_id}-{page_num}"
+        if page_node_id in existing_node_ids:
+            continue
+
+        ps = summary_map.get(page_num, {})
+        page_title = ps.get("title", f"Page {page_num + 1}")
+        page_summary = ps.get("summary", "")
+
+        page_node = {
+            "id": page_node_id,
+            "type": NodeType.PAGE_SUPER.value,
+            "position": {"x": 0, "y": 0},  # Will be laid out after
+            "data": {
+                "label": page_title,
+                "content": page_summary,
+                "content_type": ContentType.MARKDOWN.value,
+                "page_number": page_num,
+                "page_summary": page_summary,
+                "is_collapsed": True,
+                "status": "complete" if page_summary else "idle",
+                "tags": [],
+                "created_at": now,
+            },
+            "parent_id": paper_node_id,
+            "children_ids": [],
+        }
+
+        nodes.append(page_node)
+        existing_node_ids.add(page_node_id)
+        _add_child(nodes, paper_node_id, page_node_id)
+
+        edges.append({
+            "id": f"edge-{_uid()}",
+            "source": paper_node_id,
+            "target": page_node_id,
+            "edge_type": "default",
+        })
+        pages_created += 1
+
+    # ── 2. Pull in existing highlights + explanations as branches ──
+    highlights_cursor = db.highlights.find({
+        "user_id": user_id,
+        "$or": [{"paper_id": paper_id}, {"book_id": paper_id}],
+    })
+    highlights = await highlights_cursor.to_list(length=500)
+
+    explanations_cursor = db.explanations.find({
+        "paper_id": paper_id,
+        "user_id": user_id,
+    }).sort("created_at", 1)
+    explanations = await explanations_cursor.to_list(length=500)
+
+    # Group explanations by highlight_id
+    exp_by_highlight: Dict[str, list] = {}
+    for exp in explanations:
+        hid = exp.get("highlight_id", "")
+        if hid not in exp_by_highlight:
+            exp_by_highlight[hid] = []
+        exp_by_highlight[hid].append(exp)
+
+    explorations_created = 0
+    for h in highlights:
+        h_id = str(h["_id"])
+        explore_node_id = f"explore-hl-{h_id}"
+
+        if explore_node_id in existing_node_ids:
+            continue
+
+        # Determine page
+        page_num = h.get("page_number")
+        if page_num and page_num > 0:
+            page_num = page_num - 1  # Convert 1-indexed to 0-indexed
+        elif h.get("position", {}).get("page_number") is not None:
+            page_num = h["position"]["page_number"]
+        else:
+            page_num = 0
+
+        page_node_id = f"page-{paper_id}-{page_num}"
+        if page_node_id not in existing_node_ids:
+            continue  # Skip if page node doesn't exist
+
+        selected_text = h.get("selected_text") or h.get("text", "")
+
+        # Create exploration node
+        explore_node = {
+            "id": explore_node_id,
+            "type": NodeType.EXPLORATION.value,
+            "position": {"x": 0, "y": 0},
+            "data": {
+                "label": _truncate(selected_text, 50),
+                "content": selected_text,
+                "content_type": ContentType.PLAIN.value,
+                "selected_text": selected_text,
+                "highlight_id": h_id,
+                "source_page": page_num,
+                "source_highlight_id": h_id,
+                "is_collapsed": True,
+                "status": "complete",
+                "tags": [],
+                "created_at": h.get("created_at", now) if isinstance(h.get("created_at"), str) else (h.get("created_at") or datetime.utcnow()).isoformat(),
+            },
+            "parent_id": page_node_id,
+            "children_ids": [],
+        }
+
+        nodes.append(explore_node)
+        existing_node_ids.add(explore_node_id)
+        _add_child(nodes, page_node_id, explore_node_id)
+        edges.append({
+            "id": f"edge-{_uid()}",
+            "source": page_node_id,
+            "target": explore_node_id,
+            "edge_type": "branch",
+        })
+        explorations_created += 1
+
+        # Add explanation nodes for this highlight
+        h_exps = exp_by_highlight.get(h_id, [])
+        parent_id_for_chain = explore_node_id
+
+        for exp in h_exps:
+            exp_id = str(exp["_id"])
+            ai_node_id = f"ai-exp-{exp_id}"
+
+            if ai_node_id in existing_node_ids:
+                continue
+
+            ai_node = {
+                "id": ai_node_id,
+                "type": NodeType.AI_RESPONSE.value,
+                "position": {"x": 0, "y": 0},
+                "data": {
+                    "label": f"AI: {_truncate(exp.get('question', ''), 40)}",
+                    "content": exp.get("answer_markdown", ""),
+                    "content_type": ContentType.MARKDOWN.value,
+                    "question": exp.get("question", ""),
+                    "ask_mode": exp.get("ask_mode", "explain_simply"),
+                    "model": exp.get("model"),
+                    "source_page": page_num,
+                    "source_highlight_id": h_id,
+                    "explanation_id": exp_id,
+                    "is_collapsed": True,
+                    "status": "complete",
+                    "tags": [],
+                    "created_at": exp.get("created_at", now) if isinstance(exp.get("created_at"), str) else (exp.get("created_at") or datetime.utcnow()).isoformat(),
+                },
+                "parent_id": parent_id_for_chain,
+                "children_ids": [],
+            }
+
+            nodes.append(ai_node)
+            existing_node_ids.add(ai_node_id)
+            _add_child(nodes, parent_id_for_chain, ai_node_id)
+            edges.append({
+                "id": f"edge-{_uid()}",
+                "source": parent_id_for_chain,
+                "target": ai_node_id,
+                "edge_type": "followup",
+            })
+
+            # Chain follow-ups: next exp hangs off this one
+            if exp.get("parent_id"):
+                parent_id_for_chain = ai_node_id
+
+    # ── 3. Auto-layout all nodes ──
+    _tree_layout(nodes)
+
+    # ── 4. Save ──
+    await _save_canvas(canvas["_id"], nodes, edges)
+    canvas["elements"]["nodes"] = nodes
+    canvas["elements"]["edges"] = edges
+
+    return {
+        "canvas": canvas,
+        "pages_created": pages_created,
+        "explorations_created": explorations_created,
+    }
 
 def _find_node(nodes: list, node_id: str) -> Optional[dict]:
     for n in nodes:
