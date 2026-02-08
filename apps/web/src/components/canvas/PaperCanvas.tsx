@@ -21,11 +21,16 @@ import 'reactflow/dist/style.css';
 import { RichCanvasNode } from './RichCanvasNode';
 import { useCanvasStore } from '@/store/canvasStore';
 import { canvasApi } from '@/lib/api';
-import { CanvasNode as CanvasNodeType, CanvasEdge as CanvasEdgeType, CanvasNodeType as NodeTypeEnum } from '@/types';
+
+import { AskMode, CanvasNode as CanvasNodeType, CanvasEdge as CanvasEdgeType, CanvasNodeType as NodeTypeEnum } from '@/types';
 import {
     Save, RefreshCw, Layout, Trash2, Plus, Loader2,
     ZoomIn, ZoomOut, Maximize, Grid3X3
 } from 'lucide-react';
+import { CanvasAIPanel } from './CanvasAIPanel';
+import { CanvasToolbar } from './CanvasToolbar';
+
+
 
 // Convert our CanvasNode to ReactFlow Node
 function toReactFlowNode(node: CanvasNodeType, callbacks: {
@@ -113,6 +118,14 @@ export function PaperCanvas({
     const { fitView, zoomIn, zoomOut, setCenter } = useReactFlow();
     const [isSaving, setIsSaving] = useState(false);
     const [isLayouting, setIsLayouting] = useState(false);
+    // AI Panel state
+    const [aiPanelState, setAiPanelState] = useState<{
+        nodeId: string;
+        nodeLabel: string;
+        position: { x: number; y: number };
+    } | null>(null);
+    const [isAiQuerying, setIsAiQuerying] = useState(false);
+    const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
 
     // Store
     const storeNodes = useCanvasStore((s) => s.nodes);
@@ -260,6 +273,85 @@ export function PaperCanvas({
         [storeNodes, onNodeClick]
     );
 
+    // Handle right-click on node → show AI panel
+    const handleNodeContextMenu = useCallback(
+        (event: React.MouseEvent, node: Node) => {
+            event.preventDefault();
+            setAiPanelState({
+                nodeId: node.id,
+                nodeLabel: node.data.label || 'Node',
+                position: { x: event.clientX, y: event.clientY },
+            });
+        },
+        []
+    );
+    // Handle AI query from panel
+    const handleAIQuery = useCallback(
+        async (question: string, askMode: AskMode) => {
+            if (!aiPanelState || isAiQuerying) return;
+            setIsAiQuerying(true);
+            try {
+                const result = await canvasApi.aiQuery(paperId, {
+                    parent_node_id: aiPanelState.nodeId,
+                    question,
+                    ask_mode: askMode,
+                    include_paper_context: true,
+                });
+
+                // Add new node + edge to store
+                const store = useCanvasStore.getState();
+                store.addNode(result.node);
+                store.addEdge(result.edge);
+
+                setAiPanelState(null);
+            } catch (error) {
+                console.error('AI query failed:', error);
+                alert('AI query failed. Please try again.');
+            } finally {
+                setIsAiQuerying(false);
+            }
+        },
+        [aiPanelState, isAiQuerying, paperId]
+    );
+
+    // Handle template creation
+    const handleCreateTemplate = useCallback(
+        async (template: 'summary_tree' | 'question_branch' | 'critique_map' | 'concept_map') => {
+            setIsCreatingTemplate(true);
+            try {
+                await canvasApi.createTemplate(paperId, template);
+                // Refetch canvas
+                const updated = await canvasApi.get(paperId);
+                setStoreNodes(updated.elements.nodes);
+                setStoreEdges(updated.elements.edges);
+                setTimeout(() => fitView({ padding: 0.2 }), 100);
+            } catch (error) {
+                console.error('Template creation failed:', error);
+            } finally {
+                setIsCreatingTemplate(false);
+            }
+        },
+        [paperId, setStoreNodes, setStoreEdges, fitView]
+    );
+
+    // Handle adding a blank note node
+    const handleAddNote = useCallback(() => {
+        const store = useCanvasStore.getState();
+        const newNode: CanvasNodeType = {
+            id: `node_${Date.now().toString(36)}`,
+            type: 'note',
+            position: { x: 200 + Math.random() * 400, y: 300 + Math.random() * 200 },
+            data: {
+                label: 'New Note',
+                content: 'Click to edit...',
+                content_type: 'plain',
+                is_collapsed: false,
+                tags: [],
+            },
+        };
+        store.addNode(newNode);
+    }, []);
+
     return (
         <div className="w-full h-full">
             <ReactFlow
@@ -304,6 +396,15 @@ export function PaperCanvas({
                     </button>
                 </Controls>
 
+                {/* Template toolbar */}
+                <Panel position="top-center" className="flex gap-2">
+                    <CanvasToolbar
+                        onCreateTemplate={handleCreateTemplate}
+                        onAddNote={handleAddNote}
+                        isCreating={isCreatingTemplate}
+                    />
+                </Panel>
+
                 <MiniMap
                     nodeStrokeWidth={3}
                     zoomable
@@ -315,8 +416,8 @@ export function PaperCanvas({
                 <Panel position="top-right" className="flex items-center gap-2">
                     {/* Save status */}
                     <div className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 ${isDirty
-                            ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
-                            : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                        ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                        : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
                         }`}>
                         {isSaving ? (
                             <>
@@ -379,6 +480,24 @@ export function PaperCanvas({
                     </div>
                 </Panel>
             </ReactFlow>
+            {/* AI Panel overlay */}
+            {aiPanelState && (
+                <div
+                    className="fixed z-50"
+                    style={{
+                        top: Math.min(aiPanelState.position.y, window.innerHeight - 350),
+                        left: Math.min(aiPanelState.position.x, window.innerWidth - 340),
+                    }}
+                >
+                    <CanvasAIPanel
+                        nodeId={aiPanelState.nodeId}
+                        nodeLabel={aiPanelState.nodeLabel}
+                        onQuery={handleAIQuery}
+                        onClose={() => setAiPanelState(null)}
+                        isQuerying={isAiQuerying}
+                    />
+                </div>
+            )}
         </div>
     );
 }

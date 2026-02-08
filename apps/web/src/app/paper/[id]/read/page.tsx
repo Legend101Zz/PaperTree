@@ -15,8 +15,8 @@ import { FigureViewer } from '@/components/reader/FigureViewer';
 import { InlineExplanation } from '@/components/reader/InlineExplanation';
 import { HighlightsPanel } from '@/components/reader/HighlightsPanel';
 import { useReaderStore } from '@/store/readerStore';
-import { papersApi, highlightsApi, explanationsApi } from '@/lib/api';
-import { PaperDetail, Highlight, Explanation } from '@/types';
+import { papersApi, highlightsApi, explanationsApi, canvasApi } from '@/lib/api';
+import { PaperDetail, Highlight, Explanation, HighlightCategory, AskMode } from '@/types';
 import { Sparkles, Loader2, PanelLeftClose, PanelLeft, PanelRight } from 'lucide-react';
 
 export default function ReaderPage() {
@@ -34,7 +34,7 @@ export default function ReaderPage() {
     const sidebarCollapsed = useReaderStore((s) => s.sidebarCollapsed);
     const minimapCollapsed = useReaderStore((s) => s.minimapCollapsed);
     const currentPdfPage = useReaderStore((s) => s.currentPdfPage);
-
+    const [isExporting, setIsExporting] = useState(false);
     // Store actions
     const setHighlights = useReaderStore((s) => s.setHighlights);
     const setExplanations = useReaderStore((s) => s.setExplanations);
@@ -244,11 +244,14 @@ export default function ReaderPage() {
         openInlineExplanation(highlightId, position);
     }, [openInlineExplanation, clearSelection]);
 
-    const handleAskAI = useCallback(async (question: string) => {
+    const handleAskAI = useCallback(async (question: string, askMode?: AskMode, category?: HighlightCategory) => {
         if (!pendingHighlight) return;
 
         try {
-            const highlight = await createHighlightMutation.mutateAsync(pendingHighlight);
+            const highlight = await createHighlightMutation.mutateAsync({
+                ...pendingHighlight,
+                category: category || 'none',
+            });
 
             const selection = window.getSelection();
             let position = { x: window.innerWidth / 2, y: 200 };
@@ -264,6 +267,7 @@ export default function ReaderPage() {
             await createExplanationMutation.mutateAsync({
                 highlight_id: highlight.id,
                 question,
+                ask_mode: askMode || 'explain_simply',
             });
         } catch (error) {
             console.error('Failed:', error);
@@ -293,10 +297,29 @@ export default function ReaderPage() {
         }
     }, [deleteHighlightMutation]);
 
-    const handleExportToCanvas = useCallback((highlightIds: string[]) => {
-        console.log('Export to canvas:', highlightIds);
-        alert(`Export ${highlightIds.length} highlights to Canvas - Coming soon!`);
-    }, []);
+    const handleExportToCanvas = useCallback(async (highlightIds: string[]) => {
+        if (isExporting || highlightIds.length === 0) return;
+        setIsExporting(true);
+        try {
+            const result = await canvasApi.batchExport(paperId, {
+                highlight_ids: highlightIds,
+                layout: 'tree',
+                include_explanations: true,
+            });
+            // Show success and offer to navigate
+            const goToCanvas = confirm(
+                `Exported ${result.nodes_created} nodes to Canvas. Open Canvas now?`
+            );
+            if (goToCanvas) {
+                window.location.href = `/paper/${paperId}/canvas`;
+            }
+        } catch (error) {
+            console.error('Export to canvas failed:', error);
+            alert('Failed to export to canvas. Please try again.');
+        } finally {
+            setIsExporting(false);
+        }
+    }, [paperId, isExporting]);
 
     // Apply theme
     useEffect(() => {

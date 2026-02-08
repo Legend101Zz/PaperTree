@@ -1,13 +1,13 @@
 # apps/api/papertree_api/canvas/models.py
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
+# ──── Enums ────
 
 class NodeType(str, Enum):
-    """Types of canvas nodes."""
     PAPER = "paper"
     EXCERPT = "excerpt"
     QUESTION = "question"
@@ -15,20 +15,26 @@ class NodeType(str, Enum):
     FOLLOWUP = "followup"
     NOTE = "note"
     DIAGRAM = "diagram"
+    HIGHLIGHT = "highlight"
+    AI_RESPONSE = "ai_response"
+    SUMMARY = "summary"
+    BRANCH_ROOT = "branch_root"
+    PDF_PAGE = "pdf_page"
+
+
+NodeStatus = Literal["idle", "loading", "error", "complete"]
 
 
 class ContentType(str, Enum):
-    """Content rendering types."""
     PLAIN = "plain"
     MARKDOWN = "markdown"
     LATEX = "latex"
     MERMAID = "mermaid"
     CODE = "code"
-    MIXED = "mixed"  # For answers with multiple content types
+    MIXED = "mixed"
 
 
 class AskMode(str, Enum):
-    """Ask modes for AI explanations."""
     EXPLAIN_SIMPLY = "explain_simply"
     EXPLAIN_MATH = "explain_math"
     DERIVE_STEPS = "derive_steps"
@@ -38,8 +44,19 @@ class AskMode(str, Enum):
     CUSTOM = "custom"
 
 
+# ──── Shared sub-models ────
+
+class NodePosition(BaseModel):
+    x: float
+    y: float
+
+
+class NodeDimensions(BaseModel):
+    width: float = 300
+    height: float = 200
+
+
 class SourceReference(BaseModel):
-    """Reference back to the paper source."""
     paper_id: str
     page_number: Optional[int] = None
     section_id: Optional[str] = None
@@ -49,9 +66,8 @@ class SourceReference(BaseModel):
 
 
 class ExcerptContext(BaseModel):
-    """Intelligent excerpt with context."""
     selected_text: str
-    expanded_text: str  # Expanded to include surrounding context
+    expanded_text: str
     section_title: Optional[str] = None
     section_path: List[str] = []
     nearby_equations: List[str] = []
@@ -59,8 +75,40 @@ class ExcerptContext(BaseModel):
     paragraph_context: Optional[str] = None
 
 
+# ──── Canvas-level models ────
+
+class CanvasCreate(BaseModel):
+    book_id: str
+    title: str = "Untitled Canvas"
+
+
+class CanvasEdge(BaseModel):
+    id: str
+    source_id: str
+    target_id: str
+    label: Optional[str] = None
+    edge_type: str = "default"  # "default", "branch", "reference", "followup"
+
+
+class CanvasInDB(BaseModel):
+    id: str = Field(alias="_id")
+    user_id: str
+    book_id: str
+    title: str
+    nodes: List[str] = []
+    edges: List[CanvasEdge] = []
+    viewport: Dict[str, float] = {"x": 0, "y": 0, "zoom": 1}
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        populate_by_name = True
+
+
+# ──── Node-level models ────
+
 class CanvasNodeData(BaseModel):
-    """Data for a canvas node."""
+    """Rich node data for the new canvas system."""
     label: str
     content: Optional[str] = None
     content_type: ContentType = ContentType.MARKDOWN
@@ -77,59 +125,89 @@ class CanvasNodeData(BaseModel):
     updated_at: Optional[datetime] = None
 
 
-class CanvasNodePosition(BaseModel):
-    """Position of a node on canvas."""
-    x: float
-    y: float
-
-
 class CanvasNodeCreate(BaseModel):
-    """Schema for creating a canvas node."""
+    canvas_id: str
     type: NodeType
-    position: CanvasNodePosition
-    data: CanvasNodeData
-    parent_id: Optional[str] = None  # For tree structure
+    position: NodePosition
+    title: Optional[str] = None
+    content: Optional[str] = None
+    data: Optional[CanvasNodeData] = None
+    # Source references
+    highlight_id: Optional[str] = None
+    book_id: Optional[str] = None
+    page_number: Optional[int] = None
+    # AI config
+    ai_mode: Optional[str] = None
+    ai_model: Optional[str] = None
+    # Tree structure
+    parent_node_id: Optional[str] = None
 
 
 class CanvasNodeUpdate(BaseModel):
-    """Schema for updating a canvas node."""
-    position: Optional[CanvasNodePosition] = None
+    position: Optional[NodePosition] = None
+    dimensions: Optional[NodeDimensions] = None
+    title: Optional[str] = None
+    content: Optional[str] = None
     data: Optional[Dict[str, Any]] = None
+    is_pinned: Optional[bool] = None
     is_collapsed: Optional[bool] = None
 
 
+class CanvasNodeInDB(BaseModel):
+    id: str = Field(alias="_id")
+    canvas_id: str
+    user_id: str
+    type: NodeType
+    position: NodePosition
+    dimensions: NodeDimensions = NodeDimensions()
+    title: Optional[str] = None
+    content: Optional[str] = None
+    data: Optional[CanvasNodeData] = None
+    status: NodeStatus = "idle"
+    # Source references
+    highlight_id: Optional[str] = None
+    book_id: Optional[str] = None
+    page_number: Optional[int] = None
+    explanation_id: Optional[str] = None
+    # AI metadata
+    ai_mode: Optional[str] = None
+    ai_model: Optional[str] = None
+    ai_metadata: Optional[Dict[str, Any]] = None
+    # Tree structure
+    parent_node_id: Optional[str] = None
+    child_node_ids: List[str] = []
+    # UI state
+    is_pinned: bool = False
+    is_collapsed: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        populate_by_name = True
+
+
+# ──── Rich canvas node (for paper_id-based system) ────
+
 class CanvasNode(BaseModel):
-    """Full canvas node model."""
+    """Full canvas node for the ReactFlow-based canvas."""
     id: str
     type: NodeType
-    position: CanvasNodePosition
+    position: NodePosition
     data: CanvasNodeData
     parent_id: Optional[str] = None
     children_ids: List[str] = []
 
 
-class CanvasEdge(BaseModel):
-    """Edge connecting two nodes."""
-    id: str
-    source: str
-    target: str
-    label: Optional[str] = None
-    edge_type: Literal["default", "followup", "reference"] = "default"
-
-
 class CanvasElements(BaseModel):
-    """All canvas elements."""
     nodes: List[CanvasNode]
     edges: List[CanvasEdge]
 
 
 class CanvasUpdate(BaseModel):
-    """Schema for canvas update."""
     elements: CanvasElements
 
 
 class CanvasResponse(BaseModel):
-    """Schema for canvas response."""
     id: str
     paper_id: str
     user_id: str
@@ -138,13 +216,59 @@ class CanvasResponse(BaseModel):
 
 
 class AutoCreateNodeRequest(BaseModel):
-    """Request to auto-create a node from highlight/explanation."""
     highlight_id: str
     explanation_id: str
-    position: Optional[CanvasNodePosition] = None  # Auto-position if not provided
+    position: Optional[NodePosition] = None
 
 
 class NodeLayoutRequest(BaseModel):
-    """Request to auto-layout nodes."""
     algorithm: Literal["tree", "force", "grid"] = "tree"
     root_node_id: Optional[str] = None
+
+
+# ──── AI / Query request models ────
+
+class AIQueryRequest(BaseModel):
+    """AI query request for canvas nodes."""
+    node_id: str
+    mode: str  # "explain", "summarize", "critique", "derive", "diagram", "related"
+    context_node_ids: List[str] = []
+    custom_prompt: Optional[str] = None
+    model: str = "deepseek/deepseek-chat"
+
+
+class BranchRequest(BaseModel):
+    parent_node_id: str
+    branch_type: str  # "question", "critique", "expand", "related", "custom"
+    custom_prompt: Optional[str] = None
+    position_offset: NodePosition = NodePosition(x=350, y=0)
+
+
+# ──── Batch export / Canvas AI / Templates ────
+
+class BatchExportRequest(BaseModel):
+    highlight_ids: List[str]
+    layout: Literal["tree", "grid", "radial"] = "tree"
+    include_explanations: bool = True
+
+
+class BatchExportResponse(BaseModel):
+    nodes_created: int
+    edges_created: int
+    root_node_ids: List[str]
+
+
+class CanvasAIQueryRequest(BaseModel):
+    parent_node_id: str
+    question: str
+    ask_mode: AskMode = AskMode.EXPLAIN_SIMPLY
+    include_paper_context: bool = True
+
+
+class CanvasAIQueryResponse(BaseModel):
+    node: CanvasNode
+    edge: CanvasEdge
+
+
+class CanvasTemplateRequest(BaseModel):
+    template: Literal["summary_tree", "question_branch", "critique_map", "concept_map"]

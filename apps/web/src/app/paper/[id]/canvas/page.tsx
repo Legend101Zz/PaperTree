@@ -156,7 +156,9 @@ export default function CanvasPage() {
                 {/* Help tooltip */}
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 px-4 py-2">
                     <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
-                        <span>💡 Highlights + AI answers appear here automatically</span>
+                        <span>💡 Right-click any node → Ask AI</span>
+                        <span>•</span>
+                        <span>Use Templates to start fast</span>
                         <span>•</span>
                         <span>Drag nodes to organize</span>
                         <span>•</span>

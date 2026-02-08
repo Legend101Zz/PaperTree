@@ -1,629 +1,694 @@
 # apps/api/papertree_api/canvas/routes.py
-import uuid
+import asyncio
+import json
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, status
-from papertree_api.auth.utils import get_current_user
-from papertree_api.database import get_database
+from fastapi import (APIRouter, Depends, HTTPException, WebSocket,
+                     WebSocketDisconnect)
 
-from .models import (AskMode, AutoCreateNodeRequest, CanvasEdge,
-                     CanvasElements, CanvasNode, CanvasNodeCreate,
-                     CanvasNodeData, CanvasNodePosition, CanvasNodeUpdate,
-                     CanvasResponse, CanvasUpdate, ContentType, ExcerptContext,
-                     NodeLayoutRequest, NodeType, SourceReference)
+from ..auth.utils import get_current_user
+from ..database import get_database
+from ..services.ai import get_ai_service
+from .models import (AIQueryRequest, BatchExportRequest, BatchExportResponse,
+                     BranchRequest, CanvasAIQueryRequest,
+                     CanvasAIQueryResponse, CanvasCreate, CanvasEdge,
+                     CanvasInDB, CanvasNode, CanvasNodeCreate, CanvasNodeInDB,
+                     CanvasNodeUpdate, CanvasTemplateRequest, NodePosition)
+from .services import (batch_export_highlights, canvas_ai_query,
+                       create_template_canvas)
 
-router = APIRouter()
+router = APIRouter(prefix="/canvas", tags=["canvas"])
 
-
-def generate_node_id() -> str:
-    """Generate unique node ID."""
-    return f"node_{uuid.uuid4().hex[:12]}"
-
-
-def generate_edge_id() -> str:
-    """Generate unique edge ID."""
-    return f"edge_{uuid.uuid4().hex[:12]}"
+# WebSocket connections for real-time updates
+active_connections: Dict[str, List[WebSocket]] = {}
 
 
-async def get_or_create_canvas(paper_id: str, user_id: str) -> dict:
-    """Get existing canvas or create new one."""
-    db = get_database()
-    
+# ──── Canvas CRUD ────
+
+@router.post("/", response_model=CanvasInDB)
+async def create_canvas(
+    canvas: CanvasCreate,
+    user=Depends(get_current_user),
+    db=Depends(get_database),
+):
+    now = datetime.utcnow()
+    canvas_doc = {
+        "user_id": str(user["_id"]),
+        "book_id": canvas.book_id,
+        "title": canvas.title,
+        "nodes": [],
+        "edges": [],
+        "viewport": {"x": 0, "y": 0, "zoom": 1},
+        "created_at": now,
+        "updated_at": now,
+    }
+    result = await db.canvases.insert_one(canvas_doc)
+    canvas_doc["_id"] = str(result.inserted_id)
+    return CanvasInDB(**canvas_doc)
+
+
+@router.get("/book/{book_id}", response_model=List[CanvasInDB])
+async def get_book_canvases(
+    book_id: str,
+    user=Depends(get_current_user),
+    db=Depends(get_database),
+):
+    cursor = db.canvases.find({
+        "user_id": str(user["_id"]),
+        "book_id": book_id
+    }).sort("updated_at", -1)
+    canvases = await cursor.to_list(length=100)
+    return [CanvasInDB(**{**c, "_id": str(c["_id"])}) for c in canvases]
+
+
+@router.get("/{canvas_id}", response_model=CanvasInDB)
+async def get_canvas(
+    canvas_id: str,
+    user=Depends(get_current_user),
+    db=Depends(get_database),
+):
     canvas = await db.canvases.find_one({
-        "paper_id": paper_id,
-        "user_id": user_id
+        "_id": ObjectId(canvas_id),
+        "user_id": str(user["_id"])
     })
-    
     if not canvas:
-        # Create new canvas with paper node
+        raise HTTPException(status_code=404, detail="Canvas not found")
+    canvas["_id"] = str(canvas["_id"])
+    return CanvasInDB(**canvas)
+
+
+# ──── Node CRUD ────
+
+@router.get("/{canvas_id}/nodes", response_model=List[CanvasNodeInDB])
+async def get_canvas_nodes(
+    canvas_id: str,
+    user=Depends(get_current_user),
+    db=Depends(get_database),
+):
+    cursor = db.canvas_nodes.find({
+        "canvas_id": canvas_id,
+        "user_id": str(user["_id"])
+    })
+    nodes = await cursor.to_list(length=1000)
+    return [CanvasNodeInDB(**{**n, "_id": str(n["_id"])}) for n in nodes]
+
+
+@router.post("/nodes", response_model=CanvasNodeInDB)
+async def create_node(
+    node: CanvasNodeCreate,
+    user=Depends(get_current_user),
+    db=Depends(get_database),
+):
+    canvas = await db.canvases.find_one({
+        "_id": ObjectId(node.canvas_id),
+        "user_id": str(user["_id"])
+    })
+    if not canvas:
+        raise HTTPException(status_code=404, detail="Canvas not found")
+
+    now = datetime.utcnow()
+    node_doc = {
+        "canvas_id": node.canvas_id,
+        "user_id": str(user["_id"]),
+        "type": node.type,
+        "position": node.position.dict(),
+        "dimensions": {"width": 300, "height": 200},
+        "title": node.title,
+        "content": node.content,
+        "data": node.data.dict() if node.data else None,
+        "status": "idle",
+        "highlight_id": node.highlight_id,
+        "book_id": node.book_id,
+        "page_number": node.page_number,
+        "explanation_id": None,
+        "ai_mode": node.ai_mode,
+        "ai_model": node.ai_model,
+        "ai_metadata": None,
+        "parent_node_id": node.parent_node_id,
+        "child_node_ids": [],
+        "is_pinned": False,
+        "is_collapsed": False,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+    result = await db.canvas_nodes.insert_one(node_doc)
+    node_id = str(result.inserted_id)
+    node_doc["_id"] = node_id
+
+    await db.canvases.update_one(
+        {"_id": ObjectId(node.canvas_id)},
+        {"$push": {"nodes": node_id}, "$set": {"updated_at": now}},
+    )
+
+    if node.parent_node_id:
+        await db.canvas_nodes.update_one(
+            {"_id": ObjectId(node.parent_node_id)},
+            {"$push": {"child_node_ids": node_id}},
+        )
+        edge = CanvasEdge(
+            id=f"{node.parent_node_id}-{node_id}",
+            source_id=node.parent_node_id,
+            target_id=node_id,
+            edge_type="branch",
+        )
+        await db.canvases.update_one(
+            {"_id": ObjectId(node.canvas_id)},
+            {"$push": {"edges": edge.dict()}},
+        )
+
+    if node.highlight_id:
+        await db.highlights.update_one(
+            {"_id": ObjectId(node.highlight_id)},
+            {"$set": {"canvas_node_id": node_id}},
+        )
+
+    return CanvasNodeInDB(**node_doc)
+
+
+@router.patch("/nodes/{node_id}", response_model=CanvasNodeInDB)
+async def update_node(
+    node_id: str,
+    update: CanvasNodeUpdate,
+    user=Depends(get_current_user),
+    db=Depends(get_database),
+):
+    update_data = {}
+    if update.position:
+        update_data["position"] = update.position.dict()
+    if update.dimensions:
+        update_data["dimensions"] = update.dimensions.dict()
+    if update.title is not None:
+        update_data["title"] = update.title
+    if update.content is not None:
+        update_data["content"] = update.content
+    if update.data is not None:
+        update_data["data"] = update.data
+    if update.is_pinned is not None:
+        update_data["is_pinned"] = update.is_pinned
+    if update.is_collapsed is not None:
+        update_data["is_collapsed"] = update.is_collapsed
+    update_data["updated_at"] = datetime.utcnow()
+
+    result = await db.canvas_nodes.find_one_and_update(
+        {"_id": ObjectId(node_id), "user_id": str(user["_id"])},
+        {"$set": update_data},
+        return_document=True,
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Node not found")
+    result["_id"] = str(result["_id"])
+    return CanvasNodeInDB(**result)
+
+
+@router.delete("/nodes/{node_id}")
+async def delete_node(
+    node_id: str,
+    user=Depends(get_current_user),
+    db=Depends(get_database),
+):
+    node = await db.canvas_nodes.find_one({
+        "_id": ObjectId(node_id),
+        "user_id": str(user["_id"])
+    })
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+
+    async def delete_recursive(nid: str):
+        n = await db.canvas_nodes.find_one({"_id": ObjectId(nid)})
+        if n:
+            for child_id in n.get("child_node_ids", []):
+                await delete_recursive(child_id)
+            await db.canvas_nodes.delete_one({"_id": ObjectId(nid)})
+
+    await delete_recursive(node_id)
+
+    await db.canvases.update_one(
+        {"_id": ObjectId(node["canvas_id"])},
+        {
+            "$pull": {
+                "nodes": node_id,
+                "edges": {"$or": [{"source_id": node_id}, {"target_id": node_id}]},
+            }
+        },
+    )
+
+    if node.get("parent_node_id"):
+        await db.canvas_nodes.update_one(
+            {"_id": ObjectId(node["parent_node_id"])},
+            {"$pull": {"child_node_ids": node_id}},
+        )
+
+    return {"deleted": True}
+
+
+# ──── AI on nodes ────
+
+@router.post("/nodes/{node_id}/ai", response_model=CanvasNodeInDB)
+async def run_ai_query(
+    node_id: str,
+    request: AIQueryRequest,
+    user=Depends(get_current_user),
+    db=Depends(get_database),
+):
+    node = await db.canvas_nodes.find_one({
+        "_id": ObjectId(node_id),
+        "user_id": str(user["_id"])
+    })
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+
+    if node.get("status") == "loading":
+        raise HTTPException(status_code=409, detail="Query already in progress")
+
+    await db.canvas_nodes.update_one(
+        {"_id": ObjectId(node_id)},
+        {"$set": {"status": "loading"}},
+    )
+
+    try:
+        context_parts = []
+        for ctx_id in request.context_node_ids:
+            ctx_node = await db.canvas_nodes.find_one({"_id": ObjectId(ctx_id)})
+            if ctx_node and ctx_node.get("content"):
+                context_parts.append(
+                    f"[{ctx_node.get('title', 'Context')}]: {ctx_node['content'][:500]}"
+                )
+        context = "\n".join(context_parts)
+
+        text = node.get("content", "")
+        if not text and node.get("highlight_id"):
+            highlight = await db.highlights.find_one(
+                {"_id": ObjectId(node["highlight_id"])}
+            )
+            if highlight:
+                text = highlight.get("text", "")
+
+        ai = get_ai_service()
+        result = await ai.generate(
+            text=text,
+            mode=request.mode,
+            context=context,
+            custom_prompt=request.custom_prompt,
+            model=request.model,
+        )
+
+        update_doc = {
+            "content": result["content"],
+            "status": "complete",
+            "ai_mode": request.mode,
+            "ai_model": request.model,
+            "ai_metadata": {
+                "model_name": result["model_name"],
+                "tokens_used": result["tokens_used"],
+                "cost_estimate": result["cost_estimate"],
+            },
+            "updated_at": datetime.utcnow(),
+        }
+
+        updated = await db.canvas_nodes.find_one_and_update(
+            {"_id": ObjectId(node_id)},
+            {"$set": update_doc},
+            return_document=True,
+        )
+        updated["_id"] = str(updated["_id"])
+        return CanvasNodeInDB(**updated)
+
+    except Exception as e:
+        await db.canvas_nodes.update_one(
+            {"_id": ObjectId(node_id)},
+            {"$set": {"status": "error"}},
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/nodes/{node_id}/branch", response_model=CanvasNodeInDB)
+async def create_branch(
+    node_id: str,
+    request: BranchRequest,
+    user=Depends(get_current_user),
+    db=Depends(get_database),
+):
+    parent = await db.canvas_nodes.find_one({
+        "_id": ObjectId(node_id),
+        "user_id": str(user["_id"])
+    })
+    if not parent:
+        raise HTTPException(status_code=404, detail="Parent node not found")
+
+    num_children = len(parent.get("child_node_ids", []))
+    new_position = NodePosition(
+        x=parent["position"]["x"] + request.position_offset.x,
+        y=parent["position"]["y"] + request.position_offset.y + (num_children * 250),
+    )
+
+    branch_titles = {
+        "question": "❓ Question",
+        "critique": "🔍 Critique",
+        "expand": "📖 Expand",
+        "related": "🔗 Related",
+        "custom": "💭 Custom",
+    }
+
+    new_node = CanvasNodeCreate(
+        canvas_id=parent["canvas_id"],
+        type="ai_response",
+        position=new_position,
+        title=branch_titles.get(request.branch_type, "Branch"),
+        content=None,
+        book_id=parent.get("book_id"),
+        ai_mode=request.branch_type if request.branch_type != "custom" else "explain",
+        parent_node_id=node_id,
+    )
+
+    created = await create_node(new_node, user=user, db=db)
+
+    ai_request = AIQueryRequest(
+        node_id=created.id,
+        mode=request.branch_type if request.branch_type != "custom" else "explain",
+        context_node_ids=[node_id],
+        custom_prompt=request.custom_prompt,
+    )
+
+    return await run_ai_query(created.id, ai_request, user=user, db=db)
+
+
+# ──── Highlight → Canvas ────
+
+@router.post("/from-highlight")
+async def create_canvas_from_highlight(
+    highlight_id: str,
+    user=Depends(get_current_user),
+    db=Depends(get_database),
+):
+    highlight = await db.highlights.find_one({
+        "_id": ObjectId(highlight_id),
+        "user_id": str(user["_id"])
+    })
+    if not highlight:
+        raise HTTPException(status_code=404, detail="Highlight not found")
+
+    canvas = await db.canvases.find_one({
+        "book_id": highlight["book_id"],
+        "user_id": str(user["_id"])
+    })
+
+    if not canvas:
+        canvas_create = CanvasCreate(
+            book_id=highlight["book_id"],
+            title="Research Canvas",
+        )
+        canvas = await create_canvas(canvas_create, user=user, db=db)
+        canvas_id = canvas.id
+    else:
+        canvas_id = str(canvas["_id"])
+
+    node = CanvasNodeCreate(
+        canvas_id=canvas_id,
+        type="highlight",
+        position=NodePosition(x=100, y=100),
+        title=f"📝 Page {highlight['position']['page_number'] + 1}",
+        content=highlight["text"],
+        highlight_id=highlight_id,
+        book_id=highlight["book_id"],
+        page_number=highlight["position"]["page_number"],
+    )
+
+    created_node = await create_node(node, user=user, db=db)
+    return {"canvas_id": canvas_id, "node": created_node}
+
+
+@router.post("/{canvas_id}/auto-summary")
+async def generate_auto_summary(
+    canvas_id: str,
+    user=Depends(get_current_user),
+    db=Depends(get_database),
+):
+    canvas = await db.canvases.find_one({
+        "_id": ObjectId(canvas_id),
+        "user_id": str(user["_id"])
+    })
+    if not canvas:
+        raise HTTPException(status_code=404, detail="Canvas not found")
+
+    book = await db.books.find_one({"_id": ObjectId(canvas["book_id"])})
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    abstract = ""
+    if "pages" in book and len(book["pages"]) > 0:
+        abstract = " ".join([p.get("text", "")[:1000] for p in book["pages"][:3]])
+
+    node = CanvasNodeCreate(
+        canvas_id=canvas_id,
+        type="summary",
+        position=NodePosition(x=400, y=100),
+        title="📄 Paper Summary",
+        content=None,
+        book_id=canvas["book_id"],
+        ai_mode="summarize",
+    )
+
+    created = await create_node(node, user=user, db=db)
+
+    ai = get_ai_service()
+    result = await ai.generate(
+        text=abstract,
+        mode="summarize",
+        context=f"Title: {book.get('title', 'Unknown')}",
+    )
+
+    updated = await db.canvas_nodes.find_one_and_update(
+        {"_id": ObjectId(created.id)},
+        {
+            "$set": {
+                "content": result["content"],
+                "status": "complete",
+                "ai_metadata": {
+                    "model_name": result["model_name"],
+                    "tokens_used": result["tokens_used"],
+                },
+                "updated_at": datetime.utcnow(),
+            }
+        },
+        return_document=True,
+    )
+    updated["_id"] = str(updated["_id"])
+    return CanvasNodeInDB(**updated)
+
+# ──── Paper-based canvas router (NO prefix — resolves to /papers/...) ────
+paper_canvas_router = APIRouter(tags=["paper-canvas"])
+
+
+async def _get_or_create_paper_canvas(paper_id: str, user_id: str) -> dict:
+    db = get_database()
+    canvas = await db.canvases.find_one({"paper_id": paper_id, "user_id": user_id})
+    if not canvas:
         paper = await db.papers.find_one({"_id": ObjectId(paper_id)})
         paper_title = paper["title"] if paper else "Paper"
-        
-        paper_node = {
-            "id": f"paper-{paper_id}",
-            "type": NodeType.PAPER.value,
-            "position": {"x": 400, "y": 50},
-            "data": {
-                "label": paper_title,
-                "content": None,
-                "content_type": ContentType.PLAIN.value,
-                "is_collapsed": False,
-                "tags": [],
-                "created_at": datetime.utcnow().isoformat(),
-            },
-            "parent_id": None,
-            "children_ids": []
-        }
-        
-        canvas_doc = {
+        now = datetime.utcnow()
+        doc = {
             "paper_id": paper_id,
             "user_id": user_id,
             "elements": {
-                "nodes": [paper_node],
-                "edges": []
+                "nodes": [{
+                    "id": f"paper-{paper_id}",
+                    "type": "paper",
+                    "position": {"x": 400, "y": 50},
+                    "data": {
+                        "label": paper_title, "content": None,
+                        "content_type": "plain", "is_collapsed": False,
+                        "tags": [], "created_at": now.isoformat(),
+                    },
+                    "parent_id": None, "children_ids": [],
+                }],
+                "edges": [],
             },
-            "updated_at": datetime.utcnow()
+            "updated_at": now,
         }
-        
-        result = await db.canvases.insert_one(canvas_doc)
-        canvas = canvas_doc
-        canvas["_id"] = result.inserted_id
-    
+        result = await db.canvases.insert_one(doc)
+        doc["_id"] = result.inserted_id
+        canvas = doc
     return canvas
 
 
-def calculate_next_position(nodes: List[dict], parent_id: Optional[str] = None) -> dict:
-    """Calculate position for a new node."""
-    if not nodes:
-        return {"x": 400, "y": 200}
-    
-    if parent_id:
-        # Find parent and position below it
-        parent = next((n for n in nodes if n["id"] == parent_id), None)
-        if parent:
-            # Find siblings
-            siblings = [n for n in nodes if n.get("parent_id") == parent_id]
-            x_offset = len(siblings) * 300
-            return {
-                "x": parent["position"]["x"] + x_offset,
-                "y": parent["position"]["y"] + 200
-            }
-    
-    # Find rightmost bottom node
-    max_y = max(n["position"]["y"] for n in nodes)
-    bottom_nodes = [n for n in nodes if n["position"]["y"] == max_y]
-    max_x = max(n["position"]["x"] for n in bottom_nodes)
-    
-    return {"x": max_x + 350, "y": max_y}
-
-
-@router.get("/papers/{paper_id}/canvas", response_model=CanvasResponse)
-async def get_canvas(
-    paper_id: str,
-    current_user: dict = Depends(get_current_user)
-):
-    """Get canvas for a paper. Creates one if it doesn't exist."""
+@paper_canvas_router.get("/papers/{paper_id}/canvas")
+async def get_paper_canvas(paper_id: str, current_user: dict = Depends(get_current_user)):
     db = get_database()
-    
-    # Verify paper exists
-    try:
-        paper = await db.papers.find_one({
-            "_id": ObjectId(paper_id),
-            "user_id": current_user["id"]
-        })
-    except:
-        raise HTTPException(status_code=404, detail="Paper not found")
-    
+    paper = await db.papers.find_one({"_id": ObjectId(paper_id), "user_id": current_user["id"]})
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
-    
-    canvas = await get_or_create_canvas(paper_id, current_user["id"])
-    
-    return CanvasResponse(
-        id=str(canvas["_id"]),
-        paper_id=canvas["paper_id"],
-        user_id=canvas["user_id"],
-        elements=CanvasElements(**canvas["elements"]),
-        updated_at=canvas["updated_at"]
-    )
-
-
-@router.put("/papers/{paper_id}/canvas", response_model=CanvasResponse)
-async def update_canvas(
-    paper_id: str,
-    canvas_data: CanvasUpdate,
-    current_user: dict = Depends(get_current_user)
-):
-    """Update entire canvas."""
-    db = get_database()
-    
-    # Verify paper exists
-    try:
-        paper = await db.papers.find_one({
-            "_id": ObjectId(paper_id),
-            "user_id": current_user["id"]
-        })
-    except:
-        raise HTTPException(status_code=404, detail="Paper not found")
-    
-    if not paper:
-        raise HTTPException(status_code=404, detail="Paper not found")
-    
-    now = datetime.utcnow()
-    
-    # Convert to dict for storage
-    elements_dict = {
-        "nodes": [n.dict() if hasattr(n, 'dict') else n for n in canvas_data.elements.nodes],
-        "edges": [e.dict() if hasattr(e, 'dict') else e for e in canvas_data.elements.edges]
+    canvas = await _get_or_create_paper_canvas(paper_id, current_user["id"])
+    updated = canvas.get("updated_at", datetime.utcnow())
+    return {
+        "id": str(canvas["_id"]),
+        "paper_id": paper_id,
+        "user_id": current_user["id"],
+        "elements": canvas["elements"],
+        "updated_at": updated.isoformat() if isinstance(updated, datetime) else updated,
     }
-    
-    result = await db.canvases.find_one_and_update(
-        {
-            "paper_id": paper_id,
-            "user_id": current_user["id"]
-        },
-        {
-            "$set": {
-                "elements": elements_dict,
-                "updated_at": now
-            },
-            "$setOnInsert": {
-                "paper_id": paper_id,
-                "user_id": current_user["id"]
-            }
-        },
-        upsert=True,
-        return_document=True
-    )
-    
-    return CanvasResponse(
-        id=str(result["_id"]),
-        paper_id=result["paper_id"],
-        user_id=result["user_id"],
-        elements=CanvasElements(**result["elements"]),
-        updated_at=result["updated_at"]
-    )
 
 
-@router.post("/papers/{paper_id}/canvas/nodes", response_model=CanvasNode)
-async def create_node(
-    paper_id: str,
-    node_data: CanvasNodeCreate,
-    current_user: dict = Depends(get_current_user)
-):
-    """Create a single canvas node."""
+@paper_canvas_router.put("/papers/{paper_id}/canvas")
+async def update_paper_canvas(paper_id: str, body: dict, current_user: dict = Depends(get_current_user)):
     db = get_database()
-    
-    canvas = await get_or_create_canvas(paper_id, current_user["id"])
-    
-    node_id = generate_node_id()
+    canvas = await _get_or_create_paper_canvas(paper_id, current_user["id"])
+    await db.canvases.update_one(
+        {"_id": canvas["_id"]},
+        {"$set": {"elements": body.get("elements", {}), "updated_at": datetime.utcnow()}},
+    )
+    return {"status": "ok"}
+
+
+@paper_canvas_router.post("/papers/{paper_id}/canvas/nodes")
+async def create_paper_canvas_node(paper_id: str, node_data: dict, current_user: dict = Depends(get_current_user)):
+    import uuid as _uuid
+    db = get_database()
+    canvas = await _get_or_create_paper_canvas(paper_id, current_user["id"])
+    nodes = canvas["elements"]["nodes"]
+    node_id = f"node_{_uuid.uuid4().hex[:12]}"
     now = datetime.utcnow()
-    
-    # Build node data
-    data_dict = node_data.data.dict() if hasattr(node_data.data, 'dict') else dict(node_data.data)
-    data_dict["created_at"] = now.isoformat()
-    data_dict["updated_at"] = now.isoformat()
-    
+    data = node_data.get("data", {})
+    data["created_at"] = now.isoformat()
+    data["updated_at"] = now.isoformat()
     new_node = {
         "id": node_id,
-        "type": node_data.type.value,
-        "position": node_data.position.dict(),
-        "data": data_dict,
-        "parent_id": node_data.parent_id,
-        "children_ids": []
+        "type": node_data.get("type", "note"),
+        "position": node_data.get("position", {"x": 400, "y": 200}),
+        "data": data,
+        "parent_id": node_data.get("parent_id"),
+        "children_ids": [],
     }
-    
-    # Update parent's children_ids
-    nodes = canvas["elements"]["nodes"]
-    if node_data.parent_id:
-        for i, n in enumerate(nodes):
-            if n["id"] == node_data.parent_id:
-                if "children_ids" not in n:
-                    n["children_ids"] = []
-                n["children_ids"].append(node_id)
-                break
-    
     nodes.append(new_node)
-    
-    await db.canvases.update_one(
-        {"_id": canvas["_id"]},
-        {
-            "$set": {
-                "elements.nodes": nodes,
-                "updated_at": now
-            }
-        }
-    )
-    
-    return CanvasNode(**new_node)
-
-
-@router.patch("/papers/{paper_id}/canvas/nodes/{node_id}", response_model=CanvasNode)
-async def update_node(
-    paper_id: str,
-    node_id: str,
-    update_data: CanvasNodeUpdate,
-    current_user: dict = Depends(get_current_user)
-):
-    """Update a canvas node."""
-    db = get_database()
-    
-    canvas = await db.canvases.find_one({
-        "paper_id": paper_id,
-        "user_id": current_user["id"]
-    })
-    
-    if not canvas:
-        raise HTTPException(status_code=404, detail="Canvas not found")
-    
-    nodes = canvas["elements"]["nodes"]
-    node_index = next((i for i, n in enumerate(nodes) if n["id"] == node_id), None)
-    
-    if node_index is None:
-        raise HTTPException(status_code=404, detail="Node not found")
-    
-    node = nodes[node_index]
-    now = datetime.utcnow()
-    
-    if update_data.position:
-        node["position"] = update_data.position.dict()
-    
-    if update_data.data:
-        node["data"].update(update_data.data)
-        node["data"]["updated_at"] = now.isoformat()
-    
-    if update_data.is_collapsed is not None:
-        node["data"]["is_collapsed"] = update_data.is_collapsed
-    
-    nodes[node_index] = node
-    
-    await db.canvases.update_one(
-        {"_id": canvas["_id"]},
-        {
-            "$set": {
-                "elements.nodes": nodes,
-                "updated_at": now
-            }
-        }
-    )
-    
-    return CanvasNode(**node)
-
-
-@router.delete("/papers/{paper_id}/canvas/nodes/{node_id}")
-async def delete_node(
-    paper_id: str,
-    node_id: str,
-    current_user: dict = Depends(get_current_user)
-):
-    """Delete a canvas node and its children."""
-    db = get_database()
-    
-    canvas = await db.canvases.find_one({
-        "paper_id": paper_id,
-        "user_id": current_user["id"]
-    })
-    
-    if not canvas:
-        raise HTTPException(status_code=404, detail="Canvas not found")
-    
-    nodes = canvas["elements"]["nodes"]
-    edges = canvas["elements"]["edges"]
-    
-    # Find all nodes to delete (node + all descendants)
-    def collect_descendants(nid: str) -> List[str]:
-        ids = [nid]
+    if new_node["parent_id"]:
         for n in nodes:
-            if n.get("parent_id") == nid:
-                ids.extend(collect_descendants(n["id"]))
-        return ids
-    
-    ids_to_delete = set(collect_descendants(node_id))
-    
-    # Filter out deleted nodes
-    new_nodes = [n for n in nodes if n["id"] not in ids_to_delete]
-    
-    # Filter out edges connected to deleted nodes
-    new_edges = [e for e in edges if e["source"] not in ids_to_delete and e["target"] not in ids_to_delete]
-    
-    # Update parent's children_ids
-    deleted_node = next((n for n in nodes if n["id"] == node_id), None)
-    if deleted_node and deleted_node.get("parent_id"):
-        for n in new_nodes:
-            if n["id"] == deleted_node["parent_id"] and "children_ids" in n:
-                n["children_ids"] = [cid for cid in n["children_ids"] if cid != node_id]
-    
-    await db.canvases.update_one(
-        {"_id": canvas["_id"]},
-        {
-            "$set": {
-                "elements.nodes": new_nodes,
-                "elements.edges": new_edges,
-                "updated_at": datetime.utcnow()
-            }
-        }
-    )
-    
-    return {"message": f"Deleted {len(ids_to_delete)} node(s)"}
+            if n["id"] == new_node["parent_id"]:
+                n.setdefault("children_ids", []).append(node_id)
+                break
+    await db.canvases.update_one({"_id": canvas["_id"]}, {"$set": {"elements.nodes": nodes, "updated_at": now}})
+    return new_node
 
 
-@router.post("/papers/{paper_id}/canvas/auto-create", response_model=CanvasNode)
-async def auto_create_node_from_explanation(
-    paper_id: str,
-    request: AutoCreateNodeRequest,
-    current_user: dict = Depends(get_current_user)
-):
-    """Auto-create a canvas node from a highlight and explanation."""
+@paper_canvas_router.post("/papers/{paper_id}/canvas/auto-create")
+async def auto_create_paper_node(paper_id: str, body: dict, current_user: dict = Depends(get_current_user)):
+    import uuid as _uuid
     db = get_database()
-    
-    # Get highlight
-    highlight = await db.highlights.find_one({
-        "_id": ObjectId(request.highlight_id),
-        "user_id": current_user["id"]
-    })
-    
-    if not highlight:
-        raise HTTPException(status_code=404, detail="Highlight not found")
-    
-    # Get explanation
-    explanation = await db.explanations.find_one({
-        "_id": ObjectId(request.explanation_id),
-        "user_id": current_user["id"]
-    })
-    
-    if not explanation:
-        raise HTTPException(status_code=404, detail="Explanation not found")
-    
-    # Get canvas
-    canvas = await get_or_create_canvas(paper_id, current_user["id"])
+    canvas = await _get_or_create_paper_canvas(paper_id, current_user["id"])
     nodes = canvas["elements"]["nodes"]
     edges = canvas["elements"]["edges"]
-    
-    # Check if node already exists for this explanation
-    existing = next((n for n in nodes if n["data"].get("explanation_id") == request.explanation_id), None)
-    if existing:
-        return CanvasNode(**existing)
-    
     now = datetime.utcnow()
-    
-    # Determine node type based on whether this is a follow-up
-    is_followup = explanation.get("parent_id") is not None
-    node_type = NodeType.FOLLOWUP if is_followup else NodeType.ANSWER
-    
-    # Find parent node if this is a follow-up
-    parent_node_id = None
-    if is_followup:
-        parent_exp_id = explanation["parent_id"]
-        parent_node = next((n for n in nodes if n["data"].get("explanation_id") == parent_exp_id), None)
-        if parent_node:
-            parent_node_id = parent_node["id"]
-    else:
-        # Find or create excerpt node for the highlight
-        excerpt_node = next((n for n in nodes if n["data"].get("highlight_id") == request.highlight_id and n["type"] == NodeType.EXCERPT.value), None)
-        
-        if not excerpt_node:
-            # Create excerpt node first
-            excerpt_id = generate_node_id()
-            
-            # Get expanded excerpt
-            from papertree_api.services.excerpt_service import \
-                extract_intelligent_excerpt
-            
-            paper = await db.papers.find_one({"_id": ObjectId(paper_id)})
-            excerpt_context = await extract_intelligent_excerpt(
-                paper.get("extracted_text", ""),
-                highlight["selected_text"],
-                paper.get("book_content"),
-                highlight.get("section_id")
-            )
-            
-            excerpt_position = request.position.dict() if request.position else calculate_next_position(nodes, f"paper-{paper_id}")
-            
-            excerpt_node = {
-                "id": excerpt_id,
-                "type": NodeType.EXCERPT.value,
-                "position": excerpt_position,
-                "data": {
-                    "label": "Excerpt",
-                    "content": excerpt_context.get("expanded_text", highlight["selected_text"]),
-                    "content_type": ContentType.MARKDOWN.value,
-                    "excerpt": excerpt_context,
-                    "highlight_id": request.highlight_id,
-                    "source": {
-                        "paper_id": paper_id,
-                        "page_number": highlight.get("page_number"),
-                        "section_id": highlight.get("section_id"),
-                        "section_path": excerpt_context.get("section_path", []),
-                        "highlight_id": request.highlight_id,
-                    },
-                    "is_collapsed": False,
-                    "tags": [],
-                    "created_at": now.isoformat(),
-                    "updated_at": now.isoformat(),
-                },
-                "parent_id": f"paper-{paper_id}",
-                "children_ids": []
-            }
-            
-            nodes.append(excerpt_node)
-            
-            # Add edge from paper to excerpt
-            edges.append({
-                "id": generate_edge_id(),
-                "source": f"paper-{paper_id}",
-                "target": excerpt_id,
-                "edge_type": "default"
-            })
-            
-            # Update paper node's children
-            paper_node = next((n for n in nodes if n["id"] == f"paper-{paper_id}"), None)
-            if paper_node:
-                if "children_ids" not in paper_node:
-                    paper_node["children_ids"] = []
-                paper_node["children_ids"].append(excerpt_id)
-        
-        parent_node_id = excerpt_node["id"]
-    
-    # Determine content type from answer
-    answer_content = explanation.get("answer_markdown", "")
-    content_type = ContentType.MARKDOWN
-    
-    if "```mermaid" in answer_content:
-        content_type = ContentType.MERMAID
-    elif "$$" in answer_content or "$" in answer_content:
-        content_type = ContentType.MIXED
-    
-    # Calculate position
-    if request.position:
-        position = request.position.dict()
-    else:
-        position = calculate_next_position(nodes, parent_node_id)
-    
-    # Create answer node
-    node_id = generate_node_id()
-    
-    ask_mode = explanation.get("ask_mode", AskMode.EXPLAIN_SIMPLY.value)
-    
+    highlight_id = body.get("highlight_id")
+    explanation_id = body.get("explanation_id")
+    highlight = await db.highlights.find_one({"_id": ObjectId(highlight_id)}) if highlight_id else None
+    explanation = await db.explanations.find_one({"_id": ObjectId(explanation_id)}) if explanation_id else None
+    node_id = f"node_{_uuid.uuid4().hex[:12]}"
+    paper_node_id = next((n["id"] for n in nodes if n.get("type") == "paper"), None)
+    pos = body.get("position", {"x": 200 + len(nodes) * 50, "y": 250})
     new_node = {
-        "id": node_id,
-        "type": node_type.value,
-        "position": position,
+        "id": node_id, "type": "answer", "position": pos,
         "data": {
-            "label": explanation["question"][:50] + ("..." if len(explanation["question"]) > 50 else ""),
-            "content": answer_content,
-            "content_type": content_type.value,
-            "question": explanation["question"],
-            "ask_mode": ask_mode,
-            "explanation_id": request.explanation_id,
-            "highlight_id": request.highlight_id,
-            "source": {
-                "paper_id": paper_id,
-                "page_number": highlight.get("page_number"),
-                "section_id": highlight.get("section_id"),
-                "highlight_id": request.highlight_id,
-            },
-            "is_collapsed": False,
-            "tags": [ask_mode],
-            "created_at": now.isoformat(),
-            "updated_at": now.isoformat(),
+            "label": f"AI: {(explanation or {}).get('question', '')[:40]}",
+            "content": (explanation or {}).get("answer_markdown", ""),
+            "content_type": "markdown",
+            "highlight_id": highlight_id, "explanation_id": explanation_id,
+            "question": (explanation or {}).get("question"),
+            "ask_mode": (explanation or {}).get("ask_mode"),
+            "source": {"paper_id": paper_id, "highlight_id": highlight_id},
+            "is_collapsed": False, "tags": [],
+            "created_at": now.isoformat(), "updated_at": now.isoformat(),
         },
-        "parent_id": parent_node_id,
-        "children_ids": []
+        "parent_id": paper_node_id, "children_ids": [],
     }
-    
     nodes.append(new_node)
-    
-    # Add edge
-    if parent_node_id:
-        edge_type = "followup" if is_followup else "default"
-        edges.append({
-            "id": generate_edge_id(),
-            "source": parent_node_id,
-            "target": node_id,
-            "edge_type": edge_type
-        })
-        
-        # Update parent's children
+    if paper_node_id:
         for n in nodes:
-            if n["id"] == parent_node_id:
-                if "children_ids" not in n:
-                    n["children_ids"] = []
-                n["children_ids"].append(node_id)
+            if n["id"] == paper_node_id:
+                n.setdefault("children_ids", []).append(node_id)
                 break
-    
-    # Save canvas
-    await db.canvases.update_one(
-        {"_id": canvas["_id"]},
-        {
-            "$set": {
-                "elements.nodes": nodes,
-                "elements.edges": edges,
-                "updated_at": now
-            }
-        }
-    )
-    
-    return CanvasNode(**new_node)
+        edges.append({"id": f"edge_{_uuid.uuid4().hex[:12]}", "source_id": paper_node_id, "target_id": node_id, "edge_type": "followup"})
+    await db.canvases.update_one({"_id": canvas["_id"]}, {"$set": {"elements.nodes": nodes, "elements.edges": edges, "updated_at": now}})
+    if explanation_id:
+        await db.explanations.update_one({"_id": ObjectId(explanation_id)}, {"$set": {"canvas_node_id": node_id}})
+    return new_node
 
 
-@router.post("/papers/{paper_id}/canvas/layout")
-async def auto_layout_nodes(
-    paper_id: str,
-    request: NodeLayoutRequest,
-    current_user: dict = Depends(get_current_user)
-):
-    """Auto-layout canvas nodes using specified algorithm."""
+@paper_canvas_router.post("/papers/{paper_id}/canvas/layout")
+async def layout_paper_canvas(paper_id: str, body: dict, current_user: dict = Depends(get_current_user)):
     db = get_database()
-    
-    canvas = await db.canvases.find_one({
-        "paper_id": paper_id,
-        "user_id": current_user["id"]
-    })
-    
-    if not canvas:
-        raise HTTPException(status_code=404, detail="Canvas not found")
-    
+    canvas = await _get_or_create_paper_canvas(paper_id, current_user["id"])
     nodes = canvas["elements"]["nodes"]
-    
-    if request.algorithm == "tree":
-        # Simple tree layout
-        root_id = request.root_node_id or f"paper-{paper_id}"
-        
-        def layout_tree(node_id: str, x: float, y: float, level: int = 0) -> float:
-            """Layout tree recursively, returns width used."""
-            node = next((n for n in nodes if n["id"] == node_id), None)
-            if not node:
-                return 0
-            
-            children_ids = node.get("children_ids", [])
-            
-            if not children_ids:
-                node["position"] = {"x": x, "y": y}
-                return 300  # Node width + padding
-            
-            # Layout children first to calculate total width
-            total_width = 0
-            child_positions = []
-            
-            for child_id in children_ids:
-                child_width = layout_tree(child_id, x + total_width, y + 180, level + 1)
-                child_positions.append(total_width + child_width / 2)
-                total_width += child_width
-            
-            # Position parent centered above children
-            center_x = x + total_width / 2 - 150
-            node["position"] = {"x": center_x, "y": y}
-            
-            return max(300, total_width)
-        
-        layout_tree(root_id, 100, 50)
-    
-    elif request.algorithm == "grid":
-        # Simple grid layout
-        cols = 4
-        padding = 50
-        node_width = 300
-        node_height = 200
-        
-        for i, node in enumerate(nodes):
-            col = i % cols
-            row = i // cols
-            node["position"] = {
-                "x": padding + col * (node_width + padding),
-                "y": padding + row * (node_height + padding)
-            }
-    
-    # Save updated positions
-    await db.canvases.update_one(
-        {"_id": canvas["_id"]},
-        {
-            "$set": {
-                "elements.nodes": nodes,
-                "updated_at": datetime.utcnow()
-            }
-        }
+    algo = body.get("algorithm", "tree")
+    if algo == "grid":
+        for i, n in enumerate(nodes):
+            n["position"] = {"x": 100 + (i % 3) * 350, "y": 50 + (i // 3) * 250}
+    else:
+        roots = [n for n in nodes if not n.get("parent_id")]
+        y = 50
+        for root in roots:
+            root["position"] = {"x": 400, "y": y}
+            children = [n for n in nodes if n.get("parent_id") == root["id"]]
+            for j, c in enumerate(children):
+                c["position"] = {"x": 100 + j * 320, "y": y + 220}
+            y += 500
+    await db.canvases.update_one({"_id": canvas["_id"]}, {"$set": {"elements.nodes": nodes, "updated_at": datetime.utcnow()}})
+    return {"status": "ok"}
+
+
+@paper_canvas_router.post("/papers/{paper_id}/canvas/batch-export", response_model=BatchExportResponse)
+async def paper_batch_export(paper_id: str, request: BatchExportRequest, current_user: dict = Depends(get_current_user)):
+    db = get_database()
+    paper = await db.papers.find_one({"_id": ObjectId(paper_id), "user_id": current_user["id"]})
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    new_nodes, new_edges = await batch_export_highlights(
+        paper_id=paper_id, user_id=current_user["id"],
+        highlight_ids=request.highlight_ids, include_explanations=request.include_explanations, layout=request.layout,
     )
-    
-    return {"message": "Layout applied", "algorithm": request.algorithm}
+    return BatchExportResponse(nodes_created=len(new_nodes), edges_created=len(new_edges), root_node_ids=[n["id"] for n in new_nodes if n.get("type") == "excerpt"])
+
+
+@paper_canvas_router.post("/papers/{paper_id}/canvas/ai-query", response_model=CanvasAIQueryResponse)
+async def paper_ai_query(paper_id: str, request: CanvasAIQueryRequest, current_user: dict = Depends(get_current_user)):
+    try:
+        new_node, new_edge = await canvas_ai_query(
+            paper_id=paper_id, user_id=current_user["id"],
+            parent_node_id=request.parent_node_id, question=request.question,
+            ask_mode=request.ask_mode.value, include_paper_context=request.include_paper_context,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI query failed: {str(e)}")
+    return CanvasAIQueryResponse(node=CanvasNode(**new_node), edge=CanvasEdge(**new_edge))
+
+
+@paper_canvas_router.post("/papers/{paper_id}/canvas/template")
+async def paper_canvas_template(paper_id: str, request: CanvasTemplateRequest, current_user: dict = Depends(get_current_user)):
+    db = get_database()
+    paper = await db.papers.find_one({"_id": ObjectId(paper_id), "user_id": current_user["id"]})
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    new_nodes = await create_template_canvas(paper_id=paper_id, user_id=current_user["id"], template=request.template)
+    return {"nodes_created": len(new_nodes), "template": request.template}
+
+
+# ──── WebSocket ────
+
+@router.websocket("/ws/{canvas_id}")
+async def canvas_websocket(websocket: WebSocket, canvas_id: str):
+    await websocket.accept()
+    if canvas_id not in active_connections:
+        active_connections[canvas_id] = []
+    active_connections[canvas_id].append(websocket)
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            for connection in active_connections[canvas_id]:
+                if connection != websocket:
+                    await connection.send_text(json.dumps(message))
+    except WebSocketDisconnect:
+        active_connections[canvas_id].remove(websocket)

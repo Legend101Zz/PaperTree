@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from papertree_api.auth.routes import router as auth_router
+from papertree_api.canvas.routes import paper_canvas_router
 from papertree_api.canvas.routes import router as canvas_router
 from papertree_api.config import get_settings
 from papertree_api.database import close_mongo_connection, connect_to_mongo
@@ -56,6 +57,7 @@ app.include_router(papers_router, prefix="/papers", tags=["Papers"])
 app.include_router(highlights_router, prefix="/highlight", tags=["Highlights"])
 app.include_router(explanations_router, prefix="/explanations", tags=["Explanations"])
 app.include_router(canvas_router, tags=["Canvas"])
+app.include_router(paper_canvas_router, tags=["Canvas Paper routes"]) 
 
 
 @app.get("/")

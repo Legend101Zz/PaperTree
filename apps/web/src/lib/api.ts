@@ -1,12 +1,15 @@
 // apps/web/src/lib/api.ts
 import axios from "axios";
 import {
-  AskMode,
-  CanvasElements,
+  Highlight,
+  HighlightCategory,
   CanvasNode,
-  CanvasNodeData,
-  CanvasNodePosition,
+  CanvasEdge,
+  AskMode,
   CanvasNodeType,
+  CanvasNodePosition,
+  CanvasNodeData,
+  CanvasElements,
 } from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -125,13 +128,16 @@ export const papersApi = {
 
 // Highlights API
 export const highlightsApi = {
-  list: async (paperId: string) => {
-    console.log("Fetching highlights for paper:", paperId);
-    const result = await fetchApi<any[]>(
-      `/highlight/papers/${paperId}/highlights`,
-    );
-    console.log("Highlights API response:", result);
-    return result;
+  list: async (
+    paperId: string,
+    params?: { category?: string; search?: string },
+  ) => {
+    const searchParams = new URLSearchParams();
+    if (params?.category) searchParams.set("category", params.category);
+    if (params?.search) searchParams.set("search", params.search);
+    const qs = searchParams.toString();
+    const url = `/highlight/papers/${paperId}/highlights${qs ? `?${qs}` : ""}`;
+    return fetchApi<Highlight[]>(url);
   },
 
   create: async (
@@ -142,22 +148,32 @@ export const highlightsApi = {
       page_number?: number;
       section_id?: string;
       rects?: Array<{ x: number; y: number; w: number; h: number }>;
+      category?: HighlightCategory;
+      color?: string;
+      note?: string;
     },
   ) => {
-    console.log("Creating highlight:", data);
-    const result = await fetchApi<any>(
-      `/highlight/papers/${paperId}/highlights`,
-      {
-        method: "POST",
-        body: JSON.stringify(data),
-      },
-    );
-    console.log("Created highlight response:", result);
-    return result;
+    return fetchApi<Highlight>(`/highlight/papers/${paperId}/highlights`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  update: async (
+    highlightId: string,
+    data: {
+      category?: HighlightCategory;
+      color?: string;
+      note?: string;
+    },
+  ) => {
+    return fetchApi<Highlight>(`/highlight/highlights/${highlightId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
   },
 
   delete: async (highlightId: string) => {
-    console.log("Deleting highlight:", highlightId);
     return fetchApi<void>(`/highlight/highlights/${highlightId}`, {
       method: "DELETE",
     });
@@ -235,7 +251,7 @@ export const canvasApi = {
       parent_id?: string;
     },
   ) =>
-    (await api.post(`/papers/${paperId}/canvas/nodes`, data))
+    (await api.post(`/canvas/papers/${paperId}/canvas/nodes`, data))
       .data as CanvasNode,
 
   updateNode: async (
@@ -247,11 +263,11 @@ export const canvasApi = {
       is_collapsed?: boolean;
     },
   ) =>
-    (await api.patch(`/papers/${paperId}/canvas/nodes/${nodeId}`, data))
+    (await api.patch(`/canvas/papers/${paperId}/canvas/nodes/${nodeId}`, data))
       .data as CanvasNode,
 
   deleteNode: async (paperId: string, nodeId: string) =>
-    (await api.delete(`/papers/${paperId}/canvas/nodes/${nodeId}`)).data,
+    (await api.delete(`/canvas/papers/${paperId}/canvas/nodes/${nodeId}`)).data,
 
   // Auto-create from explanation
   autoCreateNode: async (
@@ -262,7 +278,7 @@ export const canvasApi = {
       position?: CanvasNodePosition;
     },
   ) =>
-    (await api.post(`/papers/${paperId}/canvas/auto-create`, data))
+    (await api.post(`/canvas/papers/${paperId}/canvas/auto-create`, data))
       .data as CanvasNode,
 
   // Layout
@@ -272,9 +288,61 @@ export const canvasApi = {
     rootNodeId?: string,
   ) =>
     (
-      await api.post(`/papers/${paperId}/canvas/layout`, {
+      await api.post(`/canvas/papers/${paperId}/canvas/layout`, {
         algorithm,
         root_node_id: rootNodeId,
       })
     ).data,
+
+  // Batch export highlights to canvas
+  batchExport: async (
+    paperId: string,
+    data: {
+      highlight_ids: string[];
+      layout?: "tree" | "grid" | "radial";
+      include_explanations?: boolean;
+    },
+  ) =>
+    (
+      await api.post(`/papers/${paperId}/canvas/batch-export`, {
+        highlight_ids: data.highlight_ids,
+        layout: data.layout ?? "tree",
+        include_explanations: data.include_explanations ?? true,
+      })
+    ).data as {
+      nodes_created: number;
+      edges_created: number;
+      root_node_ids: string[];
+    },
+
+  // AI query from canvas node
+  aiQuery: async (
+    paperId: string,
+    data: {
+      parent_node_id: string;
+      question: string;
+      ask_mode?: AskMode;
+      include_paper_context?: boolean;
+    },
+  ) =>
+    (
+      await api.post(`/papers/${paperId}/canvas/ai-query`, {
+        parent_node_id: data.parent_node_id,
+        question: data.question,
+        ask_mode: data.ask_mode ?? "explain_simply",
+        include_paper_context: data.include_paper_context ?? true,
+      })
+    ).data as { node: CanvasNode; edge: CanvasEdge },
+
+  // Create template starter
+  createTemplate: async (
+    paperId: string,
+    template:
+      | "summary_tree"
+      | "question_branch"
+      | "critique_map"
+      | "concept_map",
+  ) =>
+    (await api.post(`/papers/${paperId}/canvas/template`, { template }))
+      .data as { nodes_created: number; template: string },
 };

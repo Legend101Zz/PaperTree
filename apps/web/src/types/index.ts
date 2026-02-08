@@ -221,20 +221,6 @@ export interface SearchResponse {
   results: SearchResultItem[];
 }
 
-// ============ HIGHLIGHT TYPES ============
-export interface Highlight {
-  id: string;
-  paper_id: string;
-  user_id: string;
-  mode: "pdf" | "book";
-  selected_text: string;
-  page_number?: number;
-  section_id?: string;
-  rects?: Rect[];
-  anchor?: TextAnchor;
-  created_at: string;
-}
-
 // ============ ASK MODES ============
 export type AskMode =
   | "explain_simply"
@@ -383,4 +369,51 @@ export interface ReaderSettings {
   minimapWidth: number;
   invertPdf: boolean;
   invertMinimap: boolean;
+}
+
+// ============ HIGHLIGHT CATEGORIES ============
+export type HighlightCategory =
+  | "key_finding"
+  | "question"
+  | "methodology"
+  | "definition"
+  | "important"
+  | "todo"
+  | "none";
+
+export const HIGHLIGHT_CATEGORY_LABELS: Record<HighlightCategory, string> = {
+  key_finding: "Key Finding",
+  question: "Question",
+  methodology: "Methodology",
+  definition: "Definition",
+  important: "Important",
+  todo: "To Do",
+  none: "No Category",
+};
+
+export const HIGHLIGHT_CATEGORY_COLORS: Record<HighlightCategory, string> = {
+  key_finding: "#22c55e",
+  question: "#a855f7",
+  methodology: "#3b82f6",
+  definition: "#f59e0b",
+  important: "#ef4444",
+  todo: "#06b6d4",
+  none: "#eab308",
+};
+
+// ============ HIGHLIGHT TYPES (UPDATED) ============
+export interface Highlight {
+  id: string;
+  paper_id: string;
+  user_id: string;
+  mode: "pdf" | "book";
+  selected_text: string;
+  page_number?: number;
+  section_id?: string;
+  rects?: Rect[];
+  anchor?: TextAnchor;
+  category: HighlightCategory;
+  color: string;
+  note?: string;
+  created_at: string;
 }
