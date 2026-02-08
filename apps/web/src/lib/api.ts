@@ -1,16 +1,24 @@
 // apps/web/src/lib/api.ts
 import axios from "axios";
-import {
+
+import type {
   Highlight,
-  HighlightCategory,
+  CreateHighlightInput,
+  UpdateHighlightInput,
+  HighlightExplanation,
+  ExplanationMode,
+} from "@/types/highlight";
+import type {
+  Canvas,
+  CanvasElements,
   CanvasNode,
   CanvasEdge,
+  ExploreRequest,
+  ExploreResponse,
+  AskFollowupRequest,
+  AddNoteRequest,
   AskMode,
-  CanvasNodeType,
-  CanvasNodePosition,
-  CanvasNodeData,
-  CanvasElements,
-} from "@/types";
+} from "@/types/canvas";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -126,60 +134,6 @@ export const papersApi = {
     ).data,
 };
 
-// Highlights API
-export const highlightsApi = {
-  list: async (
-    paperId: string,
-    params?: { category?: string; search?: string },
-  ) => {
-    const searchParams = new URLSearchParams();
-    if (params?.category) searchParams.set("category", params.category);
-    if (params?.search) searchParams.set("search", params.search);
-    const qs = searchParams.toString();
-    const url = `/highlight/papers/${paperId}/highlights${qs ? `?${qs}` : ""}`;
-    return fetchApi<Highlight[]>(url);
-  },
-
-  create: async (
-    paperId: string,
-    data: {
-      mode: "pdf" | "book";
-      selected_text: string;
-      page_number?: number;
-      section_id?: string;
-      rects?: Array<{ x: number; y: number; w: number; h: number }>;
-      category?: HighlightCategory;
-      color?: string;
-      note?: string;
-    },
-  ) => {
-    return fetchApi<Highlight>(`/highlight/papers/${paperId}/highlights`, {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
-
-  update: async (
-    highlightId: string,
-    data: {
-      category?: HighlightCategory;
-      color?: string;
-      note?: string;
-    },
-  ) => {
-    return fetchApi<Highlight>(`/highlight/highlights/${highlightId}`, {
-      method: "PATCH",
-      body: JSON.stringify(data),
-    });
-  },
-
-  delete: async (highlightId: string) => {
-    return fetchApi<void>(`/highlight/highlights/${highlightId}`, {
-      method: "DELETE",
-    });
-  },
-};
-
 // Explanations API (Enhanced with ask_mode)
 export const explanationsApi = {
   list: async (paperId: string) => {
@@ -233,116 +187,168 @@ export const explanationsApi = {
     ).data,
 };
 
-// Canvas API (Enhanced)
+// ============ Highlights API ============
+
+export const highlightsApi = {
+  getBookHighlights: async (
+    bookId: string,
+    page?: number,
+  ): Promise<Highlight[]> => {
+    const params = new URLSearchParams();
+    if (page !== undefined) params.set("page", String(page));
+    const { data } = await api.get(`/highlights/book/${bookId}?${params}`);
+    return data;
+  },
+
+  getHighlight: async (highlightId: string): Promise<Highlight> => {
+    const { data } = await api.get(`/highlights/${highlightId}`);
+    return data;
+  },
+
+  createHighlight: async (input: CreateHighlightInput): Promise<Highlight> => {
+    const { data } = await api.post("/highlights/", input);
+    return data;
+  },
+
+  updateHighlight: async (
+    highlightId: string,
+    input: UpdateHighlightInput,
+  ): Promise<Highlight> => {
+    const { data } = await api.patch(`/highlights/${highlightId}`, input);
+    return data;
+  },
+
+  deleteHighlight: async (highlightId: string): Promise<void> => {
+    await api.delete(`/highlights/${highlightId}`);
+  },
+
+  explainHighlight: async (
+    highlightId: string,
+    mode: ExplanationMode = "explain",
+    customPrompt?: string,
+  ): Promise<HighlightExplanation> => {
+    const { data } = await api.post(`/highlights/${highlightId}/explain`, {
+      highlight_id: highlightId,
+      mode,
+      custom_prompt: customPrompt,
+    });
+    return data;
+  },
+
+  getExplanations: async (
+    highlightId: string,
+  ): Promise<HighlightExplanation[]> => {
+    const { data } = await api.get(`/highlights/${highlightId}/explanations`);
+    return data;
+  },
+
+  searchHighlights: async (query: {
+    book_id?: string;
+    category?: string;
+    tags?: string[];
+    search_text?: string;
+  }): Promise<Highlight[]> => {
+    const { data } = await api.post("/highlights/search", query);
+    return data;
+  },
+
+  exportHighlights: async (
+    bookId: string,
+    format: "json" | "markdown" | "csv" = "json",
+  ): Promise<{ content: string; filename: string }> => {
+    const { data } = await api.get(
+      `/highlights/export/${bookId}?format=${format}`,
+    );
+    return data;
+  },
+};
+
+// ============ Canvas API ============
+
 export const canvasApi = {
-  get: async (paperId: string) =>
-    (await api.get(`/papers/${paperId}/canvas`)).data,
+  // ── Core CRUD ──
 
-  update: async (paperId: string, elements: CanvasElements) =>
-    (await api.put(`/papers/${paperId}/canvas`, { elements })).data,
+  get: async (paperId: string): Promise<Canvas> =>
+    fetchApi<Canvas>(`/papers/${paperId}/canvas`),
 
-  // Node operations
-  createNode: async (
+  save: async (paperId: string, elements: CanvasElements): Promise<void> =>
+    fetchApi<void>(`/papers/${paperId}/canvas`, {
+      method: "PUT",
+      body: JSON.stringify({ elements }),
+    }),
+
+  // ── Explore: Highlight → Canvas ──
+
+  explore: async (
     paperId: string,
-    data: {
-      type: CanvasNodeType;
-      position: CanvasNodePosition;
-      data: CanvasNodeData;
-      parent_id?: string;
-    },
-  ) =>
-    (await api.post(`/canvas/papers/${paperId}/canvas/nodes`, data))
-      .data as CanvasNode,
+    data: ExploreRequest,
+  ): Promise<ExploreResponse> =>
+    fetchApi<ExploreResponse>(`/papers/${paperId}/canvas/explore`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  // ── Ask Follow-up ──
+
+  ask: async (
+    paperId: string,
+    data: AskFollowupRequest,
+  ): Promise<{ node: CanvasNode; edge: CanvasEdge }> =>
+    fetchApi<{ node: CanvasNode; edge: CanvasEdge }>(
+      `/papers/${paperId}/canvas/ask`,
+      { method: "POST", body: JSON.stringify(data) },
+    ),
+
+  // ── Notes ──
+
+  addNote: async (
+    paperId: string,
+    data: AddNoteRequest,
+  ): Promise<{ node: CanvasNode; edge?: CanvasEdge }> =>
+    fetchApi<{ node: CanvasNode; edge?: CanvasEdge }>(
+      `/papers/${paperId}/canvas/note`,
+      { method: "POST", body: JSON.stringify(data) },
+    ),
+
+  // ── Page expansion ──
+
+  expandPage: async (
+    paperId: string,
+    pageNumber: number,
+  ): Promise<{ page_node: CanvasNode; was_created: boolean }> =>
+    fetchApi<{ page_node: CanvasNode; was_created: boolean }>(
+      `/papers/${paperId}/canvas/expand-page`,
+      { method: "POST", body: JSON.stringify({ page_number: pageNumber }) },
+    ),
+
+  // ── Layout ──
+
+  autoLayout: async (paperId: string, algorithm: "tree" | "grid" = "tree") =>
+    fetchApi<{ status: string }>(`/papers/${paperId}/canvas/layout`, {
+      method: "POST",
+      body: JSON.stringify({ algorithm }),
+    }),
+
+  // ── Node operations ──
 
   updateNode: async (
     paperId: string,
     nodeId: string,
     data: {
-      position?: CanvasNodePosition;
-      data?: Partial<CanvasNodeData>;
-      is_collapsed?: boolean;
+      position?: { x: number; y: number };
+      data?: Partial<CanvasNode["data"]>;
     },
   ) =>
-    (await api.patch(`/canvas/papers/${paperId}/canvas/nodes/${nodeId}`, data))
-      .data as CanvasNode,
+    fetchApi<CanvasNode>(`/papers/${paperId}/canvas/nodes/${nodeId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
 
   deleteNode: async (paperId: string, nodeId: string) =>
-    (await api.delete(`/canvas/papers/${paperId}/canvas/nodes/${nodeId}`)).data,
-
-  // Auto-create from explanation
-  autoCreateNode: async (
-    paperId: string,
-    data: {
-      highlight_id: string;
-      explanation_id: string;
-      position?: CanvasNodePosition;
-    },
-  ) =>
-    (await api.post(`/canvas/papers/${paperId}/canvas/auto-create`, data))
-      .data as CanvasNode,
-
-  // Layout
-  autoLayout: async (
-    paperId: string,
-    algorithm: "tree" | "force" | "grid" = "tree",
-    rootNodeId?: string,
-  ) =>
-    (
-      await api.post(`/canvas/papers/${paperId}/canvas/layout`, {
-        algorithm,
-        root_node_id: rootNodeId,
-      })
-    ).data,
-
-  // Batch export highlights to canvas
-  batchExport: async (
-    paperId: string,
-    data: {
-      highlight_ids: string[];
-      layout?: "tree" | "grid" | "radial";
-      include_explanations?: boolean;
-    },
-  ) =>
-    (
-      await api.post(`/papers/${paperId}/canvas/batch-export`, {
-        highlight_ids: data.highlight_ids,
-        layout: data.layout ?? "tree",
-        include_explanations: data.include_explanations ?? true,
-      })
-    ).data as {
-      nodes_created: number;
-      edges_created: number;
-      root_node_ids: string[];
-    },
-
-  // AI query from canvas node
-  aiQuery: async (
-    paperId: string,
-    data: {
-      parent_node_id: string;
-      question: string;
-      ask_mode?: AskMode;
-      include_paper_context?: boolean;
-    },
-  ) =>
-    (
-      await api.post(`/papers/${paperId}/canvas/ai-query`, {
-        parent_node_id: data.parent_node_id,
-        question: data.question,
-        ask_mode: data.ask_mode ?? "explain_simply",
-        include_paper_context: data.include_paper_context ?? true,
-      })
-    ).data as { node: CanvasNode; edge: CanvasEdge },
-
-  // Create template starter
-  createTemplate: async (
-    paperId: string,
-    template:
-      | "summary_tree"
-      | "question_branch"
-      | "critique_map"
-      | "concept_map",
-  ) =>
-    (await api.post(`/papers/${paperId}/canvas/template`, { template }))
-      .data as { nodes_created: number; template: string },
+    fetchApi<{ deleted: string[] }>(
+      `/papers/${paperId}/canvas/nodes/${nodeId}`,
+      {
+        method: "DELETE",
+      },
+    ),
 };

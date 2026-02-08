@@ -14,21 +14,21 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 MODELS = {
     "deepseek/deepseek-v3.2": {
         "name": "DeepSeek V3",
-        "cost_per_1k_input": 0.00014,
-        "cost_per_1k_output": 0.00028,
-        "max_context": 64000,
+        "cost_per_1k_input": 0.00025,
+        "cost_per_1k_output": 0.00038,
+        "max_context": 163_840,
     },
     "anthropic/claude-sonnet-4.5": {
-        "name": "Claude 3.5 Sonnet",
-        "cost_per_1k_input": 3,
-        "cost_per_1k_output": 10,
-        "max_context": 200000,
+        "name": "Claude 4.5 Sonnet",
+        "cost_per_1k_input": 0.003,
+        "cost_per_1k_output": 0.015,
+        "max_context": 1_000_000,
     },
-    "openai/gpt-5.2-chat": {
+    "qwen/qwen3-235b-a22b-thinking-2507": {
         "name": "GPT-4o Mini",
-        "cost_per_1k_input": 1.75,
-        "cost_per_1k_output": 14,
-        "max_context": 128000,
+        "cost_per_1k_input": 0.00011,
+        "cost_per_1k_output": 0.00060,
+        "max_context": 262_144,
     },
 }
 

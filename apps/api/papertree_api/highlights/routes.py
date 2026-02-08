@@ -1,192 +1,310 @@
-# apps/api/papertree_api/highlights/routes.py
 from datetime import datetime
 from typing import List, Optional
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from papertree_api.auth.utils import get_current_user
-from papertree_api.database import get_database
+from fastapi import APIRouter, Depends, HTTPException, Query
 
-from .models import (CATEGORY_COLORS, HighlightCategory, HighlightCreate,
-                     HighlightResponse, HighlightUpdate)
+from ..auth.utils import get_current_user
+from ..database import get_database
+from ..services.ai import get_ai_service
+from .models import (CATEGORY_COLORS, HighlightCreate, HighlightExplanation,
+                     HighlightExplanationCreate, HighlightInDB,
+                     HighlightSearchQuery, HighlightUpdate)
 
-router = APIRouter()
+router = APIRouter(prefix="/highlights", tags=["highlights"])
 
-
-def _highlight_to_response(highlight: dict) -> HighlightResponse:
-    """Convert a DB highlight dict to HighlightResponse."""
-    category = highlight.get("category", "none")
-    color = highlight.get("color") or CATEGORY_COLORS.get(
-        category, "#eab308"
-    )
-    return HighlightResponse(
-        id=str(highlight["_id"]),
-        paper_id=highlight["paper_id"],
-        user_id=highlight["user_id"],
-        mode=highlight["mode"],
-        selected_text=highlight["selected_text"],
-        page_number=highlight.get("page_number"),
-        section_id=highlight.get("section_id"),
-        rects=highlight.get("rects"),
-        anchor=highlight.get("anchor"),
-        category=category,
-        color=color,
-        note=highlight.get("note"),
-        created_at=highlight["created_at"],
-    )
-
-
-@router.post(
-    "/papers/{paper_id}/highlights",
-    response_model=HighlightResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/", response_model=HighlightInDB)
 async def create_highlight(
-    paper_id: str,
-    highlight_data: HighlightCreate,
-    current_user: dict = Depends(get_current_user),
+    highlight: HighlightCreate,
+    user = Depends(get_current_user),
+    db = Depends(get_database)
 ):
     """Create a new highlight."""
-    db = get_database()
-
-    # Verify paper exists and belongs to user
-    try:
-        paper = await db.papers.find_one(
-            {"_id": ObjectId(paper_id), "user_id": current_user["id"]}
-        )
-    except Exception:
-        raise HTTPException(status_code=404, detail="Paper not found")
-
-    if not paper:
-        raise HTTPException(status_code=404, detail="Paper not found")
-
-    # Resolve color
-    color = highlight_data.color or CATEGORY_COLORS.get(
-        highlight_data.category, "#eab308"
-    )
-
-    doc = {
-        "paper_id": paper_id,
-        "user_id": current_user["id"],
-        "mode": highlight_data.mode,
-        "selected_text": highlight_data.selected_text,
-        "page_number": highlight_data.page_number,
-        "section_id": highlight_data.section_id,
-        "rects": [r.dict() for r in highlight_data.rects]
-        if highlight_data.rects
-        else None,
-        "anchor": highlight_data.anchor.dict()
-        if highlight_data.anchor
-        else None,
-        "category": highlight_data.category.value,
-        "color": color,
-        "note": highlight_data.note,
-        "created_at": datetime.utcnow(),
+    now = datetime.utcnow()
+    
+    highlight_doc = {
+        "user_id": str(user["_id"]),
+        "book_id": highlight.book_id,
+        "text": highlight.text,
+        "position": highlight.position.dict(),
+        "category": highlight.category,
+        "color": CATEGORY_COLORS[highlight.category],
+        "note": highlight.note,
+        "tags": highlight.tags,
+        "explanation_id": None,
+        "canvas_node_id": None,
+        "created_at": now,
+        "updated_at": now,
     }
+    
+    result = await db.highlights.insert_one(highlight_doc)
+    highlight_doc["_id"] = str(result.inserted_id)
+    
+    return HighlightInDB(**highlight_doc)
 
-    result = await db.highlights.insert_one(doc)
-    doc["_id"] = result.inserted_id
-    return _highlight_to_response(doc)
-
-
-@router.get("/papers/{paper_id}/highlights", response_model=List[HighlightResponse])
-async def list_highlights(
-    paper_id: str,
-    category: Optional[str] = Query(None, description="Filter by category"),
-    search: Optional[str] = Query(None, description="Search in highlight text"),
-    current_user: dict = Depends(get_current_user),
+@router.get("/book/{book_id}", response_model=List[HighlightInDB])
+async def get_book_highlights(
+    book_id: str,
+    page: Optional[int] = None,
+    category: Optional[str] = None,
+    user = Depends(get_current_user),
+    db = Depends(get_database)
 ):
-    """List all highlights for a paper, with optional category filter and text search."""
-    db = get_database()
-
-    # Verify paper ownership
-    try:
-        paper = await db.papers.find_one(
-            {"_id": ObjectId(paper_id), "user_id": current_user["id"]}
-        )
-    except Exception:
-        raise HTTPException(status_code=404, detail="Paper not found")
-
-    if not paper:
-        raise HTTPException(status_code=404, detail="Paper not found")
-
-    query: dict = {"paper_id": paper_id, "user_id": current_user["id"]}
-
+    """Get all highlights for a book."""
+    query = {
+        "user_id": str(user["_id"]),
+        "book_id": book_id
+    }
+    
+    if page is not None:
+        query["position.page_number"] = page
+    
     if category:
         query["category"] = category
+    
+    cursor = db.highlights.find(query).sort("position.page_number", 1)
+    highlights = await cursor.to_list(length=1000)
+    
+    return [
+        HighlightInDB(**{**h, "_id": str(h["_id"])}) 
+        for h in highlights
+    ]
 
-    if search:
-        query["selected_text"] = {"$regex": search, "$options": "i"}
+@router.get("/{highlight_id}", response_model=HighlightInDB)
+async def get_highlight(
+    highlight_id: str,
+    user = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """Get a specific highlight."""
+    highlight = await db.highlights.find_one({
+        "_id": ObjectId(highlight_id),
+        "user_id": str(user["_id"])
+    })
+    
+    if not highlight:
+        raise HTTPException(status_code=404, detail="Highlight not found")
+    
+    highlight["_id"] = str(highlight["_id"])
+    return HighlightInDB(**highlight)
 
-    cursor = db.highlights.find(query).sort("created_at", 1)
-
-    highlights = []
-    async for highlight in cursor:
-        highlights.append(_highlight_to_response(highlight))
-
-    return highlights
-
-
-@router.patch("/highlights/{highlight_id}", response_model=HighlightResponse)
+@router.patch("/{highlight_id}", response_model=HighlightInDB)
 async def update_highlight(
     highlight_id: str,
-    update_data: HighlightUpdate,
-    current_user: dict = Depends(get_current_user),
+    update: HighlightUpdate,
+    user = Depends(get_current_user),
+    db = Depends(get_database)
 ):
-    """Update a highlight's category, color, or note."""
-    db = get_database()
-
-    try:
-        highlight = await db.highlights.find_one(
-            {"_id": ObjectId(highlight_id), "user_id": current_user["id"]}
-        )
-    except Exception:
+    """Update a highlight."""
+    update_data = {k: v for k, v in update.dict().items() if v is not None}
+    
+    if "category" in update_data:
+        update_data["color"] = CATEGORY_COLORS[update_data["category"]]
+    
+    update_data["updated_at"] = datetime.utcnow()
+    
+    result = await db.highlights.find_one_and_update(
+        {"_id": ObjectId(highlight_id), "user_id": str(user["_id"])},
+        {"$set": update_data},
+        return_document=True
+    )
+    
+    if not result:
         raise HTTPException(status_code=404, detail="Highlight not found")
+    
+    result["_id"] = str(result["_id"])
+    return HighlightInDB(**result)
 
-    if not highlight:
-        raise HTTPException(status_code=404, detail="Highlight not found")
-
-    updates = {}
-    if update_data.category is not None:
-        updates["category"] = update_data.category.value
-        # Auto-set color from category unless explicitly overridden
-        if update_data.color is None:
-            updates["color"] = CATEGORY_COLORS.get(
-                update_data.category, "#eab308"
-            )
-    if update_data.color is not None:
-        updates["color"] = update_data.color
-    if update_data.note is not None:
-        updates["note"] = update_data.note
-
-    if updates:
-        await db.highlights.update_one(
-            {"_id": ObjectId(highlight_id)}, {"$set": updates}
-        )
-
-    updated = await db.highlights.find_one({"_id": ObjectId(highlight_id)})
-    return _highlight_to_response(updated)
-
-
-@router.delete("/highlights/{highlight_id}")
+@router.delete("/{highlight_id}")
 async def delete_highlight(
     highlight_id: str,
-    current_user: dict = Depends(get_current_user),
+    user = Depends(get_current_user),
+    db = Depends(get_database)
 ):
-    """Delete a highlight and its associated explanations."""
-    db = get_database()
-
-    try:
-        highlight = await db.highlights.find_one(
-            {"_id": ObjectId(highlight_id), "user_id": current_user["id"]}
-        )
-    except Exception:
+    """Delete a highlight."""
+    result = await db.highlights.delete_one({
+        "_id": ObjectId(highlight_id),
+        "user_id": str(user["_id"])
+    })
+    
+    if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Highlight not found")
+    
+    return {"deleted": True}
 
+@router.post("/{highlight_id}/explain", response_model=HighlightExplanation)
+async def explain_highlight(
+    highlight_id: str,
+    request: HighlightExplanationCreate,
+    user = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """Generate AI explanation for a highlight."""
+    # Get highlight
+    highlight = await db.highlights.find_one({
+        "_id": ObjectId(highlight_id),
+        "user_id": str(user["_id"])
+    })
+    
     if not highlight:
         raise HTTPException(status_code=404, detail="Highlight not found")
+    
+    # Check for existing explanation with same mode (idempotency)
+    existing = await db.highlight_explanations.find_one({
+        "highlight_id": highlight_id,
+        "mode": request.mode
+    })
+    
+    if existing:
+        existing["_id"] = str(existing["_id"])
+        return HighlightExplanation(**existing)
+    
+    # Get surrounding context from book
+    book = await db.books.find_one({"_id": ObjectId(highlight["book_id"])})
+    context = ""
+    if book and "pages" in book:
+        page_num = highlight["position"]["page_number"]
+        if 0 <= page_num < len(book["pages"]):
+            context = book["pages"][page_num].get("text", "")[:1000]
+    
+    # Generate explanation
+    ai = get_ai_service()
+    result = await ai.generate(
+        text=highlight["text"],
+        mode=request.mode,
+        context=context,
+        custom_prompt=request.custom_prompt,
+    )
+    
+    # Store explanation
+    explanation_doc = {
+        "highlight_id": highlight_id,
+        "user_id": str(user["_id"]),
+        "book_id": highlight["book_id"],
+        "mode": request.mode,
+        "prompt": request.custom_prompt or request.mode,
+        "response": result["content"],
+        "model_name": result["model_name"],
+        "model_metadata": {
+            "model": result["model"],
+            "tokens_used": result["tokens_used"],
+            "cost_estimate": result["cost_estimate"],
+        },
+        "tokens_used": result["tokens_used"],
+        "created_at": datetime.utcnow(),
+    }
+    
+    insert_result = await db.highlight_explanations.insert_one(explanation_doc)
+    explanation_doc["_id"] = str(insert_result.inserted_id)
+    
+    # Update highlight with explanation reference
+    await db.highlights.update_one(
+        {"_id": ObjectId(highlight_id)},
+        {"$set": {"explanation_id": str(insert_result.inserted_id)}}
+    )
+    
+    return HighlightExplanation(**explanation_doc)
 
-    await db.explanations.delete_many({"highlight_id": highlight_id})
-    await db.highlights.delete_one({"_id": ObjectId(highlight_id)})
+@router.get("/{highlight_id}/explanations", response_model=List[HighlightExplanation])
+async def get_highlight_explanations(
+    highlight_id: str,
+    user = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """Get all explanations for a highlight."""
+    cursor = db.highlight_explanations.find({
+        "highlight_id": highlight_id,
+        "user_id": str(user["_id"])
+    }).sort("created_at", -1)
+    
+    explanations = await cursor.to_list(length=50)
+    return [
+        HighlightExplanation(**{**e, "_id": str(e["_id"])})
+        for e in explanations
+    ]
 
-    return {"message": "Highlight deleted successfully"}
+@router.post("/search", response_model=List[HighlightInDB])
+async def search_highlights(
+    query: HighlightSearchQuery,
+    user = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """Search highlights with filters."""
+    filter_query = {"user_id": str(user["_id"])}
+    
+    if query.book_id:
+        filter_query["book_id"] = query.book_id
+    
+    if query.category:
+        filter_query["category"] = query.category
+    
+    if query.tags:
+        filter_query["tags"] = {"$in": query.tags}
+    
+    if query.search_text:
+        filter_query["$text"] = {"$search": query.search_text}
+    
+    if query.page_start is not None or query.page_end is not None:
+        page_filter = {}
+        if query.page_start is not None:
+            page_filter["$gte"] = query.page_start
+        if query.page_end is not None:
+            page_filter["$lte"] = query.page_end
+        filter_query["position.page_number"] = page_filter
+    
+    cursor = db.highlights.find(filter_query).sort("created_at", -1)
+    highlights = await cursor.to_list(length=500)
+    
+    return [
+        HighlightInDB(**{**h, "_id": str(h["_id"])})
+        for h in highlights
+    ]
+
+@router.get("/export/{book_id}")
+async def export_highlights(
+    book_id: str,
+    format: str = Query("json", regex="^(json|markdown|csv)$"),
+    user = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """Export highlights in various formats."""
+    highlights = await get_book_highlights(book_id, user=user, db=db)
+    
+    if format == "json":
+        return {"highlights": [h.dict() for h in highlights]}
+    
+    elif format == "markdown":
+        lines = ["# Highlights Export\n"]
+        current_page = -1
+        
+        for h in highlights:
+            if h.position.page_number != current_page:
+                current_page = h.position.page_number
+                lines.append(f"\n## Page {current_page + 1}\n")
+            
+            lines.append(f"- **[{h.category}]** {h.text}")
+            if h.note:
+                lines.append(f"  - *Note:* {h.note}")
+            lines.append("")
+        
+        return {"content": "\n".join(lines), "filename": f"highlights_{book_id}.md"}
+    
+    elif format == "csv":
+        import csv
+        import io
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Page", "Category", "Text", "Note", "Tags", "Created"])
+        
+        for h in highlights:
+            writer.writerow([
+                h.position.page_number + 1,
+                h.category,
+                h.text,
+                h.note or "",
+                ", ".join(h.tags),
+                h.created_at.isoformat()
+            ])
+        
+        return {"content": output.getvalue(), "filename": f"highlights_{book_id}.csv"}

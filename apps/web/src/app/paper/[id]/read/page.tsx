@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { ReaderToolbar } from '@/components/reader/ReaderToolbar';
@@ -21,6 +21,7 @@ import { Sparkles, Loader2, PanelLeftClose, PanelLeft, PanelRight } from 'lucide
 
 export default function ReaderPage() {
     const params = useParams();
+    const router = useRouter();
     const paperId = params.id as string;
     const queryClient = useQueryClient();
 
@@ -35,6 +36,7 @@ export default function ReaderPage() {
     const minimapCollapsed = useReaderStore((s) => s.minimapCollapsed);
     const currentPdfPage = useReaderStore((s) => s.currentPdfPage);
     const [isExporting, setIsExporting] = useState(false);
+
     // Store actions
     const setHighlights = useReaderStore((s) => s.setHighlights);
     const setExplanations = useReaderStore((s) => s.setExplanations);
@@ -171,7 +173,6 @@ export default function ReaderPage() {
         generatePagesMutation.mutate(pages);
     }, [generatePagesMutation]);
 
-    // Page visibility change - sync PDF minimap
     const handlePageVisible = useCallback((pageNum: number) => {
         setVisiblePage(pageNum);
         setCurrentSection(`page-${pageNum}`, pageNum);
@@ -182,7 +183,6 @@ export default function ReaderPage() {
     }, [openFigureViewer]);
 
     const handleOutlineClick = useCallback((sectionId: string) => {
-        // sectionId is like "page-0", "page-1", etc.
         const match = sectionId.match(/^page-(\d+)$/);
         if (match) {
             const pageNum = parseInt(match[1]);
@@ -204,13 +204,10 @@ export default function ReaderPage() {
 
     const handleBookTextSelect = useCallback((text: string, sectionId: string, pdfPage: number) => {
         if (!text.trim() || inlineExplanation.isOpen) return;
-
         const selection = window.getSelection();
         if (!selection || selection.rangeCount === 0) return;
-
         const range = selection.getRangeAt(0);
         const rect = range.getBoundingClientRect();
-
         setSelection(text, { x: rect.right, y: rect.top });
         setPendingHighlight({
             mode: 'book',
@@ -246,24 +243,20 @@ export default function ReaderPage() {
 
     const handleAskAI = useCallback(async (question: string, askMode?: AskMode, category?: HighlightCategory) => {
         if (!pendingHighlight) return;
-
         try {
             const highlight = await createHighlightMutation.mutateAsync({
                 ...pendingHighlight,
                 category: category || 'none',
             });
-
             const selection = window.getSelection();
             let position = { x: window.innerWidth / 2, y: 200 };
             if (selection && selection.rangeCount > 0) {
                 const rect = selection.getRangeAt(0).getBoundingClientRect();
                 position = { x: rect.right, y: rect.bottom };
             }
-
             clearSelection();
             setPendingHighlight(null);
             openInlineExplanation(highlight.id, position);
-
             await createExplanationMutation.mutateAsync({
                 highlight_id: highlight.id,
                 question,
@@ -277,7 +270,6 @@ export default function ReaderPage() {
     const handleFollowUp = useCallback(async (parentId: string, question: string) => {
         const parent = explanations.find((e) => e.id === parentId);
         if (!parent) return;
-
         await createExplanationMutation.mutateAsync({
             highlight_id: parent.highlight_id,
             question,
@@ -306,12 +298,11 @@ export default function ReaderPage() {
                 layout: 'tree',
                 include_explanations: true,
             });
-            // Show success and offer to navigate
             const goToCanvas = confirm(
                 `Exported ${result.nodes_created} nodes to Canvas. Open Canvas now?`
             );
             if (goToCanvas) {
-                window.location.href = `/paper/${paperId}/canvas`;
+                router.push(`/paper/${paperId}/canvas`);
             }
         } catch (error) {
             console.error('Export to canvas failed:', error);
@@ -319,7 +310,24 @@ export default function ReaderPage() {
         } finally {
             setIsExporting(false);
         }
-    }, [paperId, isExporting]);
+    }, [paperId, isExporting, router]);
+
+    // Navigate a specific highlight to canvas for branching exploration
+    const handleExploreInCanvas = useCallback((
+        highlightId: string,
+        selectedTextStr: string,
+        pageNumber: number,
+        question?: string,
+        askMode?: AskMode,
+    ) => {
+        const params = new URLSearchParams({
+            highlight: highlightId,
+            page: String(pageNumber),
+            question: question || `Explain: "${selectedTextStr.slice(0, 80)}"`,
+            mode: askMode || 'explain_simply',
+        });
+        router.push(`/paper/${paperId}/canvas?${params.toString()}`);
+    }, [router, paperId]);
 
     // Apply theme
     useEffect(() => {
@@ -353,9 +361,7 @@ export default function ReaderPage() {
                     isGenerating={isGenerating}
                 />
 
-                {/* Main content area */}
                 <div className="flex-1 flex overflow-hidden relative">
-
                     {/* LEFT: Sidebar/Outline */}
                     <aside
                         className={`flex-shrink-0 overflow-hidden border-r border-gray-200 dark:border-gray-700 
@@ -431,9 +437,7 @@ export default function ReaderPage() {
                                             <><Sparkles className="w-5 h-5" /> Generate Book View</>
                                         )}
                                     </button>
-                                    <p className="text-xs text-gray-500 mt-4">
-                                        Takes ~30 seconds for first 5 pages
-                                    </p>
+                                    <p className="text-xs text-gray-500 mt-4">Takes ~30 seconds for first 5 pages</p>
                                 </div>
                             </div>
                         )}
@@ -454,7 +458,6 @@ export default function ReaderPage() {
                                     <PanelRight className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                                 </button>
                             )}
-
                             <aside
                                 className={`flex-shrink-0 min-h-0 overflow-hidden border-l border-gray-200 dark:border-gray-700
                                 bg-white dark:bg-gray-900 transition-all duration-300 ease-in-out`}
@@ -489,6 +492,7 @@ export default function ReaderPage() {
                     onTogglePin={(id, isPinned) => updateExplanationMutation.mutate({ id, data: { is_pinned: isPinned } })}
                     onToggleResolved={(id, isResolved) => updateExplanationMutation.mutate({ id, data: { is_resolved: isResolved } })}
                     onGoToPdf={handleGoToPdf}
+                    onExploreInCanvas={handleExploreInCanvas}
                     isLoading={createExplanationMutation.isPending}
                 />
 
@@ -500,6 +504,7 @@ export default function ReaderPage() {
                     onDeleteHighlight={handleDeleteHighlight}
                     onGoToPdf={handleGoToPdf}
                     onExportToCanvas={handleExportToCanvas}
+                    onExploreInCanvas={handleExploreInCanvas}
                 />
 
                 {/* Figure viewer */}

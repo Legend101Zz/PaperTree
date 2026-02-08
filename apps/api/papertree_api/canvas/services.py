@@ -1,298 +1,270 @@
 # apps/api/papertree_api/canvas/services.py
 """
-Canvas business logic: batch export, AI queries from canvas, templates.
+Canvas business logic: Maxly-style exploration canvas.
+Page super-nodes, branching AI conversations, notes.
 All OpenRouter calls go through explanations/services.py.
 """
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+from bson import ObjectId
+from papertree_api.config import get_settings
 from papertree_api.database import get_database
 from papertree_api.explanations.services import call_openrouter
 
-from .models import (AskMode, CanvasEdge, CanvasNode, CanvasNodeData,
-                     ContentType, NodeType, SourceReference)
+from .models import (AskMode, CanvasEdge, CanvasElements, CanvasNode,
+                     CanvasNodeData, ContentType, NodePosition, NodeType)
+
+settings = get_settings()
 
 
-def _gen_node_id() -> str:
-    return f"node_{uuid.uuid4().hex[:12]}"
+def _uid() -> str:
+    return uuid.uuid4().hex[:12]
 
 
-def _gen_edge_id() -> str:
-    return f"edge_{uuid.uuid4().hex[:12]}"
-
-
-def _now_iso() -> str:
+def _now() -> str:
     return datetime.utcnow().isoformat()
 
 
 # ────────────────────────────────────────────
-# Batch Export: highlights → canvas nodes
+# Canvas CRUD helpers
 # ────────────────────────────────────────────
 
-async def batch_export_highlights(
-    paper_id: str,
-    user_id: str,
-    highlight_ids: List[str],
-    include_explanations: bool = True,
-    layout: str = "tree",
-) -> Tuple[List[dict], List[dict]]:
-    """
-    Create canvas nodes for each highlight (and optionally their explanations).
-    Returns (new_nodes, new_edges) as dicts ready for Mongo.
-    """
+async def get_or_create_canvas(paper_id: str, user_id: str) -> dict:
+    """Get or create the single canvas for a paper.
+    Tries both user_id formats to handle auth inconsistencies."""
     db = get_database()
 
-    # Fetch canvas (or create it)
-    canvas = await _get_or_create_canvas(paper_id, user_id)
-    existing_nodes = canvas["elements"]["nodes"]
-    existing_edges = canvas["elements"]["edges"]
+    # Try finding canvas — user_id might be stored in different format
+    canvas = await db.canvases.find_one({
+        "paper_id": paper_id,
+        "user_id": user_id,
+    })
+    if canvas:
+        return canvas
 
-    # Find the paper root node to attach under
-    paper_node_id = next(
-        (n["id"] for n in existing_nodes if n.get("type") == "paper"),
-        None,
+    # Create new canvas
+    paper = None
+    try:
+        paper = await db.papers.find_one({"_id": ObjectId(paper_id)})
+    except Exception:
+        pass
+
+    paper_title = paper["title"] if paper else "Paper"
+    now = datetime.utcnow()
+
+    paper_node_id = f"paper-{paper_id}"
+    paper_node = {
+        "id": paper_node_id,
+        "type": NodeType.PAPER.value,
+        "position": {"x": 400, "y": 50},
+        "data": {
+            "label": paper_title,
+            "content": (paper.get("book_content") or {}).get("tldr") if paper else None,
+            "content_type": ContentType.MARKDOWN.value,
+            "is_collapsed": False,
+            "status": "complete",
+            "tags": [],
+            "created_at": now.isoformat(),
+        },
+        "parent_id": None,
+        "children_ids": [],
+    }
+
+    doc = {
+        "paper_id": paper_id,
+        "user_id": user_id,
+        "elements": {
+            "nodes": [paper_node],
+            "edges": [],
+        },
+        "updated_at": now,
+    }
+    result = await db.canvases.insert_one(doc)
+    doc["_id"] = result.inserted_id
+    return doc
+
+def _find_node(nodes: list, node_id: str) -> Optional[dict]:
+    for n in nodes:
+        if n["id"] == node_id:
+            return n
+    return None
+
+
+def _add_child(nodes: list, parent_id: str, child_id: str):
+    parent = _find_node(nodes, parent_id)
+    if parent:
+        if "children_ids" not in parent:
+            parent["children_ids"] = []
+        if child_id not in parent["children_ids"]:
+            parent["children_ids"].append(child_id)
+
+
+async def _save_canvas(canvas_id, nodes: list, edges: list):
+    db = get_database()
+    await db.canvases.update_one(
+        {"_id": canvas_id},
+        {"$set": {
+            "elements.nodes": nodes,
+            "elements.edges": edges,
+            "updated_at": datetime.utcnow(),
+        }},
     )
 
-    # Fetch highlights
-    from bson import ObjectId
-
-    highlight_docs = []
-    for hid in highlight_ids:
-        try:
-            h = await db.highlights.find_one(
-                {"_id": ObjectId(hid), "user_id": user_id}
-            )
-            if h:
-                highlight_docs.append(h)
-        except Exception:
-            continue
-
-    if not highlight_docs:
-        return [], []
-
-    new_nodes: List[dict] = []
-    new_edges: List[dict] = []
-
-    # Layout positions
-    start_x = 100
-    start_y = 250
-    x_spacing = 350
-    y_spacing = 200
-
-    for idx, h in enumerate(highlight_docs):
-        hid = str(h["_id"])
-
-        # Check if highlight is already on canvas
-        already_exists = any(
-            n.get("data", {}).get("highlight_id") == hid for n in existing_nodes
-        )
-        if already_exists:
-            continue
-
-        # Position based on layout
-        if layout == "grid":
-            col = idx % 3
-            row = idx // 3
-            pos = {"x": start_x + col * x_spacing, "y": start_y + row * y_spacing}
-        else:  # tree
-            pos = {"x": start_x + idx * x_spacing, "y": start_y}
-
-        excerpt_node_id = _gen_node_id()
-        now = _now_iso()
-
-        excerpt_node = {
-            "id": excerpt_node_id,
-            "type": NodeType.EXCERPT.value,
-            "position": pos,
-            "data": {
-                "label": _truncate(h["selected_text"], 50),
-                "content": h["selected_text"],
-                "content_type": ContentType.PLAIN.value,
-                "highlight_id": hid,
-                "source": {
-                    "paper_id": paper_id,
-                    "page_number": h.get("page_number"),
-                    "section_id": h.get("section_id"),
-                    "highlight_id": hid,
-                },
-                "is_collapsed": False,
-                "tags": [h.get("category", "none")],
-                "color": h.get("color"),
-                "created_at": now,
-                "updated_at": now,
-            },
-            "parent_id": paper_node_id,
-            "children_ids": [],
-        }
-        new_nodes.append(excerpt_node)
-
-        # Edge from paper root → excerpt
-        if paper_node_id:
-            new_edges.append({
-                "id": _gen_edge_id(),
-                "source": paper_node_id,
-                "target": excerpt_node_id,
-                "label": h.get("category", ""),
-                "edge_type": "default",
-            })
-
-        # Optionally add explanation nodes
-        if include_explanations:
-            exp_cursor = db.explanations.find(
-                {"highlight_id": hid, "user_id": user_id}
-            ).sort("created_at", 1)
-
-            exp_idx = 0
-            async for exp in exp_cursor:
-                exp_node_id = _gen_node_id()
-                exp_pos = {
-                    "x": pos["x"],
-                    "y": pos["y"] + (exp_idx + 1) * 180,
-                }
-
-                exp_node = {
-                    "id": exp_node_id,
-                    "type": NodeType.ANSWER.value,
-                    "position": exp_pos,
-                    "data": {
-                        "label": f"AI: {_truncate(exp.get('question', ''), 40)}",
-                        "content": exp.get("answer_markdown", ""),
-                        "content_type": ContentType.MARKDOWN.value,
-                        "question": exp.get("question"),
-                        "ask_mode": exp.get("ask_mode"),
-                        "highlight_id": hid,
-                        "explanation_id": str(exp["_id"]),
-                        "source": {
-                            "paper_id": paper_id,
-                            "page_number": h.get("page_number"),
-                            "highlight_id": hid,
-                        },
-                        "is_collapsed": True,
-                        "tags": [],
-                        "created_at": now,
-                        "updated_at": now,
-                    },
-                    "parent_id": excerpt_node_id,
-                    "children_ids": [],
-                }
-                new_nodes.append(exp_node)
-                excerpt_node["children_ids"].append(exp_node_id)
-
-                new_edges.append({
-                    "id": _gen_edge_id(),
-                    "source": excerpt_node_id,
-                    "target": exp_node_id,
-                    "label": exp.get("ask_mode", ""),
-                    "edge_type": "followup",
-                })
-
-                # Link explanation back to its DB record
-                await db.explanations.update_one(
-                    {"_id": exp["_id"]},
-                    {"$set": {"canvas_node_id": exp_node_id}},
-                )
-
-                exp_idx += 1
-
-    # Persist to canvas
-    if new_nodes or new_edges:
-        # Update paper node's children
-        all_nodes = existing_nodes + new_nodes
-        if paper_node_id:
-            for n in all_nodes:
-                if n["id"] == paper_node_id:
-                    if "children_ids" not in n:
-                        n["children_ids"] = []
-                    for nn in new_nodes:
-                        if nn.get("parent_id") == paper_node_id:
-                            n["children_ids"].append(nn["id"])
-                    break
-
-        all_edges = existing_edges + new_edges
-
-        await db.canvases.update_one(
-            {"_id": canvas["_id"]},
-            {
-                "$set": {
-                    "elements.nodes": all_nodes,
-                    "elements.edges": all_edges,
-                    "updated_at": datetime.utcnow(),
-                }
-            },
-        )
-
-    return new_nodes, new_edges
-
 
 # ────────────────────────────────────────────
-# Canvas AI Query: ask from a canvas node
+# Page Super Nodes
 # ────────────────────────────────────────────
 
-async def canvas_ai_query(
+async def ensure_page_super_node(
     paper_id: str,
     user_id: str,
-    parent_node_id: str,
-    question: str,
-    ask_mode: str = "explain_simply",
-    include_paper_context: bool = True,
-) -> Tuple[dict, dict]:
+    page_number: int,
+) -> Tuple[dict, dict, bool]:
     """
-    Run an AI query from a canvas node. Creates a new child node with the answer.
-    Returns (new_node, new_edge) dicts.
+    Ensure a page super-node exists. Returns (canvas_doc, page_node, was_created).
     """
-    db = get_database()
-    canvas = await db.canvases.find_one(
-        {"paper_id": paper_id, "user_id": user_id}
-    )
-    if not canvas:
-        raise ValueError("Canvas not found")
-
+    canvas = await get_or_create_canvas(paper_id, user_id)
     nodes = canvas["elements"]["nodes"]
     edges = canvas["elements"]["edges"]
 
-    parent_node = next((n for n in nodes if n["id"] == parent_node_id), None)
-    if not parent_node:
-        raise ValueError("Parent node not found")
+    page_node_id = f"page-{paper_id}-{page_number}"
+    existing = _find_node(nodes, page_node_id)
+    if existing:
+        return canvas, existing, False
 
-    # Build context from parent node
-    parent_data = parent_node.get("data", {})
-    parent_content = parent_data.get("content", "")
-    parent_question = parent_data.get("question", "")
-    selected_text = parent_content or parent_question or ""
+    # Fetch page summary if available
+    db = get_database()
+    paper = await db.papers.find_one({"_id": ObjectId(paper_id)})
+    page_summary = None
+    page_title = f"Page {page_number + 1}"
 
-    # Optionally get paper context
-    context_before = ""
-    context_after = ""
-    section_title = ""
+    if paper and paper.get("book_content"):
+        summaries = paper["book_content"].get("page_summaries", [])
+        for ps in summaries:
+            if ps.get("page") == page_number:
+                page_title = ps.get("title", page_title)
+                page_summary = ps.get("summary", "")
+                break
 
-    if include_paper_context:
-        source = parent_data.get("source", {})
-        highlight_id = parent_data.get("highlight_id") or source.get("highlight_id")
+    # Position: pages laid out horizontally under paper root
+    paper_node_id = f"paper-{paper_id}"
+    existing_pages = [n for n in nodes if n.get("type") == NodeType.PAGE_SUPER.value]
+    x_offset = len(existing_pages) * 400
+    now = _now()
 
-        if highlight_id:
-            from bson import ObjectId
+    page_node = {
+        "id": page_node_id,
+        "type": NodeType.PAGE_SUPER.value,
+        "position": {"x": 100 + x_offset, "y": 250},
+        "data": {
+            "label": page_title,
+            "content": page_summary,
+            "content_type": ContentType.MARKDOWN.value,
+            "page_number": page_number,
+            "page_summary": page_summary,
+            "is_collapsed": True,
+            "status": "complete" if page_summary else "idle",
+            "tags": [],
+            "created_at": now,
+        },
+        "parent_id": paper_node_id,
+        "children_ids": [],
+    }
 
-            try:
-                highlight = await db.highlights.find_one(
-                    {"_id": ObjectId(highlight_id)}
-                )
-                if highlight:
-                    selected_text = highlight.get("selected_text", selected_text)
+    nodes.append(page_node)
+    _add_child(nodes, paper_node_id, page_node_id)
 
-                    # Try to get surrounding context from paper
-                    paper = await db.papers.find_one({"_id": ObjectId(paper_id)})
-                    if paper and paper.get("extracted_text"):
-                        full_text = paper["extracted_text"]
-                        pos = full_text.find(selected_text[:100])
-                        if pos >= 0:
-                            context_before = full_text[max(0, pos - 500) : pos]
-                            end = pos + len(selected_text)
-                            context_after = full_text[end : end + 500]
-            except Exception:
-                pass
+    edges.append({
+        "id": f"edge-{_uid()}",
+        "source": paper_node_id,
+        "target": page_node_id,
+        "edge_type": "default",
+    })
 
-    # Call AI
+    await _save_canvas(canvas["_id"], nodes, edges)
+    canvas["elements"]["nodes"] = nodes
+    canvas["elements"]["edges"] = edges
+    return canvas, page_node, True
+
+
+# ────────────────────────────────────────────
+# Explore: Highlight → Canvas Branch
+# ────────────────────────────────────────────
+
+async def create_exploration(
+    paper_id: str,
+    user_id: str,
+    highlight_id: str,
+    question: str,
+    ask_mode: str,
+    page_number: int,
+) -> dict:
+    """
+    Main entry: highlight → page super node → exploration node → AI answer node.
+    Returns {exploration_node, ai_node, page_node, edges, canvas_id}.
+    """
+    db = get_database()
+
+    # 1. Ensure page super-node exists
+    canvas, page_node, page_created = await ensure_page_super_node(
+        paper_id, user_id, page_number
+    )
+    nodes = canvas["elements"]["nodes"]
+    edges = canvas["elements"]["edges"]
+    page_node_id = page_node["id"]
+
+    # 2. Fetch highlight text
+    highlight = await db.highlights.find_one({"_id": ObjectId(highlight_id)})
+    selected_text = highlight["selected_text"] if highlight else "Unknown text"
+
+    # 3. Create exploration (excerpt) node
+    explore_id = f"explore-{_uid()}"
+    siblings = [n for n in nodes if n.get("parent_id") == page_node_id
+                and n.get("type") in (NodeType.EXPLORATION.value, NodeType.NOTE.value)]
+    x_offset = len(siblings) * 380
+    page_pos = page_node.get("position", {"x": 100, "y": 250})
+    now = _now()
+
+    explore_node = {
+        "id": explore_id,
+        "type": NodeType.EXPLORATION.value,
+        "position": {
+            "x": page_pos["x"] - 150 + x_offset,
+            "y": page_pos["y"] + 220,
+        },
+        "data": {
+            "label": _truncate(selected_text, 60),
+            "content": selected_text,
+            "content_type": ContentType.PLAIN.value,
+            "selected_text": selected_text,
+            "highlight_id": highlight_id,
+            "source_page": page_number,
+            "source_highlight_id": highlight_id,
+            "is_collapsed": False,
+            "status": "complete",
+            "tags": [],
+            "created_at": now,
+        },
+        "parent_id": page_node_id,
+        "children_ids": [],
+    }
+
+    nodes.append(explore_node)
+    _add_child(nodes, page_node_id, explore_id)
+    edges.append({
+        "id": f"edge-{_uid()}",
+        "source": page_node_id,
+        "target": explore_id,
+        "edge_type": "branch",
+    })
+
+    # 4. Call AI
+    context_before, context_after, section_title = await _get_paper_context(
+        paper_id, selected_text
+    )
+
     answer = await call_openrouter(
         selected_text=selected_text,
         question=question,
@@ -302,21 +274,14 @@ async def canvas_ai_query(
         ask_mode=ask_mode,
     )
 
-    # Create answer node
-    now = _now_iso()
-    new_node_id = _gen_node_id()
-
-    # Position below parent
-    parent_pos = parent_node.get("position", {"x": 400, "y": 200})
-    siblings = [n for n in nodes if n.get("parent_id") == parent_node_id]
-    offset_x = len(siblings) * 300
-
-    new_node = {
-        "id": new_node_id,
-        "type": NodeType.ANSWER.value,
+    # 5. Create AI response node
+    ai_id = f"ai-{_uid()}"
+    ai_node = {
+        "id": ai_id,
+        "type": NodeType.AI_RESPONSE.value,
         "position": {
-            "x": parent_pos["x"] + offset_x,
-            "y": parent_pos["y"] + 220,
+            "x": explore_node["position"]["x"],
+            "y": explore_node["position"]["y"] + 250,
         },
         "data": {
             "label": f"AI: {_truncate(question, 40)}",
@@ -324,10 +289,211 @@ async def canvas_ai_query(
             "content_type": ContentType.MARKDOWN.value,
             "question": question,
             "ask_mode": ask_mode,
-            "highlight_id": parent_data.get("highlight_id"),
-            "source": parent_data.get("source"),
+            "model": settings.openrouter_model,
+            "source_page": page_number,
+            "source_highlight_id": highlight_id,
             "is_collapsed": False,
+            "status": "complete",
             "tags": [],
+            "created_at": now,
+        },
+        "parent_id": explore_id,
+        "children_ids": [],
+    }
+
+    nodes.append(ai_node)
+    _add_child(nodes, explore_id, ai_id)
+
+    new_edge = {
+        "id": f"edge-{_uid()}",
+        "source": explore_id,
+        "target": ai_id,
+        "edge_type": "followup",
+    }
+    edges.append(new_edge)
+
+    # 6. Save
+    await _save_canvas(canvas["_id"], nodes, edges)
+
+    # 7. Link explanation to highlight
+    if highlight:
+        await db.highlights.update_one(
+            {"_id": ObjectId(highlight_id)},
+            {"$set": {"canvas_node_id": explore_id}},
+        )
+
+    return {
+        "canvas_id": str(canvas["_id"]),
+        "exploration_node": explore_node,
+        "ai_node": ai_node,
+        "page_node": page_node if page_created else None,
+        "new_edges": [
+            {"id": f"edge-{_uid()}", "source": page_node_id, "target": explore_id, "edge_type": "branch"},
+            new_edge,
+        ],
+    }
+
+
+# ────────────────────────────────────────────
+# Ask Follow-up (Branch from any node)
+# ────────────────────────────────────────────
+async def ask_followup(
+    paper_id: str,
+    user_id: str,
+    parent_node_id: str,
+    question: str,
+    ask_mode: str,
+) -> dict:
+    """
+    Branch a follow-up question from any existing node.
+    Returns {node, edge}.
+    """
+    canvas = await get_or_create_canvas(paper_id, user_id)
+    nodes = canvas["elements"]["nodes"]
+    edges = canvas["elements"]["edges"]
+
+    parent = _find_node(nodes, parent_node_id)
+    if not parent:
+        raise ValueError(f"Parent node {parent_node_id} not found in canvas")
+
+    parent_data = parent.get("data", {})
+    # FIX: Ensure content is a string before slicing. 
+    # (parent_data.get("content") or "") handles both missing keys AND explicit None values.
+    content_text = parent_data.get("content") or ""
+    print('test',parent_data)
+    # Get the best text to use as context for the AI call
+    selected_text = (
+        parent_data.get("selected_text")
+        or parent_data.get("question")
+        or content_text[:500]
+        or question  # fallback: use the question itself
+    )
+    source_page = parent_data.get("source_page")
+
+    # Build conversation history walking up the tree
+    conversation = _build_conversation_history(nodes, parent_node_id)
+
+    # Get paper context
+    context_before = ""
+    context_after = ""
+    section_title = ""
+    try:
+        context_before, context_after, section_title = await _get_paper_context(
+            paper_id, selected_text
+        )
+    except Exception:
+        pass  # Non-fatal: we can still answer without paper context
+
+    # Prepend conversation history to context
+    if conversation:
+        context_before = f"Previous conversation in this branch:\n{conversation}\n\n---\nPaper context:\n{context_before}"
+
+    # Call AI
+    try:
+        answer = await call_openrouter(
+            selected_text=selected_text[:2000],  # cap length
+            question=question,
+            context_before=context_before[:2000],
+            context_after=context_after[:1000],
+            section_title=section_title,
+            ask_mode=ask_mode,
+        )
+    except Exception as e:
+        # Return error node instead of crashing
+        answer = f"**Error generating response:** {str(e)}\n\nPlease try again."
+
+    # Position: below and offset from parent
+    parent_pos = parent.get("position", {"x": 400, "y": 400})
+    siblings = [n for n in nodes if n.get("parent_id") == parent_node_id]
+    x_offset = len(siblings) * 350
+    now = _now()
+
+    new_id = f"ai-{_uid()}"
+    new_node = {
+        "id": new_id,
+        "type": NodeType.AI_RESPONSE.value,
+        "position": {
+            "x": parent_pos["x"] - 100 + x_offset,
+            "y": parent_pos["y"] + 250,
+        },
+        "data": {
+            "label": f"AI: {_truncate(question, 40)}",
+            "content": answer,
+            "content_type": ContentType.MARKDOWN.value,
+            "question": question,
+            "ask_mode": ask_mode,
+            "model": settings.openrouter_model,
+            "source_page": source_page,
+            "source_highlight_id": parent_data.get("source_highlight_id"),
+            "is_collapsed": False,
+            "status": "complete",
+            "tags": [],
+            "created_at": now,
+        },
+        "parent_id": parent_node_id,
+        "children_ids": [],
+    }
+
+    new_edge = {
+        "id": f"edge-{_uid()}",
+        "source": parent_node_id,
+        "target": new_id,
+        "edge_type": "followup",
+        "label": _truncate(question, 25),
+    }
+
+    nodes.append(new_node)
+    _add_child(nodes, parent_node_id, new_id)
+    edges.append(new_edge)
+
+    await _save_canvas(canvas["_id"], nodes, edges)
+
+    return {"node": new_node, "edge": new_edge}
+
+# ────────────────────────────────────────────
+# Notes
+# ────────────────────────────────────────────
+
+async def add_note(
+    paper_id: str,
+    user_id: str,
+    content: str,
+    parent_node_id: Optional[str] = None,
+    position: Optional[dict] = None,
+) -> dict:
+    """Add a user note node to the canvas."""
+    canvas = await get_or_create_canvas(paper_id, user_id)
+    nodes = canvas["elements"]["nodes"]
+    edges = canvas["elements"]["edges"]
+    now = _now()
+
+    note_id = f"note-{_uid()}"
+
+    if position:
+        pos = position
+    elif parent_node_id:
+        parent = _find_node(nodes, parent_node_id)
+        parent_pos = parent.get("position", {"x": 400, "y": 400}) if parent else {"x": 400, "y": 400}
+        siblings = [n for n in nodes if n.get("parent_id") == parent_node_id and n.get("type") == NodeType.NOTE.value]
+        pos = {
+            "x": parent_pos["x"] + 350 + len(siblings) * 250,
+            "y": parent_pos["y"] + 50,
+        }
+    else:
+        pos = {"x": 800, "y": 300}
+
+    note_node = {
+        "id": note_id,
+        "type": NodeType.NOTE.value,
+        "position": pos,
+        "data": {
+            "label": _truncate(content, 40) or "Note",
+            "content": content,
+            "content_type": ContentType.PLAIN.value,
+            "is_collapsed": False,
+            "status": "complete",
+            "tags": ["note"],
+            "color": "#fbbf24",
             "created_at": now,
             "updated_at": now,
         },
@@ -335,248 +501,21 @@ async def canvas_ai_query(
         "children_ids": [],
     }
 
-    new_edge = {
-        "id": _gen_edge_id(),
-        "source": parent_node_id,
-        "target": new_node_id,
-        "label": ask_mode,
-        "edge_type": "followup",
-    }
+    nodes.append(note_node)
 
-    # Update parent's children_ids
-    for n in nodes:
-        if n["id"] == parent_node_id:
-            if "children_ids" not in n:
-                n["children_ids"] = []
-            n["children_ids"].append(new_node_id)
-            break
-
-    nodes.append(new_node)
-    edges.append(new_edge)
-
-    await db.canvases.update_one(
-        {"_id": canvas["_id"]},
-        {
-            "$set": {
-                "elements.nodes": nodes,
-                "elements.edges": edges,
-                "updated_at": datetime.utcnow(),
-            }
-        },
-    )
-
-    # Also store as a proper explanation in the DB
-    highlight_id = parent_data.get("highlight_id")
-    if highlight_id:
-        from papertree_api.config import get_settings
-
-        settings = get_settings()
-        exp_doc = {
-            "paper_id": paper_id,
-            "highlight_id": highlight_id,
-            "user_id": user_id,
-            "parent_id": None,
-            "question": question,
-            "answer_markdown": answer,
-            "model": settings.openrouter_model,
-            "ask_mode": ask_mode,
-            "created_at": datetime.utcnow(),
-            "is_pinned": False,
-            "is_resolved": False,
-            "canvas_node_id": new_node_id,
+    new_edge = None
+    if parent_node_id:
+        _add_child(nodes, parent_node_id, note_id)
+        new_edge = {
+            "id": f"edge-{_uid()}",
+            "source": parent_node_id,
+            "target": note_id,
+            "edge_type": "note",
         }
-        await db.explanations.insert_one(exp_doc)
+        edges.append(new_edge)
 
-    return new_node, new_edge
-
-
-# ────────────────────────────────────────────
-# Template Starters
-# ────────────────────────────────────────────
-
-async def create_template_canvas(
-    paper_id: str,
-    user_id: str,
-    template: str,
-) -> List[dict]:
-    """Create template nodes on the canvas."""
-    db = get_database()
-    canvas = await _get_or_create_canvas(paper_id, user_id)
-
-    paper = await db.papers.find_one({"_id": __import__("bson").ObjectId(paper_id)})
-    paper_title = paper["title"] if paper else "Paper"
-
-    nodes = canvas["elements"]["nodes"]
-    edges = canvas["elements"]["edges"]
-    now = _now_iso()
-
-    # Find paper root
-    paper_node_id = next(
-        (n["id"] for n in nodes if n.get("type") == "paper"), None
-    )
-
-    new_nodes = []
-    new_edges = []
-
-    if template == "summary_tree":
-        branches = [
-            ("Abstract & Goals", "What is this paper trying to solve?"),
-            ("Methods", "What methodology does this paper use?"),
-            ("Key Results", "What are the main findings?"),
-            ("Limitations", "What are the limitations of this work?"),
-            ("Future Work", "What directions does this paper suggest?"),
-        ]
-        for i, (label, question) in enumerate(branches):
-            nid = _gen_node_id()
-            new_nodes.append({
-                "id": nid,
-                "type": NodeType.QUESTION.value,
-                "position": {"x": 100 + i * 280, "y": 250},
-                "data": {
-                    "label": label,
-                    "content": question,
-                    "content_type": ContentType.PLAIN.value,
-                    "question": question,
-                    "is_collapsed": False,
-                    "tags": ["template"],
-                    "created_at": now,
-                    "updated_at": now,
-                },
-                "parent_id": paper_node_id,
-                "children_ids": [],
-            })
-            if paper_node_id:
-                new_edges.append({
-                    "id": _gen_edge_id(),
-                    "source": paper_node_id,
-                    "target": nid,
-                    "edge_type": "default",
-                })
-
-    elif template == "question_branch":
-        branches = [
-            "What problem does this solve?",
-            "How is this different from prior work?",
-            "What evidence supports the claims?",
-            "What would I do differently?",
-        ]
-        for i, q in enumerate(branches):
-            nid = _gen_node_id()
-            new_nodes.append({
-                "id": nid,
-                "type": NodeType.QUESTION.value,
-                "position": {"x": 100 + i * 300, "y": 250},
-                "data": {
-                    "label": _truncate(q, 35),
-                    "content": q,
-                    "content_type": ContentType.PLAIN.value,
-                    "question": q,
-                    "is_collapsed": False,
-                    "tags": ["template"],
-                    "created_at": now,
-                    "updated_at": now,
-                },
-                "parent_id": paper_node_id,
-                "children_ids": [],
-            })
-            if paper_node_id:
-                new_edges.append({
-                    "id": _gen_edge_id(),
-                    "source": paper_node_id,
-                    "target": nid,
-                    "edge_type": "default",
-                })
-
-    elif template == "critique_map":
-        categories = [
-            ("Strengths", "#22c55e"),
-            ("Weaknesses", "#ef4444"),
-            ("Questions", "#a855f7"),
-            ("Connections", "#3b82f6"),
-        ]
-        for i, (label, color) in enumerate(categories):
-            nid = _gen_node_id()
-            new_nodes.append({
-                "id": nid,
-                "type": NodeType.NOTE.value,
-                "position": {"x": 100 + i * 300, "y": 250},
-                "data": {
-                    "label": label,
-                    "content": f"Add {label.lower()} here...",
-                    "content_type": ContentType.PLAIN.value,
-                    "is_collapsed": False,
-                    "tags": ["template", label.lower()],
-                    "color": color,
-                    "created_at": now,
-                    "updated_at": now,
-                },
-                "parent_id": paper_node_id,
-                "children_ids": [],
-            })
-            if paper_node_id:
-                new_edges.append({
-                    "id": _gen_edge_id(),
-                    "source": paper_node_id,
-                    "target": nid,
-                    "edge_type": "default",
-                })
-
-    elif template == "concept_map":
-        # Create a single AI-powered node that will be expanded
-        nid = _gen_node_id()
-        new_nodes.append({
-            "id": nid,
-            "type": NodeType.NOTE.value,
-            "position": {"x": 400, "y": 250},
-            "data": {
-                "label": "Key Concepts",
-                "content": "Use 'Ask AI' on this node to auto-extract concepts from the paper.",
-                "content_type": ContentType.PLAIN.value,
-                "is_collapsed": False,
-                "tags": ["template", "concepts"],
-                "source": {"paper_id": paper_id},
-                "created_at": now,
-                "updated_at": now,
-            },
-            "parent_id": paper_node_id,
-            "children_ids": [],
-        })
-        if paper_node_id:
-            new_edges.append({
-                "id": _gen_edge_id(),
-                "source": paper_node_id,
-                "target": nid,
-                "edge_type": "default",
-            })
-
-    # Persist
-    if new_nodes:
-        all_nodes = nodes + new_nodes
-        all_edges = edges + new_edges
-
-        # Update paper node children
-        if paper_node_id:
-            for n in all_nodes:
-                if n["id"] == paper_node_id:
-                    if "children_ids" not in n:
-                        n["children_ids"] = []
-                    for nn in new_nodes:
-                        if nn.get("parent_id") == paper_node_id:
-                            n["children_ids"].append(nn["id"])
-                    break
-
-        await db.canvases.update_one(
-            {"paper_id": paper_id, "user_id": user_id},
-            {
-                "$set": {
-                    "elements.nodes": all_nodes,
-                    "elements.edges": all_edges,
-                    "updated_at": datetime.utcnow(),
-                }
-            },
-        )
-
-    return new_nodes
+    await _save_canvas(canvas["_id"], nodes, edges)
+    return {"node": note_node, "edge": new_edge}
 
 
 # ────────────────────────────────────────────
@@ -586,42 +525,68 @@ async def create_template_canvas(
 def _truncate(text: str, length: int = 50) -> str:
     if not text:
         return ""
-    return text[:length] + ("..." if len(text) > length else "")
+    text = text.replace("\n", " ").strip()
+    return text[:length] + ("…" if len(text) > length else "")
 
 
-async def _get_or_create_canvas(paper_id: str, user_id: str) -> dict:
-    """Get or create a paper-based canvas."""
+def _collect_branch_context(nodes: list, node_id: str, max_depth: int = 5) -> str:
+    """Walk up the parent chain to collect context."""
+    parts = []
+    current_id = node_id
+    depth = 0
+    while current_id and depth < max_depth:
+        node = _find_node(nodes, current_id)
+        if not node:
+            break
+        data = node.get("data", {})
+        content = data.get("content") or ""
+        if content:
+            parts.append(content[:300])
+        current_id = node.get("parent_id")
+        depth += 1
+    parts.reverse()
+    return "\n---\n".join(parts)
+
+
+def _build_conversation_history(nodes: list, leaf_id: str) -> str:
+    """Build Q&A conversation history from root to leaf."""
+    print('hereqqq')
+    chain = []
+    current_id = leaf_id
+    while current_id:
+        node = _find_node(nodes, current_id)
+        if not node:
+            break
+        data = node.get("data", {})
+        ntype = node.get("type", "")
+        if ntype == NodeType.AI_RESPONSE.value:
+            q = data.get("question", "")
+            a = _truncate(data.get("content") or "", 300)
+            chain.append(f"Q: {q}\nA: {a}")
+        elif ntype == NodeType.EXPLORATION.value:
+            chain.append(f"Highlighted: {_truncate(data.get('selected_text', ''), 200)}")
+        current_id = node.get("parent_id")
+    chain.reverse()
+    return "\n\n".join(chain)
+
+
+async def _get_paper_context(paper_id: str, selected_text: str):
+    """Get surrounding context from paper text."""
     db = get_database()
-    canvas = await db.canvases.find_one({"paper_id": paper_id, "user_id": user_id})
-    if not canvas:
-        from bson import ObjectId
-        paper = await db.papers.find_one({"_id": ObjectId(paper_id)})
-        paper_title = paper["title"] if paper else "Paper"
-        now = datetime.utcnow()
-        canvas_doc = {
-            "paper_id": paper_id,
-            "user_id": user_id,
-            "elements": {
-                "nodes": [{
-                    "id": f"paper-{paper_id}",
-                    "type": "paper",
-                    "position": {"x": 400, "y": 50},
-                    "data": {
-                        "label": paper_title,
-                        "content": None,
-                        "content_type": "plain",
-                        "is_collapsed": False,
-                        "tags": [],
-                        "created_at": now.isoformat(),
-                    },
-                    "parent_id": None,
-                    "children_ids": [],
-                }],
-                "edges": [],
-            },
-            "updated_at": now,
-        }
-        result = await db.canvases.insert_one(canvas_doc)
-        canvas_doc["_id"] = result.inserted_id
-        canvas = canvas_doc
-    return canvas
+    paper = await db.papers.find_one({"_id": ObjectId(paper_id)})
+    if not paper:
+        return "", "", ""
+
+    paper_text = paper.get("extracted_text", "")
+    context_before = ""
+    context_after = ""
+    section_title = ""
+
+    if paper_text and selected_text[:100] in paper_text:
+        idx = paper_text.find(selected_text[:100])
+        if idx >= 0:
+            context_before = paper_text[max(0, idx - 500):idx]
+            end = idx + len(selected_text)
+            context_after = paper_text[end:end + 500]
+
+    return context_before, context_after, section_title

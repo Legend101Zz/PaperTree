@@ -1,100 +1,101 @@
 // apps/web/src/components/canvas/PaperCanvas.tsx
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import ReactFlow, {
-    Node,
-    Edge,
-    useNodesState,
-    useEdgesState,
-    addEdge,
-    Connection,
-    Background,
-    Controls,
-    MiniMap,
-    NodeTypes,
-    Panel,
-    useReactFlow,
+    Node, Edge, useNodesState, useEdgesState, addEdge, Connection,
+    Background, Controls, MiniMap, NodeTypes, Panel, useReactFlow,
     BackgroundVariant,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { RichCanvasNode } from './RichCanvasNode';
-import { useCanvasStore } from '@/store/canvasStore';
+
+import { PageSuperNode } from './nodes/PageSuperNode';
+import { ExplorationNode } from './nodes/ExplorationNode';
+import { AIResponseNode } from './nodes/AIResponseNode';
+import { NoteNode } from './nodes/NoteNode';
+import { InlineAskInput } from './nodes/InlineAskInput';
+
 import { canvasApi } from '@/lib/api';
-
-import { AskMode, CanvasNode as CanvasNodeType, CanvasEdge as CanvasEdgeType, CanvasNodeType as NodeTypeEnum } from '@/types';
+import { useCanvasStore } from '@/store/canvasStore';
+import type {
+    CanvasNode as CanvasNodeType,
+    CanvasEdge as CanvasEdgeType,
+    AskMode,
+    CanvasNodeType as NodeTypeEnum,
+} from '@/types/canvas';
 import {
-    Save, RefreshCw, Layout, Trash2, Plus, Loader2,
-    ZoomIn, ZoomOut, Maximize, Grid3X3
+    Save, RefreshCw, Layout, Plus, Loader2, Maximize,
+    Grid3X3, StickyNote,
 } from 'lucide-react';
-import { CanvasAIPanel } from './CanvasAIPanel';
-import { CanvasToolbar } from './CanvasToolbar';
 
+// ──── Node type registry ────
+const nodeTypes: NodeTypes = {
+    paper: AIResponseNode,       // reuse for paper root
+    page_super: PageSuperNode,
+    exploration: ExplorationNode,
+    ai_response: AIResponseNode,
+    note: NoteNode,
+};
 
+// ──── Converters ────
+function toReactFlowNode(
+    node: CanvasNodeType,
+    allNodes: CanvasNodeType[],
+    callbacks: {
+        onToggleCollapse: (id: string) => void;
+        onDelete: (id: string) => void;
+        onNavigateToSource: (node: CanvasNodeType) => void;
+        onAskFollowup: (nodeId: string, pos: { x: number; y: number }) => void;
+        onAddNote: (nodeId: string) => void;
+        onUpdateNoteContent: (nodeId: string, content: string) => void;
+    },
+): Node {
+    const childCount = allNodes.filter(n => n.parent_id === node.id).length;
 
-// Convert our CanvasNode to ReactFlow Node
-function toReactFlowNode(node: CanvasNodeType, callbacks: {
-    onToggleCollapse: (id: string) => void;
-    onDelete: (id: string) => void;
-    onNavigateToSource: (node: CanvasNodeType) => void;
-}): Node {
     return {
         id: node.id,
-        type: 'richNode',
+        type: node.type,
         position: node.position,
         data: {
             ...node.data,
-            nodeType: node.type,
+            children_count: childCount,
             onToggleCollapse: () => callbacks.onToggleCollapse(node.id),
             onDelete: () => callbacks.onDelete(node.id),
             onNavigateToSource: () => callbacks.onNavigateToSource(node),
+            onAskFollowup: () => {
+                // Calculate position near the node
+                callbacks.onAskFollowup(node.id, {
+                    x: node.position.x + 200,
+                    y: node.position.y + 100,
+                });
+            },
+            onAddNote: () => callbacks.onAddNote(node.id),
+            onUpdateContent: (content: string) => callbacks.onUpdateNoteContent(node.id, content),
         },
     };
 }
 
-// Convert ReactFlow Node back to our format
-function fromReactFlowNode(node: Node, originalNode?: CanvasNodeType): CanvasNodeType {
-    return {
-        id: node.id,
-        type: (originalNode?.type || 'note') as NodeTypeEnum,
-        position: node.position,
-        data: {
-            label: node.data.label || 'Untitled',
-            content: node.data.content,
-            content_type: node.data.content_type || 'markdown',
-            excerpt: node.data.excerpt,
-            question: node.data.question,
-            ask_mode: node.data.ask_mode,
-            source: node.data.source,
-            highlight_id: node.data.highlight_id,
-            explanation_id: node.data.explanation_id,
-            is_collapsed: node.data.is_collapsed || false,
-            tags: node.data.tags || [],
-            color: node.data.color,
-            created_at: node.data.created_at,
-            updated_at: node.data.updated_at,
-        },
-        parent_id: originalNode?.parent_id,
-        children_ids: originalNode?.children_ids || [],
-    };
-}
-
-// Convert our Edge to ReactFlow Edge
 function toReactFlowEdge(edge: CanvasEdgeType): Edge {
+    const isFollowup = edge.edge_type === 'followup';
+    const isNote = edge.edge_type === 'note';
+    const isBranch = edge.edge_type === 'branch';
+
     return {
         id: edge.id,
         source: edge.source,
         target: edge.target,
         label: edge.label,
-        type: edge.edge_type === 'followup' ? 'smoothstep' : 'default',
-        animated: edge.edge_type === 'followup',
+        type: isFollowup ? 'smoothstep' : 'default',
+        animated: isFollowup,
         style: {
-            strokeWidth: edge.edge_type === 'followup' ? 2 : 1,
-            stroke: edge.edge_type === 'followup' ? '#06b6d4' : '#94a3b8',
+            strokeWidth: isFollowup ? 2 : 1,
+            stroke: isFollowup ? '#3b82f6' : isNote ? '#eab308' : isBranch ? '#f59e0b' : '#94a3b8',
+            strokeDasharray: isNote ? '5 5' : undefined,
         },
     };
 }
 
+// ──── Main component ────
 interface PaperCanvasProps {
     paperId: string;
     initialNodes: CanvasNodeType[];
@@ -103,257 +104,195 @@ interface PaperCanvasProps {
     onNodeClick: (nodeId: string, nodeType: string, data: any) => void;
 }
 
-// Define node types
-const nodeTypes: NodeTypes = {
-    richNode: RichCanvasNode,
-};
-
 export function PaperCanvas({
-    paperId,
-    initialNodes,
-    initialEdges,
-    onSave,
-    onNodeClick,
+    paperId, initialNodes, initialEdges, onSave, onNodeClick,
 }: PaperCanvasProps) {
-    const { fitView, zoomIn, zoomOut, setCenter } = useReactFlow();
+    const { fitView, project } = useReactFlow();
     const [isSaving, setIsSaving] = useState(false);
     const [isLayouting, setIsLayouting] = useState(false);
-    // AI Panel state
-    const [aiPanelState, setAiPanelState] = useState<{
+
+    // Ask input state
+    const [askState, setAskState] = useState<{
         nodeId: string;
-        nodeLabel: string;
         position: { x: number; y: number };
     } | null>(null);
-    const [isAiQuerying, setIsAiQuerying] = useState(false);
-    const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
+    const [isAsking, setIsAsking] = useState(false);
 
     // Store
-    const storeNodes = useCanvasStore((s) => s.nodes);
-    const storeEdges = useCanvasStore((s) => s.edges);
-    const setStoreNodes = useCanvasStore((s) => s.setNodes);
-    const setStoreEdges = useCanvasStore((s) => s.setEdges);
-    const toggleNodeCollapse = useCanvasStore((s) => s.toggleNodeCollapse);
-    const removeNode = useCanvasStore((s) => s.removeNode);
-    const isDirty = useCanvasStore((s) => s.isDirty);
-    const markSaved = useCanvasStore((s) => s.markSaved);
+    const storeNodes = useCanvasStore(s => s.nodes);
+    const storeEdges = useCanvasStore(s => s.edges);
+    const setStoreNodes = useCanvasStore(s => s.setNodes);
+    const setStoreEdges = useCanvasStore(s => s.setEdges);
+    const toggleNodeCollapse = useCanvasStore(s => s.toggleNodeCollapse);
+    const removeNode = useCanvasStore(s => s.removeNode);
+    const isDirty = useCanvasStore(s => s.isDirty);
+    const markSaved = useCanvasStore(s => s.markSaved);
 
-    // Initialize store from props
+    // Init from props
     useEffect(() => {
         setStoreNodes(initialNodes);
         setStoreEdges(initialEdges);
     }, [initialNodes, initialEdges, setStoreNodes, setStoreEdges]);
 
-    // Callbacks for nodes
-    const nodeCallbacks = useMemo(() => ({
-        onToggleCollapse: (id: string) => {
-            toggleNodeCollapse(id);
-        },
+    // ──── Callbacks ────
+    const callbacks = useMemo(() => ({
+        onToggleCollapse: (id: string) => toggleNodeCollapse(id),
         onDelete: (id: string) => {
-            if (confirm('Delete this node and all its children?')) {
+            if (confirm('Delete this node and its children?')) {
+                // Delete on backend
+                canvasApi.deleteNode(paperId, id).catch(console.error);
                 removeNode(id);
             }
         },
         onNavigateToSource: (node: CanvasNodeType) => {
-            if (node.data.source) {
-                onNodeClick(node.id, node.type, node.data);
+            const data = node.data;
+            if (data.source_highlight_id) {
+                onNodeClick(node.id, node.type, { highlight_id: data.source_highlight_id });
+            } else if (data.source_page !== undefined) {
+                onNodeClick(node.id, node.type, { source: { page_number: data.source_page } });
             }
         },
-    }), [toggleNodeCollapse, removeNode, onNodeClick]);
+        onAskFollowup: (nodeId: string, pos: { x: number; y: number }) => {
+            setAskState({ nodeId, position: pos });
+        },
+        onAddNote: async (nodeId: string) => {
+            try {
+                const result = await canvasApi.addNote(paperId, {
+                    content: '',
+                    parent_node_id: nodeId,
+                });
+                const store = useCanvasStore.getState();
+                store.addNode(result.node as CanvasNodeType);
+                if (result.edge) store.addEdge(result.edge as CanvasEdgeType);
+            } catch (e) {
+                console.error('Failed to add note:', e);
+            }
+        },
+        onUpdateNoteContent: async (nodeId: string, content: string) => {
+            const store = useCanvasStore.getState();
+            store.updateNodeData(nodeId, { content, label: content.slice(0, 40) || 'Note' });
+            // Save to backend (debounced by auto-save)
+        },
+    }), [paperId, toggleNodeCollapse, removeNode, onNodeClick]);
 
-    // Convert to ReactFlow format
-    const rfNodes = useMemo(() =>
-        storeNodes.map((n) => toReactFlowNode(n, nodeCallbacks)),
-        [storeNodes, nodeCallbacks]
+    // ──── ReactFlow nodes/edges ────
+    const rfNodes = useMemo(
+        () => storeNodes.map(n => toReactFlowNode(n, storeNodes, callbacks)),
+        [storeNodes, callbacks],
+    );
+    const rfEdges = useMemo(
+        () => storeEdges.map(toReactFlowEdge),
+        [storeEdges],
     );
 
-    const rfEdges = useMemo(() =>
-        storeEdges.map(toReactFlowEdge),
-        [storeEdges]
-    );
-
-    // ReactFlow state
     const [nodes, setNodes, onNodesChange] = useNodesState(rfNodes);
     const [edges, setEdges, onEdgesChange] = useEdgesState(rfEdges);
 
-    // Sync ReactFlow state with store
-    useEffect(() => {
-        setNodes(rfNodes);
-    }, [rfNodes, setNodes]);
+    useEffect(() => { setNodes(rfNodes); }, [rfNodes, setNodes]);
+    useEffect(() => { setEdges(rfEdges); }, [rfEdges, setEdges]);
 
-    useEffect(() => {
-        setEdges(rfEdges);
-    }, [rfEdges, setEdges]);
-
-    // Handle connections
     const onConnect = useCallback(
-        (params: Connection) => {
-            setEdges((eds) => addEdge(params, eds));
-        },
-        [setEdges]
+        (params: Connection) => setEdges(eds => addEdge(params, eds)),
+        [setEdges],
     );
 
-    // Handle node position changes
     const onNodeDragStop = useCallback(
         (_: React.MouseEvent, node: Node) => {
-            const updatedNodes = storeNodes.map((n) =>
-                n.id === node.id ? { ...n, position: node.position } : n
-            );
-            setStoreNodes(updatedNodes);
+            useCanvasStore.getState().updateNodePosition(node.id, node.position);
         },
-        [storeNodes, setStoreNodes]
+        [],
     );
 
-    // Save to backend
+    // ──── Ask follow-up handler ────
+    const handleAsk = useCallback(async (parentNodeId: string, question: string, mode: AskMode) => {
+        setIsAsking(true);
+        try {
+            const result = await canvasApi.ask(paperId, {
+                parent_node_id: parentNodeId,
+                question,
+                ask_mode: mode,
+            });
+            const store = useCanvasStore.getState();
+            store.addNode(result.node as CanvasNodeType);
+            store.addEdge(result.edge as CanvasEdgeType);
+            setAskState(null);
+        } catch (e) {
+            console.error('Ask failed:', e);
+            alert('AI query failed. Please try again.');
+        } finally {
+            setIsAsking(false);
+        }
+    }, [paperId]);
+
+    // ──── Right-click → ask ────
+    const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
+        event.preventDefault();
+        if (node.type === 'note') return;
+        setAskState({
+            nodeId: node.id,
+            position: { x: event.clientX, y: event.clientY },
+        });
+    }, []);
+
+    // ──── Save ────
     const handleSave = useCallback(async () => {
         setIsSaving(true);
         try {
-            // Convert current ReactFlow nodes back
-            const canvasNodes = nodes.map((n) => {
-                const originalNode = storeNodes.find((sn) => sn.id === n.id);
-                return fromReactFlowNode(n, originalNode);
+            const store = useCanvasStore.getState();
+            // Merge positions from ReactFlow back into store
+            const mergedNodes = store.nodes.map(sn => {
+                const rfNode = nodes.find(n => n.id === sn.id);
+                return rfNode ? { ...sn, position: rfNode.position } : sn;
             });
 
-            const canvasEdges: CanvasEdgeType[] = edges.map((e) => ({
-                id: e.id,
-                source: e.source,
-                target: e.target,
-                label: e.label as string | undefined,
-                edge_type: e.animated ? 'followup' : 'default',
-            }));
-
-            await canvasApi.update(paperId, { nodes: canvasNodes, edges: canvasEdges });
+            await canvasApi.save(paperId, { nodes: mergedNodes, edges: store.edges });
             markSaved();
-            onSave(canvasNodes, canvasEdges);
-        } catch (error) {
-            console.error('Failed to save canvas:', error);
-            alert('Failed to save. Please try again.');
+            onSave(mergedNodes, store.edges);
+        } catch (e) {
+            console.error('Save failed:', e);
         } finally {
             setIsSaving(false);
         }
-    }, [nodes, edges, storeNodes, paperId, markSaved, onSave]);
+    }, [paperId, nodes, markSaved, onSave]);
 
-    // Auto-save on changes (debounced)
+    // Auto-save
     useEffect(() => {
         if (!isDirty) return;
-
-        const timeout = setTimeout(() => {
-            handleSave();
-        }, 2000);
-
-        return () => clearTimeout(timeout);
+        const t = setTimeout(handleSave, 3000);
+        return () => clearTimeout(t);
     }, [isDirty, handleSave]);
 
-    // Auto-layout
-    const handleAutoLayout = useCallback(async (algorithm: 'tree' | 'grid' = 'tree') => {
+    // ──── Layout ────
+    const handleLayout = useCallback(async (algo: 'tree' | 'grid' = 'tree') => {
         setIsLayouting(true);
         try {
-            await canvasApi.autoLayout(paperId, algorithm);
-            // Refetch canvas
+            await canvasApi.autoLayout(paperId, algo);
             const updated = await canvasApi.get(paperId);
-            setStoreNodes(updated.elements.nodes);
-            setStoreEdges(updated.elements.edges);
-
-            // Fit view after layout
+            setStoreNodes(updated.elements.nodes as CanvasNodeType[]);
+            setStoreEdges(updated.elements.edges as CanvasEdgeType[]);
             setTimeout(() => fitView({ padding: 0.2 }), 100);
-        } catch (error) {
-            console.error('Failed to auto-layout:', error);
+        } catch (e) {
+            console.error('Layout failed:', e);
         } finally {
             setIsLayouting(false);
         }
     }, [paperId, setStoreNodes, setStoreEdges, fitView]);
 
-    // Handle node click
-    const handleNodeClick = useCallback(
-        (_: React.MouseEvent, node: Node) => {
-            const originalNode = storeNodes.find((n) => n.id === node.id);
-            if (originalNode) {
-                onNodeClick(node.id, originalNode.type, originalNode.data);
-            }
-        },
-        [storeNodes, onNodeClick]
-    );
-
-    // Handle right-click on node → show AI panel
-    const handleNodeContextMenu = useCallback(
-        (event: React.MouseEvent, node: Node) => {
-            event.preventDefault();
-            setAiPanelState({
-                nodeId: node.id,
-                nodeLabel: node.data.label || 'Node',
-                position: { x: event.clientX, y: event.clientY },
+    // ──── Add standalone note ────
+    const handleAddNote = useCallback(async () => {
+        try {
+            const result = await canvasApi.addNote(paperId, {
+                content: 'New note...',
+                position: { x: 600, y: 300 },
             });
-        },
-        []
-    );
-    // Handle AI query from panel
-    const handleAIQuery = useCallback(
-        async (question: string, askMode: AskMode) => {
-            if (!aiPanelState || isAiQuerying) return;
-            setIsAiQuerying(true);
-            try {
-                const result = await canvasApi.aiQuery(paperId, {
-                    parent_node_id: aiPanelState.nodeId,
-                    question,
-                    ask_mode: askMode,
-                    include_paper_context: true,
-                });
-
-                // Add new node + edge to store
-                const store = useCanvasStore.getState();
-                store.addNode(result.node);
-                store.addEdge(result.edge);
-
-                setAiPanelState(null);
-            } catch (error) {
-                console.error('AI query failed:', error);
-                alert('AI query failed. Please try again.');
-            } finally {
-                setIsAiQuerying(false);
-            }
-        },
-        [aiPanelState, isAiQuerying, paperId]
-    );
-
-    // Handle template creation
-    const handleCreateTemplate = useCallback(
-        async (template: 'summary_tree' | 'question_branch' | 'critique_map' | 'concept_map') => {
-            setIsCreatingTemplate(true);
-            try {
-                await canvasApi.createTemplate(paperId, template);
-                // Refetch canvas
-                const updated = await canvasApi.get(paperId);
-                setStoreNodes(updated.elements.nodes);
-                setStoreEdges(updated.elements.edges);
-                setTimeout(() => fitView({ padding: 0.2 }), 100);
-            } catch (error) {
-                console.error('Template creation failed:', error);
-            } finally {
-                setIsCreatingTemplate(false);
-            }
-        },
-        [paperId, setStoreNodes, setStoreEdges, fitView]
-    );
-
-    // Handle adding a blank note node
-    const handleAddNote = useCallback(() => {
-        const store = useCanvasStore.getState();
-        const newNode: CanvasNodeType = {
-            id: `node_${Date.now().toString(36)}`,
-            type: 'note',
-            position: { x: 200 + Math.random() * 400, y: 300 + Math.random() * 200 },
-            data: {
-                label: 'New Note',
-                content: 'Click to edit...',
-                content_type: 'plain',
-                is_collapsed: false,
-                tags: [],
-            },
-        };
-        store.addNode(newNode);
-    }, []);
+            useCanvasStore.getState().addNode(result.node as CanvasNodeType);
+        } catch (e) {
+            console.error('Failed to add note:', e);
+        }
+    }, [paperId]);
 
     return (
-        <div className="w-full h-full">
+        <div className="w-full h-full relative">
             <ReactFlow
                 nodes={nodes}
                 edges={edges}
@@ -361,50 +300,25 @@ export function PaperCanvas({
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
                 onNodeDragStop={onNodeDragStop}
-                onNodeClick={handleNodeClick}
+                onNodeContextMenu={handleNodeContextMenu}
+                onClick={() => setAskState(null)}
+                onNodeClick={(_, node) => {
+                    const orig = storeNodes.find(n => n.id === node.id);
+                    if (orig) onNodeClick(node.id, orig.type, orig.data);
+                }}
                 nodeTypes={nodeTypes}
                 fitView
                 fitViewOptions={{ padding: 0.2 }}
                 minZoom={0.1}
                 maxZoom={2}
                 className="bg-gray-50 dark:bg-gray-950"
-                proOptions={{ hideAttribution: true }}
             >
                 <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
-
-                <Controls showZoom={false} showFitView={false} showInteractive={false}>
-                    <button
-                        onClick={() => zoomIn()}
-                        className="react-flow__controls-button"
-                        title="Zoom in"
-                    >
-                        <ZoomIn className="w-4 h-4" />
-                    </button>
-                    <button
-                        onClick={() => zoomOut()}
-                        className="react-flow__controls-button"
-                        title="Zoom out"
-                    >
-                        <ZoomOut className="w-4 h-4" />
-                    </button>
-                    <button
-                        onClick={() => fitView({ padding: 0.2 })}
-                        className="react-flow__controls-button"
-                        title="Fit view"
-                    >
+                <Controls showInteractive={false}>
+                    <button onClick={() => fitView({ padding: 0.2 })} className="react-flow__controls-button" title="Fit view">
                         <Maximize className="w-4 h-4" />
                     </button>
                 </Controls>
-
-                {/* Template toolbar */}
-                <Panel position="top-center" className="flex gap-2">
-                    <CanvasToolbar
-                        onCreateTemplate={handleCreateTemplate}
-                        onAddNote={handleAddNote}
-                        isCreating={isCreatingTemplate}
-                    />
-                </Panel>
-
                 <MiniMap
                     nodeStrokeWidth={3}
                     zoomable
@@ -413,90 +327,65 @@ export function PaperCanvas({
                 />
 
                 {/* Top toolbar */}
-                <Panel position="top-right" className="flex items-center gap-2">
-                    {/* Save status */}
-                    <div className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 ${isDirty
+                <Panel position="top-center" className="flex items-center gap-2">
+                    <button
+                        onClick={handleAddNote}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 border border-yellow-300 dark:border-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors shadow-sm"
+                    >
+                        <StickyNote className="w-3.5 h-3.5" />
+                        Note
+                    </button>
+                    <button
+                        onClick={() => handleLayout('tree')}
+                        disabled={isLayouting}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors shadow-sm"
+                    >
+                        {isLayouting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Layout className="w-3.5 h-3.5" />}
+                        Auto Layout
+                    </button>
+                    <button
+                        onClick={() => handleLayout('grid')}
+                        disabled={isLayouting}
+                        className="p-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors shadow-sm"
+                        title="Grid layout"
+                    >
+                        <Grid3X3 className="w-3.5 h-3.5" />
+                    </button>
+                </Panel>
+
+                {/* Save indicator */}
+                <Panel position="top-right">
+                    <div className={`px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 ${isDirty
                         ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
                         : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
                         }`}>
                         {isSaving ? (
-                            <>
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                <span>Saving...</span>
-                            </>
+                            <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving</>
                         ) : isDirty ? (
-                            <>
-                                <div className="w-2 h-2 rounded-full bg-amber-500" />
-                                <span>Unsaved</span>
-                            </>
+                            <><Save className="w-3.5 h-3.5" /> Unsaved</>
                         ) : (
-                            <>
-                                <div className="w-2 h-2 rounded-full bg-green-500" />
-                                <span>Saved</span>
-                            </>
+                            '✓ Saved'
                         )}
-                    </div>
-
-                    {/* Manual save */}
-                    <button
-                        onClick={handleSave}
-                        disabled={isSaving || !isDirty}
-                        className="p-2 bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 
-                            hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
-                        title="Save now"
-                    >
-                        <Save className="w-4 h-4" />
-                    </button>
-
-                    {/* Auto-layout */}
-                    <div className="flex items-center bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 overflow-hidden">
-                        <button
-                            onClick={() => handleAutoLayout('tree')}
-                            disabled={isLayouting}
-                            className="p-2 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 border-r border-gray-200 dark:border-gray-700"
-                            title="Tree layout"
-                        >
-                            {isLayouting ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                                <Layout className="w-4 h-4" />
-                            )}
-                        </button>
-                        <button
-                            onClick={() => handleAutoLayout('grid')}
-                            disabled={isLayouting}
-                            className="p-2 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
-                            title="Grid layout"
-                        >
-                            <Grid3X3 className="w-4 h-4" />
-                        </button>
                     </div>
                 </Panel>
 
-                {/* Stats panel */}
+                {/* Node count */}
                 <Panel position="bottom-left" className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 px-3 py-2">
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                    <div className="text-xs text-gray-500">
                         {nodes.length} nodes · {edges.length} connections
                     </div>
                 </Panel>
             </ReactFlow>
-            {/* AI Panel overlay */}
-            {aiPanelState && (
-                <div
-                    className="fixed z-50"
-                    style={{
-                        top: Math.min(aiPanelState.position.y, window.innerHeight - 350),
-                        left: Math.min(aiPanelState.position.x, window.innerWidth - 340),
-                    }}
-                >
-                    <CanvasAIPanel
-                        nodeId={aiPanelState.nodeId}
-                        nodeLabel={aiPanelState.nodeLabel}
-                        onQuery={handleAIQuery}
-                        onClose={() => setAiPanelState(null)}
-                        isQuerying={isAiQuerying}
-                    />
-                </div>
+
+            {/* Inline ask overlay */}
+            {askState && (
+                <InlineAskInput
+                    parentNodeId={askState.nodeId}
+                    onAsk={handleAsk}
+                    onClose={() => setAskState(null)}
+                    isLoading={isAsking}
+                    position={askState.position}
+                />
             )}
         </div>
     );

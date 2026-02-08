@@ -25,7 +25,7 @@ async def connect_to_mongo():
     await db.explanations.create_index([("canvas_node_id", 1)])  # NEW: For canvas sync
     await db.canvases.create_index([("paper_id", 1), ("user_id", 1)], unique=True)
     
-        # Create indexes for highlights
+    # Create indexes for highlights
     await db.highlights.create_index([("user_id", 1), ("book_id", 1)])
     await db.highlights.create_index([("user_id", 1), ("position.page_number", 1)])
     await db.highlights.create_index([("text", "text")])  # Text search
@@ -37,6 +37,7 @@ async def connect_to_mongo():
     await db.canvas_nodes.create_index([("canvas_id", 1)])
     await db.canvas_nodes.create_index([("user_id", 1)])
     await db.canvas_nodes.create_index([("highlight_id", 1)])
+    
      # Create indexes for explanations
     await db.highlight_explanations.create_index([("highlight_id", 1), ("mode", 1)])
     

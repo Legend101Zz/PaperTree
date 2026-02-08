@@ -3,7 +3,45 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Literal, Optional
 
+from bson import ObjectId
 from pydantic import BaseModel, Field
+
+
+class PyObjectId(ObjectId):
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v):
+        if not ObjectId.is_valid(v):
+            raise ValueError("Invalid ObjectId")
+        return ObjectId(v)
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, schema):
+        schema.update(type="string")
+        return schema
+
+
+
+HighlightCategory = Literal[
+    "key_finding", 
+    "question", 
+    "methodology", 
+    "definition", 
+    "important", 
+    "review_later"
+]
+
+CATEGORY_COLORS = {
+    "key_finding": "#22c55e",      # green
+    "question": "#f59e0b",          # amber
+    "methodology": "#3b82f6",       # blue
+    "definition": "#8b5cf6",        # purple
+    "important": "#ef4444",         # red
+    "review_later": "#6b7280",      # gray
+}
 
 
 class HighlightCategory(str, Enum):
@@ -45,25 +83,6 @@ class TextAnchor(BaseModel):
     section_path: List[str] = []
 
 
-class HighlightCreate(BaseModel):
-    """Schema for creating a highlight."""
-    mode: Literal["pdf", "book"]
-    selected_text: str
-    page_number: Optional[int] = None
-    section_id: Optional[str] = None
-    rects: Optional[List[Rect]] = None
-    anchor: Optional[TextAnchor] = None
-    category: HighlightCategory = HighlightCategory.NONE
-    color: Optional[str] = None  # Override color; defaults to category color
-    note: Optional[str] = None   # User's personal note
-
-
-class HighlightUpdate(BaseModel):
-    """Schema for updating a highlight."""
-    category: Optional[HighlightCategory] = None
-    color: Optional[str] = None
-    note: Optional[str] = None
-
 
 class HighlightResponse(BaseModel):
     """Schema for highlight response."""
@@ -82,7 +101,72 @@ class HighlightResponse(BaseModel):
     created_at: datetime
 
 
+class HighlightPosition(BaseModel):
+    page_number: int
+    rects: List[dict]  # [{x, y, width, height}] normalized 0-1
+    text_start: int
+    text_end: int
+
+class HighlightCreate(BaseModel):
+    book_id: str
+    text: str
+    position: HighlightPosition
+    category: HighlightCategory = "important"
+    note: Optional[str] = None
+    tags: List[str] = []
+
+class HighlightUpdate(BaseModel):
+    category: Optional[HighlightCategory] = None
+    note: Optional[str] = None
+    tags: Optional[List[str]] = None
+
 class HighlightInDB(BaseModel):
+    id: str = Field(alias="_id")
+    user_id: str
+    book_id: str
+    text: str
+    position: HighlightPosition
+    category: HighlightCategory
+    color: str
+    note: Optional[str] = None
+    tags: List[str] = []
+    explanation_id: Optional[str] = None  # Link to AI explanation
+    canvas_node_id: Optional[str] = None  # Link to canvas node
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        populate_by_name = True
+        json_encoders = {ObjectId: str}
+
+class HighlightExplanation(BaseModel):
+    id: str = Field(alias="_id")
+    highlight_id: str
+    user_id: str
+    book_id: str
+    mode: str  # "explain", "summarize", "critique", "define", "derive"
+    prompt: str
+    response: str
+    model_name: str
+    model_metadata: dict
+    tokens_used: int
+    created_at: datetime
+
+    class Config:
+        populate_by_name = True
+
+class HighlightExplanationCreate(BaseModel):
+    highlight_id: str
+    mode: str = "explain"
+    custom_prompt: Optional[str] = None
+
+class HighlightSearchQuery(BaseModel):
+    book_id: Optional[str] = None
+    category: Optional[HighlightCategory] = None
+    tags: Optional[List[str]] = None
+    search_text: Optional[str] = None
+    page_start: Optional[int] = None
+    page_end: Optional[int] = None
     """Internal highlight model."""
     paper_id: str
     user_id: str

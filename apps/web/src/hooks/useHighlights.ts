@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { canvasHighlightsApi as highlightsApi } from "@/lib/api";
+import { highlightsApi } from "@/lib/api";
 import type {
   Highlight,
   CreateHighlightInput,

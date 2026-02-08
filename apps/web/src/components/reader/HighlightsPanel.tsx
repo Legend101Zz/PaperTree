@@ -9,10 +9,11 @@ import {
     HighlightCategory,
     HIGHLIGHT_CATEGORY_LABELS,
     HIGHLIGHT_CATEGORY_COLORS,
+    AskMode,
 } from '@/types';
 import {
     ChevronUp, ChevronDown, MessageCircle, Pin, Check,
-    Trash2, ExternalLink, Sparkles, FileText, Search, Filter, X
+    Trash2, ExternalLink, Sparkles, FileText, Search, Filter, X, GitBranch
 } from 'lucide-react';
 
 interface HighlightsPanelProps {
@@ -23,6 +24,13 @@ interface HighlightsPanelProps {
     onGoToPdf: (page: number) => void;
     onExportToCanvas?: (highlightIds: string[]) => void;
     onUpdateHighlight?: (highlightId: string, data: { category?: HighlightCategory }) => void;
+    onExploreInCanvas?: (
+        highlightId: string,
+        selectedText: string,
+        pageNumber: number,
+        question?: string,
+        askMode?: AskMode,
+    ) => void;
     isExporting?: boolean;
 }
 
@@ -65,19 +73,18 @@ export function HighlightsPanel({
     onGoToPdf,
     onExportToCanvas,
     onUpdateHighlight,
+    onExploreInCanvas,
     isExporting = false,
 }: HighlightsPanelProps) {
     const [isExpanded, setIsExpanded] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [searchQuery, setSearchQuery] = useState('');
     const [filterCategory, setFilterCategory] = useState<HighlightCategory | 'all'>('all');
-    const [showFilters, setShowFilters] = useState(false);
 
     const settings = useReaderStore((state) => state.settings);
     const activeHighlightId = useReaderStore((state) => state.activeHighlightId);
     const colors = getThemeColors(settings.theme);
 
-    // Filter + search highlights
     const filteredHighlights = useMemo(() => {
         let result = highlights;
         if (filterCategory !== 'all') {
@@ -94,7 +101,6 @@ export function HighlightsPanel({
         return result;
     }, [highlights, filterCategory, searchQuery]);
 
-    // Group with explanations
     const highlightsWithExplanations = useMemo(() => {
         return filteredHighlights.map((h) => ({
             ...h,
@@ -155,9 +161,8 @@ export function HighlightsPanel({
 
             {isExpanded && (
                 <>
-                    {/* Search + Filter bar */}
+                    {/* Search + Filter */}
                     <div className={`px-3 py-2 border-t ${colors.border} ${colors.card} space-y-2`}>
-                        {/* Search */}
                         <div className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${colors.input} border`}>
                             <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                             <input
@@ -173,14 +178,12 @@ export function HighlightsPanel({
                                 </button>
                             )}
                         </div>
-
-                        {/* Category filter chips */}
                         <div className="flex items-center gap-1 flex-wrap">
                             <button
                                 onClick={() => setFilterCategory('all')}
                                 className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${filterCategory === 'all'
-                                        ? 'bg-gray-800 text-white border-gray-800 dark:bg-white dark:text-gray-900 dark:border-white'
-                                        : `${colors.border} ${colors.muted}`
+                                    ? 'bg-gray-800 text-white border-gray-800 dark:bg-white dark:text-gray-900 dark:border-white'
+                                    : `${colors.border} ${colors.muted}`
                                     }`}
                             >
                                 All
@@ -190,8 +193,8 @@ export function HighlightsPanel({
                                     key={cat}
                                     onClick={() => setFilterCategory(filterCategory === cat ? 'all' : cat)}
                                     className={`text-xs px-2 py-0.5 rounded-full border transition-colors flex items-center gap-1 ${filterCategory === cat
-                                            ? 'border-current font-medium'
-                                            : `${colors.border} ${colors.muted}`
+                                        ? 'border-current font-medium'
+                                        : `${colors.border} ${colors.muted}`
                                         }`}
                                     style={filterCategory === cat ? { color: HIGHLIGHT_CATEGORY_COLORS[cat] } : {}}
                                 >
@@ -215,9 +218,7 @@ export function HighlightsPanel({
                                 {selectedIds.size === filteredHighlights.length ? 'Deselect all' : 'Select all'}
                             </button>
                             {stats.filtered !== stats.total && (
-                                <span className={`text-xs ${colors.muted}`}>
-                                    ({stats.filtered} shown)
-                                </span>
+                                <span className={`text-xs ${colors.muted}`}>({stats.filtered} shown)</span>
                             )}
                         </div>
                         {selectedIds.size > 0 && onExportToCanvas && (
@@ -253,39 +254,34 @@ export function HighlightsPanel({
                                 return (
                                     <div
                                         key={highlight.id}
-                                        className={`px-4 py-3 border-t ${colors.border} transition-colors cursor-pointer
+                                        className={`group px-4 py-3 border-t ${colors.border} transition-colors cursor-pointer
                                             ${isActive ? colors.activeHighlight : ''}
                                             ${isSelected ? colors.selectedHighlight : ''}
                                             ${!isActive && !isSelected ? colors.hover : ''}
                                         `}
                                     >
                                         <div className="flex items-start gap-2">
-                                            {/* Checkbox */}
                                             <input
                                                 type="checkbox"
                                                 checked={isSelected}
                                                 onChange={() => toggleSelect(highlight.id)}
                                                 className="mt-1 shrink-0"
                                             />
-
-                                            {/* Color dot */}
                                             <span
                                                 className="w-2.5 h-2.5 rounded-full mt-1.5 shrink-0"
                                                 style={{ backgroundColor: highlight.color || '#eab308' }}
                                                 title={HIGHLIGHT_CATEGORY_LABELS[highlight.category] || 'Uncategorized'}
                                             />
 
-                                            {/* Content */}
+                                            {/* Content — click to open inline explanation */}
                                             <div
                                                 className="flex-1 min-w-0"
-                                                onClick={() =>
-                                                    onHighlightClick(highlight.id, { x: 200, y: 200 })
-                                                }
+                                                onClick={() => onHighlightClick(highlight.id, { x: 200, y: 200 })}
                                             >
                                                 <p className={`text-xs ${colors.text} line-clamp-2`}>
                                                     {highlight.selected_text}
                                                 </p>
-                                                <div className="flex items-center gap-2 mt-1">
+                                                <div className="flex items-center gap-2 mt-1 flex-wrap">
                                                     {highlight.category !== 'none' && (
                                                         <span
                                                             className="text-[10px] px-1.5 py-0.5 rounded-full"
@@ -322,18 +318,39 @@ export function HighlightsPanel({
                                                 )}
                                             </div>
 
-                                            {/* Delete */}
-                                            {onDeleteHighlight && (
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        onDeleteHighlight(highlight.id);
-                                                    }}
-                                                    className={`p-1 rounded ${colors.hover} ${colors.muted} shrink-0 opacity-0 group-hover:opacity-100`}
-                                                >
-                                                    <Trash2 className="w-3 h-3" />
-                                                </button>
-                                            )}
+                                            {/* Action buttons — visible on hover */}
+                                            <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                {/* Explore in Canvas */}
+                                                {onExploreInCanvas && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onExploreInCanvas(
+                                                                highlight.id,
+                                                                highlight.selected_text,
+                                                                highlight.page_number || 0,
+                                                            );
+                                                        }}
+                                                        className="p-1 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
+                                                        title="Explore in Canvas"
+                                                    >
+                                                        <GitBranch className="w-3.5 h-3.5 text-indigo-500" />
+                                                    </button>
+                                                )}
+                                                {/* Delete */}
+                                                {onDeleteHighlight && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onDeleteHighlight(highlight.id);
+                                                        }}
+                                                        className={`p-1 rounded ${colors.hover} ${colors.muted}`}
+                                                        title="Delete highlight"
+                                                    >
+                                                        <Trash2 className="w-3 h-3" />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 );

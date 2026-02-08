@@ -100,8 +100,8 @@ export function HighlightPopup({ position, onAskAI, onClose, isLoading }: Highli
                                         );
                                     }}
                                     className={`text-[10px] px-2 py-0.5 rounded-full border transition-all ${selectedCategory === category
-                                            ? 'font-semibold scale-105'
-                                            : 'opacity-70 hover:opacity-100'
+                                        ? 'font-semibold scale-105'
+                                        : 'opacity-70 hover:opacity-100'
                                         }`}
                                     style={{
                                         borderColor: color,
@@ -135,10 +135,10 @@ export function HighlightPopup({ position, onAskAI, onClose, isLoading }: Highli
                                     onClick={() => handleAsk(mode)}
                                     disabled={isLoading || !!selectedMode}
                                     className={`flex flex-col items-center gap-1 px-2 py-2 rounded-lg border text-center transition-all ${isSelected
-                                            ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/30'
-                                            : isOtherSelected
-                                                ? 'opacity-40'
-                                                : 'border-gray-100 dark:border-gray-700 hover:border-blue-300 hover:bg-blue-50/50 dark:hover:bg-blue-900/10'
+                                        ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/30'
+                                        : isOtherSelected
+                                            ? 'opacity-40'
+                                            : 'border-gray-100 dark:border-gray-700 hover:border-blue-300 hover:bg-blue-50/50 dark:hover:bg-blue-900/10'
                                         }`}
                                 >
                                     {isSelected && isLoading ? (

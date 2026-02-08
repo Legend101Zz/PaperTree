@@ -1,7 +1,7 @@
 // apps/web/src/components/reader/BookViewer.tsx
 'use client';
 
-import { useCallback, useRef, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useRef, useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
@@ -59,6 +59,94 @@ function MermaidDiagram({ chart }: { chart: string }) {
     return <div className="my-6 flex justify-center overflow-x-auto" dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
+// ============ HIGHLIGHT RENDERER ============
+
+interface HighlightedTextProps {
+    text: string;
+    highlights: Highlight[];
+    pageNum: number;
+    onHighlightClick: (highlightId: string, position: { x: number; y: number }) => void;
+    theme: any;
+}
+
+function HighlightedText({ text, highlights, pageNum, onHighlightClick, theme }: HighlightedTextProps) {
+    // Filter highlights for this page
+    const pageHighlights = useMemo(() =>
+        highlights.filter(h => h.page_number === pageNum + 1), // page_number is 1-indexed
+        [highlights, pageNum]
+    );
+
+    if (pageHighlights.length === 0) {
+        return <>{text}</>;
+    }
+
+    // Find all highlight matches in the text
+    const segments: { start: number; end: number; highlight: Highlight | null }[] = [];
+    let lastEnd = 0;
+
+    // Sort highlights by position in text (first occurrence)
+    const sortedHighlights = pageHighlights
+        .map(h => ({ highlight: h, index: text.indexOf(h.selected_text) }))
+        .filter(h => h.index !== -1)
+        .sort((a, b) => a.index - b.index);
+
+    for (const { highlight, index } of sortedHighlights) {
+        if (index >= lastEnd) {
+            // Add non-highlighted segment before
+            if (index > lastEnd) {
+                segments.push({ start: lastEnd, end: index, highlight: null });
+            }
+            // Add highlighted segment
+            segments.push({
+                start: index,
+                end: index + highlight.selected_text.length,
+                highlight
+            });
+            lastEnd = index + highlight.selected_text.length;
+        }
+    }
+
+    // Add remaining text
+    if (lastEnd < text.length) {
+        segments.push({ start: lastEnd, end: text.length, highlight: null });
+    }
+
+    if (segments.length === 0) {
+        return <>{text}</>;
+    }
+
+    return (
+        <>
+            {segments.map((seg, i) => {
+                if (!seg.highlight) {
+                    return <span key={i}>{text.slice(seg.start, seg.end)}</span>;
+                }
+                return (
+                    <mark
+                        key={i}
+                        className="cursor-pointer rounded px-0.5 transition-all hover:ring-2 hover:ring-offset-1"
+                        style={{
+                            backgroundColor: `${seg.highlight.color || '#fef08a'}40`,
+                            borderBottom: `2px solid ${seg.highlight.color || '#fef08a'}`,
+                        }}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            onHighlightClick(seg.highlight!.id, {
+                                x: rect.right,
+                                y: rect.bottom
+                            });
+                        }}
+                        title="Click to view explanation"
+                    >
+                        {text.slice(seg.start, seg.end)}
+                    </mark>
+                );
+            })}
+        </>
+    );
+}
+
 // ============ PAGE CONTENT ============
 
 interface PageContentProps {
@@ -68,11 +156,51 @@ interface PageContentProps {
     theme: any;
     mdComponents: any;
     onFigureClick: (page: number) => void;
+    highlights: Highlight[];
+    onHighlightClick: (highlightId: string, position: { x: number; y: number }) => void;
     compact?: boolean;
 }
 
-function PageContent({ summary, pageNum, totalPages, theme, mdComponents, onFigureClick, compact }: PageContentProps) {
+function PageContent({ summary, pageNum, totalPages, theme, mdComponents, onFigureClick, highlights, onHighlightClick, compact }: PageContentProps) {
     const hasContent = summary.summary && !summary.summary.includes('could not be summarized') && !summary.summary.includes('appears empty');
+
+    // Create components with highlight support for this page
+    const componentsWithHighlights = useMemo(() => ({
+        ...mdComponents,
+        // Override text nodes to add highlight detection
+        p: ({ children, ...props }: any) => {
+            // Check if children contains block elements
+            const childArray = React.Children.toArray(children);
+            const hasBlockChild = childArray.some(
+                (child) => React.isValidElement(child) &&
+                    typeof child.type === 'string' &&
+                    ['pre', 'div', 'ul', 'ol', 'blockquote', 'table', 'figure'].includes(child.type)
+            );
+
+            // Use div for block children to avoid DOM nesting errors
+            const Tag = hasBlockChild ? 'div' : 'p';
+
+            return (
+                <Tag className={`mb-4 leading-relaxed ${theme.text}`} {...props}>
+                    {childArray.map((child, i) => {
+                        if (typeof child === 'string' && child.trim()) {
+                            return (
+                                <HighlightedText
+                                    key={i}
+                                    text={child}
+                                    highlights={highlights}
+                                    pageNum={pageNum}
+                                    onHighlightClick={onHighlightClick}
+                                    theme={theme}
+                                />
+                            );
+                        }
+                        return child;
+                    })}
+                </Tag>
+            );
+        },
+    }), [mdComponents, highlights, pageNum, onHighlightClick, theme]);
 
     return (
         <div className={compact ? '' : 'px-5 py-4'}>
@@ -91,7 +219,11 @@ function PageContent({ summary, pageNum, totalPages, theme, mdComponents, onFigu
             {/* Content */}
             {hasContent ? (
                 <div className={`prose-content ${theme.text}`}>
-                    <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={mdComponents}>
+                    <ReactMarkdown
+                        remarkPlugins={[remarkMath, remarkGfm]}
+                        rehypePlugins={[rehypeKatex]}
+                        components={componentsWithHighlights}
+                    >
                         {summary.summary}
                     </ReactMarkdown>
                 </div>
@@ -122,10 +254,18 @@ interface ScrollPageCardProps {
     mdComponents: any;
     onFigureClick: (page: number) => void;
     onRef: (el: HTMLElement | null) => void;
+    highlights: Highlight[];
+    onHighlightClick: (highlightId: string, position: { x: number; y: number }) => void;
 }
 
-function ScrollPageCard({ summary, pageNum, totalPages, isVisible, theme, mdComponents, onFigureClick, onRef }: ScrollPageCardProps) {
+function ScrollPageCard({ summary, pageNum, totalPages, isVisible, theme, mdComponents, onFigureClick, onRef, highlights, onHighlightClick }: ScrollPageCardProps) {
     const [expanded, setExpanded] = useState(true);
+
+    // Count highlights for this page
+    const highlightCount = useMemo(() =>
+        highlights.filter(h => h.page_number === pageNum + 1).length,
+        [highlights, pageNum]
+    );
 
     return (
         <section
@@ -139,6 +279,11 @@ function ScrollPageCard({ summary, pageNum, totalPages, isVisible, theme, mdComp
                     <h2 className={`font-semibold ${theme.heading} truncate`}>{summary.title}</h2>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
+                    {highlightCount > 0 && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400`}>
+                            {highlightCount} highlight{highlightCount !== 1 ? 's' : ''}
+                        </span>
+                    )}
                     {summary.has_math && <span className={`text-xs px-2 py-0.5 rounded-full ${theme.card} ${theme.muted}`}>Math</span>}
                     {summary.has_figures && <span className={`text-xs px-2 py-0.5 rounded-full ${theme.card} ${theme.muted}`}>Figures</span>}
                     <button
@@ -149,7 +294,18 @@ function ScrollPageCard({ summary, pageNum, totalPages, isVisible, theme, mdComp
                     </button>
                 </div>
             </div>
-            {expanded && <PageContent summary={summary} pageNum={pageNum} totalPages={totalPages} theme={theme} mdComponents={mdComponents} onFigureClick={onFigureClick} />}
+            {expanded && (
+                <PageContent
+                    summary={summary}
+                    pageNum={pageNum}
+                    totalPages={totalPages}
+                    theme={theme}
+                    mdComponents={mdComponents}
+                    onFigureClick={onFigureClick}
+                    highlights={highlights}
+                    onHighlightClick={onHighlightClick}
+                />
+            )}
         </section>
     );
 }
@@ -166,9 +322,11 @@ interface FlipModeProps {
     onFigureClick: (page: number) => void;
     onGenerateMorePages: (pages: number[]) => void;
     generatingPages: Set<number>;
+    highlights: Highlight[];
+    onHighlightClick: (highlightId: string, position: { x: number; y: number }) => void;
 }
 
-function FlipMode({ pageSummaries, pageCount, currentPage, onPageChange, theme, mdComponents, onFigureClick, onGenerateMorePages, generatingPages }: FlipModeProps) {
+function FlipMode({ pageSummaries, pageCount, currentPage, onPageChange, theme, mdComponents, onFigureClick, onGenerateMorePages, generatingPages, highlights, onHighlightClick }: FlipModeProps) {
     const summaryMap = useMemo(() => new Map(pageSummaries.map(s => [s.page, s])), [pageSummaries]);
     const currentSummary = summaryMap.get(currentPage);
     const isGenerating = generatingPages.has(currentPage);
@@ -191,6 +349,12 @@ function FlipMode({ pageSummaries, pageCount, currentPage, onPageChange, theme, 
         return () => window.removeEventListener('keydown', handleKey);
     }, [goNext, goPrev]);
 
+    // Count highlights for current page
+    const highlightCount = useMemo(() =>
+        highlights.filter(h => h.page_number === currentPage + 1).length,
+        [highlights, currentPage]
+    );
+
     return (
         <div className="flex flex-col h-full">
             {/* Page indicator */}
@@ -208,6 +372,11 @@ function FlipMode({ pageSummaries, pageCount, currentPage, onPageChange, theme, 
                     <span className={`text-sm font-medium ${theme.heading}`}>
                         Page {currentPage + 1} of {pageCount}
                     </span>
+                    {highlightCount > 0 && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400">
+                            {highlightCount} highlight{highlightCount !== 1 ? 's' : ''}
+                        </span>
+                    )}
                     <div className="flex gap-1">
                         {Array.from({ length: Math.min(pageCount, 10) }, (_, i) => {
                             const page = pageCount <= 10 ? i : Math.floor(i * pageCount / 10);
@@ -259,6 +428,8 @@ function FlipMode({ pageSummaries, pageCount, currentPage, onPageChange, theme, 
                                 theme={theme}
                                 mdComponents={mdComponents}
                                 onFigureClick={onFigureClick}
+                                highlights={highlights}
+                                onHighlightClick={onHighlightClick}
                             />
                         </div>
                     ) : isGenerating ? (
@@ -373,7 +544,7 @@ export function BookViewer(props: BookViewerProps) {
 
     const fontClass = { serif: 'font-serif', sans: 'font-sans', mono: 'font-mono' }[settings.fontFamily || 'serif'];
 
-    // Markdown components
+    // Markdown components (base - without highlights, used for memoization)
     const mdComponents = useMemo(() => ({
         code({ inline, className, children }: any) {
             const lang = /language-(\w+)/.exec(className || '')?.[1];
@@ -382,7 +553,18 @@ export function BookViewer(props: BookViewerProps) {
             if (inline) return <code className={`px-1.5 py-0.5 rounded ${theme.code} text-sm font-mono`}>{children}</code>;
             return <pre className={`p-4 rounded-lg overflow-x-auto ${theme.code} my-4`}><code className="text-sm font-mono">{children}</code></pre>;
         },
-        p: ({ children }: any) => <p className={`mb-4 leading-relaxed ${theme.text}`}>{children}</p>,
+        // Note: p is overridden in PageContent with highlight support
+        p: ({ children, ...props }: any) => {
+            // Check if children contains block elements
+            const childArray = React.Children.toArray(children);
+            const hasBlockChild = childArray.some(
+                (child) => React.isValidElement(child) &&
+                    typeof child.type === 'string' &&
+                    ['pre', 'div', 'ul', 'ol', 'blockquote', 'table', 'figure'].includes(child.type)
+            );
+            const Tag = hasBlockChild ? 'div' : 'p';
+            return <Tag className={`mb-4 leading-relaxed ${theme.text}`} {...props}>{children}</Tag>;
+        },
         h1: ({ children }: any) => <h1 className={`text-xl font-bold ${theme.heading} mt-6 mb-3`}>{children}</h1>,
         h2: ({ children }: any) => <h2 className={`text-lg font-semibold ${theme.heading} mt-5 mb-2`}>{children}</h2>,
         h3: ({ children }: any) => <h3 className={`text-base font-medium ${theme.heading} mt-4 mb-2`}>{children}</h3>,
@@ -460,6 +642,11 @@ export function BookViewer(props: BookViewerProps) {
                     <Sparkles className="w-4 h-4 text-blue-500" />
                     <span className={`text-sm font-medium ${theme.heading}`}>{bookContent.title}</span>
                     <span className={`text-xs ${theme.muted}`}>• {pageSummaries.length}/{pageCount} pages</span>
+                    {highlights.length > 0 && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400">
+                            {highlights.length} highlight{highlights.length !== 1 ? 's' : ''}
+                        </span>
+                    )}
                 </div>
                 <div className="flex items-center gap-1 p-1 rounded-lg bg-gray-100 dark:bg-gray-800">
                     <button
@@ -491,6 +678,8 @@ export function BookViewer(props: BookViewerProps) {
                     onFigureClick={(page) => onFigureClick('', page)}
                     onGenerateMorePages={onGenerateMorePages}
                     generatingPages={generatingPages}
+                    highlights={highlights}
+                    onHighlightClick={onHighlightClick}
                 />
             ) : (
                 <div className="flex-1 overflow-auto">
@@ -518,6 +707,8 @@ export function BookViewer(props: BookViewerProps) {
                                 mdComponents={mdComponents}
                                 onFigureClick={(page) => onFigureClick('', page)}
                                 onRef={(el) => { if (el) pageRefs.current.set(summary.page, el); }}
+                                highlights={highlights}
+                                onHighlightClick={onHighlightClick}
                             />
                         ))}
 

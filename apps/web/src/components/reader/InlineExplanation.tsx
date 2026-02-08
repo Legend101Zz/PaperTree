@@ -7,10 +7,10 @@ import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
 import { useReaderStore } from '@/store/readerStore';
-import { Highlight, Explanation } from '@/types';
+import { Highlight, Explanation, AskMode } from '@/types';
 import {
     X, MessageSquare, Pin, Check, ChevronDown, ChevronUp,
-    Sparkles, Send, Loader2, FileText, RefreshCw
+    Sparkles, Send, Loader2, FileText, RefreshCw, GitBranch
 } from 'lucide-react';
 
 interface InlineExplanationProps {
@@ -21,6 +21,13 @@ interface InlineExplanationProps {
     onToggleResolved: (id: string, isResolved: boolean) => void;
     onGoToPdf: (page: number) => void;
     isLoading: boolean;
+    onExploreInCanvas?: (
+        highlightId: string,
+        selectedText: string,
+        pageNumber: number,
+        question?: string,
+        askMode?: AskMode,
+    ) => void;
 }
 
 function getThemeColors(theme: string) {
@@ -74,7 +81,6 @@ function getThemeColors(theme: string) {
             shadow: 'shadow-xl shadow-orange-500/10'
         }
     };
-
     return themes[theme as keyof typeof themes] || themes.light;
 }
 
@@ -86,6 +92,7 @@ export function InlineExplanation({
     onToggleResolved,
     onGoToPdf,
     isLoading,
+    onExploreInCanvas,
 }: InlineExplanationProps) {
     const popupRef = useRef<HTMLDivElement>(null);
     const [followUpText, setFollowUpText] = useState('');
@@ -110,7 +117,6 @@ export function InlineExplanation({
                 closeInlineExplanation();
             }
         };
-
         if (isOpen) {
             const timer = setTimeout(() => {
                 document.addEventListener('mousedown', handleClickOutside);
@@ -125,9 +131,7 @@ export function InlineExplanation({
     // Escape to close
     useEffect(() => {
         const handleEscape = (e: KeyboardEvent) => {
-            if (e.key === 'Escape' && isOpen) {
-                closeInlineExplanation();
-            }
+            if (e.key === 'Escape' && isOpen) closeInlineExplanation();
         };
         document.addEventListener('keydown', handleEscape);
         return () => document.removeEventListener('keydown', handleEscape);
@@ -152,7 +156,6 @@ export function InlineExplanation({
 
     if (!isOpen || !position) return null;
 
-    // Position calculation
     const popupWidth = 450;
     const popupMaxHeight = 520;
     const padding = 16;
@@ -185,22 +188,20 @@ export function InlineExplanation({
                         <div className="flex items-center gap-0.5 flex-shrink-0">
                             <button
                                 onClick={() => onTogglePin(exp.id, !exp.is_pinned)}
-                                className={`p-1 rounded transition-colors ${exp.is_pinned ? 'text-yellow-500' : colors.muted
-                                    } ${colors.cardHover}`}
+                                className={`p-1 rounded transition-colors ${exp.is_pinned ? 'text-yellow-500' : colors.muted} ${colors.cardHover}`}
                             >
                                 <Pin className="w-3.5 h-3.5" />
                             </button>
                             <button
                                 onClick={() => onToggleResolved(exp.id, !exp.is_resolved)}
-                                className={`p-1 rounded transition-colors ${exp.is_resolved ? 'text-green-500' : colors.muted
-                                    } ${colors.cardHover}`}
+                                className={`p-1 rounded transition-colors ${exp.is_resolved ? 'text-green-500' : colors.muted} ${colors.cardHover}`}
                             >
                                 <Check className="w-3.5 h-3.5" />
                             </button>
                         </div>
                     </div>
 
-                    {/* Answer content */}
+                    {/* Answer */}
                     <div className={`prose prose-sm max-w-none ${colors.text} overflow-hidden`}>
                         <ReactMarkdown
                             remarkPlugins={[remarkMath, remarkGfm]}
@@ -210,7 +211,6 @@ export function InlineExplanation({
                         </ReactMarkdown>
                     </div>
 
-                    {/* Expand/collapse */}
                     {hasMore && (
                         <button
                             onClick={() => toggleExpand(exp.id)}
@@ -221,14 +221,33 @@ export function InlineExplanation({
                         </button>
                     )}
 
-                    {/* Follow-up toggle */}
-                    <button
-                        onClick={() => setActiveFollowUp(activeFollowUp === exp.id ? null : exp.id)}
-                        className={`text-xs mt-2 flex items-center gap-1 ${colors.muted} hover:${colors.accent}`}
-                    >
-                        <MessageSquare className="w-3 h-3" />
-                        Ask follow-up
-                    </button>
+                    {/* Action buttons row */}
+                    <div className="flex items-center gap-3 mt-2">
+                        <button
+                            onClick={() => setActiveFollowUp(activeFollowUp === exp.id ? null : exp.id)}
+                            className={`text-xs flex items-center gap-1 ${colors.muted} hover:${colors.accent}`}
+                        >
+                            <MessageSquare className="w-3 h-3" />
+                            Follow-up
+                        </button>
+
+                        {/* Explore in Canvas button */}
+                        {onExploreInCanvas && highlight && (
+                            <button
+                                onClick={() => onExploreInCanvas(
+                                    highlight.id,
+                                    highlight.selected_text,
+                                    highlight.page_number || 0,
+                                    exp.question,
+                                    exp.ask_mode,
+                                )}
+                                className="text-xs flex items-center gap-1 text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
+                            >
+                                <GitBranch className="w-3 h-3" />
+                                Explore in Canvas
+                            </button>
+                        )}
+                    </div>
 
                     {/* Follow-up input */}
                     {activeFollowUp === exp.id && (
@@ -240,9 +259,7 @@ export function InlineExplanation({
                                 placeholder="Ask a follow-up..."
                                 className={`flex-1 px-3 py-1.5 text-sm border rounded-lg ${colors.input} focus:outline-none focus:ring-2`}
                                 onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && followUpText.trim()) {
-                                        handleFollowUp(exp.id);
-                                    }
+                                    if (e.key === 'Enter' && followUpText.trim()) handleFollowUp(exp.id);
                                 }}
                                 autoFocus
                             />
@@ -257,7 +274,6 @@ export function InlineExplanation({
                     )}
                 </div>
 
-                {/* Children */}
                 {children.length > 0 && (
                     <div className="mt-2">
                         {children.map((child) => renderExplanation(child, depth + 1))}
@@ -271,20 +287,13 @@ export function InlineExplanation({
         <div
             ref={popupRef}
             className={`fixed z-50 ${colors.bg} rounded-xl ${colors.shadow} border ${colors.border} overflow-hidden`}
-            style={{
-                left,
-                top,
-                width: popupWidth,
-                maxHeight: popupMaxHeight,
-            }}
+            style={{ left, top, width: popupWidth, maxHeight: popupMaxHeight }}
         >
             {/* Header */}
             <div className={`flex items-center justify-between px-4 py-3 border-b ${colors.border} ${colors.headerBg}`}>
                 <div className="flex items-center gap-2">
                     <Sparkles className={`w-4 h-4 ${colors.accent}`} />
-                    <span className={`text-sm font-semibold ${colors.text}`}>
-                        AI Explanation
-                    </span>
+                    <span className={`text-sm font-semibold ${colors.text}`}>AI Explanation</span>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${colors.accentBg} ${colors.accent} border ${colors.accentBorder}`}>
                         {highlightExplanations.length}
                     </span>
@@ -302,17 +311,33 @@ export function InlineExplanation({
                 <div className={`px-4 py-3 border-b ${colors.border} ${colors.highlightBg}`}>
                     <p className={`text-xs font-medium ${colors.muted} mb-1`}>Selected text:</p>
                     <p className={`text-sm ${colors.text} italic line-clamp-2`}>
-                        "{highlight.selected_text}"
+                        &ldquo;{highlight.selected_text}&rdquo;
                     </p>
-                    {highlight.page_number && (
-                        <button
-                            onClick={() => onGoToPdf(highlight.page_number! - 1)}
-                            className={`mt-2 text-xs flex items-center gap-1 ${colors.muted} hover:${colors.accent} transition-colors`}
-                        >
-                            <FileText className="w-3 h-3" />
-                            View in PDF (page {highlight.page_number})
-                        </button>
-                    )}
+                    <div className="flex items-center gap-3 mt-2">
+                        {highlight.page_number && (
+                            <button
+                                onClick={() => onGoToPdf(highlight.page_number! - 1)}
+                                className={`text-xs flex items-center gap-1 ${colors.muted} hover:${colors.accent} transition-colors`}
+                            >
+                                <FileText className="w-3 h-3" />
+                                View in PDF (page {highlight.page_number})
+                            </button>
+                        )}
+                        {/* Top-level explore button for the whole highlight */}
+                        {onExploreInCanvas && (
+                            <button
+                                onClick={() => onExploreInCanvas(
+                                    highlight.id,
+                                    highlight.selected_text,
+                                    highlight.page_number || 0,
+                                )}
+                                className="text-xs flex items-center gap-1 text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
+                            >
+                                <GitBranch className="w-3 h-3" />
+                                Explore in Canvas
+                            </button>
+                        )}
+                    </div>
                 </div>
             )}
 

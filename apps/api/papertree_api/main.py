@@ -1,9 +1,9 @@
+# apps/api/papertree_api/main.py
 import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from papertree_api.auth.routes import router as auth_router
 from papertree_api.canvas.routes import paper_canvas_router
 from papertree_api.canvas.routes import router as canvas_router
@@ -18,26 +18,19 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Handle application startup and shutdown events."""
-    # Startup
     await connect_to_mongo()
-    
-    # Ensure storage directory exists
     os.makedirs(settings.storage_path, exist_ok=True)
-    
     yield
-    # Shutdown
     await close_mongo_connection()
 
 
 app = FastAPI(
     title="PaperTree API",
     description="Research paper reader with AI explanations",
-    version="2.0.0",
-    lifespan=lifespan
+    version="2.1.0",
+    lifespan=lifespan,
 )
 
-# CORS middleware for frontend communication
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -56,17 +49,15 @@ app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 app.include_router(papers_router, prefix="/papers", tags=["Papers"])
 app.include_router(highlights_router, prefix="/highlight", tags=["Highlights"])
 app.include_router(explanations_router, prefix="/explanations", tags=["Explanations"])
-app.include_router(canvas_router, tags=["Canvas"])
-app.include_router(paper_canvas_router, tags=["Canvas Paper routes"]) 
+app.include_router(paper_canvas_router, tags=["Canvas"])
+app.include_router(canvas_router, tags=["Canvas Legacy"])
 
 
 @app.get("/")
 async def root():
-    """Root endpoint - API health check."""
-    return {"message": "PaperTree API is running", "version": "2.0.0"}
+    return {"message": "PaperTree API is running", "version": "2.1.0"}
 
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
     return {"status": "healthy"}
