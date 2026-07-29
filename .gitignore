@@ -19,6 +19,10 @@ packages/*/build/
 services/*/build/
 *.egg-info/
 
+# Turborepo / tool caches
+.turbo/
+*.tsbuildinfo
+
 # IDE
 .idea/
 .vscode/

@@ -1,0 +1,46 @@
+[project]
+name = "papertree"
+version = "0.0.0"
+description = "PaperTree v2 Python workspace root (virtual - not itself a distributable package)."
+requires-python = ">=3.12"
+dependencies = [
+    "papertree-document-ir",
+    "papertree-db",
+    "papertree-jobs",
+]
+
+# apps/api is the v1 application. It has its own pyproject.toml and uv.lock and is
+# deliberately NOT a member of this workspace - Epic 0 builds alongside it, untouched.
+[tool.uv.workspace]
+members = ["packages/*/python"]
+exclude = ["apps/*"]
+
+[tool.uv.sources]
+papertree-document-ir = { workspace = true }
+papertree-db = { workspace = true }
+papertree-jobs = { workspace = true }
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.8",
+    "mypy>=1.13",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["packages"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true

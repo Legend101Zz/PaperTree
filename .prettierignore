@@ -1,0 +1,9 @@
+apps/
+node_modules/
+dist/
+.turbo/
+pnpm-lock.yaml
+uv.lock
+research/
+packages/document-ir/fixtures/
+packages/document-ir/conformance/
