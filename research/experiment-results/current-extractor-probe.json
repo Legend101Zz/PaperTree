@@ -1,0 +1,3427 @@
+{
+  "attention-is-all-you-need.pdf": {
+    "path": "research/benchmarks/corpus/attention-is-all-you-need.pdf",
+    "size_bytes": 2215244,
+    "font_census": {
+      "fonts": [
+        {
+          "font": "NimbusRomNo9L-Regu",
+          "chars": 33748,
+          "pct_of_doc": 87.77,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "NimbusRomNo9L-ReguItal",
+          "chars": 1440,
+          "pct_of_doc": 3.75,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "ArialMT",
+          "chars": 1122,
+          "pct_of_doc": 2.92,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "NimbusRomNo9L-Medi",
+          "chars": 751,
+          "pct_of_doc": 1.95,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMR10",
+          "chars": 423,
+          "pct_of_doc": 1.1,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMMI10",
+          "chars": 409,
+          "pct_of_doc": 1.06,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "SFTT1000",
+          "chars": 193,
+          "pct_of_doc": 0.5,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMMI7",
+          "chars": 111,
+          "pct_of_doc": 0.29,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMR7",
+          "chars": 66,
+          "pct_of_doc": 0.17,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMSY10",
+          "chars": 66,
+          "pct_of_doc": 0.17,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "Times-Roman",
+          "chars": 39,
+          "pct_of_doc": 0.1,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMSY7",
+          "chars": 21,
+          "pct_of_doc": 0.05,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMMI9",
+          "chars": 13,
+          "pct_of_doc": 0.03,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMBX10",
+          "chars": 9,
+          "pct_of_doc": 0.02,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMR9",
+          "chars": 8,
+          "pct_of_doc": 0.02,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMMI5",
+          "chars": 7,
+          "pct_of_doc": 0.02,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMMI6",
+          "chars": 5,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "MSBM10",
+          "chars": 5,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMSY6",
+          "chars": 3,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMSY9",
+          "chars": 2,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMEX9",
+          "chars": 2,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMR6",
+          "chars": 2,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMBSY10",
+          "chars": 2,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMBX7",
+          "chars": 2,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMMIB10",
+          "chars": 1,
+          "pct_of_doc": 0.0,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        }
+      ],
+      "total_chars": 38450,
+      "pct_chars_in_fonts_extraction_py_calls_math": 2.98
+    },
+    "column_probe": [
+      {
+        "page": 0,
+        "n_text_blocks": 20,
+        "sides": "FFFLLLLRRRRLFFLLFFLF",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 2
+      },
+      {
+        "page": 1,
+        "n_text_blocks": 13,
+        "sides": "LFFFFLFFFFLFL",
+        "looks_two_column": false,
+        "column_alternations_in_sort_order": 0
+      },
+      {
+        "page": 2,
+        "n_text_blocks": 8,
+        "sides": "FFLFFLFL",
+        "looks_two_column": false,
+        "column_alternations_in_sort_order": 0
+      },
+      {
+        "page": 3,
+        "n_text_blocks": 17,
+        "sides": "LRFFLFFFRRFFLFRFL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 6
+      },
+      {
+        "page": 4,
+        "n_text_blocks": 24,
+        "sides": "FFFFRRRLRRFFLFFFFLFFFLFL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 3
+      },
+      {
+        "page": 5,
+        "n_text_blocks": 16,
+        "sides": "FFLFFFFFFLFFFFFL",
+        "looks_two_column": false,
+        "column_alternations_in_sort_order": 0
+      }
+    ],
+    "vector_figures": [
+      {
+        "page": 0,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 3,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 1,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 2,
+        "embedded_raster_images": 1,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 3,
+        "embedded_raster_images": 2,
+        "vector_draw_ops": 8,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 4,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 1,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 5,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 3,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 6,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 7,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 8,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 8,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 53,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 9,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 33,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 10,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 11,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 12,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 624,
+        "significant_vector_ops": 16
+      },
+      {
+        "page": 13,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 1030,
+        "significant_vector_ops": 62
+      },
+      {
+        "page": 14,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 947,
+        "significant_vector_ops": 91
+      }
+    ],
+    "current_extractor": {
+      "seconds": 2.448,
+      "page_count": 15,
+      "n_blocks": 181,
+      "block_types": {
+        "heading": 42,
+        "text": 73,
+        "figure": 3,
+        "math": 60,
+        "list": 3
+      },
+      "pct_blocks_classified_math": 33.1,
+      "math_blocks_with_latex": 12,
+      "figures": 3,
+      "figures_with_caption": 1,
+      "figure_before_page_text_violations": 3,
+      "non_monotonic_page_transitions": 0,
+      "images_dict_carries_pixel_bytes": false,
+      "text_block_chars_min": 3,
+      "text_block_chars_median": 273,
+      "text_block_chars_max": 3211,
+      "outline_items": 42,
+      "plain_text_chars": 39587,
+      "sample_math": [
+        {
+          "alt_text": "LayerNorm(x + Sublayer(x)), where Sublayer(x) is the function implemented by the sub-layer",
+          "latex": ""
+        },
+        {
+          "alt_text": "Attention(Q, K, V ) = softmax(QKT",
+          "latex": ""
+        },
+        {
+          "alt_text": ")V",
+          "latex": ""
+        },
+        {
+          "alt_text": "\u221adk",
+          "latex": "\\sqrt dk"
+        },
+        {
+          "alt_text": "1",
+          "latex": ""
+        },
+        {
+          "alt_text": "1",
+          "latex": ""
+        }
+      ],
+      "sample_text_blocks": [
+        "reproduce the tables and figures in this paper solely for use in journalistic or",
+        "Ashish Vaswani\u2217 Noam Shazeer\u2217 Google Brain avaswani@google.com Google Brain noam@google.com Niki Parmar\u2217 Google Research nikip@google.com Jakob Uszkoreit\u2217 Google Research usz@google.com \u0141ukasz Kaiser\u2217 Google Brain lukaszkaiser@google.com Llion Jones\u2217 Google Research llion@google.com Aidan N. Gomez\u2217\u2020 University of Toronto aidan@cs.toronto.edu Illia Polosukhin\u2217\u2021 illia.polosukhin@gmail.com",
+        "The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder. The best performing models also connect the encoder and decoder through an attention mechanism. We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely. Expe"
+      ],
+      "sample_headings": [
+        "Provided proper attribution is provided, Google hereby grants permission to",
+        "scholarly works.",
+        "Attention Is All You Need",
+        "Abstract",
+        "arXiv:1706.03762v7  [cs.CL]  2 Aug 2023",
+        "1",
+        "Introduction",
+        "2",
+        "Background",
+        "3",
+        "Model Architecture",
+        "4",
+        "Why Self-Attention",
+        "5",
+        "Training",
+        "BLEU",
+        "EN-DE",
+        "EN-FR",
+        "EN-DE",
+        "EN-FR",
+        "GNMT + RL [38]",
+        "6",
+        "Results",
+        "BLEU",
+        "100K"
+      ]
+    },
+    "legacy_services_extractor": {
+      "seconds": 2.396,
+      "page_count": 15,
+      "plain_text_chars": 39786,
+      "outline_items": 22,
+      "n_blocks": 304,
+      "block_types": {
+        "heading": 149,
+        "text": 109,
+        "figure": 3,
+        "math_block": 10,
+        "math_inline": 29,
+        "list": 3,
+        "references": 1
+      }
+    },
+    "pymupdf_baseline": {
+      "seconds": 0.946,
+      "page_count": 15,
+      "plain_text_chars": 44670
+    }
+  },
+  "bert-2col.pdf": {
+    "path": "research/benchmarks/corpus/bert-2col.pdf",
+    "size_bytes": 775166,
+    "font_census": {
+      "fonts": [
+        {
+          "font": "NimbusRomNo9L-Regu",
+          "chars": 55769,
+          "pct_of_doc": 89.88,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "NimbusRomNo9L-ReguItal",
+          "chars": 2586,
+          "pct_of_doc": 4.17,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "NimbusRomNo9L-Medi",
+          "chars": 1423,
+          "pct_of_doc": 2.29,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "ArialMT",
+          "chars": 1038,
+          "pct_of_doc": 1.67,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "NimbusMonL-Regu",
+          "chars": 749,
+          "pct_of_doc": 1.21,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "Verdana",
+          "chars": 125,
+          "pct_of_doc": 0.2,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMMI10",
+          "chars": 100,
+          "pct_of_doc": 0.16,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMR10",
+          "chars": 55,
+          "pct_of_doc": 0.09,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "Times-Roman",
+          "chars": 40,
+          "pct_of_doc": 0.06,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMMI8",
+          "chars": 29,
+          "pct_of_doc": 0.05,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMSY10",
+          "chars": 28,
+          "pct_of_doc": 0.05,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMR7",
+          "chars": 26,
+          "pct_of_doc": 0.04,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMR9",
+          "chars": 15,
+          "pct_of_doc": 0.02,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "Arial-BoldMT",
+          "chars": 12,
+          "pct_of_doc": 0.02,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMTT8",
+          "chars": 8,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMMI9",
+          "chars": 7,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "MSBM10",
+          "chars": 7,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMMI6",
+          "chars": 7,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMSY9",
+          "chars": 6,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMR8",
+          "chars": 4,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMSY6",
+          "chars": 4,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMTT10",
+          "chars": 4,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMSY8",
+          "chars": 2,
+          "pct_of_doc": 0.0,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMSY7",
+          "chars": 2,
+          "pct_of_doc": 0.0,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMEX8",
+          "chars": 1,
+          "pct_of_doc": 0.0,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMMI7",
+          "chars": 1,
+          "pct_of_doc": 0.0,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        }
+      ],
+      "total_chars": 62048,
+      "pct_chars_in_fonts_extraction_py_calls_math": 0.47
+    },
+    "column_probe": [
+      {
+        "page": 0,
+        "n_text_blocks": 12,
+        "sides": "FFFLLRLLLRLR",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 5
+      },
+      {
+        "page": 1,
+        "n_text_blocks": 13,
+        "sides": "LRLLLLRRLLRLR",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 7
+      },
+      {
+        "page": 2,
+        "n_text_blocks": 41,
+        "sides": "RRLRLRLLLLRRRRLRLRLRLRLRRLFFRLLRLLRRRLRRL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 25
+      },
+      {
+        "page": 3,
+        "n_text_blocks": 11,
+        "sides": "LRLRLLLLRLR",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 7
+      },
+      {
+        "page": 4,
+        "n_text_blocks": 19,
+        "sides": "FFFFFLRRRLRLRRLRRRL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 8
+      },
+      {
+        "page": 5,
+        "n_text_blocks": 15,
+        "sides": "FFRLRRRLLRLRLLR",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 8
+      }
+    ],
+    "vector_figures": [
+      {
+        "page": 0,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 1,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 2,
+        "embedded_raster_images": 13,
+        "vector_draw_ops": 115,
+        "significant_vector_ops": 9
+      },
+      {
+        "page": 3,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 2,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 4,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 73,
+        "significant_vector_ops": 1
+      },
+      {
+        "page": 5,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 7,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 6,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 16,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 7,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 3,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 8,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 9,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 9,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 1,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 10,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 11,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 12,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 264,
+        "significant_vector_ops": 4
+      },
+      {
+        "page": 13,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 14,
+        "embedded_raster_images": 21,
+        "vector_draw_ops": 163,
+        "significant_vector_ops": 9
+      },
+      {
+        "page": 15,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 35,
+        "significant_vector_ops": 6
+      }
+    ],
+    "current_extractor": {
+      "seconds": 1.736,
+      "page_count": 16,
+      "n_blocks": 242,
+      "block_types": {
+        "heading": 81,
+        "text": 117,
+        "list": 28,
+        "math": 16
+      },
+      "pct_blocks_classified_math": 6.6,
+      "math_blocks_with_latex": 1,
+      "figures": 0,
+      "figures_with_caption": 0,
+      "figure_before_page_text_violations": 0,
+      "non_monotonic_page_transitions": 0,
+      "images_dict_carries_pixel_bytes": false,
+      "text_block_chars_min": 1,
+      "text_block_chars_median": 193,
+      "text_block_chars_max": 4243,
+      "outline_items": 81,
+      "plain_text_chars": 63623,
+      "sample_math": [
+        {
+          "alt_text": "as Ti \u2208RH.",
+          "latex": "as Ti \\in RH."
+        },
+        {
+          "alt_text": "i.e., log(softmax(CW T )).",
+          "latex": ""
+        },
+        {
+          "alt_text": "eS\u00b7Ti",
+          "latex": ""
+        },
+        {
+          "alt_text": "P",
+          "latex": ""
+        },
+        {
+          "alt_text": "j eS\u00b7Tj .",
+          "latex": ""
+        },
+        {
+          "alt_text": "\u02c6",
+          "latex": ""
+        }
+      ],
+      "sample_text_blocks": [
+        "Jacob Devlin Ming-Wei Chang Kenton Lee Kristina Toutanova Google AI Language {jacobdevlin,mingweichang,kentonl,kristout}@google.com",
+        "We introduce a new language representation model called BERT, which stands for Bidirectional Encoder Representations from Transformers. Unlike recent language representation models (Peters et al., 2018a; Radford et al., 2018), BERT is designed to pretrain deep bidirectional representations from unlabeled text by jointly conditioning on both left and right context in all layers. As a result, the pr",
+        "We argue that current techniques restrict the power of the pre-trained representations, especially for the fine-tuning approaches. The major limitation is that standard language models are unidirectional, and this limits the choice of architectures that can be used during pre-training. For example, in OpenAI GPT, the authors use a left-toright architecture, where every token can only attend to pre"
+      ],
+      "sample_headings": [
+        "BERT: Pre-training of Deep Bidirectional Transformers for",
+        "Language Understanding",
+        "Abstract",
+        "Introduction",
+        "arXiv:1810.04805v2  [cs.CL]  24 May 2019",
+        "Related Work",
+        "MNLI",
+        "T[SEP]",
+        "T[SEP]",
+        "BERT",
+        "BERT",
+        "BERT",
+        "E[CLS]",
+        "E[SEP]",
+        "E[CLS]",
+        "E[SEP]",
+        "[CLS]",
+        "[SEP]",
+        "[CLS]",
+        "[SEP]",
+        "BERT",
+        "[CLS]",
+        "[SEP]",
+        "[SEP]",
+        "E[CLS]"
+      ]
+    },
+    "legacy_services_extractor": {
+      "seconds": 1.895,
+      "page_count": 16,
+      "plain_text_chars": 64225,
+      "outline_items": 20,
+      "n_blocks": 436,
+      "block_types": {
+        "heading": 272,
+        "text": 143,
+        "list": 15,
+        "math_inline": 4,
+        "math_block": 1,
+        "references": 1
+      }
+    },
+    "pymupdf_baseline": {
+      "seconds": 3.548,
+      "page_count": 16,
+      "plain_text_chars": 89199
+    }
+  },
+  "neural-odes-mathheavy.pdf": {
+    "path": "research/benchmarks/corpus/neural-odes-mathheavy.pdf",
+    "size_bytes": 3990592,
+    "font_census": {
+      "fonts": [
+        {
+          "font": "NimbusRomNo9L-Regu",
+          "chars": 43914,
+          "pct_of_doc": 81.62,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "NimbusRomNo9L-ReguItal",
+          "chars": 3027,
+          "pct_of_doc": 5.63,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "NimbusRomNo9L-Medi",
+          "chars": 1669,
+          "pct_of_doc": 3.1,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMMI9",
+          "chars": 864,
+          "pct_of_doc": 1.61,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMR9",
+          "chars": 791,
+          "pct_of_doc": 1.47,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMMI10",
+          "chars": 617,
+          "pct_of_doc": 1.15,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMR10",
+          "chars": 462,
+          "pct_of_doc": 0.86,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "SFTT1000",
+          "chars": 363,
+          "pct_of_doc": 0.67,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMMI6",
+          "chars": 311,
+          "pct_of_doc": 0.58,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMBX9",
+          "chars": 243,
+          "pct_of_doc": 0.45,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMMI7",
+          "chars": 236,
+          "pct_of_doc": 0.44,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "DejaVuSans",
+          "chars": 191,
+          "pct_of_doc": 0.35,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMEX9",
+          "chars": 164,
+          "pct_of_doc": 0.3,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMBX10",
+          "chars": 159,
+          "pct_of_doc": 0.3,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMSY9",
+          "chars": 147,
+          "pct_of_doc": 0.27,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMR6",
+          "chars": 114,
+          "pct_of_doc": 0.21,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "HelveticaNeue",
+          "chars": 98,
+          "pct_of_doc": 0.18,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMR5",
+          "chars": 70,
+          "pct_of_doc": 0.13,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMR7",
+          "chars": 69,
+          "pct_of_doc": 0.13,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMSY10",
+          "chars": 67,
+          "pct_of_doc": 0.12,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "Times-Roman",
+          "chars": 40,
+          "pct_of_doc": 0.07,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMBX6",
+          "chars": 36,
+          "pct_of_doc": 0.07,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMEX10",
+          "chars": 33,
+          "pct_of_doc": 0.06,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMMI5",
+          "chars": 29,
+          "pct_of_doc": 0.05,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMSY6",
+          "chars": 24,
+          "pct_of_doc": 0.04,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMBX7",
+          "chars": 22,
+          "pct_of_doc": 0.04,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "LINE10",
+          "chars": 19,
+          "pct_of_doc": 0.04,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMSS8",
+          "chars": 15,
+          "pct_of_doc": 0.03,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMSY7",
+          "chars": 7,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "MSBM10",
+          "chars": 4,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMBSY10",
+          "chars": 1,
+          "pct_of_doc": 0.0,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        }
+      ],
+      "total_chars": 53806,
+      "pct_chars_in_fonts_extraction_py_calls_math": 7.45
+    },
+    "column_probe": [
+      {
+        "page": 0,
+        "n_text_blocks": 34,
+        "sides": "FFFLFFLRLRLRLLRLRLLRLRRRLLLRLLFFFF",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 16
+      },
+      {
+        "page": 1,
+        "n_text_blocks": 33,
+        "sides": "FFFFFFFLLLLLLRLRLRRRRRLRRRRRRLLFL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 8
+      },
+      {
+        "page": 2,
+        "n_text_blocks": 20,
+        "sides": "LFFFFLFFFFFFFFRRRFFL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 2
+      },
+      {
+        "page": 3,
+        "n_text_blocks": 31,
+        "sides": "FFFFLFFRRRFRFRRFFFRLRRRLFFLFRRL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 6
+      },
+      {
+        "page": 4,
+        "n_text_blocks": 42,
+        "sides": "FFLFRLRLRRRFLRRLRFFRFFFFFFFRLRRLRRLRRLLRFL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 18
+      },
+      {
+        "page": 5,
+        "n_text_blocks": 48,
+        "sides": "LLLLLLLRRRRRLLLLLRLLLRFFFFFFFRFRRLLLLLLLLRLLRLFL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 10
+      }
+    ],
+    "vector_figures": [
+      {
+        "page": 0,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 446,
+        "significant_vector_ops": 4
+      },
+      {
+        "page": 1,
+        "embedded_raster_images": 18,
+        "vector_draw_ops": 67,
+        "significant_vector_ops": 2
+      },
+      {
+        "page": 2,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 14,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 3,
+        "embedded_raster_images": 4,
+        "vector_draw_ops": 8,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 4,
+        "embedded_raster_images": 21,
+        "vector_draw_ops": 90,
+        "significant_vector_ops": 3
+      },
+      {
+        "page": 5,
+        "embedded_raster_images": 38,
+        "vector_draw_ops": 122,
+        "significant_vector_ops": 1
+      },
+      {
+        "page": 6,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 945,
+        "significant_vector_ops": 10
+      },
+      {
+        "page": 7,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 4801,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 8,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 9,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 10,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 11,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 12,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 51,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 13,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 31,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 14,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 32,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 15,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 35,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 16,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 17,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 1352,
+        "significant_vector_ops": 13
+      }
+    ],
+    "current_extractor": {
+      "seconds": 11.983,
+      "page_count": 18,
+      "n_blocks": 840,
+      "block_types": {
+        "heading": 67,
+        "text": 186,
+        "math": 574,
+        "list": 9,
+        "figure": 4
+      },
+      "pct_blocks_classified_math": 68.3,
+      "math_blocks_with_latex": 265,
+      "figures": 4,
+      "figures_with_caption": 1,
+      "figure_before_page_text_violations": 4,
+      "non_monotonic_page_transitions": 0,
+      "images_dict_carries_pixel_bytes": false,
+      "text_block_chars_min": 1,
+      "text_block_chars_median": 59,
+      "text_block_chars_max": 3228,
+      "outline_items": 67,
+      "plain_text_chars": 56131,
+      "sample_math": [
+        {
+          "alt_text": "ht+1 = ht + f(ht, \u03b8t)",
+          "latex": "ht+1 = ht + f(ht, \\theta t)"
+        },
+        {
+          "alt_text": "where t \u2208{0 . . . T} and ht \u2208RD. These iterative",
+          "latex": "where t \\in {0 . . . T} and ht \\in RD. These iterative"
+        },
+        {
+          "alt_text": "dh(t)",
+          "latex": ""
+        },
+        {
+          "alt_text": "dt",
+          "latex": ""
+        },
+        {
+          "alt_text": "= f(h(t), t, \u03b8)",
+          "latex": "= f(h(t), t, \\theta )"
+        },
+        {
+          "alt_text": "\u0012",
+          "latex": ""
+        }
+      ],
+      "sample_text_blocks": [
+        "Ricky T. Q. Chen*, Yulia Rubanova*, Jesse Bettencourt*, David Duvenaud University of Toronto, Vector Institute {rtqichen, rubanova, jessebett, duvenaud}@cs.toronto.edu",
+        "We introduce a new family of deep neural network models. Instead of specifying a discrete sequence of hidden layers, we parameterize the derivative of the hidden state using a neural network. The output of the network is computed using a blackbox differential equation solver. These continuous-depth models have constant memory cost, adapt their evaluation strategy to each input, and can explicitly ",
+        "Residual Network ODE Network 5 5 4 4 3 3 Models such as residual networks, recurrent neural network decoders, and normalizing flows build complicated transformations by composing a sequence of transformations to a hidden state: Depth Depth 2 2"
+      ],
+      "sample_headings": [
+        "Neural Ordinary Differential Equations",
+        "Abstract",
+        "1",
+        "Introduction",
+        "arXiv:1806.07366v5  [cs.LG]  14 Dec 2019",
+        "2",
+        "Reverse-mode automatic differentiation of ODE solutions",
+        "3",
+        "Replacing residual networks with ODEs for supervised learning",
+        "0.24 M",
+        "0.60 M",
+        "0.22 M",
+        "0.22 M",
+        "O(1)",
+        "4",
+        "Continuous Normalizing Flows",
+        "K=32",
+        "M=32",
+        "5",
+        "A generative latent function time-series model",
+        "6",
+        "Scope and Limitations",
+        "7",
+        "Related Work",
+        "8"
+      ]
+    },
+    "legacy_services_extractor": {
+      "seconds": 4.212,
+      "page_count": 18,
+      "plain_text_chars": 55742,
+      "outline_items": 21,
+      "n_blocks": 705,
+      "block_types": {
+        "heading": 62,
+        "text": 121,
+        "math_block": 67,
+        "math_inline": 444,
+        "list": 6,
+        "figure": 4,
+        "references": 1
+      }
+    },
+    "pymupdf_baseline": {
+      "seconds": 2.369,
+      "page_count": 18,
+      "plain_text_chars": 73798
+    }
+  },
+  "pdf-to-tree-acl2col.pdf": {
+    "path": "research/benchmarks/corpus/pdf-to-tree-acl2col.pdf",
+    "size_bytes": 3223206,
+    "font_census": {
+      "fonts": [
+        {
+          "font": "NimbusRomNo9L-Regu",
+          "chars": 34409,
+          "pct_of_doc": 87.65,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "NimbusRomNo9L-ReguItal",
+          "chars": 2062,
+          "pct_of_doc": 5.25,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "TimesNewRomanPSMT",
+          "chars": 1128,
+          "pct_of_doc": 2.87,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "NimbusRomNo9L-Medi",
+          "chars": 749,
+          "pct_of_doc": 1.91,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMMI10",
+          "chars": 320,
+          "pct_of_doc": 0.82,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "TimesNewRomanPS-BoldMT",
+          "chars": 179,
+          "pct_of_doc": 0.46,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMMI8",
+          "chars": 110,
+          "pct_of_doc": 0.28,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMR10",
+          "chars": 97,
+          "pct_of_doc": 0.25,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMR8",
+          "chars": 78,
+          "pct_of_doc": 0.2,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "Inconsolatazi4-Regular",
+          "chars": 53,
+          "pct_of_doc": 0.14,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMR6",
+          "chars": 24,
+          "pct_of_doc": 0.06,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMSY10",
+          "chars": 13,
+          "pct_of_doc": 0.03,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMMI6",
+          "chars": 13,
+          "pct_of_doc": 0.03,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMEX10",
+          "chars": 11,
+          "pct_of_doc": 0.03,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMSY8",
+          "chars": 5,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CambriaMath",
+          "chars": 3,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "Calibri",
+          "chars": 2,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        }
+      ],
+      "total_chars": 39256,
+      "pct_chars_in_fonts_extraction_py_calls_math": 1.71
+    },
+    "column_probe": [
+      {
+        "page": 0,
+        "n_text_blocks": 35,
+        "sides": "FFFFRLRRRRRRRRRRRRRRRRRRRRLLRLLRLFF",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 7
+      },
+      {
+        "page": 1,
+        "n_text_blocks": 37,
+        "sides": "RFRLRRLRRLRRRLLRRLFFFFFFLLRRRLRRLRLRL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 17
+      },
+      {
+        "page": 2,
+        "n_text_blocks": 79,
+        "sides": "RRLLLLLLRRRLLRLRRLRRLLLLRRRLLRLLLRLRLLLLRRRRLRLRRLLLRRLLLLFLRLRRLRLLRLRRLLLRLRL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 39
+      },
+      {
+        "page": 3,
+        "n_text_blocks": 29,
+        "sides": "LRRRLLLLLLLLLLLRRLRRRLLRLLRLL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 10
+      },
+      {
+        "page": 4,
+        "n_text_blocks": 12,
+        "sides": "RLRLRLLRRLRL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 9
+      },
+      {
+        "page": 5,
+        "n_text_blocks": 18,
+        "sides": "FFFFLRLLLLLLRLRLRL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 8
+      }
+    ],
+    "vector_figures": [
+      {
+        "page": 0,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 51,
+        "significant_vector_ops": 6
+      },
+      {
+        "page": 1,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 62,
+        "significant_vector_ops": 9
+      },
+      {
+        "page": 2,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 132,
+        "significant_vector_ops": 2
+      },
+      {
+        "page": 3,
+        "embedded_raster_images": 1,
+        "vector_draw_ops": 7,
+        "significant_vector_ops": 4
+      },
+      {
+        "page": 4,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 5,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 35,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 6,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 84,
+        "significant_vector_ops": 3
+      },
+      {
+        "page": 7,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 43,
+        "significant_vector_ops": 3
+      },
+      {
+        "page": 8,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 9,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 10,
+        "embedded_raster_images": 1,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      }
+    ],
+    "current_extractor": {
+      "seconds": 7.089,
+      "page_count": 11,
+      "n_blocks": 196,
+      "block_types": {
+        "heading": 60,
+        "text": 76,
+        "list": 11,
+        "math": 47,
+        "figure": 2
+      },
+      "pct_blocks_classified_math": 24.0,
+      "math_blocks_with_latex": 4,
+      "figures": 2,
+      "figures_with_caption": 1,
+      "figure_before_page_text_violations": 2,
+      "non_monotonic_page_transitions": 0,
+      "images_dict_carries_pixel_bytes": false,
+      "text_block_chars_min": 1,
+      "text_block_chars_median": 174,
+      "text_block_chars_max": 4668,
+      "outline_items": 60,
+      "plain_text_chars": 40589,
+      "sample_math": [
+        {
+          "alt_text": "[T1, T2, ..., Tn] from d with PDF Miner or OCR",
+          "latex": ""
+        },
+        {
+          "alt_text": "that tree, \u02c6A = [(head, tail, label), ...]. Now the",
+          "latex": ""
+        },
+        {
+          "alt_text": "of ni.",
+          "latex": ""
+        },
+        {
+          "alt_text": "s = [ROOT], and b = [T1, T2, ..., Tn]. In each",
+          "latex": ""
+        },
+        {
+          "alt_text": "\u2190",
+          "latex": "\\leftarrow"
+        },
+        {
+          "alt_text": "A \u222a[predicted_arc].",
+          "latex": "A \\cup [predicted_{a}rc]."
+        }
+      ],
+      "sample_text_blocks": [
+        "Yue Zhang1, Zhihao Zhang1, Wenbin Lai1, Chong Zhang1 Tao Gui2, Qi Zhang1,3, Xuanjing Huang1,3 1 School of Computer Science, Fudan University 2 Institute of Modern Languages and Linguistics, Fudan University 3 Shanghai Key Laboratory of Intelligent Information Processing, Fudan University yuezhang.fdu@gmail.com, {tgui,qz,xjhuang}@fudan.edu.cn root",
+        "title",
+        "paragraph token token section subsection [a] paragraph token token 1 subsection table table row 2 4 cell cell footnote 3 5 annotation [b] [c] In many PDF documents, the reading order of text blocks is missing, which can hinder machine understanding of the document\u2019s content. Existing works try to extract one universal reading order for a PDF file. However, applications, like Retrieval Augmented Ge"
+      ],
+      "sample_headings": [
+        "PDF-to-Tree: Parsing PDF Text Blocks into a Tree",
+        "Abstract",
+        "abstract",
+        "Introduction",
+        "BUFFER",
+        "STACK",
+        "abstract",
+        "A \u2190 \u2205",
+        "[ROOT]",
+        "[T1, T2, T3, T4, T5]",
+        "[ROOT, T1]",
+        "[T2, T3, T4, T5]",
+        "[ROOT, T1, T2]",
+        "[T3, T4, T5]",
+        "SHIFT",
+        "[CLS]",
+        "[S#0]",
+        "STACK",
+        "[S#0]",
+        "abstract",
+        "[S#1]",
+        "[S#1]",
+        "[SEP]",
+        "abstract",
+        "BUFFER"
+      ]
+    },
+    "legacy_services_extractor": {
+      "seconds": 2.437,
+      "page_count": 11,
+      "plain_text_chars": 40689,
+      "outline_items": 5,
+      "n_blocks": 381,
+      "block_types": {
+        "heading": 172,
+        "text": 156,
+        "list": 7,
+        "math_inline": 36,
+        "math_block": 7,
+        "figure": 2,
+        "references": 1
+      }
+    },
+    "pymupdf_baseline": {
+      "seconds": 0.672,
+      "page_count": 11,
+      "plain_text_chars": 59935
+    }
+  },
+  "resnet-cvpr-2col.pdf": {
+    "path": "research/benchmarks/corpus/resnet-cvpr-2col.pdf",
+    "size_bytes": 819383,
+    "font_census": {
+      "fonts": [
+        {
+          "font": "NimbusRomNo9L-Regu",
+          "chars": 50520,
+          "pct_of_doc": 87.61,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "NimbusRomNo9L-ReguItal",
+          "chars": 2910,
+          "pct_of_doc": 5.05,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "TT94o00",
+          "chars": 1309,
+          "pct_of_doc": 2.27,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "NimbusRomNo9L-Medi",
+          "chars": 1249,
+          "pct_of_doc": 2.17,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "Times-Roman",
+          "chars": 613,
+          "pct_of_doc": 1.06,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "NimbusMonL-Regu",
+          "chars": 230,
+          "pct_of_doc": 0.4,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMSY10",
+          "chars": 186,
+          "pct_of_doc": 0.32,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMR10",
+          "chars": 177,
+          "pct_of_doc": 0.31,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMEX10",
+          "chars": 64,
+          "pct_of_doc": 0.11,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMMI10",
+          "chars": 61,
+          "pct_of_doc": 0.11,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMBX10",
+          "chars": 47,
+          "pct_of_doc": 0.08,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "TT95o00",
+          "chars": 37,
+          "pct_of_doc": 0.06,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "TT3Do00",
+          "chars": 36,
+          "pct_of_doc": 0.06,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "TT4Co00",
+          "chars": 33,
+          "pct_of_doc": 0.06,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "TT93o00",
+          "chars": 32,
+          "pct_of_doc": 0.06,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "TT55o00",
+          "chars": 32,
+          "pct_of_doc": 0.06,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "TT3Eo00",
+          "chars": 29,
+          "pct_of_doc": 0.05,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "TT3Co00",
+          "chars": 24,
+          "pct_of_doc": 0.04,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "Helvetica",
+          "chars": 18,
+          "pct_of_doc": 0.03,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "TT3Bo00",
+          "chars": 16,
+          "pct_of_doc": 0.03,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMR7",
+          "chars": 10,
+          "pct_of_doc": 0.02,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMSY9",
+          "chars": 9,
+          "pct_of_doc": 0.02,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMMI7",
+          "chars": 8,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMSY8",
+          "chars": 3,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMSY6",
+          "chars": 3,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "NimbusRomNo9L-MediItal",
+          "chars": 3,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMMI9",
+          "chars": 3,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "MinionPro-Regular",
+          "chars": 2,
+          "pct_of_doc": 0.0,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMMI8",
+          "chars": 1,
+          "pct_of_doc": 0.0,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        }
+      ],
+      "total_chars": 57665,
+      "pct_chars_in_fonts_extraction_py_calls_math": 0.91
+    },
+    "column_probe": [
+      {
+        "page": 0,
+        "n_text_blocks": 33,
+        "sides": "FFRRLRLRRLRRRLRLRRRRRRRLRLLLRLLRL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 17
+      },
+      {
+        "page": 1,
+        "n_text_blocks": 21,
+        "sides": "LLLLLLLLRLRRLRLLRLRLL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 10
+      },
+      {
+        "page": 2,
+        "n_text_blocks": 23,
+        "sides": "LRLLRRRLRRLRRRLLLLRLLRL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 12
+      },
+      {
+        "page": 3,
+        "n_text_blocks": 120,
+        "sides": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLRLLRLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLRLLLLLLLLLLRLLLLRLLLLLRLLLLLLLLLLLLLLLRLLLLRLRL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 18
+      },
+      {
+        "page": 4,
+        "n_text_blocks": 130,
+        "sides": "FLRRRRRFLLLLLRRLLRRRLLLRRLRRRRRLLLLRRLRRRLLLLLRRLRRRRRLLLLRRLLLRRRLLLRRRRRLRRLLLLRRLRRRLLLLLRRFFRLLLLLLLLLFLLLRLRLLLRLRFRLLRLRRRLL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 44
+      },
+      {
+        "page": 5,
+        "n_text_blocks": 37,
+        "sides": "RLRLRRLRRLRLRRLLLLRLLLLRLLRLLRLRRLRLL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 23
+      }
+    ],
+    "vector_figures": [
+      {
+        "page": 0,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 59,
+        "significant_vector_ops": 8
+      },
+      {
+        "page": 1,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 16,
+        "significant_vector_ops": 1
+      },
+      {
+        "page": 2,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 1,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 3,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 366,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 4,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 270,
+        "significant_vector_ops": 14
+      },
+      {
+        "page": 5,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 83,
+        "significant_vector_ops": 4
+      },
+      {
+        "page": 6,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 53,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 7,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 367,
+        "significant_vector_ops": 33
+      },
+      {
+        "page": 8,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 9,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 5,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 10,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 89,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 11,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 55,
+        "significant_vector_ops": 0
+      }
+    ],
+    "current_extractor": {
+      "seconds": 1.358,
+      "page_count": 12,
+      "n_blocks": 233,
+      "block_types": {
+        "heading": 58,
+        "text": 83,
+        "list": 6,
+        "math": 86
+      },
+      "pct_blocks_classified_math": 36.9,
+      "math_blocks_with_latex": 26,
+      "figures": 0,
+      "figures_with_caption": 0,
+      "figure_before_page_text_violations": 0,
+      "non_monotonic_page_transitions": 0,
+      "images_dict_carries_pixel_bytes": false,
+      "text_block_chars_min": 2,
+      "text_block_chars_median": 332,
+      "text_block_chars_max": 4673,
+      "outline_items": 58,
+      "plain_text_chars": 59346,
+      "sample_math": [
+        {
+          "alt_text": "F(x)",
+          "latex": ""
+        },
+        {
+          "alt_text": "F(x)\u0001+\u0001x",
+          "latex": ""
+        },
+        {
+          "alt_text": "y = F(x, {Wi}) + Wsx.",
+          "latex": ""
+        },
+        {
+          "alt_text": "y = F(x, {Wi}) + x.",
+          "latex": ""
+        },
+        {
+          "alt_text": "side is in {224, 256, 384, 480, 640}).",
+          "latex": ""
+        },
+        {
+          "alt_text": "\uf8ee",
+          "latex": ""
+        }
+      ],
+      "sample_text_blocks": [
+        "{kahe, v-xiangz, v-shren, jiansun}@microsoft.com 20 20",
+        "56-layer 20-layer 10 10 56-layer test error (%) training error (%) 20-layer 0 1 2 3 4 5 6 0 0 1 2 3 4 5 6 0 iter. (1e4) iter. (1e4) Figure 1. Training error (left) and test error (right) on CIFAR-10 with 20-layer and 56-layer \u201cplain\u201d networks. The deeper network has higher training error, and thus test error. Similar phenomena on ImageNet is presented in Fig. 4. greatly benefited from very deep mo",
+        "When deeper networks are able to start converging, a degradation problem has been exposed: with the network depth increasing, accuracy gets saturated (which might be unsurprising) and then degrades rapidly. Unexpectedly, such degradation is not caused by overfitting, and adding more layers to a suitably deep model leads to higher training error, as reported in [11, 42] and thoroughly verified by o"
+      ],
+      "sample_headings": [
+        "Deep Residual Learning for Image Recognition",
+        "Kaiming He",
+        "Xiangyu Zhang",
+        "Shaoqing Ren",
+        "Jian Sun",
+        "Microsoft Research",
+        "Abstract",
+        "arXiv:1512.03385v1  [cs.CV]  10 Dec 2015",
+        "3.1. Residual Learning",
+        "3.3. Network Architectures",
+        "3.2. Identity Mapping by Shortcuts",
+        "VGG-19",
+        "3.4. Implementation",
+        "4.1. ImageNet Classi\ufb01cation",
+        "VGG-16 [41]",
+        "VGG [41] (ILSVRC\u201914)",
+        "VGG [41] (ILSVRC\u201914)",
+        "NIN [25]",
+        "DSN [24]",
+        "2.5M",
+        "2.3M",
+        "1.25M",
+        "0.27M",
+        "0.46M",
+        "0.66M"
+      ]
+    },
+    "legacy_services_extractor": {
+      "seconds": 1.284,
+      "page_count": 12,
+      "plain_text_chars": 59577,
+      "outline_items": 8,
+      "n_blocks": 361,
+      "block_types": {
+        "heading": 174,
+        "text": 107,
+        "math_block": 2,
+        "math_inline": 77,
+        "references": 1
+      }
+    },
+    "pymupdf_baseline": {
+      "seconds": 0.885,
+      "page_count": 12,
+      "plain_text_chars": 99077
+    }
+  },
+  "06a65b89-e20f-4995-9f04-ea7201a12a68.pdf": {
+    "path": "apps/api/storage/papers/06a65b89-e20f-4995-9f04-ea7201a12a68.pdf",
+    "size_bytes": 366296,
+    "font_census": {
+      "fonts": [
+        {
+          "font": "Times-Roman",
+          "chars": 131185,
+          "pct_of_doc": 91.12,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "Times-Italic",
+          "chars": 7792,
+          "pct_of_doc": 5.41,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T22",
+          "chars": 2262,
+          "pct_of_doc": 1.57,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T23",
+          "chars": 1116,
+          "pct_of_doc": 0.78,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T18",
+          "chars": 435,
+          "pct_of_doc": 0.3,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "Symbol",
+          "chars": 232,
+          "pct_of_doc": 0.16,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "T16",
+          "chars": 179,
+          "pct_of_doc": 0.12,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T13",
+          "chars": 173,
+          "pct_of_doc": 0.12,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T19",
+          "chars": 133,
+          "pct_of_doc": 0.09,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T20",
+          "chars": 111,
+          "pct_of_doc": 0.08,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T15",
+          "chars": 94,
+          "pct_of_doc": 0.07,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T21",
+          "chars": 67,
+          "pct_of_doc": 0.05,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T9",
+          "chars": 67,
+          "pct_of_doc": 0.05,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T5",
+          "chars": 19,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T4",
+          "chars": 19,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T17",
+          "chars": 18,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T3",
+          "chars": 16,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T6",
+          "chars": 15,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T12",
+          "chars": 13,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T2",
+          "chars": 10,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T7",
+          "chars": 8,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T11",
+          "chars": 6,
+          "pct_of_doc": 0.0,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T24",
+          "chars": 1,
+          "pct_of_doc": 0.0,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T14",
+          "chars": 1,
+          "pct_of_doc": 0.0,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T10",
+          "chars": 1,
+          "pct_of_doc": 0.0,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T8",
+          "chars": 1,
+          "pct_of_doc": 0.0,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "T1",
+          "chars": 1,
+          "pct_of_doc": 0.0,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        }
+      ],
+      "total_chars": 143975,
+      "pct_chars_in_fonts_extraction_py_calls_math": 0.16
+    },
+    "column_probe": [
+      {
+        "page": 0,
+        "n_text_blocks": 20,
+        "sides": "LFFFFLFFFFFFFFFFRFFL",
+        "looks_two_column": false,
+        "column_alternations_in_sort_order": 2
+      },
+      {
+        "page": 1,
+        "n_text_blocks": 21,
+        "sides": "LLLRRFRLRLFLFFFFFFFFL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 4
+      },
+      {
+        "page": 2,
+        "n_text_blocks": 34,
+        "sides": "FFFFFFFFRLLLFLFRLLRFRFLLFFRLLLLRLL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 9
+      },
+      {
+        "page": 3,
+        "n_text_blocks": 67,
+        "sides": "LLLFFRRRRFFFLFFLLRRLLFFLFLLLRLLLLLLLLLFLRRRRLLLLRLLLLLRRLRLRFLRFFFL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 18
+      },
+      {
+        "page": 4,
+        "n_text_blocks": 15,
+        "sides": "FFFFFFFFFFFFFFL",
+        "looks_two_column": false,
+        "column_alternations_in_sort_order": 0
+      },
+      {
+        "page": 5,
+        "n_text_blocks": 75,
+        "sides": "FLRRLRRLLRLLRLLLLLLLFLLRRLRLLRLLLLRRLRLLRLLRLRLLRLLRLLLLRRRFRFRFLFLLFFFFFFL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 30
+      }
+    ],
+    "vector_figures": [
+      {
+        "page": 0,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 1,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 11,
+        "significant_vector_ops": 1
+      },
+      {
+        "page": 2,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 3,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 14,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 4,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 5,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 6,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 7,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 14,
+        "significant_vector_ops": 2
+      },
+      {
+        "page": 8,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 52,
+        "significant_vector_ops": 1
+      },
+      {
+        "page": 9,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 12,
+        "significant_vector_ops": 2
+      },
+      {
+        "page": 10,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 2,
+        "significant_vector_ops": 2
+      },
+      {
+        "page": 11,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 12,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 13,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 14,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 15,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 16,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 17,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 18,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 19,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 20,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 16,
+        "significant_vector_ops": 3
+      },
+      {
+        "page": 21,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 3,
+        "significant_vector_ops": 3
+      },
+      {
+        "page": 22,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 32,
+        "significant_vector_ops": 1
+      },
+      {
+        "page": 23,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 24,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 16,
+        "significant_vector_ops": 2
+      },
+      {
+        "page": 25,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 26,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 23,
+        "significant_vector_ops": 3
+      },
+      {
+        "page": 27,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 28,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 29,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 30,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 31,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 32,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 33,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 34,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 35,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 36,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 37,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 38,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 39,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 24,
+        "significant_vector_ops": 10
+      },
+      {
+        "page": 40,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 41,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 42,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 43,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 44,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 45,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 46,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 47,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 48,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 49,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 50,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 51,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 52,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 53,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 54,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      }
+    ],
+    "current_extractor": {
+      "seconds": 2.64,
+      "page_count": 55,
+      "n_blocks": 744,
+      "block_types": {
+        "text": 346,
+        "heading": 193,
+        "list": 125,
+        "math": 80
+      },
+      "pct_blocks_classified_math": 10.8,
+      "math_blocks_with_latex": 80,
+      "figures": 0,
+      "figures_with_caption": 0,
+      "figure_before_page_text_violations": 0,
+      "non_monotonic_page_transitions": 0,
+      "images_dict_carries_pixel_bytes": false,
+      "text_block_chars_min": 1,
+      "text_block_chars_median": 194,
+      "text_block_chars_max": 3353,
+      "outline_items": 193,
+      "plain_text_chars": 149600,
+      "sample_math": [
+        {
+          "alt_text": "!\u221e",
+          "latex": "!\\infty"
+        },
+        {
+          "alt_text": "\u2211",
+          "latex": "\\sum"
+        },
+        {
+          "alt_text": "= \u2211",
+          "latex": "= \\sum"
+        },
+        {
+          "alt_text": "= \u2211",
+          "latex": "= \\sum"
+        },
+        {
+          "alt_text": "= \u2211",
+          "latex": "= \\sum"
+        },
+        {
+          "alt_text": "\u2211",
+          "latex": "\\sum"
+        }
+      ],
+      "sample_text_blocks": [
+        "Reprinted with corrections from The Bell System Technical Journal, Vol. 27, pp. 379-423, 623-656, July, October, 1948.",
+        "By C. E. SHANNON",
+        "HE recent development of various methods of modulation such as PCM and PPM which exchange T bandwidth for signal-to-noise ratio has intensified the interest in a general theory of communication. A basis for such a theory is contained in the important papers of Nyquist1 and Hartley2 on this subject. In the present paper we will extend the theory to include a number of new factors, in particular the"
+      ],
+      "sample_headings": [
+        "A Mathematical Theory of Communication",
+        "INTRODUCTION",
+        "= N.",
+        "INFORMATION",
+        "SOURCE",
+        "TRANSMITTER",
+        "RECEIVER",
+        "DESTINATION",
+        "SIGNAL",
+        "RECEIVED",
+        "SIGNAL",
+        "MESSAGE",
+        "MESSAGE",
+        "NOISE",
+        "SOURCE",
+        "PART I: DISCRETE NOISELESS SYSTEMS",
+        "DASH",
+        "DASH",
+        "LETTER SPACE",
+        "WORD SPACE",
+        "B D C B C E C C C A D C B D D A A E C E E A",
+        "A B B D A E E C A C E E B A E E C B C E A D.",
+        "A A A C D C B D C E A A D A D A C E D A",
+        "E A D C A B E D A D D C E C A A A A A D.",
+        "B A B B B B A B B A B A C B B B A B A."
+      ]
+    },
+    "legacy_services_extractor": {
+      "seconds": 3.393,
+      "page_count": 55,
+      "plain_text_chars": 149229,
+      "outline_items": 183,
+      "n_blocks": 889,
+      "block_types": {
+        "text": 524,
+        "heading": 222,
+        "list": 53,
+        "math_inline": 22,
+        "math_block": 68
+      }
+    },
+    "pymupdf_baseline": {
+      "seconds": 2.341,
+      "page_count": 55,
+      "plain_text_chars": 198897
+    }
+  },
+  "5a047c21-e659-42d3-9b28-54567b21fc0b.pdf": {
+    "path": "apps/api/storage/papers/5a047c21-e659-42d3-9b28-54567b21fc0b.pdf",
+    "size_bytes": 112084,
+    "font_census": {
+      "fonts": [
+        {
+          "font": "Times-Roman",
+          "chars": 30844,
+          "pct_of_doc": 92.65,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "Times-Italic",
+          "chars": 712,
+          "pct_of_doc": 2.14,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "Times-Bold",
+          "chars": 497,
+          "pct_of_doc": 1.49,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "Helvetica",
+          "chars": 394,
+          "pct_of_doc": 1.18,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMMI10",
+          "chars": 285,
+          "pct_of_doc": 0.86,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "BitstreamVeraSans-Roman",
+          "chars": 228,
+          "pct_of_doc": 0.68,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "Courier",
+          "chars": 155,
+          "pct_of_doc": 0.47,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMR10",
+          "chars": 71,
+          "pct_of_doc": 0.21,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMR7",
+          "chars": 32,
+          "pct_of_doc": 0.1,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMMI7",
+          "chars": 28,
+          "pct_of_doc": 0.08,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMSY10",
+          "chars": 23,
+          "pct_of_doc": 0.07,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMSY5",
+          "chars": 10,
+          "pct_of_doc": 0.03,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMSY7",
+          "chars": 7,
+          "pct_of_doc": 0.02,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMEX10",
+          "chars": 4,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMSY9",
+          "chars": 1,
+          "pct_of_doc": 0.0,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        }
+      ],
+      "total_chars": 33291,
+      "pct_chars_in_fonts_extraction_py_calls_math": 1.38
+    },
+    "column_probe": [
+      {
+        "page": 0,
+        "n_text_blocks": 15,
+        "sides": "FFRRLRFLLFLLFFL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 3
+      },
+      {
+        "page": 1,
+        "n_text_blocks": 9,
+        "sides": "FFFFFFFFL",
+        "looks_two_column": false,
+        "column_alternations_in_sort_order": 0
+      },
+      {
+        "page": 2,
+        "n_text_blocks": 20,
+        "sides": "FLFLRLRLFFFRLLLFFLFL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 6
+      },
+      {
+        "page": 3,
+        "n_text_blocks": 18,
+        "sides": "LFFLFRLLFLRFFLFFFL",
+        "looks_two_column": false,
+        "column_alternations_in_sort_order": 4
+      },
+      {
+        "page": 4,
+        "n_text_blocks": 16,
+        "sides": "FLFFFFFRFLFLFFFL",
+        "looks_two_column": false,
+        "column_alternations_in_sort_order": 2
+      },
+      {
+        "page": 5,
+        "n_text_blocks": 72,
+        "sides": "LRLRLRLRLRLRLRLRLRFLRLRLRLRFRFRFRFRFFLFLLRLLLLRLLLLLLLLLRLLRLLLLRLLLRFFL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 38
+      }
+    ],
+    "vector_figures": [
+      {
+        "page": 0,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 1,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 89,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 2,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 3,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 4,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 5,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 59,
+        "significant_vector_ops": 6
+      },
+      {
+        "page": 6,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 138,
+        "significant_vector_ops": 7
+      },
+      {
+        "page": 7,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 8,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      }
+    ],
+    "current_extractor": {
+      "seconds": 0.716,
+      "page_count": 9,
+      "n_blocks": 106,
+      "block_types": {
+        "heading": 26,
+        "text": 42,
+        "math": 33,
+        "list": 5
+      },
+      "pct_blocks_classified_math": 31.1,
+      "math_blocks_with_latex": 1,
+      "figures": 0,
+      "figures_with_caption": 0,
+      "figure_before_page_text_violations": 0,
+      "non_monotonic_page_transitions": 0,
+      "images_dict_carries_pixel_bytes": false,
+      "text_block_chars_min": 3,
+      "text_block_chars_median": 255,
+      "text_block_chars_max": 4366,
+      "outline_items": 26,
+      "plain_text_chars": 33903,
+      "sample_math": [
+        {
+          "alt_text": "ht",
+          "latex": ""
+        },
+        {
+          "alt_text": "=",
+          "latex": ""
+        },
+        {
+          "alt_text": "sigm",
+          "latex": ""
+        },
+        {
+          "alt_text": "W hxxt + W hhht\u22121",
+          "latex": ""
+        },
+        {
+          "alt_text": "\u0000",
+          "latex": ""
+        },
+        {
+          "alt_text": "\u0001",
+          "latex": ""
+        }
+      ],
+      "sample_text_blocks": [
+        "Quoc V. Le Oriol Vinyals Ilya Sutskever Google qvl@google.com Google vinyals@google.com Google ilyasu@google.com",
+        "Deep Neural Networks (DNNs) are powerful models that have achieved excellent performance on difficult learning tasks. Although DNNs work well whenever large labeled training sets are available, they cannot be used to map sequences to sequences. In this paper, we present a general end-to-end approach to sequence learning that makes minimal assumptions on the sequence structure. Our method uses a mu",
+        "Deep Neural Networks (DNNs) are extremely powerful machine learning models that achieve excellent performance on difficult problems such as speech recognition [13, 7] and visual object recognition [19, 6, 21, 20]. DNNs are powerful because they can perform arbitrary parallel computation for a modest number of steps. A surprising example of the power of DNNs is their ability to sort N N-bit numbers"
+      ],
+      "sample_headings": [
+        "Sequence to Sequence Learning",
+        "with Neural Networks",
+        "Abstract",
+        "arXiv:1409.3215v3  [cs.CL]  14 Dec 2014",
+        "1",
+        "Introduction",
+        "2",
+        "The model",
+        "3",
+        "Experiments",
+        "SMT [29].",
+        "I was given a card by her in the garden",
+        "I gave her a card in the garden",
+        "Il y a , avec la cr\u00b4emation , \u201c une violence faite au corps aim\u00b4e \u201d ,",
+        "LSTM  (34.8)",
+        "LSTM  (34.8)",
+        "4",
+        "Related work",
+        "5",
+        "Conclusion",
+        "6",
+        "Acknowledgments",
+        "References",
+        "ICLR, 2014.",
+        "T. Sainath, and B. Kingsbury. Deep neural networks for acoustic modeling in speech recognition. IEEE"
+      ]
+    },
+    "legacy_services_extractor": {
+      "seconds": 0.776,
+      "page_count": 9,
+      "plain_text_chars": 34018,
+      "outline_items": 9,
+      "n_blocks": 159,
+      "block_types": {
+        "heading": 48,
+        "text": 70,
+        "math_inline": 32,
+        "math_block": 3,
+        "list": 5,
+        "references": 1
+      }
+    },
+    "pymupdf_baseline": {
+      "seconds": 0.594,
+      "page_count": 9,
+      "plain_text_chars": 39767
+    }
+  },
+  "e91a46cd-c37c-4b69-ae39-b7eff4e8aa02.pdf": {
+    "path": "apps/api/storage/papers/e91a46cd-c37c-4b69-ae39-b7eff4e8aa02.pdf",
+    "size_bytes": 112084,
+    "font_census": {
+      "fonts": [
+        {
+          "font": "Times-Roman",
+          "chars": 30844,
+          "pct_of_doc": 92.65,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "Times-Italic",
+          "chars": 712,
+          "pct_of_doc": 2.14,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "Times-Bold",
+          "chars": 497,
+          "pct_of_doc": 1.49,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "Helvetica",
+          "chars": 394,
+          "pct_of_doc": 1.18,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMMI10",
+          "chars": 285,
+          "pct_of_doc": 0.86,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "BitstreamVeraSans-Roman",
+          "chars": 228,
+          "pct_of_doc": 0.68,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "Courier",
+          "chars": 155,
+          "pct_of_doc": 0.47,
+          "is_math_font__extraction_py": false,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMR10",
+          "chars": 71,
+          "pct_of_doc": 0.21,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMR7",
+          "chars": 32,
+          "pct_of_doc": 0.1,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": false
+        },
+        {
+          "font": "CMMI7",
+          "chars": 28,
+          "pct_of_doc": 0.08,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMSY10",
+          "chars": 23,
+          "pct_of_doc": 0.07,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMSY5",
+          "chars": 10,
+          "pct_of_doc": 0.03,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMSY7",
+          "chars": 7,
+          "pct_of_doc": 0.02,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMEX10",
+          "chars": 4,
+          "pct_of_doc": 0.01,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        },
+        {
+          "font": "CMSY9",
+          "chars": 1,
+          "pct_of_doc": 0.0,
+          "is_math_font__extraction_py": true,
+          "is_math_font__services_py": true
+        }
+      ],
+      "total_chars": 33291,
+      "pct_chars_in_fonts_extraction_py_calls_math": 1.38
+    },
+    "column_probe": [
+      {
+        "page": 0,
+        "n_text_blocks": 15,
+        "sides": "FFRRLRFLLFLLFFL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 3
+      },
+      {
+        "page": 1,
+        "n_text_blocks": 9,
+        "sides": "FFFFFFFFL",
+        "looks_two_column": false,
+        "column_alternations_in_sort_order": 0
+      },
+      {
+        "page": 2,
+        "n_text_blocks": 20,
+        "sides": "FLFLRLRLFFFRLLLFFLFL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 6
+      },
+      {
+        "page": 3,
+        "n_text_blocks": 18,
+        "sides": "LFFLFRLLFLRFFLFFFL",
+        "looks_two_column": false,
+        "column_alternations_in_sort_order": 4
+      },
+      {
+        "page": 4,
+        "n_text_blocks": 16,
+        "sides": "FLFFFFFRFLFLFFFL",
+        "looks_two_column": false,
+        "column_alternations_in_sort_order": 2
+      },
+      {
+        "page": 5,
+        "n_text_blocks": 72,
+        "sides": "LRLRLRLRLRLRLRLRLRFLRLRLRLRFRFRFRFRFFLFLLRLLLLRLLLLLLLLLRLLRLLLLRLLLRFFL",
+        "looks_two_column": true,
+        "column_alternations_in_sort_order": 38
+      }
+    ],
+    "vector_figures": [
+      {
+        "page": 0,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 1,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 89,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 2,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 3,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 4,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 5,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 59,
+        "significant_vector_ops": 6
+      },
+      {
+        "page": 6,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 138,
+        "significant_vector_ops": 7
+      },
+      {
+        "page": 7,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      },
+      {
+        "page": 8,
+        "embedded_raster_images": 0,
+        "vector_draw_ops": 0,
+        "significant_vector_ops": 0
+      }
+    ],
+    "current_extractor": {
+      "seconds": 0.67,
+      "page_count": 9,
+      "n_blocks": 106,
+      "block_types": {
+        "heading": 26,
+        "text": 42,
+        "math": 33,
+        "list": 5
+      },
+      "pct_blocks_classified_math": 31.1,
+      "math_blocks_with_latex": 1,
+      "figures": 0,
+      "figures_with_caption": 0,
+      "figure_before_page_text_violations": 0,
+      "non_monotonic_page_transitions": 0,
+      "images_dict_carries_pixel_bytes": false,
+      "text_block_chars_min": 3,
+      "text_block_chars_median": 255,
+      "text_block_chars_max": 4366,
+      "outline_items": 26,
+      "plain_text_chars": 33903,
+      "sample_math": [
+        {
+          "alt_text": "ht",
+          "latex": ""
+        },
+        {
+          "alt_text": "=",
+          "latex": ""
+        },
+        {
+          "alt_text": "sigm",
+          "latex": ""
+        },
+        {
+          "alt_text": "W hxxt + W hhht\u22121",
+          "latex": ""
+        },
+        {
+          "alt_text": "\u0000",
+          "latex": ""
+        },
+        {
+          "alt_text": "\u0001",
+          "latex": ""
+        }
+      ],
+      "sample_text_blocks": [
+        "Quoc V. Le Oriol Vinyals Ilya Sutskever Google qvl@google.com Google vinyals@google.com Google ilyasu@google.com",
+        "Deep Neural Networks (DNNs) are powerful models that have achieved excellent performance on difficult learning tasks. Although DNNs work well whenever large labeled training sets are available, they cannot be used to map sequences to sequences. In this paper, we present a general end-to-end approach to sequence learning that makes minimal assumptions on the sequence structure. Our method uses a mu",
+        "Deep Neural Networks (DNNs) are extremely powerful machine learning models that achieve excellent performance on difficult problems such as speech recognition [13, 7] and visual object recognition [19, 6, 21, 20]. DNNs are powerful because they can perform arbitrary parallel computation for a modest number of steps. A surprising example of the power of DNNs is their ability to sort N N-bit numbers"
+      ],
+      "sample_headings": [
+        "Sequence to Sequence Learning",
+        "with Neural Networks",
+        "Abstract",
+        "arXiv:1409.3215v3  [cs.CL]  14 Dec 2014",
+        "1",
+        "Introduction",
+        "2",
+        "The model",
+        "3",
+        "Experiments",
+        "SMT [29].",
+        "I was given a card by her in the garden",
+        "I gave her a card in the garden",
+        "Il y a , avec la cr\u00b4emation , \u201c une violence faite au corps aim\u00b4e \u201d ,",
+        "LSTM  (34.8)",
+        "LSTM  (34.8)",
+        "4",
+        "Related work",
+        "5",
+        "Conclusion",
+        "6",
+        "Acknowledgments",
+        "References",
+        "ICLR, 2014.",
+        "T. Sainath, and B. Kingsbury. Deep neural networks for acoustic modeling in speech recognition. IEEE"
+      ]
+    },
+    "legacy_services_extractor": {
+      "seconds": 0.732,
+      "page_count": 9,
+      "plain_text_chars": 34018,
+      "outline_items": 9,
+      "n_blocks": 159,
+      "block_types": {
+        "heading": 48,
+        "text": 70,
+        "math_inline": 32,
+        "math_block": 3,
+        "list": 5,
+        "references": 1
+      }
+    },
+    "pymupdf_baseline": {
+      "seconds": 0.473,
+      "page_count": 9,
+      "plain_text_chars": 39767
+    }
+  }
+}
