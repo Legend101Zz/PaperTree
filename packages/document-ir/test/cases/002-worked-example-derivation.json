@@ -1,0 +1,23 @@
+{
+  "name": "worked-example-derivation",
+  "schema": "derivation",
+  "expect": "valid",
+  "reason": "the matching Derivation",
+  "origin": "test/schema.spec.ts",
+  "document": {
+    "derivation_id": "drv_01JQ8ZD7Y5V3WCP7S4MFXZ8JBG",
+    "paper_id": "ppr_01JQ8ZC5X4T2VBN6R3KDWY7HAE",
+    "kind": "guided_section",
+    "author": {
+      "kind": "model",
+      "model_id": "anthropic/claude-haiku-4.5",
+      "prompt_hash": "sha256:1f2e3d4c5b6a7988"
+    },
+    "content": "Residual learning reframes each block as learning a correction to the identity.",
+    "derived_from": [
+      "blk_a3c5e7g2j4m6p7r2",
+      "blk_d6f2h4k6n2q4s6u2"
+    ],
+    "created_at": "2026-07-30T09:20:00Z"
+  }
+}

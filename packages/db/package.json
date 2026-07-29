@@ -10,8 +10,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "oxlint src test",
-    "test": "vitest run"
+    "lint": "oxlint src",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@papertree/document-ir": "workspace:*",

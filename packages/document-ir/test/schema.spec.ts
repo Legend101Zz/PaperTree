@@ -879,17 +879,15 @@ describe("documented gaps: these validate ON PURPOSE, and the named check owns t
   });
 });
 
-describe("block-id alphabet vs ADR-001 Amendment 1 (TRIPWIRE — see DESIGN.md §11.0)", () => {
-  // EPIC-00 pinned `^blk_[a-z2-7]{16}$` (lowercase). ADR-001 Amendment 1 then settled the id
-  // formula by measurement and specified the UPPERCASE RFC 4648 alphabet; all 217 of its
-  // normative conformance vectors are uppercase. The two are incompatible.
+describe("block ids from ADR-001 Amendment 1 validate against the frozen pattern", () => {
+  // History: EPIC-00 pinned `^blk_[a-z2-7]{16}$` (lowercase) before the id formula was settled.
+  // Amendment 1 rev-2 then specified the UPPERCASE RFC 4648 alphabet, and 0 of its 217 vectors
+  // validated here. The conflict was resolved in favour of the schema — Amendment 1's ENCODE
+  // step now lowercases — so this block asserts AGREEMENT rather than the old contradiction.
   //
-  // This test asserts the conflict AS IT CURRENTLY STANDS so that it cannot be forgotten, and
-  // so that reconciling either side turns the suite red rather than passing silently.
-  //
-  // WHEN THE ORCHESTRATOR RECONCILES IT: delete this whole describe block, and (if the schema
-  // moved) update the BlockId pattern and DESIGN.md §11.0 in the same change.
-  const VECTORS = join(PKG, "../../research/benchmarks/id-conformance-vectors.json");
+  // These are the same 427 vectors that identity.spec (F0.4) consumes from TypeScript AND
+  // Python. If the formula ever moves again, this goes red before anything is minted.
+  const VECTORS = join(PKG, "conformance/identity-vectors.json");
 
   function conformanceIds(): string[] {
     const doc = JSON.parse(readFileSync(VECTORS, "utf8"));
@@ -898,25 +896,27 @@ describe("block-id alphabet vs ADR-001 Amendment 1 (TRIPWIRE — see DESIGN.md �
 
   const blockIdPattern: string = paperSchema.$defs.BlockId.pattern;
 
-  it("the schema's pinned pattern is still the lowercase one EPIC-00 specified", () => {
+  it("the schema's pinned pattern is the lowercase one EPIC-00 specified", () => {
     expect(blockIdPattern).toBe("^blk_[a-z2-7]{16}$");
   });
 
-  it("NOT ONE normative conformance vector validates against it — the freeze is blocked", () => {
+  it("EVERY normative conformance vector validates against it", () => {
     const ids = conformanceIds();
-    expect(ids.length).toBe(217);
+    expect(ids.length).toBeGreaterThanOrEqual(400);
 
     const re = new RegExp(blockIdPattern);
-    const accepted = ids.filter((id) => re.test(id));
-
-    // If this stops being 0, the conflict has been resolved — delete this block.
-    expect(accepted).toHaveLength(0);
-    expect(ids[0]).toMatch(/^blk_[A-Z2-7]{16}$/);
+    const rejected = ids.filter((id) => !re.test(id));
+    expect(rejected).toHaveLength(0);
   });
 
-  it("a Paper carrying a real conformance-vector block id is rejected today", () => {
+  it("a Paper carrying a real conformance-vector block id is accepted", () => {
     const realId = conformanceIds()[0];
-    const doc = withExtraBlock(plainBlock({ block_id: realId }));
+    assertValid(withExtraBlock(plainBlock({ block_id: realId })));
+  });
+
+  it("an uppercase block id is still rejected — the alphabet is not case-insensitive", () => {
+    // Two spellings of one id would break byte-identical re-parse (DESIGN.md D11 / §7.1).
+    const doc = withExtraBlock(plainBlock({ block_id: "blk_7USUVPRFZ34OQA5T" }));
     expect(assertInvalid(doc)).toMatch(/pattern/);
   });
 });

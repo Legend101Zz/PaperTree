@@ -18,6 +18,8 @@ Three later agents read *this* rather than re-deriving intent:
 
 §9 records every critique that was raised and **rejected**, with the reason, so nobody
 re-litigates it. §11 records the residual risks a reader of the schema must know about.
+**§12 records the known divergences between ajv, Zod and Pydantic** — the output of the F0.3
+differential attack. Read it before trusting "the three validators agree".
 
 ---
 
@@ -1344,3 +1346,201 @@ silently and the stale test cannot survive it.
 8. **Nothing forbids `status: "complete"` with zero blocks.** Deliberate — a genuinely
    empty PDF exists — but it is also the shape a total extraction failure takes, so the
    ingest epic should treat it as a red flag. (Rule 41 covers the `failed` direction.)
+
+## 12. Known binding divergences
+
+The schema is the contract; ajv is its reference implementation; Zod and Pydantic are generated
+bindings. §6 says a binding is never a *second* source of truth — but three programs in two
+languages can still disagree on inputs the schema never anticipated, and the only honest way to
+carry that is to write the disagreements down and test them.
+
+This section is the output of a **differential attack**: 347 hostile documents were pushed through
+ajv, Zod and Pydantic side by side. 316 were unanimous; the remaining 31 collapsed into 8 classes,
+listed below with what was done about each. Six were closed in `codegen/generate.ts`. Two remain,
+deliberately, and both are *asserted* by `test/cases/` — see the `divergence` block in
+`codegen/build-corpus.ts`, which `equivalence.spec.ts` and `test_equivalence.py` pin one verdict at
+a time. **A closed divergence turns its own annotation red**, so nothing here can go stale quietly.
+
+The rule the section exists to enforce: a *documented* divergence is acceptable, a *silent* one is
+not. Nothing below was fixed by hand-editing a generated file — a hand edit is exactly the drift
+`codegen-drift.spec.ts` exists to catch, and the next `codegen` run deletes it.
+
+### 12.1 `__proto__` under `Block.payload` — CLOSED (was FATAL)
+
+`JSON.parse('{"__proto__": {...}}')` creates an **own** property; an object *literal* with the same
+text sets the prototype and creates no key at all. The Zod binding validated `payload` with
+`z.record(z.string(), z.unknown())`, and `z.record` **rebuilds** the object key by key — where
+`out["__proto__"] = v` writes the prototype rather than a key. The key therefore vanished from the
+parsed output *before* `propertyNames`, `findModelDeclaration`, or a nested `EquationPayload`'s
+`.strict()` ever ran.
+
+Consequences beyond the verdict: **ADR-001 Commitment 1** ("there is no field in which a producer
+may record that content is model-authored") was defeated specifically through Zod — a whole
+`Derivation` fitted inside `__proto__` — and the payload re-serialised as `{}`, silently losing data
+and breaking the byte-identical re-parse criterion of §7.1. ajv and Pydantic were both right;
+`json.loads` makes `__proto__` an ordinary key, so Python was never exposed.
+
+**Fix:** the generator emits `openObject()` — a `z.custom` guard that passes the parsed value
+through *by reference* — everywhere `{"type": "object"}` appears, including `OpaquePayloadSchema`.
+`codegen-drift.spec.ts` now asserts that `z.record(` does not reappear in any generated validator,
+because the older structural check (`.object({` count === `.strict()` count) structurally *cannot*
+see this class of hole. Corpus: `proto-payload-*`, `proto-inside-equation-payload`,
+`proto-as-block-key`, and `constructor-payload-key` (which must stay **valid** — the fix must not
+over-reject a key that legitimately matches the identifier pattern).
+
+### 12.2 `\s` means three different things in three regex engines — CLOSED (was FATAL + MATERIAL)
+
+`ImageRef.uri`'s `[^\s]` is the schema's only whitespace class, and it was handed verbatim to three
+engines that do not agree on `\s`:
+
+| code point | ECMA-262 `\s` (ajv, Zod) | Rust `regex` `\p{White_Space}` (pydantic-core) |
+| --- | --- | --- |
+| U+FEFF ZWNBSP | whitespace → **rejected** | not whitespace → **accepted** |
+| U+0085 NEL | not whitespace → **accepted** | whitespace → **rejected** |
+
+Two live divergences in opposite directions, from one backslash. A sweep of 20 code points found
+these two and no others.
+
+**Fix:** `generate.ts` expands `\s`/`\S` into an explicit ECMA-262 character class before emitting
+any non-JavaScript regex (`expandEcmaClasses`). The Zod binding keeps the schema's own pattern —
+JavaScript is the reference. The schema file is untouched. `codegen-drift.spec.ts` asserts that no
+bare `\s` survives into a Python `pattern=` or `re.compile`. Corpus: `uri-whitespace-*`, covering
+both directions plus the controls.
+
+> Recorded for 2.0.0: a companion `pattern` written without shorthand classes would make the
+> contract reproducible in any language for free. `\s` in a frozen schema is a portability bug.
+
+### 12.3 `"type": "integer"` is a *number* with no fractional part — CLOSED (was MATERIAL)
+
+JSON Schema `integer` matches `1.0`, `1e0` and `10e-1`; `z.number().int()` agrees, because
+JavaScript has one number type. Strict Pydantic refused all three (`int_type`,
+`input_value=1.0, input_type=float`), on **all 10 integer fields** — `generation`, `pages[].index`,
+`pages[].rotation`, `blocks[].order`, `blocks[].doc_order`, `blocks[].page_index`, `spans[].start`,
+`repairs[].at`, `sections[].level`, `metadata.year.value`. This was the widest blast radius in the
+set: every non-JavaScript producer (a Go `float64`, a numpy pipeline, `json.dumps` of a computed
+year) emitted documents ajv blessed and the Python binding refused.
+
+**Fix:** integer fields emit as `JsonInt = Annotated[int, BeforeValidator(_json_integer)]`, which
+converts a `float` with a zero fractional part and leaves everything else alone. `bool` is passed
+through **unchanged** so strict mode still rejects it — `False == 0` in Python and ajv rejects
+`rotation: false`, and a conversion here would have quietly reopened that trap. Integer *enums*
+(`Page.rotation`) already avoided `Literal[0, 90, …]` for the same reason and now sit on `JsonInt`
+too, so the conversion happens before the membership test. Corpus: `integer-*`.
+
+### 12.4 U+0085 in `ImageRef.uri` — CLOSED
+
+The mirror of §12.2, same root cause, same fix, opposite direction. Kept as its own entry because
+it is the case where the bindings had to become **more permissive**, not less: `ajv` and Zod accept
+U+0085 and Pydantic must too. A fix that only chased "Pydantic is too lax" would have missed it.
+
+### 12.5 Unpaired surrogates — OPEN, deliberate, asserted (`class: "lone-surrogate"`)
+
+| | verdict |
+| --- | --- |
+| ajv | **valid** |
+| Zod | **invalid** (deliberate) |
+| Pydantic | **invalid** (deliberate) |
+
+An unpaired surrogate (`"a\ud800b"`) is legal in a JSON *text* and both parsers read it. It is not
+UTF-8-encodable, so such a document cannot survive the serialisation round-trip `$defs/Point`'s own
+description makes a precondition, and it cannot be stored by F0.5. pydantic-core already rejected
+it in every string carrying `pattern` or `min_length` (`string_unicode`) while silently **accepting**
+it in an unconstrained one — a binding disagreeing with *itself*, which is worse than disagreeing
+with ajv.
+
+**Disposition: not closed against ajv; made uniform and explicit.** Both generated bindings now
+reject an unpaired surrogate in **every** string — `isWellFormedText` in Zod, `JsonText` in
+Pydantic — rather than inheriting one engine's incidental behaviour. This is a deliberate
+*strengthening* over the schema, and it is the one place in F0.3 where the bindings are not a
+faithful port.
+
+Residual, stated plainly: string **values inside an opaque payload** are typed `unknown`/`Any` in
+both bindings and are not walked, so a surrogate can still hide there. Closing that would mean
+walking every payload value in both languages; it was judged not worth the cost for a shape no
+producer emits. If §7.1's canonicalisation is ever asked to guarantee UTF-8 encodability of a whole
+document, this is the gap to close.
+
+Corpus: `lone-surrogate-constrained-string`, `lone-surrogate-unconstrained-string` (both carrying
+the `divergence` annotation), and `astral-pair-string`, which must stay **valid** in all three — a
+well-formed surrogate pair is an ordinary character.
+
+### 12.6 Payload nesting depth — OPEN, deliberate, asserted (`class: "payload-depth"`)
+
+`$defs/ModelFreeSubtree` is recursive and the schema states no depth bound, so "is a 2000-deep
+payload valid?" was a property of somebody's C stack:
+
+| depth | ajv | Zod (before) | Pydantic (before) |
+| --- | --- | --- | --- |
+| ≤ 1500 | valid | valid | valid |
+| 2000 | **throws `RangeError`** | **valid** | **`RecursionError`** |
+| 5000 | throws | throws | `RecursionError` |
+
+Two problems. ajv *throws* rather than returning `false`, so a caller writing `if (validate(doc))`
+gets an exception on adversarial input. And in the 2000 window Zod returned **valid** where ajv
+could not return valid at all — the same shape as §12.1.
+
+**Disposition: bounded, not matched.** Both bindings bound opaque-payload nesting at
+`MAX_PAYLOAD_DEPTH = 64` (one constant in `generate.ts`, emitted into both languages and asserted
+equal by `codegen-drift.spec.ts`). The depth walk is **iterative** in both — a guard against
+unbounded recursion that is itself recursive overflows on exactly the input it exists to reject.
+64 is two orders of magnitude past anything a parser emits (real payloads are 2–4 deep).
+
+The window this opens is honest and bounded: between depth 65 and ajv's stack limit, ajv says valid
+and the bindings say invalid. Beyond it, ajv gives no answer at all, and `equivalence.spec.ts` now
+wraps the ajv call in `try/catch → invalid`, because "could not decide" is not "accepted". A bound
+you can state beats a bound you discover in production.
+
+Corpus: `payload-depth-at-limit` (64, valid in all three) and `payload-depth-over-limit` (65,
+annotated), plus a named criterion in both suites that drives 2000 levels and asserts ajv throws
+while the bindings return a verdict.
+
+### 12.7 `NaN` / `Infinity` at the parse layer — CLOSED at the boundary, documented
+
+CPython's `json.loads` accepts the non-JSON literals `NaN`, `Infinity` and `-Infinity`; `JSON.parse`
+cannot read them at all and throws before any validator sees the document. There is no hole
+**today** only because every `number` in PaperIR 1.0.0 is bounded (`Confidence` 0–1, `Point` ±20000,
+`ImageRef.scale` 0–64, …), so an infinity fails a bound in all three. The first *unbounded* number
+added in a later version would open it silently: Pydantic's `allow_inf_nan` defaults to `True`.
+
+**Fix (defence in depth, no verdict changes today):** every float field emits
+`Field(allow_inf_nan=False)`, and the Python package exposes `loads()` — `json.loads` with
+`parse_constant` wired to raise — as the parse-layer twin of `JSON.parse`'s refusal. Use it instead
+of `json.loads` when reading a PaperIR document.
+
+### 12.8 Integers beyond 2^53 — OPEN, value fidelity only, documented
+
+`{"generation": 9007199254740993}` is **valid in all three**, but JavaScript holds
+`9007199254740992`; a 40-digit integer becomes `1.1111111111111112e+39`. Same for `spans[].start`,
+`references[].year` and `metadata.year.value`, which carry a `minimum` and no `maximum`.
+
+This is not a verdict divergence, and it is **not fixable in a binding**: adding a
+`maximum: 9007199254740991` in the bindings would make them reject documents the schema accepts,
+and adding it to the schema is a change to a frozen file. It is recorded here because it falsifies
+the *other* half of §7.1 — "re-parsing produces byte-identical PaperIR" does not hold across the
+TypeScript/Python boundary for such a value. Corpus case
+`integer-generation-beyond-safe-range` pins the unanimous **valid** verdict so the claim in this
+paragraph stays true and visible.
+
+**Owner: 2.0.0.** Give the unbounded integer fields a `maximum` of `9007199254740991`.
+
+### 12.9 Two smaller residuals, unchanged from F0.3's own report
+
+1. **`minLength` counts code points** in JSON Schema and in Python, and **UTF-16 units** in Zod's
+   `.min()`. Reachable only with astral-plane characters in a `minLength`-constrained field; no
+   corpus case reaches it, and the only such fields are identifiers whose `pattern` is ASCII-only,
+   which makes it unreachable in practice rather than merely untested.
+2. **`type: "integer"` and the literal `1.0`** — closed for *validation* by §12.3. What remains is
+   that canonical serialisation (§7.1, D11) must never emit `1.0` for an integer field, or the
+   re-parse is not byte-identical. That is F0.4's contract, not F0.3's.
+
+### 12.10 Probed and clean — the seams that did **not** diverge
+
+Recorded so the next attacker does not re-run them: trailing-newline pattern escapes (ECMA `$` vs
+Python `$` — codegen correctly uses `\Z` in the `re` helpers) on every patterned field; near-miss
+discriminators (`"Equation"`, `"equation "`, `"equation​"`, ZWSP/RTL/NUL/fullwidth/Cyrillic-е);
+`additionalProperties: false` at **all 26 closed objects**; unknown block and relation types; all
+four nullable/optional states in both directions (the `NON_NULLABLE_OPTIONAL` before-validator
+matches ajv exactly); duplicate keys (last-wins in both parsers); the `from` → `from_` Python-keyword
+alias (`populate_by_name` is off, so `"from_"` is rejected as an extra key); `has_text_layer: 1` /
+`"true"`, `index: "0"`, `rotation: false`; and all 23 `date-time` probes including leap seconds, the
+1900/2000 century rules, offsets and separators.
