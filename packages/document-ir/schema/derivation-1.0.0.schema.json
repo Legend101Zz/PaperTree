@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://papertree.dev/schema/derivation-1.0.0.schema.json",
+  "title": "Derivation",
+  "description": "A Derivation is AI-GENERATED content about a paper: a guided section, a summary, a narration script, an explanation, a canvas node, a flashcard.\n\nThis is a SECOND, SEPARATE schema on purpose. ADR-001 Commitment 1 says source and derivation are different stores, and two files is the structural expression of that: a derivation cannot be smuggled into PaperIR because PaperIR has nowhere to put it, and a source block cannot be forged here because a Derivation always carries a model author and always points back at the blocks it came from.\n\nThe mirror image of PaperIR: there, Block.source is a closed enum with no model value; here, author.kind is the constant \"model\". Nothing in this file may be rendered in the same visual register as the paper's own text — the Guided view is not the book, it is a derivation with the source one tap away.\n\nBlock ids referenced from derived_from belong to a PaperIR document; the pattern is duplicated below rather than $ref'd across files so each schema compiles standalone.",
+  "$ref": "#/$defs/Derivation",
+  "$defs": {
+    "Derivation": {
+      "type": "object",
+      "title": "Derivation",
+      "description": "One piece of model-authored content, permanently tied to the source blocks it was derived from.\n\nONE DERIVATION IS ONE RENDERABLE UNIT. ADR-001 Commitment 1 requires the Guided view to be \"a derivation whose EVERY PARAGRAPH carries derived_from: [block_ids]\"; `content` is deliberately unconstrained in shape, so the granularity has to be stated rather than schema-enforced. A twenty-paragraph guided section is TWENTY Derivations, each grounded in the blocks that paragraph came from — not one Derivation with three block ids attached. This is what makes Epic 2's reader/provenance.spec (\"no Guided block renders without a visible derived marker and a working source link\") testable at all.",
+      "additionalProperties": false,
+      "required": [
+        "derivation_id",
+        "paper_id",
+        "kind",
+        "author",
+        "content",
+        "derived_from",
+        "created_at"
+      ],
+      "properties": {
+        "derivation_id": {
+          "type": "string",
+          "pattern": "^drv_[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "Derivation identity: \"drv_\" + a 26-character Crockford base32 ULID. Random and time-ordered, NOT content-derived: unlike a block, a derivation is an event that happened, not a region of a document that can be re-found."
+        },
+        "paper_id": {
+          "type": "string",
+          "pattern": "^ppr_[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "The paper this derivation is about."
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What sort of derivation this is. ANY IDENTIFIER-SHAPED STRING VALIDATES (^[a-z][a-z0-9_]{0,63}$) — the same open-vocabulary forward-compatibility rule as PaperIR's Block.type, and the same identifier-shape constraint. The known kinds are listed in $defs/KnownDerivationKind for codegen and documentation only. A consumer that meets an unknown kind must not render it as source.",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        },
+        "author": {
+          "$ref": "#/$defs/ModelAuthor"
+        },
+        "content": {
+          "description": "The generated content of ONE renderable unit. Deliberately unconstrained in shape — a guided paragraph is Markdown, a canvas node is an object, a narration is a script — because the point of this file is to keep generated content OUT of the source schema, not to standardise it. This is the ONE place in the whole system where unconstrained model output is correct. Whatever it is, it is model output and must be rendered in a visually distinct register."
+        },
+        "derived_from": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^blk_[a-z2-7]{16}$"
+          },
+          "minItems": 1,
+          "description": "The PaperIR block ids this content was derived from, in order of relevance. minItems 1 is load-bearing: a derivation that cannot point at any source block is ungrounded, and ungrounded generated content is exactly what the product currently ships (findings.md C4 — no block ids, no page spans, no citations). Every paragraph of the Guided view carries these so the reader can jump to the source."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 timestamp of generation."
+        }
+      }
+    },
+    "ModelAuthor": {
+      "type": "object",
+      "title": "ModelAuthor",
+      "description": "Who generated this. kind is the constant \"model\": there is no human or source option, because a human note is not a derivation and source text belongs in PaperIR. Recording model_id and prompt_hash makes a generation reproducible, attributable and invalidatable when the prompt changes.",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "model_id",
+        "prompt_hash"
+      ],
+      "properties": {
+        "kind": {
+          "const": "model",
+          "description": "Always \"model\". The mirror image of PaperIR's Block.source, which has no model value at all."
+        },
+        "model_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Exact model identifier, e.g. \"anthropic/claude-haiku-4.5\". Not a family name: a regression must be attributable to a specific model version."
+        },
+        "prompt_hash": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+:[0-9a-f]{16,128}$",
+          "description": "Algorithm-prefixed digest of the exact prompt used, e.g. \"sha256:...\". Lets a prompt change invalidate stale derivations instead of leaving them silently mismatched."
+        }
+      }
+    },
+    "KnownDerivationKind": {
+      "type": "string",
+      "enum": [
+        "guided_section",
+        "summary",
+        "narration",
+        "explanation",
+        "canvas_node",
+        "flashcard"
+      ],
+      "description": "The known derivation kinds. NOT REFERENCED BY Derivation.kind and not a validation constraint — documentation and codegen input only, exactly like PaperIR's KnownBlockType."
+    }
+  }
+}
