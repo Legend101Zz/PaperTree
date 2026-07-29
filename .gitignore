@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Environment
+.env
+.env.local
+.env*.local
+
+# Build output — anchored, so research/build/ (the epic plan) is NOT swallowed
+.next/
+dist/
+/build/
+apps/*/build/
+packages/*/build/
+services/*/build/
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+.DS_Store
+
+# ── audit / research scratch ──────────────────────────────────────────────
+# 1.4GB probe venv. Recreate per findings.md §E:
+#   python3 -m venv .audit/venv && .audit/venv/bin/pip install pymupdf pydantic pydantic-settings docling
+.audit/
+
+# Benchmark corpus PDFs are fetched, not redistributed (varied arXiv/ACL licences).
+#   ./research/benchmarks/fetch_corpus.sh
+#   (cd research/benchmarks/corpus && shasum -c ../corpus.sha256)
+research/benchmarks/corpus/*.pdf
+
+# Uploaded papers (user data)
+apps/api/storage/papers/*.pdf
