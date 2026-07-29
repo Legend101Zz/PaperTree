@@ -1,0 +1,234 @@
+# EPIC-00 F0.8 — CI: typecheck · lint · unit tests · codegen-drift · fixture validation.
+#
+# Every command below was run on a developer machine before it was written here. The
+# non-obvious ones and why they are shaped this way:
+#
+#   * `pnpm install --frozen-lockfile` is also the guard that apps/ stays OUT of the pnpm
+#     workspace: pulling apps/web in would add importers to pnpm-lock.yaml and this flag would
+#     fail. `uv sync --locked` is the same guard for the uv workspace. There is deliberately no
+#     `paths-ignore: [apps/**]` — CI is cheap, it never reads apps/, and a paths-filtered
+#     workflow can never report a required status check, which silently wedges PRs.
+#
+#   * better-sqlite3 and sqlite-vec are native. This repo is developed on darwin-arm64 and CI is
+#     linux-x64, so both are smoke-tested in a dedicated step BEFORE the suites run. Without it a
+#     native-load failure surfaces as a wall of unrelated test failures.
+#
+#   * Versions are pinned, not floated. Node 22 is ABI 127, which is the better-sqlite3 prebuild
+#     CI downloads; pnpm comes from the root package.json `packageManager` field so there is one
+#     source of truth; Python is pinned to 3.12 because pyproject only says ">=3.12" and there is
+#     no .python-version, so an unpinned uv would happily resolve 3.14.
+
+name: CI
+
+on:
+  push:
+    branches: [main, epic-0-spine]
+  pull_request:
+    branches: [main, epic-0-spine]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned deliberately. See the header note.
+  NODE_VERSION: '22.23.0'
+  PYTHON_VERSION: '3.12'
+  UV_VERSION: '0.11.15'
+  # turbo and uv both phone home by default.
+  TURBO_TELEMETRY_DISABLED: '1'
+  DO_NOT_TRACK: '1'
+
+jobs:
+  # ── TypeScript: typecheck · lint · unit tests · codegen drift ───────────────────────────────
+  typescript:
+    name: TypeScript (typecheck · lint · test · codegen drift)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      # Must precede setup-node: setup-node's pnpm cache calls `pnpm store path`.
+      # No `version:` input — action-setup reads `packageManager` from the root package.json.
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      # uv IS REQUIRED BY THE TYPESCRIPT JOB. `db/migrations.spec` proves the TypeScript and
+      # Python migration runners agree on one schema by having each finish what the other
+      # started, which means the TS suite shells out to `uv run python`. That test used to
+      # `return` silently when uv was missing — i.e. it passed while checking nothing, in
+      # precisely this job. It is fatal now, so uv has to actually be here.
+      - name: Install uv (the TS suite's cross-language drift check shells out to it)
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Sync the Python workspace (same reason)
+        run: uv sync --locked --all-packages
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # better-sqlite3's install script places its prebuilt binary and is allowlisted in
+      # pnpm-workspace.yaml `onlyBuiltDependencies`. If pnpm ever stops honouring that, the
+      # `new Database()` below throws here rather than 40 lines into the db test suite.
+      - name: Preflight — native SQLite stack loads (better-sqlite3 + sqlite-vec)
+        working-directory: packages/db
+        run: |
+          pnpm exec node --input-type=module -e "
+          import Database from 'better-sqlite3';
+          import * as sqliteVec from 'sqlite-vec';
+          const db = new Database(':memory:');
+          sqliteVec.load(db);
+          const sqlite = db.prepare('select sqlite_version() as v').get().v;
+          const vec = db.prepare('select vec_version() as v').get().v;
+          db.exec('create virtual table t using vec0(embedding float[4])');
+          console.log('node', process.version, process.platform + '-' + process.arch,
+                      '| sqlite', sqlite, '| sqlite-vec', vec, '| vec0 table: ok');
+          "
+
+      - name: Assert apps/ is not in the pnpm workspace
+        run: |
+          WORKSPACE_JSON="$(mktemp)"
+          export WORKSPACE_JSON
+          pnpm ls --recursive --depth -1 --json > "$WORKSPACE_JSON"
+          pnpm exec node --input-type=module -e "
+          import { readFileSync } from 'node:fs';
+          const pkgs = JSON.parse(readFileSync(process.env.WORKSPACE_JSON, 'utf8'));
+          for (const p of pkgs) console.log('  ' + p.name);
+          const leaked = pkgs.filter((p) => p.path.includes('/apps/'));
+          if (leaked.length > 0) {
+            console.log('::error title=apps/ leaked into the workspace::' +
+              leaked.map((p) => p.path).join(', ') +
+              ' — apps/ is the v1 application and is excluded on purpose (pnpm-workspace.yaml)');
+            process.exit(1);
+          }
+          "
+
+      # Runs BEFORE the suites, not after: the checkout is pristine at this point, so anything
+      # `codegen` changes is unambiguously drift. Put it after `test` and a future test that
+      # writes a file into the repo turns this into a confusing false failure.
+      #
+      # F0.3's acceptance test (document-ir/codegen-drift.spec) already compares in-process; this
+      # is the on-disk half of the same claim, and it covers the PYTHON bindings too — one
+      # `turbo run codegen` writes both.
+      #
+      # Whole-tree rather than a pathspec on purpose. `git status -- 'packages/*/src/generated'`
+      # matches NOTHING (git's wildmatch requires the pattern to match the full path, and that
+      # one stops at a directory), so it reports clean while checking nothing — verified.
+      - name: Codegen drift — regenerating from the schema must produce no diff
+        run: |
+          pnpm run codegen
+          if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+            echo "::error title=Codegen drift::Generated files are stale. Run 'pnpm run codegen' and commit the result."
+            echo "--- git status ---"
+            git status --porcelain --untracked-files=all
+            echo "--- diff ---"
+            git --no-pager diff
+            exit 1
+          fi
+          echo "no drift: the working tree is identical after regenerating from the schema"
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Unit tests
+        run: pnpm run test
+
+  # ── Python: pytest · ruff · mypy ────────────────────────────────────────────────────────────
+  python:
+    name: Python (pytest · ruff · mypy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      # astral-sh/setup-uv has no moving `v9` tag, so this is pinned to the exact release.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      # --locked fails if uv.lock is stale, which is also what keeps apps/api (its own uv.lock,
+      # excluded in [tool.uv.workspace]) from being pulled in.
+      - name: Sync workspace
+        run: uv sync --locked --all-packages
+
+      - name: Preflight — sqlite-vec loads under uv-managed CPython
+        run: |
+          uv run python -c "
+          import sqlite3, sqlite_vec, sys
+          conn = sqlite3.connect(':memory:')
+          conn.enable_load_extension(True)
+          sqlite_vec.load(conn)
+          conn.enable_load_extension(False)
+          sqlite, = conn.execute('select sqlite_version()').fetchone()
+          vec, = conn.execute('select vec_version()').fetchone()
+          conn.execute('create virtual table t using vec0(embedding float[4])')
+          print('python', sys.version.split()[0], sys.platform,
+                '| sqlite', sqlite, '| sqlite-vec', vec, '| vec0 table: ok')
+          "
+
+      - name: Tests
+        run: uv run pytest
+
+      - name: Lint
+        run: uv run ruff check packages
+
+      - name: Format check
+        run: uv run ruff format --check packages
+
+      # Glob rather than an explicit list so a new packages/<name>/python is type-checked the day
+      # it lands instead of being silently skipped.
+      - name: Typecheck
+        run: uv run mypy packages/*/python
+
+  # ── Fixture validation (F0.7's gate) ────────────────────────────────────────────────────────
+  # Its own job so its state is readable at a glance in the PR checks list. Until F0.7 lands,
+  # packages/document-ir/fixtures/ does not exist and this reports PENDING with a warning
+  # annotation, having validated nothing. The moment the directory appears it becomes a hard
+  # gate demanding exactly 3 schema-valid fixtures — an empty or short directory FAILS.
+  fixtures:
+    name: Fixture validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      # ajv + ajv-formats are devDependencies of @papertree/document-ir; the validator loads them
+      # through a require() rooted there.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate golden fixtures against paperir-1.0.0.schema.json
+        run: node .github/scripts/validate-fixtures.mjs packages/document-ir
