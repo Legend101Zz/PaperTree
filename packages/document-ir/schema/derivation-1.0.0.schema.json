@@ -63,11 +63,7 @@
       "title": "ModelAuthor",
       "description": "Who generated this. kind is the constant \"model\": there is no human or source option, because a human note is not a derivation and source text belongs in PaperIR. Recording model_id and prompt_hash makes a generation reproducible, attributable and invalidatable when the prompt changes.",
       "additionalProperties": false,
-      "required": [
-        "kind",
-        "model_id",
-        "prompt_hash"
-      ],
+      "required": ["kind", "model_id", "prompt_hash"],
       "properties": {
         "kind": {
           "const": "model",
@@ -87,14 +83,7 @@
     },
     "KnownDerivationKind": {
       "type": "string",
-      "enum": [
-        "guided_section",
-        "summary",
-        "narration",
-        "explanation",
-        "canvas_node",
-        "flashcard"
-      ],
+      "enum": ["guided_section", "summary", "narration", "explanation", "canvas_node", "flashcard"],
       "description": "The known derivation kinds. NOT REFERENCED BY Derivation.kind and not a validation constraint — documentation and codegen input only, exactly like PaperIR's KnownBlockType."
     }
   }

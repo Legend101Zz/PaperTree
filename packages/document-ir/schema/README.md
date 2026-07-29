@@ -2,10 +2,10 @@
 
 Two JSON Schema (draft 2020-12) files define every document contract in PaperTree v2.
 
-| File | Root | What it is |
-|---|---|---|
-| `paperir-1.0.0.schema.json` | `Paper` | **PaperIR** — source-derived document content only. Geometry, blocks, relations, repairs, uncertainty. No LLM ever writes into it. |
-| `derivation-1.0.0.schema.json` | `Derivation` | **Derivations** — AI-generated content *about* a paper (guided sections, summaries, narration, explanations, canvas nodes, flashcards), always attributed to a model and always pointing back at the block ids it came from. |
+| File                           | Root         | What it is                                                                                                                                                                                                                   |
+| ------------------------------ | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `paperir-1.0.0.schema.json`    | `Paper`      | **PaperIR** — source-derived document content only. Geometry, blocks, relations, repairs, uncertainty. No LLM ever writes into it.                                                                                           |
+| `derivation-1.0.0.schema.json` | `Derivation` | **Derivations** — AI-generated content _about_ a paper (guided sections, summaries, narration, explanations, canvas nodes, flashcards), always attributed to a model and always pointing back at the block ids it came from. |
 
 They are two files on purpose. ADR-001 Commitment 1 says source and derivation are
 different stores; two schemas are the structural expression of that. A derivation cannot
@@ -49,7 +49,7 @@ Commit the regenerated files in the same commit as the schema change.
 2. Decide the version bump using the table in `../DESIGN.md` §7. Briefly: a new optional
    field is a **patch**; a new block/relation type that producers actually emit is a
    **minor**; changing geometry semantics, changing block-id derivation, removing a field,
-   or widening a *closed* enum (`Flow`, `SourceKind`, `PaperStatus`, `RepairKind`) is a
+   or widening a _closed_ enum (`Flow`, `SourceKind`, `PaperStatus`, `RepairKind`) is a
    **major** and needs a new file plus a migration plus a full re-anchor pass.
 3. **A released schema file is immutable.** `paperir-1.0.0.schema.json` is not edited in
    place after Epic 0 — a major change means `paperir-2.0.0.schema.json` alongside it.
@@ -59,7 +59,7 @@ Commit the regenerated files in the same commit as the schema change.
 ## Two rules that are not negotiable
 
 - **Forward compatibility is about types, not fields.** `Block.type`, `Relation.type` and
-  `Derivation.kind` accept *any string*; the known vocabularies live in
+  `Derivation.kind` accept _any string_; the known vocabularies live in
   `$defs/KnownBlockType`, `$defs/KnownRelationType`, `$defs/KnownDerivationKind`, which are
   referenced by nothing and constrain nothing. Every object, meanwhile, sets
   `"additionalProperties": false`. Do not open the field sets — closed fields are what

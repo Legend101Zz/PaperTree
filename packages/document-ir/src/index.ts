@@ -12,11 +12,21 @@
  */
 
 // ─── generated bindings (F0.3) ──────────────────────────────────────────────
-export * from "./generated/types.js";
-export * from "./generated/derivation.types.js";
-export * from "./generated/zod.js";
-export * from "./generated/derivation.zod.js";
+export * from './generated/types.js';
+export * from './generated/derivation.types.js';
+export * from './generated/zod.js';
+export * from './generated/derivation.zod.js';
 
-// ─── identity + geometry (F0.4) ─────────────────────────────
-// export * from './identity.js';
-// export * from './geometry.js';
+// ─── identity, geometry and the semantic validator (F0.4) ───────────────────
+//
+// These are hand-written, not generated, and each has a Python twin that is checked against the
+// same committed conformance file rather than against the other language — see
+// `conformance/identity-vectors.json` (ADR-001 Amendment 1) and `conformance/geometry-vectors.json`.
+//
+// `validate` carries the invariants JSON Schema cannot express (bbox == polygon extent, relation
+// endpoints resolve, reading order is dense, and the block_id actually recomputes from the block's
+// own content). A document that passes the Zod/Pydantic validator is well-FORMED; a document that
+// also passes `validatePaper` is well-FORMED and internally CONSISTENT. Fixtures must pass both.
+export * from './identity.js';
+export * from './geometry.js';
+export * from './validate.js';

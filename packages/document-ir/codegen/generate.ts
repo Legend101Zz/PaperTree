@@ -36,11 +36,11 @@
  * paths and no environment reads. Line endings are LF and every file ends in a newline.
  * `test/codegen-drift.spec.ts` byte-compares a fresh generation against the committed files.
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const PKG = join(dirname(fileURLToPath(import.meta.url)), "..");
+const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 // ---------------------------------------------------------------------------------------------
 // Schema model
@@ -73,17 +73,17 @@ export interface SchemaFile {
  * asserted against the schema at generation time (see `checkOpenVocabularies`).
  */
 const OPEN_VOCABULARY: Readonly<Record<string, string>> = {
-  "paperir:Block.type": "KnownBlockType",
-  "paperir:Relation.type": "KnownRelationType",
-  "derivation:Derivation.kind": "KnownDerivationKind",
+  'paperir:Block.type': 'KnownBlockType',
+  'paperir:Relation.type': 'KnownRelationType',
+  'derivation:Derivation.kind': 'KnownDerivationKind',
 };
 
 /** $defs that are documentation + codegen input only, never validation constraints (§2.1). */
 const DOC_ONLY_VOCABULARIES = new Set([
-  "KnownBlockType",
-  "KnownHeadingBlockType",
-  "KnownRelationType",
-  "KnownDerivationKind",
+  'KnownBlockType',
+  'KnownHeadingBlockType',
+  'KnownRelationType',
+  'KnownDerivationKind',
 ]);
 
 // ---------------------------------------------------------------------------------------------
@@ -102,9 +102,9 @@ function refsOf(node: unknown, out: string[] = []): string[] {
     for (const child of node) refsOf(child, out);
     return out;
   }
-  if (node && typeof node === "object") {
+  if (node && typeof node === 'object') {
     for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
-      if (k === "$ref" && typeof v === "string") {
+      if (k === '$ref' && typeof v === 'string') {
         const name = refName(v);
         if (!out.includes(name)) out.push(name);
         continue;
@@ -122,15 +122,15 @@ function refsOf(node: unknown, out: string[] = []): string[] {
  */
 function dependencyOrder(defs: Record<string, JsonSchema>): string[] {
   const order: string[] = [];
-  const state = new Map<string, "visiting" | "done">();
+  const state = new Map<string, 'visiting' | 'done'>();
   const visit = (name: string): void => {
     const s = state.get(name);
-    if (s === "done" || s === "visiting") return;
-    state.set(name, "visiting");
+    if (s === 'done' || s === 'visiting') return;
+    state.set(name, 'visiting');
     const def = defs[name];
     if (!def) throw new Error(`$ref to a missing definition: ${name}`);
     for (const dep of refsOf(def)) visit(dep);
-    state.set(name, "done");
+    state.set(name, 'done');
     order.push(name);
   };
   for (const name of Object.keys(defs)) visit(name);
@@ -138,11 +138,18 @@ function dependencyOrder(defs: Record<string, JsonSchema>): string[] {
 }
 
 function loadSchema(key: string, relPath: string): SchemaFile {
-  const root = JSON.parse(readFileSync(join(PKG, relPath), "utf8")) as JsonSchema;
+  const root = JSON.parse(readFileSync(join(PKG, relPath), 'utf8')) as JsonSchema;
   const defs = root.$defs as Record<string, JsonSchema>;
   const rootRef = root.$ref;
-  if (typeof rootRef !== "string") throw new Error(`${relPath}: root must be a $ref into $defs`);
-  return { key, path: relPath, root, defs, order: dependencyOrder(defs), rootDef: refName(rootRef) };
+  if (typeof rootRef !== 'string') throw new Error(`${relPath}: root must be a $ref into $defs`);
+  return {
+    key,
+    path: relPath,
+    root,
+    defs,
+    order: dependencyOrder(defs),
+    rootDef: refName(rootRef),
+  };
 }
 
 /**
@@ -152,13 +159,13 @@ function loadSchema(key: string, relPath: string): SchemaFile {
  */
 function checkOpenVocabularies(file: SchemaFile): void {
   for (const [selector, vocab] of Object.entries(OPEN_VOCABULARY)) {
-    const [fileKey, rest] = selector.split(":", 2);
+    const [fileKey, rest] = selector.split(':', 2);
     if (fileKey !== file.key || !rest) continue;
-    const [defName, propName] = rest.split(".", 2);
+    const [defName, propName] = rest.split('.', 2);
     const def = defName ? file.defs[defName] : undefined;
     const props = def?.properties as Record<string, JsonSchema> | undefined;
     const prop = propName ? props?.[propName] : undefined;
-    if (!prop || prop.type !== "string" || typeof prop.pattern !== "string") {
+    if (!prop || prop.type !== 'string' || typeof prop.pattern !== 'string') {
       throw new Error(`OPEN_VOCABULARY entry ${selector} does not name a patterned string field`);
     }
     const vocabDef = file.defs[vocab];
@@ -168,7 +175,11 @@ function checkOpenVocabularies(file: SchemaFile): void {
   }
 }
 
-function openVocabularyFor(file: SchemaFile, defName: string, propName: string): string | undefined {
+function openVocabularyFor(
+  file: SchemaFile,
+  defName: string,
+  propName: string,
+): string | undefined {
   return OPEN_VOCABULARY[`${file.key}:${defName}.${propName}`];
 }
 
@@ -177,7 +188,7 @@ function openVocabularyFor(file: SchemaFile, defName: string, propName: string):
 // ---------------------------------------------------------------------------------------------
 
 function isRef(node: JsonSchema): node is JsonSchema & { $ref: string } {
-  return typeof node.$ref === "string";
+  return typeof node.$ref === 'string';
 }
 
 /**
@@ -187,8 +198,8 @@ function isRef(node: JsonSchema): node is JsonSchema & { $ref: string } {
 function nullableInner(node: JsonSchema): JsonSchema | undefined {
   if (Array.isArray(node.type)) {
     const types = node.type as string[];
-    const rest = types.filter((t) => t !== "null");
-    if (types.includes("null") && rest.length === 1) {
+    const rest = types.filter((t) => t !== 'null');
+    if (types.includes('null') && rest.length === 1) {
       const { type: _ignored, ...others } = node;
       return { ...others, type: rest[0] as string };
     }
@@ -198,24 +209,24 @@ function nullableInner(node: JsonSchema): JsonSchema | undefined {
   if (!Array.isArray(one) || one.length !== 2) return undefined;
   const [a, b] = one as JsonSchema[];
   if (!a || !b) return undefined;
-  if (b.type === "null" && !isRef(b)) return a;
-  if (a.type === "null" && !isRef(a)) return b;
+  if (b.type === 'null' && !isRef(b)) return a;
+  if (a.type === 'null' && !isRef(a)) return b;
   return undefined;
 }
 
 /** A fixed-length array: `prefixItems` + `items: false`. */
 function tupleItems(node: JsonSchema): JsonSchema[] | undefined {
-  if (node.type !== "array" || !Array.isArray(node.prefixItems)) return undefined;
-  if (node.items !== false) throw new Error("prefixItems without items:false is not supported");
+  if (node.type !== 'array' || !Array.isArray(node.prefixItems)) return undefined;
+  if (node.items !== false) throw new Error('prefixItems without items:false is not supported');
   return node.prefixItems as JsonSchema[];
 }
 
 const withoutDocs = (node: unknown): unknown => {
   if (Array.isArray(node)) return node.map(withoutDocs);
-  if (node && typeof node === "object") {
+  if (node && typeof node === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
-      if (k === "description" || k === "title" || k === "$comment") continue;
+      if (k === 'description' || k === 'title' || k === '$comment') continue;
       out[k] = withoutDocs(v);
     }
     return out;
@@ -234,7 +245,7 @@ function homogeneousTuple(items: JsonSchema[]): JsonSchema | undefined {
 
 /** The empty schema `{}` — accepts anything, including null and (as a property) must be present. */
 function isAnySchema(node: JsonSchema): boolean {
-  return Object.keys(node).filter((k) => k !== "description" && k !== "title").length === 0;
+  return Object.keys(node).filter((k) => k !== 'description' && k !== 'title').length === 0;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -245,9 +256,9 @@ interface Branch {
   /** The discriminator property the `if` keys on. */
   readonly prop: string;
   readonly match:
-    | { readonly kind: "enum"; readonly values: string[] }
-    | { readonly kind: "const"; readonly value: string }
-    | { readonly kind: "notEnum"; readonly values: string[] };
+    | { readonly kind: 'enum'; readonly values: string[] }
+    | { readonly kind: 'const'; readonly value: string }
+    | { readonly kind: 'notEnum'; readonly values: string[] };
   readonly required: string[];
   /** property -> required const value. */
   readonly propConst: Array<[string, unknown]>;
@@ -271,13 +282,13 @@ function analyseBranches(def: JsonSchema): Branch[] {
       throw new Error(`allOf[${i}].if must key on exactly one property`);
     }
     const test = condProps[prop] as JsonSchema;
-    let match: Branch["match"];
+    let match: Branch['match'];
     if (Array.isArray(test.enum)) {
-      match = { kind: "enum", values: test.enum as string[] };
-    } else if (typeof test.const === "string") {
-      match = { kind: "const", value: test.const };
+      match = { kind: 'enum', values: test.enum as string[] };
+    } else if (typeof test.const === 'string') {
+      match = { kind: 'const', value: test.const };
     } else if (test.not && Array.isArray((test.not as JsonSchema).enum)) {
-      match = { kind: "notEnum", values: (test.not as JsonSchema).enum as string[] };
+      match = { kind: 'notEnum', values: (test.not as JsonSchema).enum as string[] };
     } else {
       throw new Error(`allOf[${i}].if uses an unsupported test on ${prop}`);
     }
@@ -293,7 +304,7 @@ function analyseBranches(def: JsonSchema): Branch[] {
       }
       const sub = value as JsonSchema;
       if (isRef(sub)) propRef.push([name, refName(sub.$ref)]);
-      else if ("const" in sub) propConst.push([name, sub.const]);
+      else if ('const' in sub) propConst.push([name, sub.const]);
       else throw new Error(`allOf[${i}].then.properties.${name} uses an unsupported constraint`);
     }
     return {
@@ -318,16 +329,16 @@ const banner = (file: SchemaFile, tool: string): string =>
     `Regenerate with \`pnpm --filter @papertree/document-ir codegen\`. Hand edits are deleted by`,
     `the next run and are caught before that by test/codegen-drift.spec.ts. The JSON Schema is the`,
     `single source of truth (DESIGN.md §1); ${tool} is one of its bindings, never a second one.`,
-  ].join("\n");
+  ].join('\n');
 
 function jsDoc(text: string | undefined, indent: string): string {
-  if (!text) return "";
-  const safe = text.replace(/\*\//g, "*\\/");
-  const lines = safe.split("\n");
+  if (!text) return '';
+  const safe = text.replace(/\*\//g, '*\\/');
+  const lines = safe.split('\n');
   if (lines.length === 1 && (lines[0] as string).length + indent.length < 96) {
     return `${indent}/** ${lines[0] as string} */\n`;
   }
-  return `${indent}/**\n${lines.map((l) => `${indent} *${l ? ` ${l}` : ""}`).join("\n")}\n${indent} */\n`;
+  return `${indent}/**\n${lines.map((l) => `${indent} *${l ? ` ${l}` : ''}`).join('\n')}\n${indent} */\n`;
 }
 
 /** Ruff's configured line-length. Generated prose is wrapped to it so the output is lint-clean. */
@@ -339,31 +350,31 @@ const PY_LINE_LENGTH = 100;
  */
 function wrapLines(text: string, width: number): string[] {
   const out: string[] = [];
-  for (const line of text.split("\n")) {
+  for (const line of text.split('\n')) {
     if (line.length <= width) {
       out.push(line);
       continue;
     }
-    let current = "";
-    for (const word of line.split(" ")) {
-      if (current === "") current = word;
+    let current = '';
+    for (const word of line.split(' ')) {
+      if (current === '') current = word;
       else if (`${current} ${word}`.length <= width) current = `${current} ${word}`;
       else {
         out.push(current);
         current = word;
       }
     }
-    if (current !== "") out.push(current);
+    if (current !== '') out.push(current);
   }
   return out;
 }
 
 function pyDoc(text: string | undefined, indent: string): string {
-  if (!text) return "";
-  const safe = text.replace(/\\/g, "\\\\").replace(/"""/g, '\\"\\"\\"');
+  if (!text) return '';
+  const safe = text.replace(/\\/g, '\\\\').replace(/"""/g, '\\"\\"\\"');
   const lines = wrapLines(safe, PY_LINE_LENGTH - indent.length - 6);
   if (lines.length === 1) return `${indent}"""${lines[0] as string}"""\n`;
-  const body = lines.map((l, i) => (i === 0 ? l : l ? `${indent}${l}` : "")).join("\n");
+  const body = lines.map((l, i) => (i === 0 ? l : l ? `${indent}${l}` : '')).join('\n');
   return `${indent}"""${body}\n${indent}"""\n`;
 }
 
@@ -377,18 +388,18 @@ function pyDoc(text: string | undefined, indent: string): string {
  * touches comments. The authoritative copy of the prose is the schema; this is a convenience.
  */
 function pyFieldDoc(text: string | undefined, indent: string): string {
-  if (!text) return "";
+  if (!text) return '';
   return wrapLines(text, PY_LINE_LENGTH - indent.length - 3)
     .map((l) => (l ? `${indent}#: ${l}\n` : `${indent}#:\n`))
-    .join("");
+    .join('');
 }
 
 const q = (s: string): string => JSON.stringify(s);
 
 const snake = (s: string): string =>
   s
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
     .toLowerCase();
 
 const num = (v: unknown): string => String(v);
@@ -400,10 +411,41 @@ const num = (v: unknown): string => String(v);
  * `extra="forbid"` then rejects a document that spells the key `from_`.
  */
 const PY_KEYWORDS = new Set([
-  "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue",
-  "def", "del", "elif", "else", "except", "finally", "for", "from", "global", "if", "import",
-  "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try", "while",
-  "with", "yield",
+  'False',
+  'None',
+  'True',
+  'and',
+  'as',
+  'assert',
+  'async',
+  'await',
+  'break',
+  'class',
+  'continue',
+  'def',
+  'del',
+  'elif',
+  'else',
+  'except',
+  'finally',
+  'for',
+  'from',
+  'global',
+  'if',
+  'import',
+  'in',
+  'is',
+  'lambda',
+  'nonlocal',
+  'not',
+  'or',
+  'pass',
+  'raise',
+  'return',
+  'try',
+  'while',
+  'with',
+  'yield',
 ]);
 
 const pyName = (prop: string): string => (PY_KEYWORDS.has(prop) ? `${prop}_` : prop);
@@ -417,7 +459,7 @@ function pyRegexLiteral(rawPattern: string): string {
   // Neither Python's `re` nor the Rust engine behind Pydantic agrees with ECMA-262 on `\s`, so the
   // class is expanded here rather than handed to a second engine and hoped over (DESIGN.md §12.2).
   const pattern = expandEcmaClasses(rawPattern);
-  if (pattern.includes('"') || pattern.endsWith("\\")) return q(pattern);
+  if (pattern.includes('"') || pattern.endsWith('\\')) return q(pattern);
   return `r"${pattern}"`;
 }
 
@@ -426,7 +468,7 @@ function pyRegexLiteral(rawPattern: string): string {
  * are functions, because a recursive constraint cannot be a model.
  */
 function pyValidateCall(target: string, expr: string): string {
-  if (target === "OpaquePayload") return `validate_opaque_payload(${expr})`;
+  if (target === 'OpaquePayload') return `validate_opaque_payload(${expr})`;
   return `${target}.model_validate(${expr})`;
 }
 
@@ -439,35 +481,36 @@ function tsType(file: SchemaFile, node: JsonSchema, owner: string, prop?: string
   const nullable = nullableInner(node);
   if (nullable) return `${tsType(file, nullable, owner, prop)} | null`;
   if (Array.isArray(node.oneOf)) {
-    return (node.oneOf as JsonSchema[]).map((n) => tsType(file, n, owner, prop)).join(" | ");
+    return (node.oneOf as JsonSchema[]).map((n) => tsType(file, n, owner, prop)).join(' | ');
   }
-  if ("const" in node) return q(node.const as string);
-  if (Array.isArray(node.enum)) return (node.enum as unknown[]).map((v) => JSON.stringify(v)).join(" | ");
+  if ('const' in node) return q(node.const as string);
+  if (Array.isArray(node.enum))
+    return (node.enum as unknown[]).map((v) => JSON.stringify(v)).join(' | ');
   const tuple = tupleItems(node);
-  if (tuple) return `[${tuple.map((t) => tsType(file, t, owner, prop)).join(", ")}]`;
+  if (tuple) return `[${tuple.map((t) => tsType(file, t, owner, prop)).join(', ')}]`;
   switch (node.type) {
-    case "string": {
+    case 'string': {
       const vocab = prop ? openVocabularyFor(file, owner, prop) : undefined;
-      return vocab ? vocab.replace(/^Known/, "") : "string";
+      return vocab ? vocab.replace(/^Known/, '') : 'string';
     }
-    case "integer":
-    case "number":
-      return "number";
-    case "boolean":
-      return "boolean";
-    case "null":
-      return "null";
-    case "array": {
+    case 'integer':
+    case 'number':
+      return 'number';
+    case 'boolean':
+      return 'boolean';
+    case 'null':
+      return 'null';
+    case 'array': {
       const items = node.items as JsonSchema | undefined;
-      if (!items) throw new Error("array without items");
+      if (!items) throw new Error('array without items');
       const inner = tsType(file, items, owner, prop);
       const atom = /[ |]/.test(inner) ? `(${inner})` : inner;
       return node.minItems === 1 ? `[${inner}, ...${atom}[]]` : `${atom}[]`;
     }
-    case "object":
-      return node.properties ? "Record<string, unknown>" : "Record<string, unknown>";
+    case 'object':
+      return node.properties ? 'Record<string, unknown>' : 'Record<string, unknown>';
     default:
-      if (isAnySchema(node)) return "unknown";
+      if (isAnySchema(node)) return 'unknown';
       throw new Error(`unsupported node: ${JSON.stringify(node).slice(0, 120)}`);
   }
 }
@@ -475,11 +518,11 @@ function tsType(file: SchemaFile, node: JsonSchema, owner: string, prop?: string
 function tsObjectBody(file: SchemaFile, name: string, def: JsonSchema, skip: Set<string>): string {
   const props = (def.properties ?? {}) as Record<string, JsonSchema>;
   const required = new Set((def.required as string[] | undefined) ?? []);
-  let out = "";
+  let out = '';
   for (const [prop, node] of Object.entries(props)) {
     if (skip.has(prop)) continue;
-    out += jsDoc(node.description as string | undefined, "  ");
-    out += `  ${prop}${required.has(prop) ? "" : "?"}: ${tsType(file, node, name, prop)};\n`;
+    out += jsDoc(node.description as string | undefined, '  ');
+    out += `  ${prop}${required.has(prop) ? '' : '?'}: ${tsType(file, node, name, prop)};\n`;
   }
   return out;
 }
@@ -487,9 +530,9 @@ function tsObjectBody(file: SchemaFile, name: string, def: JsonSchema, skip: Set
 function emitTsVocabulary(name: string, def: JsonSchema): string {
   const constName = `${snake(name).toUpperCase()}S`;
   const values = def.enum as string[];
-  const alias = name.replace(/^Known/, "");
-  let out = jsDoc(def.description as string | undefined, "");
-  out += `export const ${constName} = [\n${values.map((v) => `  ${q(v)},`).join("\n")}\n] as const;\n\n`;
+  const alias = name.replace(/^Known/, '');
+  let out = jsDoc(def.description as string | undefined, '');
+  out += `export const ${constName} = [\n${values.map((v) => `  ${q(v)},`).join('\n')}\n] as const;\n\n`;
   out += `export type ${name} = (typeof ${constName})[number];\n\n`;
   out += `export function is${name}(value: string): value is ${name} {\n`;
   out += `  return (${constName} as readonly string[]).includes(value);\n}\n\n`;
@@ -506,32 +549,32 @@ function emitTsVocabulary(name: string, def: JsonSchema): string {
 const OPEN_VOCABULARY_ALIASES = new Set(Object.values(OPEN_VOCABULARY));
 
 function emitTsTypes(file: SchemaFile): string {
-  let out = `/*\n${banner(file, "TypeScript")}\n*/\n\n`;
+  let out = `/*\n${banner(file, 'TypeScript')}\n*/\n\n`;
   for (const name of file.order) {
     const def = file.defs[name] as JsonSchema;
     if (DOC_ONLY_VOCABULARIES.has(name)) {
       out += emitTsVocabulary(name, def);
       continue;
     }
-    if (name === "ModelFreeSubtree") {
+    if (name === 'ModelFreeSubtree') {
       out += jsDoc(
         `${def.description as string}\n\nTypeScript cannot express "no object anywhere in this subtree carries key X", so this\nconstraint has no type — it is the runtime guard \`assertModelFree()\` in ./zod.js\n(DESIGN.md §6).`,
-        "",
+        '',
       );
       out += `export type ${name} = unknown;\n\n`;
       continue;
     }
-    if (name === "OpaquePayload") {
-      out += jsDoc(def.description as string | undefined, "");
+    if (name === 'OpaquePayload') {
+      out += jsDoc(def.description as string | undefined, '');
       out += `export type ${name} = { readonly [key: string]: unknown };\n\n`;
       continue;
     }
-    if (name === "Block") {
+    if (name === 'Block') {
       out += emitTsBlock(file, name, def);
       continue;
     }
-    out += jsDoc(def.description as string | undefined, "");
-    if (def.type === "object" && def.properties) {
+    out += jsDoc(def.description as string | undefined, '');
+    if (def.type === 'object' && def.properties) {
       out += `export interface ${name} {\n${tsObjectBody(file, name, def, new Set())}}\n\n`;
     } else {
       out += `export type ${name} = ${tsType(file, def, name)};\n\n`;
@@ -547,19 +590,19 @@ function emitTsTypes(file: SchemaFile): string {
  */
 function emitTsBlock(file: SchemaFile, name: string, def: JsonSchema): string {
   const branches = analyseBranches(def).filter((b) => b.propRef.length > 0);
-  const discriminator = branches[0]?.prop ?? "type";
-  let out = jsDoc(def.description as string | undefined, "");
-  out += `export interface ${name}Base {\n${tsObjectBody(file, name, def, new Set([discriminator, "payload"]))}}\n\n`;
+  const discriminator = branches[0]?.prop ?? 'type';
+  let out = jsDoc(def.description as string | undefined, '');
+  out += `export interface ${name}Base {\n${tsObjectBody(file, name, def, new Set([discriminator, 'payload']))}}\n\n`;
   const members: string[] = [];
   for (const b of branches) {
     const [payloadProp, payloadDef] = b.propRef[0] as [string, string];
     const typeExpr =
-      b.match.kind === "const"
+      b.match.kind === 'const'
         ? q(b.match.value)
-        : b.match.kind === "enum"
-          ? b.match.values.map(q).join(" | ")
-          : "string";
-    const optional = b.required.includes(payloadProp) ? "" : "?";
+        : b.match.kind === 'enum'
+          ? b.match.values.map(q).join(' | ')
+          : 'string';
+    const optional = b.required.includes(payloadProp) ? '' : '?';
     members.push(
       `  | (${name}Base & { ${b.prop}: ${typeExpr}; ${payloadProp}${optional}: ${payloadDef} })`,
     );
@@ -571,7 +614,7 @@ function emitTsBlock(file: SchemaFile, name: string, def: JsonSchema): string {
   out += ` * open member structurally overlaps the closed ones; the VALIDATOR is authoritative, and it\n`;
   out += ` * is generated from the same branches (see ./zod.js \`${name}Schema\`).\n`;
   out += ` */\n`;
-  out += `export type ${name} =\n${members.join("\n")};\n\n`;
+  out += `export type ${name} =\n${members.join('\n')};\n\n`;
   return out;
 }
 
@@ -580,29 +623,29 @@ function emitTsBlock(file: SchemaFile, name: string, def: JsonSchema): string {
 // ---------------------------------------------------------------------------------------------
 
 function zodString(node: JsonSchema): string {
-  let s = "z.string()";
-  if (typeof node.minLength === "number") s += `.min(${num(node.minLength)})`;
-  if (typeof node.maxLength === "number") s += `.max(${num(node.maxLength)})`;
-  if (typeof node.pattern === "string") {
+  let s = 'z.string()';
+  if (typeof node.minLength === 'number') s += `.min(${num(node.minLength)})`;
+  if (typeof node.maxLength === 'number') s += `.max(${num(node.maxLength)})`;
+  if (typeof node.pattern === 'string') {
     s += `.regex(new RegExp(${q(node.pattern)}), { message: ${q(`must match ${node.pattern}`)} })`;
   }
   // Every string, without exception — see WELL_FORMED_TS. A binding-level strengthening over ajv,
   // applied uniformly in BOTH generated bindings so they cannot disagree with each other.
   s += `.refine(isWellFormedText, { message: ${q(WELL_FORMED_MESSAGE)} })`;
-  if (node.format === "date-time") {
+  if (node.format === 'date-time') {
     s += `.refine(isDateTime, { message: 'must match format "date-time"' })`;
-  } else if (typeof node.format === "string") {
+  } else if (typeof node.format === 'string') {
     throw new Error(`unsupported format: ${String(node.format)}`);
   }
   return s;
 }
 
 function zodNumber(node: JsonSchema): string {
-  let s = node.type === "integer" ? "z.number().int()" : "z.number()";
-  if (typeof node.minimum === "number") s += `.min(${num(node.minimum)})`;
-  if (typeof node.exclusiveMinimum === "number") s += `.gt(${num(node.exclusiveMinimum)})`;
-  if (typeof node.maximum === "number") s += `.max(${num(node.maximum)})`;
-  if (typeof node.exclusiveMaximum === "number") s += `.lt(${num(node.exclusiveMaximum)})`;
+  let s = node.type === 'integer' ? 'z.number().int()' : 'z.number()';
+  if (typeof node.minimum === 'number') s += `.min(${num(node.minimum)})`;
+  if (typeof node.exclusiveMinimum === 'number') s += `.gt(${num(node.exclusiveMinimum)})`;
+  if (typeof node.maximum === 'number') s += `.max(${num(node.maximum)})`;
+  if (typeof node.exclusiveMaximum === 'number') s += `.lt(${num(node.exclusiveMaximum)})`;
   return s;
 }
 
@@ -612,42 +655,42 @@ function zodOf(node: JsonSchema): string {
   if (nullable) return `${zodOf(nullable)}.nullable()`;
   if (Array.isArray(node.oneOf)) {
     const members = (node.oneOf as JsonSchema[]).map((n) => zodOf(n));
-    return `z.union([${members.join(", ")}])`;
+    return `z.union([${members.join(', ')}])`;
   }
-  if ("const" in node) return `z.literal(${JSON.stringify(node.const)})`;
+  if ('const' in node) return `z.literal(${JSON.stringify(node.const)})`;
   if (Array.isArray(node.enum)) {
     const values = node.enum as unknown[];
-    if (values.every((v) => typeof v === "string")) {
-      return `z.enum([${values.map((v) => q(v as string)).join(", ")}])`;
+    if (values.every((v) => typeof v === 'string')) {
+      return `z.enum([${values.map((v) => q(v as string)).join(', ')}])`;
     }
-    return `z.union([${values.map((v) => `z.literal(${JSON.stringify(v)})`).join(", ")}])`;
+    return `z.union([${values.map((v) => `z.literal(${JSON.stringify(v)})`).join(', ')}])`;
   }
   const tuple = tupleItems(node);
-  if (tuple) return `z.tuple([${tuple.map((t) => zodOf(t)).join(", ")}])`;
+  if (tuple) return `z.tuple([${tuple.map((t) => zodOf(t)).join(', ')}])`;
   switch (node.type) {
-    case "string":
+    case 'string':
       return zodString(node);
-    case "integer":
-    case "number":
+    case 'integer':
+    case 'number':
       return zodNumber(node);
-    case "boolean":
-      return "z.boolean()";
-    case "null":
-      return "z.null()";
-    case "array": {
+    case 'boolean':
+      return 'z.boolean()';
+    case 'null':
+      return 'z.null()';
+    case 'array': {
       const items = node.items as JsonSchema | undefined;
-      if (!items) throw new Error("array without items");
+      if (!items) throw new Error('array without items');
       let s = `z.array(${zodOf(items)})`;
-      if (typeof node.minItems === "number") s += `.min(${num(node.minItems)})`;
-      if (typeof node.maxItems === "number") s += `.max(${num(node.maxItems)})`;
+      if (typeof node.minItems === 'number') s += `.min(${num(node.minItems)})`;
+      if (typeof node.maxItems === 'number') s += `.max(${num(node.maxItems)})`;
       return s;
     }
-    case "object":
+    case 'object':
       // `{"type": "object"}` with no properties: an open object. NOT `z.record` — see
       // OPEN_OBJECT_TS for why rebuilding the object silently deleted `__proto__`.
-      return "openObject()";
+      return 'openObject()';
     default:
-      if (isAnySchema(node)) return "z.unknown()";
+      if (isAnySchema(node)) return 'z.unknown()';
       throw new Error(`unsupported node: ${JSON.stringify(node).slice(0, 120)}`);
   }
 }
@@ -657,7 +700,7 @@ function zodOf(node: JsonSchema): string {
  * the F0.2 field-closure guarantee in the bindings, so the emitter refuses to emit an object
  * whose schema does not close its field set.
  */
-function zodObject(name: string, def: JsonSchema, indent = ""): string {
+function zodObject(name: string, def: JsonSchema, indent = ''): string {
   if (def.additionalProperties !== false) {
     throw new Error(`${name}: object $def without additionalProperties:false — refusing to emit`);
   }
@@ -665,10 +708,10 @@ function zodObject(name: string, def: JsonSchema, indent = ""): string {
   const required = new Set((def.required as string[] | undefined) ?? []);
   const lines: string[] = [];
   for (const [prop, node] of Object.entries(props)) {
-    const suffix = required.has(prop) ? "" : ".optional()";
+    const suffix = required.has(prop) ? '' : '.optional()';
     lines.push(`${indent}    ${prop}: ${zodOf(node)}${suffix},`);
   }
-  return `z\n${indent}  .object({\n${lines.join("\n")}\n${indent}  })\n${indent}  .strict()`;
+  return `z\n${indent}  .object({\n${lines.join('\n')}\n${indent}  })\n${indent}  .strict()`;
 }
 
 /** Required properties whose schema accepts anything: Zod treats `z.unknown()` keys as optional. */
@@ -685,10 +728,10 @@ function zodBranchChecks(def: JsonSchema, varName: string): string {
   const parts: string[] = [];
   for (const b of branches) {
     const testExpr =
-      b.match.kind === "const"
+      b.match.kind === 'const'
         ? `${varName}.${b.prop} === ${q(b.match.value)}`
-        : `[${b.match.values.map((v) => q(v)).join(", ")}].includes(${varName}.${b.prop})`;
-    const cond = b.match.kind === "notEnum" ? `!${testExpr}` : testExpr;
+        : `[${b.match.values.map((v) => q(v)).join(', ')}].includes(${varName}.${b.prop})`;
+    const cond = b.match.kind === 'notEnum' ? `!${testExpr}` : testExpr;
     const body: string[] = [];
     for (const req of b.required) {
       body.push(
@@ -724,15 +767,15 @@ function zodBranchChecks(def: JsonSchema, varName: string): string {
       );
     }
     if (body.length === 0) continue;
-    parts.push(`    if (${cond}) {\n${body.join("\n")}\n    }`);
+    parts.push(`    if (${cond}) {\n${body.join('\n')}\n    }`);
   }
-  return parts.join("\n");
+  return parts.join('\n');
 }
 
 function describeMatch(b: Branch): string {
-  if (b.match.kind === "const") return b.match.value;
-  const list = b.match.values.join("/");
-  return b.match.kind === "enum" ? `one of ${list}` : `none of ${list}`;
+  if (b.match.kind === 'const') return b.match.value;
+  const list = b.match.values.join('/');
+  return b.match.kind === 'enum' ? `one of ${list}` : `none of ${list}`;
 }
 
 function emitZod(file: SchemaFile): string {
@@ -740,7 +783,7 @@ function emitZod(file: SchemaFile): string {
     (((file.defs.ModelFreeSubtree?.allOf as JsonSchema[] | undefined)?.[0]?.then as JsonSchema)
       ?.properties ?? {}) as Record<string, unknown>,
   );
-  let out = "";
+  let out = '';
 
   for (const name of file.order) {
     const def = file.defs[name] as JsonSchema;
@@ -753,13 +796,13 @@ function emitZod(file: SchemaFile): string {
       out += `// and the is${name}() guard; narrowing a field to it would close an OPEN vocabulary.\n\n`;
       continue;
     }
-    if (name === "ModelFreeSubtree") continue; // emitted above as assertModelFree
-    if (name === "OpaquePayload") {
+    if (name === 'ModelFreeSubtree') continue; // emitted above as assertModelFree
+    if (name === 'OpaquePayload') {
       out += emitZodOpaquePayload(name, def);
       continue;
     }
-    if (def.type === "object" && def.properties) {
-      const checks = zodBranchChecks(def, "value");
+    if (def.type === 'object' && def.properties) {
+      const checks = zodBranchChecks(def, 'value');
       const presence = requiredAnyProps(def).map(
         (p) =>
           `    if (!(${q(p)} in (value as Record<string, unknown>))) {\n` +
@@ -772,7 +815,7 @@ function emitZod(file: SchemaFile): string {
         out += `export const ${name}Schema = ${zodObject(name, def)};\n\n`;
       } else {
         out += `export const ${name}Schema = ${zodObject(name, def)}\n`;
-        out += `  .superRefine((value, ctx) => {\n${refinements.join("\n")}\n  });\n\n`;
+        out += `  .superRefine((value, ctx) => {\n${refinements.join('\n')}\n  });\n\n`;
       }
       continue;
     }
@@ -783,13 +826,13 @@ function emitZod(file: SchemaFile): string {
 
   // Helpers are prepended only when the body actually uses them: an unused declaration in a
   // generated file is a lint failure, and the two schema files do not use the same set.
-  let head = `/*\n${banner(file, "Zod")}\n*/\n\n`;
+  let head = `/*\n${banner(file, 'Zod')}\n*/\n\n`;
   head += `import { z } from "zod";\n\n`;
-  if (out.includes("isWellFormedText")) head += WELL_FORMED_TS;
-  if (out.includes("openObject()")) head += OPEN_OBJECT_TS;
+  if (out.includes('isWellFormedText')) head += WELL_FORMED_TS;
+  if (out.includes('openObject()')) head += OPEN_OBJECT_TS;
   // `modelFreeTs` (below) also calls findExcessiveDepth, so the bound travels with either.
-  if (out.includes("findExcessiveDepth") || forbidden.length > 0) head += DEPTH_TS;
-  if (out.includes("isDateTime")) head += DATE_TIME_TS;
+  if (out.includes('findExcessiveDepth') || forbidden.length > 0) head += DEPTH_TS;
+  if (out.includes('isDateTime')) head += DATE_TIME_TS;
   if (forbidden.length > 0) head += modelFreeTs(file, forbidden);
   return head + out;
 }
@@ -812,7 +855,7 @@ function emitZodOpaquePayload(name: string, def: JsonSchema): string {
   out += `    }\n`;
   out += `    const offending = findModelDeclaration(value);\n`;
   out += `    if (offending) {\n`;
-  out += `      ctx.addIssue({ code: z.ZodIssueCode.custom, path: offending.path, message: ${q("model-authorship declaration is forbidden in a payload subtree")} });\n`;
+  out += `      ctx.addIssue({ code: z.ZodIssueCode.custom, path: offending.path, message: ${q('model-authorship declaration is forbidden in a payload subtree')} });\n`;
   out += `    }\n`;
   out += `  });\n\n`;
   return out;
@@ -838,7 +881,7 @@ const MAX_PAYLOAD_DEPTH = 64;
 
 const DEPTH_MESSAGE = `payload nests deeper than ${MAX_PAYLOAD_DEPTH} levels`;
 
-const WELL_FORMED_MESSAGE = "string contains an unpaired surrogate and is not UTF-8-encodable";
+const WELL_FORMED_MESSAGE = 'string contains an unpaired surrogate and is not UTF-8-encodable';
 
 /**
  * ECMA-262 `\s` as an explicit set of code points.
@@ -851,7 +894,7 @@ const WELL_FORMED_MESSAGE = "string contains an unpaired surrogate and is not UT
  * the same set. See DESIGN.md §12.2.
  */
 const ECMA_WHITESPACE_CLASS =
-  "\\t\\n\\v\\f\\r\\u0020\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff";
+  '\\t\\n\\v\\f\\r\\u0020\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff';
 
 /**
  * Rewrites `\s` / `\S` into an explicit class with ECMA-262 semantics, inside or outside a
@@ -868,39 +911,39 @@ const PATTERN_PARTS = new Map<string, readonly string[]>();
 
 function expandEcmaClasses(pattern: string): string {
   const parts: string[] = [];
-  let current = "";
+  let current = '';
   const flush = (): void => {
-    if (current !== "") parts.push(current);
-    current = "";
+    if (current !== '') parts.push(current);
+    current = '';
   };
   let inClass = false;
   for (let i = 0; i < pattern.length; i += 1) {
     const ch = pattern[i] as string;
-    if (ch === "\\") {
+    if (ch === '\\') {
       const next = pattern[i + 1];
-      if (next === "s" || next === "S") {
-        if (next === "S" && inClass) {
+      if (next === 's' || next === 'S') {
+        if (next === 'S' && inClass) {
           throw new Error(`\\S inside a character class is not supported: ${pattern}`);
         }
         if (inClass) {
           flush();
           parts.push(ECMA_WHITESPACE_CLASS);
         } else {
-          current += next === "s" ? `[${ECMA_WHITESPACE_CLASS}]` : `[^${ECMA_WHITESPACE_CLASS}]`;
+          current += next === 's' ? `[${ECMA_WHITESPACE_CLASS}]` : `[^${ECMA_WHITESPACE_CLASS}]`;
         }
         i += 1;
         continue;
       }
-      current += ch + (next ?? "");
+      current += ch + (next ?? '');
       i += 1;
       continue;
     }
-    if (ch === "[") inClass = true;
-    else if (ch === "]") inClass = false;
+    if (ch === '[') inClass = true;
+    else if (ch === ']') inClass = false;
     current += ch;
   }
   flush();
-  const joined = parts.join("");
+  const joined = parts.join('');
   if (parts.length > 1) PATTERN_PARTS.set(joined, parts);
   return joined;
 }
@@ -1019,8 +1062,8 @@ function isDateTime(value: string): boolean {
 
 function modelFreeTs(file: SchemaFile, forbidden: string[]): string {
   const def = file.defs.ModelFreeSubtree as JsonSchema;
-  let out = jsDoc(def.description as string | undefined, "");
-  out += `export const MODEL_AUTHORSHIP_KEYS = [\n${forbidden.map((k) => `  ${q(k)},`).join("\n")}\n] as const;\n\n`;
+  let out = jsDoc(def.description as string | undefined, '');
+  out += `export const MODEL_AUTHORSHIP_KEYS = [\n${forbidden.map((k) => `  ${q(k)},`).join('\n')}\n] as const;\n\n`;
   out += `/**\n * Walks a value and returns the path of the first model-authorship declaration, or null.\n`;
   out += ` * TypeScript cannot express this constraint as a type, so it is a runtime guard (DESIGN.md §6).\n`;
   out += ` *\n`;
@@ -1071,20 +1114,20 @@ interface PyField {
 
 function pyFieldArgs(node: JsonSchema): string[] {
   const args: string[] = [];
-  if (typeof node.pattern === "string") args.push(`pattern=${pyRegexLiteral(node.pattern)}`);
+  if (typeof node.pattern === 'string') args.push(`pattern=${pyRegexLiteral(node.pattern)}`);
   // Python's `json.loads` accepts the non-JSON literals NaN/Infinity/-Infinity, which JS's
   // `JSON.parse` cannot even read; Pydantic's `allow_inf_nan` defaults to True. Every float in
   // this schema is bounded, so this changes no verdict today — it is the guard that keeps the
   // first UNbounded number from becoming a divergence (DESIGN.md §12.7).
-  if (node.type === "number") args.push("allow_inf_nan=False");
-  if (typeof node.minimum === "number") args.push(`ge=${num(node.minimum)}`);
-  if (typeof node.exclusiveMinimum === "number") args.push(`gt=${num(node.exclusiveMinimum)}`);
-  if (typeof node.maximum === "number") args.push(`le=${num(node.maximum)}`);
-  if (typeof node.exclusiveMaximum === "number") args.push(`lt=${num(node.exclusiveMaximum)}`);
-  if (typeof node.minLength === "number") args.push(`min_length=${num(node.minLength)}`);
-  if (typeof node.maxLength === "number") args.push(`max_length=${num(node.maxLength)}`);
-  if (typeof node.minItems === "number") args.push(`min_length=${num(node.minItems)}`);
-  if (typeof node.maxItems === "number") args.push(`max_length=${num(node.maxItems)}`);
+  if (node.type === 'number') args.push('allow_inf_nan=False');
+  if (typeof node.minimum === 'number') args.push(`ge=${num(node.minimum)}`);
+  if (typeof node.exclusiveMinimum === 'number') args.push(`gt=${num(node.exclusiveMinimum)}`);
+  if (typeof node.maximum === 'number') args.push(`le=${num(node.maximum)}`);
+  if (typeof node.exclusiveMaximum === 'number') args.push(`lt=${num(node.exclusiveMaximum)}`);
+  if (typeof node.minLength === 'number') args.push(`min_length=${num(node.minLength)}`);
+  if (typeof node.maxLength === 'number') args.push(`max_length=${num(node.maxLength)}`);
+  if (typeof node.minItems === 'number') args.push(`min_length=${num(node.minItems)}`);
+  if (typeof node.maxItems === 'number') args.push(`max_length=${num(node.maxItems)}`);
   return args;
 }
 
@@ -1107,21 +1150,26 @@ function pyPatternLines(arg: string, indent: string): string[] {
  * a magic trailing comma (which is what stops `ruff format` from joining it back into a line
  * `ruff check` then rejects for length).
  */
-function pyFieldLine(name: string, annotation: string, args: string[], defaultNone: boolean): string {
-  const tail = args.length > 0 ? ` = Field(${args.join(", ")})` : defaultNone ? " = None" : "";
+function pyFieldLine(
+  name: string,
+  annotation: string,
+  args: string[],
+  defaultNone: boolean,
+): string {
+  const tail = args.length > 0 ? ` = Field(${args.join(', ')})` : defaultNone ? ' = None' : '';
   const oneLine = `    ${name}: ${annotation}${tail}`;
   if (oneLine.length <= PY_LINE_LENGTH || args.length === 0) return `${oneLine}\n`;
-  const lines = args.flatMap((a) => pyPatternLines(a, "        "));
+  const lines = args.flatMap((a) => pyPatternLines(a, '        '));
   // A line is followed by a comma unless the NEXT line continues the same implicit concatenation.
   const body = lines
-    .map((l, i) => `        ${l}${lines[i + 1]?.startsWith('r"') ? "" : ","}\n`)
-    .join("");
+    .map((l, i) => `        ${l}${lines[i + 1]?.startsWith('r"') ? '' : ','}\n`)
+    .join('');
   return `    ${name}: ${annotation} = Field(\n${body}    )\n`;
 }
 
 function pyAnnotate(base: string, args: string[], extra: string[] = []): string {
-  const pieces = [...(args.length ? [`Field(${args.join(", ")})`] : []), ...extra];
-  return pieces.length === 0 ? base : `Annotated[${base}, ${pieces.join(", ")}]`;
+  const pieces = [...(args.length ? [`Field(${args.join(', ')})`] : []), ...extra];
+  return pieces.length === 0 ? base : `Annotated[${base}, ${pieces.join(', ')}]`;
 }
 
 /**
@@ -1136,19 +1184,19 @@ function pyWrapAssignment(name: string, expr: string): string {
   const [, head, body] = inner as unknown as [string, string, string];
   const parts: string[] = [];
   let depth = 0;
-  let current = "";
+  let current = '';
   for (const ch of body) {
-    if (ch === "[" || ch === "(") depth += 1;
-    if (ch === "]" || ch === ")") depth -= 1;
-    if (ch === "," && depth === 0) {
+    if (ch === '[' || ch === '(') depth += 1;
+    if (ch === ']' || ch === ')') depth -= 1;
+    if (ch === ',' && depth === 0) {
       parts.push(current.trim());
-      current = "";
+      current = '';
       continue;
     }
     current += ch;
   }
   if (current.trim()) parts.push(current.trim());
-  return `${head}[\n${parts.map((p) => `    ${p},\n`).join("")}]`;
+  return `${head}[\n${parts.map((p) => `    ${p},\n`).join('')}]`;
 }
 
 function pyType(node: JsonSchema, owner: string, prop?: string): string {
@@ -1156,23 +1204,27 @@ function pyType(node: JsonSchema, owner: string, prop?: string): string {
   const nullable = nullableInner(node);
   if (nullable) return `${pyType(nullable, owner, prop)} | None`;
   if (Array.isArray(node.oneOf)) {
-    return (node.oneOf as JsonSchema[]).map((n) => pyType(n, owner, prop)).join(" | ");
+    return (node.oneOf as JsonSchema[]).map((n) => pyType(n, owner, prop)).join(' | ');
   }
-  if ("const" in node) return `Literal[${JSON.stringify(node.const)}]`;
+  if ('const' in node) return `Literal[${JSON.stringify(node.const)}]`;
   if (Array.isArray(node.enum)) {
     const values = node.enum as unknown[];
-    if (values.every((v) => typeof v === "string")) {
-      return `Literal[${values.map((v) => q(v as string)).join(", ")}]`;
+    if (values.every((v) => typeof v === 'string')) {
+      return `Literal[${values.map((v) => q(v as string)).join(', ')}]`;
     }
     // `Literal[0, 90, ...]` would accept `False`, because `False == 0` in Python and ajv rejects
     // it. An `int` annotation under strict mode rejects bool, so the membership test moves into
     // an AfterValidator. `JsonInt`, not `int`, so `rotation: 90.0` behaves as JSON Schema says.
-    return pyAnnotate("JsonInt", [], [`AfterValidator(_one_of((${values.map((v) => num(v)).join(", ")})))`]);
+    return pyAnnotate(
+      'JsonInt',
+      [],
+      [`AfterValidator(_one_of((${values.map((v) => num(v)).join(', ')})))`],
+    );
   }
   const tuple = tupleItems(node);
   if (tuple) {
     const same = homogeneousTuple(tuple);
-    if (!same) throw new Error(`${owner}.${prop ?? ""}: heterogeneous tuples are not supported`);
+    if (!same) throw new Error(`${owner}.${prop ?? ''}: heterogeneous tuples are not supported`);
     const inner = pyAnnotate(pyType(same, owner, prop), pyFieldArgs(same));
     return pyAnnotate(`list[${inner}]`, [
       `min_length=${num(node.minItems)}`,
@@ -1180,28 +1232,28 @@ function pyType(node: JsonSchema, owner: string, prop?: string): string {
     ]);
   }
   switch (node.type) {
-    case "string": {
-      if (node.format === "date-time") return `Annotated[JsonText, AfterValidator(_date_time)]`;
-      return "JsonText";
+    case 'string': {
+      if (node.format === 'date-time') return `Annotated[JsonText, AfterValidator(_date_time)]`;
+      return 'JsonText';
     }
-    case "integer":
-      return "JsonInt";
-    case "number":
-      return "float";
-    case "boolean":
-      return "bool";
-    case "null":
-      return "None";
-    case "array": {
+    case 'integer':
+      return 'JsonInt';
+    case 'number':
+      return 'float';
+    case 'boolean':
+      return 'bool';
+    case 'null':
+      return 'None';
+    case 'array': {
       const items = node.items as JsonSchema | undefined;
-      if (!items) throw new Error("array without items");
+      if (!items) throw new Error('array without items');
       const inner = pyAnnotate(pyType(items, owner, prop), pyFieldArgs(items));
       return `list[${inner}]`;
     }
-    case "object":
-      return "dict[str, Any]";
+    case 'object':
+      return 'dict[str, Any]';
     default:
-      if (isAnySchema(node)) return "Any";
+      if (isAnySchema(node)) return 'Any';
       throw new Error(`unsupported node: ${JSON.stringify(node).slice(0, 120)}`);
   }
 }
@@ -1224,12 +1276,12 @@ function emitPyModel(name: string, def: JsonSchema): string {
     (p) => !required.has(p) && !nullableInner(props[p] as JsonSchema),
   );
   let out = `class ${name}(_Model):\n`;
-  out += pyDoc(def.description as string | undefined, "    ");
+  out += pyDoc(def.description as string | undefined, '    ');
   if (nonNullableOptional.length > 0) {
     // D11: an optional field is NEVER nullable. Pydantic cannot distinguish "absent" from
     // "explicitly null" once a default of None exists, so explicit nulls are rejected up front.
     out += `\n    NON_NULLABLE_OPTIONAL: ClassVar[frozenset[str]] = frozenset(\n`;
-    out += `        {\n${nonNullableOptional.map((p) => `            ${q(p)},\n`).join("")}        }\n    )\n`;
+    out += `        {\n${nonNullableOptional.map((p) => `            ${q(p)},\n`).join('')}        }\n    )\n`;
   }
   out += `\n`;
   for (const [prop, node] of Object.entries(props)) {
@@ -1237,9 +1289,9 @@ function emitPyModel(name: string, def: JsonSchema): string {
     const isRequired = required.has(prop);
     const annotation = isRequired ? f.annotation : `${f.annotation} | None`;
     const args = [...f.args];
-    if (!isRequired) args.unshift("default=None");
+    if (!isRequired) args.unshift('default=None');
     if (pyName(prop) !== prop) args.unshift(`alias=${q(prop)}`);
-    out += pyFieldDoc(node.description as string | undefined, "    ");
+    out += pyFieldDoc(node.description as string | undefined, '    ');
     out += pyFieldLine(pyName(prop), annotation, args, !isRequired);
   }
   const branches = analyseBranches(def);
@@ -1268,34 +1320,34 @@ function emitPyBranches(branches: Branch[]): string {
   out += `        """\n`;
   const parts: string[] = [];
   for (const b of branches) {
-    const values = b.match.kind === "const" ? [b.match.value] : b.match.values;
+    const values = b.match.kind === 'const' ? [b.match.value] : b.match.values;
     const prop = pyName(b.prop);
     const test =
-      b.match.kind === "const"
+      b.match.kind === 'const'
         ? `self.${prop} == ${q(b.match.value)}`
-        : b.match.kind === "enum"
-          ? `self.${prop} in (${values.map((v) => q(v)).join(", ")})`
-          : `self.${prop} not in (${values.map((v) => q(v)).join(", ")})`;
+        : b.match.kind === 'enum'
+          ? `self.${prop} in (${values.map((v) => q(v)).join(', ')})`
+          : `self.${prop} not in (${values.map((v) => q(v)).join(', ')})`;
     const body: string[] = [];
     for (const req of b.required) {
       body.push(
         `            if self.${pyName(req)} is None:\n` +
-          pyRaise("                ", `${req} is required for ${b.prop}=`, prop),
+          pyRaise('                ', `${req} is required for ${b.prop}=`, prop),
       );
     }
     for (const [p, v] of b.propConst) {
-      const lit = typeof v === "boolean" ? (v ? "True" : "False") : JSON.stringify(v);
+      const lit = typeof v === 'boolean' ? (v ? 'True' : 'False') : JSON.stringify(v);
       const cmp =
-        typeof v === "boolean" ? `self.${pyName(p)} is not ${lit}` : `self.${pyName(p)} != ${lit}`;
+        typeof v === 'boolean' ? `self.${pyName(p)} is not ${lit}` : `self.${pyName(p)} != ${lit}`;
       body.push(
         `            if ${cmp}:\n` +
-          pyRaise("                ", `${p} must be ${String(v)} for ${b.prop}=`, prop),
+          pyRaise('                ', `${p} must be ${String(v)} for ${b.prop}=`, prop),
       );
     }
     for (const p of b.propForbidden) {
       body.push(
         `            if self.${pyName(p)} is not None:\n` +
-          pyRaise("                ", `${p} is forbidden for ${b.prop}=`, prop),
+          pyRaise('                ', `${p} is forbidden for ${b.prop}=`, prop),
       );
     }
     for (const [p, target] of b.propRef) {
@@ -1305,9 +1357,9 @@ function emitPyBranches(branches: Branch[]): string {
       );
     }
     if (body.length === 0) continue;
-    parts.push(`        if ${test}:\n${body.join("\n")}`);
+    parts.push(`        if ${test}:\n${body.join('\n')}`);
   }
-  out += `${parts.join("\n")}\n        return self\n`;
+  out += `${parts.join('\n')}\n        return self\n`;
   return out;
 }
 
@@ -1317,15 +1369,17 @@ function emitPython(file: SchemaFile): string {
       ?.properties ?? {}) as Record<string, unknown>,
   );
   const opaque = file.defs.OpaquePayload as JsonSchema | undefined;
-  let out = `"""\n${banner(file, "Pydantic")}\n"""\n\n`;
+  let out = `"""\n${banner(file, 'Pydantic')}\n"""\n\n`;
   out += `# ruff: noqa: SIM102 - each nested \`if\` is one schema \`if\`/\`then\` branch, kept one-for-one\n`;
   out += `# with the construct it encodes; collapsing them would decouple the two.\n\n`;
   out += `from __future__ import annotations\n\n`;
   out += `import re\n`;
   out += `from collections.abc import Callable\n`;
   out += `from enum import StrEnum\n`;
-  const hasBranches = file.order.some((n) => analyseBranches(file.defs[n] as JsonSchema).length > 0);
-  out += `from typing import Annotated, Any, ClassVar, Literal${hasBranches ? ", Self" : ""}\n\n`;
+  const hasBranches = file.order.some(
+    (n) => analyseBranches(file.defs[n] as JsonSchema).length > 0,
+  );
+  out += `from typing import Annotated, Any, ClassVar, Literal${hasBranches ? ', Self' : ''}\n\n`;
   out += `from pydantic import (\n`;
   out += `    AfterValidator,\n    BaseModel,\n    BeforeValidator,\n    ConfigDict,\n    Field,\n    model_validator,\n)\n\n`;
   out += PY_PRELUDE;
@@ -1338,12 +1392,12 @@ function emitPython(file: SchemaFile): string {
       out += pyVocabulary(name, def);
       continue;
     }
-    if (name === "ModelFreeSubtree" || name === "OpaquePayload") continue;
-    if (def.type === "object" && def.properties) {
+    if (name === 'ModelFreeSubtree' || name === 'OpaquePayload') continue;
+    if (def.type === 'object' && def.properties) {
       out += emitPyModel(name, def);
       continue;
     }
-    out += pyDoc(def.description as string | undefined, "");
+    out += pyDoc(def.description as string | undefined, '');
     // `pyType` already folds a tuple's or an enum's constraints into the annotation; re-applying
     // them here produced a nested `Annotated[Annotated[...]]` that was correct but unreadable.
     const folded = tupleItems(def) !== undefined || Array.isArray(def.enum);
@@ -1357,7 +1411,7 @@ function emitPython(file: SchemaFile): string {
 function pyVocabulary(name: string, def: JsonSchema): string {
   const values = def.enum as string[];
   let out = `class ${name}(StrEnum):\n`;
-  out += pyDoc(def.description as string | undefined, "    ");
+  out += pyDoc(def.description as string | undefined, '    ');
   out += `\n`;
   for (const v of values) out += `    ${v.toUpperCase()} = ${q(v)}\n`;
   out += `\n\n`;
@@ -1370,7 +1424,7 @@ function pyVocabulary(name: string, def: JsonSchema): string {
   out += `def is_${snake(name)}(value: str) -> bool:\n`;
   out += `    """True when 'value' is in the documented vocabulary. NOT a validation constraint."""\n`;
   out += `    return value in ${setName}\n\n\n`;
-  const alias = name.replace(/^Known/, "");
+  const alias = name.replace(/^Known/, '');
   if (OPEN_VOCABULARY_ALIASES.has(name)) {
     out += `#: The OPEN type. Any identifier-shaped string validates; unknown values are legal by\n`;
     out += `#: design (DESIGN.md D2), so this is 'str' and the enum above is documentation only.\n`;
@@ -1535,11 +1589,11 @@ class _Model(BaseModel):
 function pyModelFree(file: SchemaFile, forbidden: string[]): string {
   const def = file.defs.ModelFreeSubtree as JsonSchema;
   let out = `MODEL_AUTHORSHIP_KEYS: frozenset[str] = frozenset(\n`;
-  out += `    {${forbidden.map((k) => q(k)).join(", ")}}\n)\n\n\n`;
+  out += `    {${forbidden.map((k) => q(k)).join(', ')}}\n)\n\n\n`;
   out += `def find_model_declaration(\n    value: Any, path: tuple[str | int, ...] = ()\n) -> tuple[str | int, ...] | None:\n`;
   out += pyDoc(
     `${def.description as string}\n\nReturns the path of the first model-authorship declaration, or None. A recursive constraint\ncannot be a type in either language, so it is a runtime guard in both (DESIGN.md §6).\n\nThe descent stops at MAX_PAYLOAD_DEPTH so this guard cannot itself raise RecursionError. That\nis not a hole: every caller rejects an over-deep value outright before searching it, so the\ntruncated levels are levels no valid document has.`,
-    "    ",
+    '    ',
   );
   out += `    if len(path) > MAX_PAYLOAD_DEPTH:\n        return None\n`;
   out += `    if isinstance(value, list):\n`;
@@ -1573,7 +1627,7 @@ function pyOpaquePayload(def: JsonSchema): string {
   const pattern = (def.propertyNames as JsonSchema).pattern as string;
   let out = `_OPAQUE_KEY_RE = re.compile(${pyRegexLiteral(ecmaToPython(pattern))})\n\n\n`;
   out += `def validate_opaque_payload(value: dict[str, Any]) -> dict[str, Any]:\n`;
-  out += pyDoc(def.description as string | undefined, "    ");
+  out += pyDoc(def.description as string | undefined, '    ');
   out += `    too_deep = find_excessive_depth(value)\n`;
   out += `    if too_deep is not None:\n`;
   out += `        raise ValueError(\n`;
@@ -1595,7 +1649,7 @@ function pyOpaquePayload(def: JsonSchema): string {
  * end-of-haystack.
  */
 function ecmaToPython(pattern: string): string {
-  return pattern.replace(/(?<!\\)\$$/, "\\Z");
+  return pattern.replace(/(?<!\\)\$$/, '\\Z');
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1606,22 +1660,22 @@ const PY_INIT = `"""Generated bindings. DO NOT EDIT — see codegen/generate.ts.
 `;
 
 export function generate(): Map<string, string> {
-  const paperir = loadSchema("paperir", "schema/paperir-1.0.0.schema.json");
-  const derivation = loadSchema("derivation", "schema/derivation-1.0.0.schema.json");
+  const paperir = loadSchema('paperir', 'schema/paperir-1.0.0.schema.json');
+  const derivation = loadSchema('derivation', 'schema/derivation-1.0.0.schema.json');
   for (const file of [paperir, derivation]) checkOpenVocabularies(file);
 
   const out = new Map<string, string>();
-  out.set("src/generated/types.ts", emitTsTypes(paperir));
-  out.set("src/generated/zod.ts", emitZod(paperir));
-  out.set("src/generated/derivation.types.ts", emitTsTypes(derivation));
-  out.set("src/generated/derivation.zod.ts", emitZod(derivation));
-  out.set("python/papertree_document_ir/generated/__init__.py", PY_INIT);
-  out.set("python/papertree_document_ir/generated/models.py", emitPython(paperir));
-  out.set("python/papertree_document_ir/generated/derivation_models.py", emitPython(derivation));
+  out.set('src/generated/types.ts', emitTsTypes(paperir));
+  out.set('src/generated/zod.ts', emitZod(paperir));
+  out.set('src/generated/derivation.types.ts', emitTsTypes(derivation));
+  out.set('src/generated/derivation.zod.ts', emitZod(derivation));
+  out.set('python/papertree_document_ir/generated/__init__.py', PY_INIT);
+  out.set('python/papertree_document_ir/generated/models.py', emitPython(paperir));
+  out.set('python/papertree_document_ir/generated/derivation_models.py', emitPython(derivation));
 
   // LF endings, exactly one trailing newline, no BOM — the drift test compares bytes.
   for (const [path, text] of out) {
-    out.set(path, `${text.replace(/\r\n/g, "\n").replace(/\n+$/, "")}\n`);
+    out.set(path, `${text.replace(/\r\n/g, '\n').replace(/\n+$/, '')}\n`);
   }
   return out;
 }
@@ -1631,7 +1685,7 @@ export function writeGenerated(root: string): string[] {
   for (const [rel, text] of generate()) {
     const target = join(root, rel);
     mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, text, "utf8");
+    writeFileSync(target, text, 'utf8');
     written.push(rel);
   }
   return written;
@@ -1639,8 +1693,10 @@ export function writeGenerated(root: string): string[] {
 
 const entry = process.argv[1];
 if (entry && resolve(entry) === resolve(fileURLToPath(import.meta.url))) {
-  const outRootFlag = process.argv.indexOf("--out");
+  const outRootFlag = process.argv.indexOf('--out');
   const root = outRootFlag >= 0 ? (process.argv[outRootFlag + 1] as string) : PKG;
   const files = writeGenerated(root);
-  process.stdout.write(`codegen: wrote ${files.length} files\n${files.map((f) => `  ${f}`).join("\n")}\n`);
+  process.stdout.write(
+    `codegen: wrote ${files.length} files\n${files.map((f) => `  ${f}`).join('\n')}\n`,
+  );
 }

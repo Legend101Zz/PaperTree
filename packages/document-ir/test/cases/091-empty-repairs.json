@@ -40,18 +40,8 @@
         "height": 792,
         "rotation": 0,
         "user_unit": 1,
-        "crop_box": [
-          0,
-          0,
-          612,
-          792
-        ],
-        "media_box": [
-          0,
-          0,
-          612,
-          792
-        ],
+        "crop_box": [0, 0, 612, 792],
+        "media_box": [0, 0, 612, 792],
         "image": {
           "uri": "r2://papers/ppr_01JQ8ZC5X4T2VBN6R3KDWY7HAE/pages/000@2x.webp",
           "scale": 2,
@@ -68,14 +58,8 @@
           "blk_c5e7g3j5m7p3r5t7"
         ],
         "flows": {
-          "body": [
-            "blk_7k2m4qx3tz5b6d7f",
-            "blk_a3c5e7g2j4m6p7r2",
-            "blk_b4d6f2h4k6n2q4s6"
-          ],
-          "caption": [
-            "blk_c5e7g3j5m7p3r5t7"
-          ],
+          "body": ["blk_7k2m4qx3tz5b6d7f", "blk_a3c5e7g2j4m6p7r2", "blk_b4d6f2h4k6n2q4s6"],
+          "caption": ["blk_c5e7g3j5m7p3r5t7"],
           "footnote": [],
           "header": [],
           "footer": [],
@@ -90,18 +74,8 @@
         "height": 792,
         "rotation": 0,
         "user_unit": 1,
-        "crop_box": [
-          0,
-          0,
-          612,
-          792
-        ],
-        "media_box": [
-          0,
-          0,
-          612,
-          792
-        ],
+        "crop_box": [0, 0, 612, 792],
+        "media_box": [0, 0, 612, 792],
         "image": {
           "uri": "r2://papers/ppr_01JQ8ZC5X4T2VBN6R3KDWY7HAE/pages/001@2x.webp",
           "scale": 2,
@@ -110,15 +84,9 @@
         },
         "has_text_layer": true,
         "is_scanned": false,
-        "block_ids": [
-          "blk_d6f2h4k6n2q4s6u2",
-          "blk_e7g3j5m7p3r5t7v3"
-        ],
+        "block_ids": ["blk_d6f2h4k6n2q4s6u2", "blk_e7g3j5m7p3r5t7v3"],
         "flows": {
-          "body": [
-            "blk_d6f2h4k6n2q4s6u2",
-            "blk_e7g3j5m7p3r5t7v3"
-          ],
+          "body": ["blk_d6f2h4k6n2q4s6u2", "blk_e7g3j5m7p3r5t7v3"],
           "caption": [],
           "footnote": [],
           "header": [],
@@ -134,36 +102,16 @@
         "type": "title",
         "page_index": 0,
         "polygon": [
-          [
-            54,
-            72
-          ],
-          [
-            558,
-            72
-          ],
-          [
-            558,
-            96
-          ],
-          [
-            54,
-            96
-          ]
+          [54, 72],
+          [558, 72],
+          [558, 96],
+          [54, 96]
         ],
-        "bbox": [
-          54,
-          72,
-          558,
-          96
-        ],
+        "bbox": [54, 72, 558, 96],
         "flow": "body",
         "order": 0,
         "doc_order": 0,
-        "child_ids": [
-          "blk_a3c5e7g2j4m6p7r2",
-          "blk_b4d6f2h4k6n2q4s6"
-        ],
+        "child_ids": ["blk_a3c5e7g2j4m6p7r2", "blk_b4d6f2h4k6n2q4s6"],
         "text": "Deep Residual Learning for Image Recognition",
         "text_normalised": "deep residual learning for image recognition",
         "content_hash": "blake2s:3f9a1c47b208e6d5",
@@ -179,36 +127,17 @@
         "type": "paragraph",
         "page_index": 0,
         "polygon": [
-          [
-            54,
-            120
-          ],
-          [
-            292,
-            120
-          ],
-          [
-            292,
-            240
-          ],
-          [
-            54,
-            240
-          ]
+          [54, 120],
+          [292, 120],
+          [292, 240],
+          [54, 240]
         ],
-        "bbox": [
-          54,
-          120,
-          292,
-          240
-        ],
+        "bbox": [54, 120, 292, 240],
         "flow": "body",
         "order": 1,
         "doc_order": 1,
         "parent_id": "blk_7k2m4qx3tz5b6d7f",
-        "child_ids": [
-          "blk_f2h4k6n2q4s6u2w4"
-        ],
+        "child_ids": ["blk_f2h4k6n2q4s6u2w4"],
         "next_id": "blk_b4d6f2h4k6n2q4s6",
         "text": "We explicitly reformulate the layers as learning residual functions F(x).",
         "text_normalised": "we explicitly reformulate the layers as learning residual functions f(x).",
@@ -217,36 +146,21 @@
           {
             "start": 0,
             "end": 45,
-            "bbox": [
-              54,
-              120,
-              292,
-              132
-            ],
+            "bbox": [54, 120, 292, 132],
             "font": "NimbusRomNo9L-Regu",
             "size": 9.96
           },
           {
             "start": 45,
             "end": 68,
-            "bbox": [
-              54,
-              132,
-              240,
-              144
-            ],
+            "bbox": [54, 132, 240, 144],
             "font": "NimbusRomNo9L-Regu",
             "size": 9.96
           },
           {
             "start": 68,
             "end": 72,
-            "bbox": [
-              240,
-              132,
-              262,
-              144
-            ],
+            "bbox": [240, 132, 262, 144],
             "role": "inline_equation",
             "block_id": "blk_f2h4k6n2q4s6u2w4",
             "font": "CMMI10",
@@ -267,29 +181,12 @@
         "type": "inline_equation",
         "page_index": 0,
         "polygon": [
-          [
-            240,
-            132
-          ],
-          [
-            262,
-            132
-          ],
-          [
-            262,
-            144
-          ],
-          [
-            240,
-            144
-          ]
+          [240, 132],
+          [262, 132],
+          [262, 144],
+          [240, 144]
         ],
-        "bbox": [
-          240,
-          132,
-          262,
-          144
-        ],
+        "bbox": [240, 132, 262, 144],
         "flow": "body",
         "order": 0,
         "parent_id": "blk_a3c5e7g2j4m6p7r2",
@@ -314,29 +211,12 @@
         "type": "figure",
         "page_index": 0,
         "polygon": [
-          [
-            320,
-            120
-          ],
-          [
-            558,
-            120
-          ],
-          [
-            558,
-            300
-          ],
-          [
-            320,
-            300
-          ]
+          [320, 120],
+          [558, 120],
+          [558, 300],
+          [320, 300]
         ],
-        "bbox": [
-          320,
-          120,
-          558,
-          300
-        ],
+        "bbox": [320, 120, 558, 300],
         "flow": "body",
         "order": 2,
         "doc_order": 2,
@@ -362,22 +242,10 @@
             {
               "text": "conv 3x3",
               "polygon": [
-                [
-                  340,
-                  160
-                ],
-                [
-                  396,
-                  160
-                ],
-                [
-                  396,
-                  172
-                ],
-                [
-                  340,
-                  172
-                ]
+                [340, 160],
+                [396, 160],
+                [396, 172],
+                [340, 172]
               ],
               "source": "pdf_text_layer",
               "confidence": 0.88
@@ -390,29 +258,12 @@
         "type": "caption",
         "page_index": 0,
         "polygon": [
-          [
-            320,
-            308
-          ],
-          [
-            558,
-            308
-          ],
-          [
-            558,
-            332
-          ],
-          [
-            320,
-            332
-          ]
+          [320, 308],
+          [558, 308],
+          [558, 332],
+          [320, 332]
         ],
-        "bbox": [
-          320,
-          308,
-          558,
-          332
-        ],
+        "bbox": [320, 308, 558, 332],
         "flow": "caption",
         "order": 0,
         "text": "Figure 2. Residual learning: a building block.",
@@ -430,29 +281,12 @@
         "type": "equation",
         "page_index": 1,
         "polygon": [
-          [
-            54,
-            150
-          ],
-          [
-            292,
-            150
-          ],
-          [
-            292,
-            186
-          ],
-          [
-            54,
-            186
-          ]
+          [54, 150],
+          [292, 150],
+          [292, 186],
+          [54, 186]
         ],
-        "bbox": [
-          54,
-          150,
-          292,
-          186
-        ],
+        "bbox": [54, 150, 292, 186],
         "flow": "body",
         "order": 0,
         "doc_order": 3,
@@ -497,29 +331,12 @@
         "type": "unknown",
         "page_index": 1,
         "polygon": [
-          [
-            320,
-            400
-          ],
-          [
-            558,
-            400
-          ],
-          [
-            558,
-            520
-          ],
-          [
-            320,
-            520
-          ]
+          [320, 400],
+          [558, 400],
+          [558, 520],
+          [320, 520]
         ],
-        "bbox": [
-          320,
-          400,
-          558,
-          520
-        ],
+        "bbox": [320, 400, 558, 520],
         "flow": "body",
         "order": 1,
         "doc_order": 4,
@@ -578,13 +395,8 @@
     "references": [],
     "confidence": {
       "overall": 0.91,
-      "by_page": [
-        0.98,
-        0.83
-      ],
-      "weakest_pages": [
-        1
-      ],
+      "by_page": [0.98, 0.83],
+      "weakest_pages": [1],
       "needs_review": true
     }
   }

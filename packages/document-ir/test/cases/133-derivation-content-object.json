@@ -17,16 +17,11 @@
       "sections": [
         {
           "text": "…",
-          "derived_from": [
-            "blk_a3c5e7g2j4m6p7r2"
-          ]
+          "derived_from": ["blk_a3c5e7g2j4m6p7r2"]
         }
       ]
     },
-    "derived_from": [
-      "blk_a3c5e7g2j4m6p7r2",
-      "blk_d6f2h4k6n2q4s6u2"
-    ],
+    "derived_from": ["blk_a3c5e7g2j4m6p7r2", "blk_d6f2h4k6n2q4s6u2"],
     "created_at": "2026-07-30T09:20:00Z"
   }
 }

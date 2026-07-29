@@ -1,0 +1,2797 @@
+{
+  "$schema_note": "The CONTRACT for PaperTree geometry. Consumed by document-ir/geometry.spec in BOTH TypeScript and Python, so the two languages are checked against one recording rather than against each other. Regenerate with `uv run --python 3.12 --with pymupdf python packages/document-ir/test/fixtures-pdf/generate.py`.",
+  "contract_version": "papertree/geometry/1.0.0",
+  "generated_by": "packages/document-ir/test/fixtures-pdf/generate.py",
+  "oracles": {
+    "fixture_vectors": "MuPDF. Markers are painted by a raw PDF content stream, read back with page.get_drawings(), divided by /UserUnit and mapped with page.rotation_matrix - a second, independently implemented coordinate pipeline.",
+    "everything_else": "hand arithmetic, written as literals in generate.py with the working shown in the comment beside each entry. Nothing here was produced by running geometry.ts or geometry.py."
+  },
+  "spec": {
+    "ir_space": "PDF DEFAULT USER SPACE units (1/72 in); origin TOP-LEFT of the page's post-rotation CROP rect; y grows DOWNWARD; /Rotate already applied; coordinates relative to the crop rect's own origin so a CropBox offset cannot leak in; /UserUnit DELIBERATELY NOT APPLIED. Identical to ADR-001 Amendment 1 'COORDINATE FRAME', which is what the block id is computed in.",
+    "normalise": "u = raw_x - crop.x0 ; v = crop.y1 - raw_y ; then rotate clockwise inside cw x ch: rot 0 -> (u, v) [cw x ch]; rot 90 -> (ch - v, u) [ch x cw]; rot 180 -> (cw - u, ch - v) [cw x ch]; rot 270 -> (v, cw - u) [ch x cw]. The effective crop box is CropBox INTERSECT MediaBox, corner-ordered (PDF 1.7 14.11.2); an absent /CropBox defaults to the MediaBox.",
+    "viewport": "s = zoom * user_unit ; W = page_width * s ; H = page_height * s ; rot 0 -> (x*s, y*s) on a W x H surface; rot 90 -> (H - y*s, x*s) on H x W; rot 180 -> (W - x*s, H - y*s) on W x H; rot 270 -> (y*s, W - x*s) on H x W. `rotation` here is the VIEWER's extra rotation on top of the page's own /Rotate, which is already baked into page_width/page_height and every stored polygon.",
+    "user_unit_boundary": "/UserUnit is RECORDED in the IR and APPLIED ONLY in the viewport transform. Amendment 1 pins it out of the id's coordinate frame; geometry.spec requires the viewport transform to handle it. Both hold at once because they are different spaces. MEASURED CAVEAT: Amendment 1 justifies the rule with 'it is what MuPDF's page.rect gives' - that is FALSE as of PyMuPDF 1.28 / MuPDF 1.29, which scales page.rect and every extracted coordinate by /UserUnit while leaving page.rotation_matrix unscaled. The rule stands; the justification does not, and a PyMuPDF-based parser must divide /UserUnit out exactly once before storing.",
+    "polygon_conventions": "bbox == polygon extent, ALWAYS (schema + semantic validator rule 1); rings are NOT closed (do not repeat the first vertex); signed area is the shoelace sum halved, positive for a ring that reads clockwise on screen in this y-down frame; point-in-polygon is even-odd with the boundary tested explicitly first and INCLUSIVE by default; polygon intersection and bbox intersection both count boundary contact as intersecting.",
+    "union_of_line_rects": "Two line rects join one run iff their x-extents overlap by more than horizontal_overlap_tolerance AND their y-intervals overlap or are separated by at most vertical_gap_tolerance; connectivity is transitive. Each run becomes ONE staircase polygon whose horizontal band edges sit at the midpoint of each inter-line gap. A selection spanning two columns therefore returns TWO polygons and never a bounding box across the gutter. Rects with non-positive width or height are dropped. Output is sorted by (top, left)."
+  },
+  "how_to_use": [
+    "1. `page_frames`: normalise_page_frame(raw) MUST equal `frame` field for field.",
+    "2. `normalisation_vectors` / `normalise_rect_vectors`: the named frame's normalise_point / normalise_rect MUST equal `expected` exactly (these are all exact binary64 values), and denormalise_point MUST return the raw point.",
+    "3. `viewport_vectors`: pdf_to_viewport MUST equal `viewport_point`, viewport_size MUST equal `surface`, and viewport_to_pdf MUST invert.",
+    "4. `roundtrip_grid`: every (page, zoom, rotation, user_unit, point) combination must round-trip with max abs error < max_abs_error_pt. This is the acceptance criterion.",
+    "5. `polygon_vectors` / `intersection_vectors` / `line_union_vectors`: exact match.",
+    "6. `fixture_vectors`: open the PDF in `test/fixtures-pdf/`, read /MediaBox, /CropBox, /Rotate and /UserUnit from the page dictionary, build the frame, normalise each raw marker rect, and compare with `expected_marker_bboxes` - which came from MuPDF."
+  ],
+  "page_frames": [
+    {
+      "label": "frame:letter-cropped-rot0",
+      "raw": {
+        "media_box": [
+          0,
+          0,
+          612,
+          792
+        ],
+        "crop_box": [
+          72,
+          90,
+          540,
+          720
+        ],
+        "rotate": 0,
+        "user_unit": 1
+      },
+      "frame": {
+        "width": 468,
+        "height": 630,
+        "rotation": 0,
+        "user_unit": 1,
+        "crop_box": [
+          0,
+          0,
+          468,
+          630
+        ],
+        "media_box": [
+          -72,
+          -72,
+          540,
+          720
+        ],
+        "source_crop_box": [
+          72,
+          90,
+          540,
+          720
+        ]
+      }
+    },
+    {
+      "label": "frame:letter-cropped-rot90",
+      "raw": {
+        "media_box": [
+          0,
+          0,
+          612,
+          792
+        ],
+        "crop_box": [
+          72,
+          90,
+          540,
+          720
+        ],
+        "rotate": 90,
+        "user_unit": 1
+      },
+      "frame": {
+        "width": 630,
+        "height": 468,
+        "rotation": 90,
+        "user_unit": 1,
+        "crop_box": [
+          0,
+          0,
+          630,
+          468
+        ],
+        "media_box": [
+          -90,
+          -72,
+          702,
+          540
+        ],
+        "source_crop_box": [
+          72,
+          90,
+          540,
+          720
+        ]
+      }
+    },
+    {
+      "label": "frame:letter-cropped-rot180",
+      "raw": {
+        "media_box": [
+          0,
+          0,
+          612,
+          792
+        ],
+        "crop_box": [
+          72,
+          90,
+          540,
+          720
+        ],
+        "rotate": 180,
+        "user_unit": 1
+      },
+      "frame": {
+        "width": 468,
+        "height": 630,
+        "rotation": 180,
+        "user_unit": 1,
+        "crop_box": [
+          0,
+          0,
+          468,
+          630
+        ],
+        "media_box": [
+          -72,
+          -90,
+          540,
+          702
+        ],
+        "source_crop_box": [
+          72,
+          90,
+          540,
+          720
+        ]
+      }
+    },
+    {
+      "label": "frame:letter-cropped-rot270",
+      "raw": {
+        "media_box": [
+          0,
+          0,
+          612,
+          792
+        ],
+        "crop_box": [
+          72,
+          90,
+          540,
+          720
+        ],
+        "rotate": 270,
+        "user_unit": 1
+      },
+      "frame": {
+        "width": 630,
+        "height": 468,
+        "rotation": 270,
+        "user_unit": 1,
+        "crop_box": [
+          0,
+          0,
+          630,
+          468
+        ],
+        "media_box": [
+          -72,
+          -72,
+          720,
+          540
+        ],
+        "source_crop_box": [
+          72,
+          90,
+          540,
+          720
+        ]
+      }
+    },
+    {
+      "label": "frame:negative-mediabox",
+      "raw": {
+        "media_box": [
+          -100,
+          -50,
+          300,
+          400
+        ],
+        "crop_box": null,
+        "rotate": 0,
+        "user_unit": 1
+      },
+      "frame": {
+        "width": 400,
+        "height": 450,
+        "rotation": 0,
+        "user_unit": 1,
+        "crop_box": [
+          0,
+          0,
+          400,
+          450
+        ],
+        "media_box": [
+          0,
+          0,
+          400,
+          450
+        ],
+        "source_crop_box": [
+          -100,
+          -50,
+          300,
+          400
+        ]
+      }
+    },
+    {
+      "label": "frame:userunit-2.5",
+      "raw": {
+        "media_box": [
+          0,
+          0,
+          200,
+          300
+        ],
+        "crop_box": null,
+        "rotate": 0,
+        "user_unit": 2.5
+      },
+      "frame": {
+        "width": 200,
+        "height": 300,
+        "rotation": 0,
+        "user_unit": 2.5,
+        "crop_box": [
+          0,
+          0,
+          200,
+          300
+        ],
+        "media_box": [
+          0,
+          0,
+          200,
+          300
+        ],
+        "source_crop_box": [
+          0,
+          0,
+          200,
+          300
+        ]
+      }
+    },
+    {
+      "label": "frame:cropbox-outside-mediabox",
+      "raw": {
+        "media_box": [
+          0,
+          0,
+          200,
+          300
+        ],
+        "crop_box": [
+          -200,
+          -100,
+          400,
+          500
+        ],
+        "rotate": 0,
+        "user_unit": 1
+      },
+      "frame": {
+        "width": 200,
+        "height": 300,
+        "rotation": 0,
+        "user_unit": 1,
+        "crop_box": [
+          0,
+          0,
+          200,
+          300
+        ],
+        "media_box": [
+          0,
+          0,
+          200,
+          300
+        ],
+        "source_crop_box": [
+          0,
+          0,
+          200,
+          300
+        ]
+      }
+    },
+    {
+      "label": "frame:reversed-corners",
+      "raw": {
+        "media_box": [
+          612,
+          792,
+          0,
+          0
+        ],
+        "crop_box": [
+          540,
+          720,
+          72,
+          90
+        ],
+        "rotate": 0,
+        "user_unit": 1
+      },
+      "frame": {
+        "width": 468,
+        "height": 630,
+        "rotation": 0,
+        "user_unit": 1,
+        "crop_box": [
+          0,
+          0,
+          468,
+          630
+        ],
+        "media_box": [
+          -72,
+          -72,
+          540,
+          720
+        ],
+        "source_crop_box": [
+          72,
+          90,
+          540,
+          720
+        ]
+      }
+    },
+    {
+      "label": "frame:rotate-negative-90",
+      "raw": {
+        "media_box": [
+          0,
+          0,
+          200,
+          300
+        ],
+        "crop_box": null,
+        "rotate": -90,
+        "user_unit": 1
+      },
+      "frame": {
+        "width": 300,
+        "height": 200,
+        "rotation": 270,
+        "user_unit": 1,
+        "crop_box": [
+          0,
+          0,
+          300,
+          200
+        ],
+        "media_box": [
+          0,
+          0,
+          300,
+          200
+        ],
+        "source_crop_box": [
+          0,
+          0,
+          200,
+          300
+        ]
+      }
+    },
+    {
+      "label": "frame:combined",
+      "raw": {
+        "media_box": [
+          -100,
+          -50,
+          300,
+          400
+        ],
+        "crop_box": [
+          -40,
+          10,
+          260,
+          330
+        ],
+        "rotate": 270,
+        "user_unit": 1.5
+      },
+      "frame": {
+        "width": 320,
+        "height": 300,
+        "rotation": 270,
+        "user_unit": 1.5,
+        "crop_box": [
+          0,
+          0,
+          320,
+          300
+        ],
+        "media_box": [
+          -70,
+          -40,
+          380,
+          360
+        ],
+        "source_crop_box": [
+          -40,
+          10,
+          260,
+          330
+        ]
+      }
+    }
+  ],
+  "normalisation_vectors": [
+    {
+      "label": "norm:rot0:crop-top-left",
+      "frame": "frame:letter-cropped-rot0",
+      "raw_point": [
+        72,
+        720
+      ],
+      "expected": [
+        0,
+        0
+      ],
+      "why": "the crop box's top-left corner IS the IR origin (u=0, v=720-720=0)"
+    },
+    {
+      "label": "norm:rot0:crop-bottom-right",
+      "frame": "frame:letter-cropped-rot0",
+      "raw_point": [
+        540,
+        90
+      ],
+      "expected": [
+        468,
+        630
+      ],
+      "why": "u=468, v=720-90=630"
+    },
+    {
+      "label": "norm:rot0:centre",
+      "frame": "frame:letter-cropped-rot0",
+      "raw_point": [
+        306,
+        405
+      ],
+      "expected": [
+        234,
+        315
+      ],
+      "why": "u=234, v=315"
+    },
+    {
+      "label": "norm:rot0:outside-crop-origin",
+      "frame": "frame:letter-cropped-rot0",
+      "raw_point": [
+        0,
+        0
+      ],
+      "expected": [
+        -72,
+        720
+      ],
+      "why": "the PDF origin is OUTSIDE the crop box: u=-72, v=720. Not clamped."
+    },
+    {
+      "label": "norm:rot90:crop-top-left",
+      "frame": "frame:letter-cropped-rot90",
+      "raw_point": [
+        72,
+        720
+      ],
+      "expected": [
+        630,
+        0
+      ],
+      "why": "u=0,v=0 -> (630-0, 0). Rotating clockwise sends the top-left to the top-right."
+    },
+    {
+      "label": "norm:rot90:crop-bottom-right",
+      "frame": "frame:letter-cropped-rot90",
+      "raw_point": [
+        540,
+        90
+      ],
+      "expected": [
+        0,
+        468
+      ],
+      "why": "u=468,v=630 -> (630-630, 468)"
+    },
+    {
+      "label": "norm:rot90:centre",
+      "frame": "frame:letter-cropped-rot90",
+      "raw_point": [
+        306,
+        405
+      ],
+      "expected": [
+        315,
+        234
+      ],
+      "why": "u=234,v=315 -> (630-315, 234)"
+    },
+    {
+      "label": "norm:rot90:outside-crop-origin",
+      "frame": "frame:letter-cropped-rot90",
+      "raw_point": [
+        0,
+        0
+      ],
+      "expected": [
+        -90,
+        -72
+      ],
+      "why": "u=-72,v=720 -> (630-720, -72)"
+    },
+    {
+      "label": "norm:rot180:crop-top-left",
+      "frame": "frame:letter-cropped-rot180",
+      "raw_point": [
+        72,
+        720
+      ],
+      "expected": [
+        468,
+        630
+      ],
+      "why": "u=0,v=0 -> (468, 630)"
+    },
+    {
+      "label": "norm:rot180:crop-bottom-right",
+      "frame": "frame:letter-cropped-rot180",
+      "raw_point": [
+        540,
+        90
+      ],
+      "expected": [
+        0,
+        0
+      ],
+      "why": "u=468,v=630 -> (0, 0)"
+    },
+    {
+      "label": "norm:rot180:centre",
+      "frame": "frame:letter-cropped-rot180",
+      "raw_point": [
+        306,
+        405
+      ],
+      "expected": [
+        234,
+        315
+      ],
+      "why": "u=234,v=315 -> (234, 315)"
+    },
+    {
+      "label": "norm:rot270:crop-top-left",
+      "frame": "frame:letter-cropped-rot270",
+      "raw_point": [
+        72,
+        720
+      ],
+      "expected": [
+        0,
+        468
+      ],
+      "why": "u=0,v=0 -> (0, 468-0)"
+    },
+    {
+      "label": "norm:rot270:crop-bottom-right",
+      "frame": "frame:letter-cropped-rot270",
+      "raw_point": [
+        540,
+        90
+      ],
+      "expected": [
+        630,
+        0
+      ],
+      "why": "u=468,v=630 -> (630, 0)"
+    },
+    {
+      "label": "norm:rot270:centre",
+      "frame": "frame:letter-cropped-rot270",
+      "raw_point": [
+        306,
+        405
+      ],
+      "expected": [
+        315,
+        234
+      ],
+      "why": "u=234,v=315 -> (315, 468-234)"
+    },
+    {
+      "label": "norm:negative:crop-top-left",
+      "frame": "frame:negative-mediabox",
+      "raw_point": [
+        -100,
+        400
+      ],
+      "expected": [
+        0,
+        0
+      ],
+      "why": "u=0, v=400-400=0"
+    },
+    {
+      "label": "norm:negative:crop-bottom-right",
+      "frame": "frame:negative-mediabox",
+      "raw_point": [
+        300,
+        -50
+      ],
+      "expected": [
+        400,
+        450
+      ],
+      "why": "u=400, v=450"
+    },
+    {
+      "label": "norm:negative:pdf-origin",
+      "frame": "frame:negative-mediabox",
+      "raw_point": [
+        0,
+        0
+      ],
+      "expected": [
+        100,
+        400
+      ],
+      "why": "u=0-(-100)=100, v=400-0=400"
+    },
+    {
+      "label": "norm:userunit:top-left",
+      "frame": "frame:userunit-2.5",
+      "raw_point": [
+        0,
+        300
+      ],
+      "expected": [
+        0,
+        0
+      ],
+      "why": "/UserUnit 2.5 does not scale IR space"
+    },
+    {
+      "label": "norm:userunit:interior",
+      "frame": "frame:userunit-2.5",
+      "raw_point": [
+        100,
+        200
+      ],
+      "expected": [
+        100,
+        100
+      ],
+      "why": "if this were [250,250] the impl applied /UserUnit - Amendment 1 forbids it"
+    },
+    {
+      "label": "norm:combined:crop-top-left",
+      "frame": "frame:combined",
+      "raw_point": [
+        -40,
+        330
+      ],
+      "expected": [
+        0,
+        300
+      ],
+      "why": "u=0,v=0 -> (0, 300-0)"
+    },
+    {
+      "label": "norm:combined:crop-bottom-right",
+      "frame": "frame:combined",
+      "raw_point": [
+        260,
+        10
+      ],
+      "expected": [
+        320,
+        0
+      ],
+      "why": "u=300,v=320 -> (320, 300-300)"
+    },
+    {
+      "label": "norm:combined:interior",
+      "frame": "frame:combined",
+      "raw_point": [
+        110,
+        170
+      ],
+      "expected": [
+        160,
+        150
+      ],
+      "why": "u=150,v=160 -> (160, 300-150)"
+    },
+    {
+      "label": "norm:combined:outside-crop",
+      "frame": "frame:combined",
+      "raw_point": [
+        -100,
+        400
+      ],
+      "expected": [
+        -70,
+        360
+      ],
+      "why": "u=-60,v=-70 -> (-70, 300+60)"
+    },
+    {
+      "label": "norm:reversed-corners:crop-top-left",
+      "frame": "frame:reversed-corners",
+      "raw_point": [
+        72,
+        720
+      ],
+      "expected": [
+        0,
+        0
+      ],
+      "why": "corner order in the file is irrelevant"
+    }
+  ],
+  "normalise_rect_vectors": [
+    {
+      "label": "rect:rot0",
+      "frame": "frame:letter-cropped-rot0",
+      "raw_rect": [
+        100,
+        600,
+        200,
+        650
+      ],
+      "expected": [
+        28,
+        70,
+        128,
+        120
+      ],
+      "why": "(100,600)->(28,120); (200,650)->(128,70); extent [28,70,128,120]"
+    },
+    {
+      "label": "rect:rot90",
+      "frame": "frame:letter-cropped-rot90",
+      "raw_rect": [
+        100,
+        600,
+        200,
+        650
+      ],
+      "expected": [
+        510,
+        28,
+        560,
+        128
+      ],
+      "why": "(100,600)->u=28,v=120->(510,28); (200,650)->u=128,v=70->(560,128)"
+    },
+    {
+      "label": "rect:rot270",
+      "frame": "frame:letter-cropped-rot270",
+      "raw_rect": [
+        100,
+        600,
+        200,
+        650
+      ],
+      "expected": [
+        70,
+        340,
+        120,
+        440
+      ],
+      "why": "(100,600)->(120,440); (200,650)->(70,340)"
+    },
+    {
+      "label": "rect:combined",
+      "frame": "frame:combined",
+      "raw_rect": [
+        0,
+        100,
+        60,
+        140
+      ],
+      "expected": [
+        190,
+        200,
+        230,
+        260
+      ],
+      "why": "(0,100)->u=40,v=230->(230,260); (60,140)->u=100,v=190->(190,200)"
+    }
+  ],
+  "viewport_vectors": [
+    {
+      "label": "vp:rot0:zoom1:origin",
+      "page": [
+        468,
+        630
+      ],
+      "zoom": 1,
+      "rotation": 0,
+      "user_unit": 1,
+      "surface": [
+        468,
+        630
+      ],
+      "pdf_point": [
+        0,
+        0
+      ],
+      "viewport_point": [
+        0,
+        0
+      ]
+    },
+    {
+      "label": "vp:rot0:zoom1:corner",
+      "page": [
+        468,
+        630
+      ],
+      "zoom": 1,
+      "rotation": 0,
+      "user_unit": 1,
+      "surface": [
+        468,
+        630
+      ],
+      "pdf_point": [
+        468,
+        630
+      ],
+      "viewport_point": [
+        468,
+        630
+      ]
+    },
+    {
+      "label": "vp:rot0:zoom2:interior",
+      "page": [
+        468,
+        630
+      ],
+      "zoom": 2,
+      "rotation": 0,
+      "user_unit": 1,
+      "surface": [
+        936,
+        1260
+      ],
+      "pdf_point": [
+        100,
+        200
+      ],
+      "viewport_point": [
+        200,
+        400
+      ]
+    },
+    {
+      "label": "vp:rot90:zoom1:origin",
+      "page": [
+        468,
+        630
+      ],
+      "zoom": 1,
+      "rotation": 90,
+      "user_unit": 1,
+      "surface": [
+        630,
+        468
+      ],
+      "pdf_point": [
+        0,
+        0
+      ],
+      "viewport_point": [
+        630,
+        0
+      ],
+      "why": "H - 0 = 630, so the page's top-left lands on the surface's top-RIGHT"
+    },
+    {
+      "label": "vp:rot90:zoom1:corner",
+      "page": [
+        468,
+        630
+      ],
+      "zoom": 1,
+      "rotation": 90,
+      "user_unit": 1,
+      "surface": [
+        630,
+        468
+      ],
+      "pdf_point": [
+        468,
+        630
+      ],
+      "viewport_point": [
+        0,
+        468
+      ]
+    },
+    {
+      "label": "vp:rot90:zoom0.5:interior",
+      "page": [
+        468,
+        630
+      ],
+      "zoom": 0.5,
+      "rotation": 90,
+      "user_unit": 1,
+      "surface": [
+        315,
+        234
+      ],
+      "pdf_point": [
+        100,
+        200
+      ],
+      "viewport_point": [
+        215,
+        50
+      ],
+      "why": "s=0.5: H=315, (315-100, 50)"
+    },
+    {
+      "label": "vp:rot180:zoom1:origin",
+      "page": [
+        468,
+        630
+      ],
+      "zoom": 1,
+      "rotation": 180,
+      "user_unit": 1,
+      "surface": [
+        468,
+        630
+      ],
+      "pdf_point": [
+        0,
+        0
+      ],
+      "viewport_point": [
+        468,
+        630
+      ]
+    },
+    {
+      "label": "vp:rot180:zoom4:interior",
+      "page": [
+        468,
+        630
+      ],
+      "zoom": 4,
+      "rotation": 180,
+      "user_unit": 1,
+      "surface": [
+        1872,
+        2520
+      ],
+      "pdf_point": [
+        100,
+        200
+      ],
+      "viewport_point": [
+        1472,
+        1720
+      ],
+      "why": "s=4: (1872-400, 2520-800)"
+    },
+    {
+      "label": "vp:rot270:zoom1:origin",
+      "page": [
+        468,
+        630
+      ],
+      "zoom": 1,
+      "rotation": 270,
+      "user_unit": 1,
+      "surface": [
+        630,
+        468
+      ],
+      "pdf_point": [
+        0,
+        0
+      ],
+      "viewport_point": [
+        0,
+        468
+      ]
+    },
+    {
+      "label": "vp:rot270:zoom1:corner",
+      "page": [
+        468,
+        630
+      ],
+      "zoom": 1,
+      "rotation": 270,
+      "user_unit": 1,
+      "surface": [
+        630,
+        468
+      ],
+      "pdf_point": [
+        468,
+        630
+      ],
+      "viewport_point": [
+        630,
+        0
+      ]
+    },
+    {
+      "label": "vp:userunit:rot0:zoom1",
+      "page": [
+        200,
+        300
+      ],
+      "zoom": 1,
+      "rotation": 0,
+      "user_unit": 2.5,
+      "surface": [
+        500,
+        750
+      ],
+      "pdf_point": [
+        100,
+        100
+      ],
+      "viewport_point": [
+        250,
+        250
+      ],
+      "why": "s = 1*2.5. The SAME point normalised to [100,100] in IR space (see norm:userunit:interior) renders at 250 - that is the whole UserUnit boundary."
+    },
+    {
+      "label": "vp:userunit:rot90:zoom2",
+      "page": [
+        200,
+        300
+      ],
+      "zoom": 2,
+      "rotation": 90,
+      "user_unit": 2.5,
+      "surface": [
+        1500,
+        1000
+      ],
+      "pdf_point": [
+        100,
+        100
+      ],
+      "viewport_point": [
+        1000,
+        500
+      ],
+      "why": "s=5: H=1500, (1500-500, 500)"
+    },
+    {
+      "label": "vp:userunit:rot270:zoom0.25",
+      "page": [
+        200,
+        300
+      ],
+      "zoom": 0.25,
+      "rotation": 270,
+      "user_unit": 1.5,
+      "surface": [
+        112.5,
+        75
+      ],
+      "pdf_point": [
+        200,
+        300
+      ],
+      "viewport_point": [
+        112.5,
+        0
+      ],
+      "why": "s=0.375: W=75, H=112.5; (300*0.375, 75-200*0.375)"
+    }
+  ],
+  "roundtrip_grid": {
+    "zooms": [
+      0.25,
+      0.5,
+      0.75,
+      1,
+      1.5,
+      2,
+      4,
+      8
+    ],
+    "rotations": [
+      0,
+      90,
+      180,
+      270
+    ],
+    "user_units": [
+      1,
+      2.5,
+      0.75
+    ],
+    "pages": [
+      [
+        468,
+        630
+      ],
+      [
+        200,
+        300
+      ],
+      [
+        612,
+        792
+      ]
+    ],
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        468,
+        630
+      ],
+      [
+        0,
+        630
+      ],
+      [
+        468,
+        0
+      ],
+      [
+        234,
+        315
+      ],
+      [
+        1,
+        1
+      ],
+      [
+        -72,
+        -90
+      ],
+      [
+        700,
+        900
+      ],
+      [
+        0.5,
+        0.25
+      ],
+      [
+        123.456789,
+        654.321
+      ]
+    ],
+    "max_abs_error_pt": 0.01,
+    "why": "the named acceptance test: document-ir/geometry.spec. Points deliberately include the page corners AND points outside the crop box (negative, and beyond width/height) - a transform that only works inside the page is not a transform."
+  },
+  "polygon_vectors": [
+    {
+      "label": "poly:square",
+      "polygon": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          0
+        ],
+        [
+          10,
+          10
+        ],
+        [
+          0,
+          10
+        ]
+      ],
+      "extent": [
+        0,
+        0,
+        10,
+        10
+      ],
+      "area": 100,
+      "signed_area": 100,
+      "is_simple": true,
+      "points": [
+        {
+          "point": [
+            5,
+            5
+          ],
+          "inside": true
+        },
+        {
+          "point": [
+            0,
+            0
+          ],
+          "inside": true,
+          "why": "boundary is INCLUSIVE by default"
+        },
+        {
+          "point": [
+            10,
+            5
+          ],
+          "inside": true
+        },
+        {
+          "point": [
+            -0.0001,
+            5
+          ],
+          "inside": false
+        },
+        {
+          "point": [
+            5,
+            10.0001
+          ],
+          "inside": false
+        },
+        {
+          "point": [
+            11,
+            11
+          ],
+          "inside": false
+        }
+      ]
+    },
+    {
+      "label": "poly:staircase",
+      "polygon": [
+        [
+          292,
+          100
+        ],
+        [
+          292,
+          127
+        ],
+        [
+          200,
+          127
+        ],
+        [
+          200,
+          140
+        ],
+        [
+          54,
+          140
+        ],
+        [
+          54,
+          100
+        ]
+      ],
+      "extent": [
+        54,
+        100,
+        292,
+        140
+      ],
+      "area": 8324,
+      "signed_area": 8324,
+      "is_simple": true,
+      "points": [
+        {
+          "point": [
+            250,
+            110
+          ],
+          "inside": true
+        },
+        {
+          "point": [
+            250,
+            135
+          ],
+          "inside": false,
+          "why": "the notch. A bounding box would say True - that is highlight bleed."
+        },
+        {
+          "point": [
+            100,
+            135
+          ],
+          "inside": true
+        },
+        {
+          "point": [
+            292,
+            100
+          ],
+          "inside": true
+        },
+        {
+          "point": [
+            53.9,
+            120
+          ],
+          "inside": false
+        }
+      ]
+    },
+    {
+      "label": "poly:triangle",
+      "polygon": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          0
+        ],
+        [
+          0,
+          10
+        ]
+      ],
+      "extent": [
+        0,
+        0,
+        10,
+        10
+      ],
+      "area": 50,
+      "signed_area": 50,
+      "is_simple": true,
+      "points": [
+        {
+          "point": [
+            1,
+            1
+          ],
+          "inside": true
+        },
+        {
+          "point": [
+            6,
+            6
+          ],
+          "inside": false
+        },
+        {
+          "point": [
+            5,
+            5
+          ],
+          "inside": true,
+          "why": "exactly on the hypotenuse"
+        }
+      ]
+    },
+    {
+      "label": "poly:bowtie",
+      "polygon": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          10
+        ],
+        [
+          10,
+          0
+        ],
+        [
+          0,
+          10
+        ]
+      ],
+      "extent": [
+        0,
+        0,
+        10,
+        10
+      ],
+      "area": 0,
+      "signed_area": 0,
+      "is_simple": false,
+      "why": "self-intersecting: validator rule G6 WARNs on this and G6's area check ERRORs",
+      "points": [
+        {
+          "point": [
+            5,
+            5
+          ],
+          "inside": true,
+          "why": "the crossing point, on both edges"
+        }
+      ]
+    },
+    {
+      "label": "poly:counter-clockwise-square",
+      "polygon": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          10
+        ],
+        [
+          10,
+          10
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "extent": [
+        0,
+        0,
+        10,
+        10
+      ],
+      "area": 100,
+      "signed_area": -100,
+      "is_simple": true,
+      "why": "reversing the ring flips the SIGN and leaves the absolute area alone",
+      "points": [
+        {
+          "point": [
+            5,
+            5
+          ],
+          "inside": true
+        }
+      ]
+    },
+    {
+      "label": "poly:negative-coords",
+      "polygon": [
+        [
+          -30,
+          -20
+        ],
+        [
+          -10,
+          -20
+        ],
+        [
+          -10,
+          -5
+        ],
+        [
+          -30,
+          -5
+        ]
+      ],
+      "extent": [
+        -30,
+        -20,
+        -10,
+        -5
+      ],
+      "area": 300,
+      "signed_area": 300,
+      "is_simple": true,
+      "why": "IR space is not the positive quadrant - see media_box on a cropped page",
+      "points": [
+        {
+          "point": [
+            -20,
+            -10
+          ],
+          "inside": true
+        },
+        {
+          "point": [
+            0,
+            0
+          ],
+          "inside": false
+        }
+      ]
+    }
+  ],
+  "intersection_vectors": [
+    {
+      "label": "isect:two-columns",
+      "a": [
+        [
+          54,
+          100
+        ],
+        [
+          292,
+          100
+        ],
+        [
+          292,
+          140
+        ],
+        [
+          54,
+          140
+        ]
+      ],
+      "b": [
+        [
+          320,
+          100
+        ],
+        [
+          558,
+          100
+        ],
+        [
+          558,
+          140
+        ],
+        [
+          320,
+          140
+        ]
+      ],
+      "intersects": false,
+      "why": "THE case. Two column blocks on the same lines must not intersect."
+    },
+    {
+      "label": "isect:touching-edges",
+      "a": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          0
+        ],
+        [
+          10,
+          10
+        ],
+        [
+          0,
+          10
+        ]
+      ],
+      "b": [
+        [
+          10,
+          0
+        ],
+        [
+          20,
+          0
+        ],
+        [
+          20,
+          10
+        ],
+        [
+          10,
+          10
+        ]
+      ],
+      "intersects": true,
+      "why": "boundary contact counts - stated so the two languages cannot disagree"
+    },
+    {
+      "label": "isect:nested",
+      "a": [
+        [
+          0,
+          0
+        ],
+        [
+          100,
+          0
+        ],
+        [
+          100,
+          100
+        ],
+        [
+          0,
+          100
+        ]
+      ],
+      "b": [
+        [
+          10,
+          10
+        ],
+        [
+          20,
+          10
+        ],
+        [
+          20,
+          20
+        ],
+        [
+          10,
+          20
+        ]
+      ],
+      "intersects": true,
+      "why": "containment has no edge crossing; an edge-only test would answer False"
+    },
+    {
+      "label": "isect:disjoint",
+      "a": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          0
+        ],
+        [
+          10,
+          10
+        ],
+        [
+          0,
+          10
+        ]
+      ],
+      "b": [
+        [
+          50,
+          50
+        ],
+        [
+          60,
+          50
+        ],
+        [
+          60,
+          60
+        ],
+        [
+          50,
+          60
+        ]
+      ],
+      "intersects": false
+    },
+    {
+      "label": "isect:staircase-notch",
+      "a": [
+        [
+          292,
+          100
+        ],
+        [
+          292,
+          127
+        ],
+        [
+          200,
+          127
+        ],
+        [
+          200,
+          140
+        ],
+        [
+          54,
+          140
+        ],
+        [
+          54,
+          100
+        ]
+      ],
+      "b": [
+        [
+          210,
+          130
+        ],
+        [
+          280,
+          130
+        ],
+        [
+          280,
+          138
+        ],
+        [
+          210,
+          138
+        ]
+      ],
+      "intersects": false,
+      "why": "the probe sits in the staircase's notch. Bounding boxes DO overlap here."
+    },
+    {
+      "label": "isect:staircase-hit",
+      "a": [
+        [
+          292,
+          100
+        ],
+        [
+          292,
+          127
+        ],
+        [
+          200,
+          127
+        ],
+        [
+          200,
+          140
+        ],
+        [
+          54,
+          140
+        ],
+        [
+          54,
+          100
+        ]
+      ],
+      "b": [
+        [
+          210,
+          110
+        ],
+        [
+          280,
+          110
+        ],
+        [
+          280,
+          118
+        ],
+        [
+          210,
+          118
+        ]
+      ],
+      "intersects": true
+    },
+    {
+      "label": "isect:crossing-no-vertex-inside",
+      "a": [
+        [
+          0,
+          4
+        ],
+        [
+          10,
+          4
+        ],
+        [
+          10,
+          6
+        ],
+        [
+          0,
+          6
+        ]
+      ],
+      "b": [
+        [
+          4,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          6,
+          10
+        ],
+        [
+          4,
+          10
+        ]
+      ],
+      "intersects": true,
+      "why": "a plus sign: no vertex of either is inside the other, only edges cross"
+    }
+  ],
+  "line_union_vectors": [
+    {
+      "label": "union:two-column-selection",
+      "why": "THE named operation. A selection spanning both columns returns TWO polygons, so nothing is ever painted across the gutter (findings.md highlight bleed).",
+      "rects": [
+        [
+          54,
+          100,
+          292,
+          112
+        ],
+        [
+          54,
+          114,
+          292,
+          126
+        ],
+        [
+          54,
+          128,
+          200,
+          140
+        ],
+        [
+          320,
+          100,
+          558,
+          112
+        ],
+        [
+          320,
+          114,
+          400,
+          126
+        ]
+      ],
+      "options": {
+        "vertical_gap_tolerance": 2,
+        "horizontal_overlap_tolerance": 0
+      },
+      "polygons": [
+        [
+          [
+            292,
+            100
+          ],
+          [
+            292,
+            127
+          ],
+          [
+            200,
+            127
+          ],
+          [
+            200,
+            140
+          ],
+          [
+            54,
+            140
+          ],
+          [
+            54,
+            100
+          ]
+        ],
+        [
+          [
+            558,
+            100
+          ],
+          [
+            558,
+            113
+          ],
+          [
+            400,
+            113
+          ],
+          [
+            400,
+            126
+          ],
+          [
+            320,
+            126
+          ],
+          [
+            320,
+            100
+          ]
+        ]
+      ]
+    },
+    {
+      "label": "union:single-rect",
+      "rects": [
+        [
+          10,
+          20,
+          30,
+          40
+        ]
+      ],
+      "options": {
+        "vertical_gap_tolerance": 2,
+        "horizontal_overlap_tolerance": 0
+      },
+      "polygons": [
+        [
+          [
+            30,
+            20
+          ],
+          [
+            30,
+            40
+          ],
+          [
+            10,
+            40
+          ],
+          [
+            10,
+            20
+          ]
+        ]
+      ],
+      "why": "one line is a rectangle, wound clockwise on screen starting at the top-right"
+    },
+    {
+      "label": "union:paragraph-gap-splits",
+      "rects": [
+        [
+          54,
+          100,
+          292,
+          112
+        ],
+        [
+          54,
+          130,
+          292,
+          142
+        ]
+      ],
+      "options": {
+        "vertical_gap_tolerance": 2,
+        "horizontal_overlap_tolerance": 0
+      },
+      "polygons": [
+        [
+          [
+            292,
+            100
+          ],
+          [
+            292,
+            112
+          ],
+          [
+            54,
+            112
+          ],
+          [
+            54,
+            100
+          ]
+        ],
+        [
+          [
+            292,
+            130
+          ],
+          [
+            292,
+            142
+          ],
+          [
+            54,
+            142
+          ],
+          [
+            54,
+            130
+          ]
+        ]
+      ],
+      "why": "an 18 pt vertical gap exceeds the 2 pt tolerance, so these are two regions"
+    },
+    {
+      "label": "union:same-band-fragments-merge",
+      "rects": [
+        [
+          54,
+          100,
+          150,
+          112
+        ],
+        [
+          140,
+          101,
+          292,
+          113
+        ]
+      ],
+      "options": {
+        "vertical_gap_tolerance": 2,
+        "horizontal_overlap_tolerance": 0
+      },
+      "polygons": [
+        [
+          [
+            292,
+            100
+          ],
+          [
+            292,
+            113
+          ],
+          [
+            54,
+            113
+          ],
+          [
+            54,
+            100
+          ]
+        ]
+      ],
+      "why": "two word runs on one line: same run, overlapping y -> one band [54,100,292,113]"
+    },
+    {
+      "label": "union:short-last-line-still-joins",
+      "rects": [
+        [
+          54,
+          100,
+          292,
+          112
+        ],
+        [
+          54,
+          113,
+          90,
+          125
+        ]
+      ],
+      "options": {
+        "vertical_gap_tolerance": 2,
+        "horizontal_overlap_tolerance": 0
+      },
+      "polygons": [
+        [
+          [
+            292,
+            100
+          ],
+          [
+            292,
+            112.5
+          ],
+          [
+            90,
+            112.5
+          ],
+          [
+            90,
+            125
+          ],
+          [
+            54,
+            125
+          ],
+          [
+            54,
+            100
+          ]
+        ]
+      ],
+      "why": "band edge (112+113)/2 = 112.5; the short line joins by x-overlap of 36 pt"
+    },
+    {
+      "label": "union:degenerate-rects-dropped",
+      "rects": [
+        [
+          54,
+          100,
+          292,
+          112
+        ],
+        [
+          54,
+          120,
+          54,
+          130
+        ],
+        [
+          10,
+          200,
+          30,
+          200
+        ]
+      ],
+      "options": {
+        "vertical_gap_tolerance": 2,
+        "horizontal_overlap_tolerance": 0
+      },
+      "polygons": [
+        [
+          [
+            292,
+            100
+          ],
+          [
+            292,
+            112
+          ],
+          [
+            54,
+            112
+          ],
+          [
+            54,
+            100
+          ]
+        ]
+      ],
+      "why": "zero-width and zero-height rects are not regions and are dropped"
+    },
+    {
+      "label": "union:empty",
+      "rects": [],
+      "options": {
+        "vertical_gap_tolerance": 2,
+        "horizontal_overlap_tolerance": 0
+      },
+      "polygons": []
+    }
+  ],
+  "fixture_vectors": [
+    {
+      "label": "fixture:rotate-0",
+      "file": "rotate-0.pdf",
+      "sha256": "98ad1467ca6d91b70ba9d8ec803841f345ea2f80ee574f7f710bfda168ed17a1",
+      "why": "the baseline: /Rotate 0, CropBox == MediaBox, no /UserUnit. Matches 100% of the real corpus, so it is the case that proves the fixtures agree with reality.",
+      "raw": {
+        "media_box": [
+          0,
+          0,
+          200,
+          300
+        ],
+        "crop_box": null,
+        "rotate": 0,
+        "user_unit": null
+      },
+      "marker_rects_raw_pdf_space": [
+        [
+          20,
+          250,
+          60,
+          270
+        ],
+        [
+          100,
+          200,
+          120,
+          230
+        ],
+        [
+          150,
+          20,
+          190,
+          60
+        ]
+      ],
+      "expected_page_size": [
+        200.0,
+        300.0
+      ],
+      "expected_marker_bboxes": [
+        [
+          20.0,
+          30.0,
+          60.0,
+          50.0
+        ],
+        [
+          100.0,
+          70.0,
+          120.0,
+          100.0
+        ],
+        [
+          150.0,
+          240.0,
+          190.0,
+          280.0
+        ]
+      ],
+      "mupdf_page_rect_unadjusted": [
+        0.0,
+        0.0,
+        200.0,
+        300.0
+      ]
+    },
+    {
+      "label": "fixture:rotate-90",
+      "file": "rotate-90.pdf",
+      "sha256": "4fdc99fc73aa9f7da6dd43817244db2549e7409df0ee03fccfd600314691fd4a",
+      "why": "/Rotate 90. The corpus has none; P9 measured the cost of a wrong frame at 99.93%.",
+      "raw": {
+        "media_box": [
+          0,
+          0,
+          200,
+          300
+        ],
+        "crop_box": null,
+        "rotate": 90,
+        "user_unit": null
+      },
+      "marker_rects_raw_pdf_space": [
+        [
+          20,
+          250,
+          60,
+          270
+        ],
+        [
+          100,
+          200,
+          120,
+          230
+        ],
+        [
+          150,
+          20,
+          190,
+          60
+        ]
+      ],
+      "expected_page_size": [
+        300.0,
+        200.0
+      ],
+      "expected_marker_bboxes": [
+        [
+          250.0,
+          20.0,
+          270.0,
+          60.0
+        ],
+        [
+          200.0,
+          100.0,
+          230.0,
+          120.0
+        ],
+        [
+          20.0,
+          150.0,
+          60.0,
+          190.0
+        ]
+      ],
+      "mupdf_page_rect_unadjusted": [
+        0.0,
+        0.0,
+        300.0,
+        200.0
+      ]
+    },
+    {
+      "label": "fixture:rotate-180",
+      "file": "rotate-180.pdf",
+      "sha256": "01ee959bc310e8407a5afdee3e23cdd4184cd54ce4baaaa2fc0d04d6d193d39f",
+      "why": "/Rotate 180.",
+      "raw": {
+        "media_box": [
+          0,
+          0,
+          200,
+          300
+        ],
+        "crop_box": null,
+        "rotate": 180,
+        "user_unit": null
+      },
+      "marker_rects_raw_pdf_space": [
+        [
+          20,
+          250,
+          60,
+          270
+        ],
+        [
+          100,
+          200,
+          120,
+          230
+        ],
+        [
+          150,
+          20,
+          190,
+          60
+        ]
+      ],
+      "expected_page_size": [
+        200.0,
+        300.0
+      ],
+      "expected_marker_bboxes": [
+        [
+          140.0,
+          250.0,
+          180.0,
+          270.0
+        ],
+        [
+          80.0,
+          200.0,
+          100.0,
+          230.0
+        ],
+        [
+          10.0,
+          20.0,
+          50.0,
+          60.0
+        ]
+      ],
+      "mupdf_page_rect_unadjusted": [
+        0.0,
+        0.0,
+        200.0,
+        300.0
+      ]
+    },
+    {
+      "label": "fixture:rotate-270",
+      "file": "rotate-270.pdf",
+      "sha256": "a83beb96ae0911ea267cbbb58ed0f6909e1b73b9407529ef16bb01f34f04d171",
+      "why": "/Rotate 270.",
+      "raw": {
+        "media_box": [
+          0,
+          0,
+          200,
+          300
+        ],
+        "crop_box": null,
+        "rotate": 270,
+        "user_unit": null
+      },
+      "marker_rects_raw_pdf_space": [
+        [
+          20,
+          250,
+          60,
+          270
+        ],
+        [
+          100,
+          200,
+          120,
+          230
+        ],
+        [
+          150,
+          20,
+          190,
+          60
+        ]
+      ],
+      "expected_page_size": [
+        300.0,
+        200.0
+      ],
+      "expected_marker_bboxes": [
+        [
+          30.0,
+          140.0,
+          50.0,
+          180.0
+        ],
+        [
+          70.0,
+          80.0,
+          100.0,
+          100.0
+        ],
+        [
+          240.0,
+          10.0,
+          280.0,
+          50.0
+        ]
+      ],
+      "mupdf_page_rect_unadjusted": [
+        0.0,
+        0.0,
+        300.0,
+        200.0
+      ]
+    },
+    {
+      "label": "fixture:cropbox-offset",
+      "file": "cropbox-offset.pdf",
+      "sha256": "13f933bc31a8cb83889a503970378d3818a8b1704d7c174d956d6acc2a626b67",
+      "why": "a CropBox strictly inside the MediaBox with a non-zero origin - the case DESIGN.md D23 exists for, and the one that silently offsets every polygon when unhandled.",
+      "raw": {
+        "media_box": [
+          0,
+          0,
+          612,
+          792
+        ],
+        "crop_box": [
+          72,
+          90,
+          540,
+          720
+        ],
+        "rotate": 0,
+        "user_unit": null
+      },
+      "marker_rects_raw_pdf_space": [
+        [
+          72,
+          700,
+          172,
+          720
+        ],
+        [
+          300,
+          400,
+          340,
+          430
+        ],
+        [
+          500,
+          100,
+          540,
+          120
+        ]
+      ],
+      "expected_page_size": [
+        468.0,
+        630.0
+      ],
+      "expected_marker_bboxes": [
+        [
+          0.0,
+          0.0,
+          100.0,
+          20.0
+        ],
+        [
+          228.0,
+          290.0,
+          268.0,
+          320.0
+        ],
+        [
+          428.0,
+          600.0,
+          468.0,
+          620.0
+        ]
+      ],
+      "mupdf_page_rect_unadjusted": [
+        0.0,
+        0.0,
+        468.0,
+        630.0
+      ]
+    },
+    {
+      "label": "fixture:userunit",
+      "file": "userunit.pdf",
+      "sha256": "ec1fa7dc1f6e7f03e63be49f91ba0b3f30934c86f5d8befb7bfc20e6a0f23a70",
+      "why": "/UserUnit 2.5. The stored frame must be IDENTICAL to the same page without it (Amendment 1 pins UserUnit out of the id frame); only the viewport scale changes.",
+      "raw": {
+        "media_box": [
+          0,
+          0,
+          200,
+          300
+        ],
+        "crop_box": null,
+        "rotate": 0,
+        "user_unit": 2.5
+      },
+      "marker_rects_raw_pdf_space": [
+        [
+          20,
+          250,
+          60,
+          270
+        ],
+        [
+          100,
+          200,
+          120,
+          230
+        ],
+        [
+          150,
+          20,
+          190,
+          60
+        ]
+      ],
+      "expected_page_size": [
+        200.0,
+        300.0
+      ],
+      "expected_marker_bboxes": [
+        [
+          20.0,
+          30.0,
+          60.0,
+          50.0
+        ],
+        [
+          100.0,
+          70.0,
+          120.0,
+          100.0
+        ],
+        [
+          150.0,
+          240.0,
+          190.0,
+          280.0
+        ]
+      ],
+      "mupdf_page_rect_unadjusted": [
+        0.0,
+        0.0,
+        500.0,
+        750.0
+      ]
+    },
+    {
+      "label": "fixture:negative-mediabox",
+      "file": "negative-mediabox.pdf",
+      "sha256": "7250c6d6aa0cf1cf2d1a25c60f27ee9dd24332a083679b20ef19a3e77c7011ae",
+      "why": "a MediaBox with negative coordinates. The corpus has zero negative coordinates; the normalised origin must be the crop rect's own corner, not (0, 0).",
+      "raw": {
+        "media_box": [
+          -100,
+          -50,
+          300,
+          400
+        ],
+        "crop_box": null,
+        "rotate": 0,
+        "user_unit": null
+      },
+      "marker_rects_raw_pdf_space": [
+        [
+          -100,
+          380,
+          -40,
+          400
+        ],
+        [
+          0,
+          0,
+          40,
+          40
+        ],
+        [
+          240,
+          -50,
+          300,
+          -20
+        ]
+      ],
+      "expected_page_size": [
+        400.0,
+        450.0
+      ],
+      "expected_marker_bboxes": [
+        [
+          0.0,
+          0.0,
+          60.0,
+          20.0
+        ],
+        [
+          100.0,
+          360.0,
+          140.0,
+          400.0
+        ],
+        [
+          340.0,
+          420.0,
+          400.0,
+          450.0
+        ]
+      ],
+      "mupdf_page_rect_unadjusted": [
+        0.0,
+        0.0,
+        400.0,
+        450.0
+      ]
+    },
+    {
+      "label": "fixture:cropbox-outside-mediabox",
+      "file": "cropbox-outside-mediabox.pdf",
+      "sha256": "8e1c5a0d69ad9a6d45748e2444ef4b71a35807e1689524c06d0f613e37afd096",
+      "why": "a CropBox that escapes the MediaBox. PDF 1.7 14.11.2 says the visible page is the INTERSECTION; a reader that trusts the CropBox verbatim gets the page size wrong.",
+      "raw": {
+        "media_box": [
+          0,
+          0,
+          200,
+          300
+        ],
+        "crop_box": [
+          -200,
+          -100,
+          400,
+          500
+        ],
+        "rotate": 0,
+        "user_unit": null
+      },
+      "marker_rects_raw_pdf_space": [
+        [
+          20,
+          250,
+          60,
+          270
+        ],
+        [
+          100,
+          200,
+          120,
+          230
+        ]
+      ],
+      "expected_page_size": [
+        200.0,
+        300.0
+      ],
+      "expected_marker_bboxes": [
+        [
+          20.0,
+          30.0,
+          60.0,
+          50.0
+        ],
+        [
+          100.0,
+          70.0,
+          120.0,
+          100.0
+        ]
+      ],
+      "mupdf_page_rect_unadjusted": [
+        0.0,
+        0.0,
+        200.0,
+        300.0
+      ]
+    },
+    {
+      "label": "fixture:combined",
+      "file": "combined.pdf",
+      "sha256": "28503c6baad58f058af5a6db30116b9b5ba6d90799e54c45e2fe20befda7daa5",
+      "why": "all four at once: negative MediaBox, offset CropBox, /Rotate 270, /UserUnit 1.5. This is where implementations break, so it is the one that must be in the suite.",
+      "raw": {
+        "media_box": [
+          -100,
+          -50,
+          300,
+          400
+        ],
+        "crop_box": [
+          -40,
+          10,
+          260,
+          330
+        ],
+        "rotate": 270,
+        "user_unit": 1.5
+      },
+      "marker_rects_raw_pdf_space": [
+        [
+          -40,
+          310,
+          20,
+          330
+        ],
+        [
+          100,
+          160,
+          130,
+          180
+        ],
+        [
+          200,
+          10,
+          260,
+          40
+        ]
+      ],
+      "expected_page_size": [
+        320.0,
+        300.0
+      ],
+      "expected_marker_bboxes": [
+        [
+          0.0,
+          240.0,
+          20.0,
+          300.0
+        ],
+        [
+          150.0,
+          130.0,
+          170.0,
+          160.0
+        ],
+        [
+          290.0,
+          0.0,
+          320.0,
+          60.0
+        ]
+      ],
+      "mupdf_page_rect_unadjusted": [
+        0.0,
+        0.0,
+        480.0,
+        450.0
+      ]
+    }
+  ],
+  "counts": {
+    "page_frames": 10,
+    "normalisation_vectors": 24,
+    "normalise_rect_vectors": 4,
+    "viewport_vectors": 13,
+    "roundtrip_combinations": 2880,
+    "polygon_vectors": 6,
+    "polygon_point_tests": 18,
+    "intersection_vectors": 7,
+    "line_union_vectors": 7,
+    "fixture_vectors": 9
+  },
+  "pymupdf_version": "PyMuPDF 1.28.0: Python bindings for the MuPDF 1.29.0 library."
+}

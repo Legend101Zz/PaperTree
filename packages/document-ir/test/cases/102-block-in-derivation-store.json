@@ -9,36 +9,17 @@
     "type": "paragraph",
     "page_index": 0,
     "polygon": [
-      [
-        54,
-        120
-      ],
-      [
-        292,
-        120
-      ],
-      [
-        292,
-        240
-      ],
-      [
-        54,
-        240
-      ]
+      [54, 120],
+      [292, 120],
+      [292, 240],
+      [54, 240]
     ],
-    "bbox": [
-      54,
-      120,
-      292,
-      240
-    ],
+    "bbox": [54, 120, 292, 240],
     "flow": "body",
     "order": 1,
     "doc_order": 1,
     "parent_id": "blk_7k2m4qx3tz5b6d7f",
-    "child_ids": [
-      "blk_f2h4k6n2q4s6u2w4"
-    ],
+    "child_ids": ["blk_f2h4k6n2q4s6u2w4"],
     "next_id": "blk_b4d6f2h4k6n2q4s6",
     "text": "We explicitly reformulate the layers as learning residual functions F(x).",
     "text_normalised": "we explicitly reformulate the layers as learning residual functions f(x).",
@@ -47,36 +28,21 @@
       {
         "start": 0,
         "end": 45,
-        "bbox": [
-          54,
-          120,
-          292,
-          132
-        ],
+        "bbox": [54, 120, 292, 132],
         "font": "NimbusRomNo9L-Regu",
         "size": 9.96
       },
       {
         "start": 45,
         "end": 68,
-        "bbox": [
-          54,
-          132,
-          240,
-          144
-        ],
+        "bbox": [54, 132, 240, 144],
         "font": "NimbusRomNo9L-Regu",
         "size": 9.96
       },
       {
         "start": 68,
         "end": 72,
-        "bbox": [
-          240,
-          132,
-          262,
-          144
-        ],
+        "bbox": [240, 132, 262, 144],
         "role": "inline_equation",
         "block_id": "blk_f2h4k6n2q4s6u2w4",
         "font": "CMMI10",

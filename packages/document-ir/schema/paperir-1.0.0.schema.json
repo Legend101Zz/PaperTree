@@ -56,10 +56,7 @@
           "$ref": "#/$defs/PaperStatus"
         },
         "partial_reason": {
-          "type": [
-            "string",
-            "null"
-          ],
+          "type": ["string", "null"],
           "description": "Human-readable explanation when status is \"partial\" or \"failed\", e.g. \"pages 12-14 low confidence, vision repair queued\". Null otherwise. Required-and-nullable rather than optional so that \"nothing to report\" is stated once, in exactly one encoding."
         },
         "metadata": {
@@ -201,33 +198,17 @@
     },
     "PaperStatus": {
       "type": "string",
-      "enum": [
-        "partial",
-        "complete",
-        "failed"
-      ],
+      "enum": ["partial", "complete", "failed"],
       "description": "Lifecycle of this parse generation. \"partial\" is a FIRST-CLASS STATE, not an error: a reader can open the paper while pages 12-14 are still in vision repair. This is the direct replacement for a pipeline that blocked an HTTP request for up to 450 s (findings.md C1).\n\nADR-001 also lists \"pending\" and \"parsing\". THEY ARE DELIBERATELY ABSENT HERE. A PaperIR document requires a fully-populated ParserInfo (including config_hash and parsed_at) and a DocumentConfidence; at upload time none of those exist, so a \"pending\" PaperIR document could only be produced by fabricating them — which is precisely the failure class this schema exists to prevent (findings.md: title = the uploaded filename). pending/parsing are JOB states: they live in the `papers` and `jobs` tables in packages/db, and the first PaperIR document for a generation is written when there is something real to write."
     },
     "Flow": {
       "type": "string",
-      "enum": [
-        "body",
-        "caption",
-        "footnote",
-        "header",
-        "footer",
-        "margin"
-      ],
+      "enum": ["body", "caption", "footnote", "header", "footer", "margin"],
       "description": "Which independent reading order a block belongs to. CLOSED vocabulary, deliberately: unlike block/relation types, adding a flow changes what \"read the document\" means for every consumer and is a breaking change.\n\nFootnotes, captions and page furniture get their own orders rather than being spliced into the body stream (ADR-001 Commitment 3, after PDF-to-Tree). This is what lets the reader run the body continuously while still knowing exactly where footnote 3 sits on the page, and what keeps running heads and arXiv margin stamps out of the prose — the failure measured in findings.md B6."
     },
     "SourceKind": {
       "type": "string",
-      "enum": [
-        "pdf_text_layer",
-        "pdf_vector",
-        "pdf_raster",
-        "ocr"
-      ],
+      "enum": ["pdf_text_layer", "pdf_vector", "pdf_raster", "ocr"],
       "description": "How this block's content was obtained from the PDF. CLOSED vocabulary with NO model/LLM value, and that absence is the point: the line is TRANSCRIPTION vs GENERATION. \"ocr\" transcribes a region of the source and is legitimate; an LLM generating prose is not, and has no value it could be recorded under. Combined with \"additionalProperties\": false everywhere, this makes AI-authored source text unrepresentable rather than merely discouraged.\n\n- pdf_text_layer: characters read from the PDF's own text layer.\n- pdf_vector: derived from vector drawing operations (the property the previous extractor was blind to — findings.md B3: every ResNet figure is a vector drawing and zero were extracted).\n- pdf_raster: derived from an embedded raster image.\n- ocr: transcribed from a rendered region by an OCR engine.\n\nA model's READING of a region is not a source; it is a proposed Repair (see $defs/Repair) or an Alternative, stored alongside the original and never in place of it."
     },
     "KnownBlockType": {
@@ -266,10 +247,7 @@
     },
     "KnownHeadingBlockType": {
       "type": "string",
-      "enum": [
-        "title",
-        "heading"
-      ],
+      "enum": ["title", "heading"],
       "description": "The block types that open a SECTION. NOT REFERENCED BY ANYTHING and not a validation constraint — it is the vocabulary the semantic validator and the reading-order rules key on, and codegen emits as an isHeadingBlockType() guard.\n\nIt defines the single distinction the reading order depends on:\n• SECTION CONTAINMENT — parent_id names a block of one of these types. The child is TOP-LEVEL: it keeps its doc_order and appears in Page.flows. A paragraph under a heading is this case.\n• NESTING — parent_id names ANY OTHER type (table, table_row, list, figure, paragraph, or a type this version has never heard of). The child is NESTED: it ranks by `order` inside its parent, carries NO doc_order, and does NOT appear in Page.flows. A table cell, a list item and an inline_equation inside a paragraph are all this case.\n\nStated as the complement of a two-value list rather than as a list of containers so that an UNKNOWN parent type nests by default — the safe direction, since splicing the children of an unrecognised container into the body stream is the damaging error.\n\nThe distinction is load-bearing and measured: Docling emits 342 cells for one ResNet table (findings.md §H2). Without it those 342 blocks occupy 342 consecutive doc_order slots between two paragraphs, and doc_order is defined as \"the sequence a continuous reader or an audiobook follows\" — so Guided view and TTS would read the table cell by cell and get_adjacent_blocks on the preceding paragraph would return cells. Likewise an inline_equation inside a paragraph must not become a doc_order slot: that is the prose shredding of findings.md B1."
     },
     "KnownRelationType": {
@@ -295,12 +273,7 @@
       "title": "ParserInfo",
       "description": "Exactly which software produced this generation. Required so that a re-parse is reproducible, so a regression can be attributed, and so parser choice stays a swappable implementation detail behind an adapter.",
       "additionalProperties": false,
-      "required": [
-        "name",
-        "version",
-        "config_hash",
-        "parsed_at"
-      ],
+      "required": ["name", "version", "config_hash", "parsed_at"],
       "properties": {
         "name": {
           "type": "string",
@@ -333,11 +306,7 @@
       "title": "MetadataValue",
       "description": "A metadata STRING together with the block it was read from and how sure we are. Never a bare string.\n\nsource_block_id is REQUIRED, so a metadata value that cannot point at a real block is unrepresentable. This is the schema-level answer to findings.md: the live system sets title = os.path.splitext(file.filename)[0] — the uploaded filename — and there is nowhere in PaperIR to put a value with no source.",
       "additionalProperties": false,
-      "required": [
-        "value",
-        "source_block_id",
-        "confidence"
-      ],
+      "required": ["value", "source_block_id", "confidence"],
       "properties": {
         "value": {
           "type": "string",
@@ -357,11 +326,7 @@
       "title": "MetadataYear",
       "description": "A metadata INTEGER (publication year) with the same provenance requirement as MetadataValue: value, source_block_id, confidence.",
       "additionalProperties": false,
-      "required": [
-        "value",
-        "source_block_id",
-        "confidence"
-      ],
+      "required": ["value", "source_block_id", "confidence"],
       "properties": {
         "value": {
           "type": "integer",
@@ -380,10 +345,7 @@
       "title": "AbstractRef",
       "description": "The abstract is not copied into metadata — it is a POINTER at the blocks that are the abstract. Copying would create a second representation that drifts from the first, which is the failure mode this whole rewrite exists to remove.",
       "additionalProperties": false,
-      "required": [
-        "block_ids",
-        "confidence"
-      ],
+      "required": ["block_ids", "confidence"],
       "properties": {
         "block_ids": {
           "type": "array",
@@ -403,15 +365,7 @@
       "title": "Metadata",
       "description": "Document-level bibliographic metadata. EVERY field is either a provenance-carrying value object or explicitly null: all keys are required so that \"we looked and found nothing\" is stated rather than silently omitted, and so there is exactly one encoding of absence.",
       "additionalProperties": false,
-      "required": [
-        "title",
-        "authors",
-        "abstract",
-        "doi",
-        "arxiv_id",
-        "venue",
-        "year"
-      ],
+      "required": ["title", "authors", "abstract", "doi", "arxiv_id", "venue", "year"],
       "properties": {
         "title": {
           "description": "The paper's title, read from a block of type \"title\". Null if no title block was identified.",
@@ -493,12 +447,7 @@
       "title": "DocumentConfidence",
       "description": "Document-level uncertainty rollup, so the UI can route a reader to the weak pages and so a partial parse is actionable rather than merely incomplete. `overall` and each entry of `by_page` are REQUIRED-AND-NULLABLE: null means \"no calibrated estimate exists\", which is the honest value for a failed parse and for a page still queued for repair. Writing 0 there would be a fabricated measurement in the field the UI uses to decide whether to trust the document. Semantic rule 13b requires them non-null when status is \"complete\".",
       "additionalProperties": false,
-      "required": [
-        "overall",
-        "by_page",
-        "weakest_pages",
-        "needs_review"
-      ],
+      "required": ["overall", "by_page", "weakest_pages", "needs_review"],
       "properties": {
         "overall": {
           "oneOf": [
@@ -544,9 +493,7 @@
       "title": "ImageRef",
       "description": "A pointer to a rendered raster of a region of the source, held in object storage. The image is GROUND TRUTH: for equations and figures it is retained even when LaTeX or vector extraction succeeds, because the LaTeX is an interpretation and the crop is the paper. When latex_confidence is low the UI shows the crop and offers the LaTeX as \"our reading\".",
       "additionalProperties": false,
-      "required": [
-        "uri"
-      ],
+      "required": ["uri"],
       "properties": {
         "uri": {
           "type": "string",
@@ -568,11 +515,7 @@
         },
         "rendered_from": {
           "type": "string",
-          "enum": [
-            "raster",
-            "vector",
-            "page"
-          ],
+          "enum": ["raster", "vector", "page"],
           "description": "What was rasterised: an embedded raster image, vector drawing operations, or a crop of the rendered page."
         }
       }
@@ -582,14 +525,7 @@
       "title": "Flows",
       "description": "The page's TOP-LEVEL blocks partitioned into independent reading orders, one array per Flow value, each in ascending Block.order. All six keys are required (an empty array means \"this page has no top-level blocks in that flow\") so consumers never have to distinguish absent from empty.\n\nNESTED blocks — those whose parent_id names a block that is NOT a heading (see $defs/KnownHeadingBlockType) — are DELIBERATELY NOT LISTED HERE. They appear in Page.block_ids and are reached through their container's child_ids. This is what keeps Docling's 342 cells on a single ResNet table out of the body reading order: without it, \"read the document\" would mean reading a table cell by cell, and every consumer of doc_order (Guided view, TTS, get_adjacent_blocks) would inherit that. See DESIGN.md §4 D14.\n\nEvery id listed here must belong to a top-level block whose page_index is this page's index and whose flow is the corresponding key (semantic validator rule 11).",
       "additionalProperties": false,
-      "required": [
-        "body",
-        "caption",
-        "footnote",
-        "header",
-        "footer",
-        "margin"
-      ],
+      "required": ["body", "caption", "footnote", "header", "footer", "margin"],
       "properties": {
         "body": {
           "type": "array",
@@ -679,12 +615,7 @@
         },
         "rotation": {
           "type": "integer",
-          "enum": [
-            0,
-            90,
-            180,
-            270
-          ],
+          "enum": [0, 90, 180, 270],
           "description": "The page's /Rotate value, recorded for auditability. It has ALREADY been applied to width, height and every polygon on this page; a consumer must not apply it again."
         },
         "user_unit": {
@@ -741,11 +672,7 @@
       "title": "Span",
       "description": "Character-level geometry inside a block's text: the unit a highlight snaps to. A span maps a half-open character range [start, end) of Block.text onto a box on the page, so a selection of part of a paragraph has real coordinates instead of viewport pixels.\n\nOFFSETS INDEX Block.text AS STORED — that is, POST-APPLIED-REPAIR. So does Repair.at. Exactly one string is addressable in this schema and every offset in it means the same thing; the alternative (spans measured against the raw glyph stream, repairs against a different one) drifts every tier-1 anchor after offset 0 by the cumulative length delta of the applied repairs, and the drift is invisible until a highlight lands a word off.",
       "additionalProperties": false,
-      "required": [
-        "start",
-        "end",
-        "bbox"
-      ],
+      "required": ["start", "end", "bbox"],
       "properties": {
         "start": {
           "type": "integer",
@@ -788,10 +715,7 @@
       "title": "Provenance",
       "description": "Which component of the pipeline produced this block, and what it called the block itself. Kept so that a bad block can be attributed to a stage, and so a parser upgrade can be diffed stage by stage.",
       "additionalProperties": false,
-      "required": [
-        "parser",
-        "stage"
-      ],
+      "required": ["parser", "stage"],
       "properties": {
         "parser": {
           "type": "string",
@@ -875,12 +799,7 @@
       "title": "Repair",
       "description": "One recorded modification of source text — never a silent fix. The original always survives in \"from\".\n\nThis exists because the previous code failed the rule twice: _clean_text rewrote U+2212 MINUS SIGN to an ASCII hyphen in the same table as ligature repair (destroying mathematical content, findings.md B7), and the LLM path silently discarded the middle of any page over 5,000 characters (C6). Both would now have to be expressed as a Repair or not happen at all.\n\nRepairs are split into APPLIED and PROPOSED by the required \"applied\" flag. When applied is true, Block.text already contains \"to\" and \"from\" preserves what was replaced. When applied is false, Block.text still contains \"from\" and \"to\" is only a proposal awaiting acceptance.\n\nTWO if/then branches, mirror images of each other, carry the safety property:\n• A MODEL-AUTHORED kind (ocr_correction, vlm_substitution) must have applied:false and MUST name its model_id and prompt_hash. This is ADR-001's \"the LLM never overwrites source; it proposes a repair that is stored alongside the original ... the model and prompt hash are recorded\", in full, as a schema constraint.\n• A DETERMINISTIC kind (dehyphenate, ligature, unicode_normalise, whitespace, reorder) MAY be applied and MUST NOT carry model_id or prompt_hash. Without this branch, {kind:\"dehyphenate\", applied:true, model_id:\"gpt-4o\", to:\"<model prose>\"} validates — an openly model-stamped rewrite of source, through a category whose entire justification is that it is rule-based and reproducible. Semantic rule 30b closes the remaining half by checking that from→to is actually an edit of the declared class.",
       "additionalProperties": false,
-      "required": [
-        "kind",
-        "applied",
-        "from",
-        "to"
-      ],
+      "required": ["kind", "applied", "from", "to"],
       "properties": {
         "kind": {
           "$ref": "#/$defs/RepairKind"
@@ -920,23 +839,15 @@
         {
           "$comment": "P3: model-authored repair kinds may never be applied, and must name the model and prompt that produced them (ADR-001 §Repairs).",
           "if": {
-            "required": [
-              "kind"
-            ],
+            "required": ["kind"],
             "properties": {
               "kind": {
-                "enum": [
-                  "ocr_correction",
-                  "vlm_substitution"
-                ]
+                "enum": ["ocr_correction", "vlm_substitution"]
               }
             }
           },
           "then": {
-            "required": [
-              "model_id",
-              "prompt_hash"
-            ],
+            "required": ["model_id", "prompt_hash"],
             "properties": {
               "applied": {
                 "const": false
@@ -949,18 +860,10 @@
         {
           "$comment": "The mirror image: a deterministic repair may not name a model. Closes the 'applied deterministic repair carrying model_id rewrites source' bypass.",
           "if": {
-            "required": [
-              "kind"
-            ],
+            "required": ["kind"],
             "properties": {
               "kind": {
-                "enum": [
-                  "dehyphenate",
-                  "ligature",
-                  "unicode_normalise",
-                  "whitespace",
-                  "reorder"
-                ]
+                "enum": ["dehyphenate", "ligature", "unicode_normalise", "whitespace", "reorder"]
               }
             }
           },
@@ -978,12 +881,7 @@
       "title": "Alternative",
       "description": "A competing reading of the same block from a different parser, retained WITH the rule that decided between them. When two parsers disagree, both survive and the decision is auditable rather than lost.\n\nAn Alternative is EVIDENCE, never content. `authored_by` is required and a model-authored alternative is pinned to decision:\"not_selected\" — the exact mirror of Repair's applied:false constraint, and for the same reason. Without it, a block could carry text:\"<model prose>\" with a selected alternative from \"openai/gpt-4o\" saying the same thing, and every check would pass: the semantic rule that a selected alternative's text equals block.text is satisfied BECAUSE the model's reading is what the reader sees. That was the last channel through which model text could sit inside a Paper without an explicit \"this is not what you are reading\" flag next to it.",
       "additionalProperties": false,
-      "required": [
-        "parser",
-        "authored_by",
-        "confidence",
-        "decision"
-      ],
+      "required": ["parser", "authored_by", "confidence", "decision"],
       "properties": {
         "parser": {
           "type": "string",
@@ -992,10 +890,7 @@
         },
         "authored_by": {
           "type": "string",
-          "enum": [
-            "parser",
-            "model"
-          ],
+          "enum": ["parser", "model"],
           "description": "Whether this reading came from a deterministic parser or from a model. CLOSED, with no third option. \"model\" forces decision:\"not_selected\" (see the if/then below): a model may argue about what a region says, and its argument is kept, but it may never BE the reading the reader sees."
         },
         "text": {
@@ -1007,10 +902,7 @@
         },
         "decision": {
           "type": "string",
-          "enum": [
-            "selected",
-            "not_selected"
-          ],
+          "enum": ["selected", "not_selected"],
           "description": "Whether this reading won. Exactly one alternative may be \"selected\" (semantic validator)."
         },
         "rule": {
@@ -1023,9 +915,7 @@
         {
           "$comment": "A model-authored alternative can never be the selected reading. Mirror of the Repair applied:false constraint.",
           "if": {
-            "required": [
-              "authored_by"
-            ],
+            "required": ["authored_by"],
             "properties": {
               "authored_by": {
                 "const": "model"
@@ -1047,10 +937,7 @@
       "title": "EquationSymbol",
       "description": "A symbol occurring in an equation, linked to the block that defines it. definition_block is REQUIRED: a symbol whose definition cannot be pointed at a real block is unrepresentable, mirroring the rule for metadata values. Note that a natural-language GLOSS of a symbol is model-authored explanation and belongs in a Derivation, not here (see DESIGN.md §Deviations).",
       "additionalProperties": false,
-      "required": [
-        "symbol",
-        "definition_block"
-      ],
+      "required": ["symbol", "definition_block"],
       "properties": {
         "symbol": {
           "type": "string",
@@ -1068,10 +955,7 @@
       "title": "EquationPayload",
       "description": "Block.payload for type \"equation\" AND type \"inline_equation\". The rendered crop is the ground truth; latex and mathml are interpretations of it, each with their own confidence. The crop is required-and-nullable so that \"detected but not yet rendered\" is statable, and so an inline equation that has not been cropped is expressible.",
       "additionalProperties": false,
-      "required": [
-        "display",
-        "image"
-      ],
+      "required": ["display", "image"],
       "properties": {
         "display": {
           "type": "boolean",
@@ -1128,12 +1012,7 @@
       "title": "FigurePanel",
       "description": "A labelled sub-panel of a multi-part figure, e.g. \"(a)\", so a citation can point at a panel rather than the whole figure. A panel label is transcribed text, so it carries the same required `source` and `confidence` as DetectedLabel.",
       "additionalProperties": false,
-      "required": [
-        "label",
-        "polygon",
-        "source",
-        "confidence"
-      ],
+      "required": ["label", "polygon", "source", "confidence"],
       "properties": {
         "label": {
           "type": "string",
@@ -1158,12 +1037,7 @@
       "title": "DetectedLabel",
       "description": "Text found INSIDE a figure, e.g. \"conv 3x3\" on an architecture diagram, with its own geometry. Kept separate from blocks so that diagram interior text is searchable without being promoted into the reading order — promoting it is exactly how the previous extractor produced headings like \"T[SEP]\" and \"BUFFER\" (findings.md B6).\n\n`source` and `confidence` are REQUIRED for the same reason they are required on a Block: reading text off a VECTOR diagram is precisely the job that gets handed to a VLM, and a required-minLength string with no source field would be a transcription surface exempt from the rule the rest of the page obeys. SourceKind has no model value here either.",
       "additionalProperties": false,
-      "required": [
-        "text",
-        "polygon",
-        "source",
-        "confidence"
-      ],
+      "required": ["text", "polygon", "source", "confidence"],
       "properties": {
         "text": {
           "type": "string",
@@ -1188,10 +1062,7 @@
       "title": "FigurePayload",
       "description": "Block.payload for type \"figure\". The rendered crop is the ground truth for a figure exactly as it is for an equation, and is required-and-nullable for the same reason.",
       "additionalProperties": false,
-      "required": [
-        "is_vector",
-        "image"
-      ],
+      "required": ["is_vector", "image"],
       "properties": {
         "figure_number": {
           "type": "string",
@@ -1253,12 +1124,7 @@
       "title": "TableCell",
       "description": "One cell of a table's grid. Every cell is ALSO a block (of type table_cell) so it can be highlighted and cited like anything else; this entry adds the grid coordinates a block cannot carry.",
       "additionalProperties": false,
-      "required": [
-        "cell_id",
-        "r",
-        "c",
-        "polygon"
-      ],
+      "required": ["cell_id", "r", "c", "polygon"],
       "properties": {
         "cell_id": {
           "$ref": "#/$defs/BlockId",
@@ -1303,11 +1169,7 @@
       "title": "TableGrid",
       "description": "The logical grid recovered from a table, alongside (never instead of) the geometry of its cells.",
       "additionalProperties": false,
-      "required": [
-        "rows",
-        "cols",
-        "cells"
-      ],
+      "required": ["rows", "cols", "cells"],
       "properties": {
         "rows": {
           "type": "integer",
@@ -1333,9 +1195,7 @@
       "title": "TablePayload",
       "description": "Block.payload for type \"table\". The grid is required; the HTML serialisation is a convenience for rendering and for feeding a model, never the canonical form.",
       "additionalProperties": false,
-      "required": [
-        "grid"
-      ],
+      "required": ["grid"],
       "properties": {
         "table_number": {
           "type": "string",
@@ -1484,22 +1344,15 @@
         {
           "$comment": "P7: specialised payloads are constrained by block type, not hoisted onto the block. inline_equation shares EquationPayload (display:false) rather than falling through to the opaque branch: ADR-001 gives inline math no payload contract at all, and inline math is the majority of real math in the corpus (1,411 inline vs 641 display).",
           "if": {
-            "required": [
-              "type"
-            ],
+            "required": ["type"],
             "properties": {
               "type": {
-                "enum": [
-                  "equation",
-                  "inline_equation"
-                ]
+                "enum": ["equation", "inline_equation"]
               }
             }
           },
           "then": {
-            "required": [
-              "payload"
-            ],
+            "required": ["payload"],
             "properties": {
               "payload": {
                 "$ref": "#/$defs/EquationPayload"
@@ -1509,9 +1362,7 @@
         },
         {
           "if": {
-            "required": [
-              "type"
-            ],
+            "required": ["type"],
             "properties": {
               "type": {
                 "const": "figure"
@@ -1519,9 +1370,7 @@
             }
           },
           "then": {
-            "required": [
-              "payload"
-            ],
+            "required": ["payload"],
             "properties": {
               "payload": {
                 "$ref": "#/$defs/FigurePayload"
@@ -1531,9 +1380,7 @@
         },
         {
           "if": {
-            "required": [
-              "type"
-            ],
+            "required": ["type"],
             "properties": {
               "type": {
                 "const": "table"
@@ -1541,9 +1388,7 @@
             }
           },
           "then": {
-            "required": [
-              "payload"
-            ],
+            "required": ["payload"],
             "properties": {
               "payload": {
                 "$ref": "#/$defs/TablePayload"
@@ -1554,18 +1399,11 @@
         {
           "$comment": "Closes the payload for every non-specialised type. Without this branch payload is the only unclosed object in the schema and a whole Derivation fits inside it.",
           "if": {
-            "required": [
-              "type"
-            ],
+            "required": ["type"],
             "properties": {
               "type": {
                 "not": {
-                  "enum": [
-                    "equation",
-                    "inline_equation",
-                    "figure",
-                    "table"
-                  ]
+                  "enum": ["equation", "inline_equation", "figure", "table"]
                 }
               }
             }
@@ -1585,13 +1423,7 @@
       "title": "Relation",
       "description": "A typed, directed, confidence-scored edge between two blocks. Relations are first-class rather than implied by array order, so hierarchy, captioning, citation and cross-page continuation can each be measured and repaired independently.\n\nIdentity is the tuple (type, from, to) — matching the physical model's primary key — so a relation has no id of its own and cannot be duplicated.",
       "additionalProperties": false,
-      "required": [
-        "type",
-        "from",
-        "to",
-        "confidence",
-        "provenance"
-      ],
+      "required": ["type", "from", "to", "confidence", "provenance"],
       "properties": {
         "type": {
           "type": "string",
@@ -1623,11 +1455,7 @@
       "title": "Section",
       "description": "One node of the document outline: a materialised view over heading blocks and parent_of relations.\n\nA Section has NO title field. Its title IS the text of its heading block, by construction, which makes an LLM-invented section title unrepresentable — the exact failure recorded in findings.md C3, where the \"semantic outline\" was one entry per PDF page named by the model. For the same reason a Section has no id of its own: it is identified by its heading block.\n\nFRONT MATTER IS SECTION-LESS, deliberately: title, authors, affiliations and the abstract precede the first heading and belong to no Section. Consumers of get_parent_section must handle null rather than discovering it at runtime.",
       "additionalProperties": false,
-      "required": [
-        "heading_block_id",
-        "level",
-        "block_ids"
-      ],
+      "required": ["heading_block_id", "level", "block_ids"],
       "properties": {
         "heading_block_id": {
           "$ref": "#/$defs/BlockId",
@@ -1656,10 +1484,7 @@
       "title": "Reference",
       "description": "One bibliography entry, parsed into fields. A materialised view over a reference_entry block.\n\nThe verbatim text of the entry is NOT copied here: it lives in exactly one place, the reference_entry block, and duplicating it would create a second representation that drifts.\n\nEVERY FIELD BELOW IS EXTRACTED FROM THAT BLOCK'S TEXT — never fetched from an external service and never composed. A citation enriched from Crossref or Semantic Scholar is NOT a PaperIR fact, because it has no region of this PDF behind it. Semantic rule 35 enforces this by requiring every non-null scalar here to appear in the normalised text of reference_entry_block_id: one substring check per field, exactly checkable precisely because the verbatim entry is deliberately kept in one place. This is the schema's most likely real-world leak — bibliographic enrichment is a normal, well-intentioned feature that a future epic will want — so the rule is not optional.",
       "additionalProperties": false,
-      "required": [
-        "reference_entry_block_id",
-        "confidence"
-      ],
+      "required": ["reference_entry_block_id", "confidence"],
       "properties": {
         "reference_entry_block_id": {
           "$ref": "#/$defs/BlockId",

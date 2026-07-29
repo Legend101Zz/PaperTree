@@ -44,3 +44,9 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
+
+# PyMuPDF ships no type stubs. It is used only by the synthetic-PDF generator that produces
+# packages/document-ir/test/fixtures-pdf/, never by library code.
+[[tool.mypy.overrides]]
+module = ["pymupdf", "fitz"]
+ignore_missing_imports = true

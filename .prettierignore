@@ -1,4 +1,5 @@
 apps/
+docker-compose.yml
 node_modules/
 dist/
 .turbo/
@@ -7,3 +8,15 @@ uv.lock
 research/
 packages/document-ir/fixtures/
 packages/document-ir/conformance/
+
+# Generated bindings — codegen owns their formatting; prettier here would fight the drift test.
+packages/*/src/generated/
+packages/*/python/**/generated/
+.github/
+infrastructure/
+
+# Pre-existing audit artefacts — not Epic 0's to reformat.
+findings.md
+progress.md
+task_plan.md
+README.md
