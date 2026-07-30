@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 from _corpus_manifest import CORPUS_DIR as CORPUS
-from _corpus_manifest import CORPUS_FILES, requires_corpus
+from _corpus_manifest import CORPUS_PARAMS, requires_corpus
 from papertree_document_ir import Repair
 from papertree_document_ir.identity import content_hash, normalise_text, resolved_text
 from papertree_document_ir.validate import _dehyphenate
@@ -45,7 +45,7 @@ class _BlockLike:
         self.repairs = repairs
 
 
-@pytest.mark.parametrize("path", CORPUS_FILES, ids=lambda p: p.name)
+@pytest.mark.parametrize("path", CORPUS_PARAMS, ids=lambda p: p.name if p else "no-corpus")
 def test_spans_satisfy_rules_25_and_26_on_every_block(path: Path) -> None:
     """Rule 25: `0 <= start < end <= len(text)`. Rule 26: non-overlapping, ascending."""
     with SourceDocument(path) as doc:
@@ -59,7 +59,7 @@ def test_spans_satisfy_rules_25_and_26_on_every_block(path: Path) -> None:
                     previous_end = span.end
 
 
-@pytest.mark.parametrize("path", CORPUS_FILES, ids=lambda p: p.name)
+@pytest.mark.parametrize("path", CORPUS_PARAMS, ids=lambda p: p.name if p else "no-corpus")
 def test_every_span_carries_a_positive_size(path: Path) -> None:
     """EPIC-02-RESULT §2.3's actual ask, met at source.
 
@@ -73,7 +73,7 @@ def test_every_span_carries_a_positive_size(path: Path) -> None:
                     assert span.size is not None and span.size > 0
 
 
-@pytest.mark.parametrize("path", CORPUS_FILES, ids=lambda p: p.name)
+@pytest.mark.parametrize("path", CORPUS_PARAMS, ids=lambda p: p.name if p else "no-corpus")
 def test_every_repair_satisfies_rules_27_and_30b(path: Path) -> None:
     """The two rules that stop a "deterministic repair" from being an arbitrary rewrite.
 
@@ -100,7 +100,7 @@ def test_every_repair_satisfies_rules_27_and_30b(path: Path) -> None:
     assert seen > 0, f"{path.name} produced no hyphenation at all, which is implausible"
 
 
-@pytest.mark.parametrize("path", CORPUS_FILES, ids=lambda p: p.name)
+@pytest.mark.parametrize("path", CORPUS_PARAMS, ids=lambda p: p.name if p else "no-corpus")
 def test_no_repair_is_ever_applied_so_text_is_the_glyph_stream(path: Path) -> None:
     """The whole criterion, stated as the property that makes it hold.
 

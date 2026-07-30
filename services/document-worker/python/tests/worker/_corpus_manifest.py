@@ -37,6 +37,7 @@ import glob
 from pathlib import Path
 
 import pytest
+from _pytest.mark.structures import ParameterSet
 
 REPO = Path(__file__).resolve().parents[5]
 CORPUS_DIR = REPO / "research" / "benchmarks" / "corpus"
@@ -57,8 +58,7 @@ EXPECTED_CORPUS = (
 CORPUS_FILES: list[Path] = sorted(Path(p) for p in glob.glob(str(CORPUS_DIR / "*.pdf")))
 HAVE_CORPUS = len(CORPUS_FILES) == len(EXPECTED_CORPUS)
 
-#: Applied to every corpus-dependent module. `parametrize` over an empty list collects nothing,
-#: so the *reason* has to live on the module, not on the parameter list.
+#: Applied to every corpus-dependent module, for the tests that name a paper directly.
 requires_corpus = pytest.mark.skipif(
     not HAVE_CORPUS,
     reason=(
@@ -82,3 +82,24 @@ def test_corpus_presence_is_all_or_nothing() -> None:
         f"partial corpus: {len(found)} of {len(expected)} papers present. "
         f"Missing {sorted(expected - found)}; unexpected {sorted(found - expected)}."
     )
+
+
+#: THE PARAMETER LIST FOR EVERY `@pytest.mark.parametrize("path", ...)` OVER THE CORPUS.
+#:
+#: Never `CORPUS_FILES` directly. A module-level `skipif` does NOT save a parametrised test from
+#: an empty corpus: the mark is applied to the cases pytest COLLECTS, and an empty parameter
+#: sequence collects **zero cases**, so there is nothing to mark and nothing to report. Measured
+#: on this branch's second CI run - 755 passed, 25 skipped, and **48 parametrised cases that
+#: appeared in neither number**. A first fix that only added the module mark did not close it.
+#:
+#: This substitutes one explicitly-skipped placeholder case so the absence always shows up in
+#: the summary line as a skip with a reason, which is the whole point.
+#: Typed as the union pytest actually accepts: real paths, or one skipped placeholder.
+CORPUS_PARAMS: list[Path | ParameterSet] = list(CORPUS_FILES) or [
+    pytest.param(
+        None,
+        marks=pytest.mark.skip(
+            reason=f"corpus absent: 0 of {len(EXPECTED_CORPUS)} papers in {CORPUS_DIR}"
+        ),
+    )
+]

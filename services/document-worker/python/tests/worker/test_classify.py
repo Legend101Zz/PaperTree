@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 from _corpus_manifest import CORPUS_DIR as CORPUS
-from _corpus_manifest import CORPUS_FILES, FIXTURE_PDFS, requires_corpus
+from _corpus_manifest import CORPUS_PARAMS, FIXTURE_PDFS, requires_corpus
 from papertree_document_worker.classify import (
     DocumentProfile,
     PageKind,
@@ -73,7 +73,7 @@ def blank_pdf(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return out
 
 
-@pytest.mark.parametrize("path", CORPUS_FILES, ids=lambda p: p.name)
+@pytest.mark.parametrize("path", CORPUS_PARAMS, ids=lambda p: p.name if p else "no-corpus")
 def test_every_corpus_page_is_born_digital(path: Path) -> None:
     """All 8 papers are arXiv/LaTeX preprints with a full text layer, on all 195 pages.
 
@@ -100,7 +100,7 @@ def test_every_corpus_page_is_born_digital(path: Path) -> None:
     assert all(p.confidence >= 0.95 for p in profile.pages)
 
 
-@pytest.mark.parametrize("path", CORPUS_FILES, ids=lambda p: p.name)
+@pytest.mark.parametrize("path", CORPUS_PARAMS, ids=lambda p: p.name if p else "no-corpus")
 def test_the_corpus_exercises_none_of_the_normalisation_path(path: Path) -> None:
     """The measurement behind `pdf.py`'s module docstring, pinned so it stays true.
 
