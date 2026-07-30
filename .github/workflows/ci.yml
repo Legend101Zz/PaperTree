@@ -20,11 +20,22 @@
 
 name: CI
 
+# TRIGGERS (#25). `pull_request.branches` filters on the PR's *base*, not its head. The old
+# list — [main, epic-0-spine] — meant every stacked PR based on another epic branch went
+# untested: CI ran on 3 of Epic 0's 13 PRs. `epic-0-spine` no longer exists at all.
+#
+# `pull_request:` is therefore UNFILTERED, deliberately. The alternative — enumerating
+# [main, epic-1-ingest, epic-2-reader, ...] — reintroduces exactly the same failure the day
+# someone stacks a PR on a branch nobody remembered to add, and Wave 1's stacks are not
+# nameable in advance. An unfiltered trigger cannot go stale.
+#
+# `push` stays filtered to [main]. Pushes to a PR head branch are already covered by the
+# `pull_request` trigger's `synchronize` event, so an unfiltered `push` would only double
+# every run; and `concurrency` cancels in-progress runs per ref, not across triggers.
 on:
   push:
-    branches: [main, epic-0-spine]
+    branches: [main]
   pull_request:
-    branches: [main, epic-0-spine]
   workflow_dispatch:
 
 permissions:
