@@ -22,18 +22,21 @@
  */
 // oxlint-disable typescript/no-explicit-any -- the conformance files are deliberately untyped JSON.
 import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { Block, Paper } from '../src/generated/types.js';
-import { blockId, contentHash, normaliseText } from '../src/identity.js';
+import { NFC_POST_PIN_STARTERS, blockId, contentHash, normaliseText } from '../src/identity.js';
 import { PaperSchema } from '../src/generated/zod.js';
 import {
+  NFKC_POST_PIN_STARTERS,
   SEMANTIC_RULES,
   SemanticValidationError,
   assertValidPaper,
   formatDiagnostics,
+  pinnedNfkc,
   validatePaper,
   type Diagnostic,
   type ValidateOptions,
@@ -518,18 +521,39 @@ describe('the rules whose implementation is not a one-liner', () => {
     expect(repair('a b', 'b a')).toEqual([]);
   });
 
-  it("R30b's unicode_normalise is a RUNTIME call, and this runtime's NFKC is pinned", () => {
+  it("R30b's unicode_normalise is VERSION-PINNED, not inherited from the runtime", () => {
     /**
-     * The one place this module depends on the runtime's Unicode tables rather than on a pinned
-     * one, and therefore the one place the TS and Python twins can legitimately disagree. The
-     * count is asserted per Unicode version so that a Node upgrade fails here instead of silently
-     * moving what "a deterministic unicode_normalise repair" means.
+     * Rule 30b's `unicode_normalise` class WAS the one place this module depended on the runtime's
+     * Unicode tables rather than a pinned one, and therefore the one place the TS and Python twins
+     * legitimately disagreed — one and the same repair clean here and an ERROR in Python.
      *
      * Measured 2026-07-30: Node 22 (Unicode 17.0) decomposes 4965 code points under NFKC; Python
-     * 3.12 (UCD 15.0.0) decomposes 4928. The 37-code-point difference is U+A7F1 plus
-     * U+1CCD6…U+1CCF9, all added after 15.0.0.
+     * 3.12 (UCD 15.0.0) decomposes 4928. A full sweep of every code point in five combining
+     * contexts found the divergence to be exactly 83 code points: the 46 that gained a canonical
+     * combining class (identity's `NFC_POST_PIN_STARTERS`) plus the 37 that gained a COMPATIBILITY
+     * decomposition (U+A7F1 and U+1CCD6…U+1CCF9). `pinnedNfkc` freezes all 83 to UCD 15.0.0.
      */
-    const expected: Record<string, number> = { '15.0.0': 4928, '15.1': 4928, '17.0': 4965 };
+    expect(NFKC_POST_PIN_STARTERS.size).toBe(83);
+    for (const point of NFC_POST_PIN_STARTERS) expect(NFKC_POST_PIN_STARTERS.has(point)).toBe(true);
+    expect(NFKC_POST_PIN_STARTERS.size - NFC_POST_PIN_STARTERS.size).toBe(37);
+
+    // THE TRIPWIRE. Digest the pinned NFKC of "a" + X + U+0334 for every code point X. The Python
+    // twin asserts the same constant on UCD 15.0.0; the day either runtime moves an 84th code
+    // point, this fails instead of the two languages forking a verdict on the same document.
+    const lines: string[] = [];
+    for (let cp = 0; cp < 0x110000; cp += 1) {
+      if (cp >= 0xd800 && cp <= 0xdfff) continue;
+      const out = pinnedNfkc(`a${String.fromCodePoint(cp)}\u0334`);
+      lines.push(
+        `${cp.toString(16)}:${[...out].map((c) => (c.codePointAt(0) ?? 0).toString(16)).join(',')}`,
+      );
+    }
+    expect(lines).toHaveLength(1_112_064);
+    expect(createHash('sha256').update(lines.join('\n'), 'utf8').digest('hex')).toBe(
+      'ef6e26a61311d116fe3ccb9976bb8552047d68cd303095bff01b10730e5020a8',
+    );
+
+    // …and the raw runtime call, recorded so a runtime upgrade is visible rather than silent.
     const version = process.versions.unicode ?? 'unknown';
     let decomposing = 0;
     for (let cp = 0; cp < 0x110000; cp += 1) {
@@ -538,18 +562,22 @@ describe('the rules whose implementation is not a one-liner', () => {
       if (ch.normalize('NFKC') !== ch) decomposing += 1;
     }
     console.log(
-      `[validate.spec] Node ${process.version} carries Unicode ${version}; NFKC decomposes ` +
-        `${String(decomposing)} code points. Python 3.12 (UCD 15.0.0) decomposes 4928 — rule 30b's ` +
-        `unicode_normalise check forks on the difference.`,
+      `[validate.spec] Node ${process.version} carries Unicode ${version}; the RAW runtime NFKC ` +
+        `decomposes ${String(decomposing)} code points (Python 3.12 / UCD 15.0.0: 4928). rule 30b ` +
+        `no longer calls it: ${String(NFKC_POST_PIN_STARTERS.size)} code points are pinned and ` +
+        `the digest matches the Python twin.`,
     );
-    expect(
-      expected[version],
-      `unrecorded Unicode version ${version}: re-measure the NFKC divergence against the Python ` +
-        `twin before trusting rule 30b's unicode_normalise class`,
-    ).toBe(decomposing);
-    // The concrete fork, named so it cannot be waved away as theoretical.
+    // The concrete fork that used to be live, named so it cannot be waved away as theoretical.
     expect('\u{1CCD6}'.normalize('NFKC') === '\u{1CCD6}').toBe(version === '15.0.0');
-  });
+    // …and it is now closed: the pinned form is the UCD-15.0.0 form in EVERY runtime.
+    expect(pinnedNfkc('\u{1CCD6}')).toBe('\u{1CCD6}');
+    const normaliseRepair = (from: string, to: string): string[] => {
+      const document: any = structuredClone(CLEAN);
+      document.blocks[4].repairs = [{ kind: 'unicode_normalise', applied: true, from, to }];
+      return validatePaper(document as Paper).diagnostics.map((d) => d.rule);
+    };
+    expect(normaliseRepair('\u{1CCD6}', '\u{1CCD6}')).toEqual([]);
+  }, 120_000);
 
   it('R29 does not re-normalise text_normalised — normaliseText is NOT idempotent', () => {
     // `normalise()` output is deliberately not NFC (Amendment 1 § A), so normalising

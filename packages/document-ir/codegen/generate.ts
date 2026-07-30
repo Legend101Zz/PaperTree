@@ -847,15 +847,18 @@ function emitZodOpaquePayload(name: string, def: JsonSchema): string {
   out += `      ctx.addIssue({ code: z.ZodIssueCode.custom, path: tooDeep, message: ${q(DEPTH_MESSAGE)} });\n`;
   out += `      return;\n`;
   out += `    }\n`;
-  out += `    const keyPattern = new RegExp(${q(pattern)});\n`;
-  out += `    for (const key of Object.keys(value)) {\n`;
-  out += `      if (!keyPattern.test(key)) {\n`;
-  out += `        ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: ${q(`payload keys must match ${pattern}`)} });\n`;
-  out += `      }\n`;
-  out += `    }\n`;
+  out += `    // ONE walk, and it checks keys at EVERY depth. The key check used to be a loop over\n`;
+  out += `    // Object.keys(value) here, i.e. the outermost object only.\n`;
   out += `    const offending = findModelDeclaration(value);\n`;
   out += `    if (offending) {\n`;
-  out += `      ctx.addIssue({ code: z.ZodIssueCode.custom, path: offending.path, message: ${q('model-authorship declaration is forbidden in a payload subtree')} });\n`;
+  out += `      ctx.addIssue({\n`;
+  out += `        code: z.ZodIssueCode.custom,\n`;
+  out += `        path: offending.path,\n`;
+  out += `        message:\n`;
+  out += `          offending.reason === "key"\n`;
+  out += `            ? ${q(`payload keys must match ${pattern} at every depth`)}\n`;
+  out += `            : ${q('model-authorship declaration is forbidden in a payload subtree')},\n`;
+  out += `      });\n`;
   out += `    }\n`;
   out += `  });\n\n`;
   return out;
@@ -1063,6 +1066,7 @@ function isDateTime(value: string): boolean {
 function modelFreeTs(file: SchemaFile, forbidden: string[]): string {
   const def = file.defs.ModelFreeSubtree as JsonSchema;
   let out = jsDoc(def.description as string | undefined, '');
+  out += `export const PAYLOAD_KEY_PATTERN = /${modelFreeKeyPattern(file)}/;\n\n`;
   out += `export const MODEL_AUTHORSHIP_KEYS = [\n${forbidden.map((k) => `  ${q(k)},`).join('\n')}\n] as const;\n\n`;
   out += `/**\n * Walks a value and returns the path of the first model-authorship declaration, or null.\n`;
   out += ` * TypeScript cannot express this constraint as a type, so it is a runtime guard (DESIGN.md §6).\n`;
@@ -1073,20 +1077,23 @@ function modelFreeTs(file: SchemaFile, forbidden: string[]): string {
   out += `export function findModelDeclaration(\n`;
   out += `  value: unknown,\n`;
   out += `  depth = 0,\n`;
-  out += `): { path: (string | number)[] } | null {\n`;
+  out += `): { path: (string | number)[]; reason: "key" | "authorship" } | null {\n`;
   out += `  if (depth > MAX_PAYLOAD_DEPTH) return null;\n`;
   out += `  if (Array.isArray(value)) {\n`;
   out += `    for (let i = 0; i < value.length; i += 1) {\n`;
   out += `      const hit = findModelDeclaration(value[i], depth + 1);\n`;
-  out += `      if (hit) return { path: [i, ...hit.path] };\n`;
+  out += `      if (hit) return { path: [i, ...hit.path], reason: hit.reason };\n`;
   out += `    }\n`;
   out += `    return null;\n`;
   out += `  }\n`;
   out += `  if (value !== null && typeof value === "object") {\n`;
   out += `    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {\n`;
-  out += `      if ((MODEL_AUTHORSHIP_KEYS as readonly string[]).includes(key)) return { path: [key] };\n`;
+  out += `      if (!PAYLOAD_KEY_PATTERN.test(key)) return { path: [key], reason: "key" };\n`;
+  out += `      if ((MODEL_AUTHORSHIP_KEYS as readonly string[]).includes(key)) {\n`;
+  out += `        return { path: [key], reason: "authorship" };\n`;
+  out += `      }\n`;
   out += `      const hit = findModelDeclaration(child, depth + 1);\n`;
-  out += `      if (hit) return { path: [key, ...hit.path] };\n`;
+  out += `      if (hit) return { path: [key, ...hit.path], reason: hit.reason };\n`;
   out += `    }\n`;
   out += `  }\n`;
   out += `  return null;\n}\n\n`;
@@ -1098,9 +1105,25 @@ function modelFreeTs(file: SchemaFile, forbidden: string[]): string {
   out += `  }\n`;
   out += `  const hit = findModelDeclaration(value);\n`;
   out += `  if (hit) {\n`;
-  out += `    throw new Error(\`model-authorship declaration at \${hit.path.join(".")}\`);\n`;
+  out += `    throw new Error(\n`;
+  out += `      hit.reason === "key"\n`;
+  out += `        ? \`payload key at \${hit.path.join(".")} must match \${String(PAYLOAD_KEY_PATTERN)}\`\n`;
+  out += `        : \`model-authorship declaration at \${hit.path.join(".")}\`,\n`;
+  out += `    );\n`;
   out += `  }\n}\n\n`;
   return out;
+}
+
+/**
+ * The identifier-key pattern, read from `ModelFreeSubtree`'s object branch — where it now lives,
+ * so it applies at EVERY depth. It used to sit only on `OpaquePayload`, i.e. only on the
+ * OUTERMOST payload object, and `{meta: {"model-id": "gpt-4o"}}` validated while the identical
+ * lowercase spelling one level up did not.
+ */
+function modelFreeKeyPattern(file: SchemaFile): string {
+  const then = ((file.defs.ModelFreeSubtree?.allOf as JsonSchema[] | undefined)?.[0]?.then ??
+    {}) as JsonSchema;
+  return (then.propertyNames as JsonSchema).pattern as string;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1588,8 +1611,11 @@ class _Model(BaseModel):
 
 function pyModelFree(file: SchemaFile, forbidden: string[]): string {
   const def = file.defs.ModelFreeSubtree as JsonSchema;
-  let out = `MODEL_AUTHORSHIP_KEYS: frozenset[str] = frozenset(\n`;
-  out += `    {${forbidden.map((k) => q(k)).join(', ')}}\n)\n\n\n`;
+  let out = `PAYLOAD_KEY_PATTERN = re.compile(${pyRegexLiteral(ecmaToPython(modelFreeKeyPattern(file)))})\n\n`;
+  // One key per line: the list is 35 names now, and `ruff format` (part of the gate) explodes
+  // any set literal that does not fit on one line.
+  const keyLines = forbidden.map((k) => `        ${q(k)},`).join('\n');
+  out += `MODEL_AUTHORSHIP_KEYS: frozenset[str] = frozenset(\n    {\n${keyLines}\n    }\n)\n\n\n`;
   out += `def find_model_declaration(\n    value: Any, path: tuple[str | int, ...] = ()\n) -> tuple[str | int, ...] | None:\n`;
   out += pyDoc(
     `${def.description as string}\n\nReturns the path of the first model-authorship declaration, or None. A recursive constraint\ncannot be a type in either language, so it is a runtime guard in both (DESIGN.md §6).\n\nThe descent stops at MAX_PAYLOAD_DEPTH so this guard cannot itself raise RecursionError. That\nis not a hole: every caller rejects an over-deep value outright before searching it, so the\ntruncated levels are levels no valid document has.`,
@@ -1604,6 +1630,11 @@ function pyModelFree(file: SchemaFile, forbidden: string[]): string {
   out += `        return None\n`;
   out += `    if isinstance(value, dict):\n`;
   out += `        for key, child in value.items():\n`;
+  out += `            if not isinstance(key, str) or PAYLOAD_KEY_PATTERN.match(key) is None:\n`;
+  out += `                raise ValueError(\n`;
+  out += `                    f"payload key {key!r} at {'.'.join(str(p) for p in path)} must match "\n`;
+  out += `                    + PAYLOAD_KEY_PATTERN.pattern\n`;
+  out += `                )\n`;
   out += `            if key in MODEL_AUTHORSHIP_KEYS:\n`;
   out += `                return (*path, key)\n`;
   out += `            hit = find_model_declaration(child, (*path, key))\n`;
@@ -1624,18 +1655,16 @@ function pyModelFree(file: SchemaFile, forbidden: string[]): string {
 }
 
 function pyOpaquePayload(def: JsonSchema): string {
-  const pattern = (def.propertyNames as JsonSchema).pattern as string;
-  let out = `_OPAQUE_KEY_RE = re.compile(${pyRegexLiteral(ecmaToPython(pattern))})\n\n\n`;
-  out += `def validate_opaque_payload(value: dict[str, Any]) -> dict[str, Any]:\n`;
+  let out = `def validate_opaque_payload(value: dict[str, Any]) -> dict[str, Any]:\n`;
   out += pyDoc(def.description as string | undefined, '    ');
   out += `    too_deep = find_excessive_depth(value)\n`;
   out += `    if too_deep is not None:\n`;
   out += `        raise ValueError(\n`;
   out += `            ${q(DEPTH_MESSAGE)} + f" at {'.'.join(str(p) for p in too_deep)}"\n`;
   out += `        )\n`;
-  out += `    for key in value:\n`;
-  out += `        if _OPAQUE_KEY_RE.match(key) is None:\n`;
-  out += `            raise ValueError(f"payload key {key!r} must match " + _OPAQUE_KEY_RE.pattern)\n`;
+  out += `    # ONE walk, and it checks keys at EVERY depth: assert_model_free ->\n`;
+  out += `    # find_model_declaration raises on the first key that is not identifier-shaped. The\n`;
+  out += `    # check used to be a loop over the outermost object only.\n`;
   out += `    assert_model_free(value)\n`;
   out += `    return value\n\n\n`;
   out += `OpaquePayload = Annotated[dict[str, Any], AfterValidator(validate_opaque_payload)]\n\n\n`;

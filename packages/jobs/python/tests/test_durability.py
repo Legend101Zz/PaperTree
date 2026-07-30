@@ -55,8 +55,10 @@ def env(tmp_path: Path) -> Iterator[Env]:
     db = tmp_path / "papertree.sqlite"
     paper_db = open_database(db)
     paper_db.migrate()
-    owner = paper_db.create_user("worker-tests@papertree.test")
+    created = paper_db.create_user("worker-tests@papertree.test")
     store = JobStore(db)
+    # Owner handles are per-connection: `store` has its own, so it mints its own.
+    owner = store.owner_for(created.user_id)
     try:
         yield Env(
             db=db,

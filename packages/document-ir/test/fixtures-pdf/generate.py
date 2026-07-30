@@ -1003,6 +1003,58 @@ LINE_UNION_VECTORS: list[dict[str, Any]] = [
         "why": "band edge (112+113)/2 = 112.5; the short line joins by x-overlap of 36 pt",
     },
     {
+        "label": "union:overlapping-font-metric-lines",
+        "rects": [[54, 100, 292, 112], [54, 111, 292, 123], [54, 122, 200, 134]],
+        "options": {"vertical_gap_tolerance": 2, "horizontal_overlap_tolerance": 0},
+        # THE REGRESSION VECTOR. MuPDF's line boxes are the FONT's ascent/descent, so consecutive
+        # lines routinely ABUT OR OVERLAP - here by 1 pt. An implementation that decides band
+        # membership against the band's RUNNING extent (`r.y0 < band.y1`) cascades: line 2 merges,
+        # pushing y1 to 123, line 3 then overlaps THAT and merges too, and the whole paragraph
+        # collapses to the single rectangle [54,100,292,134]. That rectangle claims the 92 pt of
+        # blank page to the right of the short last line - the highlight-bleed lie Commitment 2
+        # forbids, produced by the function that exists to prevent it. Membership is therefore
+        # decided against the band's ANCHOR interval (its first rect), which never grows.
+        # Band edges: 100, (112+111)/2 = 111.5, (123+122)/2 = 122.5, 134. The 111.5 vertices are
+        # collinear with their neighbours and are dropped.
+        "polygons": [[[292, 100], [292, 122.5], [200, 122.5], [200, 134], [54, 134], [54, 100]]],
+        "why": "consecutive font-metric line boxes overlap by 1 pt and must still be three bands",
+    },
+    {
+        "label": "union:superscript-joins-its-line",
+        "rects": [[54, 100, 60, 104], [54, 100, 292, 112], [54, 113, 90, 125]],
+        "options": {"vertical_gap_tolerance": 2, "horizontal_overlap_tolerance": 0},
+        # The 4 pt superscript is SHORTER than the line it sits on, so "overlap by more than half"
+        # must be measured against the SHORTER of the two boxes, not against the new one. Measured
+        # the other way the superscript would become its own band and the staircase would carve a
+        # notch out of text the block really does cover - under-claiming instead of over-claiming,
+        # which is a different lie, not a safer one. Bands: [54,100,292,112] and [54,113,90,125];
+        # edge (112+113)/2 = 112.5.
+        "polygons": [[[292, 100], [292, 112.5], [90, 112.5], [90, 125], [54, 125], [54, 100]]],
+        "why": "a short run at the top of a line joins that line, so no notch appears",
+    },
+    {
+        "label": "union:half-overlap-is-the-boundary",
+        "rects": [[54, 100, 150, 112], [140, 106, 292, 118]],
+        "options": {"vertical_gap_tolerance": 2, "horizontal_overlap_tolerance": 0},
+        # Overlap is exactly 6 pt of a 12 pt box - exactly half, and the test is STRICTLY more
+        # than half, so these are two bands. `union:same-band-fragments-merge` above is the other
+        # side of the same boundary (11 pt of 12). Pinned so the threshold cannot drift silently.
+        # Band edges: 100, (112+106)/2 = 109, 118.
+        "polygons": [
+            [
+                [150, 100],
+                [150, 109],
+                [292, 109],
+                [292, 118],
+                [140, 118],
+                [140, 109],
+                [54, 109],
+                [54, 100],
+            ]
+        ],
+        "why": "vertical overlap of exactly half does NOT make one visual line",
+    },
+    {
         "label": "union:degenerate-rects-dropped",
         "rects": [[54, 100, 292, 112], [54, 120, 54, 130], [10, 200, 30, 200]],
         "options": {"vertical_gap_tolerance": 2, "horizontal_overlap_tolerance": 0},

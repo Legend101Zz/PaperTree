@@ -12,7 +12,7 @@ these decisions. Do not add features here.
 
 ## Features
 
-- [ ] **F0.1 — Monorepo skeleton.** pnpm workspaces + Turborepo for TS; `uv` workspace for Python. `apps/web`, `apps/api`, `services/*`, `packages/*`, `infrastructure/*`. Root scripts: `dev`, `build`, `test`, `lint`, `typecheck`.
+- [ ] **F0.1 — Monorepo skeleton.** pnpm workspaces + Turborepo for TS; `uv` workspace for Python. `apps/web`, `apps/api`, `services/*`, `packages/*`, `infrastructure/*`. Root scripts: `dev`, `build`, `test`, `lint`, `typecheck`. (`dev` exists and is a `turbo run dev` passthrough that currently executes nothing — there is no app to run until Wave 1. `services/*` is globbed by `pnpm-workspace.yaml` and the directory does not exist yet; Epic 1 owns `services/document-worker`.)
 - [ ] **F0.2 — PaperIR JSON Schema.** Single source of truth at `packages/document-ir/schema/paperir-1.0.0.schema.json`. Implements `research/architecture-decisions/ADR-001-canonical-document-representation.md`.
 - [ ] **F0.3 — Codegen.** JSON Schema → TypeScript types + Zod validators, and → Pydantic v2 models. Wired into `build`. **A drift test fails CI if generated files are stale.**
 - [ ] **F0.4 — Identity + geometry library.** Content-derived stable block IDs; PDF-user-space polygon helpers; the coordinate transform (bottom-left→top-left, rotation, CropBox/MediaBox, userUnit). Shipped as a TS package **and** a Python twin with a shared conformance test vector file.
@@ -66,7 +66,7 @@ No other epic may edit these. Changes are requested via issue.
 | `document-ir/geometry.spec` | Round-trips PDF↔viewport at 8 zoom levels and 4 rotations with <0.01pt error. Handles `userUnit ≠ 1` and `CropBox ≠ MediaBox`. |
 | `document-ir/schema.spec` | All 3 fixtures validate. A block with an unknown `type` validates (forward compat). A block missing `polygon` fails. A block with LLM-authored text in a source field fails. |
 | `document-ir/codegen-drift.spec` | Regenerating from schema produces no diff. |
-| `db/migrations.spec` | Migrate up from empty → head; re-running is a no-op; a paper with 30k blocks inserts in <2s. |
+| `db/migrations.spec` | Migrate up from empty → head; re-running is a no-op; a paper with 30k blocks inserts in <2s. **MET BY THE MINIMAL FIXTURE ONLY** — with parser-shaped blocks (60 words, 12 spans, 8-point polygon) the same insert measures ~2.3 s TS / ~3.9 s Python. Both numbers are printed by the suite; see `packages/db/test/migrations.spec.ts` and `research/build/EPIC-00-RESULT.md`. |
 | `db/ownership.spec` | **Every** query helper requires an owner argument. A query built without one fails to compile (TS) / raises (Python). |
 | `jobs/durability.spec` | A job killed mid-step resumes at that step, not from the start. A failed step retries with backoff then dead-letters. Cancellation is honoured within one step. |
 
@@ -150,7 +150,8 @@ as an amendment. Do not settle this by preference.
 [the test table from the Acceptance section above]
 
 Specifically: cross-language ID agreement, geometry round-trip <0.01pt across 8 zooms and
-4 rotations, 30k-block insert <2s, a job killed mid-step resuming at that step, and every
+4 rotations, 30k-block insert <2s (minimal fixture; see the acceptance table's note), a job
+killed mid-step resuming at that step, and every
 query helper structurally requiring an owner.
 
 ## Hard rules

@@ -505,6 +505,48 @@ describe('union of line rects → polygon(s)', () => {
     }
   });
 
+  it('does NOT collapse to a bounding box when consecutive line boxes overlap', () => {
+    // THE REGRESSION. MuPDF's line rects are font ascent/descent boxes, so consecutive lines
+    // routinely abut or overlap — this helper's own docstring says so, and that made the
+    // overlapping case the NORMAL case, not an edge case. Deciding band membership against the
+    // band's RUNNING extent (`r.y0 < band.y1`) cascades: each merge pushes y1 down, the next line
+    // overlaps THAT, and the paragraph collapses into a single 4-point rectangle. It shipped in
+    // three golden fixtures. Membership is decided against the band's ANCHOR interval instead.
+    const overlapping: BBox[] = [
+      [54, 100, 292, 112],
+      [54, 111, 292, 123],
+      [54, 122, 200, 134],
+    ];
+    const [polygon] = unionOfLineRects(overlapping);
+    expect(polygon).toBeDefined();
+    // Not a rectangle: a rectangle here is the bug, and "4 vertices" is exactly how it looked.
+    expect((polygon as Polygon).length).toBeGreaterThan(4);
+    expect(polygon).toEqual([
+      [292, 100],
+      [292, 122.5],
+      [200, 122.5],
+      [200, 134],
+      [54, 134],
+      [54, 100],
+    ]);
+    // The lie the bounding box told: 92 pt of blank page beside the short last line.
+    for (const blank of [
+      [250, 128],
+      [290, 133],
+      [210, 130],
+    ] as Point[]) {
+      expect(pointInPolygon(blank, polygon as Polygon)).toBe(false);
+      // …and it IS inside the bounding box, so the two really do differ where it matters.
+      expect(pointInPolygon(blank, bboxToPolygon(polygonExtent(polygon as Polygon)))).toBe(true);
+    }
+    // Every line the caller passed is still covered — the fix must not under-claim either.
+    for (const rect of overlapping) {
+      const centre: Point = [(rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2];
+      expect(pointInPolygon(centre, polygon as Polygon)).toBe(true);
+    }
+    expect(polygonIsSimple(polygon as Polygon)).toBe(true);
+  });
+
   it('covers every input rect it did not drop', () => {
     const vector = (VECTORS['line_union_vectors'] as any[]).find(
       (v) => v.label === 'union:two-column-selection',

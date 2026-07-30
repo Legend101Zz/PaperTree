@@ -113,12 +113,18 @@ function isDateTime(value: string): boolean {
 }
 
 /**
- * A recursive constraint: no object ANYWHERE in this value's subtree may declare model authorship. Applied to Block.payload for block types this schema does not know, which is the one place in PaperIR where an open object shape is required for forward compatibility.
+ * A recursive constraint on Block.payload for block types this schema does not know, which is the one place in PaperIR where an open object shape is required for forward compatibility. Two rules, applied to every object ANYWHERE in the subtree.
  *
- * Without it, `blocks[i].payload` was the single object in the file with no "additionalProperties": false, and a complete Derivation — or a bare {"generated_by": "gpt-4"} — fitted inside it whole, one level below the block that rejects exactly those fields. That falsified the field-closure property the whole design rests on.
+ * 1. KEYS MUST BE IDENTIFIER-SHAPED, at every depth: ^[a-z][a-z0-9_]{0,63}$. This is the rule that makes rule 2 bounded rather than a guessing game - without it `{"meta": {"model-id": "gpt-4o"}}` and `{"meta": {"GENERATED_BY": "gpt-4"}}` both validated while their identical lowercase spellings one level up were correctly rejected. An earlier revision applied it only to the OUTERMOST payload object; that was the hole.
  *
- * This blocks the SHAPE of a declared derivation, not prose. A payload string containing model output is still expressible — see the schema-level description on undeclarable-vs-undetectable.
+ * 2. NO OBJECT MAY CARRY ONE OF THE LISTED KEY NAMES. Without this, `blocks[i].payload` was the single object in the file with no "additionalProperties": false, and a complete Derivation - or a bare {"generated_by": "gpt-4"} - fitted inside it whole, one level below the block that rejects exactly those fields.
+ *
+ * WHAT THIS IS NOT. The list is a DENY-LIST OF NAMES and a deny-list cannot be complete; it covers the seven fields PaperIR itself uses for derivation plus the near-miss spellings an acceptance review actually reached for. A producer that declares authorship under a name nobody listed - `payload.provenance_note`, say - still validates. So do not read this as "authorship is unrepresentable": it makes the OBVIOUS declarations unrepresentable and raises the cost of the rest. Detecting authorship is `ingest/source-authenticity.spec`'s job (Epic 1, owed); see DESIGN.md 11 residual risks 1 and 8.
+ *
+ * This blocks the SHAPE of a declared derivation, not prose. A payload string containing model output is still expressible - see the schema-level description on undeclarable-vs-undetectable.
  */
+export const PAYLOAD_KEY_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
+
 export const MODEL_AUTHORSHIP_KEYS = [
   "model_id",
   "prompt_hash",
@@ -127,6 +133,34 @@ export const MODEL_AUTHORSHIP_KEYS = [
   "derived_from",
   "prompt",
   "llm",
+  "model",
+  "models",
+  "model_name",
+  "model_version",
+  "llm_model",
+  "generator",
+  "generated",
+  "generation_model",
+  "agent",
+  "assistant",
+  "completion",
+  "completions",
+  "response",
+  "author",
+  "authored_by",
+  "written_by",
+  "synthesised_by",
+  "synthesized_by",
+  "system_prompt",
+  "system_prompt_digest",
+  "prompt_id",
+  "prompt_sha256",
+  "prompt_template",
+  "prompt_tokens",
+  "temperature",
+  "top_p",
+  "ai",
+  "ai_generated",
 ] as const;
 
 /**
@@ -140,20 +174,23 @@ export const MODEL_AUTHORSHIP_KEYS = [
 export function findModelDeclaration(
   value: unknown,
   depth = 0,
-): { path: (string | number)[] } | null {
+): { path: (string | number)[]; reason: "key" | "authorship" } | null {
   if (depth > MAX_PAYLOAD_DEPTH) return null;
   if (Array.isArray(value)) {
     for (let i = 0; i < value.length; i += 1) {
       const hit = findModelDeclaration(value[i], depth + 1);
-      if (hit) return { path: [i, ...hit.path] };
+      if (hit) return { path: [i, ...hit.path], reason: hit.reason };
     }
     return null;
   }
   if (value !== null && typeof value === "object") {
     for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-      if ((MODEL_AUTHORSHIP_KEYS as readonly string[]).includes(key)) return { path: [key] };
+      if (!PAYLOAD_KEY_PATTERN.test(key)) return { path: [key], reason: "key" };
+      if ((MODEL_AUTHORSHIP_KEYS as readonly string[]).includes(key)) {
+        return { path: [key], reason: "authorship" };
+      }
       const hit = findModelDeclaration(child, depth + 1);
-      if (hit) return { path: [key, ...hit.path] };
+      if (hit) return { path: [key, ...hit.path], reason: hit.reason };
     }
   }
   return null;
@@ -167,7 +204,11 @@ export function assertModelFree(value: unknown): void {
   }
   const hit = findModelDeclaration(value);
   if (hit) {
-    throw new Error(`model-authorship declaration at ${hit.path.join(".")}`);
+    throw new Error(
+      hit.reason === "key"
+        ? `payload key at ${hit.path.join(".")} must match ${String(PAYLOAD_KEY_PATTERN)}`
+        : `model-authorship declaration at ${hit.path.join(".")}`,
+    );
   }
 }
 
@@ -240,7 +281,7 @@ export const BBoxSchema = z.tuple([z.number().min(-20000).max(20000), z.number()
 /** ImageRef — every field set closed with `.strict()` (schema `additionalProperties: false`). */
 export const ImageRefSchema = z
   .object({
-    uri: z.string().min(1).regex(new RegExp("^[a-z][a-z0-9+.\\-]*://[^\\s]+$"), { message: "must match ^[a-z][a-z0-9+.\\-]*://[^\\s]+$" }).refine(isWellFormedText, { message: "string contains an unpaired surrogate and is not UTF-8-encodable" }),
+    uri: z.string().min(1).max(2048).regex(new RegExp("^[a-z][a-z0-9+.\\-]*://[^\\s]+$"), { message: "must match ^[a-z][a-z0-9+.\\-]*://[^\\s]+$" }).refine(isWellFormedText, { message: "string contains an unpaired surrogate and is not UTF-8-encodable" }),
     scale: z.number().gt(0).max(64).optional(),
     dpi: z.number().gt(0).max(4800).optional(),
     rendered_from: z.enum(["raster", "vector", "page"]).optional(),
@@ -465,15 +506,18 @@ export const OpaquePayloadSchema = openObject()
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: tooDeep, message: "payload nests deeper than 64 levels" });
       return;
     }
-    const keyPattern = new RegExp("^[a-z][a-z0-9_]{0,63}$");
-    for (const key of Object.keys(value)) {
-      if (!keyPattern.test(key)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: "payload keys must match ^[a-z][a-z0-9_]{0,63}$" });
-      }
-    }
+    // ONE walk, and it checks keys at EVERY depth. The key check used to be a loop over
+    // Object.keys(value) here, i.e. the outermost object only.
     const offending = findModelDeclaration(value);
     if (offending) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: offending.path, message: "model-authorship declaration is forbidden in a payload subtree" });
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: offending.path,
+        message:
+          offending.reason === "key"
+            ? "payload keys must match ^[a-z][a-z0-9_]{0,63}$ at every depth"
+            : "model-authorship declaration is forbidden in a payload subtree",
+      });
     }
   });
 

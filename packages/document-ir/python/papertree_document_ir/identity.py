@@ -128,6 +128,47 @@ _NFC_POST_PIN_PACKED = (
     "16d69:16d63,16d67 16d6a:16d63,16d67,16d67"
 )
 
+# THE THIRD VERSION-PINNING HOLE - the same hole one property along, and it was FATAL and latent
+# exactly like defect 2 was.
+#
+# NFC is two algorithms, not one: CANONICAL ORDERING (sort each combining sequence by Canonical
+# Combining Class) and then CANONICAL COMPOSITION. NFC_POST_PIN_DECOMPOSITIONS pins the second.
+# NOTHING pinned the first, and it forks on its own, with no composition involved anywhere:
+#
+#   46 code points have ccc = 0 in Python 3.12 (UCD 15.0.0, where they are UNASSIGNED) and a
+#   NON-ZERO ccc in Node 22 (Unicode 17.0), because Unicode 16.0 and 17.0 assigned them as marks.
+#   For "a" + U+0897 + U+0334, Node's canonical-ordering step SWAPS the two marks (U+0334 has
+#   ccc 1, U+0897 has ccc 230) and Python leaves them alone. One input, two normalised strings,
+#   two block_ids, two content_hashes - and because content_hash forks too, the tier-2 mechanism
+#   § E.2 relies on to DETECT an id fork forks with it.
+#
+#   The decomposition tripwire is structurally blind to this class: it digests only code points
+#   whose NFD is longer than one code point, and not one of these 46 has a canonical decomposition
+#   at all (verified in both languages). That is defect 2's blindness repeated.
+#
+# These are real marks in real documents: U+0897 is ARABIC PEPET, U+10EFA/U+10EFB are Arabic
+# marks, U+1ACF..U+1AEB are Combining Diacritical Marks Extended, and U+113CE..U+113D0 are
+# Tulu-Tigalari viramas - the same script three of the pinned decompositions come from.
+#
+# THE FIX, and why it is a split rather than a table of combining classes. Pinning to UCD 15.0.0
+# means "treat every one of these as a STARTER (ccc = 0)", which is what an unassigned code point
+# is. A starter terminates the combining sequence before it and begins a new one, and it blocks
+# composition across itself; none of the 46 has a canonical decomposition or composition in either
+# runtime. So splitting the string at each of them, normalising each piece with the runtime's own
+# NFC, and rejoining is EXACTLY UCD-15 NFC - without shipping a ccc table. Measured: 5 560 320
+# probes (every code point in 5 combining contexts) agree byte-for-byte between Node 22 and
+# Python 3.12 after this change, and 46 of them forked before it.
+#
+# test_identity.py and its TypeScript twin carry a REORDER tripwire - a digest over
+# pinned_nfc("a" + X + U+0334) for every code point X - that can see this class, which the
+# decomposition digest cannot. The day either runtime assigns a 47th, the suite fails instead of
+# the ids forking.
+_NFC_POST_PIN_STARTERS_PACKED = (
+    "897 1acf 1ad0 1ad1 1ad2 1ad3 1ad4 1ad5 1ad6 1ad7 1ad8 1ad9 1ada 1adb 1adc 1add 1ae0 1ae1 "
+    "1ae2 1ae3 1ae4 1ae5 1ae6 1ae7 1ae8 1ae9 1aea 1aeb 10d69 10d6a 10d6b 10d6c 10d6d 10efa 10efb "
+    "113ce 113cf 113d0 1612f 1e5ee 1e5ef 1e6e3 1e6e6 1e6ee 1e6ef 1e6f5"
+)
+
 _WHITESPACE_PACKED = (
     0x0009, 0x000A, 0x000B, 0x000C, 0x000D, 0x0020, 0x0085, 0x00A0, 0x1680, 0x2000, 0x2001,
     0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200A, 0x2028, 0x2029,
@@ -331,6 +372,46 @@ LIGATURE_TABLE: dict[int, str] = _unpack(_LIGATURE_PACKED)
 #: step 1 of NORMALISE is version-pinned like steps 2-4. 20 entries; see ``_NFC_POST_PIN_PACKED``.
 NFC_POST_PIN_DECOMPOSITIONS: dict[int, str] = _unpack(_NFC_POST_PIN_PACKED)
 
+#: Code points assigned a NON-ZERO canonical combining class AFTER
+#: :data:`CASE_FOLD_UNICODE_VERSION`, forced back to starters (ccc = 0) so the runtime's
+#: canonical-ORDERING step is pinned to the same Unicode version as everything else. 46 entries;
+#: see ``_NFC_POST_PIN_STARTERS_PACKED``.
+NFC_POST_PIN_STARTERS: frozenset[int] = frozenset(
+    int(point, 16) for point in _NFC_POST_PIN_STARTERS_PACKED.split(" ")
+)
+
+
+def pinned_nfc(text: str) -> str:
+    """Step 1 of NORMALISE: the runtime's NFC, version-pinned in BOTH of its halves.
+
+    Canonical ordering is pinned here; canonical composition is pinned by the caller straight
+    afterwards with :data:`NFC_POST_PIN_DECOMPOSITIONS`.
+
+    The split is the pin. Every code point in :data:`NFC_POST_PIN_STARTERS` is a starter in
+    UCD 15.0.0 and a combining mark in Node 22, so normalising the segments between them and
+    re-joining around them makes both runtimes treat them as starters. None of the 46 has a
+    canonical decomposition or composition in either runtime, so passing them through untouched
+    is exact.
+
+    The fast path - no pinned code point present - is the overwhelmingly common case and is a
+    single ``unicodedata.normalize``, so ordinary text pays one extra scan and nothing else.
+    """
+    if not any(ord(char) in NFC_POST_PIN_STARTERS for char in text):
+        return unicodedata.normalize("NFC", text)
+
+    out: list[str] = []
+    segment: list[str] = []
+    for char in text:
+        if ord(char) in NFC_POST_PIN_STARTERS:
+            out.append(unicodedata.normalize("NFC", "".join(segment)))
+            out.append(char)
+            segment = []
+        else:
+            segment.append(char)
+    out.append(unicodedata.normalize("NFC", "".join(segment)))
+    return "".join(out)
+
+
 #: The enumerated whitespace set: 26 code points, and emphatically not ``\s``.
 WHITESPACE_CODE_POINTS: frozenset[int] = frozenset(_WHITESPACE_PACKED)
 
@@ -358,7 +439,8 @@ def _assert_encodable(text: str, field: str) -> None:
 def normalise_text(text: str) -> str:
     """The four normalisation steps of Amendment 1 § A, and the ONLY normalisation in the system.
 
-    1. Unicode NFC.
+    1. Unicode NFC, version-pinned: :func:`pinned_nfc` for canonical ordering, then
+       :data:`NFC_POST_PIN_DECOMPOSITIONS` for canonical composition.
     2. Ligature expansion via :data:`LIGATURE_TABLE`.
     3. Collapse every maximal run of :data:`WHITESPACE_CODE_POINTS` to one U+0020, then strip
        whitespace from both ends.
@@ -372,12 +454,12 @@ def normalise_text(text: str) -> str:
     C8). The output is deliberately NOT guaranteed to be NFC - U+01F0 folds to ``006A 030C`` - so
     do not add a trailing ``normalize("NFC")``.
     """
-    # 1. NFC, then version-pin it: the runtime's NFC is the only step this module does not own,
-    #    and Node 22 composes 20 sequences Python 3.12 does not (NFC_POST_PIN_DECOMPOSITIONS).
-    #    Undoing exactly those keeps step 1 pinned to the same Unicode version as the fold table.
+    # 1. NFC, version-pinned in BOTH of its halves - the runtime's NFC is the only step this module
+    #    does not own. Canonical ORDERING is pinned by pinned_nfc (46 code points that are marks in
+    #    Node 22 and unassigned in Python 3.12 would otherwise be REORDERED in one runtime only);
+    #    canonical COMPOSITION is pinned here (Node composes 20 sequences Python does not).
     composed = "".join(
-        NFC_POST_PIN_DECOMPOSITIONS.get(ord(char), char)
-        for char in unicodedata.normalize("NFC", text)
+        NFC_POST_PIN_DECOMPOSITIONS.get(ord(char), char) for char in pinned_nfc(text)
     )
 
     # 2. Ligature expansion. Full case folding already maps U+FB00..U+FB06, so only U+0132/U+0133
@@ -497,8 +579,21 @@ class BlockIdParts:
     block_id: BlockId
 
 
-_SOURCE_HASH_PATTERN = re.compile(r"^[0-9a-f]{64}$")
-_BLOCK_TYPE_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+# `\Z`, not `$`, and `.fullmatch()`, not `.match()` - BOTH, and neither is redundant.
+#
+# Python's `$` matches at end-of-string OR immediately before a trailing U+000A; JavaScript's
+# (without /m) matches only at end-of-input. `re.match()` anchors only at the start. So the
+# obvious `_BLOCK_TYPE_PATTERN.match(...)` with a trailing `$` ACCEPTS "paragraph\n", which
+# `identity.ts` REJECTS with a TypeError.
+#
+# That asymmetry is the same defect class as an id fork and is harder to diagnose, not easier: a
+# Python producer mints and stores a block_id that TypeScript can never recompute, and the failure
+# surfaces as "TS cannot reproduce this id" rather than "the two disagree". The repo already
+# treats trailing whitespace on block_type as hostile input (validator cases
+# 010-block-type-trailing-space, 162-block-type-trailing-newline-again); the identity boundary now
+# holds the same line in both languages. Pinned by `rejection_vectors` in the conformance file.
+_SOURCE_HASH_PATTERN = re.compile(r"\A[0-9a-f]{64}\Z")
+_BLOCK_TYPE_PATTERN = re.compile(r"\A[a-z][a-z0-9_]{0,63}\Z")
 # Lowercase directly rather than base32-then-lower(): identical output, and this file does not
 # call a case function anywhere. RFC 4648 alphabet, "=" padding never emitted.
 _BASE32_LOWER_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567"
@@ -523,7 +618,7 @@ def _base32(digest: bytes, chars: int) -> str:
 
 def block_id_parts(value: BlockIdInput) -> BlockIdParts:
     """:func:`block_id` with its intermediates. See :class:`BlockIdParts`."""
-    if not _SOURCE_HASH_PATTERN.match(value.source_hash):
+    if not _SOURCE_HASH_PATTERN.fullmatch(value.source_hash):
         raise ValueError(
             'source_hash must be 64 lowercase hex characters WITHOUT the "sha256:" prefix the IR '
             f"stores (strip it), got {value.source_hash!r}"
@@ -542,7 +637,7 @@ def block_id_parts(value: BlockIdInput) -> BlockIdParts:
             f"emit (JS String() gives exponential notation above 1e21 where Python's str() stays "
             f"positional, which is two ids for one block)"
         )
-    if not _BLOCK_TYPE_PATTERN.match(value.block_type):
+    if not _BLOCK_TYPE_PATTERN.fullmatch(value.block_type):
         raise ValueError(
             f"block_type must match {_BLOCK_TYPE_PATTERN.pattern} - the pattern is what guarantees "
             f"it carries no U+007C, and the payload defines no escaping - got {value.block_type!r}"

@@ -48,6 +48,7 @@ import {
 } from './geometry.js';
 import {
   LIGATURE_TABLE,
+  NFC_POST_PIN_STARTERS,
   WHITESPACE_CODE_POINTS,
   blockId as recomputeBlockId,
   contentHashOfNormalised as computeContentHash,
@@ -631,6 +632,65 @@ function expandLigatures(text: string): string {
     out += expansion === undefined ? ch : expansion;
   }
   return out;
+}
+
+/**
+ * Rule 30b's `unicode_normalise` class is "to == NFKC(from)", and NFKC WAS the one runtime Unicode
+ * call left in this file. It forked the twins for exactly the reason ADR-001 Amendment 1 forbids a
+ * runtime case function: Node 22 carries Unicode 17.0, Python 3.12 carries UCD 15.0.0, and the two
+ * disagree on 83 code points — so one and the same `unicode_normalise` repair was an ERROR in one
+ * language and clean in the other. A validator verdict that depends on which language ran it is
+ * the "two implementations, one contract" failure the rewrite exists to end.
+ *
+ * IT IS NOW PINNED, by the same mechanism and the same argument as `pinnedNfc`. The divergence is
+ * exactly the set of code points UNASSIGNED in UCD 15.0.0 that a newer runtime knows:
+ *
+ *   • 46 that gained a non-zero canonical combining class (identity's `NFC_POST_PIN_STARTERS`,
+ *     imported rather than re-listed so the two cannot drift), and
+ *   • 37 that gained a COMPATIBILITY decomposition — U+A7F1 plus U+1CCD6…U+1CCF9.
+ *
+ * An unassigned code point has ccc 0 and no decomposition of either kind, so treating all 83 as
+ * starters and passing them through untouched IS UCD-15.0.0 NFKC. Measured after the change:
+ * 5 560 320 probes (every code point in 5 combining contexts) agree byte-for-byte between Node 22
+ * and Python 3.12; 83 of them forked before it. `validate.spec` and its Python twin carry the
+ * digest as a tripwire, so an 84th fails the suite instead of forking a verdict.
+ *
+ * This is a real, if small, contract widening: rule 30b now means "to == NFKC_15.0.0(from)".
+ * DESIGN.md §5.2 rule 30b and §11 record it.
+ */
+const NFKC_POST_PIN_COMPAT_PACKED =
+  'a7f1 1ccd6 1ccd7 1ccd8 1ccd9 1ccda 1ccdb 1ccdc 1ccdd 1ccde 1ccdf 1cce0 1cce1 1cce2 1cce3 ' +
+  '1cce4 1cce5 1cce6 1cce7 1cce8 1cce9 1ccea 1cceb 1ccec 1cced 1ccee 1ccef 1ccf0 1ccf1 1ccf2 ' +
+  '1ccf3 1ccf4 1ccf5 1ccf6 1ccf7 1ccf8 1ccf9';
+
+/** The 83 code points NFKC must treat as UCD-15.0.0 starters. 46 from identity + 37 compat-only. */
+export const NFKC_POST_PIN_STARTERS: ReadonlySet<number> = new Set([
+  ...NFC_POST_PIN_STARTERS,
+  ...NFKC_POST_PIN_COMPAT_PACKED.split(' ').map((hex) => Number.parseInt(hex, 16)),
+]);
+
+/** NFKC, version-pinned to `CASE_FOLD_UNICODE_VERSION`. See `NFKC_POST_PIN_COMPAT_PACKED`. */
+export function pinnedNfkc(text: string): string {
+  let hasPinned = false;
+  for (const char of text) {
+    if (NFKC_POST_PIN_STARTERS.has(char.codePointAt(0) ?? 0)) {
+      hasPinned = true;
+      break;
+    }
+  }
+  if (!hasPinned) return text.normalize('NFKC');
+
+  let out = '';
+  let segment = '';
+  for (const char of text) {
+    if (NFKC_POST_PIN_STARTERS.has(char.codePointAt(0) ?? 0)) {
+      out += segment.normalize('NFKC') + char;
+      segment = '';
+    } else {
+      segment += char;
+    }
+  }
+  return out + segment.normalize('NFKC');
 }
 
 const HYPHENS = new Set([0x002d, 0x00ad, 0x2010]);
@@ -2167,17 +2227,12 @@ function ruleR30b(ctx: Ctx): void {
           break;
         }
         case 'unicode_normalise': {
-          // ESCALATION, measured. This is the ONE check in this file that calls a RUNTIME Unicode
-          // function, and it forks the two twins for exactly the reason ADR-001 Amendment 1 §
-          // "case fold by table" forbids one: Node 22 carries Unicode 17.0 and Python 3.12 carries
-          // UCD 15.0.0, and NFKC differs on 37 code points between them (U+A7F1 and U+1CCD6…
-          // U+1CCF9 — measured, not assumed; `unicode_normalise NFKC is a RUNTIME call` in
-          // validate.spec pins the measurement so a runtime upgrade surfaces it). A repair whose
-          // `from` contains one of those 37 is accepted here and rejected by the Python twin.
-          // Closing it properly means shipping a pinned NFKC table in conformance/, which is a
-          // contract change and is not this module's to make — DESIGN.md §5.2 rule 30b says
-          // "to == NFKC(from)" and this implements exactly that.
-          const expected = repair.from.normalize('NFKC');
+          // CLOSED, and measured. This used to be the ONE check in this file that called a RUNTIME
+          // Unicode function, and it forked the two twins on 83 code points — a repair that was an
+          // ERROR in Python and clean in TypeScript, or the reverse. `pinnedNfkc` freezes NFKC to
+          // CASE_FOLD_UNICODE_VERSION the same way `pinnedNfc` freezes NFC. Rule 30b therefore
+          // means "to == NFKC_15.0.0(from)"; DESIGN.md §5.2 records the widening.
+          const expected = pinnedNfkc(repair.from);
           if (expected !== repair.to) complain('NFKC(from)', expected);
           break;
         }

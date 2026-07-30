@@ -16,10 +16,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+import sqlite_vec  # type: ignore[import-untyped]
 from papertree_db import OwnerId, OwnershipError, PaperTreeDb, open_database
 from papertree_jobs import JobContext, JobRunner, JobStore
 
-LIFECYCLE_METHODS = frozenset({"migrate", "close"})
+LIFECYCLE_METHODS = frozenset({"migrate", "close", "owner_for"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,6 +28,7 @@ class Two:
     store: JobStore
     alice: OwnerId
     bob: OwnerId
+    alice_user_id: str
     db: PaperTreeDb
 
 
@@ -35,11 +37,17 @@ def two(tmp_path: Path) -> Iterator[Two]:
     db = open_database(tmp_path / "papertree.sqlite")
     db.migrate()
     store = JobStore(tmp_path / "papertree.sqlite")
+    alice = db.create_user("alice@papertree.test")
+    bob = db.create_user("bob@papertree.test")
     try:
+        # An owner handle is minted BY A CONNECTION and resolvable only by that connection, so
+        # the store mints its own even though the users rows came from `db`. That is the point,
+        # and `test_an_owner_from_another_connection_is_refused` below pins it.
         yield Two(
             store=store,
-            alice=db.create_user("alice@papertree.test"),
-            bob=db.create_user("bob@papertree.test"),
+            alice=store.owner_for(alice.user_id),
+            bob=store.owner_for(bob.user_id),
+            alice_user_id=alice.user_id,
             db=db,
         )
     finally:
@@ -92,22 +100,51 @@ def test_a_forged_owner_raises(two: Two) -> None:
         OwnerId("usr_forged")
 
 
-def test_an_owner_from_a_different_database_cannot_enqueue(two: Two, tmp_path: Path) -> None:
-    """Gate 4, on THIS connection: ``jobs.owner_id`` really is an enforced FK to ``users``.
+def test_an_owner_from_another_connection_is_refused(two: Two, tmp_path: Path) -> None:
+    """An owner handle is minted BY A CONNECTION and means nothing on any other.
 
-    Python's sqlite3 defaults ``PRAGMA foreign_keys`` OFF and it is per-connection, so
-    packages/db asserting it says nothing about the job store's own connection. Here a
-    genuinely minted OwnerId — real class, real users row, wrong database — is rejected by
-    the constraint. Delete the PRAGMA line in store.py and this test goes green-to-red.
+    The previous version of this store had no per-connection binding at all - it checked
+    ``isinstance`` and read ``owner.value``, so a forged ``OwnerId`` carrying a victim's user id
+    worked against a brand-new ``JobStore`` the victim had never touched. Cross-tenant read and a
+    cross-tenant ``request_cancel``, with no window at all.
     """
     elsewhere = open_database(tmp_path / "other.sqlite")
     try:
         elsewhere.migrate()
         stranger = elsewhere.create_user("mallory@papertree.test")
-        with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"):
-            two.store.enqueue(stranger, "parse", "k", {})
+        # (a) a handle minted by another connection does not resolve here...
+        with pytest.raises(OwnershipError):
+            two.store.enqueue(stranger.owner, "parse", "k", {})
+        # (b) ...and this store will not mint one either: no such users row in THIS database.
+        with pytest.raises(OwnershipError, match="no such user"):
+            two.store.owner_for(stranger.user_id)
     finally:
         elsewhere.close()
+
+
+def test_gate_4_the_jobs_owner_fk_is_enforced_on_the_stores_own_connection(
+    two: Two, tmp_path: Path
+) -> None:
+    """Python's sqlite3 defaults ``PRAGMA foreign_keys`` OFF and it is PER-CONNECTION, so
+    packages/db asserting it says nothing about the job store's own connection.
+
+    Reaching the constraint takes a legitimately minted owner whose ``users`` row is then removed
+    underneath it through a separate connection - after which the ONLY thing that can refuse the
+    enqueue is the foreign key. Delete the PRAGMA line in store.py and this goes green-to-red.
+    """
+    raw = sqlite3.connect(tmp_path / "papertree.sqlite", isolation_level=None)
+    # The `papers` AFTER DELETE trigger touches the vec0 table, so the extension has to be here
+    # too even though this connection only deletes a user.
+    raw.enable_load_extension(True)
+    sqlite_vec.load(raw)
+    raw.enable_load_extension(False)
+    raw.execute("PRAGMA foreign_keys = ON")
+    try:
+        raw.execute("DELETE FROM users WHERE user_id = ?", (two.alice_user_id,))
+    finally:
+        raw.close()
+    with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"):
+        two.store.enqueue(two.alice, "parse", "k", {})
 
 
 def test_every_tenant_facing_store_method_takes_owner_first(two: Two) -> None:
@@ -136,15 +173,17 @@ def test_a_worker_is_handed_a_bare_string_not_an_owner(two: Two) -> None:
         seen["raw"] = ctx.owner_id
         seen["type"] = type(ctx.owner_id)
         # A bare string is worth nothing until papertree_db checks it against `users`.
-        seen["authenticated"] = two.db.authenticate(ctx.owner_id)
+        seen["authenticated"] = two.store.owner_for(ctx.owner_id)
 
     two.store.enqueue(two.alice, "parse", "k", {})
     final = JobRunner(two.store, {"parse": handler}).run_once()
     assert final is not None and final.state == "succeeded"
     assert seen["type"] is str
-    assert seen["authenticated"] == two.alice
+    # A DIFFERENT handle for the same tenant: handles are per mint, not per user.
+    assert isinstance(seen["authenticated"], OwnerId)
+    assert seen["authenticated"] != two.alice
     with pytest.raises(OwnershipError):
-        two.db.authenticate("usr_not_a_real_user")
+        two.db.owner_for("usr_not_a_real_user")
 
 
 def test_a_runner_only_claims_kinds_it_can_handle(two: Two) -> None:

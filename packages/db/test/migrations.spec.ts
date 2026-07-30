@@ -217,6 +217,13 @@ describe('30k blocks in under 2s', () => {
       );
 
       expect(db.countBlocks(owner, asPaperId(paper.paper_id), generation(1))).toBe(30_000);
+      // THE ACCEPTANCE CRITERION. This bound cannot move; it is EPIC-00's, not this file's.
+      // The margin is thin by construction — TS ~1.0-1.6 s, Python ~1.7-2.5 s against 2000 —
+      // so a failure HERE is more likely a loaded runner than a regression. First response:
+      // re-run and compare the PRINTED number above with the table in the next test, not
+      // assume the criterion broke. (Measured on a box with load average 72 caused by 23
+      // runaway processes: TS 1560 ms, Python 2505 ms. Same code at HEAD measured the same,
+      // so the shortfall was the machine.)
       expect(elapsedMs).toBeLessThan(2000);
     } finally {
       db.close();
@@ -243,6 +250,10 @@ describe('30k blocks in under 2s', () => {
     // So the acceptance figure is TRUE and it is FIXTURE-DEPENDENT, and both halves are
     // now recorded rather than one being implied. The assertion here is a regression guard
     // at a measured bound, not a second acceptance criterion — do not confuse the two.
+    //
+    // THE SAME CAVEAT IS ALSO IN research/build/EPIC-00-spine.md's acceptance table and in
+    // research/build/EPIC-00-RESULT.md. It used to live only here, 240 lines inside a spec
+    // file, which is not where a Wave-1 agent sizing an ingest pipeline will look.
     const db: PaperTreeDb = openDatabase({ filename: file });
     try {
       db.migrate();
@@ -267,7 +278,12 @@ describe('30k blocks in under 2s', () => {
       );
 
       expect(db.countBlocks(owner, asPaperId(paper.paper_id), generation(1))).toBe(30_000);
-      expect(elapsedMs).toBeLessThan(8000);
+      // 8000 was 3.5x the measured 2284 ms — the insert path could regress THREEFOLD and stay
+      // green, which is a smoke test that the code still terminates, not "a regression guard at
+      // a measured bound" as the comment above claimed. 5000 is ~2.2x, which is deliberate slack
+      // for slower CI hardware rather than an engineering target: this same insert measured
+      // 3171-3965 ms on a box under load average 72-103, so the slack is doing real work.
+      expect(elapsedMs).toBeLessThan(5000);
     } finally {
       db.close();
     }

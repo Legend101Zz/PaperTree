@@ -115,7 +115,7 @@ before committing.** A wrong fixture poisons Epic 2 silently.
 | `document-ir/geometry.spec` | PDF↔viewport round-trip at 8 zoom levels × 4 rotations, error <0.01pt. Handles `userUnit ≠ 1` and `CropBox ≠ MediaBox`. |
 | `document-ir/schema.spec` | All 3 fixtures validate. Unknown block `type` **validates** (forward compat). Missing `polygon` fails. **LLM-authored text in a source field fails.** |
 | `document-ir/codegen-drift.spec` | Regenerating from schema produces no diff. |
-| `db/migrations.spec` | Empty → head; re-run is a no-op; 30k blocks insert in <2s. |
+| `db/migrations.spec` | Empty → head; re-run is a no-op; 30k blocks insert in <2s **(minimal fixture only — parser-shaped payload measures ~2.3 s TS / ~3.9 s Python; see EPIC-00-RESULT.md)**. |
 | `db/ownership.spec` | Every query helper **structurally requires** an owner — a query built without one fails to compile (TS) / raises (Python). |
 | `jobs/durability.spec` | A job killed mid-step resumes **at that step**. A failed step retries with backoff then dead-letters. Cancellation honoured within one step. |
 

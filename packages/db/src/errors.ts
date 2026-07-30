@@ -1,4 +1,4 @@
-/** Raised when a value typed as `OwnerId` was not minted by `PaperTreeDb.authenticate()`. */
+/** Raised when a value typed as `OwnerId` was not minted by this `PaperTreeDb` connection. */
 export class OwnershipError extends Error {
   override readonly name = 'OwnershipError';
 }

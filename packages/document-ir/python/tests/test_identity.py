@@ -31,6 +31,7 @@ import json
 import re
 import sys
 import unicodedata
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +47,7 @@ from papertree_document_ir.identity import (
     LIGATURE_TABLE,
     MAX_QUANTISED_BUCKET,
     NFC_POST_PIN_DECOMPOSITIONS,
+    NFC_POST_PIN_STARTERS,
     TEXT_PREFIX_CODEPOINTS,
     WHITESPACE_CODE_POINTS,
     BlockIdInput,
@@ -54,6 +56,7 @@ from papertree_document_ir.identity import (
     content_hash,
     content_hash_of_normalised,
     normalise_text,
+    pinned_nfc,
     quantise,
     resolved_text,
     truncate_code_points,
@@ -112,11 +115,12 @@ POST_15_DRIFT: list[int] = (
 # ─── the contract this implementation was built from ────────────────────────────────────────
 
 
-def test_contract_is_revision_4() -> None:
-    assert CONTRACT["vector_count"] == 427
-    assert len(VECTORS) == 427
+def test_contract_is_revision_5() -> None:
+    assert CONTRACT["vector_count"] == 433
+    assert len(VECTORS) == 433
     assert len(CONTRACT["negative_vectors"]) == 8
     assert len(CONTRACT["equivalence_vectors"]) == 11
+    assert len(CONTRACT["rejection_vectors"]) == 5
     assert CONTRACT["formula_version"] == BLOCK_ID_FORMULA_VERSION
 
 
@@ -150,7 +154,7 @@ def test_embedded_tables_are_identical_to_the_shipped_ones() -> None:
 
 
 def test_same_input_same_id_over_10k_runs(capsys: pytest.CaptureFixture[str]) -> None:
-    """427 vectors x 24 rounds = 10 248 ids, not 10 000 identical calls: a constant function
+    """433 vectors x 24 rounds = 10 392 ids, not 10 000 identical calls: a constant function
     passes the latter. The walk order alternates so determinism cannot come from a warm cache."""
     rounds = 24
     first: dict[str, str] = {}
@@ -165,7 +169,7 @@ def test_same_input_same_id_over_10k_runs(capsys: pytest.CaptureFixture[str]) ->
             assert identifier == vector["block_id"], vector["label"]
     assert computed == len(VECTORS) * rounds
     assert computed >= 10_000
-    assert len(first) == 427
+    assert len(first) == 433
     with capsys.disabled():
         print(
             f"\n[test_identity] determinism: {computed} ids over {len(VECTORS)} distinct inputs "
@@ -196,7 +200,7 @@ def test_inputs_that_should_collapse_do_collapse() -> None:
 # ─── (b) TS and Python produce identical IDs for the shared vector file ─────────────────────
 
 
-def test_reproduces_all_427_recorded_block_ids() -> None:
+def test_reproduces_all_433_recorded_block_ids() -> None:
     mismatches = [v["label"] for v in VECTORS if block_id(input_of(v)) != v["block_id"]]
     assert mismatches == []
 
@@ -231,13 +235,13 @@ def test_every_id_satisfies_the_schema_pattern() -> None:
 def test_content_hash_is_pinned_across_the_two_languages() -> None:
     """content_hash is NOT in the vector file - ADR-001 left it as "blake2s:3f9a..." with no
     digest length, the very defect Amendment 1 fixed for block_id and flagged for this. So the
-    cross-language pin lives here: the SHA-256 of all 427 content hashes, joined by "\\n" in
+    cross-language pin lives here: the SHA-256 of all 433 content hashes, joined by "\\n" in
     vector order, is the same constant in this suite and in test/identity.spec.ts. If the two
     implementations ever disagree by one character, this fails in both."""
     aggregate = hashlib.sha256(
         "\n".join(content_hash(vector["raw_text"]) for vector in VECTORS).encode("utf-8")
     ).hexdigest()
-    assert aggregate == "6ccde4b3bda72069733972a45f137a576fc225b67afb216940e180a7a86cd85b"
+    assert aggregate == "7606f76bc6408f37da0b4dfcb64d6b2d514c237f3e54764304977bfabb4bb8fa"
 
 
 def test_content_hash_shape_and_normalisation() -> None:
@@ -448,6 +452,126 @@ def test_canonical_decomposition_table_matches_the_typescript_twin(
             f"{len(NFC_POST_PIN_DECOMPOSITIONS)} post-{CASE_FOLD_UNICODE_VERSION} compositions; "
             f"digest matches the TypeScript twin"
         )
+
+
+# ─── step 1 is pinned in BOTH halves: canonical ORDERING as well as composition ─────────────
+
+
+def test_pinned_starter_set_is_exactly_the_46_that_fork() -> None:
+    """THE FOURTH DIVERGENCE CLASS, and the reason the decomposition pin above is not enough.
+
+    NFC is two algorithms. NFC_POST_PIN_DECOMPOSITIONS pins canonical COMPOSITION. Canonical
+    ORDERING - the sort of each combining sequence by Canonical Combining Class - was inherited
+    from the runtime, and it forks on its own with no composition anywhere in sight: 46 code
+    points have ccc 0 in Python 3.12 (UCD 15.0.0, unassigned) and a non-zero ccc in Node 22
+    (Unicode 17.0). Node REORDERS a combining sequence Python leaves alone, so one input gives
+    two normalised strings, two block_ids and two content_hashes.
+
+    The decomposition tripwire is STRUCTURALLY BLIND to this: it skips every code point whose NFD
+    is one code point long, and not one of the 46 has a canonical decomposition at all.
+    """
+    assert len(NFC_POST_PIN_STARTERS) == 46
+    for point in NFC_POST_PIN_STARTERS:
+        char = chr(point)
+        # No canonical decomposition and no canonical composition, in THIS runtime - which is what
+        # makes "split the string at it and normalise the pieces" exactly equal to treating it as
+        # a starter rather than an approximation of it.
+        assert unicodedata.normalize("NFD", char) == char
+        assert unicodedata.normalize("NFC", char) == char
+        # Every one of them is UNASSIGNED here (ccc 0), which is the behaviour the pin freezes.
+        # On this interpreter the pin is therefore a no-op; on Node 22 it is what stops the fork.
+        assert unicodedata.combining(char) == 0
+        assert [ord(c) for c in pinned_nfc("a" + char + "̴")] == [0x61, point, 0x0334]
+
+
+def test_the_ccc_fork_is_closed_end_to_end() -> None:
+    """The witness from the acceptance review, verbatim. Before the pin these produced
+    blk_lnsf6dvxrllswlte here and blk_ppmqw554sys6n2pp in Node."""
+    text = "a" + chr(0x0897) + "̴bc"
+    assert [ord(c) for c in normalise_text(text)] == [0x61, 0x0897, 0x0334, 0x62, 0x63]
+    # The contract file carries this exact input, so the id is pinned by the committed vectors.
+    vector = BY_LABEL["nfc:ccc-arabic-pepet"]
+    assert vector["raw_text"] == text
+    assert block_id(input_of(vector)) == vector["block_id"]
+
+
+def test_embedded_nfc_pin_tables_match_the_shipped_contract() -> None:
+    pin = CONTRACT["nfc_version_pin"]
+    shipped_starters = {int(u[2:], 16) for u in pin["post_pin_starters"]}
+    assert len(shipped_starters) == 46
+    assert shipped_starters == set(NFC_POST_PIN_STARTERS)
+    shipped_decomp = {
+        int(key[2:], 16): "".join(chr(int(u[2:], 16)) for u in value)
+        for key, value in pin["post_pin_decompositions"].items()
+    }
+    assert shipped_decomp == NFC_POST_PIN_DECOMPOSITIONS
+
+
+def test_canonical_ordering_matches_the_typescript_twin(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """THE REORDER TRIPWIRE - the one the decomposition digest cannot be. For every code point X,
+    digest the pinned NFC of "a" + X + U+0334 (ccc 1, so ANY non-zero ccc on X reorders it).
+    ``test/identity.spec.ts`` asserts the same constant on Node 22 / Unicode 17.0. The day either
+    runtime assigns a 47th combining class this fails, instead of the ids forking."""
+    lines: list[str] = []
+    for point in range(0x110000):
+        if 0xD800 <= point <= 0xDFFF:
+            continue
+        out = pinned_nfc("a" + chr(point) + "̴")
+        lines.append(f"{point:x}:" + ",".join(f"{ord(c):x}" for c in out))
+    assert len(lines) == 1_112_064
+    digest = hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
+    assert digest == "144355d77df7b9ac5c5a9bdb0e6dec5ef8fbc4f875bc60431e3f98e5fc05d744"
+    with capsys.disabled():
+        print(
+            f"\n[test_identity] canonical ordering: {len(lines)} code points probed with "
+            f"{len(NFC_POST_PIN_STARTERS)} post-{CASE_FOLD_UNICODE_VERSION} combining classes "
+            f"pinned to starters; digest matches the TypeScript twin"
+        )
+
+
+# ─── the acceptance BOUNDARY is the same in both languages (rejection_vectors) ──────────────
+
+
+def test_every_rejection_vector_is_rejected() -> None:
+    """Python's ``$`` matches at end-of-string OR immediately before a trailing U+000A, and
+    ``re.match`` does not anchor the end at all; JavaScript's ``$`` (without /m) matches only at
+    end-of-input. So ``_BLOCK_TYPE_PATTERN.match(value)`` with a trailing ``$`` ACCEPTED
+    "paragraph\\n" here while ``identity.ts`` threw. That is an asymmetric-acceptance fork - this
+    side mints an id TypeScript can never recompute - and it is harder to diagnose than a value
+    fork, not easier. ``identity.py`` now uses ``re.fullmatch`` with ``\\A..\\Z``."""
+    assert CONTRACT["rejection_vectors"]
+    for vector in CONTRACT["rejection_vectors"]:
+        with pytest.raises(ValueError):
+            block_id(
+                BlockIdInput(
+                    source_hash=vector["source_hash"],
+                    page_index=vector["page_index"],
+                    x0=vector["bbox"][0],
+                    y0=vector["bbox"][1],
+                    block_type=vector["block_type"],
+                    text=vector["raw_text"],
+                )
+            )
+
+
+def test_a_trailing_newline_is_not_a_near_miss_it_can_absorb() -> None:
+    sixty_four = "a" * 64
+    base = BlockIdInput(
+        source_hash=sixty_four,
+        page_index=0,
+        x0=90.0,
+        y0=100.0,
+        block_type="paragraph",
+        text="hello",
+    )
+    with pytest.raises(ValueError):
+        block_id(replace(base, block_type="paragraph\n"))
+    with pytest.raises(ValueError):
+        block_id(replace(base, source_hash=sixty_four + "\n"))
+    # ...and the same inputs WITHOUT the newline are accepted, so the guard is not just "reject".
+    assert BLOCK_ID_PATTERN.match(block_id(base))
 
 
 # ─── normalise_text is NOT idempotent, and content_hash must not pretend it is ──────────────

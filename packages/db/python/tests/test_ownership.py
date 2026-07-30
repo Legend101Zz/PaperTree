@@ -10,6 +10,8 @@ legal — the exact mirror of ``@ts-expect-error`` on the TypeScript side.
 
 from __future__ import annotations
 
+import ast
+import copy
 import sqlite3
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -40,6 +42,7 @@ OWNED_TABLES = (
 @dataclass(frozen=True, slots=True)
 class Tenant:
     owner: OwnerId
+    user_id: str
     paper_id: PaperId
     block_id: BlockId
     highlight_id: HighlightId
@@ -47,7 +50,8 @@ class Tenant:
 
 
 def _seed(db: PaperTreeDb, email: str, paper_id: str, hash_char: str) -> Tenant:
-    owner = db.create_user(email)
+    created = db.create_user(email)
+    owner, user_id = created.owner, created.user_id
     pid = PaperId(paper_id)
     db.put_paper(owner, make_paper(paper_id, "sha256:" + hash_char * 64, 1, 8))
     block_id = BlockId(block_id_for(3))
@@ -85,7 +89,7 @@ def _seed(db: PaperTreeDb, email: str, paper_id: str, hash_char: str) -> Tenant:
         [block_id],
         parent_derivation_id=derivation_id,
     )
-    return Tenant(owner, pid, block_id, highlight_id, derivation_id)
+    return Tenant(owner, user_id, pid, block_id, highlight_id, derivation_id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,15 +143,115 @@ def test_an_owner_from_another_connection_is_not_trusted(env: Env) -> None:
         fresh.migrate()
         with pytest.raises(OwnershipError):
             fresh.list_papers(alice.owner)
-        # Authenticating is the supported path, and it works.
-        reauthenticated = fresh.authenticate(alice.owner.value)
-        assert len(fresh.list_papers(reauthenticated)) == 1
+        # Minting on THIS connection is the supported path, and it works.
+        reminted = fresh.owner_for(alice.user_id)
+        assert len(fresh.list_papers(reminted)) == 1
 
 
-def test_authenticate_refuses_an_unknown_user(env: Env) -> None:
+def test_owner_for_refuses_an_unknown_user(env: Env) -> None:
     db, _alice, _bob, _file = env.db, env.alice, env.bob, env.file
     with pytest.raises(OwnershipError, match="no such user"):
-        db.authenticate("usr_nobody")
+        db.owner_for("usr_nobody")
+
+
+def test_owner_for_is_a_seam_and_is_meant_to_be(env: Env) -> None:
+    """``owner_for`` PERFORMS NO AUTHENTICATION, and this test says so out loud.
+
+    Gate 3 makes a user id worthless to code that holds only an owner handle - which is the code
+    inside a request handler, and the whole point. But ``owner_for(bob_user_id)`` returns a
+    working owner for Bob, and the user id is not secret: it appears in URLs, logs and emails,
+    and ``create_user`` hands it straight back. "No auth beyond a users table" is a stated
+    non-goal of Epic 0, so the seam is INTENDED - but it is a seam, the method used to be called
+    ``authenticate`` (a name that asserted the opposite), and an intended seam nobody wrote down
+    is indistinguishable from an oversight. The mint belongs outside the request handler.
+    """
+    db, _alice, bob, _file = env.db, env.alice, env.bob, env.file
+    forged = db.owner_for(bob.user_id)
+    got = db.get_highlight(forged, bob.highlight_id)
+    assert got is not None and got["note"] == "bob@papertree.test private note"
+
+
+def test_a_forged_owner_id_is_worthless_however_it_is_built(env: Env) -> None:
+    """findings.md §F1, and the three ways an adversarial review reproduced it.
+
+    All three built a real ``OwnerId`` carrying the VICTIM'S USER ID, which the previous design
+    accepted because it checked ``owner.value in self._minted`` - a set of user ids, every one of
+    which is public. The handle redesign makes each of them produce an object holding a string no
+    connection ever minted.
+    """
+    db, _alice, bob, _file = env.db, env.alice, env.bob, env.file
+    from papertree_db import ids as ids_module
+
+    # 1. import the module-private mint token and construct directly.
+    with pytest.raises(OwnershipError):
+        db.list_papers(ids_module.OwnerId(bob.user_id, ids_module._MINT))
+
+    # 2. mint_owner() is PUBLIC, and that is safe: it mints a handle nobody recorded.
+    _handle, unrecorded = ids_module.mint_owner()
+    with pytest.raises(OwnershipError):
+        db.list_papers(unrecorded)
+
+    # 3. copy.copy of a legitimate owner, then mutate the slot. Stdlib only, no private import;
+    #    __slots__ are writable and copy preserves the mint sentinel, so this passed isinstance
+    #    AND the .value re-check under the old design.
+    stolen = copy.copy(bob.owner)
+    stolen._handle = bob.user_id  # noqa: SLF001
+    with pytest.raises(OwnershipError):
+        db.list_papers(stolen)
+
+    # 4. object.__new__, the original break, still closed by the mint sentinel.
+    bypassed = object.__new__(ids_module.OwnerId)
+    with pytest.raises(OwnershipError):
+        db.list_papers(bypassed)
+
+    # Non-vacuous: the genuine owner works for all four calls above.
+    assert len(db.list_papers(bob.owner)) == 1
+
+
+def test_the_user_id_is_not_the_credential(env: Env) -> None:
+    """The property the whole redesign buys: naming a tenant gets you nothing.
+
+    ``repr`` must not leak the handle either - an owner in a log line or a traceback would
+    otherwise be a working credential.
+    """
+    _db, _alice, bob, _file = env.db, env.alice, env.bob, env.file
+    assert bob.user_id.startswith("usr_")
+    assert bob.owner.handle.startswith("own_")
+    assert bob.owner.handle != bob.user_id
+    assert bob.user_id not in repr(bob.owner)
+    assert bob.owner.handle not in repr(bob.owner)
+    assert bob.owner.handle not in str(bob.owner)
+
+
+def test_conn_is_a_forbidden_token_outside_papertree_db() -> None:
+    """Gate 1 is language-enforced in TypeScript and CONVENTION in Python - so lint the convention.
+
+    ``db._conn`` is one attribute lookup from a live ``sqlite3.Connection`` and therefore from an
+    unscoped cross-tenant UPDATE. Nothing in Python can make that impossible, so the honest move
+    is to say so (see ``database.py``'s gate 1) and to make the convention checkable.
+    """
+    root = Path(__file__).resolve().parents[4]
+    # The only two modules entitled to touch a connection are the two that OPEN one. Everything
+    # else — including the tests — must go through a method that takes an owner.
+    owners_of_a_connection = {
+        "packages/db/python/papertree_db/database.py",
+        "packages/db/python/papertree_db/migrate.py",
+        "packages/jobs/python/papertree_jobs/store.py",
+    }
+    # Parsed, not grepped: an `ast.Attribute` named `_conn` is a real access, whereas a grep also
+    # hits every docstring that explains the rule — including the ones in this repo that do.
+    offenders: list[str] = []
+    for package in ("packages/db/python", "packages/jobs/python", "packages/document-ir/python"):
+        for path in sorted((root / package).rglob("*.py")):
+            relative = str(path.relative_to(root))
+            if relative in owners_of_a_connection:
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            if any(
+                isinstance(node, ast.Attribute) and node.attr == "_conn" for node in ast.walk(tree)
+            ):
+                offenders.append(relative)
+    assert offenders == [], f"._conn reached outside a connection owner: {offenders}"
 
 
 # ── cross-owner READ ────────────────────────────────────────────────────────────────
@@ -271,7 +375,7 @@ def test_derivation_tree_is_owner_filtered_at_every_level(env: Env) -> None:
     db, alice, bob, _file = env.db, env.alice, env.bob, env.file
     tree = db.derivation_tree(alice.owner, alice.derivation_id)
     assert [row["depth"] for row in tree] == [0, 1]
-    assert all(row["owner_id"] == alice.owner.value for row in tree)
+    assert all(row["owner_id"] == alice.user_id for row in tree)
     assert db.derivation_tree(alice.owner, bob.derivation_id) == []
 
 
@@ -380,7 +484,7 @@ def test_deleting_a_user_cascades_to_papers_blocks_highlights_and_vectors(env: E
     sqlite_vec.load(raw)  # the papers AFTER DELETE trigger touches the vec0 table
     raw.enable_load_extension(False)
     raw.execute("PRAGMA foreign_keys = ON")
-    raw.execute("DELETE FROM users WHERE user_id = ?", (bob.owner.value,))
+    raw.execute("DELETE FROM users WHERE user_id = ?", (bob.user_id,))
     raw.close()
 
     assert db.get_paper(bob.owner, bob.paper_id, GEN) is None

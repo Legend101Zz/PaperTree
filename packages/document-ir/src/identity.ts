@@ -124,6 +124,48 @@ const NFC_POST_PIN_PACKED =
   '16126:1611e,1611e,1611f 16127:1611e,16129,1611f 16128:1611e,1611e,16120 16d68:16d67,16d67 ' +
   '16d69:16d63,16d67 16d6a:16d63,16d67,16d67';
 
+/**
+ * THE THIRD VERSION-PINNING HOLE — the same hole as `NFC_POST_PIN_PACKED`, one property along,
+ * and it was FATAL and latent exactly like defect 2 was.
+ *
+ * NFC is two algorithms, not one: CANONICAL ORDERING (sort each combining sequence by Canonical
+ * Combining Class) and then CANONICAL COMPOSITION. `NFC_POST_PIN_DECOMPOSITIONS` pins the second.
+ * NOTHING pinned the first, and it forks on its own, with no composition involved anywhere:
+ *
+ *   46 code points have ccc = 0 in Python 3.12 (UCD 15.0.0, where they are UNASSIGNED) and a
+ *   NON-ZERO ccc in Node 22 (Unicode 17.0), because Unicode 16.0 and 17.0 assigned them as marks.
+ *   For `"a" + U+0897 + U+0334`, Node's canonical-ordering step SWAPS the two marks (U+0334 has
+ *   ccc 1, U+0897 has ccc 230) and Python leaves them alone. One input, two normalised strings,
+ *   two block_ids, two content_hashes — and because content_hash forks too, the tier-2 mechanism
+ *   § E.2 relies on to DETECT an id fork forks with it.
+ *
+ *   The decomposition tripwire is structurally blind to this class: it digests only code points
+ *   whose NFD is longer than one code point, and not one of these 46 has a canonical
+ *   decomposition at all (verified in both languages). That is defect 2's blindness repeated.
+ *
+ * These are real marks in real documents: U+0897 is ARABIC PEPET, U+10EFA/U+10EFB are Arabic
+ * marks, U+1ACF..U+1AEB are Combining Diacritical Marks Extended, and U+113CE..U+113D0 are
+ * Tulu-Tigalari viramas — the same script three of the pinned decompositions come from.
+ *
+ * THE FIX, and why it is a split rather than a table of combining classes. Pinning to UCD 15.0.0
+ * means "treat every one of these as a STARTER (ccc = 0)", which is what an unassigned code point
+ * is. A starter terminates the combining sequence before it and begins a new one, and it blocks
+ * composition across itself; none of the 46 has a canonical decomposition or composition in
+ * either runtime. So splitting the string at each of them, normalising each piece with the
+ * runtime's own NFC, and rejoining is EXACTLY UCD-15 NFC — without shipping a ccc table.
+ * Measured: 5 560 320 probes (every code point in 5 combining contexts) agree byte-for-byte
+ * between Node 22 and Python 3.12 after this change, and 46 of them forked before it.
+ *
+ * `identity.spec` and its Python twin carry a REORDER tripwire — a digest over
+ * `pinnedNfc("a" + X + U+0334)` for every code point X — that can see this class, which the
+ * decomposition digest cannot. The day either runtime assigns a 47th, the suite fails instead of
+ * the ids forking.
+ */
+const NFC_POST_PIN_STARTERS_PACKED =
+  '897 1acf 1ad0 1ad1 1ad2 1ad3 1ad4 1ad5 1ad6 1ad7 1ad8 1ad9 1ada 1adb 1adc 1add 1ae0 1ae1 ' +
+  '1ae2 1ae3 1ae4 1ae5 1ae6 1ae7 1ae8 1ae9 1aea 1aeb 10d69 10d6a 10d6b 10d6c 10d6d 10efa 10efb ' +
+  '113ce 113cf 113d0 1612f 1e5ee 1e5ef 1e6e3 1e6e6 1e6ee 1e6ef 1e6f5';
+
 const WHITESPACE_PACKED = [
   0x0009, 0x000a, 0x000b, 0x000c, 0x000d, 0x0020, 0x0085, 0x00a0, 0x1680, 0x2000, 0x2001, 0x2002,
   0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200a, 0x2028, 0x2029, 0x202f, 0x205f,
@@ -332,6 +374,51 @@ export const LIGATURE_TABLE: ReadonlyMap<number, string> = unpack(LIGATURE_PACKE
  */
 export const NFC_POST_PIN_DECOMPOSITIONS: ReadonlyMap<number, string> = unpack(NFC_POST_PIN_PACKED);
 
+/**
+ * Code points assigned a NON-ZERO canonical combining class AFTER `CASE_FOLD_UNICODE_VERSION`,
+ * forced back to starters (ccc = 0) so the runtime's canonical-ORDERING step is pinned to the
+ * same Unicode version as everything else. 46 entries; see `NFC_POST_PIN_STARTERS_PACKED`.
+ */
+export const NFC_POST_PIN_STARTERS: ReadonlySet<number> = new Set(
+  NFC_POST_PIN_STARTERS_PACKED.split(' ').map((hex) => Number.parseInt(hex, 16)),
+);
+
+/**
+ * Step 1 of NORMALISE: the runtime's NFC, pinned to `CASE_FOLD_UNICODE_VERSION` in BOTH of its
+ * halves — canonical ordering (here) and canonical composition (`NFC_POST_PIN_DECOMPOSITIONS`,
+ * applied by the caller straight afterwards).
+ *
+ * The split is the pin. Every code point in `NFC_POST_PIN_STARTERS` is a starter in UCD 15.0.0
+ * and a combining mark in Node 22, so normalising the segments between them and re-joining
+ * around them makes both runtimes treat them as starters. None of the 46 has a canonical
+ * decomposition or composition in either runtime, so passing them through untouched is exact.
+ *
+ * The fast path — no pinned code point present — is the overwhelmingly common case and is a
+ * single `.normalize('NFC')`, so ordinary text pays one extra scan and nothing else.
+ */
+export function pinnedNfc(text: string): string {
+  let hasPinned = false;
+  for (const char of text) {
+    if (NFC_POST_PIN_STARTERS.has(char.codePointAt(0) ?? 0)) {
+      hasPinned = true;
+      break;
+    }
+  }
+  if (!hasPinned) return text.normalize('NFC');
+
+  let out = '';
+  let segment = '';
+  for (const char of text) {
+    if (NFC_POST_PIN_STARTERS.has(char.codePointAt(0) ?? 0)) {
+      out += segment.normalize('NFC') + char;
+      segment = '';
+    } else {
+      segment += char;
+    }
+  }
+  return out + segment.normalize('NFC');
+}
+
 /** The enumerated whitespace set: 26 code points, and emphatically not `\s`. */
 export const WHITESPACE_CODE_POINTS: ReadonlySet<number> = new Set(WHITESPACE_PACKED);
 
@@ -388,7 +475,8 @@ function assertEncodable(text: string, field: string): void {
 /**
  * The four normalisation steps of Amendment 1 § A, and the ONLY normalisation in the system.
  *
- *   1. Unicode NFC.
+ *   1. Unicode NFC, version-pinned: `pinnedNfc` for canonical ordering, then
+ *      `NFC_POST_PIN_DECOMPOSITIONS` for canonical composition.
  *   2. Ligature expansion via `LIGATURE_TABLE`.
  *   3. Collapse every maximal run of `WHITESPACE_CODE_POINTS` to one U+0020, then strip
  *      whitespace from both ends.
@@ -403,11 +491,13 @@ function assertEncodable(text: string, field: string): void {
  * `006A 030C` — so do not add a trailing `normalize("NFC")`.
  */
 export function normaliseText(text: string): string {
-  // 1. NFC, then version-pin it: the runtime's NFC is the only step this module does not own, and
-  //    Node 22 composes 20 sequences Python 3.12 does not (NFC_POST_PIN_DECOMPOSITIONS). Undoing
-  //    exactly those keeps step 1 pinned to the same Unicode version as the fold table.
+  // 1. NFC, version-pinned in BOTH of its halves — the runtime's NFC is the only step this module
+  //    does not own. Canonical ORDERING is pinned by `pinnedNfc` (46 code points that are marks in
+  //    Node 22 and unassigned in Python 3.12 would otherwise be REORDERED in one runtime only);
+  //    canonical COMPOSITION is pinned here (Node composes 20 sequences Python does not). Together
+  //    they keep step 1 pinned to the same Unicode version as the fold table.
   const composed: number[] = [];
-  for (const point of toCodePoints(text.normalize('NFC'))) {
+  for (const point of toCodePoints(pinnedNfc(text))) {
     const pinned = NFC_POST_PIN_DECOMPOSITIONS.get(point);
     if (pinned === undefined) composed.push(point);
     else composed.push(...toCodePoints(pinned));

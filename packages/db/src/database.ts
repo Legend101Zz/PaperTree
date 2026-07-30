@@ -30,7 +30,11 @@
 //      and it is closed at runtime because AN OwnerId IS NOT A USER ID — it is an opaque
 //      per-connection handle backed by 32 bytes of CSPRNG output that appears nowhere in
 //      the database, a URL, a log or an email (see `#resolve`). Casting a value you can
-//      name gets you nothing, because the value the check wants is one you cannot name.
+//      name gets you nothing WITHIN a request handler that was given one owner handle and no
+//      mint access, because the value the check wants is one you cannot name. It is not a
+//      claim about the process as a whole: a caller that can reach `ownerFor` is inside the
+//      trust boundary by construction and can mint an owner for any user id it can name —
+//      see `ownerFor`, which says so, and `ownership.spec`'s "ownerFor is a seam".
 //
 //      This is the second design of gate 3 and the first one was WRONG, which is worth
 //      recording. It kept a set of minted USER IDS, so `bobUserId as OwnerId` was rejected
@@ -50,6 +54,16 @@
 // Gates 1–3 are compile-time and are asserted by test/ownership-types.spec.ts with
 // `@ts-expect-error`. Gate 4 is asserted by test/ownership.spec.ts, which reads
 // PRAGMA foreign_key_list and fails if any owned table gains an FK that drops owner_id.
+//
+// WHAT GATE 1 IS NOT. `#db` is unreachable by any LANGUAGE-LEVEL operation — no export,
+// accessor, cast, subclass, Proxy or property enumeration yields it, and that is asserted
+// by reflection in ownership.spec.ts. It is NOT proof against in-process arbitrary code:
+// `node:inspector` is stdlib and needs no flags, and `Runtime.getProperties` enumerates ES
+// private fields and hands back live references to `#db`, `#statements` and `#minted`;
+// monkeypatching `Map.prototype.get` subverts `#resolve` without the inspector at all. Code
+// that can do either has already beaten every same-process guard — it could equally
+// `require("better-sqlite3")` and open the file directly. THE BOUNDARY IS THE PROCESS, not
+// the class, and no arrangement of private fields moves it.
 //
 // The alternative designs considered and rejected: (a) a query builder that refuses to
 // emit SQL without an owner clause — it can only pattern-match its own output, and cannot
@@ -197,10 +211,21 @@ export class PaperTreeDb {
   }
 
   /**
-   * Mints an `OwnerId` for an existing user. This is the ONLY function in the package that
-   * turns a string into an `OwnerId`, and it refuses unless the `users` row exists.
+   * Turns an ALREADY-VERIFIED user id into an owner handle.
+   *
+   * THIS PERFORMS NO AUTHENTICATION, and it was called `authenticate` until an adversarial
+   * review pointed out that the name asserted the opposite of what the body does. All it checks
+   * is that a `users` row exists; "no auth beyond a `users` table" is a stated non-goal of Epic
+   * 0, so that is the intended contract — but it must be stated rather than implied by a name.
+   *
+   * THE CALLER IS THE TRUST BOUNDARY. Passing a user id taken from a request — a path
+   * parameter, a header, an unverified cookie — is findings.md §F1, and no gate in this package
+   * can stop it: gate 3 makes a user id worthless to code that holds only an owner handle,
+   * which is precisely the code inside a request handler. Code that can reach `ownerFor` is
+   * inside the trust boundary by construction, so keep the mint out of the handler and hand the
+   * handler its one handle.
    */
-  authenticate(userId: string): OwnerId {
+  ownerFor(userId: string): OwnerId {
     const row = this.#stmt<[string], UserRow>('SELECT * FROM users WHERE user_id = ?').get(userId);
     if (row === undefined) throw new OwnershipError(`no such user: ${userId}`);
     return this.#mint(userId);

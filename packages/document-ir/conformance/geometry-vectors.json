@@ -2116,6 +2116,176 @@
       "why": "band edge (112+113)/2 = 112.5; the short line joins by x-overlap of 36 pt"
     },
     {
+      "label": "union:overlapping-font-metric-lines",
+      "rects": [
+        [
+          54,
+          100,
+          292,
+          112
+        ],
+        [
+          54,
+          111,
+          292,
+          123
+        ],
+        [
+          54,
+          122,
+          200,
+          134
+        ]
+      ],
+      "options": {
+        "vertical_gap_tolerance": 2,
+        "horizontal_overlap_tolerance": 0
+      },
+      "polygons": [
+        [
+          [
+            292,
+            100
+          ],
+          [
+            292,
+            122.5
+          ],
+          [
+            200,
+            122.5
+          ],
+          [
+            200,
+            134
+          ],
+          [
+            54,
+            134
+          ],
+          [
+            54,
+            100
+          ]
+        ]
+      ],
+      "why": "consecutive font-metric line boxes overlap by 1 pt and must still be three bands"
+    },
+    {
+      "label": "union:superscript-joins-its-line",
+      "rects": [
+        [
+          54,
+          100,
+          60,
+          104
+        ],
+        [
+          54,
+          100,
+          292,
+          112
+        ],
+        [
+          54,
+          113,
+          90,
+          125
+        ]
+      ],
+      "options": {
+        "vertical_gap_tolerance": 2,
+        "horizontal_overlap_tolerance": 0
+      },
+      "polygons": [
+        [
+          [
+            292,
+            100
+          ],
+          [
+            292,
+            112.5
+          ],
+          [
+            90,
+            112.5
+          ],
+          [
+            90,
+            125
+          ],
+          [
+            54,
+            125
+          ],
+          [
+            54,
+            100
+          ]
+        ]
+      ],
+      "why": "a short run at the top of a line joins that line, so no notch appears"
+    },
+    {
+      "label": "union:half-overlap-is-the-boundary",
+      "rects": [
+        [
+          54,
+          100,
+          150,
+          112
+        ],
+        [
+          140,
+          106,
+          292,
+          118
+        ]
+      ],
+      "options": {
+        "vertical_gap_tolerance": 2,
+        "horizontal_overlap_tolerance": 0
+      },
+      "polygons": [
+        [
+          [
+            150,
+            100
+          ],
+          [
+            150,
+            109
+          ],
+          [
+            292,
+            109
+          ],
+          [
+            292,
+            118
+          ],
+          [
+            140,
+            118
+          ],
+          [
+            140,
+            109
+          ],
+          [
+            54,
+            109
+          ],
+          [
+            54,
+            100
+          ]
+        ]
+      ],
+      "why": "vertical overlap of exactly half does NOT make one visual line"
+    },
+    {
       "label": "union:degenerate-rects-dropped",
       "rects": [
         [
@@ -2790,7 +2960,7 @@
     "polygon_vectors": 6,
     "polygon_point_tests": 18,
     "intersection_vectors": 7,
-    "line_union_vectors": 7,
+    "line_union_vectors": 10,
     "fixture_vectors": 9
   },
   "pymupdf_version": "PyMuPDF 1.28.0: Python bindings for the MuPDF 1.29.0 library."

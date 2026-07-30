@@ -38,6 +38,18 @@ const WS = new Set(
 const FOLD = new Map(
   Object.entries(doc.case_fold_map).map(([u, v]) => [parseInt(u.slice(2), 16), v]),
 );
+// The NFC VERSION PIN, both halves, built from `nfc_version_pin` and nothing else. Step 1 is
+// the only step a runtime would otherwise supply, and Python 3.12 (UCD 15.0.0) and Node 22
+// (Unicode 17.0) disagree on 46 canonical combining classes and 20 canonical compositions.
+const PIN_STARTERS = new Set(
+  (doc.nfc_version_pin?.post_pin_starters ?? []).map((u) => parseInt(u.slice(2), 16)),
+);
+const PIN_DECOMP = new Map(
+  Object.entries(doc.nfc_version_pin?.post_pin_decompositions ?? {}).map(([u, v]) => [
+    parseInt(u.slice(2), 16),
+    v.map((c) => String.fromCodePoint(parseInt(c.slice(2), 16))).join(""),
+  ]),
+);
 const Q_MAX = 9007199254740991;               // 2^53 - 1, per SPEC.quantise
 const GRID = SPEC.grid_pt;
 const NPFX = SPEC.text_prefix_codepoints;
@@ -61,8 +73,30 @@ function foldChar(ch) {
   const m = FOLD.get(ch.codePointAt(0));
   return m === undefined ? ch : m;
 }
+// Canonical ORDERING pin: every post_pin_starter is a starter in UCD 15.0.0 and none of them has
+// a canonical decomposition, so normalising the segments BETWEEN them and rejoining around them
+// is exactly UCD-15 canonical ordering -- without shipping a combining-class table.
+function pinnedNfc(s) {
+  let hasPinned = false;
+  for (const ch of s) if (PIN_STARTERS.has(ch.codePointAt(0))) { hasPinned = true; break; }
+  if (!hasPinned) return s.normalize("NFC");
+  let out = "", seg = "";
+  for (const ch of s) {
+    if (PIN_STARTERS.has(ch.codePointAt(0))) { out += seg.normalize("NFC") + ch; seg = ""; }
+    else seg += ch;
+  }
+  return out + seg.normalize("NFC");
+}
 function normalise(s) {
-  s = s.normalize("NFC");
+  // Step 1: NFC, version-pinned in both halves -- ordering by the split above, composition by
+  // undoing every composition newer than case_fold_unicode_version.
+  s = pinnedNfc(s);
+  let z = "";
+  for (const ch of s) {
+    const d = PIN_DECOMP.get(ch.codePointAt(0));
+    z += d === undefined ? ch : d;
+  }
+  s = z;
   let a = "";
   for (const ch of s) a += LIG[ch] !== undefined ? LIG[ch] : ch;
   let b = "", prevWs = false;
@@ -96,7 +130,23 @@ function coords(bbox) {
   throw new Error("unknown geometry_payload " + GEOM);
 }
 
+// The acceptance BOUNDARY, which forks between languages as readily as the formula does. Both
+// patterns are anchored at both ends: in Python `$` also matches before a trailing U+000A and
+// `re.match` does not anchor the end at all, so `re.fullmatch` with \A..\Z is the only spelling
+// that agrees with JavaScript. `rejection_vectors` pins this.
+const SOURCE_HASH_FORM = /^[0-9a-f]{64}$/;
+const BLOCK_TYPE_FORM = /^[a-z][a-z0-9_]{0,63}$/;
+
 export function blockId({ source_hash, page_index, bbox, block_type, raw_text }) {
+  if (typeof source_hash !== "string" || !SOURCE_HASH_FORM.test(source_hash)) {
+    throw new TypeError(`source_hash must match ${SOURCE_HASH_FORM} (no "sha256:" prefix)`);
+  }
+  if (!Number.isInteger(page_index) || page_index < 0 || page_index > Q_MAX) {
+    throw new RangeError(`page_index must be an integer in 0..${Q_MAX}`);
+  }
+  if (typeof block_type !== "string" || !BLOCK_TYPE_FORM.test(block_type)) {
+    throw new TypeError(`block_type must match ${BLOCK_TYPE_FORM}`);
+  }
   const payload = [
     source_hash, String(page_index),
     ...coords(bbox).map((v) => String(q(v, GRID))),
@@ -126,6 +176,12 @@ for (const p of doc.negative_vectors ?? []) {
 for (const p of doc.equivalence_vectors ?? []) {
   if (byLabel.get(p.a) !== byLabel.get(p.b)) fails.push(["EQUIVALENCE", p.label]);
 }
+// Rejection vectors: the implementation must THROW, not compute an id.
+for (const r of doc.rejection_vectors ?? []) {
+  let rejected = false;
+  try { blockId(r); } catch { rejected = true; }
+  if (!rejected) fails.push(["REJECTION", r.label]);
+}
 
 let extra = 0;
 if (process.argv[3]) {
@@ -141,12 +197,14 @@ console.log(JSON.stringify({
   contract_unicode: doc.case_fold_unicode_version,
   fold_map_entries: FOLD.size,
   whitespace_chars: WS.size,
+  nfc_pin: { starters: PIN_STARTERS.size, decompositions: PIN_DECOMP.size },
   formula_version: doc.formula_version,
   config: { geometry_payload: GEOM, grid_pt: GRID, text_prefix_codepoints: NPFX,
             hash: SPEC.hash },
   vectors: doc.vectors.length,
   negative_pairs: (doc.negative_vectors ?? []).length,
   equivalence_pairs: (doc.equivalence_vectors ?? []).length,
+  rejection_vectors: (doc.rejection_vectors ?? []).length,
   extra_rows: extra,
   failures: fails.length,
   examples: fails.slice(0, 10),

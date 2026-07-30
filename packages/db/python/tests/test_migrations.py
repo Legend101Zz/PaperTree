@@ -156,11 +156,13 @@ def test_edited_migration_is_refused(tmp_path: Path) -> None:
         db.migrate()
 
 
-def test_30k_blocks_insert_under_two_seconds(tmp_path: Path) -> None:
+def test_30k_blocks_insert_under_two_seconds(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     file = tmp_path / "papertree.sqlite"
     with open_database(file) as db:
         db.migrate()
-        owner = db.create_user("perf@papertree.test")
+        owner = db.create_user("perf@papertree.test").owner
         paper = make_paper(
             paper_id="ppr_00000000000000000000000001",
             source_hash="sha256:" + "a" * 64,
@@ -173,18 +175,30 @@ def test_30k_blocks_insert_under_two_seconds(tmp_path: Path) -> None:
         elapsed_ms = (time.perf_counter() - started) * 1000
 
         # Printed, not merely asserted: the number is the deliverable, the bound is the gate.
-        print(
-            f"\n[db/migrations.spec::py] 30,000 blocks + {len(paper['pages'])} pages + "
-            f"{len(paper['relations'])} relations inserted in {elapsed_ms:.0f} ms "
-            f"(one transaction, executemany, WAL, synchronous=NORMAL, on-disk file)"
-        )
+        # `capsys.disabled()` and not a bare print: the root pyproject sets `addopts = "-q"`
+        # and pytest captures stdout from PASSING tests, so `uv run pytest` — the documented
+        # gate command — showed neither figure. The TypeScript half printed and this one did
+        # not, which made "both numbers are measured and printed by the suite" half true.
+        with capsys.disabled():
+            print(
+                f"\n[db/migrations.spec::py] 30,000 blocks + {len(paper['pages'])} pages + "
+                f"{len(paper['relations'])} relations inserted in {elapsed_ms:.0f} ms "
+                f"(one transaction, executemany, WAL, synchronous=NORMAL, on-disk file)"
+            )
 
         assert db.count_blocks(owner, PaperId(str(paper["paper_id"])), generation(1)) == 30_000
+        # THE ACCEPTANCE CRITERION. This bound cannot move; it is EPIC-00's, not this file's.
+        # The margin is the thinnest in the suite — measured 1.5-1.7 s against 2000 on an idle
+        # box — so a failure HERE is more likely a loaded runner than a regression. First
+        # response: re-run and compare the PRINTED number with the table below, do not assume
+        # the criterion broke. (Measured on a box with load average 72 caused by 23 runaway
+        # processes: 2505 ms. The same code at HEAD measured 2306-2339 ms there, so the
+        # shortfall was the machine and not a change.)
         assert elapsed_ms < 2000
 
 
 def test_30k_realistic_blocks_measured_because_the_two_second_bound_does_not_hold_there(
-    tmp_path: Path,
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """WHAT THE BOUND ABOVE ACTUALLY MEASURES.
 
@@ -205,7 +219,7 @@ def test_30k_realistic_blocks_measured_because_the_two_second_bound_does_not_hol
     file = tmp_path / "papertree.sqlite"
     with open_database(file) as db:
         db.migrate()
-        owner = db.create_user("perf-realistic@papertree.test")
+        owner = db.create_user("perf-realistic@papertree.test").owner
         paper = make_paper(
             paper_id="ppr_00000000000000000000000042",
             source_hash="sha256:" + "4" * 64,
@@ -219,14 +233,19 @@ def test_30k_realistic_blocks_measured_because_the_two_second_bound_does_not_hol
         db.put_paper(owner, paper)
         elapsed_ms = (time.perf_counter() - started) * 1000
 
-        print(
-            f"\n[db/migrations.spec::py] 30,000 REALISTIC blocks (60 words, 12 spans, "
-            f"8-point polygon) inserted in {elapsed_ms:.0f} ms — the <2s acceptance bound is "
-            f"met by the minimal fixture only; this is the honest parser-shaped number"
-        )
+        with capsys.disabled():
+            print(
+                f"\n[db/migrations.spec::py] 30,000 REALISTIC blocks (60 words, 12 spans, "
+                f"8-point polygon) inserted in {elapsed_ms:.0f} ms — the <2s acceptance bound "
+                f"is met by the minimal fixture only; this is the honest parser-shaped number"
+            )
 
         assert db.count_blocks(owner, PaperId(str(paper["paper_id"])), generation(1)) == 30_000
-        assert elapsed_ms < 12_000
+        # 12_000 was 3.1x the measured 3905 ms — the insert path could regress threefold and
+        # stay green, which is a smoke test that the code still terminates, not "a regression
+        # guard at a measured value". 8000 is ~2x, which is deliberate slack for slower CI
+        # hardware rather than an engineering target.
+        assert elapsed_ms < 8000
 
 
 def test_generations_share_block_ids(tmp_path: Path) -> None:
@@ -234,7 +253,7 @@ def test_generations_share_block_ids(tmp_path: Path) -> None:
     file = tmp_path / "papertree.sqlite"
     with open_database(file) as db:
         db.migrate()
-        owner = db.create_user("gen@papertree.test")
+        owner = db.create_user("gen@papertree.test").owner
         paper_id = PaperId("ppr_00000000000000000000000002")
         source_hash = "sha256:" + "b" * 64
 
@@ -258,7 +277,7 @@ def test_cannot_promote_a_generation_that_does_not_exist(tmp_path: Path) -> None
     file = tmp_path / "papertree.sqlite"
     with open_database(file) as db:
         db.migrate()
-        owner = db.create_user("gen2@papertree.test")
+        owner = db.create_user("gen2@papertree.test").owner
         paper_id = PaperId("ppr_00000000000000000000000003")
         db.put_paper(owner, make_paper(paper_id, "sha256:" + "c" * 64, 1, 3))
         with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"):
