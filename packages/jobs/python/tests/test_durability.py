@@ -372,6 +372,93 @@ def test_a_superseded_worker_cannot_clobber_the_worker_that_replaced_it(env: Env
     assert [(s.step_name, s.state) for s in steps] == [("render", "running")]
 
 
+def test_a_superseded_worker_whose_body_throws_cannot_undo_a_committed_checkpoint(
+    env: Env,
+) -> None:
+    """THE FAILURE PATH'S HALF OF THE FENCE (#24). The test above covers the success path.
+
+    ``ctx.step`` fences before ``_finish_step`` — the comment there says why: once the
+    lease is gone another worker owns the job and is redoing the work, so writing our
+    checkpoint would overwrite theirs. The ``except`` branch four lines above it did not
+    fence, and ``_fail_step``'s UPDATE was keyed on ``(job_id, step_name)`` alone. So a
+    superseded worker whose body happened to THROW could write ``state='failed'`` over the
+    live worker's committed ``succeeded``.
+
+    That is not merely a wrong status. ``ctx.step``'s ``recorded.state == 'succeeded'``
+    early-return is the only thing standing between a retry and a second side effect, so
+    demoting the row to ``failed`` re-arms the exact bug the checkpoint exists to prevent.
+    The last assertion here is that consequence, not the status: the render body must run
+    twice (once superseded, once live), never three times.
+
+    Same in-process construction as the test above — worker A's lease expires inside its
+    step body, worker B re-claims — with two additions: B commits the checkpoint for the
+    *same* step name, and A's body then raises.
+    """
+    job_id = env.store.enqueue(env.owner, "slow", "fenced-failure", {}, max_attempts=5)
+    render_bodies_run: list[str] = []
+    claims: list[str] = []
+    live_fails_once = {"still": True}
+
+    def live_body() -> str:
+        render_bodies_run.append("live")
+        return "the live worker's render"
+
+    def live_handler(ctx: JobContext) -> None:
+        claims.append(f"attempt{ctx.attempt}")
+        ctx.step("render", live_body)
+        if live_fails_once["still"]:
+            # B's JOB fails after its STEP committed, so the job is rescheduled rather than
+            # left terminal — which is what lets a third worker claim it and demonstrate
+            # whether the checkpoint survived.
+            live_fails_once["still"] = False
+            raise RuntimeError("the live worker's job failed after render had committed")
+
+    def superseded_body() -> str:
+        render_bodies_run.append("superseded")
+        time.sleep(0.35)  # outlive worker-A's 0.2s lease, without calling progress()
+        JobRunner(
+            env.store,
+            {"slow": live_handler},
+            worker_id="worker-B",
+            lease_seconds=5.0,
+            backoff_base=0.01,
+            backoff_factor=2.0,
+        ).run_once()
+        raise RuntimeError("worker A's body exploded after worker B committed the checkpoint")
+
+    def superseded_handler(ctx: JobContext) -> None:
+        ctx.step("render", superseded_body)
+
+    JobRunner(
+        env.store, {"slow": superseded_handler}, worker_id="worker-A", lease_seconds=0.2
+    ).run_once()
+
+    after_the_race = env.store.list_steps(env.owner, job_id)
+    print(f"\n  render bodies run so far: {render_bodies_run}")
+    print(
+        f"  ledger after A threw:     {[(s.step_name, s.state, s.error) for s in after_the_race]}"
+    )
+
+    # Worker A wrote NOTHING after losing the lease — including on the way out through the
+    # exception handler. The checkpoint on disk is worker B's.
+    assert [(s.step_name, s.state) for s in after_the_race] == [("render", "succeeded")]
+    assert after_the_race[0].result == "the live worker's render"
+    assert after_the_race[0].error is None, "worker A's exception must not be recorded here"
+
+    # THE CONSEQUENCE. B's job was rescheduled, so a third worker claims it and replays the
+    # handler. `render` already committed, so its body must not fire again.
+    resumed = _drain(
+        JobRunner(env.store, {"slow": live_handler}, worker_id="worker-C", lease_seconds=5.0)
+    )
+    assert resumed is not None
+    print(f"  handler claims:           {claims}")
+    print(f"  render bodies in the end:  {render_bodies_run}")
+    assert resumed.state == "succeeded"
+    assert render_bodies_run == ["superseded", "live"], "a committed step must never re-run"
+    final_steps = env.store.list_steps(env.owner, job_id)
+    assert [(s.step_name, s.state) for s in final_steps] == [("render", "succeeded")]
+
+
 # ── cancellation ─────────────────────────────────────────────────────────────────────
 
 

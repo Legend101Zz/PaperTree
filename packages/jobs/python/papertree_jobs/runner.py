@@ -85,7 +85,15 @@ class JobContext:
         except Cancelled:
             raise
         except Exception as exc:
-            self._store._fail_step(self._job.job_id, name, _describe(exc))
+            # FENCE BEFORE THE FAILURE WRITE, for the same reason as the checkpoint below
+            # and with more at stake (#24). If the lease expired while the body ran, the
+            # worker that took over may already have re-run this step and committed
+            # `succeeded`; writing our `failed` over it would demote a committed
+            # checkpoint back to a re-runnable one. check_lease() raises LeaseLost, which
+            # run_once() answers by writing nothing at all — the right outcome for a
+            # worker that has been superseded, whether its body succeeded or threw.
+            self.check_lease()
+            self._store._fail_step(self._job.job_id, name, _describe(exc), self._worker_id)
             raise
         # FENCE BEFORE THE CHECKPOINT. If the lease expired while the body ran, another
         # worker now owns this job and is redoing the work; writing our checkpoint (and,
