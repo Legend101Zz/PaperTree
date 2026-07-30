@@ -1,0 +1,33 @@
+[project]
+name = "papertree-evaluation"
+version = "1.0.0"
+description = "PTUB - the PaperTree Understanding Benchmark: adapters, metrics, gold format and the comparison harness."
+requires-python = ">=3.12"
+dependencies = [
+    "papertree-document-ir",
+    "papertree-document-worker",
+]
+
+# Docling is DELIBERATELY absent from this file, in EVERY form - not a dependency, not an
+# optional extra, not a dependency-group.
+#
+# research/benchmarks/README.md row 5 is an OPT-IN adapter. Declaring it here at all puts its
+# full resolution (torch, onnxruntime, transformers - ~1.4 GB, findings.md §E) into the
+# workspace uv.lock, because uv locks every group whether or not it installs it. Measured:
+# adding one `docling>=2.0` line took uv.lock from 22 packages to 100+, including xlsxwriter
+# and websockets, for a benchmark row that runs at most once per epic.
+#
+# findings.md §E already established the pattern this repo uses instead - a separate
+# gitignored probe venv - and research/benchmarks/DOCLING.md records the exact commands.
+# The adapter imports lazily and reports itself UNAVAILABLE rather than crashing, and the
+# harness records "not run" as a distinct outcome from "scored 0".
+[tool.uv.sources]
+papertree-document-ir = { workspace = true }
+papertree-document-worker = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["papertree_evaluation"]

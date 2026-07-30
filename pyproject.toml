@@ -7,18 +7,29 @@ dependencies = [
     "papertree-document-ir",
     "papertree-db",
     "papertree-jobs",
+    "papertree-document-worker",
+    "papertree-evaluation",
 ]
 
 # apps/api is the v1 application. It has its own pyproject.toml and uv.lock and is
 # deliberately NOT a member of this workspace - Epic 0 builds alongside it, untouched.
+#
+# `services/*/python` was added by Epic 1 (see EPIC-01-RESULT.md and issue #45). It is the
+# one edit outside Epic 1's declared ownership that the epic could not avoid: uv resolves a
+# member only from this list, and `services/document-worker` cannot import papertree-db /
+# papertree-jobs / papertree-document-ir from outside the workspace without acquiring its own
+# second uv.lock and a second .venv - which is the apps/api arrangement, and is exactly the
+# split that lets two halves of one repo drift onto different dependency sets.
 [tool.uv.workspace]
-members = ["packages/*/python"]
+members = ["packages/*/python", "services/*/python"]
 exclude = ["apps/*"]
 
 [tool.uv.sources]
 papertree-document-ir = { workspace = true }
 papertree-db = { workspace = true }
 papertree-jobs = { workspace = true }
+papertree-document-worker = { workspace = true }
+papertree-evaluation = { workspace = true }
 
 [tool.uv]
 package = false
@@ -31,7 +42,10 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["packages"]
+# "services" was added with the workspace member above: `uv run pytest` is the command CI
+# runs, and a suite outside testpaths reports green by never executing. See EPIC-00-GATE §8's
+# turbo-cache finding for the same failure in the other language.
+testpaths = ["packages", "services"]
 addopts = "-q"
 
 [tool.ruff]
@@ -45,8 +59,12 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 python_version = "3.12"
 strict = true
 
-# PyMuPDF ships no type stubs. It is used only by the synthetic-PDF generator that produces
-# packages/document-ir/test/fixtures-pdf/, never by library code.
+# PyMuPDF ships no type stubs. Until Epic 1 it was used only by the synthetic-PDF generator
+# that produces packages/document-ir/test/fixtures-pdf/; it is now also the geometry library
+# of services/document-worker. `ignore_missing_imports` makes every pymupdf expression `Any`,
+# and `strict` still forbids returning one from a typed function - the worker therefore keeps
+# pymupdf behind services/document-worker/python/papertree_document_worker/pdf.py, which is
+# the only module that imports it and the only place the Any-to-concrete conversion happens.
 [[tool.mypy.overrides]]
 module = ["pymupdf", "fitz"]
 ignore_missing_imports = true
