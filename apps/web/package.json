@@ -9,9 +9,10 @@
     "lint": "next lint",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "prebuild": "node scripts/copy-pdf-worker.mjs",
-    "predev": "node scripts/copy-pdf-worker.mjs",
-    "pretest": "node scripts/copy-pdf-worker.mjs"
+    "prebuild": "node scripts/copy-pdf-worker.mjs && node scripts/copy-fixtures.mjs --strict",
+    "predev": "node scripts/copy-pdf-worker.mjs && node scripts/copy-fixtures.mjs",
+    "pretest": "node scripts/copy-pdf-worker.mjs && node scripts/copy-fixtures.mjs",
+    "prepare:assets": "node scripts/copy-pdf-worker.mjs && node scripts/copy-fixtures.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.17.19",
