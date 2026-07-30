@@ -26,7 +26,7 @@ def unit(index: int) -> list[float]:
 def test_insert_and_search_a_dummy_vector(tmp_path: Path) -> None:
     with open_database(tmp_path / "vec.sqlite") as db:
         db.migrate()
-        owner = db.create_user("vec@papertree.test")
+        owner = db.create_user("vec@papertree.test").owner
         paper_id = PaperId("ppr_0000000000000000000000VEC1")
         db.put_paper(owner, make_paper(paper_id, "sha256:" + "d" * 64, 1, 4))
 
@@ -46,7 +46,7 @@ def test_insert_and_search_a_dummy_vector(tmp_path: Path) -> None:
 def test_put_replaces_rather_than_duplicates(tmp_path: Path) -> None:
     with open_database(tmp_path / "vec.sqlite") as db:
         db.migrate()
-        owner = db.create_user("vec2@papertree.test")
+        owner = db.create_user("vec2@papertree.test").owner
         paper_id = PaperId("ppr_0000000000000000000000VEC2")
         db.put_paper(owner, make_paper(paper_id, "sha256:" + "e" * 64, 1, 2))
         block_id = BlockId(block_id_for(0))
@@ -64,7 +64,7 @@ def test_generations_of_the_same_block_do_not_collide(tmp_path: Path) -> None:
     vec_key is what makes this pass."""
     with open_database(tmp_path / "vec.sqlite") as db:
         db.migrate()
-        owner = db.create_user("vec3@papertree.test")
+        owner = db.create_user("vec3@papertree.test").owner
         paper_id = PaperId("ppr_0000000000000000000000VEC3")
         source_hash = "sha256:" + "0" * 64
         db.put_paper(owner, make_paper(paper_id, source_hash, 1, 2))

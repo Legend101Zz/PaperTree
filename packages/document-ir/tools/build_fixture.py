@@ -260,6 +260,38 @@ def _round(value: float) -> float:
     return round(float(value), COORD_DECIMALS)
 
 
+def _read_user_unit(doc: Any, page: Any) -> float:
+    """The page's ``/UserUnit``, or 1.0.
+
+    THIS TOOL ONLY SUPPORTS ``/UserUnit == 1``, AND IT NOW SAYS SO INSTEAD OF ASSUMING IT. The
+    two frame-building sites below used to pass a hardcoded ``user_unit=1.0`` while taking block
+    coordinates from ``page.get_text("dict")``, which MuPDF has ALREADY multiplied by
+    ``/UserUnit`` (measured: PyMuPDF 1.28 / MuPDF 1.29 scales ``page.rect``, ``get_text`` and
+    ``get_drawings``, and does NOT scale ``page.mediabox``, ``page.cropbox`` or
+    ``page.rotation_matrix`` - see ADR-001 Amendment 1's COORDINATE FRAME retraction). On a
+    ``/UserUnit != 1`` page that combines an UNSCALED frame with SCALED block coordinates.
+
+    It is a coverage gap rather than a live bug - all 8 corpus PDFs are (rotate=0, crop==media,
+    userUnit=1.0), re-measured - and ``_assert_frame_round_trips`` fires loudly rather than
+    corrupting anything. But this file is the only worked example of the parse path in the repo,
+    so an unstated assumption here is an assumption Wave 1 inherits. Supporting it properly means
+    routing every ``get_text`` coordinate through ``geometry.strip_user_unit`` first; until
+    something needs that, the limitation is STATED.
+    """
+    raw = doc.xref_get_key(page.xref, "UserUnit")
+    if raw is None or raw[0] == "null":
+        return 1.0
+    value = float(raw[1])
+    if value != 1.0:
+        raise SystemExit(
+            f"page {page.number}: /UserUnit is {value}, and this tool only supports 1.0. "
+            f"MuPDF pre-multiplies get_text()/get_drawings() coordinates by /UserUnit but not "
+            f"page.mediabox/cropbox, so the frame and the blocks would be in different scales. "
+            f"Route every coordinate through geometry.strip_user_unit() before adding such a PDF."
+        )
+    return value
+
+
 def _round_polygon(polygon: Sequence[Sequence[float]]) -> Polygon:
     return [[_round(p[0]), _round(p[1])] for p in polygon]
 
@@ -359,7 +391,7 @@ def _read_pdf(path: Path, page_indices: Sequence[int]) -> tuple[str, dict[int, R
                 media_box=[float(v) for v in page.mediabox],
                 crop_box=[float(v) for v in page.cropbox],
                 rotate=float(page.rotation),
-                user_unit=1.0,
+                user_unit=_read_user_unit(doc, page),
             )
         )
         _assert_frame_round_trips(page, frame)
@@ -844,6 +876,7 @@ def overlay(plan: PaperPlan, document: Mapping[str, Any], out: Path, scale: floa
                 media_box=[float(v) for v in page.mediabox],
                 crop_box=[float(v) for v in page.cropbox],
                 rotate=float(page.rotation),
+                user_unit=_read_user_unit(doc, page),
             )
         )
         shape = page.new_shape()

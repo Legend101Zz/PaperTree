@@ -27,6 +27,7 @@ export * from './generated/derivation.zod.js';
 // endpoints resolve, reading order is dense, and the block_id actually recomputes from the block's
 // own content). A document that passes the Zod/Pydantic validator is well-FORMED; a document that
 // also passes `validatePaper` is well-FORMED and internally CONSISTENT. Fixtures must pass both.
+export * from './canonical.js';
 export * from './identity.js';
 export * from './geometry.js';
 export * from './validate.js';

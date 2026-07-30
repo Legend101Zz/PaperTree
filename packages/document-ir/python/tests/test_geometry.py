@@ -466,6 +466,42 @@ def test_union_never_enters_the_gutter() -> None:
             assert point_in_polygon(gutter_point, polygon) is False
 
 
+def test_union_does_not_collapse_to_a_bounding_box_when_line_boxes_overlap() -> None:
+    """THE REGRESSION.
+
+    MuPDF's line rects are font ascent/descent boxes, so consecutive lines routinely abut or
+    overlap - this helper's own docstring says so, which made the overlapping case the NORMAL case
+    rather than an edge case. Deciding band membership against the band's RUNNING extent
+    (``r.y0 < band.y1``) cascades: each merge pushes y1 down, the next line overlaps THAT, and the
+    paragraph collapses into a single 4-point rectangle. It shipped in three golden fixtures.
+    Membership is decided against the band's ANCHOR interval instead.
+    """
+    overlapping = [[54, 100, 292, 112], [54, 111, 292, 123], [54, 122, 200, 134]]
+    polygons = union_of_line_rects(overlapping)
+    assert len(polygons) == 1
+    polygon = polygons[0]
+    # Not a rectangle: a rectangle here is the bug, and "4 vertices" is exactly how it looked.
+    assert len(polygon) > 4
+    assert polygon == [
+        [292.0, 100.0],
+        [292.0, 122.5],
+        [200.0, 122.5],
+        [200.0, 134.0],
+        [54.0, 134.0],
+        [54.0, 100.0],
+    ]
+    # The lie the bounding box told: 92 pt of blank page beside the short last line.
+    for blank in ([250, 128], [290, 133], [210, 130]):
+        assert point_in_polygon(blank, polygon) is False
+        # ...and it IS inside the bounding box, so the two really do differ where it matters.
+        assert point_in_polygon(blank, bbox_to_polygon(list(polygon_extent(polygon)))) is True
+    # Every line the caller passed is still covered - the fix must not under-claim either.
+    for rect in overlapping:
+        centre = [(rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2]
+        assert point_in_polygon(centre, polygon) is True
+    assert polygon_is_simple(polygon) is True
+
+
 def test_union_covers_every_rect_it_did_not_drop() -> None:
     vector = next(v for v in LINE_UNION_VECTORS if v["label"] == "union:two-column-selection")
     polygons = union_of_line_rects(vector["rects"])

@@ -720,15 +720,41 @@ export function unionOfLineRects(
   for (const members of groups.values()) {
     // Collapse rects that share a vertical band into one. They are already in the same run, so
     // taking their x-extent cannot reach another column.
+    //
+    // THE TEST IS AGAINST THE BAND'S ANCHOR INTERVAL, NOT ITS RUNNING EXTENT. The obvious
+    // `r.y0 < cur.y1` cascades: each merge pushes `cur.y1` down, so the next line overlaps the
+    // EXTENDED band, merges, pushes it further, and a whole paragraph collapses into ONE band —
+    // that is, into a plain bounding rectangle. It fired on the normal case, because MuPDF's
+    // font-metric line boxes abut or overlap by design (this function's own docstring says so),
+    // and it put 4-point rectangles on multi-line paragraphs in the shipped fixtures. A rectangle
+    // over a paragraph whose last line is short claims blank page, which is exactly the
+    // highlight-bleed lie Commitment 2 forbids.
+    //
+    // Two rects are the same VISUAL LINE iff they overlap vertically by more than half of the
+    // SHORTER of the two. "Shorter" and not "the new one": a superscript or a small-caps run
+    // sitting at the top of a line is short and must still join the line it belongs to, or the
+    // staircase would carve a notch out of text the block really does cover. The anchor interval
+    // is the band's FIRST rect and never grows, so no chain of merges can walk the band down the
+    // page. Vertical connectivity between bands is already handled by the union-find pass above,
+    // so this only decides where the staircase steps.
     const bands: Band[] = [];
+    const anchors: { y0: number; y1: number }[] = [];
     for (const r of members) {
       const cur = bands[bands.length - 1];
-      if (cur !== undefined && r.y0 < cur.y1) {
+      const anchor = anchors[anchors.length - 1];
+      let sameLine = false;
+      if (cur !== undefined && anchor !== undefined) {
+        const overlapY = Math.min(r.y1, anchor.y1) - Math.max(r.y0, anchor.y0);
+        const shorter = Math.min(r.y1 - r.y0, anchor.y1 - anchor.y0);
+        sameLine = overlapY > 0.5 * shorter;
+      }
+      if (cur !== undefined && sameLine) {
         cur.x0 = Math.min(cur.x0, r.x0);
         cur.x1 = Math.max(cur.x1, r.x1);
         cur.y1 = Math.max(cur.y1, r.y1);
       } else {
         bands.push({ ...r });
+        anchors.push({ y0: r.y0, y1: r.y1 });
       }
     }
     // Bound the vertex count: merge the adjacent band pair whose union wastes the least area,

@@ -475,9 +475,19 @@ made nullable too.
 `dpi ≤ 4800`; `Span.size ≤ 2000`; `AlgoPrefixedHash` hex body is 16–128 chars;
 `ImageRef.uri` must carry an explicit non-inline scheme. And `Block.payload`, for any type
 other than `equation`/`inline_equation`/`figure`/`table`, is `$defs/OpaquePayload`:
-identifier-shaped keys only, and **no object anywhere in its subtree may carry `model_id`,
-`prompt_hash`, `generated_by`, `derivation_id`, `derived_from`, `prompt` or `llm`**
-(`$defs/ModelFreeSubtree`, recursive).
+**identifier-shaped keys at every depth**, and **no object anywhere in its subtree may carry any
+of the 35 model-authorship key names** in `$defs/ModelFreeSubtree` (recursive).
+
+_Revised 2026-07-30, acceptance review._ It was seven key names, and `propertyNames` applied only
+to the OUTERMOST payload object — so `{"meta": {"GENERATED_BY": "gpt-4"}}` and `{"meta":
+{"model-id": "gpt-4o"}}` validated while their identical lowercase spellings one level up were
+correctly rejected, and every near-miss spelling (`model`, `authored_by`, `completion`,
+`system_prompt_digest`, …) was open at every depth. A review assembled a block openly declaring
+model authorship — `payload.author.kind: "model"`, `payload.completion`, `payload.render_as:
+"source"` — that passed ajv, Zod, Pydantic and the Tier-A semantic validator with zero findings.
+Both halves are fixed and both are pinned as a PROPERTY in `schema.spec`, not by one example.
+**The mechanism is still a deny-list of names plus a key shape and it cannot be complete** — see
+§11 residual risk 8, and do not read the summary sentence as "authorship is unrepresentable".
 **Why (two findings):**
 (a) `payload` was the **only** object in the file without `additionalProperties: false`. A
 complete, schema-valid `Derivation` fitted inside it whole, one level below the `Block` that
@@ -661,7 +671,16 @@ retained so the validator reports it with a useful message.
 
 - **30b.** For each **deterministic** kind, `from → to` must be an edit **of that class**,
   exactly reproducibly: `whitespace` — `to == from` under whitespace collapse;
-  `ligature` / `unicode_normalise` — `to == NFKC(from)` / ligature expansion;
+  `ligature` / `unicode_normalise` — ligature expansion / `to == NFKC_15.0.0(from)`, i.e. NFKC
+  **version-pinned to `CASE_FOLD_UNICODE_VERSION`**, not the runtime's. This was the ONE runtime
+  Unicode call left in the validator and it forked the two twins on **83 code points** — the 46
+  that gained a canonical combining class after Unicode 15.0.0 plus the 37 that gained a
+  compatibility decomposition (U+A7F1, U+1CCD6–U+1CCF9) — so one and the same repair was an ERROR
+  in Python 3.12 and clean in Node 22. A validator verdict that depends on which language ran it
+  is the "two implementations, one contract" failure this rewrite exists to end. Pinned by
+  `validate.pinnedNfkc` / `validate.pinned_nfkc`, by the same split-at-the-post-15.0.0-starters
+  mechanism as `identity.pinnedNfc`, and guarded by a cross-language digest over all 1,112,064
+  code points. The widening is recorded in §11 residual risk 9;
   `dehyphenate` — `to == from` with a soft/hard hyphen + line break removed;
   `reorder` — `to` is a permutation of `from`'s tokens. **ERROR.** This is the single
   highest-value rule in the spec: it is what stops a "deterministic" repair from being an
@@ -722,6 +741,13 @@ non-empty. 41. `status == "failed"` implies `partial_reason` is non-null;
   `list[T] = Field(min_length=1)` in Pydantic. Serialisers must **omit** empty arrays.
 - Two schema files ⇒ two generated modules. Do not merge them; do not add a cross-file
   `$ref`. Each file compiles standalone (the block-id pattern is duplicated on purpose).
+- **Python writers MUST call `paper.model_dump(mode="json", by_alias=True,
+exclude_unset=True)`.** The obvious call, `model_dump_json()`, is silently wrong: it emits
+  `from_` — the Python-keyword-escaped field name — instead of `from` for every `Relation`, and
+  `null` for every absent optional, producing a document with 1,241 ajv errors. `by_alias`
+  without `exclude_unset` fixes the first and not the second. This incantation appeared nowhere
+  in this file, the generated models, the Python tests or `fixtures/README.md`; it is now pinned
+  by `python/tests/test_canonical.py::test_the_only_model_dump_that_reproduces_a_valid_document`.
 
 ## 7. Versioning contract, and what "byte-identical" means
 
@@ -758,6 +784,32 @@ parser.config_hash)` produce **byte-identical canonical JSON after removing
 
 Both facts are written into the `PaperId` and `ParserInfo.parsed_at` descriptions in the
 schema so Epic 1 cannot mis-read the criterion.
+
+**AND IT IS IMPLEMENTED, ONCE, IN EACH LANGUAGE.** `src/canonical.ts` (`canonicalJson`,
+`canonicalJsonForDeterminism`) and `python/papertree_document_ir/canonical.py`
+(`canonical_json`, `canonical_json_for_determinism`) are the only implementations; they are
+pinned to each other by `conformance/canonical-vectors.json` and by `canonical.spec` in both
+languages. **Epic 1's `worker/determinism.spec` and Epic 2 must CALL them, not re-derive them
+from the four clauses above.** Until this landed, the four clauses were prose and nothing
+implemented them — the one contract Epic 0 defined and did not ship, which is precisely the
+"every feature invents its own representation" failure `findings.md` records. The two runtimes
+did not even agree on the bytes of the same committed fixture: 112,359 in TypeScript against
+112,777 in Python, diverging at 145 numeric literals, because the fixtures store
+`"confidence": 1.0` and JavaScript re-emits it as `1`.
+
+Two clauses need reading carefully, because the prose above is loose about both:
+
+- **"numbers in shortest round-trip form" means ECMAScript `Number::toString`** (ECMA-262
+  §6.1.6.1.20), in BOTH languages. Python's `repr` is also shortest-round-trip and formats
+  differently; `canonical.py` re-derives the layout. An integer-valued number outside
+  ±(2^53 − 1) is **rejected**, never emitted, in both — see §12.8.
+- **"empty optional arrays omitted (D11)" is a SCHEMA guarantee, not a serialiser step.** Every
+  optional array carries `minItems: 1`, so an empty one is not schema-valid and cannot reach the
+  serialiser; several REQUIRED arrays (`Paper.relations`, every `Flows.*`, `Section.block_ids`)
+  legitimately ARE empty, and a serialiser that dropped empty arrays would turn a valid document
+  into an invalid one. `canonical.spec` asserts the `minItems` property directly, in both
+  languages, so a future optional array shipped without it fails a test rather than quietly
+  reopening the gap.
 
 ---
 
@@ -1315,42 +1367,33 @@ hand-written — hand-writing it is the "two representations that drift" failure
 
 Stated plainly, because an overclaimed guarantee is how an epic skips a check.
 
-### 11.0 FREEZE-BLOCKING — the block-id alphabet conflicts with ADR-001 Amendment 1
+### 11.0 CLOSED — the block-id alphabet conflict was resolved in favour of the schema
 
-This is not a residual risk to live with; it is a contradiction between two artefacts that
-both claim to be normative, and **one of them must change before Epic 1 mints a single id.**
+Kept as a closed historical note, in §12's style, because it was a FREEZE-BLOCKING banner on a
+resolved conflict for long enough that an acceptance review found it and traced every sentence in
+it to be false at HEAD. A reader who acted on it would have "fixed" a non-existent conflict by
+changing the pattern to `^blk_[A-Z2-7]{16}$` — invalidating all 433 conformance vectors, all 3
+fixtures and the whole identity suite.
 
-|                                                                       | says                                                   |
-| --------------------------------------------------------------------- | ------------------------------------------------------ |
-| This schema, `$defs/BlockId` (pinned by EPIC-00)                      | `^blk_[a-z2-7]{16}$` — **lowercase**                   |
-| ADR-001 Amendment 1, ENCODE step (resolved by measurement 2026-07-30) | "RFC 4648 base32, **uppercase** alphabet A-Z2-7"       |
-| `research/benchmarks/id-conformance-vectors.json`                     | 217/217 vectors uppercase, e.g. `blk_7USUVPRFZ34OQA5T` |
+**What it said:** the schema pinned `^blk_[a-z2-7]{16}$` while ADR-001 Amendment 1's ENCODE step
+produced uppercase, so 0 of the then-217 conformance vectors validated, and one artefact had to
+change before Epic 1 minted an id.
 
-**Measured: 0 of the 217 normative conformance vectors validate against this schema.** Every
-block id the settled formula produces is rejected by the contract that is supposed to carry
-it. Amendment 1 is machine-checked against those 217 vectors _and_ 5,670 real corpus blocks,
-so the formula is not going to move casually.
+**How it was resolved:** THE FORMULA MOVED, NOT THE SCHEMA. ADR-001 Amendment 1's ENCODE step now
+lowercases the base32 (ADR-001, "the formula moved, not the schema"), and
+`conformance/identity-vectors.json` was regenerated. **433 of 433 vectors validate against
+`^blk_[a-z2-7]{16}$`**; `research/benchmarks/id-conformance-vectors.json`, the file this section
+cited, no longer exists. `test/schema.spec.ts`'s block is now titled "block ids from ADR-001
+Amendment 1 validate against the frozen pattern" and asserts AGREEMENT.
 
-Why it was missed: EPIC-00 pinned the string shape on the premise that the concurrent
-workflow was settling "the exact hash/quantisation" only. It also settled the _encoding
-case_, which the pin did not anticipate. Note the pin's own justification — "RFC 4648
-base32" — actually favours uppercase, since that is RFC 4648's canonical alphabet.
+**The lesson worth keeping**: the tripwire test that was supposed to turn red on reconciliation
+DID turn red, was corrected, and the prose did not follow it. A tripwire guards the artefact it
+asserts on; it does not guard the paragraph that describes it. When a §11 entry is resolved,
+resolve the entry.
 
-**This design has NOT changed the pinned pattern**, because reconciling two pinned artefacts
-is not this file's call. The cheap fix is one character class:
-
-- **Recommended:** change this schema to `^blk_[A-Z2-7]{16}$`. Cost: one edit. No ids, no
-  fixtures and no anchors exist yet, so there is nothing to migrate.
-- The alternative — lowercasing the formula — invalidates 217 conformance vectors and
-  requires re-running a harness owned by another workflow.
-
-Do **not** "fix" it by making the pattern case-insensitive: two spellings of one id
-reintroduces exactly the two-encodings-of-one-fact problem D11 exists to remove, and it
-would break the canonical-JSON byte-identity criterion (§7.1).
-
-`test/schema.spec.ts` carries a **tripwire test** that asserts the conflict currently exists.
-It turns red the moment either side is reconciled, which is the point: the fix cannot land
-silently and the stale test cannot survive it.
+Do **not** re-open this by making the pattern case-insensitive: two spellings of one id
+reintroduces exactly the two-encodings-of-one-fact problem D11 exists to remove, and it would
+break the canonical-JSON byte-identity criterion (§7.1).
 
 ---
 
@@ -1381,13 +1424,34 @@ silently and the stale test cannot survive it.
    and has no stated discipline. Minor, but it is the one free string in the schema with
    none.
 7. **Block-id derivation is settled elsewhere, and only the string shape is frozen here.**
-   ADR-001 **Amendment 1** (2026-07-30) resolved it by measurement: SHA-256, 2.0 pt grid,
-   `q(v) = floor(v/2.0 + 0.5)`, **anchor** geometry (`x0, y0` only), 32-code-point text
-   prefix, base32 truncated to 16 chars. Nothing in this schema depends on the outcome —
-   but see **§11.0**, which is a consequence of it and is freeze-blocking.
-8. **Nothing forbids `status: "complete"` with zero blocks.** Deliberate — a genuinely
-   empty PDF exists — but it is also the shape a total extraction failure takes, so the
-   ingest epic should treat it as a red flag. (Rule 41 covers the `failed` direction.)
+   ADR-001 **Amendment 1** (2026-07-30) resolved it by measurement: SHA-256, **1.0 pt grid**,
+   `q(v) = floor(v/1.0 + 0.5)`, **anchor** geometry (`x0, y0` only), **8-code-point** text
+   prefix, base32 lowercased and truncated to 16 chars. Nothing in this schema depends on the
+   outcome. (This item said "2.0 pt grid" and "32-code-point text prefix" until an acceptance
+   review caught it: those are the pre-rev-3 numbers, they contradicted `$defs/BlockId`'s own
+   description and the shipped `GRID_PT = 1.0` / `TEXT_PREFIX_CODEPOINTS = 8` in the same
+   repository, and anyone re-implementing the formula from here rather than from ADR-001 or the
+   code would have produced ids matching none of the 433 conformance vectors.)
+8. **`Block.payload`'s closure against authorship is a DENY-LIST OF KEY NAMES plus a key
+   shape, not a proof.** Every key at every depth must match `^[a-z][a-z0-9_]{0,63}$` and no
+   object anywhere may carry one of the 35 names in `$defs/ModelFreeSubtree`. That is stronger
+   than it was — the list was seven names and the key shape applied only to the OUTERMOST payload
+   object, so `{"meta": {"GENERATED_BY": "gpt-4"}}` and `{"meta": {"model-id": "gpt-4o"}}` both
+   validated while their lowercase depth-0 spellings did not — but a deny-list cannot be
+   complete. A producer declaring authorship under a name nobody listed still validates. Read the
+   def's description, not the summary sentence, and see risk 1: detection is the owed lint's job.
+9. **Rule 30b's `unicode_normalise` class means NFKC AS OF UNICODE 15.0.0, which is a small
+   widening of "to == NFKC(from)".** It used to call the runtime's NFKC and forked the two twins
+   on 83 code points — the 46 that gained a canonical combining class after 15.0.0 plus the 37
+   that gained a compatibility decomposition (U+A7F1, U+1CCD6–U+1CCF9) — so one and the same
+   repair was an ERROR in Python 3.12 and clean in Node 22. It is now pinned by
+   `validate.pinnedNfkc` / `validate.pinned_nfkc` the same way NFC and the case fold are pinned,
+   and guarded by a cross-language digest over all 1,112,064 code points. The residual is the
+   widening itself: a document whose repair was written against a NEWER NFKC is now rejected.
+   That is the intended direction — a verdict that depends on which language ran it is worse.
+10. **Nothing forbids `status: "complete"` with zero blocks.** Deliberate — a genuinely
+    empty PDF exists — but it is also the shape a total extraction failure takes, so the
+    ingest epic should treat it as a red flag. (Rule 41 covers the `failed` direction.)
 
 ## 12. Known binding divergences
 

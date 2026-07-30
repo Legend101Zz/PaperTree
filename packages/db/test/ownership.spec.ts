@@ -133,9 +133,9 @@ describe('the owner cannot be forged', () => {
       fresh.migrate();
       // `alice.owner` is a genuine handle, but THIS connection has not minted it.
       expect(() => fresh.listPapers(alice.owner)).toThrow(OwnershipError);
-      // Authenticating is the supported path, and it works.
-      const reauthenticated = fresh.authenticate(alice.userId);
-      expect(fresh.listPapers(reauthenticated)).toHaveLength(1);
+      // Minting on THIS connection is the supported path, and it works.
+      const reminted = fresh.ownerFor(alice.userId);
+      expect(fresh.listPapers(reminted)).toHaveLength(1);
     } finally {
       fresh.close();
     }
@@ -180,8 +180,36 @@ describe('the owner cannot be forged', () => {
     }
   });
 
-  it('refuses to authenticate a user that does not exist', () => {
-    expect(() => db.authenticate('usr_nobody')).toThrow(OwnershipError);
+  it('refuses to mint an owner for a user that does not exist', () => {
+    expect(() => db.ownerFor('usr_nobody')).toThrow(OwnershipError);
+  });
+
+  it('ownerFor is a SEAM, it is meant to be, and it is written down here', () => {
+    // The gate-3 argument above says a user id buys you nothing. That is true of code holding
+    // only an owner handle — a request handler — and it is the property the handle design
+    // exists for. It is NOT true of code that can reach `ownerFor`: one legal, type-clean,
+    // cast-free call turns Bob's public user id into a working owner for Bob.
+    //
+    // "No auth beyond a `users` table" is a stated non-goal of Epic 0, so the seam is
+    // INTENDED. But the method was called `authenticate` until an acceptance review pointed
+    // out that the name asserted the opposite, and an intended seam nobody wrote down is
+    // indistinguishable from an oversight. So: THE MINT BELONGS OUTSIDE THE REQUEST HANDLER.
+    const seam = db.ownerFor(bob.userId);
+    expect(db.getHighlight(seam, bob.highlightId)?.note).toBe('bob@papertree.test private note');
+  });
+
+  it('the connection is unreachable by any LANGUAGE operation, and that is the whole claim', () => {
+    // Gate 1, asserted rather than asserted-about. What this does NOT cover is in-process
+    // arbitrary code: `node:inspector` reads ES private fields and monkeypatching
+    // `Map.prototype.get` subverts `#resolve`. Code that can do either could equally require
+    // better-sqlite3 and open the file itself — the boundary is the process, not the class.
+    // See the "WHAT GATE 1 IS NOT" paragraph in database.ts.
+    expect(Object.getOwnPropertyNames(db)).toEqual([]);
+    expect(Object.getOwnPropertySymbols(db)).toEqual([]);
+    expect(JSON.stringify(db)).toBe('{}');
+    for (const key of ['db', 'connection', 'conn', 'statements', 'minted']) {
+      expect((db as unknown as Record<string, unknown>)[key]).toBeUndefined();
+    }
   });
 });
 

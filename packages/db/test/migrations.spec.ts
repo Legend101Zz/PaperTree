@@ -217,13 +217,20 @@ describe('30k blocks in under 2s', () => {
       );
 
       expect(db.countBlocks(owner, asPaperId(paper.paper_id), generation(1))).toBe(30_000);
+      // THE ACCEPTANCE CRITERION. This bound cannot move; it is EPIC-00's, not this file's.
+      // The margin is thin by construction — TS ~1.0-1.6 s, Python ~1.7-2.5 s against 2000 —
+      // so a failure HERE is more likely a loaded runner than a regression. First response:
+      // re-run and compare the PRINTED number above with the table in the next test, not
+      // assume the criterion broke. (Measured on a box with load average 72 caused by 23
+      // runaway processes: TS 1560 ms, Python 2505 ms. Same code at HEAD measured the same,
+      // so the shortfall was the machine.)
       expect(elapsedMs).toBeLessThan(2000);
     } finally {
       db.close();
     }
   }, 30_000);
 
-  it('measures the SAME insert with a parser-shaped payload, because the 2s bound does not hold there', () => {
+  it('measures the SAME insert with a parser-shaped payload, because the fixture is lighter than one', () => {
     // WHAT THE BOUND ABOVE ACTUALLY MEASURES. Its fixture is `minimal`: a 38-character
     // text, one span, a four-point polygon — about a quarter of the bytes a real parser
     // emits for a body paragraph. An adversarial review re-ran the acceptance test with a
@@ -231,9 +238,13 @@ describe('30k blocks in under 2s', () => {
     // 8-point polygon, a 4-field provenance object) and measured, on the machine this was
     // built on:
     //
-    //     minimal    TS ~1.0-1.1 s   Python ~1.5-1.6 s     (32 MB database)
-    //     realistic  TS ~2.1-2.2 s   Python ~3.6-3.8 s     (135 MB database)
-    //     heavy      TS ~4.0-4.4 s   Python ~7.1-7.5 s     (258 MB database)
+    //     minimal    TS ~0.71 s      Python ~0.97-1.07 s   (32 MB database)
+    //     realistic  TS ~1.50 s      Python ~2.29 s        (135 MB database)
+    //
+    // CORRECTED 2026-07-30. Every earlier figure in this file was inflated ~1.85x: the
+    // machine was carrying 22 orphaned `yes` processes at ~900% CPU, predating this work
+    // by 1d16h. Re-measured with them killed, TypeScript clears <2s on the parser-shaped
+    // payload as well; only Python does not, and only by ~0.29 s.
     //
     // Attributed on the same machine, for the realistic payload: ~0.4 s JSON.stringify,
     // ~0.9 s raw insert of 123 MB, ~0.35 s the four `blocks` indexes real queries need,
@@ -243,6 +254,10 @@ describe('30k blocks in under 2s', () => {
     // So the acceptance figure is TRUE and it is FIXTURE-DEPENDENT, and both halves are
     // now recorded rather than one being implied. The assertion here is a regression guard
     // at a measured bound, not a second acceptance criterion — do not confuse the two.
+    //
+    // THE SAME CAVEAT IS ALSO IN research/build/EPIC-00-spine.md's acceptance table and in
+    // research/build/EPIC-00-RESULT.md. It used to live only here, 240 lines inside a spec
+    // file, which is not where a Wave-1 agent sizing an ingest pipeline will look.
     const db: PaperTreeDb = openDatabase({ filename: file });
     try {
       db.migrate();
@@ -262,12 +277,17 @@ describe('30k blocks in under 2s', () => {
 
       console.log(
         `[db/migrations.spec] 30,000 REALISTIC blocks (60 words, 12 spans, 8-point polygon) ` +
-          `inserted in ${elapsedMs.toFixed(0)} ms — the <2s acceptance bound is met by the ` +
-          `minimal fixture only; this is the honest parser-shaped number`,
+          `inserted in ${elapsedMs.toFixed(0)} ms — TypeScript clears <2s on this payload ` +
+          `too; Python does not (~2.29 s). Parser-shaped, measured.`,
       );
 
       expect(db.countBlocks(owner, asPaperId(paper.paper_id), generation(1))).toBe(30_000);
-      expect(elapsedMs).toBeLessThan(8000);
+      // 8000 was 3.5x the then-measured 2284 ms (since corrected to ~1382 ms, so ~5.8x) — the insert path could regress THREEFOLD and stay
+      // green, which is a smoke test that the code still terminates, not "a regression guard at
+      // a measured bound" as the comment above claimed. 5000 is ~2.2x, which is deliberate slack
+      // for slower CI hardware rather than an engineering target: this same insert measured
+      // 3171-3965 ms on a box under load average 72-103, so the slack is doing real work.
+      expect(elapsedMs).toBeLessThan(5000);
     } finally {
       db.close();
     }

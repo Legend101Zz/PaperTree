@@ -721,15 +721,40 @@ def union_of_line_rects(
     for members in groups.values():
         # Collapse rects that share a vertical band into one. They are already in the same run, so
         # taking their x-extent cannot reach another column.
+        #
+        # THE TEST IS AGAINST THE BAND'S ANCHOR INTERVAL, NOT ITS RUNNING EXTENT. The obvious
+        # ``r.y0 < bands[-1].y1`` cascades: each merge pushes ``y1`` down, so the next line
+        # overlaps the EXTENDED band, merges, pushes it further, and a whole paragraph collapses
+        # into ONE band - that is, into a plain bounding rectangle. It fired on the normal case,
+        # because MuPDF's font-metric line boxes abut or overlap by design (this function's own
+        # docstring says so), and it put 4-point rectangles on multi-line paragraphs in the shipped
+        # fixtures. A rectangle over a paragraph whose last line is short claims blank page, which
+        # is exactly the highlight-bleed lie Commitment 2 forbids.
+        #
+        # Two rects are the same VISUAL LINE iff they overlap vertically by more than half of the
+        # SHORTER of the two. "Shorter" and not "the new one": a superscript or a small-caps run
+        # sitting at the top of a line is short and must still join the line it belongs to, or the
+        # staircase would carve a notch out of text the block really does cover. The anchor
+        # interval is the band's FIRST rect and never grows, so no chain of merges can walk the
+        # band down the page. Vertical connectivity between bands is already handled by the
+        # union-find pass above, so this only decides where the staircase steps.
         bands: list[_Band] = []
+        anchors: list[tuple[float, float]] = []
         for r in members:
-            if bands and r.y0 < bands[-1].y1:
+            same_line = False
+            if bands:
+                anchor_y0, anchor_y1 = anchors[-1]
+                overlap_y = min(r.y1, anchor_y1) - max(r.y0, anchor_y0)
+                shorter = min(r.y1 - r.y0, anchor_y1 - anchor_y0)
+                same_line = overlap_y > 0.5 * shorter
+            if bands and same_line:
                 cur = bands[-1]
                 cur.x0 = min(cur.x0, r.x0)
                 cur.x1 = max(cur.x1, r.x1)
                 cur.y1 = max(cur.y1, r.y1)
             else:
                 bands.append(_Band(r.x0, r.y0, r.x1, r.y1))
+                anchors.append((r.y0, r.y1))
         # Bound the vertex count: merge the adjacent band pair whose union wastes the least area,
         # repeatedly. Over-approximates WITHIN a run, never across runs.
         while len(bands) * 2 + 2 > max_vertices and len(bands) > 1:

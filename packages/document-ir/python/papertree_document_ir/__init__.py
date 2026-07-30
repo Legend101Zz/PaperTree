@@ -14,6 +14,13 @@ and ``loads`` is here rather than ``json.loads`` for the reason given on it.
 
 from typing import Any
 
+from papertree_document_ir.canonical import (
+    MAX_SAFE_JSON_INTEGER,
+    CanonicalJsonError,
+    canonical_json,
+    canonical_json_for_determinism,
+    ecmascript_number_to_string,
+)
 from papertree_document_ir.generated.derivation_models import (
     KNOWN_DERIVATION_KINDS,
     Derivation,
@@ -139,6 +146,7 @@ from papertree_document_ir.identity import (
     LIGATURE_TABLE,
     MAX_QUANTISED_BUCKET,
     NFC_POST_PIN_DECOMPOSITIONS,
+    NFC_POST_PIN_STARTERS,
     TEXT_PREFIX_CODEPOINTS,
     WHITESPACE_CODE_POINTS,
     AppliedProposal,
@@ -154,6 +162,7 @@ from papertree_document_ir.identity import (
     content_hash,
     content_hash_of_normalised,
     normalise_text,
+    pinned_nfc,
     quantise,
     resolved_text,
     truncate_code_points,
@@ -192,6 +201,11 @@ def loads(text: str | bytes) -> Any:
 
 
 __all__ = [
+    "ecmascript_number_to_string",
+    "canonical_json_for_determinism",
+    "canonical_json",
+    "CanonicalJsonError",
+    "MAX_SAFE_JSON_INTEGER",
     "AbstractRef",
     "AlgoPrefixedHash",
     "Alternative",
@@ -245,6 +259,7 @@ __all__ = [
     "MetadataYear",
     "ModelAuthor",
     "NFC_POST_PIN_DECOMPOSITIONS",
+    "NFC_POST_PIN_STARTERS",
     "OpaquePayload",
     "Page",
     "PageFrame",
@@ -311,6 +326,7 @@ __all__ = [
     "normalise_rect",
     "normalise_rotation",
     "normalise_text",
+    "pinned_nfc",
     "pdf_to_viewport",
     "point_in_polygon",
     "polygon_area",

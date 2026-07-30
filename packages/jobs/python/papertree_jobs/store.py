@@ -2,13 +2,22 @@
 
 Same two gates as ``packages/db`` (findings.md §F), for the same reason:
 
-  1. THE CONNECTION IS PRIVATE. ``_conn`` is not exported and there is no accessor, so no
-     SQL exists outside this module and none can forget a WHERE clause.
-  2. EVERY TENANT-FACING METHOD TAKES ``owner: OwnerId`` FIRST, and ``OwnerId`` is
-     papertree_db's guarded-constructor class — ``OwnerId("usr_x")`` raises, so the check
-     here is a real gate rather than a type annotation. It is deliberately the SAME class
-     and not a second one: two spellings of "the owner" is how this repo ended up with two
-     ``Highlight`` types (findings.md §G5).
+  1. THE CONNECTION IS PRIVATE BY CONVENTION. ``_conn`` is not exported and there is no
+     accessor, so no SQL exists outside this module and none can forget a WHERE clause —
+     but ``store._conn`` is one attribute lookup away, exactly as in ``papertree_db``. Read
+     that package's gate 1 for the honest version; ``._conn`` is a forbidden token outside
+     this module and ``test_jobs_api.py`` greps for it.
+  2. EVERY TENANT-FACING METHOD TAKES ``owner: OwnerId`` FIRST, AND THIS STORE RESOLVES IT
+     AGAINST ITS OWN HANDLE TABLE. The CLASS is papertree_db's — deliberately the same one
+     and not a second spelling, because two spellings of "the owner" is how this repo ended
+     up with two ``Highlight`` types (findings.md §G5) — but the CHECK cannot be borrowed,
+     and an earlier version of this file said it was. It did ``isinstance(owner, OwnerId)``
+     and read ``owner.value``, and nothing else: no per-connection binding at all. An
+     adversarial review walked straight through it, on a brand-new ``JobStore`` the victim
+     had never authenticated against, to a cross-tenant read AND a cross-tenant
+     ``request_cancel``. An owner handle is minted BY A CONNECTION and means nothing on any
+     other, so this store mints and resolves its own — see ``owner_for`` and ``_resolve``.
+     A handle from a ``PaperTreeDb`` on the same file is correctly refused here.
 
   THE ONE DELIBERATE EXCEPTION is the claim path (``_claim`` and friends, all underscored
   and used only by ``runner.py``). A worker is not a tenant: it drains every tenant's
@@ -30,7 +39,14 @@ from types import TracebackType
 from typing import Any, Final
 
 import sqlite_vec  # type: ignore[import-untyped]
-from papertree_db import MigrationResult, OwnerId, OwnershipError, migrate, new_id
+from papertree_db import (
+    MigrationResult,
+    OwnerId,
+    OwnershipError,
+    migrate,
+    mint_owner,
+    new_id,
+)
 
 from .model import DEFAULT_MAX_ATTEMPTS, Job, JobState, StepRecord
 
@@ -53,7 +69,7 @@ _CRASH_LOOP_ERROR: Final = (
 class JobStore:
     """The durable side of the job runner. Open one per process."""
 
-    __slots__ = ("_conn", "_migrations_dir")
+    __slots__ = ("_conn", "_handles", "_migrations_dir")
 
     def __init__(self, filename: str | Path, migrations_dir: Path | None = None) -> None:
         conn = sqlite3.connect(str(filename), isolation_level=None)
@@ -73,6 +89,8 @@ class JobStore:
         conn.execute("PRAGMA busy_timeout = 5000")
         self._conn = conn
         self._migrations_dir = migrations_dir
+        # handle -> user_id, for handles THIS connection minted. See `_resolve`.
+        self._handles: dict[str, str] = {}
 
     # ── lifecycle ────────────────────────────────────────────────────────────────────
 
@@ -82,6 +100,45 @@ class JobStore:
 
     def close(self) -> None:
         self._conn.close()
+
+    # ── owner minting ────────────────────────────────────────────────────────────────
+
+    def owner_for(self, user_id: str) -> OwnerId:
+        """Turns an ALREADY-VERIFIED user id into an owner handle for THIS connection.
+
+        THIS PERFORMS NO AUTHENTICATION — see ``PaperTreeDb.owner_for``, of which this is
+        the exact mirror. It checks that a ``users`` row exists and nothing more.
+
+        WHY THIS EXISTS AT ALL, given the class comes from papertree_db. An owner handle is
+        minted by a connection and resolvable only by that connection; ``JobStore`` opens
+        its own, so a handle from a ``PaperTreeDb`` over the same file is not one this store
+        can resolve and is refused. Borrowing the object without borrowing the binding is
+        what the previous version did, and it left this store with no gate at all.
+        """
+        row = self._conn.execute(
+            "SELECT user_id FROM users WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if row is None:
+            raise OwnershipError(f"no such user: {user_id}")
+        handle, owner = mint_owner()
+        self._handles[handle] = user_id
+        return owner
+
+    def _resolve(self, owner: OwnerId) -> str:
+        """Turns an owner HANDLE into the ``user_id`` every statement binds, or refuses."""
+        if not isinstance(owner, OwnerId):
+            raise OwnershipError(
+                f"expected an OwnerId minted by this JobStore, got {type(owner).__name__}"
+            )
+        user_id = self._handles.get(owner.handle)
+        if user_id is None:
+            raise OwnershipError(
+                "that value was not minted by this JobStore. An OwnerId is an opaque "
+                "per-connection handle from JobStore.owner_for(); a handle minted by a "
+                "PaperTreeDb — even one over the same file — is not one, and neither is an "
+                "OwnerId constructed around a user id."
+            )
+        return user_id
 
     def __enter__(self) -> JobStore:
         return self
@@ -111,13 +168,13 @@ class JobStore:
         The dedup is a UNIQUE index read inside the same IMMEDIATE transaction as the
         insert, so two concurrent enqueues of one key produce one job, not a race.
         """
-        _require_owner(owner)
+        owner_id = self._resolve(owner)
         now = time.time()
         self._conn.execute("BEGIN IMMEDIATE")
         try:
             existing = self._conn.execute(
                 "SELECT job_id FROM jobs WHERE owner_id = ? AND kind = ? AND idempotency_key = ?",
-                (owner.value, kind, idempotency_key),
+                (owner_id, kind, idempotency_key),
             ).fetchone()
             if existing is not None:
                 job_id = str(existing["job_id"])
@@ -129,7 +186,7 @@ class JobStore:
                     "VALUES (?,?,?,?,?,'pending',0,0,?,?,NULL,NULL,0,0,NULL,NULL,?,?)",
                     (
                         job_id,
-                        owner.value,
+                        owner_id,
                         kind,
                         idempotency_key,
                         json.dumps(payload, separators=(",", ":")),
@@ -147,32 +204,32 @@ class JobStore:
 
     def get_job(self, owner: OwnerId, job_id: str) -> Job | None:
         """Readable from any process at any time — this is the progress endpoint."""
-        _require_owner(owner)
+        owner_id = self._resolve(owner)
         row = self._conn.execute(
             f"SELECT {_JOB_COLUMNS} FROM jobs WHERE owner_id = ? AND job_id = ?",
-            (owner.value, job_id),
+            (owner_id, job_id),
         ).fetchone()
         return None if row is None else _job(row)
 
     def list_jobs(self, owner: OwnerId) -> list[Job]:
-        _require_owner(owner)
+        owner_id = self._resolve(owner)
         return [
             _job(r)
             for r in self._conn.execute(
                 f"SELECT {_JOB_COLUMNS} FROM jobs WHERE owner_id = ? ORDER BY created_at DESC",
-                (owner.value,),
+                (owner_id,),
             )
         ]
 
     def list_steps(self, owner: OwnerId, job_id: str) -> list[StepRecord]:
         """The checkpoint ledger: which steps are done, which is running, which failed."""
-        _require_owner(owner)
+        owner_id = self._resolve(owner)
         return [
             _step(r)
             for r in self._conn.execute(
                 f"SELECT {_STEP_COLUMNS} FROM job_steps WHERE owner_id = ? AND job_id = ? "
                 "ORDER BY step_index",
-                (owner.value, job_id),
+                (owner_id, job_id),
             )
         ]
 
@@ -183,12 +240,12 @@ class JobStore:
         wait for. A running job gets the flag, and its worker observes it at the next step
         boundary. That is the whole of "honoured within one step".
         """
-        _require_owner(owner)
+        owner_id = self._resolve(owner)
         cursor = self._conn.execute(
             "UPDATE jobs SET cancel_requested = 1, updated_at = ?, "
             "  state = CASE WHEN state = 'pending' THEN 'cancelled' ELSE state END "
             "WHERE owner_id = ? AND job_id = ? AND state IN ('pending', 'running')",
-            (_iso(), owner.value, job_id),
+            (_iso(), owner_id, job_id),
         )
         return cursor.rowcount > 0
 
@@ -344,19 +401,6 @@ class JobStore:
             "lease_expires_at = NULL, updated_at = ? WHERE job_id = ? AND lease_owner = ?",
             (time.time() + delay, error, _iso(), job_id, worker_id),
         )
-
-
-def _require_owner(owner: OwnerId) -> None:
-    # papertree_db.OwnerId has a guarded constructor. `isinstance` alone is NOT enough:
-    # `object.__new__(OwnerId)` bypasses `__init__` and still satisfies it. Reading `.value`
-    # is the real check — it raises unless the instance carries the mint token (ids.py) —
-    # so it is done HERE, at the gate, rather than incidentally at the first bind site.
-    if not isinstance(owner, OwnerId):
-        raise OwnershipError(
-            f"{owner!r} is not an OwnerId. One is minted only by PaperTreeDb.authenticate() "
-            f"/ create_user(), which require a users row."
-        )
-    _ = owner.value
 
 
 def _iso() -> str:

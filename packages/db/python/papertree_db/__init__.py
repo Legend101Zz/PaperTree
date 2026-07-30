@@ -9,12 +9,18 @@ Two guarantees, and nothing else:
      rejects it); forging one raises. See ``database.py``'s module docstring.
 
 NOTE WHAT IS NOT EXPORTED: no ``sqlite3.Connection``, no ``execute``, no cursor and no
-connection accessor. That is deliberate and it is gate 1.
+connection accessor. That is deliberate and it is gate 1 — but read gate 1 in
+``database.py``'s docstring before relying on it. In TypeScript the connection is
+UNREACHABLE (``#db`` is an ES private field); in Python it is merely UNEXPORTED, and
+``db._conn`` is one attribute lookup away. The two languages do not deliver this gate
+equally. ``._conn`` outside ``papertree_db`` is a forbidden token and
+``test_ownership.py`` greps for it.
 """
 
 from .database import (
     MAX_DERIVATION_DEPTH,
     VECTOR_DIMENSIONS,
+    CreatedUser,
     PaperTreeDb,
     Row,
     open_database,
@@ -31,6 +37,7 @@ from .ids import (
     PageId,
     PaperId,
     generation,
+    mint_owner,
     new_id,
 )
 from .migrate import (
@@ -50,6 +57,7 @@ __all__ = [
     "AnchorId",
     "AppliedMigration",
     "BlockId",
+    "CreatedUser",
     "DerivationId",
     "Generation",
     "HighlightId",
@@ -67,6 +75,7 @@ __all__ = [
     "generation",
     "load_migrations",
     "migrate",
+    "mint_owner",
     "new_id",
     "open_database",
     "split_statements",

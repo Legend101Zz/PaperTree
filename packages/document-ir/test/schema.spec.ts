@@ -486,6 +486,68 @@ describe('Block.payload is closed against derivation smuggling (review finding: 
     );
   });
 
+  /**
+   * THE NEAR-MISS SET. The test above it passes because its example happens to use `model_id`
+   * and `prompt_hash`; an acceptance review swapped those for `model` and `system_prompt_digest`
+   * and the same shape sailed through — a block OPENLY declaring model authorship, inside a
+   * golden fixture, clean under ajv + Zod + Pydantic + the Tier-A semantic validator.
+   *
+   * Two things were wrong and both are fixed. The blocked-key list was seven names; it is now 35
+   * and covers every spelling that review reached for. And `propertyNames` was applied ONLY to
+   * the outermost payload object, so at depth >= 1 keys did not even have to be identifier-shaped
+   * and the deny-list was case-sensitive: `{meta: {GENERATED_BY}}` and `{meta: {"model-id"}}`
+   * both validated while their lowercase depth-0 spellings were correctly rejected. It is now on
+   * `$defs/ModelFreeSubtree`, i.e. at every depth.
+   *
+   * Pinned as a PROPERTY here rather than by one example, because one example is exactly what
+   * made this survivable. Note what the mechanism still is: a deny-list of names plus a key
+   * shape. It is not "authorship is unrepresentable" — see the def's own description and
+   * DESIGN.md §11 residual risk 8.
+   */
+  it.each([
+    ['a bare model name', { model: 'openai/gpt-4o' }],
+    ['authorship + the completion itself', { authored_by: 'model', completion: '<model prose>' }],
+    ['a prompt digest under a near-miss name', { system_prompt_digest: 'sha256:0a1b' }],
+    ['an agent field', { agent: 'anthropic/claude-opus-4' }],
+    ['a generator field', { generator: 'gpt-4o', response: '<model prose>' }],
+    [
+      'UPPERCASE, nested — was open because propertyNames was top-level only',
+      {
+        meta: { GENERATED_BY: 'gpt-4' },
+      },
+    ],
+    ['a hyphenated spelling, nested — same hole', { meta: { 'model-id': 'gpt-4o' } }],
+    ['a non-identifier key at depth 2', { a: { b: { 'Not An Ident': 1 } } }],
+    [
+      'the full declaration the review built, with NO originally-blocked key',
+      {
+        author: { kind: 'model', model: 'anthropic/claude-opus-4', temperature: 0.7 },
+        system_prompt_digest: 'sha256:0a1b2c3d4e5f6071',
+        completion: 'Residual learning reframes each layer as a correction to the identity map.',
+        render_as: 'source',
+      },
+    ],
+  ])('rejects an authorship declaration spelled as: %s', (_label, payload) => {
+    assertInvalid(withExtraBlock(plainBlock({ type: 'guided_paragraph', payload })));
+  });
+
+  it('…and still accepts an ordinary forward-compatible payload, so this is not just "reject"', () => {
+    // The non-vacuous half. Forward compatibility is the reason `payload` is open at all, and a
+    // deny-list wide enough to break it would be a worse bug than the one it closed.
+    assertValid(
+      withExtraBlock(
+        plainBlock({
+          type: 'chart_v2',
+          payload: {
+            chart_kind: 'bar',
+            axes: { x: { label: 'layers', unit: 'count' }, y: { label: 'error', unit: 'pct' } },
+            series: [{ label: 'plain', values: [7.1, 6.5] }],
+          },
+        }),
+      ),
+    );
+  });
+
   it("a figure block's payload cannot be smuggled either — it must be a FigurePayload", () => {
     assertInvalid(
       paper((p) => {
@@ -678,6 +740,29 @@ describe('specialised payloads', () => {
     assertInvalid(
       paper((p) => {
         blockOf(p, ID.figure).payload.image.uri = '/local/path.webp';
+      }),
+    );
+    // THE NEAR MISS. `data:` has no `//` authority so the pattern rejects it — but `data://` is
+    // the same scheme name one slash-pair away, and `[^\s]+` was unbounded, so a 40 000-character
+    // base64 blob validated in all three bindings. "Provably never embeds pixel bytes" was a
+    // property of a length bound, and there wasn't one. There is now: maxLength 2048.
+    assertInvalid(
+      paper((p) => {
+        blockOf(p, ID.figure).payload.image.uri = `data://image/webp;base64,${'A'.repeat(40_000)}`;
+      }),
+    );
+    // …and it is the LENGTH doing the work, not a scheme allowlist, so say which: a short
+    // `data://` URI still validates. That is a documented limitation, not an oversight — see the
+    // field's own description.
+    assertValid(
+      paper((p) => {
+        blockOf(p, ID.figure).payload.image.uri = 'data://image/webp;base64,AAAA';
+      }),
+    );
+    // Any scheme carrying a long blob is now unrepresentable, not just `data://`.
+    assertInvalid(
+      paper((p) => {
+        blockOf(p, ID.figure).payload.image.uri = `r2://x/${'A'.repeat(4000)}`;
       }),
     );
   });

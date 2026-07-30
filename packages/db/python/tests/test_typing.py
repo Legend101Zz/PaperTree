@@ -53,20 +53,26 @@ def test_an_owner_whose_constructor_was_BYPASSED_authorises_nothing(db: PaperTre
     A guarded ``__init__`` is not a gate on its own: ``object.__new__`` skips it entirely.
     An adversarial review built a working ``OwnerId`` this way and used it to read AND
     write another tenant's highlight — findings.md §F1, reproduced through the one hole
-    the design admitted to. ``ids.OwnerId.value`` now re-checks the mint token, so a
-    bypassed constructor is rejected at the gate rather than trusted at the bind site.
+    the design admitted to.
+
+    TWO independent things close it now, and the second is the one that matters. (1)
+    ``OwnerId.handle`` re-checks the mint token, so a bypassed constructor raises. (2) Even a
+    PROPERLY constructed ``OwnerId`` carrying the victim's user id is worthless, because what
+    ``_resolve`` looks up is an unguessable per-connection HANDLE — see
+    ``test_ownership.test_a_forged_owner_id_is_worthless_however_it_is_built``, which walks the
+    three routes that defeated design 1.
     """
-    victim = db.create_user("victim@papertree.test")
+    victim = db.create_user("victim@papertree.test").owner
     paper_id = PaperId("ppr_000000000000000000000FORGE")
     db.put_paper(victim, make_paper(paper_id, "sha256:" + "7" * 64, 1, 2))
     highlight_id = db.create_highlight(victim, paper_id, GEN, "yellow", "victim private note")
 
     forged = object.__new__(OwnerId)  # never calls __init__, still isinstance(OwnerId)
-    object.__setattr__(forged, "_value", victim.value)
+    object.__setattr__(forged, "_handle", victim.handle)
     assert isinstance(forged, OwnerId)
 
     with pytest.raises(OwnershipError):
-        _ = forged.value
+        _ = forged.handle
     with pytest.raises(OwnershipError):
         db.get_highlight(forged, highlight_id)
     with pytest.raises(OwnershipError):
@@ -102,7 +108,7 @@ def test_a_bare_string_is_not_an_owner(db: PaperTreeDb) -> None:
 
 
 def test_ids_are_not_interchangeable(db: PaperTreeDb) -> None:
-    owner = db.create_user("typing@papertree.test")
+    owner = db.create_user("typing@papertree.test").owner
     paper_id = PaperId("ppr_00000000000000000000TYPING")
     db.put_paper(owner, make_paper(paper_id, "sha256:" + "9" * 64, 1, 2))
 
@@ -118,7 +124,7 @@ def test_ids_are_not_interchangeable(db: PaperTreeDb) -> None:
 
 
 def test_the_write_vectors_from_findings_f1_and_f3_do_not_typecheck(db: PaperTreeDb) -> None:
-    owner = db.create_user("typing2@papertree.test")
+    owner = db.create_user("typing2@papertree.test").owner
     paper_id = PaperId("ppr_0000000000000000000TYPING2")
     db.put_paper(owner, make_paper(paper_id, "sha256:" + "8" * 64, 1, 2))
     highlight_id = db.create_highlight(owner, paper_id, GEN, "yellow")
@@ -139,7 +145,7 @@ def test_there_is_no_connection_to_reach(db: PaperTreeDb) -> None:
     assert not hasattr(db, "execute")
     assert not hasattr(db, "cursor")
     assert not hasattr(db, "connection")
-    assert PaperTreeDb.__slots__ == ("_conn", "_migrations_dir", "_minted")
+    assert PaperTreeDb.__slots__ == ("_conn", "_handles", "_migrations_dir")
     with pytest.raises(AttributeError):
         db.connection = object()  # type: ignore[attr-defined]
 
@@ -149,7 +155,7 @@ def test_every_public_helper_takes_the_owner_first(db: PaperTreeDb) -> None:
 
     A new helper that forgets the owner parameter fails here the moment it is added.
     """
-    exempt = {"migrate", "close", "create_user", "authenticate"}
+    exempt = {"migrate", "close", "create_user", "owner_for"}
     checked = 0
     for name in dir(db):
         if name.startswith("_") or name in exempt:

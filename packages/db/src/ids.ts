@@ -91,6 +91,8 @@ export function asPaperId(value: string): PaperId {
 export function asBlockId(value: string): BlockId {
   return value as BlockId;
 }
-export function asPageId(value: string): PageId {
-  return value as PageId;
-}
+// NOTE, deliberately: there is no `asPageId`. There was, exported and never called by anything
+// in the repository — written for symmetry with its two siblings, which ARE used. That is the
+// seed of the pattern findings.md §A measures (1,698 lines of geometry code with zero
+// importers), so it was deleted rather than kept "for later". Re-add it in the PR that first
+// needs it. The Python twin never had one: `NewType` doubles as the caster there.

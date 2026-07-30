@@ -11,14 +11,14 @@
     "grid_pt": 1.0,
     "text_prefix_codepoints": 8,
     "quantise": "q(v,g) = floor(v/g + 0.5) evaluated in IEEE-754 binary64, emitted as a base-10 integer: optional leading '-', no '+', no leading zeros, no decimal point, no negative zero. NOT round(v/g)*g -- Python round() is half-to-even, JS Math.round and Rust f64::round are half-away-from-zero, and they disagree on every coordinate where v/g lands on k+0.5. RANGE: the bucket index MUST satisfy |q| <= 2^53-1 = 9007199254740991; an implementation MUST REJECT a coordinate outside that range rather than emit it, because JS String() switches to exponential notation at 1e21 ('1e+21') where Python str() stays positional ('1000000000000000000000'). PDF 1.7 Annex C bounds user space at +/-32767, so conforming input never approaches the guard.",
-    "coordinate_frame": "PDF DEFAULT USER SPACE units (1/72in); /UserUnit is deliberately NOT applied, so coordinates are raw default-user-space units and never physical ones (pinned by fiat: no corpus PDF carries a /UserUnit, and the only thing that matters is that all implementations make the same choice); origin TOP-LEFT of the page's post-rotation rect; y grows DOWNWARD so y0 is the top edge; /Rotate already applied; coordinates relative to the page rect's own origin (x = raw_x - rect.x0), so a CropBox offset cannot leak into the id; the binary64 value the IR stores, NOT pre-rounded.",
+    "coordinate_frame": "PDF DEFAULT USER SPACE units (1/72in); /UserUnit is deliberately NOT applied, so coordinates are raw default-user-space units and never physical ones (pinned BY FIAT: no corpus PDF carries a /UserUnit, and the only thing that matters is that all implementations make the same choice). MEASURED, and the opposite of what an earlier revision of ADR-001 claimed: MuPDF page.rect AND every coordinate get_text()/get_drawings() returns ARE pre-multiplied by /UserUnit, while page.mediabox, page.cropbox and page.rotation_matrix are NOT (PyMuPDF 1.28 / MuPDF 1.29: /MediaBox [0 0 200 300] with /UserUnit 2.5 gives page.rect (0,0,500,750)). A MuPDF-based parser MUST divide /UserUnit back out exactly once, in raw PDF space, before normalising; origin TOP-LEFT of the page's post-rotation rect; y grows DOWNWARD so y0 is the top edge; /Rotate already applied; coordinates relative to the page rect's own origin (x = raw_x - rect.x0), so a CropBox offset cannot leak into the id; the binary64 value the IR stores, NOT pre-rounded.",
     "payload": "source_hash|page_index|q(x0)|q(y0)|block_type|normalise(text)[:8]",
     "payload_encoding": "UTF-8; fields joined with U+007C; only the last field may contain U+007C, so no escaping is defined or permitted",
     "source_hash_form": "lowercase hex SHA-256 of the PDF bytes, 64 chars, WITHOUT the 'sha256:' prefix the IR stores",
     "page_index_form": "0-based, base-10 integer, no padding",
     "block_type_form": "the IR's block-type discriminator verbatim; matches ^[a-z][a-z0-9_]{0,63}$ and so contains no U+007C",
     "normalise": [
-      "Unicode NFC",
+      "Unicode NFC, VERSION-PINNED to case_fold_unicode_version in both of its halves - see the `nfc_version_pin` block. Canonical ORDERING: treat every code point in nfc_version_pin.post_pin_starters as a starter (ccc 0). Canonical COMPOSITION: immediately after the runtime's NFC, replace every code point in nfc_version_pin.post_pin_decompositions with the decomposition given there. An implementation MUST NOT simply call the runtime's NFC and stop - Python 3.12 (UCD 15.0.0) and Node 22 (Unicode 17.0) disagree on 46 combining classes and 20 compositions, and every disagreement is a forked block_id AND a forked content_hash.",
       "ligature expansion (ligature_table below)",
       "collapse each maximal run of whitespace_chars to one U+0020, then strip whitespace_chars from both ends",
       "case fold BY TABLE: for each code point, replace it with case_fold_map[cp] if present, else leave it unchanged. This is Unicode full case folding, non-Turkic (UAX #21 toCasefold, CaseFolding.txt status C+F), pinned to the Unicode version in case_fold_unicode_version. An implementation MUST NOT call str.casefold() / String.prototype.toLowerCase() / str::to_lowercase() -- not for the mapped code points and NOT FOR THE REMAINDER EITHER, because runtimes carry different Unicode versions and a code point unmapped in one is mapped in another. Full case folding is context-independent, so per-code-point application is exact and JS's context-sensitive final-sigma rule cannot fire."
@@ -1601,6 +1601,146 @@
     "U+1E920": "𞥂",
     "U+1E921": "𞥃"
   },
+  "nfc_version_pin": {
+    "why": "Step 1 of `normalise` is Unicode NFC, and NFC is the only step an implementation is expected to take from its runtime. That makes it a VERSION-PINNING HOLE of exactly the kind case_fold_map closes, and it forks in TWO independent ways because NFC is two algorithms: canonical ORDERING and canonical COMPOSITION. Both are pinned to case_fold_unicode_version below. Measured: Python 3.12 carries UCD 15.0.0, Node 22 carries Unicode 17.0.",
+    "post_pin_starters_note": "CANONICAL ORDERING. These 46 code points have canonical combining class 0 in UCD 15.0.0 (they are UNASSIGNED there) and a NON-ZERO ccc in Unicode 16.0/17.0. A runtime that knows them as marks REORDERS the combining sequence around them; one that does not, leaves it alone - one input, two normalised strings, two block_ids, two content_hashes. An implementation MUST treat every one of them as a STARTER (ccc 0), which is UCD-15.0.0 behaviour. None of them has a canonical decomposition or composition in any runtime, so the cheapest exact way to do that is to SPLIT the string at each occurrence, apply the runtime's NFC to each segment, and rejoin around the untouched code points. This is NOT a cosmetic concern: U+0897 is ARABIC PEPET, U+10EFA/U+10EFB are Arabic marks, U+1ACF..U+1AEB are Combining Diacritical Marks Extended and U+113CE..U+113D0 are Tulu-Tigalari viramas.",
+    "post_pin_starters": [
+      "U+0897",
+      "U+1ACF",
+      "U+1AD0",
+      "U+1AD1",
+      "U+1AD2",
+      "U+1AD3",
+      "U+1AD4",
+      "U+1AD5",
+      "U+1AD6",
+      "U+1AD7",
+      "U+1AD8",
+      "U+1AD9",
+      "U+1ADA",
+      "U+1ADB",
+      "U+1ADC",
+      "U+1ADD",
+      "U+1AE0",
+      "U+1AE1",
+      "U+1AE2",
+      "U+1AE3",
+      "U+1AE4",
+      "U+1AE5",
+      "U+1AE6",
+      "U+1AE7",
+      "U+1AE8",
+      "U+1AE9",
+      "U+1AEA",
+      "U+1AEB",
+      "U+10D69",
+      "U+10D6A",
+      "U+10D6B",
+      "U+10D6C",
+      "U+10D6D",
+      "U+10EFA",
+      "U+10EFB",
+      "U+113CE",
+      "U+113CF",
+      "U+113D0",
+      "U+1612F",
+      "U+1E5EE",
+      "U+1E5EF",
+      "U+1E6E3",
+      "U+1E6E6",
+      "U+1E6EE",
+      "U+1E6EF",
+      "U+1E6F5"
+    ],
+    "post_pin_decompositions_note": "CANONICAL COMPOSITION. These 20 sequences are composed by runtimes NEWER than case_fold_unicode_version and not by UCD 15.0.0 (Unicode 16.0 script additions: Todhri, Tulu-Tigalari, Gurung Khema, Kirat Rai). Immediately after the runtime's NFC, replace each of these code points with the full canonical decomposition given here, so every implementation emits the decomposed form. Three of the values are 3 code points long because the decompositions are recursive.",
+    "post_pin_decompositions": {
+      "U+105C9": [
+        "U+105D2",
+        "U+0307"
+      ],
+      "U+105E4": [
+        "U+105DA",
+        "U+0307"
+      ],
+      "U+11383": [
+        "U+11382",
+        "U+113C9"
+      ],
+      "U+11385": [
+        "U+11384",
+        "U+113BB"
+      ],
+      "U+1138E": [
+        "U+1138B",
+        "U+113C2"
+      ],
+      "U+11391": [
+        "U+11390",
+        "U+113C9"
+      ],
+      "U+113C5": [
+        "U+113C2",
+        "U+113C2"
+      ],
+      "U+113C7": [
+        "U+113C2",
+        "U+113B8"
+      ],
+      "U+113C8": [
+        "U+113C2",
+        "U+113C9"
+      ],
+      "U+16121": [
+        "U+1611E",
+        "U+1611E"
+      ],
+      "U+16122": [
+        "U+1611E",
+        "U+16129"
+      ],
+      "U+16123": [
+        "U+1611E",
+        "U+1611F"
+      ],
+      "U+16124": [
+        "U+16129",
+        "U+1611F"
+      ],
+      "U+16125": [
+        "U+1611E",
+        "U+16120"
+      ],
+      "U+16126": [
+        "U+1611E",
+        "U+1611E",
+        "U+1611F"
+      ],
+      "U+16127": [
+        "U+1611E",
+        "U+16129",
+        "U+1611F"
+      ],
+      "U+16128": [
+        "U+1611E",
+        "U+1611E",
+        "U+16120"
+      ],
+      "U+16D68": [
+        "U+16D67",
+        "U+16D67"
+      ],
+      "U+16D69": [
+        "U+16D63",
+        "U+16D67"
+      ],
+      "U+16D6A": [
+        "U+16D63",
+        "U+16D67",
+        "U+16D67"
+      ]
+    },
+    "tripwire": "Both pinned lists are only correct while they are exactly the difference between the two runtimes, so both are guarded by a digest an implementation can recompute. The COMPOSITION digest is over every canonical decomposition the runtime knows minus the pinned ones. The ORDERING digest is over pinned_nfc('a' + X + U+0334) for EVERY code point X - a decomposition digest is structurally blind to the ordering class, because not one of the 46 has a canonical decomposition at all. See identity.spec / test_identity.py in packages/document-ir."
+  },
   "vector_groups": {
     "corpus_ordinary": "real blocks sampled from each of the 8 corpus papers",
     "corpus_half_bucket_tie": "real blocks with a quantised coordinate exactly on k+0.5 at the operating grid -- the class that forked between Python and JS under the round(v/g)*g quantiser",
@@ -1612,13 +1752,16 @@
     "page_index": "0 and large page indices",
     "source_hash": "the id namespace",
     "negative_pair": "members of negative_vectors below",
-    "equivalence_pair": "members of equivalence_vectors below"
+    "equivalence_pair": "members of equivalence_vectors below",
+    "nfc_version_pin": "text exercising the VERSION PIN on step 1 (Unicode NFC). Two independent forks live here: canonical ORDERING (46 code points that are unassigned in UCD 15.0.0 and non-zero-ccc marks in Unicode 16.0/17.0) and canonical COMPOSITION (20 sequences a newer runtime composes). See `nfc_version_pin` above; a runtime that inherits its own NFC fails these vectors."
   },
   "how_to_use": [
     "1. For every entry in `vectors`: normalise(raw_text) MUST equal `normalised_text`; the assembled payload MUST equal `payload` byte for byte as UTF-8; and the id MUST equal `block_id`.",
     "2. For every entry in `negative_vectors`: the two named vectors MUST have DIFFERENT block_ids.",
     "3. For every entry in `equivalence_vectors`: the two named vectors MUST have THE SAME block_id.",
-    "4. `quantised_coords` is exposed so a failure can be localised to the quantiser rather than the hash."
+    "4. `quantised_coords` is exposed so a failure can be localised to the quantiser rather than the hash.",
+    "5. For every entry in `rejection_vectors`: the implementation MUST REJECT the input (raise/throw), not compute an id. These pin the acceptance BOUNDARY, which forks between languages just as readily as the formula does.",
+    "6. `nfc_version_pin` is part of the formula, not commentary: an implementation that inherits its runtime's NFC unmodified fails the `nfc_version_pin` vector group."
   ],
   "negative_vectors": [
     {
@@ -1795,7 +1938,7 @@
       "why": "THE DEFINING PROPERTY OF anchor_xy: x1/y1 are not in the payload, so a block that grows downward (a paragraph merge) keeps its id. This is intentional; content_hash (anchoring tier 2) is what detects that the text changed."
     }
   ],
-  "vector_count": 427,
+  "vector_count": 433,
   "vectors": [
     {
       "label": "tie:bert-2col.pdf:p15:0",
@@ -10871,6 +11014,215 @@
       ],
       "payload": "0000000000000000000000000000000000000000000000000000000000000000|0|72|100|paragraph|same anc",
       "block_id": "blk_w5h2vdse3pe3rss7"
+    },
+    {
+      "label": "nfc:ccc-arabic-pepet",
+      "group": "nfc_version_pin",
+      "source_hash": "3f2c1e9a7b4d6f80512e3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f",
+      "page_index": 0,
+      "bbox": [
+        90.0,
+        100.0,
+        200.0,
+        120.0
+      ],
+      "block_type": "paragraph",
+      "raw_text": "a̴ࢗbc",
+      "normalised_text": "a̴ࢗbc",
+      "quantised_coords": [
+        90,
+        100
+      ],
+      "payload": "3f2c1e9a7b4d6f80512e3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f|0|90|100|paragraph|a̴ࢗbc",
+      "block_id": "blk_ewbqv367mrjdpdoe",
+      "note": "U+0897 ARABIC PEPET has ccc 0 in UCD 15.0.0 (unassigned) and ccc 230 in Unicode 17.0. Without the canonical-ORDERING pin, Node reorders to 'a' U+0334 U+0897 and Python does not: one input, two ids. No composition is involved, so the post-pin DECOMPOSITION table cannot see this class."
+    },
+    {
+      "label": "nfc:ccc-cdm-extended",
+      "group": "nfc_version_pin",
+      "source_hash": "3f2c1e9a7b4d6f80512e3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f",
+      "page_index": 0,
+      "bbox": [
+        90.0,
+        140.0,
+        200.0,
+        160.0
+      ],
+      "block_type": "paragraph",
+      "raw_text": "a᫏̴z",
+      "normalised_text": "a᫏̴z",
+      "quantised_coords": [
+        90,
+        140
+      ],
+      "payload": "3f2c1e9a7b4d6f80512e3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f|0|90|140|paragraph|a᫏̴z",
+      "block_id": "blk_sx7rz32lcu6s33i6",
+      "note": "U+1ACF is Combining Diacritical Marks Extended, assigned in Unicode 16.0. Same reorder fork as U+0897."
+    },
+    {
+      "label": "nfc:ccc-tulu-virama",
+      "group": "nfc_version_pin",
+      "source_hash": "3f2c1e9a7b4d6f80512e3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f",
+      "page_index": 0,
+      "bbox": [
+        90.0,
+        180.0,
+        200.0,
+        200.0
+      ],
+      "block_type": "paragraph",
+      "raw_text": "𑏎e̴a",
+      "normalised_text": "𑏎e̴a",
+      "quantised_coords": [
+        90,
+        180
+      ],
+      "payload": "3f2c1e9a7b4d6f80512e3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f|0|90|180|paragraph|𑏎e̴a",
+      "block_id": "blk_4tqesiq4k7s7sjvj",
+      "note": "U+113CE TULU-TIGALARI SIGN VIRAMA, assigned in Unicode 16.0 - the same script three of the post-pin decompositions come from. Leading position, so it also pins the behaviour of a pinned starter at offset 0."
+    },
+    {
+      "label": "nfc:ccc-kirat-rai",
+      "group": "nfc_version_pin",
+      "source_hash": "3f2c1e9a7b4d6f80512e3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f",
+      "page_index": 0,
+      "bbox": [
+        90.0,
+        220.0,
+        200.0,
+        240.0
+      ],
+      "block_type": "paragraph",
+      "raw_text": "a𖄯f̴",
+      "normalised_text": "a𖄯f̴",
+      "quantised_coords": [
+        90,
+        220
+      ],
+      "payload": "3f2c1e9a7b4d6f80512e3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f|0|90|220|paragraph|a𖄯f̴",
+      "block_id": "blk_hmrm4wwmwz6utmmz",
+      "note": "U+1612F KIRAT RAI SIGN VIRAMA. Trailing pinned starter followed by one mark."
+    },
+    {
+      "label": "nfc:ccc-and-composition-together",
+      "group": "nfc_version_pin",
+      "source_hash": "3f2c1e9a7b4d6f80512e3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f",
+      "page_index": 0,
+      "bbox": [
+        90.0,
+        260.0,
+        200.0,
+        280.0
+      ],
+      "block_type": "paragraph",
+      "raw_text": "a̴ࢗ𑏅",
+      "normalised_text": "a̴ࢗ𑏅",
+      "quantised_coords": [
+        90,
+        260
+      ],
+      "payload": "3f2c1e9a7b4d6f80512e3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f|0|90|260|paragraph|a̴ࢗ𑏅",
+      "block_id": "blk_jlforyitnhyf5fcg",
+      "note": "BOTH pins in one string: the ordering pin (U+0897) and the composition pin (U+113C2 U+113C2, which Node 22 composes to U+113C5 and Python 3.12 does not). A conforming implementation must apply both and emit the decomposed, unreordered form."
+    },
+    {
+      "label": "nfc:ccc-multiple-pinned-starters",
+      "group": "nfc_version_pin",
+      "source_hash": "3f2c1e9a7b4d6f80512e3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f",
+      "page_index": 0,
+      "bbox": [
+        90.0,
+        300.0,
+        200.0,
+        320.0
+      ],
+      "block_type": "paragraph",
+      "raw_text": "𐻺a̴A𞛵̴b",
+      "normalised_text": "𐻺a̴a𞛵̴b",
+      "quantised_coords": [
+        90,
+        300
+      ],
+      "payload": "3f2c1e9a7b4d6f80512e3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f|0|90|300|paragraph|𐻺a̴a𞛵̴b",
+      "block_id": "blk_266rgtf6tcm3ocuv",
+      "note": "Two pinned starters in one string, so an implementation that splits at them must handle more than one segment boundary; the uppercase A also proves the fold still runs after the pin."
+    }
+  ],
+  "rejection_vectors": [
+    {
+      "label": "reject:block-type-trailing-newline",
+      "source_hash": "3f2c1e9a7b4d6f80512e3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f",
+      "page_index": 0,
+      "bbox": [
+        90.0,
+        100.0,
+        200.0,
+        120.0
+      ],
+      "block_type": "paragraph\n",
+      "raw_text": "hello",
+      "field": "block_type",
+      "why": "block_type_form is ^[a-z][a-z0-9_]{0,63}$ and it is an ANCHORED-AT-BOTH-ENDS match. Python's `$` also matches immediately before a trailing U+000A and `re.match` does not anchor the end at all, so the obvious Python spelling ACCEPTS this and mints an id that JavaScript can never recompute. That asymmetry is the same defect class as an id fork and is harder to diagnose. Use `re.fullmatch` with `\\A...\\Z`."
+    },
+    {
+      "label": "reject:source-hash-trailing-newline",
+      "source_hash": "3f2c1e9a7b4d6f80512e3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f\n",
+      "page_index": 0,
+      "bbox": [
+        90.0,
+        100.0,
+        200.0,
+        120.0
+      ],
+      "block_type": "paragraph",
+      "raw_text": "hello",
+      "field": "source_hash",
+      "why": "Same `$`-vs-end-of-input asymmetry on source_hash_form (^[0-9a-f]{64}$)."
+    },
+    {
+      "label": "reject:source-hash-prefixed",
+      "source_hash": "sha256:3f2c1e9a7b4d6f80512e3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f",
+      "page_index": 0,
+      "bbox": [
+        90.0,
+        100.0,
+        200.0,
+        120.0
+      ],
+      "block_type": "paragraph",
+      "raw_text": "hello",
+      "field": "source_hash",
+      "why": "source_hash_form is the bare 64 hex characters WITHOUT the 'sha256:' prefix the IR stores. Hashing the prefixed form would produce a complete, plausible, wrong id space rather than an error."
+    },
+    {
+      "label": "reject:block-type-uppercase",
+      "source_hash": "3f2c1e9a7b4d6f80512e3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f",
+      "page_index": 0,
+      "bbox": [
+        90.0,
+        100.0,
+        200.0,
+        120.0
+      ],
+      "block_type": "Paragraph",
+      "raw_text": "hello",
+      "field": "block_type",
+      "why": "block_type enters the payload verbatim; it is never case-folded, so it must be rejected rather than silently normalised."
+    },
+    {
+      "label": "reject:block-type-with-pipe",
+      "source_hash": "3f2c1e9a7b4d6f80512e3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f",
+      "page_index": 0,
+      "bbox": [
+        90.0,
+        100.0,
+        200.0,
+        120.0
+      ],
+      "block_type": "para|graph",
+      "raw_text": "hello",
+      "field": "block_type",
+      "why": "payload_encoding defines no escaping; only the LAST field may contain U+007C."
     }
   ]
 }

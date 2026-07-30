@@ -19,7 +19,6 @@ export { MigrationError, OwnershipError } from './errors.js';
 
 export {
   asBlockId,
-  asPageId,
   asPaperId,
   generation,
   newId,

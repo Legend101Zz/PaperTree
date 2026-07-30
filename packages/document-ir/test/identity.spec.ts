@@ -6,7 +6,7 @@
  *
  * Both halves are asserted for real:
  *
- * (a) DETERMINISM is measured over the whole 427-vector contract, 24 rounds each (10 248 ids),
+ * (a) DETERMINISM is measured over the whole 433-vector contract, 24 rounds each (10 392 ids),
  *     not over 10 000 identical calls — a constant function passes that. The negative pairs
  *     assert that different input gives a different id, and the equivalence pairs assert that
  *     inputs which SHOULD collapse (whitespace, ligature, sub-bucket jitter, −0.0, text past the
@@ -50,6 +50,7 @@ import {
   LIGATURE_TABLE,
   MAX_QUANTISED_BUCKET,
   NFC_POST_PIN_DECOMPOSITIONS,
+  NFC_POST_PIN_STARTERS,
   TEXT_PREFIX_CODEPOINTS,
   WHITESPACE_CODE_POINTS,
   blockId,
@@ -57,6 +58,7 @@ import {
   contentHash,
   contentHashOfNormalised,
   normaliseText,
+  pinnedNfc,
   quantise,
   resolvedText,
   truncateCodePoints,
@@ -91,6 +93,17 @@ interface Pair {
   readonly why: string;
 }
 
+interface RejectionVector {
+  readonly label: string;
+  readonly source_hash: string;
+  readonly page_index: number;
+  readonly bbox: readonly [number, number, number, number];
+  readonly block_type: string;
+  readonly raw_text: string;
+  readonly field: string;
+  readonly why: string;
+}
+
 interface VectorFile {
   readonly formula_version: string;
   readonly spec: Record<string, unknown>;
@@ -102,6 +115,11 @@ interface VectorFile {
   readonly vectors: readonly Vector[];
   readonly negative_vectors: readonly Pair[];
   readonly equivalence_vectors: readonly Pair[];
+  readonly rejection_vectors: readonly RejectionVector[];
+  readonly nfc_version_pin: {
+    readonly post_pin_starters: readonly string[];
+    readonly post_pin_decompositions: Record<string, readonly string[]>;
+  };
 }
 
 const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -146,11 +164,12 @@ for (let point = 0x16ea0; point <= 0x16eb8; point += 1) POST_15_DRIFT.push(point
 // ─── the contract this implementation was built from ────────────────────────────────────────
 
 describe('the shipped contract', () => {
-  it('is revision 4: 427 vectors, 8 negative pairs, 11 equivalence pairs', () => {
-    expect(CONTRACT.vector_count).toBe(427);
-    expect(VECTORS).toHaveLength(427);
+  it('is revision 5: 433 vectors, 8 negative pairs, 11 equivalence pairs, 5 rejections', () => {
+    expect(CONTRACT.vector_count).toBe(433);
+    expect(VECTORS).toHaveLength(433);
     expect(CONTRACT.negative_vectors).toHaveLength(8);
     expect(CONTRACT.equivalence_vectors).toHaveLength(11);
+    expect(CONTRACT.rejection_vectors).toHaveLength(5);
     expect(CONTRACT.formula_version).toBe(BLOCK_ID_FORMULA_VERSION);
   });
 
@@ -198,7 +217,7 @@ describe('the shipped contract', () => {
 // ─── (a) same input ⇒ same ID, 10k times ────────────────────────────────────────────────────
 
 describe('(a) same input => same ID', () => {
-  it('427 vectors x 24 rounds = 10 248 ids, every one deterministic and equal to the record', () => {
+  it('433 vectors x 24 rounds = 10 392 ids, every one deterministic and equal to the record', () => {
     const ROUNDS = 24;
     const first = new Map<string, string>();
     let computed = 0;
@@ -217,7 +236,7 @@ describe('(a) same input => same ID', () => {
     }
     expect(computed).toBe(VECTORS.length * ROUNDS);
     expect(computed).toBeGreaterThanOrEqual(10_000);
-    expect(first.size).toBe(427);
+    expect(first.size).toBe(433);
     console.log(
       `[identity.spec] determinism: ${String(computed)} ids over ${String(VECTORS.length)} ` +
         `distinct inputs x ${String(ROUNDS)} rounds, 0 mismatches`,
@@ -252,7 +271,7 @@ describe('(a) same input => same ID', () => {
 // ─── (b) TS and Python produce identical IDs for the shared vector file ─────────────────────
 
 describe('(b) TS and Python agree, because both agree with the committed file', () => {
-  it('reproduces all 427 recorded block_ids', () => {
+  it('reproduces all 433 recorded block_ids', () => {
     const mismatches = VECTORS.filter((v) => blockId(inputOf(v)) !== v.block_id).map(
       (v) => v.label,
     );
@@ -291,14 +310,14 @@ describe('(b) TS and Python agree, because both agree with the committed file', 
   it('pins content_hash across the two languages', () => {
     // content_hash is NOT in the vector file — ADR-001 left it as "blake2s:3f9a…" with no digest
     // length, the very defect Amendment 1 fixed for block_id and flagged for this. So the
-    // cross-language pin is asserted here instead: the SHA-256 of all 427 content hashes, joined
+    // cross-language pin is asserted here instead: the SHA-256 of all 433 content hashes, joined
     // by "\n" in vector order, is the same constant in this suite and in
     // python/tests/test_identity.py. If the two implementations ever disagree by one character,
     // this fails in both.
     const aggregate = createHash('sha256')
       .update(VECTORS.map((vector) => contentHash(vector.raw_text)).join('\n'), 'utf8')
       .digest('hex');
-    expect(aggregate).toBe('6ccde4b3bda72069733972a45f137a576fc225b67afb216940e180a7a86cd85b');
+    expect(aggregate).toBe('7606f76bc6408f37da0b4dfcb64d6b2d514c237f3e54764304977bfabb4bb8fa');
   });
 
   it("content_hash is the schema's hash shape and shares block_id's normalisation", () => {
@@ -524,6 +543,171 @@ describe('step 1 (NFC) is version-pinned too, not inherited from the runtime', (
         `compositions; digest matches the Python twin`,
     );
   }, 60_000);
+});
+
+describe('step 1 is pinned in BOTH halves: canonical ORDERING as well as composition', () => {
+  /**
+   * THE FOURTH DIVERGENCE CLASS, and the reason the block above is not sufficient on its own.
+   *
+   * NFC is two algorithms. `NFC_POST_PIN_DECOMPOSITIONS` pins canonical COMPOSITION. Canonical
+   * ORDERING — the sort of each combining sequence by Canonical Combining Class — was inherited
+   * from the runtime, and it forks on its own with no composition anywhere in sight: 46 code
+   * points have ccc 0 in Python 3.12 (UCD 15.0.0, unassigned) and a non-zero ccc in Node 22
+   * (Unicode 17.0). Node REORDERS a combining sequence Python leaves alone, so one input gives
+   * two normalised strings, two block_ids and two content_hashes.
+   *
+   * The decomposition tripwire is STRUCTURALLY BLIND to this: it skips every code point whose NFD
+   * is one code point long, and not one of the 46 has a canonical decomposition at all. That is
+   * defect 2's blindness repeated one property along, which is why the tripwire below digests a
+   * REORDER rather than a decomposition.
+   */
+  it('the pinned starter set is exactly the 46 that fork, and none of them decomposes', () => {
+    expect(NFC_POST_PIN_STARTERS.size).toBe(46);
+    for (const point of NFC_POST_PIN_STARTERS) {
+      const char = String.fromCodePoint(point);
+      // No canonical decomposition and no canonical composition, in THIS runtime — which is what
+      // makes "split the string at it and normalise the pieces" exactly equal to treating it as
+      // a starter, rather than an approximation of it.
+      expect(char.normalize('NFD')).toBe(char);
+      expect(char.normalize('NFC')).toBe(char);
+      // And each one really is a mark to THIS runtime: 'a' + X + U+0334 gets reordered without
+      // the pin. That is the fork, demonstrated rather than asserted.
+      const unpinned = `a${char}̴`.normalize('NFC');
+      expect([...unpinned].map((c) => c.codePointAt(0))).toEqual([0x61, 0x0334, point]);
+      // With the pin, the marks stay in source order — which is what Python 3.12 produces.
+      expect([...pinnedNfc(`a${char}̴`)].map((c) => c.codePointAt(0))).toEqual([
+        0x61,
+        point,
+        0x0334,
+      ]);
+    }
+  });
+
+  it('the fork is closed end to end: one input, one id, one content_hash', () => {
+    // The witness from the acceptance review, verbatim. Before the pin these two lines produced
+    // blk_ppmqw554sys6n2pp in Node and blk_lnsf6dvxrllswlte in Python.
+    const text = `a${String.fromCodePoint(0x0897)}̴bc`;
+    expect([...normaliseText(text)].map((c) => c.codePointAt(0))).toEqual([
+      0x61, 0x0897, 0x0334, 0x62, 0x63,
+    ]);
+    // The contract file carries this exact input as `nfc:ccc-arabic-pepet`, so the id and the
+    // payload are pinned by the committed vectors, not by this file.
+    const vector = BY_LABEL.get('nfc:ccc-arabic-pepet');
+    expect(vector).toBeDefined();
+    expect(vector?.raw_text).toBe(text);
+    expect(blockId(inputOf(vector as Vector))).toBe(vector?.block_id);
+  });
+
+  it('the EMBEDDED starter set is identical to the shipped contract, entry by entry', () => {
+    const shipped = CONTRACT.nfc_version_pin.post_pin_starters.map((u) =>
+      Number.parseInt(u.slice(2), 16),
+    );
+    expect(shipped).toHaveLength(46);
+    expect([...NFC_POST_PIN_STARTERS].toSorted((a, b) => a - b)).toEqual(
+      shipped.toSorted((a, b) => a - b),
+    );
+    const shippedDecomp = new Map(
+      Object.entries(CONTRACT.nfc_version_pin.post_pin_decompositions).map(
+        ([key, value]) =>
+          [
+            Number.parseInt(key.slice(2), 16),
+            value.map((u) => String.fromCodePoint(Number.parseInt(u.slice(2), 16))).join(''),
+          ] as const,
+      ),
+    );
+    expect(shippedDecomp.size).toBe(NFC_POST_PIN_DECOMPOSITIONS.size);
+    for (const [point, value] of shippedDecomp) {
+      expect(NFC_POST_PIN_DECOMPOSITIONS.get(point)).toBe(value);
+    }
+  });
+
+  it("leaves canonical ORDERING identical to Python's, for every code point", () => {
+    // THE REORDER TRIPWIRE — the one the decomposition digest cannot be. For every code point X,
+    // digest the pinned NFC of "a" + X + U+0334 (ccc 1, so ANY non-zero ccc on X reorders it).
+    // `test_identity.py` asserts the same constant on Python 3.12 / UCD 15.0.0. The day either
+    // runtime assigns a 47th combining class this fails, instead of the ids forking. Run against
+    // the unpinned `String.prototype.normalize` this digest differs on 46 code points — that is
+    // the FATAL finding this test exists to have caught.
+    const lines: string[] = [];
+    for (let point = 0; point < 0x110000; point += 1) {
+      if (point >= 0xd800 && point <= 0xdfff) continue;
+      const out = pinnedNfc(`a${String.fromCodePoint(point)}̴`);
+      lines.push(
+        `${point.toString(16)}:${[...out].map((c) => (c.codePointAt(0) ?? 0).toString(16)).join(',')}`,
+      );
+    }
+    expect(lines).toHaveLength(1_112_064);
+    const digest = createHash('sha256').update(lines.join('\n'), 'utf8').digest('hex');
+    expect(digest).toBe('144355d77df7b9ac5c5a9bdb0e6dec5ef8fbc4f875bc60431e3f98e5fc05d744');
+    console.log(
+      `[identity.spec] canonical ordering: ${String(lines.length)} code points probed with ` +
+        `${String(NFC_POST_PIN_STARTERS.size)} post-${CASE_FOLD_UNICODE_VERSION} combining ` +
+        `classes pinned to starters; digest matches the Python twin`,
+    );
+  }, 120_000);
+});
+
+describe('the acceptance BOUNDARY is the same in both languages (rejection_vectors)', () => {
+  /**
+   * Python's `$` matches at end-of-string OR immediately before a trailing U+000A, and
+   * `re.match()` does not anchor the end at all; JavaScript's `$` (without /m) matches only at
+   * end-of-input. So `_BLOCK_TYPE_PATTERN.match(value)` with a trailing `$` ACCEPTED
+   * `"paragraph\n"` in Python and the TypeScript twin threw. That is an asymmetric-acceptance
+   * fork — a Python producer mints an id TypeScript can never recompute — and it is harder to
+   * diagnose than a value fork, not easier. `identity.py` now uses `re.fullmatch` with `\A..\Z`.
+   */
+  it('rejects every rejection vector, and the contract says why', () => {
+    expect(CONTRACT.rejection_vectors.length).toBeGreaterThan(0);
+    for (const vector of CONTRACT.rejection_vectors) {
+      expect(
+        () =>
+          blockId({
+            source_hash: vector.source_hash,
+            page_index: vector.page_index,
+            x0: vector.bbox[0],
+            y0: vector.bbox[1],
+            block_type: vector.block_type,
+            text: vector.raw_text,
+          }),
+        vector.why,
+      ).toThrow(TypeError);
+    }
+  });
+
+  it('a trailing newline is not a near-miss it can absorb', () => {
+    const SIXTY_FOUR = 'a'.repeat(64);
+    expect(() =>
+      blockId({
+        source_hash: SIXTY_FOUR,
+        page_index: 0,
+        x0: 90,
+        y0: 100,
+        block_type: 'paragraph\n',
+        text: 'hello',
+      }),
+    ).toThrow(TypeError);
+    expect(() =>
+      blockId({
+        source_hash: `${SIXTY_FOUR}\n`,
+        page_index: 0,
+        x0: 90,
+        y0: 100,
+        block_type: 'paragraph',
+        text: 'hello',
+      }),
+    ).toThrow(TypeError);
+    // …and the same inputs WITHOUT the newline are accepted, so the guard is not just "reject".
+    expect(
+      blockId({
+        source_hash: SIXTY_FOUR,
+        page_index: 0,
+        x0: 90,
+        y0: 100,
+        block_type: 'paragraph',
+        text: 'hello',
+      }),
+    ).toMatch(BLOCK_ID_PATTERN);
+  });
 });
 
 describe('normaliseText is NOT idempotent, and contentHash must not pretend it is', () => {

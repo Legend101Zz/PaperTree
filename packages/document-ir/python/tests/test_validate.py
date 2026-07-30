@@ -23,6 +23,7 @@ cases file's central claim checkable: these are all defects the JSON Schema CANN
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import unicodedata
 from collections.abc import Callable, Sequence
@@ -32,18 +33,21 @@ from typing import Any
 import pytest
 from papertree_document_ir.generated.models import Paper, Repair
 from papertree_document_ir.identity import (
+    NFC_POST_PIN_STARTERS,
     BlockIdInput,
     content_hash,
     normalise_text,
 )
 from papertree_document_ir.identity import block_id as recompute_block_id
 from papertree_document_ir.validate import (
+    NFKC_POST_PIN_STARTERS,
     SEMANTIC_RULES,
     Diagnostic,
     SemanticValidationError,
     ValidateOptions,
     assert_valid_paper,
     format_diagnostics,
+    pinned_nfkc,
     validate_paper,
 )
 
@@ -556,36 +560,55 @@ def test_r30b_reorder_is_a_multiset_check() -> None:
     assert _repair_rules("reorder", "a b", "b a") == []
 
 
-def test_nfkc_is_a_runtime_call_and_this_runtime_is_pinned() -> None:
-    """The one place this module depends on the runtime's Unicode tables rather than a pinned one.
-
-    Therefore the one place the TS and Python twins can legitimately disagree. The count is
-    asserted per Unicode version so a Python upgrade fails here instead of silently moving what "a
-    deterministic unicode_normalise repair" means.
+def test_nfkc_is_version_pinned_not_inherited_from_the_runtime(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Rule 30b's ``unicode_normalise`` class WAS the one place this module depended on the
+    runtime's Unicode tables rather than a pinned one, and therefore the one place the two twins
+    legitimately disagreed - one and the same repair an ERROR here and clean in TypeScript.
 
     Measured 2026-07-30: Python 3.12 (UCD 15.0.0) decomposes 4928 code points under NFKC; Node 22
-    (Unicode 17.0) decomposes 4965. The 37-code-point difference is U+A7F1 plus U+1CCD6..U+1CCF9,
-    all added after 15.0.0.
+    (Unicode 17.0) decomposes 4965. A full sweep of every code point in five combining contexts
+    found the divergence to be exactly 83 code points: the 46 that gained a canonical combining
+    class (identity's NFC_POST_PIN_STARTERS) plus the 37 that gained a COMPATIBILITY decomposition
+    (U+A7F1 and U+1CCD6..U+1CCF9). ``pinned_nfkc`` freezes all 83 to their UCD-15.0.0 behaviour.
     """
-    expected = {"15.0.0": 4928, "15.1.0": 4928, "17.0.0": 4965}
+    assert len(NFKC_POST_PIN_STARTERS) == 83
+    assert NFC_POST_PIN_STARTERS < NFKC_POST_PIN_STARTERS
+    assert len(NFKC_POST_PIN_STARTERS - NFC_POST_PIN_STARTERS) == 37
+
+    # THE TRIPWIRE. Digest the pinned NFKC of "a" + X + U+0334 for every code point X. The
+    # TypeScript twin asserts the same constant on Node 22 / Unicode 17.0; the day either runtime
+    # moves an 84th code point, this fails instead of the two languages forking a verdict on the
+    # same document.
+    lines = [
+        f"{cp:x}:" + ",".join(f"{ord(c):x}" for c in pinned_nfkc("a" + chr(cp) + "\u0334"))
+        for cp in range(0x110000)
+        if not (0xD800 <= cp <= 0xDFFF)
+    ]
+    assert len(lines) == 1_112_064
+    digest = hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
+    assert digest == "ef6e26a61311d116fe3ccb9976bb8552047d68cd303095bff01b10730e5020a8"
+
+    # ...and the raw runtime call, recorded so a runtime upgrade is visible rather than silent.
     version = unicodedata.unidata_version
     decomposing = sum(
         1
         for cp in range(0x110000)
         if not (0xD800 <= cp <= 0xDFFF) and unicodedata.normalize("NFKC", chr(cp)) != chr(cp)
     )
-    print(
-        f"[test_validate] Python carries UCD {version}; NFKC decomposes {decomposing} code points. "
-        f"Node 22 (Unicode 17.0) decomposes 4965 - rule 30b's unicode_normalise check forks on the "
-        f"difference."
-    )
-    assert version in expected, (
-        f"unrecorded Unicode version {version}: re-measure the NFKC divergence against the "
-        f"TypeScript twin before trusting rule 30b's unicode_normalise class"
-    )
-    assert decomposing == expected[version]
-    # The concrete fork, named so it cannot be waved away as theoretical.
+    with capsys.disabled():
+        print(
+            f"\n[test_validate] Python carries UCD {version}; the RAW runtime NFKC decomposes "
+            f"{decomposing} code points (Node 22 / Unicode 17.0: 4965). rule 30b no longer calls "
+            f"it: {len(NFKC_POST_PIN_STARTERS)} code points are pinned and the digest matches the "
+            f"TypeScript twin."
+        )
+    # The concrete fork that used to be live, named so it cannot be waved away as theoretical.
     assert (unicodedata.normalize("NFKC", "\U0001ccd6") == "\U0001ccd6") == (version == "15.0.0")
+    # ...and it is now closed: the pinned form is the UCD-15.0.0 form in EVERY runtime.
+    assert pinned_nfkc("\U0001ccd6") == "\U0001ccd6"
+    assert _repair_rules("unicode_normalise", "\U0001ccd6", "\U0001ccd6") == []
 
 
 def test_r20_reports_a_cycle_once_not_once_per_entry_point() -> None:

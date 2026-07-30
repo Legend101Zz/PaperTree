@@ -177,25 +177,77 @@ class _Model(BaseModel):
         return data
 
 
+PAYLOAD_KEY_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}\Z")
+
 MODEL_AUTHORSHIP_KEYS: frozenset[str] = frozenset(
-    {"model_id", "prompt_hash", "generated_by", "derivation_id", "derived_from", "prompt", "llm"}
+    {
+        "model_id",
+        "prompt_hash",
+        "generated_by",
+        "derivation_id",
+        "derived_from",
+        "prompt",
+        "llm",
+        "model",
+        "models",
+        "model_name",
+        "model_version",
+        "llm_model",
+        "generator",
+        "generated",
+        "generation_model",
+        "agent",
+        "assistant",
+        "completion",
+        "completions",
+        "response",
+        "author",
+        "authored_by",
+        "written_by",
+        "synthesised_by",
+        "synthesized_by",
+        "system_prompt",
+        "system_prompt_digest",
+        "prompt_id",
+        "prompt_sha256",
+        "prompt_template",
+        "prompt_tokens",
+        "temperature",
+        "top_p",
+        "ai",
+        "ai_generated",
+    }
 )
 
 
 def find_model_declaration(
     value: Any, path: tuple[str | int, ...] = ()
 ) -> tuple[str | int, ...] | None:
-    """A recursive constraint: no object ANYWHERE in this value's subtree may declare model
-    authorship. Applied to Block.payload for block types this schema does not know, which is
-    the one place in PaperIR where an open object shape is required for forward compatibility.
+    """A recursive constraint on Block.payload for block types this schema does not know, which
+    is the one place in PaperIR where an open object shape is required for forward
+    compatibility. Two rules, applied to every object ANYWHERE in the subtree.
 
-    Without it, `blocks[i].payload` was the single object in the file with no
-    "additionalProperties": false, and a complete Derivation — or a bare {"generated_by":
-    "gpt-4"} — fitted inside it whole, one level below the block that rejects exactly those
-    fields. That falsified the field-closure property the whole design rests on.
+    1. KEYS MUST BE IDENTIFIER-SHAPED, at every depth: ^[a-z][a-z0-9_]{0,63}$. This is the
+    rule that makes rule 2 bounded rather than a guessing game - without it `{"meta":
+    {"model-id": "gpt-4o"}}` and `{"meta": {"GENERATED_BY": "gpt-4"}}` both validated while
+    their identical lowercase spellings one level up were correctly rejected. An earlier
+    revision applied it only to the OUTERMOST payload object; that was the hole.
+
+    2. NO OBJECT MAY CARRY ONE OF THE LISTED KEY NAMES. Without this, `blocks[i].payload` was
+    the single object in the file with no "additionalProperties": false, and a complete
+    Derivation - or a bare {"generated_by": "gpt-4"} - fitted inside it whole, one level below
+    the block that rejects exactly those fields.
+
+    WHAT THIS IS NOT. The list is a DENY-LIST OF NAMES and a deny-list cannot be complete; it
+    covers the seven fields PaperIR itself uses for derivation plus the near-miss spellings an
+    acceptance review actually reached for. A producer that declares authorship under a name
+    nobody listed - `payload.provenance_note`, say - still validates. So do not read this as
+    "authorship is unrepresentable": it makes the OBVIOUS declarations unrepresentable and
+    raises the cost of the rest. Detecting authorship is `ingest/source-authenticity.spec`'s
+    job (Epic 1, owed); see DESIGN.md 11 residual risks 1 and 8.
 
     This blocks the SHAPE of a declared derivation, not prose. A payload string containing
-    model output is still expressible — see the schema-level description on
+    model output is still expressible - see the schema-level description on
     undeclarable-vs-undetectable.
 
     Returns the path of the first model-authorship declaration, or None. A recursive
@@ -218,6 +270,11 @@ def find_model_declaration(
         return None
     if isinstance(value, dict):
         for key, child in value.items():
+            if not isinstance(key, str) or PAYLOAD_KEY_PATTERN.match(key) is None:
+                raise ValueError(
+                    f"payload key {key!r} at {'.'.join(str(p) for p in path)} must match "
+                    + PAYLOAD_KEY_PATTERN.pattern
+                )
             if key in MODEL_AUTHORSHIP_KEYS:
                 return (*path, key)
             hit = find_model_declaration(child, (*path, key))
@@ -238,23 +295,22 @@ def assert_model_free(value: Any) -> None:
         raise ValueError(f"model-authorship declaration at {'.'.join(str(p) for p in hit)}")
 
 
-_OPAQUE_KEY_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}\Z")
-
-
 def validate_opaque_payload(value: dict[str, Any]) -> dict[str, Any]:
-    """Block.payload for any block type this schema version does not know. OPEN IN SHAPE — that
+    """Block.payload for any block type this schema version does not know. OPEN IN SHAPE - that
     is the forward-compatibility requirement: a block type added in 1.1.0 must be able to
-    carry its own data without a major bump — but CLOSED against authorship declarations at
-    any depth (see $defs/ModelFreeSubtree) and restricted to identifier-shaped keys.
+    carry its own data without a major bump - but every key at every depth must be
+    identifier-shaped, and no object anywhere in the subtree may carry one of the
+    model-authorship key names listed in $defs/ModelFreeSubtree. Read that def's 'WHAT THIS IS
+    NOT' paragraph before relying on it: the key list is a deny-list and cannot be complete.
     """
     too_deep = find_excessive_depth(value)
     if too_deep is not None:
         raise ValueError(
             "payload nests deeper than 64 levels" + f" at {'.'.join(str(p) for p in too_deep)}"
         )
-    for key in value:
-        if _OPAQUE_KEY_RE.match(key) is None:
-            raise ValueError(f"payload key {key!r} must match " + _OPAQUE_KEY_RE.pattern)
+    # ONE walk, and it checks keys at EVERY depth: assert_model_free ->
+    # find_model_declaration raises on the first key that is not identifier-shaped. The
+    # check used to be a loop over the outermost object only.
     assert_model_free(value)
     return value
 
@@ -469,14 +525,24 @@ class ImageRef(_Model):
         }
     )
 
-    #: Opaque storage URI with an explicit scheme, e.g. "r2://papers/ppr_.../pages/000@2x.webp". The
-    #: scheme pattern is load-bearing: it rejects "data:" and every other inline scheme, so PaperIR
-    #: provably never embeds pixel bytes. Resolution is the storage layer's business.
+    #: Opaque storage URI with an explicit scheme, e.g. "r2://papers/ppr_.../pages/000@2x.webp".
+    #: Resolution is the storage layer's business.
+    #:
+    #: THE PATTERN AND THE LENGTH BOUND TOGETHER are what make an inline pixel payload
+    #: unrepresentable, and it is worth saying which does what. The pattern rejects the `data:` URL
+    #: form, because `data:` has no `//` authority. It does NOT reject
+    #: `data://image/webp;base64,...` - one slash-pair away, same scheme name - and `[^\s]+` is
+    #: unbounded, so before maxLength any scheme could carry an arbitrary base64 blob: a 40
+    #: 025-character `data://` URI validated in all three bindings with zero semantic findings. The
+    #: earlier claim that the pattern alone made embedding "provably" impossible was false and is
+    #: retracted. maxLength 2048 is the half that does the work; 2048 is the conventional practical
+    #: URL limit and is ~14 times the longest URI this schema's own examples produce.
     uri: JsonText = Field(
         pattern=r"^[a-z][a-z0-9+.\-]*://[^"
         r"\t\n\v\f\r\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
         r"]+$",
         min_length=1,
+        max_length=2048,
     )
     #: Render scale relative to PDF user space, e.g. 2.0 for a 2x raster. Needed to map image pixels
     #: back to points.

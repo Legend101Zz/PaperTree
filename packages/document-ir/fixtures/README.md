@@ -102,8 +102,29 @@ fails any of this. Independently re-checked in **both** languages:
 recorded but not applied — produced by `papertree_document_ir.geometry`, never by reading a
 viewer's device coordinates. Coordinates are rounded to **0.01 pt** before anything is derived from
 them, so the number in the JSON is the number `block_id` was hashed from and the number rule 1
-compares. Multi-line text blocks carry a **staircase polygon** from `union_of_line_rects`, not a
-bounding box; the build fails if that function returns more than one region for one block.
+compares. Multi-line PROSE blocks (paragraph, heading, caption, abstract, list item) get their polygon from
+`union_of_line_rects`, which returns a **staircase** wherever the lines differ in width and a
+rectangle where they do not; the build fails if that function returns more than one region for one
+block. **92 of the 199 blocks carry a polygon with more than four vertices** (up to 30), and **0
+multi-line prose blocks are plain rectangles**.
+
+Blocks whose region is a typeset BOX rather than a run of lines are rectangles ON PURPOSE, and the
+plan says so with `geometry="rect"`: `equation` and `inline_equation` (the region a reader means by
+"equation (4)" is the formula's box plus its flush-right number), `table_row` (the row band), and
+the one `algorithm` float (its region is the ruled frame drawn on the page, at y = 120.01, 133.61
+and 222.59). Do not "fix" those into staircases.
+
+_Corrected 2026-07-30, acceptance review._ This paragraph used to say every multi-line block was a
+staircase, and it was FALSE OF THE DATA: three paragraphs and the algorithm float carried plain
+4-point rectangles, because `union_of_line_rects` collapsed a whole paragraph into one band
+whenever consecutive line rects overlapped vertically — which is the NORMAL case, since MuPDF's
+line boxes are font ascent/descent boxes that abut or overlap. Hit-testing returned true in
+whitespace the block did not occupy: for `blk_gwc2xsv7t6wxonxe` (Attention) the point (480, 618)
+was inside a polygon whose last printed line ends at x = 459.46. The helper was fixed (it now
+decides band membership against the band's ANCHOR interval, not its running extent), the fixtures
+were rebuilt, and the claim was rewritten to what the data supports rather than to what the call
+was supposed to produce. The verification table's "rendered at 2x with all polygons overlaid and
+looked at" row did not catch it, so treat that check as weaker than its wording implies.
 
 **Text and spans.** `text` is the glyph stream as the PDF's text layer gives it, with lines joined
 by `\n`. It is **not** de-hyphenated: a line ending `transduc-` stays that way, because a repair is
@@ -507,8 +528,10 @@ Sources: `pdf_text_layer` 77 · `pdf_vector` 4.
   underneath. Page 1 mirrors it: eq (3) full measure → **Figure 2 in the left column** → the right
   column (paragraph, eq (4), paragraph, paragraph, eq (5)) → the full-measure paragraph at the foot.
   A reader that sorts blocks by `y` and then `x` gets both pages wrong.
-- **Polygons follow the lines, and do not enter the gutter.** Every multi-line block is a staircase
-  from `union_of_line_rects`. `p2-para-22` ("Model Architectures…") is the sharp case: it is a
+- **Polygons follow the lines, and do not enter the gutter.** Every multi-line PROSE block gets its
+  polygon from `union_of_line_rects`, which steps wherever the lines differ in width (equations,
+  table rows and the algorithm frame are typeset boxes and are rectangles on purpose — see
+  "Geometry" above). `p2-para-22` ("Model Architectures…") is the sharp case: it is a
   narrow left column for nine lines and then wraps to the full measure *underneath* Table 1, so its
   polygon is **L-shaped**. A bounding box there would paint straight through the table.
 - **A display equation's number is part of its region, not of its text.** Each of (1)–(5) has a

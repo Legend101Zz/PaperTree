@@ -532,13 +532,39 @@ COORDINATE FRAME   (unspecified in the original ADR; the single highest-leverage
                     the formula -- getting it wrong costs 99.93 % of ids, measured)
     units         PDF DEFAULT USER SPACE UNITS, i.e. 1/72 in.
     /UserUnit     NOT applied. A page's /UserUnit multiplier is deliberately IGNORED, so
-                  coordinates are raw default-user-space units, never physical ones. This
-                  is pinned because it is what MuPDF's page.rect gives and therefore what
-                  the IR stores; the alternative (scaling by /UserUnit) is equally
+                  coordinates are raw default-user-space units, never physical ones. THE
+                  DECISION STANDS; the alternative (scaling by /UserUnit) is equally
                   defensible and equally arbitrary, and the only thing that matters is
                   that all three implementations make the SAME choice. NOTHING IN THE
                   CORPUS EXERCISES THIS -- all 8 PDFs have no /UserUnit at all -- so it is
-                  pinned by fiat, not by measurement. See § H.2.
+                  pinned BY FIAT, not by measurement. See § H.2.
+
+                  RETRACTION (2026-07-30, acceptance review). An earlier revision of this
+                  amendment justified the rule with "it is what MuPDF's page.rect gives
+                  and therefore what the IR stores". THAT CLAIM IS FALSE AND IS RETRACTED.
+                  It is exactly inverted, and a parser author who followed the stated
+                  reasoning would commit the very error this section measures at 99.93 %
+                  of ids lost (perturbation P9).
+
+                  MEASURED (PyMuPDF 1.28.0 / MuPDF 1.29.0, on
+                  packages/document-ir/test/fixtures-pdf/userunit.pdf, whose page is
+                  /MediaBox [0 0 200 300] with /UserUnit 2.5):
+
+                      page.rect            = Rect(0, 0, 500, 750)   <- PRE-MULTIPLIED
+                      page.mediabox        = Rect(0, 0, 200, 300)   <- not scaled
+                      page.cropbox         = Rect(0, 0, 200, 300)   <- not scaled
+                      page.rotation_matrix = Matrix(1, 0, 0, 1, 0, 0)  <- not scaled
+                      get_drawings()[0].rect = Rect(50, 75, 150, 125)  <- SCALED
+                                               (the raw marker is 20,250,60,270)
+
+                  So page.rect, and every coordinate get_text()/get_drawings() returns,
+                  ARE multiplied by /UserUnit; mediabox, cropbox and rotation_matrix are
+                  not. A MuPDF-based parser must therefore DIVIDE /UserUnit BACK OUT
+                  exactly once, in raw PDF space, before normalising -- see
+                  `geometry.stripUserUnit` / `geometry.strip_user_unit`, which is what the
+                  shipped library does and what the committed vector for userunit.pdf
+                  records (`expected_page_size` [200, 300] alongside
+                  `mupdf_page_rect_unadjusted` [0, 0, 500, 750]).
     origin        TOP-LEFT of the page's post-rotation rect
     y direction   DOWNWARD, so y0 is the TOP edge and y0 <= y1
     rotation      already applied; /Rotate is resolved before the bbox is taken
