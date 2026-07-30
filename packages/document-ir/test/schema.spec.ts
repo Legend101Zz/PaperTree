@@ -19,9 +19,17 @@
 import { describe, expect, it } from 'vitest';
 import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+// F0.7 fixtures: the golden documents are checked with the SHIPPED library, not with a private
+// re-implementation, so a fixture and the code Epic 2 imports cannot disagree. `validatePaper` is
+// aliased because this file already binds that name to the ajv-compiled schema validator above.
+import type { Paper } from '../src/generated/types.js';
+import { PaperSchema } from '../src/generated/zod.js';
+import { blockId, contentHash, normaliseText } from '../src/identity.js';
+import { validatePaper as semanticValidate } from '../src/validate.js';
 
 const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -939,21 +947,147 @@ describe('block ids from ADR-001 Amendment 1 validate against the frozen pattern
 });
 
 // ---------------------------------------------------------------------------
-// FIXTURES — TODO (F0.7, another agent).
+// FIXTURES (F0.7). This is the block F0.2 reserved above; it is now filled in.
 //
-// Add here, and nowhere else:
+// The TODO asked for two assertions — three fixtures present, each schema-valid — and this suite
+// makes both. It then makes two more, because SCHEMA VALIDITY IS NOT ENOUGH and this is the file
+// Epic 2 trusts. A fixture whose polygons are around the wrong paragraphs, whose relations point
+// at blocks that are not there, or whose `block_id` was minted from text it no longer carries is
+// perfectly schema-valid and completely useless. So:
 //
-//   import { readdirSync } from "node:fs";
-//   describe("golden fixtures", () => {
-//     const dir = join(PKG, "fixtures");
-//     const files = readdirSync(dir).filter((f) => f.endsWith(".paperir.json"));
-//     it("all three fixtures are present", () => expect(files).toHaveLength(3));
-//     it.each(files)("%s validates against paperir-1.0.0", (f) => {
-//       assertValid(JSON.parse(readFileSync(join(dir, f), "utf8")));
-//     });
-//   });
+//   1. present — exactly EXPECTED_FIXTURES `*.paperir.json` files, named for their corpus PDF.
+//   2. well-FORMED — ajv strict against `schema/paperir-1.0.0.schema.json` (the TODO's ask).
+//   3. internally CONSISTENT — `validatePaper` (F0.4, DESIGN.md §5.2 Tier A) with ZERO errors.
+//      The TODO said this "belongs with the validator, not here". It is here anyway: F0.4's suite
+//      proves the validator is right about hand-built documents, and nothing there ever opens
+//      `fixtures/`. Without this assertion a fixture could regress and no test would notice.
+//   4. HONEST about identity — every `block_id` recomputes from that block's OWN
+//      (source_hash, page_index, x0, y0, type, text), and `text_normalised` / `content_hash`
+//      recompute from its own text. `validatePaper` rule I1 already checks the id; this repeats it
+//      independently of the validator's own bookkeeping and adds the two derived text fields, so a
+//      bug that disables I1 cannot also hide a mis-minted id.
 //
-// Nothing above needs to change: `assertValid`, `PKG` and the compiled `validatePaper` are
-// already in scope. Fixtures must ALSO pass the Tier-A semantic rules in DESIGN.md §5.2 —
-// that assertion belongs with the validator (F0.4), not here.
+// The Python twin of this block is `python/tests/test_fixtures.py`, which loads the SAME files
+// through Pydantic + `validate_paper` + the Python `block_id`. Neither language is the oracle.
+// What the fixtures do and do not cover in prose: `fixtures/README.md`.
 // ---------------------------------------------------------------------------
+describe('golden fixtures (F0.7)', () => {
+  const EXPECTED_FIXTURES = 3;
+  const dir = join(PKG, 'fixtures');
+  const files = readdirSync(dir)
+    .filter((f) => f.endsWith('.paperir.json'))
+    .toSorted();
+
+  function load(file: string): any {
+    return JSON.parse(readFileSync(join(dir, file), 'utf8'));
+  }
+
+  it('all three fixtures are present', () => {
+    expect(files).toEqual([
+      'attention-is-all-you-need.paperir.json',
+      'neural-odes-mathheavy.paperir.json',
+      'resnet-cvpr-2col.paperir.json',
+    ]);
+    expect(files).toHaveLength(EXPECTED_FIXTURES);
+  });
+
+  it.each(files)('%s validates against paperir-1.0.0', (file) => {
+    assertValid(load(file));
+  });
+
+  it.each(files)('%s passes the generated Zod binding', (file) => {
+    // ajv reads the schema; Zod is GENERATED from it. A fixture that satisfies one and not the
+    // other means codegen drifted, and `packages/reader` consumes the Zod side, not ajv.
+    const parsed = PaperSchema.safeParse(load(file));
+    expect(parsed.error?.issues ?? []).toEqual([]);
+    expect(parsed.success).toBe(true);
+  });
+
+  it.each(files)('%s has ZERO Tier-A semantic errors', (file) => {
+    const report = semanticValidate(load(file) as Paper);
+    // Print the whole diagnostic, not just a count — a bare `expect(ok).toBe(true)` tells the
+    // next person nothing about which rule broke or where.
+    expect(report.errors.map((d) => `${d.rule} ${d.path}: ${d.message}`)).toEqual([]);
+    expect(report.ok).toBe(true);
+  });
+
+  it.each(files)('%s carries no Tier-A warnings either', (file) => {
+    // Warnings are not fatal for an arbitrary document. For a HAND-CHECKED fixture they are: a
+    // warning here means a human declared something the validator finds suspicious, and Epic 2
+    // would inherit it silently.
+    const report = semanticValidate(load(file) as Paper);
+    expect(report.warnings.map((d) => `${d.rule} ${d.path}: ${d.message}`)).toEqual([]);
+  });
+
+  it.each(files)('%s: every block_id recomputes from that block’s own content', (file) => {
+    const doc = load(file) as Paper;
+    const sourceHash = doc.source_hash.replace(/^sha256:/, '');
+    const mismatched: string[] = [];
+
+    for (const block of doc.blocks) {
+      const recomputed = blockId({
+        source_hash: sourceHash,
+        page_index: block.page_index,
+        x0: block.bbox[0],
+        y0: block.bbox[1],
+        block_type: block.type,
+        text: block.text ?? '',
+      });
+      if (recomputed !== block.block_id) {
+        mismatched.push(
+          `${block.block_id} (p${String(block.page_index)} ${block.type}) -> ${recomputed}`,
+        );
+      }
+    }
+
+    expect(mismatched).toEqual([]);
+    expect(doc.blocks.length).toBeGreaterThan(0);
+  });
+
+  it.each(files)(
+    '%s: text_normalised and content_hash recompute from the block’s own text',
+    (file) => {
+      const doc = load(file) as Paper;
+      const wrong: string[] = [];
+
+      for (const block of doc.blocks) {
+        if (block.text == null) continue;
+        if (block.text_normalised !== normaliseText(block.text)) {
+          wrong.push(`${block.block_id}.text_normalised`);
+        }
+        if (block.content_hash !== contentHash(block.text)) {
+          wrong.push(`${block.block_id}.content_hash`);
+        }
+      }
+
+      expect(wrong).toEqual([]);
+    },
+  );
+
+  it('the recompute check discriminates — a tampered fixture fails it', () => {
+    // Negative controls. Without them, a check that silently computed nothing passes forever.
+    const doc = load(files[0]!) as Paper;
+    const block = doc.blocks.find((b) => (b.text ?? '').length > 0)!;
+    const sourceHash = doc.source_hash.replace(/^sha256:/, '');
+    const input = {
+      source_hash: sourceHash,
+      page_index: block.page_index,
+      x0: block.bbox[0],
+      y0: block.bbox[1],
+      block_type: block.type,
+      text: block.text ?? '',
+    };
+
+    expect(blockId(input)).toBe(block.block_id); // the positive half, on the same input
+    expect(blockId({ ...input, text: `tampered ${input.text}` })).not.toBe(block.block_id);
+    expect(blockId({ ...input, x0: input.x0 + 1 })).not.toBe(block.block_id);
+    expect(blockId({ ...input, page_index: input.page_index + 1 })).not.toBe(block.block_id);
+
+    // …but APPENDING is invisible to the id: only the first TEXT_PREFIX_CODEPOINTS (8) code
+    // points of the normalised text are hashed (§E.4). That is by design — a block that grows
+    // downward keeps its id — and it is exactly why `content_hash` is mandatory on every tier-1
+    // anchor hit and why the previous test checks `content_hash` separately.
+    expect(blockId({ ...input, text: `${input.text} appended` })).toBe(block.block_id);
+    expect(contentHash(`${input.text} appended`)).not.toBe(block.content_hash);
+  });
+});
