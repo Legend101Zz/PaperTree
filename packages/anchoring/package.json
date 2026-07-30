@@ -1,0 +1,24 @@
+{
+  "name": "@papertree/anchoring",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "ADR-004's multi-selector anchor and the T0-T6 resolver ladder. Shared by the web reader and the API: an anchor captured in one must resolve in the other, so neither may own the algorithm.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./perturb": "./src/perturb.ts"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "oxlint src test",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@papertree/document-ir": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2"
+  }
+}
