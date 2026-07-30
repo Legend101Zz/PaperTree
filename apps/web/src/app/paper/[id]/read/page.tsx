@@ -424,7 +424,7 @@ export default function ReaderPage() {
                                     <h2 className="text-xl font-semibold mb-3">Generate Book View</h2>
                                     <p className="text-gray-600 dark:text-gray-400 mb-6">
                                         Create an AI-powered explanation with beautiful typography and diagrams.
-                                        We'll generate the first 5 pages by default.
+                                        We&apos;ll generate the first 5 pages by default.
                                     </p>
                                     <button
                                         onClick={handleGenerateBook}

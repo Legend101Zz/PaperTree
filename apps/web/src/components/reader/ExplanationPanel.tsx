@@ -187,7 +187,7 @@ export function ExplanationPanel({
                         onClick={() => onHighlightClick(highlight.id)}
                     >
                         <p className="text-sm font-medium text-gray-700 dark:text-gray-300 line-clamp-2">
-                            "{truncateText(highlight.selected_text, 100)}"
+                            &ldquo;{truncateText(highlight.selected_text, 100)}&rdquo;
                         </p>
                         <p className="text-xs text-gray-500 mt-1">
                             {formatDate(highlight.created_at)}

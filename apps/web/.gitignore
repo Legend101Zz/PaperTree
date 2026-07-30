@@ -40,3 +40,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# The pdf.js worker is COPIED here from the installed pdfjs-dist by scripts/copy-pdf-worker.mjs
+# on prebuild/predev/pretest. It is a build artefact of a pinned dependency, not source: checking
+# in a 1.2 MB minified bundle would put a second, silently-divergable copy of pdf.js in the repo.
+/public/pdf.worker.min.mjs
