@@ -12,10 +12,13 @@
 #     `paths-ignore: [apps/**]` — a paths-filtered workflow can never report a required status
 #     check, which silently wedges PRs.
 #
-#   * CI now installs apps/web's 648 extra packages, which includes compiling `canvas` from
-#     source: canvas 2.11.2 predates Node 22 and publishes no ABI-127 prebuild, so node-pre-gyp
-#     falls back to node-gyp. It is allowlisted in pnpm-workspace.yaml `onlyBuiltDependencies`.
-#     If a runner image ever drops the cairo/pango headers, THIS is the step that goes red.
+#   * CI now installs apps/web's ~650 extra packages. One of them, `canvas`, does NOT get built:
+#     it is pdfjs-dist's optional Node-side renderer, it publishes no Node 22 prebuild, and its
+#     node-gyp fallback fails at `configure` on this runner for want of cairo/pango headers.
+#     Because it is optional that failure is non-fatal — the install would go green with a
+#     node-gyp error wall inside it — so it is blocked deliberately in pnpm-workspace.yaml
+#     `ignoredBuiltDependencies`, where the reason is written down. apps/web still reports
+#     "✓ Compiled successfully" without it.
 #
 #   * better-sqlite3 and sqlite-vec are native. This repo is developed on darwin-arm64 and CI is
 #     linux-x64, so both are smoke-tested in a dedicated step BEFORE the suites run. Without it a

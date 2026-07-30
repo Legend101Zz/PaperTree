@@ -25,10 +25,20 @@ onlyBuiltDependencies:
   - better-sqlite3
   # esbuild backs tsx (codegen) and vitest (tests); its postinstall places the binary.
   - esbuild
-  # canvas is pdfjs-dist@3.11's optional Node-side renderer, reached via apps/web's react-pdf.
-  # NOTE: canvas 2.11.2 predates Node 22, so node-pre-gyp finds no v127 prebuild and COMPILES
-  # from source (~1 min here, needs cairo/pango/jpeg/gif/rsvg headers). See PR for the CI cost.
-  - canvas
   # unrs-resolver is the native module resolver behind eslint-import-resolver-typescript,
   # which eslint-config-next loads; its postinstall places the platform binary.
   - unrs-resolver
+
+# Blocked ON PURPOSE, so pnpm stops asking. Entries here are the answer to "why is this build
+# script not allowlisted", and the answer must survive the next person who runs approve-builds.
+ignoredBuiltDependencies:
+  # canvas is pdfjs-dist@3.11's OPTIONAL Node-side renderer, reached via apps/web's react-pdf.
+  # It was allowlisted first, and CI proved that wrong: canvas 2.11.2 predates Node 22, publishes
+  # no v127 prebuild, and node-pre-gyp falls back to node-gyp — which fails at `configure` on
+  # ubuntu-latest for want of cairo/pango headers (run 30565488280). Because canvas is optional
+  # that failure is NON-FATAL: the install exits 0 and the job goes green with a 30-line node-gyp
+  # error wall buried in it. A tolerated error that looks like a real one is worse than no error.
+  # Nothing here imports canvas — apps/web renders PDFs in the BROWSER — and anything that did
+  # would already be broken on linux-x64. If a server-side renderer is ever wanted, that is a
+  # decision with a version bump attached, not an allowlist entry.
+  - canvas
