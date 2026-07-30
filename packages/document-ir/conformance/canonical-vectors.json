@@ -1,0 +1,253 @@
+{
+  "$schema_note": "The CONTRACT for DESIGN.md 7.1 canonical JSON. Consumed by document-ir/canonical.spec in BOTH TypeScript and Python, so neither language is the oracle. Clause 4 of 7.1 (empty optional arrays omitted) is a SCHEMA guarantee, not a serialiser step - every optional array in paperir-1.0.0 carries minItems: 1 - and the suites assert that property directly rather than implementing a transform that would corrupt a legitimately empty REQUIRED array.",
+  "contract_version": "papertree/canonical-json/1.0.0",
+  "spec": {
+    "key_order": "Unicode CODE POINT order. NOT JavaScript's default Array.prototype.sort, which is UTF-16 code-unit order and disagrees with Python's sorted() for keys mixing astral characters with U+E000..U+FFFF.",
+    "whitespace": "none: no space after ':' or ',', no newline, no trailing newline.",
+    "numbers": "ECMAScript Number::toString (ECMA-262 6.1.6.1.20), i.e. String(x) in JavaScript. Python's repr is also shortest-round-trip but formats differently, so the Python twin re-derives the LAYOUT from repr's digits. Negative zero emits '0'. An integer outside +/-(2^53-1) MUST be rejected, never emitted.",
+    "strings": "JSON escaping of the double quote, the backslash and C0 controls only; non-ASCII is emitted literally as UTF-8. An unpaired surrogate MUST be rejected: JavaScript would emit an escape json.dumps never produces.",
+    "nulls": "a null VALUE is kept; only an ABSENT key is absent. The schema distinguishes the two and D11 turns on that distinction.",
+    "determinism_variant": "canonicalJsonForDeterminism removes parser.parsed_at and nothing else - the one field definition-of-done criterion 1 excuses."
+  },
+  "number_vectors": [
+    {
+      "python_repr": "0.0",
+      "canonical": "0"
+    },
+    {
+      "python_repr": "-0.0",
+      "canonical": "0"
+    },
+    {
+      "python_repr": "1.0",
+      "canonical": "1"
+    },
+    {
+      "python_repr": "-1.0",
+      "canonical": "-1"
+    },
+    {
+      "python_repr": "0.5",
+      "canonical": "0.5"
+    },
+    {
+      "python_repr": "100.0",
+      "canonical": "100"
+    },
+    {
+      "python_repr": "1000000.0",
+      "canonical": "1000000"
+    },
+    {
+      "python_repr": "1e-06",
+      "canonical": "0.000001"
+    },
+    {
+      "python_repr": "1e-07",
+      "canonical": "1e-7"
+    },
+    {
+      "python_repr": "1.5e-09",
+      "canonical": "1.5e-9"
+    },
+    {
+      "python_repr": "1e-05",
+      "canonical": "0.00001"
+    },
+    {
+      "python_repr": "0.1",
+      "canonical": "0.1"
+    },
+    {
+      "python_repr": "0.3333333333333333",
+      "canonical": "0.3333333333333333"
+    },
+    {
+      "python_repr": "123.456",
+      "canonical": "123.456"
+    },
+    {
+      "python_repr": "9007199254740991",
+      "canonical": "9007199254740991"
+    },
+    {
+      "python_repr": "-9007199254740991",
+      "canonical": "-9007199254740991"
+    },
+    {
+      "python_repr": "5e-324",
+      "canonical": "5e-324"
+    },
+    {
+      "python_repr": "1000000000000000.5",
+      "canonical": "1000000000000000.5"
+    },
+    {
+      "python_repr": "4.9e-300",
+      "canonical": "4.9e-300"
+    },
+    {
+      "python_repr": "1e+16",
+      "canonical": "10000000000000000"
+    },
+    {
+      "python_repr": "1e+20",
+      "canonical": "100000000000000000000"
+    },
+    {
+      "python_repr": "1e+21",
+      "canonical": "1e+21"
+    },
+    {
+      "python_repr": "1e+22",
+      "canonical": "1e+22"
+    },
+    {
+      "python_repr": "1.7976931348623157e+308",
+      "canonical": "1.7976931348623157e+308"
+    },
+    {
+      "python_repr": "1.2345678901234568e+18",
+      "canonical": "1234567890123456800"
+    },
+    {
+      "python_repr": "12345.6789",
+      "canonical": "12345.6789"
+    }
+  ],
+  "document_vectors": [
+    {
+      "label": "scalars",
+      "value": {
+        "a": null,
+        "b": true,
+        "c": false,
+        "d": "",
+        "e": 0
+      },
+      "canonical": "{\"a\":null,\"b\":true,\"c\":false,\"d\":\"\",\"e\":0}"
+    },
+    {
+      "label": "key-order",
+      "value": {
+        "z": 1,
+        "a": 2,
+        "A": 3,
+        "_": 4,
+        "a0": 5,
+        "aa": 6
+      },
+      "canonical": "{\"A\":3,\"_\":4,\"a\":2,\"a0\":5,\"aa\":6,\"z\":1}"
+    },
+    {
+      "label": "nested-and-empty",
+      "value": {
+        "arr": [],
+        "obj": {},
+        "nested": {
+          "b": [
+            1,
+            {
+              "y": 2,
+              "x": 3
+            }
+          ],
+          "a": null
+        }
+      },
+      "canonical": "{\"arr\":[],\"nested\":{\"a\":null,\"b\":[1,{\"x\":3,\"y\":2}]},\"obj\":{}}"
+    },
+    {
+      "label": "one-point-zero",
+      "value": {
+        "confidence": 1.0,
+        "count": 1,
+        "ratio": 0.5
+      },
+      "canonical": "{\"confidence\":1,\"count\":1,\"ratio\":0.5}"
+    },
+    {
+      "label": "strings",
+      "value": {
+        "quote": "\"",
+        "backslash": "\\",
+        "control": "\u0001",
+        "tab": "\t",
+        "newline": "\n",
+        "unicode": "café 中 😀",
+        "sep": "  "
+      },
+      "canonical": "{\"backslash\":\"\\\\\",\"control\":\"\\u0001\",\"newline\":\"\\n\",\"quote\":\"\\\"\",\"sep\":\"  \",\"tab\":\"\\t\",\"unicode\":\"café 中 😀\"}"
+    },
+    {
+      "label": "deep-numbers",
+      "value": {
+        "values": [
+          0.0,
+          -0.0,
+          1.0,
+          -1.0,
+          0.5,
+          100.0,
+          1000000.0,
+          1e-06,
+          1e-07,
+          1.5e-09,
+          1e-05,
+          0.1,
+          0.3333333333333333,
+          123.456,
+          9007199254740991,
+          -9007199254740991,
+          5e-324,
+          1000000000000000.5,
+          4.9e-300,
+          12345.6789
+        ]
+      },
+      "canonical": "{\"values\":[0,0,1,-1,0.5,100,1000000,0.000001,1e-7,1.5e-9,0.00001,0.1,0.3333333333333333,123.456,9007199254740991,-9007199254740991,5e-324,1000000000000000.5,4.9e-300,12345.6789]}"
+    }
+  ],
+  "rejection_vectors": [
+    {
+      "label": "int-beyond-2^53",
+      "python_repr": "9007199254740993",
+      "why": "an exact Python int JavaScript cannot represent; canonicalising it in one language and not the other is an asymmetric-acceptance fork."
+    },
+    {
+      "label": "integral-float-beyond-2^53",
+      "python_repr": "1e+16",
+      "why": "in JavaScript this IS the integer 10000000000000000, so both languages must refuse it or neither does."
+    },
+    {
+      "label": "not-finite",
+      "python_repr": "inf",
+      "why": "JSON has no infinity; Python's json.dumps emits `Infinity`, which JSON.parse cannot even read."
+    }
+  ],
+  "fixture_vectors": [
+    {
+      "fixture": "attention-is-all-you-need.paperir.json",
+      "canonical_bytes": 81783,
+      "canonical_sha256": "e42b80723cbe1f5e47265181d4afb76947ec81e7fa649791d1327e44034f62eb",
+      "determinism_sha256": "726bc695a0074a808d3357de8ccb00d555b24dcc204222e4ff713fdf5318b48e"
+    },
+    {
+      "fixture": "neural-odes-mathheavy.paperir.json",
+      "canonical_bytes": 108406,
+      "canonical_sha256": "7a60561ff58607f54701de9881724f922f56329750f7897fe77b8463e9351373",
+      "determinism_sha256": "df026d752ed55856e8cb2060a0f53f538f2241e0e8f157713a3971fa976b6c29"
+    },
+    {
+      "fixture": "resnet-cvpr-2col.paperir.json",
+      "canonical_bytes": 112541,
+      "canonical_sha256": "fb55818dec0e1e765def83ddd9f478d47e21963124763cc7d4e58255e8c20d3f",
+      "determinism_sha256": "336130ebd1d5e63a3d0b95826f13713e426dec34946899dcf54ca24581693712"
+    }
+  ],
+  "how_to_use": [
+    "1. For every entry in `number_vectors`: the canonical form of that double MUST equal `canonical`.",
+    "2. For every entry in `document_vectors`: canonicalJson(value) MUST equal `canonical` byte for byte.",
+    "3. For every entry in `fixture_vectors`: the SHA-256 of the canonical bytes of that committed fixture MUST equal `canonical_sha256`, and of the parsed_at-stripped form `determinism_sha256`. This is the cross-language byte agreement DESIGN.md 7.1 asserts and nothing used to check."
+  ]
+}

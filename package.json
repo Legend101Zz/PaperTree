@@ -1,0 +1,32 @@
+{
+  "name": "papertree",
+  "version": "0.0.0",
+  "private": true,
+  "description": "PaperTree v2 monorepo root. See research/build/README.md for the build plan.",
+  "packageManager": "pnpm@10.15.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "codegen": "turbo run codegen",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "py:sync": "uv sync --all-packages",
+    "py:test": "uv run pytest",
+    "py:lint": "uv run ruff check packages",
+    "py:format:check": "uv run ruff format --check packages"
+  },
+  "devDependencies": {
+    "oxlint": "^1.5.0",
+    "prettier": "^3.4.2",
+    "tsx": "^4.19.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

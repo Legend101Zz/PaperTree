@@ -1,0 +1,26 @@
+{
+  "name": "@papertree/document-ir",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PaperIR: the canonical, geometry-preserving document representation. Schema is the single source of truth; TS and Python bindings are generated from it.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./schema/paperir-1.0.0.schema.json"
+  },
+  "scripts": {
+    "codegen": "tsx codegen/generate.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "oxlint src test codegen",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1"
+  }
+}

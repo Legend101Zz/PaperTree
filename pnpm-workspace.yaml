@@ -1,0 +1,17 @@
+# PaperTree v2 workspace.
+#
+# apps/** is DELIBERATELY EXCLUDED. The existing app (apps/web, apps/api) is the v1
+# system being replaced; apps/web has its own package-lock.json and npm install, and
+# pulling it into this workspace would change how it resolves dependencies. Epic 0
+# builds alongside it without touching it. Epics 1-2 bring apps/* in when they replace it.
+packages:
+  - 'packages/*'
+  - 'services/*'
+  - '!apps/**'
+
+# better-sqlite3 ships prebuilt binaries but needs its install script to place them.
+# pnpm 10 blocks lifecycle scripts by default; this is the explicit allowlist.
+onlyBuiltDependencies:
+  - better-sqlite3
+  # esbuild backs tsx (codegen) and vitest (tests); its postinstall places the binary.
+  - esbuild

@@ -33,7 +33,14 @@ fetch bert-2col                 https://arxiv.org/pdf/1810.04805   # 2-col ACL, 
 fetch neural-odes-mathheavy     https://arxiv.org/pdf/1806.07366   # dense derivations, appendices
 fetch pdf-to-tree-acl2col       https://aclanthology.org/2024.findings-emnlp.628.pdf
 
+# Tier A extension (Epic 0, block-ID stability): the three shapes the seed lacked.
+# Chosen because each stresses a DIFFERENT part of the content-derived block ID —
+# repeated short cells, repeated pseudocode tokens, and sheer block count.
+fetch superglue-tableheavy      https://arxiv.org/pdf/1905.00537   # §7 complex tables, many near-identical numeric cells
+fetch a3c-algorithmheavy        https://arxiv.org/pdf/1602.01783   # algorithm2e pseudocode floats, repeated "end for" lines
+fetch gpt3-longform-singlecol   https://arxiv.org/pdf/2005.14165   # 75pp single-column, appendices + supplementary
+
 echo
-echo "Seed corpus ready. 39 more papers needed for the full Tier A set —"
+echo "Seed corpus ready. 36 more papers needed for the full Tier A set —"
 echo "see research/benchmarks/README.md §1.3 for the missing categories"
-echo "(scanned, non-English, plot-heavy, table-heavy, algorithm-heavy)."
+echo "(scanned, non-English, plot-heavy, architecture-diagram-heavy, poorly-encoded)."

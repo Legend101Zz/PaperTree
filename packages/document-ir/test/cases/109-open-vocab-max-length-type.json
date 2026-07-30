@@ -1,0 +1,433 @@
+{
+  "name": "open-vocab-max-length-type",
+  "schema": "paperir",
+  "expect": "valid",
+  "reason": "the identifier pattern allows 64 characters",
+  "origin": "F0.3 codegen — construct coverage",
+  "document": {
+    "ir_version": "1.0.0",
+    "paper_id": "ppr_01JQ8ZC5X4T2VBN6R3KDWY7HAE",
+    "source_hash": "sha256:9f2c4b1e7a03d5c68f19b2e4a7c0d3f6819b5e2a4c7d0f36819b5e2a4c7d0f36",
+    "generation": 1,
+    "coordinate_space": "pdf_user_space_topleft",
+    "parser": {
+      "name": "pdfium-deterministic",
+      "version": "0.1.0",
+      "config_hash": "sha256:0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9",
+      "profile": "born-digital-fast",
+      "parsed_at": "2026-07-30T09:14:22Z"
+    },
+    "status": "complete",
+    "partial_reason": null,
+    "metadata": {
+      "title": {
+        "value": "Deep Residual Learning for Image Recognition",
+        "source_block_id": "blk_7k2m4qx3tz5b6d7f",
+        "confidence": 0.97
+      },
+      "authors": [],
+      "abstract": null,
+      "doi": null,
+      "arxiv_id": null,
+      "venue": null,
+      "year": null
+    },
+    "pages": [
+      {
+        "page_id": "pg_2a4c6e2g4j6m2p4r",
+        "index": 0,
+        "width": 612,
+        "height": 792,
+        "rotation": 0,
+        "user_unit": 1,
+        "crop_box": [0, 0, 612, 792],
+        "media_box": [0, 0, 612, 792],
+        "image": {
+          "uri": "r2://papers/ppr_01JQ8ZC5X4T2VBN6R3KDWY7HAE/pages/000@2x.webp",
+          "scale": 2,
+          "dpi": 144,
+          "rendered_from": "page"
+        },
+        "has_text_layer": true,
+        "is_scanned": false,
+        "block_ids": [
+          "blk_7k2m4qx3tz5b6d7f",
+          "blk_a3c5e7g2j4m6p7r2",
+          "blk_f2h4k6n2q4s6u2w4",
+          "blk_b4d6f2h4k6n2q4s6",
+          "blk_c5e7g3j5m7p3r5t7"
+        ],
+        "flows": {
+          "body": ["blk_7k2m4qx3tz5b6d7f", "blk_a3c5e7g2j4m6p7r2", "blk_b4d6f2h4k6n2q4s6"],
+          "caption": ["blk_c5e7g3j5m7p3r5t7"],
+          "footnote": [],
+          "header": [],
+          "footer": [],
+          "margin": []
+        },
+        "confidence": 0.98
+      },
+      {
+        "page_id": "pg_3b5d7f3h5k7n3q5s",
+        "index": 1,
+        "width": 612,
+        "height": 792,
+        "rotation": 0,
+        "user_unit": 1,
+        "crop_box": [0, 0, 612, 792],
+        "media_box": [0, 0, 612, 792],
+        "image": {
+          "uri": "r2://papers/ppr_01JQ8ZC5X4T2VBN6R3KDWY7HAE/pages/001@2x.webp",
+          "scale": 2,
+          "dpi": 144,
+          "rendered_from": "page"
+        },
+        "has_text_layer": true,
+        "is_scanned": false,
+        "block_ids": ["blk_d6f2h4k6n2q4s6u2", "blk_e7g3j5m7p3r5t7v3", "blk_z2z3z4z5z6z7z2z3"],
+        "flows": {
+          "body": ["blk_d6f2h4k6n2q4s6u2", "blk_e7g3j5m7p3r5t7v3", "blk_z2z3z4z5z6z7z2z3"],
+          "caption": [],
+          "footnote": [],
+          "header": [],
+          "footer": [],
+          "margin": []
+        },
+        "confidence": 0.83
+      }
+    ],
+    "blocks": [
+      {
+        "block_id": "blk_7k2m4qx3tz5b6d7f",
+        "type": "title",
+        "page_index": 0,
+        "polygon": [
+          [54, 72],
+          [558, 72],
+          [558, 96],
+          [54, 96]
+        ],
+        "bbox": [54, 72, 558, 96],
+        "flow": "body",
+        "order": 0,
+        "doc_order": 0,
+        "child_ids": ["blk_a3c5e7g2j4m6p7r2", "blk_b4d6f2h4k6n2q4s6"],
+        "text": "Deep Residual Learning for Image Recognition",
+        "text_normalised": "deep residual learning for image recognition",
+        "content_hash": "blake2s:3f9a1c47b208e6d5",
+        "source": "pdf_text_layer",
+        "confidence": 0.99,
+        "provenance": {
+          "parser": "pdfium-deterministic",
+          "stage": "layout+text"
+        }
+      },
+      {
+        "block_id": "blk_a3c5e7g2j4m6p7r2",
+        "type": "paragraph",
+        "page_index": 0,
+        "polygon": [
+          [54, 120],
+          [292, 120],
+          [292, 240],
+          [54, 240]
+        ],
+        "bbox": [54, 120, 292, 240],
+        "flow": "body",
+        "order": 1,
+        "doc_order": 1,
+        "parent_id": "blk_7k2m4qx3tz5b6d7f",
+        "child_ids": ["blk_f2h4k6n2q4s6u2w4"],
+        "next_id": "blk_b4d6f2h4k6n2q4s6",
+        "text": "We explicitly reformulate the layers as learning residual functions F(x).",
+        "text_normalised": "we explicitly reformulate the layers as learning residual functions f(x).",
+        "content_hash": "blake2s:8b1d0e2f6a4c9375",
+        "spans": [
+          {
+            "start": 0,
+            "end": 45,
+            "bbox": [54, 120, 292, 132],
+            "font": "NimbusRomNo9L-Regu",
+            "size": 9.96
+          },
+          {
+            "start": 45,
+            "end": 68,
+            "bbox": [54, 132, 240, 144],
+            "font": "NimbusRomNo9L-Regu",
+            "size": 9.96
+          },
+          {
+            "start": 68,
+            "end": 72,
+            "bbox": [240, 132, 262, 144],
+            "role": "inline_equation",
+            "block_id": "blk_f2h4k6n2q4s6u2w4",
+            "font": "CMMI10",
+            "size": 9.96
+          }
+        ],
+        "source": "pdf_text_layer",
+        "confidence": 0.96,
+        "provenance": {
+          "parser": "pdfium-deterministic",
+          "stage": "layout+text",
+          "native_id": "#/texts/47"
+        },
+        "repairs": [
+          {
+            "kind": "dehyphenate",
+            "applied": true,
+            "at": 49,
+            "from": "resid-\nual",
+            "to": "residual"
+          }
+        ]
+      },
+      {
+        "block_id": "blk_f2h4k6n2q4s6u2w4",
+        "type": "inline_equation",
+        "page_index": 0,
+        "polygon": [
+          [240, 132],
+          [262, 132],
+          [262, 144],
+          [240, 144]
+        ],
+        "bbox": [240, 132, 262, 144],
+        "flow": "body",
+        "order": 0,
+        "parent_id": "blk_a3c5e7g2j4m6p7r2",
+        "text": "F(x)",
+        "text_normalised": "f(x)",
+        "content_hash": "blake2s:1a2b3c4d5e6f7081",
+        "source": "pdf_text_layer",
+        "confidence": 0.74,
+        "provenance": {
+          "parser": "pdfium-deterministic",
+          "stage": "formula-region"
+        },
+        "payload": {
+          "display": false,
+          "latex": "\\mathcal{F}(\\mathbf{x})",
+          "latex_confidence": 0.71,
+          "image": null
+        }
+      },
+      {
+        "block_id": "blk_b4d6f2h4k6n2q4s6",
+        "type": "figure",
+        "page_index": 0,
+        "polygon": [
+          [320, 120],
+          [558, 120],
+          [558, 300],
+          [320, 300]
+        ],
+        "bbox": [320, 120, 558, 300],
+        "flow": "body",
+        "order": 2,
+        "doc_order": 2,
+        "parent_id": "blk_7k2m4qx3tz5b6d7f",
+        "prev_id": "blk_a3c5e7g2j4m6p7r2",
+        "source": "pdf_vector",
+        "confidence": 0.92,
+        "provenance": {
+          "parser": "pdfium-deterministic",
+          "stage": "vector-figure"
+        },
+        "payload": {
+          "figure_number": "2",
+          "figure_kind": "diagram",
+          "is_vector": true,
+          "image": {
+            "uri": "r2://papers/ppr_01JQ8ZC5X4T2VBN6R3KDWY7HAE/fig/blk_b4d6f2h4k6n2q4s6.webp",
+            "scale": 3,
+            "rendered_from": "vector"
+          },
+          "caption_block": "blk_c5e7g3j5m7p3r5t7",
+          "detected_labels": [
+            {
+              "text": "conv 3x3",
+              "polygon": [
+                [340, 160],
+                [396, 160],
+                [396, 172],
+                [340, 172]
+              ],
+              "source": "pdf_text_layer",
+              "confidence": 0.88
+            }
+          ]
+        }
+      },
+      {
+        "block_id": "blk_c5e7g3j5m7p3r5t7",
+        "type": "caption",
+        "page_index": 0,
+        "polygon": [
+          [320, 308],
+          [558, 308],
+          [558, 332],
+          [320, 332]
+        ],
+        "bbox": [320, 308, 558, 332],
+        "flow": "caption",
+        "order": 0,
+        "text": "Figure 2. Residual learning: a building block.",
+        "text_normalised": "figure 2. residual learning: a building block.",
+        "content_hash": "blake2s:c40a7719e2b58d63",
+        "source": "pdf_text_layer",
+        "confidence": 0.95,
+        "provenance": {
+          "parser": "pdfium-deterministic",
+          "stage": "layout+text"
+        }
+      },
+      {
+        "block_id": "blk_d6f2h4k6n2q4s6u2",
+        "type": "equation",
+        "page_index": 1,
+        "polygon": [
+          [54, 150],
+          [292, 150],
+          [292, 186],
+          [54, 186]
+        ],
+        "bbox": [54, 150, 292, 186],
+        "flow": "body",
+        "order": 0,
+        "doc_order": 3,
+        "next_id": "blk_e7g3j5m7p3r5t7v3",
+        "source": "pdf_text_layer",
+        "confidence": 0.9,
+        "provenance": {
+          "parser": "pdfium-deterministic",
+          "stage": "formula-region"
+        },
+        "alternatives": [
+          {
+            "parser": "pdfium-deterministic",
+            "authored_by": "parser",
+            "confidence": 0.9,
+            "decision": "selected",
+            "rule": "prefer_native_text_when_delta<0.2"
+          },
+          {
+            "parser": "vlm-repair",
+            "authored_by": "model",
+            "text": "\\mathcal{F}(x) + x",
+            "confidence": 0.88,
+            "decision": "not_selected",
+            "rule": "prefer_native_text_when_delta<0.2"
+          }
+        ],
+        "payload": {
+          "display": true,
+          "equation_number": "1",
+          "latex": "\\mathcal{F}(\\mathbf{x}) := \\mathcal{H}(\\mathbf{x}) - \\mathbf{x}",
+          "latex_confidence": 0.88,
+          "image": {
+            "uri": "r2://papers/ppr_01JQ8ZC5X4T2VBN6R3KDWY7HAE/eq/blk_d6f2h4k6n2q4s6u2.webp",
+            "scale": 3,
+            "rendered_from": "page"
+          }
+        }
+      },
+      {
+        "block_id": "blk_e7g3j5m7p3r5t7v3",
+        "type": "unknown",
+        "page_index": 1,
+        "polygon": [
+          [320, 400],
+          [558, 400],
+          [558, 520],
+          [320, 520]
+        ],
+        "bbox": [320, 400, 558, 520],
+        "flow": "body",
+        "order": 1,
+        "doc_order": 4,
+        "prev_id": "blk_d6f2h4k6n2q4s6u2",
+        "source": "pdf_vector",
+        "confidence": 0.31,
+        "provenance": {
+          "parser": "pdfium-deterministic",
+          "stage": "layout"
+        }
+      },
+      {
+        "block_id": "blk_z2z3z4z5z6z7z2z3",
+        "type": "abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "page_index": 1,
+        "polygon": [
+          [54, 600],
+          [292, 600],
+          [292, 640],
+          [54, 640]
+        ],
+        "bbox": [54, 600, 292, 640],
+        "flow": "body",
+        "order": 2,
+        "doc_order": 5,
+        "text": "A perfectly ordinary sentence read out of the text layer.",
+        "source": "pdf_text_layer",
+        "confidence": 0.9,
+        "provenance": {
+          "parser": "pdfium-deterministic",
+          "stage": "layout+text"
+        }
+      }
+    ],
+    "relations": [
+      {
+        "type": "caption_of",
+        "from": "blk_c5e7g3j5m7p3r5t7",
+        "to": "blk_b4d6f2h4k6n2q4s6",
+        "confidence": 0.91,
+        "provenance": "geometric+numbering"
+      },
+      {
+        "type": "parent_of",
+        "from": "blk_7k2m4qx3tz5b6d7f",
+        "to": "blk_a3c5e7g2j4m6p7r2",
+        "confidence": 1,
+        "provenance": "font-cluster"
+      },
+      {
+        "type": "parent_of",
+        "from": "blk_7k2m4qx3tz5b6d7f",
+        "to": "blk_b4d6f2h4k6n2q4s6",
+        "confidence": 1,
+        "provenance": "font-cluster"
+      },
+      {
+        "type": "parent_of",
+        "from": "blk_a3c5e7g2j4m6p7r2",
+        "to": "blk_f2h4k6n2q4s6u2w4",
+        "confidence": 1,
+        "provenance": "span-role"
+      }
+    ],
+    "sections": [
+      {
+        "heading_block_id": "blk_7k2m4qx3tz5b6d7f",
+        "level": 1,
+        "block_ids": [
+          "blk_a3c5e7g2j4m6p7r2",
+          "blk_b4d6f2h4k6n2q4s6",
+          "blk_c5e7g3j5m7p3r5t7",
+          "blk_d6f2h4k6n2q4s6u2",
+          "blk_e7g3j5m7p3r5t7v3"
+        ]
+      }
+    ],
+    "references": [],
+    "confidence": {
+      "overall": 0.91,
+      "by_page": [0.98, 0.83],
+      "weakest_pages": [1],
+      "needs_review": true
+    }
+  }
+}

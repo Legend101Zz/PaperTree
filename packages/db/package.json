@@ -1,0 +1,25 @@
+{
+  "name": "@papertree/db",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SQLite data layer for PaperTree v2. Forward-only migrations plus query helpers that structurally require an owner.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "oxlint src test",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@papertree/document-ir": "workspace:*",
+    "better-sqlite3": "^11.7.0",
+    "sqlite-vec": "^0.1.7-alpha.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.2"
+  }
+}

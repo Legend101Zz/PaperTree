@@ -1,0 +1,580 @@
+{
+  "$note": "HAND-WRITTEN. Each case patches conformance/validator-clean.json and states the diagnostics the semantic validator must produce, in order. `expect` entries are (rule, severity, path) triples: the message is deliberately NOT part of the cross-language contract, because it interpolates numbers and String(1.0) is '1' in JS while str(1.0) is '1.0' in Python. Every patched document is still SCHEMA-VALID -- that is the point: this file exercises the layer above the schema, and a mutation the schema already rejects belongs in the per-language bypass tests instead (see `unreachable_via_schema` below).",
+  "clean": "validator-clean.json",
+  "patch_ops": "Each op is {\"set\": path, \"value\": v} | {\"delete\": path} | {\"append\": path, \"value\": v}. `path` is slash-separated; a numeric segment indexes an array. Ops are applied in order to a deep copy of the clean document. A `value` that is a string beginning with \"@\" is a REFERENCE: the rest is a path read out of the UNMUTATED clean document, which is how a case names a generated block_id without hard-coding a digest that would rot the moment the identity formula moved.",
+  "unreachable_via_schema": {
+    "$note": "Rules that CANNOT fire on a schema-valid document, so they have no case here and are instead tested in each language by constructing the object behind the schema's back. This is a property of the rules, not a gap in the tests.",
+    "G5": "Point/BBox are bounded to +/-20000 with allow_inf_nan false, so NaN/Infinity cannot survive Paper.model_validate or PaperSchema.parse.",
+    "R30": "DESIGN.md 30 says so itself: the schema's if/then already requires model_id + prompt_hash and forces applied:false on ocr_correction / vlm_substitution. The rule is retained only for a better message.",
+    "R30b-model-naming": "The mirror if/then forbids model_id / prompt_hash on deterministic kinds, so the 'a deterministic repair must not name a model' half of R30b is likewise schema-enforced. The from->to class check, which is NOT, is exercised by five cases below."
+  },
+  "cases": [
+    {
+      "name": "clean",
+      "note": "the unmutated baseline: a semantically perfect document produces nothing at all",
+      "ops": [],
+      "expect": []
+    },
+
+    {
+      "name": "R1-bbox-is-not-the-polygon-extent",
+      "note": "widening bbox.x1 alone; the anchor (x0,y0) is untouched so the block id still checks out",
+      "ops": [{ "set": "blocks/0/bbox/2", "value": 559 }],
+      "expect": [{ "rule": "R1", "severity": "error", "path": "blocks[0].bbox" }]
+    },
+    {
+      "name": "R2-span-bbox-is-inverted",
+      "note": "x0 > x1 on a span box; block geometry is untouched so nothing else fires",
+      "ops": [{ "set": "blocks/1/spans/0/bbox", "value": [292, 120, 54, 132] }],
+      "expect": [{ "rule": "R2", "severity": "error", "path": "blocks[1].spans[0].bbox" }]
+    },
+    {
+      "name": "R3-one-block-escapes-the-crop-box",
+      "note": "a single marginally out-of-box block is parser jitter: WARN. The 5% threshold is raised so G7 does not promote it on a 5-block page.",
+      "options": { "out_of_crop_box_error_fraction": 0.5 },
+      "ops": [
+        { "set": "blocks/4/polygon", "value": [[320, 308], [620, 308], [620, 332], [320, 332]] },
+        { "set": "blocks/4/bbox", "value": [320, 308, 620, 332] }
+      ],
+      "expect": [{ "rule": "R3", "severity": "warning", "path": "blocks[4].polygon" }]
+    },
+    {
+      "name": "G7-a-systematic-coordinate-space-error",
+      "note": "2 of 5 blocks on page 0 leave the crop box: 40% is not jitter, so rule 3 is promoted to ERROR and reported as G7",
+      "ops": [
+        { "set": "blocks/3/polygon", "value": [[320, 120], [620, 120], [620, 300], [320, 300]] },
+        { "set": "blocks/3/bbox", "value": [320, 120, 620, 300] },
+        { "set": "blocks/4/polygon", "value": [[320, 308], [620, 308], [620, 332], [320, 332]] },
+        { "set": "blocks/4/bbox", "value": [320, 308, 620, 332] }
+      ],
+      "expect": [
+        { "rule": "G7", "severity": "error", "path": "blocks[3].polygon" },
+        { "rule": "G7", "severity": "error", "path": "blocks[4].polygon" }
+      ]
+    },
+    {
+      "name": "G4-page-width-disagrees-with-crop-box",
+      "ops": [{ "set": "pages/0/width", "value": 600 }],
+      "expect": [{ "rule": "G4", "severity": "error", "path": "pages[0].width" }]
+    },
+    {
+      "name": "G4-crop-box-does-not-start-at-the-origin",
+      "note": "width and height still agree with the box, so only the D23 origin clause fires",
+      "ops": [{ "set": "pages/0/crop_box", "value": [10, 10, 622, 802] }],
+      "expect": [{ "rule": "G4", "severity": "error", "path": "pages[0].crop_box" }]
+    },
+    {
+      "name": "G6-degenerate-polygon",
+      "note": "three collinear vertices: zero area, and the bowtie half is deliberately not also reported",
+      "ops": [
+        { "set": "blocks/4/polygon", "value": [[320, 308], [440, 308], [558, 308]] },
+        { "set": "blocks/4/bbox", "value": [320, 308, 558, 308] }
+      ],
+      "expect": [{ "rule": "G6", "severity": "error", "path": "blocks[4].polygon" }]
+    },
+    {
+      "name": "G6-self-intersecting-ring",
+      "note": "area 3336 pt2 and the same extent, so only the bowtie clause fires - a parser bug, hence WARN",
+      "ops": [
+        {
+          "set": "blocks/4/polygon",
+          "value": [[320, 308], [558, 320], [400, 308], [558, 332], [320, 332]]
+        }
+      ],
+      "expect": [{ "rule": "G6", "severity": "warning", "path": "blocks[4].polygon" }]
+    },
+    {
+      "name": "G8-geometry-at-the-wrong-scale-for-its-page",
+      "note": "page 1 blown up to 20000x20000 with a matching crop box: G4 and rule 3 both still pass, and only G8 notices that the blocks now cover 0.001% of it. This is the same detection as geometry stored in normalised [0,1] fractions, from the other side. G8 is a WARNING (DESIGN.md 5.2): low coverage is suspicion, not proof the document is wrong.",
+      "ops": [
+        { "set": "pages/1/width", "value": 20000 },
+        { "set": "pages/1/height", "value": 20000 },
+        { "set": "pages/1/crop_box", "value": [0, 0, 20000, 20000] },
+        { "set": "pages/1/media_box", "value": [0, 0, 20000, 20000] }
+      ],
+      "expect": [{ "rule": "G8", "severity": "warning", "path": "pages[1]" }]
+    },
+
+    {
+      "name": "R8-duplicate-page-id",
+      "ops": [{ "set": "pages/1/page_id", "value": "pg_2a4c6e2g4j6m2p4r" }],
+      "expect": [{ "rule": "R8", "severity": "error", "path": "pages[1].page_id" }]
+    },
+    {
+      "name": "R40-pages-empty-but-blocks-exist",
+      "ops": [{ "set": "pages", "value": [] }],
+      "expect": [
+        { "rule": "R40", "severity": "error", "path": "pages" },
+        { "rule": "R13", "severity": "error", "path": "confidence.by_page" },
+        { "rule": "R13", "severity": "error", "path": "confidence.weakest_pages[0]" }
+      ]
+    },
+    {
+      "name": "R41-complete-paper-carries-a-partial-reason",
+      "ops": [{ "set": "partial_reason", "value": "pages 12-14 queued for vision repair" }],
+      "expect": [{ "rule": "R41", "severity": "error", "path": "partial_reason" }]
+    },
+    {
+      "name": "R13-by-page-length-does-not-match-pages",
+      "ops": [{ "append": "confidence/by_page", "value": 0.5 }],
+      "expect": [{ "rule": "R13", "severity": "error", "path": "confidence.by_page" }]
+    },
+    {
+      "name": "R13b-complete-paper-with-an-uncalibrated-confidence",
+      "ops": [{ "set": "confidence/overall", "value": null }],
+      "expect": [{ "rule": "R13b", "severity": "error", "path": "confidence.overall" }]
+    },
+
+    {
+      "name": "R10-block-claims-a-page-that-does-not-list-it",
+      "ops": [{ "delete": "pages/0/block_ids/4" }],
+      "expect": [{ "rule": "R10", "severity": "error", "path": "pages[0].block_ids" }]
+    },
+    {
+      "name": "R11-block-listed-in-the-wrong-flow",
+      "ops": [{ "set": "blocks/4/flow", "value": "footnote" }],
+      "expect": [{ "rule": "R11", "severity": "error", "path": "pages[0].flows.caption[0]" }]
+    },
+    {
+      "name": "R42-nested-block-spliced-into-a-flow",
+      "note": "the enforcement half of D14. R12 also fires because the nested block's container-local order 0 lands after the top-level order 2.",
+      "ops": [
+        { "append": "pages/0/flows/body", "value": "@blocks/2/block_id" }
+      ],
+      "expect": [
+        { "rule": "R42", "severity": "error", "path": "pages[0].flows.body[3]" },
+        { "rule": "R12", "severity": "error", "path": "pages[0].flows.body[3]" }
+      ]
+    },
+    {
+      "name": "R12-flow-not-in-ascending-order",
+      "ops": [
+        { "set": "pages/1/flows/body/1", "value": "@blocks/7/block_id" },
+        { "set": "pages/1/flows/body/2", "value": "@blocks/6/block_id" }
+      ],
+      "expect": [{ "rule": "R12", "severity": "error", "path": "pages[1].flows.body[2]" }]
+    },
+    {
+      "name": "R14-order-is-neither-dense-nor-unique",
+      "note": "paragraph moved from 1 to 2, colliding with the figure and leaving a hole at 1",
+      "ops": [{ "set": "blocks/1/order", "value": 2 }],
+      "expect": [
+        { "rule": "R14", "severity": "error", "path": "blocks[3].order" },
+        { "rule": "R14", "severity": "error", "path": "blocks[0].order" }
+      ]
+    },
+    {
+      "name": "R15-nested-block-carries-doc-order",
+      "ops": [{ "set": "blocks/2/doc_order", "value": 8 }],
+      "expect": [{ "rule": "R15", "severity": "error", "path": "blocks[2].doc_order" }]
+    },
+    {
+      "name": "R15-doc-order-has-a-hole",
+      "ops": [{ "set": "blocks/11/doc_order", "value": 9 }],
+      "expect": [{ "rule": "R15", "severity": "error", "path": "blocks" }]
+    },
+    {
+      "name": "R16-the-body-stream-runs-backwards",
+      "ops": [
+        { "set": "blocks/6/doc_order", "value": 5 },
+        { "set": "blocks/7/doc_order", "value": 4 }
+      ],
+      "expect": [{ "rule": "R16", "severity": "error", "path": "blocks[7].doc_order" }]
+    },
+
+    {
+      "name": "R4-relation-endpoint-does-not-resolve",
+      "ops": [{ "set": "relations/0/to", "value": "blk_aaaaaaaaaaaaaaaa" }],
+      "expect": [{ "rule": "R4", "severity": "error", "path": "relations[0].to" }]
+    },
+    {
+      "name": "R5-prev-id-does-not-resolve",
+      "ops": [{ "set": "blocks/1/prev_id", "value": "blk_aaaaaaaaaaaaaaaa" }],
+      "expect": [{ "rule": "R5", "severity": "error", "path": "blocks[1].prev_id" }]
+    },
+    {
+      "name": "R6-metadata-source-block-does-not-resolve",
+      "ops": [{ "set": "metadata/title/source_block_id", "value": "blk_aaaaaaaaaaaaaaaa" }],
+      "expect": [{ "rule": "R6", "severity": "error", "path": "metadata.title.source_block_id" }]
+    },
+    {
+      "name": "R6b-metadata-title-was-composed-not-extracted",
+      "note": "the exact failure D6 alone did not close: a real source_block_id with a tidied-up value",
+      "ops": [
+        {
+          "set": "metadata/title/value",
+          "value": "Deep Residual Learning for Image Recognition (ResNet)"
+        }
+      ],
+      "expect": [{ "rule": "R6b", "severity": "error", "path": "metadata.title.value" }]
+    },
+    {
+      "name": "R6b-quotation-is-case-and-whitespace-insensitive",
+      "note": "the POSITIVE case, and the one that pins rule 6b to the LIBRARY normalisation rather than a raw substring test: this value is not a substring of block.text at all, and is one of normalise(block.text). Without normaliseText/normalise_text on both sides this case fails.",
+      "ops": [
+        {
+          "set": "metadata/title/value",
+          "value": "DEEP   RESIDUAL  LEARNING for\u00a0Image Recognition"
+        }
+      ],
+      "expect": []
+    },
+    {
+      "name": "R35-reference-author-quoted-with-different-case-and-spacing",
+      "note": "the same point for rule 35: \"K.  HE\" normalises to \"k. he\", which the entry contains",
+      "ops": [{ "set": "references/0/authors/0", "value": "K.  HE" }],
+      "expect": []
+    },
+    {
+      "name": "R6b-metadata-year-is-not-in-its-source-block",
+      "ops": [{ "set": "metadata/year/value", "value": 2017 }],
+      "expect": [{ "rule": "R6b", "severity": "error", "path": "metadata.year.value" }]
+    },
+    {
+      "name": "R7-section-block-id-does-not-resolve",
+      "ops": [{ "set": "sections/0/block_ids/0", "value": "blk_aaaaaaaaaaaaaaaa" }],
+      "expect": [{ "rule": "R7", "severity": "error", "path": "sections[0].block_ids[0]" }]
+    },
+    {
+      "name": "R9-the-same-edge-twice",
+      "ops": [
+        {
+          "append": "relations",
+          "value": {
+            "type": "caption_of",
+            "from": "@blocks/4/block_id",
+            "to": "@blocks/3/block_id",
+            "confidence": 0.5,
+            "provenance": "geometric"
+          }
+        }
+      ],
+      "expect": [{ "rule": "R9", "severity": "error", "path": "relations[17]" }]
+    },
+
+    {
+      "name": "R17-child-ids-names-a-block-that-does-not-name-it-back",
+      "ops": [{ "append": "blocks/0/child_ids", "value": "@blocks/4/block_id" }],
+      "expect": [{ "rule": "R17", "severity": "error", "path": "blocks[0].child_ids[3]" }]
+    },
+    {
+      "name": "R18-next-and-prev-are-not-mutual",
+      "ops": [{ "delete": "blocks/3/prev_id" }],
+      "expect": [
+        { "rule": "R18", "severity": "error", "path": "blocks[1].next_id" },
+        { "rule": "R19", "severity": "error", "path": "relations[11]" }
+      ]
+    },
+    {
+      "name": "R19-parent-of-relation-contradicts-parent-id",
+      "ops": [{ "set": "relations/1/to", "value": "@blocks/4/block_id" }],
+      "expect": [
+        { "rule": "R19", "severity": "error", "path": "relations[1]" },
+        { "rule": "R19", "severity": "error", "path": "relations[1]" }
+      ]
+    },
+    {
+      "name": "R20-a-block-is-its-own-parent",
+      "ops": [{ "set": "blocks/2/parent_id", "value": "@blocks/2/block_id" }],
+      "expect": [
+        { "rule": "R17", "severity": "error", "path": "blocks[1].child_ids[0]" },
+        { "rule": "R17", "severity": "error", "path": "blocks[2].parent_id" },
+        { "rule": "R19", "severity": "error", "path": "relations[4]" },
+        { "rule": "R20", "severity": "error", "path": "blocks[2].parent_id" }
+      ]
+    },
+    {
+      "name": "R21-section-level-is-not-parent-plus-one",
+      "ops": [{ "set": "sections/1/level", "value": 3 }],
+      "expect": [{ "rule": "R21", "severity": "error", "path": "sections[1].level" }]
+    },
+    {
+      "name": "R21-section-opened-by-a-non-heading-block",
+      "ops": [{ "set": "sections/1/heading_block_id", "value": "@blocks/6/block_id" }],
+      "expect": [
+        { "rule": "R21", "severity": "error", "path": "sections[1].heading_block_id" },
+        { "rule": "R38", "severity": "error", "path": "sections[1].block_ids[0]" }
+      ]
+    },
+    {
+      "name": "R38-section-claims-a-nested-block",
+      "ops": [{ "append": "sections/1/block_ids", "value": "@blocks/8/block_id" }],
+      "expect": [{ "rule": "R38", "severity": "error", "path": "sections[1].block_ids[4]" }]
+    },
+
+    {
+      "name": "R22-caption-of-from-is-not-a-caption",
+      "ops": [{ "set": "relations/0/from", "value": "@blocks/1/block_id" }],
+      "expect": [{ "rule": "R22", "severity": "error", "path": "relations[0].from" }]
+    },
+    {
+      "name": "R22-caption-block-points-at-a-title",
+      "ops": [{ "set": "blocks/3/payload/caption_block", "value": "@blocks/0/block_id" }],
+      "expect": [{ "rule": "R22", "severity": "error", "path": "blocks[3].payload.caption_block" }]
+    },
+    {
+      "name": "R23-cites-target-is-not-a-reference-entry",
+      "ops": [{ "set": "relations/16/to", "value": "@blocks/0/block_id" }],
+      "expect": [{ "rule": "R23", "severity": "error", "path": "relations[16].to" }]
+    },
+    {
+      "name": "R24-continues-on-next-page-does-not-cross-a-page",
+      "ops": [
+        {
+          "append": "relations",
+          "value": {
+            "type": "continues_on_next_page",
+            "from": "@blocks/6/block_id",
+            "to": "@blocks/7/block_id",
+            "confidence": 0.7,
+            "provenance": "geometric"
+          }
+        }
+      ],
+      "expect": [{ "rule": "R24", "severity": "error", "path": "relations[17]" }]
+    },
+    {
+      "name": "R24b-a-valid-two-column-continuation",
+      "note": "the POSITIVE case for 24b: same page, ascending x0, x-extents 54..292 and 320..558 do not touch",
+      "ops": [
+        {
+          "append": "relations",
+          "value": {
+            "type": "continues_in_next_column",
+            "from": "@blocks/1/block_id",
+            "to": "@blocks/4/block_id",
+            "confidence": 0.7,
+            "provenance": "geometric"
+          }
+        }
+      ],
+      "expect": []
+    },
+    {
+      "name": "R24b-columns-overlap-in-x",
+      "note": "the head's x-extent swallows the tail's, which is what a single gutter-spanning block looks like",
+      "ops": [
+        {
+          "append": "relations",
+          "value": {
+            "type": "continues_in_next_column",
+            "from": "@blocks/6/block_id",
+            "to": "@blocks/8/block_id",
+            "confidence": 0.7,
+            "provenance": "geometric"
+          }
+        }
+      ],
+      "expect": [
+        { "rule": "R24b", "severity": "error", "path": "relations[17]" },
+        { "rule": "R24b", "severity": "error", "path": "relations[17]" }
+      ]
+    },
+
+    {
+      "name": "R25-span-runs-past-the-end-of-the-text",
+      "ops": [{ "set": "blocks/1/spans/2/end", "value": 74 }],
+      "expect": [{ "rule": "R25", "severity": "error", "path": "blocks[1].spans[2]" }]
+    },
+    {
+      "name": "R26-spans-overlap",
+      "ops": [{ "set": "blocks/1/spans/1/end", "value": 70 }],
+      "expect": [{ "rule": "R26", "severity": "error", "path": "blocks[1].spans[2]" }]
+    },
+    {
+      "name": "R27-repair-offset-does-not-address-what-the-repair-claims",
+      "ops": [{ "set": "blocks/1/repairs/0/at", "value": 40 }],
+      "expect": [{ "rule": "R27", "severity": "error", "path": "blocks[1].repairs[0].at" }]
+    },
+    {
+      "name": "R28-text-normalised-has-drifted-from-text",
+      "note": "R29 follows because the content hash is a digest OF text_normalised, so a drifted normalisation invalidates it too",
+      "ops": [{ "set": "blocks/0/text_normalised", "value": "deep residual learning" }],
+      "expect": [
+        { "rule": "R28", "severity": "error", "path": "blocks[0].text_normalised" },
+        { "rule": "R29", "severity": "error", "path": "blocks[0].content_hash" }
+      ]
+    },
+    {
+      "name": "R29-content-hash-does-not-match",
+      "ops": [
+        {
+          "set": "blocks/0/content_hash",
+          "value": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "expect": [{ "rule": "R29", "severity": "error", "path": "blocks[0].content_hash" }]
+    },
+    {
+      "name": "R30b-whitespace-repair-that-changes-the-content",
+      "ops": [
+        {
+          "set": "blocks/1/repairs/0",
+          "value": { "kind": "whitespace", "applied": true, "at": 49, "from": "resid ual", "to": "residual" }
+        }
+      ],
+      "expect": [{ "rule": "R30b", "severity": "error", "path": "blocks[1].repairs[0]" }]
+    },
+    {
+      "name": "R30b-dehyphenate-that-is-actually-a-rewrite",
+      "ops": [{ "set": "blocks/1/repairs/0/from", "value": "REZID-\nUAL" }],
+      "expect": [{ "rule": "R30b", "severity": "error", "path": "blocks[1].repairs[0]" }]
+    },
+    {
+      "name": "R30b-ligature-repair-that-expands-to-the-wrong-letters",
+      "ops": [
+        {
+          "set": "blocks/4/repairs",
+          "value": [{ "kind": "ligature", "applied": true, "from": "ﬁ", "to": "ff" }]
+        }
+      ],
+      "expect": [{ "rule": "R30b", "severity": "error", "path": "blocks[4].repairs[0]" }]
+    },
+    {
+      "name": "R30b-unicode-normalise-that-is-not-NFKC",
+      "ops": [
+        {
+          "set": "blocks/4/repairs",
+          "value": [{ "kind": "unicode_normalise", "applied": true, "from": "①", "to": "2" }]
+        }
+      ],
+      "expect": [{ "rule": "R30b", "severity": "error", "path": "blocks[4].repairs[0]" }]
+    },
+    {
+      "name": "R30b-reorder-that-is-not-a-permutation",
+      "ops": [
+        {
+          "set": "blocks/1/repairs/0",
+          "value": {
+            "kind": "reorder",
+            "applied": true,
+            "from": "functions residual learning",
+            "to": "learning residual features"
+          }
+        }
+      ],
+      "expect": [{ "rule": "R30b", "severity": "error", "path": "blocks[1].repairs[0]" }]
+    },
+    {
+      "name": "R30b-a-genuine-reorder-passes",
+      "note": "the POSITIVE case: same tokens, different order, and no `at` so rule 27 has nothing to check",
+      "ops": [
+        {
+          "set": "blocks/1/repairs/0",
+          "value": {
+            "kind": "reorder",
+            "applied": true,
+            "from": "functions residual learning",
+            "to": "learning residual functions"
+          }
+        }
+      ],
+      "expect": []
+    },
+    {
+      "name": "R31-two-selected-alternatives",
+      "note": "the second must also be re-declared parser-authored, because the schema already pins a model-authored alternative to not_selected",
+      "ops": [
+        { "set": "blocks/6/alternatives/1/authored_by", "value": "parser" },
+        { "set": "blocks/6/alternatives/1/decision", "value": "selected" }
+      ],
+      "expect": [{ "rule": "R31", "severity": "error", "path": "blocks[6].alternatives[1]" }]
+    },
+    {
+      "name": "R31-selected-alternative-is-not-what-renders",
+      "ops": [{ "set": "blocks/6/alternatives/0/text", "value": "\\mathcal{F}(x) + x" }],
+      "expect": [{ "rule": "R31", "severity": "error", "path": "blocks[6].alternatives[0].text" }]
+    },
+
+    {
+      "name": "R32-grid-cell-text-has-drifted-from-its-block",
+      "ops": [{ "set": "blocks/7/payload/grid/cells/0/text", "value": "Approach" }],
+      "expect": [
+        { "rule": "R32", "severity": "error", "path": "blocks[7].payload.grid.cells[0].text" }
+      ]
+    },
+    {
+      "name": "R32-cell-id-is-neither-a-table-cell-nor-on-this-page",
+      "ops": [{ "set": "blocks/7/payload/grid/cells/0/cell_id", "value": "@blocks/4/block_id" }],
+      "expect": [
+        { "rule": "R32", "severity": "error", "path": "blocks[7].payload.grid.cells[0].cell_id" },
+        { "rule": "R32", "severity": "error", "path": "blocks[7].payload.grid.cells[0].cell_id" },
+        { "rule": "R32", "severity": "error", "path": "blocks[7].payload.grid.cells[0].text" }
+      ]
+    },
+    {
+      "name": "R35-reference-venue-was-enriched-not-extracted",
+      "note": "exactly the Crossref-enrichment leak rule 35 exists to stop",
+      "ops": [{ "set": "references/0/venue", "value": "NeurIPS" }],
+      "expect": [{ "rule": "R35", "severity": "error", "path": "references[0].venue" }]
+    },
+    {
+      "name": "R35-reference-year-is-not-in-the-entry",
+      "ops": [{ "set": "references/0/year", "value": 2015 }],
+      "expect": [{ "rule": "R35", "severity": "error", "path": "references[0].year" }]
+    },
+    {
+      "name": "R36-complete-paper-with-an-unrendered-crop",
+      "ops": [{ "set": "blocks/2/payload/image", "value": null }],
+      "expect": [{ "rule": "R36", "severity": "error", "path": "blocks[2].payload.image" }]
+    },
+    {
+      "name": "R37-pdf-text-layer-block-without-a-tier-2-anchor",
+      "ops": [{ "delete": "blocks/0/content_hash" }],
+      "expect": [{ "rule": "R37", "severity": "error", "path": "blocks[0].content_hash" }]
+    },
+    {
+      "name": "R39-inline-equation-declared-as-display-math",
+      "ops": [{ "set": "blocks/2/payload/display", "value": true }],
+      "expect": [{ "rule": "R39", "severity": "error", "path": "blocks[2].payload.display" }]
+    },
+
+    {
+      "name": "I1-text-edited-while-the-id-was-kept",
+      "note": "the real-world shape of an invented id: the producer rewrote the text inside the 8-code-point prefix and left block_id and the derived fields alone. NOTE WHICH RULES FIRE. R29 does NOT, and that is correct: DESIGN.md 29 defines content_hash as the digest of text_normalised, and text_normalised is also stale, so the two agree with each other while both disagree with text. R28 is what catches that pair, and I1 catches the id. A validator that only checked 29 would pass this document.",
+      "ops": [
+        { "set": "blocks/4/text", "value": "Fig. 2. Residual learning: a building block." }
+      ],
+      "expect": [
+        { "rule": "R28", "severity": "error", "path": "blocks[4].text_normalised" },
+        { "rule": "I1", "severity": "error", "path": "blocks[4].block_id" }
+      ]
+    },
+    {
+      "name": "I1-ids-minted-against-a-different-pdf",
+      "note": "one op, twelve failures: the id space is bound to source_hash, so a document whose blocks were copied from another PDF cannot pass",
+      "ops": [
+        {
+          "set": "source_hash",
+          "value": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      ],
+      "expect": [
+        { "rule": "I1", "severity": "error", "path": "blocks[0].block_id" },
+        { "rule": "I1", "severity": "error", "path": "blocks[1].block_id" },
+        { "rule": "I1", "severity": "error", "path": "blocks[2].block_id" },
+        { "rule": "I1", "severity": "error", "path": "blocks[3].block_id" },
+        { "rule": "I1", "severity": "error", "path": "blocks[4].block_id" },
+        { "rule": "I1", "severity": "error", "path": "blocks[5].block_id" },
+        { "rule": "I1", "severity": "error", "path": "blocks[6].block_id" },
+        { "rule": "I1", "severity": "error", "path": "blocks[7].block_id" },
+        { "rule": "I1", "severity": "error", "path": "blocks[8].block_id" },
+        { "rule": "I1", "severity": "error", "path": "blocks[9].block_id" },
+        { "rule": "I1", "severity": "error", "path": "blocks[10].block_id" },
+        { "rule": "I1", "severity": "error", "path": "blocks[11].block_id" }
+      ]
+    },
+    {
+      "name": "I1-disabled-for-a-hand-written-fixture",
+      "note": "the one legitimate use of disabled_rules, and the reason the option exists",
+      "options": { "disabled_rules": ["I1"] },
+      "ops": [
+        {
+          "set": "source_hash",
+          "value": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      ],
+      "expect": []
+    }
+  ]
+}
