@@ -815,12 +815,42 @@ Two clauses need reading carefully, because the prose above is loose about both:
 
 ## 8. Worked minimal example
 
-A valid `Paper`: two pages; a title with two children; a paragraph carrying an inline
-equation located by a `role`-tagged span; a vector figure with its caption and a
-`caption_of` relation; a display equation with a rejected model alternative; and one
-`unknown` block. This JSON is not illustrative — `test/schema.spec.ts` extracts it from
-between the markers below and validates it, so the documented example cannot drift from the
-validated one.
+A **schema-valid** `Paper` — and deliberately not a semantically clean one; see the box
+below before copying anything out of it. Two pages; a title with two children; a paragraph
+carrying an inline equation located by a `role`-tagged span; a vector figure with its
+caption and a `caption_of` relation; a display equation with a rejected model alternative;
+and one `unknown` block. This JSON is not illustrative — `test/schema.spec.ts` extracts it
+from between the markers below and validates it **against the JSON Schema**, so the
+documented example cannot drift from the schema-validated one.
+
+> **This example does not pass the semantic validator, and that is asserted, not
+> overlooked.** _(Clarified 2026-07-30, issue #29. This section previously opened "A valid
+> `Paper`" with no qualifier and said the example "cannot drift from the validated one" —
+> true of the schema, and read by the Epic 0 gate as a claim about `validatePaper`, which it
+> is not.)_
+>
+> `validatePaper` (F0.4, §5.2 Tier A) rejects this document with **12 errors across three
+> rules**, every one a consequence of the example predating F0.4:
+>
+> | rule  |   × | why                                                                                 |
+> | ----- | --: | ----------------------------------------------------------------------------------- |
+> | `I1`  |   7 | every `blk_` id is a hand-written mnemonic, not the ADR-001 Amendment 1 digest      |
+> | `R29` |   4 | `content_hash` is `blake2s:` + 16 hex; F0.4 pinned the digest to `sha256:` + 64 hex |
+> | `R36` |   1 | `status` is `"complete"` while the inline_equation's `payload.image` is `null`      |
+>
+> **The failure is pinned in both languages**, with the exact counts and with the assertion
+> that every _other_ Tier A rule passes once those three are disabled:
+> `test/validate.spec.ts` → `describe("DESIGN.md §8's worked example")`, and
+> `python/tests/test_validate.py::test_worked_example_fails_exactly_i1_r29_and_r36`. Six
+> tests in total. So neither the example nor the rules can drift silently **in either
+> direction** — including being quietly "fixed".
+>
+> F0.7's golden fixtures in `fixtures/` _are_ normative and pass all three rules
+> (`test/schema.spec.ts` asserts zero semantic diagnostics on each). This document is
+> documentation, not a fixture. **Making the example semantically clean is a live proposal,
+> not an oversight** — it would require inverting those six assertions and regenerating the
+> 162-file `test/cases/` corpus, so it is recorded in `research/build/EPIC-00.1-RESULT.md`
+> for the owner to decide rather than done in passing.
 
 <!-- BEGIN worked-example -->
 

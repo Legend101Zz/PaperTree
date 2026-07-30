@@ -776,3 +776,118 @@ committed file instead.
 `packages/document-ir/src/validate.ts` and a few other large generated-table files on this machine —
 it exits 1 rather than matching. Two claims in this document were briefly and wrongly suspected of
 being false because of it. Use Python (`pathlib.Path(p).read_text()`) to search those files.
+
+---
+
+## 9. Corrections — appended by Epic 0.1 hardening (2026-07-30, issue #29)
+
+This section is **appended, not merged into the text above**: §1–§8 are the hand-off record as
+it was written and are left intact, exactly as §3 and §7.1 already do for their own
+corrections. Nothing above has been rewritten. Every item below was re-verified by execution
+in the Epic 0.1 session before being written here; the commands are in
+`research/build/EPIC-00.1-RESULT.md`.
+
+§5 claims to record *"every deviation from ADR-001 and from the epic brief"* and lists twelve.
+It misses the first three below. The fourth is a self-contradiction inside §7.
+
+### 9.1 `packages/jobs` is 813 lines against the brief's "~300"
+
+Undisclosed deviation from the epic brief. Measured at `main` (`ae5c99f`), before Epic 0.1
+added its regression test:
+
+| file          | lines |
+| ------------- | ----: |
+| `__init__.py` |    79 |
+| `model.py`    |   108 |
+| `runner.py`   |   205 |
+| `store.py`    |   421 |
+| **total**     |   **813** |
+
+That is **2.7×** the stated size. The **"not a framework" constraint is honoured** — stdlib
+only, no celery, no temporal, no DSL, no decorator, no registry, and deliberately no
+`run_forever()` (`runner.py` says why). The deviation is one of size, not of shape, and it is
+the size that was never disclosed.
+
+### 9.2 F0.1's workspace scope — 2 of the 5 path groups the spine names
+
+The spine names `apps/web`, `apps/api`, `services/*`, `packages/*`, `infrastructure/*`.
+`pnpm-workspace.yaml` ships:
+
+```yaml
+packages:
+  - 'packages/*'
+  - 'services/*'
+  - '!apps/**'
+```
+
+So **`packages/*` is the only group that matches anything**: `services/` does not exist in the
+tree at all (`ls -d services` → *No such file or directory*), and `apps/**` is excluded on
+purpose. The engineering call is right and is justified inline in `pnpm-workspace.yaml` — the
+v1 app has its own `package-lock.json` and pulling it in would change how it resolves. But
+**the word `apps` appears nowhere in this document** (`grep -c apps` → 0), so a reader of the
+hand-off record alone would not know the exclusion exists. Issue #28 is the consequence: Epic 2
+needs `apps/web` in the workspace and cannot put it there, because both blocking files are
+Epic 0's.
+
+### 9.3 The root `dev` script executes nothing
+
+```
+$ npx turbo run dev
+ Tasks:    0 successful, 0 total
+```
+
+`package.json`'s `"dev": "turbo run dev"` matches no package task. It was **absent from F0.1**
+(`git show 9cb4cb7:package.json` has no `dev` key) and was added silently by `7d028d0`
+("adversarial acceptance review — close four FATALs, correct the record"). The only attempt to
+disclose it was the illegitimate edit to `EPIC-00-spine.md` that the gate reverted; the
+disclosure belonged here and never arrived. Harmless, but it is a script that lies about
+having something to run.
+
+### 9.4 §7.3 contradicts §7.2 — and §7.2 is the correct one
+
+§7.3 ends: *"State the guarantee precisely — **'knowing a user id buys you nothing' holds**"*.
+That does not hold, and §7.2 on the same page says why: `owner_for()` is **public and performs
+no authentication**; it checks only that a `users` row exists. Demonstrated end to end,
+cross-connection, knowing nothing but the user id:
+
+```
+victim (connection A) stored paper: ppr_8XZBZEK3A5T716GZKHVFF7TKMP
+attacker.owner_for(user_id)  -> OwnerId(<opaque handle>)
+attacker.list_papers(owner)  -> ['ppr_8XZBZEK3A5T716GZKHVFF7TKMP']
+attacker.get_paper(...)      -> not None: True
+attacker.count_blocks(...)   -> 61 blocks of another tenant, read cross-connection
+```
+
+**Knowing a user id buys exactly one working `OwnerId`, and with it that tenant's data.**
+
+Everything else in §7.3 stands and is unaffected: `OwnerId` is still unforgeable by the five
+routes tabulated there, the handle is still absent from every column, and the bearer-secret
+framing is still right. The single sentence quoted above is the error — it overstates the
+guarantee into the one area §7.2 explicitly disclaims. Read §7.2 as normative and treat §7.3's
+guarantee as scoped to *forging* a handle, never to *obtaining* one.
+
+### 9.5 `DESIGN.md` §8's worked example — the claim, corrected; the example, unchanged
+
+The gate reported that §8 is labelled "A valid `Paper`" while the shipped semantic validator
+rejects it with 12 hard errors. **Both halves are true**, reproduced here — `I1` ×7, `R29` ×4,
+`R36` ×1 — but the framing needs one correction that the gate did not have:
+
+**this failure was already known, enumerated and asserted in both languages.**
+`test/validate.spec.ts` → `describe("DESIGN.md §8's worked example")` and
+`python/tests/test_validate.py::test_worked_example_fails_exactly_i1_r29_and_r36` pin the exact
+counts `{I1: 7, R29: 4, R36: 1}` and additionally assert that every *other* Tier A rule passes
+once those three are disabled — six tests, written, in Epic 0's own words, *"so that neither
+the example nor the rules can drift silently"*. So the example **cannot** drift; what was wrong
+was only §8's prose, which claimed schema validity in words that read as semantic validity.
+
+§8 now states the failure, tabulates the three rules and names the six tests that pin them.
+**The example itself is unchanged**, and making it semantically clean is left as an open
+decision — it would mean inverting six deliberate assertions and regenerating the 162-file
+`test/cases/` corpus, which is not a call a hardening pass should make on its own. See
+`research/build/EPIC-00.1-RESULT.md`.
+
+### 9.6 Cross-reference
+
+ADR-001 Amendment 1's *"Applied literally, it eliminates everything — 0 of 192 pass"* was false
+and is corrected in that document (issue #22). The correction does not touch any number, table
+or formula quoted in §4 of this document, which was independently reproduced by the gate.
