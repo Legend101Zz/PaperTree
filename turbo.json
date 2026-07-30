@@ -29,6 +29,22 @@
       "dependsOn": ["^build", "codegen"],
       "inputs": ["src/**", "test/**", "schema/**", "fixtures/**", "conformance/**"],
       "outputs": []
+    },
+
+    "@papertree/db#test": {
+      "dependsOn": ["^build", "codegen"],
+      "inputs": [
+        "src/**",
+        "test/**",
+        "schema/**",
+        "fixtures/**",
+        "conformance/**",
+        "python/**",
+        "!python/**/__pycache__/**",
+        "!python/**/.pytest_cache/**",
+        "$TURBO_ROOT$/infrastructure/migrations/**"
+      ],
+      "outputs": []
     }
   }
 }
