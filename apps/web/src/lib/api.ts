@@ -1,13 +1,7 @@
 // apps/web/src/lib/api.ts
 import axios from "axios";
 
-import type {
-  Highlight,
-  CreateHighlightInput,
-  UpdateHighlightInput,
-  HighlightExplanation,
-  ExplanationMode,
-} from "@/types/highlight";
+import type { Highlight } from "@/types";
 import type {
   Canvas,
   CanvasElements,
@@ -205,78 +199,6 @@ export const highlightsApi = {
   delete: async (highlightId: string): Promise<void> => {
     // Use the legacy route which works for any highlight
     await api.delete(`/highlights/${highlightId}`);
-  },
-
-  getBookHighlights: async (
-    bookId: string,
-    page?: number,
-  ): Promise<Highlight[]> => {
-    const params = new URLSearchParams();
-    if (page !== undefined) params.set("page", String(page));
-    const { data } = await api.get(`/highlights/book/${bookId}?${params}`);
-    return data;
-  },
-
-  getHighlight: async (highlightId: string): Promise<Highlight> => {
-    const { data } = await api.get(`/highlights/${highlightId}`);
-    return data;
-  },
-
-  createHighlight: async (input: CreateHighlightInput): Promise<Highlight> => {
-    const { data } = await api.post("/highlights/", input);
-    return data;
-  },
-
-  updateHighlight: async (
-    highlightId: string,
-    input: UpdateHighlightInput,
-  ): Promise<Highlight> => {
-    const { data } = await api.patch(`/highlights/${highlightId}`, input);
-    return data;
-  },
-
-  deleteHighlight: async (highlightId: string): Promise<void> => {
-    await api.delete(`/highlights/${highlightId}`);
-  },
-
-  explainHighlight: async (
-    highlightId: string,
-    mode: ExplanationMode = "explain",
-    customPrompt?: string,
-  ): Promise<HighlightExplanation> => {
-    const { data } = await api.post(`/highlights/${highlightId}/explain`, {
-      highlight_id: highlightId,
-      mode,
-      custom_prompt: customPrompt,
-    });
-    return data;
-  },
-
-  getExplanations: async (
-    highlightId: string,
-  ): Promise<HighlightExplanation[]> => {
-    const { data } = await api.get(`/highlights/${highlightId}/explanations`);
-    return data;
-  },
-
-  searchHighlights: async (query: {
-    book_id?: string;
-    category?: string;
-    tags?: string[];
-    search_text?: string;
-  }): Promise<Highlight[]> => {
-    const { data } = await api.post("/highlights/search", query);
-    return data;
-  },
-
-  exportHighlights: async (
-    bookId: string,
-    format: "json" | "markdown" | "csv" = "json",
-  ): Promise<{ content: string; filename: string }> => {
-    const { data } = await api.get(
-      `/highlights/export/${bookId}?format=${format}`,
-    );
-    return data;
   },
 };
 
