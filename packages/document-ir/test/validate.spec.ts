@@ -378,7 +378,12 @@ describe("the validator's API", () => {
     const ids = SEMANTIC_RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(SEMANTIC_RULES.every((r) => r.tier === 'A')).toBe(true);
-    expect(SEMANTIC_RULES.filter((r) => r.severity === 'warning').map((r) => r.id)).toEqual(['R3']);
+    // R3 (out-of-crop-box jitter) and G8 (low page coverage) are the two heuristics: both mean
+    // "suspicious", not "wrong", so both warn. See DESIGN.md §5.2 G8.
+    expect(SEMANTIC_RULES.filter((r) => r.severity === 'warning').map((r) => r.id)).toEqual([
+      'R3',
+      'G8',
+    ]);
     // Tier B is deliberately absent: 32b belongs to Epic 1, 34 to Epic 3 (DESIGN.md §5.2).
     expect(ids).not.toContain('R32b');
     expect(ids).not.toContain('R34');

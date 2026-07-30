@@ -379,7 +379,9 @@ def test_semantic_rules_is_a_complete_unique_tier_a_index() -> None:
     ids = [rule.id for rule in SEMANTIC_RULES]
     assert len(set(ids)) == len(ids)
     assert all(rule.tier == "A" for rule in SEMANTIC_RULES)
-    assert [r.id for r in SEMANTIC_RULES if r.severity == "warning"] == ["R3"]
+    # R3 (out-of-crop-box jitter) and G8 (low page coverage) are the two heuristics: both mean
+    # "suspicious", not "wrong", so both warn. See DESIGN.md 5.2 G8.
+    assert [r.id for r in SEMANTIC_RULES if r.severity == "warning"] == ["R3", "G8"]
     # Tier B is deliberately absent: 32b belongs to Epic 1, 34 to Epic 3 (DESIGN.md 5.2).
     assert "R32b" not in ids
     assert "R34" not in ids

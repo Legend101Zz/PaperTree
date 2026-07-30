@@ -85,14 +85,14 @@
     },
     {
       "name": "G8-geometry-at-the-wrong-scale-for-its-page",
-      "note": "page 1 blown up to 20000x20000 with a matching crop box: G4 and rule 3 both still pass, and only G8 notices that the blocks now cover 0.001% of it. This is the same detection as geometry stored in normalised [0,1] fractions, from the other side.",
+      "note": "page 1 blown up to 20000x20000 with a matching crop box: G4 and rule 3 both still pass, and only G8 notices that the blocks now cover 0.001% of it. This is the same detection as geometry stored in normalised [0,1] fractions, from the other side. G8 is a WARNING (DESIGN.md 5.2): low coverage is suspicion, not proof the document is wrong.",
       "ops": [
         { "set": "pages/1/width", "value": 20000 },
         { "set": "pages/1/height", "value": 20000 },
         { "set": "pages/1/crop_box", "value": [0, 0, 20000, 20000] },
         { "set": "pages/1/media_box", "value": [0, 0, 20000, 20000] }
       ],
-      "expect": [{ "rule": "G8", "severity": "error", "path": "pages[1]" }]
+      "expect": [{ "rule": "G8", "severity": "warning", "path": "pages[1]" }]
     },
 
     {

@@ -180,7 +180,10 @@ export const SEMANTIC_RULES: readonly RuleInfo[] = [
     id: 'G8',
     design: 'G8',
     title: 'block bboxes cover >= 1% of the page area',
-    severity: 'error',
+    // WARNING, not ERROR (DESIGN.md §5.2 G8): low coverage means the page is SUSPICIOUS, not that
+    // the document is wrong. A page carrying one running header covers 0.25 % of US Letter and is
+    // perfectly valid. Suspicion belongs in page.confidence / weakest_pages / needs_review.
+    severity: 'warning',
     tier: 'A',
   },
   {
@@ -970,8 +973,8 @@ function ruleG8(ctx: Ctx): void {
         `pages[${String(p)}]`,
         `block bboxes cover ${fmt(union)} pt² of a ${fmt(pageArea)} pt² page ` +
           `(${(100 * (pageArea > 0 ? union / pageArea : 0)).toFixed(4)} %), below the ` +
-          `${(100 * ctx.minCoverage).toFixed(2)} % floor — the signature of geometry stored as ` +
-          `normalised [0,1] fractions`,
+          `${(100 * ctx.minCoverage).toFixed(2)} % floor — either the parser missed content on ` +
+          `this page, or geometry is stored as normalised [0,1] fractions; review the page`,
       );
     }
   });

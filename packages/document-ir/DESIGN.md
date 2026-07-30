@@ -588,8 +588,23 @@ it does not, once 32b and 34 are handed to the epics that own the code they need
 - **G7.** Rule 3 is promoted to **ERROR** when more than 5% of a page's blocks fall outside
   `crop_box`. A systematic coordinate-space error looks different from parser jitter, and
   that difference is what makes the rule usable at error severity at all.
-- **G8.** The union of all block bboxes on a page covers ≥1% of the page area. **ERROR.**
-  Catches a document stored in normalised `[0,1]` fractions, which every other check passes.
+- **G8.** The union of all block bboxes on a page covers ≥1% of the page area. **WARN.**
+  Flags a document stored in normalised `[0,1]` fractions, which every other check passes,
+  and a page the parser has under-read.
+
+  **Why WARN and not ERROR** (amended after F0.4's adversarial review demonstrated the rule
+  firing at ERROR on a legitimate page — a page carrying a single running-header block covers
+  0.25 % of US Letter). Tier A **ERROR** means the document is _wrong_: a reference that does
+  not resolve, a bbox that contradicts its own polygon, an id that does not recompute. Low
+  page coverage does not mean the document is wrong; it means it is **suspicious** — the
+  parser may have missed content. PaperIR already has a first-class channel for "we are not
+  sure about this page": `page.confidence`, `DocumentConfidence.weakest_pages` and
+  `needs_review`. Routing a heuristic through the error channel instead is exactly what
+  produces a validator people learn to ignore, and a validator that is ignored catches
+  nothing. Consumers should feed a G8 diagnostic into `weakest_pages` / `needs_review`
+  rather than reject the document. Nothing is lost at the bottom end: a page whose blocks
+  are genuinely missing is still caught as an ERROR by the page/block consistency rules
+  (10, 11, 40), which do not depend on coverage at all.
 
 **Referential integrity** 4. Every relation endpoint (`from`, `to`) resolves to a block in `Paper.blocks`. 5. Every `parent_id`, `prev_id`, `next_id`, `child_ids[]` resolves to a real block. 6. Every metadata `source_block_id`, and every `abstract.block_ids[]`, resolves.
 
@@ -1352,7 +1367,7 @@ silently and the stale test cannot survive it.
    the fact that no consumer renders an unknown type's payload as source.
 3. **A bottom-left-origin document whose coordinates happen to fall inside the CropBox is
    indistinguishable from a correct one.** G4 catches wrong page dimensions, G7 catches
-   out-of-box geometry, G8 catches normalised fractions — but a vertically mirrored page
+   out-of-box geometry, G8 warns on normalised fractions — but a vertically mirrored page
    passes all three. Only `geometry.spec`'s round-trip against the actual PDF catches it,
    which is why F0.4's conformance vectors are not optional.
 4. **`EquationPayload.latex` / `mathml` and `TablePayload.html` accept arbitrary strings.**

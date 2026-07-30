@@ -163,7 +163,10 @@ SEMANTIC_RULES: tuple[RuleInfo, ...] = (
     _rule("R3", "3", "block polygon lies within the page crop_box", "warning"),
     _rule("G7", "G7", "rule 3 promoted to error past 5% of a page's blocks"),
     _rule("G4", "G4", "page.width/height match crop_box, and crop_box starts at (0,0)"),
-    _rule("G8", "G8", "block bboxes cover >= 1% of the page area"),
+    # WARNING, not ERROR (DESIGN.md 5.2 G8): low coverage means the page is SUSPICIOUS, not that
+    # the document is wrong. A page carrying one running header covers 0.25% of US Letter and is
+    # perfectly valid. Suspicion belongs in page.confidence / weakest_pages / needs_review.
+    _rule("G8", "G8", "block bboxes cover >= 1% of the page area", "warning"),
     _rule("R8", "8", "block ids, page ids and page indices are unique"),
     _rule("R40", "40", "page indices are contiguous 0..n-1; pages exist when blocks do"),
     _rule("R41", "41", "status and partial_reason agree"),
@@ -625,8 +628,9 @@ def _rule_g8(ctx: _Ctx) -> None:
                 "G8",
                 f"pages[{p}]",
                 f"block bboxes cover {_fmt(union)} pt2 of a {_fmt(page_area)} pt2 page "
-                f"({percent:.4f} %), below the {floor:.2f} % floor - the signature of geometry "
-                f"stored as normalised [0,1] fractions",
+                f"({percent:.4f} %), below the {floor:.2f} % floor - either the parser missed "
+                f"content on this page, or geometry is stored as normalised [0,1] fractions; "
+                f"review the page",
             )
 
 
