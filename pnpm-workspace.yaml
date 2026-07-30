@@ -1,13 +1,23 @@
 # PaperTree v2 workspace.
 #
-# apps/** is DELIBERATELY EXCLUDED. The existing app (apps/web, apps/api) is the v1
-# system being replaced; apps/web has its own package-lock.json and npm install, and
-# pulling it into this workspace would change how it resolves dependencies. Epic 0
-# builds alongside it without touching it. Epics 1-2 bring apps/* in when they replace it.
+# apps/web IS a member (#28). The old comment here claimed that "pulling it into this
+# workspace would change how it resolves dependencies" — that fear was measured and did
+# NOT materialise: under pnpm's strict node_modules `next build` still reports
+# "✓ Compiled successfully". Epic 2 owns apps/web/src/** and builds the reader against
+# packages/anchoring and packages/ui, which is only possible from inside the workspace.
+#
+# apps/web keeps its own package-lock.json for now, so `cd apps/web && npm ci` still works
+# for anyone on the v1 app. Two lockfiles for one package is a transitional state, not the
+# target: EPIC 2 deletes apps/web/package-lock.json when v1 stops being deployable.
+#
+# apps/api is Python (its own uv.lock, excluded in pyproject's [tool.uv.workspace]) and has
+# no package.json, so it is not and cannot be a pnpm package. `apps/*` is therefore listed
+# as `apps/web` and not as a glob — a new apps/<something> joins the workspace only when
+# somebody writes it here.
 packages:
   - 'packages/*'
   - 'services/*'
-  - '!apps/**'
+  - 'apps/web'
 
 # better-sqlite3 ships prebuilt binaries but needs its install script to place them.
 # pnpm 10 blocks lifecycle scripts by default; this is the explicit allowlist.
@@ -15,3 +25,10 @@ onlyBuiltDependencies:
   - better-sqlite3
   # esbuild backs tsx (codegen) and vitest (tests); its postinstall places the binary.
   - esbuild
+  # canvas is pdfjs-dist@3.11's optional Node-side renderer, reached via apps/web's react-pdf.
+  # NOTE: canvas 2.11.2 predates Node 22, so node-pre-gyp finds no v127 prebuild and COMPILES
+  # from source (~1 min here, needs cairo/pango/jpeg/gif/rsvg headers). See PR for the CI cost.
+  - canvas
+  # unrs-resolver is the native module resolver behind eslint-import-resolver-typescript,
+  # which eslint-config-next loads; its postinstall places the platform binary.
+  - unrs-resolver

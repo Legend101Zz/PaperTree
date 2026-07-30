@@ -3,11 +3,19 @@
 # Every command below was run on a developer machine before it was written here. The
 # non-obvious ones and why they are shaped this way:
 #
-#   * `pnpm install --frozen-lockfile` is also the guard that apps/ stays OUT of the pnpm
-#     workspace: pulling apps/web in would add importers to pnpm-lock.yaml and this flag would
-#     fail. `uv sync --locked` is the same guard for the uv workspace. There is deliberately no
-#     `paths-ignore: [apps/**]` — CI is cheap, it never reads apps/, and a paths-filtered
-#     workflow can never report a required status check, which silently wedges PRs.
+#   * `pnpm install --frozen-lockfile` is the guard that WORKSPACE MEMBERSHIP AND THE LOCKFILE
+#     AGREE: adding or removing an importer without relocking fails this flag. It used to be
+#     described here as the guard that apps/ stays OUT — that stopped being true in #28, which
+#     brought apps/web IN deliberately; the assertion below was inverted to match. `uv sync
+#     --locked` is the same lockfile guard for the uv workspace, and apps/api stays out of that
+#     one for real (its own uv.lock, excluded in [tool.uv.workspace]). There is deliberately no
+#     `paths-ignore: [apps/**]` — a paths-filtered workflow can never report a required status
+#     check, which silently wedges PRs.
+#
+#   * CI now installs apps/web's 648 extra packages, which includes compiling `canvas` from
+#     source: canvas 2.11.2 predates Node 22 and publishes no ABI-127 prebuild, so node-pre-gyp
+#     falls back to node-gyp. It is allowlisted in pnpm-workspace.yaml `onlyBuiltDependencies`.
+#     If a runner image ever drops the cairo/pango headers, THIS is the step that goes red.
 #
 #   * better-sqlite3 and sqlite-vec are native. This repo is developed on darwin-arm64 and CI is
 #     linux-x64, so both are smoke-tested in a dedicated step BEFORE the suites run. Without it a
@@ -112,7 +120,30 @@ jobs:
                       '| sqlite', sqlite, '| sqlite-vec', vec, '| vec0 table: ok');
           "
 
-      - name: Assert apps/ is not in the pnpm workspace
+      # INVERTED BY #28, not deleted. This used to assert apps/ was NOT in the pnpm workspace.
+      #
+      # That assertion was only ever about apps/web. apps/api is Python — its own uv.lock,
+      # excluded in pyproject's [tool.uv.workspace], and it has no package.json at all — so
+      # `pnpm ls` could never have listed it whatever pnpm-workspace.yaml said. Re-aiming the old
+      # job at apps/api would have left a check that cannot fail, which is the exact shape this
+      # repo has already been bitten by twice: #26's fixture script that passed while validating
+      # nothing, and the cross-language test that SKIPPED and reported green.
+      #
+      # apps/web is now a member on purpose, so the invariant worth guarding flipped with it. It
+      # is no longer "apps/ stays out" but "the membership list is exactly what #28 decided":
+      #   * papertree-web IS a member — so the door cannot silently close on Epic 2 again, which
+      #     is the failure #28 was opened for;
+      #   * nothing ELSE under apps/ is — so a future apps/<thing> becomes a workspace package
+      #     only when somebody adds it to pnpm-workspace.yaml deliberately.
+      #
+      # `pnpm install --frozen-lockfile` above remains the other half of the guard: it fails if
+      # a member is added without relocking.
+      #
+      # Deliberately NOT asserted: that apps/web/package-lock.json still exists. It does, and the
+      # v1 npm path (`cd apps/web && npm ci`) still works — but Epic 2 is chartered to delete that
+      # lockfile, and a CI assertion demanding it would force Epic 2 to edit this file, which it
+      # does not own. That is precisely the deadlock #28 is about; do not re-create it.
+      - name: Assert the pnpm workspace is packages/* plus apps/web — and nothing else under apps/
         run: |
           WORKSPACE_JSON="$(mktemp)"
           export WORKSPACE_JSON
@@ -120,14 +151,26 @@ jobs:
           pnpm exec node --input-type=module -e "
           import { readFileSync } from 'node:fs';
           const pkgs = JSON.parse(readFileSync(process.env.WORKSPACE_JSON, 'utf8'));
-          for (const p of pkgs) console.log('  ' + p.name);
-          const leaked = pkgs.filter((p) => p.path.includes('/apps/'));
-          if (leaked.length > 0) {
-            console.log('::error title=apps/ leaked into the workspace::' +
-              leaked.map((p) => p.path).join(', ') +
-              ' — apps/ is the v1 application and is excluded on purpose (pnpm-workspace.yaml)');
-            process.exit(1);
+          for (const p of pkgs) console.log('  ' + p.name + '  ' + p.path);
+          let failed = false;
+          const web = pkgs.filter((p) => p.path.endsWith('/apps/web'));
+          if (web.length !== 1) {
+            console.log('::error title=apps/web left the pnpm workspace::' +
+              'papertree-web is not a workspace member. Epic 2 builds the reader against ' +
+              'packages/anchoring and packages/ui and cannot do that from outside the ' +
+              'workspace — see #28. Restore the apps/web entry in pnpm-workspace.yaml.');
+            failed = true;
           }
+          const other = pkgs.filter((p) => p.path.includes('/apps/') && !p.path.endsWith('/apps/web'));
+          if (other.length > 0) {
+            console.log('::error title=an unexpected apps/ package joined the workspace::' +
+              other.map((p) => p.path).join(', ') +
+              ' — only apps/web is a member (#28). Add it to pnpm-workspace.yaml and to this ' +
+              'assertion deliberately, or take it back out.');
+            failed = true;
+          }
+          if (failed) process.exit(1);
+          console.log('workspace membership is as #28 decided: apps/web in, nothing else under apps/');
           "
 
       # Runs BEFORE the suites, not after: the checkout is pristine at this point, so anything
