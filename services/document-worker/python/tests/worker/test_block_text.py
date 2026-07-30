@@ -19,19 +19,22 @@ the direct regression.
 
 from __future__ import annotations
 
-import glob
 from pathlib import Path
 
 import pytest
+from _corpus_manifest import CORPUS_DIR as CORPUS
+from _corpus_manifest import CORPUS_FILES, requires_corpus
 from papertree_document_ir import Repair
 from papertree_document_ir.identity import content_hash, normalise_text, resolved_text
 from papertree_document_ir.validate import _dehyphenate
 from papertree_document_worker.pdf import SourceDocument
 from papertree_document_worker.text import build_block_text, is_dehyphenatable
 
-REPO = Path(__file__).resolve().parents[5]
-CORPUS = REPO / "research" / "benchmarks" / "corpus"
-CORPUS_FILES = sorted(Path(p) for p in glob.glob(str(CORPUS / "*.pdf")))
+# EVERY test below needs the corpus, which is gitignored. Module-level so the skip carries a
+# reason even for the parametrised ones - a `parametrize` over an empty glob collects ZERO
+# cases and reports nothing at all, which is how the first CI run on this branch "passed"
+# these while running none of them. See tests/conftest.py.
+pytestmark = requires_corpus
 
 
 class _BlockLike:

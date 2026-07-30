@@ -18,10 +18,11 @@ all Epic 1 promises for that class.
 
 from __future__ import annotations
 
-import glob
 from pathlib import Path
 
 import pytest
+from _corpus_manifest import CORPUS_DIR as CORPUS
+from _corpus_manifest import CORPUS_FILES, FIXTURE_PDFS, requires_corpus
 from papertree_document_worker.classify import (
     DocumentProfile,
     PageKind,
@@ -35,11 +36,11 @@ from papertree_document_worker.classify import (
 # in a single place rather than scattering ignores through the tests.
 from papertree_document_worker.pdf import SourceDocument, pymupdf
 
-REPO = Path(__file__).resolve().parents[5]
-CORPUS = REPO / "research" / "benchmarks" / "corpus"
-FIXTURE_PDFS = REPO / "packages" / "document-ir" / "test" / "fixtures-pdf"
-
-CORPUS_FILES = sorted(Path(p) for p in glob.glob(str(CORPUS / "*.pdf")))
+# EVERY test below needs the corpus, which is gitignored. Module-level so the skip carries a
+# reason even for the parametrised ones - a `parametrize` over an empty glob collects ZERO
+# cases and reports nothing at all, which is how the first CI run on this branch "passed"
+# these while running none of them. See tests/conftest.py.
+pytestmark = requires_corpus
 
 
 def _profile(path: Path) -> DocumentProfile:
