@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import sqlite3
 import subprocess
@@ -121,9 +122,21 @@ def test_a_database_migrated_by_typescript_is_a_noop_for_python(tmp_path: Path) 
     this test fails.
     """
     package_root = Path(__file__).resolve().parents[2]  # packages/db
+    # SYMMETRIC WITH THE TYPESCRIPT TWIN. migrations.spec.ts fails rather than skips when `uv`
+    # is missing, because a skip reports as a pass and CI then certifies a check it never ran.
+    # This side skipped silently instead, and CI's Python job installs no Node — so the
+    # Python->TS direction was disabled there permanently while the TS->Python direction ran.
+    # Caught by watching the first real CI run: "717 passed, 1 skipped" against 718 locally.
+    opted_out = os.environ.get("PT_SKIP_CROSS_LANGUAGE_DRIFT") == "1"
     node = shutil.which("node")
     if node is None or not (package_root / "node_modules").exists():
-        pytest.skip("node / node_modules not available for the cross-language drift check")
+        if opted_out:
+            pytest.skip("cross-language drift check explicitly opted out")
+        raise AssertionError(
+            "db/migrations.spec cannot run the Python->TypeScript drift check because node or "
+            "packages/db/node_modules is missing. Run `pnpm install`, or set "
+            "PT_SKIP_CROSS_LANGUAGE_DRIFT=1 to acknowledge that you are running without it."
+        )
 
     file = tmp_path / "cross.sqlite"
     completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
@@ -134,7 +147,12 @@ def test_a_database_migrated_by_typescript_is_a_noop_for_python(tmp_path: Path) 
         check=False,
     )
     if completed.returncode != 0:
-        pytest.skip(f"TypeScript runner could not be executed here: {completed.stderr[-400:]}")
+        if opted_out:
+            pytest.skip(f"TypeScript runner unavailable, opted out: {completed.stderr[-200:]}")
+        raise AssertionError(
+            f"the TypeScript migration runner failed, so the drift check did not run: "
+            f"{completed.stderr[-400:]}"
+        )
 
     applied_by_ts = json.loads(completed.stdout.strip().splitlines()[-1])["applied"]
     assert applied_by_ts == [m.version for m in load_migrations()]

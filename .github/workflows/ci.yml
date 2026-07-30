@@ -174,6 +174,23 @@ jobs:
       - name: Sync workspace
         run: uv sync --locked --all-packages
 
+      # The Python suite's cross-language drift check shells out to the TypeScript migration
+      # runner, so this job needs Node too. Without it that test SKIPPED, and a skip reports as
+      # a pass — so CI certified a check it never ran. Caught by watching the first real CI run:
+      # "717 passed, 1 skipped" here against 718 locally. The TypeScript job installs uv for the
+      # mirror-image reason; the two jobs are deliberately symmetric.
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install JS dependencies (for the cross-language drift check)
+        run: pnpm install --frozen-lockfile
+
       - name: Preflight — sqlite-vec loads under uv-managed CPython
         run: |
           uv run python -c "
