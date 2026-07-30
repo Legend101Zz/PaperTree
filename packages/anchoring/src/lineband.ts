@@ -182,31 +182,47 @@ export function quadsForRange(
   const touched = spans.filter((s) => s.start < endOffset && startOffset < s.end);
   if (touched.length === 0) return { quads: [], polygons: [] };
 
+  // THE Y-BAND IS PER LINE; THE X-EXTENT STAYS PER SPAN. Collapsing each line to one rect spanning
+  // its leftmost to its rightmost span is what paints across a two-column gutter: two spans on the
+  // same y-band in different columns are one "line" by any vertical test, and their union is a box
+  // straddling the gutter. Epic 0 shipped and then fixed exactly that bug inside
+  // `unionOfLineRects`; merging here before calling it would reintroduce it one layer downstream,
+  // where the helper can no longer see the columns to separate them.
+  //
+  // So each span keeps its own x range and takes only its LINE's clamped y range, and
+  // `unionOfLineRects` does the column separation — which is the single thing it exists for. Its
+  // union-find joins two rects only when they overlap in x by more than the tolerance, and a
+  // 15–25 pt gutter clears that comfortably.
   const lines = groupIntoLines(touched);
   const bands = clampLineBands(lines);
 
-  // Narrow the first and last band horizontally to the selected fraction of their line. Without
-  // this a selection starting mid-line paints from the line's left edge, which reads as selecting
-  // text the user did not select. Interpolating on the code-point offset assumes a monospaced
-  // advance within the span, which is wrong for proportional type — but it is wrong by less than a
-  // character width, and the alternative is per-glyph geometry the IR does not carry.
-  const narrowed = bands.map((band, index) => {
-    const line = lines[index];
-    if (line === undefined) return band;
-    const lineStart = Math.min(...line.map((s) => s.start));
-    const lineEnd = Math.max(...line.map((s) => s.end));
-    const span = lineEnd - lineStart;
-    if (span <= 0) return band;
-    const from = Math.max(0, Math.min(1, (startOffset - lineStart) / span));
-    const to = Math.max(0, Math.min(1, (endOffset - lineStart) / span));
-    if (from <= 0 && to >= 1) return band;
-    const width = band[2] - band[0];
-    return [band[0] + width * from, band[1], band[0] + width * to, band[3]] as BBox;
-  });
+  const rects: BBox[] = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const band = bands[i];
+    if (line === undefined || band === undefined) continue;
+    for (const span of line) {
+      // Narrow a partially-selected span to the selected fraction of ITS OWN width. Per span rather
+      // than per line: a span is one run of one font, so interpolating on the code-point offset
+      // inside it is wrong by less than a character width. Doing the same across a whole line would
+      // be wrong by a whole word, and across a two-column line, by a column.
+      const length = span.end - span.start;
+      let x0 = span.bbox[0];
+      let x1 = span.bbox[2];
+      if (length > 0) {
+        const from = Math.max(0, Math.min(1, (startOffset - span.start) / length));
+        const to = Math.max(0, Math.min(1, (endOffset - span.start) / length));
+        const width = span.bbox[2] - span.bbox[0];
+        x0 = span.bbox[0] + width * from;
+        x1 = span.bbox[0] + width * to;
+      }
+      if (x1 - x0 > 0 && band[3] - band[1] > 0) rects.push([x0, band[1], x1, band[3]]);
+    }
+  }
 
-  const usable = narrowed.filter((b) => b[2] - b[0] > 0 && b[3] - b[1] > 0);
-  const polygons = unionOfLineRects(usable);
-  return { quads: usable, polygons };
+  if (rects.length === 0) return { quads: [], polygons: [] };
+  const polygons = unionOfLineRects(rects);
+  return { quads: rects, polygons };
 }
 
 /** The extent of a set of polygons, for a page-level jump on an orphaned anchor. */
