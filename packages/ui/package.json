@@ -5,9 +5,18 @@
   "type": "module",
   "description": "The reader's shared components. Owns the provenance register: the reserved ⊙ marker, derived_from block ids and the show-source affordance are implemented HERE so no surface can render derived content without them.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles.css"
   },
-  "sideEffects": false,
+  "//sideEffects": [
+    "The stylesheet is the ONLY side-effecting module here, and it is imported for its side effect",
+    "by definition. Under a bare `false` a bundler is entitled to drop `import",
+    "'@papertree/ui/styles.css'` entirely — and the failure is silent and looks like a missing",
+    "class, not like a dropped import. Every .ts/.tsx module remains tree-shakeable."
+  ],
+  "sideEffects": [
+    "*.css"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
