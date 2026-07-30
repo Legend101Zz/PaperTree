@@ -259,7 +259,7 @@ function RichCanvasNodeComponent({ data, selected }: RichNodeProps) {
                         </p>
                     )}
                     <p className="text-sm italic text-gray-700 dark:text-gray-300">
-                        "{truncateText(data.excerpt.expanded_text || data.excerpt.selected_text, 200)}"
+                        &ldquo;{truncateText(data.excerpt.expanded_text || data.excerpt.selected_text, 200)}&rdquo;
                     </p>
                     {data.excerpt.nearby_equations?.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">

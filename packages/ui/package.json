@@ -1,0 +1,44 @@
+{
+  "name": "@papertree/ui",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The reader's shared components. Owns the provenance register: the reserved ⊙ marker, derived_from block ids and the show-source affordance are implemented HERE so no surface can render derived content without them.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles.css"
+  },
+  "//sideEffects": [
+    "The stylesheet is the ONLY side-effecting module here, and it is imported for its side effect",
+    "by definition. Under a bare `false` a bundler is entitled to drop `import",
+    "'@papertree/ui/styles.css'` entirely — and the failure is silent and looks like a missing",
+    "class, not like a dropped import. Every .ts/.tsx module remains tree-shakeable."
+  ],
+  "sideEffects": [
+    "*.css"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "oxlint src",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@papertree/anchoring": "workspace:*",
+    "@papertree/document-ir": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.2.52",
+    "@types/react-dom": "^18.2.18",
+    "@testing-library/react": "^16.1.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "happy-dom": "^15.11.7",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}

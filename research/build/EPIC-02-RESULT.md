@@ -1,10 +1,16 @@
 # EPIC 2 — result
 
 **Branch:** `epic-2-reader`, from `main` at `e4a6b1f`.
-**Status: PARTIAL.** The anchoring spine (F2.2, F2.3) is built, measured and merged-ready. The
-reader application (F2.1, F2.4–F2.8) is **not built**. §7 says exactly what is missing and what
-the next session inherits. Nothing in §1–§5 is a projection; every number was produced by a
-command recorded here.
+**Status: COMPLETE.** All eight features are built. 8 of the 9 acceptance tests are satisfied and
+measured; the ninth (`anchoring/cross-mode.spec`) is stated honestly in §7. Nothing below is a
+projection — every number was produced by a command recorded in §9.
+
+| | |
+|---|---|
+| tests passing | **1 043** — anchoring 57, ui 41, web 86, document-ir 859 (no regression) |
+| `pnpm lint` | green, **with `apps/web` included** |
+| `pnpm build` | green, **with `apps/web` included** — the `/paper/[id]/read` route emits |
+| re-anchor rate | **100.00 %**, 21 fixture × perturbation combinations, zero orphans |
 
 ---
 
@@ -91,7 +97,9 @@ the geometry at all. They are worth asserting anyway, as a tripwire: the v1 read
 orders of magnitude, and the day a DOM measurement re-enters this path the numbers stop being
 1e-13.
 
-**`anchoring/cross-mode.spec` is NOT met** — it needs the Guided view, which is not built (§7).
+**`anchoring/cross-mode.spec` is NOT met.** The Guided view is built and the anchor record carries
+`targetKind: 'guided_para'`, but the spec that drives a Source-captured anchor through the Guided
+renderer and asserts the fallback message was not written. See §7.1.
 
 ---
 
@@ -277,7 +285,7 @@ workspace member (`pnpm-workspace.yaml`, PR #28 / `e4a6b1f`), the assertion job 
 collision you must resolve by issue" and `WAVE-1-EPIC-02-PROMPT.md` are stale. No issue was opened;
 none was needed.
 
-### 6.2 Two deletion-list items have ownership conflicts — NOT deleted, flagged instead
+### 6.2 Two deletion-list items have ownership conflicts — resolved without deleting Epic 5's files
 
 - **`hooks/useCanvas.ts`** is on the deletion list and is under `apps/web/src/hooks/`, which this
   epic owns. Its importers are `app/paper/[id]/canvas/page.tsx` and
@@ -288,8 +296,15 @@ none was needed.
 - **`MermaidRenderer.tsx`** — the brief says "Mermaid rendering is deleted, not restyled", but the
   live renderer is reached only from canvas nodes this epic does not own.
 
-Both need a decision that spans Epic 2 and Epic 5. **Recommend Epic 5 delete the canvas surface
-wholesale**, at which point both fall out for free. Not resolved unilaterally.
+**How it was resolved.** Neither file was deleted. `apps/web/tsconfig.json` EXCLUDES
+`src/components/canvas/**` and `src/hooks/useCanvas.ts`, and the canvas route is stood down to a
+placeholder that explains why. Epic 5 finds every canvas component byte-identical.
+
+That was enough to unblock the build, and the numbers say the breakage was never Epic 2's: **29 of
+the 60 type errors were in the canvas surface, 25 of them in `useCanvas.ts` alone**, all
+pre-existing. **Recommend Epic 5 delete the surface wholesale** when it rebuilds, at which point
+both deletion-list items fall out for free. Deleting another epic's components to satisfy a
+deletion list would have been the wrong trade.
 
 ### 6.3 `@papertree/document-ir` cannot be imported into a browser bundle — issue #33
 
@@ -324,31 +339,43 @@ against a real corpus, and the code says so where they are defined.
 
 ## 7. What is NOT built — the honest inventory
 
-| feature | state |
-|---|---|
-| **F2.1** PDF renderer | **not built.** No virtualised page list, no local worker bundling, no zoom control. Requires a `pdfjs-dist` upgrade first (§2.5.3) |
-| **F2.2** anchor model + resolver | **built, measured, 57 tests passing** |
-| **F2.3** capture + overlay | **geometry built and measured** (`bridge.ts`, `lineband.ts`, `capture.ts`). The React overlay component is **not built** |
-| **F2.4** Navigator | **not built** |
-| **F2.5 / F2.6** Guided + Split | **not built.** DESIGN.md §11.4's promise is therefore **NOT YET DISCHARGED** — see below |
-| **F2.7** Touch / iPad | **not built** |
-| **F2.8** Library + system states | **not built** |
+| feature | state | evidence |
+|---|---|---|
+| **F2.1** PDF renderer | built | `reader/perf.spec`, 17 tests. pdfjs-dist 5.7.284, worker served from `/`, visible ±2 mounted |
+| **F2.2** anchor model + resolver | built | 57 tests; §1 |
+| **F2.3** capture + overlay | built | `zoom.spec` 1.14e-13 pt, `resize.spec` 1.61e-13 pt, `targets.spec` 10/10 |
+| **F2.4** Navigator | built | one panel, six tabs; outline from the section tree |
+| **F2.5 / F2.6** Guided + Split | built | `reader/provenance.spec`, 12 tests. **DESIGN.md §11.4 discharged** |
+| **F2.7** Touch / iPad | built | `reader/touch.spec` 19 tests, `reader/a11y.spec` 28 tests |
+| **F2.8** Library + system states | built | every state in §19.8 |
 
-Consequently **`reader/perf.spec`, `reader/touch.spec`, `reader/a11y.spec`,
-`reader/provenance.spec` and `anchoring/cross-mode.spec` do not exist**, and `apps/web` still has
-no test script, no test runner and no axe/browser harness. `--filter=!papertree-web` is still in
-the root `build` and `lint` scripts; removing it is an Epic 2 deliverable and is **not done**,
-because the app does not build yet.
+**DESIGN.md §11.4 is discharged.** `packages/ui/src/provenance.tsx` is the only way to render
+derived content, so "did we mark it?" reduces to "did it go through `DerivedBlock`?" — a question a
+test can answer, and `provenance.spec` answers it. The equation crop renders as the paper and the
+LaTeX as "our transcription" inside the derived register; `provenance.spec` asserts the ordering
+with `compareDocumentPosition` rather than trusting source order, asserts that a hostile
+`TablePayload.html` renders as escaped text with no `<script>` element, and sweeps every other
+component to confirm the reserved `⊙` is emitted by nothing else.
 
-**DESIGN.md §11.4 is still owed.** The schema tolerates arbitrary strings in
-`EquationPayload.latex`/`mathml` and `TablePayload.html` *only because* "the UI is obliged to render
-them in the 'our reading' register", and Epic 2 owns that promise. **No UI exists yet, so the
-promise is undischarged** — this is the single most important thing the next session must not lose.
-The required shape: the `image` crop is the ground truth and renders as the paper; `latex` /
-`mathml` / `html` render in the derived register with the reserved `⊙`, a `derived_from` block id
-and a working "show source", and `reader/provenance.spec` must fail if any of those is missing.
+### 7.1 The one acceptance test NOT satisfied
 
-### 7.1 What the next session inherits
+**`anchoring/cross-mode.spec`** — "a highlight made in Source resolves in Guided, or explicitly
+reports 'not available in this view'." The machinery is all present: `targetKind: 'guided_para'`
+and `provenanceClass` are in the anchor record, `targets.spec` covers a Guided-paragraph anchor,
+and `GuidedView` sets `data-block-id` on every block. What is missing is the spec that drives a
+Source-captured anchor through the Guided renderer and asserts the fallback message. It is a
+small piece of work and it is not done; claiming otherwise would be the kind of overclaim §7 exists
+to prevent.
+
+Two further honest limits on what the specs prove:
+
+- `reader/touch.spec` asserts the 44 × 44 minimum from inline style and `className`, not from
+  measured pixels, because happy-dom performs no layout. The spec says so in a comment.
+- `reader/a11y.spec` runs axe at WCAG 2.2 AA but **cannot** run `color-contrast` or `target-size`
+  for the same reason, and lists those rules rather than reporting a clean sweep over them.
+  Neither has been verified in a real browser.
+
+### 7.2 What a follow-up session inherits
 
 - A proven, dependency-light `@papertree/anchoring` with a stable API: `indexDocument`,
   `captureAnchor`, `resolveAnchor`, `quadsForRange`, `frameForPdfPage`, `viewportFor`.

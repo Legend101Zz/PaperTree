@@ -1,0 +1,684 @@
+/*
+ * @papertree/ui — the stylesheet for the provenance register, the five primitives, and the
+ * highlight overlay.
+ *
+ * IMPORT IT ONCE, from the app shell:  @import '@papertree/ui/styles.css';
+ *
+ * WHY PLAIN CSS AND NOT TAILWIND. `packages/ui` is outside `apps/web/tailwind.config.ts`'s
+ * `content` globs, so a utility class written in this package is purged and arrives as nothing.
+ * That is survivable for a colour and fatal for a 44px minimum, which is why the touch minimum is
+ * an inline style in `primitives.tsx` and this file carries appearance only. Nothing here is
+ * load-bearing for correctness: the reader is usable, legible and operable with this stylesheet
+ * missing entirely — it is just ugly.
+ *
+ * THE DERIVED REGISTER IS THE POINT OF THIS FILE. `DESIGN.md` §11.4 makes the UI responsible for
+ * keeping "our reading" distinguishable from the paper, and `findings.md` §G records the current
+ * product failing exactly there ("AI output is indistinguishable from source"). So `.pt-derived`
+ * changes FOUR things at once — family, ground, a 3px rule, and the measure — because any one of
+ * them alone survives a redesign, a dark theme, or a user stylesheet, and four do not.
+ */
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+ * tokens
+ * ───────────────────────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /*
+   * Two families, and they must not be neighbours. The document is set in a serif because that is
+   * what the papers are set in; the derived register is a rounded humanist sans, which is
+   * recognisable as "not the paper" at a glance, out of the corner of an eye, and in a screenshot.
+   */
+  --pt-font-body: ui-serif, Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  --pt-font-derived: ui-rounded, 'SF Pro Rounded', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
+  --pt-font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+
+  /* A shorter measure for derived prose: a second signal that costs nothing and reads as an aside. */
+  --pt-measure-body: 68ch;
+  --pt-measure-derived: 56ch;
+
+  --pt-ink: #1c1a17;
+  --pt-ink-muted: #6b6459;
+  --pt-ground: #fdfcfa;
+  --pt-ground-raised: #ffffff;
+  --pt-rule: #e3ddd3;
+
+  /* The derived register: a warm tint that is clearly a different ground, not a hover state. */
+  --pt-derived-ground: #f4f1fb;
+  --pt-derived-rule: #6d5ae0;
+  --pt-derived-ink: #241f3a;
+  --pt-derived-ink-muted: #574d80;
+
+  --pt-focus: #2f6fd0;
+
+  /* Highlights. Alpha, always: the paper must remain readable through its own annotation. */
+  --pt-highlight-fill: rgb(255 208 0 / 30%);
+  --pt-highlight-stroke: rgb(196 152 0 / 70%);
+  --pt-highlight-approx-fill: rgb(255 208 0 / 14%);
+  --pt-highlight-approx-stroke: rgb(196 152 0 / 90%);
+  --pt-highlight-orphan-stroke: #b23c3c;
+
+  --pt-radius: 10px;
+  --pt-gap: 8px;
+
+  color-scheme: light dark;
+}
+
+/*
+ * Dark, three ways, because three different mechanisms are already in play: the OS preference,
+ * Tailwind's `darkMode: 'class'` (`apps/web/tailwind.config.ts`), and an explicit override for a
+ * user who wants dark on a light OS. `:not([data-pt-theme='light'])` is what lets the explicit
+ * override win over the OS.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-pt-theme='light']) {
+    --pt-ink: #ece7df;
+    --pt-ink-muted: #a09889;
+    --pt-ground: #16151a;
+    --pt-ground-raised: #1f1e25;
+    --pt-rule: #34323c;
+
+    --pt-derived-ground: #1e1b2e;
+    --pt-derived-rule: #9d8cff;
+    --pt-derived-ink: #ece9fb;
+    --pt-derived-ink-muted: #b3aad8;
+
+    --pt-focus: #79aaf5;
+
+    --pt-highlight-fill: rgb(255 214 64 / 26%);
+    --pt-highlight-stroke: rgb(255 214 64 / 65%);
+    --pt-highlight-approx-fill: rgb(255 214 64 / 10%);
+    --pt-highlight-approx-stroke: rgb(255 214 64 / 85%);
+    --pt-highlight-orphan-stroke: #ff7a7a;
+  }
+}
+
+:root.dark,
+:root[data-pt-theme='dark'] {
+  --pt-ink: #ece7df;
+  --pt-ink-muted: #a09889;
+  --pt-ground: #16151a;
+  --pt-ground-raised: #1f1e25;
+  --pt-rule: #34323c;
+
+  --pt-derived-ground: #1e1b2e;
+  --pt-derived-rule: #9d8cff;
+  --pt-derived-ink: #ece9fb;
+  --pt-derived-ink-muted: #b3aad8;
+
+  --pt-focus: #79aaf5;
+
+  --pt-highlight-fill: rgb(255 214 64 / 26%);
+  --pt-highlight-stroke: rgb(255 214 64 / 65%);
+  --pt-highlight-approx-fill: rgb(255 214 64 / 10%);
+  --pt-highlight-approx-stroke: rgb(255 214 64 / 85%);
+  --pt-highlight-orphan-stroke: #ff7a7a;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+ * shared
+ * ───────────────────────────────────────────────────────────────────────────────────────────── */
+
+.pt-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * One focus ring, everywhere, and `:focus-visible` rather than `:focus` so a tap does not leave a
+ * ring behind. Never removed without a replacement: `outline: none` on a focusable element is the
+ * single most common WCAG 2.4.7 failure.
+ */
+.pt-iconbutton:focus-visible,
+.pt-segmented__option:focus-visible,
+.pt-tabs__tab:focus-visible,
+.pt-tabs__panel:focus-visible,
+.pt-sheet:focus-visible,
+.pt-sheet__grip:focus-visible,
+.pt-derived__source:focus-visible {
+  outline: 2px solid var(--pt-focus);
+  outline-offset: 2px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+ * the derived register — DESIGN.md §11.4
+ * ───────────────────────────────────────────────────────────────────────────────────────────── */
+
+.pt-derived {
+  font-family: var(--pt-font-derived);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  max-inline-size: var(--pt-measure-derived);
+  color: var(--pt-derived-ink);
+  background: var(--pt-derived-ground);
+  /* The rule the brief specifies literally: 3px, on the leading edge, in the derived hue. */
+  border-inline-start: 3px solid var(--pt-derived-rule);
+  border-radius: 0 var(--pt-radius) var(--pt-radius) 0;
+  padding: 10px 14px 12px;
+  margin-block: 12px;
+}
+
+.pt-derived__header {
+  display: flex;
+  align-items: center;
+  gap: var(--pt-gap);
+  margin-block-end: 6px;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pt-derived-ink-muted);
+}
+
+/*
+ * The reserved derived marker (`DERIVED_MARKER` in `provenance.tsx`). Sized up and given the rule's
+ * colour so it is the first thing seen, and given `flex: none` so it never collapses. The character
+ * itself is deliberately NOT written here: it appears nowhere else in the product, `provenance.spec`
+ * greps the built output to prove it, and a stylesheet comment is built output.
+ */
+.pt-derived__marker {
+  flex: none;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--pt-derived-rule);
+}
+
+.pt-derived__label {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+/*
+ * "show source" is a 44px target and is ALWAYS VISIBLE. It is not revealed on hover: §19.4 puts a
+ * source affordance on every derived block precisely so the reader never has to go looking, and a
+ * finger cannot hover.
+ */
+.pt-derived__source {
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  padding-inline: 10px;
+  font: inherit;
+  color: var(--pt-derived-rule);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--pt-radius);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.pt-derived__source:hover,
+.pt-derived__source:focus-visible {
+  border-color: var(--pt-derived-rule);
+}
+
+.pt-derived__body > :first-child {
+  margin-block-start: 0;
+}
+
+.pt-derived__body > :last-child {
+  margin-block-end: 0;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+ * equation · table · figure — the crop is the paper
+ * ───────────────────────────────────────────────────────────────────────────────────────────── */
+
+.pt-equation,
+.pt-figure,
+.pt-table {
+  margin: 16px 0;
+  padding: 0;
+}
+
+/*
+ * The crop renders at the ground's own background, with no rule and no tint — it IS the paper, and
+ * any decoration would start to read as our commentary on it.
+ */
+.pt-equation__crop,
+.pt-figure__crop {
+  display: block;
+  max-inline-size: 100%;
+  height: auto;
+  margin-inline: auto;
+}
+
+.pt-equation {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.pt-equation__number {
+  align-self: flex-end;
+  font-family: var(--pt-font-body);
+  font-size: 0.875rem;
+  color: var(--pt-ink-muted);
+}
+
+/* The transcription sits under its crop and is narrower than it — subordinate, visibly. */
+.pt-equation__reading {
+  align-self: flex-start;
+}
+
+.pt-equation__latex,
+.pt-table__html {
+  display: block;
+  font-family: var(--pt-font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pt-table__grid {
+  border-collapse: collapse;
+  font-family: var(--pt-font-body);
+  font-size: 0.9375rem;
+  color: var(--pt-ink);
+}
+
+.pt-table__grid caption {
+  caption-side: top;
+  padding-block-end: 6px;
+  font-size: 0.875rem;
+  color: var(--pt-ink-muted);
+  text-align: start;
+}
+
+.pt-table__grid th,
+.pt-table__grid td {
+  padding: 6px 10px;
+  text-align: start;
+  border: 1px solid var(--pt-rule);
+}
+
+.pt-table__grid th {
+  font-weight: 600;
+  background: var(--pt-ground-raised);
+}
+
+.pt-figure__caption {
+  max-inline-size: var(--pt-measure-body);
+  margin: 8px auto 0;
+  font-family: var(--pt-font-body);
+  font-size: 0.875rem;
+  color: var(--pt-ink-muted);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+ * the highlight overlay
+ * ───────────────────────────────────────────────────────────────────────────────────────────── */
+
+/*
+ * The overlay is sized to the SCALE-1 viewport and scaled with a transform; the reader sets the
+ * width/height and `--pt-zoom`. Everything geometric comes from the IR, so there is nothing here to
+ * measure and nothing to recompute on zoom. See `anchoring/bridge.ts#irBboxToOverlayRect`.
+ */
+.pt-overlay {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  transform: scale(var(--pt-zoom, 1));
+  transform-origin: 0 0;
+  /* The overlay must not swallow selection on the text layer underneath. */
+  pointer-events: none;
+  overflow: visible;
+}
+
+.pt-overlay .pt-highlight {
+  pointer-events: auto;
+}
+
+/*
+ * REGIONS ARE POLYGONS. A selection crossing the two-column gutter in `resnet-cvpr-2col` is two of
+ * these, never one bounding box that swallows the gutter and half the other column.
+ *
+ * `non-scaling-stroke` is not cosmetic: the overlay is inside `transform: scale(z)`, so without it
+ * a 1px outline is 4px at 400% zoom and 0.5px at 50%, and the "dashed means approximate" signal
+ * degrades exactly when the user has zoomed in to check it.
+ */
+.pt-highlight {
+  fill: var(--pt-highlight-fill);
+  stroke: none;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/*
+ * Tier 2–4 resolutions: we found it, but not by identity. The dashed outline is the visible half of
+ * `Resolution.state === 'approximate'`, and it is a DIFFERENT SHAPE rather than a different opacity
+ * so that it survives a dark theme, a colour-blind reader and a greyscale screenshot.
+ */
+.pt-highlight--approximate {
+  fill: var(--pt-highlight-approx-fill);
+  stroke: var(--pt-highlight-approx-stroke);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+}
+
+/*
+ * An orphan has no region — that is what makes it an orphan — so this styles the placeholder the
+ * Navigator shows in its stead. It is loud on purpose: `anchoring/reparse.spec` requires every
+ * failure to be surfaced, and a silently dropped highlight is the failure mode the whole anchor
+ * ladder exists to avoid.
+ */
+.pt-highlight--orphan {
+  fill: none;
+  stroke: var(--pt-highlight-orphan-stroke);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 4;
+  color: var(--pt-highlight-orphan-stroke);
+  border: 1px dashed var(--pt-highlight-orphan-stroke);
+  border-radius: var(--pt-radius);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+ * primitives
+ * ───────────────────────────────────────────────────────────────────────────────────────────── */
+
+.pt-iconbutton {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 6px;
+  font-family: var(--pt-font-derived);
+  font-size: 0.6875rem;
+  color: var(--pt-ink);
+  background: transparent;
+  border: 0;
+  border-radius: var(--pt-radius);
+  cursor: pointer;
+}
+
+.pt-iconbutton__icon {
+  font-size: 1.125rem;
+  line-height: 1;
+}
+
+.pt-iconbutton:hover,
+.pt-iconbutton[aria-pressed='true'] {
+  background: var(--pt-ground-raised);
+}
+
+.pt-iconbutton[data-disabled='true'] {
+  color: var(--pt-ink-muted);
+  cursor: not-allowed;
+}
+
+/*
+ * NOTHING HOVER-ONLY. The label is hidden on a fine pointer (where hover and focus both reveal it)
+ * and ALWAYS SHOWN on a coarse one, because a finger cannot hover and a tooltip that only a mouse
+ * can summon is a label that half the users never see. This is a media query rather than a device
+ * sniff, so a trackpad-and-touchscreen laptop gets the right answer on whichever it is using.
+ */
+.pt-iconbutton--label-tooltip .pt-iconbutton__label {
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  white-space: nowrap;
+  transition: opacity 120ms ease-out;
+}
+
+.pt-iconbutton--label-tooltip:hover .pt-iconbutton__label,
+.pt-iconbutton--label-tooltip:focus-visible .pt-iconbutton__label {
+  max-width: 16ch;
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .pt-iconbutton--label-tooltip .pt-iconbutton__label {
+    max-width: 16ch;
+    opacity: 1;
+  }
+}
+
+.pt-iconbutton__reason {
+  font-size: 0.6875rem;
+  color: var(--pt-ink-muted);
+}
+
+.pt-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  font-family: var(--pt-font-derived);
+  color: var(--pt-ink);
+  background: var(--pt-ground);
+  border: 1px solid var(--pt-rule);
+  border-radius: var(--pt-radius);
+  overflow: hidden;
+}
+
+.pt-panel__header {
+  display: flex;
+  align-items: center;
+  gap: var(--pt-gap);
+  padding: 4px 4px 4px 12px;
+  border-block-end: 1px solid var(--pt-rule);
+}
+
+.pt-panel__title {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pt-ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pt-panel__actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.pt-panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 12px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+.pt-panel__footer {
+  flex: none;
+  padding: 8px 12px;
+  border-block-start: 1px solid var(--pt-rule);
+}
+
+.pt-segmented {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--pt-ground-raised);
+  border: 1px solid var(--pt-rule);
+  border-radius: var(--pt-radius);
+}
+
+.pt-segmented__option {
+  padding-inline: 14px;
+  font-family: var(--pt-font-derived);
+  font-size: 0.8125rem;
+  color: var(--pt-ink-muted);
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--pt-radius) - 2px);
+  cursor: pointer;
+}
+
+.pt-segmented__option[aria-checked='true'] {
+  color: var(--pt-ink);
+  background: var(--pt-ground);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
+}
+
+.pt-tabs {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.pt-tabs--vertical {
+  flex-direction: row;
+}
+
+.pt-tabs__list {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  overflow-x: auto;
+  border-block-end: 1px solid var(--pt-rule);
+  /* Six tabs on a 320px phone scroll horizontally rather than shrinking below the 44px minimum. */
+  touch-action: pan-x;
+  scrollbar-width: none;
+}
+
+.pt-tabs--vertical .pt-tabs__list {
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-block-end: 0;
+  border-inline-end: 1px solid var(--pt-rule);
+  touch-action: pan-y;
+}
+
+.pt-tabs__tab {
+  flex: none;
+  padding-inline: 12px;
+  font-family: var(--pt-font-derived);
+  font-size: 0.8125rem;
+  color: var(--pt-ink-muted);
+  background: transparent;
+  border: 0;
+  border-block-end: 2px solid transparent;
+  cursor: pointer;
+}
+
+.pt-tabs__tab[aria-selected='true'] {
+  color: var(--pt-ink);
+  border-block-end-color: var(--pt-focus);
+}
+
+.pt-tabs--vertical .pt-tabs__tab {
+  border-block-end: 0;
+  border-inline-start: 2px solid transparent;
+  text-align: start;
+}
+
+.pt-tabs--vertical .pt-tabs__tab[aria-selected='true'] {
+  border-inline-start-color: var(--pt-focus);
+}
+
+.pt-tabs__panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+.pt-sheet__scrim {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 32%);
+}
+
+/*
+ * Positioned against the reader shell, which must be `position: relative` — the sheet is the
+ * bottom edge of the document region, not of the window, so it must not be `position: fixed`.
+ */
+.pt-sheet {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  font-family: var(--pt-font-derived);
+  color: var(--pt-ink);
+  background: var(--pt-ground);
+  border-start-start-radius: 16px;
+  border-start-end-radius: 16px;
+  box-shadow: 0 -8px 32px rgb(0 0 0 / 18%);
+  transition: height 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.pt-sheet__grip {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+}
+
+.pt-sheet__grip-bar {
+  inline-size: 40px;
+  block-size: 5px;
+  background: var(--pt-rule);
+  border-radius: 3px;
+}
+
+.pt-sheet__header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--pt-gap);
+  padding: 0 4px 4px 16px;
+}
+
+.pt-sheet__title {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.pt-sheet__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 16px 16px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/*
+ * At the peek detent the body is clipped rather than scrollable: 120px of a scrollable region is a
+ * scroll trap on a touch screen, and the gesture the user wants there is "drag me taller".
+ */
+.pt-sheet[data-detent='peek'] .pt-sheet__body {
+  overflow: hidden;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+ * reduced motion
+ * ───────────────────────────────────────────────────────────────────────────────────────────── */
+
+/*
+ * Every transition above is decoration; none of them communicates state on its own (the detent is
+ * also `data-detent` and `aria-valuetext`, the label is also `aria-label`). So they can all be
+ * turned off outright without losing information — which is the test for whether a motion is
+ * decorative in the first place.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .pt-sheet,
+  .pt-iconbutton--label-tooltip .pt-iconbutton__label {
+    transition: none;
+  }
+}

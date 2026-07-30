@@ -390,7 +390,7 @@ export function PaperCanvas({
                                 Your Research Canvas
                             </p>
                             <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                                Expand a page node to explore its content. Click "Ask AI" to create branches.
+                                Expand a page node to explore its content. Click &ldquo;Ask AI&rdquo; to create branches.
                                 Highlights from the reader will appear as branches automatically.
                             </p>
                         </div>

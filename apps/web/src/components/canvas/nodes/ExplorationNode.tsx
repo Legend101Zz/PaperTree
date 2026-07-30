@@ -45,7 +45,7 @@ function ExplorationNodeComponent({ data, selected }: NodeProps) {
             {/* Quoted text */}
             <div className="px-4 py-3">
                 <p className="text-[13px] text-gray-700 dark:text-gray-300 leading-[1.7] italic">
-                    "{isLong ? text.slice(0, 150) + '…' : text}"
+                    &ldquo;{isLong ? text.slice(0, 150) + '…' : text}&rdquo;
                 </p>
             </div>
 

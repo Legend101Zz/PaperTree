@@ -95,12 +95,27 @@ export interface PageFlows {
   readonly margin?: readonly string[];
 }
 
+/**
+ * A `Relation` as the fixtures shape it.
+ *
+ * NOTE `provenance` is a STRING here while `Block.provenance` is an OBJECT `{parser, stage}`. Same
+ * field name, two different types — `jq '.relations[].provenance.parser'` errors on it.
+ */
+export interface IndexedRelationSource {
+  readonly type: string;
+  readonly from_block_id: string;
+  readonly to_block_id: string;
+  readonly confidence?: number;
+  readonly provenance?: string;
+}
+
 export interface PaperSource {
   readonly paper_id: string;
   readonly source_hash: string;
   readonly parser?: { readonly name?: string; readonly version?: string } | null;
   readonly pages: readonly (IndexedPageSource & { readonly flows?: PageFlows })[];
   readonly blocks: readonly IndexedBlockSource[];
+  readonly relations?: readonly IndexedRelationSource[];
   readonly sections?: readonly IndexedSectionSource[];
 }
 
@@ -153,6 +168,18 @@ export interface IndexedDocument {
   readonly byPage: ReadonlyMap<number, readonly IndexedBlock[]>;
   readonly byContentHash: ReadonlyMap<string, readonly IndexedBlock[]>;
   readonly sections: readonly IndexedSectionSource[];
+  readonly relations: readonly IndexedRelationSource[];
+  /**
+   * `from_block_id` -> the block it continues into, for `continues_in_next_column` and
+   * `continues_on_next_page`.
+   *
+   * Exposed because a CONTINUED PARAGRAPH IS ONE PARAGRAPH, and a reflowed reading that treats the
+   * fragments as separate paragraphs is wrong in a way the reader can see: `resnet`'s
+   * `blk_4hiq3kzukt6azk4x` ends with the characters `high-` and the word finishes in the next
+   * block, so rendering them apart produces "high- way networks". De-hyphenation is a
+   * document-level operation wherever a paragraph is continued, not a block-level one.
+   */
+  readonly continuedBy: ReadonlyMap<string, string>;
   /** The document-global stream, raw (un-normalised), as code points. T2 indexes into this. */
   readonly streamCodePoints: readonly number[];
   /** The same stream normalised for matching, with the map back to raw offsets. T3 searches this. */
@@ -353,6 +380,17 @@ export function indexDocument(paper: PaperSource, textStreamId: string): Indexed
     else hash.push(block);
   }
 
+  const relations = paper.relations ?? [];
+  const continuedBy = new Map<string, string>();
+  for (const relation of relations) {
+    if (
+      relation.type === 'continues_in_next_column' ||
+      relation.type === 'continues_on_next_page'
+    ) {
+      continuedBy.set(relation.from_block_id, relation.to_block_id);
+    }
+  }
+
   const streamCodePoints = toCodePoints(stream);
   const normalisedStream = normaliseForMatch(stream);
   const normalisedStreamCodePoints = toCodePoints(normalisedStream.text);
@@ -398,6 +436,8 @@ export function indexDocument(paper: PaperSource, textStreamId: string): Indexed
     byPage,
     byContentHash,
     sections: paper.sections ?? [],
+    relations,
+    continuedBy,
     streamCodePoints,
     normalisedStream,
     normalisedStreamCodePoints,

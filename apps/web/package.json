@@ -6,7 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prebuild": "node scripts/copy-pdf-worker.mjs && node scripts/copy-fixtures.mjs --strict",
+    "predev": "node scripts/copy-pdf-worker.mjs && node scripts/copy-fixtures.mjs",
+    "pretest": "node scripts/copy-pdf-worker.mjs && node scripts/copy-fixtures.mjs",
+    "prepare:assets": "node scripts/copy-pdf-worker.mjs && node scripts/copy-fixtures.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.17.19",
@@ -14,20 +20,21 @@
     "clsx": "^2.1.0",
     "katex": "^0.16.9",
     "lucide-react": "^0.314.0",
-    "mermaid": "^11.12.2",
     "next": "14.1.0",
-    "pdfjs-dist": "^3.11.174",
+    "pdfjs-dist": "^5.7.284",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-katex": "^3.1.0",
     "react-markdown": "^9.0.1",
-    "react-pdf": "^7.7.0",
     "reactflow": "^11.10.4",
     "rehype-katex": "^7.0.0",
     "remark-gfm": "^4.0.0",
     "remark-math": "^6.0.0",
     "tailwind-merge": "^2.2.1",
-    "zustand": "^4.5.0"
+    "zustand": "^4.5.0",
+    "@papertree/document-ir": "workspace:*",
+    "@papertree/anchoring": "workspace:*",
+    "@papertree/ui": "workspace:*"
   },
   "devDependencies": {
     "@types/katex": "^0.16.7",
@@ -39,6 +46,13 @@
     "eslint-config-next": "14.1.0",
     "postcss": "^8.4.33",
     "tailwindcss": "^3.4.1",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^2.1.9",
+    "happy-dom": "^15.11.7",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/dom": "^10.4.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "axe-core": "^4.10.2",
+    "@typescript-eslint/eslint-plugin": "^8.18.0"
   }
 }
