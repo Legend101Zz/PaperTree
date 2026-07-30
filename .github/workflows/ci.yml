@@ -20,11 +20,22 @@
 
 name: CI
 
+# TRIGGERS (#25). `pull_request.branches` filters on the PR's *base*, not its head. The old
+# list — [main, epic-0-spine] — meant every stacked PR based on another epic branch went
+# untested: CI ran on 3 of Epic 0's 13 PRs. `epic-0-spine` no longer exists at all.
+#
+# `pull_request:` is therefore UNFILTERED, deliberately. The alternative — enumerating
+# [main, epic-1-ingest, epic-2-reader, ...] — reintroduces exactly the same failure the day
+# someone stacks a PR on a branch nobody remembered to add, and Wave 1's stacks are not
+# nameable in advance. An unfiltered trigger cannot go stale.
+#
+# `push` stays filtered to [main]. Pushes to a PR head branch are already covered by the
+# `pull_request` trigger's `synchronize` event, so an unfiltered `push` would only double
+# every run; and `concurrency` cancels in-progress runs per ref, not across triggers.
 on:
   push:
-    branches: [main, epic-0-spine]
+    branches: [main]
   pull_request:
-    branches: [main, epic-0-spine]
   workflow_dispatch:
 
 permissions:
@@ -221,10 +232,10 @@ jobs:
         run: uv run mypy packages/*/python
 
   # ── Fixture validation (F0.7's gate) ────────────────────────────────────────────────────────
-  # Its own job so its state is readable at a glance in the PR checks list. Until F0.7 lands,
-  # packages/document-ir/fixtures/ does not exist and this reports PENDING with a warning
-  # annotation, having validated nothing. The moment the directory appears it becomes a hard
-  # gate demanding exactly 3 schema-valid fixtures — an empty or short directory FAILS.
+  # Its own job so its state is readable at a glance in the PR checks list. F0.7 landed the
+  # fixtures in 4d1f67d, so this is a hard gate demanding exactly 3 schema-valid fixtures: an
+  # empty, short or absent directory FAILS, and so does dropping the path argument below
+  # (#26 — the script used to treat all of those as a pass that checked nothing).
   fixtures:
     name: Fixture validation
     runs-on: ubuntu-latest

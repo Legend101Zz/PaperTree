@@ -350,11 +350,23 @@ class JobStore:
             (json.dumps(result, separators=(",", ":")), _iso(), job_id, step_name),
         )
 
-    def _fail_step(self, job_id: str, step_name: str, error: str) -> None:
+    def _fail_step(self, job_id: str, step_name: str, error: str, worker_id: str) -> None:
+        """Fenced, and MORE strongly than the checkpoint above it — deliberately.
+
+        ``runner.py`` calls ``check_lease()`` before this, exactly as it does before
+        ``_finish_step``. That leaves the same TOCTOU sliver in both paths, and the two
+        paths do not deserve the same treatment when they lose it: a late ``succeeded``
+        agrees with what the live worker is writing anyway, whereas a late ``failed``
+        overwrites a checkpoint that has already committed and re-arms the duplicate side
+        effect ``step()``'s early-return exists to prevent (#24). So the destructive one
+        is conditional in SQL as well, on the same predicate ``_holds_lease`` uses.
+        """
         self._conn.execute(
             "UPDATE job_steps SET state = 'failed', error = ?, finished_at = ? "
-            "WHERE job_id = ? AND step_name = ?",
-            (error, _iso(), job_id, step_name),
+            "WHERE job_id = ? AND step_name = ? AND EXISTS ("
+            "  SELECT 1 FROM jobs WHERE jobs.job_id = job_steps.job_id "
+            "    AND jobs.state = 'running' AND jobs.lease_owner = ?)",
+            (error, _iso(), job_id, step_name, worker_id),
         )
 
     def _set_progress(
