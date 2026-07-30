@@ -26,6 +26,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { resolveAnchor, type Anchor, type IndexedDocument, type Resolution } from '@papertree/anchoring';
 
+import { GuidedView } from '@/components/reader/GuidedView';
+import { HighlightOverlay } from '@/components/reader/HighlightOverlay';
+import { Navigator } from '@/components/reader/Navigator';
+import { PdfDocumentProvider } from '@/components/reader/PdfDocumentProvider';
+import { SplitView } from '@/components/reader/SplitView';
+import { UnanchoredTray } from '@/components/reader/UnanchoredTray';
+import { VirtualPageList } from '@/components/reader/VirtualPageList';
 import { loadPaper, pdfUrlFor, type FixtureSlug } from '@/lib/fixtures';
 
 export type ReadingMode = 'source' | 'guided' | 'split';
@@ -134,6 +141,16 @@ export function ReaderWorkspace({ slug }: ReaderWorkspaceProps) {
     [],
   );
 
+  /**
+   * The page-level jump an orphaned anchor gets instead of a precise location.
+   *
+   * Hypothesis's 2017 orphans-tab decision is the precedent and it is the right one: a failed
+   * anchor is never deleted, it is SHOWN, with its stored quote and a way to get near it.
+   */
+  const jumpToPage = useCallback((pageIndex: number, _anchorId: string) => {
+    documentRef.current.scrollToBlock?.(`page:${String(pageIndex)}`);
+  }, []);
+
   if (loadError !== null) {
     return (
       <div role="alert" className="p-8">
@@ -167,6 +184,7 @@ export function ReaderWorkspace({ slug }: ReaderWorkspaceProps) {
       onShowSource={showSource}
       documentRef={documentRef}
       pdfUrl={pdfUrlFor(slug)}
+      onJumpToPage={jumpToPage}
     />
   );
 }
@@ -194,6 +212,8 @@ interface ViewProps {
   readonly onShowSource: (blockIds: readonly string[]) => void;
   readonly documentRef: React.MutableRefObject<{ scrollToBlock?: (blockId: string) => void }>;
   readonly pdfUrl: string;
+  /** A page-level jump for an anchor that could not be placed — never a delete. */
+  readonly onJumpToPage: (pageIndex: number, anchorId: string) => void;
 }
 
 function ReaderWorkspaceView(props: ViewProps) {
@@ -219,7 +239,12 @@ function ReaderWorkspaceView(props: ViewProps) {
             className="w-[320px] shrink-0 overflow-y-auto border-r md:relative absolute inset-y-0 left-0 z-20 bg-[--pt-panel-ground]"
             aria-label="Navigator"
           >
-            <NavigatorSlot doc={doc} anchors={props.anchors} onShowSource={props.onShowSource} />
+            <NavigatorSlot
+              doc={doc}
+              anchors={props.anchors}
+              onShowSource={props.onShowSource}
+              onClose={props.onNavigatorToggle}
+            />
           </aside>
         ) : null}
 
@@ -236,7 +261,9 @@ function ReaderWorkspaceView(props: ViewProps) {
         />
       </div>
 
-      {orphans.length > 0 ? <UnanchoredTraySlot orphans={orphans} /> : null}
+      {orphans.length > 0 ? (
+        <UnanchoredTraySlot orphans={orphans} onJumpToPage={props.onJumpToPage} />
+      ) : null}
     </div>
   );
 }
@@ -315,34 +342,83 @@ function ReaderToolbarShell({
   );
 }
 
-function DocumentSlot(props: ViewProps) {
-  if (props.mode === 'guided') {
-    return <PendingSlot label="Guided" detail="F2.5 GuidedView mounts here." />;
-  }
-  if (props.mode === 'split') {
-    return <PendingSlot label="Split" detail="F2.6 SplitView mounts here, scroll-linked by block id." />;
-  }
+function SourcePane(props: ViewProps) {
   return (
-    <PendingSlot
-      label="Source"
-      detail={`F2.1 VirtualPageList + F2.3 HighlightOverlay mount here for ${props.pdfUrl}.`}
+    <PdfDocumentProvider src={props.pdfUrl}>
+      <VirtualPageList
+        zoom={props.zoom}
+        className="h-full"
+        renderOverlay={(pageIndex, meta) => (
+          <HighlightOverlay
+            pageIndex={pageIndex}
+            pageWidth={meta.width}
+            pageHeight={meta.height}
+            userUnit={meta.userUnit}
+            zoom={props.zoom}
+            items={props.anchors.map((record) => ({
+              anchorId: record.anchor.id,
+              resolution: record.resolution,
+            }))}
+          />
+        )}
+      />
+    </PdfDocumentProvider>
+  );
+}
+
+function GuidedPane(props: ViewProps) {
+  return <GuidedView doc={props.doc} onShowSource={props.onShowSource} className="h-full overflow-y-auto" />;
+}
+
+function DocumentSlot(props: ViewProps) {
+  if (props.mode === 'guided') return <GuidedPane {...props} />;
+  if (props.mode === 'split') {
+    return (
+      <SplitView
+        source={<SourcePane {...props} />}
+        guided={<GuidedPane {...props} />}
+        className="h-full"
+      />
+    );
+  }
+  return <SourcePane {...props} />;
+}
+
+function NavigatorSlot(props: {
+  doc: IndexedDocument;
+  anchors: readonly AnchorRecord[];
+  onShowSource: (blockIds: readonly string[]) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Navigator
+      doc={props.doc}
+      pages={props.doc.pages.map((page) => ({
+        index: page.index,
+        width: page.width,
+        height: page.height,
+      }))}
+      open
+      onClose={props.onClose}
+      layout="push"
+      onNavigateToBlock={(blockId) => props.onShowSource([blockId])}
+      onNavigateToPage={() => undefined}
     />
   );
 }
 
-function NavigatorSlot(_props: {
-  doc: IndexedDocument;
-  anchors: readonly AnchorRecord[];
-  onShowSource: (blockIds: readonly string[]) => void;
+function UnanchoredTraySlot({
+  orphans,
+  onJumpToPage,
+}: {
+  orphans: readonly AnchorRecord[];
+  onJumpToPage: (pageIndex: number, anchorId: string) => void;
 }) {
-  return <PendingSlot label="Navigator" detail="F2.4 Navigator (six tabs) mounts here." />;
-}
-
-function UnanchoredTraySlot({ orphans }: { orphans: readonly AnchorRecord[] }) {
   return (
-    <div role="region" aria-label="Unanchored highlights" className="border-t px-4 py-2 text-sm">
-      {orphans.length} highlight{orphans.length === 1 ? '' : 's'} could not be placed in this
-      version of the document. They are kept, not deleted.
-    </div>
+    <UnanchoredTray
+      // The tray does its own filtering ON PURPOSE, so nothing can be dropped before it gets there.
+      items={orphans.map((record) => ({ anchor: record.anchor, resolution: record.resolution }))}
+      onJumpToPage={onJumpToPage}
+    />
   );
 }
