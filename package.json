@@ -37,8 +37,9 @@
     "format:check": "prettier --check .",
     "py:sync": "uv sync --all-packages",
     "py:test": "uv run pytest",
-    "py:lint": "uv run ruff check packages",
-    "py:format:check": "uv run ruff format --check packages"
+    "py:lint": "uv run ruff check packages services",
+    "py:format:check": "uv run ruff format --check packages services",
+    "py:typecheck": "uv run mypy packages/*/python services/*/python"
   },
   "devDependencies": {
     "oxlint": "^1.5.0",

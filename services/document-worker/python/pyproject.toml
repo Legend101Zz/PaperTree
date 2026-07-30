@@ -31,3 +31,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["papertree_document_worker"]
+# packages/db is the only other package that ships this. Without it mypy sees no types at
+# all when this package is consumed as a BUILT WHEEL rather than from source (PEP 561).
+artifacts = ["papertree_document_worker/py.typed"]
