@@ -137,6 +137,31 @@ small hand-checked subset (well short of 120 pages), report the verdict against 
 explicitly that it does not clear §7's authorisation bar. Do not report a Docling comparison as
 if Tier B existed.
 
+## 4b. Decisions taken by the project owner, 2026-07-31
+
+Recorded here because each changes what the remaining work is, and none is derivable from the
+brief.
+
+| Decision | Choice | Consequence |
+|---|---|---|
+| **PTUB gold** | Build the annotation tool and the metric suite; annotate later | F1.9 ships the tool, the four adapters and every metric that needs no gold (operational, capability, speed). The zero-ML-vs-Docling **F1 verdict is deferred**, and `EPIC-01-RESULT.md` will say so rather than report an unearned number. Parser selection stays formally unauthorised per `benchmarks/README.md` §7. |
+| **F1.7 VLM** | A cheap vision model, capped run, cost recorded | An OpenRouter key already exists in `apps/api/.env`, but `OPENROUTER_MODEL` is `deepseek/deepseek-v3.2` — a **text** model. F1.7 needs its own vision model setting; it must not reuse that one. |
+| **`ImageRef.uri`** | Configurable, defaulting to an opaque scheme | Default `asset://<paper_id>/<generation>/<kind>/<block_id>@<scale>x.webp`. The scheme comes from parser config so `config_hash` records which was used and two generations stay distinguishable. **Epic 2 must add a second scheme handler** — `apps/web/.../assetSrc.ts` resolves only `fixture://` and passes everything else untouched into `<img src>`, so a figure renders as nothing, silently. Issue owed to Epic 2. |
+| **Docling** | Installed, entirely off the boot volume | The internal disk had **14 GiB** free against the SSD's 649 GiB. Both the venv and uv's package cache live at `/Volumes/Mrigesh SSD/papertree-docling/` — **2.1 GB total, 0 bytes on the internal disk**. `docling 2.117.0`, Python 3.12.8, `DocumentConverter` verified importable. Nothing entered `uv.lock`. The harness will find it via `PAPERTREE_DOCLING_PYTHON` defaulting to that path, and report **UNAVAILABLE** (distinct from "scored 0") when absent. |
+
+## 4c. Findings filed as issues
+
+Epic 1 may not edit the files these belong to, so each finding is an issue rather than an edit:
+
+- **#47** — `page.cropbox` is already y-flipped while `page.mediabox` is not. Fixed in Epic 1's own
+  code; filed because any future parser or probe in this repo will hit it.
+- **#48** — `EPIC-02-RESULT` §2.3's "reject spans over 1.3 × size" would delete the arXiv stamp,
+  every rotated axis label and every big brace. Includes the "19.24 pt overlap" figure that does
+  not reproduce, and the two stale claims in `fixtures/README.md`.
+- **#49** — `doc_order` is body-only by validator rule 15, so the choice the brief offers has only
+  one legal answer.
+- **#50** — `EPIC-01-ingest.md` states the F1.3/F1.5 dependency backwards.
+
 ## 5. Files changed outside Epic 1's ownership
 
 All four are declared on **issue #45**, additive, and change no behaviour for existing packages:
