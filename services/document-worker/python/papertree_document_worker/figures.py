@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from statistics import median
 
 from papertree_document_ir import BBox
 
@@ -49,6 +50,30 @@ __all__ = ["FigureRegion", "detect_figure_regions", "is_caption_line"]
 #: Ink within this distance joins one cluster. A figure's internal whitespace is much smaller
 #: than the gap between a figure and the body text around it.
 MERGE_TOLERANCE_PT = 12.0
+
+#: SECOND-PASS MERGE. Two ink clusters join when their gap is small RELATIVE TO THEIR OWN SIZE,
+#: not just small in absolute points.
+#:
+#: Measured on ResNet page 3, which is why this exists. Figure 3 is three side-by-side network
+#: stacks (VGG-19, 34-layer plain, 34-layer residual) at x = 74-122, 144-193 and 215-285. The
+#: gaps between them are ~22 pt - larger than MERGE_TOLERANCE_PT - so the first pass emits three
+#: regions where the document has one figure. A flat tolerance cannot fix that without also
+#: swallowing the body text 22 pt away from a small plot.
+#:
+#: The ratio does distinguish them: 22 pt between two 450 pt-tall stacks is 5 % of their extent
+#: and obviously internal; 22 pt between a 60 pt plot and a paragraph is 37 % and obviously not.
+PANEL_GAP_RATIO = 0.12
+#: ...and the two clusters must overlap on the other axis by at least this share of the smaller,
+#: so that two unrelated plots stacked in a column do not merge through a shared x-range.
+PANEL_OVERLAP_SHARE = 0.5
+
+#: A line SMALLER than this share of the page's dominant font, sitting within
+#: `LABEL_MARGIN_PT` of a figure, is one of that figure's labels even when it falls outside the
+#: ink. ResNet Figure 3's `output size: 224` legend sits at x = 51-68 against ink starting at
+#: x = 74 - outside every cluster, 4.92 pt against a 9.96 pt body. findings.md B6 records these
+#: exact labels being promoted to HEADINGS by the old extractor.
+LABEL_MAX_SIZE_SHARE = 0.75
+LABEL_MARGIN_PT = 18.0
 #: A cluster smaller than this in either dimension is a glyph decoration, a bullet or a rule
 #: cap, not a figure.
 MIN_FIGURE_SIDE_PT = 24.0
@@ -146,6 +171,50 @@ def _cluster(boxes: list[BBox], tolerance: float) -> list[list[int]]:
     return list(groups.values())
 
 
+def _gap_and_overlap(a: BBox, b: BBox, axis: int) -> tuple[float, float]:
+    """Gap along `axis` (0 = x, 1 = y) and the overlap share on the other axis."""
+    other = 1 - axis
+    gap = max(a[axis] - b[axis + 2], b[axis] - a[axis + 2])
+    lo = max(a[other], b[other])
+    hi = min(a[other + 2], b[other + 2])
+    smaller = min(a[other + 2] - a[other], b[other + 2] - b[other])
+    share = (hi - lo) / smaller if smaller > 0 else 0.0
+    return gap, share
+
+
+def _same_figure(a: BBox, b: BBox) -> bool:
+    """Whether two ink clusters are panels of one figure. See `PANEL_GAP_RATIO`."""
+    for axis in (0, 1):
+        gap, overlap_share = _gap_and_overlap(a, b, axis)
+        if overlap_share < PANEL_OVERLAP_SHARE:
+            continue
+        other = 1 - axis
+        extent = min(a[other + 2] - a[other], b[other + 2] - b[other])
+        if gap <= max(MERGE_TOLERANCE_PT, PANEL_GAP_RATIO * extent):
+            return True
+    return False
+
+
+def _merge_panels(boxes: list[BBox]) -> list[BBox]:
+    """Fixed-point merge of ink clusters into figures. Iterates because merging two panels can
+    bring the result within reach of a third - ResNet Figure 3 is exactly that, three stacks."""
+    current = list(boxes)
+    changed = True
+    while changed and len(current) > 1:
+        changed = False
+        merged: list[BBox] = []
+        for box in current:
+            for index, existing in enumerate(merged):
+                if _same_figure(existing, box):
+                    merged[index] = _union([existing, box])
+                    changed = True
+                    break
+            else:
+                merged.append(box)
+        current = merged
+    return current
+
+
 def _union(boxes: list[BBox]) -> BBox:
     return [
         min(b[0] for b in boxes),
@@ -153,6 +222,15 @@ def _union(boxes: list[BBox]) -> BBox:
         max(b[2] for b in boxes),
         max(b[3] for b in boxes),
     ]
+
+
+def _within(inner: BBox, outer: BBox) -> bool:
+    return (
+        inner[0] >= outer[0] - 0.5
+        and inner[1] >= outer[1] - 0.5
+        and inner[2] <= outer[2] + 0.5
+        and inner[3] <= outer[3] + 0.5
+    )
 
 
 def _inside(band: BBox, region: BBox) -> bool:
@@ -167,6 +245,21 @@ def _inside(band: BBox, region: BBox) -> bool:
     return region[0] <= cx <= region[2] and region[1] <= cy <= region[3]
 
 
+def _claims(band: BBox, region: BBox, size: float, body_size: float) -> bool:
+    """Whether a line belongs to a figure: inside its ink, or a small label just outside it."""
+    if _inside(band, region):
+        return True
+    if size >= LABEL_MAX_SIZE_SHARE * body_size:
+        return False
+    grown: BBox = [
+        region[0] - LABEL_MARGIN_PT,
+        region[1] - LABEL_MARGIN_PT,
+        region[2] + LABEL_MARGIN_PT,
+        region[3] + LABEL_MARGIN_PT,
+    ]
+    return _inside(band, grown)
+
+
 def detect_figure_regions(page: PageContent) -> list[FigureRegion]:
     """Vector clusters and raster placements, with their interior text claimed.
 
@@ -177,33 +270,42 @@ def detect_figure_regions(page: PageContent) -> list[FigureRegion]:
     regions: list[FigureRegion] = []
 
     ink = [d for d in page.drawings if _paintable(d)]
-    for indices in _cluster([d.bbox for d in ink], MERGE_TOLERANCE_PT):
-        box = _union([ink[i].bbox for i in indices])
+    clusters = _cluster([d.bbox for d in ink], MERGE_TOLERANCE_PT)
+    for box in _merge_panels([_union([ink[i].bbox for i in idx]) for idx in clusters]):
         if (
             box[2] - box[0] < MIN_FIGURE_SIDE_PT
             or box[3] - box[1] < MIN_FIGURE_SIDE_PT
             or (box[2] - box[0]) * (box[3] - box[1]) < MIN_FIGURE_AREA_PT2
         ):
             continue
-        regions.append(FigureRegion(bbox=box, is_vector=True, ink_count=len(indices)))
+        ink_count = sum(1 for d in ink if _within(d.bbox, box))
+        regions.append(FigureRegion(bbox=box, is_vector=True, ink_count=ink_count))
 
     for image in _significant_rasters(page.images):
         regions.append(FigureRegion(bbox=list(image.bbox), is_vector=False, ink_count=1))
 
     # Claim interior text. Largest region first so a label inside a sub-panel of a big figure is
     # claimed by the panel that actually contains it rather than by whichever was found first.
+    sizes = [s.size for line in page.lines for s in line.spans if s.size > 0]
+    body_size = median(sizes) if sizes else 10.0
+
     regions.sort(key=lambda r: r.area, reverse=True)
     claimed: set[int] = set()
     resolved: list[FigureRegion] = []
     for region in regions:
-        interior = tuple(
-            line
+        taken = [
+            index
             for index, line in enumerate(page.lines)
-            if index not in claimed and _inside(line.band, region.bbox)
-        )
-        for index, line in enumerate(page.lines):
-            if index not in claimed and _inside(line.band, region.bbox):
-                claimed.add(index)
+            if index not in claimed
+            and _claims(
+                line.band,
+                region.bbox,
+                line.spans[0].size if line.spans else body_size,
+                body_size,
+            )
+        ]
+        interior = tuple(page.lines[index] for index in taken)
+        claimed.update(taken)
         resolved.append(
             FigureRegion(
                 bbox=region.bbox,
