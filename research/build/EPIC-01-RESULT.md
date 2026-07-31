@@ -87,32 +87,47 @@ Three things in that table are worth stating plainly:
 | `worker/perf.spec` | **MET** | p50 305 ms/page, p95 568 ms/page against a 1500 ms bar |
 | `ingest/source-authenticity.spec` | **MET** | every line of every non-table block traced to the page's glyph stream; found 2 real bugs while being written |
 | `eval/ptub.spec` | **PARTIAL** | harness + metrics + annotation tool done, 16 tests; **3 adapters, not 4** — rows 1/2 are deleted code |
-| `worker/figures.spec` | **PARTIAL** | ResNet ≥5 ✅ (11, all vector); ≥80 % captioned ❌ (median ~35 %) |
+| `worker/figures.spec` | **PARTIAL** | ResNet ≥5 ✅ (9, all vector); `is_vector` correct ✅; ≥80 % captioned ❌ (58 % corpus-wide) |
 | `worker/equations.spec` | **PARTIAL** | prose never classified as an equation ✅; ≥80 % of gold ❌ (no gold); every equation retains its crop ✅ |
 | `worker/reading-order.spec` | **NOT MET** | needs gold for the ≥0.90 pairwise figure. Cross-column interleaving is reduced, not eliminated |
-| `worker/hierarchy.spec` | **NOT MET** | number/title joining and furniture stripping work; outline size is far outside ±20 % on long papers |
+| `worker/hierarchy.spec` | **NOT MET** | number/title joining and furniture stripping work; outline size improved 3–6× but is still outside ±20 % — now under-detecting on ResNet and over-detecting on a3c/gpt3 |
 
 ---
 
 ## 3. What is wrong, stated without rounding up
 
-- **Hierarchy over-detects badly on long papers.** a3c 156 heading candidates, gpt3 324, against
-  real section counts of 7–25. Display equations and table rows are still promoted — ResNet
-  yields `'y = F(x, {Wi}) + x.'` as a heading. The cause is pipeline ordering, the same one
-  issue #50 records for figures: equations and tables must be claimed before hierarchy runs.
-- **Caption linking is 8–100 % per paper, median ~35 %.** The linker takes the nearest unlinked
-  region by vertical centre and ignores the caption's *own number* — "Figure 3" should bind to
-  the third figure, not the closest one.
-- **Figure over-detection on plot-heavy papers.** neural-odes yields 77 figures for a paper with
-  about 4; every matplotlib panel and axis becomes its own region.
+- **Hierarchy is much better and still wrong, now in BOTH directions.** Detecting headings after
+  equations and tables have claimed their lines (issue #50's ordering, applied) moved ResNet
+  31 → **5**, BERT 56 → **12** (real count ~12, essentially correct) and gpt3 324 → **192**.
+  ResNet has now flipped to *under*-detecting — real count ~10, found 5 — while a3c (142) and
+  gpt3 (192) remain far too high. Both are long papers whose headings come from the font rule
+  rather than from numbering, and that rule still fires on emphasis runs. `hierarchy.spec` wants
+  ±20 % of gold and neither end is inside it.
+- **Caption linking is 58 %, against an 80 % bar**, up from ~35 % after two fixes: raster panels
+  are merged (neural-odes 77 → 18 regions) and a caption now binds by horizontal overlap plus
+  edge-to-edge adjacency rather than by nearest vertical centre, which on a two-column page
+  routinely picked the float in the *other* column.
+  **The bottleneck has moved and the next person should not re-tune the linker.** ResNet is 9
+  figures with 2 linked because only **4 caption blocks are detected on a paper with ~12
+  captions** — `is_caption_line` needs the marker at position 0 and segmentation is merging
+  caption lines into the surrounding body block. That is a segmentation fix: captions need
+  claiming before paragraph grouping, exactly as figures, tables and equations already did.
+- **Figure over-detection persists**, at 83 regions corpus-wide. Regions overlapping a detected
+  table are now suppressed (superglue correctly drops to 0 figures), but ResNet still reports 9
+  for roughly 6 real figures.
+- **The VLM independently confirms the equation over-detection.** A 6-call run on neural-odes
+  returned `NOT_MATH` for **4 of 6** crops. That is a cheap, model-agnostic precision signal and
+  it agrees with the 13-vs-5 count below.
 - **330 of ResNet's blocks still produce more than one polygon**, i.e. the geometry says they
   span a gutter. Down from 478, not resolved.
 - **Equation regions over-fire inside algorithms.** 13 regions against 5 hand-labelled on
   neural-odes pages 0–2; 7 of the extras are math inside Algorithm 1.
-- **`worker/equations.spec`'s LaTeX half is unexercised.** `vlm.py` works — verified live against
-  MiniMax-M3 on a real crop, returning `\frac{d\mathbf{h}(t)}{dt} = f(\mathbf{h}(t), t, \theta)`
-  correctly — but the pipeline runs with `vlm_max_calls=0` by default and no corpus-wide LaTeX
-  pass has been made.
+- **The VLM LaTeX path is wired and runs**, opt-in and budgeted, defaulting to 0 calls so no
+  parse spends money unless asked. Verified live against MiniMax-M3: a standalone crop returned
+  `\frac{d\mathbf{h}(t)}{dt} = f(\mathbf{h}(t), t, \theta)` correctly, and a 6-call pipeline
+  run cost 2,754 tokens. The two LaTeX strings it produced are **not** claimed to be correct —
+  both came from regions the `NOT_MATH` result suggests were dubious. `≥80 % of gold` stays
+  unmeasurable.
 - **The Docling adapter reports counts, not documents**, so element-detection F1 against Docling
   is not computable even with gold until the bridge returns geometry.
 
