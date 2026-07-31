@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Any
 
 from papertree_evaluation.annotate import (
     build_annotator,
@@ -74,7 +75,7 @@ def _score(args: argparse.Namespace) -> int:
     papers = sorted({page["paper_id"] for page in raw})
     corpus = Path(args.corpus)
 
-    documents: dict[str, dict[str, object]] = {}
+    documents: dict[str, dict[str, Any]] = {}
     for paper in papers:
         pdf = corpus / f"{paper}.pdf"
         if not pdf.exists():
@@ -130,27 +131,34 @@ def _score(args: argparse.Namespace) -> int:
     return 0
 
 
-def _region_texts(corpus: Path, pages: list[dict[str, object]]) -> dict[tuple[str, int, str], str]:
+def _region_texts(corpus: Path, pages: list[dict[str, Any]]) -> dict[tuple[str, int, str], str]:
     """Raw PDF text under each gold box, for `normalise.py`'s caption rule.
 
-    Read straight from the PDF rather than from PaperIR: the normaliser must not see any
-    parser's opinion of what is on the page, or the gold it produces is shaped by the candidate
-    it will be used to score.
+    Read straight from the PDF rather than from PaperIR. The normaliser must not see any parser's
+    opinion of what is on the page, or the gold it produces is shaped by the very candidate it
+    will be used to score - which is the one thing `ANNOTATION_GUIDE.md` §1 forbids.
+
+    PyMuPDF arrives through `papertree_document_worker.pdf`, which is the repo's single import
+    site and carries the `Any` boundary alias that keeps mypy strict everywhere else.
     """
-    import pymupdf
+    from papertree_document_worker.pdf import pymupdf
 
     out: dict[tuple[str, int, str], str] = {}
     for paper in sorted({str(p["paper_id"]) for p in pages}):
         pdf = corpus / f"{paper}.pdf"
         if not pdf.exists():
             continue
-        with pymupdf.open(pdf) as document:
+        document = pymupdf.open(str(pdf))
+        try:
             for page in [p for p in pages if p["paper_id"] == paper]:
-                rendered = document[int(page["page"])]  # type: ignore[index]
-                for region in page["regions"]:  # type: ignore[index]
+                index = int(page["page"])
+                rendered = document[index]
+                for region in page["regions"]:
                     clip = pymupdf.Rect(*region["bbox"])
-                    key = (paper, int(page["page"]), str(region["gold_id"]))  # type: ignore[index]
-                    out[key] = rendered.get_text("text", clip=clip).strip()
+                    text: str = rendered.get_text("text", clip=clip).strip()
+                    out[(paper, index, str(region["gold_id"]))] = text
+        finally:
+            document.close()
     return out
 
 
