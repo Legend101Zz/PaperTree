@@ -1,7 +1,7 @@
 # EPIC 1 — Ingest & Document Intelligence: result
 
-**Status: INCOMPLETE. 5 of 10 acceptance tests met.** Branch `epic-1-ingest`, 58 commits,
-`63be37d..e8276de`. `research/build/EPIC-01-ingest.md` is **unedited** — no acceptance criterion
+**Status: INCOMPLETE. 5 of 10 acceptance tests met.** Branch `epic-1-ingest`, 62 commits,
+`63be37d..247dc3b`. `research/build/EPIC-01-ingest.md` is **unedited** — no acceptance criterion
 was weakened, and no test file claims a criterion it does not meet.
 
 Every number below was measured on this machine at `pymupdf 1.28.0` / `docling 2.117.0` against
@@ -25,7 +25,7 @@ Both halves are now measured against the same human gold, and they disagree:
 
 | half | bar | measured | |
 |---|---|---|---|
-| **accuracy** | ≥ 85 % of Docling's F1 | **91 %** | **PASS** |
+| **accuracy** | ≥ 85 % of Docling's F1 | **97 %** | **PASS** |
 | **speed** | ≥ 20× Docling | **12.4×** | **FAIL** |
 
 The rule requires both, so zero-ML does not ship as default. But the reason has completely
@@ -80,14 +80,14 @@ below carries that n.
 
 | paper | pages | macro F1 @0.5 | @0.75 | reading order | near misses |
 |---|---|---|---|---|---|
-| attention-is-all-you-need | 6 | **0.250** | 0.101 | 0.278 | 24 |
-| neural-odes-mathheavy | 6 | **0.193** | 0.104 | 0.389 | 20 |
-| resnet-cvpr-2col | 6 | **0.212** | 0.159 | 0.967 | 21 |
+| attention-is-all-you-need | 6 | **0.283** | 0.100 | 0.389 | 23 |
+| neural-odes-mathheavy | 6 | **0.192** | 0.103 | 0.389 | 20 |
+| resnet-cvpr-2col | 6 | **0.228** | 0.165 | 0.967 | 20 |
 
-*(First measured at 0.223 / 0.077 / 0.146, reading order 0.167 / 0.333 / 0.800. Five fixes since —
-front-matter typing, the single-column barrier, equation block merging, the footnote flow, and the
-bibliography — are the difference. Every one of the five was found by this gold set and none was
-visible from the capability counts.)*
+*(First measured at 0.223 / 0.077 / 0.146, reading order 0.167 / 0.333 / 0.800. Six fixes since —
+front-matter typing, the single-column barrier, equation block merging, the footnote flow, the
+bibliography, and a bold-weight block boundary — are the difference. Every one was found by this
+gold set and none was visible from the capability counts.)*
 
 **A quarter of the gold is found in the right place and boxed to a different convention.** 67 of
 249 gold regions have a same-type prediction at IoU 0.25–0.5 — detected, but missing the bar on
@@ -100,10 +100,10 @@ says which failures need detecting and which need reconciling.
 
 | paper | deterministic | docling | share of Docling | ≥ 85 %? |
 |---|---|---|---|---|
-| attention-is-all-you-need | 0.250 | 0.280 | **89 %** | yes |
-| neural-odes-mathheavy | 0.193 | 0.168 | **115 %** | yes |
-| resnet-cvpr-2col | 0.212 | 0.308 | **69 %** | no |
-| | | | **mean 91 %** | **PASS** |
+| attention-is-all-you-need | 0.283 | 0.280 | **101 %** | yes |
+| neural-odes-mathheavy | 0.192 | 0.168 | **115 %** | yes |
+| resnet-cvpr-2col | 0.228 | 0.308 | **74 %** | no |
+| | | | **mean 97 %** | **PASS** |
 
 Reproduce with `uv run python -m papertree_evaluation score --with-docling`.
 
@@ -113,7 +113,10 @@ scores 0.28 is a gold set whose boxing conventions differ from *both* parsers', 
 one of them. It is why the RATIO is the meaningful quantity here and the absolute is not, which is
 also why the rule was written as a ratio.
 
-ResNet is the one clear loss: Docling 0.308 against 0.212, and it is the two-column paper.
+ResNet is the one clear loss: Docling 0.308 against 0.228, and it is the two-column paper. Docling
+beats it on `table` (1.00 vs 0.33), `equation` (1.00 vs 0.00), `caption` (0.82 vs 0.31) and
+`footnote` (1.00 vs 0.50); the deterministic path wins `paragraph` (0.60 vs 0.17), `abstract`,
+`margin_note` and — with 0 predicted on Docling's side — `title`, `author` and `affiliation`.
 
 Reading order runs the other way and is not part of the rule: Docling scores 0.500 / 0.578 /
 0.546 against 0.278 / 0.389 / **0.967**. The deterministic path is far better on the two-column
@@ -135,6 +138,7 @@ structural 0.00 weighted as heavily as a type the parser gets right. Five have s
 | `title` `author` `affiliation` `abstract` | `frontmatter.py` — a retype pass over page 0's visual rows | typed on all three papers; `metadata.authors` populated |
 | `footnote` | the flow test asked for the bottom 6 % of the page; real footnotes are at 75–90 % | ResNet F1 **0.50**, the first real score on the type |
 | `reference_entry` | `references.py` — a sweep after the `References` heading | 45 / 53 / 6 entries; `Paper.references` no longer `[]` |
+| `heading` (recall) | a bold-weight change now starts a block; ResNet sets headings **bold at body size**, so nothing split them off | attention `heading` F1 0.00 → **0.35**; ResNet 2 → 5 predicted against 11 gold |
 
 Two remain absent: `citation` and `inline_equation`.
 
@@ -142,8 +146,9 @@ Over-segmentation was the other half, and it was never a threshold to tune:
 
 | | before | after | cause |
 |---|---|---|---|
-| paragraphs (attention) | 107 | **44** | a full-width *column barrier* applied on a single-column page, which split every paragraph's short last line into its own block |
-| paragraphs (neural-odes) | 153 | **106** | same |
+| paragraphs (attention) | 107 | **24** | a full-width *column barrier* applied on a single-column page, splitting every paragraph's short last line into its own block; then bold headings being absorbed into the paragraphs around them |
+| paragraphs (resnet) | 51 | **48**, F1 0.40 → **0.60** | the bold-weight boundary; recall 0.55 → 0.79 |
+| paragraphs (neural-odes) | 153 | **106** | the single-column barrier |
 | equations (neural-odes) | 89 | **16** vs 17 gold | layout segmenting a display equation with prose rules, before equation detection ran |
 
 Equation *extents* are still narrower than gold's full-column convention, so equations match at 0
@@ -152,14 +157,15 @@ distinguishes it from a detection failure.
 
 **So: zero-ML does not ship as default on this evidence** — because the rule requires both halves
 and speed misses. It is worth being precise about what that does and does not mean. It is not
-"the deterministic path is not accurate enough": on this gold it reaches 91 % of Docling and the
-bar is 85 %. It is "it is 12.4× faster where the rule asked for 20×", against a bar whose
+"the deterministic path is not accurate enough": on this gold it reaches 97 % of Docling against a
+bar of 85 %, and on `attention-is-all-you-need` it is ahead outright. It is "it is 12.4× faster where the rule asked for 20×", against a bar whose
 provenance the epic file does not record.
 
 And the n matters. 18 pages, one annotator, no inter-annotator agreement figure — enough to
 measure, not enough to authorise, and README §2 is explicit that *"without [IAA], no metric on
-this set has a meaningful ceiling."* A 91 % that would need to fall by 6 points to flip the
-verdict is not a comfortable margin at this sample size.
+this set has a meaningful ceiling."* 97 % against an 85 % bar is a more comfortable margin than
+the 91 % measured an hour earlier, but it rests on three papers, and one of the three (ResNet, at
+74 %) is below the bar on its own.
 
 ### Capability, measured (findings.md H2's columns)
 
