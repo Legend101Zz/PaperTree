@@ -1,7 +1,7 @@
 # EPIC 1 — Ingest & Document Intelligence: result
 
-**Status: INCOMPLETE. 5 of 10 acceptance tests met.** Branch `epic-1-ingest`, 53 commits,
-`63be37d..f19ad9d`. `research/build/EPIC-01-ingest.md` is **unedited** — no acceptance criterion
+**Status: INCOMPLETE. 5 of 10 acceptance tests met.** Branch `epic-1-ingest`, 58 commits,
+`63be37d..e8276de`. `research/build/EPIC-01-ingest.md` is **unedited** — no acceptance criterion
 was weakened, and no test file claims a criterion it does not meet.
 
 Every number below was measured on this machine at `pymupdf 1.28.0` / `docling 2.117.0` against
@@ -56,12 +56,14 @@ below carries that n.
 
 | paper | pages | macro F1 @0.5 | @0.75 | reading order | near misses |
 |---|---|---|---|---|---|
-| attention-is-all-you-need | 6 | **0.249** | 0.090 | 0.278 | 25 |
-| neural-odes-mathheavy | 6 | **0.116** | 0.041 | 0.333 | 22 |
-| resnet-cvpr-2col | 6 | **0.174** | 0.157 | 0.967 | 20 |
+| attention-is-all-you-need | 6 | **0.250** | 0.101 | 0.278 | 24 |
+| neural-odes-mathheavy | 6 | **0.193** | 0.104 | 0.389 | 20 |
+| resnet-cvpr-2col | 6 | **0.212** | 0.159 | 0.967 | 21 |
 
-*(First measured at 0.223 / 0.077 / 0.146 with reading order 0.167 / 0.333 / 0.800. Front-matter
-typing, below, is the difference.)*
+*(First measured at 0.223 / 0.077 / 0.146, reading order 0.167 / 0.333 / 0.800. Five fixes since —
+front-matter typing, the single-column barrier, equation block merging, the footnote flow, and the
+bibliography — are the difference. Every one of the five was found by this gold set and none was
+visible from the capability counts.)*
 
 **A quarter of the gold is found in the right place and boxed to a different convention.** 67 of
 249 gold regions have a same-type prediction at IoU 0.25–0.5 — detected, but missing the bar on
@@ -81,20 +83,29 @@ links) and **vector-figure recall** (no `is_vector` flag). The annotator tool di
 either. That is a tool defect, recorded, and it costs PaperTree the one metric — vector figures —
 where it was expected to look good.
 
-**Where the F1 actually goes.** The macro-average is over gold types, and the first scored run
-found **seven of fifteen gold types on `attention` were never emitted by the parser at all**.
-Four of those — `title`, `author`, `affiliation`, `abstract` — are now typed (`frontmatter.py`),
-which is what moved the numbers above and took ResNet's reading order from 0.800 to 0.967. Three
-remain structurally absent: `footnote`, `citation`, `inline_equation`.
+**Where the F1 goes.** The macro-average is over gold types, and the first scored run found
+**seven of fifteen gold types on `attention` were never emitted by the parser at all** — each a
+structural 0.00 weighted as heavily as a type the parser gets right. Five have since been closed:
 
-The rest is over-segmentation: 13 gold paragraphs against **107 predicted**, 17 gold equations
-against **89** with zero matches. Precision 0.03–0.31 with recall 0.23–0.55 is the signature of a
-parser cutting real regions into pieces, not one that cannot find them — which the 94–100 %
-geometry overlap confirms independently.
+| type | how | outcome |
+|---|---|---|
+| `title` `author` `affiliation` `abstract` | `frontmatter.py` — a retype pass over page 0's visual rows | typed on all three papers; `metadata.authors` populated |
+| `footnote` | the flow test asked for the bottom 6 % of the page; real footnotes are at 75–90 % | ResNet F1 **0.50**, the first real score on the type |
+| `reference_entry` | `references.py` — a sweep after the `References` heading | 45 / 53 / 6 entries; `Paper.references` no longer `[]` |
 
-Neither is a tuning problem. They are missing capabilities — typing the remaining three types,
-and grouping at region rather than fragment granularity — and both are Epic-1 scope that this
-epic did not complete.
+Two remain absent: `citation` and `inline_equation`.
+
+Over-segmentation was the other half, and it was never a threshold to tune:
+
+| | before | after | cause |
+|---|---|---|---|
+| paragraphs (attention) | 107 | **44** | a full-width *column barrier* applied on a single-column page, which split every paragraph's short last line into its own block |
+| paragraphs (neural-odes) | 153 | **106** | same |
+| equations (neural-odes) | 89 | **16** vs 17 gold | layout segmenting a display equation with prose rules, before equation detection ran |
+
+Equation *extents* are still narrower than gold's full-column convention, so equations match at 0
+even with the count right. That is a boxing-convention gap, and the near-miss column is what
+distinguishes it from a detection failure.
 
 **So: zero-ML does not ship as default on this evidence**, and the conclusion is now supported by
 both halves rather than one. 12× against a 20× bar, and an absolute F1 that would need to roughly
@@ -141,8 +152,8 @@ Three things in that table are worth stating plainly:
 | `ingest/source-authenticity.spec` | **MET** | every line of every non-table block traced to the page's glyph stream; found 2 real bugs while being written |
 | `eval/ptub.spec` | **PARTIAL** | harness + metrics + annotation tool + scorer, 63 tests; gold exists (18 pp); **3 adapters, not 4** and Docling returns counts not geometry, so no cross-parser F1 |
 | `worker/figures.spec` | **PARTIAL** | ResNet ≥5 ✅ (9, all vector); `is_vector` correct ✅; ≥80 % captioned ❌ (58 % corpus-wide). Gold figure F1 0.67 on `attention`, **0.00 on the other two**; vector-figure recall still not evaluable — gold has no `is_vector` |
-| `worker/equations.spec` | **NOT MET** | prose never classified as an equation ✅; every equation retains its crop ✅; **≥80 % of gold ❌ — measured 0 of 17 at IoU 0.5**, 89 predicted regions against 17 gold |
-| `worker/reading-order.spec` | **NOT MET** | **measured: 0.167 / 0.333 / 0.800 pairwise against a ≥0.90 bar.** The two-column paper is much the best of the three, so the ordering logic is not the weak part — the regions being ordered are |
+| `worker/equations.spec` | **NOT MET** | prose never classified as an equation ✅; every equation retains its crop ✅; **≥80 % of gold ❌ — 0 of 17 at IoU 0.5**. Count now 16 predicted against 17 gold (was 89); the extents are narrower than gold's full-column convention |
+| `worker/reading-order.spec` | **NOT MET** | **0.278 / 0.389 / 0.967 pairwise against a ≥0.90 bar**, up from 0.167 / 0.333 / 0.800. ResNet is now over the bar; the two single-column papers are not. The ordering logic was never the weak part — the regions being ordered were |
 | `worker/hierarchy.spec` | **NOT MET** | number/title joining and furniture stripping work; outline size improved 3–6× but is still outside ±20 % — now under-detecting on ResNet and over-detecting on a3c/gpt3 |
 
 ---
@@ -154,22 +165,23 @@ because they are the largest, and because neither was visible from the capabilit
 parser that emits 929 blocks with 929 bboxes and 929 stable ids looks healthy until something
 asks whether those boxes have the shape of the regions on the page.
 
-- **Three gold types are still never emitted at all**: `footnote`, `citation`,
-  `inline_equation`. Each scores a structural 0.00 and a macro-average weights a type the parser
-  has never heard of exactly as heavily as one it gets right. There were seven; `frontmatter.py`
-  closed four of them (`title`, `author`, `affiliation`, `abstract`), which also fixed
-  `Paper.metadata.authors == []` — never a `metadata.py` bug, but rule 6b having no `author`
-  block to cite. `footnote` is the odd one: `_block_type` *does* emit it when the flow classifier
-  says `footnote`, and on `attention` that classifier never fires — so this one is a flow bug,
-  not a missing type.
-- **Paragraphs are cut into fragments.** 13 gold paragraphs against **107** predicted on
-  `attention`; 26 against **153** on `neural-odes`. Precision 0.03–0.31 at recall 0.23–0.55 is the
-  signature of over-segmentation, and geometry overlap of 94–100 % rules out the alternative
-  explanation that the parser is looking in the wrong place. The last line of a paragraph
-  repeatedly becomes its own block.
-- **Equations fragment worse: 17 gold, 89 predicted, 0 matched.** Not one predicted equation box
-  reaches IoU 0.5 against a gold one. The over-detection recorded further down (13 regions vs 5
-  hand-labelled) understated this because it counted regions rather than comparing extents.
+- **Two gold types are still never emitted**: `citation` and `inline_equation`. There were
+  seven; five are closed (§1). `citation` is partly a gold-granularity question — gold boxes a
+  whole reference page as one `citation` region while the parser now emits one `reference_entry`
+  per entry, which is what `ANNOTATION_GUIDE.md` asks for — so the two will not match on this
+  gold set and the parser is not the thing to change. `inline_equation` needs `equations.py` to
+  separate inline from display, which it does not attempt.
+- **Paragraph fragmentation is fixed and paragraphs are still not right.** 107 → 44 predicted on
+  `attention`, 153 → 106 on `neural-odes`, F1 0.05 → 0.18 and 0.13 → 0.21. The cause was a
+  single-column page being given a full-width *column barrier*, which routed every normal body
+  line to the barrier bucket and every paragraph's short last line to column 0. Precision is
+  still 0.11–0.39, so blocks are still finer than gold regions; it is no longer 3×.
+- **Equation counts are right and extents are not.** 89 → **16** predicted against 17 gold, by
+  merging the fragments an equation region already claims into the one block that region
+  describes. Still **0 matched at IoU 0.5**: gold boxes a display equation across the full column
+  including its right-margin number, and the parser boxes the glyph bands. Absorbing any non-prose
+  block sharing a region's vertical band closes that and was measured and reverted — it chained
+  distinct equations together and took 16 down to 6.
 - **Two headline metrics could not be computed and it is the tool's fault.** Caption association
   needs `parent` links and vector-figure recall needs `is_vector`; the annotator collected
   neither. Vector figures are the one dimension where PaperTree was expected to beat every
@@ -229,10 +241,16 @@ asks whether those boxes have the shape of the regions on the page.
   own id and polygon, and cross-referenced from `payload.grid.cells[].cell_id`. 580 on ResNet.
 - **`payload.html` is deliberately absent** on tables (rule 32b: own the serialiser or drop the
   field — it would have to live in `packages/document-ir`, which Epic 1 may not edit).
-- **`Metadata` is all-null.** Every one of the seven keys is present and `authors` is `[]`, which
-  validates clean, but no bibliographic extraction was built. Rule 6b makes this expensive to add
-  carelessly: every value must be a *substring of its cited block's normalised text*.
-- **`Paper.references` is `[]`.** No reference parsing.
+- **`Metadata` is populated** — `title`, `authors`, `abstract`, `arxiv_id` and `year`, each a
+  verbatim slice of a block it cites (rule 6b). `venue` and `doi` stay null: arXiv preprints carry
+  neither in a form that survives the substring test. `authors` was `[]` on every paper until
+  `frontmatter.py` existed, which was never a `metadata.py` bug — rule 6b had no `author` block to
+  slice.
+- **`Paper.references` is populated**: 45 / 53 / 6 entries across the annotated papers, each
+  naming its `reference_entry` block. Only `year` and `arxiv_id` are parsed out. `title`,
+  `authors` and `venue` are left null on purpose — a heuristic split of a reference string yields
+  a *plausible* author list, which is worse than none, because it looks populated and nothing
+  downstream would question it.
 
 ---
 
