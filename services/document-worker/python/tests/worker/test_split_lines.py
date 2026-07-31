@@ -169,3 +169,91 @@ class TestSingleColumnHasNoFullWidthBarrier:
 
         # A line spanning both columns of a 612 pt page is wider than the share of the content.
         assert 54.0 + FULL_WIDTH_SHARE * (542.0 - 54.0) < 542.0
+
+
+class TestEquationBlockMerge:
+    """A display equation is one block, because the region knows its extent and layout does not.
+
+    Layout runs before equation detection and segments a display equation with prose rules, so
+    MuPDF's numerator / denominator / relation-symbol lines each became their own block: 17 gold
+    equations against **66 predicted** on `neural-odes` p14.
+    """
+
+    @staticmethod
+    def _region(lines: list[Line]) -> object:
+        from papertree_document_worker.equations import EquationRegion
+
+        bands = [line.band for line in lines]
+        return EquationRegion(
+            lines=tuple(lines),
+            bbox=[
+                min(b[0] for b in bands),
+                min(b[1] for b in bands),
+                max(b[2] for b in bands),
+                max(b[3] for b in bands),
+            ],
+            number=None,
+            score=1.0,
+        )
+
+    @staticmethod
+    def _layout(lines: list[Line], order: int) -> object:
+        from papertree_document_worker.layout import LayoutBlock, _bounds
+
+        return LayoutBlock(
+            lines=tuple(lines), flow="body", column=0, bbox=_bounds(lines), order=order
+        )
+
+    def test_fragments_of_one_region_become_one_block(self) -> None:
+        from papertree_document_worker.pipeline import _merge_equation_blocks
+
+        top = _line("dht+1", 266.0, 291.0, 223.0, 231.0)
+        bottom = _line("dht =", 266.0, 291.0, 231.0, 238.0)
+        merged = _merge_equation_blocks(
+            (self._layout([top], 0), self._layout([bottom], 1)),  # type: ignore[arg-type]
+            [self._region([top, bottom])],
+        )
+        assert len(merged) == 1
+        assert merged[0].bbox == [266.0, 223.0, 291.0, 238.0]
+
+    def test_the_merged_box_covers_every_line_it_holds(self) -> None:
+        """Not `region.bbox` — `assemble.py` rebuilds the polygon from lines and would disagree."""
+        from papertree_document_worker.pipeline import _merge_equation_blocks
+
+        left = _line("a =", 100.0, 150.0, 200.0, 210.0)
+        right = _line("b", 400.0, 430.0, 200.0, 210.0)
+        merged = _merge_equation_blocks(
+            (self._layout([left], 0), self._layout([right], 1)),  # type: ignore[arg-type]
+            [self._region([left, right])],
+        )
+        assert merged[0].bbox == [100.0, 200.0, 430.0, 210.0]
+
+    def test_blocks_in_no_region_pass_through_untouched(self) -> None:
+        from papertree_document_worker.pipeline import _merge_equation_blocks
+
+        prose = self._layout([_line("Ordinary prose.", 100.0, 400.0, 300.0, 310.0)], 0)
+        assert _merge_equation_blocks((prose,), []) == [prose]  # type: ignore[arg-type]
+
+    def test_two_regions_stay_two_blocks(self) -> None:
+        """The boundary that the removed band-absorption rule destroyed."""
+        from papertree_document_worker.pipeline import _merge_equation_blocks
+
+        first = _line("a = b", 200.0, 300.0, 100.0, 110.0)
+        second = _line("c = d", 200.0, 300.0, 140.0, 150.0)
+        merged = _merge_equation_blocks(
+            (self._layout([first], 0), self._layout([second], 1)),  # type: ignore[arg-type]
+            [self._region([first]), self._region([second])],
+        )
+        assert len(merged) == 2
+
+    def test_a_block_straddling_two_regions_is_not_merged(self) -> None:
+        from papertree_document_worker.pipeline import _merge_equation_blocks
+
+        a = _line("a", 200.0, 300.0, 100.0, 110.0)
+        b = _line("b", 200.0, 300.0, 140.0, 150.0)
+        straddler = self._layout([a, b], 0)
+        merged = _merge_equation_blocks(
+            (straddler,),  # type: ignore[arg-type]
+            [self._region([a]), self._region([b])],
+        )
+        assert merged == [straddler]

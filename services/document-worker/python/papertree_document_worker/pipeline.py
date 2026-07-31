@@ -172,6 +172,102 @@ def _dedupe_tables(regions: list[Any]) -> list[Any]:
     return kept
 
 
+def _merge_equation_blocks(
+    blocks: tuple[LayoutBlock, ...], regions: list[Any]
+) -> list[LayoutBlock]:
+    """One block per display equation, because the REGION knows its extent and layout does not.
+
+    Layout runs before equation detection - it has to, since `detect_equation_regions` needs the
+    body line stream - so it segments a display equation with the same rules it uses on prose.
+    A display equation is not prose. MuPDF returns its numerator, its denominator, its relation
+    symbol and its right-margin number as separate lines at different x, and `_same_block`'s
+    indent rule then splits every one of them into its own block.
+
+    Measured against gold on `neural-odes-mathheavy` page 14: **17 gold equations, 66 predicted
+    blocks, and not one match at IoU 0.5**. Fragments like `'dht+1\\ndht ='`, `'dht .'` and
+    `'(35)\\ndt'` are each a correct piece of an equation and none of them is an equation.
+
+    So the fragments a region already claims are re-joined into the one block that region
+    describes. Nothing about detection changes; this only stops layout's answer from overriding
+    the more specific detector's, which is the same ordering principle issue #50 established for
+    figures and headings.
+
+    The merged block keeps the EARLIEST `order` of its parts, so its position in the flow is the
+    position where the equation starts.
+    """
+    if not regions:
+        return list(blocks)
+
+    region_of: dict[int, int] = {}
+    for index, region in enumerate(regions):
+        for line in region.lines:
+            region_of[id(line)] = index
+
+    def sole_region(block: LayoutBlock) -> int | None:
+        """The region this block belongs to entirely, or `None` if it straddles or is prose.
+
+        Claimed lines only. A block sharing the equation's BAND but claimed by nothing - the
+        `(35)` in the right margin is the standing example - is picked up by `_shares_the_band`
+        below instead, and only if it is not prose.
+        """
+        if not block.lines:
+            return None
+        found = {region_of.get(id(line)) for line in block.lines}
+        if len(found) != 1:
+            return None
+        only = found.pop()
+        return only
+
+    out: list[LayoutBlock] = []
+    members: dict[int, list[LayoutBlock]] = {}
+    unclaimed: list[LayoutBlock] = []
+    for block in blocks:
+        claimed_by = sole_region(block)
+        if claimed_by is None:
+            unclaimed.append(block)
+        else:
+            members.setdefault(claimed_by, []).append(block)
+
+    # THE EQUATION NUMBER IS LEFT OUT, DELIBERATELY, AFTER TRYING THE OTHER WAY.
+    #
+    # `(35)` sits at the right margin, is claimed by no region, and forms its own block - so the
+    # merged equation's box stops short of it while gold runs to the column edge. The obvious fix
+    # is to absorb any non-prose block sharing the region's vertical band, and it was written,
+    # measured and removed: on `neural-odes` p14 it took the count from 16 predicted against 17
+    # gold to **6**, chaining several distinct equations into one block through the fragments
+    # between them. Trading a boxing-convention gap for a merge that destroys real boundaries is
+    # a worse document, and the near-miss column now makes that visible either way.
+    out.extend(unclaimed)
+
+    for group in members.values():
+        if len(group) == 1:
+            out.append(group[0])
+            continue
+        lines = tuple(
+            line for block in sorted(group, key=lambda b: b.order) for line in block.lines
+        )
+        # The union of what was merged, NOT `regions[index].bbox`. The region's own extent covers
+        # only the lines its seed rules claimed, so a block absorbed by `_shares_the_band` - the
+        # right-margin equation number, most often - would sit outside the box describing it, and
+        # `assemble.py` would then rebuild the polygon from the lines anyway and disagree.
+        bands = [line.band for block in group for line in block.lines]
+        out.append(
+            LayoutBlock(
+                lines=lines,
+                flow=group[0].flow,
+                column=group[0].column,
+                bbox=[
+                    min(b[0] for b in bands),
+                    min(b[1] for b in bands),
+                    max(b[2] for b in bands),
+                    max(b[3] for b in bands),
+                ],
+                order=min(block.order for block in group),
+            )
+        )
+    return sorted(out, key=lambda b: b.order)
+
+
 def _block_type(flow: str, text: str, is_heading: bool, is_equation: bool) -> str:
     # A block opening `Figure 3.` / `Table 1:` IS a caption, whatever flow it landed in.
     # Rule 22 requires `caption_of.from` to be a `caption` block, and the flow classifier does
@@ -360,7 +456,7 @@ def _assemble(
         heading_blocks = {id(h.block) for h in headings}
         all_headings.extend(headings)
 
-        for layout_block in page_layout.blocks:
+        for layout_block in _merge_equation_blocks(page_layout.blocks, equation_regions):
             if layout_block.lines and all(id(line) in table_lines for line in layout_block.lines):
                 continue  # every line already emitted as a table cell
             built = build_block_text(list(layout_block.lines))
