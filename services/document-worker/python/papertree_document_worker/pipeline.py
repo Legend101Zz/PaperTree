@@ -115,6 +115,12 @@ def _dedupe_tables(regions: list[Any]) -> list[Any]:
 
 
 def _block_type(flow: str, text: str, is_heading: bool, is_equation: bool) -> str:
+    # A block opening `Figure 3.` / `Table 1:` IS a caption, whatever flow it landed in.
+    # Rule 22 requires `caption_of.from` to be a `caption` block, and the flow classifier does
+    # not always route these correctly - so the NUMBERING decides the type, which is the same
+    # signal `figures.py` uses to link the caption to its float.
+    if is_caption_line(text) is not None:
+        return "caption"
     if is_heading:
         return "heading"
     if is_equation:
@@ -299,42 +305,69 @@ def _assemble(
             if layout_block.flow == "body":
                 all_body.append(layout_block)
 
+        # FIGURES ARE EMITTED FOR EVERY DETECTED REGION, captioned or not.
+        #
+        # An earlier version created the figure block INSIDE the caption-linking loop, so a
+        # figure whose caption was not detected produced no block at all. PTUB measured the
+        # result: ResNet yielded **0 figures** against an acceptance bar of >=5, while
+        # `detect_figure_regions` was finding 12 - the regions existed and were being thrown
+        # away. That is findings.md B3's "zero figures on ResNet" re-created one layer up.
+        #
+        # A figure is a figure because there is ink on the page. A caption is a separate fact.
+        figure_blocks: list[tuple[Any, AssembledBlock]] = []
+        # Deduplicated by QUANTISED TOP-LEFT ANCHOR, because that is what the id hashes. A
+        # figure carries no text, so two regions sharing a 1 pt-quantised (x0, y0) produce the
+        # SAME block_id - `block_id` hashes (source_hash, page, x0, y0, type, text-prefix) and
+        # every one of those is equal. a3c hit it: 1011 blocks, 1009 ids.
+        seen_anchors: set[tuple[int, int]] = set()
+        for region in detect_figure_regions(page):
+            anchor = (round(region.bbox[0]), round(region.bbox[1]))
+            if anchor in seen_anchors:
+                continue
+            seen_anchors.add(anchor)
+            figure_blocks.append(
+                (
+                    region,
+                    builder.add(
+                        AssembledBlock(
+                            type="figure",
+                            page_index=page.index,
+                            flow="body",
+                            line_bands=[list(region.bbox)],
+                            source="pdf_vector" if region.is_vector else "pdf_raster",
+                            confidence=0.8 if region.is_vector else 0.9,
+                            # D20: `is_vector` is DECOUPLED from Block.source, so it is stated
+                            # rather than left for a consumer to infer from the source kind.
+                            payload={"is_vector": region.is_vector, "image": None},
+                            stage="figures",
+                        )
+                    ),
+                )
+            )
+
         # Caption -> float linking, by NUMBERING first and proximity second. Proximity alone
         # attaches a caption to whichever float is nearest, which is wrong the moment two floats
         # share a page.
-        figure_regions = detect_figure_regions(page)
+        unlinked = list(figure_blocks)
         for layout_block in page_layout.blocks:
-            if layout_block.flow != "caption" or id(layout_block) not in emitted:
-                continue
-            text = " ".join(line.text for line in layout_block.lines)
-            parsed = is_caption_line(text)
-            if parsed is None or not figure_regions:
+            if id(layout_block) not in emitted or not unlinked:
                 continue
             caption = emitted[id(layout_block)]
-            nearest = min(
-                figure_regions,
-                key=lambda r: (
-                    abs((r.bbox[1] + r.bbox[3]) / 2 - caption.bbox[1]) if caption.bbox else 0.0
-                ),
-            )
-            figure = builder.add(
-                AssembledBlock(
-                    type="figure",
-                    page_index=page.index,
-                    flow="body",
-                    line_bands=[list(nearest.bbox)],
-                    source="pdf_vector" if nearest.is_vector else "pdf_raster",
-                    confidence=0.8,
-                    # `is_vector` is decoupled from `Block.source` by D20, so it is stated in the
-                    # payload rather than inferred by a consumer from the source kind.
-                    payload={"is_vector": nearest.is_vector, "image": None},
-                    stage="figures",
-                )
+            if caption.type != "caption":
+                continue  # rule 22: caption_of.from must be a `caption` block
+            caption_y = caption.line_bands[0][1] if caption.line_bands else 0.0
+            region, figure = min(
+                unlinked, key=lambda pair: abs((pair[0].bbox[1] + pair[0].bbox[3]) / 2 - caption_y)
             )
             builder.relate("caption_of", caption, figure, 0.8, "geometric+numbering")
-            figure_regions.remove(nearest)
+            unlinked.remove((region, figure))
 
     sections = build_sections(all_headings, all_body)
+    # RULE 21: a section's `heading_block_id` must name a block of a KNOWN HEADING type - only
+    # `title` or `heading`. `detect_headings` works on layout blocks, but the final type is
+    # decided later and a heading-shaped line that opens `Figure 3.` becomes a `caption`, so a
+    # node can survive detection and then point at a non-heading. Filtered here rather than
+    # earlier, because this is the first point at which the emitted type is known.
     builder.sections = [
         (
             emitted[id(node.heading_block)],
@@ -344,6 +377,7 @@ def _assemble(
         )
         for node in sections
         if id(node.heading_block) in emitted
+        and emitted[id(node.heading_block)].type in ("heading", "title")
     ]
 
     # RULE 36: `status: "complete"` requires a non-null crop on every equation and figure. The
