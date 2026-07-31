@@ -250,13 +250,24 @@ def build_sections(headings: list[Heading], body_blocks: list[LayoutBlock]) -> l
 
     sections: list[SectionNode] = []
     stack: list[SectionNode] = []
+    #: The author's numbering depth per node, kept beside the normalised `level` so popping can
+    #: use one and the emitted document the other.
+    _pop_depth: dict[int, int] = {}
     for position, heading in enumerate(ordered):
-        while stack and stack[-1].level >= heading.level:
+        while stack and _pop_depth[id(stack[-1])] >= heading.level:
             stack.pop()
+        # RULE 21: `level` is 1 with no parent, and EXACTLY `parent.level + 1` otherwise - so it
+        # is derived from the tree, never from the numbering depth. A paper that jumps `1` ->
+        # `1.1.1` (gpt3-longform does, and it was the one corpus paper that failed validation)
+        # would otherwise emit a level-3 section whose parent is level 1.
+        #
+        # `heading.level` still decides POPPING, so the tree shape follows the author's numbering;
+        # only the emitted integer is normalised.
+        parent = stack[-1] if stack else None
         node = SectionNode(
             heading_block=heading.block,
-            level=heading.level,
-            parent_heading_block=stack[-1].heading_block if stack else None,
+            level=parent.level + 1 if parent else 1,
+            parent_heading_block=parent.heading_block if parent else None,
             member_blocks=[],
         )
         # Members run from just after this heading to just before the next one, whatever its
@@ -271,5 +282,6 @@ def build_sections(headings: list[Heading], body_blocks: list[LayoutBlock]) -> l
             block for block in body_blocks[start:end] if id(block) != id(heading.block)
         ]
         sections.append(node)
+        _pop_depth[id(node)] = heading.level
         stack.append(node)
     return sections

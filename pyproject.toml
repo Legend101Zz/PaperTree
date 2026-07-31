@@ -47,6 +47,10 @@ dev = [
 # turbo-cache finding for the same failure in the other language.
 testpaths = ["packages", "services"]
 addopts = "-q"
+# "slow" marks tests that satisfy an acceptance criterion LITERALLY (e.g. 20 parse runs) where
+# a cheaper test already asserts the same property. Deselect with -m "not slow". They still run
+# by default: a criterion nobody executes is a criterion nobody meets.
+markers = ["slow: long-running acceptance runs"]
 
 [tool.ruff]
 line-length = 100

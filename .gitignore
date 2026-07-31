@@ -40,3 +40,8 @@ research/benchmarks/corpus/*.pdf
 
 # Uploaded papers (user data)
 apps/api/storage/papers/*.pdf
+
+# Epic 1: parsed asset crops. The worker writes figure/equation/page renders under a caller-
+# supplied root; the default is OUTSIDE the repo, but a run pointed here must not turn CI's
+# codegen-drift step (a whole-tree `git status --untracked-files=all`) red.
+/.papertree-assets/

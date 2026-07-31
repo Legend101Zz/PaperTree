@@ -492,6 +492,15 @@ class SourceDocument:
     def pages(self) -> list[PageContent]:
         return [self.page(i) for i in range(self.page_count)]
 
+    def raw_page(self, index: int) -> Any:
+        """The live `pymupdf.Page`, for RENDERING only.
+
+        The one hole in this module's boundary, and it is deliberate: rasterising a region needs
+        the page object itself, not the typed primitives. `crops.py` is the only caller, and it
+        uses the result solely for `get_pixmap`.
+        """
+        return self._doc[index]
+
 
 def _span(raw: Any, direction: WritingDirection, transform: _PageTransform) -> Span | None:
     """One rawdict span -> a `Span`, or `None` if its geometry is unusable.
