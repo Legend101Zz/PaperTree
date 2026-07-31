@@ -132,9 +132,89 @@ def build_annotator(tasks: list[AnnotationTask], destination: Path) -> Path:
            color: #fff; padding: 0 4px; white-space: nowrap; }}
  .bar {{ position: sticky; top: 0; background: #fff; padding: .75rem; border: 1px solid #ddd;
          z-index: 10; margin-bottom: 1rem; }}
+ details.help {{ background: #fff; border: 1px solid #ddd; padding: .75rem 1rem;
+                 margin-bottom: 1rem; }}
+ details.help summary {{ cursor: pointer; font-weight: 600; }}
+ details.help table {{ border-collapse: collapse; margin: .6rem 0; font-size: 13px; }}
+ details.help td, details.help th {{ border: 1px solid #e3e3e3; padding: .25rem .5rem;
+                                     text-align: left; vertical-align: top; }}
+ details.help code {{ background: #f4f4f4; padding: 0 .25rem; }}
+ .warn {{ background: #fff8e1; border-left: 3px solid #f0ad4e; padding: .5rem .75rem;
+          margin: .6rem 0; }}
  button {{ margin-left: .5rem; }}
  section.page {{ margin-bottom: 3rem; }}
 </style>
+
+<details class="help" open>
+<summary>How to mark a region — read once, then collapse</summary>
+
+<div class="warn"><b>FLOW matters more than TYPE.</b> Flow decides whether a region gets a
+<code>reading_order</code>. Only <code>body</code> is ranked; everything else is
+nulled, which is what stops a parser being punished for correctly leaving furniture
+out of the reading order.
+Get the flow right even if you are unsure of the type.</div>
+
+<b>Pick the flow first</b>
+
+<table>
+<tr><th>flow</th><th>use for</th></tr>
+<tr><td><code>body</code></td><td>the paper itself — title, authors, headings,
+  paragraphs, equations, tables, lists. <b>Draw these in reading order</b>
+  (left column fully, then right).</td></tr>
+<tr><td><code>caption</code></td><td>anything starting "Figure 3." / "Table 1:"</td></tr>
+<tr><td><code>footnote</code></td><td>an asterisked or numbered note — <i>content</i>, usually at
+  the page bottom above a rule</td></tr>
+<tr><td><code>header</code> / <code>footer</code></td><td>page <i>furniture</i> repeated across
+  pages — running head, page number, conference/copyright line</td></tr>
+<tr><td><code>margin</code></td><td>the rotated arXiv stamp down the left edge</td></tr>
+<tr><td><code>float</code></td><td>a figure or table that sits outside the text column</td></tr>
+</table>
+
+<b>Then the type</b>
+
+<table>
+<tr><th>type</th><th>use for</th></tr>
+<tr><td><code>title</code></td><td>the paper's title, once</td></tr>
+<tr><td><code>author</code></td><td>the names line/block</td></tr>
+<tr><td><code>affiliation</code></td><td><b>who the authors belong to</b> — "Google Brain",
+  "University of Toronto". Near the top, part of the author block.</td></tr>
+<tr><td><code>abstract</code></td><td>the abstract's TEXT (the word "Abstract" itself is a
+  <code>heading</code>)</td></tr>
+<tr><td><code>heading</code></td><td>a section heading — "1 Introduction", "Abstract",
+  "References"</td></tr>
+<tr><td><code>paragraph</code></td><td>ordinary body prose. One box per paragraph, <b>not per
+  line</b>.</td></tr>
+<tr><td><code>equation</code></td><td>a display equation set on its own line(s)</td></tr>
+<tr><td><code>figure</code></td><td>the figure INCLUDING its axis labels and interior text, but
+  NOT its caption</td></tr>
+<tr><td><code>table</code></td><td>the table body. Add <code>table_cell</code> boxes only on a
+  page where you want cell-level scoring.</td></tr>
+<tr><td><code>caption</code></td><td>the caption text, its own box, never part of
+  the figure</td></tr>
+<tr><td><code>footnote</code></td><td>the note text</td></tr>
+<tr><td><code>footer</code>/<code>header</code>/<code>page_number</code></td>
+  <td>furniture</td></tr>
+<tr><td><code>margin_note</code></td><td>the arXiv stamp</td></tr>
+<tr><td><code>reference_entry</code></td><td>one entry in the bibliography</td></tr>
+<tr><td><code>unknown</code></td><td><b>when unsure.</b> Better than a wrong type —
+  a wrong label makes a correct parser look wrong.</td></tr>
+</table>
+
+<b>The three that are easy to confuse</b>
+<table>
+<tr><th>looks like</th><th>it is</th><th>because</th></tr>
+<tr><td>"Google Brain" under the authors</td><td><code>affiliation</code> / body</td>
+  <td>it says who the authors are</td></tr>
+<tr><td>"∗Equal contribution. Jakob proposed…"</td><td><code>footnote</code> / footnote</td>
+  <td>it is content the paper is making a point with</td></tr>
+<tr><td>"31st Conference on NIPS 2017, Long Beach"</td><td><code>footer</code> / footer</td>
+  <td>it is furniture — the venue notice, not the paper</td></tr>
+</table>
+
+<b>Two more rules</b><br>
+• One box per <i>logical region</i>, not per line — a five-line paragraph is ONE box.<br>
+• A two-column page should end up with roughly 8–20 regions. Hundreds means you boxed lines.
+</details>
 
 <div class="bar">
   <label>type <select id="type">{options}</select></label>

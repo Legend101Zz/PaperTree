@@ -53,6 +53,26 @@ It is one self-contained HTML file — no server, no build, works offline. Boxes
 **PDF user space** (origin top-left), so they are independent of your window size and of any
 parser.
 
+### The three that are genuinely confusing
+
+Found by annotating a real page — all three sit at the top or bottom of the page and look alike.
+
+| looks like | it is | because |
+|---|---|---|
+| "Google Brain" under the authors | `affiliation`, flow `body` | it says **who the authors are** |
+| "∗Equal contribution. Jakob proposed…" | `footnote`, flow `footnote` | it is **content** — the paper is making a point |
+| "31st Conference on NIPS 2017, Long Beach" | `footer`, flow `footer` | it is **furniture** — the venue notice, not the paper |
+| the rotated "arXiv:1706.03762v7" down the left edge | `margin_note`, flow `margin` | it is the preprint stamp, not the paper |
+
+**Affiliation vs footer** is the pair that catches people: an affiliation belongs to the authors
+and is body content; a footer is page furniture that would appear whether or not this paper had
+authors.
+
+**FLOW MATTERS MORE THAN TYPE.** Flow decides whether a region gets a `reading_order`. Only
+`body` is ranked; everything else is nulled. Leave the flow on `body` for a footnote and a
+parser that *correctly* excludes it from the reading order scores as if it got the order wrong.
+Get the flow right even when unsure of the type.
+
 ### The five rules that decide whether the data is usable
 
 1. **`reading_order` ranks the body flow only.** The tool sets it automatically from the order
