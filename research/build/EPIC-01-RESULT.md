@@ -35,7 +35,7 @@ changed, and so has what follows from it.
 small local layout model becomes default"* — a remedy for losing on accuracy. Accuracy is the half
 that passed. The half that failed is speed, and a local layout model is **slower** than the
 deterministic path, not faster; adopting it would move the failing number in the wrong direction
-while replacing a metric that is already at 91 %.
+while replacing a metric that is already at 97 %.
 
 So the fallback as written is not applicable, and this is a decision for whoever owns Wave 1
 rather than one Epic 1 should quietly make. The three options I can see, stated without a
@@ -108,7 +108,7 @@ says which failures need detecting and which need reconciling.
 Reproduce with `uv run python -m papertree_evaluation score --with-docling`.
 
 **Docling's own absolute numbers are also low — 0.168 to 0.308 — and that reframes the
-deterministic path's 0.19–0.25.** A gold set on which a mature, ML-based, widely-used converter
+deterministic path's 0.19–0.28.** A gold set on which a mature, ML-based, widely-used converter
 scores 0.28 is a gold set whose boxing conventions differ from *both* parsers', not a verdict on
 one of them. It is why the RATIO is the meaningful quantity here and the absolute is not, which is
 also why the rule was written as a ratio.
