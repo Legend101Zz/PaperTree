@@ -1,7 +1,7 @@
 # EPIC 1 — Ingest & Document Intelligence: result
 
-**Status: INCOMPLETE. 5 of 10 acceptance tests met.** Branch `epic-1-ingest`, 48 commits,
-`63be37d..3db8ad1`. `research/build/EPIC-01-ingest.md` is **unedited** — no acceptance criterion
+**Status: INCOMPLETE. 5 of 10 acceptance tests met.** Branch `epic-1-ingest`, 53 commits,
+`63be37d..f19ad9d`. `research/build/EPIC-01-ingest.md` is **unedited** — no acceptance criterion
 was weakened, and no test file claims a criterion it does not meet.
 
 Every number below was measured on this machine at `pymupdf 1.28.0` / `docling 2.117.0` against
@@ -54,11 +54,21 @@ papers (`research/benchmarks/gold/`). That is **15 % of README §1.2's Tier B**,
 with no inter-annotator agreement figure — so it measures without authorising, and every number
 below carries that n.
 
-| paper | pages | macro F1 @0.5 | @0.75 | reading order |
-|---|---|---|---|---|
-| attention-is-all-you-need | 6 | **0.223** | 0.090 | 0.167 |
-| neural-odes-mathheavy | 6 | **0.077** | 0.001 | 0.333 |
-| resnet-cvpr-2col | 6 | **0.146** | 0.132 | 0.800 |
+| paper | pages | macro F1 @0.5 | @0.75 | reading order | near misses |
+|---|---|---|---|---|---|
+| attention-is-all-you-need | 6 | **0.249** | 0.090 | 0.278 | 25 |
+| neural-odes-mathheavy | 6 | **0.116** | 0.041 | 0.333 | 22 |
+| resnet-cvpr-2col | 6 | **0.174** | 0.157 | 0.967 | 20 |
+
+*(First measured at 0.223 / 0.077 / 0.146 with reading order 0.167 / 0.333 / 0.800. Front-matter
+typing, below, is the difference.)*
+
+**A quarter of the gold is found in the right place and boxed to a different convention.** 67 of
+249 gold regions have a same-type prediction at IoU 0.25–0.5 — detected, but missing the bar on
+shape. `attention`'s title is the clearest case: gold drew it 31 pt tall, the parser boxes it
+16 pt from the font's typographic band, IoU **0.474**. The §4.1 threshold stays at 0.5 — moving it
+after seeing results is what the decision rule was written in advance to prevent — but the split
+says which failures need detecting and which need reconciling.
 
 Docling has not been scored on this gold — `DoclingAdapter` returns capability counts, not
 per-region geometry (issue open, §7). **So the ratio the decision rule asks for still cannot be
@@ -71,17 +81,20 @@ links) and **vector-figure recall** (no `is_vector` flag). The annotator tool di
 either. That is a tool defect, recorded, and it costs PaperTree the one metric — vector figures —
 where it was expected to look good.
 
-**Where the F1 actually goes.** The macro-average is over gold types, and on `attention` **seven
-of fifteen gold types are never emitted by the parser at all**: `title`, `author`, `affiliation`,
-`abstract`, `footnote`, `citation`, `inline_equation`. Seven structural zeros are half the
-average. The rest is over-segmentation: 13 gold paragraphs against **107 predicted**, 17 gold
-equations against **89**. Precision 0.03–0.31 with recall 0.23–0.55 is the signature of a parser
-cutting real regions into pieces, not one that cannot find them — which the 94–100 % geometry
-overlap confirms independently.
+**Where the F1 actually goes.** The macro-average is over gold types, and the first scored run
+found **seven of fifteen gold types on `attention` were never emitted by the parser at all**.
+Four of those — `title`, `author`, `affiliation`, `abstract` — are now typed (`frontmatter.py`),
+which is what moved the numbers above and took ResNet's reading order from 0.800 to 0.967. Three
+remain structurally absent: `footnote`, `citation`, `inline_equation`.
 
-Neither is a tuning problem. They are two missing capabilities (typing front matter; grouping at
-region rather than fragment granularity), and both are Epic-1 scope that this epic did not
-complete.
+The rest is over-segmentation: 13 gold paragraphs against **107 predicted**, 17 gold equations
+against **89** with zero matches. Precision 0.03–0.31 with recall 0.23–0.55 is the signature of a
+parser cutting real regions into pieces, not one that cannot find them — which the 94–100 %
+geometry overlap confirms independently.
+
+Neither is a tuning problem. They are missing capabilities — typing the remaining three types,
+and grouping at region rather than fragment granularity — and both are Epic-1 scope that this
+epic did not complete.
 
 **So: zero-ML does not ship as default on this evidence**, and the conclusion is now supported by
 both halves rather than one. 12× against a 20× bar, and an absolute F1 that would need to roughly
@@ -141,11 +154,14 @@ because they are the largest, and because neither was visible from the capabilit
 parser that emits 929 blocks with 929 bboxes and 929 stable ids looks healthy until something
 asks whether those boxes have the shape of the regions on the page.
 
-- **Seven gold types are never emitted at all.** `title`, `author`, `affiliation`, `abstract`,
-  `footnote`, `citation`, `inline_equation` — every one scores a structural 0.00, and on
-  `attention` that is seven of fifteen gold types, i.e. roughly half the macro-average. `authors`
-  in `Paper.metadata` is `[]` on every paper for the same root cause: nothing types an author
-  block, so `metadata.py` has nothing to cite. This is a missing capability, not a threshold.
+- **Three gold types are still never emitted at all**: `footnote`, `citation`,
+  `inline_equation`. Each scores a structural 0.00 and a macro-average weights a type the parser
+  has never heard of exactly as heavily as one it gets right. There were seven; `frontmatter.py`
+  closed four of them (`title`, `author`, `affiliation`, `abstract`), which also fixed
+  `Paper.metadata.authors == []` — never a `metadata.py` bug, but rule 6b having no `author`
+  block to cite. `footnote` is the odd one: `_block_type` *does* emit it when the flow classifier
+  says `footnote`, and on `attention` that classifier never fires — so this one is a flow bug,
+  not a missing type.
 - **Paragraphs are cut into fragments.** 13 gold paragraphs against **107** predicted on
   `attention`; 26 against **153** on `neural-odes`. Precision 0.03–0.31 at recall 0.23–0.55 is the
   signature of over-segmentation, and geometry overlap of 94–100 % rules out the alternative
