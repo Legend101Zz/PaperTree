@@ -1,11 +1,14 @@
 # EPIC 1 — Ingest & Document Intelligence: result
 
-**Status: INCOMPLETE. 5 of 10 acceptance tests met.** Branch `epic-1-ingest`, 36 commits,
-`63be37d..e071add`. `research/build/EPIC-01-ingest.md` is **unedited** — no acceptance criterion
+**Status: INCOMPLETE. 5 of 10 acceptance tests met.** Branch `epic-1-ingest`, 48 commits,
+`63be37d..3db8ad1`. `research/build/EPIC-01-ingest.md` is **unedited** — no acceptance criterion
 was weakened, and no test file claims a criterion it does not meet.
 
 Every number below was measured on this machine at `pymupdf 1.28.0` / `docling 2.117.0` against
 the 8-paper, 195-page corpus. Nothing is quoted from a doc without being re-run.
+
+**Gold-based numbers arrived on 2026-08-01** and are marked as such. Reproduce them with
+`uv run python -m papertree_evaluation score`.
 
 ---
 
@@ -16,7 +19,17 @@ the 8-paper, 195-page corpus. Nothing is quoted from a doc without being re-run.
 > zero-ML ships as default. Otherwise a small local layout model becomes default and Docling
 > stays opt-in.
 
-### Verdict: **the rule is not satisfied, and it is not fully evaluable.**
+### Verdict: **the rule is not satisfied.**
+
+Both halves now fail. The speed half fails at 12× against a 20× bar; the accuracy half is
+measured on human gold for the first time and comes in at macro F1 **0.08–0.22**. The
+*comparison* to Docling is still not formable — the Docling adapter reports counts, not geometry
+— but the deterministic path's absolute number is low enough that the ratio is no longer the
+interesting question.
+
+*This section was rewritten on 2026-08-01, when gold arrived. What it said before — "not fully
+evaluable", resting on the speed half alone — is preserved in git history rather than deleted,
+because a prediction made before the measurement is worth being able to check.*
 
 **The speed half is measured and it FAILS.** Median over the 8 papers both parsed:
 
@@ -34,19 +47,45 @@ and the deterministic path is **288 ms/page, not 134**, because it now also dete
 renders 130+ crops per paper and runs the full semantic validator. Both halves of the ratio
 moved toward each other.
 
-**The F1 half cannot be computed at all.** `research/benchmarks/README.md` §7: *"Gold
-annotations: **not started** — the critical path item; ~60 expert-hours"*, and *"No parser
-selection is authorised until Tier B gold exists and rows 1–5 have been run."* The metrics are
-implemented and tested (§4 below); there is nothing to run them against.
+**The F1 half is now measured, on human gold, and it is bad.**
 
-I did not manufacture the gold. An agent annotating the corpus with knowledge of its own
-parser's output, or treating Docling's output as gold, produces exactly the number the rule was
-written in advance to prevent.
+Gold exists as of 2026-08-01: 18 pages, 249 regions, hand-drawn by one annotator over three
+papers (`research/benchmarks/gold/`). That is **15 % of README §1.2's Tier B**, single-annotator,
+with no inter-annotator agreement figure — so it measures without authorising, and every number
+below carries that n.
 
-**So: zero-ML does not ship as default on this evidence.** The honest reading is that the epic's
-own fallback applies — Docling stays opt-in, and the question of a small local layout model is
-open — but that conclusion rests on the speed half alone and should be revisited once gold
-exists, because the capability table below is not a bad result.
+| paper | pages | macro F1 @0.5 | @0.75 | reading order |
+|---|---|---|---|---|
+| attention-is-all-you-need | 6 | **0.223** | 0.090 | 0.167 |
+| neural-odes-mathheavy | 6 | **0.077** | 0.001 | 0.333 |
+| resnet-cvpr-2col | 6 | **0.146** | 0.132 | 0.800 |
+
+Docling has not been scored on this gold — `DoclingAdapter` returns capability counts, not
+per-region geometry (issue open, §7). **So the ratio the decision rule asks for still cannot be
+formed.** What has changed is that the deterministic path's own F1 is no longer a question mark:
+it is 0.08–0.22, and no plausible Docling number makes 85 % of it a passing grade.
+
+Two of §4.1's four metrics remain not evaluable, and are reported as such rather than as zero,
+because a zero is a claim about the parser: **caption association** (gold carries no `parent`
+links) and **vector-figure recall** (no `is_vector` flag). The annotator tool did not collect
+either. That is a tool defect, recorded, and it costs PaperTree the one metric — vector figures —
+where it was expected to look good.
+
+**Where the F1 actually goes.** The macro-average is over gold types, and on `attention` **seven
+of fifteen gold types are never emitted by the parser at all**: `title`, `author`, `affiliation`,
+`abstract`, `footnote`, `citation`, `inline_equation`. Seven structural zeros are half the
+average. The rest is over-segmentation: 13 gold paragraphs against **107 predicted**, 17 gold
+equations against **89**. Precision 0.03–0.31 with recall 0.23–0.55 is the signature of a parser
+cutting real regions into pieces, not one that cannot find them — which the 94–100 % geometry
+overlap confirms independently.
+
+Neither is a tuning problem. They are two missing capabilities (typing front matter; grouping at
+region rather than fragment granularity), and both are Epic-1 scope that this epic did not
+complete.
+
+**So: zero-ML does not ship as default on this evidence**, and the conclusion is now supported by
+both halves rather than one. 12× against a 20× bar, and an absolute F1 that would need to roughly
+quadruple before the ratio question is even interesting.
 
 ### Capability, measured (findings.md H2's columns)
 
@@ -87,16 +126,39 @@ Three things in that table are worth stating plainly:
 | `worker/robustness.spec` | **MET** | 8/8 papers parse and validate; 0 crashes, 0 timeouts, 0 empty outputs |
 | `worker/perf.spec` | **MET** | p50 305 ms/page, p95 568 ms/page against a 1500 ms bar |
 | `ingest/source-authenticity.spec` | **MET** | every line of every non-table block traced to the page's glyph stream; found 2 real bugs while being written |
-| `eval/ptub.spec` | **PARTIAL** | harness + metrics + annotation tool done, 16 tests; **3 adapters, not 4** — rows 1/2 are deleted code |
-| `worker/figures.spec` | **PARTIAL** | ResNet ≥5 ✅ (9, all vector); `is_vector` correct ✅; ≥80 % captioned ❌ (58 % corpus-wide) |
-| `worker/equations.spec` | **PARTIAL** | prose never classified as an equation ✅; ≥80 % of gold ❌ (no gold); every equation retains its crop ✅ |
-| `worker/reading-order.spec` | **NOT MET** | needs gold for the ≥0.90 pairwise figure. Cross-column interleaving is reduced, not eliminated |
+| `eval/ptub.spec` | **PARTIAL** | harness + metrics + annotation tool + scorer, 63 tests; gold exists (18 pp); **3 adapters, not 4** and Docling returns counts not geometry, so no cross-parser F1 |
+| `worker/figures.spec` | **PARTIAL** | ResNet ≥5 ✅ (9, all vector); `is_vector` correct ✅; ≥80 % captioned ❌ (58 % corpus-wide). Gold figure F1 0.67 on `attention`, **0.00 on the other two**; vector-figure recall still not evaluable — gold has no `is_vector` |
+| `worker/equations.spec` | **NOT MET** | prose never classified as an equation ✅; every equation retains its crop ✅; **≥80 % of gold ❌ — measured 0 of 17 at IoU 0.5**, 89 predicted regions against 17 gold |
+| `worker/reading-order.spec` | **NOT MET** | **measured: 0.167 / 0.333 / 0.800 pairwise against a ≥0.90 bar.** The two-column paper is much the best of the three, so the ordering logic is not the weak part — the regions being ordered are |
 | `worker/hierarchy.spec` | **NOT MET** | number/title joining and furniture stripping work; outline size improved 3–6× but is still outside ±20 % — now under-detecting on ResNet and over-detecting on a3c/gpt3 |
 
 ---
 
 ## 3. What is wrong, stated without rounding up
 
+Gold turned the first three of these from suspicions into measurements. They are listed first
+because they are the largest, and because neither was visible from the capability counts — a
+parser that emits 929 blocks with 929 bboxes and 929 stable ids looks healthy until something
+asks whether those boxes have the shape of the regions on the page.
+
+- **Seven gold types are never emitted at all.** `title`, `author`, `affiliation`, `abstract`,
+  `footnote`, `citation`, `inline_equation` — every one scores a structural 0.00, and on
+  `attention` that is seven of fifteen gold types, i.e. roughly half the macro-average. `authors`
+  in `Paper.metadata` is `[]` on every paper for the same root cause: nothing types an author
+  block, so `metadata.py` has nothing to cite. This is a missing capability, not a threshold.
+- **Paragraphs are cut into fragments.** 13 gold paragraphs against **107** predicted on
+  `attention`; 26 against **153** on `neural-odes`. Precision 0.03–0.31 at recall 0.23–0.55 is the
+  signature of over-segmentation, and geometry overlap of 94–100 % rules out the alternative
+  explanation that the parser is looking in the wrong place. The last line of a paragraph
+  repeatedly becomes its own block.
+- **Equations fragment worse: 17 gold, 89 predicted, 0 matched.** Not one predicted equation box
+  reaches IoU 0.5 against a gold one. The over-detection recorded further down (13 regions vs 5
+  hand-labelled) understated this because it counted regions rather than comparing extents.
+- **Two headline metrics could not be computed and it is the tool's fault.** Caption association
+  needs `parent` links and vector-figure recall needs `is_vector`; the annotator collected
+  neither. Vector figures are the one dimension where PaperTree was expected to beat every
+  alternative — findings.md B3 measured both old extractors at 0 on ResNet — and that claim
+  remains unverified. `annotate.py` must collect both before the next pass.
 - **Hierarchy is much better and still wrong, now in BOTH directions.** Detecting headings after
   equations and tables have claimed their lines (issue #50's ordering, applied) moved ResNet
   31 → **5**, BERT 56 → **12** (real count ~12, essentially correct) and gpt3 324 → **192**.
