@@ -259,6 +259,7 @@ def _assemble(
         # detection nor hierarchy sees them.
         table_regions = _dedupe_tables(detect_tables(page, column_width))
         table_lines: set[int] = set()
+        float_blocks: list[tuple[Any, AssembledBlock]] = []
         for region in table_regions:
             table_block = builder.add(
                 AssembledBlock(
@@ -275,6 +276,7 @@ def _assemble(
                     payload={"grid": {"rows": len(region.rows), "cols": region.column_count}},
                 )
             )
+            float_blocks.append((region, table_block))
             grid_cells: list[tuple[int, int, AssembledBlock]] = []
             for row_index, row in enumerate(region.rows):
                 row_block = builder.add(
@@ -305,8 +307,20 @@ def _assemble(
             pending_grids.append((table_block, grid_cells))
             for line in page.lines:
                 centre_y = (line.band[1] + line.band[3]) / 2
-                if region.bbox[1] - 2 <= centre_y <= region.bbox[3] + 2:
-                    table_lines.add(id(line))
+                if not (region.bbox[1] - 2 <= centre_y <= region.bbox[3] + 2):
+                    continue
+                # A CAPTION IS NEVER A TABLE CELL, even when it sits inside the rule group's
+                # vertical span - and on this corpus it routinely does, because a table's
+                # caption is set above its toprule and inside the same float.
+                #
+                # Measured on ResNet: 10 blocks open with a `Figure N` / `Table N` marker and
+                # only 4 survived to be typed `caption`. The other 6 - exactly its table count -
+                # were swallowed here and re-emitted as cells, which capped figures.spec's
+                # ">=80% captioned" clause at a level no linker could reach. The captions were
+                # never missing; they were being consumed.
+                if is_caption_line(line.text.strip()) is not None:
+                    continue
+                table_lines.add(id(line))
 
         body_lines = [
             line
@@ -396,6 +410,9 @@ def _assemble(
         #
         # Tables win because they were found by a STRONGER signal - a booktabs rule group is
         # unambiguous where an ink cluster is a heuristic.
+        # Rule 22: `caption_of.to` may point at a figure, table, diagram or plot. TABLES ARE
+        # OFFERED AS LINK TARGETS TOO - roughly half of this corpus's captions are "Table N",
+        # and with only figures on offer they had nothing legal to bind to.
         figure_blocks: list[tuple[Any, AssembledBlock]] = []
         # Deduplicated by QUANTISED TOP-LEFT ANCHOR, because that is what the id hashes. A
         # figure carries no text, so two regions sharing a 1 pt-quantised (x0, y0) produce the
@@ -432,7 +449,7 @@ def _assemble(
         # Caption -> float linking, by NUMBERING first and proximity second. Proximity alone
         # attaches a caption to whichever float is nearest, which is wrong the moment two floats
         # share a page.
-        unlinked = list(figure_blocks)
+        unlinked = float_blocks + figure_blocks
         for layout_block in page_layout.blocks:
             if id(layout_block) not in emitted or not unlinked:
                 continue

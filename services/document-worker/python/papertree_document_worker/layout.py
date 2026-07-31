@@ -275,9 +275,24 @@ def _same_block(previous: Line, current: Line, line_gap: float) -> bool:
 
 
 def _group(lines: list[Line], line_gap: float) -> list[list[Line]]:
+    """Group lines into blocks, STARTING A NEW BLOCK at every caption marker.
+
+    A caption line must open its own block, because `is_caption_line` needs the `Figure N` /
+    `Table 1` marker at position 0 and rule 22 needs `caption_of.from` to be a `caption` block.
+
+    Measured before this: ResNet produced **4 caption blocks on a paper with ~12 captions**,
+    because a caption that happened to sit within the paragraph pitch of the text above it was
+    absorbed into that paragraph and its marker stopped being at position 0. That capped
+    `figures.spec`'s ">=80% captioned" clause at a level no amount of linker tuning could reach -
+    the captions were not missing, they were buried.
+
+    A caption also ENDS at the next line that starts a new region, which `_same_block` already
+    handles; only the opening needed forcing.
+    """
     groups: list[list[Line]] = []
     for line in lines:
-        if groups and _same_block(groups[-1][-1], line, line_gap):
+        starts_caption = _CAPTION_START.match(line.text.strip()) is not None
+        if groups and not starts_caption and _same_block(groups[-1][-1], line, line_gap):
             groups[-1].append(line)
         else:
             groups.append([line])
