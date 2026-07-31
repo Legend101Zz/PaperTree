@@ -67,6 +67,7 @@ from papertree_document_ir.identity import (
 
 from papertree_document_worker.classify import DocumentProfile
 from papertree_document_worker.layout import FlowKind
+from papertree_document_worker.metadata import extract_metadata
 
 __all__ = [
     "AssembledBlock",
@@ -295,17 +296,9 @@ class PaperBuilder:
             "status": status,
             "partial_reason": partial_reason,
             # Every one of the seven keys is required and `authors` must be `[]` rather than
-            # null. An all-null Metadata validates clean; inventing values would trip rule 6b,
-            # which requires each to be a SUBSTRING of its cited block's normalised text.
-            "metadata": {
-                "title": None,
-                "authors": [],
-                "abstract": None,
-                "doi": None,
-                "arxiv_id": None,
-                "venue": None,
-                "year": None,
-            },
+            # null. Values are extracted from the document's OWN blocks and each cites the block
+            # it came from verbatim - rule 6b makes anything else an ERROR.
+            "metadata": extract_metadata(blocks),
             "pages": pages,
             "blocks": blocks,
             "relations": self._emit_relations(by_id),
