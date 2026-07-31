@@ -139,6 +139,7 @@ def build_annotator(tasks: list[AnnotationTask], destination: Path) -> Path:
  .bar {{ position: sticky; top: 0; background: #fff; padding: .75rem; border: 1px solid #ddd;
          z-index: 10; margin-bottom: 1rem; }}
  .hint {{ font-size: 12px; color: #64748b; margin-left: .35rem; }}
+ .extra {{ margin-left: .75rem; padding-left: .75rem; border-left: 1px solid #e3e3e3; }}
  details.help {{ background: #fff; border: 1px solid #ddd; padding: .75rem 1rem;
                  margin-bottom: 1rem; }}
  details.help summary {{ cursor: pointer; font-weight: 600; }}
@@ -235,6 +236,12 @@ Get the flow right even if you are unsure of the type.</div>
   <button id="undo">undo</button>
   <button id="download">download gold JSON</button>
   <span id="count">0 regions</span>
+  <!-- The two fields whose absence made two of §4.1's four metrics unmeasurable on the first
+       pass. Both are cheap to collect while drawing and impossible to recover afterwards. -->
+  <label id="vectorwrap" class="extra"><input type="checkbox" id="isvector">
+    vector figure <span class="hint">drawn, not a photo</span></label>
+  <label id="parentwrap" class="extra">describes
+    <select id="parent"><option value="">— pick the figure/table —</option></select></label>
 </div>
 
 {pages}
@@ -272,12 +279,41 @@ function syncFlow() {{
     ? 'overridden — reset by changing type' : 'follows the type';
   flowHint.style.color = flowOverridden ? '#b45309' : '#64748b';
 }}
-typeSelect.addEventListener('change', () => {{ flowOverridden = false; syncFlow(); }});
+// `is_vector` only means anything on a figure, and `parent` only on a caption. Showing them
+// unconditionally invites the same mistake the flow select made: a control that is always
+// present is a control that carries the previous region's answer into this one.
+const vectorWrap = document.getElementById('vectorwrap');
+const parentWrap = document.getElementById('parentwrap');
+const parentSelect = document.getElementById('parent');
+
+function syncExtras() {{
+  const kind = typeSelect.value;
+  vectorWrap.style.display = kind === 'figure' ? '' : 'none';
+  parentWrap.style.display = kind === 'caption' ? '' : 'none';
+  if (kind !== 'figure') document.getElementById('isvector').checked = false;
+  if (kind !== 'caption') parentSelect.value = '';
+}}
+
+function refreshParents(paper, page) {{
+  // Only floats ON THIS PAGE, because a caption never describes a float on another one.
+  const floats = regions.filter(r => r.paper === paper && r.page === page
+    && ['figure', 'table', 'algorithm'].includes(r.type));
+  const chosen = parentSelect.value;
+  parentSelect.innerHTML = '<option value="">— pick the figure/table —</option>'
+    + floats.map(r => '<option value="' + r.gold_id + '">' + r.gold_id + ' ' + r.type
+                      + '</option>').join('');
+  parentSelect.value = chosen;
+}}
+
+typeSelect.addEventListener('change', () => {{
+  flowOverridden = false; syncFlow(); syncExtras();
+}});
 flowSelect.addEventListener('change', () => {{
   flowOverridden = flowSelect.value !== CANONICAL_FLOW[typeSelect.value];
   syncFlow();
 }});
 syncFlow();
+syncExtras();
 
 function toPdf(box, img) {{
   // The image may be displayed smaller than its natural size; normalise through naturalWidth
@@ -327,12 +363,23 @@ document.querySelectorAll('.canvas').forEach(canvas => {{
       // §2: reading_order ranks ONLY the body flow. Captions, footnotes and page furniture get
       // null and their own flow, so a parser is not punished for correctly EXCLUDING a footnote.
       reading_order: flow === 'body' ? bodyCount : null,
-      parent: null, text: '', continues_from: null, continues_to: null
+      // THE TWO FIELDS THE FIRST PASS COULD NOT SUPPLY.
+      //
+      // `is_vector` carries §4.1's isolated vector-figure recall - the metric that exists
+      // because findings.md B3 measured BOTH old extractors finding 0 of ResNet's figures, all
+      // of which are vector ink. `parent` carries caption association. Neither can be recovered
+      // after the fact: inferring a caption's float from proximity would score the parser's own
+      // caption heuristic against a copy of itself, and no amount of re-reading the PDF tells
+      // you whether the annotator considered a figure to be drawn or photographed.
+      is_vector: type === 'figure' ? document.getElementById('isvector').checked : null,
+      parent: document.getElementById('parent').value || null,
+      text: '', continues_from: null, continues_to: null
     }};
     regions.push(region);
     live.innerHTML = '<b>' + region.gold_id + ' ' + type + '</b>';
     live._region = region;
     document.getElementById('count').textContent = regions.length + ' regions';
+    refreshParents(region.paper, region.page);
     start = null; live = null;
   }});
 }});
