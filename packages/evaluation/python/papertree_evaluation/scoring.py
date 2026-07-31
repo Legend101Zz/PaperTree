@@ -47,6 +47,7 @@ from typing import Any
 from papertree_evaluation.metrics import (
     IOU_MATCH,
     IOU_STRICT,
+    iou,
     match_regions,
     reading_order_accuracy,
 )
@@ -95,6 +96,10 @@ class PaperScore:
     by_type_strict: dict[str, TypeScore] = field(default_factory=dict)
     #: Pairwise reading-order accuracy per page, in page order.
     reading_order: list[float] = field(default_factory=list)
+    #: Gold regions with a SAME-TYPE prediction that overlaps well but misses the bar. Counted
+    #: per type, because "not detected" and "detected, boxed to a different convention" are
+    #: different failures and the headline F1 cannot tell them apart.
+    near_misses: dict[str, int] = field(default_factory=dict)
     #: Types gold uses that the parser never emits, and vice versa.
     gold_only_types: set[str] = field(default_factory=set)
     predicted_only_types: set[str] = field(default_factory=set)
@@ -209,6 +214,7 @@ def score_paper(
         gold = [r for r in page["regions"] if r.get("bbox")]
 
         _pool(score.by_type, predicted, gold, IOU_MATCH)
+        _count_near_misses(score.near_misses, predicted, gold)
         _pool(score.by_type_strict, predicted, gold, IOU_STRICT)
         score.reading_order.append(reading_order_accuracy(predicted, gold))
 
@@ -230,6 +236,34 @@ def score_paper(
             "on this pass"
         )
     return score
+
+
+#: A gold region overlapping a same-type prediction by at least this much, but less than
+#: `IOU_MATCH`, is in the right PLACE and the wrong SHAPE.
+IOU_NEAR = 0.25
+
+
+def _count_near_misses(
+    into: dict[str, int], predicted: list[dict[str, Any]], gold: list[dict[str, Any]]
+) -> None:
+    """Gold regions found but boxed differently, per type.
+
+    Reported because the first scored run made the distinction matter. `attention`'s title was
+    detected correctly and scored 0.00: gold drew it 31 pt tall, the parser boxes it 16 pt tall
+    from the font's own typographic band, and the IoU came to **0.474** against a 0.5 bar. That
+    is not a detection failure and reporting it as one would send the next person to fix the
+    wrong thing.
+
+    This does NOT change the headline. §4.1 fixes the threshold at IoU >= 0.5 and it stays there;
+    moving a bar after seeing the results is how a benchmark stops meaning anything. This is a
+    separate column that says which side of the miss to investigate.
+    """
+    for region in gold:
+        kind = str(region["type"])
+        same_type = [p for p in predicted if p["type"] == kind]
+        best = max((iou(p["bbox"], region["bbox"]) for p in same_type), default=0.0)
+        if IOU_NEAR <= best < IOU_MATCH:
+            into[kind] = into.get(kind, 0) + 1
 
 
 def _pool(
@@ -261,19 +295,27 @@ def render_report(scores: Sequence[PaperScore]) -> str:
         lines.append(f"\n{score.adapter}  ·  {score.paper}  ({score.pages} pages)")
         lines.append(
             f"  {'type':18s} {'gold':>5s} {'pred':>5s} {'hit':>5s} {'P':>6s} {'R':>6s} {'F1':>6s}"
+            f" {'near':>5s}"
         )
         for kind, bucket in sorted(score.by_type.items(), key=lambda kv: -kv[1].gold):
             if not bucket.gold and not bucket.predicted:
                 continue
             lines.append(
                 f"  {kind:18s} {bucket.gold:5d} {bucket.predicted:5d} {bucket.matched:5d} "
-                f"{bucket.precision:6.2f} {bucket.recall:6.2f} {bucket.f1:6.2f}"
+                f"{bucket.precision:6.2f} {bucket.recall:6.2f} {bucket.f1:6.2f} "
+                f"{score.near_misses.get(kind, 0):5d}"
             )
         lines.append(
             f"  {'MACRO F1 @0.5':18s} {score.macro_f1:>34.3f}"
             f"    (strict @0.75: {score.macro_f1_strict:.3f})"
         )
         lines.append(f"  {'reading order':18s} {score.mean_reading_order:>34.3f}")
+        near = sum(score.near_misses.values())
+        if near:
+            lines.append(
+                f"  {'near misses':18s} {near:>34d}"
+                f"    (right place, IoU {IOU_NEAR}-{IOU_MATCH} - a boxing convention gap)"
+            )
         if score.gold_only_types:
             lines.append(f"  gold-only types      : {', '.join(sorted(score.gold_only_types))}")
         if score.predicted_only_types:

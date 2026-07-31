@@ -186,3 +186,44 @@ def test_render_report_names_the_unevaluable_metrics() -> None:
     report = render_report([score_paper("a", "p", {"blocks": []}, gold)])
     assert "NOT EVALUABLE" in report
     assert "MACRO F1" in report
+
+
+class TestNearMisses:
+    """Right place, wrong shape — the distinction the headline F1 cannot express."""
+
+    def test_a_near_miss_is_counted_not_matched(self) -> None:
+        """`attention`'s title, to scale: gold drew it 31 pt tall, the parser boxes 16 pt.
+
+        IoU came to 0.474 against a 0.5 bar, so it scored as a total miss while being detected
+        correctly. Reporting that as a detection failure sends the next person to fix the wrong
+        thing.
+        """
+        document = {"blocks": [_block("t", "title", [211, 150, 400, 166], doc_order=0)]}
+        gold = [_page(_gold("g0", "title", [208, 138, 408, 169], order=0))]
+        score = score_paper("a", "p", document, gold)
+        assert score.by_type["title"].matched == 0
+        assert score.near_misses["title"] == 1
+
+    def test_a_real_match_is_not_a_near_miss(self) -> None:
+        document = {"blocks": [_block("t", "title", [208, 138, 408, 169], doc_order=0)]}
+        gold = [_page(_gold("g0", "title", [208, 138, 408, 169], order=0))]
+        score = score_paper("a", "p", document, gold)
+        assert score.by_type["title"].matched == 1
+        assert score.near_misses == {}
+
+    def test_a_genuine_miss_is_not_a_near_miss(self) -> None:
+        document = {"blocks": [_block("t", "title", [0, 700, 50, 720], doc_order=0)]}
+        gold = [_page(_gold("g0", "title", [208, 138, 408, 169], order=0))]
+        assert score_paper("a", "p", document, gold).near_misses == {}
+
+    def test_the_wrong_type_in_the_right_place_is_not_a_near_miss(self) -> None:
+        """Near-miss is about BOXING, so the type still has to agree."""
+        document = {"blocks": [_block("t", "paragraph", [211, 150, 400, 166], doc_order=0)]}
+        gold = [_page(_gold("g0", "title", [208, 138, 408, 169], order=0))]
+        assert score_paper("a", "p", document, gold).near_misses == {}
+
+    def test_the_headline_threshold_is_untouched(self) -> None:
+        """§4.1 fixes IoU >= 0.5. Moving a bar after seeing results is how a benchmark dies."""
+        from papertree_evaluation.metrics import IOU_MATCH
+
+        assert IOU_MATCH == 0.5
