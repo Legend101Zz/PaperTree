@@ -257,3 +257,45 @@ class TestEquationBlockMerge:
             [self._region([a]), self._region([b])],
         )
         assert merged == [straddler]
+
+
+class TestFootnoteFlow:
+    """A footnote is below the body in a smaller face — which the old test claimed and did not do.
+
+    It required `band[3] >= FOOTER_BAND * height`, the bottom 6 % of the page. Real footnotes are
+    nowhere near there: `attention` p0 sets its contribution note at y 598-709 on a 792 pt page.
+    The rule never fired, and every gold footnote scored against zero predicted.
+    """
+
+    HEIGHT = 792.0
+
+    @staticmethod
+    def _flow(y0: float, size: float, body_size: float, body_bottom: float) -> str:
+        from types import SimpleNamespace
+
+        from papertree_document_worker.layout import _flow_for
+
+        line = Line(
+            bbox=[108.0, y0, 400.0, y0 + 8.0],
+            direction="ltr",
+            spans=(_span("a footnote about something", 108.0, 400.0, y0, y0 + 8.0, size),),
+        )
+        # `_flow_for` reads only `page.frame.height`. A stub says that, where a fabricated
+        # `PageContent` would say "this test needs a page" and then need six more fields.
+        page = SimpleNamespace(frame=SimpleNamespace(height=792.0))
+        return _flow_for(line, page, set(), body_size, body_bottom)  # type: ignore[arg-type]
+
+    def test_a_footnote_far_above_the_footer_band_is_found(self) -> None:
+        """`attention` p0: y 598 on a 792 pt page, body ends at 576."""
+        assert self._flow(598.0, 8.0, 10.0, 576.0) == "footnote"
+
+    def test_a_two_column_footnote_is_found_though_the_body_runs_lower(self) -> None:
+        """`resnet` p0: the note is at y 694 while the OTHER column's text reaches 718."""
+        assert self._flow(694.0, 8.0, 10.0, 718.0) == "footnote"
+
+    def test_body_sized_text_low_on_the_page_is_not_a_footnote(self) -> None:
+        assert self._flow(700.0, 10.0, 10.0, 600.0) == "body"
+
+    def test_small_text_high_on_the_page_is_not_a_footnote(self) -> None:
+        """A superscript or a small caption mid-page must not qualify."""
+        assert self._flow(200.0, 8.0, 10.0, 100.0) == "body"

@@ -87,6 +87,17 @@ FOOTER_BAND = 0.94
 #: A header/footer candidate must repeat on at least this share of pages to be furniture. One
 #: page's top line is a heading; the same line on 8 pages is a running head.
 RUNNING_HEAD_SHARE = 0.35
+#: ...and a footnote must also be in the lower part of the page. Without this a small-face
+#: caption or a sub/superscript run anywhere below the last full-size line would qualify - a
+#: page whose body ends early (a figure page) has almost everything 'below the body'.
+FOOTNOTE_MIN_PAGE_SHARE = 0.55
+#: ...or it may sit in this bottom band, which counts as a footnote WITHOUT being below the
+#: body. Needed for two-column pages: `resnet-cvpr-2col` sets its footnotes at page-share
+#: 0.86-0.88 in the left column while the RIGHT column's body text runs lower still, so
+#: "below the last body-size line" is false for a perfectly ordinary footnote. Columns are not
+#: known here - flows are assigned before `detect_columns` runs on the body - so the page band
+#: stands in for a per-column measurement.
+FOOTNOTE_BAND = 0.82
 
 _CAPTION_START = re.compile(r"^\s*(?:figure|fig\.?|table|algorithm|listing)\s*[0-9IVXivx]+[.:)\s]")
 _PAGE_NUMBER = re.compile(r"^\s*[-–—]?\s*(?:[0-9]{1,4}|[ivxlcIVXLC]{1,7})\s*[-–—]?\s*$")
@@ -235,7 +246,9 @@ def _running_heads(pages: list[PageContent]) -> set[str]:
     return {key for key, count in counts.items() if count >= floor}
 
 
-def _flow_for(line: Line, page: PageContent, heads: set[str], body_top: float) -> FlowKind:
+def _flow_for(
+    line: Line, page: PageContent, heads: set[str], body_top: float, body_bottom: float
+) -> FlowKind:
     band = line.band
     height = page.frame.height
     text = line.text.strip()
@@ -252,10 +265,21 @@ def _flow_for(line: Line, page: PageContent, heads: set[str], body_top: float) -
         return "header" if band[1] < height / 2 else "footer"
     if _CAPTION_START.match(text):
         return "caption"
-    # A footnote sits below the body's last line, in a smaller face. `body_top` is the page's
-    # dominant font size; the comparison is against THIS page rather than a constant, because
-    # a two-column paper's body is ~10 pt and a single-column one's is ~12 pt.
-    if band[3] >= FOOTER_BAND * height and line.spans and line.spans[0].size < body_top * 0.92:
+    # A footnote sits BELOW THE BODY'S LAST LINE in a smaller face - which is what this always
+    # said it tested and did not.
+    #
+    # The old test was `band[3] >= FOOTER_BAND * height`, i.e. the bottom 6 % of the page. Real
+    # footnotes are nowhere near there. `attention-is-all-you-need` p0 sets its contribution note
+    # and its affiliation footnotes at y 598-709 on a 792 pt page - below the abstract, far above
+    # the footer band - so the rule never fired and gold's 2 footnotes were scored against 0
+    # predicted. Same on the other two papers.
+    #
+    # `body_bottom` is the lowest point reached by text at body size on THIS page, so "below the
+    # body" is measured rather than assumed from a page fraction. Footnote-sized lines cannot
+    # contribute to it, being smaller than the body, so it cannot chase them down the page.
+    small = bool(line.spans) and line.spans[0].size < body_top * 0.92
+    below_body = band[1] >= body_bottom or band[1] >= FOOTNOTE_BAND * height
+    if small and below_body and band[1] >= FOOTNOTE_MIN_PAGE_SHARE * height:
         return "footnote"
     return "body"
 
@@ -418,6 +442,13 @@ def layout_page(page: PageContent, heads: set[str]) -> PageLayout:
 
     sizes = [s.size for line in lines for s in line.spans if s.size > 0]
     body_size = statistics.median(sizes) if sizes else 10.0
+    # The lowest point text at BODY SIZE reaches on this page - where "below the body" starts.
+    # Measured rather than taken as a page fraction, and footnote-sized lines cannot contribute
+    # to it (they are smaller than the body), so it cannot chase them down the page.
+    full_size = [
+        line.band[3] for line in lines if line.spans and line.spans[0].size >= body_size * 0.92
+    ]
+    body_bottom = max(full_size) if full_size else 0.0
     # The pitch that separates "next line of this paragraph" from "new paragraph". 1.6x the
     # dominant font size: single-spaced LaTeX body sets at ~1.2x, so this leaves headroom
     # without reaching the ~2x that separates paragraphs.
@@ -425,7 +456,7 @@ def layout_page(page: PageContent, heads: set[str]) -> PageLayout:
 
     by_flow: dict[FlowKind, list[Line]] = {}
     for line in lines:
-        by_flow.setdefault(_flow_for(line, page, heads, body_size), []).append(line)
+        by_flow.setdefault(_flow_for(line, page, heads, body_size, body_bottom), []).append(line)
 
     body = by_flow.get("body", [])
     columns = detect_columns(body, page.frame.width)
