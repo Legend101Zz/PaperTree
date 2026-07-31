@@ -32,8 +32,8 @@ from papertree_document_worker.crops import DEFAULT_SCALE, CropStore
 from papertree_document_worker.equations import detect_equation_regions
 from papertree_document_worker.figures import detect_figure_regions, is_caption_line
 from papertree_document_worker.hierarchy import build_sections, detect_headings
-from papertree_document_worker.layout import LayoutBlock, layout_document
 from papertree_document_worker.joining import find_continuations
+from papertree_document_worker.layout import LayoutBlock, layout_document
 from papertree_document_worker.pdf import SourceDocument
 from papertree_document_worker.tables import detect_tables
 from papertree_document_worker.text import build_block_text
