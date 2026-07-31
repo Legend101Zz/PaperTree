@@ -33,6 +33,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from papertree_evaluation.normalise import CANONICAL_FLOW
+
 __all__ = ["GOLD_TYPES", "AnnotationTask", "build_annotator", "stratified_pages"]
 
 #: §2's type vocabulary, "deliberately identical to PaperIR block types so gold data is directly
@@ -118,6 +120,10 @@ def build_annotator(tasks: list[AnnotationTask], destination: Path) -> Path:
     destination.parent.mkdir(parents=True, exist_ok=True)
     pages = "\n".join(_page_html(task) for task in tasks)
     options = "\n".join(f'<option value="{name}">{name}</option>' for name in GOLD_TYPES)
+    # The SAME table `normalise.py` applies server-side, shipped into the page so the tool and
+    # the normaliser cannot drift apart. Imported here rather than duplicated as a JS literal:
+    # two copies of this mapping is exactly how the flow field went wrong in the first place.
+    canonical_flow = json.dumps({name: CANONICAL_FLOW[name] for name in GOLD_TYPES})
 
     html = f"""<!doctype html>
 <meta charset="utf-8">
@@ -132,6 +138,7 @@ def build_annotator(tasks: list[AnnotationTask], destination: Path) -> Path:
            color: #fff; padding: 0 4px; white-space: nowrap; }}
  .bar {{ position: sticky; top: 0; background: #fff; padding: .75rem; border: 1px solid #ddd;
          z-index: 10; margin-bottom: 1rem; }}
+ .hint {{ font-size: 12px; color: #64748b; margin-left: .35rem; }}
  details.help {{ background: #fff; border: 1px solid #ddd; padding: .75rem 1rem;
                  margin-bottom: 1rem; }}
  details.help summary {{ cursor: pointer; font-weight: 600; }}
@@ -224,6 +231,7 @@ Get the flow right even if you are unsure of the type.</div>
       <option>header</option><option>footer</option><option>margin</option><option>float</option>
     </select>
   </label>
+  <span id="flowhint" class="hint">follows the type</span>
   <button id="undo">undo</button>
   <button id="download">download gold JSON</button>
   <span id="count">0 regions</span>
@@ -237,6 +245,39 @@ Get the flow right even if you are unsure of the type.</div>
 // produces gold that no parser can ever match, and nothing downstream would reveal why.
 const SCALE = {IMAGE_SCALE};
 const regions = [];
+
+// THE FLOW SELECT FOLLOWS THE TYPE SELECT.
+//
+// The first real annotation pass came back with 55 of 249 regions whose flow contradicted their
+// type - page numbers in the body flow, a run of thirteen figures on `caption`. The cause was
+// this pair of controls being INDEPENDENT and STICKY: pick a type, forget the flow, and the
+// region inherits whatever the previous one left behind. The annotator never sees the mismatch
+// because only the type is drawn on the box.
+//
+// So flow is now DERIVED, using the same table `normalise.py` applies server-side. It stays a
+// select rather than becoming a read-only field: `float` is a real choice for a figure that sits
+// outside the text column, and a deliberate override is worth keeping. Touching it just stops
+// the auto-follow until the type changes again, and the hint says which mode it is in.
+const CANONICAL_FLOW = {canonical_flow};
+let flowOverridden = false;
+
+const typeSelect = document.getElementById('type');
+const flowSelect = document.getElementById('flow');
+const flowHint = document.getElementById('flowhint');
+
+function syncFlow() {{
+  const canonical = CANONICAL_FLOW[typeSelect.value];
+  if (canonical && !flowOverridden) flowSelect.value = canonical;
+  flowHint.textContent = flowOverridden
+    ? 'overridden — reset by changing type' : 'follows the type';
+  flowHint.style.color = flowOverridden ? '#b45309' : '#64748b';
+}}
+typeSelect.addEventListener('change', () => {{ flowOverridden = false; syncFlow(); }});
+flowSelect.addEventListener('change', () => {{
+  flowOverridden = flowSelect.value !== CANONICAL_FLOW[typeSelect.value];
+  syncFlow();
+}});
+syncFlow();
 
 function toPdf(box, img) {{
   // The image may be displayed smaller than its natural size; normalise through naturalWidth
