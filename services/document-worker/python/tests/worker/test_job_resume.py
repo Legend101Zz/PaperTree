@@ -100,8 +100,8 @@ def test_enqueueing_the_same_source_twice_returns_one_job(wiring: dict) -> None:
 def test_a_completed_step_is_not_re_run_after_a_crash(wiring: dict) -> None:  # type: ignore[type-arg]
     """THE POINT OF THE JOB RUNNER, asserted by counting.
 
-    The handler counts each step body's invocations, and the `persist` step raises the first time - simulating a worker that dies after checkpointing the expensive
-    step but before finishing.
+    The handler counts each step body's invocations, and `persist` raises the first time -
+    a worker that dies after checkpointing the expensive step but before finishing.
 
     On retry the job must complete with the parse body having run **exactly once**. A runner
     without per-step checkpointing would re-parse, and the only visible difference would be time
