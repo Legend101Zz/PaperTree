@@ -322,9 +322,19 @@ class DoclingAdapter:
             "ok",
             seconds=float(reported.get("seconds", 0.0)),
             pages=int(reported.get("pages", 0)),
-            # Counts only: a full DoclingDocument is megabytes of JSON across a pipe, and the
-            # comparison is over capability columns.
-            document={"blocks": [None] * int(reported["counts"]["blocks"])},
+            # PaperIR-SHAPED REGIONS, not a placeholder list of the right length.
+            #
+            # This used to be `[None] * counts["blocks"]` with a comment saying a full
+            # DoclingDocument is megabytes across a pipe and the comparison is over capability
+            # columns. The first half is true; the second stopped being true the day gold
+            # existed. The decision rule asks for "85 % of Docling's F1", and a list of `None`
+            # cannot be scored against anything - so the RATIO the whole epic turns on was not
+            # computable even with gold in hand, and `EPIC-01-RESULT.md` had to say so.
+            #
+            # The bridge now emits `{type, page_index, bbox}` per region and nothing else. That
+            # is a few hundred kilobytes for a 12-page paper, and it is exactly what
+            # `scoring.score_paper` consumes.
+            document={"blocks": list(reported.get("blocks") or [])},
             counts=dict(reported["counts"]),
         )
 

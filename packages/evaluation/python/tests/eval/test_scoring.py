@@ -227,3 +227,32 @@ class TestNearMisses:
         from papertree_evaluation.metrics import IOU_MATCH
 
         assert IOU_MATCH == 0.5
+
+
+class TestDoclingCoordinateConversion:
+    """The conversion the bridge does, pinned here because getting it wrong is invisible.
+
+    Docling's `BoundingBox` carries a `coord_origin` that is TOPLEFT or BOTTOMLEFT depending on
+    the backend, and under BOTTOMLEFT its `t` is the LARGER number. Converting with the wrong
+    assumption yields boxes that are plausible, land on the wrong half of the page, and score
+    0.00 everywhere — indistinguishable from a parser that found nothing.
+    """
+
+    @staticmethod
+    def _convert(top: float, bottom: float, origin: str, height: float = 792.0) -> list[float]:
+        """The bridge's arithmetic, extracted. The bridge itself runs in a separate venv."""
+        if "BOTTOMLEFT" in origin:
+            top, bottom = height - top, height - bottom
+        if bottom < top:
+            top, bottom = bottom, top
+        return [top, bottom]
+
+    def test_topleft_passes_through(self) -> None:
+        assert self._convert(107.0, 120.0, "TOPLEFT") == [107.0, 120.0]
+
+    def test_bottomleft_is_flipped_about_the_page_height(self) -> None:
+        """ResNet's title: `t=685, b=672` from the bottom is `top=107, bottom=120` from the top."""
+        assert self._convert(685.0, 672.0, "COORDORIGIN.BOTTOMLEFT") == [107.0, 120.0]
+
+    def test_the_result_is_always_ordered(self) -> None:
+        assert self._convert(120.0, 107.0, "TOPLEFT") == [107.0, 120.0]

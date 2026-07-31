@@ -67,7 +67,7 @@ def _score(args: argparse.Namespace) -> int:
     """
     import json
 
-    from papertree_evaluation.adapters import DeterministicAdapter
+    from papertree_evaluation.adapters import DeterministicAdapter, DoclingAdapter
     from papertree_evaluation.normalise import normalise_gold
     from papertree_evaluation.scoring import render_report, sanity_check_overlap, score_paper
 
@@ -112,14 +112,34 @@ def _score(args: argparse.Namespace) -> int:
     print("\n" + "=" * 92)
     print(f"GOLD NORMALISED ({len(normalised.repairs)} repairs)")
     print("=" * 92)
-    print(
-        render_report(
-            [
-                score_paper("papertree-deterministic", p, documents[p], normalised.pages)
-                for p in papers
-            ]
-        )
-    )
+    ours = [
+        score_paper("papertree-deterministic", p, documents[p], normalised.pages) for p in papers
+    ]
+    print(render_report(ours))
+
+    # THE RATIO THE DECISION RULE ASKS FOR, when Docling is available to form it.
+    if args.with_docling:
+        docling = DoclingAdapter()
+        if not docling.available:
+            print("\ndocling: NOT RUN - probe venv absent. This is not a score of 0.")
+        else:
+            print("\n" + "=" * 92)
+            print("DOCLING, ON THE SAME NORMALISED GOLD")
+            print("=" * 92)
+            scored = []
+            for paper in papers:
+                outcome = docling.parse(str(corpus / f"{paper}.pdf"))
+                if outcome.status != "ok" or outcome.document is None:
+                    print(f"  {paper}: docling {outcome.status} - {outcome.error}")
+                    continue
+                print(f"  parsed {paper:32s} {outcome.pages:3d} pages  {outcome.seconds:6.2f}s")
+                scored.append(score_paper("docling", paper, outcome.document, normalised.pages))
+            if scored:
+                print(render_report(scored))
+                _decision_rule(
+                    {p: s for p, s in zip(papers, ours, strict=False)},
+                    {s.paper: s for s in scored},
+                )
 
     print("\nrepairs applied:", normalised.repairs_by_rule() or "none")
     print("warnings       :", normalised.warnings_by_kind() or "none")
@@ -129,6 +149,37 @@ def _score(args: argparse.Namespace) -> int:
         for warning in normalised.warnings:
             print("  ", warning.describe())
     return 0
+
+
+def _decision_rule(ours: dict[str, Any], theirs: dict[str, Any]) -> None:
+    """The epic's fixed rule, evaluated: >= 85 % of Docling's F1 at >= 20x the speed.
+
+    Printed per paper AND as a mean, because a rule stated over three metrics on three papers has
+    no single number in it and inventing one would be choosing an aggregation after seeing the
+    results.
+    """
+    print("\n" + "-" * 92)
+    print("DECISION RULE: deterministic >= 85 % of docling's F1, at >= 20x the speed")
+    print("-" * 92)
+    print(f"  {'paper':32s} {'ours':>7s} {'docling':>8s} {'share':>7s}  {'>=85%?':>7s}")
+    shares = []
+    for paper, mine in sorted(ours.items()):
+        other = theirs.get(paper)
+        if other is None:
+            print(f"  {paper:32s} {mine.macro_f1:7.3f} {'not run':>8s}")
+            continue
+        share = mine.macro_f1 / other.macro_f1 if other.macro_f1 else float("inf")
+        shares.append(share)
+        print(
+            f"  {paper:32s} {mine.macro_f1:7.3f} {other.macro_f1:8.3f} {share:6.0%}  "
+            f"{'YES' if share >= 0.85 else 'NO':>7s}"
+        )
+    if shares:
+        mean = sum(shares) / len(shares)
+        print(
+            f"\n  mean share of docling's F1: {mean:.0%}  ->  {'PASS' if mean >= 0.85 else 'FAIL'}"
+        )
+    print("  speed: measured separately at 12x against a 20x bar -> FAIL")
 
 
 def _region_texts(corpus: Path, pages: list[dict[str, Any]]) -> dict[tuple[str, int, str], str]:
@@ -191,6 +242,11 @@ def main(argv: list[str] | None = None) -> int:
     sco.add_argument("--gold", default=str(DEFAULT_GOLD))
     sco.add_argument("--assets", default="/tmp/ptub-assets", help="where figure crops go")
     sco.add_argument("--verbose", action="store_true", help="list every repair and warning")
+    sco.add_argument(
+        "--with-docling",
+        action="store_true",
+        help="also score docling and form the decision rule's ratio (slow: ~5 s/page)",
+    )
     sco.set_defaults(func=_score)
 
     cmp_ = sub.add_parser("compare", help="run every adapter and emit the matrix")
