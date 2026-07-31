@@ -38,6 +38,7 @@ from papertree_document_worker.layout import LayoutBlock, layout_document
 from papertree_document_worker.pdf import SourceDocument
 from papertree_document_worker.tables import detect_tables
 from papertree_document_worker.text import build_block_text
+from papertree_document_worker.vlm import VlmBudget, VlmClient, VlmError
 
 __all__ = ["ParseResult", "ParserConfig", "parse_document"]
 
@@ -82,6 +83,9 @@ class ParseResult:
     diagnostics: list[Any] = field(default_factory=list)
     multi_polygon_blocks: int = 0
     page_count: int = 0
+    #: VLM calls made, and what they cost. Reported so a run's spend is a fact, not a guess.
+    vlm_calls: int = 0
+    vlm_tokens: int = 0
 
 
 #: A caption sits directly under its float, or occasionally over it. Beyond this many points
@@ -522,6 +526,28 @@ def _assemble(
             "typographic",
         )
 
+    # F1.7's VLM half: ONLY flagged regions, only when a budget is configured, and the crop is
+    # always retained whatever happens. The LaTeX is a DECLARED INTERPRETATION with its own
+    # confidence sitting beside the ground truth, never a source field (DESIGN.md §2.2).
+    vlm_budget = VlmBudget(max_calls=config.vlm_max_calls)
+    if config.vlm_max_calls > 0:
+        client = VlmClient(model=config.vlm_model)
+        if client.available:
+            for block in builder.blocks:
+                if block.type != "equation" or block.payload is None or vlm_budget.exhausted:
+                    continue
+                try:
+                    reading = client.read_equation(
+                        store.read("equations", block.block_id), vlm_budget
+                    )
+                except VlmError:
+                    # A failed call leaves the crop and no latex, which is a valid document.
+                    # Never a partial reading.
+                    continue
+                if reading is not None and reading.latex:
+                    block.payload["latex"] = reading.latex
+                    block.payload["latex_confidence"] = reading.confidence
+
     paper = builder.build(
         config_hash=config_hash_for(config.as_dict()),
         parsed_at=parsed_at,
@@ -537,4 +563,6 @@ def _assemble(
         multi_polygon_blocks=builder.multi_polygon_blocks,
         page_count=len(pages),
         crops_written=store.written,
+        vlm_calls=vlm_budget.calls,
+        vlm_tokens=vlm_budget.input_tokens + vlm_budget.output_tokens,
     )
