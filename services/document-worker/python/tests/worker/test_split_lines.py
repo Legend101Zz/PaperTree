@@ -299,3 +299,93 @@ class TestFootnoteFlow:
     def test_small_text_high_on_the_page_is_not_a_footnote(self) -> None:
         """A superscript or a small caption mid-page must not qualify."""
         assert self._flow(200.0, 8.0, 10.0, 100.0) == "body"
+
+
+class TestBoldStartsABlock:
+    """A change of WEIGHT starts a block, exactly as a change of size does.
+
+    The size rule assumes a heading is set larger than its body. `resnet-cvpr-2col` sets its
+    section headings BOLD AT BODY SIZE, so nothing fired and page 2 produced one block reading
+    "3. Deep Residual Learning 3.1. Residual Learning Let us consider..." — two headings and a
+    paragraph. `hierarchy.py` could not have recovered them: by the time it runs, the heading is
+    no longer a block.
+    """
+
+    BOLD = 1 << 4
+
+    @staticmethod
+    def _weighted(text: str, y0: float, flags: int) -> Line:
+        span = _span(text, 50.0, 286.0, y0, y0 + 9.0)
+        return Line(
+            bbox=[50.0, y0, 286.0, y0 + 9.0],
+            direction="ltr",
+            spans=(
+                Span(
+                    text=text,
+                    bbox=span.bbox,
+                    size=span.size,
+                    font=span.font,
+                    flags=flags,
+                    color=0,
+                    origin=span.origin,
+                    ascender=span.ascender,
+                    descender=span.descender,
+                    direction="ltr",
+                    chars=(),
+                ),
+            ),
+        )
+
+    def test_a_bold_heading_leaves_the_paragraph_above_it(self) -> None:
+        groups = _group(
+            [
+                self._weighted("way networks have not demonstrated gains", 100.0, 0),
+                self._weighted("3. Deep Residual Learning", 110.0, self.BOLD),
+            ],
+            15.9,
+        )
+        assert len(groups) == 2
+
+    def test_the_paragraph_below_it_is_also_separate(self) -> None:
+        groups = _group(
+            [
+                self._weighted("3.1. Residual Learning", 100.0, self.BOLD),
+                self._weighted("Let us consider H(x) as an underlying", 110.0, 0),
+            ],
+            15.9,
+        )
+        assert len(groups) == 2
+
+    def test_a_run_of_body_text_is_not_split(self) -> None:
+        groups = _group(
+            [self._weighted(f"body line {i}", 100.0 + i * 10, 0) for i in range(4)], 15.9
+        )
+        assert len(groups) == 1
+
+    def test_weight_is_judged_by_text_volume_not_the_first_span(self) -> None:
+        """A paragraph opening with a bold run-in word must not start a block on every one."""
+        from papertree_document_worker.layout import _is_bold_line
+
+        bold_word = _span("Note.", 50.0, 70.0, 100.0, 109.0)
+        rest = _span(" the rest of a long ordinary sentence", 70.0, 286.0, 100.0, 109.0)
+        line = Line(
+            bbox=[50.0, 100.0, 286.0, 109.0],
+            direction="ltr",
+            spans=(
+                Span(
+                    text=bold_word.text,
+                    bbox=bold_word.bbox,
+                    size=bold_word.size,
+                    font="Times",
+                    flags=self.BOLD,
+                    color=0,
+                    origin=bold_word.origin,
+                    ascender=bold_word.ascender,
+                    descender=0.0,
+                    direction="ltr",
+                    chars=(),
+                ),
+                rest,
+            ),
+        )
+        assert _is_bold_line(line) is False

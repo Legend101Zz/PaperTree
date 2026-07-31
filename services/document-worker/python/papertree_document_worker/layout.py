@@ -111,6 +111,9 @@ _SECTION_NUMBER_ONLY = re.compile(r"^\s*(?:\d+|[A-Z]|[IVXL]+)(?:\.\d+)*\s*[.)]?\
 #: line. 0.6 rather than something tighter because a number set in a smaller face than its
 #: title still sits on the same baseline with a shorter band.
 _BASELINE_OVERLAP_SHARE = 0.6
+#: PDF font-descriptor bit 17 (1 << 4) is "bold" in MuPDF's `flags`. Same constant as
+#: `hierarchy._BOLD_FLAG`; kept local because `layout` runs first and must not import from it.
+_BOLD_FLAG = 1 << 4
 #: Digits, in any script, that a running head might carry. Used to blank them before comparing
 #: one page's header with another's - "Preprint. Page 4" and "Preprint. Page 5" are one header.
 _DIGITS = re.compile(r"\d+")
@@ -287,6 +290,19 @@ def _flow_for(
 # ── block segmentation and ordering ────────────────────────────────────────────────────────
 
 
+def _is_bold_line(line: Line) -> bool:
+    """Whether MOST of a line's glyphs are bold, by character count.
+
+    By weight of text rather than by `spans[0]`, because a paragraph beginning with a bold
+    run-in word ("**Note.** the rest of the sentence") would otherwise start a new block on every
+    such paragraph, and a heading whose first span is a non-bold section number would not start
+    one at all.
+    """
+    bold = sum(len(s.text) for s in line.spans if s.flags & _BOLD_FLAG)
+    total = sum(len(s.text) for s in line.spans)
+    return total > 0 and bold * 2 > total
+
+
 def _shares_a_baseline(previous: Line, current: Line) -> bool:
     """Whether two `Line`s are really one visual line that MuPDF returned separately."""
     overlap = min(previous.band[3], current.band[3]) - max(previous.band[1], current.band[1])
@@ -349,6 +365,16 @@ def _same_block(previous: Line, current: Line, line_gap: float) -> bool:
         after = current.spans[0].size
         if before > 0 and abs(after - before) / before > 0.15:
             return False
+    # A CHANGE OF WEIGHT STARTS A BLOCK, exactly as a change of size does.
+    #
+    # The size rule assumes a heading is set larger than its body. `resnet-cvpr-2col` sets its
+    # section headings BOLD AT BODY SIZE, so no rule fired and they were swallowed whole: page 2
+    # produced one block reading "3. Deep Residual Learning 3.1. Residual Learning Let us
+    # consider..." - two headings and a paragraph. Measured against gold, 11 gold headings on the
+    # sampled pages against **2 predicted**, and `hierarchy.py` could not have recovered them
+    # because by the time it runs the heading is no longer a block.
+    if _is_bold_line(previous) != _is_bold_line(current):
+        return False
     # An indent of more than half a line height starts a paragraph. Compared against the
     # PREVIOUS line's left edge, so a hanging indent (references) does not split every entry.
     return current.band[0] - previous.band[0] <= line_gap
