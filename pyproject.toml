@@ -72,3 +72,11 @@ strict = true
 [[tool.mypy.overrides]]
 module = ["pymupdf", "fitz"]
 ignore_missing_imports = true
+
+# Docling is deliberately NOT in this workspace's lock (one `docling>=2.0` line took it from 22
+# packages to 100+, because uv locks a group whether or not it installs it). It lives in an
+# opt-in probe venv, and `docling_bridge.py` runs under THAT interpreter, never this one - so
+# mypy checking the bridge here can never resolve the import and should not try.
+[[tool.mypy.overrides]]
+module = ["docling.*"]
+ignore_missing_imports = true
