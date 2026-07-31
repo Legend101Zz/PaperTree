@@ -52,6 +52,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from statistics import median
 from typing import Any
@@ -202,12 +203,22 @@ class PaperBuilder:
         # Scaled to the block's own text rather than fixed, because a 20 pt title and a 6 pt
         # footnote have different pitches. 0.55 x band height clears the intra-paragraph gap and
         # stays well under the ~10 pt gap that separates one paragraph from the next.
-        heights = [b[3] - b[1] for b in block.line_bands if b[3] > b[1]]
+        # ONE RECT PER LINE IS THE FUNCTION'S PRECONDITION, and MuPDF does not always honour it.
+        #
+        # `union_of_line_rects` joins two rects into a run only when they OVERLAP IN X. That is
+        # right for stacked lines and wrong for two rects that MuPDF returned for one visual
+        # line - a numbered heading split at its tab (`5.1` at x 108-120, the title at 130-249),
+        # or a subscript broken out of an equation. Those overlap in x by nothing at all, so they
+        # come back as two rings, `len(rings) > 1` fires, and the LARGEST ring wins: the section
+        # number is dropped from its own heading's geometry while its text stays in the block.
+        #
+        # The contract is frozen and correct - its docstring asks for "one rect per selected
+        # line". Supplying that is the caller's job, so same-baseline bands are coalesced here.
+        bands = _coalesce_baselines(block.line_bands)
+        heights = [b[3] - b[1] for b in bands if b[3] > b[1]]
         tolerance = 0.55 * median(heights) if heights else 2.0
         rings = (
-            union_of_line_rects(block.line_bands, vertical_gap_tolerance=tolerance)
-            if block.line_bands
-            else []
+            union_of_line_rects(bands, vertical_gap_tolerance=tolerance) if block.line_bands else []
         )
         if not rings:
             # A block with no usable bands still needs geometry - "unclassifiable regions become
@@ -453,6 +464,73 @@ class PaperBuilder:
             # total extraction failure, so it is reported as partial rather than claimed clean.
             return "partial", "no blocks were extracted from this document"
         return "complete", None
+
+
+#: How much of the shorter band's height must overlap the other's for the two to be one visual
+#: line. Matches `layout._BASELINE_OVERLAP_SHARE`; the two decisions are the same judgement made
+#: at two layers, and letting them drift would group lines that then split into two polygons.
+_BASELINE_OVERLAP_SHARE = 0.6
+
+#: The widest horizontal gap that still reads as a TAB WITHIN one line, in multiples of the
+#: band's own height. Two measurements bracket this and they are closer together than is
+#: comfortable, so both are written down:
+#:
+#:   a numbered heading's tab   9.9 pt on a 9.0 pt band  = 1.10 heights  (all three papers)
+#:   a two-column gutter       16.0 pt on a 9.0 pt band  = 1.78 heights  (letter, 1 in margins)
+#:
+#: 1.3 sits between them. The gutter should never reach this function - `layout.py` assigns
+#: lines to columns BEFORE grouping, so two columns' lines are not in one block - but a value
+#: that would union across a gutter if it ever did would defeat ADR-001's second commitment on
+#: the strength of an invariant held somewhere else, and there is a test for it here.
+_TAB_GAP_HEIGHTS = 1.3
+
+
+def _coalesce_baselines(bands: Sequence[BBox]) -> list[BBox]:
+    """Merge bands that are two fragments of ONE visual line into a single rect.
+
+    `union_of_line_rects` asks for one rect per line and joins runs by X-OVERLAP. The two halves
+    of a numbered heading - `5.1` at x 108-120, its title at 130-249 - overlap in x by nothing,
+    so they arrive as separate runs, `len(rings) > 1` fires, and the largest-ring rule drops the
+    number from its own heading's geometry while its text stays in the block. Merging here is not
+    a change to the frozen geometry contract; it is meeting its documented precondition.
+
+    THREE CONDITIONS, AND THE THIRD WAS LEARNED THE HARD WAY.
+
+    Bands merge only when they overlap vertically (so a line cannot absorb the one below it),
+    when the later band lies to the RIGHT of the earlier one, and when the gap between them is
+    tab-sized. Without the last two, `neural-odes` page 16 - a code listing whose lines wrap -
+    merged a fragment at x 248-364 with the WRAPPED CONTINUATION at x 152-181 sharing its
+    baseline. That widened the block's origin to x0 = 152.6, where another block on the same row
+    already began, and the two collided on `block_id`: same page, same type, same quantised
+    anchor, same eight-codepoint prefix (`"f l a t _ "` for both, the listing being letter-spaced).
+
+    `build` treats an id collision as a segmentation bug that must not be salted away, and it was
+    right to: the collision was this function inventing a geometry that spanned another block.
+    """
+    ordered = sorted(bands, key=lambda b: (b[1], b[0]))
+    merged: list[BBox] = []
+    for band in ordered:
+        if merged and _is_tab_continuation(merged[-1], band):
+            last = merged[-1]
+            merged[-1] = [
+                min(last[0], band[0]),
+                min(last[1], band[1]),
+                max(last[2], band[2]),
+                max(last[3], band[3]),
+            ]
+            continue
+        merged.append(list(band))
+    return merged
+
+
+def _is_tab_continuation(left: BBox, right: BBox) -> bool:
+    """Whether `right` is the far side of a tab on `left`'s own line."""
+    overlap = min(left[3], right[3]) - max(left[1], right[1])
+    height = min(left[3] - left[1], right[3] - right[1])
+    if height <= 0 or overlap / height <= _BASELINE_OVERLAP_SHARE:
+        return False
+    gap = right[0] - left[2]
+    return 0 <= gap <= _TAB_GAP_HEIGHTS * height
 
 
 def _ring_area(ring: Polygon) -> float:
