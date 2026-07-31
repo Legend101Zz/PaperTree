@@ -128,3 +128,44 @@ class TestCoalesceBaselines:
 
     def test_empty_input(self) -> None:
         assert _coalesce_baselines([]) == []
+
+
+class TestSingleColumnHasNoFullWidthBarrier:
+    """A short last line must stay with its paragraph when the page has one column.
+
+    `per_column` routes lines wider than `FULL_WIDTH_SHARE * content_width` to the `None`
+    barrier bucket. On a single-column page a NORMAL body line is by definition that wide and its
+    paragraph's short last line is not, so the tail of nearly every paragraph was grouped apart
+    from its body - 13 gold paragraphs against 107 predicted blocks on `attention`.
+    """
+
+    @staticmethod
+    def _page_lines() -> list[Line]:
+        full = [
+            _line(f"a full width body line number {i}", 108.0, 505.0, y0, y0 + 9.0)
+            for i, y0 in enumerate((146.0, 158.0, 170.0, 182.0))
+        ]
+        return [*full, _line("the approach we take in our model.", 108.0, 248.0, 194.0, 203.0)]
+
+    def test_the_short_last_line_joins_the_paragraph(self) -> None:
+        from papertree_document_worker.layout import Column, _order_body
+
+        columns = (Column(0, 0.0, 612.0),)
+        lines = self._page_lines()
+        content_width = max(line.band[2] for line in lines) - min(line.band[0] for line in lines)
+
+        # Mirrors `layout_page`'s body path with a single column.
+        per_column: dict[int | None, list[Line]] = {}
+        for line in lines:
+            per_column.setdefault(0 if len(columns) < 2 else None, []).append(line)
+        assigned = [(g, k) for k, ls in per_column.items() for g in _group(ls, 15.9)]
+
+        assert content_width > 0
+        assert len(_order_body(assigned, columns)) == 1
+
+    def test_two_columns_still_get_a_barrier(self) -> None:
+        """The barrier is real when there ARE column runs to separate - ADR-001 depends on it."""
+        from papertree_document_worker.layout import FULL_WIDTH_SHARE
+
+        # A line spanning both columns of a 612 pt page is wider than the share of the content.
+        assert 54.0 + FULL_WIDTH_SHARE * (542.0 - 54.0) < 542.0

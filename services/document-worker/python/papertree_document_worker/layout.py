@@ -453,10 +453,26 @@ def layout_page(page: PageContent, heads: set[str]) -> PageLayout:
             # then spans the gutter and is classified full-width. Measured on ResNet: **46
             # false full-width blocks per page**, i.e. findings.md B5.3's both-columns blob
             # re-created by the code meant to prevent it.
+            # A FULL-WIDTH BARRIER IS MEANINGLESS ON A SINGLE-COLUMN PAGE, and treating it as
+            # meaningful is what shredded paragraphs there.
+            #
+            # `None` means "spans the columns, so it separates one column run from the next".
+            # With one column there are no runs to separate - but the width test still fires,
+            # because on a single-column page a NORMAL body line is by definition as wide as the
+            # text block. Its paragraph's SHORT LAST LINE is not, so it fell into column 0 while
+            # every line above it went to `None`, and the two were then grouped separately.
+            #
+            # Measured on `attention-is-all-you-need`: 13 gold paragraphs against 107 predicted
+            # blocks, with the tail of nearly every paragraph broken off as its own block
+            # ("the approach we take in our model.", "target tokens.", "(3.5 days)."). Reads as
+            # aggressive segmentation; is actually a column partition applied where no columns
+            # exist. `_order_body` already short-circuits on `len(columns) < 2` for the same
+            # reason.
+            single_column = len(columns) < 2
             per_column: dict[int | None, list[Line]] = {}
             for line in flow_lines:
                 band = line.band
-                if band[2] - band[0] > FULL_WIDTH_SHARE * content_width:
+                if not single_column and band[2] - band[0] > FULL_WIDTH_SHARE * content_width:
                     key: int | None = None
                 else:
                     found = next((c.index for c in columns if c.contains(band)), None)
