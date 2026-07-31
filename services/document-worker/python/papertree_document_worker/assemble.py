@@ -129,6 +129,11 @@ class AssembledBlock:
     confidence: float = 1.0
     payload: dict[str, Any] | None = None
     stage: str = "layout"
+    #: The layout column this block was assigned to, or `None` for a full-width element. Carried
+    #: so `continues_in_next_column` can require two GENUINELY DIFFERENT columns rather than
+    #: inferring it from non-overlapping x - which fired 463 times on gpt3-longform, a
+    #: SINGLE-COLUMN paper, because two same-column fragments need not overlap.
+    column: int | None = None
     #: Set for nested blocks (a table cell in its row). Nested blocks get no `doc_order` and do
     #: not appear in `Page.flows` - D14, enforced by rules 15 and 42.
     parent: AssembledBlock | None = None

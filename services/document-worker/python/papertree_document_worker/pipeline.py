@@ -33,7 +33,9 @@ from papertree_document_worker.equations import detect_equation_regions
 from papertree_document_worker.figures import detect_figure_regions, is_caption_line
 from papertree_document_worker.hierarchy import build_sections, detect_headings
 from papertree_document_worker.layout import LayoutBlock, layout_document
+from papertree_document_worker.joining import find_continuations
 from papertree_document_worker.pdf import SourceDocument
+from papertree_document_worker.tables import detect_tables
 from papertree_document_worker.text import build_block_text
 
 __all__ = ["ParseResult", "ParserConfig", "parse_document"]
@@ -79,6 +81,37 @@ class ParseResult:
     diagnostics: list[Any] = field(default_factory=list)
     multi_polygon_blocks: int = 0
     page_count: int = 0
+
+
+def _dedupe_tables(regions: list[Any]) -> list[Any]:
+    """Drop table regions that substantially overlap one already kept.
+
+    Rule groups can produce two regions over the same table when a mid-rule is slightly narrower
+    than the top rule. Emitting both gives two sets of cells at identical positions with
+    identical text - and identical block ids, because the id hashes exactly (page, anchor, type,
+    text). Measured on ResNet: 858 blocks producing 856 ids, which `PaperBuilder` rejects rather
+    than salting, since a collision here is a segmentation bug and not an id bug.
+    """
+    kept: list[Any] = []
+    for region in sorted(regions, key=lambda r: -(r.bbox[2] - r.bbox[0]) * (r.bbox[3] - r.bbox[1])):
+        overlapping = False
+        for existing in kept:
+            lo_x, hi_x = (
+                max(region.bbox[0], existing.bbox[0]),
+                min(region.bbox[2], existing.bbox[2]),
+            )
+            lo_y, hi_y = (
+                max(region.bbox[1], existing.bbox[1]),
+                min(region.bbox[3], existing.bbox[3]),
+            )
+            if hi_x > lo_x and hi_y > lo_y:
+                area = (region.bbox[2] - region.bbox[0]) * (region.bbox[3] - region.bbox[1])
+                if area > 0 and (hi_x - lo_x) * (hi_y - lo_y) / area > 0.5:
+                    overlapping = True
+                    break
+        if not overlapping:
+            kept.append(region)
+    return kept
 
 
 def _block_type(flow: str, text: str, is_heading: bool, is_equation: bool) -> str:
@@ -143,6 +176,7 @@ def _assemble(
     all_headings = []
     all_body: list[LayoutBlock] = []
     emitted: dict[int, AssembledBlock] = {}
+    pending_grids: list[tuple[AssembledBlock, list[tuple[int, int, AssembledBlock]]]] = []
 
     for page, page_layout in zip(pages, layout.pages, strict=True):
         sizes = [
@@ -160,11 +194,74 @@ def _assemble(
         heading_blocks = {id(h.block) for h in headings}
         all_headings.extend(headings)
 
-        body_lines = [line for b in page_layout.blocks if b.flow == "body" for line in b.lines]
+        # TABLES FIRST, for the same reason figures run before layout: a table's cells are
+        # interleaved in y with body text on a two-column page, and a cell promoted to a heading
+        # is findings.md B6's `'0.24 M'` defect. Their lines are claimed here so neither equation
+        # detection nor hierarchy sees them.
+        table_regions = _dedupe_tables(detect_tables(page, column_width))
+        table_lines: set[int] = set()
+        for region in table_regions:
+            table_block = builder.add(
+                AssembledBlock(
+                    type="table",
+                    page_index=page.index,
+                    flow="body",
+                    line_bands=[list(region.bbox)],
+                    confidence=0.75,
+                    stage="tables",
+                    # `html` is deliberately absent - rule 32b, see tables.py.
+                    # `grid.cells` needs every cell's block_id, which does not exist until
+                    # assign_ids() runs - so the grid is filled in after, exactly like crops.
+                    # `html` is deliberately absent (rule 32b, see tables.py).
+                    payload={"grid": {"rows": len(region.rows), "cols": region.column_count}},
+                )
+            )
+            grid_cells: list[tuple[int, int, AssembledBlock]] = []
+            for row_index, row in enumerate(region.rows):
+                row_block = builder.add(
+                    AssembledBlock(
+                        type="table_row",
+                        page_index=page.index,
+                        flow="body",
+                        line_bands=[list(row.bbox)],
+                        confidence=0.75,
+                        stage="tables",
+                        parent=table_block,
+                    )
+                )
+                for column_index, (cell_box, cell_text) in enumerate(row.cells):
+                    cell_block = builder.add(
+                        AssembledBlock(
+                            type="table_cell",
+                            page_index=page.index,
+                            flow="body",
+                            line_bands=[list(cell_box)],
+                            text=cell_text or None,
+                            confidence=0.75,
+                            stage="tables",
+                            parent=row_block,
+                        )
+                    )
+                    grid_cells.append((row_index, column_index, cell_block))
+            pending_grids.append((table_block, grid_cells))
+            for line in page.lines:
+                centre_y = (line.band[1] + line.band[3]) / 2
+                if region.bbox[1] - 2 <= centre_y <= region.bbox[3] + 2:
+                    table_lines.add(id(line))
+
+        body_lines = [
+            line
+            for b in page_layout.blocks
+            if b.flow == "body"
+            for line in b.lines
+            if id(line) not in table_lines
+        ]
         equation_regions = detect_equation_regions(body_lines, column_width, body_size)
         equation_lines = {id(line) for region in equation_regions for line in region.lines}
 
         for layout_block in page_layout.blocks:
+            if layout_block.lines and all(id(line) in table_lines for line in layout_block.lines):
+                continue  # every line already emitted as a table cell
             built = build_block_text(list(layout_block.lines))
             if not built.text.strip():
                 continue
@@ -194,6 +291,7 @@ def _assemble(
                     repairs=built.repairs,
                     confidence=1.0 if block_type != "unknown" else 0.3,
                     payload=payload,
+                    column=layout_block.column,
                     stage="layout",
                 )
             )
@@ -252,6 +350,23 @@ def _assemble(
     # ids have to exist first, because the crop's URI names the block - hence assign_ids() here
     # rather than only inside build().
     builder.assign_ids()
+
+    # RULE 32: every `grid.cells[].text` must equal the text of the block named by `cell_id`,
+    # and `cell_id` must name a `table_cell` on the same page. Filled here rather than at
+    # emission because the ids do not exist until now.
+    for table_block, cells in pending_grids:
+        assert table_block.payload is not None
+        table_block.payload["grid"]["cells"] = [
+            {
+                "cell_id": cell.block_id,
+                "r": row_index,
+                "c": column_index,
+                "polygon": cell.polygon,
+                **({"text": cell.text} if cell.text else {}),
+            }
+            for row_index, column_index, cell in cells
+        ]
+
     store = CropStore(
         root=asset_root, paper_id=paper_id, scheme=config.asset_scheme, scale=config.crop_scale
     )
@@ -265,6 +380,32 @@ def _assemble(
             kind="figures" if block.type == "figure" else "equations",
             block_id=block.block_id,
             rendered_from="vector" if block.source == "pdf_vector" else "page",
+        )
+
+    # F1.8, over the assembled body stream in reading order. Needs geometry, so it runs after
+    # assign_ids() has computed every bbox.
+    body_blocks = [b for b in builder.blocks if b.flow == "body" and not b.is_nested]
+    continuations = find_continuations(
+        [
+            (index, b.type, b.text or "", b.bbox[0], b.bbox[2], b.page_index)
+            for index, b in enumerate(body_blocks)
+        ]
+    )
+    for link in continuations:
+        # `continues_in_next_column` needs two GENUINELY DIFFERENT columns. Inferring it from
+        # non-overlapping x alone fired 463 times on gpt3-longform - a single-column paper -
+        # because two fragments in one column need not overlap horizontally.
+        if link.kind == "continues_in_next_column":
+            earlier_column = body_blocks[link.from_index].column
+            later_column = body_blocks[link.to_index].column
+            if earlier_column is None or later_column is None or earlier_column == later_column:
+                continue
+        builder.relate(
+            link.kind,
+            body_blocks[link.from_index],
+            body_blocks[link.to_index],
+            link.confidence,
+            "typographic",
         )
 
     paper = builder.build(
