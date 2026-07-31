@@ -249,10 +249,6 @@ def _assemble(
         body_size = median(sizes) if sizes else 10.0
         column_width = page_layout.columns[0].x1 - page_layout.columns[0].x0
 
-        headings = detect_headings(page_layout, body_size)
-        heading_blocks = {id(h.block) for h in headings}
-        all_headings.extend(headings)
-
         # TABLES FIRST, for the same reason figures run before layout: a table's cells are
         # interleaved in y with body text on a two-column page, and a cell promoted to a heading
         # is findings.md B6's `'0.24 M'` defect. Their lines are claimed here so neither equation
@@ -317,6 +313,27 @@ def _assemble(
         ]
         equation_regions = detect_equation_regions(body_lines, column_width, body_size)
         equation_lines = {id(line) for region in equation_regions for line in region.lines}
+
+        # HEADINGS ARE DETECTED LAST, and that ordering is the fix for a measured defect.
+        #
+        # Running it first gave a3c 156 heading candidates and gpt3-longform 324, against real
+        # section counts of 7-25, and ResNet emitted `'y = F(x, {Wi}) + x.'` - a display
+        # equation - as a heading. A heading detector cannot tell a short isolated line set
+        # slightly larger than the body from a numbered display equation or a table row,
+        # because geometrically they ARE the same thing.
+        #
+        # So the two stronger, more specific detectors run first and claim their lines, and
+        # hierarchy sees only what is left. Same ordering figures already forced (issue #50).
+        claimed = table_lines | equation_lines
+        headings = [
+            heading
+            for heading in detect_headings(page_layout, body_size)
+            if not (
+                heading.block.lines and all(id(line) in claimed for line in heading.block.lines)
+            )
+        ]
+        heading_blocks = {id(h.block) for h in headings}
+        all_headings.extend(headings)
 
         for layout_block in page_layout.blocks:
             if layout_block.lines and all(id(line) in table_lines for line in layout_block.lines):
