@@ -67,10 +67,9 @@ import unicodedata
 from pathlib import Path
 
 import pytest
+from _corpus_manifest import CORPUS_PARAMS, requires_corpus
 from papertree_document_worker.pdf import SourceDocument
 from papertree_document_worker.pipeline import parse_document
-
-from _corpus_manifest import CORPUS_PARAMS, requires_corpus
 
 pytestmark = requires_corpus
 
