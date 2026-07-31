@@ -32,6 +32,7 @@ from papertree_document_worker.classify import classify_document
 from papertree_document_worker.crops import DEFAULT_SCALE, CropStore
 from papertree_document_worker.equations import detect_equation_regions
 from papertree_document_worker.figures import detect_figure_regions, is_caption_line
+from papertree_document_worker.frontmatter import classify_front_matter
 from papertree_document_worker.hierarchy import build_sections, detect_headings
 from papertree_document_worker.joining import find_continuations
 from papertree_document_worker.layout import LayoutBlock, layout_document
@@ -240,6 +241,10 @@ def _assemble(
     all_body: list[LayoutBlock] = []
     emitted: dict[int, AssembledBlock] = {}
     pending_grids: list[tuple[AssembledBlock, list[tuple[int, int, AssembledBlock]]]] = []
+    #: Page 0's body size, kept for `frontmatter.py`. The title ratio has to be measured against
+    #: the page the title is ON - a later page's body size would be the same number by luck on
+    #: this corpus and wrong on any paper whose front matter is set differently from its body.
+    front_matter_body_size = 10.0
 
     for page, page_layout in zip(pages, layout.pages, strict=True):
         sizes = [
@@ -251,6 +256,8 @@ def _assemble(
             if span.size > 0
         ]
         body_size = median(sizes) if sizes else 10.0
+        if page.index == 0:
+            front_matter_body_size = body_size
         column_width = page_layout.columns[0].x1 - page_layout.columns[0].x0
 
         # TABLES FIRST, for the same reason figures run before layout: a table's cells are
@@ -480,6 +487,19 @@ def _assemble(
         if id(node.heading_block) in emitted
         and emitted[id(node.heading_block)].type in ("heading", "title")
     ]
+
+    # FRONT MATTER IS TYPED HERE, AND THE POSITION IS LOAD-BEARING TWICE OVER.
+    #
+    # After the section tree (above), because retyping the `Abstract` heading would break rule
+    # 21 - a section's `heading_block_id` must name a `heading` or `title` - and `frontmatter`
+    # is careful to leave the heading alone precisely so this ordering stays safe.
+    #
+    # Before `assign_ids()`, because `block_id` hashes the block TYPE. Retyping afterwards would
+    # leave every front-matter block carrying an id minted for the type it used to have, and
+    # `worker/determinism.spec` would still pass, because the wrong ids would be wrong the same
+    # way every run.
+    for retype in classify_front_matter(builder.blocks, front_matter_body_size):
+        retype.block.type = retype.new_type
 
     # RULE 36: `status: "complete"` requires a non-null crop on every equation and figure. The
     # ids have to exist first, because the crop's URI names the block - hence assign_ids() here
