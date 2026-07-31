@@ -90,6 +90,16 @@ RUNNING_HEAD_SHARE = 0.35
 
 _CAPTION_START = re.compile(r"^\s*(?:figure|fig\.?|table|algorithm|listing)\s*[0-9IVXivx]+[.:)\s]")
 _PAGE_NUMBER = re.compile(r"^\s*[-–—]?\s*(?:[0-9]{1,4}|[ivxlcIVXLC]{1,7})\s*[-–—]?\s*$")
+#: A section number occupying a whole line: `5`, `5.1`, `3.2.3`, `A.2`, `IV`. Deliberately the
+#: same shape as `hierarchy._BARE_NUMBER`, which documents why it is needed: *"MuPDF frequently
+#: returns the number and the title as separate spans on one line, and sometimes as separate
+#: LINES."* Kept as its own pattern rather than imported, because `layout` must not depend on
+#: `hierarchy` - the pipeline runs headings LAST, after this.
+_SECTION_NUMBER_ONLY = re.compile(r"^\s*(?:\d+|[A-Z]|[IVXL]+)(?:\.\d+)*\s*[.)]?\s*$")
+#: How much of the shorter line's height must overlap the other's for them to be one visual
+#: line. 0.6 rather than something tighter because a number set in a smaller face than its
+#: title still sits on the same baseline with a shorter band.
+_BASELINE_OVERLAP_SHARE = 0.6
 #: Digits, in any script, that a running head might carry. Used to blank them before comparing
 #: one page's header with another's - "Preprint. Page 4" and "Preprint. Page 5" are one header.
 _DIGITS = re.compile(r"\d+")
@@ -253,6 +263,47 @@ def _flow_for(line: Line, page: PageContent, heads: set[str], body_top: float) -
 # ── block segmentation and ordering ────────────────────────────────────────────────────────
 
 
+def _shares_a_baseline(previous: Line, current: Line) -> bool:
+    """Whether two `Line`s are really one visual line that MuPDF returned separately."""
+    overlap = min(previous.band[3], current.band[3]) - max(previous.band[1], current.band[1])
+    height = min(previous.band[3] - previous.band[1], current.band[3] - current.band[1])
+    return height > 0 and overlap / height > _BASELINE_OVERLAP_SHARE
+
+
+def _continues_numbered_heading(previous: Line, current: Line) -> bool:
+    """`5.1` and `Training Data and Batching`, returned as two lines on one baseline.
+
+    MuPDF splits every numbered heading in this corpus at the tab between the number and the
+    title, and `_same_block`'s indent rule then sees a 10 pt step and starts a new block. The
+    result was measured against gold: on `attention-is-all-you-need` FIFTEEN section headings
+    came out as a `heading` block holding only `"5.1"` plus a `paragraph` block holding the
+    title. Element-detection F1 for `heading` was **0.00** - not because headings were missed,
+    but because no predicted box had the shape of one.
+
+    `hierarchy.py` already has a join for the same defect (its "B6 join", `_is_bare_number`),
+    but it operates on BLOCKS: it builds a correct `Heading` out of the pair while leaving both
+    blocks in the document, so the section view is right and the geometry is still wrong. This
+    fixes the layer where the boundary is actually decided.
+
+    Nothing is merged textually. The two lines join a single group and `text.py` renders them
+    `"5.1\\nTraining Data and Batching"` - the glyph stream, unmutated, no synthetic separator,
+    no `Repair`. `parse_section_number` sees the joined form because `hierarchy.py` reads a
+    block as `" ".join(line.text ...)`.
+
+    TWO GUARDS, BOTH LOAD-BEARING, both measured on this corpus:
+
+      * the title must START WITH A LETTER. Without it `_SECTION_NUMBER_ONLY` matches table
+        values - `attention` Table 3 holds `5.29` beside `24.9` on one baseline, and merging
+        those would fuse two cells of a results table into one block.
+      * the pair must share a baseline. `5.1` above an unrelated indented line is a different
+        situation, already handled by the gap rule.
+    """
+    if not _SECTION_NUMBER_ONLY.match(previous.text.strip()):
+        return False
+    title = current.text.strip()
+    return bool(title) and title[0].isalpha() and _shares_a_baseline(previous, current)
+
+
 def _same_block(previous: Line, current: Line, line_gap: float) -> bool:
     """Whether `current` continues the paragraph `previous` belongs to.
 
@@ -260,7 +311,12 @@ def _same_block(previous: Line, current: Line, line_gap: float) -> bool:
       * a vertical gap larger than the running line pitch - an actual paragraph break;
       * a font size change of more than 15 % - a heading or a caption starting;
       * a first-line indent - the typographic marker of a new paragraph in a LaTeX paper.
+
+    ...and one way to be a continuation that all three would otherwise reject: a numbered
+    heading whose number and title MuPDF returned as two lines on one baseline.
     """
+    if _continues_numbered_heading(previous, current):
+        return True
     gap = current.band[1] - previous.band[3]
     if gap > line_gap:
         return False
