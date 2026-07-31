@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 
-import fitz  # PyMuPDF
+import fitz  # PyMuPDF - still used by the region-render endpoint below
 from bson import ObjectId
 from fastapi import (APIRouter, Depends, File, Header, HTTPException,
                      UploadFile, status)
@@ -22,19 +22,46 @@ settings = get_settings()
 router = APIRouter()
 
 
-def extract_text_from_pdf(file_path: str) -> tuple[str, int]:
-    """Extract plain text and page count from PDF."""
-    doc = fitz.open(file_path)
-    page_count = len(doc)
-    
-    text_parts = []
-    for page in doc:
-        text = page.get_text("text", sort=True)
-        if text:
-            text_parts.append(f"[Page {page.number + 1}]\n{text}")
-    
-    doc.close()
-    return "\n\n".join(text_parts), page_count
+def read_paper_text(file_path: str) -> tuple[str, int]:
+    """Plain text and page count, in READING ORDER, from the Epic 1 worker.
+
+    Replaces `extract_text_from_pdf`, which used PyMuPDF's `sort=True`. That orders blocks
+    top-to-bottom, which on a two-column page ALTERNATES between columns - 44 alternations
+    measured on a single ResNet page (findings.md B5.2) - so the text it produced interleaved
+    the two columns sentence by sentence. Every downstream LLM call read that.
+
+    This uses the worker's column detection and per-flow reading order, and drops page furniture
+    (running heads, page numbers, the arXiv margin stamp) rather than splicing it into the body.
+
+    Still SYNCHRONOUS, and that is a known defect rather than a design: findings.md C1 records
+    generation running inside the HTTP request. The durable path is
+    `papertree_document_worker.job.enqueue_parse`, which apps/api cannot use yet because it
+    stores papers in MongoDB while the job store is SQLite. Bridging those two is Epic 3's
+    business, not this deletion's.
+    """
+    from papertree_document_worker.layout import layout_document
+    from papertree_document_worker.pdf import SourceDocument
+    from papertree_document_worker.text import build_block_text
+
+    with SourceDocument(file_path) as document:
+        pages = document.pages()
+        layout = layout_document(pages)
+        page_count = document.page_count
+
+        parts: list[str] = []
+        for page, page_layout in zip(pages, layout.pages, strict=True):
+            blocks = [b for b in page_layout.blocks if b.flow == "body"]
+            if not blocks:
+                continue
+            body = "\n\n".join(
+                text
+                for block in blocks
+                if (text := build_block_text(list(block.lines)).text.strip())
+            )
+            if body:
+                parts.append(f"[Page {page.index + 1}]\n{body}")
+
+    return "\n\n".join(parts), page_count
 
 
 @router.post("/upload", response_model=PaperResponse)
@@ -56,7 +83,7 @@ async def upload_paper(
         f.write(content)
     
     # Extract text for LLM
-    extracted_text, page_count = extract_text_from_pdf(file_path)
+    extracted_text, page_count = read_paper_text(file_path)
     
     title = os.path.splitext(file.filename)[0]
     
