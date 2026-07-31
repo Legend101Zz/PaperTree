@@ -65,7 +65,7 @@ IMPORTANT FORMATTING RULES:
 - Start with a brief TL;DR if the explanation is long"""
 
 
-async def call_openrouter(
+async def call_llm(
     selected_text: str,
     question: str,
     context_before: str = "",
@@ -75,9 +75,9 @@ async def call_openrouter(
     model: Optional[str] = None
 ) -> str:
     """
-    Call OpenRouter API to get AI explanation.
+    Call the configured LLM backend to get an AI explanation.
     """
-    model = model or settings.openrouter_model
+    model = model or settings.llm_model
     
     system_prompt = get_system_prompt(ask_mode)
 
@@ -99,9 +99,9 @@ Please provide your explanation following the formatting guidelines."""
     try:
         async with httpx.AsyncClient(timeout=90.0) as client:
             response = await client.post(
-                f"{settings.openrouter_base_url}/chat/completions",
+                f"{settings.llm_base_url}/chat/completions",
                 headers={
-                    "Authorization": f"Bearer {settings.openrouter_api_key}",
+                    "Authorization": f"Bearer {settings.llm_api_key}",
                     "Content-Type": "application/json",
                     "HTTP-Referer": "http://localhost:3000",
                     "X-Title": "PaperTree"
@@ -123,9 +123,9 @@ Please provide your explanation following the formatting guidelines."""
             return data["choices"][0]["message"]["content"]
     
     except httpx.HTTPStatusError as e:
-        raise Exception(f"OpenRouter API error: {e.response.text}")
+        raise Exception(f"LLM API error: {e.response.text}")
     except Exception as e:
-        raise Exception(f"Failed to call OpenRouter: {str(e)}")
+        raise Exception(f"Failed to call the LLM backend: {str(e)}")
 
 
 async def summarize_thread(explanations: list) -> str:
@@ -150,15 +150,15 @@ Provide a brief summary of the key points discussed."""
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
-                f"{settings.openrouter_base_url}/chat/completions",
+                f"{settings.llm_base_url}/chat/completions",
                 headers={
-                    "Authorization": f"Bearer {settings.openrouter_api_key}",
+                    "Authorization": f"Bearer {settings.llm_api_key}",
                     "Content-Type": "application/json",
                     "HTTP-Referer": "http://localhost:3000",
                     "X-Title": "PaperTree"
                 },
                 json={
-                    "model": settings.openrouter_model,
+                    "model": settings.llm_model,
                     "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}

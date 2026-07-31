@@ -10,7 +10,7 @@ from papertree_api.database import get_database
 
 from .models import (AskMode, ExplanationCreate, ExplanationResponse,
                      ExplanationThread, ExplanationUpdate, SummarizeRequest)
-from .services import call_openrouter, summarize_thread
+from .services import call_llm, summarize_thread
 
 settings = get_settings()
 router = APIRouter()
@@ -89,7 +89,7 @@ async def create_explanation(
     
     # Call AI with ask mode
     try:
-        answer = await call_openrouter(
+        answer = await call_llm(
             selected_text=selected_text,
             question=explanation_data.question,
             context_before=context_before,
@@ -111,7 +111,7 @@ async def create_explanation(
         "parent_id": explanation_data.parent_id,
         "question": explanation_data.question,
         "answer_markdown": answer,
-        "model": settings.openrouter_model,
+        "model": settings.llm_model,
         "ask_mode": explanation_data.ask_mode.value,
         "created_at": datetime.utcnow(),
         "is_pinned": False,
@@ -165,7 +165,7 @@ async def create_explanation(
         parent_id=explanation_data.parent_id,
         question=explanation_data.question,
         answer_markdown=answer,
-        model=settings.openrouter_model,
+        model=settings.llm_model,
         ask_mode=explanation_data.ask_mode,
         created_at=explanation_doc["created_at"],
         is_pinned=False,

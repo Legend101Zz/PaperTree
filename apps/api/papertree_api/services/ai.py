@@ -7,8 +7,8 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 
 import httpx
 
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+LLM_API_KEY = os.getenv("LLM_API_KEY")
+LLM_BASE_URL = "https://api.minimax.io/v1"
 
 # Model configurations
 MODELS = {
@@ -172,7 +172,7 @@ class AIService:
             return self._request_cache[cache_key]
         
         headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Authorization": f"Bearer {LLM_API_KEY}",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://papertree.app",
             "X-Title": "PaperTree",
@@ -189,7 +189,7 @@ class AIService:
         
         try:
             response = await self.client.post(
-                f"{OPENROUTER_BASE_URL}/chat/completions",
+                f"{LLM_BASE_URL}/chat/completions",
                 headers=headers,
                 json=payload,
             )
@@ -231,7 +231,7 @@ class AIService:
         prompt = self._build_prompt(mode, text, context, custom_prompt)
         
         headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Authorization": f"Bearer {LLM_API_KEY}",
             "Content-Type": "application/json",
         }
         
@@ -245,7 +245,7 @@ class AIService:
         
         async with self.client.stream(
             "POST",
-            f"{OPENROUTER_BASE_URL}/chat/completions",
+            f"{LLM_BASE_URL}/chat/completions",
             headers=headers,
             json=payload,
         ) as response:

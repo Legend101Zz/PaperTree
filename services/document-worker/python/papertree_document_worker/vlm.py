@@ -25,10 +25,9 @@ The project owner's decision, 2026-07-31. The endpoint is Anthropic-compatible, 
 `urllib` only, which keeps the epic's new-dependency count at one (pymupdf).
 
 **Only `MiniMax-M3` accepts an image block.** M2.7 / M2.5 / M2.1 / M2 are text-and-tool-calls
-only. Separately, `apps/api/.env` already carries `OPENROUTER_MODEL=deepseek/deepseek-v3.2`,
-which is a **text** model that would accept this call shape and return confident nonsense - so
-this module never falls back to the app's configured LLM, and takes its model from its own
-setting or not at all.
+only, and a text model will accept this call's shape and answer anyway - so the model is never
+inherited from a general "which LLM are we using" setting. `apps/api` keeps `llm_model` and
+`llm_vision_model` as two separate settings for the same reason.
 
 Measured 2026-07-31 on the `dh(t)/dt = f(h(t), t, theta)` display equation from
 `neural-odes-mathheavy.pdf` p0: `\\frac{d\\mathbf{h}(t)}{dt} = f(\\mathbf{h}(t), t, \\theta)`,
@@ -161,8 +160,9 @@ def _confidence(latex: str) -> float:
 class VlmClient:
     """Stdlib-only client for the Anthropic-compatible endpoint.
 
-    `api_key` defaults to `$PAPERTREE_VLM_API_KEY`. There is deliberately **no fallback** to
-    `OPENROUTER_API_KEY`: that account's configured model is text-only and would answer.
+    `api_key` defaults to `$PAPERTREE_VLM_API_KEY`. Deliberately its own variable rather than a
+    shared `LLM_API_KEY`: the worker is a separate process from the API and should be grantable
+    a separate credential.
     """
 
     def __init__(

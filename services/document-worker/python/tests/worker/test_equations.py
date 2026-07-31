@@ -123,11 +123,11 @@ def test_a_math_heavy_paper_yields_equation_regions_and_a_prose_paper_far_fewer(
 
 
 def test_the_vlm_client_is_unavailable_without_a_key_and_never_falls_back() -> None:
-    """`apps/api/.env` carries OPENROUTER_API_KEY with a TEXT model configured.
-
-    A fallback to it would accept this call shape and return confident nonsense, so there is
-    none: no key means unavailable, and unavailable means the equation keeps its crop with no
+    """No key means unavailable, and unavailable means the equation keeps its crop with no
     `latex`. That is a valid document, not a failure.
+
+    The client reads its OWN key and its OWN model. It never inherits a general "which LLM are
+    we using" setting, because a text model accepts this call's shape and answers anyway.
     """
     client = VlmClient(api_key=None)
     assert not client.available
