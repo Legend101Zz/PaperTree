@@ -281,8 +281,20 @@ def detect_figure_regions(page: PageContent) -> list[FigureRegion]:
         ink_count = sum(1 for d in ink if _within(d.bbox, box))
         regions.append(FigureRegion(bbox=box, is_vector=True, ink_count=ink_count))
 
-    for image in _significant_rasters(page.images):
-        regions.append(FigureRegion(bbox=list(image.bbox), is_vector=False, ink_count=1))
+    # RASTER PLACEMENTS ARE PANEL-MERGED TOO, and measuring said why. A matplotlib figure
+    # exported as a raster is placed once PER PANEL, so neural-odes returned 63 raster regions
+    # for a paper with about four figures - every subplot its own "figure". The same adaptive
+    # merge the vector clusters use collapses them, because the relation is identical: panels of
+    # one float sit close together relative to their own size.
+    raster_boxes = [list(image.bbox) for image in _significant_rasters(page.images)]
+    for box in _merge_panels(raster_boxes):
+        regions.append(
+            FigureRegion(
+                bbox=box,
+                is_vector=False,
+                ink_count=sum(1 for b in raster_boxes if _within(b, box)),
+            )
+        )
 
     # Claim interior text. Largest region first so a label inside a sub-panel of a big figure is
     # claimed by the panel that actually contains it rather than by whichever was found first.

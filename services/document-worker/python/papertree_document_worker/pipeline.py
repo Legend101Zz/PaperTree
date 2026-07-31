@@ -24,6 +24,7 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
+from papertree_document_ir import BBox
 from papertree_document_ir.validate import assert_valid_paper, validate_paper
 
 from papertree_document_worker.assemble import AssembledBlock, PaperBuilder, config_hash_for
@@ -81,6 +82,48 @@ class ParseResult:
     diagnostics: list[Any] = field(default_factory=list)
     multi_polygon_blocks: int = 0
     page_count: int = 0
+
+
+#: A caption sits directly under its float, or occasionally over it. Beyond this many points
+#: away it is a caption for something else - findings.md B3 measured the old extractor searching
+#: only a 60 pt band BELOW a single image rect, which is why 1 of 3 captions were found on
+#: Attention and 1 of 4 on Neural ODEs.
+CAPTION_MAX_GAP_PT = 90.0
+#: ...and it must sit under the float, not beside it. Horizontal overlap is what distinguishes
+#: "the caption of this figure" from "a caption in the other column at the same height", and
+#: proximity alone cannot: on a two-column page the nearest region by vertical centre is
+#: frequently the float in the OTHER column.
+CAPTION_MIN_X_OVERLAP = 0.35
+
+
+def _x_overlap_share(a: BBox, b: BBox) -> float:
+    lo, hi = max(a[0], b[0]), min(a[2], b[2])
+    smaller = min(a[2] - a[0], b[2] - b[0])
+    return (hi - lo) / smaller if smaller > 0 else 0.0
+
+
+def _nearest_float(
+    caption: BBox, candidates: list[tuple[Any, AssembledBlock]]
+) -> tuple[Any, AssembledBlock] | None:
+    """The float a caption belongs to: overlapping in x, adjacent in y, nearest of those.
+
+    Three constraints rather than one distance, because each rules out a failure the others
+    permit: x-overlap rules out the other column, the gap rules out a float three paragraphs
+    away, and "nearest" then picks among genuine candidates.
+    """
+    viable = []
+    for pair in candidates:
+        box = pair[0].bbox
+        if _x_overlap_share(caption, box) < CAPTION_MIN_X_OVERLAP:
+            continue
+        # Distance between the two edges that would touch: the float's bottom to the caption's
+        # top (caption below, the usual case) or the caption's bottom to the float's top.
+        gap = min(abs(caption[1] - box[3]), abs(box[1] - caption[3]))
+        if gap <= CAPTION_MAX_GAP_PT:
+            viable.append((gap, pair))
+    if not viable:
+        return None
+    return min(viable, key=lambda item: item[0])[1]
 
 
 def _dedupe_tables(regions: list[Any]) -> list[Any]:
@@ -355,12 +398,12 @@ def _assemble(
             caption = emitted[id(layout_block)]
             if caption.type != "caption":
                 continue  # rule 22: caption_of.from must be a `caption` block
-            caption_y = caption.line_bands[0][1] if caption.line_bands else 0.0
-            region, figure = min(
-                unlinked, key=lambda pair: abs((pair[0].bbox[1] + pair[0].bbox[3]) / 2 - caption_y)
-            )
-            builder.relate("caption_of", caption, figure, 0.8, "geometric+numbering")
-            unlinked.remove((region, figure))
+            band = caption.line_bands[0] if caption.line_bands else [0.0, 0.0, 0.0, 0.0]
+            match = _nearest_float(band, unlinked)
+            if match is None:
+                continue
+            builder.relate("caption_of", caption, match[1], 0.8, "geometric+numbering")
+            unlinked.remove(match)
 
     sections = build_sections(all_headings, all_body)
     # RULE 21: a section's `heading_block_id` must name a block of a KNOWN HEADING type - only
