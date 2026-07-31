@@ -102,6 +102,16 @@ def _x_overlap_share(a: BBox, b: BBox) -> float:
     return (hi - lo) / smaller if smaller > 0 else 0.0
 
 
+def _overlaps(a: BBox, b: BBox, share: float) -> bool:
+    """Whether `a` is covered by `b` by at least `share` of `a`'s own area."""
+    lo_x, hi_x = max(a[0], b[0]), min(a[2], b[2])
+    lo_y, hi_y = max(a[1], b[1]), min(a[3], b[3])
+    if hi_x <= lo_x or hi_y <= lo_y:
+        return False
+    area = (a[2] - a[0]) * (a[3] - a[1])
+    return area > 0 and (hi_x - lo_x) * (hi_y - lo_y) / area >= share
+
+
 def _nearest_float(
     caption: BBox, candidates: list[tuple[Any, AssembledBlock]]
 ) -> tuple[Any, AssembledBlock] | None:
@@ -357,6 +367,14 @@ def _assemble(
         # away. That is findings.md B3's "zero figures on ResNet" re-created one layer up.
         #
         # A figure is a figure because there is ink on the page. A caption is a separate fact.
+        # A REGION THAT OVERLAPS A DETECTED TABLE IS THAT TABLE, NOT A FIGURE. Both are found by
+        # clustering ink, so a bordered table's interior rules and cell borders cluster exactly
+        # like a diagram would. Emitting both gives two blocks over one object, and it caps
+        # caption linking: ResNet reported 11 figure regions for ~6 real figures, so at most
+        # ~55% could ever carry a caption however good the linker was.
+        #
+        # Tables win because they were found by a STRONGER signal - a booktabs rule group is
+        # unambiguous where an ink cluster is a heuristic.
         figure_blocks: list[tuple[Any, AssembledBlock]] = []
         # Deduplicated by QUANTISED TOP-LEFT ANCHOR, because that is what the id hashes. A
         # figure carries no text, so two regions sharing a 1 pt-quantised (x0, y0) produce the
@@ -366,6 +384,8 @@ def _assemble(
         for region in detect_figure_regions(page):
             anchor = (round(region.bbox[0]), round(region.bbox[1]))
             if anchor in seen_anchors:
+                continue
+            if any(_overlaps(region.bbox, t.bbox, 0.5) for t in table_regions):
                 continue
             seen_anchors.add(anchor)
             figure_blocks.append(
