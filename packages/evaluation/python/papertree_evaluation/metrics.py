@@ -37,6 +37,7 @@ __all__ = [
     "caption_association",
     "element_detection",
     "iou",
+    "match_regions",
     "reading_order_accuracy",
     "vector_figure_recall",
 ]
@@ -72,8 +73,8 @@ class DetectionScore:
     per_type: dict[str, float] = field(default_factory=dict)
 
 
-def _match(
-    predicted: list[dict[str, Any]], gold: list[dict[str, Any]], threshold: float
+def match_regions(
+    predicted: list[dict[str, Any]], gold: list[dict[str, Any]], threshold: float = IOU_MATCH
 ) -> list[tuple[int, int]]:
     """Greedy one-to-one matching by descending IoU, type-constrained.
 
@@ -99,6 +100,13 @@ def _match(
         used_g.add(gi)
         pairs.append((pi, gi))
     return pairs
+
+
+#: Public since `scoring.py` needs per-page matching to pool per-type counts across a paper.
+#: Element detection has to match WITHIN a page - a figure on page 3 must not be allowed to
+#: satisfy a gold figure on page 7 - but per-type F1 computed page-by-page and then averaged is
+#: dominated by pages where a type appears once. Pooling the counts needs the pairs themselves.
+_match = match_regions
 
 
 def element_detection(
