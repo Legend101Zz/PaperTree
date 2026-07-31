@@ -126,6 +126,25 @@ means you missed most of the page.
 standard, and the result document will say so — but it converts "not evaluable" into "measured,
 with stated n", which is the difference that matters.
 
+## 5b. Two extra clicks that buy two whole metrics
+
+The first pass (18 pages, `research/benchmarks/gold/`) could not score **caption association** or
+**vector-figure recall** at all, because the tool never collected the fields they need. It does
+now, and both are one click while the box is fresh:
+
+- **`vector figure`** — a checkbox that appears when the type is `figure`. Tick it when the
+  figure is *drawn* (lines, axes, arrows, a plot) rather than a *photograph*. This is the metric
+  §4.1 isolates because both of PaperTree's old extractors found **zero** of ResNet's figures,
+  every one of which is vector ink. It is the one dimension where this parser is expected to win,
+  and right now that is unproven.
+- **`describes`** — a dropdown that appears when the type is `caption`, listing the figures and
+  tables you have already drawn *on that page*. Pick the one the caption belongs to.
+
+Neither can be added afterwards. Guessing a caption's figure from proximity would score the
+parser's own caption heuristic against a copy of itself, and nothing in the PDF records whether
+you considered a figure drawn or photographed. **Draw floats before their captions** so the
+dropdown is already populated.
+
 ## 6. What happens when you hand it back
 
 `packages/evaluation` already implements every metric against this exact format, tested on
