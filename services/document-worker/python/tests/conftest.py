@@ -9,10 +9,24 @@ every push.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
 from papertree_document_worker.pdf import pymupdf
+
+# `_corpus_manifest` lives in tests/worker/ and is imported from tests/ingest/ too. It exists
+# ONCE, and this insertion is what makes the sibling import work.
+#
+# Not by copying the file: mypy treats two files with the same basename as one module and aborts
+# the whole run ("Duplicate module named ..."), which is the constraint pytest's `prepend` import
+# mode imposes across this repo. Not by a second conftest either - same collision. And not by
+# making `tests` a package: packages/db/python/tests/__init__.py already claims that name.
+#
+# This conftest is loaded for every subdirectory of tests/, so one insertion covers them all.
+_WORKER_TESTS = Path(__file__).resolve().parent / "worker"
+if str(_WORKER_TESTS) not in sys.path:
+    sys.path.insert(0, str(_WORKER_TESTS))
 
 
 @pytest.fixture(scope="session")
