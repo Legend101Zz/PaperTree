@@ -124,14 +124,26 @@ def _split_row(lines: list[Line]) -> tuple[tuple[BBox, str], ...]:
 
     Borderless splitting, because booktabs draws no vertical rules. The gap threshold scales with
     the row's own character advance so a wide-set header row and a tight numeric row both work.
+
+    SPLIT PER LINE, THEN MERGED, and that ordering matters. An earlier draft sorted every span in
+    the row by x and concatenated, which silently welded spans from DIFFERENT lines together with
+    no separator: a3c produced a cell reading `'Onewayofpropagatingrewardsfasterisbyusingn-'`,
+    text that appears nowhere in the page's glyph stream. `ingest/source-authenticity.spec`
+    caught it - which is the whole reason that lint exists, since the result is a plausible
+    string that no validator would question.
+
+    A cell spanning several lines now joins them with U+000A, the same convention
+    `build_block_text` uses, so cell text stays reconstructible line by line.
     """
-    pieces: list[tuple[BBox, str]] = []
-    for line in lines:
-        for span in line.spans:
-            if span.text.strip():
-                pieces.append((list(span.bbox), span.text))
+    per_line = [_split_line(line) for line in lines]
+    return _merge_columns([cells for cells in per_line if cells])
+
+
+def _split_line(line: Line) -> list[tuple[BBox, str]]:
+    """One LINE -> its cells. Never crosses a line boundary."""
+    pieces = [(list(span.bbox), span.text) for span in line.spans if span.text.strip()]
     if not pieces:
-        return ()
+        return []
     pieces.sort(key=lambda p: p[0][0])
 
     advances = [
@@ -144,7 +156,7 @@ def _split_row(lines: list[Line]) -> tuple[tuple[BBox, str], ...]:
     current_text = pieces[0][1]
     for box, text in pieces[1:]:
         if box[0] - current_box[2] > threshold:
-            cells.append((current_box, current_text.strip()))
+            cells.append((current_box, current_text))
             current_box, current_text = list(box), text
         else:
             current_box = [
@@ -154,8 +166,35 @@ def _split_row(lines: list[Line]) -> tuple[tuple[BBox, str], ...]:
                 max(current_box[3], box[3]),
             ]
             current_text += text
-    cells.append((current_box, current_text.strip()))
-    return tuple(cells)
+    cells.append((current_box, current_text))
+    return cells
+
+
+def _merge_columns(per_line: list[list[tuple[BBox, str]]]) -> tuple[tuple[BBox, str], ...]:
+    """Stack each line's cells into columns by x-overlap, joining wrapped text with U+000A."""
+    if not per_line:
+        return ()
+    columns: list[tuple[BBox, list[str]]] = [(box, [text]) for box, text in per_line[0]]
+    for cells in per_line[1:]:
+        for box, text in cells:
+            for index, (existing_box, texts) in enumerate(columns):
+                overlap = min(existing_box[2], box[2]) - max(existing_box[0], box[0])
+                if overlap > 0:
+                    texts.append(text)
+                    columns[index] = (
+                        [
+                            min(existing_box[0], box[0]),
+                            min(existing_box[1], box[1]),
+                            max(existing_box[2], box[2]),
+                            max(existing_box[3], box[3]),
+                        ],
+                        texts,
+                    )
+                    break
+            else:
+                columns.append((box, [text]))
+    columns.sort(key=lambda c: c[0][0])
+    return tuple((box, "\n".join(texts)) for box, texts in columns)
 
 
 def detect_tables(page: PageContent, column_width: float) -> list[TableRegion]:
