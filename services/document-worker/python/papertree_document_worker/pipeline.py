@@ -37,6 +37,9 @@ from papertree_document_worker.hierarchy import build_sections, detect_headings
 from papertree_document_worker.joining import find_continuations
 from papertree_document_worker.layout import LayoutBlock, layout_document
 from papertree_document_worker.pdf import SourceDocument
+from papertree_document_worker.references import (
+    classify_reference_entries,
+)
 from papertree_document_worker.tables import detect_tables
 from papertree_document_worker.text import build_block_text
 from papertree_document_worker.vlm import VlmBudget, VlmClient, VlmError
@@ -596,6 +599,9 @@ def _assemble(
     # way every run.
     for retype in classify_front_matter(builder.blocks, front_matter_body_size):
         retype.block.type = retype.new_type
+    # Same layer, same reason: `reference_entry` is a type, and `block_id` hashes the type.
+    for entry in classify_reference_entries(builder.blocks):
+        entry.block.type = entry.new_type
 
     # RULE 36: `status: "complete"` requires a non-null crop on every equation and figure. The
     # ids have to exist first, because the crop's URI names the block - hence assign_ids() here

@@ -69,6 +69,7 @@ from papertree_document_ir.identity import (
 from papertree_document_worker.classify import DocumentProfile
 from papertree_document_worker.layout import FlowKind
 from papertree_document_worker.metadata import extract_metadata
+from papertree_document_worker.references import extract_references
 
 __all__ = [
     "AssembledBlock",
@@ -314,7 +315,10 @@ class PaperBuilder:
             "blocks": blocks,
             "relations": self._emit_relations(by_id),
             "sections": self._emit_sections(),
-            "references": [],
+            # One record per `reference_entry` block. Runs on the SERIALISED blocks because
+            # every record is required to name the block it came from, and those ids
+            # do not exist until `assign_ids()` has run.
+            "references": extract_references(blocks),
             "confidence": {
                 "overall": overall,
                 "by_page": [p.confidence for p in self.profile.pages],
