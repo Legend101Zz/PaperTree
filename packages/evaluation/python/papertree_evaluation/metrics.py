@@ -109,7 +109,6 @@ def element_detection(
     matched = len(pairs)
     precision = matched / len(predicted) if predicted else 0.0
     recall = matched / len(gold) if gold else 0.0
-    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
 
     per_type: dict[str, float] = {}
     for kind in {g.get("type", "?") for g in gold}:
@@ -123,8 +122,11 @@ def element_detection(
     return DetectionScore(
         precision=precision,
         recall=recall,
-        # The HEADLINE number is the macro-average, not the micro f1 above. A micro-average over
-        # gold that is 300 table cells and 12 paragraphs measures table-cell detection.
+        # The HEADLINE number is the MACRO-average - the mean of the per-type f1s - and NOT the
+        # micro f1 that `precision` and `recall` above would give. A micro-average over gold
+        # that is 300 table cells and 12 paragraphs measures table-cell detection and calls it
+        # element detection. `precision`/`recall` are still reported, for the same reason §4.1
+        # asks for per-type numbers: an aggregate nobody can decompose is hard to act on.
         f1=sum(per_type.values()) / len(per_type) if per_type else 0.0,
         matched=matched,
         predicted=len(predicted),
