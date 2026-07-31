@@ -1,7 +1,7 @@
 # EPIC 1 — Ingest & Document Intelligence: result
 
-**Status: INCOMPLETE. 5 of 10 acceptance tests met.** Branch `epic-1-ingest`, 30 commits,
-`63be37d..1aaea2d`. `research/build/EPIC-01-ingest.md` is **unedited** — no acceptance criterion
+**Status: INCOMPLETE. 5 of 10 acceptance tests met.** Branch `epic-1-ingest`, 36 commits,
+`63be37d..e071add`. `research/build/EPIC-01-ingest.md` is **unedited** — no acceptance criterion
 was weakened, and no test file claims a criterion it does not meet.
 
 Every number below was measured on this machine at `pymupdf 1.28.0` / `docling 2.117.0` against
@@ -58,7 +58,7 @@ exists, because the capability table below is not a bad result.
 | PaperTree dead extractor *(H2, deleted)* | 233 | 233 | 233 | 0 | 58 | 86 | **0** | 0 | 0 | 0 | — | 4.1 |
 | pymupdf-raw | 549 | 549 | 549 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0.05 |
 | docling | 519 | 497 | 497 | **0** | 22 | 2 | **7** | 21 | 15 | 342 | 22 | 2.10 |
-| **papertree-deterministic** | 931 | **931** | **931** | **931** | 7 | 0 | **11** | 3 | 10 | **580** | 7 | **0.14** |
+| **papertree-deterministic** | 929 | **929** | **929** | **929** | 5 | 2 | **9** | 2 | 10 | **580** | 5 | **0.13** |
 
 Rows 1 and 2 are carried forward from findings.md H2 and marked as such: both are **deleted**
 (§5), and re-implementing 1,698 lines of removed code to re-measure what was already measured
@@ -71,9 +71,10 @@ Three things in that table are worth stating plainly:
   calls this "the single most important schema consequence"; it is why PaperTree mints its own
   ids whichever parser wins, and it is the column where the deterministic path is not merely
   competitive but categorically different.
-- **Figures: 11 against Docling's 7**, all correctly `pdf_vector`, where both old extractors
-  scored 0. That is findings.md B3 closed.
-- **Headings: 7 against Docling's 22.** The deterministic hierarchy is weak, and §3 says so.
+- **Figures: 9 against Docling's 7**, all correctly `pdf_vector`, where both old extractors
+  scored **0**. That is findings.md B3 closed.
+- **Headings: 5 against Docling's 22**, and ResNet's real section count is about 10. The
+  deterministic hierarchy is weak in BOTH directions depending on the paper, and §3 says so.
 
 ---
 
