@@ -19,17 +19,37 @@ the 8-paper, 195-page corpus. Nothing is quoted from a doc without being re-run.
 > zero-ML ships as default. Otherwise a small local layout model becomes default and Docling
 > stays opt-in.
 
-### Verdict: **the rule is not satisfied.**
+### Verdict: **the rule is not satisfied — on speed alone. The accuracy half passes.**
 
-Both halves now fail. The speed half fails at 12× against a 20× bar; the accuracy half is
-measured on human gold for the first time and comes in at macro F1 **0.08–0.22**. The
-*comparison* to Docling is still not formable — the Docling adapter reports counts, not geometry
-— but the deterministic path's absolute number is low enough that the ratio is no longer the
-interesting question.
+Both halves are now measured against the same human gold, and they disagree:
 
-*This section was rewritten on 2026-08-01, when gold arrived. What it said before — "not fully
-evaluable", resting on the speed half alone — is preserved in git history rather than deleted,
-because a prediction made before the measurement is worth being able to check.*
+| half | bar | measured | |
+|---|---|---|---|
+| **accuracy** | ≥ 85 % of Docling's F1 | **91 %** | **PASS** |
+| **speed** | ≥ 20× Docling | **12.4×** | **FAIL** |
+
+The rule requires both, so zero-ML does not ship as default. But the reason has completely
+changed, and so has what follows from it.
+
+**THE STATED FALLBACK DOES NOT ADDRESS THE FAILING HALF.** The rule's `otherwise` branch is *"a
+small local layout model becomes default"* — a remedy for losing on accuracy. Accuracy is the half
+that passed. The half that failed is speed, and a local layout model is **slower** than the
+deterministic path, not faster; adopting it would move the failing number in the wrong direction
+while replacing a metric that is already at 91 %.
+
+So the fallback as written is not applicable, and this is a decision for whoever owns Wave 1
+rather than one Epic 1 should quietly make. The three options I can see, stated without a
+recommendation dressed up as a finding:
+
+1. **Ship zero-ML anyway** and record the 20× bar as unmet. 12.4× is still an order of magnitude,
+   and the bar's provenance is not documented anywhere in the epic file.
+2. **Close the speed gap.** 288 ms/page includes table detection, 130+ crops per paper and full
+   semantic validation. Crops are the obvious candidate to defer.
+3. **Re-run the rule on Tier B gold** before deciding anything. 18 pages is 15 % of it (below).
+
+*This section has been rewritten twice — once when gold arrived, once when Docling became
+scoreable. Both earlier versions are in git history rather than deleted, because a conclusion
+stated before the measurement is worth being able to check against.*
 
 **The speed half is measured and it FAILS.** Median over the 8 papers both parsed:
 
@@ -38,6 +58,10 @@ because a prediction made before the measurement is worth being able to check.*
 | pymupdf-raw (floor) | 0.046 | 0.107 | 0 % |
 | **papertree-deterministic** | **0.288** | **1.644** | **0 %** |
 | docling | 4.584 | 6.017 | 0 % |
+
+**12× faster, against a 20× bar** — and independently reproduced: the `--with-docling` scoring
+run over the three annotated papers measures 0.101 s/page against Docling's 1.250 s/page, a ratio
+of **12.4×**. Two runs, different paper sets, different Docling warmth, same answer.
 
 **12× faster, against a 20× bar.** Not 250×, which is what an earlier partial measurement of
 mine suggested and which I am correcting here: that figure compared a parse without tables,
@@ -72,10 +96,29 @@ shape. `attention`'s title is the clearest case: gold drew it 31 pt tall, the pa
 after seeing results is what the decision rule was written in advance to prevent — but the split
 says which failures need detecting and which need reconciling.
 
-Docling has not been scored on this gold — `DoclingAdapter` returns capability counts, not
-per-region geometry (issue open, §7). **So the ratio the decision rule asks for still cannot be
-formed.** What has changed is that the deterministic path's own F1 is no longer a question mark:
-it is 0.08–0.22, and no plausible Docling number makes 85 % of it a passing grade.
+**Docling, on the same gold, with the same metric:**
+
+| paper | deterministic | docling | share of Docling | ≥ 85 %? |
+|---|---|---|---|---|
+| attention-is-all-you-need | 0.250 | 0.280 | **89 %** | yes |
+| neural-odes-mathheavy | 0.193 | 0.168 | **115 %** | yes |
+| resnet-cvpr-2col | 0.212 | 0.308 | **69 %** | no |
+| | | | **mean 91 %** | **PASS** |
+
+Reproduce with `uv run python -m papertree_evaluation score --with-docling`.
+
+**Docling's own absolute numbers are also low — 0.168 to 0.308 — and that reframes the
+deterministic path's 0.19–0.25.** A gold set on which a mature, ML-based, widely-used converter
+scores 0.28 is a gold set whose boxing conventions differ from *both* parsers', not a verdict on
+one of them. It is why the RATIO is the meaningful quantity here and the absolute is not, which is
+also why the rule was written as a ratio.
+
+ResNet is the one clear loss: Docling 0.308 against 0.212, and it is the two-column paper.
+
+Reading order runs the other way and is not part of the rule: Docling scores 0.500 / 0.578 /
+0.546 against 0.278 / 0.389 / **0.967**. The deterministic path is far better on the two-column
+paper and worse on both single-column ones — the opposite of what "columns are the hard part"
+would predict, and worth a look before Epic 2 relies on either.
 
 Two of §4.1's four metrics remain not evaluable, and are reported as such rather than as zero,
 because a zero is a claim about the parser: **caption association** (gold carries no `parent`
@@ -107,9 +150,16 @@ Equation *extents* are still narrower than gold's full-column convention, so equ
 even with the count right. That is a boxing-convention gap, and the near-miss column is what
 distinguishes it from a detection failure.
 
-**So: zero-ML does not ship as default on this evidence**, and the conclusion is now supported by
-both halves rather than one. 12× against a 20× bar, and an absolute F1 that would need to roughly
-quadruple before the ratio question is even interesting.
+**So: zero-ML does not ship as default on this evidence** — because the rule requires both halves
+and speed misses. It is worth being precise about what that does and does not mean. It is not
+"the deterministic path is not accurate enough": on this gold it reaches 91 % of Docling and the
+bar is 85 %. It is "it is 12.4× faster where the rule asked for 20×", against a bar whose
+provenance the epic file does not record.
+
+And the n matters. 18 pages, one annotator, no inter-annotator agreement figure — enough to
+measure, not enough to authorise, and README §2 is explicit that *"without [IAA], no metric on
+this set has a meaningful ceiling."* A 91 % that would need to fall by 6 points to flip the
+verdict is not a comfortable margin at this sample size.
 
 ### Capability, measured (findings.md H2's columns)
 
@@ -150,7 +200,7 @@ Three things in that table are worth stating plainly:
 | `worker/robustness.spec` | **MET** | 8/8 papers parse and validate; 0 crashes, 0 timeouts, 0 empty outputs |
 | `worker/perf.spec` | **MET** | p50 305 ms/page, p95 568 ms/page against a 1500 ms bar |
 | `ingest/source-authenticity.spec` | **MET** | every line of every non-table block traced to the page's glyph stream; found 2 real bugs while being written |
-| `eval/ptub.spec` | **PARTIAL** | harness + metrics + annotation tool + scorer, 63 tests; gold exists (18 pp); **3 adapters, not 4** and Docling returns counts not geometry, so no cross-parser F1 |
+| `eval/ptub.spec` | **PARTIAL** | harness + metrics + annotation tool + scorer + Docling geometry, 83 tests; gold exists (18 pp); **cross-parser F1 now computable and computed**; still **3 adapters, not 4** — row 2 is deleted code |
 | `worker/figures.spec` | **PARTIAL** | ResNet ≥5 ✅ (9, all vector); `is_vector` correct ✅; ≥80 % captioned ❌ (58 % corpus-wide). Gold figure F1 0.67 on `attention`, **0.00 on the other two**; vector-figure recall still not evaluable — gold has no `is_vector` |
 | `worker/equations.spec` | **NOT MET** | prose never classified as an equation ✅; every equation retains its crop ✅; **≥80 % of gold ❌ — 0 of 17 at IoU 0.5**. Count now 16 predicted against 17 gold (was 89); the extents are narrower than gold's full-column convention |
 | `worker/reading-order.spec` | **NOT MET** | **0.278 / 0.389 / 0.967 pairwise against a ≥0.90 bar**, up from 0.167 / 0.333 / 0.800. ResNet is now over the bar; the two single-column papers are not. The ordering logic was never the weak part — the regions being ordered were |
