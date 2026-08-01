@@ -121,8 +121,8 @@ def _page_html(task: AnnotationTask) -> str:
         f'data-rasters="{task.raster_images}">'
         f"<h2>{task.paper} — page {task.page_index}"
         f'<span class="hint">{task.raster_images} raster image'
-        f'{"" if task.raster_images == 1 else "s"} on this page'
-        f'{" — so every figure here is vector" if task.raster_images == 0 else ""}</span></h2>'
+        f"{'' if task.raster_images == 1 else 's'} on this page"
+        f"{' — so every figure here is vector' if task.raster_images == 0 else ''}</span></h2>"
         f'<div class="canvas"><img src="{task.image_path.name}" alt="page {task.page_index}">'
         f'<div class="overlay"></div></div></section>'
     )
