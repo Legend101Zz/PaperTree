@@ -1,7 +1,16 @@
 # EPIC 2 — result
 
-**Branch:** `epic-2-reader`, from `main` at `e4a6b1f`; continued 2026-08-01 from `560109e` (PR #56).
-**Status: COMPLETE. All 9 of 9 acceptance tests are satisfied and measured.**
+**Branch:** `epic-2-reader`, from `main` at `e4a6b1f`; continued 2026-08-01 from `560109e` (PR #56);
+continued again 2026-08-01 on `epic-2/f2.3-wire-capture` from `ddbe123` (PR #61).
+**Status: COMPLETE.** All 9 of 9 acceptance tests satisfied and measured, and — since §11 — all of
+them reachable by a user.
+
+> **§11 IS THE CORRECTION THAT MATTERS.** Everything above and below it was written when the nine
+> criteria passed, and the nine criteria passing turned out not to mean the epic worked. **Four
+> features were built, tested, audited and mounted by nothing**: the provenance stylesheet (§10.2),
+> the highlight capture path, the library, and the zoom control. A user could not create a
+> highlight, could not reach any designed system state, and could not change the zoom. Read §11
+> before quoting any status from this file.
 
 `anchoring/cross-mode.spec` — the one this document originally recorded as NOT met, in §7.1 — was
 written on 2026-08-01 and is covered in **§10**. That section also records two defects it found
@@ -679,3 +688,117 @@ The browser numbers in §10.3 are not reproduced by a suite — that is the poin
 also their weakness: **they are a measurement taken once, by hand, not a regression test.** Wiring
 axe into a real-browser runner (Playwright) so `color-contrast` and `target-size` cannot silently
 stop being checked is the obvious follow-up, and it is not done.
+
+---
+
+# 11. The fourth correction: nine passing criteria, four unreachable features
+
+*Written 2026-08-01, on `epic-2/f2.3-wire-capture` (PR #61), after the owner asked whether Epic 2
+could be closed. The answer was no, and the reason is the most useful thing in this document.*
+
+## 11.1 What was actually wrong
+
+`#56` closed the ninth acceptance criterion, and I recorded this epic COMPLETE. Both halves of that
+were true and the conclusion was wrong. Booting the product — mongo, `apps/api`, `next dev` — and
+using it found:
+
+| | what existed | what a user could do |
+|---|---|---|
+| F2.3 capture | `useSelectionCapture`, `SelectionToolbar`, 57 anchoring tests, 100.00% re-anchor | **nothing** — neither is imported by anything; `onAnchorCaptured` is declared, supplied, and read by no descendant |
+| F2.3 stamping | `useSelectionCapture`'s header states `PdfPage` writes `data-block-id`/`data-cp-start` | **nothing** — 415 rendered spans, 0 stamped; the hook could only ever run its own documented fallback |
+| F2.8 library | `PaperGrid`, `PaperList`, `UploadDropzone`, six `SystemStates`, 0 axe violations, every target ≥44×44 | **nothing** — imported only by `test/library-cases.tsx` and `test/a11y.spec`; `/dashboard` was still v1 |
+| F2.1 zoom | `ZoomControl`, `resolveZoom`, fit modes, pinch | **nothing** — unmounted; the shell held a zoom scalar no control could change |
+
+Verified in Chrome, not inferred: selecting the word `convolutional` inside the abstract left
+`document.querySelector('.pt-selection-toolbar')` null.
+
+## 11.2 Why nine green criteria said nothing about it
+
+**Every acceptance test in this epic imports the component it tests.** `reparse.spec` builds
+anchors by calling `captureAnchor` in TypeScript; `a11y.spec` and `touch.spec` call
+`render(testCase.element)`. Both prove the component works. Neither can observe whether anything
+renders it, because the act of testing supplies the missing caller.
+
+The property that was broken is REACHABILITY, and it is a property of the import graph rather than
+of any module. `apps/web/test/reachable.spec.ts` now checks it: walk from `src/app/**`, Next's real
+entry points, and require every component to be in the transitive closure. It would have caught all
+four. **It found the fourth** — I wrote it for capture and the library, ran it, and it named
+`ZoomControl` and `ModeSwitch`.
+
+If one check from this epic is worth keeping, it is that one.
+
+## 11.3 The stamping, and the trap inside it
+
+pdf.js and PyMuPDF segment a page differently — 469 text items against 62 line-level spans on
+`attention` — so no index, id or offset survives the crossing. `stampTextLayer` matches each item's
+box to a block geometrically, then walks that block's text with a running cursor:
+
+| fixture | items | matched | placed (of textual) |
+|---|---|---|---|
+| attention-is-all-you-need | 469 (332 textual) | 465 · 99.1% | 327 · **98.5%** |
+| resnet-cvpr-2col | 754 (567 textual) | 673 · 89.3% | 488 · **86.1%** |
+| neural-odes-mathheavy | 892 (656 textual) | 820 · 91.9% | 577 · **88.0%** |
+
+The denominator is TEXTUAL items: a third of pdf.js's stream is whitespace-only gap markers, which
+have no offset to have. The remaining shortfall is display equations and rotated margin text, left
+**unstamped** rather than guessed — an absent `data-block-id` is visibly approximate where a wrong
+one is silently wrong.
+
+**The trap.** `item.transform` is already raw PDF user space, so `convertToPdfPoint` — which is what
+the surrounding code uses everywhere else, and which reads as obviously correct here — runs the
+inverse of a transform that was never applied.
+
+|  | matched | placed |
+|---|---|---|
+| with `convertToPdfPoint` | 35.8% | 3.4% |
+| without | 99.1% | 98.5% |
+
+Both typecheck. Neither throws. The wrong one silently degrades every anchor to the text fallback.
+pdf.js's own `#appendText` is the proof it does not belong: it composes the PDF→CSS flip *onto*
+`geom.transform`, which it could not do if that were already viewport space.
+
+## 11.4 A defect I introduced while fixing these
+
+Wiring the scroller's measured box up to `resolveZoom`, I declared `onViewportResize` on
+`SourcePaneProps` and never supplied it from the shell. Fit-width then saw a container of zero and
+clamped to `MIN_ZOOM`: a 25% page, in a reader, with no error anywhere — **the same
+declared-and-never-read shape as the bug I was fixing**, introduced in the commit fixing it.
+
+The prop is now **required**. That moves the check from a test that has to think of it to the
+compiler, which cannot forget. Worth generalising: of the five instances of this defect on this
+epic, four involved an OPTIONAL prop or an unimported module, and none would have survived being
+mandatory.
+
+## 11.5 Two environment findings, so the next session does not re-derive them
+
+**The reader renders nothing in a background browser tab.** `visibilityState: "hidden"` starves
+`requestAnimationFrame`; pdf.js's `RenderTask.promise` never settles; the text layer is never built.
+0 spans, no error, canvas apparently painted. I spent an hour treating this as a regression in my
+own change before testing pristine `main` and finding it there too. **Any automated browser check of
+this reader must foreground the tab, or it is measuring the tab.**
+
+**The corpus is not committed and CI does not have it.** `stamp.spec` reads the real PDFs, passed
+locally against a `--force` gate, and failed CI on `ENOENT … public/fixtures/*.pdf`. It now
+`describe.skipIf`s on their absence and prints the fetch script. The cost, stated plainly: **in CI
+the coverage numbers in §11.3 are unverified.** The wire itself is not — `capture-wire.spec` fakes
+pdf.js, needs only the committed IR, and runs everywhere.
+
+## 11.6 What is still open, and whose
+
+| | |
+|---|---|
+| #43 | Epic 5 owns `hooks/useCanvas.ts` and the stood-down canvas surface — Epic 2's last must-delete item, and the nine components on `reachable.spec`'s `ORPHAN_LEDGER` |
+| #33 | Epic 0 owns `@papertree/document-ir`'s barrel, which pulls `node:crypto` into a browser bundle |
+
+Neither is this epic's to close. Every child of #3 is.
+
+## 11.7 What a user can and cannot do today
+
+**Can:** open the three sample papers from the library, read them as a real pdf.js render, switch
+Source/Guided/Split, zoom (presets, fit-width, fit-page), navigate by PaperIR's section tree, select
+text and create a highlight that survives zoom, resize, reload and a reparse.
+
+**Cannot:** open their own PDF. The reader takes fixture slugs; `apps/api` is v1 and does not
+produce PaperIR, and `services/document-worker`, which does, has no HTTP surface. An upload
+therefore lands as `pending` and says so rather than pretending. **That gap is Epic 1's ingest
+endpoint, not Epic 2's, and it is the single thing between this reader and a usable product.**
