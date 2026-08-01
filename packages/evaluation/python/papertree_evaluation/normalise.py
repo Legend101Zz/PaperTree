@@ -173,6 +173,7 @@ class NormalisedGold:
 def normalise_gold(
     pages: Iterable[dict[str, Any]],
     region_text: dict[tuple[str, int, str], str] | None = None,
+    page_rasters: dict[tuple[str, int], int] | None = None,
 ) -> NormalisedGold:
     """Apply the guide's own rules to hand-drawn gold, recording every change.
 
@@ -181,9 +182,14 @@ def normalise_gold(
     under a box" means. Omit it and rule 1 is skipped: retyping a caption cannot be done from
     labels alone, and guessing from the box's shape would be a heuristic dressed as a fact.
 
-    Rules run in order, because rule 2 depends on rule 1's output and rule 3 on rule 2's.
+    `page_rasters` maps `(paper_id, page)` to the number of raster image XObjects the PDF page
+    contains, on the same terms. Omit it and rule 4 is skipped.
+
+    Rules run in order, because rule 2 depends on rule 1's output and rule 3 on rule 2's. Rule 4
+    runs last, after rule 1 has finished deciding which regions are figures at all.
     """
     texts = region_text or {}
+    rasters = page_rasters or {}
     out: list[dict[str, Any]] = []
     repairs: list[GoldRepair] = []
     warnings: list[GoldWarning] = []
@@ -199,6 +205,9 @@ def normalise_gold(
             _rule_1_caption_typed_as_subject(paper_id, index, region, text, repairs, warnings)
             _rule_2_flow_from_type(paper_id, index, region, repairs)
             _check_whole_page_box(paper_id, index, region, page, warnings)
+            _rule_4_no_raster_on_a_page_without_one(
+                paper_id, index, region, rasters, repairs, warnings
+            )
 
         _rule_3_renumber_reading_order(paper_id, index, regions, repairs)
         _check_caption_links(paper_id, index, regions, warnings)
@@ -306,6 +315,93 @@ def _rule_3_renumber_reading_order(
                 )
             )
             region["reading_order"] = wanted
+
+
+def _rule_4_no_raster_on_a_page_without_one(
+    paper_id: str,
+    page: int,
+    region: dict[str, Any],
+    page_rasters: dict[tuple[str, int], int],
+    repairs: list[GoldRepair],
+    warnings: list[GoldWarning],
+) -> None:
+    """A figure on a page holding zero raster image XObjects is vector. Not likely - certainly.
+
+    WHY THIS EXISTS. The first `is_vector` pass came back inverted on exactly the pages the
+    metric was built for. ResNet page 0 contains no raster images at all, and both of its plots -
+    the boxes holding "iter. (1e4)" and "training error (%)" - were marked `raster`, while the
+    box holding "Figure 1. Training error (left)..." was marked `vector`. The same shape appeared
+    on ResNet p4 and neural-odes p0, p7 and p17: nine of twenty `raster` marks sat on pages with
+    nothing rasterised on them.
+
+    That was a tool defect, not an annotator one, and both halves of it are now fixed in
+    `annotate.py` - `is_vector` has three states and got two radio buttons instead of one
+    checkbox, and each page shows its own raster count, because a 150-DPI PNG renders vector line
+    art and a photograph equally pixelated and so cannot answer the question it was asking.
+
+    THE RULE FIRES IN ONE DIRECTION ONLY.
+
+      0 rasters on the page  ->  every figure on it is vector.        Certain. Repaired.
+      1 or more              ->  nothing follows about ANY one figure. Left alone.
+
+    A page with two rasters and six figures does not say which two, and a rule that guessed would
+    be inventing gold. So the safe half is repaired and the other half is not touched.
+
+    WHAT THIS COSTS, STATED PLAINLY. The count comes from PyMuPDF's image inventory, and the
+    parser's own `is_vector` comes from the same library's `get_images`/`get_drawings`. So after
+    this rule the `is_vector` LABEL is no longer independent of the parser's source of truth, and
+    "did the parser get is_vector right" is no longer a question this gold can answer.
+
+    What it still answers is the one §4.1 actually asks: **vector-figure recall** - of the gold
+    figures that are vector, how many did the parser find at all. That is a measurement of
+    `figures.py`'s clustering, which is the thing under test and which no image inventory
+    predicts. findings.md B3 measured both old extractors finding 0 of ResNet's figures while
+    `get_images()` returned nothing for them; knowing the page has no rasters would not have
+    saved either one.
+    """
+    if region.get("type") != "figure":
+        return
+    count = page_rasters.get((paper_id, page))
+    if count is None or count > 0:
+        return
+    if region.get("is_vector") is True:
+        return
+    before = region.get("is_vector")
+    region["is_vector"] = True
+    if before is False:
+        repairs.append(
+            GoldRepair(
+                paper_id,
+                page,
+                region["gold_id"],
+                "is_vector",
+                before,
+                True,
+                "vector-on-a-page-with-no-rasters",
+            )
+        )
+        warnings.append(
+            GoldWarning(
+                paper_id,
+                page,
+                region["gold_id"],
+                "raster-marked-on-a-page-without-rasters",
+                "the page holds 0 raster image XObjects, so `raster` was not possible - "
+                "repaired to vector, and worth re-checking by hand",
+            )
+        )
+    else:  # was null: filled in rather than corrected, so it is not reported as a disagreement
+        repairs.append(
+            GoldRepair(
+                paper_id,
+                page,
+                region["gold_id"],
+                "is_vector",
+                before,
+                True,
+                "vector-on-a-page-with-no-rasters",
+            )
+        )
 
 
 def _check_whole_page_box(

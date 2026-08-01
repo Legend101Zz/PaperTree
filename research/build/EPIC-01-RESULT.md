@@ -282,6 +282,30 @@ asks whether those boxes have the shape of the regions on the page.
   including its right-margin number, and the parser boxes the glyph bands. Absorbing any non-prose
   block sharing a region's vertical band closes that and was measured and reverted — it chained
   distinct equations together and took 16 down to 6.
+- **Vector-figure recall is measurable as of 2026-08-01, and it is 0.167 / 0.000 / 0.000.** The
+  third of the decision rule's three named metrics, computed for the first time. It needed
+  `is_vector` on gold figures, which needed the annotator to be able to reopen its own output
+  (`b282912`), a control with three states rather than a checkbox with two, and `normalise.py`
+  rule 4 — *a figure on a page holding zero raster XObjects is vector* — which repaired 14 marks
+  that were not merely wrong but impossible.
+
+  **What the zero means matters more than the zero.** It is *not* findings.md B3 repeating: the
+  parser is not blind to vector ink. On ResNet's six sampled pages it emits **2 figure regions
+  where gold marks 12**, with 4 near misses; on neural-odes, 8 against 12 with 5 near. The ink is
+  found and the boundaries disagree — gold boxes individual panels, the parser merges panels into
+  one figure (`_merge_panels`). That is the same granularity argument as `citation` versus
+  `reference_entry`, and like that one it needs a convention ruling rather than a parser fix. What
+  is *not* explained by convention is ResNet's 2-against-12: merging cannot take 12 panels to 2
+  regions across six pages, so some are genuinely missed.
+
+  One caveat, stated because the metric is now load-bearing: rule 4 derives `is_vector` from
+  PyMuPDF's image inventory, which is also where the parser's `is_vector` comes from, so the
+  **label** is no longer independent. **Recall** — did `figures.py` cluster a region there at all
+  — still is, and that is what §4.1 asks for.
+- **Caption association is still not evaluable, and it is not a dropdown away.** Gold holds
+  **51 floats against 1 drawn caption**: captions were almost never boxed as their own regions on
+  the first pass, so there is nothing for a `parent` to point at. Adding the field to the tool was
+  necessary and not sufficient — the caption boxes have to be drawn.
 - **Two headline metrics could not be computed and it is the tool's fault.** Caption association
   needs `parent` links and vector-figure recall needs `is_vector`; the annotator collected
   neither. Vector figures are the one dimension where PaperTree was expected to beat every

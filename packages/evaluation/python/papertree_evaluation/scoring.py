@@ -29,13 +29,23 @@ than reporting nothing - a zero is a claim about the parser.
 
   Caption association  needs caption -> float edges. Gold's `parent` is null everywhere; the
                        tool never collected them. Inferring the nearest float would score
-                       PaperTree's caption heuristic against a copy of itself.
-  Vector-figure recall needs `is_vector` on gold figures. The tool never collected that either.
-                       `annotate.py` now offers the checkbox, so the NEXT annotation pass fixes
-                       it; this one cannot be rescued after the fact.
+                       PaperTree's caption heuristic against a copy of itself. STILL NOT
+                       EVALUABLE, and it is not a dropdown away: gold holds 51 floats against 1
+                       drawn caption, so the caption boxes have to be drawn before there is
+                       anything for a `parent` to point at.
+  Vector-figure recall needs `is_vector` on gold figures. NOW EVALUABLE as of 2026-08-01 - the
+                       annotator collects it and the second pass supplied it, so `vector_recall`
+                       carries a number instead of a reason.
 
-Both come back as `None`, and `render_report` prints "not evaluable" with the reason rather than
-a number.
+What is not evaluable comes back as `None`, and `render_report` prints "not evaluable" with the
+reason rather than a number - a zero is a claim about the parser.
+
+ONE CAVEAT ON THE VECTOR NUMBER. `normalise.py` rule 4 repairs `is_vector` on pages whose PDF
+holds no raster XObjects, so the LABEL is no longer independent of PyMuPDF's image inventory,
+which is also where the parser's own `is_vector` comes from. What stays independently measured is
+the thing §4.1 asks for - RECALL, whether `figures.py` clustered a region there at all. The
+inventory does not predict that: findings.md B3 measured both old extractors finding 0 of
+ResNet's figures while `get_images()` returned nothing for them.
 """
 
 from __future__ import annotations
@@ -50,6 +60,7 @@ from papertree_evaluation.metrics import (
     iou,
     match_regions,
     reading_order_accuracy,
+    vector_figure_recall,
 )
 
 __all__ = [
@@ -105,6 +116,13 @@ class PaperScore:
     predicted_only_types: set[str] = field(default_factory=set)
     #: §4.1 metrics this gold set cannot express, with the reason.
     not_evaluable: dict[str, str] = field(default_factory=dict)
+    #: §4.1's ISOLATED vector-figure recall, per page, for pages whose gold has a vector figure.
+    #:
+    #: Isolated rather than folded into figure F1 because vector blindness is the specific defect
+    #: this benchmark was built around: findings.md B3 measured BOTH old extractors finding 0 of
+    #: ResNet's figures, all of which are vector ink, while the overall figure numbers looked
+    #: merely poor rather than catastrophic. Averaged in, that distinction disappears.
+    vector_recall: list[float] = field(default_factory=list)
 
     @property
     def macro_f1(self) -> float:
@@ -126,6 +144,17 @@ class PaperScore:
     def mean_reading_order(self) -> float:
         pages = [score for score in self.reading_order if score >= 0]
         return sum(pages) / len(pages) if pages else 0.0
+
+    @property
+    def mean_vector_recall(self) -> float | None:
+        """None when no page in this paper's gold holds a vector figure — absent, not zero.
+
+        `metrics.vector_figure_recall` already returns None for a page with no vector gold, and
+        collapsing that to 0.0 here would report a perfect parser as having missed everything on
+        every prose page. `test_an_unavailable_adapter_is_not_a_zero` makes the same distinction
+        one level up.
+        """
+        return sum(self.vector_recall) / len(self.vector_recall) if self.vector_recall else None
 
     @property
     def total_matched(self) -> int:
@@ -217,6 +246,9 @@ def score_paper(
         _count_near_misses(score.near_misses, predicted, gold)
         _pool(score.by_type_strict, predicted, gold, IOU_STRICT)
         score.reading_order.append(reading_order_accuracy(predicted, gold))
+        page_vector = vector_figure_recall(predicted, gold, IOU_MATCH)
+        if page_vector is not None:
+            score.vector_recall.append(page_vector)
 
         score.gold_only_types |= {str(r["type"]) for r in gold}
         score.predicted_only_types |= {str(p["type"]) for p in predicted}
@@ -310,6 +342,12 @@ def render_report(scores: Sequence[PaperScore]) -> str:
             f"    (strict @0.75: {score.macro_f1_strict:.3f})"
         )
         lines.append(f"  {'reading order':18s} {score.mean_reading_order:>34.3f}")
+        vector = score.mean_vector_recall
+        if vector is not None:
+            lines.append(
+                f"  {'vector fig recall':18s} {vector:>34.3f}"
+                f"    (§4.1's isolated metric - findings.md B3's 0 of 4)"
+            )
         near = sum(score.near_misses.values())
         if near:
             lines.append(

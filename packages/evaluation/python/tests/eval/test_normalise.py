@@ -211,3 +211,95 @@ def test_canonical_flows_are_all_valid_options() -> None:
     """Every derived flow must be selectable in the `#flow` control, or the assignment no-ops."""
     selectable = {"body", "caption", "footnote", "header", "footer", "margin", "float"}
     assert set(CANONICAL_FLOW.values()) <= selectable
+
+
+class TestRule4VectorOnAPageWithNoRasters:
+    """The one-directional rule: 0 rasters on the page makes `raster` impossible, not unlikely.
+
+    The first `is_vector` pass came back inverted on exactly the pages this metric exists for -
+    ResNet p0 holds no raster images and both of its plots were marked `raster`, while the box
+    holding "Figure 1. Training error (left)..." was marked `vector`. Nine of twenty `raster`
+    marks sat on pages with nothing rasterised on them.
+    """
+
+    @staticmethod
+    def _figure(gold_id: str = "r00", is_vector: object = False) -> dict[str, Any]:
+        return {
+            "gold_id": gold_id,
+            "type": "figure",
+            "flow": "body",
+            "bbox": [10.0, 10.0, 200.0, 120.0],
+            "reading_order": 0,
+            "parent": None,
+            "is_vector": is_vector,
+            "text": "",
+            "continues_from": None,
+            "continues_to": None,
+        }
+
+    @staticmethod
+    def _page(regions: list[dict[str, Any]]) -> dict[str, Any]:
+        return {
+            "paper_id": "resnet-cvpr-2col",
+            "page": 0,
+            "page_size": {"width": 612, "height": 792},
+            "regions": regions,
+        }
+
+    def test_a_raster_mark_on_a_page_without_rasters_is_repaired(self) -> None:
+        result = normalise_gold(
+            [self._page([self._figure()])],
+            page_rasters={("resnet-cvpr-2col", 0): 0},
+        )
+        assert result.pages[0]["regions"][0]["is_vector"] is True
+        assert result.repairs_by_rule() == {"vector-on-a-page-with-no-rasters": 1}
+
+    def test_the_repair_is_also_warned_so_it_is_re_checkable(self) -> None:
+        """A repair that silently flips a human's answer is a repair nobody audits."""
+        result = normalise_gold(
+            [self._page([self._figure()])],
+            page_rasters={("resnet-cvpr-2col", 0): 0},
+        )
+        assert "raster-marked-on-a-page-without-rasters" in result.warnings_by_kind()
+
+    def test_a_page_WITH_rasters_is_never_touched(self) -> None:
+        """Two rasters and six figures does not say WHICH two. Guessing would invent gold."""
+        result = normalise_gold(
+            [self._page([self._figure(), self._figure("r01")])],
+            page_rasters={("resnet-cvpr-2col", 0): 2},
+        )
+        assert all(r["is_vector"] is False for r in result.pages[0]["regions"])
+        # Scoped to rule 4: the two fixtures share a reading_order, so rule 3 legitimately
+        # renumbers one of them and a bare `repairs == []` would be asserting the wrong thing.
+        assert "vector-on-a-page-with-no-rasters" not in result.repairs_by_rule()
+
+    def test_an_unanswered_figure_is_filled_but_not_warned(self) -> None:
+        """null is a gap, not a disagreement - filling it is not overruling anybody."""
+        result = normalise_gold(
+            [self._page([self._figure(is_vector=None)])],
+            page_rasters={("resnet-cvpr-2col", 0): 0},
+        )
+        assert result.pages[0]["regions"][0]["is_vector"] is True
+        assert result.warnings_by_kind() == {}
+
+    def test_a_correct_vector_mark_produces_no_repair(self) -> None:
+        result = normalise_gold(
+            [self._page([self._figure(is_vector=True)])],
+            page_rasters={("resnet-cvpr-2col", 0): 0},
+        )
+        assert result.repairs == []
+
+    def test_only_figures_are_affected(self) -> None:
+        """A caption mistyped as a figure is rule 1's business; a real caption is nobody's."""
+        caption = {**self._figure(), "type": "caption", "is_vector": None}
+        result = normalise_gold(
+            [self._page([caption])],
+            page_rasters={("resnet-cvpr-2col", 0): 0},
+        )
+        assert result.pages[0]["regions"][0]["is_vector"] is None
+
+    def test_without_raster_counts_the_rule_is_skipped_entirely(self) -> None:
+        """Same contract as rule 1: no evidence supplied, no change invented."""
+        result = normalise_gold([self._page([self._figure()])])
+        assert result.pages[0]["regions"][0]["is_vector"] is False
+        assert result.repairs == []

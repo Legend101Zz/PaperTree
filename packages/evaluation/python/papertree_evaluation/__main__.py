@@ -98,7 +98,11 @@ def _score(args: argparse.Namespace) -> int:
         note = "" if share > 0.8 else "   <-- CHECK THE COORDINATE FRAME"
         print(f"  geometry overlap {paper:32s} {touched:4d}/{total:<4d} ({share:.0%}){note}")
 
-    normalised = normalise_gold(raw, region_text=_region_texts(corpus, raw))
+    normalised = normalise_gold(
+        raw,
+        region_text=_region_texts(corpus, raw),
+        page_rasters=_page_rasters(corpus, raw),
+    )
 
     print("\n" + "=" * 92)
     print("GOLD AS DRAWN (raw)")
@@ -180,6 +184,30 @@ def _decision_rule(ours: dict[str, Any], theirs: dict[str, Any]) -> None:
             f"\n  mean share of docling's F1: {mean:.0%}  ->  {'PASS' if mean >= 0.85 else 'FAIL'}"
         )
     print("  speed: measured separately at 12x against a 20x bar -> FAIL")
+
+
+def _page_rasters(corpus: Path, pages: list[dict[str, Any]]) -> dict[tuple[str, int], int]:
+    """How many raster image XObjects each annotated page holds, for `normalise.py`'s rule 4.
+
+    The same contract as `_region_texts`: a fact read off the PDF, handed in by the caller, so
+    the normaliser never imports PyMuPDF and never sees a parser's opinion. Zero here is the only
+    value that licenses a change - it makes `raster` impossible rather than merely unlikely.
+    """
+    from papertree_document_worker.pdf import pymupdf
+
+    out: dict[tuple[str, int], int] = {}
+    for paper in sorted({str(p["paper_id"]) for p in pages}):
+        pdf = corpus / f"{paper}.pdf"
+        if not pdf.exists():
+            continue
+        document = pymupdf.open(str(pdf))
+        try:
+            for page in [p for p in pages if p["paper_id"] == paper]:
+                index = int(page["page"])
+                out[(paper, index)] = len(document[index].get_images(full=True))
+        finally:
+            document.close()
+    return out
 
 
 def _region_texts(corpus: Path, pages: list[dict[str, Any]]) -> dict[tuple[str, int, str], str]:
