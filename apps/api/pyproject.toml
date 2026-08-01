@@ -3,7 +3,9 @@ name = "papertree-api"
 version = "1.0.0"
 description = "PaperTree API - Research paper reader with AI explanations"
 #readme = "README.md"
-requires-python = ">=3.11,<3.14"
+# Raised from >=3.11 by Epic 1: papertree-document-worker requires >=3.12, and so does every
+# other package in this repo (the root workspace pins 3.12 and CI installs exactly that).
+requires-python = ">=3.12,<3.14"
 dependencies = [
     "fastapi>=0.109.0",
     "uvicorn[standard]>=0.27.0",
@@ -15,8 +17,18 @@ dependencies = [
     "pydantic[email]>=2.5.0",
     "pydantic-settings>=2.1.0",
     "httpx>=0.26.0",
+    "pymupdf>=1.28,<2",
     "pypdf2>=3.0.0",
     "python-dotenv>=1.0.0",
+    # Epic 1. The v1 inline extractor is deleted and this replaces it: `extract_text_from_pdf`
+    # used PyMuPDF's `sort=True`, which alternates between columns on a two-column page (44
+    # alternations measured on one ResNet page, findings.md B5.2). The worker does column
+    # detection properly.
+    #
+    # A PATH dependency rather than a workspace member: apps/api is deliberately excluded from
+    # the root uv workspace ([tool.uv.workspace] exclude) and keeps its own uv.lock, which this
+    # does not change.
+    "papertree-document-worker",
 ]
 
 [project.optional-dependencies]
@@ -27,14 +39,17 @@ dev = [
     "ruff>=0.1.0",
 ]
 
+[tool.uv.sources]
+papertree-document-worker = { path = "../../services/document-worker/python" }
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 
 [tool.black]
 line-length = 100
-target-version = ["py311"]
+target-version = ["py312"]

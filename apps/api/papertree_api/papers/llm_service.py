@@ -144,7 +144,7 @@ async def generate_page_summary(
     model: Optional[str] = None
 ) -> dict:
     """Generate a summary for a single page."""
-    model = model or settings.openrouter_model
+    model = model or settings.llm_model
     if not page_text.strip():
         return {
             "page": page_num,
@@ -170,9 +170,9 @@ async def generate_page_summary(
     try:
         async with httpx.AsyncClient(timeout=90.0) as client:
             response = await client.post(
-                f"{settings.openrouter_base_url}/chat/completions",
+                f"{settings.llm_base_url}/chat/completions",
                 headers={
-                    "Authorization": f"Bearer {settings.openrouter_api_key}",
+                    "Authorization": f"Bearer {settings.llm_api_key}",
                     "Content-Type": "application/json",
                     "HTTP-Referer": "http://localhost:3000",
                     "X-Title": "PaperTree"
@@ -210,7 +210,7 @@ async def generate_paper_tldr(
     model: Optional[str] = None
 ) -> str:
     """Generate a TL;DR for the entire paper."""
-    model = model or settings.openrouter_model
+    model = model or settings.llm_model
     
     # Use first ~3000 chars for TL;DR
     if len(text_preview) > 4000:
@@ -224,9 +224,9 @@ async def generate_paper_tldr(
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
-                f"{settings.openrouter_base_url}/chat/completions",
+                f"{settings.llm_base_url}/chat/completions",
                 headers={
-                    "Authorization": f"Bearer {settings.openrouter_api_key}",
+                    "Authorization": f"Bearer {settings.llm_api_key}",
                     "Content-Type": "application/json",
                     "HTTP-Referer": "http://localhost:3000",
                     "X-Title": "PaperTree"
@@ -287,7 +287,7 @@ async def generate_multiple_pages(
                 "has_math": False,
                 "has_figures": False,
                 "generated_at": datetime.utcnow().isoformat(),
-                "model": model or settings.openrouter_model,
+                "model": model or settings.llm_model,
                 "error": True
             })
     
@@ -307,7 +307,7 @@ async def generate_book_content(
     Generate book content with page-by-page summaries.
     By default, only generates first N pages.
     """
-    model = model or settings.openrouter_model
+    model = model or settings.llm_model
     
     # Generate TL;DR first
     tldr = await generate_paper_tldr(title, paper_text[:6000], model)
@@ -416,7 +416,7 @@ async def generate_highlight_explanation(
     model: Optional[str] = None
 ) -> str:
     """Generate explanation for a highlighted text selection."""
-    model = model or settings.openrouter_model
+    model = model or settings.llm_model
     
     system_prompt = """You explain research paper content clearly and concisely.
 
@@ -443,9 +443,9 @@ Give a clear, helpful explanation."""
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
-                f"{settings.openrouter_base_url}/chat/completions",
+                f"{settings.llm_base_url}/chat/completions",
                 headers={
-                    "Authorization": f"Bearer {settings.openrouter_api_key}",
+                    "Authorization": f"Bearer {settings.llm_api_key}",
                     "Content-Type": "application/json",
                     "HTTP-Referer": "http://localhost:3000",
                     "X-Title": "PaperTree"

@@ -266,16 +266,20 @@ jobs:
       - name: Tests
         run: uv run pytest
 
+      # `packages services` since Epic 1, which is the first epic to own code outside packages/.
+      # A directory that is not named here is not linted, and unlinted code reports green — the
+      # same shape as the cross-language check that SKIPPED and passed, noted two steps above.
+      # The pytest half of this is `testpaths` in the root pyproject.
       - name: Lint
-        run: uv run ruff check packages
+        run: uv run ruff check packages services
 
       - name: Format check
-        run: uv run ruff format --check packages
+        run: uv run ruff format --check packages services
 
-      # Glob rather than an explicit list so a new packages/<name>/python is type-checked the day
-      # it lands instead of being silently skipped.
+      # Globs rather than an explicit list so a new packages/<name>/python or
+      # services/<name>/python is type-checked the day it lands instead of being silently skipped.
       - name: Typecheck
-        run: uv run mypy packages/*/python
+        run: uv run mypy packages/*/python services/*/python
 
   # ── Fixture validation (F0.7's gate) ────────────────────────────────────────────────────────
   # Its own job so its state is readable at a glance in the PR checks list. F0.7 landed the

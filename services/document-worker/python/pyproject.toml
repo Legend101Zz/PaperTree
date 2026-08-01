@@ -1,0 +1,36 @@
+[project]
+name = "papertree-document-worker"
+version = "1.0.0"
+description = "Deterministic PDF -> PaperIR ingest worker: geometry, reading order, hierarchy, figures, tables, equations."
+requires-python = ">=3.12"
+dependencies = [
+    "papertree-document-ir",
+    "papertree-db",
+    "papertree-jobs",
+    # The ONE new runtime dependency this epic adds, and research/build/README.md's constraints
+    # table already names it: "PyMuPDF (AGPL) is back on the table and is the core geometry
+    # library." Nothing else in the Python ecosystem exposes per-CHARACTER bounding boxes and
+    # the vector draw-op list (`get_drawings()`) from a single parse, and the vector draw-op
+    # list is the entire reason ResNet's figure count is 0 today (findings.md B3: 0 rasters,
+    # 1364 draw ops measured at 1.28.0).
+    #
+    # Pinned <2 rather than floated: `page.rect` is pre-multiplied by /UserUnit while
+    # `rotation_matrix` is not (geometry.py's strip_user_unit docstring), which is a behaviour
+    # this worker depends on knowing. A major bump may change it and must be re-measured.
+    "pymupdf>=1.28,<2",
+]
+
+[tool.uv.sources]
+papertree-document-ir = { workspace = true }
+papertree-db = { workspace = true }
+papertree-jobs = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["papertree_document_worker"]
+# packages/db is the only other package that ships this. Without it mypy sees no types at
+# all when this package is consumed as a BUILT WHEEL rather than from source (PEP 561).
+artifacts = ["papertree_document_worker/py.typed"]

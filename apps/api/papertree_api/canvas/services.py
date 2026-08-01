@@ -2,7 +2,7 @@
 """
 Canvas business logic: Maxly-style exploration canvas.
 Page super-nodes, branching AI conversations, notes.
-All OpenRouter calls go through explanations/services.py.
+All LLM calls go through explanations/services.py.
 """
 import uuid
 from datetime import datetime
@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from bson import ObjectId
 from papertree_api.config import get_settings
 from papertree_api.database import get_database
-from papertree_api.explanations.services import call_openrouter
+from papertree_api.explanations.services import call_llm
 
 from .models import (AskMode, CanvasEdge, CanvasElements, CanvasNode,
                      CanvasNodeData, ContentType, NodePosition, NodeType)
@@ -590,7 +590,7 @@ async def create_exploration(
         paper_id, selected_text
     )
 
-    answer = await call_openrouter(
+    answer = await call_llm(
         selected_text=selected_text,
         question=question,
         context_before=context_before,
@@ -614,7 +614,7 @@ async def create_exploration(
             "content_type": ContentType.MARKDOWN.value,
             "question": question,
             "ask_mode": ask_mode,
-            "model": settings.openrouter_model,
+            "model": settings.llm_model,
             "source_page": page_number,
             "source_highlight_id": highlight_id,
             "is_collapsed": False,
@@ -715,7 +715,7 @@ async def ask_followup(
 
     # Call AI
     try:
-        answer = await call_openrouter(
+        answer = await call_llm(
             selected_text=selected_text[:2000],  # cap length
             question=question,
             context_before=context_before[:2000],
@@ -747,7 +747,7 @@ async def ask_followup(
             "content_type": ContentType.MARKDOWN.value,
             "question": question,
             "ask_mode": ask_mode,
-            "model": settings.openrouter_model,
+            "model": settings.llm_model,
             "source_page": source_page,
             "source_highlight_id": parent_data.get("source_highlight_id"),
             "is_collapsed": False,
