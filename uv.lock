@@ -24,6 +24,8 @@ members = [
     "papertree-document-worker",
     "papertree-evaluation",
     "papertree-jobs",
+    "papertree-memory",
+    "papertree-prompts",
 ]
 
 [[package]]
@@ -229,6 +231,8 @@ dependencies = [
     { name = "papertree-document-worker" },
     { name = "papertree-evaluation" },
     { name = "papertree-jobs" },
+    { name = "papertree-memory" },
+    { name = "papertree-prompts" },
 ]
 
 [package.dev-dependencies]
@@ -245,6 +249,8 @@ requires-dist = [
     { name = "papertree-document-worker", editable = "services/document-worker/python" },
     { name = "papertree-evaluation", editable = "packages/evaluation/python" },
     { name = "papertree-jobs", editable = "packages/jobs/python" },
+    { name = "papertree-memory", editable = "packages/memory/python" },
+    { name = "papertree-prompts", editable = "packages/prompts/python" },
 ]
 
 [package.metadata.requires-dev]
@@ -324,6 +330,22 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "papertree-db", editable = "packages/db/python" }]
+
+[[package]]
+name = "papertree-memory"
+version = "1.0.0"
+source = { editable = "packages/memory/python" }
+dependencies = [
+    { name = "papertree-db" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "papertree-db", editable = "packages/db/python" }]
+
+[[package]]
+name = "papertree-prompts"
+version = "1.0.0"
+source = { editable = "packages/prompts/python" }
 
 [[package]]
 name = "pathspec"

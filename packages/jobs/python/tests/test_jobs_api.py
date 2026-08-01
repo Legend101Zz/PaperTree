@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 import sqlite_vec  # type: ignore[import-untyped]
 from papertree_db import OwnerId, OwnershipError, PaperTreeDb, open_database
+from papertree_db.migrate import find_migrations_dir, load_migrations
 from papertree_jobs import JobContext, JobRunner, JobStore
 
 LIFECYCLE_METHODS = frozenset({"migrate", "close", "owner_for"})
@@ -56,11 +57,27 @@ def two(tmp_path: Path) -> Iterator[Two]:
 
 
 def test_migrate_applies_0002_and_re_running_is_a_noop(tmp_path: Path) -> None:
-    """F0.6 ships DDL, not a second runner: this is packages/db's migrate() applying it."""
+    """F0.6 ships DDL, not a second runner: this is packages/db's migrate() applying it.
+
+    The head is read FROM DISK rather than hardcoded. It used to be a literal `(1, 2)`, which made
+    this test fail the moment Epic 3 added `0003_memory.sql` (#65) — with a message about a tuple
+    length that says nothing about jobs, in a suite that has nothing to do with the new migration.
+    `packages/db/test/migrations.spec.ts:42` already had it right (`expect(result.head)
+    .toEqual(onDisk)`); this is its Python twin catching up, and it is the one edit outside Epic 3's
+    paths that adding a migration forces.
+
+    What the test is actually for is unchanged and is not weakened by this: `JobStore.migrate()`
+    applies EVERY on-disk migration through `packages/db`'s single runner, and re-running applies
+    nothing. Pinning the literal count asserted a fact about how many migrations exist, which is
+    not a property of the job store.
+    """
+    on_disk = tuple(migration.version for migration in load_migrations(find_migrations_dir()))
+    assert on_disk[:2] == (1, 2), "0001_core and 0002_jobs must still be the first two"
+
     with JobStore(tmp_path / "fresh.sqlite") as store:
         result = store.migrate()
-        assert result.head == (1, 2)
-        assert result.applied == (1, 2)
+        assert result.head == on_disk
+        assert result.applied == on_disk
         assert store.migrate().applied == ()
 
 
