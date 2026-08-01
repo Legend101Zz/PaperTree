@@ -79,6 +79,19 @@ class AnnotationTask:
     image_path: Path
     width_pt: float
     height_pt: float
+    #: How many raster image XObjects the PAGE contains, read straight from the PDF.
+    #:
+    #: Shown to the annotator because the page render cannot answer the question it is being
+    #: asked. Every page image is a 150-DPI PNG, so vector line art and an embedded photograph
+    #: look equally pixelated in the tool - the first `is_vector` pass came back with ResNet's
+    #: plots marked `raster` on pages holding **zero** raster XObjects, which is not a judgement
+    #: call that went the other way, it is impossible.
+    #:
+    #: This is an AID, not a label: it reports what the file contains and the human still decides
+    #: which region is which. A page with 2 rasters and 6 figures still needs a person to say
+    #: which two. It comes from PyMuPDF's image inventory, the same library that renders these
+    #: pages - NOT from `figures.py`, whose clustering is the thing being measured.
+    raster_images: int = 0
 
 
 def stratified_pages(page_count: int, quota: int = 10) -> list[int]:
@@ -104,8 +117,12 @@ def stratified_pages(page_count: int, quota: int = 10) -> list[int]:
 def _page_html(task: AnnotationTask) -> str:
     return (
         f'<section class="page" data-paper="{task.paper}" data-page="{task.page_index}" '
-        f'data-width="{task.width_pt}" data-height="{task.height_pt}">'
-        f"<h2>{task.paper} — page {task.page_index}</h2>"
+        f'data-width="{task.width_pt}" data-height="{task.height_pt}" '
+        f'data-rasters="{task.raster_images}">'
+        f"<h2>{task.paper} — page {task.page_index}"
+        f'<span class="hint">{task.raster_images} raster image'
+        f'{"" if task.raster_images == 1 else "s"} on this page'
+        f'{" — so every figure here is vector" if task.raster_images == 0 else ""}</span></h2>'
         f'<div class="canvas"><img src="{task.image_path.name}" alt="page {task.page_index}">'
         f'<div class="overlay"></div></div></section>'
     )
@@ -263,11 +280,22 @@ Get the flow right even if you are unsure of the type.</div>
   <span id="todo" class="hint"></span>
   <div id="editor">
     <b id="edittitle">region</b>
-    <label id="editvectorwrap"><input type="checkbox" id="editvector"> vector figure
-      <span class="hint">drawn, not a photo</span></label>
+    <!-- TWO BUTTONS, NOT A CHECKBOX.
+         `is_vector` has THREE states - unanswered, vector, raster - and a checkbox has two. The
+         first pass had to express "raster" by ticking and then unticking, because leaving it
+         alone left the field null and the region amber. That is not a control anyone can use
+         correctly, and the data showed it: ResNet's plots came back `raster` on pages with zero
+         raster XObjects, while the caption boxes beside them came back `vector`. -->
+    <span id="editvectorwrap">is this figure
+      <label><input type="radio" name="isvec" id="editvec_v" value="v"> vector
+        <span class="hint">drawn — plot, diagram, schematic</span></label>
+      <label><input type="radio" name="isvec" id="editvec_r" value="r"> raster
+        <span class="hint">photo or screenshot</span></label>
+    </span>
     <label id="editparentwrap">describes
       <select id="editparent"><option value="">— pick the figure/table —</option></select></label>
     <button id="editclose">done</button>
+    <span id="rasterhint" class="hint"></span>
     <span class="hint">click any box to edit it; only these two fields change</span>
   </div>
 </div>
@@ -529,7 +557,8 @@ document.getElementById('loadgold').addEventListener('change', async event => {{
 
 let editing = null;
 const editor = document.getElementById('editor');
-const editVector = document.getElementById('editvector');
+const editVecV = document.getElementById('editvec_v');
+const editVecR = document.getElementById('editvec_r');
 const editParent = document.getElementById('editparent');
 
 function attachEditor(el, region) {{
@@ -548,7 +577,17 @@ function attachEditor(el, region) {{
       region.type === 'figure' ? '' : 'none';
     document.getElementById('editparentwrap').style.display =
       region.type === 'caption' ? '' : 'none';
-    editVector.checked = region.is_vector === true;
+    editVecV.checked = region.is_vector === true;
+    editVecR.checked = region.is_vector === false;
+    // The page's own raster inventory, so "raster" is not guessed from a 150-DPI PNG in which
+    // vector line art and a photograph are equally pixelated.
+    const rasters = +document.querySelector(
+      'section.page[data-paper="' + region.paper + '"][data-page="' + region.page + '"]'
+    ).dataset.rasters;
+    document.getElementById('rasterhint').textContent = rasters === 0
+      ? 'this page contains NO raster images — every figure on it is vector'
+      : 'this page contains ' + rasters + ' raster image' + (rasters === 1 ? '' : 's');
+    document.getElementById('rasterhint').style.color = rasters === 0 ? '#16a34a' : '#64748b';
     const floats = regions.filter(r => r.paper === region.paper && r.page === region.page
       && ['figure', 'table', 'algorithm'].includes(r.type));
     editParent.innerHTML = '<option value="">— pick the figure/table —</option>'
@@ -560,11 +599,13 @@ function attachEditor(el, region) {{
   }});
 }}
 
-editVector.addEventListener('change', () => {{
-  if (!editing || editing.type !== 'figure') return;
-  editing.is_vector = editVector.checked;
-  paint(editing); refreshTodo();
-}});
+for (const [input, value] of [[editVecV, true], [editVecR, false]]) {{
+  input.addEventListener('change', () => {{
+    if (!editing || editing.type !== 'figure') return;
+    editing.is_vector = value;
+    paint(editing); refreshTodo();
+  }});
+}}
 editParent.addEventListener('change', () => {{
   if (!editing || editing.type !== 'caption') return;
   editing.parent = editParent.value || null;
@@ -630,6 +671,7 @@ def render_pages(pdf_path: Path, pages: list[int], destination: Path) -> list[An
                     image_path=image,
                     width_pt=round(float(page.rect.width), 2),
                     height_pt=round(float(page.rect.height), 2),
+                    raster_images=len(page.get_images(full=True)),
                 )
             )
     finally:

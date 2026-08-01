@@ -40,8 +40,36 @@ class TestTheToolCanReopenItsOwnOutput:
         assert 'type="file"' in annotator_html
 
     def test_the_editor_exists_for_the_two_retrofit_fields(self, annotator_html: str) -> None:
-        assert 'id="editvector"' in annotator_html
+        assert 'id="editvec_v"' in annotator_html
+        assert 'id="editvec_r"' in annotator_html
         assert 'id="editparent"' in annotator_html
+
+    def test_is_vector_is_three_state_and_the_control_is_too(self, annotator_html: str) -> None:
+        """A checkbox cannot express "raster". The first pass proves what that costs.
+
+        `is_vector` is null / true / false. With a single checkbox, "raster" could only be
+        recorded by ticking and then unticking, because leaving it alone left the field null and
+        the region amber — so the control offered no way to say "no" that looked like saying
+        anything. The returned gold had ResNet's plots marked `raster` on pages containing zero
+        raster XObjects, and the caption boxes beside them marked `vector`.
+        """
+        editor = annotator_html.split('id="editor"')[1].split("</div>")[0]
+        assert 'type="radio"' in editor
+        assert 'type="checkbox"' not in editor
+
+    def test_the_page_raster_count_is_shown(self, annotator_html: str) -> None:
+        """The page render cannot answer the question the annotator is being asked.
+
+        Every page is a 150-DPI PNG, so vector line art and a photograph are equally pixelated in
+        the tool. The PDF's own image inventory is shown alongside — an aid, not a label: a page
+        with 2 rasters and 6 figures still needs a person to say which two.
+        """
+        assert "data-rasters=" in annotator_html
+        assert "raster image" in annotator_html
+
+    def test_a_page_with_no_rasters_says_so_unmistakably(self, annotator_html: str) -> None:
+        """Zero is the case worth shouting about: it makes `raster` not a judgement but an error."""
+        assert "every figure" in annotator_html
 
     def test_unfilled_regions_can_be_found_without_hunting(self, annotator_html: str) -> None:
         """`next unfilled` plus an amber class: "what is left" is answerable by scrolling."""
