@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from papertree_evaluation.scoring import (
+    _caption_links,
     blocks_to_regions,
     render_report,
     sanity_check_overlap,
@@ -256,3 +257,65 @@ class TestDoclingCoordinateConversion:
 
     def test_the_result_is_always_ordered(self) -> None:
         assert self._convert(120.0, 107.0, "TOPLEFT") == [107.0, 120.0]
+
+
+class TestCaptionAssociationCrossesTwoIdSpaces:
+    """The join that would silently score a PERFECT parser at zero.
+
+    Gold links are `(caption gold_id, parent gold_id)`; the parser's are
+    `(caption block_id, float block_id)`. Different namespaces for the same page. Comparing them
+    directly finds no intersection at all, and the report would read 0 correct with no hint that
+    the metric — not the parser — was broken.
+    """
+
+    FIGURE: dict[str, Any] = {"bbox": [10.0, 10.0, 200.0, 120.0], "type": "figure"}
+    CAPTION: dict[str, Any] = {"bbox": [10.0, 125.0, 200.0, 140.0], "type": "caption"}
+
+    @classmethod
+    def _page(cls) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
+        predicted: list[dict[str, Any]] = [
+            {**cls.FIGURE, "block_id": "blk_fig"},
+            {**cls.CAPTION, "block_id": "blk_cap"},
+        ]
+        gold: list[dict[str, Any]] = [
+            {**cls.FIGURE, "gold_id": "r00", "parent": None},
+            {**cls.CAPTION, "gold_id": "r01", "parent": "r00"},
+        ]
+        document: dict[str, Any] = {
+            "relations": [{"type": "caption_of", "from": "blk_cap", "to": "blk_fig"}],
+        }
+        return document, predicted, gold
+
+    def test_a_correct_link_is_recognised_across_the_namespaces(self) -> None:
+        document, predicted, gold = self._page()
+        links, gold_links = _caption_links(document, predicted, gold)
+        assert links == [("r01", "r00")]
+        assert gold_links == [("r01", "r00")]
+
+    def test_a_link_to_the_wrong_float_is_a_false_link(self) -> None:
+        """Worse than no link: confidently wrong, and everything downstream believes it."""
+        document, predicted, gold = self._page()
+        other: dict[str, Any] = {"bbox": [220.0, 10.0, 400.0, 120.0], "type": "figure"}
+        predicted.append({**other, "block_id": "blk_other"})
+        gold.append({**other, "gold_id": "r02", "parent": None})
+        document["relations"] = [{"type": "caption_of", "from": "blk_cap", "to": "blk_other"}]
+        links, gold_links = _caption_links(document, predicted, gold)
+        assert links == [("r01", "r02")]
+        assert set(links) & set(gold_links) == set()
+
+    def test_an_unmatched_caption_drops_the_link_rather_than_failing_it(self) -> None:
+        """A caption boxed too differently to match is a DETECTION failure.
+
+        The `caption` row's F1 already counts it. Counting it here too reports one defect as two
+        and makes the linking heuristic look worse than it is.
+        """
+        document, predicted, gold = self._page()
+        predicted[1] = {**predicted[1], "bbox": [400.0, 600.0, 500.0, 620.0]}
+        links, _ = _caption_links(document, predicted, gold)
+        assert links == []
+
+    def test_relations_of_other_types_are_ignored(self) -> None:
+        document, predicted, gold = self._page()
+        document["relations"] = [{"type": "references", "from": "blk_cap", "to": "blk_fig"}]
+        links, _ = _caption_links(document, predicted, gold)
+        assert links == []

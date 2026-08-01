@@ -57,6 +57,7 @@ from typing import Any
 from papertree_evaluation.metrics import (
     IOU_MATCH,
     IOU_STRICT,
+    caption_association,
     iou,
     match_regions,
     reading_order_accuracy,
@@ -116,6 +117,14 @@ class PaperScore:
     predicted_only_types: set[str] = field(default_factory=set)
     #: §4.1 metrics this gold set cannot express, with the reason.
     not_evaluable: dict[str, str] = field(default_factory=dict)
+    #: §4.1's caption association, pooled over the paper. Kept as raw counts rather than as a
+    #: single score because the metric is DIRECTIONAL by requirement: "report FALSE LINKS
+    #: separately from MISSED LINKS". One number would hide the difference between attaching
+    #: Figure 2's caption to Figure 3 and attaching nothing, and the first is worse - it is
+    #: confidently wrong, and everything downstream would believe it.
+    caption_correct: int = 0
+    caption_false: int = 0
+    caption_missed: int = 0
     #: §4.1's ISOLATED vector-figure recall, per page, for pages whose gold has a vector figure.
     #:
     #: Isolated rather than folded into figure F1 because vector blindness is the specific defect
@@ -155,6 +164,10 @@ class PaperScore:
         one level up.
         """
         return sum(self.vector_recall) / len(self.vector_recall) if self.vector_recall else None
+
+    @property
+    def caption_links_gold(self) -> int:
+        return self.caption_correct + self.caption_missed
 
     @property
     def total_matched(self) -> int:
@@ -250,6 +263,12 @@ def score_paper(
         if page_vector is not None:
             score.vector_recall.append(page_vector)
 
+        links, gold_links = _caption_links(document, predicted, gold)
+        association = caption_association(links, gold_links)
+        score.caption_correct += int(association["correct"])
+        score.caption_false += int(association["false_links"])
+        score.caption_missed += int(association["missed_links"])
+
         score.gold_only_types |= {str(r["type"]) for r in gold}
         score.predicted_only_types |= {str(p["type"]) for p in predicted}
 
@@ -273,6 +292,45 @@ def score_paper(
 #: A gold region overlapping a same-type prediction by at least this much, but less than
 #: `IOU_MATCH`, is in the right PLACE and the wrong SHAPE.
 IOU_NEAR = 0.25
+
+
+def _caption_links(
+    document: dict[str, Any],
+    predicted: list[dict[str, Any]],
+    gold: list[dict[str, Any]],
+) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+    """Caption -> float edges on one page, BOTH SIDES EXPRESSED IN GOLD IDS.
+
+    The join nobody can skip: gold links are `(caption gold_id, parent gold_id)` and the parser's
+    are `(caption block_id, float block_id)`. Two different id spaces naming the same page, so
+    comparing them directly would score **zero on a perfect parser**. Every predicted block is
+    first matched to a gold region by IoU and type - the same matcher the F1 uses - and each link
+    is translated into gold ids or dropped.
+
+    DROPPED, not counted as wrong. A link whose caption the parser boxed too differently to match
+    is a *detection* failure, and the `caption` row's F1 already counts it. Counting it again here
+    would report one defect as two and make the linking heuristic look worse than it is.
+    """
+    pairs = match_regions(predicted, gold, IOU_MATCH)
+    block_to_gold = {
+        str(predicted[pi]["block_id"]): str(gold[gi]["gold_id"])
+        for pi, gi in pairs
+        if predicted[pi].get("block_id") and gold[gi].get("gold_id")
+    }
+
+    gold_links = [
+        (str(region["gold_id"]), str(region["parent"]))
+        for region in gold
+        if region.get("type") == "caption" and region.get("parent")
+    ]
+    predicted_links = [
+        (block_to_gold[str(rel["from"])], block_to_gold[str(rel["to"])])
+        for rel in (document.get("relations") or [])
+        if rel.get("type") == "caption_of"
+        and str(rel.get("from")) in block_to_gold
+        and str(rel.get("to")) in block_to_gold
+    ]
+    return predicted_links, gold_links
 
 
 def _count_near_misses(
@@ -342,6 +400,13 @@ def render_report(scores: Sequence[PaperScore]) -> str:
             f"    (strict @0.75: {score.macro_f1_strict:.3f})"
         )
         lines.append(f"  {'reading order':18s} {score.mean_reading_order:>34.3f}")
+        if score.caption_links_gold:
+            correct = f"{score.caption_correct}/{score.caption_links_gold}"
+            lines.append(
+                f"  {'caption links':18s} {correct:>34s}"
+                f"    (false {score.caption_false}, missed {score.caption_missed}"
+                " - §4.1 wants these apart)"
+            )
         vector = score.mean_vector_recall
         if vector is not None:
             lines.append(

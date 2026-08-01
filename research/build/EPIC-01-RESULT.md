@@ -302,10 +302,33 @@ asks whether those boxes have the shape of the regions on the page.
   PyMuPDF's image inventory, which is also where the parser's `is_vector` comes from, so the
   **label** is no longer independent. **Recall** — did `figures.py` cluster a region there at all
   — still is, and that is what §4.1 asks for.
-- **Caption association is still not evaluable, and it is not a dropdown away.** Gold holds
-  **51 floats against 1 drawn caption**: captions were almost never boxed as their own regions on
-  the first pass, so there is nothing for a `parent` to point at. Adding the field to the tool was
-  necessary and not sufficient — the caption boxes have to be drawn.
+- **Caption association is measurable as of 2026-08-01, and the failure mode is the good one.**
+  The LAST of §4.1's four metrics. The third annotation pass added three papers with captions
+  drawn as their own boxes and linked — 24 links across a3c, bert, gpt3 and attention.
+
+  | paper | correct | false | missed |
+  |---|---|---|---|
+  | attention-is-all-you-need | **1 / 1** | 0 | 0 |
+  | bert-2col | 3 / 6 | 0 | 3 |
+  | a3c-algorithmheavy | 2 / 7 | 0 | 5 |
+  | gpt3-longform-singlecol | 1 / 10 | **1** | 9 |
+  | | **7 / 24** | **1** | 17 |
+
+  §4.1 insists these are reported apart, and this is exactly why: **one false link against
+  seventeen misses.** The parser is not attaching Figure 2's caption to Figure 3 — it is failing
+  to attach at all. A confidently wrong link is the expensive failure, because everything
+  downstream believes it; a missing one is visible as missing. `CAPTION_MAX_GAP_PT` and
+  `CAPTION_MIN_X_OVERLAP` are too tight, which is a far easier thing to fix than a wrong rule.
+
+  Still not evaluable on `resnet` and `neural-odes`: those two papers' 51 floats have no caption
+  boxes drawn against them. The metric covers 4 of 6 annotated papers.
+
+  A join worth recording, because getting it wrong scores a *perfect* parser at zero: gold links
+  are `(caption gold_id, parent gold_id)` and the parser's are `(caption block_id, float
+  block_id)`. Two namespaces for one page. `_caption_links` matches every predicted block to a
+  gold region by IoU first and translates, and a link whose caption did not match is **dropped
+  rather than failed** — that is a detection failure the `caption` row's F1 already counts, and
+  counting it twice would report one defect as two.
 - **Two headline metrics could not be computed and it is the tool's fault.** Caption association
   needs `parent` links and vector-figure recall needs `is_vector`; the annotator collected
   neither. Vector figures are the one dimension where PaperTree was expected to beat every
