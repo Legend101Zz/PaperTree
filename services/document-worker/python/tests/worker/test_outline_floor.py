@@ -18,9 +18,8 @@ clause is fully closed.
 from __future__ import annotations
 
 import pytest
-from test_pipeline_end_to_end import _parse
-
 from _corpus_manifest import CORPUS_DIR, requires_corpus
+from test_pipeline_end_to_end import _parse
 
 pytestmark = requires_corpus
 
