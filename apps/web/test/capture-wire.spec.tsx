@@ -186,7 +186,14 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
 
   it('selecting text in the paper surfaces the selection toolbar', async () => {
     render(
-      <SourcePane doc={doc} pdfUrl="fixture://paper.pdf" zoom={1} anchors={[]} onAnchorCaptured={() => undefined} />,
+      <SourcePane
+        doc={doc}
+        pdfUrl="fixture://paper.pdf"
+        zoom={1}
+        anchors={[]}
+        onAnchorCaptured={() => undefined}
+        onViewportResize={() => undefined}
+      />,
     );
 
     const span = await waitFor(() => {
@@ -204,6 +211,32 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
     expect(await screen.findByRole('toolbar', { name: 'Selection actions' })).toBeTruthy();
   });
 
+  it('reports the scroller box upward, so a fit-zoom mode has something to resolve against', async () => {
+    // The seam that broke: `onViewportResize` was declared on `SourcePaneProps`, forwarded to the
+    // scroller, and never supplied by the shell — so `resolveZoom` saw a container of zero and
+    // "fit width" clamped to MIN_ZOOM, rendering a 25% page with no error anywhere. The prop is now
+    // REQUIRED, which makes the shell side a compile error; this covers the scroller side.
+    const sizes: { width: number; height: number }[] = [];
+    render(
+      <SourcePane
+        doc={doc}
+        pdfUrl="fixture://paper.pdf"
+        zoom={1}
+        anchors={[]}
+        onAnchorCaptured={() => undefined}
+        onViewportResize={(size) => sizes.push({ ...size })}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(sizes.length, 'the scroller never reported its box').toBeGreaterThan(0);
+    });
+    // happy-dom lays nothing out, so the NUMBERS are zero and asserting on them would be theatre.
+    // That the call happens at all is the property that was missing.
+    expect(sizes[0]).toHaveProperty('width');
+    expect(sizes[0]).toHaveProperty('height');
+  });
+
   it('pressing Highlight stores an anchor that resolves back to the selected block', async () => {
     const captured: Anchor[] = [];
     render(
@@ -213,6 +246,7 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
         zoom={1}
         anchors={[]}
         onAnchorCaptured={(anchor) => captured.push(anchor)}
+        onViewportResize={() => undefined}
       />,
     );
 

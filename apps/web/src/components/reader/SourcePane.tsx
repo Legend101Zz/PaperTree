@@ -32,6 +32,16 @@ export interface SourcePaneProps {
   readonly zoom: number;
   readonly anchors: readonly SourcePaneAnchor[];
   readonly onAnchorCaptured: (anchor: Anchor) => void;
+  /**
+   * Forwarded from the scroller so the shell can re-resolve a fit-zoom mode.
+   *
+   * REQUIRED, not optional, and that is the point. It was optional for one commit and the shell
+   * silently never supplied it, so `resolveZoom` ran with a container of zero and "fit width"
+   * clamped to `MIN_ZOOM` — a 25% page, in a reader, with no error anywhere. That is the same
+   * declared-and-never-read shape as #58's `onAnchorCaptured`. Making it required moves the check
+   * from a test that has to think of it to the compiler, which cannot forget.
+   */
+  readonly onViewportResize: (size: { readonly width: number; readonly height: number }) => void;
 }
 
 /**
@@ -122,6 +132,7 @@ export function SourcePane(props: SourcePaneProps) {
         zoom={props.zoom}
         className="h-full"
         onTextLayer={onTextLayer}
+        onViewportResize={props.onViewportResize}
         renderOverlay={(pageIndex, meta) => (
           <>
             <HighlightOverlay

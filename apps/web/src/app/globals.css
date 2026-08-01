@@ -25,236 +25,21 @@ body {
   background: rgb(var(--background-rgb));
 }
 
-/* ============ PDF VIEWER STYLES ============ */
-.react-pdf__Page__canvas {
-  margin: 0 auto;
-}
-
-.react-pdf__Page__textContent {
-  user-select: text;
-}
-
-/* PDF Inversion Mode */
-.pdf-inverted .react-pdf__Page__canvas {
-  filter: invert(1) hue-rotate(180deg);
-}
-
-.pdf-inverted .react-pdf__Page__textContent {
-  filter: invert(1) hue-rotate(180deg);
-}
-
-
-/* ============ BOOK MODE TYPOGRAPHY ============ */
-.book-content {
-  font-feature-settings:
-    "kern" 1,
-    "liga" 1,
-    "calt" 1;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-.book-content.font-serif {
-  font-family: "Georgia", "Cambria", "Times New Roman", serif;
-}
-
-.book-content.font-sans {
-  font-family: "Inter", "Segoe UI", "Roboto", "Helvetica Neue", sans-serif;
-}
-
-.book-content.font-mono {
-  font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
-}
-
-/* ============ MATH/KATEX STYLES ============ */
-.math-block {
-  overflow-x: auto;
-  padding: 1rem 0;
-  margin: 1.5rem 0;
-  text-align: center;
-}
-
-.math-block .katex-display {
-  margin: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-
-.math-inline .katex {
-  font-size: 1em;
-}
-
-.book-content .katex {
-  font-size: 1.1em;
-}
-
-.book-content .katex-display > .katex {
-  font-size: 1.21em;
-}
-
-.katex-display {
-  margin: 1em 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-
-.katex {
-  font-size: 1.1em;
-}
-
-/* ============ FIGURE/IMAGE STYLES ============ */
-.figure-block {
-  margin: 2rem auto;
-  text-align: center;
-}
-
-.figure-block img {
-  max-width: 100%;
-  height: auto;
-  border-radius: 4px;
-}
-
-.figure-block figcaption {
-  margin-top: 0.75rem;
-  font-size: 0.9em;
-  color: #666;
-  font-style: italic;
-}
-
-.book-content figure {
-  margin: 2rem 0;
-}
-
-.book-content figcaption {
-  margin-top: 0.75rem;
-}
-
-.equation-image {
-  display: block;
-  margin: 1rem auto;
-  max-width: 100%;
-  height: auto;
-}
-
-.dark .equation-image {
-  filter: invert(1) hue-rotate(180deg);
-}
-
-/* ============ CODE STYLES ============ */
-.code-block {
-  background: #1e1e1e;
-  color: #d4d4d4;
-  border-radius: 8px;
-  padding: 1rem;
-  margin: 1rem 0;
-  overflow-x: auto;
-  font-family: "JetBrains Mono", "Fira Code", monospace;
-  font-size: 0.9em;
-  line-height: 1.5;
-}
-
-.sepia .code-block {
-  background: #3d3225;
-  color: #e5d3b3;
-}
-
-/* ============ REFERENCES SECTION ============ */
-.references-section {
-  border-top: 1px solid currentColor;
-  margin-top: 3rem;
-  padding-top: 2rem;
-  opacity: 0.9;
-}
-
-.references-section h2 {
-  font-size: 1.5rem;
-  margin-bottom: 1.5rem;
-}
-
-.reference-item {
-  margin-bottom: 0.75rem;
-  padding-left: 2rem;
-  text-indent: -2rem;
-  font-size: 0.9em;
-  line-height: 1.6;
-}
-
-/* ============ BLOCKQUOTE ============ */
-.book-blockquote {
-  border-left: 4px solid currentColor;
-  margin: 1.5rem 0;
-  padding: 0.5rem 1.5rem;
-  opacity: 0.9;
-  font-style: italic;
-}
-
-/* ============ TABLE STYLES ============ */
-.book-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 1.5rem 0;
-  font-size: 0.95em;
-}
-
-.book-table th,
-.book-table td {
-  border: 1px solid currentColor;
-  padding: 0.75rem;
-  text-align: left;
-}
-
-.book-table th {
-  font-weight: 600;
-  background: rgba(0, 0, 0, 0.05);
-}
-
-.dark .book-table th {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.sepia .book-table th {
-  background: rgba(93, 75, 55, 0.1);
-}
-
-/* ============ LIST STYLES ============ */
-.book-list {
-  margin: 1rem 0;
-  padding-left: 2rem;
-}
-
-.book-list li {
-  margin-bottom: 0.5rem;
-  line-height: 1.7;
-}
-
-/* ============ PROSE CONTENT ============ */
-.prose-content p {
-  margin-bottom: 1em;
-}
-
-.prose-content > *:last-child {
-  margin-bottom: 0;
-}
-
-.prose-content .inline {
-  display: inline;
-}
-
-/* Block elements in prose */
-.prose-content > pre,
-.prose-content > ul,
-.prose-content > ol,
-.prose-content > blockquote,
-.prose-content > table,
-.prose-content > h1,
-.prose-content > h2,
-.prose-content > h3,
-.prose-content > h4,
-.prose-content > h5,
-.prose-content > h6 {
-  display: block;
-}
+/*
+ * WHAT USED TO BE HERE, and why it is not.
+ *
+ * Epic 2's "Must delete" names `globals.css:49-148`. It was 231 lines by the time this ran, and all
+ * of it was keyed on surfaces that no longer exist: `.react-pdf__Page__*` (react-pdf was dropped
+ * for `pdfjs-dist` in F2.1), `.book-content` and its typography, math, figure, code, references,
+ * blockquote, table, list and prose descendants (BookViewer, deleted in e099b62),
+ * `.inline-explanation-popup` (InlineExplanation.tsx, same commit) and `.search-highlight-active`
+ * (SearchResults.tsx, same commit). Every one had zero references anywhere in `src/` outside this
+ * file. Issue #60.
+ *
+ * The canvas sections below are NOT dead in the same sense — `.canvas-prose`, `.canvas-node-content`
+ * and the react-flow rules are still referenced by `components/canvas/**`, which Epic 5 owns and is
+ * standing down under #43. They go with it, not with this.
+ */
 
 /* ============ SCROLLBAR ============ */
 ::-webkit-scrollbar {
@@ -283,33 +68,6 @@ body {
 
 .react-flow__edge-path {
   stroke-width: 2;
-}
-
-/* ============ INLINE EXPLANATION POPUP ============ */
-.inline-explanation-popup {
-  box-shadow:
-    0 25px 50px -12px rgba(0, 0, 0, 0.25),
-    0 0 0 1px rgba(0, 0, 0, 0.05);
-}
-
-/* ============ SEARCH HIGHLIGHT ============ */
-@keyframes searchPulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
-  }
-}
-
-.search-highlight-active {
-  animation: searchPulse 1s ease-in-out 2;
-}
-
-/* ============ SMOOTH SCROLLING ============ */
-.book-content {
-  scroll-behavior: smooth;
 }
 
 /* ============ CANVAS NODE TYPOGRAPHY ============ */
