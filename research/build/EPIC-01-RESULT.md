@@ -19,17 +19,34 @@ the 8-paper, 195-page corpus. Nothing is quoted from a doc without being re-run.
 > zero-ML ships as default. Otherwise a small local layout model becomes default and Docling
 > stays opt-in.
 
-### Verdict: **the rule is not satisfied — on speed alone. The accuracy half passes.**
-
-Both halves are now measured against the same human gold, and they disagree:
+### Verdict: **accuracy PASSES. Speed is NOT ESTABLISHED — the measurement cannot resolve it.**
 
 | half | bar | measured | |
 |---|---|---|---|
 | **accuracy** | ≥ 85 % of Docling's F1 | **97 %** | **PASS** |
-| **speed** | ≥ 20× Docling | **12.4×** | **FAIL** |
+| **speed** | ≥ 20× Docling | 12.4× / 16.8× / 18.7× across runs | **NOT ESTABLISHED** |
 
-The rule requires both, so zero-ML does not ship as default. But the reason has completely
-changed, and so has what follows from it.
+**Corrected 2026-08-01. The speed half was previously recorded as a measured FAIL at 12.4×. It
+is not a measured anything — the noise is larger than the gap to the bar.** Three controlled
+re-runs of the same comparison, same machine, same code, gave median ratios of **12.4×, 16.8×
+and 18.7×**, with per-paper ratios spanning **4.8× to 36.4×**. The deterministic path alone
+measured **0.076 s/page p50** where the recorded figure is **0.288** — a 3.8× discrepancy on a
+parser that `test_determinism_over_twenty_runs` proves does byte-identical work every time.
+
+The cause is that **no speed number on this branch was taken on an idle machine.** During this
+session's runs a `rustc` build was consuming 1.25 of 10 cores. Quantified: ten identical parses
+*within one process* spread 1.4× (0.081–0.115 s/page); the same paper *across* processes spread
+**3.3×** (0.066 → 0.217). The gap between the recorded 12.4× and the 20× bar is **1.6×** — well
+inside the between-run noise. A further confound: both parsers pay a fixed import/model-load
+cost amortised over 11–15 page papers, so run *order* alone moved the ratio from 10.3× to 18.7×.
+
+So the honest state is that the rule's speed half is **unresolved**, and everything below that
+was written on the assumption it had failed should be read in that light. It may pass. Resolving
+it needs a quiesced machine, discarded warm-up, repeated trials and a reported spread — and the
+harness should refuse to emit a ratio when the spread is wide enough to make it meaningless.
+Until then, neither "zero-ML ships" nor "a layout model becomes default" is supported by data.
+
+The accuracy half is unaffected: F1 is computed from parser output, not from wall-clock.
 
 **THE STATED FALLBACK DOES NOT ADDRESS THE FAILING HALF.** The rule's `otherwise` branch is *"a
 small local layout model becomes default"* — a remedy for losing on accuracy. Accuracy is the half
@@ -38,12 +55,16 @@ deterministic path, not faster; adopting it would move the failing number in the
 while replacing a metric that is already at 97 %.
 
 So the fallback as written is not applicable, and this is a decision for whoever owns Wave 1
-rather than one Epic 1 should quietly make. The three options I can see, stated without a
-recommendation dressed up as a finding:
+rather than one Epic 1 should quietly make. The options, stated without a recommendation dressed
+up as a finding — and note that **(0) now precedes the others, because the rest are answers to a
+question the data does not yet ask**:
 
-1. **Ship zero-ML anyway** and record the 20× bar as unmet. 12.4× is still an order of magnitude,
-   and the bar's provenance is not documented anywhere in the epic file.
-2. **Close the speed gap.** 288 ms/page includes table detection, 130+ crops per paper and full
+0. **Measure the ratio properly before deciding anything.** Quiesced machine, warm-up discarded,
+   N trials, spread reported, and the harness refusing to emit a ratio it cannot support. This is
+   cheap and it may resolve the whole question — the observed range already brackets the bar.
+1. **Ship zero-ML anyway** and record the 20× bar as unmet. Even the lowest observed ratio is an
+   order of magnitude, and the bar's provenance is not documented anywhere in the epic file.
+2. **Close the speed gap.** The parse includes table detection, 130+ crops per paper and full
    semantic validation. Crops are the obvious candidate to defer.
 3. **Re-run the rule on Tier B gold** before deciding anything. 18 pages is 15 % of it (below).
 
@@ -51,7 +72,9 @@ recommendation dressed up as a finding:
 scoreable. Both earlier versions are in git history rather than deleted, because a conclusion
 stated before the measurement is worth being able to check against.*
 
-**The speed half is measured and it FAILS.** Median over the 8 papers both parsed:
+**The run that produced the table below is the contaminated one** — retained rather than deleted,
+because the numbers in it are what the 12.4× verdict rested on and they should stay checkable.
+Read the p50 of 0.288 against the 0.076 measured cleanly. Median over the 8 papers both parsed:
 
 | | p50 s/page | p95 s/page | failure rate |
 |---|---|---|---|
@@ -267,6 +290,26 @@ asks whether those boxes have the shape of the regions on the page.
   `hierarchy.py` alone would suppress the symptom and leave the cells unaddressable; the
   borderless-table path is the thing to fix, and `hierarchy.spec`'s clause should be asserted so
   it cannot silently regress either way.
+- **The ±20 % outline clause has never been measurable, and half of it now is — for free.**
+  The gold set is region-level; nothing in it states a paper's section count, so "within ±20 % of
+  gold" had no gold. But **4 of the 8 corpus papers carry an embedded PDF outline** written by
+  `hyperref` at compile time — the author's own section list, independent of both parsers and of
+  the annotator. `pymupdf.Document.get_toc()` returns it:
+
+  | paper | embedded TOC | our headings | delta | ±20 %? |
+  |---|---|---|---|---|
+  | superglue-tableheavy | 20 | 20 | **0 %** | yes |
+  | attention-is-all-you-need | 22 | 18 | −18 % | yes |
+  | neural-odes-mathheavy | 21 | 47 | +124 % | no |
+  | gpt3-longform-singlecol | 32 | 181 | +466 % | no |
+  | a3c · bert · pdf-to-tree · resnet | *(none)* | — | — | — |
+
+  Two of four already pass. gpt3's failure is mostly the table-numeral defect above (126 of its
+  181 are numerals; without them it is 55 against 32, still outside but a different problem).
+  This does not replace hand-annotated gold — a TOC lists what the author bookmarked, which is
+  not always every visual heading — so it belongs as a *floor* check, not as the definition. But
+  it turns an unmeasurable clause into a measurable one on half the corpus at zero annotation
+  cost, and it should have been the first place anyone looked.
 - **Caption linking is 58 %, against an 80 % bar**, up from ~35 % after two fixes: raster panels
   are merged (neural-odes 77 → 18 regions) and a caption now binds by horizontal overlap plus
   edge-to-edge adjacency rather than by nearest vertical centre, which on a two-column page
