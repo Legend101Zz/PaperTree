@@ -16,6 +16,7 @@ dependencies = [
     # collected is the vacuous green AGENTS.md §2 records three instances of.
     "papertree-memory",
     "papertree-prompts",
+    "papertree-retrieval",
 ]
 
 # apps/api is the v1 application. It has its own pyproject.toml and uv.lock and is
@@ -39,6 +40,7 @@ papertree-document-worker = { workspace = true }
 papertree-evaluation = { workspace = true }
 papertree-memory = { workspace = true }
 papertree-prompts = { workspace = true }
+papertree-retrieval = { workspace = true }
 
 [tool.uv]
 package = false
