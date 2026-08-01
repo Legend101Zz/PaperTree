@@ -254,7 +254,7 @@ Three things in that table are worth stating plainly:
 | `worker/figures.spec` | **PARTIAL** | ResNet ≥5 ✅ (9, all vector); `is_vector` correct ✅; ≥80 % captioned ❌ (58 % corpus-wide). Gold figure F1 0.67 on `attention`, **0.00 on the other two**; vector-figure recall still not evaluable — gold has no `is_vector` |
 | `worker/equations.spec` | **NOT MET** | prose never classified as an equation ✅; every equation retains its crop ✅; **≥80 % of gold ❌ — 0 of 17 at IoU 0.5**. Count now 16 predicted against 17 gold (was 89); the extents are narrower than gold's full-column convention |
 | `worker/reading-order.spec` | **NOT MET** | **0.278 / 0.389 / 0.967 pairwise against a ≥0.90 bar**, up from 0.167 / 0.333 / 0.800. ResNet is now over the bar; the two single-column papers are not. The ordering logic was never the weak part — the regions being ordered were |
-| `worker/hierarchy.spec` | **NOT MET** | number/title joining ✅ and running-head/page-number/margin-stamp routing ✅. But the clause **"no table cell is classified as a heading" is violated outright**: 165 of a3c's 193 headings and 126 of gpt3's 181 are numeral-only table values (`'570.2'`, `'3.66'`, `'DQN'`). Outline size is therefore ~14× gold on a3c, not ±20 % |
+| `worker/hierarchy.spec` | **PARTIAL** | number/title joining ✅, furniture routing ✅, and **"no table cell is classified as a heading" now holds on 6 of 8 papers** — a3c **193 → 17** headings (numeral-only 165 → **0**), gpt3 **181 → 61** (126 → **6**), fixed in `tables.py` rather than `hierarchy.py`. Outline size against the embedded-TOC floor: superglue **0 %**, attention **−18 %** (both pass), gpt3 **+91 %** (was +466 %), neural-odes **+124 %** (unchanged — its over-detection is emphasis runs, not tables) |
 
 ---
 
@@ -327,14 +327,29 @@ asks whether those boxes have the shape of the regions on the page.
   a 14×-inflated outline was carried as a vague "over-detecting on a3c/gpt3" rather than as the
   concrete defect it is.
 
-  The root cause is one layer down, and it is not `hierarchy.py`. Those numerals sit in
-  `a3c` p18's Atari results table and `gpt3` p22/p44 — **borderless** tables that `tables.py`
-  never claimed: a containment check finds **0** of these headings inside any detected table
-  region. So the cells were never absorbed into a table, stayed loose on the page, and the
-  font/weight heading rule then took bold table numerals for section titles. Fixing
-  `hierarchy.py` alone would suppress the symptom and leave the cells unaddressable; the
-  borderless-table path is the thing to fix, and `hierarchy.spec`'s clause should be asserted so
-  it cannot silently regress either way.
+  **FIXED 2026-08-01, in `tables.py`.** The root cause was one layer down: a containment check
+  put **0** of those headings inside any detected table region, because `MIN_RULES = 2` rejected
+  the tables holding them. a3c p18 — the Atari results table, ~50 rows — draws exactly **one**
+  rule across 510 text lines. gpt3 p62's two rules bracket its **header only**, so the 60-row
+  body below stayed unclaimed.
+
+  `tables.py` now has a second, borderless path: runs of rows whose column positions repeat
+  line after line, which is the *"borderless via column/row whitespace alignment"* F1.6 asked
+  for and never got. Two things it had to learn the hard way — columns are **centred or
+  right-aligned** as often as left (testing left edges only found *zero* tables on a3c p18,
+  across 58 rows that split cleanly into 7–9 cells), and rows a ruled region already holds must
+  be **dropped rather than re-emitted**, because `assign_ids` hashes position and text so a
+  duplicate cell is an id collision, not a cosmetic one (`4650 blocks produced 4640 ids`).
+
+  | | headings before | after | numeral-only before | after |
+  |---|---|---|---|---|
+  | a3c-algorithmheavy | 193 | **17** | 165 | **0** |
+  | gpt3-longform-singlecol | 181 | **61** | 126 | **6** |
+
+  a3c also went 6 → 10 tables and 325 → 901 addressable cells; gpt3 39 → 41 and 1,725 → 3,094.
+  The six other papers are unchanged, and the three gold-scored papers' F1 and reading order are
+  identical — this fixed a defect without moving the benchmark.
+
 - **The ±20 % outline clause has never been measurable, and half of it now is — for free.**
   The gold set is region-level; nothing in it states a paper's section count, so "within ±20 % of
   gold" had no gold. But **4 of the 8 corpus papers carry an embedded PDF outline** written by
