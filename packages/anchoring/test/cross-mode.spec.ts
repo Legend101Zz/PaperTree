@@ -216,7 +216,7 @@ describe('anchoring/cross-mode.spec — Source ⇄ Guided', () => {
     // eslint-disable-next-line no-console
     console.log(
       `\ncross-mode: ${String(resolved)} resolved, ${String(unavailable)} unavailable ` +
-        `(reasons: ${[...seenReasons].sort().join(', ')})\n`,
+        `(reasons: ${[...seenReasons].toSorted().join(', ')})\n`,
     );
 
     expect(resolved + unavailable).toBe(199);

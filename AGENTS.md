@@ -33,8 +33,24 @@ done, the result file said not done, and only the result file was right.
    disagree more often than you would think, and the disagreement is the finding.
 3. Verify the previous session's claims by **running them**, not by reading them.
    `pnpm test` is not a gate — turbo caches and will reprint a pass it did not execute.
-   Run the suite directly, or `turbo run test --force`.
 4. Comment on the epic issue saying what you are picking up.
+
+### Before you push — run what CI runs, uncached
+
+```bash
+pnpm exec turbo run lint --force
+pnpm exec turbo run typecheck --force
+pnpm exec turbo run test --force
+```
+
+`--force` because turbo caches, and the Epic 0 gate observed a cache hit reprinting
+results without executing them.
+
+**Per-package `tsc --noEmit` and `vitest run` are not enough.** The four TypeScript
+packages lint with **oxlint**; `apps/web` lints with `next lint`. Running only the latter
+misses the former entirely, which is how run 30702316937 failed on two errors after a
+branch that had passed every suite its author thought to run. A green subset looks
+exactly like a green whole.
 
 ### DURING
 

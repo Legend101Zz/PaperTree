@@ -358,12 +358,6 @@ function contentParentOf(block: IndexedBlock, doc: IndexedDocument): string | nu
   return parent.type === 'heading' ? null : parent.id;
 }
 
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
-
 /** caption block id → the float that claims it. Such a caption renders inside its float. */
 function captionOwners(doc: IndexedDocument): ReadonlyMap<string, string> {
   const owners = new Map<string, string>();
