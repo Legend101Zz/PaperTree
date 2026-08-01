@@ -204,13 +204,13 @@ Three things in that table are worth stating plainly:
 | `worker/determinism.spec` | **MET** | 20 runs byte-identical via `canonical_json_for_determinism`, ids stable. `test_pipeline_end_to_end.py` |
 | `worker/repairs.spec` | **MET** | 84,395 spans, 749 dehyphenation proposals, rules 25/26/27/30b hold; 30b checked against the validator's own `_dehyphenate` |
 | `worker/robustness.spec` | **MET** | 8/8 papers parse and validate; 0 crashes, 0 timeouts, 0 empty outputs |
-| `worker/perf.spec` | **MET** | p50 305 ms/page, p95 568 ms/page against a 1500 ms bar |
+| `worker/perf.spec` | **PARTIAL** | time ✅ p50 305 ms/page, p95 568 ms/page against a 1500 ms bar. **Memory ❌ — `gpt3-longform-singlecol` peaks at 746 MB against the <500 MB bar** (clean process, 75 pp; the other seven are 143–281 MB). Recorded MET here until 2026-08-01 on the strength of the time half alone |
 | `ingest/source-authenticity.spec` | **MET** | every line of every non-table block traced to the page's glyph stream; found 2 real bugs while being written |
 | `eval/ptub.spec` | **PARTIAL** | harness + metrics + annotation tool + scorer + Docling geometry, 83 tests; gold exists (18 pp); **cross-parser F1 now computable and computed**; still **3 adapters, not 4** — row 2 is deleted code |
 | `worker/figures.spec` | **PARTIAL** | ResNet ≥5 ✅ (9, all vector); `is_vector` correct ✅; ≥80 % captioned ❌ (58 % corpus-wide). Gold figure F1 0.67 on `attention`, **0.00 on the other two**; vector-figure recall still not evaluable — gold has no `is_vector` |
 | `worker/equations.spec` | **NOT MET** | prose never classified as an equation ✅; every equation retains its crop ✅; **≥80 % of gold ❌ — 0 of 17 at IoU 0.5**. Count now 16 predicted against 17 gold (was 89); the extents are narrower than gold's full-column convention |
 | `worker/reading-order.spec` | **NOT MET** | **0.278 / 0.389 / 0.967 pairwise against a ≥0.90 bar**, up from 0.167 / 0.333 / 0.800. ResNet is now over the bar; the two single-column papers are not. The ordering logic was never the weak part — the regions being ordered were |
-| `worker/hierarchy.spec` | **NOT MET** | number/title joining and furniture stripping work; outline size improved 3–6× but is still outside ±20 % — now under-detecting on ResNet and over-detecting on a3c/gpt3 |
+| `worker/hierarchy.spec` | **NOT MET** | number/title joining ✅ and running-head/page-number/margin-stamp routing ✅. But the clause **"no table cell is classified as a heading" is violated outright**: 165 of a3c's 193 headings and 126 of gpt3's 181 are numeral-only table values (`'570.2'`, `'3.66'`, `'DQN'`). Outline size is therefore ~14× gold on a3c, not ±20 % |
 
 ---
 
@@ -250,6 +250,23 @@ asks whether those boxes have the shape of the regions on the page.
   gpt3 (192) remain far too high. Both are long papers whose headings come from the font rule
   rather than from numbering, and that rule still fires on emphasis runs. `hierarchy.spec` wants
   ±20 % of gold and neither end is inside it.
+- **The over-detection has ONE cause, and it is a named acceptance clause being violated:
+  table values are becoming headings.** Measured 2026-08-01 over the whole corpus: **165 of
+  a3c's 193 headings and 126 of gpt3's 181 are numeral-only strings** — `'570.2'`, `'133.4'`,
+  `'3.66'`, `'44.3'` — plus bare column labels `'Game'`, `'DQN'`, `'Gorila'`. The other six
+  papers have 0–2 between them. `hierarchy.spec` says in as many words: *"No figure label, table
+  cell, author line or arXiv stamp is classified as a heading."* Nothing asserts it, which is why
+  a 14×-inflated outline was carried as a vague "over-detecting on a3c/gpt3" rather than as the
+  concrete defect it is.
+
+  The root cause is one layer down, and it is not `hierarchy.py`. Those numerals sit in
+  `a3c` p18's Atari results table and `gpt3` p22/p44 — **borderless** tables that `tables.py`
+  never claimed: a containment check finds **0** of these headings inside any detected table
+  region. So the cells were never absorbed into a table, stayed loose on the page, and the
+  font/weight heading rule then took bold table numerals for section titles. Fixing
+  `hierarchy.py` alone would suppress the symptom and leave the cells unaddressable; the
+  borderless-table path is the thing to fix, and `hierarchy.spec`'s clause should be asserted so
+  it cannot silently regress either way.
 - **Caption linking is 58 %, against an 80 % bar**, up from ~35 % after two fixes: raster panels
   are merged (neural-odes 77 → 18 regions) and a caption now binds by horizontal overlap plus
   edge-to-edge adjacency rather than by nearest vertical centre, which on a two-column page
@@ -277,6 +294,19 @@ asks whether those boxes have the shape of the regions on the page.
   unmeasurable.
 - **The Docling adapter reports counts, not documents**, so element-detection F1 against Docling
   is not computable even with gold until the bridge returns geometry.
+- **`perf.spec`'s memory half was never actually checked, and it fails.** The brief asks for
+  peak RSS **<500 MB**. `test_the_parse_stays_inside_the_performance_budget` asserts
+  `peak_mb < 2000` — four times the bar — on `resnet-cvpr-2col`, the *second-smallest* paper in
+  the corpus, because `ru_maxrss` is process-wide inside a shared pytest run and a tight bound
+  there would be measuring the rest of the suite. The reasoning in that comment is sound; the
+  consequence is that nothing measured the real number. Measured 2026-08-01, one clean process
+  per paper: **`gpt3-longform-singlecol` peaks at 746 MB**, over the bar, while the other seven
+  sit at 143–281 MB. It scales with page count (75 pp), so the fix is a streaming or
+  page-batched assembly rather than holding every page's spans at once — and the assertion
+  belongs in a subprocess against the *largest* paper, at the bar the brief actually states.
+  This is the third time on this branch a green test has turned out to assert less than it
+  appeared to; it is the same shape as the empty-`parametrize` trap `_corpus_manifest.py`
+  documents.
 
 ---
 
