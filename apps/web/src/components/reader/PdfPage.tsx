@@ -31,7 +31,12 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 
 import type { RenderTask } from 'pdfjs-dist';
 
+import type { BBox } from '@papertree/document-ir';
+
 import { getPdfjs } from '@/lib/pdf/worker';
+
+import { alignedItems } from './stampTextLayer';
+
 
 import {
   irToCssScale,
@@ -63,12 +68,35 @@ export interface PdfPageProps {
   readonly textLayer?: boolean;
   readonly className?: string;
   readonly onRenderError?: (error: Error) => void;
+  /**
+   * Called once per successful text-layer build, with the divs and the items they were built from.
+   *
+   * The reader shell uses it to stamp `data-block-id`/`data-cp-start` (`stampTextLayer`). It lives
+   * here rather than in this file because the mapping needs the IR and this file deliberately does
+   * not have it: `PdfPage` renders a PDF, and a page component that knew about PaperIR blocks would
+   * be a second place the two coordinate systems meet. `anchoring/bridge.ts` is the only one.
+   */
+  readonly onTextLayer?: (info: TextLayerInfo) => void;
+}
+
+/** What `onTextLayer` hands back. Everything needed to map items to blocks, and nothing measured. */
+export interface TextLayerInfo {
+  readonly pageIndex: number;
+  /** `TextLayer.textDivs`, render order. */
+  readonly divs: readonly HTMLElement[];
+  /** The items those divs were built from, `str`-defined only — index-aligned with `divs`. */
+  readonly items: readonly { readonly str: string; readonly transform: readonly number[] }[];
+  readonly viewport: { convertToPdfPoint(x: number, y: number): number[] };
+  /** `PDFPageProxy.view` / `.rotate`. Raw PDF space; `bridge.ts` turns them into an IR frame. */
+  readonly page: { readonly view: BBox; readonly rotate: number };
 }
 
 /** The v5 `TextLayer` instance surface this uses. Deliberately not the pdf.js type. */
 interface TextLayerHandle {
   render(): Promise<unknown>;
   cancel(): void;
+  /** v5 only. Absent on the v3 fallback path, which is why `onTextLayer` is not fired there. */
+  readonly textDivs?: HTMLElement[];
 }
 
 /** v3's free function, kept as a fallback so a version downgrade degrades instead of crashing. */
@@ -142,6 +170,7 @@ export function PdfPage({
   textLayer = true,
   className,
   onRenderError,
+  onTextLayer,
 }: PdfPageProps): JSX.Element {
   const { pdf, pageMeta } = usePdfDocument();
   const meta = pageMeta.get(pageIndex) ?? null;
@@ -154,6 +183,8 @@ export function PdfPage({
   // in the dependency list would re-run — and therefore re-raster — the page on every render.
   const onRenderErrorRef = useRef(onRenderError);
   onRenderErrorRef.current = onRenderError;
+  const onTextLayerRef = useRef(onTextLayer);
+  onTextLayerRef.current = onTextLayer;
 
   const css = meta === null ? { width: 0, height: 0 } : pageCssSize(meta, zoom);
   const irScale = meta === null ? zoom : irToCssScale(meta, zoom);
@@ -201,18 +232,40 @@ export function PdfPage({
         container.style.height = `${swapped ? css.width : css.height}px`;
 
         const api = pdfjs as unknown as PdfjsTextLayerApi;
-        const source = page.streamTextContent();
+
+        // `getTextContent()` AND NOT `streamTextContent()`. `TextLayer` accepts either, but the
+        // stream is consumed by the layer and its items are then unreachable — and the items are
+        // exactly what `stampTextLayer` needs, because a div carries only glyphs while an item
+        // carries the text matrix those glyphs were placed by. Handing the SAME resolved object to
+        // the layer is what guarantees the two views cannot disagree; re-fetching afterwards would
+        // be a second extraction, and `Anchor.textStreamId` exists because two extractions of one
+        // document are not required to agree.
+        const content = await page.getTextContent();
+        if (cancelled) return;
+
         if (typeof api.TextLayer === 'function') {
           const layer = new api.TextLayer({
-            textContentSource: source,
+            textContentSource: content,
             container,
             viewport: cssViewport,
           });
           text = layer;
           await layer.render();
+          if (cancelled) return;
+
+          const divs = layer.textDivs;
+          if (divs !== undefined) {
+            onTextLayerRef.current?.({
+              pageIndex,
+              divs,
+              items: alignedItems(content.items as readonly { str?: string }[]) as TextLayerInfo['items'],
+              viewport: cssViewport as unknown as TextLayerInfo['viewport'],
+              page: { view: page.view as BBox, rotate: page.rotate },
+            });
+          }
         } else if (typeof api.renderTextLayer === 'function') {
           const task = api.renderTextLayer({
-            textContentSource: source,
+            textContentSource: content,
             container,
             viewport: cssViewport,
           });

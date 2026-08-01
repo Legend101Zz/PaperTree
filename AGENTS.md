@@ -127,3 +127,13 @@ never shrink on their own.
   `text` and `repairs` by hand.
 - Corpus PDFs are fetched, not committed: `./research/benchmarks/fetch_corpus.sh`.
   Without them the reader renders nothing and `copy-fixtures` warns `0/3 PDFs`.
+  **Your machine has them and CI does not.** A test that reads one passes locally and fails on a
+  clean checkout with `ENOENT … public/fixtures/*.pdf` — that is how run 30712541335 went red after
+  a fully green local `--force` gate. A test that needs the corpus must `describe.skipIf` on its
+  absence and say so on stdout, naming the fetch script. Skipping loudly is honest; passing quietly
+  is the vacuous-green failure in §2.
+- **The reader renders nothing in a browser tab that is not foregrounded.**
+  `document.visibilityState === 'hidden'` starves `requestAnimationFrame`, so pdf.js's
+  `RenderTask.promise` never settles and the text layer is never built — 0 spans, no error, canvas
+  apparently painted. Confirmed on pristine `main`, so it is not anyone's regression. Any automated
+  browser check of the reader must foreground the tab, or it is measuring the tab and not the code.

@@ -40,7 +40,7 @@ import {
 
 import type { BBox } from '@papertree/document-ir';
 
-import { PdfPage } from './PdfPage';
+import { PdfPage, type TextLayerInfo } from './PdfPage';
 import { pageUnitSize, usePdfDocument, type PdfPageMeta } from './PdfDocumentProvider';
 
 /* ────────────────────────────── the pure windowing math ────────────────────────────── */
@@ -385,6 +385,17 @@ export interface VirtualPageListProps {
   readonly className?: string;
   /** The highlight overlay for a page, rendered into `PdfPage`'s overlay slot. */
   readonly renderOverlay?: (pageIndex: number, meta: PdfPageMeta) => ReactNode;
+  /** Forwarded to every mounted `PdfPage`. The reader shell stamps the IR attributes from it. */
+  readonly onTextLayer?: (info: TextLayerInfo) => void;
+  /**
+   * The scroller's own box, reported on resize.
+   *
+   * The reader shell needs it for `resolveZoom`: "fit width" that resolves to a number ONCE stops
+   * fitting the moment the window changes, so the mode is kept and re-resolved against this. It is
+   * published from the observer that already runs rather than measured a second time — a second
+   * `clientWidth` read somewhere else is a second source of truth for the same pixel.
+   */
+  readonly onViewportResize?: (size: { readonly width: number; readonly height: number }) => void;
   readonly onVisibleChange?: (visible: VisiblePages) => void;
   /** Pinch handlers and `touch-action`, from `usePinchZoom` in `ZoomControl`. */
   readonly surfaceProps?: PointerSurfaceProps;
@@ -392,7 +403,17 @@ export interface VirtualPageListProps {
 
 export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageListProps>(
   function VirtualPageList(
-    { zoom, overscan = DEFAULT_OVERSCAN, gap = DEFAULT_PAGE_GAP, className, renderOverlay, onVisibleChange, surfaceProps },
+    {
+      zoom,
+      overscan = DEFAULT_OVERSCAN,
+      gap = DEFAULT_PAGE_GAP,
+      className,
+      renderOverlay,
+      onTextLayer,
+      onViewportResize,
+      onVisibleChange,
+      surfaceProps,
+    },
     ref,
   ) {
     const { numPages, pageMeta } = usePdfDocument();
@@ -441,16 +462,25 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
     );
 
     // The ONLY measurement in this file, and it happens on resize rather than on scroll: the
-    // viewport's own height, which cannot be derived from the IR.
+    // viewport's own box, which cannot be derived from the IR. Held in a ref so a caller passing an
+    // inline lambda does not re-run the observer on every render.
+    const onViewportResizeRef = useRef(onViewportResize);
+    onViewportResizeRef.current = onViewportResize;
+
     useEffect(() => {
       const el = scrollRef.current;
       if (el === null) return;
       setViewportHeight(el.clientHeight);
+      onViewportResizeRef.current?.({ width: el.clientWidth, height: el.clientHeight });
       if (typeof ResizeObserver === 'undefined') return;
       const observer = new ResizeObserver((entries) => {
         const entry = entries[0];
         if (entry === undefined) return;
         setViewportHeight(entry.contentRect.height);
+        onViewportResizeRef.current?.({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height,
+        });
       });
       observer.observe(el);
       return () => observer.disconnect();
@@ -546,7 +576,7 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
                   marginRight: 'auto',
                 }}
               >
-                <PdfPage pageIndex={pageIndex} zoom={zoom}>
+                <PdfPage pageIndex={pageIndex} zoom={zoom} onTextLayer={onTextLayer}>
                   {renderOverlay?.(pageIndex, meta)}
                 </PdfPage>
               </div>

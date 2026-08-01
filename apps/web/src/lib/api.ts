@@ -1,7 +1,26 @@
-// apps/web/src/lib/api.ts
-import axios from "axios";
+/**
+ * apps/web/src/lib/api — ONE client for `apps/api`.
+ *
+ * There were two. `fetchApi`, a `fetch` wrapper, and `api`, an axios instance with interceptors,
+ * each with thirteen call sites, two auth-header conventions and two error shapes. Epic 2's brief
+ * lists "the second API client in `lib/api.ts`" under Must delete; issue #60.
+ *
+ * THE FETCH ONE WON, and not by preference. The axios instance was the richer of the two — it
+ * carried the request interceptor that attaches the bearer token and the response interceptor that
+ * signs the user out on a 401 — but both are ten lines to express directly, and expressing them
+ * directly removes a runtime dependency from the browser bundle rather than adding one. `FormData`
+ * needed no help either: `fetch` sets `multipart/form-data` AND its boundary itself, which is why
+ * `upload` below omits `Content-Type` rather than setting it. Setting it by hand omits the
+ * boundary, and the server then rejects a body that looks correct — the one axios-to-fetch
+ * migration trap that produces a confusing error rather than an obvious one.
+ *
+ * WHAT THIS TALKS TO. `apps/api`, which is the **v1** application: MongoDB, its own JWT, its own
+ * PDF extractor. It is not `services/document-worker` and it does not produce PaperIR. Nothing here
+ * returns a document the reader can open; `lib/fixtures.ts` is that path today. Keeping the two
+ * clearly separated is the point of this file being small.
+ */
 
-import type { Highlight } from "@/types";
+import type { Highlight } from '@/types';
 import type {
   Canvas,
   CanvasElements,
@@ -12,86 +31,99 @@ import type {
   AskFollowupRequest,
   AddNoteRequest,
   AskMode,
-} from "@/types/canvas";
+} from '@/types/canvas';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
-async function fetchApi<T>(
-  endpoint: string,
-  options?: RequestInit,
-): Promise<T> {
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+function getToken(): string | null {
+  return typeof window === 'undefined' ? null : window.localStorage.getItem('token');
+}
 
-  const res = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
+/**
+ * The 401 response interceptor, kept.
+ *
+ * An expired token otherwise leaves every panel in a permanent loading state with no explanation,
+ * because each caller handles its own rejection and none of them can tell "your session ended" from
+ * "the server is down". Clearing the token first matters: navigating with it still in storage lands
+ * on `/login`, which reads it, believes it, and bounces straight back.
+ */
+function onUnauthorized(): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem('token');
+  window.location.href = '/login';
+}
+
+export interface ApiRequestInit extends Omit<RequestInit, 'body'> {
+  /** A plain value is JSON-encoded; `FormData` is passed through untouched. See the header. */
+  readonly body?: unknown;
+}
+
+export async function apiFetch<T>(endpoint: string, options: ApiRequestInit = {}): Promise<T> {
+  const { body, headers, ...rest } = options;
+  const token = getToken();
+  const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
+
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    ...rest,
+    ...(body === undefined
+      ? {}
+      : { body: isForm ? (body as FormData) : JSON.stringify(body) }),
     headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options?.headers,
+      // Never for FormData: the browser must supply the boundary with it.
+      ...(isForm ? {} : { 'Content-Type': 'application/json' }),
+      ...(token === null ? {} : { Authorization: `Bearer ${token}` }),
+      ...headers,
     },
   });
 
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(error.detail || `API Error: ${res.status}`);
+  if (response.status === 401) {
+    onUnauthorized();
+    throw new Error('Your session has expired. Please sign in again.');
   }
 
-  return res.json();
+  if (!response.ok) {
+    const detail = await response
+      .json()
+      .then((parsed: { detail?: string }) => parsed.detail)
+      .catch(() => undefined);
+    throw new Error(detail ?? `${String(response.status)} ${response.statusText}`);
+  }
+
+  // 204 and an empty body are legitimate — `delete` and `save` both return one.
+  if (response.status === 204) return undefined as T;
+  const text = await response.text();
+  return (text === '' ? undefined : JSON.parse(text)) as T;
 }
 
-const getToken = () =>
-  typeof window !== "undefined" ? localStorage.getItem("token") : "";
+/** A URL the browser fetches itself (an `<img>`, an `<iframe>`), so the token rides in the query. */
+function withToken(path: string, params: URLSearchParams = new URLSearchParams()): string {
+  params.set('token', getToken() ?? '');
+  return `${API_URL}${path}?${params.toString()}`;
+}
 
-export const api = axios.create({
-  baseURL: API_URL,
-  headers: { "Content-Type": "application/json" },
-});
+/* ─────────────────────────────────────────── auth ─────────────────────────────────────────── */
 
-api.interceptors.request.use((config) => {
-  const token = getToken();
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-
-api.interceptors.response.use(
-  (r) => r,
-  (error) => {
-    if (error.response?.status === 401 && typeof window !== "undefined") {
-      localStorage.removeItem("token");
-      window.location.href = "/login";
-    }
-    return Promise.reject(error);
-  },
-);
-
-// Auth
 export const authApi = {
-  register: async (email: string, password: string) =>
-    (await api.post("/auth/register", { email, password })).data,
-  login: async (email: string, password: string) =>
-    (await api.post("/auth/login", { email, password })).data,
-  getMe: async () => (await api.get("/auth/me")).data,
+  register: (email: string, password: string) =>
+    apiFetch<{ access_token: string }>('/auth/register', { method: 'POST', body: { email, password } }),
+  login: (email: string, password: string) =>
+    apiFetch<{ access_token: string }>('/auth/login', { method: 'POST', body: { email, password } }),
+  getMe: () => apiFetch<{ id: string; email: string; created_at: string }>('/auth/me'),
 };
 
-// Papers
-export const papersApi = {
-  upload: async (file: File) => {
-    const formData = new FormData();
-    formData.append("file", file);
-    return (
-      await api.post("/papers/upload", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      })
-    ).data;
-  },
-  list: async () => (await api.get("/papers")).data,
-  get: async (paperId: string) => (await api.get(`/papers/${paperId}`)).data,
-  delete: async (paperId: string) =>
-    (await api.delete(`/papers/${paperId}`)).data,
+/* ────────────────────────────────────────── papers ────────────────────────────────────────── */
 
-  getFileUrl: (paperId: string) =>
-    `${API_URL}/papers/${paperId}/file?token=${getToken()}`,
+export const papersApi = {
+  upload: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return apiFetch<{ id: string }>('/papers/upload', { method: 'POST', body: form });
+  },
+  list: () => apiFetch<unknown[]>('/papers'),
+  get: (paperId: string) => apiFetch<unknown>(`/papers/${paperId}`),
+  delete: (paperId: string) => apiFetch<void>(`/papers/${paperId}`, { method: 'DELETE' }),
+
+  getFileUrl: (paperId: string) => withToken(`/papers/${paperId}/file`),
 
   getPageImageUrl: (
     paperId: string,
@@ -99,45 +131,32 @@ export const papersApi = {
     region?: { x0: number; y0: number; x1: number; y1: number },
     scale = 2,
   ) => {
-    const params = new URLSearchParams({
-      token: getToken() || "",
-      scale: String(scale),
-    });
-    if (region) {
-      params.set("x0", String(region.x0));
-      params.set("y0", String(region.y0));
-      params.set("x1", String(region.x1));
-      params.set("y1", String(region.y1));
+    const params = new URLSearchParams({ scale: String(scale) });
+    if (region !== undefined) {
+      params.set('x0', String(region.x0));
+      params.set('y0', String(region.y0));
+      params.set('x1', String(region.x1));
+      params.set('y1', String(region.y1));
     }
-    return `${API_URL}/papers/${paperId}/page/${page}/image?${params}`;
+    return withToken(`/papers/${paperId}/page/${String(page)}/image`, params);
   },
 
-  generateBook: async (paperId: string, force = false, generateAll = false) =>
-    (
-      await api.post(`/papers/${paperId}/generate-book`, {
-        force_regenerate: force,
-        generate_all: generateAll,
-      })
-    ).data,
+  generateBook: (paperId: string, force = false, generateAll = false) =>
+    apiFetch<unknown>(`/papers/${paperId}/generate-book`, {
+      method: 'POST',
+      body: { force_regenerate: force, generate_all: generateAll },
+    }),
 
-  generatePages: async (paperId: string, pages: number[]) =>
-    (
-      await api.post(`/papers/${paperId}/generate-pages`, {
-        pages,
-      })
-    ).data,
+  generatePages: (paperId: string, pages: number[]) =>
+    apiFetch<unknown>(`/papers/${paperId}/generate-pages`, { method: 'POST', body: { pages } }),
 };
 
-// Explanations API (Enhanced with ask_mode)
-export const explanationsApi = {
-  list: async (paperId: string) => {
-    console.log("Fetching explanations for paper:", paperId);
-    const result = await fetchApi<any[]>(`/explanations/papers/${paperId}`);
-    console.log("Explanations API response:", result);
-    return result;
-  },
+/* ─────────────────────────────────────── explanations ─────────────────────────────────────── */
 
-  create: async (
+export const explanationsApi = {
+  list: (paperId: string) => apiFetch<unknown[]>(`/explanations/papers/${paperId}`),
+
+  create: (
     paperId: string,
     data: {
       highlight_id: string;
@@ -146,160 +165,93 @@ export const explanationsApi = {
       ask_mode?: AskMode;
       auto_add_to_canvas?: boolean;
     },
-  ) => {
-    console.log("Creating explanation:", data);
-    const result = await fetchApi<any>(`/explanations/papers/${paperId}`, {
-      method: "POST",
-      body: JSON.stringify({
+  ) =>
+    apiFetch<unknown>(`/explanations/papers/${paperId}`, {
+      method: 'POST',
+      body: {
         ...data,
-        ask_mode: data.ask_mode || "explain_simply",
+        ask_mode: data.ask_mode ?? 'explain_simply',
         auto_add_to_canvas: data.auto_add_to_canvas ?? true,
-      }),
-    });
-    console.log("Created explanation response:", result);
-    return result;
-  },
+      },
+    }),
 
-  update: async (
-    explanationId: string,
-    data: {
-      is_pinned?: boolean;
-      is_resolved?: boolean;
-    },
-  ) => {
-    return fetchApi<any>(`/explanations/${explanationId}`, {
-      method: "PATCH",
-      body: JSON.stringify(data),
-    });
-  },
+  update: (explanationId: string, data: { is_pinned?: boolean; is_resolved?: boolean }) =>
+    apiFetch<unknown>(`/explanations/${explanationId}`, { method: 'PATCH', body: data }),
 
-  summarize: async (explanationId: string) =>
-    (
-      await api.post("/explanations/summarize", {
-        explanation_id: explanationId,
-      })
-    ).data,
+  summarize: (explanationId: string) =>
+    apiFetch<unknown>('/explanations/summarize', {
+      method: 'POST',
+      body: { explanation_id: explanationId },
+    }),
 };
 
-// ============ Highlights API ============
+/* ──────────────────────────────────────── highlights ──────────────────────────────────────── */
 
 export const highlightsApi = {
-  // ─── NEW: Paper-based methods (used by reader page) ───
-
-  list: async (paperId: string): Promise<Highlight[]> => {
-    const { data } = await api.get(`/highlights/papers/${paperId}`);
-    return data;
-  },
-
-  create: async (paperId: string, input: any): Promise<Highlight> => {
-    const { data } = await api.post(`/highlights/papers/${paperId}`, input);
-    return data;
-  },
-
-  delete: async (highlightId: string): Promise<void> => {
-    // Use the legacy route which works for any highlight
-    await api.delete(`/highlights/${highlightId}`);
-  },
+  list: (paperId: string) => apiFetch<Highlight[]>(`/highlights/papers/${paperId}`),
+  create: (paperId: string, input: unknown) =>
+    apiFetch<Highlight>(`/highlights/papers/${paperId}`, { method: 'POST', body: input }),
+  delete: (highlightId: string) =>
+    apiFetch<void>(`/highlights/${highlightId}`, { method: 'DELETE' }),
 };
 
-// ============ Canvas API ============
+/* ────────────────────────────────────────── canvas ────────────────────────────────────────── */
 
+/** Epic 5 owns this surface and it is stood down (#43). Kept transport-compatible, not extended. */
 export const canvasApi = {
-  // ── Core CRUD ──
+  get: (paperId: string) => apiFetch<Canvas>(`/papers/${paperId}/canvas`),
 
-  get: async (paperId: string): Promise<Canvas> =>
-    fetchApi<Canvas>(`/papers/${paperId}/canvas`),
+  save: (paperId: string, elements: CanvasElements) =>
+    apiFetch<void>(`/papers/${paperId}/canvas`, { method: 'PUT', body: { elements } }),
 
-  save: async (paperId: string, elements: CanvasElements): Promise<void> =>
-    fetchApi<void>(`/papers/${paperId}/canvas`, {
-      method: "PUT",
-      body: JSON.stringify({ elements }),
+  explore: (paperId: string, data: ExploreRequest) =>
+    apiFetch<ExploreResponse>(`/papers/${paperId}/canvas/explore`, { method: 'POST', body: data }),
+
+  ask: (paperId: string, data: AskFollowupRequest) =>
+    apiFetch<{ node: CanvasNode; edge: CanvasEdge }>(`/papers/${paperId}/canvas/ask`, {
+      method: 'POST',
+      body: data,
     }),
 
-  // ── Explore: Highlight → Canvas ──
-
-  explore: async (
-    paperId: string,
-    data: ExploreRequest,
-  ): Promise<ExploreResponse> =>
-    fetchApi<ExploreResponse>(`/papers/${paperId}/canvas/explore`, {
-      method: "POST",
-      body: JSON.stringify(data),
+  addNote: (paperId: string, data: AddNoteRequest) =>
+    apiFetch<{ node: CanvasNode; edge?: CanvasEdge }>(`/papers/${paperId}/canvas/note`, {
+      method: 'POST',
+      body: data,
     }),
 
-  // ── Ask Follow-up ──
-
-  ask: async (
-    paperId: string,
-    data: AskFollowupRequest,
-  ): Promise<{ node: CanvasNode; edge: CanvasEdge }> =>
-    fetchApi<{ node: CanvasNode; edge: CanvasEdge }>(
-      `/papers/${paperId}/canvas/ask`,
-      { method: "POST", body: JSON.stringify(data) },
-    ),
-
-  // ── Notes ──
-
-  addNote: async (
-    paperId: string,
-    data: AddNoteRequest,
-  ): Promise<{ node: CanvasNode; edge?: CanvasEdge }> =>
-    fetchApi<{ node: CanvasNode; edge?: CanvasEdge }>(
-      `/papers/${paperId}/canvas/note`,
-      { method: "POST", body: JSON.stringify(data) },
-    ),
-
-  // ── Page expansion ──
-
-  expandPage: async (
-    paperId: string,
-    pageNumber: number,
-  ): Promise<{ page_node: CanvasNode; was_created: boolean }> =>
-    fetchApi<{ page_node: CanvasNode; was_created: boolean }>(
+  expandPage: (paperId: string, pageNumber: number) =>
+    apiFetch<{ page_node: CanvasNode; was_created: boolean }>(
       `/papers/${paperId}/canvas/expand-page`,
-      { method: "POST", body: JSON.stringify({ page_number: pageNumber }) },
+      { method: 'POST', body: { page_number: pageNumber } },
     ),
 
-  // ── Layout ──
-
-  autoLayout: async (paperId: string, algorithm: "tree" | "grid" = "tree") =>
-    fetchApi<{ status: string }>(`/papers/${paperId}/canvas/layout`, {
-      method: "POST",
-      body: JSON.stringify({ algorithm }),
+  autoLayout: (paperId: string, algorithm: 'tree' | 'grid' = 'tree') =>
+    apiFetch<{ status: string }>(`/papers/${paperId}/canvas/layout`, {
+      method: 'POST',
+      body: { algorithm },
     }),
 
-  // ── Node operations ──
-
-  updateNode: async (
+  updateNode: (
     paperId: string,
     nodeId: string,
-    data: {
-      position?: { x: number; y: number };
-      data?: Partial<CanvasNode["data"]>;
-    },
+    data: { position?: { x: number; y: number }; data?: Partial<CanvasNode['data']> },
   ) =>
-    fetchApi<CanvasNode>(`/papers/${paperId}/canvas/nodes/${nodeId}`, {
-      method: "PATCH",
-      body: JSON.stringify(data),
+    apiFetch<CanvasNode>(`/papers/${paperId}/canvas/nodes/${nodeId}`, {
+      method: 'PATCH',
+      body: data,
     }),
 
-  deleteNode: async (paperId: string, nodeId: string) =>
-    fetchApi<{ deleted: string[] }>(
-      `/papers/${paperId}/canvas/nodes/${nodeId}`,
-      {
-        method: "DELETE",
-      },
-    ),
+  deleteNode: (paperId: string, nodeId: string) =>
+    apiFetch<{ deleted: string[] }>(`/papers/${paperId}/canvas/nodes/${nodeId}`, {
+      method: 'DELETE',
+    }),
 
-  // ── Populate (auto-create page nodes + explanation branches) ──
-
-  populate: async (
-    paperId: string,
-  ): Promise<{
-    id: string;
-    paper_id: string;
-    elements: CanvasElements;
-    pages_created: number;
-    explorations_created: number;
-  }> => fetchApi(`/papers/${paperId}/canvas/populate`, { method: "POST" }),
+  populate: (paperId: string) =>
+    apiFetch<{
+      id: string;
+      paper_id: string;
+      elements: CanvasElements;
+      pages_created: number;
+      explorations_created: number;
+    }>(`/papers/${paperId}/canvas/populate`, { method: 'POST' }),
 };

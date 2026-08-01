@@ -27,12 +27,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { resolveAnchor, type Anchor, type IndexedDocument, type Resolution } from '@papertree/anchoring';
 
 import { GuidedView } from '@/components/reader/GuidedView';
-import { HighlightOverlay } from '@/components/reader/HighlightOverlay';
+import { ModeSwitch } from '@/components/reader/ModeSwitch';
 import { Navigator } from '@/components/reader/Navigator';
-import { PdfDocumentProvider } from '@/components/reader/PdfDocumentProvider';
+import { SourcePane } from '@/components/reader/SourcePane';
 import { SplitView } from '@/components/reader/SplitView';
 import { UnanchoredTray } from '@/components/reader/UnanchoredTray';
-import { VirtualPageList } from '@/components/reader/VirtualPageList';
+import { resolveZoom, ZoomControl, type ZoomMode } from '@/components/reader/ZoomControl';
 import { loadPaper, pdfUrlFor, type FixtureSlug } from '@/lib/fixtures';
 
 export type ReadingMode = 'source' | 'guided' | 'split';
@@ -52,7 +52,13 @@ export function ReaderWorkspace({ slug }: ReaderWorkspaceProps) {
   const [mode, setMode] = useState<ReadingMode>('source');
   const [navigatorOpen, setNavigatorOpen] = useState(false);
   const [anchors, setAnchors] = useState<readonly AnchorRecord[]>([]);
-  const [zoom, setZoom] = useState(1);
+  /**
+   * ZOOM IS A MODE, NOT A NUMBER, and `ZoomControl`'s header says why: "fit width" stored as `1.37`
+   * stops fitting the instant the window is resized. The scalar below is derived from the mode and
+   * the measured container on every resize, so a fit mode keeps fitting.
+   */
+  const [zoomMode, setZoomMode] = useState<ZoomMode>({ kind: 'scale', scale: 1 });
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
 
   // Mode, zoom and scroll are remembered PER PAPER (IA §18.2's persistence column), so returning
   // to a paper returns you to how you were reading it, not to a global default.
@@ -77,9 +83,11 @@ export function ReaderWorkspace({ slug }: ReaderWorkspaceProps) {
     const saved = window.localStorage.getItem(storageKey);
     if (saved === null) return;
     try {
-      const parsed = JSON.parse(saved) as { mode?: ReadingMode; zoom?: number };
+      const parsed = JSON.parse(saved) as { mode?: ReadingMode; zoomMode?: ZoomMode };
       if (parsed.mode !== undefined) setMode(parsed.mode);
-      if (typeof parsed.zoom === 'number' && parsed.zoom > 0) setZoom(parsed.zoom);
+      // The MODE is what persists. Restoring a stored scalar for a paper last read fit-to-width on
+      // a wider window would reopen it at a size that fits nothing.
+      if (parsed.zoomMode !== undefined) setZoomMode(parsed.zoomMode);
     } catch {
       // A corrupt entry is not worth a crash, and not worth a migration either — the cost of
       // getting it wrong is that one paper opens at 100% in Source mode.
@@ -88,8 +96,8 @@ export function ReaderWorkspace({ slug }: ReaderWorkspaceProps) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    window.localStorage.setItem(storageKey, JSON.stringify({ mode, zoom }));
-  }, [storageKey, mode, zoom]);
+    window.localStorage.setItem(storageKey, JSON.stringify({ mode, zoomMode }));
+  }, [storageKey, mode, zoomMode]);
 
   /**
    * Re-resolve every anchor against the current parse.
@@ -160,6 +168,23 @@ export function ReaderWorkspace({ slug }: ReaderWorkspaceProps) {
     );
   }
 
+  /**
+   * The mode resolved against the page and the measured container.
+   *
+   * Page ONE is the reference on purpose: a document with a landscape figure page would otherwise
+   * make "fit width" mean something different depending on where the reader had scrolled to.
+   */
+  const zoom =
+    doc === null
+      ? 1
+      : resolveZoom(zoomMode, {
+          pageWidth: doc.pages[0]?.width ?? 612,
+          pageHeight: doc.pages[0]?.height ?? 792,
+          userUnit: doc.pages[0]?.user_unit ?? 1,
+          containerWidth: viewport.width,
+          containerHeight: viewport.height,
+        });
+
   if (doc === null) {
     return (
       <div role="status" aria-live="polite" className="p-8 text-sm opacity-80">
@@ -175,7 +200,9 @@ export function ReaderWorkspace({ slug }: ReaderWorkspaceProps) {
       mode={mode}
       onModeChange={setMode}
       zoom={zoom}
-      onZoomChange={setZoom}
+      zoomMode={zoomMode}
+      onZoomChange={setZoomMode}
+      onViewportResize={setViewport}
       navigatorOpen={navigatorOpen}
       onNavigatorToggle={() => setNavigatorOpen((open) => !open)}
       anchors={anchors}
@@ -203,7 +230,9 @@ interface ViewProps {
   readonly mode: ReadingMode;
   readonly onModeChange: (mode: ReadingMode) => void;
   readonly zoom: number;
-  readonly onZoomChange: (zoom: number) => void;
+  readonly zoomMode: ZoomMode;
+  readonly onZoomChange: (mode: ZoomMode) => void;
+  readonly onViewportResize: (size: { readonly width: number; readonly height: number }) => void;
   readonly navigatorOpen: boolean;
   readonly onNavigatorToggle: () => void;
   readonly anchors: readonly AnchorRecord[];
@@ -227,6 +256,9 @@ function ReaderWorkspaceView(props: ViewProps) {
         title={title}
         mode={mode}
         onModeChange={props.onModeChange}
+        zoom={props.zoom}
+        zoomMode={props.zoomMode}
+        onZoomChange={props.onZoomChange}
         onNavigatorToggle={props.onNavigatorToggle}
         navigatorOpen={props.navigatorOpen}
       />
@@ -289,24 +321,37 @@ function PendingSlot({ label, detail }: { label: string; detail: string }) {
   );
 }
 
+/**
+ * The reader's one toolbar.
+ *
+ * It used to declare its own mode buttons inline — a three-entry `MODES` array and a `map` — while
+ * `components/reader/ModeSwitch.tsx` sat unimported next to it, and it had NO zoom control at all
+ * while `ZoomControl` sat unimported beside that. Both were found by `test/reachable.spec.ts`, and
+ * `ZoomControl`'s absence meant F2.1's "real zoom, not a CSS width slider" had no way to be
+ * exercised by a user: the state existed and nothing could change it. Issue #60.
+ *
+ * `ModeSwitch` is not a cosmetic swap for the inline buttons. It knows to DISABLE Guided with a
+ * stated reason when a document has no derived reading, which the inline version had no concept of.
+ */
 function ReaderToolbarShell({
   title,
   mode,
   onModeChange,
+  zoom,
+  zoomMode,
+  onZoomChange,
   onNavigatorToggle,
   navigatorOpen,
 }: {
   title: string;
   mode: ReadingMode;
   onModeChange: (mode: ReadingMode) => void;
+  zoom: number;
+  zoomMode: ZoomMode;
+  onZoomChange: (mode: ZoomMode) => void;
   onNavigatorToggle: () => void;
   navigatorOpen: boolean;
 }) {
-  const MODES: readonly { id: ReadingMode; label: string }[] = [
-    { id: 'source', label: 'Source' },
-    { id: 'guided', label: 'Guided' },
-    { id: 'split', label: 'Split' },
-  ];
   return (
     <header className="flex items-center gap-2 border-b px-2 py-1">
       <button
@@ -322,47 +367,13 @@ function ReaderToolbarShell({
         ☰
       </button>
       <h1 className="min-w-0 flex-1 truncate text-sm font-medium">{title}</h1>
-      <div role="group" aria-label="Reading mode" className="flex">
-        {MODES.map((entry) => (
-          <button
-            key={entry.id}
-            type="button"
-            aria-pressed={mode === entry.id}
-            className={`h-11 min-w-[64px] rounded px-3 text-sm ${mode === entry.id ? 'font-semibold underline' : ''}`}
-            onPointerUp={() => onModeChange(entry.id)}
-            onClick={(event) => {
-              if (event.detail === 0) onModeChange(entry.id);
-            }}
-          >
-            {entry.label}
-          </button>
-        ))}
-      </div>
+      {/* Zoom applies to the paper, so it is hidden in Guided — a percentage that changes nothing
+          is worse than no control. Split shows it: half of Split is the paper. */}
+      {mode === 'guided' ? null : (
+        <ZoomControl mode={zoomMode} zoom={zoom} onModeChange={onZoomChange} />
+      )}
+      <ModeSwitch mode={mode} onModeChange={onModeChange} />
     </header>
-  );
-}
-
-function SourcePane(props: ViewProps) {
-  return (
-    <PdfDocumentProvider src={props.pdfUrl}>
-      <VirtualPageList
-        zoom={props.zoom}
-        className="h-full"
-        renderOverlay={(pageIndex, meta) => (
-          <HighlightOverlay
-            pageIndex={pageIndex}
-            pageWidth={meta.width}
-            pageHeight={meta.height}
-            userUnit={meta.userUnit}
-            zoom={props.zoom}
-            items={props.anchors.map((record) => ({
-              anchorId: record.anchor.id,
-              resolution: record.resolution,
-            }))}
-          />
-        )}
-      />
-    </PdfDocumentProvider>
   );
 }
 
@@ -375,13 +386,31 @@ function DocumentSlot(props: ViewProps) {
   if (props.mode === 'split') {
     return (
       <SplitView
-        source={<SourcePane {...props} />}
+        source={
+          <SourcePane
+            doc={props.doc}
+            pdfUrl={props.pdfUrl}
+            zoom={props.zoom}
+            anchors={props.anchors}
+            onAnchorCaptured={props.onAnchorCaptured}
+            onViewportResize={props.onViewportResize}
+          />
+        }
         guided={<GuidedPane {...props} />}
         className="h-full"
       />
     );
   }
-  return <SourcePane {...props} />;
+  return (
+    <SourcePane
+      doc={props.doc}
+      pdfUrl={props.pdfUrl}
+      zoom={props.zoom}
+      anchors={props.anchors}
+      onAnchorCaptured={props.onAnchorCaptured}
+      onViewportResize={props.onViewportResize}
+    />
+  );
 }
 
 function NavigatorSlot(props: {
