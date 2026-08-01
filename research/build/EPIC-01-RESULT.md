@@ -19,7 +19,28 @@ the 8-paper, 195-page corpus. Nothing is quoted from a doc without being re-run.
 > zero-ML ships as default. Otherwise a small local layout model becomes default and Docling
 > stays opt-in.
 
-### Verdict: **accuracy PASSES. Speed is NOT ESTABLISHED — the measurement cannot resolve it.**
+### PROVISIONAL DECISION (owner's call, 2026-08-01): **zero-ML ships as default. Docling stays opt-in.**
+
+Taken so Wave 2 is not blocked on a benchmark repair, and **explicitly not a claim that the rule
+was satisfied** — the rule needs both halves and only one is established. What it rests on:
+
+- **Accuracy passed on its merits**, measured against human gold: 97 % of Docling's F1, ahead
+  outright on two of three papers.
+- **Every speed measurement taken, however contaminated, favours the deterministic path by at
+  least 4.8× and typically 12–19×.** The question is whether it clears 20×, not whether it is
+  faster. No observation puts it anywhere near parity.
+- **The rule's stated fallback would make things worse.** `otherwise` is *"a small local layout
+  model becomes default"* — a remedy for losing on accuracy, which passed. A layout model is
+  slower, so it degrades the only half in doubt.
+- **The 20× bar's provenance is not documented anywhere in the epic file**, so there is nothing
+  to check the number against.
+
+**Revisit when task #26 lands** a reproducible ratio. If it comes in under 20× the decision above
+still needs an owner's ruling on whether the bar or the parser moves — this defers that, it does
+not answer it. Recorded here rather than in a commit message so a later reader finds the
+reasoning attached to the evidence.
+
+### Verdict on the rule itself: **accuracy PASSES. Speed is NOT ESTABLISHED — the measurement cannot resolve it.**
 
 | half | bar | measured | |
 |---|---|---|---|
