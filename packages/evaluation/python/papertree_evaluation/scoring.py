@@ -323,14 +323,26 @@ def _caption_links(
         for region in gold
         if region.get("type") == "caption" and region.get("parent")
     ]
-    predicted_links = [
-        (block_to_gold[str(rel["from"])], block_to_gold[str(rel["to"])])
-        for rel in (document.get("relations") or [])
-        if rel.get("type") == "caption_of"
-        and str(rel.get("from")) in block_to_gold
-        and str(rel.get("to")) in block_to_gold
-    ]
+    predicted_links = []
+    for rel in document.get("relations") or []:
+        if rel.get("type") != "caption_of":
+            continue
+        source, target = str(_relation_source(rel)), str(rel.get("to"))
+        if source in block_to_gold and target in block_to_gold:
+            predicted_links.append((block_to_gold[source], block_to_gold[target]))
     return predicted_links, gold_links
+
+
+def _relation_source(relation: dict[str, Any]) -> object:
+    """`Relation.from` under EITHER spelling, because the two dump modes disagree.
+
+    `from` is a Python keyword, so the model field is `from_` and the schema alias is `from`.
+    `model_dump(by_alias=True)` - what `DeterministicAdapter` uses - emits `from`, while a plain
+    `model_dump_json()` emits `from_`. Reading only one of them means a caller who dumped the
+    other way gets **zero caption links and no error**, which reads exactly like a parser that
+    never links anything. Accepting both is two lines; the alternative is a silent zero.
+    """
+    return relation.get("from", relation.get("from_"))
 
 
 def _count_near_misses(
