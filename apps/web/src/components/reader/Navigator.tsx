@@ -521,7 +521,7 @@ function EmptyState({ title, body }: { readonly title: string; readonly body: st
   return (
     <div className="px-3 py-10 text-center">
       <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{title}</p>
-      <p className="mx-auto mt-2 max-w-[34ch] text-[13px] leading-6 text-gray-500">{body}</p>
+      <p className="mx-auto mt-2 max-w-[34ch] text-[13px] leading-6 text-gray-400">{body}</p>
     </div>
   );
 }
@@ -610,7 +610,7 @@ function OutlineGroupRows({
       <Row
         onPress={toggle}
         expanded={expanded}
-        className="text-[11px] font-semibold uppercase tracking-wide text-gray-500"
+        className="text-[11px] font-semibold uppercase tracking-wide text-gray-400"
       >
         <span aria-hidden="true" className="w-3">
           {expanded ? '▾' : '▸'}
@@ -835,7 +835,7 @@ function PageThumb({
             />
           ) : null}
         </span>
-        <span className="mt-1 flex min-h-[20px] items-center justify-between text-[11px] text-gray-500">
+        <span className="mt-1 flex min-h-[20px] items-center justify-between text-[11px] text-gray-400">
           <span>p.{page.index + 1}</span>
           {/* "the note mentions this page" is the WEAKEST claim the data supports. `neural-odes`
               names its GOOD pages; the brief's example names the bad ones. Asserting either
@@ -919,7 +919,7 @@ function HighlightsTab({
           {/* SURFACED, NEVER DELETED. An orphan means the ladder reached T6 — the text this was
               attached to is not in this parse. That is the user's information to act on, and a
               re-parse that silently drops annotations is the failure Epic 2 exists to prevent. */}
-          <p className="px-2 pb-1 text-[12px] leading-5 text-gray-500">
+          <p className="px-2 pb-1 text-[12px] leading-5 text-gray-400">
             The passage these were attached to is not in this parse. They are kept with their quote
             so they can be re-placed by hand.
           </p>
@@ -938,7 +938,7 @@ function HighlightsTab({
 
       {groups.map((group) => (
         <section key={group.key} aria-label={group.title}>
-          <h3 className="truncate px-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+          <h3 className="truncate px-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
             {group.title} · {group.items.length}
           </h3>
           <ul>
