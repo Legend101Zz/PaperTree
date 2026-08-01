@@ -101,13 +101,55 @@ export interface PageFlows {
  * NOTE `provenance` is a STRING here while `Block.provenance` is an OBJECT `{parser, stage}`. Same
  * field name, two different types — `jq '.relations[].provenance.parser'` errors on it.
  */
+/**
+ * A PaperIR relation.
+ *
+ * THE ENDPOINT FIELDS ARE SPELLED `from` / `to`, NOT `from_block_id` / `to_block_id`.
+ * `paperir-1.0.0.schema.json:1458` requires `["type", "from", "to", "confidence", "provenance"]`,
+ * and all three golden fixtures agree. This interface declared the `_block_id` spelling until
+ * 2026-08-01, which compiled fine — the fixtures reach `indexDocument` through `PaperSource`, so
+ * nothing ever type-checked the field names against the schema — and made `continuedBy` a
+ * ONE-ENTRY MAP KEYED `undefined` on every document in existence:
+ *
+ *     attention   1 continuation relation  → continuedBy.size 1, keys [undefined]
+ *     neural-odes 1                        → continuedBy.size 1, keys [undefined]
+ *     resnet      4                        → continuedBy.size 1, keys [undefined]
+ *
+ * Nothing threw. `byId.has(undefined)` is merely false, so every consumer silently behaved as
+ * though the document had no continued paragraphs at all, and `resnet` read "high- way networks".
+ * A map that is present, non-empty and wrong is worse than a missing one.
+ *
+ * BOTH SPELLINGS ARE ACCEPTED because both exist in the wild: the Epic 1 worker emitted
+ * `from_block_id` at one point, and `1dff4d1` ("read Relation.from under both spellings") records
+ * the evaluation harness hitting the same split. The schema spelling wins where both are present.
+ */
 export interface IndexedRelationSource {
   readonly type: string;
-  readonly from_block_id: string;
-  readonly to_block_id: string;
+  readonly from?: string;
+  readonly to?: string;
+  /** @deprecated Non-schema spelling, read only as a fallback. See the note above. */
+  readonly from_block_id?: string;
+  /** @deprecated Non-schema spelling, read only as a fallback. See the note above. */
+  readonly to_block_id?: string;
   readonly confidence?: number;
   readonly provenance?: string;
 }
+
+/** The `from` endpoint under either spelling, or `undefined` if the relation carries neither. */
+export function relationFrom(relation: IndexedRelationSource): string | undefined {
+  return typeof relation.from === 'string' ? relation.from : relation.from_block_id;
+}
+
+/** The `to` endpoint under either spelling. */
+export function relationTo(relation: IndexedRelationSource): string | undefined {
+  return typeof relation.to === 'string' ? relation.to : relation.to_block_id;
+}
+
+/** The relation types that mean "the SAME paragraph, continued in another block". */
+export const CONTINUATION_RELATION_TYPES: ReadonlySet<string> = new Set([
+  'continues_in_next_column',
+  'continues_on_next_page',
+]);
 
 export interface PaperSource {
   readonly paper_id: string;
@@ -383,12 +425,14 @@ export function indexDocument(paper: PaperSource, textStreamId: string): Indexed
   const relations = paper.relations ?? [];
   const continuedBy = new Map<string, string>();
   for (const relation of relations) {
-    if (
-      relation.type === 'continues_in_next_column' ||
-      relation.type === 'continues_on_next_page'
-    ) {
-      continuedBy.set(relation.from_block_id, relation.to_block_id);
-    }
+    if (!CONTINUATION_RELATION_TYPES.has(relation.type)) continue;
+    const from = relationFrom(relation);
+    const to = relationTo(relation);
+    // Both endpoints must exist AND name a block we actually indexed. A relation pointing outside
+    // the page range is normal in a sliced fixture, and following it would walk off the document.
+    if (from === undefined || to === undefined) continue;
+    if (!byId.has(from) || !byId.has(to)) continue;
+    continuedBy.set(from, to);
   }
 
   const streamCodePoints = toCodePoints(stream);
