@@ -112,6 +112,23 @@ pymupdf: Any = _pymupdf
 #: A rect as MuPDF hands it over, before any transform. Named so the 4-ness is in the type.
 RawRect = tuple[float, float, float, float]
 
+#: `get_text("rawdict")` with no `flags` uses `TEXTFLAGS_RAWDICT` (199), which sets
+#: `TEXT_PRESERVE_IMAGES` (4). That bit makes MuPDF decode every embedded raster on the page into
+#: its process-global store — and `_text_blocks` throws all of them away two lines later, because
+#: rasters come from `_images()` with an xref instead. We were paying for a full image decode of
+#: every page to immediately `continue` past it.
+#:
+#: Measured on `gpt3-longform-singlecol` (75 pp), extracting every page and discarding the result:
+#:
+#:     flags=199 (the default)   peak RSS 549.9 MB
+#:     flags=195 (this constant) peak RSS  68.5 MB
+#:
+#: with byte-identical text out of both — 231,278 chars either way. This is the single largest
+#: term in issue #52's 500 MB budget, and `EPIC-01-RESULT.md` §3's diagnosis ("it scales with page
+#: count, so the fix is streaming assembly") was wrong about the mechanism: the retained Python
+#: objects for all 75 pages are only ~107 MB. The allocation is C-side and per-page.
+RAWDICT_NO_IMAGES: int = pymupdf.TEXTFLAGS_RAWDICT & ~pymupdf.TEXT_PRESERVE_IMAGES  # == 195
+
 __all__ = [
     "Char",
     "Drawing",
@@ -455,7 +472,9 @@ class SourceDocument:
         )
 
         blocks: list[TextBlock] = []
-        for block in page.get_text("rawdict")["blocks"]:
+        for block in page.get_text("rawdict", flags=RAWDICT_NO_IMAGES)["blocks"]:
+            # Kept as a guard even though `RAWDICT_NO_IMAGES` means it never fires: it documents
+            # that image blocks are not this function's business, and it costs nothing.
             if block.get("type") != 0:  # 1 == image; those come from get_images() with an xref
                 continue
             lines: list[Line] = []
@@ -490,7 +509,27 @@ class SourceDocument:
         )
 
     def pages(self) -> list[PageContent]:
-        return [self.page(i) for i in range(self.page_count)]
+        out: list[PageContent] = []
+        for index in range(self.page_count):
+            out.append(self.page(index))
+            # PURGE MuPDF'S GLOBAL STORE AFTER EACH PAGE — issue #52.
+            #
+            # `_images()` calls `get_image_rects`, which traverses the page's display list and
+            # decodes every embedded raster into MuPDF's process-global cache. That cache is keyed
+            # for reuse across pages and is bounded only by `store_maxsize`, so on a long paper it
+            # simply grows: the decoded pixels of page 3's figure are still resident on page 70,
+            # and nothing here will ever ask for them again.
+            #
+            # Measured on `gpt3-longform-singlecol` (75 pp), image traversal alone, 83 placements:
+            #
+            #     no purge   peak RSS 343.0 MB
+            #     purge      peak RSS 200.1 MB
+            #
+            # This is the second of the two terms in #52; `RAWDICT_NO_IMAGES` is the first. It
+            # frees only cache, so it cannot change output — every number the scorer prints is
+            # identical before and after.
+            pymupdf.TOOLS.store_shrink(100)
+        return out
 
     def raw_page(self, index: int) -> Any:
         """The live `pymupdf.Page`, for RENDERING only.

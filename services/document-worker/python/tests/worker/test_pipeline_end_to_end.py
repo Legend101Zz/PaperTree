@@ -185,5 +185,61 @@ def test_the_parse_stays_inside_the_performance_budget(tmp_path: Path) -> None:
     peak_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1024 * 1024)
     # ru_maxrss is the HIGH-WATER MARK for the whole pytest process, so this is an upper bound
     # that includes every other test's allocations. Asserted loosely for that reason; the tight
-    # per-document figure belongs to a dedicated measurement, not to a shared-process test.
+    # per-document figure is `test_peak_rss_on_the_largest_paper_is_inside_the_budget` below,
+    # which runs in a SUBPROCESS and can therefore assert the bar the brief actually states.
     assert peak_mb < 2000, f"peak RSS {peak_mb:.0f} MB is implausibly high"
+
+
+#: `worker/perf.spec`, memory half. The brief says peak RSS < 500 MB.
+PEAK_RSS_BUDGET_MB = 500
+
+#: The LARGEST paper in the corpus, 75 pages. Peak RSS scales with page count, so measuring the
+#: budget on anything else measures nothing: `resnet-cvpr-2col` above is 12 pages and peaks around
+#: 141 MB, which would pass a 500 MB bar no matter how badly the parser leaked.
+LARGEST_PAPER = "gpt3-longform-singlecol.pdf"
+
+
+@pytest.mark.skipif(not (CORPUS / LARGEST_PAPER).is_file(), reason="corpus not fetched")
+def test_peak_rss_on_the_largest_paper_is_inside_the_budget(tmp_path: Path) -> None:
+    """`worker/perf.spec`: peak RSS < 500 MB, measured properly. Issue #52.
+
+    WHY A SUBPROCESS. `ru_maxrss` is a high-water mark for the whole process and never falls, so
+    inside a shared pytest run it reports the largest allocation ANY test made. That is why the
+    assertion above is 2000 MB — four times the real bar — on the second-smallest paper in the
+    corpus. It passed for months and measured nothing, and `EPIC-01-RESULT.md` §3 records it as
+    the third time on that branch a green test turned out to assert less than it appeared to.
+
+    A fresh interpreter has no such history, so the number it reports is this parse's own.
+    """
+    import json
+    import subprocess
+    import sys
+    import textwrap
+
+    program = textwrap.dedent("""
+        import json, resource, sys
+        from pathlib import Path
+        from papertree_document_worker.pipeline import parse_document
+        pdf, root, paper_id = sys.argv[1], sys.argv[2], sys.argv[3]
+        result = parse_document(Path(pdf), paper_id=paper_id, asset_root=Path(root))
+        rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        # Linux reports ru_maxrss in KiB, macOS in bytes.
+        peak_mb = rss / (1024 * 1024) if sys.platform == "darwin" else rss / 1024
+        print(json.dumps({"peak_mb": peak_mb, "pages": result.page_count}))
+    """)
+
+    completed = subprocess.run(
+        [sys.executable, "-c", program, str(CORPUS / LARGEST_PAPER), str(tmp_path), PAPER_ID],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    measured = json.loads(completed.stdout.strip().splitlines()[-1])
+    peak_mb, pages = measured["peak_mb"], measured["pages"]
+
+    assert pages > 50, f"{LARGEST_PAPER} should be the long paper; got {pages} pages"
+    assert peak_mb < PEAK_RSS_BUDGET_MB, (
+        f"peak RSS {peak_mb:.0f} MB over {pages} pages exceeds the {PEAK_RSS_BUDGET_MB} MB budget. "
+        "The two known terms are pdf.RAWDICT_NO_IMAGES (get_text must not preserve images) and "
+        "the per-page TOOLS.store_shrink in SourceDocument.pages; see issue #52."
+    )
