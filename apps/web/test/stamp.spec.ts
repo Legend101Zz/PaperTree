@@ -20,6 +20,17 @@
  * collapsed→raw index map, a cursor that fails to advance, a UTF-16/code-point confusion — each of
  * them breaks that equality on the first line it affects.
  *
+ * REQUIRES THE CORPUS, AND SAYS SO WHEN IT IS ABSENT. The three PDFs are fetched, not committed
+ * (`./research/benchmarks/fetch_corpus.sh`; AGENTS.md §4), so on a clean CI checkout
+ * `public/fixtures/` has the IR and no PDFs. This file then SKIPS, loudly, naming the script — it
+ * does not quietly pass, which would be the "green test that asserts nothing" failure this repo has
+ * already had three times.
+ *
+ * What that costs is worth stating exactly: in CI the real-pdf.js COVERAGE NUMBERS are unverified.
+ * The wire itself is not — `test/capture-wire.spec.tsx` fakes pdf.js, needs only the committed IR,
+ * and runs everywhere. So CI proves a selection still becomes an anchor; this file proves the
+ * mapping is accurate against real files, and it runs wherever the corpus does.
+ *
  * NODE, NOT happy-dom. pdf.js's page rendering needs `requestAnimationFrame`, and its text LAYOUT
  * needs a canvas to measure fonts — neither exists here. Neither is required: `getTextContent()` is
  * pure parsing, and `stampTextLayer` takes divs as plain objects with `setAttribute`. What is
@@ -28,7 +39,7 @@
  * @vitest-environment node
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
@@ -98,6 +109,22 @@ const FIXTURES = [
   'neural-odes-mathheavy',
 ] as const;
 
+/** The staged PDFs, absent on a clean checkout until `fetch_corpus.sh` + `prepare:assets` run. */
+const CORPUS_PRESENT = FIXTURES.every((slug) =>
+  existsSync(`${repoRoot}public/fixtures/${slug}.pdf`),
+);
+
+if (!CORPUS_PRESENT) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    '\n  reader/stamp.spec SKIPPED: apps/web/public/fixtures/*.pdf are absent.\n' +
+      '  These PDFs are fetched, not committed. To run this file:\n' +
+      '      ./research/benchmarks/fetch_corpus.sh\n' +
+      '      pnpm --filter papertree-web prepare:assets\n' +
+      '  The capture wire itself is covered without them, by test/capture-wire.spec.tsx.\n',
+  );
+}
+
 /**
  * Coverage floors, set BELOW the measured values so this file fails on a regression rather than on
  * a pdf.js patch release that shifts one item. The measured numbers are in `stampTextLayer`'s
@@ -158,7 +185,7 @@ async function runFixture(slug: string): Promise<PageRun[]> {
   return runs;
 }
 
-describe('reader/stamp.spec — pdf.js text items carry the IR block and offset', () => {
+describe.skipIf(!CORPUS_PRESENT)('reader/stamp.spec — pdf.js text items carry the IR block and offset', () => {
   for (const slug of FIXTURES) {
     describe(slug, () => {
       let runs: PageRun[];
