@@ -520,6 +520,14 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
         onPointerCancel={surfaceProps?.onPointerCancel}
         style={surfaceStyle}
         data-papertree-scroller=""
+        // WCAG 2.2 AA, axe `scrollable-region-focusable`. A region that scrolls but cannot be
+        // focused is unreachable by keyboard: the pages are not themselves focusable, so without
+        // this a keyboard-only reader can open the paper and never move down it. Found by running
+        // axe in a REAL browser — happy-dom performs no layout, so it never sees an overflow and
+        // this rule could not fire in `reader/a11y.spec` (issue #42).
+        tabIndex={0}
+        role="region"
+        aria-label="Paper pages"
       >
         <div style={{ width: `${layout.maxWidth}px`, margin: '0 auto' }}>
           {/* Exact-height spacers: the scroll height never depends on what happens to be mounted. */}

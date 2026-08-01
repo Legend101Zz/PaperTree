@@ -43,6 +43,7 @@ import { DerivedBlock, EquationView, FigureView, TableView } from '@papertree/ui
 import type { IndexedBlock, IndexedDocument } from '@papertree/anchoring';
 
 import { assetSrc } from './assetSrc';
+import { guidedProjectionFor } from '@papertree/anchoring';
 import { joinContinuedBlocks, reflow, reflowPreservingLines } from './reflow';
 
 export { joinContinuedBlocks, reflow, reflowPreservingLines };
@@ -66,27 +67,14 @@ export interface GuidedViewProps {
 }
 
 /**
- * Page furniture. Present in the IR, absent from the reading.
- *
- * A page number, a running footer and the arXiv stamp down the margin are artefacts of the page,
- * not of the argument — and Guided has no pages. `annotation` is the arXiv stamp in `neural-odes`
- * ("arXiv:1806.07366v5 [cs.LG] 14 Dec 2019"); `margin_note` is the same thing in `attention` and
- * `resnet`. `unknown` blocks are hairline rules 0.4–4pt tall carrying confidence 0.3 and no text at
- * all: there is nothing to render and drawing a box for one would be inventing a paragraph.
- *
- * They are COUNTED and reported at the foot of the reading rather than dropped in silence — "we
- * left something out" is a claim the reader is entitled to check.
+ * Page furniture (`page_number`, `footer`, `header`, `margin_note`, `annotation`, `unknown`) and
+ * the nested/claimed-caption rules that used to be duplicated here now live in
+ * `@papertree/anchoring`'s `projectGuided`, as `GUIDED_FURNITURE_TYPES`. They are COUNTED and
+ * reported at the foot of the reading rather than dropped in silence — "we left something out" is
+ * a claim the reader is entitled to check — and `cross-mode.spec` asserts that a highlight on one
+ * of them reports "not available in this view" instead of vanishing.
  */
-const FURNITURE_TYPES: ReadonlySet<string> = new Set([
-  'page_number',
-  'footer',
-  'header',
-  'margin_note',
-  'annotation',
-  'unknown',
-]);
 
-/** Line-preserving types: pseudocode is laid out on purpose and `reflow` would flatten it. */
 const LINEWISE_TYPES: ReadonlySet<string> = new Set(['algorithm']);
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -105,152 +93,65 @@ function payloadImageUri(block: IndexedBlock): string | undefined {
   return image === undefined ? undefined : asNonEmptyString(image['uri']);
 }
 
-/**
- * A block is nested INSIDE CONTENT when its parent is not a heading.
- *
- * `parent_id` carries two different relations in the fixtures and conflating them loses blocks. A
- * paragraph's parent is its section HEADING (that is sectioning, and the paragraph is still
- * top-level prose); a `table_cell`'s parent is a `table_row`, a `table_row`'s is a `table`, and an
- * `inline_equation`'s is the paragraph whose text already contains it — verified: the parent's text
- * includes the inline equation's text in all 5 occurrences across the three fixtures. Only the
- * second kind must be skipped, and rendering them top-level would print every table cell twice.
- */
-function isNestedInContent(block: IndexedBlock, doc: IndexedDocument): boolean {
-  if (block.parentId === null) return false;
-  const parent = doc.byId.get(block.parentId);
-  if (parent === undefined) return false;
-  return parent.type !== 'heading';
-}
-
-/** Captions owned by a figure or table; rendered by their owner, not on their own. */
-function captionsClaimedByFloats(doc: IndexedDocument): ReadonlySet<string> {
-  const claimed = new Set<string>();
-  for (const block of doc.blocks) {
-    const captionBlock = asNonEmptyString(block.payload?.['caption_block']);
-    if (captionBlock !== undefined) claimed.add(captionBlock);
-  }
-  return claimed;
-}
-
 interface RenderPlan {
   readonly rendered: readonly IndexedBlock[];
   readonly furnitureCount: number;
 }
 
-/** The relation types that mean "the SAME paragraph, continued in another block". */
-const CONTINUATION_TYPES: ReadonlySet<string> = new Set([
-  'continues_in_next_column',
-  'continues_on_next_page',
-]);
-
 /**
- * `from → to` for every continuation relation, read from `doc.relations`.
+ * The compatibility shim that used to live here is GONE, and that is the point.
  *
- * COMPATIBILITY SHIM, AND IT IS LOAD-BEARING TODAY. `doc.continuedBy` is the right source and this
- * should just use it, but `anchoring/document.ts` builds that map by reading `relation.from_block_id`
- * / `relation.to_block_id`, and the fixtures spell those fields `from` / `to`:
+ * It existed because `doc.continuedBy` was a one-entry map keyed `undefined`: `document.ts` read
+ * `relation.from_block_id` while the schema and all three fixtures spell the field `from`. This
+ * file worked around it by re-deriving the map from `doc.relations` under both spellings, and noted
+ * the defect as "another group's file" — which was the wrong call twice over. `packages/anchoring`
+ * is the SAME epic's package, and a view that quietly re-implements its index is a second source of
+ * truth that will drift from the first.
  *
- *     {"type":"continues_on_next_page","from":"blk_…","to":"blk_…","confidence":0.99,
- *      "provenance":"hyphen-continuity"}
- *
- * So every relation writes `undefined → undefined` and `doc.continuedBy` comes out as a ONE-entry
- * map keyed `undefined` — measured, on `resnet`, which has four continuation relations. Nothing
- * throws: `byId.has(undefined)` is false, so the merge below simply never fires and the reading
- * silently keeps "high- way networks". That is a defect in `packages/anchoring/src/document.ts`
- * (reported, not patched here — it is another group's file), and this function accepts BOTH
- * spellings so Guided is correct either way. DELETE IT once `continuedBy` is fixed.
+ * `document.ts` now reads both spellings and validates both endpoints, so `doc.continuedBy` is
+ * correct (resnet: 4 entries, was 1 keyed `undefined`) and `cross-mode.spec` can rely on the view
+ * and the resolver agreeing about what a paragraph IS.
  */
-function continuationMap(doc: IndexedDocument): ReadonlyMap<string, string> {
-  const map = new Map<string, string>();
-  for (const relation of doc.relations) {
-    if (!CONTINUATION_TYPES.has(relation.type)) continue;
-    const record = relation as unknown as Record<string, unknown>;
-    const from = relation.from_block_id ?? record['from'];
-    const to = relation.to_block_id ?? record['to'];
-    if (typeof from !== 'string' || typeof to !== 'string') continue;
-    if (!doc.byId.has(from) || !doc.byId.has(to)) continue;
-    map.set(from, to);
-  }
-  return map;
-}
 
 /**
  * Decide, once, what the reading contains. Exported so a spec can assert the front matter survives.
+ *
+ * DELEGATES to `guidedProjectionFor(doc)`. This function used to own the logic, and
+ * `resolveCrossMode` had to re-derive it to answer "which paragraph does this Source highlight land
+ * in?". Two implementations of "what counts as a paragraph" drift, and the symptom when they do is a
+ * highlight drawn in the wrong place — the one bug this epic exists to make impossible. So the
+ * projection is computed once, in the package, and the view and the resolver read the same answer.
  */
 export function planGuidedReading(doc: IndexedDocument): RenderPlan {
-  const claimedCaptions = captionsClaimedByFloats(doc);
+  const view = guidedProjectionFor(doc);
   const rendered: IndexedBlock[] = [];
-  let furnitureCount = 0;
-
-  // A CONTINUED PARAGRAPH IS ONE PARAGRAPH. `continues_in_next_column` and
-  // `continues_on_next_page` say that a block's text runs on into another block, and Guided view is
-  // the one place where that matters visibly: the source shows two columns, the reading shows one
-  // paragraph. Rendering the fragments separately also breaks de-hyphenation across the seam —
-  // `resnet`'s `blk_4hiq3kzukt6azk4x` ends with the characters `high-` and finishes as `way
-  // networks` in the block it continues into, so two paragraphs read "high- way networks".
-  //
-  // Continuations are collected here and rendered by the FIRST fragment, which owns the merged
-  // text; the tail fragments are dropped from the plan (but keep their own block ids in
-  // `derivedFrom`, so "show source" still reaches whichever column the reader means).
-  const continuationTails = new Set<string>();
-  continuationMap(doc).forEach((to) => {
-    continuationTails.add(to);
-  });
-
-  for (const block of doc.blocks) {
-    if (continuationTails.has(block.id)) continue;
-    if (isNestedInContent(block, doc)) continue;
-    if (claimedCaptions.has(block.id)) continue;
-    if (FURNITURE_TYPES.has(block.type)) {
-      furnitureCount += 1;
-      continue;
-    }
-    // A text block with nothing in it has nothing to reflow. Floats carry no text by design and
-    // must survive this check — `figure`, `table` and `unknown` have no `text` key at all.
-    const isFloat = block.type === 'figure' || block.type === 'table' || block.type === 'equation';
-    if (!isFloat && block.text.trim().length === 0) {
-      furnitureCount += 1;
-      continue;
-    }
-    rendered.push(block);
+  for (const paragraph of view.paragraphs) {
+    const block = doc.byId.get(paragraph.id);
+    if (block !== undefined) rendered.push(block);
   }
-
-  return { rendered, furnitureCount };
+  return { rendered, furnitureCount: view.furnitureCount };
 }
-
 
 /**
  * The full text of a block, following any `continues_in_next_column` / `continues_on_next_page`
  * chain, plus every block id that contributed.
  *
  * The ids matter as much as the text: "show source" on a merged paragraph must be able to reach
- * BOTH columns, so `derivedFrom` carries the whole chain rather than only the head.
+ * BOTH columns, so `sourceIds` carries the whole chain rather than only the head.
  *
- * `joinContinuedBlocks` — not `reflow` on a concatenation — because the seam needs the hyphen rule
- * applied at a block boundary where there is no newline to trigger it.
+ * Also delegates, for the reason above. A block that is not a paragraph head in the projection (a
+ * continuation tail, or furniture) has no reading of its own, and falls back to reflowing itself so
+ * that a caller outside the plan still gets sensible text rather than an empty string.
  */
 export function continuedText(
   block: IndexedBlock,
   doc: IndexedDocument,
 ): { readonly text: string; readonly sourceIds: readonly string[] } {
-  const texts: string[] = [block.text];
-  const sourceIds: string[] = [block.id];
-  const seen = new Set<string>([block.id]);
-  const continuedBy = continuationMap(doc);
-
-  // `seen` is not defensive padding: a `continues_*` cycle would otherwise hang the render, and a
-  // relation list is parser output, not something the schema proves acyclic.
-  let cursor: string | undefined = continuedBy.get(block.id);
-  while (cursor !== undefined && !seen.has(cursor)) {
-    const next = doc.byId.get(cursor);
-    if (next === undefined) break;
-    seen.add(cursor);
-    texts.push(next.text);
-    sourceIds.push(next.id);
-    cursor = continuedBy.get(cursor);
+  const paragraph = guidedProjectionFor(doc).byParagraphId.get(block.id);
+  if (paragraph !== undefined) {
+    return { text: paragraph.text, sourceIds: paragraph.sourceIds };
   }
-
-  return { text: joinContinuedBlocks(texts), sourceIds };
+  return { text: reflow(block.text), sourceIds: [block.id] };
 }
 
 /** Heading level for a block, so the reading has a real document outline for a screen reader. */

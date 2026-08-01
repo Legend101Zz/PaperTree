@@ -1,16 +1,29 @@
 # EPIC 2 — result
 
-**Branch:** `epic-2-reader`, from `main` at `e4a6b1f`.
-**Status: COMPLETE.** All eight features are built. 8 of the 9 acceptance tests are satisfied and
-measured; the ninth (`anchoring/cross-mode.spec`) is stated honestly in §7. Nothing below is a
-projection — every number was produced by a command recorded in §9.
+**Branch:** `epic-2-reader`, from `main` at `e4a6b1f`; continued 2026-08-01 from `560109e` (PR #56).
+**Status: COMPLETE. All 9 of 9 acceptance tests are satisfied and measured.**
+
+`anchoring/cross-mode.spec` — the one this document originally recorded as NOT met, in §7.1 — was
+written on 2026-08-01 and is covered in **§10**. That section also records two defects it found
+that no existing test could have caught, and the corrections in §2.1 above.
 
 | | |
 |---|---|
-| tests passing | **1 043** — anchoring 57, ui 41, web 86, document-ir 859 (no regression) |
-| `pnpm lint` | green, **with `apps/web` included** |
-| `pnpm build` | green, **with `apps/web` included** — the `/paper/[id]/read` route emits |
+| tests passing | **1 050** — anchoring **64**, ui 41, web 86, document-ir 859 (no regression) |
+| `turbo run lint --force` | green, 5/5, **with `apps/web` included** |
+| `turbo run typecheck --force` | green, 9/9 |
+| `turbo run test --force` | green, 9/9 |
 | re-anchor rate | **100.00 %**, 21 fixture × perturbation combinations, zero orphans |
+| cross-mode | **199 blocks → 179 resolve in Guided, 20 explicitly unavailable, 0 silent** |
+| WCAG 2.2 AA, **real Chrome** | **0 violations** in Source, Guided and Split; `color-contrast` and `target-size` both RAN |
+| touch targets, **real measured px** | **75 interactive elements, 0 under 44 × 44** |
+
+Nothing below is a projection — every number was produced by a command recorded in §9 or §10.
+
+> **Read §10 before trusting §7.** §7's inventory was accurate when written and is now partly
+> superseded: it lists F2.5/F2.6 as "built" and `provenance.spec` as passing, both of which were
+> true of the code and false of the running product, because the stylesheet that carries the
+> provenance register was never imported by anything (§10.2).
 
 ---
 
@@ -97,9 +110,12 @@ the geometry at all. They are worth asserting anyway, as a tripwire: the v1 read
 orders of magnitude, and the day a DOM measurement re-enters this path the numbers stop being
 1e-13.
 
-**`anchoring/cross-mode.spec` is NOT met.** The Guided view is built and the anchor record carries
+~~**`anchoring/cross-mode.spec` is NOT met.**~~ **Met as of 2026-08-01 — see §10.1.** When this
+paragraph was written the Guided view was built and the anchor record carried
 `targetKind: 'guided_para'`, but the spec that drives a Source-captured anchor through the Guided
-renderer and asserts the fallback message was not written. See §7.1.
+renderer and asserts the fallback message was not written. It now exists: 199 blocks → 179 resolve,
+20 explicitly unavailable, 0 silent. Writing it exposed `doc.continuedBy` as a one-entry map keyed
+`undefined`, which is why it was not the small piece of work §7.1 estimated.
 
 ---
 
@@ -115,10 +131,46 @@ Each was measured, not inferred. Commands are in the module headers.
 |---|---:|---:|---:|---|---:|
 | `resnet` | 295 | 13 | 17 (22 by absolute height) | 7.32–7.34 pt | 18 (5.16–5.39 pt) |
 | `attention` | 173 | 48 | 0 | — | 9 (0.78–15.39 pt) |
-| `neural-odes` | 259 | 57 | **12** | 5.86 pt+ | **14 (up to 19.24 pt)** |
+| `neural-odes` | 259 | 57 | **12** | 5.86 pt+ | ~~14 (up to 19.24 pt)~~ **see below** |
 
 `neural-odes` — the maths-heavy paper, whose highlights most need it — has 12 more of the defect
 and the worst overlap in the set. A clamp applied only to `resnet` would have left it bleeding.
+
+> **CORRECTION, 2026-08-01 — "up to 19.24 pt" does not reproduce, and issue #48 is right.**
+>
+> Re-measured independently, per block, over adjacent line pairs, feeding the shipped
+> `groupIntoLines` and `clampLineBands`:
+>
+> | fixture | raw overlapping line pairs | worst raw | after the clamp | worst |
+> |---|---:|---:|---:|---:|
+> | `attention` | 10 | 10.93 pt | 1 | 1.33 pt |
+> | `neural-odes` | 13 | **10.51 pt** | 2 | 0.74 pt |
+> | `resnet` | 5 | 5.39 pt | **0** | 0.00 pt |
+>
+> 19.24 pt is the *height* of two spans in `neural-odes`' `algorithm` block
+> (`blk_fyzlxqrbvqw47hb2`, spans 8 and 9, both `y = [174.26, 193.50]`) that sit on the **same
+> visual line** and abut in x. `lineband.ts`'s own `sameLine()` groups them into one band, so
+> under the shipped algorithm it was never an overlap at all. The worst genuine *cross-line*
+> overlap in `neural-odes` is 10.51 pt, exactly as #48 reports.
+>
+> This also corrects §2.2 below: the clamp takes 28 raw overlapping pairs to **3**, not to 0, and
+> the residue is ≤1.33 pt — under a typographic line and far under the 5–7 pt bleed the clamp
+> exists for. The scalpel claim stands; the "→ 0" does not.
+>
+> **§2.3's producer-side guidance was wrong and #48 measured why.** "Do not emit spans that exceed
+> 1.3 × their declared `size`" would delete the arXiv stamp from every arXiv paper (`h/size` 17.05
+> –17.55, because the text runs *vertically* — `line["dir"] == (0, -1)`), every rotated matplotlib
+> axis label, and the large delimiters of every display equation (`{`, `}` reach `h/size ≈ 1.73`
+> with `dir == (1, 0)`; `size` is the nominal font size, not the glyph's extent). It also violates
+> the epic's own rule that unclassifiable regions are never dropped. The correct producer-side rule
+> is **"the extent perpendicular to the writing direction is about one line"**, which is what
+> Epic 1's `Span.line_band` and `Span.direction` implement. `packages/anchoring/src/lineband.ts`
+> remains a correct *consumer*-side response to fixtures it could not change.
+>
+> Also from #48, and it matters for §2.2: **`size` is never missing from real MuPDF output** — 0 of
+> 84 395 spans across all 8 corpus papers lack it. The "118 of 727 (16 %)" figure is a property of
+> how Epic 0 hand-built these three fixtures, not of anything a parser emits. The geometric clamp is
+> still the right choice for the fixtures, but the stated *reason* does not generalise.
 
 Counts reconcile as follows: **17** spans exceed 1.3 × their declared `size`; **22** have absolute
 height in [17.0, 17.5] pt against a 9.96 pt median. The difference is the 5 spans that declare no
@@ -357,7 +409,13 @@ with `compareDocumentPosition` rather than trusting source order, asserts that a
 `TablePayload.html` renders as escaped text with no `<script>` element, and sweeps every other
 component to confirm the reserved `⊙` is emitted by nothing else.
 
-### 7.1 The one acceptance test NOT satisfied
+### 7.1 The one acceptance test NOT satisfied — *resolved 2026-08-01, see §10.1*
+
+> **Superseded.** This section is kept as written because its estimate was wrong in an instructive
+> way: it calls the missing spec "a small piece of work". It was not — writing it uncovered
+> `doc.continuedBy` returning a one-entry map keyed `undefined` on every document, which had been
+> silently disabling paragraph continuation since Epic 0. The two "honest limits" below about
+> `touch.spec` and `a11y.spec` were both correct, and both are now closed by §10.3.
 
 **`anchoring/cross-mode.spec`** — "a highlight made in Source resolves in Guided, or explicitly
 reports 'not available in this view'." The machinery is all present: `targetKind: 'guided_para'`
@@ -428,3 +486,196 @@ without executing. Run the suite directly, as above, or `turbo run test --force`
 The reparse table (§1), the zoom/resize drift (§1.3) and the line-band census (§2.1–2.2) are all
 printed by the specs themselves, so the numbers in this document and the numbers the suite emits
 cannot drift apart.
+
+---
+
+# 10. Continuation session — 2026-08-01
+
+Branched from `main` at `560109e`. PR #56. Closes #41 and #42, the two open Epic 2 issues.
+
+This session began by **verifying §1–§9 rather than believing them**, per `AGENTS.md` §1. They
+hold: `packages/anchoring` 57 tests pass and the §1 reparse table reproduces byte-for-byte —
+100.00 % re-anchor, zero orphans, 21 combinations, `worst_case` retiring 89–90 % of block ids.
+`ui` 41 and `web` 86 pass. The architectural gate criterion 3 is genuinely met.
+
+Then it wrote the ninth spec and opened the reader in a browser, and each of those found a defect
+the existing 184 tests could not.
+
+## 10.1 `anchoring/cross-mode.spec` — and the map that was silently empty
+
+**Measured: 199 blocks → 179 resolve in Guided, 20 report unavailable, 0 silent.**
+
+```
+cd packages/anchoring && ../../node_modules/.bin/vitest run test/cross-mode.spec.ts
+```
+
+7 tests. The 20 unavailable are page furniture — the arXiv stamp, page numbers, the 0.4–4 pt
+hairline rules — each carrying a **user-readable sentence**, not a reason code destined for a log.
+The spec asserts that **both** outcomes occur, so a resolver that answered "resolved" for
+everything fails it. That is the anti-vacuity guard, and it is the same shape as §1.2's
+`falsify.spec`: a criterion with an easy half and a hard half needs a test that can fail on the
+easy one.
+
+### The defect underneath
+
+**`doc.continuedBy` was a one-entry map keyed `undefined`, on every document in existence.**
+`document.ts` read `relation.from_block_id`; `paperir-1.0.0.schema.json:1458` requires `from`, and
+all three fixtures agree.
+
+| fixture | continuation relations | `continuedBy` before | after |
+|---|---:|---|---:|
+| `attention` | 1 | 1, keyed `undefined` | 1 |
+| `neural-odes` | 1 | 1, keyed `undefined` | 1 |
+| `resnet` | 4 | 1, keyed `undefined` | **4** |
+
+Nothing threw — `byId.has(undefined)` is merely false — so every consumer behaved as though no
+paper had a continued paragraph, and `resnet` read **"high- way networks"**. `GuidedView` had
+shimmed around it locally and recorded the defect as *"another group's file"*. That was wrong
+twice: `packages/anchoring` is the **same epic's** package, and a view that re-implements the index
+it renders from is a second source of truth. Both spellings are now read — the worker has emitted
+either (cf. `1dff4d1`).
+
+### What moved, and why it had to
+
+The Guided projection and `reflow` now live in `packages/anchoring/src/guided.ts`, and `GuidedView`
+renders **from** it. Two implementations of "what counts as a paragraph" drift, and when they drift
+the symptom is a highlight drawn in the wrong place — the bug this package exists to prevent.
+
+The real work is **offsets**. `reflow` deletes line breaks and repairs hyphens, so code point 40 in
+`Block.text` is not code point 40 in the paragraph the reader sees. `reflowWithMap` emits the map
+back; `offsetToGuided` binary-searches it. A cross-mode resolution that returned only a paragraph
+id would be a guess wearing an answer's clothes.
+
+`reflow.spec`'s 19 tests pass **unchanged** against the moved implementation — that is the
+regression check. The move also drops `String.charAt` (UTF-16 code units) for code points, which is
+what `Anchor.offsetUnit: 'unicode'` has claimed since §1.
+
+## 10.2 The provenance stylesheet was never imported — §7's worst overclaim
+
+**`@papertree/ui/styles.css` was not imported by anything.**
+
+It defines ~200 `pt-*` rules — `pt-derived__marker`, `pt-derived__header`, `pt-equation`,
+`pt-figure`, `pt-table`. `@papertree/ui`'s `package.json` even carries a note explaining why
+`sideEffects` is `["*.css"]` rather than `false`, *so that a bundler could not drop
+`import '@papertree/ui/styles.css'`*. **The import it was protecting did not exist.**
+
+The consequence is this epic's own hard rule failing in the running product: **Guided content
+rendered in the same visual register as the paper.** The `⊙` marker and the "our reading" label
+were present in the DOM and visually undifferentiated — the header rendered as `⊙our readingshow
+source`, unspaced, because `display:flex; gap:8px` never applied.
+
+**§7 says "DESIGN.md §11.4 is discharged" and cites `provenance.spec`'s 12 tests. Those 12 tests
+passed throughout.** They assert class names, `derived_from` ids, and DOM order via
+`compareDocumentPosition` — all of which were correct. happy-dom applies no stylesheet, so *every
+assertion was true and the product was still wrong.* §11.4's promise is that the UI renders
+interpretation "in the 'our reading' register"; a register is a visual claim, and no assertion in
+that spec is about anything visible.
+
+With the stylesheet loaded, derived blocks render as dark cards with a violet rule and a rounded
+face against the paper's serif. §11.4 is discharged **now**.
+
+## 10.3 axe at WCAG 2.2 AA, in Chrome — the two rules that had never run
+
+§7.1 admitted `reader/a11y.spec` "cannot run `color-contrast` or `target-size`" because happy-dom
+performs no layout, and that neither had been verified in a real browser. Both now have been, at
+`/paper/resnet-cvpr-2col/read`, in all three modes with the Navigator open:
+
+| surface | violations | passes |
+|---|---:|---:|
+| Source + Navigator | **0** | 25 |
+| Guided + Navigator | **0** | 26 |
+| Split + Navigator | **0** | 26 |
+
+`color-contrast` **RAN**. `target-size` **RAN**. **75 interactive elements, 0 under 44 × 44 real
+measured pixels** — `touch.spec` could only read inline style and `className`.
+
+The 5–11 remaining `color-contrast` *incompletes* are all "element content contains only non-text
+characters": the `aria-hidden` `⊙` glyphs and the icon button. Not failures.
+
+Two real violations, both `serious`, both fixed:
+
+- **`scrollable-region-focusable`** — the virtualised page scroller had `overflow-auto` and no
+  `tabIndex`. The pages are not themselves focusable, so a keyboard-only reader could open a paper
+  and never move down it.
+- **`color-contrast`, 15 nodes** — the Navigator's 11 px metadata text. **Recorded because the
+  obvious fix was wrong.** The root cause was §10.2: the panel is `#16151a` under the real
+  stylesheet, so `text-gray-400` was always correct there and the violation was measured against an
+  unstyled white background. Darkening it to `text-gray-600` fixed the measurement and would have
+  produced 2.4:1 the moment the CSS loaded. The genuine failures were `text-gray-500` at 3.75:1 on
+  the dark panel, now 6.5:1. *A contrast fix validated without the real stylesheet is not a fix.*
+
+## 10.4 The reader had never rendered a real PDF
+
+`copy-fixtures` reported **`0/3 PDFs`** throughout the original session: corpus PDFs are gitignored
+and fetched, not committed, and `research/benchmarks/corpus/` did not exist. After
+`./research/benchmarks/fetch_corpus.sh` (8/8 papers, all checksums verify against
+`corpus.sha256`) it is **3/3**, and ResNet renders — two columns, figure crops, the arXiv stamp
+rotated down the left margin, and that stamp correctly **absent** from Guided as furniture, which
+is §10.1's classification visible on screen.
+
+So every claim in §7 about F2.1's renderer was, until now, a claim about a component that had never
+been given a document.
+
+## 10.5 A verification gap, recorded because it reached CI
+
+Run 30702316937 failed on `@papertree/anchoring#lint`: two oxlint errors (`asRecord` unused in
+`guided.ts`, `sort()` for `toSorted()` in `cross-mode.spec`). This session had run `tsc --noEmit`
+and `vitest run` per package and `next lint` for `apps/web` — and never `oxlint`, which is what the
+four TypeScript **packages** lint with. Every suite run was green; the branch looked verified and
+was not.
+
+**A green subset looks exactly like a green whole.** `AGENTS.md` now carries the pre-push block:
+
+```bash
+pnpm exec turbo run lint --force
+pnpm exec turbo run typecheck --force
+pnpm exec turbo run test --force
+```
+
+## 10.6 Corrections to this document
+
+- **§2.1's "up to 19.24 pt"** does not reproduce. Re-measured independently: the worst genuine
+  cross-line band overlap in `neural-odes` is **10.51 pt**. 19.24 is the height of two spans on the
+  *same* visual line, which `sameLine()` groups into one band. Issue #48 is correct.
+- **§2.2's "20 raw line-band overlaps → 0"** does not reproduce either. Measured 28 raw → **3**,
+  worst residue 1.33 pt. The scalpel claim stands; "→ 0" does not.
+- **§2.3's producer-side guidance was wrong**, and #48 measured why: a `1.3 × size` height rule
+  deletes the arXiv stamp from every arXiv paper, every rotated axis label and every large
+  delimiter, because those are tall in the axis-*across* the writing direction. The right rule is
+  per-direction. `lineband.ts` remains a correct consumer-side response.
+- **§2.2's "`size` is absent on 118 of 727 spans (16 %)"** is a property of Epic 0's hand-built
+  fixtures, not of parser output: 0 of 84 395 real MuPDF spans lack `size`. The geometric clamp is
+  still right for these fixtures; the stated reason does not generalise.
+- **§7's inventory** is superseded by §10.2 for F2.5/F2.6 and by §10.3/§10.4 for F2.1 and F2.7.
+
+## 10.7 What is still open, and whose it is
+
+| | issue | owner |
+|---|---|---|
+| `useCanvas.ts` + `MermaidRenderer.tsx` — Epic 2's last 2 must-delete items | #43 | Epic 5 |
+| `@papertree/document-ir`'s barrel pulls `node:crypto` into a browser bundle | #33 | Epic 0 |
+| `apps/web/package-lock.json` still exists; v1 npm path still works | — | a deliberate transitional state, see `pnpm-workspace.yaml` |
+
+**One thing this session found and did not fix.** The reader route is wrapped in `AuthGuard`, which
+calls `authApi.getMe()` against `apps/api` — a Python service that does not run in a fixture-only
+dev setup. With no backend the reader spins forever or bounces to `/login`, so **the epic's own
+deliverable cannot be looked at without standing up v1's auth**. Verification here used a
+throwaway stub on `:8000`. That is a product decision (should a fixture-backed reader be behind a
+login at all?), not a defect to silently patch, so it is left for the owner to rule on.
+
+## 10.8 Reproducing §10
+
+```bash
+cd "/Volumes/Mrigesh SSD/PaperTree"
+./research/benchmarks/fetch_corpus.sh        # 8 papers; shasum -c research/benchmarks/corpus.sha256
+pnpm install
+pnpm exec turbo run lint --force             # 5/5
+pnpm exec turbo run typecheck --force        # 9/9
+pnpm exec turbo run test --force             # 9/9
+cd packages/anchoring && ../../node_modules/.bin/vitest run   # 64 passed, 7 files
+```
+
+The browser numbers in §10.3 are not reproduced by a suite — that is the point of them, and it is
+also their weakness: **they are a measurement taken once, by hand, not a regression test.** Wiring
+axe into a real-browser runner (Playwright) so `color-contrast` and `target-size` cannot silently
+stop being checked is the obvious follow-up, and it is not done.
