@@ -1,14 +1,34 @@
 # EPIC 1 — Ingest & Document Intelligence: result
 
-**Status: INCOMPLETE. 5 of 10 acceptance tests met.** Branch `epic-1-ingest`, 62 commits,
-`63be37d..247dc3b`. `research/build/EPIC-01-ingest.md` is **unedited** — no acceptance criterion
-was weakened, and no test file claims a criterion it does not meet.
+**Status: INCOMPLETE. 5 of 10 acceptance tests met, 4 PARTIAL, 1 NOT MET.** Branch
+`epic-1-ingest`, 142 commits, `63be37d..fbfbf4d`. `research/build/EPIC-01-ingest.md` is
+**unedited** — no acceptance criterion was weakened, and no test file claims a criterion it does
+not meet.
 
 Every number below was measured on this machine at `pymupdf 1.28.0` / `docling 2.117.0` against
 the 8-paper, 195-page corpus. Nothing is quoted from a doc without being re-run.
 
-**Gold-based numbers arrived on 2026-08-01** and are marked as such. Reproduce them with
+**Gold arrived 2026-08-01 and grew twice that day**: 18 pages → 36, 249 regions → 420, 3 papers
+→ 6, single annotator, no inter-annotator agreement. That is 30 % of README §1.2's Tier B. Every
+gold-based number carries that n — it measures, it does not authorise. Reproduce with
 `uv run python -m papertree_evaluation score`.
+
+**All four of §4.1's metrics are now computable.** Element-detection F1, reading order,
+vector-figure recall and caption association were each "not evaluable — no gold" when the epic
+began; the last of them landed 2026-08-01. Three of the four needed a tool fix as well as an
+annotation pass, and two of those three had the metric function written but never wired into
+the scorer — a shape worth remembering: **a metric that is never called reports nothing, and
+nothing looks a lot like a metric that passed.**
+
+### What remains, and where it is tracked
+
+| | issue |
+|---|---|
+| Region detection blocks `figures.spec` + 2 metrics | [#51](https://github.com/Legend101Zz/PaperTree/issues/51) |
+| Peak RSS 762 MB vs a 500 MB bar | [#52](https://github.com/Legend101Zz/PaperTree/issues/52) |
+| The speed half is unmeasured, not failed | [#53](https://github.com/Legend101Zz/PaperTree/issues/53) |
+| Gold coverage limits every remaining verdict | [#54](https://github.com/Legend101Zz/PaperTree/issues/54) |
+| Equation extents, absent types, 4th adapter, WebP | [#55](https://github.com/Legend101Zz/PaperTree/issues/55) |
 
 ---
 
