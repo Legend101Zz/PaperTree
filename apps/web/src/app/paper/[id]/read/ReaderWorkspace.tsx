@@ -27,12 +27,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { resolveAnchor, type Anchor, type IndexedDocument, type Resolution } from '@papertree/anchoring';
 
 import { GuidedView } from '@/components/reader/GuidedView';
-import { HighlightOverlay } from '@/components/reader/HighlightOverlay';
 import { Navigator } from '@/components/reader/Navigator';
-import { PdfDocumentProvider } from '@/components/reader/PdfDocumentProvider';
+import { SourcePane } from '@/components/reader/SourcePane';
 import { SplitView } from '@/components/reader/SplitView';
 import { UnanchoredTray } from '@/components/reader/UnanchoredTray';
-import { VirtualPageList } from '@/components/reader/VirtualPageList';
 import { loadPaper, pdfUrlFor, type FixtureSlug } from '@/lib/fixtures';
 
 export type ReadingMode = 'source' | 'guided' | 'split';
@@ -342,30 +340,6 @@ function ReaderToolbarShell({
   );
 }
 
-function SourcePane(props: ViewProps) {
-  return (
-    <PdfDocumentProvider src={props.pdfUrl}>
-      <VirtualPageList
-        zoom={props.zoom}
-        className="h-full"
-        renderOverlay={(pageIndex, meta) => (
-          <HighlightOverlay
-            pageIndex={pageIndex}
-            pageWidth={meta.width}
-            pageHeight={meta.height}
-            userUnit={meta.userUnit}
-            zoom={props.zoom}
-            items={props.anchors.map((record) => ({
-              anchorId: record.anchor.id,
-              resolution: record.resolution,
-            }))}
-          />
-        )}
-      />
-    </PdfDocumentProvider>
-  );
-}
-
 function GuidedPane(props: ViewProps) {
   return <GuidedView doc={props.doc} onShowSource={props.onShowSource} className="h-full overflow-y-auto" />;
 }
@@ -375,13 +349,25 @@ function DocumentSlot(props: ViewProps) {
   if (props.mode === 'split') {
     return (
       <SplitView
-        source={<SourcePane {...props} />}
+        source={<SourcePane
+        doc={props.doc}
+        pdfUrl={props.pdfUrl}
+        zoom={props.zoom}
+        anchors={props.anchors}
+        onAnchorCaptured={props.onAnchorCaptured}
+      />}
         guided={<GuidedPane {...props} />}
         className="h-full"
       />
     );
   }
-  return <SourcePane {...props} />;
+  return <SourcePane
+        doc={props.doc}
+        pdfUrl={props.pdfUrl}
+        zoom={props.zoom}
+        anchors={props.anchors}
+        onAnchorCaptured={props.onAnchorCaptured}
+      />;
 }
 
 function NavigatorSlot(props: {
