@@ -136,6 +136,18 @@ def build_annotator(tasks: list[AnnotationTask], destination: Path) -> Path:
  .box {{ position: absolute; border: 2px solid #d33; background: rgba(221,51,51,.12); }}
  .box b {{ position: absolute; top: -1.4em; left: 0; font-size: 11px; background: #d33;
            color: #fff; padding: 0 4px; white-space: nowrap; }}
+ /* A region loaded from a previous pass that is still missing the field its type needs.
+    Amber rather than red so "what is left to do" is answerable by scrolling, not by counting. */
+ .box.needs {{ border-color: #f0ad4e; background: rgba(240,173,78,.18); }}
+ .box.needs b {{ background: #f0ad4e; color: #3b2c06; }}
+ .box.sel {{ border-color: #2563eb; background: rgba(37,99,235,.18); }}
+ .box.sel b {{ background: #2563eb; }}
+ .box.done {{ border-color: #16a34a; background: rgba(22,163,74,.10); }}
+ .box.done b {{ background: #16a34a; }}
+ .overlay.editing .box {{ cursor: pointer; }}
+ #editor {{ display: none; background: #eff6ff; border: 1px solid #bfdbfe; padding: .5rem .75rem;
+            margin-top: .5rem; }}
+ #editor.on {{ display: block; }}
  .bar {{ position: sticky; top: 0; background: #fff; padding: .75rem; border: 1px solid #ddd;
          z-index: 10; margin-bottom: 1rem; }}
  .hint {{ font-size: 12px; color: #64748b; margin-left: .35rem; }}
@@ -242,6 +254,22 @@ Get the flow right even if you are unsure of the type.</div>
     vector figure <span class="hint">drawn, not a photo</span></label>
   <label id="parentwrap" class="extra">describes
     <select id="parent"><option value="">— pick the figure/table —</option></select></label>
+  <!-- RESUME. Without this, adding `is_vector` and `parent` to gold that already exists means
+       redrawing every region by hand - 249 of them on the first pass, which is the whole
+       annotation budget spent again to fill in two fields. The tool could only ever download. -->
+  <label class="extra">reopen
+    <input type="file" id="loadgold" accept="application/json,.json"></label>
+  <button id="jump" style="display:none">next unfilled →</button>
+  <span id="todo" class="hint"></span>
+  <div id="editor">
+    <b id="edittitle">region</b>
+    <label id="editvectorwrap"><input type="checkbox" id="editvector"> vector figure
+      <span class="hint">drawn, not a photo</span></label>
+    <label id="editparentwrap">describes
+      <select id="editparent"><option value="">— pick the figure/table —</option></select></label>
+    <button id="editclose">done</button>
+    <span class="hint">click any box to edit it; only these two fields change</span>
+  </div>
 </div>
 
 {pages}
@@ -252,6 +280,40 @@ Get the flow right even if you are unsure of the type.</div>
 // produces gold that no parser can ever match, and nothing downstream would reveal why.
 const SCALE = {IMAGE_SCALE};
 const regions = [];
+
+// `gold_id` is a GLOBAL counter across every page, not per-page - the existing gold runs r00 to
+// r248 across 18 pages. Reloading has to continue that sequence rather than restart it, or a
+// second pass mints ids that collide with the first.
+let nextId = 0;
+const elFor = new Map();          // gold_id -> the box element, so a region can be restyled
+const pageMeta = new Map();       // "paper:page" -> {{annotator, minutes_spent, notes}}, preserved
+
+function idOf(n) {{ return 'r' + String(n).padStart(2, '0'); }}
+
+// A region is "unfilled" when its type demands a field the first pass could not collect.
+function needsWork(r) {{
+  if (r.type === 'figure') return r.is_vector === null || r.is_vector === undefined;
+  if (r.type === 'caption') return !r.parent;
+  return false;
+}}
+
+function paint(r) {{
+  const el = elFor.get(r.gold_id);
+  if (!el) return;
+  el.classList.toggle('needs', needsWork(r));
+  el.classList.toggle('done', !needsWork(r) && (r.type === 'figure' || r.type === 'caption'));
+  el.querySelector('b').textContent = r.gold_id + ' ' + r.type
+    + (r.type === 'figure' && r.is_vector != null ? (r.is_vector ? ' ·vector' : ' ·raster') : '')
+    + (r.type === 'caption' && r.parent ? ' →' + r.parent : '');
+}}
+
+function refreshTodo() {{
+  const left = regions.filter(needsWork).length;
+  document.getElementById('todo').textContent =
+    regions.length + ' regions' + (left ? ' · ' + left + ' still need a field' : '');
+  document.getElementById('count').textContent = regions.length + ' regions';
+  document.getElementById('jump').style.display = left ? '' : 'none';
+}}
 
 // THE FLOW SELECT FOLLOWS THE TYPE SELECT.
 //
@@ -357,7 +419,7 @@ document.querySelectorAll('.canvas').forEach(canvas => {{
       paper: page.dataset.paper,
       page: +page.dataset.page,
       page_size: {{ width: +page.dataset.width, height: +page.dataset.height }},
-      gold_id: 'r' + String(regions.length).padStart(2, '0'),
+      gold_id: idOf(nextId++),
       type, flow,
       bbox: toPdf(live._box, img),
       // §2: reading_order ranks ONLY the body flow. Captions, footnotes and page furniture get
@@ -376,10 +438,18 @@ document.querySelectorAll('.canvas').forEach(canvas => {{
       text: '', continues_from: null, continues_to: null
     }};
     regions.push(region);
-    live.innerHTML = '<b>' + region.gold_id + ' ' + type + '</b>';
+    live.innerHTML = '<b></b>';
+    elFor.set(region.gold_id, live);
     live._region = region;
-    document.getElementById('count').textContent = regions.length + ' regions';
+    attachEditor(live, region);
+    paint(region);
+    refreshTodo();
     refreshParents(region.paper, region.page);
+    // A caption's `parent` select has to be populated from the floats on THIS page, and it is
+    // only correct after the region exists. Reading it at draw time - as the toolbar copy does -
+    // means the first caption drawn on a page reads a list built for the previous page. So the
+    // editor opens on the region just drawn and the link is chosen after, not before.
+    if (region.type === 'caption' || region.type === 'figure') live.click();
     start = null; live = null;
   }});
 }});
@@ -387,17 +457,142 @@ document.querySelectorAll('.canvas').forEach(canvas => {{
 document.getElementById('undo').onclick = () => {{
   const last = regions.pop();
   if (!last) return;
-  const boxes = document.querySelectorAll('.box');
-  boxes[boxes.length - 1]?.remove();
-  document.getElementById('count').textContent = regions.length + ' regions';
+  elFor.get(last.gold_id)?.remove();
+  elFor.delete(last.gold_id);
+  refreshTodo();
+}};
+
+// ---------------------------------------------------------------- reopening a previous pass
+
+// Boxes restored from a file are positioned as a PERCENTAGE of the page, computed from the
+// recorded bbox and the page's own point size. Deliberately not via the image's pixel metrics:
+// those depend on the image having finished loading and on the window width, and a box that is
+// placed before `naturalWidth` is known lands silently in the wrong spot.
+function placeRestored(region, pageEl) {{
+  const W = +pageEl.dataset.width, H = +pageEl.dataset.height;
+  const [x0, y0, x1, y1] = region.bbox;
+  const el = document.createElement('div');
+  el.className = 'box';
+  el.innerHTML = '<b></b>';
+  Object.assign(el.style, {{
+    left: (100 * x0 / W) + '%', top: (100 * y0 / H) + '%',
+    width: (100 * (x1 - x0) / W) + '%', height: (100 * (y1 - y0) / H) + '%'
+  }});
+  pageEl.querySelector('.overlay').appendChild(el);
+  el._region = region;
+  elFor.set(region.gold_id, el);
+  attachEditor(el, region);
+  paint(region);
+}}
+
+document.getElementById('loadgold').addEventListener('change', async event => {{
+  const file = event.target.files[0];
+  if (!file) return;
+  let parsed;
+  try {{ parsed = JSON.parse(await file.text()); }}
+  catch (err) {{ alert('Not JSON: ' + err.message); return; }}
+  if (!Array.isArray(parsed)) {{ alert('Expected the array-of-pages gold format.'); return; }}
+
+  regions.length = 0; nextId = 0; elFor.clear(); pageMeta.clear();
+  document.querySelectorAll('.box').forEach(b => b.remove());
+
+  let restored = 0, orphaned = [];
+  for (const page of parsed) {{
+    const key = page.paper_id + ':' + page.page;
+    pageMeta.set(key, {{ annotator: page.annotator || '', minutes_spent: page.minutes_spent || 0,
+                        notes: page.notes || '' }});
+    const pageEl = document.querySelector(
+      'section.page[data-paper="' + page.paper_id + '"][data-page="' + page.page + '"]');
+    for (const raw of (page.regions || [])) {{
+      const region = Object.assign({{
+        paper: page.paper_id, page: page.page, page_size: page.page_size,
+        is_vector: null, parent: null, text: '', continues_from: null, continues_to: null
+      }}, raw);
+      const n = parseInt(String(region.gold_id).replace(/^r/, ''), 10);
+      if (!Number.isNaN(n)) nextId = Math.max(nextId, n + 1);
+      regions.push(region);
+      // A page in the file that this bundle did not render still has to survive the round trip.
+      // Dropping it would silently delete gold, so it is kept and reported, just not drawn.
+      if (pageEl) {{ placeRestored(region, pageEl); restored++; }}
+      else orphaned.push(key);
+    }}
+  }}
+  refreshTodo();
+  const missing = [...new Set(orphaned)];
+  alert('Reopened ' + regions.length + ' regions; ' + restored + ' drawn.\\n'
+    + regions.filter(needsWork).length + ' still need is_vector or parent (amber).'
+    + (missing.length ? '\\n\\nNot in this bundle, kept but not shown: ' + missing.join(', ')
+        + '\\nRe-run annotate with the same --papers/--pages to edit those.' : ''));
+}});
+
+// ------------------------------------------------------------------- editing one loaded region
+
+let editing = null;
+const editor = document.getElementById('editor');
+const editVector = document.getElementById('editvector');
+const editParent = document.getElementById('editparent');
+
+function attachEditor(el, region) {{
+  el.addEventListener('click', event => {{
+    event.stopPropagation();
+    // Only the two retrofit fields are editable. Type, flow, bbox and reading_order are what the
+    // annotator actually drew; a second pass that can silently retype them is a second pass that
+    // can quietly rewrite the benchmark.
+    if (region.type !== 'figure' && region.type !== 'caption') return;
+    if (editing) elFor.get(editing.gold_id)?.classList.remove('sel');
+    editing = region;
+    el.classList.add('sel');
+    editor.classList.add('on');
+    document.getElementById('edittitle').textContent = region.gold_id + ' ' + region.type;
+    document.getElementById('editvectorwrap').style.display =
+      region.type === 'figure' ? '' : 'none';
+    document.getElementById('editparentwrap').style.display =
+      region.type === 'caption' ? '' : 'none';
+    editVector.checked = region.is_vector === true;
+    const floats = regions.filter(r => r.paper === region.paper && r.page === region.page
+      && ['figure', 'table', 'algorithm'].includes(r.type));
+    editParent.innerHTML = '<option value="">— pick the figure/table —</option>'
+      + floats.map(r => '<option value="' + r.gold_id + '">' + r.gold_id + ' ' + r.type
+                        + '</option>').join('');
+    editParent.value = region.parent || '';
+    // No scrollIntoView here. The editor lives in the sticky bar and is always on screen, and
+    // scrolling to it actively fights `next unfilled`, which has just scrolled to the region.
+  }});
+}}
+
+editVector.addEventListener('change', () => {{
+  if (!editing || editing.type !== 'figure') return;
+  editing.is_vector = editVector.checked;
+  paint(editing); refreshTodo();
+}});
+editParent.addEventListener('change', () => {{
+  if (!editing || editing.type !== 'caption') return;
+  editing.parent = editParent.value || null;
+  paint(editing); refreshTodo();
+}});
+document.getElementById('editclose').onclick = () => {{
+  if (editing) elFor.get(editing.gold_id)?.classList.remove('sel');
+  editing = null; editor.classList.remove('on');
+}};
+
+document.getElementById('jump').onclick = () => {{
+  const next = regions.find(needsWork);
+  if (!next) return;
+  const el = elFor.get(next.gold_id);
+  if (!el) {{ alert('The next unfilled region is on a page this bundle did not render.'); return; }}
+  el.scrollIntoView({{ block: 'center', behavior: 'smooth' }});
+  el.click();
 }};
 
 document.getElementById('download').onclick = () => {{
+  const left = regions.filter(needsWork).length;
+  if (left && !confirm(left + ' regions still need is_vector or parent. Download anyway?')) return;
   const byPage = {{}};
   for (const r of regions) {{
     const key = r.paper + ':' + r.page;
+    const meta = pageMeta.get(key) || {{ annotator: '', minutes_spent: 0, notes: '' }};
     (byPage[key] ||= {{ paper_id: r.paper, page: r.page, page_size: r.page_size,
-                        regions: [], annotator: '', minutes_spent: 0, notes: '' }})
+                        regions: [], ...meta }})
       .regions.push((({{ paper, page, page_size, ...rest }}) => rest)(r));
   }}
   const blob = new Blob([JSON.stringify(Object.values(byPage), null, 2)],
@@ -407,6 +602,8 @@ document.getElementById('download').onclick = () => {{
   a.download = 'ptub-gold.json';
   a.click();
 }};
+
+refreshTodo();
 </script>
 """
     destination.write_text(html, encoding="utf-8")
