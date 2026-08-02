@@ -9,10 +9,11 @@
  * the same thing with a worse name.
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import type { Anchor, IndexedDocument, Resolution } from '@papertree/anchoring';
 
+import { type DocumentHandle, type DocumentRef } from './documentHandle';
 import { HighlightOverlay } from '@/components/reader/HighlightOverlay';
 import { PdfDocumentProvider } from '@/components/reader/PdfDocumentProvider';
 import type { TextLayerInfo } from '@/components/reader/PdfPage';
@@ -42,6 +43,15 @@ export interface SourcePaneProps {
    * from a test that has to think of it to the compiler, which cannot forget.
    */
   readonly onViewportResize: (size: { readonly width: number; readonly height: number }) => void;
+  /**
+   * Populated by this pane while it is mounted, and nulled when it unmounts — #64.
+   *
+   * REQUIRED, not optional. `DocumentSlot` renders this component in Source and Split modes and
+   * both call sites in the shell reach through this ref; before #64 the ref existed, was passed
+   * as far as `DocumentSlot`, and was never handed down here, so every citation click was a
+   * no-op. A required prop makes the next omission a compile error.
+   */
+  readonly documentRef: DocumentRef;
 }
 
 /**
@@ -122,11 +132,38 @@ export function SourcePane(props: SourcePaneProps) {
     clear();
   }, [selection, clear]);
 
+  /**
+   * The block-id -> (pageIndex, bbox) translation, done HERE because `doc.byId` is in this scope
+   * and not the shell's — #64 step 2. `VirtualPageList`'s imperative handle already implements
+   * both scrolls (`VirtualPageList.tsx:365, 367`); nothing new is being built one layer down.
+   */
+  const documentHandle = useMemo<DocumentHandle>(
+    () => ({
+      scrollToBlock(blockId) {
+        const block = doc.byId.get(blockId);
+        // A stale id resolves to nothing. Not a throw: block ids are content-derived, so any edit
+        // to a block retires its id (AGENTS.md §4), and a citation minted against an older parse
+        // arriving here is expected. Recovering from that is the anchoring ladder's job.
+        if (block === undefined) return;
+        listRef.current?.scrollToBlock(block.pageIndex, block.bbox, { behavior: 'smooth' });
+      },
+      scrollToPage(pageIndex) {
+        listRef.current?.scrollToPage(pageIndex, { behavior: 'smooth' });
+      },
+    }),
+    [doc],
+  );
+
   return (
     <PdfDocumentProvider src={props.pdfUrl}>
       <VirtualPageList
         ref={(handle) => {
           listRef.current = handle;
+          // #64: the shell's seam terminates HERE. `listRef` was written and never read for two
+          // epics; this is the line that makes it reachable. A ref callback runs during commit,
+          // BEFORE effects, which is what lets the shell flush a deferred scroll in an effect
+          // keyed on `mode` and find the handle already installed.
+          props.documentRef.current = handle === null ? null : documentHandle;
           setRoot(handle?.getScrollElement() ?? null);
         }}
         zoom={props.zoom}

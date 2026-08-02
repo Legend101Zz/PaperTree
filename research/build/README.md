@@ -162,7 +162,7 @@ gate, and it is satisfied at the end of **Wave 2**.
 | 1 | Re-parsing produces byte-identical PaperIR and identical block IDs | ✅ **MET** | 20 runs byte-identical, `test_pipeline_end_to_end.py` |
 | 2 | A highlight survives reload, zoom 50→400%, 5 viewport widths, drift <1pt | ✅ **MET** | Epic 2, `EPIC-02-RESULT.md` |
 | 3 | A highlight re-anchors under a different parser config, **or fails loudly** | ✅ **MET** | **100.00%, 0 orphans**, 21 fixture × perturbation combinations — including one retiring 89.5% of ids |
-| 4 | An answer's citation navigates to the correct polygon | 🟡 **PARTIAL** | Resolution **100%** page and polygon; the DOM scroll is a no-op (#64). **Closes in #78 Session A** |
+| 4 | An answer's citation navigates to the correct polygon | ✅ **MET** | Resolution **100%** page and polygon; the scroll now fires — #64 closed in #78 Session A (PR #93), asserted click-to-scroller by `apps/web/test/citation-scroll.spec.tsx` |
 | 5 | Figures from an all-vector paper (ResNet) present with captions linked | 🟡 **PARTIAL** | ≥5 figures ✅ (9, all vector); captions **58%** against an 80% bar (#51). **Closes in #78 Session B** |
 | 6 | Parse runs as a background job with observable progress, surviving a worker restart | ✅ **MET** | `jobs/durability.spec`, `test_a_job_killed_mid_step_resumes_at_that_step` |
 

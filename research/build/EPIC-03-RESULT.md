@@ -48,7 +48,7 @@ are the real gate.
 | `retrieval/expansion.spec` | **MET** | `packages/retrieval/python/tests/test_expansion.py`. Parent section, adjacent blocks and related equation/figure returned; determinism asserted by running twice and comparing exactly. |
 | `retrieval/budget.spec` | **MET**, with the ceiling stated as an *upper bound* | `tests/test_budget.py`. Never exceeds 8,100; truncation recorded as data. See §3 for what the estimator can and cannot claim. |
 | `qa/grounding.spec` | **DEFERRED — not attempted** | The 120 Tier C questions do not exist. Schema, loader and scorer ship; the spec is not written because there is nothing to run it on. See §2. |
-| `qa/citation-nav.spec` | **PARTIAL** | Resolution accuracy measured and met (§4). The end-to-end DOM scroll is a no-op today — **#64**, in files this epic does not own. |
+| `qa/citation-nav.spec` | **MET** | Resolution accuracy measured and met (§4). The end-to-end scroll was a no-op (**#64**); closed in #78 Session A (PR #93), asserted by `apps/web/test/citation-scroll.spec.tsx`. |
 | `qa/interpretation.spec` | **MET** | `apps/web/test/interpretation.spec.tsx`, 6 tests. Falsified on purpose: replacing the flag with a filter fails 2 of them. |
 | `security/injection.spec` | **MET** | `packages/memory/python/tests/test_security_injection.py`, 12 tests. See §5 — this is the strongest result in the epic. |
 | `security/isolation.spec` | **PARTIAL** | 10 tests. Asserted for every surface the registry can expose; **not** asserted at the process level. §5.3 says exactly what is and is not claimed. |
@@ -62,7 +62,7 @@ are the real gate.
 | F3.3 | Evidence package assembly | **MET** |
 | F3.4 | Agent runtime | **PARTIAL** — registry + provider layer + a 54-line lazy Pydantic AI adapter. `pydantic-ai` is **not** a dependency (§6), and **no live provider call is made anywhere in the suite**. |
 | F3.5 | Answer contract + grounding verifier | **PARTIAL** — contract and verifier built, tested, and aligned with the TS twin mechanically. **Unscored**, because §2's dataset does not exist. |
-| F3.6 | Inspector UI | **PARTIAL** — built, reachable, measured; wired to a **fixture** answer source (#62), and the last DOM hop is a no-op (#64). |
+| F3.6 | Inspector UI | **PARTIAL** — built, reachable, measured, and the last DOM hop now works (#64 closed). Still wired to a **fixture** answer source (#62), which is Session C. |
 | F3.7 | Memory stores | **MET** — four stores + proposal queue + append-only audit. |
 | F3.8 | Injection defence | **MET** — structural, measured, and falsified on purpose. |
 | — | **Must delete** (4 v1 AI clients) | **NOT DONE** — #71. The replacement layer exists; the deletion needs Epic 5 for two of the four. |
@@ -154,9 +154,17 @@ not forward the ref, `SourcePane` keeps `listRef` private, and `VirtualPageList`
 `onJumpToPage` are silent no-ops in Source and Split modes **on `main` today**, and a citation chip
 reaches the declared seam and stops.
 
-That is **#64**. It lives in Epic 2's files and Epic 2 is closed, so it is filed rather than reached
-past. The criterion is therefore **PARTIAL**: resolution is measured and meets the bar; delivery is
-blocked one layer down.
+That was **#64**, and it is **CLOSED** — #78 Session A, PR #93. `DocumentSlot` forwards
+`documentRef` to `SourcePane`, `SourcePane` populates it from its existing `listRef` and resolves
+`blockId -> (pageIndex, bbox)` where `doc.byId` is in scope, and `scrollToPage` replaced the
+`` `page:${n}` `` sentinel. Both members of the handle are REQUIRED, so the missing forward is now
+`TS2741` rather than a dead click — Epic 2's own post-mortem conclusion, applied to the fifth and
+last instance of that defect.
+
+The criterion is therefore **MET** for delivery as well as resolution. What the new
+`citation-scroll.spec` asserts stops at the scroller's imperative handle rather than at a CSS
+`scrollTop`, because happy-dom does no layout; that boundary is stated in the spec's header rather
+than papered over.
 
 ---
 
@@ -257,7 +265,7 @@ surface that puts paper text in front of a model should go through these rather 
 
 | # | What |
 |---|---|
-| #64 | `documentRef.scrollToBlock` is never assigned — `onShowSource`/`onJumpToPage` are no-ops, and the capability exists one layer down under a different signature. **Blocks the end-to-end half of `qa/citation-nav.spec`.** |
+| #64 | `documentRef.scrollToBlock` is never assigned — `onShowSource`/`onJumpToPage` are no-ops, and the capability exists one layer down under a different signature. **CLOSED** by #78 Session A (PR #93). |
 | #65 | The migration and three other edits outside Epic 3's owned paths, declared. |
 | #66 | Three of the retrieval ladder's six rungs have no data: no `cites`/`references`/`defines`, no `prev_id`/`next_id`, no equation `referenced_by`. |
 | #71 | The must-delete list is NOT done; two of the four need Epic 5 (#43) first. |
@@ -284,6 +292,6 @@ that nothing depends on is **not installed into the root `.venv`**, and `uv run 
 language, and it is why those four lines exist.
 
 **Where the lesson was only partly applied:** F3.6 is reachable from a route and its citations
-resolve correctly, but the click does not yet move the page (#64), and the panel is fed by a fixture
+resolve correctly, and since #64 closed the click moves the page — but the panel is still fed by a fixture
 rather than an agent (#62). A user can reach the Inspector. They cannot yet get a real answer out of
 it. That is stated here rather than counted as a working feature.

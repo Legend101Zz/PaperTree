@@ -36,6 +36,12 @@ import { SourcePane } from '@/components/reader/SourcePane';
 import { SplitView } from '@/components/reader/SplitView';
 import { UnanchoredTray } from '@/components/reader/UnanchoredTray';
 import { resolveZoom, ZoomControl, type ZoomMode } from '@/components/reader/ZoomControl';
+import {
+  applyScroll,
+  type DocumentHandle,
+  type DocumentRef,
+  type PendingScroll,
+} from '@/components/reader/documentHandle';
 import { loadPaper, pdfUrlFor, type FixtureSlug } from '@/lib/fixtures';
 
 export type ReadingMode = 'source' | 'guided' | 'split';
@@ -141,15 +147,36 @@ export function ReaderWorkspace({ slug }: ReaderWorkspaceProps) {
    * IA §18.6: "no view is a dead end — anything derived can always navigate back to the exact
    * region it came from." This is that function, and it is passed down to every `DerivedBlock`.
    */
-  const documentRef = useRef<{ scrollToBlock?: (blockId: string) => void }>({});
+  const documentRef = useRef<DocumentHandle | null>(null);
+
+  /**
+   * What to scroll to once a document pane exists to scroll it — #64, and a bug the old shape hid.
+   *
+   * `showSource` from Guided mode switches to Split and then scrolls. `SourcePane` does not exist
+   * until that state change commits, so the ref is still null on the line after `setMode`. The old
+   * code called `documentRef.current.scrollToBlock?.(first)` there and did nothing, which looked
+   * identical to the never-wired case and is why this was invisible: in Guided mode the seam was
+   * broken twice over.
+   */
+  const pendingScroll = useRef<PendingScroll | null>(null);
+
+  const requestScroll = useCallback((request: PendingScroll) => {
+    const handle = documentRef.current;
+    if (handle === null) {
+      pendingScroll.current = request;
+      return;
+    }
+    applyScroll(handle, request);
+  }, []);
+
   const showSource = useCallback(
     (blockIds: readonly string[]) => {
       const first = blockIds[0];
       if (first === undefined) return;
       setMode((current) => (current === 'guided' ? 'split' : current));
-      documentRef.current.scrollToBlock?.(first);
+      requestScroll({ kind: 'block', blockId: first });
     },
-    [],
+    [requestScroll],
   );
 
   /**
@@ -158,9 +185,29 @@ export function ReaderWorkspace({ slug }: ReaderWorkspaceProps) {
    * Hypothesis's 2017 orphans-tab decision is the precedent and it is the right one: a failed
    * anchor is never deleted, it is SHOWN, with its stored quote and a way to get near it.
    */
-  const jumpToPage = useCallback((pageIndex: number, _anchorId: string) => {
-    documentRef.current.scrollToBlock?.(`page:${String(pageIndex)}`);
-  }, []);
+  const jumpToPage = useCallback(
+    (pageIndex: number, _anchorId: string) => {
+      // `scrollToPage`, not a `page:${n}` string through `scrollToBlock` — #64 step 3. The old
+      // sentinel could never have matched a block id even once the seam was connected.
+      requestScroll({ kind: 'page', pageIndex });
+    },
+    [requestScroll],
+  );
+
+  /**
+   * Flush a scroll that was requested before a document pane existed.
+   *
+   * Keyed on `mode` because that is the only thing that mounts or unmounts `SourcePane`. React
+   * runs ref callbacks during commit and effects after, so by the time this fires the pane has
+   * already installed its handle.
+   */
+  useEffect(() => {
+    const request = pendingScroll.current;
+    const handle = documentRef.current;
+    if (request === null || handle === null) return;
+    pendingScroll.current = null;
+    applyScroll(handle, request);
+  }, [mode]);
 
   if (loadError !== null) {
     return (
@@ -242,7 +289,7 @@ interface ViewProps {
   readonly orphans: readonly AnchorRecord[];
   readonly onAnchorCaptured: (anchor: Anchor) => void;
   readonly onShowSource: (blockIds: readonly string[]) => void;
-  readonly documentRef: React.MutableRefObject<{ scrollToBlock?: (blockId: string) => void }>;
+  readonly documentRef: DocumentRef;
   readonly pdfUrl: string;
   /** A page-level jump for an anchor that could not be placed — never a delete. */
   readonly onJumpToPage: (pageIndex: number, anchorId: string) => void;
@@ -314,10 +361,11 @@ function ReaderWorkspaceView(props: ViewProps) {
             call site — when an endpoint lands, this line changes and nothing else does.
 
             `onNavigate` routes a citation through the SAME `onShowSource` seam every derived
-            surface already uses. Note that the seam is currently unterminated:
-            `documentRef.current.scrollToBlock` is never assigned anywhere in this app, so the last
-            DOM hop is a no-op — that is #64, it lives in files this epic does not own, and it is
-            filed rather than reached past. */}
+            surface already uses, and that seam now TERMINATES: `SourcePane` populates
+            `documentRef` from its `VirtualPageList` handle and resolves the block id to a
+            (pageIndex, bbox) where `doc.byId` is in scope. #64, closed. Both members of
+            `DocumentHandle` are required, so an unwired pane is a compile error rather than a
+            dead click. */}
         <aside
           className="hidden w-[380px] shrink-0 border-l xl:block"
           aria-label="Inspector"
@@ -436,6 +484,7 @@ function DocumentSlot(props: ViewProps) {
             anchors={props.anchors}
             onAnchorCaptured={props.onAnchorCaptured}
             onViewportResize={props.onViewportResize}
+            documentRef={props.documentRef}
           />
         }
         guided={<GuidedPane {...props} />}
@@ -451,6 +500,7 @@ function DocumentSlot(props: ViewProps) {
       anchors={props.anchors}
       onAnchorCaptured={props.onAnchorCaptured}
       onViewportResize={props.onViewportResize}
+      documentRef={props.documentRef}
     />
   );
 }
