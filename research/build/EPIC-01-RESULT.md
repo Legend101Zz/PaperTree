@@ -194,10 +194,29 @@ Reading order runs the other way and is not part of the rule: Docling scores 0.5
 paper and worse on both single-column ones — the opposite of what "columns are the hard part"
 would predict, and worth a look before Epic 2 relies on either.
 
-Two of §4.1's four metrics remain not evaluable, and are reported as such rather than as zero,
-because a zero is a claim about the parser: **caption association** (gold carries no `parent`
-links) and **vector-figure recall** (no `is_vector` flag). The annotator tool did not collect
-either. That is a tool defect, recorded, and it costs PaperTree the one metric — vector figures —
+> **Superseded 2026-08-03 on the deterministic side only.** Those three deterministic figures
+> were three of six papers. All six now read a3c 0.667 / attention 0.389 / bert 0.699 /
+> gpt3 0.222 / neural-odes 0.611 / resnet 0.929, mean **0.586** — see §2's
+> `worker/reading-order.spec` row. **Docling's side has not been re-measured**, so the
+> head-to-head above is not a current comparison and must not be quoted as one.
+
+**Both of the "not evaluable" metrics below were re-checked and one of them was never a gold
+defect at all.** Corrected 2026-08-03 (#86/#95):
+
+- **caption association** and **vector-figure recall** were reported as not evaluable because
+  the gold "carries no `parent` links" and "no `is_vector` flag". **It carries both.** The
+  scorer's guards tested `any(r.get(field))` — TRUTHINESS, not presence — so a complete
+  annotation in which every `parent` is a valid id but every `is_vector` is legitimately
+  `False` read as a missing one. All 39 gold captions carry a `parent` and all 55 gold figures
+  carry an `is_vector`. Caption association now measures **14/39 correct, 1 false**; vector
+  recall is measured per paper.
+- What remains genuinely not evaluable is narrower and is stated where it applies: `resnet` and
+  `neural-odes` hold 51 floats between them with **no caption boxes drawn at all**, so caption
+  association covers 4 of 6 annotated papers rather than 6.
+
+The original text below is kept because the reasoning about zero-vs-unevaluable is right and
+still governs; only its premise about this gold set was wrong. That is a tool defect, recorded,
+and it costs PaperTree the one metric — vector figures —
 where it was expected to look good.
 
 **Where the F1 goes.** The macro-average is over gold types, and the first scored run found
@@ -478,6 +497,13 @@ asks whether those boxes have the shape of the regions on the page.
   sit at 143–281 MB. It scales with page count (75 pp), so the fix is a streaming or
   page-batched assembly rather than holding every page's spans at once — and the assertion
   belongs in a subprocess against the *largest* paper, at the bar the brief actually states.
+
+  > **The 746 MB no longer reproduces (2026-08-03).** Same paper, same method, fresh subprocess:
+  > **442.6 / 497.4 / 501.7 MB** on `main` @ `dff69e5`, and **488.3 / 509.1 / 496.3 MB** on
+  > `e9c58ca` before it. Roughly 240 MB came off between 2026-08-01 and now and **nothing
+  > recorded which change did it** (#52) — which is its own finding. The subprocess assertion
+  > described above was built and is right; what it cannot do is decide a 500 MB clause when
+  > three identical runs of a byte-deterministic parser straddle 500. #104.
   This is the third time on this branch a green test has turned out to assert less than it
   appeared to; it is the same shape as the empty-`parametrize` trap `_corpus_manifest.py`
   documents.
