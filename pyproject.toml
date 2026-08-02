@@ -17,6 +17,7 @@ dependencies = [
     "papertree-memory",
     "papertree-prompts",
     "papertree-retrieval",
+    "papertree-agent-tools",
 ]
 
 # apps/api is the v1 application. It has its own pyproject.toml and uv.lock and is
@@ -41,6 +42,7 @@ papertree-evaluation = { workspace = true }
 papertree-memory = { workspace = true }
 papertree-prompts = { workspace = true }
 papertree-retrieval = { workspace = true }
+papertree-agent-tools = { workspace = true }
 
 [tool.uv]
 package = false
