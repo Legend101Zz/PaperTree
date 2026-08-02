@@ -102,12 +102,49 @@ requires_corpus = pytest.mark.skipif(
 
 # ── the baseline ─────────────────────────────────────────────────────────────────────────────
 #
-# Measured 2026-08-02 on `main` at `c8bf62e` plus this PR's scoring corrections (#86 and the
-# pooled vector recall). Emitted by a script rather than transcribed by hand.
+# Measured 2026-08-02 on `main` at `c8bf62e` plus #95's scoring corrections; re-derived
+# 2026-08-03 on `main` at `dff69e5` (i.e. INCLUDING #102) plus issue #55's equation
+# right-margin extension. Emitted by a script rather than transcribed by hand.
 #
 # TO UPDATE: run the scorer, confirm you understand WHY each number moved, and change it here
 # in the same commit as the code that moved it. A baseline edited in its own commit is a
 # baseline nobody reviewed.
+#
+# WHAT MOVED, AND WHY (issue #55, `pipeline._extend_to_right_margin`)
+#
+# A display equation's block now runs out to its column's right text margin, so it contains the
+# right-margin equation number that gold boxes with it. Corpus-wide: **21 gold equations, 21
+# predicted, 0 matched at IoU 0.5 -> 8 matched**. Nothing about detection changed; the predicted
+# count is identical, which is the property that distinguishes this from the vertical merge that
+# was measured and reverted (`pipeline._merge_equation_blocks`). Every delta below is against
+# `origin/main` at `dff69e5`, re-derived after rebasing onto #102 rather than carried across it:
+#
+#   RAW          neural-odes  equation_matched 0 -> 6 · macro_f1 0.1967 -> 0.2175 ·
+#                             macro_f1_strict 0.1079 -> 0.1183 · reading_order 0.6667 -> 0.6111
+#                resnet       equation_matched 0 -> 2 · macro_f1 0.2542 -> 0.3257 ·
+#                             reading_order 0.9278 -> 0.9288 · strict unmoved at 0.1588
+#   NORMALISED   neural-odes  equation_matched 0 -> 6 · macro_f1 0.1929 -> 0.2137 ·
+#                             macro_f1_strict 0.1087 -> 0.1191
+#                resnet       equation_matched 0 -> 2 · macro_f1 0.2469 -> 0.3184 ·
+#                             strict unmoved at 0.1561
+#
+# a3c, bert and gpt3 do not move on any field: their gold holds no `equation` region at all.
+# `attention-is-all-you-need` does not move either, and that one IS about the parser - its single
+# gold equation's best IoU went 0.063 -> 0.293, a real improvement that is still short of 0.5.
+#
+# THE READING-ORDER MOVEMENT IS NOT AN ORDERING CHANGE AND ONE HALF OF IT IS DOWN. Stated
+# plainly because a fall in a headline number inside a change that claims an improvement is
+# exactly what a baseline update can hide. `metrics.reading_order_accuracy` scores PAIRS of gold
+# body regions that BOTH matched a prediction, so a newly matched region adds pairs:
+#
+#   neural-odes p3   matched body regions 2 -> 3, pairs 1 -> 3, agreeing 1 -> 2. Page 1.000 ->
+#                    0.667, paper mean 0.6667 -> 0.6111. The one disagreement is (r438 figure,
+#                    r439 equation): gold reads the figure first and `doc_order` puts the
+#                    equation first. A page scored on ONE pair was reporting nothing; it now
+#                    reports three, and one of them is wrong. That defect was always there.
+#   resnet p2        matched body regions 10 -> 12, pairs 45 -> 66, agreeing 42 -> 62. Page
+#                    0.9333 -> 0.9394. The new wrong pair is (r190 footnote, r192 equation) -
+#                    the same footnote already misplaced against three paragraphs.
 
 RAW: dict[str, dict[str, Any]] = {
     "a3c-algorithmheavy": {
@@ -121,6 +158,7 @@ RAW: dict[str, dict[str, Any]] = {
         "vector_gold": 0,
         "equation_matched": 0,
         "equation_gold": 0,
+        "equation_predicted": 0,
         "figure_matched": 4,
         "figure_gold": 5,
         "figure_predicted": 4,
@@ -136,6 +174,7 @@ RAW: dict[str, dict[str, Any]] = {
         "vector_gold": 3,
         "equation_matched": 0,
         "equation_gold": 1,
+        "equation_predicted": 3,
         "figure_matched": 2,
         "figure_gold": 5,
         "figure_predicted": 3,
@@ -151,6 +190,7 @@ RAW: dict[str, dict[str, Any]] = {
         "vector_gold": 0,
         "equation_matched": 0,
         "equation_gold": 0,
+        "equation_predicted": 0,
         "figure_matched": 2,
         "figure_gold": 2,
         "figure_predicted": 2,
@@ -166,36 +206,39 @@ RAW: dict[str, dict[str, Any]] = {
         "vector_gold": 6,
         "equation_matched": 0,
         "equation_gold": 0,
+        "equation_predicted": 0,
         "figure_matched": 2,
         "figure_gold": 8,
         "figure_predicted": 2,
     },
     "neural-odes-mathheavy": {
-        "macro_f1": 0.1967,
-        "macro_f1_strict": 0.1079,
-        "reading_order": 0.6667,
+        "macro_f1": 0.2175,
+        "macro_f1_strict": 0.1183,
+        "reading_order": 0.6111,
         "caption_correct": 0,
         "caption_false": 0,
         "caption_gold": 5,
         "vector_matched": 0,
         "vector_gold": 7,
-        "equation_matched": 0,
+        "equation_matched": 6,
         "equation_gold": 18,
+        "equation_predicted": 16,
         "figure_matched": 1,
         "figure_gold": 18,
         "figure_predicted": 8,
     },
     "resnet-cvpr-2col": {
-        "macro_f1": 0.2542,
+        "macro_f1": 0.3257,
         "macro_f1_strict": 0.1588,
-        "reading_order": 0.9278,
+        "reading_order": 0.9288,
         "caption_correct": 3,
         "caption_false": 0,
         "caption_gold": 10,
         "vector_matched": 0,
         "vector_gold": 4,
-        "equation_matched": 0,
+        "equation_matched": 2,
         "equation_gold": 2,
+        "equation_predicted": 2,
         "figure_matched": 2,
         "figure_gold": 17,
         "figure_predicted": 2,
@@ -214,6 +257,7 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "vector_gold": 5,
         "equation_matched": 0,
         "equation_gold": 0,
+        "equation_predicted": 0,
         "figure_matched": 4,
         "figure_gold": 5,
         "figure_predicted": 4,
@@ -229,6 +273,7 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "vector_gold": 1,
         "equation_matched": 0,
         "equation_gold": 1,
+        "equation_predicted": 3,
         "figure_matched": 2,
         "figure_gold": 3,
         "figure_predicted": 3,
@@ -244,6 +289,7 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "vector_gold": 2,
         "equation_matched": 0,
         "equation_gold": 0,
+        "equation_predicted": 0,
         "figure_matched": 2,
         "figure_gold": 2,
         "figure_predicted": 2,
@@ -259,27 +305,29 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "vector_gold": 6,
         "equation_matched": 0,
         "equation_gold": 0,
+        "equation_predicted": 0,
         "figure_matched": 2,
         "figure_gold": 8,
         "figure_predicted": 2,
     },
     "neural-odes-mathheavy": {
-        "macro_f1": 0.1929,
-        "macro_f1_strict": 0.1087,
+        "macro_f1": 0.2137,
+        "macro_f1_strict": 0.1191,
         "reading_order": 0.3889,
         "caption_correct": 0,
         "caption_false": 0,
         "caption_gold": 5,
         "vector_matched": 0,
         "vector_gold": 9,
-        "equation_matched": 0,
+        "equation_matched": 6,
         "equation_gold": 18,
+        "equation_predicted": 16,
         "figure_matched": 1,
         "figure_gold": 14,
         "figure_predicted": 8,
     },
     "resnet-cvpr-2col": {
-        "macro_f1": 0.2469,
+        "macro_f1": 0.3184,
         "macro_f1_strict": 0.1561,
         "reading_order": 0.9667,
         "caption_correct": 1,
@@ -287,8 +335,9 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "caption_gold": 10,
         "vector_matched": 2,
         "vector_gold": 16,
-        "equation_matched": 0,
+        "equation_matched": 2,
         "equation_gold": 2,
+        "equation_predicted": 2,
         "figure_matched": 2,
         "figure_gold": 16,
         "figure_predicted": 2,
@@ -366,6 +415,17 @@ def _measure(paper: str, document: dict[str, Any], pages: list[dict[str, Any]]) 
         "vector_gold": score.vector_gold,
         "equation_matched": of("equation", "matched"),
         "equation_gold": of("equation", "gold"),
+        # `equation_predicted` IS THE GUARD AGAINST THE FIX THAT ALREADY FAILED ONCE.
+        #
+        # `pipeline._merge_equation_blocks` records an approach that closed the same extent gap
+        # by absorbing any non-prose block sharing an equation region's VERTICAL band. It raised
+        # the IoU-0.5 match count and took `neural-odes-mathheavy` from 16 predicted against 17
+        # gold to **6**, chaining distinct equations into one block. With only `matched` and
+        # `gold` recorded, that trade reads as a pure improvement: the matches go up and nothing
+        # in this file disagrees. The predicted count is the number that fell, so it is the
+        # number that has to be asserted. `figure_predicted` was already here for the same
+        # reason and `equation` was the type that needed it.
+        "equation_predicted": of("equation", "predicted"),
         "figure_matched": of("figure", "matched"),
         "figure_gold": of("figure", "gold"),
         "figure_predicted": of("figure", "predicted"),

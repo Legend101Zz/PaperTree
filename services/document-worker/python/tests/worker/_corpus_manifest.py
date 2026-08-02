@@ -63,8 +63,10 @@ requires_corpus = pytest.mark.skipif(
     not HAVE_CORPUS,
     reason=(
         f"the 8-paper corpus is gitignored and not present ({len(CORPUS_FILES)} of "
-        f"{len(EXPECTED_CORPUS)} found in {CORPUS_DIR}). Fetch it to run these; the "
-        f"synthetic-PDF suite covers the same invariants everywhere."
+        f"{len(EXPECTED_CORPUS)} found in {CORPUS_DIR}). Fetch it with "
+        f"`./research/benchmarks/fetch_corpus.sh` to run these; the synthetic-PDF suite covers "
+        f"the same invariants everywhere. (AGENTS.md §4: name the script, do not just say "
+        f"'fetch it'.)"
     ),
 )
 
