@@ -72,7 +72,35 @@ reasoning attached to the evidence.
 | half | bar | measured | |
 |---|---|---|---|
 | **accuracy** | ≥ 85 % of Docling's F1 | **97 %** | **PASS** |
-| **speed** | ≥ 20× Docling | 12.4× / 16.8× / 18.7× across runs | **NOT ESTABLISHED** |
+| **speed** | ≥ **10×** Docling (ruled down from 20× by the owner, 2026-08-02, [#53](https://github.com/Legend101Zz/PaperTree/issues/53)) | deterministic arm re-derived 2026-08-03 at **0.1690 s/page** corpus-amortised (min 0.1679 – max 0.1712 over 3 warmed trials, 195 pp); **no Docling arm on this code**, so no ratio exists | **NOT ESTABLISHED** |
+
+**Updated 2026-08-03 (#53). The harness now exists; the ratio still does not.**
+`packages/evaluation/python/papertree_evaluation/speed.py` and
+`uv run python -m papertree_evaluation speed` implement what the row above needed — warm-up
+discarded per parser per paper, N trials, median **and** spread as an interval, total corpus
+wall-clock as the basis rather than per-paper medians, the machine state named in the output,
+and a **refusal** to emit a ratio when the interval's spread exceeds the distance from its median
+to the bar. The hardcoded `"speed: measured separately at 12x against a 20x bar -> FAIL"` that
+`_decision_rule` printed unconditionally, from no measurement, is deleted.
+
+**Why the row still says NOT ESTABLISHED, and it is not the refusal rule that says so.** The
+deterministic arm was measured on this code and is in the row. The **Docling arm was not run to
+completion on it** — the session reached 3 of 32 comparison passes and stopped. So no interval
+was formed and the refusal predicate was never evaluated. That is a *different* reason from
+2026-08-01's, and conflating the two would be the error this row exists to prevent: then the
+number was too noisy to rule, now there is no number.
+
+Both re-runs on the *pre*-rebase tree are excluded from everything above, and the reason is
+itself evidence for #53. The same deterministic arm measured **36.46 s** corpus median with a
+**5.26 s** spread before #102/#105 landed and **32.95 s** with a **0.63 s** spread after. A
+measurement taken without pinning the code state moves by more than an eighth of its own value
+and by 8× in dispersion — so mixing arms across that boundary cannot support a 10× decision.
+
+**What a run that rules would have to look like:** both arms in one invocation on one commit,
+1 warm-up pass discarded and ≥3 counted trials each over all 8 papers / 195 pages, and a
+resulting corpus-ratio interval whose spread is **smaller than its distance to 10×**. On the
+deterministic arm's post-rebase dispersion (±1.9 % of its median) that is achievable; whether
+Docling's is that stable on a loaded box is the open question, and it is the only one left.
 
 **Corrected 2026-08-01. The speed half was previously recorded as a measured FAIL at 12.4×. It
 is not a measured anything — the noise is larger than the gap to the bar.** Three controlled
@@ -267,7 +295,15 @@ the 91 % measured an hour earlier, but it rests on three papers, and one of the 
 | PaperTree dead extractor *(H2, deleted)* | 233 | 233 | 233 | 0 | 58 | 86 | **0** | 0 | 0 | 0 | — | 0.34 |
 | pymupdf-raw *(2026-08-01)* | 549 | 549 | 549 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0.05 |
 | docling *(2026-08-01)* | 519 | 497 | 497 | **0** | 22 | 2 | **7** | 21 | 15 | 342 | 22 | 2.10 |
-| **papertree-deterministic** *(2026-08-03)* | 955 | **955** | **955** | **955** | 13 | 2 | **9** | **7** | 13 | **563** | 14 | see #53 |
+| **papertree-deterministic** *(2026-08-03)* | 955 | **955** | **955** | **955** | 13 | 2 | **9** | **7** | 13 | **563** | 14 | **0.18** |
+
+**The `s/page` column is four different kinds of number and only one of them is a measurement
+with a spread.** The deterministic row's **0.18** is `resnet-cvpr-2col`'s **median of 3 warmed
+trials**, warm-up discarded — 0.1796 s/page, min 0.1673, max 0.1807 (#53's harness,
+`python -m papertree_evaluation speed`, machine **not declared quiesced**). Rows 3 and 4 are
+**undated single runs from 2026-08-01** and have not been re-derived; rows 1 and 2 are H2's
+totals divided by ResNet's page count. Do not form a ratio from this column — the one place a
+ratio belongs is §1's speed half, and it says NOT ESTABLISHED.
 
 Rows 1 and 2 are carried forward from findings.md H2 and marked as such: both are **deleted**
 (§5), and re-implementing 1,698 lines of removed code to re-measure what was already measured
@@ -312,7 +348,7 @@ Three things in that table are worth stating plainly:
 | `worker/determinism.spec` | **MET** | 20 runs byte-identical via `canonical_json_for_determinism`, ids stable. `test_pipeline_end_to_end.py` |
 | `worker/repairs.spec` | **MET** | 84,395 spans, 749 dehyphenation proposals, rules 25/26/27/30b hold; 30b checked against the validator's own `_dehyphenate` |
 | `worker/robustness.spec` | **MET** | 8/8 papers parse and validate; 0 crashes, 0 timeouts, 0 empty outputs |
-| `worker/perf.spec` | **PARTIAL** | time ✅ p50 305 ms/page, p95 568 ms/page against a 1500 ms bar. **Memory ❓ NOT DECIDABLE at this bar** — `gpt3-longform-singlecol` (75 pp, fresh subprocess) re-measured 2026-08-03 at **442.6 / 497.4 / 501.7 MB** against a <500 MB bar, and at **488.3 / 509.1 / 496.3 MB** on the commit before #102. Three identical runs of a byte-deterministic parser straddle the bar on both sides of that change, so the ~60 MB spread exceeds the distance to the bar and no run of this test decides the clause. Filed as #104. The **746 MB** this row previously carried no longer reproduces; ~240 MB came off it between 2026-08-01 and now and nothing recorded which change did it (#52) |
+| `worker/perf.spec` | **PARTIAL** | time ✅ — re-derived 2026-08-03 by `uv run python -m papertree_evaluation speed` (1 warm-up pass discarded per parser per paper, 3 counted trials, all 8 papers / 195 pages): **169 ms/page** corpus-amortised median, min 168 – max 171. Slowest paper `neural-odes-mathheavy` **337 ms/page** median (min 334 – max 346) — and over 8 papers `operational()`'s p95 *is* the maximum (`int(8 × 0.95) == 7`), so that is the p95 the bar names. Both against the 1500 ms bar, on a machine **not declared quiesced** (load average 5.04 at start), which can only inflate them. Replaces `p50 305 / p95 568`, which came from one un-warmed run (#53). **Memory ❓ NOT DECIDABLE at this bar** — `gpt3-longform-singlecol` (75 pp, fresh subprocess) re-measured 2026-08-03 at **442.6 / 497.4 / 501.7 MB** against a <500 MB bar, and at **488.3 / 509.1 / 496.3 MB** on the commit before #102. Three identical runs of a byte-deterministic parser straddle the bar on both sides of that change, so the ~60 MB spread exceeds the distance to the bar and no run of this test decides the clause. Filed as #104. The **746 MB** this row previously carried no longer reproduces; ~240 MB came off it between 2026-08-01 and now and nothing recorded which change did it (#52) |
 | `ingest/source-authenticity.spec` | **MET** | every line of every non-table block traced to the page's glyph stream; found 2 real bugs while being written |
 | `eval/ptub.spec` | **MET on the amended criterion** (2026-08-03) | harness + metrics + annotation tool + scorer + Docling geometry; gold 36 pp; cross-parser F1 computed. The 4th adapter was **the epic contradicting itself** — the same file that asks for a current-PaperTree adapter orders that extractor deleted in its "Must delete" section, and it is (§5). Criterion amended in `EPIC-01-ingest.md` to **3 live adapters + a declared historical column**, carried in `harness.HISTORICAL_ROWS` with its provenance, labelled `(DELETED)`, printing `?` where findings.md H2 recorded nothing, and provably outside `ComparisonMatrix.outcomes` so a 2026-06 measurement of deleted code can never enter a computed ratio. **Read as: the criterion moved, the work did not grow.** #55 |
 | `worker/figures.spec` | **PARTIAL** | ResNet ≥5 ✅ (9, all vector); `is_vector` correct ✅; **≥80 % captioned ❌ — 68.2 %** (58/85 over figures; 142/226 = 62.8 % over floats), up from 57.8 % / 49.1 % in #102. Float detection against gold **29/80 type-blind, 22/80 type-aware** — the 7-region gap is a convention disagreement, not a miss: on gpt3 the parser boxes 9 of 10 gold floats correctly and types them `table` where gold says `figure`, because GPT-3's boxed qualitative examples *are* booktabs tables in the source. Remaining real misses are figure-region **extents** on neural-odes (1/22) and resnet (5/29) — #103. `n = 36 pp / 6 of 8 papers / 442 regions / 1 annotator / no IAA` |
