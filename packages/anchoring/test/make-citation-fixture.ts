@@ -43,7 +43,10 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { blockId, canonicalJson, contentHash, normaliseText } from '@papertree/document-ir';
+import { canonicalJson, normaliseText } from '@papertree/document-ir';
+// `blockId`/`contentHash` hash, so they are behind the Node-only `/identity` subpath (#33). This
+// is a Node script that mints a fixture, so reaching for it is exactly what that subpath is for.
+import { blockId, contentHash } from '@papertree/document-ir/identity';
 
 const FIXTURE_DIR = fileURLToPath(new URL('../../document-ir/fixtures/', import.meta.url));
 const OUT_DIR = fileURLToPath(new URL('./fixtures/', import.meta.url));

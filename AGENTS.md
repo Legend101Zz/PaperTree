@@ -165,9 +165,16 @@ never shrink on their own.
   branches that no longer exist. They are allowlisted in that script, by name and with the
   commit that remediated them; the entry only suppresses on a history that actually contains
   that remediation, so it cannot become a mute button.
-- `@papertree/document-ir`'s barrel re-exports `node:crypto`, so importing it into a
-  browser bundle breaks webpack — issue #33. `apps/web` aliases it to a throwing stub
-  meanwhile; **delete the stub when #33 lands**, and delete this bullet with it.
+- **`@papertree/document-ir`'s barrel is browser-safe, and two of its modules are not.** #33 is
+  closed and the `node:crypto` stub in `apps/web` is gone. `blockId`/`contentHash` live behind
+  `@papertree/document-ir/identity` and `validatePaper` behind `.../validate` — both import
+  `node:crypto` at module scope, and webpack 5 will not resolve a `node:`-prefixed specifier
+  (it is a URI *scheme*, so `resolve.alias` never fires; the error is `UnhandledSchemeError`).
+  Re-exporting either from `src/index.ts` re-breaks every browser import of the package,
+  including one that only wants `polygonExtent`. `test/browser-safety.spec.ts` fails if you do,
+  and that is the guard rather than the build. Two paths reached the builtin, not one, and the
+  webpack trace only ever printed the shorter — so fix by moving code behind a subpath, never by
+  chasing the trace.
 - `doc_order` exists only on top-level `flow == "body"` blocks — validator rule 15 makes
   that mandatory, not a choice, so populating it on a caption is an ERROR (#49). Sorting by
   `doc_order ?? 0` collapses every caption, footnote and nested table cell to position 0.

@@ -30,7 +30,10 @@
  * different number on every run, which is not a criterion.
  */
 
-import { blockId, contentHash, normaliseText } from '@papertree/document-ir';
+// `/identity`, not the barrel: `blockId` and `contentHash` hash, so they live behind the Node-only
+// subpath (#33). This module is already a separate Node-only entry point — `@papertree/anchoring/
+// perturb` — for exactly that reason, so nothing about that changes here.
+import { blockId, contentHash, normaliseText } from '@papertree/document-ir/identity';
 
 import type { IndexedBlockSource, PaperSource } from './document.js';
 
