@@ -271,10 +271,10 @@ Three things in that table are worth stating plainly:
 | `worker/perf.spec` | **PARTIAL** | time ✅ p50 305 ms/page, p95 568 ms/page against a 1500 ms bar. **Memory ❌ — `gpt3-longform-singlecol` peaks at 746 MB against the <500 MB bar** (clean process, 75 pp; the other seven are 143–281 MB). Recorded MET here until 2026-08-01 on the strength of the time half alone |
 | `ingest/source-authenticity.spec` | **MET** | every line of every non-table block traced to the page's glyph stream; found 2 real bugs while being written |
 | `eval/ptub.spec` | **PARTIAL** | harness + metrics + annotation tool + scorer + Docling geometry, 83 tests; gold exists (18 pp); **cross-parser F1 now computable and computed**; still **3 adapters, not 4** — row 2 is deleted code |
-| `worker/figures.spec` | **PARTIAL** | ResNet ≥5 ✅ (9, all vector); `is_vector` correct ✅; ≥80 % captioned ❌ (58 % corpus-wide). Gold figure F1 0.67 on `attention`, **0.00 on the other two**; vector-figure recall still not evaluable — gold has no `is_vector` |
+| `worker/figures.spec` | **PARTIAL** | ResNet ≥5 ✅ (9, all vector); `is_vector` correct ✅; **≥80 % captioned ❌ — 68.2 %** (58/85 over figures; 142/226 = 62.8 % over floats), up from 57.8 % / 49.1 % in #102. Float detection against gold **29/80 type-blind, 22/80 type-aware** — the 7-region gap is a convention disagreement, not a miss: on gpt3 the parser boxes 9 of 10 gold floats correctly and types them `table` where gold says `figure`, because GPT-3's boxed qualitative examples *are* booktabs tables in the source. Remaining real misses are figure-region **extents** on neural-odes (1/22) and resnet (5/29) — #103. `n = 36 pp / 6 of 8 papers / 442 regions / 1 annotator / no IAA` |
 | `worker/equations.spec` | **NOT MET** | prose never classified as an equation ✅; every equation retains its crop ✅; **≥80 % of gold ❌ — 0 of 17 at IoU 0.5**. Count now 16 predicted against 17 gold (was 89); the extents are narrower than gold's full-column convention |
-| `worker/reading-order.spec` | **NOT MET** | **0.278 / 0.389 / 0.967 pairwise against a ≥0.90 bar**, up from 0.167 / 0.333 / 0.800. ResNet is now over the bar; the two single-column papers are not. The ordering logic was never the weak part — the regions being ordered were |
-| `worker/hierarchy.spec` | **PARTIAL** | number/title joining ✅, furniture routing ✅, and **"no table cell is classified as a heading" now holds on 6 of 8 papers** — a3c **193 → 17** headings (numeral-only 165 → **0**), gpt3 **181 → 61** (126 → **6**), fixed in `tables.py` rather than `hierarchy.py`. Outline size against the embedded-TOC floor: superglue **0 %**, attention **−18 %** (both pass), gpt3 **+91 %** (was +466 %), neural-odes **+124 %** (unchanged — its over-detection is emphasis runs, not tables) |
+| `worker/reading-order.spec` | **NOT MET** | Pairwise against a ≥0.90 bar, all six annotated papers: a3c **0.667**, attention **0.389**, bert **0.699**, gpt3 **0.222**, neural-odes **0.667**, resnet **0.928** — mean **0.595**. One paper clears the bar. The earlier "0.278 / 0.389 / 0.967" quoted three of the six and is superseded. The ordering logic was never the weak part — the regions being ordered were. `n = 36 pp / 6 of 8 papers / 1 annotator / no IAA` |
+| `worker/hierarchy.spec` | **PARTIAL** | number/title joining ✅, furniture routing ✅, and **"no table cell is classified as a heading" now holds on 6 of 8 papers** — a3c **193 → 17** headings (numeral-only 165 → **0**), gpt3 **181 → 52** (126 → **6**), fixed in `tables.py` rather than `hierarchy.py`. **Outline size now has an independent floor on all 8 papers** (#54 item 4: 4 from `hyperref` bookmarks, 4 hand-counted off the glyph stream, ONE annotator, no IAA). Inside ±20 %: superglue **1.00×**, attention **0.82×**, a3c **1.00×**, bert **1.03×**, resnet **0.81×** — **5 of 8**. Outside: gpt3 **1.63×** (was 1.91×), neural-odes **~2.4×** (over-detection is emphasis runs, not tables), pdf-to-tree **0.66×** (under-detection: bold-at-body-size subsection heads in a two-column ACL layout) |
 
 ---
 
@@ -413,10 +413,13 @@ asks whether those boxes have the shape of the regions on the page.
   not always every visual heading — so it belongs as a *floor* check, not as the definition. But
   it turns an unmeasurable clause into a measurable one on half the corpus at zero annotation
   cost, and it should have been the first place anyone looked.
-- **Caption linking is 58 %, against an 80 % bar**, up from ~35 % after two fixes: raster panels
-  are merged (neural-odes 77 → 18 regions) and a caption now binds by horizontal overlap plus
+- **Caption linking is 68.2 %, against an 80 % bar** (58/85 over figures; 142/226 = 62.8 % over
+  floats — the denominator was never stated and the two disagree). Up from ~35 % via, in order:
+  raster panel merging (neural-odes 77 → 18 regions); binding by horizontal overlap plus
   edge-to-edge adjacency rather than by nearest vertical centre, which on a two-column page
-  routinely picked the float in the *other* column.
+  routinely picked the float in the *other* column; and #102, which found that
+  `figures._CAPTION_START` matched `[0-9]+|[IVXivx]+` and so could not match an APPENDIX label —
+  gpt3's 34 `Figure G.N:` captions were never captions at all and could bind to nothing.
   **The bottleneck has moved and the next person should not re-tune the linker.** ResNet is 9
   figures with 2 linked because only **4 caption blocks are detected on a paper with ~12
   captions** — `is_caption_line` needs the marker at position 0 and segmentation is merging
