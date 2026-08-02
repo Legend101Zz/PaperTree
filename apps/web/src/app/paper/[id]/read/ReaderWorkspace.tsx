@@ -18,14 +18,17 @@
  * `captureAnchor`, which writes a complete multi-selector anchor in IR space, and painting goes
  * through `HighlightOverlay`, which never measures the DOM.
  *
- * The Inspector slot is deliberately left empty. Epic 3 fills it; a placeholder that did something
- * would be a worse lie than one that says so.
+ * The Inspector slot is filled by Epic 3 (F3.6). It was left as an absence rather than a stub, so
+ * landing it was an addition and nothing here had to be rearranged. Its answer source is a fixture
+ * because nothing serves PaperIR over HTTP yet (#62), and that is visible at the call site rather
+ * than hidden behind a default.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { resolveAnchor, type Anchor, type IndexedDocument, type Resolution } from '@papertree/anchoring';
 
+import { createFixtureAnswerSource, Inspector } from '@/components/inspector';
 import { GuidedView } from '@/components/reader/GuidedView';
 import { ModeSwitch } from '@/components/reader/ModeSwitch';
 import { Navigator } from '@/components/reader/Navigator';
@@ -247,6 +250,25 @@ interface ViewProps {
 
 function ReaderWorkspaceView(props: ViewProps) {
   const { doc, mode, orphans } = props;
+
+  /**
+   * The Inspector's answer source (#62 — there is no live one).
+   *
+   * `at` and `client` are fixed rather than defaulted to a wall clock: an `Anchor` records
+   * `created.at`, so a `Date.now()` here would make every captured citation anchor differ between
+   * renders and turn any test that compares them into a flake. Deterministic by construction, not
+   * by the test remembering to freeze time.
+   */
+  const inspectorAnswerSource = useMemo(
+    () =>
+      createFixtureAnswerSource({
+        doc,
+        at: '1970-01-01T00:00:00.000Z',
+        client: 'papertree-web/inspector',
+      }),
+    [doc],
+  );
+
   const title =
     doc.blocks.find((block) => block.type === 'title')?.text.replace(/\n/g, ' ') ?? props.slug;
 
@@ -284,13 +306,33 @@ function ReaderWorkspaceView(props: ViewProps) {
           <DocumentSlot {...props} />
         </main>
 
-        {/* The Inspector slot. EPIC 3 FILLS THIS. It is left empty rather than stubbed, because a
-            placeholder that appears to work is worse than an absence that is honest. */}
+        {/* The Inspector slot, filled by EPIC 3 (F3.6).
+
+            `answerSource` is REQUIRED and there is no live implementation to give it: nothing in
+            this repo serves PaperIR over HTTP (#62), so the fixture source is the only one that
+            exists. It is built here rather than inside the Inspector so the seam is visible at the
+            call site — when an endpoint lands, this line changes and nothing else does.
+
+            `onNavigate` routes a citation through the SAME `onShowSource` seam every derived
+            surface already uses. Note that the seam is currently unterminated:
+            `documentRef.current.scrollToBlock` is never assigned anywhere in this app, so the last
+            DOM hop is a no-op — that is #64, it lives in files this epic does not own, and it is
+            filed rather than reached past. */}
         <aside
           className="hidden w-[380px] shrink-0 border-l xl:block"
           aria-label="Inspector"
           data-epic="3"
-        />
+        >
+          <Inspector
+            context={{ kind: 'selection', blockIds: [doc.blocks[0]?.id ?? ''], quote: title }}
+            answerSource={inspectorAnswerSource}
+            paperId={props.slug}
+            onNavigate={(citation) => {
+              props.onShowSource(citation.resolution.blockIds);
+            }}
+            onShowSource={props.onShowSource}
+          />
+        </aside>
       </div>
 
       {orphans.length > 0 ? (

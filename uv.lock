@@ -19,6 +19,7 @@ resolution-markers = [
 [manifest]
 members = [
     "papertree",
+    "papertree-agent-tools",
     "papertree-db",
     "papertree-document-ir",
     "papertree-document-worker",
@@ -26,6 +27,7 @@ members = [
     "papertree-jobs",
     "papertree-memory",
     "papertree-prompts",
+    "papertree-retrieval",
 ]
 
 [[package]]
@@ -226,6 +228,7 @@ name = "papertree"
 version = "0.0.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "papertree-agent-tools" },
     { name = "papertree-db" },
     { name = "papertree-document-ir" },
     { name = "papertree-document-worker" },
@@ -233,6 +236,7 @@ dependencies = [
     { name = "papertree-jobs" },
     { name = "papertree-memory" },
     { name = "papertree-prompts" },
+    { name = "papertree-retrieval" },
 ]
 
 [package.dev-dependencies]
@@ -244,6 +248,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "papertree-agent-tools", editable = "packages/agent-tools/python" },
     { name = "papertree-db", editable = "packages/db/python" },
     { name = "papertree-document-ir", editable = "packages/document-ir/python" },
     { name = "papertree-document-worker", editable = "services/document-worker/python" },
@@ -251,6 +256,7 @@ requires-dist = [
     { name = "papertree-jobs", editable = "packages/jobs/python" },
     { name = "papertree-memory", editable = "packages/memory/python" },
     { name = "papertree-prompts", editable = "packages/prompts/python" },
+    { name = "papertree-retrieval", editable = "packages/retrieval/python" },
 ]
 
 [package.metadata.requires-dev]
@@ -258,6 +264,27 @@ dev = [
     { name = "mypy", specifier = ">=1.13" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "ruff", specifier = ">=0.8" },
+]
+
+[[package]]
+name = "papertree-agent-tools"
+version = "1.0.0"
+source = { editable = "packages/agent-tools/python" }
+dependencies = [
+    { name = "papertree-db" },
+    { name = "papertree-document-ir" },
+    { name = "papertree-memory" },
+    { name = "papertree-prompts" },
+    { name = "papertree-retrieval" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "papertree-db", editable = "packages/db/python" },
+    { name = "papertree-document-ir", editable = "packages/document-ir/python" },
+    { name = "papertree-memory", editable = "packages/memory/python" },
+    { name = "papertree-prompts", editable = "packages/prompts/python" },
+    { name = "papertree-retrieval", editable = "packages/retrieval/python" },
 ]
 
 [[package]]
@@ -346,6 +373,21 @@ requires-dist = [{ name = "papertree-db", editable = "packages/db/python" }]
 name = "papertree-prompts"
 version = "1.0.0"
 source = { editable = "packages/prompts/python" }
+
+[[package]]
+name = "papertree-retrieval"
+version = "1.0.0"
+source = { editable = "packages/retrieval/python" }
+dependencies = [
+    { name = "papertree-db" },
+    { name = "papertree-document-ir" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "papertree-db", editable = "packages/db/python" },
+    { name = "papertree-document-ir", editable = "packages/document-ir/python" },
+]
 
 [[package]]
 name = "pathspec"
