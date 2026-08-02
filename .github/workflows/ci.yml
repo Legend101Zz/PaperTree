@@ -310,3 +310,78 @@ jobs:
 
       - name: Validate golden fixtures against paperir-1.0.0.schema.json
         run: node .github/scripts/validate-fixtures.mjs packages/document-ir
+
+  # ── The stacked-merge trap (#81) ────────────────────────────────────────────────────────────
+  #
+  # Epic 3 shipped four PRs, all four reported MERGED, `main` received one, and it sat 12,564
+  # lines short for a day while every signal was green. GitHub merged each PR into ITS STATED
+  # BASE, and three of those bases were each other. See AGENTS.md §4 and #81.
+  #
+  # The ROOT CAUSE was the repo setting `deleteBranchOnMerge: false`, flipped to true by #81.
+  # GitHub auto-retargets an open PR when its base branch is DELETED, so merging the bottom of
+  # a stack now re-points the next PR at `main` on its own. These two jobs are the belt to that
+  # braces — they assume the setting can be turned off again, or fail, or be worked around.
+  #
+  # BOTH RIDE THE EXISTING TRIGGERS. `pull_request:` above is unfiltered and `push:` is already
+  # filtered to [main], which is exactly what these need, so the trigger block is untouched —
+  # and so is the reasoning in its header, which nobody should undo without reading.
+
+  # An ANNOTATION, never a failure. Stacking is legitimate and useful — Epic 3's four PRs were
+  # reviewable BECAUSE they were stacked, and banning it fixes the wrong thing. The defect was
+  # that the failure was silent, not that stacking happened. So this job says what to DO.
+  #
+  # No checkout: it reads the event payload and nothing else. Values reach bash through `env`
+  # rather than `${{ }}` interpolation inside `run`, because a branch name is user-controlled
+  # text and interpolating it into a shell script is a script-injection hole.
+  pr-base-annotation:
+    name: PR base (annotation only — never fails)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Note when this PR targets a branch other than main
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+          NUM: ${{ github.event.pull_request.number }}
+        run: |
+          if [ "$BASE" = "main" ]; then
+            echo "PR #$NUM targets main. Nothing to say."
+            exit 0
+          fi
+          echo "::warning title=PR #$NUM is stacked on '$BASE', not main::\
+          Merging this PR merges it INTO '$BASE' — NOT into main — and GitHub will still report \
+          it as MERGED. That is the #81 trap: four PRs reported MERGED and main received one. \
+          This is fine and stacking is supported, but the order matters. DO THIS: merge the PR \
+          that owns '$BASE' FIRST and let its branch deletion auto-retarget this PR at main \
+          (deleteBranchOnMerge is on, so that happens by itself). If you merge this one first, \
+          verify afterwards with 'git fetch origin main && git merge-base --is-ancestor \
+          <merge-commit> origin/main' — read that, not the MERGED badge. The post-merge guard \
+          on push-to-main will catch it either way, but only at the next push to main."
+
+  # The check that would actually have caught the incident. For every PR merged in the lookback
+  # window, assert its merge commit is an ancestor of main.
+  #
+  # fetch-depth: 0 IS LOAD-BEARING. actions/checkout is shallow by default and
+  # `git merge-base --is-ancestor` returns WRONG ANSWERS SILENTLY on a shallow history — the
+  # script re-asserts this itself rather than trusting this line.
+  #
+  # Job-level `permissions:` REPLACES the workflow default, so `contents: read` is repeated
+  # here deliberately; dropping it would break the checkout. `pull-requests: read` is what
+  # `gh pr list` needs, and it is granted here rather than widening the workflow default.
+  merged-prs-reached-main:
+    name: Merged PRs actually reached main (#81)
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Every merged PR in the window is an ancestor of main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: .github/scripts/assert-merged-prs-reached-main.sh
