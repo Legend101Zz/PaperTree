@@ -246,13 +246,22 @@ the 91 % measured an hour earlier, but it rests on three papers, and one of the 
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | PaperTree LIVE *(H2, deleted)* | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | — | 0.17 |
 | PaperTree dead extractor *(H2, deleted)* | 233 | 233 | 233 | 0 | 58 | 86 | **0** | 0 | 0 | 0 | — | 0.34 |
-| pymupdf-raw | 549 | 549 | 549 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0.05 |
-| docling | 519 | 497 | 497 | **0** | 22 | 2 | **7** | 21 | 15 | 342 | 22 | 2.10 |
-| **papertree-deterministic** | 929 | **929** | **929** | **929** | 5 | 2 | **9** | 2 | 10 | **580** | 5 | **0.13** |
+| pymupdf-raw *(2026-08-01)* | 549 | 549 | 549 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0.05 |
+| docling *(2026-08-01)* | 519 | 497 | 497 | **0** | 22 | 2 | **7** | 21 | 15 | 342 | 22 | 2.10 |
+| **papertree-deterministic** *(2026-08-03)* | 955 | **955** | **955** | **955** | 13 | 2 | **9** | **7** | 13 | **563** | 14 | see #53 |
 
 Rows 1 and 2 are carried forward from findings.md H2 and marked as such: both are **deleted**
 (§5), and re-implementing 1,698 lines of removed code to re-measure what was already measured
 would be the opposite of the point.
+
+**Every row is now dated, because they were not all measured at the same time and the table read
+as though they were.** The deterministic row is re-derived on `main` @ `568487b` (after #102 and
+#105) and it moved a long way from what this table carried: blocks 929 → **955**, headings
+5 → **13**, captions linked 2 → **7**, tables 10 → **13**, cells 580 → **563**, sections
+5 → **14**. Rows 3 and 4 are **2026-08-01 measurements and have NOT been re-derived** — Docling
+is a ~4 s/page arm and re-running it belongs with #53's harness, not here. Read them as of their
+date. The deterministic `s/page` cell is deliberately empty rather than filled from a run taken
+while this machine was under load; #53 is measuring it properly.
 
 **Corrected 2026-08-03.** H2's `sec` column is a per-paper **total** over ResNet's 12 pages, and
 this table read it as a rate: row 1 printed `0.2` where 2.0 s / 12 pp is **0.17**, and row 2
