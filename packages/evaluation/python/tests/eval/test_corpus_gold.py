@@ -111,10 +111,10 @@ requires_corpus = pytest.mark.skipif(
 
 RAW: dict[str, dict[str, Any]] = {
     "a3c-algorithmheavy": {
-        "macro_f1": 0.3736,
-        "macro_f1_strict": 0.3419,
+        "macro_f1": 0.3932,
+        "macro_f1_strict": 0.35,
         "reading_order": 0.6667,
-        "caption_correct": 2,
+        "caption_correct": 4,
         "caption_false": 0,
         "caption_gold": 7,
         "vector_matched": 0,
@@ -141,10 +141,10 @@ RAW: dict[str, dict[str, Any]] = {
         "figure_predicted": 3,
     },
     "bert-2col": {
-        "macro_f1": 0.3189,
-        "macro_f1_strict": 0.1758,
-        "reading_order": 0.6778,
-        "caption_correct": 3,
+        "macro_f1": 0.3523,
+        "macro_f1_strict": 0.2098,
+        "reading_order": 0.6992,
+        "caption_correct": 4,
         "caption_false": 0,
         "caption_gold": 6,
         "vector_matched": 0,
@@ -156,10 +156,10 @@ RAW: dict[str, dict[str, Any]] = {
         "figure_predicted": 2,
     },
     "gpt3-longform-singlecol": {
-        "macro_f1": 0.3245,
-        "macro_f1_strict": 0.1971,
+        "macro_f1": 0.3429,
+        "macro_f1_strict": 0.1817,
         "reading_order": 0.2222,
-        "caption_correct": 1,
+        "caption_correct": 2,
         "caption_false": 1,
         "caption_gold": 10,
         "vector_matched": 0,
@@ -186,8 +186,8 @@ RAW: dict[str, dict[str, Any]] = {
         "figure_predicted": 8,
     },
     "resnet-cvpr-2col": {
-        "macro_f1": 0.2581,
-        "macro_f1_strict": 0.162,
+        "macro_f1": 0.2542,
+        "macro_f1_strict": 0.1588,
         "reading_order": 0.9278,
         "caption_correct": 3,
         "caption_false": 0,
@@ -204,10 +204,10 @@ RAW: dict[str, dict[str, Any]] = {
 
 NORMALISED: dict[str, dict[str, Any]] = {
     "a3c-algorithmheavy": {
-        "macro_f1": 0.3736,
-        "macro_f1_strict": 0.3419,
+        "macro_f1": 0.3932,
+        "macro_f1_strict": 0.35,
         "reading_order": 0.6667,
-        "caption_correct": 2,
+        "caption_correct": 4,
         "caption_false": 0,
         "caption_gold": 7,
         "vector_matched": 4,
@@ -234,10 +234,10 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "figure_predicted": 3,
     },
     "bert-2col": {
-        "macro_f1": 0.3189,
-        "macro_f1_strict": 0.1758,
-        "reading_order": 0.6778,
-        "caption_correct": 3,
+        "macro_f1": 0.3523,
+        "macro_f1_strict": 0.2098,
+        "reading_order": 0.6992,
+        "caption_correct": 4,
         "caption_false": 0,
         "caption_gold": 6,
         "vector_matched": 2,
@@ -249,10 +249,10 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "figure_predicted": 2,
     },
     "gpt3-longform-singlecol": {
-        "macro_f1": 0.3245,
-        "macro_f1_strict": 0.1971,
+        "macro_f1": 0.3429,
+        "macro_f1_strict": 0.1817,
         "reading_order": 0.2222,
-        "caption_correct": 1,
+        "caption_correct": 2,
         "caption_false": 1,
         "caption_gold": 10,
         "vector_matched": 0,
@@ -279,8 +279,8 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "figure_predicted": 8,
     },
     "resnet-cvpr-2col": {
-        "macro_f1": 0.2533,
-        "macro_f1_strict": 0.1618,
+        "macro_f1": 0.2469,
+        "macro_f1_strict": 0.1561,
         "reading_order": 0.9667,
         "caption_correct": 1,
         "caption_false": 2,
@@ -453,6 +453,86 @@ def _drift(paper: str, table: str, measured: dict[str, Any], expected: dict[str,
 
 # ── the corpus-wide figures the RESULT document quotes ───────────────────────────────────────
 
+#: Floats found at IoU >= 0.5 IGNORING type, against floats found with the type matching too.
+#: `(type_blind, type_aware, gold_floats)` pooled over the six annotated papers.
+FLOAT_DETECTION = (29, 22, 80)
+#: ...and per paper, because the corpus figure hides where the gap is.
+FLOAT_DETECTION_BY_PAPER = {
+    "a3c-algorithmheavy": (5, 5, 7),
+    "attention-is-all-you-need": (3, 3, 6),
+    "bert-2col": (6, 6, 6),
+    "gpt3-longform-singlecol": (9, 3, 10),
+    "neural-odes-mathheavy": (1, 1, 22),
+    "resnet-cvpr-2col": (5, 4, 29),
+}
+
+
+@requires_corpus
+def test_floats_found_in_the_right_place_against_floats_found_with_the_right_type(
+    parsed: dict[str, dict[str, Any]],
+    gold_pages: list[dict[str, Any]],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """#51 says "region detection, not linking, is what blocks `figures.spec`". Half of that is
+    now wrong, and the headline F1 cannot show which half.
+
+    §4.1 matches on `IoU >= 0.5 AND type`, so a region boxed exactly right but typed differently
+    scores identically to one that was never found at all. Those are different defects with
+    different owners — the first is a convention disagreement (#54: one annotator, no IAA,
+    "Docling's own absolute F1 against this gold is 0.168-0.308"), the second is a parser bug —
+    and the report could not previously tell them apart.
+
+    Splitting the whole-page false table (`tables._group_rules`) moved gpt3 from **3/10 to 9/10
+    type-blind** while type-aware stayed at 3/10: those six regions are gold `figure` and the
+    parser calls them `table`, because they are GPT-3's boxed qualitative examples, which are
+    literally booktabs tables in the source. The parser is not wrong about what it found. Nobody
+    should spend another session trying to make the parser's figure detector see them.
+
+    bert moved 4/6 -> 6/6 on BOTH, which is the half that was a real detection defect.
+
+    neural-odes at 1/22 and resnet at 5/29 are unmoved and are still genuine detection failures —
+    stated here so this test is not read as saying detection is solved.
+    """
+    from papertree_evaluation.metrics import iou, match_regions
+    from papertree_evaluation.scoring import blocks_to_regions
+
+    float_types = {"figure", "table", "algorithm"}
+    by_paper: dict[str, tuple[int, int, int]] = {}
+    for paper in ANNOTATED:
+        blind = aware = gold_n = 0
+        for page in (p for p in gold_pages if p["paper_id"] == paper):
+            gold = [r for r in page["regions"] if r["type"] in float_types and r.get("bbox")]
+            pred = [
+                b
+                for b in blocks_to_regions(parsed[paper], int(page["page"]))
+                if b["type"] in float_types
+            ]
+            gold_n += len(gold)
+            aware += len(match_regions(pred, gold, 0.5))
+            used: set[int] = set()
+            for g in gold:
+                ranked = sorted(
+                    ((iou(p["bbox"], g["bbox"]), i) for i, p in enumerate(pred) if i not in used),
+                    reverse=True,
+                )
+                if ranked and ranked[0][0] >= 0.5:
+                    used.add(ranked[0][1])
+                    blind += 1
+        by_paper[paper] = (blind, aware, gold_n)
+
+    totals = tuple(sum(v[i] for v in by_paper.values()) for i in range(3))
+    with capsys.disabled():
+        print(
+            f"\n[eval/corpus-gold] float detection, gold as drawn: "
+            f"TYPE-BLIND {totals[0]}/{totals[2]}, type-aware {totals[1]}/{totals[2]}. "
+            f"Per paper (blind, aware, gold): {by_paper}"
+        )
+    assert by_paper == FLOAT_DETECTION_BY_PAPER
+    assert totals == FLOAT_DETECTION
+    # Anti-vacuity: if these two were equal the test would assert nothing about the distinction
+    # it exists to draw, and would pass unchanged on a scorer that ignored `type` entirely.
+    assert totals[0] > totals[1], "type-blind and type-aware agree - the split is not measurable"
+
 
 @requires_corpus
 def test_the_corpus_wide_caption_association(
@@ -465,6 +545,11 @@ def test_the_corpus_wide_caption_association(
     Reported as correct / false / missed rather than as one rate, because §4.1 requires it:
     attaching Figure 2's caption to Figure 3 and attaching nothing are different failures and
     the first is worse.
+
+    #51 moved this from **10/39 correct, 1 false** to **14/39, 1 false** — and the false count
+    did NOT rise, which is the half that matters. §4.1 treats a false link as the more expensive
+    error, so four recovered links bought at the cost of a fifth false one would have been a
+    worse result reported as a better one.
     """
     correct = sum(_measure(p, parsed[p], gold_pages)["caption_correct"] for p in ANNOTATED)
     false = sum(_measure(p, parsed[p], gold_pages)["caption_false"] for p in ANNOTATED)
@@ -475,7 +560,7 @@ def test_the_corpus_wide_caption_association(
             f"{correct}/{total} correct, {false} false "
             f"(n = 36 pages / 6 of 8 papers / 1 annotator, #54)"
         )
-    assert (correct, false, total) == (10, 1, 39)
+    assert (correct, false, total) == (14, 1, 39)
 
 
 @requires_corpus
@@ -486,10 +571,16 @@ def test_the_share_of_floats_carrying_a_caption(
     """`worker/figures.spec`'s ">=80% have a linked caption", measured the way the gate table
     reports it — and with its DENOMINATOR STATED, which it never was.
 
-    `research/build/README.md`'s gate item 5 says "captions 58% against an 80% bar". That
-    reproduces only over FIGURES: 48 of 83 = 57.8%. Over floats — figures **and** tables, both
-    of which rule 22 permits as `caption_of` targets, and roughly half this corpus's captions
-    read "Table N" — it is 85 of 173 = 49.1%. Two different numbers for one sentence.
+    `research/build/README.md`'s gate item 5 said "captions 58% against an 80% bar". That
+    reproduced only over FIGURES, and at the time it was 48 of 83 = 57.8%. Over floats — figures
+    **and** tables, both of which rule 22 permits as `caption_of` targets, and roughly half this
+    corpus's captions read "Table N" — it was 85 of 173 = 49.1%. Two different numbers for one
+    sentence, which is why the denominator is now named in the assertion.
+
+    #51 moved both. Over figures **58 of 85 = 68.2%**; over floats **142 of 226 = 62.8%**. The
+    numerator rose because `figures._CAPTION_START` could not match an APPENDIX label, so gpt3's
+    34 `Figure G.N:` captions were never captions at all and could link to nothing. STILL UNDER
+    THE 80% BAR, on both denominators.
 
     Runs over the whole 8-paper corpus, not the 6 annotated ones, because this metric reads the
     parser's own relations and needs no gold.
@@ -521,5 +612,5 @@ def test_the_share_of_floats_carrying_a_caption(
             f"over FLOATS (figures+tables) {floats_captioned}/{floats} = "
             f"{floats_captioned / floats:.1%}. The bar is 80%."
         )
-    assert (figures_captioned, figures) == (48, 83)
-    assert (floats_captioned, floats) == (85, 173)
+    assert (figures_captioned, figures) == (58, 85)
+    assert (floats_captioned, floats) == (142, 226)

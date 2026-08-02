@@ -85,8 +85,22 @@ MIN_FIGURE_AREA_PT2 = 1600.0
 RULE_MAX_THICKNESS_PT = 2.5
 RULE_MIN_ASPECT = 8.0
 
+#: A caption opener. The label alternatives, in order: `3`, `3.1`, an APPENDIX label `G.2` /
+#: `S3` / `A.1`, or a roman numeral.
+#:
+#: THE APPENDIX FORM WAS MISSING AND IT COST 24 CAPTIONS. `[0-9]+|[IVXivx]+` cannot match
+#: "Figure G.2: Formatted dataset example for ANLI R2", so every one of gpt3's appendix figure
+#: captions fell through to `detect_headings`, which promoted them on font weight. They were
+#: invisible while the whole-page false table swallowed them as cells; splitting that table
+#: (see `tables._group_rules`) un-claimed them and `test_outline_floor` caught the promotion at
+#: 85 headings against a 2.1x bar.
+#:
+#: A digit is required somewhere in every alternative, so "Figure S shows" cannot open a caption
+#: on the strength of a bare capital.
 _CAPTION_START = re.compile(
-    r"^\s*(?:figure|fig\.?|table|algorithm|listing)\s*([0-9]+|[IVXivx]+)\s*[.:)\s]", re.IGNORECASE
+    r"^\s*(?:figure|fig\.?|table|algorithm|listing)\s*"
+    r"([0-9]+(?:\.[0-9]+)*|[A-Z]\.?[0-9]+(?:\.[0-9]+)*|[IVXivx]+)\s*[.:)\s]",
+    re.IGNORECASE,
 )
 
 
