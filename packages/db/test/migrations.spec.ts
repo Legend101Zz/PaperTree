@@ -292,7 +292,7 @@ const MAX_SCALING_RATIO = 2.0;
  * 0.348 can produce a fast calibration and a slow measurement, and that direction goes red.
  * So both timed inserts now run on a warmed database and a warmed code path.
  */
-const WARMUP_BLOCKS = 2_000;
+const WARMUP_BLOCKS = 10_000;
 
 /** Inserts `blockCount` blocks and returns the elapsed milliseconds. */
 function timedPut(
