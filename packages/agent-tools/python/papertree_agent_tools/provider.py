@@ -72,9 +72,10 @@ __all__ = [
     "VisionModelUnverified",
 ]
 
-#: ``archive/v1-api/papertree_api/config.py`` (v1, #75)'s values, mirrored rather than imported: ``apps/api`` is
-#: deliberately NOT a member of this uv workspace (root ``pyproject.toml`` says so and why), so
-#: importing from it is not possible. The duplication is real and is the reason these are named
+#: v1's values, mirrored rather than imported. v1 lived at ``apps/api`` and was never a member of
+#: this uv workspace (root ``pyproject.toml`` says so and why), so importing from it was not
+#: possible; #75 archived it to ``archive/v1-api/papertree_api/config.py``, which may not be
+#: imported OR read (``archive/README.md``). The duplication is real and is why these are named
 #: constants — one place to change per side, and ``tests/test_runtime_swappable.py`` asserts the
 #: values still match the ones documented in that file.
 DEFAULT_BASE_URL: Final = "https://api.minimax.io/v1"
@@ -104,7 +105,7 @@ class VisionModelUnverified(ProviderError):
 
 @dataclass(frozen=True, slots=True)
 class ProviderSettings:
-    """The four settings ``archive/v1-api/papertree_api/config.py`` (v1, #75) documents, as one object."""
+    """The four settings v1's ``config.py`` documented, as one object. See #75, #88."""
 
     api_key: str = ""
     model: str = DEFAULT_MODEL
