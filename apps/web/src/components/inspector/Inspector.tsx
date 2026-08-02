@@ -18,12 +18,13 @@
  * every call site that has to change. A default would have hidden exactly that.
  *
  * It does not own scrolling either. `onNavigate` is passed out to `ReaderWorkspace`, which routes
- * it through the `onShowSource` seam Epic 2 declared. **That seam is currently unterminated —
- * `documentRef.current.scrollToBlock` is never assigned anywhere in the app, so the final DOM hop
- * is a no-op today.** That is issue #64, it is Epic 2's file, and this epic files it rather than
- * reaching past its own boundary to fix it. What this component guarantees is everything up to the
- * seam: the citation resolves to the right page and the right polygon, which is the part that
- * determines whether the destination is correct at all.
+ * it through the `onShowSource` seam Epic 2 declared. That seam was unterminated when this
+ * component was written — `documentRef.current.scrollToBlock` was never assigned anywhere in the
+ * app, so the final DOM hop was a no-op, which was issue #64. **#64 is closed** and the click now
+ * moves the page; `test/citation-scroll.spec.tsx` asserts the whole chain from the click to the
+ * scroller's imperative handle. What this component guarantees is unchanged and is still the part
+ * that decides whether the destination is correct at all: the citation resolves to the right page
+ * and the right polygon.
  */
 
 import type { ReactNode } from 'react';

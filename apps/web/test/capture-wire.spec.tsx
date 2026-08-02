@@ -192,6 +192,7 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
         zoom={1}
         anchors={[]}
         onAnchorCaptured={() => undefined}
+        documentRef={{ current: null }}
         onViewportResize={() => undefined}
       />,
     );
@@ -224,6 +225,7 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
         zoom={1}
         anchors={[]}
         onAnchorCaptured={() => undefined}
+        documentRef={{ current: null }}
         onViewportResize={(size) => sizes.push({ ...size })}
       />,
     );
@@ -246,6 +248,7 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
         zoom={1}
         anchors={[]}
         onAnchorCaptured={(anchor) => captured.push(anchor)}
+        documentRef={{ current: null }}
         onViewportResize={() => undefined}
       />,
     );
