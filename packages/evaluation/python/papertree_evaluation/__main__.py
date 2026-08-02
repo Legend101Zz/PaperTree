@@ -183,7 +183,18 @@ def _decision_rule(ours: dict[str, Any], theirs: dict[str, Any]) -> None:
         print(
             f"\n  mean share of docling's F1: {mean:.0%}  ->  {'PASS' if mean >= 0.85 else 'FAIL'}"
         )
-    print("  speed: measured separately at 12x against a 20x bar -> FAIL")
+    # THE SPEED HALF IS NOT A STRING. It used to be one, here:
+    #
+    #     print("  speed: measured separately at 12x against a 20x bar -> FAIL")
+    #
+    # printed unconditionally, from no measurement, inside the tool whose job is to produce
+    # numbers (#53). `score` cannot supply it either: it times ONE un-warmed run per paper, which
+    # is exactly the measurement #53 records as unable to support the decision it was used for.
+    print(
+        "  speed: NOT MEASURED IN THIS RUN. `score` times one un-warmed run per paper and\n"
+        "         cannot support the rule's speed half. Measure it with:\n"
+        "           python -m papertree_evaluation speed --with-docling --quiesced"
+    )
 
 
 def _page_rasters(corpus: Path, pages: list[dict[str, Any]]) -> dict[tuple[str, int], int]:
