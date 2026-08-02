@@ -472,3 +472,123 @@ class TestCaptionAssociationCrossesTwoIdSpaces:
         document["relations"] = [{"type": "references", "from": "blk_cap", "to": "blk_fig"}]
         links, _ = _caption_links(document, predicted, gold)
         assert links == []
+
+
+# ── declared convention gaps (issue #55) ───────────────────────────────────────────────────
+#
+# The `citation` row scores 0.00 on four of the six annotated papers and reads as a detection
+# failure. It is not one: gold boxes a whole reference page as ONE `citation` region (measured
+# 421-505 pt wide and up to 749 pt tall on the four pages that carry one) while the parser emits
+# one `reference_entry` per entry, which is what `ANNOTATION_GUIDE.md` asks an annotator for and
+# what `Span.role`'s vocabulary and semantic rule 23 mean by the two words.
+#
+# DECLARING A GAP MUST NOT BE ABLE TO IMPROVE A SCORE BY ITSELF, which is what `substantiated`
+# is for and what the second test here pins.
+
+
+class TestConventionGaps:
+    def _paper(self, predicted: list[dict[str, Any]]) -> Any:
+        gold = [_gold("g0", "citation", [0, 0, 400, 600], order=0)]
+        document = {"blocks": predicted, "relations": []}
+        return score_paper("a", "p", document, [{"paper_id": "p", "page": 0, "regions": gold}])
+
+    def test_reference_entries_inside_the_gold_box_substantiate_the_gap(self) -> None:
+        """Three `reference_entry` blocks inside the one gold `citation` region. The type still
+        scores 0.00 - they are a different type at a different granularity - and the gap now
+        carries the evidence that says which failure it is."""
+        blocks = [
+            _block(f"b{i}", "reference_entry", [10, 10 + i * 20, 390, 25 + i * 20])
+            for i in range(3)
+        ]
+        score = self._paper(blocks)
+        gap = score.convention_gaps["citation"]
+        assert (gap.gold_regions, gap.substantiated, gap.substitute_blocks) == (1, 1, 3)
+        assert gap.is_substantiated
+        assert score.by_type["citation"].f1 == 0.0, "the §4.1 row is untouched by a declaration"
+
+    def test_an_unsubstantiated_gap_stays_in_the_average(self) -> None:
+        """THE GUARD THAT MAKES THE DECLARATION HONEST. The parser put nothing inside the gold
+        region, so `citation` is a plain miss and writing its name in a dict must not excuse it.
+
+        Two scored types here, `citation` (0.0) and `paragraph` (1.0). With the gap excluded the
+        macro would be 1.000; unsubstantiated, it stays 0.500."""
+        gold = [
+            _gold("g0", "citation", [0, 0, 400, 600], order=0),
+            _gold("g1", "paragraph", [420, 0, 500, 100], order=1),
+        ]
+        document = {"blocks": [_block("b0", "paragraph", [420, 0, 500, 100])], "relations": []}
+        score = score_paper("a", "p", document, [{"paper_id": "p", "page": 0, "regions": gold}])
+        gap = score.convention_gaps["citation"]
+        assert (gap.gold_regions, gap.substantiated) == (1, 0)
+        assert not gap.is_substantiated
+        assert score.macro_f1 == 0.5
+        assert score.macro_f1_excluding_convention_gaps == 0.5, (
+            "an unsubstantiated gap must not leave the mean"
+        )
+
+    def test_a_substantiated_gap_leaves_the_secondary_average_and_not_the_headline(self) -> None:
+        """`macro_f1` is §4.1's and does not move. The excl-gap figure is the decomposition."""
+        gold = [
+            _gold("g0", "citation", [0, 0, 400, 600], order=0),
+            _gold("g1", "paragraph", [420, 0, 500, 100], order=1),
+        ]
+        document = {
+            "blocks": [
+                _block("b0", "paragraph", [420, 0, 500, 100]),
+                _block("b1", "reference_entry", [10, 10, 390, 25]),
+            ],
+            "relations": [],
+        }
+        score = score_paper("a", "p", document, [{"paper_id": "p", "page": 0, "regions": gold}])
+        assert score.macro_f1 == 0.5, "§4.1's headline must be untouched"
+        assert score.macro_f1_excluding_convention_gaps == 1.0
+
+    def test_a_substitute_block_outside_the_gold_region_does_not_count(self) -> None:
+        """Containment, not presence-on-the-page. A `reference_entry` elsewhere on the page says
+        nothing about whether the parser covered the region gold drew."""
+        blocks = [_block("b0", "reference_entry", [500, 700, 600, 750])]
+        gap = self._paper(blocks).convention_gaps["citation"]
+        assert (gap.substantiated, gap.substitute_blocks) == (0, 0)
+
+    def test_a_paper_with_no_gold_of_the_type_declares_no_gap(self) -> None:
+        """`a3c-algorithmheavy` has no gold `citation`. An empty gap entry there would print a
+        disagreement about a type nobody annotated."""
+        gold = [_gold("g0", "paragraph", [0, 0, 100, 100], order=0)]
+        document = {"blocks": [_block("b0", "paragraph", [0, 0, 100, 100])], "relations": []}
+        score = score_paper("a", "p", document, [{"paper_id": "p", "page": 0, "regions": gold}])
+        assert score.convention_gaps == {}
+
+
+def test_the_report_prints_a_gap_with_its_evidence_and_never_a_bare_second_headline() -> None:
+    """Both halves matter. A gap line with no counts is an assertion; an excl-gap number with no
+    gap line is a second headline someone will quote as if it were §4.1's."""
+    gold = [
+        _gold("g0", "citation", [0, 0, 400, 600], order=0),
+        _gold("g1", "paragraph", [420, 0, 500, 100], order=1),
+    ]
+    document = {
+        "blocks": [
+            _block("b0", "paragraph", [420, 0, 500, 100]),
+            _block("b1", "reference_entry", [10, 10, 390, 25]),
+        ],
+        "relations": [],
+    }
+    score = score_paper("a", "p", document, [{"paper_id": "p", "page": 0, "regions": gold}])
+    report = render_report([score])
+    assert "convention gap" in report
+    assert "citation: substantiated" in report
+    assert "reference_entry block(s)" in report
+    assert "MACRO F1 excl. gap" in report
+    assert "NOT §4.1's metric" in report
+
+    unsubstantiated = score_paper(
+        "a",
+        "p",
+        {"blocks": [_block("b0", "paragraph", [420, 0, 500, 100])], "relations": []},
+        [{"paper_id": "p", "page": 0, "regions": gold}],
+    )
+    bare = render_report([unsubstantiated])
+    assert "citation: NOT substantiated" in bare
+    assert "MACRO F1 excl. gap" not in bare, (
+        "nothing was substantiated, so there is no second average to print"
+    )

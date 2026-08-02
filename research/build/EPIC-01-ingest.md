@@ -42,6 +42,37 @@ either way.
 - [ ] **F1.8 — Cross-page joining.** Paragraph continuation across pages as an explicit `continues_on_next_page` relation with confidence.
 - [ ] **F1.9 — PTUB benchmark + gold annotation tool.** Per `research/benchmarks/README.md`. Includes a minimal annotation UI (a local HTML page over page images is fine) so gold data is actually producible. Adapters: deterministic, Docling (opt-in), PyMuPDF-raw, current-PaperTree.
 
+> **DEVIATION — 2026-08-03, issue #55. F1.5's "render each region to WebP at 2–3×" is met at the
+> scale and NOT at the format: the parser writes PNG at 3×. Recorded here rather than only in
+> the result file, because F1.5 is the sentence a future session would read and try to satisfy.**
+>
+> "Trivial to change" was the issue's own reading of it and it is false. Re-measured on this
+> machine 2026-08-03, PyMuPDF **1.28.0** bound to MuPDF **1.29.0**:
+>
+> ```
+> Pixmap.tobytes("webp")  -> ValueError: Image format webp not in
+>     ('png', 'pnm', 'pgm', 'ppm', 'pbm', 'pam', 'tga', 'tpic', 'psd', 'ps', 'jpg', 'jpeg')
+> Pixmap.pil_tobytes("WEBP") -> ModuleNotFoundError: No module named 'PIL'
+> import PIL                 -> ModuleNotFoundError: No module named 'PIL'
+> ```
+>
+> **MuPDF cannot encode WebP and Pillow is not installed.** The only route is a new runtime
+> dependency for a container change, against this epic's own "a local ML model is a last resort /
+> no new dependency without justification" posture — and `uv.lock` discipline is not free here:
+> `adapters.py` records one `docling>=2.0` line taking the lock from 22 packages to 100+.
+>
+> The lossy fallback is disqualified twice over. These crops are the GROUND TRUTH that makes
+> `payload.latex` acceptable as a declared interpretation (F1.7: *"Always keep the crop; LaTeX is
+> an interpretation"*), so a lossy re-encoding of the evidence is the wrong trade at any ratio —
+> and it loses on size anyway. Re-measured on a 750×180 crop of `resnet-cvpr-2col` p2:
+> **PNG 38,210 bytes, JPEG 60,386 bytes.** A page region is flat high-contrast text, which is the
+> case PNG's filters win and the "WebP beats PNG" intuition (photographs) does not cover.
+>
+> **No acceptance criterion is changed by this note** — `worker/figures.spec` says nothing about
+> the container. Revisit if Pillow ever arrives for another reason; the change is then one
+> string in `crops.py::crop_uri` and one in `CropStore._path_for`, plus a migration for every
+> stored `payload.image.uri`.
+
 > **ERRATUM — 2026-08-02, issue #50. This dependency was stated backwards, twice (here and in
 > "How to work" below), and building F1.3 first is what showed it.**
 >
@@ -109,7 +140,44 @@ research/benchmarks/**            (harness + corpus + gold)
 | `worker/repairs.spec` | Every text mutation appears in `repairs[]` with `from` and `to`. No mutation is silent. |
 | `worker/perf.spec` | Deterministic path ≤1.5 s/page p95 on the corpus; peak RSS <500 MB. |
 | `worker/robustness.spec` | Zero crashes, timeouts or empty outputs across the full Tier A corpus. |
-| `eval/ptub.spec` | Harness runs all 4 adapters and emits the comparison matrix. |
+| `eval/ptub.spec` | ~~Harness runs all 4 adapters~~ **AMENDED 2026-08-03 (#55): harness runs all 3 LIVE adapters and emits the comparison matrix, with `findings.md` H2's measurement of the deleted extractors carried as a declared historical column.** See the amendment below. |
+
+> **AMENDMENT — 2026-08-03, issue #55. This is the only acceptance criterion this epic has
+> weakened, and it is weakened because the epic contradicted itself, not because the work fell
+> short. Read this before quoting the row above.**
+>
+> The row asked for four adapters — deterministic, Docling, PyMuPDF-raw and **current-PaperTree**.
+> The **"Must delete"** section of this same file orders the current-PaperTree extractor removed,
+> and it was removed: `apps/api/papertree_api/papers/extraction.py` (1,016 lines) and
+> `services.py` (682 lines), commit `078d208`, recorded in `EPIC-01-RESULT.md` §5. So the fourth
+> adapter has nothing to call, and no change to any parser could ever have satisfied both
+> sentences. `eval/ptub.spec` was carried as PARTIAL for a reason that was never the parser's.
+>
+> **The rejected alternative, and why.** Issue #55 offers vendoring the deleted extractor into
+> `research/benchmarks/baselines/` as a frozen snapshot. Rejected on two checks run this session:
+>
+> * It is **v1 code**. `archive/README.md`, and `AGENTS.md` §4 repeating it: *"Do not read it. Do
+>   not import from it."* The two files are not under `archive/` — `archive/v1-api/papertree_api/
+>   papers/` holds only `__init__.py`, `llm_service.py`, `models.py`, `routes.py`, so they are
+>   recoverable only from git history at `078d208^` — but they are the same application at an
+>   earlier moment, and vendoring them re-imports what that rule exists to keep out.
+> * **`research/` is in none of the allow-lists.** `pyproject.toml` sets
+>   `[tool.uv.workspace] members = ["packages/*/python", "services/*/python"]` and
+>   `testpaths = ["packages", "services"]`, and ruff and mypy are driven from the same two roots.
+>   1,698 lines would sit in the tree unlinted, untyped and untested while a linted, typed,
+>   tested package imported them.
+>
+> **What was done instead.** `harness.HISTORICAL_ROWS` carries H2's four measured rows as data —
+> two deleted extractors × the two papers H2 covers — each labelled `(DELETED)`, each printing its
+> provenance (`findings.md H2, 2026-06, code deleted in 078d208`), each rendering `?` rather than
+> `0` for the one column H2 never recorded. They are deliberately **not** `AdapterOutcome`s and
+> deliberately **not** in `ComparisonMatrix.outcomes`, so a 2026-06 number can never enter
+> `speed_ratio` or `operational` and be reported as this run's; `test_ptub.py` asserts that
+> separation directly.
+>
+> This does not make the epic's original question better answered. It makes the answer's status
+> honest: three columns are live and one is history, and the file says which is which on every
+> line it prints.
 
 ## Non-goals
 

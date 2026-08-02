@@ -271,6 +271,76 @@ def _merge_equation_blocks(
     return sorted(out, key=lambda b: b.order)
 
 
+#: Quantile of a column's body-line right edges taken as its right text margin. See
+#: `_right_text_margins` for why it is a quantile rather than the maximum.
+RIGHT_MARGIN_QUANTILE = 0.90
+
+
+def _right_text_margins(page_layout: Any) -> dict[int | None, float]:
+    """Where each column's text actually stops, per page, from the body lines themselves.
+
+    NOT `PageLayout.columns[i].x1`. A `Column` is a PARTITION of the page - on a single-column
+    page `detect_columns` returns `Column(0, 0.0, page_width)`, so its `x1` is 612.0 on every
+    paper in this corpus and extending anything to it would run a display equation 100 pt past
+    the last glyph on the page. Measured on `neural-odes-mathheavy` p14: `columns == [(0, 612)]`
+    while the body text stops at **504.00** and gold's own right edges sit at 507-531.
+
+    A QUANTILE, NOT THE MAXIMUM, because one stray wide line moves a maximum and cannot move a
+    quantile: `resnet-cvpr-2col` p0 column 0 has a p50 of 286.37 and a **max of 441.78** - the
+    title, set across the measure on a page whose body is two columns. p90 on the pages that
+    carry gold equations lands within 1.75 pt of the maximum every time (neural-odes p14
+    504.00 vs 505.49; attention p3 504.17 vs 505.65; resnet p2 286.37/545.11 vs 286.37/545.12),
+    so the robustness is free.
+
+    `None` is a real key - `layout.py` gives a full-width block no column - and it takes the
+    widest margin on the page, which is what "full width" means.
+    """
+    rights: dict[int | None, list[float]] = {}
+    for block in page_layout.blocks:
+        if block.flow != "body":
+            continue
+        for line in block.lines:
+            rights.setdefault(block.column, []).append(line.band[2])
+    margins: dict[int | None, float] = {}
+    for column, edges in rights.items():
+        edges.sort()
+        margins[column] = edges[min(int(RIGHT_MARGIN_QUANTILE * len(edges)), len(edges) - 1)]
+    if margins:
+        margins[None] = max(margins.values())
+    return margins
+
+
+def _extend_to_right_margin(bands: list[BBox], margin: float | None) -> list[BBox]:
+    """A display equation's bands, run out to the right text margin. HORIZONTAL ONLY.
+
+    WHY THIS IS THE SHAPE OF THE FIX, AND WHY IT IS RIGHT-EDGE-ONLY.
+
+    Gold boxes a display equation across the measure of its column *including the right-margin
+    equation number*; the parser boxes the glyph bands, so `(35)` - which is claimed by no
+    equation region and forms its own block - falls outside the box describing the equation it
+    numbers. That gap is worth **0 matches at IoU 0.5 against 21 gold equations** corpus-wide.
+
+    `EPIC-01-RESULT.md` and issue #55 both describe gold as boxing "the full column width". It
+    does not, and the difference decides the shape of the fix. Re-measured here on
+    `neural-odes-mathheavy` p14's 17 gold equations:
+
+        right edges   507.06  508.98  510.90  513.30  513.30  513.78  515.22  515.22  515.22
+                      516.18  517.14  518.10  521.46  531.54   ... plus 187.38 198.42 400.50
+        left  edges   109.14  111.54  116.34  134.58  136.50 x5  176.82  201.78  228.18
+                      248.34  256.02  258.90  276.66  323.22
+
+    Fourteen of seventeen right edges sit in a 24 pt band at the column's right margin. The left
+    edges scatter over **214 pt**, because a centred display equation is left where its glyphs
+    are. So a symmetric extension to both column bounds would over-box 9 of 17 on the left; the
+    right edge is the only one gold actually supports, and it is the only one moved here.
+
+    The VERTICAL approach is separately measured and reverted - see `_merge_equation_blocks`.
+    """
+    if margin is None:
+        return bands
+    return [[band[0], band[1], max(band[2], margin), band[3]] for band in bands]
+
+
 def _block_type(flow: str, text: str, is_heading: bool, is_equation: bool) -> str:
     # A block opening `Figure 3.` / `Table 1:` IS a caption, whatever flow it landed in.
     # Rule 22 requires `caption_of.from` to be a `caption` block, and the flow classifier does
@@ -459,6 +529,8 @@ def _assemble(
         heading_blocks = {id(h.block) for h in headings}
         all_headings.extend(headings)
 
+        right_margins = _right_text_margins(page_layout)
+
         for layout_block in _merge_equation_blocks(page_layout.blocks, equation_regions):
             if layout_block.lines and all(id(line) in table_lines for line in layout_block.lines):
                 continue  # every line already emitted as a table cell
@@ -475,17 +547,27 @@ def _assemble(
                 is_equation,
             )
             payload: dict[str, Any] | None = None
+            line_bands = [line.band for line in layout_block.lines]
             if block_type == "equation":
                 # D16 / rule 36: `image` is required-and-NULLABLE. Null while the render step is
                 # outstanding, which is why `status` is not `complete` until crops exist.
                 payload = {"display": True, "image": None}
+                # THE BANDS ARE WIDENED, NOT THE BLOCK'S bbox, because the bbox is COMPUTED.
+                # `assemble._geometry` builds the polygon from `line_bands` and rule 1 makes
+                # `bbox` the polygon's extent, so a `LayoutBlock.bbox` set here is discarded.
+                # This also fixes a second thing for free: two fragments of one equation at
+                # disjoint x (a numerator at 320-347 and its `(35)` at 490-505) produced two
+                # rings, and `_geometry` keeps only the largest.
+                line_bands = _extend_to_right_margin(
+                    line_bands, right_margins.get(layout_block.column)
+                )
 
             assembled = builder.add(
                 AssembledBlock(
                     type=block_type,
                     page_index=page.index,
                     flow=layout_block.flow,
-                    line_bands=[line.band for line in layout_block.lines],
+                    line_bands=line_bands,
                     text=built.text,
                     spans=built.spans,
                     repairs=built.repairs,

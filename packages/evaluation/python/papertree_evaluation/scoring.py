@@ -79,6 +79,8 @@ from papertree_evaluation.metrics import (
 )
 
 __all__ = [
+    "CONVENTION_SUBSTITUTES",
+    "ConventionGap",
     "PaperScore",
     "TypeScore",
     "blocks_to_regions",
@@ -86,6 +88,31 @@ __all__ = [
     "sanity_check_overlap",
     "score_paper",
 ]
+
+#: Gold TYPES whose annotation CONVENTION this parser deliberately does not follow, each naming
+#: the block type it emits over the same region instead.
+#:
+#: RULED IN `research/benchmarks/ANNOTATION_GUIDE.md` §"citation vs reference_entry" (issue #55).
+#: Gold boxes a whole reference page as ONE `citation` region; the parser emits one
+#: `reference_entry` per entry. The schema decides it and not this table: `Span.role`'s
+#: documented vocabulary (DESIGN.md D17, `models.py::Span.role`) lists `citation` beside
+#: `footnote_marker` as an IN-TEXT construct, and semantic rule 23 makes `cites.to` point at a
+#: `reference_entry`. So a `citation` is the marker that cites and a `reference_entry` is the
+#: bibliography entry cited, and the four gold `citation` regions - each 421-505 pt wide and up
+#: to 749 pt tall, i.e. an entire reference page - are the second thing wearing the first
+#: thing's name.
+#:
+#: WHAT THIS DOES AND DOES NOT DO. It does NOT change `macro_f1`: §4.1 fixes that metric and a
+#: score that moves because someone declared a type inconvenient is worth nothing. It records
+#: the disagreement, SUBSTANTIATES it against the parser's own output, and prints it. A gap that
+#: cannot be substantiated - no substitute block anywhere inside the gold region - is a plain
+#: detection failure and is reported as one.
+CONVENTION_SUBSTITUTES: dict[str, tuple[str, ...]] = {"citation": ("reference_entry",)}
+
+#: Share of a predicted block that must fall inside a gold region to count as substituting for
+#: it. Half, deliberately loose: the question is "did the parser put content there", not "did it
+#: box it the way gold did" - the second question is what the gap is ABOUT.
+SUBSTITUTE_CONTAINMENT = 0.5
 
 
 @dataclass(slots=True)
@@ -112,6 +139,30 @@ class TypeScore:
 
 
 @dataclass(slots=True)
+class ConventionGap:
+    """One declared granularity disagreement between gold and the parser, with its evidence.
+
+    DECLARED IS NOT THE SAME AS TRUE, which is the whole point of `substantiated`. Saying "the
+    parser deliberately does not follow this convention" is free; showing that it put
+    `reference_entry` blocks inside every gold `citation` region is a measurement, and if it did
+    not, the type is a plain miss and this object says so by leaving `substantiated` short of
+    `gold_regions`.
+    """
+
+    kind: str
+    substitutes: tuple[str, ...]
+    gold_regions: int = 0
+    #: Gold regions of `kind` holding at least one predicted block of a substitute type.
+    substantiated: int = 0
+    #: Predicted substitute blocks found inside those regions, pooled over the paper.
+    substitute_blocks: int = 0
+
+    @property
+    def is_substantiated(self) -> bool:
+        return self.gold_regions > 0 and self.substantiated == self.gold_regions
+
+
+@dataclass(slots=True)
 class PaperScore:
     """Everything measurable about one adapter on one paper, plus what was not measurable."""
 
@@ -131,6 +182,8 @@ class PaperScore:
     predicted_only_types: set[str] = field(default_factory=set)
     #: §4.1 metrics this gold set cannot express, with the reason.
     not_evaluable: dict[str, str] = field(default_factory=dict)
+    #: Declared granularity disagreements, keyed by gold type. See `CONVENTION_SUBSTITUTES`.
+    convention_gaps: dict[str, ConventionGap] = field(default_factory=dict)
     #: §4.1's caption association, pooled over the paper. Kept as raw counts rather than as a
     #: single score because the metric is DIRECTIONAL by requirement: "report FALSE LINKS
     #: separately from MISSED LINKS". One number would hide the difference between attaching
@@ -168,6 +221,24 @@ class PaperScore:
     @property
     def macro_f1_strict(self) -> float:
         scored = [t for t in self.by_type_strict.values() if t.gold]
+        return sum(t.f1 for t in scored) / len(scored) if scored else 0.0
+
+    @property
+    def macro_f1_excluding_convention_gaps(self) -> float:
+        """`macro_f1` with the SUBSTANTIATED convention-gap rows dropped from the mean.
+
+        NOT §4.1's metric and never reported instead of it. §4.1 fixes the headline and moving it
+        after seeing results is what the decision rule was written in advance to prevent - so
+        `macro_f1` above is untouched and this sits beside it, named for exactly what it removes,
+        in the same way the report already prints raw beside normalised and pooled beside
+        per-page. It answers one question: how much of the headline is the parser missing regions
+        and how much is it disagreeing with the annotator about where one region ends.
+
+        A gap that is DECLARED but not SUBSTANTIATED stays in the mean. A type the parser simply
+        failed to find does not get to leave the average by being written down in a dict.
+        """
+        dropped = {k for k, gap in self.convention_gaps.items() if gap.is_substantiated}
+        scored = [t for t in self.by_type.values() if t.gold and t.kind not in dropped]
         return sum(t.f1 for t in scored) / len(scored) if scored else 0.0
 
     @property
@@ -308,6 +379,8 @@ def score_paper(
         score.caption_false += int(association["false_links"])
         score.caption_missed += int(association["missed_links"])
 
+        _pool_convention_gaps(score.convention_gaps, predicted, gold)
+
         score.gold_only_types |= {str(r["type"]) for r in gold}
         score.predicted_only_types |= {str(p["type"]) for p in predicted}
 
@@ -344,6 +417,45 @@ def score_paper(
 #: A gold region overlapping a same-type prediction by at least this much, but less than
 #: `IOU_MATCH`, is in the right PLACE and the wrong SHAPE.
 IOU_NEAR = 0.25
+
+
+def _covered_share(inner: Sequence[float], outer: Sequence[float]) -> float:
+    """Share of `inner`'s own area that lies inside `outer`. Zero for a degenerate `inner`."""
+    lo_x, hi_x = max(inner[0], outer[0]), min(inner[2], outer[2])
+    lo_y, hi_y = max(inner[1], outer[1]), min(inner[3], outer[3])
+    if hi_x <= lo_x or hi_y <= lo_y:
+        return 0.0
+    area = (inner[2] - inner[0]) * (inner[3] - inner[1])
+    return (hi_x - lo_x) * (hi_y - lo_y) / area if area > 0 else 0.0
+
+
+def _pool_convention_gaps(
+    into: dict[str, ConventionGap],
+    predicted: list[dict[str, Any]],
+    gold: list[dict[str, Any]],
+) -> None:
+    """Accumulate one page's evidence for each declared granularity disagreement.
+
+    This does not touch a score. It answers the question the `citation` row's 0.00 cannot: is
+    the parser silent over that part of the page, or did it put the same content there under a
+    different name and a finer granularity.
+    """
+    for kind, substitutes in CONVENTION_SUBSTITUTES.items():
+        regions = [r for r in gold if r["type"] == kind]
+        if not regions:
+            continue
+        gap = into.setdefault(kind, ConventionGap(kind=kind, substitutes=substitutes))
+        candidates = [p for p in predicted if p["type"] in substitutes and p.get("bbox")]
+        for region in regions:
+            gap.gold_regions += 1
+            inside = [
+                p
+                for p in candidates
+                if _covered_share(p["bbox"], region["bbox"]) >= SUBSTITUTE_CONTAINMENT
+            ]
+            if inside:
+                gap.substantiated += 1
+                gap.substitute_blocks += len(inside)
 
 
 def _caption_links(
@@ -463,6 +575,28 @@ def render_report(scores: Sequence[PaperScore]) -> str:
             f"  {'MACRO F1 @0.5':18s} {score.macro_f1:>34.3f}"
             f"    (strict @0.75: {score.macro_f1_strict:.3f})"
         )
+        # A DECLARED CONVENTION GAP IS PRINTED WITH ITS EVIDENCE OR NOT AT ALL.
+        #
+        # The `citation` row scores 0.00 and reads as "the parser found nothing there". It found
+        # 18 things there on `attention` and called every one of them a `reference_entry`, which
+        # is what ANNOTATION_GUIDE.md asks an annotator for. Printing the 0.00 alone reports a
+        # granularity disagreement as a detection failure and sends the next person to fix the
+        # parser. §4.1's headline above is UNCHANGED; this is the decomposition, not a rescore.
+        substantiated = [g for g in score.convention_gaps.values() if g.is_substantiated]
+        for gap in sorted(score.convention_gaps.values(), key=lambda g: g.kind):
+            state = "substantiated" if gap.is_substantiated else "NOT substantiated"
+            lines.append(
+                f"  {'convention gap':18s} {gap.kind + ': ' + state:>34s}"
+                f"    ({gap.substantiated}/{gap.gold_regions} gold regions hold "
+                f"{gap.substitute_blocks} {'/'.join(gap.substitutes)} block(s); "
+                "granularity, not detection - ANNOTATION_GUIDE.md)"
+            )
+        if substantiated:
+            excluded = ", ".join(sorted(g.kind for g in substantiated))
+            lines.append(
+                f"  {'MACRO F1 excl. gap':18s} {score.macro_f1_excluding_convention_gaps:>34.3f}"
+                f"    (drops {excluded}; NOT §4.1's metric - the line above is)"
+            )
         lines.append(f"  {'reading order':18s} {score.mean_reading_order:>34.3f}")
         # A METRIC IS EITHER A NUMBER OR A REASON, NEVER BOTH IN ONE REPORT.
         #

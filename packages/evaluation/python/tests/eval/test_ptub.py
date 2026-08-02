@@ -16,7 +16,13 @@ from pathlib import Path
 import pytest
 from papertree_evaluation.adapters import AdapterOutcome, DoclingAdapter, PyMuPdfRawAdapter
 from papertree_evaluation.annotate import GOLD_TYPES, stratified_pages
-from papertree_evaluation.harness import COLUMNS, ComparisonMatrix, render_matrix
+from papertree_evaluation.harness import (
+    COLUMNS,
+    HISTORICAL_ROWS,
+    ComparisonMatrix,
+    historical_rows_for,
+    render_matrix,
+)
 from papertree_evaluation.metrics import (
     caption_association,
     element_detection,
@@ -247,7 +253,12 @@ def test_the_pymupdf_floor_expresses_no_structure() -> None:
     corpus = Path(__file__).resolve().parents[5] / "research" / "benchmarks" / "corpus"
     pdf = corpus / "resnet-cvpr-2col.pdf"
     if not pdf.is_file():
-        pytest.skip("corpus is gitignored and not present")
+        # AGENTS.md §4: a corpus-dependent test skips LOUDLY and names the fetch script, because
+        # a suite that quietly collects zero cases looks exactly like a suite that passed.
+        pytest.skip(
+            f"the corpus is gitignored and {pdf} is absent. "
+            "Fetch it with `./research/benchmarks/fetch_corpus.sh` to run this."
+        )
 
     outcome = adapter.parse(str(pdf))
     assert outcome.status == "ok"
@@ -255,3 +266,97 @@ def test_the_pymupdf_floor_expresses_no_structure() -> None:
     assert outcome.counts["with_bbox"] == outcome.counts["blocks"]
     for column in ("headings", "figures", "tables", "table_cells", "sections", "with_stable_id"):
         assert outcome.counts[column] == 0, f"the raw floor cannot express {column}"
+
+
+# ── the fourth row (issue #55) ─────────────────────────────────────────────────────────────
+#
+# `EPIC-01-ingest.md` asks `eval/ptub.spec` for four adapters and the same file's "Must delete"
+# section orders one of the four deleted. Both were followed, so the criterion could not be met
+# by any parser change. Ruled 2026-08-03: three live adapters plus a declared HISTORICAL column
+# carried as data with its provenance. These tests are what stop that column becoming a
+# laundered live measurement.
+
+
+def test_the_matrix_carries_findings_h2s_fourth_row_where_h2_measured_one() -> None:
+    """Four rows on ResNet: two live-in-this-fixture plus H2's two deleted extractors."""
+    matrix = ComparisonMatrix(
+        outcomes=[
+            AdapterOutcome(
+                "papertree-deterministic",
+                "resnet-cvpr-2col",
+                "ok",
+                seconds=1.6,
+                pages=12,
+                document={"blocks": [1]},
+                counts={c: 1 for c in COLUMNS},
+            )
+        ]
+    )
+    rendered = render_matrix(matrix, "resnet-cvpr-2col")
+    assert "papertree-v1-extractor (DELETED)" in rendered
+    assert "papertree-v1-live (DELETED)" in rendered
+    assert "findings.md H2" in rendered, "a historical row without provenance is a rumour"
+    assert "078d208" in rendered, "the commit that deleted the code is the provenance"
+    assert "| 233 |" in rendered, "H2's block count for the dead extractor on ResNet"
+    assert "0.34" in rendered, (
+        "H2's `sec` column is a TOTAL: 4.1 s over 12 pp is 0.34 s/page, not 4.1"
+    )
+
+
+def test_a_column_h2_never_recorded_is_a_question_mark_rather_than_a_zero() -> None:
+    """H2 has a `nested tree` tick, not a section COUNT. §3's "cannot express it scores 0, not
+    N/A" is about a parser that ran; nothing ran here, so a 0 would be an invented measurement."""
+    rendered = render_matrix(ComparisonMatrix(), "resnet-cvpr-2col")
+    assert "| ? |" in rendered
+
+
+def test_a_historical_row_can_never_reach_a_computed_ratio() -> None:
+    """THE SEPARATION THAT MAKES THE AMENDMENT HONEST.
+
+    `speed_ratio` and `operational` compute over `ComparisonMatrix.outcomes`. A 2026-06
+    measurement of deleted code landing in either would be presented as this run's. `render_matrix`
+    is the only consumer of `HISTORICAL_ROWS`, so the guard is that `outcomes` never gains one.
+    """
+    matrix = ComparisonMatrix(
+        outcomes=[
+            AdapterOutcome(
+                "papertree-deterministic",
+                "resnet-cvpr-2col",
+                "ok",
+                seconds=1.6,
+                pages=12,
+                document={"blocks": [1]},
+                counts={c: 1 for c in COLUMNS},
+            )
+        ]
+    )
+    render_matrix(matrix, "resnet-cvpr-2col")
+    assert {o.adapter for o in matrix.outcomes} == {"papertree-deterministic"}
+    assert matrix.operational("papertree-v1-extractor (DELETED)")["papers"] == 0
+    assert matrix.speed_ratio("papertree-deterministic", "papertree-v1-extractor (DELETED)") is None
+    assert not isinstance(HISTORICAL_ROWS[0], AdapterOutcome)
+
+
+def test_the_six_papers_h2_never_covered_get_three_rows_not_four() -> None:
+    """H2 measured ResNet and Attention. Inventing rows for the other six would be the whole
+    defect this is fixing, upside down."""
+    assert historical_rows_for("gpt3-longform-singlecol") == ()
+    assert len(historical_rows_for("resnet-cvpr-2col")) == 2
+    assert len(historical_rows_for("attention-is-all-you-need")) == 2
+    assert "DELETED" not in render_matrix(ComparisonMatrix(), "gpt3-longform-singlecol")
+
+
+def test_the_historical_numbers_are_h2s_and_carry_its_central_finding() -> None:
+    """Transcription guard. The row exists to preserve one measurement above all: BOTH deleted
+    extractors found **0 figures** on ResNet, every one of which is vector ink (findings.md B3).
+    A row that quietly acquired a non-zero there would erase the reason the benchmark exists."""
+    resnet = {r.adapter: r for r in historical_rows_for("resnet-cvpr-2col")}
+    dead = resnet["papertree-v1-extractor (DELETED)"]
+    assert dead.counts["blocks"] == 233
+    assert dead.counts["headings"] == 58
+    assert dead.counts["equations"] == 86
+    assert dead.counts["with_stable_id"] == 0
+    assert dead.counts["figures"] == 0
+    assert dead.counts["sections"] is None
+    live = resnet["papertree-v1-live (DELETED)"]
+    assert all(live.counts[c] == 0 for c in COLUMNS if c != "sections")

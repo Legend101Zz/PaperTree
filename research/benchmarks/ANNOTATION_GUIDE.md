@@ -68,6 +68,108 @@ Found by annotating a real page — all three sit at the top or bottom of the pa
 and is body content; a footer is page furniture that would appear whether or not this paper had
 authors.
 
+### When the parser and the annotator disagree — the general rule, #55
+
+Three of these are now on record (`citation` vs `reference_entry` below, `equation` vs
+`inline_equation` below that, and gpt3's boxed qualitative examples typed `table` by the parser
+and `figure` by gold), so they get a rule rather than three separate arguments.
+
+**1. If `packages/document-ir` decides it, the side matching the schema is right and the other
+side is what changes.** The block-type vocabulary, `Span.role`'s documented values and the
+semantic rules that constrain them (rule 22's legal `caption_of` targets, rule 23's `cites.to`)
+are the contract both the parser and this guide are written against. `citation` is settled this
+way and it settles against the gold.
+
+**2. If the schema is silent, it is an open annotation question, and it is settled by a written
+rule BEFORE the next pass draws anything.** Never by tuning a parser until it reproduces boxes
+it has already seen — that is `README.md` §4.4's forbidden move, and it measures a
+reimplementation of the annotator rather than the task. `equation` vs `inline_equation` is here.
+So is gpt3's case: the type vocabulary is deliberately open and rule 22 accepts a `table` **or**
+a `figure` as a caption target, so nothing in the schema says whether a boxed qualitative
+example set with booktabs rules is one or the other. **#55 does not settle it and should not be
+quoted as settling it.**
+
+**3. Either way the disagreement is declared, substantiated against real parser output, and
+printed — and §4.1's macro F1 does not move.** `scoring.CONVENTION_SUBSTITUTES` is the
+mechanism: it records which type the parser emits instead, checks that the parser actually put
+those blocks inside the gold region, and reports `NOT substantiated` when it did not, in which
+case the type is a plain miss and stays in the average. A headline that improves because
+someone wrote a type's name in a dict is worth nothing.
+
+### `citation` vs `reference_entry` — RULED 2026-08-03, issue #55
+
+**A `citation` is the marker in the running text. A `reference_entry` is one entry in the
+bibliography. The bibliography is never one box.**
+
+This is a ruling rather than a preference, because the schema already decides it and this guide
+never passed the decision on:
+
+- `Span.role`'s documented vocabulary (`packages/document-ir/DESIGN.md` D17, and
+  `Span.role`'s own docstring) is *"`inline_equation`, `citation`, `footnote_marker`, `code`,
+  …"* — a list of things that occupy a **character range inside a paragraph**. D17 exists
+  because *"inline citations are what `resolve_citation` resolves"*.
+- Semantic **rule 23**: `cites.to` must point at a **`reference_entry`** block. So the thing
+  that cites is a `citation` and the thing cited is a `reference_entry`; they cannot be the
+  same object.
+
+The first gold pass drew the other convention, and it is worth stating what it cost so the next
+pass does not repeat it. Measured on the 2026-08-02 gold: **4 `citation` regions, one per
+reference page, sized 421 × 660, 446 × 673, 489 × 749 and 506 × 54 pt** — i.e. a whole page of
+bibliography as a single box, on `attention-is-all-you-need` p11, `neural-odes-mathheavy` p10,
+`bert-2col` p9 and `gpt3-longform-singlecol` p74. Against them the parser emits **17, 2, 13 and
+2 `reference_entry` blocks** inside those very boxes. Nothing can match: the types differ and
+the granularity differs, so all four score 0.00 and the `citation` row costs
+**0.0136–0.0271 macro F1** on four of the six annotated papers while looking like a detection
+failure.
+
+**The parser is not the thing to change**, and rule 5 below already says why: *"a wrong type is
+worse than an honest `unknown` — it makes a correct parser look wrong."* Concretely, next pass:
+
+| you are looking at | draw | flow |
+|---|---|---|
+| one entry in the reference list — `[12] K. He, X. Zhang… CVPR, 2016.` | one `reference_entry` per entry | `body` |
+| `[12]` or `(He et al., 2016)` sitting inside a sentence | **do not draw a region.** It is a `Span.role` inside its paragraph, and this tool records regions | — |
+| the whole reference list, because drawing 40 entries is tedious | **no.** One box per logical region, and a bibliography is forty of them | — |
+
+Until a pass redraws them, `packages/evaluation`'s scorer reports the disagreement explicitly
+rather than as a parser miss: `scoring.CONVENTION_SUBSTITUTES` declares it, the report prints
+`convention gap  citation: substantiated` with the count of `reference_entry` blocks found
+inside each gold box, and **§4.1's macro F1 is left unchanged** — a metric that moves because
+someone declared a type inconvenient is worth nothing.
+
+### `equation` vs `inline_equation` — the current gold does not separate them, issue #55
+
+Same shape as the pair above and **not yet ruled**, because unlike `citation` this one needs a
+second annotation pass to settle rather than a sentence. Recorded here with its measurement so
+the next pass can settle it, and so nobody spends a session trying to make a parser reproduce it.
+
+The 2026-08-02 gold holds **21 `equation` and 13 `inline_equation` regions**. Every feature that
+could tell them apart overlaps completely:
+
+| | `equation` (n=21) | `inline_equation` (n=13) |
+|---|---|---|
+| width | 71.0 – 405.6 pt | 43.7 – **395.5** pt |
+| height | 4.8 – 36.5 pt | 9.6 – 30.7 pt *(inside the other range)* |
+| symbol density | 0.000 – 0.315 | 0.050 – 0.250 *(inside the other range)* |
+| carries an equation number | 17 / 21 | 6 / 13 |
+| has a body `reading_order` | 21 / 21 | **13 / 13** |
+
+The clearest single case is on one paper, two pages apart. `neural-odes-mathheavy` p3 `r439` is
+typed **`equation`** at 331.2 × 30.7 pt with a number; p3 `r87` is typed **`inline_equation`** at
+333.6 × 26.4 pt with a number. Nothing in the PDF distinguishes them. And **9 of the 13
+`inline_equation` boxes overlap a gold `paragraph` box** while carrying their own
+`reading_order`, so gold asks for two regions over the same glyphs — which the block model
+cannot express and `DESIGN.md` D17 exists to avoid (*"fragment the paragraph into three blocks"*
+is the measured failure it names, findings.md B1's 59-character median block).
+
+**What to do next pass, when someone rules on it:**
+
+- A **display** equation is set on its own lines, off the paragraph flow: `equation`.
+- Math **inside a line of running prose** is a `Span.role`, not a region — the same answer as
+  `citation` above. Do not draw it.
+- If a form of "inline equation region" is wanted anyway, it needs a written rule that separates
+  it from `equation` **before** anything is drawn, because the current 34 boxes do not carry one.
+
 **FLOW MATTERS MORE THAN TYPE.** Flow decides whether a region gets a `reading_order`. Only
 `body` is ranked; everything else is nulled. Leave the flow on `body` for a footnote and a
 parser that *correctly* excludes it from the reading order scores as if it got the order wrong.
