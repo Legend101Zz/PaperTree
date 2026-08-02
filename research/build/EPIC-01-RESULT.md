@@ -29,13 +29,18 @@ nothing looks a lot like a metric that passed.**
 
 ### What remains, and where it is tracked
 
-| | issue |
-|---|---|
-| Region detection blocks `figures.spec` + 2 metrics | [#51](https://github.com/Legend101Zz/PaperTree/issues/51) |
-| Peak RSS 762 MB vs a 500 MB bar | [#52](https://github.com/Legend101Zz/PaperTree/issues/52) |
-| The speed half is unmeasured, not failed | [#53](https://github.com/Legend101Zz/PaperTree/issues/53) |
-| Gold coverage limits every remaining verdict | [#54](https://github.com/Legend101Zz/PaperTree/issues/54) |
-| Equation extents, absent types, 4th adapter, WebP | [#55](https://github.com/Legend101Zz/PaperTree/issues/55) |
+Rewritten 2026-08-03 after #78 Session B. **Five of the six rows below are closed**, and each is
+replaced by the narrower thing that actually remains — a "what remains" table listing closed
+issues is the same defect as a result table quoting a number nobody re-ran.
+
+| | was | now open |
+|---|---|---|
+| Region detection blocks `figures.spec` | [#51](https://github.com/Legend101Zz/PaperTree/issues/51) ✅ closed | **[#103](https://github.com/Legend101Zz/PaperTree/issues/103)** — figure-region *extents*: neural-odes 1/22, resnet 5/29 type-blind. `_merge_panels` under-merges resnet p3 and would over-merge neural-odes p17, so no tolerance fixes it |
+| Peak RSS vs a 500 MB bar | [#52](https://github.com/Legend101Zz/PaperTree/issues/52) | **[#104](https://github.com/Legend101Zz/PaperTree/issues/104)** — the 762/746 MB does not reproduce, and the test decides on a bar inside its own ~60 MB spread |
+| The speed half is unmeasured, not failed | [#53](https://github.com/Legend101Zz/PaperTree/issues/53) ✅ closed | **[#108](https://github.com/Legend101Zz/PaperTree/issues/108)** — the harness exists and refuses correctly; the ruling run needs both arms on one commit |
+| Gold coverage limits every remaining verdict | [#54](https://github.com/Legend101Zz/PaperTree/issues/54) | **[#54](https://github.com/Legend101Zz/PaperTree/issues/54)** — item 4 done (outline floor on all 8 papers); the other three need a **second annotator**, which no code closes |
+| Equation extents, 4th adapter, WebP | [#55](https://github.com/Legend101Zz/PaperTree/issues/55) ✅ closed | **[#101](https://github.com/Legend101Zz/PaperTree/issues/101)** — `inline_equation` is unemittable on this gold (oracle ceiling 7 of 13) and `Span.role` is 0 of 15,241 spans |
+| — | — | **[#100](https://github.com/Legend101Zz/PaperTree/issues/100)** — `adapters.py` cites a `DOCLING.md` that does not exist |
 
 ---
 
