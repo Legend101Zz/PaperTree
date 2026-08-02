@@ -9,6 +9,13 @@ dependencies = [
     "papertree-jobs",
     "papertree-document-worker",
     "papertree-evaluation",
+    # Epic 3 (F3.7/F3.8). `[tool.uv.workspace] members` already globs `packages/*/python`, so these
+    # are discovered as members without editing that line; they are listed HERE because a member is
+    # only installed into the root .venv if something depends on it, and `uv run pytest` collects
+    # from the root .venv. A member that is not installed reports ZERO tests, and zero tests
+    # collected is the vacuous green AGENTS.md §2 records three instances of.
+    "papertree-memory",
+    "papertree-prompts",
 ]
 
 # apps/api is the v1 application. It has its own pyproject.toml and uv.lock and is
@@ -30,6 +37,8 @@ papertree-db = { workspace = true }
 papertree-jobs = { workspace = true }
 papertree-document-worker = { workspace = true }
 papertree-evaluation = { workspace = true }
+papertree-memory = { workspace = true }
+papertree-prompts = { workspace = true }
 
 [tool.uv]
 package = false
