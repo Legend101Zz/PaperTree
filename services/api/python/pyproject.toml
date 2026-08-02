@@ -1,0 +1,53 @@
+[project]
+name = "papertree-api"
+version = "1.0.0"
+description = "The HTTP transport in front of PaperTreeDb and the parse job runner. A transport, not a rewrite."
+requires-python = ">=3.12"
+dependencies = [
+    "papertree-document-ir",
+    "papertree-db",
+    "papertree-jobs",
+    "papertree-document-worker",
+    # The only two runtime dependencies that are not already in this workspace, and the reason
+    # each is here rather than being written by hand:
+    #
+    #   fastapi   — routing, request/response validation and OpenAPI over `pydantic`, which the
+    #               lock ALREADY carries at 2.13.4 via papertree-document-ir. It brings
+    #               `starlette` plus `anyio`/`sniffio`/`idna`/`certifi`-class transitives.
+    #   uvicorn   — the ASGI server. Nothing serves ASGI otherwise, and `python -m papertree_api`
+    #               with no way to run it is not a deliverable.
+    #
+    # Measured lockfile delta is in #74's PR body, per the root README's anti-slop rule 4 and the
+    # `docling>=2.0` precedent (one line, 22 packages -> 100+).
+    #
+    # DELIBERATELY ABSENT: `python-jose[cryptography]` and `bcrypt`, which v1 used. See
+    # infrastructure/migrations/0004_auth.sql for why; `hashlib.scrypt` and `secrets` are stdlib.
+    "fastapi>=0.115,<1",
+    "uvicorn>=0.30,<1",
+    # Multipart bodies are how a PDF arrives. FastAPI raises at import time on a `File(...)`
+    # parameter without it, so it is a runtime dependency rather than an optional extra.
+    "python-multipart>=0.0.9",
+]
+
+[dependency-groups]
+dev = [
+    # Starlette's TestClient is httpx-backed. The isolation test in `tests/test_isolation.py` is
+    # #74's one non-negotiable and it has to run over the real ASGI app, not over the route
+    # functions — an isolation check that bypasses the dependency graph is checking the wrong
+    # thing, since the dependency graph is where `owner_for` is called.
+    "httpx>=0.27",
+]
+
+[tool.uv.sources]
+papertree-document-ir = { workspace = true }
+papertree-db = { workspace = true }
+papertree-jobs = { workspace = true }
+papertree-document-worker = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["papertree_api"]
+artifacts = ["papertree_api/py.typed"]

@@ -18,6 +18,20 @@ dependencies = [
     "papertree-prompts",
     "papertree-retrieval",
     "papertree-agent-tools",
+    # #74's HTTP transport. Listed for consistency with the nine above and so a plain `uv sync`
+    # installs it — NOT because CI needs it. I claimed the latter and it is wrong; the correction
+    # is here rather than only in the handoff. Measured both ways:
+    #
+    #   * CI runs `uv sync --locked --all-packages` (ci.yml:96, 249), which installs every
+    #     workspace member whether or not anything depends on it. #74's "no root-config edit" is
+    #     therefore CORRECT for CI, and my design plan's claim that it was not is retracted.
+    #   * With this line removed AND a plain `uv sync`, the package is uninstalled and
+    #     `uv run pytest services/api` reports "2 errors during collection" — LOUD, not vacuous,
+    #     because the tests import `papertree_api` and the import fails.
+    #
+    # The vacuous-green the comment above describes is real, but it needs a package whose tests do
+    # not import it. That is not this one.
+    "papertree-api",
 ]
 
 # apps/api is the v1 application. It has its own pyproject.toml and uv.lock and is
@@ -43,6 +57,7 @@ papertree-memory = { workspace = true }
 papertree-prompts = { workspace = true }
 papertree-retrieval = { workspace = true }
 papertree-agent-tools = { workspace = true }
+papertree-api = { workspace = true }
 
 [tool.uv]
 package = false
