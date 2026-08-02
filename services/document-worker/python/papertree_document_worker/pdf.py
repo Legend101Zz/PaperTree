@@ -514,8 +514,12 @@ class SourceDocument:
             out.append(self.page(index))
             # PURGE MuPDF'S GLOBAL STORE AFTER EACH PAGE — issue #52.
             #
-            # `_images()` calls `get_image_rects`, which traverses the page's display list and
-            # decodes every embedded raster into MuPDF's process-global cache. That cache is keyed
+            # `_images()` calls `get_image_info`, which traverses the page's display list and
+            # decodes every embedded raster into MuPDF's process-global cache. (It called
+            # `get_image_rects` when this was measured — #57 replaced that, and the traversal
+            # and therefore the cache pressure are the same; the peak was 341.9 MB against
+            # 343.4 MB on gpt3 either way. The purge below is what moves the number.) That cache
+            # is keyed
             # for reuse across pages and is bounded only by `store_maxsize`, so on a long paper it
             # simply grows: the decoded pixels of page 3's figure are still resident on page 70,
             # and nothing here will ever ask for them again.
@@ -608,32 +612,63 @@ def _drawings(page: Any, transform: _PageTransform) -> tuple[Drawing, ...]:
 
 
 def _images(page: Any, transform: _PageTransform) -> tuple[RasterImage, ...]:
-    """Embedded rasters, with their ON-PAGE rects rather than their intrinsic pixel sizes.
+    """Embedded rasters, ONE ENTRY PER PLACEMENT, with on-page rects not intrinsic pixel sizes.
 
-    `page.get_images()` gives the xref and the pixel dimensions but no placement; the placement
-    comes from `get_image_rects()`. One xref can be placed several times, and each placement is
-    its own region - findings.md B3 records BERT's 34 rasters being dropped wholesale by code
-    that looked only at intrinsic size.
+    THE ON-PAGE RECT IS THE POINT, AND THAT HALF HAS NOT CHANGED. findings.md B3 records BERT's
+    34 rasters being dropped wholesale by code that looked only at intrinsic pixel size. A
+    40x40 px logo scaled to 200x200 pt is a figure and a 2000x2000 px texture placed at 8x8 pt
+    is not, so every consumer here reads `bbox`.
+
+    WHY NOT `get_images` + `get_image_rects` PER XREF, WHICH IS WHAT THIS USED TO DO - #57.
+
+    That pairing emits the same on-page rect more than once when a placement is reachable from
+    several xrefs. Measured across all 8 corpus papers at pymupdf 1.28.0:
+
+        paper                     get_image_rects   get_image_info   distinct rects
+        bert-2col                            154               38               38
+        a3c-algorithmheavy                    30               28               28
+        gpt3-longform-singlecol               83               83               83
+        neural-odes-mathheavy                 81               81               81
+        attention / pdf-to-tree              3 / 2            3 / 2            3 / 2
+        resnet / superglue                   0 / 0            0 / 0            0 / 0
+
+    `get_image_info(xrefs=True)` returns one entry per placement and carries every field
+    `get_images(full=True)` does - `bbox`, `xref`, `width`, `height`, `cs-name`, `bpc` - so
+    nothing downstream changes shape. Equivalence was checked as a SET, per page, on all 8
+    papers and 195 pages: `{rounded get_image_rects rects} == {rounded get_image_info bboxes}`
+    on every one. The only difference is the duplicates.
+
+    WHAT THE DUPLICATES COST, MEASURED - IT IS A METRIC, NOT MEMORY OR A REGION COUNT.
+
+    `classify.classify_page` sums `_area(image.bbox)` over this list into `raster_coverage`:
+
+        bert p14   placements 116 -> 24    raster_coverage 0.1542 -> 0.0715   (2.16x)
+        bert p2     placements 38 -> 14    raster_coverage 0.0490 -> 0.0326   (1.50x)
+        a3c  p15    placements 16 -> 14    raster_coverage 0.3494 -> 0.3058   (1.14x)
+
+    It does NOT move `is_vector`, and #78 §5 predicts that it will. Measured both ways in one
+    process: figure regions and vector regions are IDENTICAL on all 8 papers (bert 11 regions /
+    5 vector either way) and no page changes `PageKind`. `figures.py` builds raster regions from
+    `_significant_rasters` and then `_merge_panels`, and duplicate placements are the SAME box,
+    so they union before a region is emitted.
+
+    It does not save memory either - 341.9 MB vs 343.4 MB on gpt3, image traversal only. The
+    memory win in #52 was `RAWDICT_NO_IMAGES` plus the per-page store purge, both already
+    merged, and a diagnosis in flight during #52 that attributed it here was wrong.
     """
     out: list[RasterImage] = []
-    for info in page.get_images(full=True):
-        xref = int(info[0])
-        try:
-            rects = page.get_image_rects(xref)
-        except Exception:  # pragma: no cover - malformed xref; the image is simply not placed
+    for info in page.get_image_info(xrefs=True):
+        box = _rect4(info["bbox"])
+        if not _finite(box):
             continue
-        for rect in rects:
-            box = _rect4(rect)
-            if not _finite(box):
-                continue
-            out.append(
-                RasterImage(
-                    bbox=transform.rect(box),
-                    xref=xref,
-                    width=int(info[2]),
-                    height=int(info[3]),
-                    colorspace=str(info[5]) if len(info) > 5 else "",
-                    bpc=int(info[4]) if len(info) > 4 else 0,
-                )
+        out.append(
+            RasterImage(
+                bbox=transform.rect(box),
+                xref=int(info.get("xref", 0)),
+                width=int(info.get("width", 0)),
+                height=int(info.get("height", 0)),
+                colorspace=str(info.get("cs-name", "")),
+                bpc=int(info.get("bpc", 0)),
             )
+        )
     return tuple(out)
