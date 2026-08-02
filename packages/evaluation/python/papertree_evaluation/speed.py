@@ -70,7 +70,7 @@ FETCH_SCRIPT = "./research/benchmarks/fetch_corpus.sh"
 
 @dataclass(frozen=True, slots=True)
 class Interval:
-    """A central value AND the range it was drawn from. A bare median is what #53 was filed about."""
+    """A central value AND the range it came from. A bare median is what #53 was filed about."""
 
     low: float
     median: float
