@@ -4,8 +4,14 @@
   "private": true,
   "type": "module",
   "description": "PaperIR: the canonical, geometry-preserving document representation. Schema is the single source of truth; TS and Python bindings are generated from it.",
+  "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./geometry": "./src/geometry.ts",
+    "./types": "./src/generated/types.ts",
+    "./normalise": "./src/normalise.ts",
+    "./identity": "./src/identity.ts",
+    "./validate": "./src/validate.ts",
     "./schema": "./schema/paperir-1.0.0.schema.json"
   },
   "scripts": {

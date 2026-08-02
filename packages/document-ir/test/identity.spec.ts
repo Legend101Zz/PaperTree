@@ -429,21 +429,39 @@ describe('edge case: the case fold comes from the SHIPPED TABLE, never the runti
     // runtime primitive where the runtime and the pinned table happen to disagree TODAY; the
     // Python twin has no such point at all while its interpreter carries UCD 15.0.0. So both
     // suites also read their implementation and check that the forbidden calls are absent.
-    const source = readFileSync(join(PKG, 'src/identity.ts'), 'utf8')
-      .replaceAll(/\/\*[\s\S]*?\*\//g, '') // block comments
-      .replaceAll(/^[^\n]*?\/\/[^\n]*$/gm, ''); // line comments
-    for (const forbidden of [
-      'toLowerCase',
-      'toUpperCase',
-      'localeCompare',
-      'Math.round',
-      'toFixed',
-      'toPrecision',
-      '\\s',
-    ]) {
-      expect(source, `identity.ts must never use ${forbidden}`).not.toContain(forbidden);
+    // BOTH files, because #33 split the implementation in two: `normalise.ts` is the pure half
+    // the browser can import and `identity.ts` is the Node-only hashing half. The contract binds
+    // the implementation, not a filename, so scanning only one would let a forbidden call move
+    // into the other and the test go green — which is the shape of defect this repo keeps.
+    const files = ['src/normalise.ts', 'src/identity.ts'] as const;
+    const stripped = files.map((file) => ({
+      file,
+      text: readFileSync(join(PKG, file), 'utf8')
+        .replaceAll(/\/\*[\s\S]*?\*\//g, '') // block comments
+        .replaceAll(/^[^\n]*?\/\/[^\n]*$/gm, ''), // line comments
+    }));
+
+    // The scan must not pass by reading nothing. Both files exist and both carry code.
+    for (const { file, text } of stripped) {
+      expect(text.length, `${file} read as empty — the scan is not scanning`).toBeGreaterThan(500);
     }
-    // …and it must still contain the things that replace them.
+
+    for (const { file, text } of stripped) {
+      for (const forbidden of [
+        'toLowerCase',
+        'toUpperCase',
+        'localeCompare',
+        'Math.round',
+        'toFixed',
+        'toPrecision',
+        '\\s',
+      ]) {
+        expect(text, `${file} must never use ${forbidden}`).not.toContain(forbidden);
+      }
+    }
+
+    // …and the things that replace them must still be there. They are in the pure half now.
+    const source = stripped.map((entry) => entry.text).join('\n');
     expect(source).toContain('Math.floor');
     expect(source).toContain('CASE_FOLD_MAP.get');
   });
