@@ -188,7 +188,7 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
     render(
       <SourcePane
         doc={doc}
-        pdfUrl="fixture://paper.pdf"
+        pdfSource="fixture://paper.pdf"
         zoom={1}
         anchors={[]}
         onAnchorCaptured={() => undefined}
@@ -221,7 +221,7 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
     render(
       <SourcePane
         doc={doc}
-        pdfUrl="fixture://paper.pdf"
+        pdfSource="fixture://paper.pdf"
         zoom={1}
         anchors={[]}
         onAnchorCaptured={() => undefined}
@@ -244,7 +244,7 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
     render(
       <SourcePane
         doc={doc}
-        pdfUrl="fixture://paper.pdf"
+        pdfSource="fixture://paper.pdf"
         zoom={1}
         anchors={[]}
         onAnchorCaptured={(anchor) => captured.push(anchor)}

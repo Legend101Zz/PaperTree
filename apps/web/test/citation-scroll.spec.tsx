@@ -123,7 +123,7 @@ describe('reader/citation-scroll.spec — clicking a citation moves the page (#6
     render(
       <SourcePane
         doc={doc}
-        pdfUrl="fixture://paper.pdf"
+        pdfSource="fixture://paper.pdf"
         zoom={1}
         anchors={[]}
         onAnchorCaptured={() => undefined}
@@ -157,7 +157,7 @@ describe('reader/citation-scroll.spec — clicking a citation moves the page (#6
     render(
       <SourcePane
         doc={doc}
-        pdfUrl="fixture://paper.pdf"
+        pdfSource="fixture://paper.pdf"
         zoom={1}
         anchors={[]}
         onAnchorCaptured={() => undefined}
@@ -181,7 +181,7 @@ describe('reader/citation-scroll.spec — clicking a citation moves the page (#6
     render(
       <SourcePane
         doc={doc}
-        pdfUrl="fixture://paper.pdf"
+        pdfSource="fixture://paper.pdf"
         zoom={1}
         anchors={[]}
         onAnchorCaptured={() => undefined}

@@ -22,15 +22,24 @@
  * unrecoverable, lands wrong on creation, moves on resize and differs per device. Capture now runs
  * through `captureAnchor` and painting through `HighlightOverlay`; neither measures the DOM.
  *
- * EPIC 2 BUILDS AGAINST FIXTURES, NOT THE PARSER. The `[id]` segment is a fixture slug for now.
- * A non-fixture id renders a designed state rather than a blank screen — Epic 1 turns that branch
- * into a real fetch, and `lib/fixtures.ts` is the only file that then has to change.
+ * THE `[id]` SEGMENT IS A PAPER ID OR A FIXTURE SLUG, and this route no longer decides which by
+ * consulting a list of three strings.
+ *
+ * It used to: `isFixtureSlug(id) ? <ReaderWorkspace/> : <NotParsedYet/>`. That branch is why a
+ * paper uploaded through the product could never open, no matter what `loadPaper` did — and the
+ * prediction in `lib/fixtures.ts` that "`lib/fixtures.ts` is the only file that then has to
+ * change" missed it. `lib/paperSource.ts`'s header has the full account.
+ *
+ * An unknown id is now an API id. If it is not a real one the API answers 404 and the designed
+ * not-found state is reached THROUGH that answer, rather than by a client-side allow-list that
+ * cannot know what the server has.
  */
 
 import { useParams } from 'next/navigation';
 
 import { AuthGuard } from '@/components/auth/AuthGuard';
-import { FIXTURE_SLUGS, FIXTURE_TITLES, isFixtureSlug } from '@/lib/fixtures';
+import { FIXTURE_SLUGS, FIXTURE_TITLES } from '@/lib/fixtures';
+import { resolvePaperRef } from '@/lib/paperSource';
 
 import { ReaderWorkspace } from './ReaderWorkspace';
 
@@ -41,10 +50,10 @@ export default function ReaderPage() {
 
   return (
     <AuthGuard>
-      {typeof id === 'string' && isFixtureSlug(id) ? (
-        <ReaderWorkspace slug={id} />
+      {typeof id === 'string' && id.length > 0 ? (
+        <ReaderWorkspace paper={resolvePaperRef(id)} />
       ) : (
-        <NotParsedYet id={typeof id === 'string' ? id : ''} />
+        <NotParsedYet id="" />
       )}
     </AuthGuard>
   );

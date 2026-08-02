@@ -26,6 +26,29 @@ Three connections to one SQLite file is the arrangement `packages/jobs` already 
 intended ("explicitly multi-process: worker, API and canceller all opening the same file"), and it
 sets `busy_timeout` for exactly this. The auth connection does the same.
 
+EVERY DEPENDENCY AND EVERY ROUTE IS `async def`, AND THAT IS LOAD-BEARING
+
+`sqlite3` connections are bound to the thread that created them. FastAPI runs a SYNC dependency in
+a threadpool worker and a SYNC route in a separate `run_in_threadpool` call, and an ASYNC route on
+the event loop thread — so a sync dependency feeding an async route is guaranteed to hand a
+connection across a thread boundary, and a sync dependency feeding a sync route is only
+*incidentally* on the same worker. That first case was real:
+
+    services/api/.../app.py:271 in upload
+    sqlite3.ProgrammingError: SQLite objects created in a thread can only be used in that same
+    thread. The object was created in thread id 6168981504 and this is thread id 6152155136.
+
+Making the whole chain async puts every connection's creation and use on the event loop thread, by
+construction rather than by luck. `packages/db` does not expose `check_same_thread`, so the
+alternative — the one that "works" until anyio hands out a different worker — was not available and
+would not have been worth taking if it were.
+
+THE COST, STATED: SQLite calls now block the event loop. For this service that is the right trade —
+the datastore is a local file (the build plan's "SQLite + sqlite-vec, no Postgres, no Docker"), the
+reads are milliseconds, and correctness under concurrency beats throughput nobody has measured a
+need for. If that stops being true the fix is an explicit per-request executor, not a return to
+mixed sync/async.
+
 CONNECTIONS ARE PER REQUEST, NOT PER PROCESS, and that is not an oversight. An `OwnerId` is scoped
 to the connection that minted it, so a pooled connection shared between requests would let a handle
 minted for user A be resolvable while serving user B. Opening a connection per request costs
@@ -35,7 +58,7 @@ minted for user A be resolvable while serving user B. Opening a connection per r
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Annotated
 
@@ -56,7 +79,9 @@ def settings_of(request: Request) -> Settings:
     return request.app.state.settings  # type: ignore[no-any-return]
 
 
-def open_database(settings: Annotated[Settings, Depends(settings_of)]) -> Iterator[PaperTreeDb]:
+async def open_database(
+    settings: Annotated[Settings, Depends(settings_of)],
+) -> AsyncIterator[PaperTreeDb]:
     db = PaperTreeDb(settings.database_file)
     try:
         yield db
@@ -64,7 +89,9 @@ def open_database(settings: Annotated[Settings, Depends(settings_of)]) -> Iterat
         db.close()
 
 
-def open_store(settings: Annotated[Settings, Depends(settings_of)]) -> Iterator[JobStore]:
+async def open_store(
+    settings: Annotated[Settings, Depends(settings_of)],
+) -> AsyncIterator[JobStore]:
     store = JobStore(settings.database_file)
     try:
         yield store
@@ -72,7 +99,9 @@ def open_store(settings: Annotated[Settings, Depends(settings_of)]) -> Iterator[
         store.close()
 
 
-def open_auth(settings: Annotated[Settings, Depends(settings_of)]) -> Iterator[sqlite3.Connection]:
+async def open_auth(
+    settings: Annotated[Settings, Depends(settings_of)],
+) -> AsyncIterator[sqlite3.Connection]:
     conn = sqlite3.connect(str(settings.database_file), isolation_level=None)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
@@ -83,7 +112,7 @@ def open_auth(settings: Annotated[Settings, Depends(settings_of)]) -> Iterator[s
         conn.close()
 
 
-def current_user_id(
+async def current_user_id(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     conn: Annotated[sqlite3.Connection, Depends(open_auth)],
 ) -> str:
@@ -117,7 +146,7 @@ class Caller:
     store_owner: OwnerId
 
 
-def caller(
+async def caller(
     user_id: Annotated[str, Depends(current_user_id)],
     db: Annotated[PaperTreeDb, Depends(open_database)],
     store: Annotated[JobStore, Depends(open_store)],

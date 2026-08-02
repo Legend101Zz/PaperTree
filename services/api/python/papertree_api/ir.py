@@ -77,25 +77,44 @@ import json
 from typing import Any
 
 from papertree_db import BlockId, Generation, OwnerId, PaperId, PaperTreeDb, Row
+from papertree_document_ir import Block, Page, ParserInfo
+from pydantic import BaseModel
 
 
 def _loads(value: Any) -> Any:
     return None if value is None else json.loads(value)
 
 
-def _without_nulls(fields: dict[str, Any]) -> dict[str, Any]:
-    """Drops keys whose value is None. OMISSION AND NULL ARE NOT THE SAME THING HERE.
+def _optional_fields(model: type[BaseModel]) -> frozenset[str]:
+    """The field names on `model` that may be OMITTED, by the model's own definition."""
+    return frozenset(
+        name
+        for name, field in model.model_fields.items()
+        if not field.is_required()
+        for name in (name, field.alias or name)
+    )
 
-    Several PaperIR fields are "optional but never nullable" and the generated validator says so in
-    those words — `payload` is one, and an explicit `"payload": null` fails validation with
-    `Value error, payload is optional but never nullable; omit it instead`. A SQLite NULL is how
-    "absent" was stored, so the inverse must omit rather than emit null.
 
-    Found by validating the response against the generated `Paper` model in `test_ir.py`, not by
-    reading. Every block in every fixture was affected; the document was well-formed JSON, indexed
-    fine in the reader, and was not a valid PaperIR document.
+def _without_nulls(model: type[BaseModel], fields: dict[str, Any]) -> dict[str, Any]:
+    """Drop `None` values, but ONLY for fields the model says are optional.
+
+    OMISSION AND NULL ARE DIFFERENT THINGS HERE, IN BOTH DIRECTIONS, and PaperIR uses both:
+
+        Block.payload   OPTIONAL, NEVER NULLABLE.  `"payload": null` fails validation with
+                        "payload is optional but never nullable; omit it instead".
+        Page.image      REQUIRED, NULLABLE.        Omitting it fails with "Field required".
+
+    A SQLite NULL is how both were stored, so neither "always emit null" nor "always drop null" is
+    correct — and each mistake was made here in turn. Blanket-emitting failed `test_ir.py` on
+    `payload`; blanket-dropping then failed `test_end_to_end.py` on `Page.image`, because the
+    committed fixtures all carry a page image and a real parse does not.
+
+    So the rule is taken from the GENERATED MODEL rather than from a list maintained by hand. The
+    schema is the single source of truth (DESIGN.md §1); a hardcoded set here would be a second
+    copy of it, and this file has already been wrong about it twice.
     """
-    return {key: value for key, value in fields.items() if value is not None}
+    optional = _optional_fields(model)
+    return {key: value for key, value in fields.items() if value is not None or key not in optional}
 
 
 #: The flow buckets `Page.flows` always carries, in the schema's own key order. Present-but-empty
@@ -138,6 +157,7 @@ def _flows_for_page(page_index: int, blocks_on_page: list[dict[str, Any]]) -> di
 
 def _page(row: Row, blocks_on_page: list[dict[str, Any]]) -> dict[str, Any]:
     return _without_nulls(
+        Page,
         {
             "page_id": row["page_id"],
             # The column is `page_index`; the IR field is `index`. `_page_params` maps it the other
@@ -159,12 +179,13 @@ def _page(row: Row, blocks_on_page: list[dict[str, Any]]) -> dict[str, Any]:
             # Rule 10: exactly the blocks on this page, nested included, in the order the DB yields.
             "block_ids": [block["block_id"] for block in blocks_on_page],
             "flows": _flows_for_page(row["page_index"], blocks_on_page),
-        }
+        },
     )
 
 
 def _block(row: Row) -> dict[str, Any]:
     return _without_nulls(
+        Block,
         {
             "block_id": row["block_id"],
             "page_index": row["page_index"],
@@ -188,7 +209,7 @@ def _block(row: Row) -> dict[str, Any]:
             "provenance": _loads(row["provenance"]),
             "repairs": _loads(row["repairs"]),
             "alternatives": _loads(row["alternatives"]),
-        }
+        },
     )
 
 
@@ -243,13 +264,20 @@ def paper_document(
         "generation": paper["generation"],
         "source_hash": paper["source_hash"],
         "coordinate_space": paper["coordinate_space"],
-        "parser": {
-            "name": paper["parser_name"],
-            "version": paper["parser_version"],
-            "config_hash": paper["parser_config_hash"],
-            "profile": paper["parser_profile"],
-            "parsed_at": paper["parsed_at"],
-        },
+        # `_without_nulls` HERE TOO: `parser.profile` is another "optional but never nullable"
+        # field. The committed fixtures all carry a profile, so `test_ir.py` never exercised the
+        # null — a REAL parse leaves it unset, and `test_end_to_end.py` is what found it. A
+        # contract test against a fixture is only as complete as the fixture.
+        "parser": _without_nulls(
+            ParserInfo,
+            {
+                "name": paper["parser_name"],
+                "version": paper["parser_version"],
+                "config_hash": paper["parser_config_hash"],
+                "profile": paper["parser_profile"],
+                "parsed_at": paper["parsed_at"],
+            },
+        ),
         "status": paper["status"],
         "partial_reason": paper["partial_reason"],
         "metadata": _loads(paper["metadata"]),

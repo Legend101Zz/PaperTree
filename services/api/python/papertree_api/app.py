@@ -88,6 +88,45 @@ class NoteIn(BaseModel):
 # ─── helpers ──────────────────────────────────────────────────────────────────────────────────
 
 
+#: Crockford base32 — the alphabet `PaperId`'s pattern `^ppr_[0-9A-HJKMNP-TV-Z]{26}$` describes:
+#: 0-9 and A-Z minus I, L, O and U, the four that are misread as 1, 1, 0 and V.
+_CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+
+def derive_paper_id(user_id: str, source_hash: str) -> str:
+    """A `PaperId` that is a pure function of (user, bytes).
+
+    DERIVED, NOT RANDOM, because `0001_core.sql:47` requires it: "a paper_id is minted ONCE per
+    (owner, source_hash) and held fixed across every re-parse". Deriving means re-uploading the
+    same PDF resolves to the same paper instead of a second copy, with no lookup — and since
+    `enqueue_parse`'s idempotency key is `parse:{source_hash}:{paper_id}`, the duplicate upload
+    returns the ORIGINAL job rather than parsing again.
+
+    The `user_id` is in the digest, not the `OwnerId`: the handle is opaque and per-connection, so
+    it would give a different id on every request. Including the user is what stops two people who
+    upload the same public arXiv PDF — the ordinary case for this product — from colliding onto one
+    row that only one of them can read. `tests/test_end_to_end.py` asserts both halves.
+
+    THE SHAPE IS NOT FREE, and getting it wrong fails late: `PaperId`'s pattern is a 26-character
+    Crockford base32 ULID, so a hex digest is REJECTED — by the validator inside the parse job,
+    after the parse has already run:
+
+        ValidationError: paper_id String should match pattern '^ppr_[0-9A-HJKMNP-TV-Z]{26}$'
+        [input_value='pap_c12fe40e896a5ab4c580b0c4dc']
+
+    The job then retried twice and dead-lettered, and the only symptom at the HTTP boundary was a
+    paper that stayed PENDING. That is why `test_end_to_end` asserts on `job["state"]` rather than
+    only on the upload's 202.
+    """
+    digest = hashlib.sha256(f"{user_id}:{source_hash}".encode()).digest()
+    value = int.from_bytes(digest[:17], "big")  # 136 bits; 26 base32 chars carry 130
+    out = []
+    for _ in range(26):
+        out.append(_CROCKFORD[value & 31])
+        value >>= 5
+    return "ppr_" + "".join(reversed(out))
+
+
 def _public(row: Any) -> dict[str, Any]:
     """A DB row as a response body, minus `owner_id`.
 
@@ -145,7 +184,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # does not satisfy it. `migrate()` is forward-only and idempotent, and raises if an applied
     # migration's checksum changed.
     @app.on_event("startup")
-    def _migrate() -> None:
+    async def _migrate() -> None:
         from papertree_db import open_database
 
         db = open_database(resolved.database_file)
@@ -166,7 +205,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 def _mount_auth(app: FastAPI) -> None:
     @app.post("/auth/register", response_model=Session, status_code=status.HTTP_201_CREATED)
-    def register(body: Credentials, conn: AuthConnDep, settings: SettingsDep) -> Session:
+    async def register(body: Credentials, conn: AuthConnDep, settings: SettingsDep) -> Session:
         from papertree_db import PaperTreeDb
 
         db = PaperTreeDb(settings.database_file)
@@ -192,7 +231,7 @@ def _mount_auth(app: FastAPI) -> None:
         return Session(token=token, user_id=created.user_id, email=body.email)
 
     @app.post("/auth/login", response_model=Session)
-    def login(body: Credentials, conn: AuthConnDep, settings: SettingsDep) -> Session:
+    async def login(body: Credentials, conn: AuthConnDep, settings: SettingsDep) -> Session:
         row = conn.execute(
             "SELECT u.user_id AS user_id, u.email AS email, c.password_hash AS password_hash "
             "FROM users u JOIN user_credentials c ON c.user_id = u.user_id WHERE u.email = ?",
@@ -211,7 +250,7 @@ def _mount_auth(app: FastAPI) -> None:
         return Session(token=token, user_id=row["user_id"], email=row["email"])
 
     @app.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
-    def logout(
+    async def logout(
         conn: AuthConnDep,
         authorization: Annotated[str | None, Depends(_raw_bearer)],
     ) -> Response:
@@ -221,7 +260,7 @@ def _mount_auth(app: FastAPI) -> None:
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @app.get("/auth/me")
-    def me(call: CallerDep, conn: AuthConnDep) -> dict[str, str]:
+    async def me(call: CallerDep, conn: AuthConnDep) -> dict[str, str]:
         row = conn.execute("SELECT email FROM users WHERE user_id = ?", (call.user_id,)).fetchone()
         if row is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "no such user")
@@ -257,11 +296,7 @@ def _mount_papers(app: FastAPI) -> None:
             raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "not a PDF")
 
         source_hash = hashlib.sha256(raw).hexdigest()
-        # Derived, not random: 0001_core.sql:47 requires one paper_id per (owner, source_hash),
-        # held fixed across every re-parse. The owner handle is opaque and per-connection so it
-        # cannot go in the digest; the user_id can, and gives the same per-owner property.
-        digest = hashlib.sha256(f"{call.user_id}:{source_hash}".encode()).hexdigest()[:26]
-        paper_id = f"pap_{digest}"
+        paper_id = derive_paper_id(call.user_id, source_hash)
 
         # 202 means "the bytes are safe and a job exists". Writing before enqueueing is the order
         # that makes that true: the reverse can hand a worker a path that is not there yet.
@@ -280,11 +315,11 @@ def _mount_papers(app: FastAPI) -> None:
         return Upload(paper_id=paper_id, job_id=job_id, created=key not in known)
 
     @app.get("/papers")
-    def list_papers(call: CallerDep) -> list[dict[str, Any]]:
+    async def list_papers(call: CallerDep) -> list[dict[str, Any]]:
         return [_public(row) for row in call.db.list_papers(call.db_owner)]
 
     @app.get("/papers/{paper_id}")
-    def get_paper(
+    async def get_paper(
         call: CallerDep, paper_id: str, gen: Annotated[int | None, Query()] = None
     ) -> dict[str, Any]:
         row = call.db.get_paper(
@@ -295,7 +330,7 @@ def _mount_papers(app: FastAPI) -> None:
         return _public(row)
 
     @app.get("/papers/{paper_id}/ir")
-    def get_ir(
+    async def get_ir(
         call: CallerDep, paper_id: str, gen: Annotated[int | None, Query()] = None
     ) -> dict[str, Any]:
         """The one that matters: the shape `indexDocument` takes. See `ir.py`."""
@@ -307,14 +342,14 @@ def _mount_papers(app: FastAPI) -> None:
         return document
 
     @app.get("/papers/{paper_id}/pages")
-    def pages(
+    async def pages(
         call: CallerDep, paper_id: str, gen: Annotated[int | None, Query()] = None
     ) -> list[dict[str, Any]]:
         g = generation(_promoted(call, paper_id, gen))
         return [_public(row) for row in call.db.list_pages(call.db_owner, PaperId(paper_id), g)]
 
     @app.get("/papers/{paper_id}/blocks")
-    def blocks(
+    async def blocks(
         call: CallerDep,
         paper_id: str,
         page: Annotated[int | None, Query(ge=0)] = None,
@@ -337,14 +372,14 @@ def _mount_papers(app: FastAPI) -> None:
         return [_public(row) for row in rows]
 
     @app.get("/papers/{paper_id}/relations")
-    def relations(
+    async def relations(
         call: CallerDep, paper_id: str, gen: Annotated[int | None, Query()] = None
     ) -> list[dict[str, Any]]:
         g = generation(_promoted(call, paper_id, gen))
         return [_public(row) for row in call.db.list_relations(call.db_owner, PaperId(paper_id), g)]
 
     @app.get("/papers/{paper_id}/blocks/{block_id}/location")
-    def location(
+    async def location(
         call: CallerDep, paper_id: str, block_id: str, gen: Annotated[int | None, Query()] = None
     ) -> dict[str, Any]:
         found = block_location(
@@ -359,7 +394,7 @@ def _mount_papers(app: FastAPI) -> None:
         return found
 
     @app.get("/papers/{paper_id}/file")
-    def original(call: CallerDep, settings: SettingsDep, paper_id: str) -> FileResponse:
+    async def original(call: CallerDep, settings: SettingsDep, paper_id: str) -> FileResponse:
         # The ownership check is `_promoted`, which is owner-scoped: a paper this caller cannot see
         # 404s BEFORE any path is built. The filename is the paper_id, so nothing user-supplied
         # ever reaches the filesystem.
@@ -370,7 +405,7 @@ def _mount_papers(app: FastAPI) -> None:
         return FileResponse(path, media_type="application/pdf")
 
     @app.get("/papers/{paper_id}/assets/{kind}/{block_id}")
-    def asset(
+    async def asset(
         call: CallerDep,
         settings: SettingsDep,
         paper_id: str,
@@ -403,7 +438,7 @@ def _mount_papers(app: FastAPI) -> None:
 
 def _mount_highlights(app: FastAPI) -> None:
     @app.get("/papers/{paper_id}/highlights")
-    def list_highlights(
+    async def list_highlights(
         call: CallerDep, paper_id: str, gen: Annotated[int | None, Query()] = None
     ) -> list[dict[str, Any]]:
         g = generation(_promoted(call, paper_id, gen))
@@ -414,7 +449,7 @@ def _mount_highlights(app: FastAPI) -> None:
         ]
 
     @app.post("/papers/{paper_id}/highlights", status_code=status.HTTP_201_CREATED)
-    def create_highlight(
+    async def create_highlight(
         call: CallerDep,
         paper_id: str,
         body: HighlightIn,
@@ -450,7 +485,7 @@ def _mount_highlights(app: FastAPI) -> None:
         return _public(row)
 
     @app.patch("/papers/{paper_id}/highlights/{highlight_id}")
-    def update_note(
+    async def update_note(
         call: CallerDep, paper_id: str, highlight_id: str, body: NoteIn
     ) -> dict[str, Any]:
         changed = call.db.update_highlight_note(call.db_owner, HighlightId(highlight_id), body.note)
@@ -462,7 +497,7 @@ def _mount_highlights(app: FastAPI) -> None:
     @app.delete(
         "/papers/{paper_id}/highlights/{highlight_id}", status_code=status.HTTP_204_NO_CONTENT
     )
-    def delete_highlight(call: CallerDep, paper_id: str, highlight_id: str) -> Response:
+    async def delete_highlight(call: CallerDep, paper_id: str, highlight_id: str) -> Response:
         if call.db.delete_highlight(call.db_owner, HighlightId(highlight_id)) == 0:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "no such highlight")
         return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -473,7 +508,7 @@ def _mount_highlights(app: FastAPI) -> None:
 
 def _mount_jobs(app: FastAPI) -> None:
     @app.get("/jobs/{job_id}")
-    def get_job(call: CallerDep, job_id: str) -> dict[str, Any]:
+    async def get_job(call: CallerDep, job_id: str) -> dict[str, Any]:
         """What makes the library's PENDING state real (#74).
 
         `dashboard/page.tsx` defaults every paper to `processing: 'pending'` because "a row that
