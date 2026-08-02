@@ -26,41 +26,49 @@ is watched failing against exactly that mutation.
 
 So blocks are read per page via `list_blocks_on_page`, which has no such filter.
 
-WHAT THE DATABASE DOES NOT STORE, MEASURED — and what that costs
+HOW `Page.flows` AND `Page.block_ids` ARE REBUILT, AND WHY THE RULE IS THE ONE IT IS
 
-`pages` has no `flows` column and no `block_ids` column, and BOTH FIELDS ARE REQUIRED by the
-PaperIR schema (`Page.model_fields`: `block_ids` required, `flows` required). So a document that
-went in through `put_paper` cannot come back out as a schema-valid PaperIR document without being
-re-derived here. Three separate facts, each measured against all three committed fixtures rather
-than reasoned about:
+Neither is a column, and BOTH ARE REQUIRED by the schema (`Page.model_fields`), so a document that
+went in through `put_paper` cannot come back out valid without them. `0001_core.sql:80-81` says
+`flows` is "reconstructable from `blocks(page_index, flow, "order")` filtered to top-level blocks".
+The intent is right and the stated filter is not implementable as written: `parent_id` is
+OVERLOADED. On resnet page 2 an included paragraph has `parent_id` -> a *heading* (section
+membership) and an excluded `inline_equation` has `parent_id` -> a *paragraph* (true nesting).
+Filtering on `parent_id is None` reproduces the stored value on 0 of 10 fixture pages.
 
-  1. `flows` IS exactly derivable: every block on the page, grouped by `flow`, ordered by `order`.
-     Reproduces the stored value on 3/3 fixtures, every flow, every page.
+The producer's own rule is `not b.is_nested` (`assemble.py:399`). What recovers it from stored
+columns, measured on all three fixtures and all 10 pages:
 
-     `0001_core.sql:80-81` states the rule as "reconstructable from `blocks(page_index, flow,
-     "order")` FILTERED TO TOP-LEVEL BLOCKS". That filter is wrong: resnet page 0 has 11 top-level
-     blocks and its `flows` carries 21 ids — every block on the page, nested ones included.
-     Following the comment would silently drop every caption and table cell from reading order.
-     Filed as a correction; the rule implemented here is the measured one.
+    body    blocks whose `doc_order` is present.  VALIDATOR RULE 15 guarantees this exactly --
+            "`doc_order` is present on EXACTLY the top-level `flow == "body"` blocks" -- and #49
+            records that populating it anywhere else is an ERROR, not a style choice. So this half
+            is a schema invariant, not a fixture observation.
+    others  every block in the flow. Across all three fixtures, ZERO non-body blocks are excluded
+            from `flows` (caption 0, footnote 0, header 0, footer 0, margin 0), so no nesting
+            occurs outside `body` on this corpus. This half is an OBSERVATION, not an invariant.
 
-  2. `block_ids` is the order the blocks appear in the document's `blocks` ARRAY — verified on
-     3/3 fixtures, every page. That order is NOT STORED. `list_blocks_on_page` returns
-     `ORDER BY flow, "order"`, which yields the same SET and a different ORDER on all three
-     fixtures. So `block_ids` is emitted in the order the database can produce, not the order the
-     producer wrote.
+10/10 pages. But an observation is not a guarantee, so it is GUARDED rather than trusted:
 
-  3. The document-level `blocks` array has the same problem for the same reason.
+THE DENSITY GUARD, which is what makes this safe rather than lucky
 
-WHY (2) AND (3) ARE HARMLESS, AND WHY THAT IS AN ARGUMENT RATHER THAN A SHRUG
+Validator rule 14: `order` is dense `0..n-1` within each `(page_index, flow, container)` group. So
+a correctly derived flow list has orders exactly `0..n-1`. A nested block leaking in duplicates an
+order -- the inline_equation above is `order 0` colliding with the paragraph's `order 0` -- and the
+count no longer matches. `_flows_for_page` therefore CHECKS density and raises rather than serving
+a reading order it cannot vouch for.
 
-Array order carries no meaning in PaperIR. Reading order is `Page.flows` plus parent/child descent
-— AGENTS.md §4 is emphatic that it is NOT `doc_order` and NOT array position, because `doc_order`
-exists only on top-level `flow == "body"` blocks and `doc_order ?? 0` collapses every caption to
-position 0. `indexDocument` rebuilds the stream from `flows`, which IS round-tripped exactly. So
-what is lost is a serialisation detail, and what is preserved is the thing every consumer reads.
+Measured: 60/60 derived groups are dense; dropping the `doc_order` filter breaks density on 4/10
+pages, so the guard fires on precisely the mistake it exists for. A wrong `flows` is a wrong text
+stream is a wrong citation polygon, silently -- AGENTS.md §2's failure class -- so failing loudly
+is the only acceptable behaviour. See #91.
 
-A consumer that depended on array order would already be broken by any re-parse. If one turns up,
-the fix is a stored ordinal in `packages/db`, not a sort here.
+`block_ids` is every block on the page (rule 10, `assemble.py:417`), and the ARRAY ORDER the
+producer wrote is not stored: `list_blocks_on_page` is `ORDER BY flow, "order"`, which gives the
+same set in a different order on 3/3 fixtures. That is harmless and this is the argument rather
+than a shrug: array order carries no meaning in PaperIR -- reading order is `Page.flows` plus
+parent/child descent (AGENTS.md §4) -- and `flows` round-trips exactly. A consumer depending on
+array order would already be broken by any re-parse.
+
 """
 
 from __future__ import annotations
@@ -95,63 +103,93 @@ def _without_nulls(fields: dict[str, Any]) -> dict[str, Any]:
 FLOWS: tuple[str, ...] = ("body", "caption", "footnote", "header", "footer", "margin")
 
 
+class ReadingOrderUnrecoverable(RuntimeError):
+    """`Page.flows` could not be rebuilt with confidence. Never served past; always raised.
+
+    See this module's header. The alternative is emitting a reading order that is wrong in a way no
+    consumer can detect, which corrupts every character offset, quote selector and citation polygon
+    downstream while the document still validates and renders.
+    """
+
+
+def _flows_for_page(page_index: int, blocks_on_page: list[dict[str, Any]]) -> dict[str, list[str]]:
+    flows: dict[str, list[str]] = {}
+    for flow in FLOWS:
+        members = [block for block in blocks_on_page if block["flow"] == flow]
+        if flow == "body":
+            # `_block` drops null keys, so an absent `doc_order` means NULL in the column, which
+            # validator rule 15 makes equivalent to "not a top-level body block".
+            members = [block for block in members if block.get("doc_order") is not None]
+        members.sort(key=lambda block: block["order"])
+
+        # Rule 14. A duplicate or missing `order` means the membership rule above admitted a nested
+        # block or dropped a top-level one, and the resulting reading order would be wrong.
+        orders = [block["order"] for block in members]
+        if orders != list(range(len(orders))):
+            raise ReadingOrderUnrecoverable(
+                f"page {page_index} flow {flow!r}: `order` is {orders}, not dense "
+                f"0..{len(orders) - 1}. "
+                "Page.flows cannot be rebuilt from the stored columns for this document — see #91. "
+                "Refusing to serve a reading order that would be silently wrong."
+            )
+        flows[flow] = [block["block_id"] for block in members]
+    return flows
+
+
 def _page(row: Row, blocks_on_page: list[dict[str, Any]]) -> dict[str, Any]:
-    return _without_nulls({
-        "page_id": row["page_id"],
-        # The column is `page_index`; the IR field is `index`. `_page_params` maps it the other
-        # way, and getting this backwards yields pages that index as page 0 forever.
-        "index": row["page_index"],
-        "width": row["width"],
-        "height": row["height"],
-        "rotation": row["rotation"],
-        "user_unit": row["user_unit"],
-        "crop_box": _loads(row["crop_box"]),
-        "media_box": _loads(row["media_box"]),
-        "image": _loads(row["image"]),
-        "has_text_layer": bool(row["has_text_layer"]),
-        "is_scanned": bool(row["is_scanned"]),
-        "confidence": row["confidence"],
-        # Derived, because the schema requires them and the DB stores neither. See the header:
-        # `flows` reproduces the producer exactly (3/3 fixtures); `block_ids` reproduces the same
-        # SET in a different ORDER, and array order carries no meaning in PaperIR.
-        "block_ids": [block["block_id"] for block in blocks_on_page],
-        "flows": {
-            flow: [
-                block["block_id"]
-                for block in sorted(
-                    (b for b in blocks_on_page if b["flow"] == flow), key=lambda b: b["order"]
-                )
-            ]
-            for flow in FLOWS
-        },
-    })
+    return _without_nulls(
+        {
+            "page_id": row["page_id"],
+            # The column is `page_index`; the IR field is `index`. `_page_params` maps it the other
+            # way, and getting this backwards yields pages that index as page 0 forever.
+            "index": row["page_index"],
+            "width": row["width"],
+            "height": row["height"],
+            "rotation": row["rotation"],
+            "user_unit": row["user_unit"],
+            "crop_box": _loads(row["crop_box"]),
+            "media_box": _loads(row["media_box"]),
+            "image": _loads(row["image"]),
+            "has_text_layer": bool(row["has_text_layer"]),
+            "is_scanned": bool(row["is_scanned"]),
+            "confidence": row["confidence"],
+            # Derived, because the schema requires them and the DB stores neither. See the header:
+            # `flows` reproduces the producer exactly (3/3 fixtures); `block_ids` gives the same
+            # SET in a different ORDER, and array order carries no meaning in PaperIR.
+            # Rule 10: exactly the blocks on this page, nested included, in the order the DB yields.
+            "block_ids": [block["block_id"] for block in blocks_on_page],
+            "flows": _flows_for_page(row["page_index"], blocks_on_page),
+        }
+    )
 
 
 def _block(row: Row) -> dict[str, Any]:
-    return _without_nulls({
-        "block_id": row["block_id"],
-        "page_index": row["page_index"],
-        "type": row["type"],
-        "flow": row["flow"],
-        "order": row["order"],
-        "doc_order": row["doc_order"],
-        "parent_id": row["parent_id"],
-        "prev_id": row["prev_id"],
-        "next_id": row["next_id"],
-        "child_ids": _loads(row["child_ids"]),
-        "polygon": _loads(row["polygon"]),
-        "bbox": [row["bbox_x0"], row["bbox_y0"], row["bbox_x1"], row["bbox_y1"]],
-        "text": row["text"],
-        "text_normalised": row["text_normalised"],
-        "content_hash": row["content_hash"],
-        "spans": _loads(row["spans"]),
-        "payload": _loads(row["payload"]),
-        "source": row["source"],
-        "confidence": row["confidence"],
-        "provenance": _loads(row["provenance"]),
-        "repairs": _loads(row["repairs"]),
-        "alternatives": _loads(row["alternatives"]),
-    })
+    return _without_nulls(
+        {
+            "block_id": row["block_id"],
+            "page_index": row["page_index"],
+            "type": row["type"],
+            "flow": row["flow"],
+            "order": row["order"],
+            "doc_order": row["doc_order"],
+            "parent_id": row["parent_id"],
+            "prev_id": row["prev_id"],
+            "next_id": row["next_id"],
+            "child_ids": _loads(row["child_ids"]),
+            "polygon": _loads(row["polygon"]),
+            "bbox": [row["bbox_x0"], row["bbox_y0"], row["bbox_x1"], row["bbox_y1"]],
+            "text": row["text"],
+            "text_normalised": row["text_normalised"],
+            "content_hash": row["content_hash"],
+            "spans": _loads(row["spans"]),
+            "payload": _loads(row["payload"]),
+            "source": row["source"],
+            "confidence": row["confidence"],
+            "provenance": _loads(row["provenance"]),
+            "repairs": _loads(row["repairs"]),
+            "alternatives": _loads(row["alternatives"]),
+        }
+    )
 
 
 def _relation(row: Row) -> dict[str, Any]:

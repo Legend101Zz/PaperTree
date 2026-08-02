@@ -32,10 +32,10 @@ from __future__ import annotations
 import hashlib
 from typing import Annotated, Any
 
-from fastapi import Body, Depends, FastAPI, File, HTTPException, Query, UploadFile, status
+from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
-from papertree_db import BlockId, HighlightId, PaperId, generation, new_id
+from papertree_db import BlockId, HighlightId, PaperId, generation
 from papertree_document_worker.crops import CropStore
 from papertree_document_worker.job import enqueue_parse
 from pydantic import BaseModel, Field
@@ -124,7 +124,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="PaperTree",
         version="1.0.0",
-        summary="PaperIR over HTTP: upload a PDF, watch it parse, read the document a client can index.",
+        summary=(
+            "PaperIR over HTTP: upload a PDF, watch it parse, read the document a client can index."
+        ),
     )
     app.state.settings = resolved
 
@@ -174,7 +176,9 @@ def _mount_auth(app: FastAPI) -> None:
             except Exception as exc:  # sqlite3.IntegrityError on users_email_unique
                 # 409 rather than a 500, and deliberately not "that email is taken" phrasing in a
                 # way that differs from a wrong-password response — see `login`.
-                raise HTTPException(status.HTTP_409_CONFLICT, "could not create that account") from exc
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT, "could not create that account"
+                ) from exc
         finally:
             db.close()
 
@@ -225,7 +229,9 @@ def _mount_auth(app: FastAPI) -> None:
 
 
 def _raw_bearer(
-    credentials: Annotated[Any, Depends(__import__("fastapi").security.HTTPBearer(auto_error=False))],
+    credentials: Annotated[
+        Any, Depends(__import__("fastapi").security.HTTPBearer(auto_error=False))
+    ],
 ) -> str | None:
     return None if credentials is None else str(credentials.credentials)
 
@@ -235,7 +241,13 @@ def _raw_bearer(
 
 def _mount_papers(app: FastAPI) -> None:
     @app.post("/papers", response_model=Upload, status_code=status.HTTP_202_ACCEPTED)
-    async def upload(call: CallerDep, settings: SettingsDep, file: UploadFile = File(...)) -> Upload:
+    async def upload(
+        call: CallerDep,
+        settings: SettingsDep,
+        # `Annotated[..., File()]` rather than `= File(...)`: a call in a default argument is
+        # what ruff's B008 flags. FastAPI accepts both; only this form is lint-clean.
+        file: Annotated[UploadFile, File()],
+    ) -> Upload:
         raw = await file.read()
         if not raw:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "empty upload")
@@ -272,14 +284,20 @@ def _mount_papers(app: FastAPI) -> None:
         return [_public(row) for row in call.db.list_papers(call.db_owner)]
 
     @app.get("/papers/{paper_id}")
-    def get_paper(call: CallerDep, paper_id: str, gen: Annotated[int | None, Query()] = None) -> dict[str, Any]:
-        row = call.db.get_paper(call.db_owner, PaperId(paper_id), generation(_promoted(call, paper_id, gen)))
+    def get_paper(
+        call: CallerDep, paper_id: str, gen: Annotated[int | None, Query()] = None
+    ) -> dict[str, Any]:
+        row = call.db.get_paper(
+            call.db_owner, PaperId(paper_id), generation(_promoted(call, paper_id, gen))
+        )
         if row is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "no such paper")
         return _public(row)
 
     @app.get("/papers/{paper_id}/ir")
-    def get_ir(call: CallerDep, paper_id: str, gen: Annotated[int | None, Query()] = None) -> dict[str, Any]:
+    def get_ir(
+        call: CallerDep, paper_id: str, gen: Annotated[int | None, Query()] = None
+    ) -> dict[str, Any]:
         """The one that matters: the shape `indexDocument` takes. See `ir.py`."""
         document = paper_document(
             call.db, call.db_owner, PaperId(paper_id), generation(_promoted(call, paper_id, gen))
@@ -289,7 +307,9 @@ def _mount_papers(app: FastAPI) -> None:
         return document
 
     @app.get("/papers/{paper_id}/pages")
-    def pages(call: CallerDep, paper_id: str, gen: Annotated[int | None, Query()] = None) -> list[dict[str, Any]]:
+    def pages(
+        call: CallerDep, paper_id: str, gen: Annotated[int | None, Query()] = None
+    ) -> list[dict[str, Any]]:
         g = generation(_promoted(call, paper_id, gen))
         return [_public(row) for row in call.db.list_pages(call.db_owner, PaperId(paper_id), g)]
 
@@ -310,12 +330,16 @@ def _mount_papers(app: FastAPI) -> None:
             rows = [
                 row
                 for p in call.db.list_pages(call.db_owner, PaperId(paper_id), g)
-                for row in call.db.list_blocks_on_page(call.db_owner, PaperId(paper_id), g, p["page_index"])
+                for row in call.db.list_blocks_on_page(
+                    call.db_owner, PaperId(paper_id), g, p["page_index"]
+                )
             ]
         return [_public(row) for row in rows]
 
     @app.get("/papers/{paper_id}/relations")
-    def relations(call: CallerDep, paper_id: str, gen: Annotated[int | None, Query()] = None) -> list[dict[str, Any]]:
+    def relations(
+        call: CallerDep, paper_id: str, gen: Annotated[int | None, Query()] = None
+    ) -> list[dict[str, Any]]:
         g = generation(_promoted(call, paper_id, gen))
         return [_public(row) for row in call.db.list_relations(call.db_owner, PaperId(paper_id), g)]
 
@@ -358,7 +382,12 @@ def _mount_papers(app: FastAPI) -> None:
         # Resolve the block through the OWNER-SCOPED query before touching disk: that is what
         # makes `kind`/`block_id` safe to interpolate into a path. A block id that does not belong
         # to this owner never reaches `CropStore`.
-        if block_location(call.db, call.db_owner, PaperId(paper_id), generation(g), BlockId(block_id)) is None:
+        if (
+            block_location(
+                call.db, call.db_owner, PaperId(paper_id), generation(g), BlockId(block_id)
+            )
+            is None
+        ):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "no such block")
         store = CropStore(root=settings.asset_root, paper_id=paper_id, generation=g)
         try:
@@ -374,15 +403,22 @@ def _mount_papers(app: FastAPI) -> None:
 
 def _mount_highlights(app: FastAPI) -> None:
     @app.get("/papers/{paper_id}/highlights")
-    def list_highlights(call: CallerDep, paper_id: str, gen: Annotated[int | None, Query()] = None) -> list[dict[str, Any]]:
+    def list_highlights(
+        call: CallerDep, paper_id: str, gen: Annotated[int | None, Query()] = None
+    ) -> list[dict[str, Any]]:
         g = generation(_promoted(call, paper_id, gen))
         # `resolve_highlights` is the pre-joined highlight-with-anchors view; a caller that wanted
         # to rebuild that join client-side would be reimplementing a query that exists.
-        return [_public(row) for row in call.db.resolve_highlights(call.db_owner, PaperId(paper_id), g)]
+        return [
+            _public(row) for row in call.db.resolve_highlights(call.db_owner, PaperId(paper_id), g)
+        ]
 
     @app.post("/papers/{paper_id}/highlights", status_code=status.HTTP_201_CREATED)
     def create_highlight(
-        call: CallerDep, paper_id: str, body: HighlightIn, gen: Annotated[int | None, Query()] = None
+        call: CallerDep,
+        paper_id: str,
+        body: HighlightIn,
+        gen: Annotated[int | None, Query()] = None,
     ) -> dict[str, Any]:
         g = generation(_promoted(call, paper_id, gen))
         highlight_id = call.db.create_highlight(
@@ -414,14 +450,18 @@ def _mount_highlights(app: FastAPI) -> None:
         return _public(row)
 
     @app.patch("/papers/{paper_id}/highlights/{highlight_id}")
-    def update_note(call: CallerDep, paper_id: str, highlight_id: str, body: NoteIn) -> dict[str, Any]:
+    def update_note(
+        call: CallerDep, paper_id: str, highlight_id: str, body: NoteIn
+    ) -> dict[str, Any]:
         changed = call.db.update_highlight_note(call.db_owner, HighlightId(highlight_id), body.note)
         if changed == 0:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "no such highlight")
         row = call.db.get_highlight(call.db_owner, HighlightId(highlight_id))
         return _public(row) if row is not None else {}
 
-    @app.delete("/papers/{paper_id}/highlights/{highlight_id}", status_code=status.HTTP_204_NO_CONTENT)
+    @app.delete(
+        "/papers/{paper_id}/highlights/{highlight_id}", status_code=status.HTTP_204_NO_CONTENT
+    )
     def delete_highlight(call: CallerDep, paper_id: str, highlight_id: str) -> Response:
         if call.db.delete_highlight(call.db_owner, HighlightId(highlight_id)) == 0:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "no such highlight")
@@ -459,7 +499,12 @@ def _mount_jobs(app: FastAPI) -> None:
             # `owner_id` is on the Job dataclass and is DELIBERATELY not in this dict. It is the
             # opaque handle, and #74's one non-negotiable is that it never crosses the wire.
             "steps": [
-                {"name": step.step_name, "index": step.step_index, "state": step.state, "error": step.error}
+                {
+                    "name": step.step_name,
+                    "index": step.step_index,
+                    "state": step.state,
+                    "error": step.error,
+                }
                 for step in call.store.list_steps(call.store_owner, job_id)
             ],
         }

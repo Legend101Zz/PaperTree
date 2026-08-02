@@ -86,7 +86,7 @@ def token_hash(token: str) -> str:
 
 
 def create_session(conn: sqlite3.Connection, user_id: str, *, hours: int) -> str:
-    """Inserts a session row and returns the bearer token. The caller commits nothing; autocommit."""
+    """Inserts a session row and returns the bearer token. Autocommit; nothing to commit."""
     token, digest = mint_token()
     expires = (datetime.now(UTC) + timedelta(hours=hours)).replace(microsecond=0)
     conn.execute(

@@ -23,16 +23,16 @@ THE MUTATION EACH ASSERTION CATCHES is named on the assertion.
 
 from __future__ import annotations
 
-import pytest
-from fastapi.testclient import TestClient
-from papertree_api.settings import Settings
+from pathlib import Path
+from typing import Any
 
-from conftest import FIXTURE_DIR, auth, load_fixture, register, seed_paper
+import pytest
+from api_support import FIXTURE_DIR, auth, harness, load_fixture, register, seed_paper
 
 SLUGS = ["resnet-cvpr-2col", "neural-odes-mathheavy", "attention-is-all-you-need"]
 
 
-def _normalised(document: dict) -> dict:
+def _normalised(document: dict[str, Any]) -> dict[str, Any]:
     """The document with the two orderings the database cannot preserve made canonical.
 
     NOT a way to make the test pass. It is the statement of what the round trip claims, and the
@@ -67,7 +67,7 @@ def _normalised(document: dict) -> dict:
 
 @pytest.mark.parametrize("slug", SLUGS)
 def test_the_ir_response_matches_the_committed_fixture_field_for_field(
-    client: TestClient, settings: Settings, slug: str
+    tmp_path: Path, slug: str
 ) -> None:
     """The whole contract, in one comparison, on the terms the round trip actually claims.
 
@@ -78,18 +78,19 @@ def test_the_ir_response_matches_the_committed_fixture_field_for_field(
     MUTATION: emit relations as `from_block`/`to_block`. Fails on the key set. Found for real.
     MUTATION: `_loads` a relation's `provenance`. Raises on the first row. Found for real.
     """
-    token = register(client, "alice@example.com")
-    paper_id = seed_paper(settings, client, token, slug)
-    expected = load_fixture(slug)
+    with harness(tmp_path) as h:
+        token = register(h.client, "alice@example.com")
+        paper_id = seed_paper(h.settings, h.client, token, slug)
+        expected = load_fixture(slug)
 
-    got = client.get(f"/papers/{paper_id}/ir", headers=auth(token))
-    assert got.status_code == 200, got.text
+        got = h.client.get(f"/papers/{paper_id}/ir", headers=auth(token))
+        assert got.status_code == 200, got.text
 
-    assert _normalised(got.json()) == _normalised(expected)
+        assert _normalised(got.json()) == _normalised(expected)
 
 
 @pytest.mark.parametrize("slug", SLUGS)
-def test_flows_round_trip_exactly(client: TestClient, settings: Settings, slug: str) -> None:
+def test_flows_round_trip_exactly(tmp_path: Path, slug: str) -> None:
     """`Page.flows` is the reading order, so it is compared with ORDER, not as a set.
 
     This is the assertion that makes `_normalised`'s block-order relaxation honest: what was
@@ -99,91 +100,95 @@ def test_flows_round_trip_exactly(client: TestClient, settings: Settings, slug: 
     MUTATION: derive `flows` from top-level blocks only, as `0001_core.sql:80-81` instructs. resnet
     page 0 goes from 21 ids to 11 and this fails. That comment is wrong and this test is the proof.
     """
-    token = register(client, "alice@example.com")
-    paper_id = seed_paper(settings, client, token, slug)
-    expected = load_fixture(slug)
+    with harness(tmp_path) as h:
+        token = register(h.client, "alice@example.com")
+        paper_id = seed_paper(h.settings, h.client, token, slug)
+        expected = load_fixture(slug)
 
-    document = client.get(f"/papers/{paper_id}/ir", headers=auth(token)).json()
-    for got_page, expected_page in zip(document["pages"], expected["pages"], strict=True):
-        assert got_page["flows"] == expected_page["flows"], f"page {expected_page['index']}"
+        document = h.client.get(f"/papers/{paper_id}/ir", headers=auth(token)).json()
+        for got_page, expected_page in zip(document["pages"], expected["pages"], strict=True):
+            assert got_page["flows"] == expected_page["flows"], f"page {expected_page['index']}"
 
 
 @pytest.mark.parametrize("slug", SLUGS)
-def test_page_block_ids_carry_the_same_set_the_producer_wrote(
-    client: TestClient, settings: Settings, slug: str
-) -> None:
+def test_page_block_ids_carry_the_same_set_the_producer_wrote(tmp_path: Path, slug: str) -> None:
     """The honest version of the `block_ids` claim: same members, different order.
 
     Recorded as a test rather than only as a comment so the next session cannot mistake it for an
     oversight. If `packages/db` ever stores an ordinal, this becomes an equality and the relaxation
     in `_normalised` can go.
     """
-    token = register(client, "alice@example.com")
-    paper_id = seed_paper(settings, client, token, slug)
-    expected = load_fixture(slug)
+    with harness(tmp_path) as h:
+        token = register(h.client, "alice@example.com")
+        paper_id = seed_paper(h.settings, h.client, token, slug)
+        expected = load_fixture(slug)
 
-    document = client.get(f"/papers/{paper_id}/ir", headers=auth(token)).json()
-    for got_page, expected_page in zip(document["pages"], expected["pages"], strict=True):
-        assert set(got_page["block_ids"]) == set(expected_page["block_ids"])
-        assert len(got_page["block_ids"]) == len(expected_page["block_ids"])
+        document = h.client.get(f"/papers/{paper_id}/ir", headers=auth(token)).json()
+        for got_page, expected_page in zip(document["pages"], expected["pages"], strict=True):
+            assert set(got_page["block_ids"]) == set(expected_page["block_ids"])
+            assert len(got_page["block_ids"]) == len(expected_page["block_ids"])
 
 
 @pytest.mark.parametrize("slug", SLUGS)
-def test_no_block_is_lost(client: TestClient, settings: Settings, slug: str) -> None:
+def test_no_block_is_lost(tmp_path: Path, slug: str) -> None:
     """Named separately from the equality above so a regression reports a COUNT, not a diff.
 
     A whole-document `assert a == b` failure on a 974-block paper is unreadable. This one says
     "974 != 657" and points straight at the doc_order filter.
     """
-    token = register(client, "alice@example.com")
-    paper_id = seed_paper(settings, client, token, slug)
-    expected = load_fixture(slug)
+    with harness(tmp_path) as h:
+        token = register(h.client, "alice@example.com")
+        paper_id = seed_paper(h.settings, h.client, token, slug)
+        expected = load_fixture(slug)
 
-    document = client.get(f"/papers/{paper_id}/ir", headers=auth(token)).json()
-    assert len(document["blocks"]) == len(expected["blocks"])
-    assert {b["block_id"] for b in document["blocks"]} == {b["block_id"] for b in expected["blocks"]}
+        document = h.client.get(f"/papers/{paper_id}/ir", headers=auth(token)).json()
+        assert len(document["blocks"]) == len(expected["blocks"])
+        assert {b["block_id"] for b in document["blocks"]} == {
+            b["block_id"] for b in expected["blocks"]
+        }
 
 
 @pytest.mark.parametrize("slug", SLUGS)
 def test_the_non_body_blocks_the_obvious_implementation_would_drop_are_present(
-    client: TestClient, settings: Settings, slug: str
+    tmp_path: Path, slug: str
 ) -> None:
     """Non-vacuity for the test above: there ARE blocks with no `doc_order`, and they came back.
 
     Without this, `test_no_block_is_lost` would pass on a paper where every block happened to be
     top-level body text, and the reader would find out on the first paper with a caption.
     """
-    token = register(client, "alice@example.com")
-    paper_id = seed_paper(settings, client, token, slug)
+    with harness(tmp_path) as h:
+        token = register(h.client, "alice@example.com")
+        paper_id = seed_paper(h.settings, h.client, token, slug)
 
-    document = client.get(f"/papers/{paper_id}/ir", headers=auth(token)).json()
-    without_doc_order = [b for b in document["blocks"] if b["doc_order"] is None]
-    assert len(without_doc_order) > 0, (
-        f"{slug} has no blocks lacking doc_order, so this test asserts nothing on it — "
-        "pick a fixture with captions or footnotes"
-    )
+        document = h.client.get(f"/papers/{paper_id}/ir", headers=auth(token)).json()
+        # `doc_order` is OMITTED, not null, when absent — PaperIR distinguishes the two.
+        without_doc_order = [b for b in document["blocks"] if b.get("doc_order") is None]
+        assert len(without_doc_order) > 0, (
+            f"{slug} has no blocks lacking doc_order, so this test asserts nothing on it — "
+            "pick a fixture with captions or footnotes"
+        )
 
 
-def test_relations_carry_the_ir_field_names_and_resolve(client: TestClient, settings: Settings) -> None:
+def test_relations_carry_the_ir_field_names_and_resolve(tmp_path: Path) -> None:
     """MUTATION: emit `from_block`/`to_block`. Every endpoint resolves to nothing.
 
     resnet has 974 blocks and 25 relations on `main` (#66), and three types account for all of
     them. Asserting the endpoints RESOLVE is what makes this more than a key-name check.
     """
-    token = register(client, "alice@example.com")
-    paper_id = seed_paper(settings, client, token, "resnet-cvpr-2col")
+    with harness(tmp_path) as h:
+        token = register(h.client, "alice@example.com")
+        paper_id = seed_paper(h.settings, h.client, token, "resnet-cvpr-2col")
 
-    document = client.get(f"/papers/{paper_id}/ir", headers=auth(token)).json()
-    ids = {b["block_id"] for b in document["blocks"]}
-    assert len(document["relations"]) > 0
-    for relation in document["relations"]:
-        assert set(relation) == {"type", "from", "to", "confidence", "provenance"}
-        assert relation["from"] in ids and relation["to"] in ids
+        document = h.client.get(f"/papers/{paper_id}/ir", headers=auth(token)).json()
+        ids = {b["block_id"] for b in document["blocks"]}
+        assert len(document["relations"]) > 0
+        for relation in document["relations"]:
+            assert set(relation) == {"type", "from", "to", "confidence", "provenance"}
+            assert relation["from"] in ids and relation["to"] in ids
 
 
-def test_the_document_still_validates_against_the_shipped_json_schema(
-    client: TestClient, settings: Settings
-) -> None:
+def test_the_document_still_validates_against_the_shipped_json_schema(tmp_path: Path) -> None:
     """The strongest available check that the round trip did not corrupt anything.
 
     `packages/document-ir/schema/paperir-1.0.0.schema.json` is the single source of truth (DESIGN.md
@@ -194,37 +199,40 @@ def test_the_document_still_validates_against_the_shipped_json_schema(
     Uses the Pydantic binding rather than an AJV-equivalent, because that binding is GENERATED from
     the schema and is what the worker itself validates with.
     """
-    from papertree_document_ir import Paper  # generated from the schema
+    with harness(tmp_path) as h:
+        from papertree_document_ir import Paper  # generated from the schema
 
-    token = register(client, "alice@example.com")
-    paper_id = seed_paper(settings, client, token, "resnet-cvpr-2col")
+        token = register(h.client, "alice@example.com")
+        paper_id = seed_paper(h.settings, h.client, token, "resnet-cvpr-2col")
 
-    document = client.get(f"/papers/{paper_id}/ir", headers=auth(token)).json()
-    Paper.model_validate(document)
+        document = h.client.get(f"/papers/{paper_id}/ir", headers=auth(token)).json()
+        Paper.model_validate(document)
 
 
-def test_the_fixtures_this_file_depends_on_are_actually_there(client: TestClient) -> None:
+def test_the_fixtures_this_file_depends_on_are_actually_there() -> None:
     """Loud rather than skipped.
 
     Unlike the corpus PDFs (fetched, not committed — AGENTS.md §4), these three JSON files ARE
     committed, so their absence is a broken checkout rather than an expected CI condition. If that
     ever changes this fails with the reason instead of the suite quietly shrinking.
     """
+    # No harness: this asserts a property of the checkout, not of the service.
     missing = [slug for slug in SLUGS if not (FIXTURE_DIR / f"{slug}.paperir.json").is_file()]
     assert missing == [], f"committed fixtures are missing: {missing} (looked in {FIXTURE_DIR})"
 
 
-def test_block_location_is_what_a_citation_needs(client: TestClient, settings: Settings) -> None:
+def test_block_location_is_what_a_citation_needs(tmp_path: Path) -> None:
     """`GET /blocks/{id}/location` — the (pageIndex, bbox) pair #64's scroll needs, server-side."""
-    token = register(client, "alice@example.com")
-    paper_id = seed_paper(settings, client, token, "resnet-cvpr-2col")
+    with harness(tmp_path) as h:
+        token = register(h.client, "alice@example.com")
+        paper_id = seed_paper(h.settings, h.client, token, "resnet-cvpr-2col")
 
-    document = client.get(f"/papers/{paper_id}/ir", headers=auth(token)).json()
-    block = document["blocks"][5]
+        document = h.client.get(f"/papers/{paper_id}/ir", headers=auth(token)).json()
+        block = document["blocks"][5]
 
-    found = client.get(
-        f"/papers/{paper_id}/blocks/{block['block_id']}/location", headers=auth(token)
-    ).json()
-    assert found["page_index"] == block["page_index"]
-    assert found["bbox"] == block["bbox"]
-    assert found["polygon"] == block["polygon"]
+        found = h.client.get(
+            f"/papers/{paper_id}/blocks/{block['block_id']}/location", headers=auth(token)
+        ).json()
+        assert found["page_index"] == block["page_index"]
+        assert found["bbox"] == block["bbox"]
+        assert found["polygon"] == block["polygon"]
