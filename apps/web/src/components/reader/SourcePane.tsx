@@ -29,7 +29,12 @@ export interface SourcePaneAnchor {
 
 export interface SourcePaneProps {
   readonly doc: IndexedDocument;
-  readonly pdfUrl: string;
+  /**
+   * A same-origin path (fixture) or the PDF bytes (API — the file endpoint needs a bearer header
+   * that pdf.js cannot send). `null` while the fetch is in flight; the pane renders its shell and
+   * `PdfDocumentProvider` opens nothing until it arrives.
+   */
+  readonly pdfSource: string | ArrayBuffer | null;
   readonly zoom: number;
   readonly anchors: readonly SourcePaneAnchor[];
   readonly onAnchorCaptured: (anchor: Anchor) => void;
@@ -155,7 +160,7 @@ export function SourcePane(props: SourcePaneProps) {
   );
 
   return (
-    <PdfDocumentProvider src={props.pdfUrl}>
+    <PdfDocumentProvider src={props.pdfSource}>
       <VirtualPageList
         ref={(handle) => {
           listRef.current = handle;

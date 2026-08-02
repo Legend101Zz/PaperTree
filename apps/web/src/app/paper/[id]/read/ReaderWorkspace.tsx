@@ -42,12 +42,24 @@ import {
   type DocumentRef,
   type PendingScroll,
 } from '@/components/reader/documentHandle';
-import { loadPaper, pdfUrlFor, type FixtureSlug } from '@/lib/fixtures';
+import {
+  loadDocument,
+  paperRefKey,
+  pdfSourceFor,
+  type PaperRef,
+} from '@/lib/paperSource';
 
 export type ReadingMode = 'source' | 'guided' | 'split';
 
 export interface ReaderWorkspaceProps {
-  readonly slug: FixtureSlug;
+  /**
+   * A fixture slug or a real `paper_id`, already resolved by the route.
+   *
+   * A discriminated union rather than a bare string: the two differ in where the document AND the
+   * PDF come from, and a string would have pushed that decision back down into every consumer —
+   * which is how `pdfUrlFor(slug)` came to be a second fixture-specific seam nobody counted.
+   */
+  readonly paper: PaperRef;
 }
 
 interface AnchorRecord {
@@ -55,7 +67,9 @@ interface AnchorRecord {
   readonly resolution: Resolution;
 }
 
-export function ReaderWorkspace({ slug }: ReaderWorkspaceProps) {
+export function ReaderWorkspace({ paper }: ReaderWorkspaceProps) {
+  const paperKey = paperRefKey(paper);
+  const [pdfSource, setPdfSource] = useState<string | ArrayBuffer | null>(null);
   const [doc, setDoc] = useState<IndexedDocument | null>(null);
   const [loadError, setLoadError] = useState<Error | null>(null);
   const [mode, setMode] = useState<ReadingMode>('source');
@@ -71,21 +85,29 @@ export function ReaderWorkspace({ slug }: ReaderWorkspaceProps) {
 
   // Mode, zoom and scroll are remembered PER PAPER (IA §18.2's persistence column), so returning
   // to a paper returns you to how you were reading it, not to a global default.
-  const storageKey = `papertree/reader/${slug}`;
+  const storageKey = `papertree/reader/${paperKey}`;
 
   useEffect(() => {
     let cancelled = false;
-    loadPaper(slug)
+    const fail = (error: unknown) => {
+      if (!cancelled) setLoadError(error instanceof Error ? error : new Error(String(error)));
+    };
+    loadDocument(paper)
       .then((indexed) => {
         if (!cancelled) setDoc(indexed);
       })
-      .catch((error: unknown) => {
-        if (!cancelled) setLoadError(error instanceof Error ? error : new Error(String(error)));
-      });
+      .catch(fail);
+    // The PDF is fetched alongside the IR rather than after it: they are independent, and for an
+    // API paper the bytes need an Authorization header that pdf.js cannot send for itself.
+    pdfSourceFor(paper)
+      .then((source) => {
+        if (!cancelled) setPdfSource(source);
+      })
+      .catch(fail);
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [paper]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -238,7 +260,7 @@ export function ReaderWorkspace({ slug }: ReaderWorkspaceProps) {
   if (doc === null) {
     return (
       <div role="status" aria-live="polite" className="p-8 text-sm opacity-80">
-        Loading {slug}…
+        Loading {paper.kind === 'fixture' ? paper.slug : paper.paperId}…
       </div>
     );
   }
@@ -246,7 +268,7 @@ export function ReaderWorkspace({ slug }: ReaderWorkspaceProps) {
   return (
     <ReaderWorkspaceView
       doc={doc}
-      slug={slug}
+      paper={paper}
       mode={mode}
       onModeChange={setMode}
       zoom={zoom}
@@ -260,7 +282,7 @@ export function ReaderWorkspace({ slug }: ReaderWorkspaceProps) {
       onAnchorCaptured={addAnchor}
       onShowSource={showSource}
       documentRef={documentRef}
-      pdfUrl={pdfUrlFor(slug)}
+      pdfSource={pdfSource}
       onJumpToPage={jumpToPage}
     />
   );
@@ -276,7 +298,7 @@ export function ReaderWorkspace({ slug }: ReaderWorkspaceProps) {
  */
 interface ViewProps {
   readonly doc: IndexedDocument;
-  readonly slug: FixtureSlug;
+  readonly paper: PaperRef;
   readonly mode: ReadingMode;
   readonly onModeChange: (mode: ReadingMode) => void;
   readonly zoom: number;
@@ -290,7 +312,7 @@ interface ViewProps {
   readonly onAnchorCaptured: (anchor: Anchor) => void;
   readonly onShowSource: (blockIds: readonly string[]) => void;
   readonly documentRef: DocumentRef;
-  readonly pdfUrl: string;
+  readonly pdfSource: string | ArrayBuffer | null;
   /** A page-level jump for an anchor that could not be placed — never a delete. */
   readonly onJumpToPage: (pageIndex: number, anchorId: string) => void;
 }
@@ -317,7 +339,8 @@ function ReaderWorkspaceView(props: ViewProps) {
   );
 
   const title =
-    doc.blocks.find((block) => block.type === 'title')?.text.replace(/\n/g, ' ') ?? props.slug;
+    doc.blocks.find((block) => block.type === 'title')?.text.replace(/\n/g, ' ') ??
+    paperRefKey(props.paper);
 
   return (
     <div className="flex h-dvh flex-col bg-[--pt-page-ground]">
@@ -374,7 +397,7 @@ function ReaderWorkspaceView(props: ViewProps) {
           <Inspector
             context={{ kind: 'selection', blockIds: [doc.blocks[0]?.id ?? ''], quote: title }}
             answerSource={inspectorAnswerSource}
-            paperId={props.slug}
+            paperId={paperRefKey(props.paper)}
             onNavigate={(citation) => {
               props.onShowSource(citation.resolution.blockIds);
             }}
@@ -479,7 +502,7 @@ function DocumentSlot(props: ViewProps) {
         source={
           <SourcePane
             doc={props.doc}
-            pdfUrl={props.pdfUrl}
+            pdfSource={props.pdfSource}
             zoom={props.zoom}
             anchors={props.anchors}
             onAnchorCaptured={props.onAnchorCaptured}
@@ -495,7 +518,7 @@ function DocumentSlot(props: ViewProps) {
   return (
     <SourcePane
       doc={props.doc}
-      pdfUrl={props.pdfUrl}
+      pdfSource={props.pdfSource}
       zoom={props.zoom}
       anchors={props.anchors}
       onAnchorCaptured={props.onAnchorCaptured}
