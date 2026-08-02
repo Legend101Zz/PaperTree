@@ -68,6 +68,34 @@ Found by annotating a real page — all three sit at the top or bottom of the pa
 and is body content; a footer is page furniture that would appear whether or not this paper had
 authors.
 
+### When the parser and the annotator disagree — the general rule, #55
+
+Three of these are now on record (`citation` vs `reference_entry` below, `equation` vs
+`inline_equation` below that, and gpt3's boxed qualitative examples typed `table` by the parser
+and `figure` by gold), so they get a rule rather than three separate arguments.
+
+**1. If `packages/document-ir` decides it, the side matching the schema is right and the other
+side is what changes.** The block-type vocabulary, `Span.role`'s documented values and the
+semantic rules that constrain them (rule 22's legal `caption_of` targets, rule 23's `cites.to`)
+are the contract both the parser and this guide are written against. `citation` is settled this
+way and it settles against the gold.
+
+**2. If the schema is silent, it is an open annotation question, and it is settled by a written
+rule BEFORE the next pass draws anything.** Never by tuning a parser until it reproduces boxes
+it has already seen — that is `README.md` §4.4's forbidden move, and it measures a
+reimplementation of the annotator rather than the task. `equation` vs `inline_equation` is here.
+So is gpt3's case: the type vocabulary is deliberately open and rule 22 accepts a `table` **or**
+a `figure` as a caption target, so nothing in the schema says whether a boxed qualitative
+example set with booktabs rules is one or the other. **#55 does not settle it and should not be
+quoted as settling it.**
+
+**3. Either way the disagreement is declared, substantiated against real parser output, and
+printed — and §4.1's macro F1 does not move.** `scoring.CONVENTION_SUBSTITUTES` is the
+mechanism: it records which type the parser emits instead, checks that the parser actually put
+those blocks inside the gold region, and reports `NOT substantiated` when it did not, in which
+case the type is a plain miss and stays in the average. A headline that improves because
+someone wrote a type's name in a dict is worth nothing.
+
 ### `citation` vs `reference_entry` — RULED 2026-08-03, issue #55
 
 **A `citation` is the marker in the running text. A `reference_entry` is one entry in the
