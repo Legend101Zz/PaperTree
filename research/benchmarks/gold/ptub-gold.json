@@ -1427,6 +1427,40 @@
           562.86
         ],
         "reading_order": null
+      },
+      {
+        "gold_id": "r435",
+        "type": "caption",
+        "flow": "caption",
+        "bbox": [
+          324.48,
+          526.03,
+          508.8,
+          549.07
+        ],
+        "reading_order": null,
+        "is_vector": null,
+        "parent": "r72",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null
+      },
+      {
+        "gold_id": "r436",
+        "type": "caption",
+        "flow": "caption",
+        "bbox": [
+          323.52,
+          550.03,
+          508.32,
+          571.15
+        ],
+        "reading_order": null,
+        "is_vector": null,
+        "parent": "r73",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null
       }
     ],
     "annotator": "",
@@ -1712,6 +1746,57 @@
           692.68
         ],
         "reading_order": 14
+      },
+      {
+        "gold_id": "r437",
+        "type": "caption",
+        "flow": "caption",
+        "bbox": [
+          135.36,
+          194.14,
+          476.64,
+          206.62
+        ],
+        "reading_order": null,
+        "is_vector": null,
+        "parent": "r438",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null
+      },
+      {
+        "gold_id": "r438",
+        "type": "figure",
+        "flow": "body",
+        "bbox": [
+          104.16,
+          105.34,
+          515.04,
+          188.38
+        ],
+        "reading_order": 15,
+        "is_vector": false,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null
+      },
+      {
+        "gold_id": "r439",
+        "type": "equation",
+        "flow": "body",
+        "bbox": [
+          192.48,
+          694.78,
+          523.68,
+          725.5
+        ],
+        "reading_order": 16,
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null
       }
     ],
     "annotator": "",
@@ -2099,6 +2184,23 @@
           753.49
         ],
         "reading_order": null
+      },
+      {
+        "gold_id": "r440",
+        "type": "caption",
+        "flow": "caption",
+        "bbox": [
+          104.16,
+          124.81,
+          507.36,
+          168.01
+        ],
+        "reading_order": null,
+        "is_vector": null,
+        "parent": "r94",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null
       }
     ],
     "annotator": "",
@@ -2886,6 +2988,40 @@
           754.39
         ],
         "reading_order": null
+      },
+      {
+        "gold_id": "r441",
+        "type": "caption",
+        "flow": "caption",
+        "bbox": [
+          105.12,
+          626.28,
+          517.92,
+          643.56
+        ],
+        "reading_order": null,
+        "is_vector": null,
+        "parent": "r444",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null
+      },
+      {
+        "gold_id": "r444",
+        "type": "figure",
+        "flow": "body",
+        "bbox": [
+          111.84,
+          439.08,
+          530.4,
+          619.56
+        ],
+        "reading_order": 7,
+        "is_vector": false,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null
       }
     ],
     "annotator": "",
@@ -3205,6 +3341,40 @@
           744.59
         ],
         "reading_order": 8
+      },
+      {
+        "gold_id": "r442",
+        "type": "caption",
+        "flow": "caption",
+        "bbox": [
+          305.28,
+          303.51,
+          552.96,
+          344.31
+        ],
+        "reading_order": null,
+        "is_vector": null,
+        "parent": "r443",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null
+      },
+      {
+        "gold_id": "r443",
+        "type": "figure",
+        "flow": "body",
+        "bbox": [
+          295.68,
+          207.51,
+          578.88,
+          299.67
+        ],
+        "reading_order": 9,
+        "is_vector": false,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null
       }
     ],
     "annotator": "",
@@ -3775,6 +3945,74 @@
           750.73
         ],
         "reading_order": 9
+      },
+      {
+        "gold_id": "r445",
+        "type": "figure",
+        "flow": "body",
+        "bbox": [
+          84,
+          247.42,
+          545.76,
+          387.1
+        ],
+        "reading_order": 10,
+        "is_vector": false,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null
+      },
+      {
+        "gold_id": "r446",
+        "type": "caption",
+        "flow": "caption",
+        "bbox": [
+          46.08,
+          388.54,
+          550.56,
+          422.62
+        ],
+        "reading_order": null,
+        "is_vector": null,
+        "parent": "r445",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null
+      },
+      {
+        "gold_id": "r453",
+        "type": "caption",
+        "flow": "caption",
+        "bbox": [
+          54.72,
+          485.02,
+          295.68,
+          518.62
+        ],
+        "reading_order": null,
+        "is_vector": null,
+        "parent": "r203",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null
+      },
+      {
+        "gold_id": "r454",
+        "type": "caption",
+        "flow": "caption",
+        "bbox": [
+          46.56,
+          221.98,
+          556.8,
+          246.94
+        ],
+        "reading_order": null,
+        "is_vector": null,
+        "parent": "r198",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null
       }
     ],
     "annotator": "",
@@ -4094,6 +4332,108 @@
           741.46
         ],
         "reading_order": 13
+      },
+      {
+        "gold_id": "r447",
+        "type": "figure",
+        "flow": "body",
+        "bbox": [
+          81.6,
+          45.13,
+          550.56,
+          170.89
+        ],
+        "reading_order": 14,
+        "is_vector": false,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null
+      },
+      {
+        "gold_id": "r448",
+        "type": "caption",
+        "flow": "caption",
+        "bbox": [
+          46.08,
+          167.53,
+          559.2,
+          197.29
+        ],
+        "reading_order": null,
+        "is_vector": null,
+        "parent": "r447",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null
+      },
+      {
+        "gold_id": "r449",
+        "type": "figure",
+        "flow": "body",
+        "bbox": [
+          52.32,
+          197.77,
+          288,
+          325.93
+        ],
+        "reading_order": 15,
+        "is_vector": false,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null
+      },
+      {
+        "gold_id": "r450",
+        "type": "caption",
+        "flow": "caption",
+        "bbox": [
+          46.56,
+          327.85,
+          289.44,
+          369.13
+        ],
+        "reading_order": null,
+        "is_vector": null,
+        "parent": "r449",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null
+      },
+      {
+        "gold_id": "r451",
+        "type": "caption",
+        "flow": "caption",
+        "bbox": [
+          304.8,
+          261.61,
+          546.72,
+          292.81
+        ],
+        "reading_order": null,
+        "is_vector": null,
+        "parent": "r218",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null
+      },
+      {
+        "gold_id": "r452",
+        "type": "caption",
+        "flow": "caption",
+        "bbox": [
+          305.28,
+          337.45,
+          549.6,
+          366.25
+        ],
+        "reading_order": null,
+        "is_vector": null,
+        "parent": "r220",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null
       }
     ],
     "annotator": "",
@@ -4460,6 +4800,40 @@
           744.54
         ],
         "reading_order": 6
+      },
+      {
+        "gold_id": "r455",
+        "type": "caption",
+        "flow": "caption",
+        "bbox": [
+          45.12,
+          149.84,
+          288.48,
+          203.12
+        ],
+        "reading_order": null,
+        "is_vector": null,
+        "parent": "r240",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null
+      },
+      {
+        "gold_id": "r456",
+        "type": "caption",
+        "flow": "caption",
+        "bbox": [
+          304.32,
+          142.16,
+          551.04,
+          172.4
+        ],
+        "reading_order": null,
+        "is_vector": null,
+        "parent": "r245",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null
       }
     ],
     "annotator": "",
@@ -4475,6 +4849,11 @@
     },
     "regions": [
       {
+        "is_vector": null,
+        "parent": "r254",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r253",
         "type": "caption",
         "flow": "caption",
@@ -4484,14 +4863,14 @@
           550.08,
           389.05
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r254",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       },
       {
+        "is_vector": false,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r254",
         "type": "figure",
         "flow": "body",
@@ -4501,14 +4880,14 @@
           545.76,
           331.94
         ],
-        "reading_order": 0,
+        "reading_order": 0
+      },
+      {
         "is_vector": false,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r255",
         "type": "figure",
         "flow": "body",
@@ -4518,14 +4897,14 @@
           541.44,
           664.57
         ],
-        "reading_order": 1,
-        "is_vector": false,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 1
       },
       {
+        "is_vector": null,
+        "parent": "r255",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r257",
         "type": "caption",
         "flow": "caption",
@@ -4535,12 +4914,7 @@
           549.12,
           728.65
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r255",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       }
     ],
     "annotator": "",
@@ -4556,6 +4930,11 @@
     },
     "regions": [
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r258",
         "type": "title",
         "flow": "body",
@@ -4565,14 +4944,14 @@
           492,
           108.91
         ],
-        "reading_order": 0,
+        "reading_order": 0
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r259",
         "type": "author",
         "flow": "body",
@@ -4582,14 +4961,14 @@
           144.96,
           151.15
         ],
-        "reading_order": 1,
+        "reading_order": 1
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r260",
         "type": "author",
         "flow": "body",
@@ -4599,14 +4978,14 @@
           185.28,
           163.15
         ],
-        "reading_order": 2,
+        "reading_order": 2
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r261",
         "type": "author",
         "flow": "body",
@@ -4616,14 +4995,14 @@
           128.64,
           173.71
         ],
-        "reading_order": 3,
+        "reading_order": 3
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r262",
         "type": "author",
         "flow": "body",
@@ -4633,14 +5012,14 @@
           114.24,
           187.15
         ],
-        "reading_order": 4,
+        "reading_order": 4
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r263",
         "type": "author",
         "flow": "body",
@@ -4650,14 +5029,14 @@
           126.24,
           199.63
         ],
-        "reading_order": 5,
+        "reading_order": 5
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r264",
         "type": "author",
         "flow": "body",
@@ -4667,14 +5046,14 @@
           146.88,
           213.07
         ],
-        "reading_order": 6,
+        "reading_order": 6
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r265",
         "type": "author",
         "flow": "body",
@@ -4684,14 +5063,14 @@
           132,
           224.59
         ],
-        "reading_order": 7,
+        "reading_order": 7
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r266",
         "type": "author",
         "flow": "body",
@@ -4701,14 +5080,14 @@
           156.48,
           236.59
         ],
-        "reading_order": 8,
+        "reading_order": 8
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r267",
         "type": "affiliation",
         "flow": "body",
@@ -4718,14 +5097,14 @@
           583.68,
           238.03
         ],
-        "reading_order": 9,
+        "reading_order": 9
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r268",
         "type": "affiliation",
         "flow": "body",
@@ -4735,14 +5114,14 @@
           368.16,
           270.67
         ],
-        "reading_order": 10,
+        "reading_order": 10
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r269",
         "type": "abstract",
         "flow": "header",
@@ -4752,14 +5131,14 @@
           195.84,
           291.79
         ],
-        "reading_order": null,
+        "reading_order": null
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r270",
         "type": "abstract",
         "flow": "body",
@@ -4769,14 +5148,14 @@
           271.68,
           511.63
         ],
-        "reading_order": 11,
+        "reading_order": 11
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r271",
         "type": "margin_note",
         "flow": "margin",
@@ -4786,14 +5165,14 @@
           40.32,
           566.11
         ],
-        "reading_order": null,
+        "reading_order": null
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r272",
         "type": "heading",
         "flow": "body",
@@ -4803,14 +5182,14 @@
           147.36,
           545.95
         ],
-        "reading_order": 12,
+        "reading_order": 12
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r273",
         "type": "paragraph",
         "flow": "body",
@@ -4820,14 +5199,14 @@
           291.36,
           673.63
         ],
-        "reading_order": 13,
+        "reading_order": 13
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r274",
         "type": "footnote",
         "flow": "footnote",
@@ -4837,14 +5216,14 @@
           295.2,
           717.31
         ],
-        "reading_order": null,
+        "reading_order": null
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r275",
         "type": "paragraph",
         "flow": "body",
@@ -4854,12 +5233,7 @@
           547.68,
           723.31
         ],
-        "reading_order": 14,
-        "is_vector": null,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 14
       }
     ],
     "annotator": "",
@@ -4875,6 +5249,11 @@
     },
     "regions": [
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r276",
         "type": "heading",
         "flow": "body",
@@ -4884,14 +5263,14 @@
           417.12,
           54.46
         ],
-        "reading_order": 0,
-        "is_vector": null,
+        "reading_order": 0
+      },
+      {
+        "is_vector": false,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r277",
         "type": "figure",
         "flow": "body",
@@ -4901,14 +5280,14 @@
           551.04,
           177.34
         ],
-        "reading_order": 1,
-        "is_vector": false,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 1
       },
       {
+        "is_vector": null,
+        "parent": "r277",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r278",
         "type": "caption",
         "flow": "caption",
@@ -4918,14 +5297,14 @@
           548.16,
           234.94
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r277",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       },
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r279",
         "type": "paragraph",
         "flow": "body",
@@ -4935,14 +5314,14 @@
           292.32,
           340.06
         ],
-        "reading_order": 2,
+        "reading_order": 2
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r280",
         "type": "heading",
         "flow": "body",
@@ -4952,14 +5331,14 @@
           153.12,
           367.18
         ],
-        "reading_order": 3,
+        "reading_order": 3
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r281",
         "type": "paragraph",
         "flow": "body",
@@ -4969,14 +5348,14 @@
           294.72,
           716.86
         ],
-        "reading_order": 4,
+        "reading_order": 4
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r282",
         "type": "table",
         "flow": "body",
@@ -4986,14 +5365,14 @@
           555.84,
           341.5
         ],
-        "reading_order": 5,
-        "is_vector": null,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 5
       },
       {
+        "is_vector": null,
+        "parent": "r282",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r283",
         "type": "caption",
         "flow": "caption",
@@ -5003,14 +5382,14 @@
           547.68,
           378.94
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r282",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       },
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r284",
         "type": "paragraph",
         "flow": "body",
@@ -5020,14 +5399,14 @@
           548.64,
           616.54
         ],
-        "reading_order": 6,
+        "reading_order": 6
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r285",
         "type": "heading",
         "flow": "body",
@@ -5037,14 +5416,14 @@
           460.32,
           639.1
         ],
-        "reading_order": 7,
+        "reading_order": 7
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r286",
         "type": "paragraph",
         "flow": "body",
@@ -5054,12 +5433,7 @@
           545.76,
           721.18
         ],
-        "reading_order": 8,
-        "is_vector": null,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 8
       }
     ],
     "annotator": "",
@@ -5075,6 +5449,11 @@
     },
     "regions": [
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r287",
         "type": "heading",
         "flow": "body",
@@ -5084,14 +5463,14 @@
           453.6,
           43.49
         ],
-        "reading_order": 0,
+        "reading_order": 0
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r288",
         "type": "heading",
         "flow": "body",
@@ -5101,14 +5480,14 @@
           213.12,
           87.65
         ],
-        "reading_order": 1,
+        "reading_order": 1
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r289",
         "type": "paragraph",
         "flow": "body",
@@ -5118,14 +5497,14 @@
           552,
           356.93
         ],
-        "reading_order": 2,
+        "reading_order": 2
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r290",
         "type": "heading",
         "flow": "body",
@@ -5135,14 +5514,14 @@
           451.2,
           383.81
         ],
-        "reading_order": 3,
+        "reading_order": 3
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r291",
         "type": "paragraph",
         "flow": "body",
@@ -5152,12 +5531,7 @@
           540.96,
           692.45
         ],
-        "reading_order": 4,
-        "is_vector": null,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 4
       }
     ],
     "annotator": "",
@@ -5173,6 +5547,11 @@
     },
     "regions": [
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r292",
         "type": "heading",
         "flow": "body",
@@ -5182,14 +5561,14 @@
           445.92,
           44.72
         ],
-        "reading_order": 0,
-        "is_vector": null,
+        "reading_order": 0
+      },
+      {
+        "is_vector": false,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r293",
         "type": "figure",
         "flow": "body",
@@ -5199,14 +5578,14 @@
           500.64,
           259.28
         ],
-        "reading_order": 1,
-        "is_vector": false,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 1
       },
       {
+        "is_vector": null,
+        "parent": "r293",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r294",
         "type": "caption",
         "flow": "caption",
@@ -5216,14 +5595,14 @@
           531.36,
           346.16
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r293",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       },
       {
+        "is_vector": false,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r295",
         "type": "figure",
         "flow": "body",
@@ -5233,14 +5612,14 @@
           492.96,
           619.28
         ],
-        "reading_order": 2,
-        "is_vector": false,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 2
       },
       {
+        "is_vector": null,
+        "parent": "r295",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r296",
         "type": "caption",
         "flow": "caption",
@@ -5250,12 +5629,7 @@
           538.56,
           698.48
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r295",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       }
     ],
     "annotator": "",
@@ -5271,6 +5645,11 @@
     },
     "regions": [
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r297",
         "type": "heading",
         "flow": "body",
@@ -5280,14 +5659,14 @@
           446.88,
           43.08
         ],
-        "reading_order": 0,
+        "reading_order": 0
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r298",
         "type": "table",
         "flow": "body",
@@ -5297,14 +5676,14 @@
           517.44,
           591.72
         ],
-        "reading_order": 1,
-        "is_vector": null,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 1
       },
       {
+        "is_vector": null,
+        "parent": "r298",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r300",
         "type": "caption",
         "flow": "caption",
@@ -5314,12 +5693,7 @@
           528.96,
           641.16
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r298",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       }
     ],
     "annotator": "",
@@ -5335,6 +5709,11 @@
     },
     "regions": [
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r301",
         "type": "title",
         "flow": "body",
@@ -5344,14 +5723,14 @@
           492.48,
           113.63
         ],
-        "reading_order": 0,
+        "reading_order": 0
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r302",
         "type": "author",
         "flow": "body",
@@ -5361,14 +5740,14 @@
           199.2,
           147.71
         ],
-        "reading_order": 1,
+        "reading_order": 1
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r303",
         "type": "author",
         "flow": "body",
@@ -5378,14 +5757,14 @@
           289.44,
           142.91
         ],
-        "reading_order": 2,
+        "reading_order": 2
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r304",
         "type": "author",
         "flow": "body",
@@ -5395,14 +5774,14 @@
           362.88,
           140.51
         ],
-        "reading_order": 3,
+        "reading_order": 3
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r305",
         "type": "author",
         "flow": "body",
@@ -5412,14 +5791,14 @@
           484.8,
           143.87
         ],
-        "reading_order": 4,
+        "reading_order": 4
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r306",
         "type": "affiliation",
         "flow": "body",
@@ -5429,14 +5808,14 @@
           353.76,
           154.91
         ],
-        "reading_order": 5,
+        "reading_order": 5
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r307",
         "type": "affiliation",
         "flow": "body",
@@ -5446,14 +5825,14 @@
           522.72,
           176.99
         ],
-        "reading_order": 6,
+        "reading_order": 6
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r308",
         "type": "abstract",
         "flow": "header",
@@ -5463,14 +5842,14 @@
           221.76,
           240.35
         ],
-        "reading_order": null,
+        "reading_order": null
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r309",
         "type": "abstract",
         "flow": "body",
@@ -5480,14 +5859,14 @@
           274.08,
           547.55
         ],
-        "reading_order": 7,
+        "reading_order": 7
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r310",
         "type": "heading",
         "flow": "body",
@@ -5497,14 +5876,14 @@
           187.2,
           571.55
         ],
-        "reading_order": 8,
+        "reading_order": 8
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r311",
         "type": "paragraph",
         "flow": "body",
@@ -5514,14 +5893,14 @@
           297.12,
           774.59
         ],
-        "reading_order": 9,
+        "reading_order": 9
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r312",
         "type": "margin_note",
         "flow": "margin",
@@ -5531,14 +5910,14 @@
           39.36,
           617.63
         ],
-        "reading_order": null,
+        "reading_order": null
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r313",
         "type": "paragraph",
         "flow": "body",
@@ -5548,12 +5927,7 @@
           553.92,
           787.55
         ],
-        "reading_order": 10,
-        "is_vector": null,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 10
       }
     ],
     "annotator": "",
@@ -5569,6 +5943,11 @@
     },
     "regions": [
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r315",
         "type": "paragraph",
         "flow": "body",
@@ -5578,14 +5957,14 @@
           290.4,
           470.31
         ],
-        "reading_order": 0,
+        "reading_order": 0
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r316",
         "type": "heading",
         "flow": "body",
@@ -5595,14 +5974,14 @@
           187.68,
           497.67
         ],
-        "reading_order": 1,
+        "reading_order": 1
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r317",
         "type": "paragraph",
         "flow": "body",
@@ -5612,14 +5991,14 @@
           289.92,
           582.15
         ],
-        "reading_order": 2,
+        "reading_order": 2
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r318",
         "type": "paragraph",
         "flow": "body",
@@ -5629,14 +6008,14 @@
           293.28,
           726.15
         ],
-        "reading_order": 3,
+        "reading_order": 3
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r319",
         "type": "footnote",
         "flow": "footnote",
@@ -5646,14 +6025,14 @@
           291.84,
           772.23
         ],
-        "reading_order": null,
+        "reading_order": null
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r321",
         "type": "paragraph",
         "flow": "body",
@@ -5663,14 +6042,14 @@
           531.84,
           726.87
         ],
-        "reading_order": 4,
+        "reading_order": 4
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r322",
         "type": "footnote",
         "flow": "footnote",
@@ -5680,12 +6059,7 @@
           529.92,
           777.75
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       }
     ],
     "annotator": "",
@@ -5701,6 +6075,11 @@
     },
     "regions": [
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r323",
         "type": "table",
         "flow": "body",
@@ -5710,14 +6089,14 @@
           283.68,
           238.74
         ],
-        "reading_order": 0,
-        "is_vector": null,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 0
       },
       {
+        "is_vector": null,
+        "parent": "r323",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r324",
         "type": "caption",
         "flow": "caption",
@@ -5727,14 +6106,14 @@
           293.76,
           287.22
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r323",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       },
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r325",
         "type": "table",
         "flow": "body",
@@ -5744,14 +6123,14 @@
           296.16,
           436.26
         ],
-        "reading_order": 1,
-        "is_vector": null,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 1
       },
       {
+        "is_vector": null,
+        "parent": "r325",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r326",
         "type": "caption",
         "flow": "caption",
@@ -5761,14 +6140,14 @@
           291.84,
           469.86
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r325",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       },
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r327",
         "type": "paragraph",
         "flow": "body",
@@ -5778,14 +6157,14 @@
           296.64,
           520.26
         ],
-        "reading_order": 2,
+        "reading_order": 2
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r328",
         "type": "heading",
         "flow": "body",
@@ -5795,14 +6174,14 @@
           182.4,
           546.66
         ],
-        "reading_order": 3,
+        "reading_order": 3
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r329",
         "type": "paragraph",
         "flow": "body",
@@ -5812,14 +6191,14 @@
           291.84,
           723.78
         ],
-        "reading_order": 4,
+        "reading_order": 4
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r330",
         "type": "footnote",
         "flow": "footnote",
@@ -5829,14 +6208,14 @@
           294.72,
           768.42
         ],
-        "reading_order": null,
+        "reading_order": null
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r332",
         "type": "table",
         "flow": "body",
@@ -5846,14 +6225,14 @@
           494.4,
           169.38
         ],
-        "reading_order": 5,
-        "is_vector": null,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 5
       },
       {
+        "is_vector": null,
+        "parent": "r332",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r333",
         "type": "caption",
         "flow": "caption",
@@ -5863,14 +6242,14 @@
           527.52,
           214.98
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r332",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       },
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r334",
         "type": "paragraph",
         "flow": "body",
@@ -5880,14 +6259,14 @@
           551.04,
           403.62
         ],
-        "reading_order": 6,
+        "reading_order": 6
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r335",
         "type": "inline_equation",
         "flow": "body",
@@ -5897,14 +6276,14 @@
           423.84,
           253.86
         ],
-        "reading_order": 7,
+        "reading_order": 7
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r336",
         "type": "inline_equation",
         "flow": "body",
@@ -5914,14 +6293,14 @@
           444.96,
           266.82
         ],
-        "reading_order": 8,
+        "reading_order": 8
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r337",
         "type": "heading",
         "flow": "body",
@@ -5931,14 +6310,14 @@
           376.32,
           426.66
         ],
-        "reading_order": 9,
+        "reading_order": 9
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r338",
         "type": "paragraph",
         "flow": "body",
@@ -5948,14 +6327,14 @@
           527.52,
           693.3
         ],
-        "reading_order": 10,
+        "reading_order": 10
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r339",
         "type": "heading",
         "flow": "body",
@@ -5965,14 +6344,14 @@
           417.6,
           719.22
         ],
-        "reading_order": 11,
+        "reading_order": 11
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r340",
         "type": "paragraph",
         "flow": "body",
@@ -5982,12 +6361,7 @@
           525.6,
           769.14
         ],
-        "reading_order": 12,
-        "is_vector": null,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 12
       }
     ],
     "annotator": "",
@@ -6003,6 +6377,11 @@
     },
     "regions": [
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r341",
         "type": "citation",
         "flow": "body",
@@ -6012,12 +6391,7 @@
           557.76,
           788.13
         ],
-        "reading_order": 0,
-        "is_vector": null,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 0
       }
     ],
     "annotator": "",
@@ -6033,6 +6407,11 @@
     },
     "regions": [
       {
+        "is_vector": false,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r342",
         "type": "figure",
         "flow": "body",
@@ -6042,14 +6421,14 @@
           539.52,
           168.73
         ],
-        "reading_order": 0,
-        "is_vector": false,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 0
       },
       {
+        "is_vector": null,
+        "parent": "r342",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r343",
         "type": "caption",
         "flow": "caption",
@@ -6059,14 +6438,14 @@
           536.64,
           248.41
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r342",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       },
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r344",
         "type": "paragraph",
         "flow": "body",
@@ -6076,14 +6455,14 @@
           293.28,
           330.49
         ],
-        "reading_order": 1,
+        "reading_order": 1
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r345",
         "type": "paragraph",
         "flow": "body",
@@ -6093,14 +6472,14 @@
           299.04,
           383.29
         ],
-        "reading_order": 2,
+        "reading_order": 2
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r347",
         "type": "paragraph",
         "flow": "body",
@@ -6110,14 +6489,14 @@
           298.56,
           507.13
         ],
-        "reading_order": 3,
+        "reading_order": 3
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r348",
         "type": "heading",
         "flow": "body",
@@ -6127,14 +6506,14 @@
           220.32,
           534.49
         ],
-        "reading_order": 4,
+        "reading_order": 4
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r349",
         "type": "paragraph",
         "flow": "body",
@@ -6144,14 +6523,14 @@
           293.76,
           768.73
         ],
-        "reading_order": 5,
+        "reading_order": 5
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r350",
         "type": "paragraph",
         "flow": "body",
@@ -6161,14 +6540,14 @@
           530.4,
           576.01
         ],
-        "reading_order": 6,
+        "reading_order": 6
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r351",
         "type": "heading",
         "flow": "body",
@@ -6178,14 +6557,14 @@
           447.84,
           598.57
         ],
-        "reading_order": 7,
+        "reading_order": 7
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r352",
         "type": "paragraph",
         "flow": "body",
@@ -6195,14 +6574,14 @@
           532.32,
           726.73
         ],
-        "reading_order": 8,
+        "reading_order": 8
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r353",
         "type": "footnote",
         "flow": "footnote",
@@ -6212,12 +6591,7 @@
           530.88,
           763.21
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       }
     ],
     "annotator": "",
@@ -6233,6 +6607,11 @@
     },
     "regions": [
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r354",
         "type": "paragraph",
         "flow": "body",
@@ -6242,14 +6621,14 @@
           120.48,
           77.08
         ],
-        "reading_order": 0,
+        "reading_order": 0
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r355",
         "type": "heading",
         "flow": "body",
@@ -6259,14 +6638,14 @@
           263.52,
           127.48
         ],
-        "reading_order": 1,
+        "reading_order": 1
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r356",
         "type": "paragraph",
         "flow": "body",
@@ -6276,14 +6655,14 @@
           288.48,
           422.92
         ],
-        "reading_order": 2,
+        "reading_order": 2
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r357",
         "type": "heading",
         "flow": "body",
@@ -6293,14 +6672,14 @@
           248.16,
           464.2
         ],
-        "reading_order": 3,
+        "reading_order": 3
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r358",
         "type": "paragraph",
         "flow": "body",
@@ -6310,14 +6689,14 @@
           291.36,
           550.6
         ],
-        "reading_order": 4,
-        "is_vector": null,
+        "reading_order": 4
+      },
+      {
+        "is_vector": false,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r359",
         "type": "figure",
         "flow": "body",
@@ -6327,14 +6706,14 @@
           276.48,
           708.04
         ],
-        "reading_order": 5,
-        "is_vector": false,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 5
       },
       {
+        "is_vector": null,
+        "parent": "r359",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r360",
         "type": "caption",
         "flow": "caption",
@@ -6344,14 +6723,14 @@
           291.36,
           761.8
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r359",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       },
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r361",
         "type": "paragraph",
         "flow": "body",
@@ -6361,14 +6740,14 @@
           537.12,
           195.88
         ],
-        "reading_order": 6,
+        "reading_order": 6
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r363",
         "type": "table",
         "flow": "body",
@@ -6378,14 +6757,14 @@
           537.6,
           318.76
         ],
-        "reading_order": 7,
-        "is_vector": null,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 7
       },
       {
+        "is_vector": null,
+        "parent": "r363",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r364",
         "type": "caption",
         "flow": "caption",
@@ -6395,14 +6774,14 @@
           525.12,
           343.72
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r363",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       },
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r365",
         "type": "paragraph",
         "flow": "body",
@@ -6412,12 +6791,7 @@
           537.12,
           641.08
         ],
-        "reading_order": 8,
-        "is_vector": null,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 8
       }
     ],
     "annotator": "",
@@ -6433,6 +6807,11 @@
     },
     "regions": [
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r366",
         "type": "title",
         "flow": "body",
@@ -6442,14 +6821,14 @@
           487.2,
           122.95
         ],
-        "reading_order": 0,
+        "reading_order": 0
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r367",
         "type": "author",
         "flow": "body",
@@ -6459,14 +6838,14 @@
           178.56,
           170.95
         ],
-        "reading_order": 1,
+        "reading_order": 1
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r368",
         "type": "author",
         "flow": "body",
@@ -6476,14 +6855,14 @@
           312,
           172.39
         ],
-        "reading_order": 2,
+        "reading_order": 2
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r369",
         "type": "author",
         "flow": "body",
@@ -6493,14 +6872,14 @@
           401.28,
           169.51
         ],
-        "reading_order": 3,
+        "reading_order": 3
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r370",
         "type": "author",
         "flow": "body",
@@ -6510,14 +6889,14 @@
           519.36,
           168.55
         ],
-        "reading_order": 4,
+        "reading_order": 4
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r371",
         "type": "author",
         "flow": "body",
@@ -6527,14 +6906,14 @@
           156,
           201.19
         ],
-        "reading_order": 5,
+        "reading_order": 5
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r372",
         "type": "author",
         "flow": "body",
@@ -6544,14 +6923,14 @@
           247.68,
           200.23
         ],
-        "reading_order": 6,
+        "reading_order": 6
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r373",
         "type": "author",
         "flow": "body",
@@ -6561,14 +6940,14 @@
           361.44,
           204.07
         ],
-        "reading_order": 7,
+        "reading_order": 7
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r374",
         "type": "author",
         "flow": "body",
@@ -6578,14 +6957,14 @@
           448.32,
           198.31
         ],
-        "reading_order": 8,
+        "reading_order": 8
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r375",
         "type": "author",
         "flow": "body",
@@ -6595,14 +6974,14 @@
           531.36,
           200.71
         ],
-        "reading_order": 9,
+        "reading_order": 9
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r376",
         "type": "author",
         "flow": "body",
@@ -6612,14 +6991,14 @@
           156,
           231.43
         ],
-        "reading_order": 10,
+        "reading_order": 10
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r377",
         "type": "author",
         "flow": "body",
@@ -6629,14 +7008,14 @@
           250.08,
           227.11
         ],
-        "reading_order": 11,
+        "reading_order": 11
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r378",
         "type": "author",
         "flow": "body",
@@ -6646,14 +7025,14 @@
           350.4,
           230.95
         ],
-        "reading_order": 12,
+        "reading_order": 12
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r380",
         "type": "author",
         "flow": "body",
@@ -6663,14 +7042,14 @@
           446.88,
           229.51
         ],
-        "reading_order": 13,
+        "reading_order": 13
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r381",
         "type": "author",
         "flow": "body",
@@ -6680,14 +7059,14 @@
           532.8,
           229.51
         ],
-        "reading_order": 14,
+        "reading_order": 14
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r382",
         "type": "author",
         "flow": "body",
@@ -6697,14 +7076,14 @@
           154.08,
           257.83
         ],
-        "reading_order": 15,
+        "reading_order": 15
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r383",
         "type": "author",
         "flow": "body",
@@ -6714,14 +7093,14 @@
           243.84,
           258.79
         ],
-        "reading_order": 16,
+        "reading_order": 16
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r384",
         "type": "author",
         "flow": "body",
@@ -6731,14 +7110,14 @@
           347.04,
           255.43
         ],
-        "reading_order": 17,
+        "reading_order": 17
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r385",
         "type": "author",
         "flow": "body",
@@ -6748,14 +7127,14 @@
           430.56,
           257.35
         ],
-        "reading_order": 18,
+        "reading_order": 18
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r386",
         "type": "author",
         "flow": "body",
@@ -6765,14 +7144,14 @@
           523.68,
           257.83
         ],
-        "reading_order": 19,
+        "reading_order": 19
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r387",
         "type": "author",
         "flow": "body",
@@ -6782,14 +7161,14 @@
           190.08,
           285.19
         ],
-        "reading_order": 20,
+        "reading_order": 20
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r388",
         "type": "author",
         "flow": "body",
@@ -6799,14 +7178,14 @@
           263.04,
           286.63
         ],
-        "reading_order": 21,
+        "reading_order": 21
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r389",
         "type": "author",
         "flow": "body",
@@ -6816,14 +7195,14 @@
           336.96,
           284.23
         ],
-        "reading_order": 22,
+        "reading_order": 22
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r390",
         "type": "author",
         "flow": "body",
@@ -6833,14 +7212,14 @@
           435.84,
           284.71
         ],
-        "reading_order": 23,
+        "reading_order": 23
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r391",
         "type": "author",
         "flow": "body",
@@ -6850,14 +7229,14 @@
           519.84,
           282.79
         ],
-        "reading_order": 24,
+        "reading_order": 24
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r392",
         "type": "author",
         "flow": "body",
@@ -6867,14 +7246,14 @@
           216.96,
           317.35
         ],
-        "reading_order": 25,
+        "reading_order": 25
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r393",
         "type": "author",
         "flow": "body",
@@ -6884,14 +7263,14 @@
           338.4,
           308.71
         ],
-        "reading_order": 26,
+        "reading_order": 26
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r394",
         "type": "author",
         "flow": "body",
@@ -6901,14 +7280,14 @@
           478.56,
           310.63
         ],
-        "reading_order": 27,
+        "reading_order": 27
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r395",
         "type": "author",
         "flow": "body",
@@ -6918,14 +7297,14 @@
           189.12,
           348.07
         ],
-        "reading_order": 28,
+        "reading_order": 28
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r397",
         "type": "author",
         "flow": "body",
@@ -6935,14 +7314,14 @@
           296.64,
           340.88
         ],
-        "reading_order": 29,
+        "reading_order": 29
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r398",
         "type": "author",
         "flow": "body",
@@ -6952,14 +7331,14 @@
           408,
           342.31
         ],
-        "reading_order": 30,
+        "reading_order": 30
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r399",
         "type": "author",
         "flow": "body",
@@ -6969,14 +7348,14 @@
           525.6,
           342.31
         ],
-        "reading_order": 31,
+        "reading_order": 31
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r400",
         "type": "affiliation",
         "flow": "body",
@@ -6986,14 +7365,14 @@
           342.72,
           389.35
         ],
-        "reading_order": 32,
+        "reading_order": 32
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r401",
         "type": "abstract",
         "flow": "header",
@@ -7003,14 +7382,14 @@
           336.48,
           421.99
         ],
-        "reading_order": null,
+        "reading_order": null
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r402",
         "type": "abstract",
         "flow": "body",
@@ -7020,14 +7399,14 @@
           508.8,
           647.59
         ],
-        "reading_order": 33,
+        "reading_order": 33
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r403",
         "type": "margin_note",
         "flow": "margin",
@@ -7037,14 +7416,14 @@
           40.8,
           562.88
         ],
-        "reading_order": null,
+        "reading_order": null
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r405",
         "type": "footnote",
         "flow": "footnote",
@@ -7054,12 +7433,7 @@
           226.56,
           722.23
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       }
     ],
     "annotator": "",
@@ -7075,6 +7449,11 @@
     },
     "regions": [
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r406",
         "type": "table",
         "flow": "body",
@@ -7084,14 +7463,14 @@
           418.08,
           140.75
         ],
-        "reading_order": 0,
-        "is_vector": null,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 0
       },
       {
+        "is_vector": null,
+        "parent": "r406",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r407",
         "type": "caption",
         "flow": "caption",
@@ -7101,14 +7480,14 @@
           552,
           174.83
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r406",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       },
       {
+        "is_vector": false,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r408",
         "type": "figure",
         "flow": "body",
@@ -7118,14 +7497,14 @@
           476.64,
           422.51
         ],
-        "reading_order": 1,
-        "is_vector": false,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 1
       },
       {
+        "is_vector": null,
+        "parent": "r408",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r409",
         "type": "caption",
         "flow": "caption",
@@ -7135,14 +7514,14 @@
           549.12,
           462.35
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r408",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       },
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r410",
         "type": "paragraph",
         "flow": "body",
@@ -7152,14 +7531,14 @@
           550.08,
           650.03
         ],
-        "reading_order": 2,
+        "reading_order": 2
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r411",
         "type": "heading",
         "flow": "body",
@@ -7169,14 +7548,14 @@
           189.12,
           682.19
         ],
-        "reading_order": 3,
+        "reading_order": 3
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r412",
         "type": "paragraph",
         "flow": "body",
@@ -7186,14 +7565,14 @@
           550.56,
           720.59
         ],
-        "reading_order": 4,
+        "reading_order": 4
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r413",
         "type": "page_number",
         "flow": "footer",
@@ -7203,12 +7582,7 @@
           318.72,
           754.67
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       }
     ],
     "annotator": "",
@@ -7224,6 +7598,11 @@
     },
     "regions": [
       {
+        "is_vector": false,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r414",
         "type": "figure",
         "flow": "body",
@@ -7233,14 +7612,14 @@
           508.8,
           279.74
         ],
-        "reading_order": 0,
-        "is_vector": false,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 0
       },
       {
+        "is_vector": null,
+        "parent": "r414",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r415",
         "type": "caption",
         "flow": "caption",
@@ -7250,14 +7629,14 @@
           559.2,
           325.82
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r414",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       },
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r416",
         "type": "paragraph",
         "flow": "body",
@@ -7267,14 +7646,14 @@
           556.32,
           726.14
         ],
-        "reading_order": 1,
+        "reading_order": 1
+      },
+      {
         "is_vector": null,
         "parent": null,
         "text": "",
         "continues_from": null,
-        "continues_to": null
-      },
-      {
+        "continues_to": null,
         "gold_id": "r417",
         "type": "page_number",
         "flow": "footer",
@@ -7284,12 +7663,7 @@
           313.92,
           752.06
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       }
     ],
     "annotator": "",
@@ -7305,6 +7679,11 @@
     },
     "regions": [
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r418",
         "type": "table",
         "flow": "body",
@@ -7314,14 +7693,14 @@
           607.2,
           584.82
         ],
-        "reading_order": 0,
-        "is_vector": null,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 0
       },
       {
+        "is_vector": null,
+        "parent": "r418",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r419",
         "type": "caption",
         "flow": "caption",
@@ -7331,12 +7710,7 @@
           541.92,
           664.02
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r418",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       }
     ],
     "annotator": "",
@@ -7352,6 +7726,11 @@
     },
     "regions": [
       {
+        "is_vector": true,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r420",
         "type": "figure",
         "flow": "body",
@@ -7361,14 +7740,14 @@
           558.24,
           133.89
         ],
-        "reading_order": 0,
-        "is_vector": true,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 0
       },
       {
+        "is_vector": null,
+        "parent": "r420",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r421",
         "type": "caption",
         "flow": "caption",
@@ -7378,14 +7757,14 @@
           424.32,
           147.81
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r420",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       },
       {
+        "is_vector": true,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r422",
         "type": "figure",
         "flow": "body",
@@ -7395,14 +7774,14 @@
           552,
           219.81
         ],
-        "reading_order": 1,
-        "is_vector": true,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 1
       },
       {
+        "is_vector": null,
+        "parent": "r422",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r423",
         "type": "caption",
         "flow": "caption",
@@ -7412,14 +7791,14 @@
           554.4,
           254.85
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r422",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       },
       {
+        "is_vector": true,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r424",
         "type": "figure",
         "flow": "body",
@@ -7429,14 +7808,14 @@
           547.2,
           315.33
         ],
-        "reading_order": 2,
-        "is_vector": true,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 2
       },
       {
+        "is_vector": null,
+        "parent": "r424",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r425",
         "type": "caption",
         "flow": "caption",
@@ -7446,14 +7825,14 @@
           422.88,
           335.01
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r424",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       },
       {
+        "is_vector": true,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r426",
         "type": "figure",
         "flow": "body",
@@ -7463,14 +7842,14 @@
           548.64,
           435.81
         ],
-        "reading_order": 3,
-        "is_vector": true,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 3
       },
       {
+        "is_vector": null,
+        "parent": "r426",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r427",
         "type": "caption",
         "flow": "caption",
@@ -7480,14 +7859,14 @@
           417.12,
           450.21
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r426",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       },
       {
+        "is_vector": true,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r428",
         "type": "figure",
         "flow": "body",
@@ -7497,14 +7876,14 @@
           550.08,
           548.61
         ],
-        "reading_order": 4,
-        "is_vector": true,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 4
       },
       {
+        "is_vector": null,
+        "parent": "r428",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r429",
         "type": "caption",
         "flow": "caption",
@@ -7514,14 +7893,14 @@
           417.6,
           561.09
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r428",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       },
       {
+        "is_vector": true,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r430",
         "type": "figure",
         "flow": "body",
@@ -7531,14 +7910,14 @@
           549.6,
           696.93
         ],
-        "reading_order": 5,
-        "is_vector": true,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 5
       },
       {
+        "is_vector": null,
+        "parent": "r430",
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r431",
         "type": "caption",
         "flow": "caption",
@@ -7548,14 +7927,14 @@
           431.04,
           712.29
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": "r430",
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       },
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r432",
         "type": "page_number",
         "flow": "footer",
@@ -7565,12 +7944,7 @@
           320.64,
           751.65
         ],
-        "reading_order": null,
-        "is_vector": null,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": null
       }
     ],
     "annotator": "",
@@ -7586,6 +7960,11 @@
     },
     "regions": [
       {
+        "is_vector": null,
+        "parent": null,
+        "text": "",
+        "continues_from": null,
+        "continues_to": null,
         "gold_id": "r433",
         "type": "citation",
         "flow": "body",
@@ -7595,12 +7974,7 @@
           575.52,
           111.6
         ],
-        "reading_order": 0,
-        "is_vector": null,
-        "parent": null,
-        "text": "",
-        "continues_from": null,
-        "continues_to": null
+        "reading_order": 0
       }
     ],
     "annotator": "",
