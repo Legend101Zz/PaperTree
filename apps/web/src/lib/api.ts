@@ -20,18 +20,7 @@
  * clearly separated is the point of this file being small.
  */
 
-import type { Highlight } from '@/types';
-import type {
-  Canvas,
-  CanvasElements,
-  CanvasNode,
-  CanvasEdge,
-  ExploreRequest,
-  ExploreResponse,
-  AskFollowupRequest,
-  AddNoteRequest,
-  AskMode,
-} from '@/types/canvas';
+import type { AskMode, Highlight } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
@@ -193,65 +182,4 @@ export const highlightsApi = {
     apiFetch<Highlight>(`/highlights/papers/${paperId}`, { method: 'POST', body: input }),
   delete: (highlightId: string) =>
     apiFetch<void>(`/highlights/${highlightId}`, { method: 'DELETE' }),
-};
-
-/* ────────────────────────────────────────── canvas ────────────────────────────────────────── */
-
-/** Epic 5 owns this surface and it is stood down (#43). Kept transport-compatible, not extended. */
-export const canvasApi = {
-  get: (paperId: string) => apiFetch<Canvas>(`/papers/${paperId}/canvas`),
-
-  save: (paperId: string, elements: CanvasElements) =>
-    apiFetch<void>(`/papers/${paperId}/canvas`, { method: 'PUT', body: { elements } }),
-
-  explore: (paperId: string, data: ExploreRequest) =>
-    apiFetch<ExploreResponse>(`/papers/${paperId}/canvas/explore`, { method: 'POST', body: data }),
-
-  ask: (paperId: string, data: AskFollowupRequest) =>
-    apiFetch<{ node: CanvasNode; edge: CanvasEdge }>(`/papers/${paperId}/canvas/ask`, {
-      method: 'POST',
-      body: data,
-    }),
-
-  addNote: (paperId: string, data: AddNoteRequest) =>
-    apiFetch<{ node: CanvasNode; edge?: CanvasEdge }>(`/papers/${paperId}/canvas/note`, {
-      method: 'POST',
-      body: data,
-    }),
-
-  expandPage: (paperId: string, pageNumber: number) =>
-    apiFetch<{ page_node: CanvasNode; was_created: boolean }>(
-      `/papers/${paperId}/canvas/expand-page`,
-      { method: 'POST', body: { page_number: pageNumber } },
-    ),
-
-  autoLayout: (paperId: string, algorithm: 'tree' | 'grid' = 'tree') =>
-    apiFetch<{ status: string }>(`/papers/${paperId}/canvas/layout`, {
-      method: 'POST',
-      body: { algorithm },
-    }),
-
-  updateNode: (
-    paperId: string,
-    nodeId: string,
-    data: { position?: { x: number; y: number }; data?: Partial<CanvasNode['data']> },
-  ) =>
-    apiFetch<CanvasNode>(`/papers/${paperId}/canvas/nodes/${nodeId}`, {
-      method: 'PATCH',
-      body: data,
-    }),
-
-  deleteNode: (paperId: string, nodeId: string) =>
-    apiFetch<{ deleted: string[] }>(`/papers/${paperId}/canvas/nodes/${nodeId}`, {
-      method: 'DELETE',
-    }),
-
-  populate: (paperId: string) =>
-    apiFetch<{
-      id: string;
-      paper_id: string;
-      elements: CanvasElements;
-      pages_created: number;
-      explorations_created: number;
-    }>(`/papers/${paperId}/canvas/populate`, { method: 'POST' }),
 };

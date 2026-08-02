@@ -1,4 +1,5 @@
 apps/
+archive/
 docker-compose.yml
 node_modules/
 dist/

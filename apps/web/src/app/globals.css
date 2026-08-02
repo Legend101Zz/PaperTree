@@ -36,9 +36,12 @@ body {
  * (SearchResults.tsx, same commit). Every one had zero references anywhere in `src/` outside this
  * file. Issue #60.
  *
- * The canvas sections below are NOT dead in the same sense — `.canvas-prose`, `.canvas-node-content`
- * and the react-flow rules are still referenced by `components/canvas/**`, which Epic 5 owns and is
- * standing down under #43. They go with it, not with this.
+ * The canvas sections below WERE not dead in the same sense — they were referenced by
+ * `components/canvas/**`. #75 archived that surface, so as of now `.canvas-prose`,
+ * `.canvas-node-content` and the react-flow rules have zero references in `src/`, exactly like the
+ * rules above. They are left in place ON PURPOSE for one release: Epic 5 (#43) rebuilds the canvas
+ * and these are the styles it was designed against, whereas the rules above have no successor.
+ * If #43 slips past that, delete them — a second dead block is how the first one happened.
  */
 
 /* ============ SCROLLBAR ============ */

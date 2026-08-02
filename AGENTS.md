@@ -129,8 +129,11 @@ never shrink on their own.
 
 - **`archive/` is v1 and is not to be read.** It is outside every workspace, gate and lint
   path. A grep hit in `archive/` is a false positive — go back. See `archive/README.md`.
-  (Lands with #75; until then v1 is still at `apps/api` and `components/canvas/**`, and
-  the same advice applies.)
+  It is outside those paths **by construction, not by exclusion**: uv, pytest, ruff, mypy and
+  pnpm are each driven by an allow-list naming `packages` and `services`, so a new top-level
+  directory is never reached. The two things that do walk the whole tree are `prettier` and an
+  ad-hoc root `oxlint`, and `archive/` is listed in both ignore files. `ci.yml` asserts no
+  workspace member lives under it.
 - `pnpm test` is cached and not a gate (above).
 - **`migrations.spec`'s 30k-block insert is a wall-clock assertion and fails randomly on
   CI** (#80). Observed on a docs-only PR: `expected 6207 to be less than 5000`, then green

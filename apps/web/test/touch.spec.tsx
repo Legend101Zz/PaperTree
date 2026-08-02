@@ -346,9 +346,11 @@ function repoPath(absolute: string): string {
  * unquarantined. The canvas is not in this epic's charter, so its six files stay listed rather than
  * turning the suite red for work nobody here is allowed to do.
  *
- * (`canvas/MermaidRenderer.tsx` additionally breaks the epic's "no fabricated diagrams" rule; it is
- * only out of `tsc`'s way because `apps/web/tsconfig.json` now EXCLUDES `src/components/canvas/**`.
- * It wants deleting, not quarantining, by whoever owns the canvas.)
+ * (#75 moved the whole canvas surface to `archive/v1-web-canvas/`, so the six entries below now
+ * name files that are not in `src/` at all. They are kept rather than deleted because this ledger's
+ * "a listed file that no longer offends fails" rule is guarded on the file EXISTING — an entry for
+ * a moved file is inert, not stale. Delete them when Epic 5 (#43) rebuilds the canvas and this list
+ * stops being the record of what was quarantined.)
  *
  * The list is a DEBT LEDGER and it is enforced in both directions:
  *
