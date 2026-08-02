@@ -193,6 +193,18 @@ never shrink on their own.
 - `Block.text` keeps the *unrepaired* reading permanently by design (deviation D4).
   `resolvedText(block, {applyProposed})` is the only sanctioned reader. Never concatenate
   `text` and `repairs` by hand.
+- **The gold set measures; it does not authorise.** 442 regions, 36 pages, 6 of 8 corpus
+  papers, **one annotator, no inter-annotator agreement** — 30% of `benchmarks/README.md`
+  §1.2's Tier B. Every verdict derived from it carries that n **in the row, not in a
+  footnote**. 27% of gold regions are found in the right place and boxed differently
+  (IoU 0.25–0.5), and Docling's own absolute F1 against this gold is **0.168–0.308** — a
+  mature converter scoring 0.28 says the boxing conventions differ from *both* parsers,
+  not that both parsers are bad.
+- **Never derive gold from parser output.** `ANNOTATION_GUIDE.md` §1 and
+  `benchmarks/README.md` §4.4 both forbid it, for the same reason: it scores an
+  implementation against a reimplementation of itself and measures nothing. This binds
+  agents specifically — deriving Tier C questions from `blocks`, or a caption's parent
+  from proximity, fails the standard by the standard's own definition.
 - Corpus PDFs are fetched, not committed: `./research/benchmarks/fetch_corpus.sh`.
   Without them the reader renders nothing and `copy-fixtures` warns `0/3 PDFs`.
   **Your machine has them and CI does not.** A test that reads one passes locally and fails on a
