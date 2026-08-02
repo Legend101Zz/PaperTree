@@ -237,8 +237,8 @@ the 91 % measured an hour earlier, but it rests on three papers, and one of the 
 
 | Candidate | blocks | bbox | page | stable id | headings | eq | figures | captions linked | tables | cells | sections | s/page |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| PaperTree LIVE *(H2, deleted)* | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2.0 | 0.2 |
-| PaperTree dead extractor *(H2, deleted)* | 233 | 233 | 233 | 0 | 58 | 86 | **0** | 0 | 0 | 0 | — | 4.1 |
+| PaperTree LIVE *(H2, deleted)* | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | — | 0.17 |
+| PaperTree dead extractor *(H2, deleted)* | 233 | 233 | 233 | 0 | 58 | 86 | **0** | 0 | 0 | 0 | — | 0.34 |
 | pymupdf-raw | 549 | 549 | 549 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0.05 |
 | docling | 519 | 497 | 497 | **0** | 22 | 2 | **7** | 21 | 15 | 342 | 22 | 2.10 |
 | **papertree-deterministic** | 929 | **929** | **929** | **929** | 5 | 2 | **9** | 2 | 10 | **580** | 5 | **0.13** |
@@ -246,6 +246,15 @@ the 91 % measured an hour earlier, but it rests on three papers, and one of the 
 Rows 1 and 2 are carried forward from findings.md H2 and marked as such: both are **deleted**
 (§5), and re-implementing 1,698 lines of removed code to re-measure what was already measured
 would be the opposite of the point.
+
+**Corrected 2026-08-03.** H2's `sec` column is a per-paper **total** over ResNet's 12 pages, and
+this table read it as a rate: row 1 printed `0.2` where 2.0 s / 12 pp is **0.17**, and row 2
+printed `4.1` — the raw total — where 4.1 s / 12 pp is **0.34**, an error of 12×. Row 1's
+`sections` cell held `2.0`, the same total leaking one column left; H2 records `nested tree ✗`
+for that row and no section count at all, so it now reads `—`. Rows 3–5 are re-measurements
+taken here and were never affected. The transcription now lives in
+`packages/evaluation/python/papertree_evaluation/harness.py` as `HISTORICAL_ROWS`, which stores
+the total and derives the rate, so this particular mistake cannot be made again by hand.
 
 Three things in that table are worth stating plainly:
 
