@@ -331,9 +331,9 @@ def _speed(args: argparse.Namespace) -> int:
         docling = DoclingAdapter()
         if not docling.available:
             verdict = no_comparison(
-                f"no docling interpreter at {docling.python}; the probe venv is opt-in "
-                "(research/benchmarks/DOCLING.md). An absent comparison arm is NOT a score, "
-                "and is not a ratio either.",
+                f"no docling interpreter at {docling.python}; the probe venv is opt-in and "
+                "lives outside this workspace's lock (set $PAPERTREE_DOCLING_PYTHON). An "
+                "absent comparison arm is NOT a score, and is not a ratio either.",
                 bar=args.bar,
             )
         else:

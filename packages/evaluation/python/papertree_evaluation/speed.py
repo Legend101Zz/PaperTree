@@ -1,17 +1,13 @@
 """The speed half of the decision rule, measured so it can carry the decision — or refused.
 
-WHAT THIS EXISTS TO FIX, STATED BEFORE THE CODE
-
 `EPIC-01-RESULT.md` §1 records the rule's speed half as **NOT ESTABLISHED**, not as a failure.
-Three controlled re-runs of the same comparison, same machine, same code, produced median ratios
-of 12.4× / 16.8× / 18.7×; the gap from the lowest of those to the then-bar of 20× was 1.6×,
-against a measured 3.3× cross-process spread. **A number whose spread exceeds the distance to its
-bar cannot support the decision it is being used for** — the same principle #80 was fixed on.
+Three re-runs of the same comparison, same machine, same code, gave median ratios of 12.4× /
+16.8× / 18.7×; the gap from the lowest of those to the then-bar of 20× was 1.6×, against a
+measured 3.3× cross-process spread. **A number whose spread exceeds the distance to its bar
+cannot support the decision it is being used for** — the principle #80 was fixed on.
 
-So this module's central feature is not a timer. It is `rule_on_speed`'s **refusal**: when the
-spread of the observed ratio exceeds the distance from the observed ratio to the bar, it returns
-no ratio at all and names the two numbers that made it refuse. `SpeedVerdict.ratio_for_decision`
-is `None` in that case, so a caller cannot accidentally quote one.
+So this module's central feature is not a timer. It is `rule_on_speed`'s **refusal**, and
+`SpeedVerdict.ratio_for_decision` is `None` there so a caller cannot read around it.
 
 FIVE PROPERTIES #53 ASKS FOR, AND WHERE EACH LIVES
 
@@ -21,30 +17,20 @@ FIVE PROPERTIES #53 ASKS FOR, AND WHERE EACH LIVES
   4. total corpus wall-clock, not per-paper p50  `Measurement.corpus_wall`, and `basis`
   5. the machine state named in the output       `MachineState`
 
-WHY TOTAL CORPUS WALL-CLOCK IS THE RATIO THAT DECIDES
+**Why corpus wall-clock decides.** Both parsers pay a fixed import/model-load cost amortised
+over 11–75 page papers, which is how run *order* alone moved the ratio from 10.3× to 18.7×. A
+per-paper median weights an 11-page paper like a 75-page one and lets that fixed cost dominate
+the short ones. Both aggregations are reported; only the corpus one feeds the verdict.
 
-Both parsers pay a fixed import/model-load cost amortised over 11–75 page papers, which is how
-run *order* alone moved the ratio from 10.3× to 18.7×. A per-paper median weights an 11-page
-paper equally with a 75-page one and lets that fixed cost dominate the short ones. The corpus
-total pays it once per round and divides it over all 195 pages. Both are reported; only the
-corpus one feeds the verdict, and `SpeedVerdict.basis` says so in the output.
+**Why the ratio interval is pessimistic.** `corpus_ratio` pairs the slow parser's slowest round
+with the fast parser's fastest, and the reverse — the widest interval the observations admit.
+Same-rank pairing would be narrower and would make the refusal easier to clear, i.e. an
+aggregation chosen to defeat the guard. The guard is the point.
 
-WHY THE RATIO INTERVAL IS FORMED PESSIMISTICALLY
-
-`corpus_ratio` pairs the slow parser's *slowest* round with the fast parser's *fastest* to get
-its upper bound, and the reverse for its lower. That is the widest interval the observations
-admit. Pairing trial *i* with trial *i* would be narrower and would make the refusal in (3)
-easier to clear — i.e. it would be an aggregation chosen to defeat the guard. The guard is the
-point, so the aggregation is chosen against it.
-
-THE BAR
-
-`SPEED_BAR` is **10.0**, on the owner's ruling of 2026-08-02 recorded in #53's first comment,
-which drops it from 20×. That ruling states in terms that **the 20× bar's provenance is
-documented nowhere** — it appears in `EPIC-01-ingest.md`'s decision rule and in no measurement,
-derivation or ADR. Neither number is derived here and this module does not pretend otherwise:
-the bar is an input, and `rule_on_speed` takes it as an argument so a caller can rule against
-either.
+**The bar.** `SPEED_BAR` is **10.0**, on the owner's ruling of 2026-08-02 in #53, which drops it
+from 20×. That ruling records that **the 20× bar's provenance is documented nowhere** — it is in
+`EPIC-01-ingest.md`'s decision rule (twice) and in no measurement, derivation or ADR. Neither
+number is derived here: the bar is an argument to `rule_on_speed`, so a caller can rule on either.
 """
 
 from __future__ import annotations
@@ -84,10 +70,7 @@ FETCH_SCRIPT = "./research/benchmarks/fetch_corpus.sh"
 
 @dataclass(frozen=True, slots=True)
 class Interval:
-    """A measurement reported as a central value AND the range it was drawn from.
-
-    Every number this module reports is one of these. A bare median is what #53 was filed about.
-    """
+    """A central value AND the range it was drawn from. A bare median is what #53 was filed about."""
 
     low: float
     median: float
@@ -114,10 +97,10 @@ class Interval:
 class MachineState:
     """What the machine was, and whether anybody *claimed* it was quiet.
 
-    #53: *"run on a quiesced machine and say so in the output"*. The half of that which is easy
-    to get wrong is the saying: a report that omits the question reads as if the answer were yes.
-    So `quiesce_declared` defaults to **False** and renders as a loud NOT DECLARED, and a
-    declaration renders as an operator claim the harness cannot verify — because it cannot.
+    #53: *"run on a quiesced machine and say so in the output"*. The half that is easy to get
+    wrong is the saying — a report omitting the question reads as if the answer were yes. So
+    `quiesce_declared` defaults to False and renders as a loud NOT DECLARED, and a declaration
+    renders as an operator claim the harness cannot verify, because it cannot.
     """
 
     platform: str
@@ -175,10 +158,9 @@ class MachineState:
 class PaperRun:
     """One parser over one paper, once.
 
-    `wall_seconds` is measured by THIS module around `adapter.parse`; `adapter_seconds` is what
-    the adapter reported for itself. They differ for Docling by a whole interpreter start-up,
-    because that adapter shells out to a probe venv. Both are kept so the difference is visible
-    rather than assumed away.
+    `wall_seconds` is measured by THIS module around `adapter.parse`; `adapter_seconds` is the
+    adapter's own figure. They differ for Docling by a whole interpreter start-up, because that
+    adapter shells out to a probe venv. Both are kept so the gap is visible, not assumed away.
     """
 
     paper: str
@@ -288,10 +270,10 @@ def measure(
     """Run `adapter` over `pdfs` `warm_ups + trials` times and keep only the trials.
 
     The warm-up is per parser per paper by construction: a warm-up pass covers every paper, so
-    every (parser, paper) pair has had one discarded run before any counted one. It is not
-    cosmetic — measured on this box, Docling's first pass over an 11-page paper took **969 s**
-    wall and its second took **85 s**, a 11.4× difference from page cache and dylib loading
-    alone. A single-trial harness reports whichever of those it happened to hit.
+    every (parser, paper) pair has had a discarded run before any counted one. Not cosmetic —
+    measured here, Docling's first pass over an 11-page paper took **969 s** wall and its second
+    **85 s**, 11.4× from page cache and dylib loading alone. A single-trial harness reports
+    whichever of those it happened to hit.
     """
     if trials < 1:
         raise ValueError(f"trials must be >= 1, got {trials}")
@@ -325,8 +307,7 @@ def _pass(
 def corpus_ratio(fast: Measurement, slow: Measurement) -> Interval:
     """How many times faster `fast` is than `slow` over total corpus wall-clock.
 
-    Pessimistic on purpose — see the module docstring. The endpoints pair the extremes that
-    disagree most, so the spread reported is the widest the observations admit.
+    Pessimistic on purpose — see the module docstring. The endpoints pair the extremes.
     """
     quick, sluggish = fast.corpus_wall(), slow.corpus_wall()
     return Interval(
@@ -339,8 +320,7 @@ def corpus_ratio(fast: Measurement, slow: Measurement) -> Interval:
 def per_paper_ratio(fast: Measurement, slow: Measurement) -> float | None:
     """The median over papers of per-paper s/page ratios — REPORTED, never the verdict's basis.
 
-    This is the shape `ComparisonMatrix.speed_ratio` computes and the shape #53 rejects for the
-    decision, because a fixed model-load cost amortised over an 11-page paper dominates it.
+    The shape `ComparisonMatrix.speed_ratio` computes, and the shape #53 rejects for the decision.
     """
     mine = fast.per_paper_median_seconds_per_page()
     theirs = slow.per_paper_median_seconds_per_page()
@@ -365,10 +345,7 @@ class SpeedVerdict:
 
     @property
     def ratio_for_decision(self) -> float | None:
-        """The ratio a caller may quote — `None` whenever the measurement cannot discriminate.
-
-        This is the refusal in #53, expressed so it cannot be worked around by reading a field.
-        """
+        """The ratio a caller may quote — `None` whenever the measurement cannot discriminate."""
         if self.ruling == "NOT ESTABLISHED" or self.observed is None:
             return None
         return self.observed.median
@@ -396,16 +373,14 @@ class SpeedVerdict:
 def rule_on_speed(fast: Measurement, slow: Measurement, *, bar: float = SPEED_BAR) -> SpeedVerdict:
     """Rule on the bar, or refuse to.
 
-    THE REFUSAL, WHICH IS THE POINT OF THIS FUNCTION
-
         spread   = the width of the observed corpus-ratio interval
         distance = |median observed ratio - bar|
         refuse when spread > distance
 
     A spread wider than the distance to the bar means the next re-run can land on the other side
-    of it, so the ratio decides nothing. Note this is strictly stronger than "the interval
-    straddles the bar": if the bar lies inside the interval then `|median - bar| <= spread`
-    already, so every straddling interval also refuses, and some non-straddling ones do too.
+    of it, so the ratio decides nothing. Strictly stronger than "the interval straddles the bar":
+    a bar inside the interval already gives `|median - bar| <= spread`, so every straddling
+    interval refuses and some non-straddling ones do too.
     """
     incomplete = [m.adapter for m in (fast, slow) if not m.complete]
     if incomplete:
@@ -472,10 +447,9 @@ def rule_on_speed(fast: Measurement, slow: Measurement, *, bar: float = SPEED_BA
 def no_comparison(reason: str, *, bar: float = SPEED_BAR) -> SpeedVerdict:
     """No comparison arm ran. NOT the same fact as a parser that lost, and reported differently.
 
-    `adapters.py` already draws this line for capability columns — *"`available` is about the
-    ENVIRONMENT; a `0` is about the PARSER"*. It matters at least as much for a ratio: an absent
-    Docling scored as infinitely slow would report the deterministic path winning on the strength
-    of a missing dependency.
+    `adapters.py` draws this line for capability columns — *"`available` is about the
+    ENVIRONMENT; a `0` is about the PARSER"*. An absent Docling scored as infinitely slow would
+    report the deterministic path winning on the strength of a missing dependency.
     """
     return SpeedVerdict(
         bar=bar,

@@ -5,26 +5,22 @@ WHAT MAKES THESE ASSERTIONS NON-VACUOUS, STATED BEFORE THEM
 `AGENTS.md` §2 records `perf.spec` asserting `peak_mb < 2000` against a 500 MB bar — green for
 months, measuring nothing. The same shape is available here and is avoided deliberately:
 
-  * **No assertion here is a loose bound on a wall-clock time.** The synthetic tests feed
-    *constructed* timings into `rule_on_speed` and assert the ruling it returns, so the inputs
-    sit a stated distance from the bar and each one flips class under a one-character mutation
-    (the table is in the PR body). `test_a_tight_measurement_above_the_bar_...` and
-    `..._below_the_bar_...` are the same code path with the bar on opposite sides.
+  * **Nothing here is a loose bound on a wall-clock time.** The synthetic tests feed
+    *constructed* timings into `rule_on_speed` and assert the ruling, so each input sits a stated
+    distance from the bar and flips class under a one-character mutation (table in the PR body).
+    `..._above_the_bar_...` and `..._below_the_bar_...` are one code path, bar on either side.
   * **No `parametrize` walks the corpus glob.** `_corpus_manifest.py` records that an empty glob
     collects ZERO cases and reports as a pass. The one corpus test names a single paper and its
-    page count explicitly, so an empty corpus is a *skip with a reason*, not a silent nothing.
-  * **The source-scan test carries a positive control.** It asserts its own pattern matches the
-    historical defect string before asserting the module is clean, because a regex that can never
-    match is the vacuous green in its purest form.
+    page count, so an empty corpus is a *skip with a reason*, not a silent nothing.
+  * **The source-scan test carries a positive control** — it asserts its own pattern matches the
+    historical defect string first, because a regex that can never match is the vacuous green in
+    its purest form.
   * **The warm-up test counts adapter calls**, so "warm-up discarded" cannot be satisfied by
     never running one.
 
-THE CORPUS IS NOT COMMITTED AND CI DOES NOT HAVE IT
-
-`research/benchmarks/corpus/*.pdf` is gitignored. The corpus test skips on its absence with a
+`research/benchmarks/corpus/*.pdf` is gitignored and CI has none. The corpus test skips with a
 reason naming `./research/benchmarks/fetch_corpus.sh`, and
-`test_the_corpus_skip_names_the_fetch_script` prints that status to stdout on every run —
-including CI — so the absence is visible rather than inferred from a summary line.
+`test_the_corpus_skip_names_the_fetch_script` prints that status to stdout on every run.
 """
 
 from __future__ import annotations
