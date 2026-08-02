@@ -1,14 +1,21 @@
 # EPIC 1 — Ingest & Document Intelligence: result
 
-**Status: INCOMPLETE. 5 of 10 acceptance tests met, 4 PARTIAL, 1 NOT MET.** Branch
-`epic-1-ingest`, 142 commits, `63be37d..fbfbf4d`. `research/build/EPIC-01-ingest.md` is
-**unedited** — no acceptance criterion was weakened, and no test file claims a criterion it does
-not meet.
+**Status: INCOMPLETE. 5 of 10 acceptance tests met, 3 PARTIAL, 2 NOT MET.** Branch
+`epic-1-ingest`, 142 commits, `63be37d..fbfbf4d`; re-measured on `main` 2026-08-03 after #78
+Session B.
+
+**One acceptance criterion HAS since been weakened, and this line used to deny it.**
+`research/build/EPIC-01-ingest.md` was unedited when this file was first written. It is not
+now: `eval/ptub.spec` was amended from four adapters to **three live adapters plus a declared
+historical column** (#55/#105), because the epic contradicted itself — it asks for a
+current-PaperTree adapter and its own "Must delete" section orders that extractor deleted. The
+epic also carries an erratum on the F1.3/F1.5 dependency (#50/#97) and a recorded deviation on
+F1.5's WebP clause (#55/#105). No test file claims a criterion it does not meet.
 
 Every number below was measured on this machine at `pymupdf 1.28.0` / `docling 2.117.0` against
 the 8-paper, 195-page corpus. Nothing is quoted from a doc without being re-run.
 
-**Gold arrived 2026-08-01 and grew twice that day**: 18 pages → 36, 249 regions → 420, 3 papers
+**Gold arrived 2026-08-01 and grew twice that day**: 18 pages → 36, 249 regions → **442**, 3 papers
 → 6, single annotator, no inter-annotator agreement. That is 30 % of README §1.2's Tier B. Every
 gold-based number carries that n — it measures, it does not authorise. Reproduce with
 `uv run python -m papertree_evaluation score`.
@@ -187,10 +194,29 @@ Reading order runs the other way and is not part of the rule: Docling scores 0.5
 paper and worse on both single-column ones — the opposite of what "columns are the hard part"
 would predict, and worth a look before Epic 2 relies on either.
 
-Two of §4.1's four metrics remain not evaluable, and are reported as such rather than as zero,
-because a zero is a claim about the parser: **caption association** (gold carries no `parent`
-links) and **vector-figure recall** (no `is_vector` flag). The annotator tool did not collect
-either. That is a tool defect, recorded, and it costs PaperTree the one metric — vector figures —
+> **Superseded 2026-08-03 on the deterministic side only.** Those three deterministic figures
+> were three of six papers. All six now read a3c 0.667 / attention 0.389 / bert 0.699 /
+> gpt3 0.222 / neural-odes 0.611 / resnet 0.929, mean **0.586** — see §2's
+> `worker/reading-order.spec` row. **Docling's side has not been re-measured**, so the
+> head-to-head above is not a current comparison and must not be quoted as one.
+
+**Both of the "not evaluable" metrics below were re-checked and one of them was never a gold
+defect at all.** Corrected 2026-08-03 (#86/#95):
+
+- **caption association** and **vector-figure recall** were reported as not evaluable because
+  the gold "carries no `parent` links" and "no `is_vector` flag". **It carries both.** The
+  scorer's guards tested `any(r.get(field))` — TRUTHINESS, not presence — so a complete
+  annotation in which every `parent` is a valid id but every `is_vector` is legitimately
+  `False` read as a missing one. All 39 gold captions carry a `parent` and all 55 gold figures
+  carry an `is_vector`. Caption association now measures **14/39 correct, 1 false**; vector
+  recall is measured per paper.
+- What remains genuinely not evaluable is narrower and is stated where it applies: `resnet` and
+  `neural-odes` hold 51 floats between them with **no caption boxes drawn at all**, so caption
+  association covers 4 of 6 annotated papers rather than 6.
+
+The original text below is kept because the reasoning about zero-vs-unevaluable is right and
+still governs; only its premise about this gold set was wrong. That is a tool defect, recorded,
+and it costs PaperTree the one metric — vector figures —
 where it was expected to look good.
 
 **Where the F1 goes.** The macro-average is over gold types, and the first scored run found
@@ -237,15 +263,33 @@ the 91 % measured an hour earlier, but it rests on three papers, and one of the 
 
 | Candidate | blocks | bbox | page | stable id | headings | eq | figures | captions linked | tables | cells | sections | s/page |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| PaperTree LIVE *(H2, deleted)* | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2.0 | 0.2 |
-| PaperTree dead extractor *(H2, deleted)* | 233 | 233 | 233 | 0 | 58 | 86 | **0** | 0 | 0 | 0 | — | 4.1 |
-| pymupdf-raw | 549 | 549 | 549 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0.05 |
-| docling | 519 | 497 | 497 | **0** | 22 | 2 | **7** | 21 | 15 | 342 | 22 | 2.10 |
-| **papertree-deterministic** | 929 | **929** | **929** | **929** | 5 | 2 | **9** | 2 | 10 | **580** | 5 | **0.13** |
+| PaperTree LIVE *(H2, deleted)* | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | — | 0.17 |
+| PaperTree dead extractor *(H2, deleted)* | 233 | 233 | 233 | 0 | 58 | 86 | **0** | 0 | 0 | 0 | — | 0.34 |
+| pymupdf-raw *(2026-08-01)* | 549 | 549 | 549 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0.05 |
+| docling *(2026-08-01)* | 519 | 497 | 497 | **0** | 22 | 2 | **7** | 21 | 15 | 342 | 22 | 2.10 |
+| **papertree-deterministic** *(2026-08-03)* | 955 | **955** | **955** | **955** | 13 | 2 | **9** | **7** | 13 | **563** | 14 | see #53 |
 
 Rows 1 and 2 are carried forward from findings.md H2 and marked as such: both are **deleted**
 (§5), and re-implementing 1,698 lines of removed code to re-measure what was already measured
 would be the opposite of the point.
+
+**Every row is now dated, because they were not all measured at the same time and the table read
+as though they were.** The deterministic row is re-derived on `main` @ `568487b` (after #102 and
+#105) and it moved a long way from what this table carried: blocks 929 → **955**, headings
+5 → **13**, captions linked 2 → **7**, tables 10 → **13**, cells 580 → **563**, sections
+5 → **14**. Rows 3 and 4 are **2026-08-01 measurements and have NOT been re-derived** — Docling
+is a ~4 s/page arm and re-running it belongs with #53's harness, not here. Read them as of their
+date. The deterministic `s/page` cell is deliberately empty rather than filled from a run taken
+while this machine was under load; #53 is measuring it properly.
+
+**Corrected 2026-08-03.** H2's `sec` column is a per-paper **total** over ResNet's 12 pages, and
+this table read it as a rate: row 1 printed `0.2` where 2.0 s / 12 pp is **0.17**, and row 2
+printed `4.1` — the raw total — where 4.1 s / 12 pp is **0.34**, an error of 12×. Row 1's
+`sections` cell held `2.0`, the same total leaking one column left; H2 records `nested tree ✗`
+for that row and no section count at all, so it now reads `—`. Rows 3–5 are re-measurements
+taken here and were never affected. The transcription now lives in
+`packages/evaluation/python/papertree_evaluation/harness.py` as `HISTORICAL_ROWS`, which stores
+the total and derives the rate, so this particular mistake cannot be made again by hand.
 
 Three things in that table are worth stating plainly:
 
@@ -268,13 +312,13 @@ Three things in that table are worth stating plainly:
 | `worker/determinism.spec` | **MET** | 20 runs byte-identical via `canonical_json_for_determinism`, ids stable. `test_pipeline_end_to_end.py` |
 | `worker/repairs.spec` | **MET** | 84,395 spans, 749 dehyphenation proposals, rules 25/26/27/30b hold; 30b checked against the validator's own `_dehyphenate` |
 | `worker/robustness.spec` | **MET** | 8/8 papers parse and validate; 0 crashes, 0 timeouts, 0 empty outputs |
-| `worker/perf.spec` | **PARTIAL** | time ✅ p50 305 ms/page, p95 568 ms/page against a 1500 ms bar. **Memory ❌ — `gpt3-longform-singlecol` peaks at 746 MB against the <500 MB bar** (clean process, 75 pp; the other seven are 143–281 MB). Recorded MET here until 2026-08-01 on the strength of the time half alone |
+| `worker/perf.spec` | **PARTIAL** | time ✅ p50 305 ms/page, p95 568 ms/page against a 1500 ms bar. **Memory ❓ NOT DECIDABLE at this bar** — `gpt3-longform-singlecol` (75 pp, fresh subprocess) re-measured 2026-08-03 at **442.6 / 497.4 / 501.7 MB** against a <500 MB bar, and at **488.3 / 509.1 / 496.3 MB** on the commit before #102. Three identical runs of a byte-deterministic parser straddle the bar on both sides of that change, so the ~60 MB spread exceeds the distance to the bar and no run of this test decides the clause. Filed as #104. The **746 MB** this row previously carried no longer reproduces; ~240 MB came off it between 2026-08-01 and now and nothing recorded which change did it (#52) |
 | `ingest/source-authenticity.spec` | **MET** | every line of every non-table block traced to the page's glyph stream; found 2 real bugs while being written |
-| `eval/ptub.spec` | **PARTIAL** | harness + metrics + annotation tool + scorer + Docling geometry, 83 tests; gold exists (18 pp); **cross-parser F1 now computable and computed**; still **3 adapters, not 4** — row 2 is deleted code |
-| `worker/figures.spec` | **PARTIAL** | ResNet ≥5 ✅ (9, all vector); `is_vector` correct ✅; ≥80 % captioned ❌ (58 % corpus-wide). Gold figure F1 0.67 on `attention`, **0.00 on the other two**; vector-figure recall still not evaluable — gold has no `is_vector` |
-| `worker/equations.spec` | **NOT MET** | prose never classified as an equation ✅; every equation retains its crop ✅; **≥80 % of gold ❌ — 0 of 17 at IoU 0.5**. Count now 16 predicted against 17 gold (was 89); the extents are narrower than gold's full-column convention |
-| `worker/reading-order.spec` | **NOT MET** | **0.278 / 0.389 / 0.967 pairwise against a ≥0.90 bar**, up from 0.167 / 0.333 / 0.800. ResNet is now over the bar; the two single-column papers are not. The ordering logic was never the weak part — the regions being ordered were |
-| `worker/hierarchy.spec` | **PARTIAL** | number/title joining ✅, furniture routing ✅, and **"no table cell is classified as a heading" now holds on 6 of 8 papers** — a3c **193 → 17** headings (numeral-only 165 → **0**), gpt3 **181 → 61** (126 → **6**), fixed in `tables.py` rather than `hierarchy.py`. Outline size against the embedded-TOC floor: superglue **0 %**, attention **−18 %** (both pass), gpt3 **+91 %** (was +466 %), neural-odes **+124 %** (unchanged — its over-detection is emphasis runs, not tables) |
+| `eval/ptub.spec` | **MET on the amended criterion** (2026-08-03) | harness + metrics + annotation tool + scorer + Docling geometry; gold 36 pp; cross-parser F1 computed. The 4th adapter was **the epic contradicting itself** — the same file that asks for a current-PaperTree adapter orders that extractor deleted in its "Must delete" section, and it is (§5). Criterion amended in `EPIC-01-ingest.md` to **3 live adapters + a declared historical column**, carried in `harness.HISTORICAL_ROWS` with its provenance, labelled `(DELETED)`, printing `?` where findings.md H2 recorded nothing, and provably outside `ComparisonMatrix.outcomes` so a 2026-06 measurement of deleted code can never enter a computed ratio. **Read as: the criterion moved, the work did not grow.** #55 |
+| `worker/figures.spec` | **PARTIAL** | ResNet ≥5 ✅ (9, all vector); `is_vector` correct ✅; **≥80 % captioned ❌ — 68.2 %** (58/85 over figures; 142/226 = 62.8 % over floats), up from 57.8 % / 49.1 % in #102. Float detection against gold **29/80 type-blind, 22/80 type-aware** — the 7-region gap is a convention disagreement, not a miss: on gpt3 the parser boxes 9 of 10 gold floats correctly and types them `table` where gold says `figure`, because GPT-3's boxed qualitative examples *are* booktabs tables in the source. Remaining real misses are figure-region **extents** on neural-odes (1/22) and resnet (5/29) — #103. `n = 36 pp / 6 of 8 papers / 442 regions / 1 annotator / no IAA` |
+| `worker/equations.spec` | **NOT MET** (improved 2026-08-03) | prose never classified as an equation ✅; every equation retains its crop ✅; **≥80 % of gold ❌ — 8 of 21 gold equations at IoU 0.5 = 38 %**, up from **0 of 21**. Per paper: neural-odes **6/18**, resnet **2/2**, attention **0/1** (best IoU 0.063 → 0.293). Predicted count unchanged at 21, which is what separates this from the vertical merge that was measured and reverted (16 → 6 predicted). **What blocks the bar is no longer extents**: on neural-odes p14 the parser emits **8 equation blocks against 17 gold**, so 9 cannot match at any IoU. That is region detection — #51/#103. `n = 36 pp / 6 of 8 papers / 1 annotator / no IAA` |
+| `worker/reading-order.spec` | **NOT MET** | Pairwise against a ≥0.90 bar, all six annotated papers: a3c **0.667**, attention **0.389**, bert **0.699**, gpt3 **0.222**, neural-odes **0.611**, resnet **0.929** — mean **0.586**. One paper clears the bar. The earlier "0.278 / 0.389 / 0.967" quoted three of the six and is superseded. neural-odes fell 0.667 → 0.611 in #105 and **that is not an ordering change**: the metric scores PAIRS of gold regions that both matched, so newly matched equations added pairs on a page previously scored on one. The ordering logic was never the weak part — the regions being ordered were. `n = 36 pp / 6 of 8 papers / 1 annotator / no IAA` |
+| `worker/hierarchy.spec` | **PARTIAL** | number/title joining ✅, furniture routing ✅, and **"no table cell is classified as a heading" now holds on 6 of 8 papers** — a3c **193 → 17** headings (numeral-only 165 → **0**), gpt3 **181 → 52** (126 → **6**), fixed in `tables.py` rather than `hierarchy.py`. **Outline size now has an independent floor on all 8 papers** (#54 item 4: 4 from `hyperref` bookmarks, 4 hand-counted off the glyph stream, ONE annotator, no IAA). Inside ±20 %: superglue **1.00×**, attention **0.82×**, a3c **1.00×**, bert **1.03×**, resnet **0.81×** — **5 of 8**. Outside: gpt3 **1.63×** (was 1.91×), neural-odes **~2.4×** (over-detection is emphasis runs, not tables), pdf-to-tree **0.66×** (under-detection: bold-at-body-size subsection heads in a two-column ACL layout) |
 
 ---
 
@@ -413,10 +457,13 @@ asks whether those boxes have the shape of the regions on the page.
   not always every visual heading — so it belongs as a *floor* check, not as the definition. But
   it turns an unmeasurable clause into a measurable one on half the corpus at zero annotation
   cost, and it should have been the first place anyone looked.
-- **Caption linking is 58 %, against an 80 % bar**, up from ~35 % after two fixes: raster panels
-  are merged (neural-odes 77 → 18 regions) and a caption now binds by horizontal overlap plus
+- **Caption linking is 68.2 %, against an 80 % bar** (58/85 over figures; 142/226 = 62.8 % over
+  floats — the denominator was never stated and the two disagree). Up from ~35 % via, in order:
+  raster panel merging (neural-odes 77 → 18 regions); binding by horizontal overlap plus
   edge-to-edge adjacency rather than by nearest vertical centre, which on a two-column page
-  routinely picked the float in the *other* column.
+  routinely picked the float in the *other* column; and #102, which found that
+  `figures._CAPTION_START` matched `[0-9]+|[IVXivx]+` and so could not match an APPENDIX label —
+  gpt3's 34 `Figure G.N:` captions were never captions at all and could bind to nothing.
   **The bottleneck has moved and the next person should not re-tune the linker.** ResNet is 9
   figures with 2 linked because only **4 caption blocks are detected on a paper with ~12
   captions** — `is_caption_line` needs the marker at position 0 and segmentation is merging
@@ -450,6 +497,13 @@ asks whether those boxes have the shape of the regions on the page.
   sit at 143–281 MB. It scales with page count (75 pp), so the fix is a streaming or
   page-batched assembly rather than holding every page's spans at once — and the assertion
   belongs in a subprocess against the *largest* paper, at the bar the brief actually states.
+
+  > **The 746 MB no longer reproduces (2026-08-03).** Same paper, same method, fresh subprocess:
+  > **442.6 / 497.4 / 501.7 MB** on `main` @ `dff69e5`, and **488.3 / 509.1 / 496.3 MB** on
+  > `e9c58ca` before it. Roughly 240 MB came off between 2026-08-01 and now and **nothing
+  > recorded which change did it** (#52) — which is its own finding. The subprocess assertion
+  > described above was built and is right; what it cannot do is decide a 500 MB clause when
+  > three identical runs of a byte-deterministic parser straddle 500. #104.
   This is the third time on this branch a green test has turned out to assert less than it
   appeared to; it is the same shape as the empty-`parametrize` trap `_corpus_manifest.py`
   documents.

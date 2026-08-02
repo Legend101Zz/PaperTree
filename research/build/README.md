@@ -155,7 +155,7 @@ layer. Three epics of measured, tested libraries exist and a user can reach none
 The first milestone from `../ROADMAP-AND-CHANGE-MAP.md` §27 remains the architectural
 gate, and it is satisfied at the end of **Wave 2**.
 
-**Status as of 2026-08-02, `main` at `8573ffc`.** Every number re-measured, not quoted.
+**Status as of 2026-08-03, `main` at `dff69e5`.** Every number re-measured, not quoted.
 
 | # | Criterion | | Evidence |
 |---|---|---|---|
@@ -163,7 +163,7 @@ gate, and it is satisfied at the end of **Wave 2**.
 | 2 | A highlight survives reload, zoom 50→400%, 5 viewport widths, drift <1pt | ✅ **MET** | Epic 2, `EPIC-02-RESULT.md` |
 | 3 | A highlight re-anchors under a different parser config, **or fails loudly** | ✅ **MET** | **100.00%, 0 orphans**, 21 fixture × perturbation combinations — including one retiring 89.5% of ids |
 | 4 | An answer's citation navigates to the correct polygon | ✅ **MET** | Resolution **100%** page and polygon; the scroll now fires — #64 closed in #78 Session A (PR #93), asserted click-to-scroller by `apps/web/test/citation-scroll.spec.tsx` |
-| 5 | Figures from an all-vector paper (ResNet) present with captions linked | 🟡 **PARTIAL** | ≥5 figures ✅ (9, all vector); captions **58%** against an 80% bar (#51). **Closes in #78 Session B** |
+| 5 | Figures from an all-vector paper (ResNet) present with captions linked | 🟡 **PARTIAL** | ≥5 figures ✅ (9, all vector); `is_vector` correct ✅; captions **68.2%** (58/85 over figures, 142/226 = 62.8% over floats) against an 80% bar — moved from 58% by #51/#102, **still short**. #51 is closed and the residual is figure-region *extents*, not linking: neural-odes 1/22 and resnet 5/29 type-blind float recall (#103) |
 | 6 | Parse runs as a background job with observable progress, surviving a worker restart | ✅ **MET** | `jobs/durability.spec`, `test_a_job_killed_mid_step_resumes_at_that_step` |
 
 *"If criterion 3 fails, stop and fix the anchoring design before Wave 3 — everything
