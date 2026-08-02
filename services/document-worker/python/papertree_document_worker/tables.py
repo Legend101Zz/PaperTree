@@ -63,6 +63,13 @@ MAX_RULE_GAP_PT = 420.0
 RULE_X_OVERLAP_SHARE = 0.6
 #: A table needs at least two rules - booktabs always draws toprule and bottomrule.
 MIN_RULES = 2
+#: A rule at least this share of the group's widest stroke is a HEAVY rule. See `_heavy_flags`.
+#:
+#: Measured stroke widths across the corpus's structural rules: gpt3 {0.797, 0.498}, superglue
+#: {0.797, 0.498}, bert {0.873, 0.545, 0.398}, attention {0.996, 0.797, 0.398, 0.299}, a3c
+#: {0.996, 0.797, 0.398, 0.379}. Every page is bimodal and the modes are 1.6-2.2x apart, so 0.75
+#: sits in empty space on all of them rather than being tuned to one.
+HEAVY_RULE_SHARE = 0.75
 #: Horizontal gap between cells, as a multiple of the row's median character advance.
 COLUMN_GAP_RATIO = 1.8
 
@@ -139,17 +146,74 @@ def _x_overlap_share(a: BBox, b: BBox) -> float:
     return (hi - lo) / smaller if smaller > 0 else 0.0
 
 
+def _heavy_flags(rules: list[Drawing]) -> dict[int, bool]:
+    """Which rules are `\\toprule`/`\\bottomrule` weight rather than `\\midrule` weight.
+
+    THE DISCRIMINATOR #51 ASKED FOR, AND IT IS BOOKTABS' OWN SEMANTICS RATHER THAN A STATISTIC.
+
+    `\\heavyrulewidth` is 0.08em and `\\lightrulewidth` is 0.05em, so a booktabs table's stroke
+    widths are bimodal by construction: the rules that OPEN and CLOSE a table are heavy, and
+    every rule inside it is light. That is a fact about the generator, not a property measured
+    off this corpus and hoped to generalise.
+
+    Four discriminators were measured before this one and every one of them failed to separate,
+    which is why the issue says "this needs a discriminator nobody has found yet":
+
+      * gap / row-pitch      - FALSE 4.0-37.5 vs GENUINE 3.5-30.0, overlapping
+      * rule-spacing CV      - FALSE 0.373-1.546 vs GENUINE 0.271-1.136, overlapping AND
+                               BACKWARDS: gpt3 p52/p59/p60 carry 18/18/24 rules at the three
+                               MOST EVEN spacings in the corpus
+      * group height + column count - kills genuine a3c p12/p13 and gpt3 p27
+      * prose share inside the group - FALSE 0.763-0.941 vs GENUINE 0.080-0.979, overlapping
+
+    All four are scalar summaries of the group. The weight is not a summary; it is the typesetter
+    saying where the table ends.
+
+    THE SIGNAL IS ONLY READ WHEN IT CARRIES INFORMATION. A table drawn with `\\hline` throughout
+    has ONE stroke width, every rule is trivially "heavy", and closing a group at the second one
+    would cut every such table into pairs. So a page whose structural rules are all one width
+    gets `{}` back and the grouping falls through to the pre-existing behaviour unchanged.
+    """
+    if not rules:
+        return {}
+    widest = max(r.width for r in rules)
+    if widest <= 0:
+        return {}
+    flags = {id(r): r.width >= HEAVY_RULE_SHARE * widest for r in rules}
+    return flags if not all(flags.values()) else {}
+
+
 def _group_rules(rules: list[Drawing]) -> list[list[Drawing]]:
-    """Rules that share an x-range and are vertically reachable form one table."""
+    """Rules that share an x-range and are vertically reachable form one table.
+
+    A HEAVY RULE CLOSES ITS GROUP, and that is what stops `MAX_RULE_GAP_PT`'s transitive chain
+    from swallowing a page. `\\bottomrule` is where the table ends; the next heavy rule is the
+    next table's `\\toprule`, not a continuation.
+
+    Measured on gpt3 p50-p60 - the stack of boxed qualitative examples #51 names - the rules run
+    `heavy, light, heavy | heavy, light, heavy | ...`: four to six independent booktabs tables
+    whose only separator IS that weight pattern. Chaining them produced ONE region spanning
+    `[72.0, 81.4, 540.0, 691.8]`, the whole text block, against 6 gold figures and 6 gold
+    captions with a best same-type IoU of 0.000 for all twelve.
+
+    A heavy rule that OPENS a group does not close it - that is the `\\toprule` - so the guard is
+    on appending to a group that already has a rule in it.
+    """
+    heavy = _heavy_flags(rules)
     groups: list[list[Drawing]] = []
+    closed: set[int] = set()
     for rule in sorted(rules, key=lambda r: r.bbox[1]):
-        for group in groups:
+        for index, group in enumerate(groups):
             last = group[-1]
+            if index in closed:
+                continue
             if (
                 _x_overlap_share(last.bbox, rule.bbox) >= RULE_X_OVERLAP_SHARE
                 and rule.bbox[1] - last.bbox[3] <= MAX_RULE_GAP_PT
             ):
                 group.append(rule)
+                if heavy.get(id(rule)):
+                    closed.add(index)
                 break
         else:
             groups.append([rule])
