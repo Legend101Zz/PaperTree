@@ -278,6 +278,22 @@ const SCALE = TARGET_BLOCKS / BASELINE_BLOCKS;
  */
 const MAX_SCALING_RATIO = 2.0;
 
+/**
+ * Blocks in the UNTIMED warm-up insert that precedes both timed ones.
+ *
+ * WITHOUT THIS THE CALIBRATION PAYS ONE-TIME COSTS THE MEASUREMENT DOES NOT, and the ratio
+ * stops being a linearity measure. Observed on a real GitHub runner (run 30737048653): the
+ * realistic calibration took 1776 ms and the 30k insert that followed it took 1857 ms — three
+ * times the data in the same time, ratio 0.348, nowhere near the 0.861-1.191 measured
+ * locally. Whatever the runner charges for first-touch — file growth, WAL setup, cold page
+ * cache, JIT — the calibration was paying all of it and the measurement none.
+ *
+ * A ratio that is wrong in the SAFE direction is still wrong: the same variance that produced
+ * 0.348 can produce a fast calibration and a slow measurement, and that direction goes red.
+ * So both timed inserts now run on a warmed database and a warmed code path.
+ */
+const WARMUP_BLOCKS = 2_000;
+
 /** Inserts `blockCount` blocks and returns the elapsed milliseconds. */
 function timedPut(
   db: PaperTreeDb,
@@ -312,7 +328,15 @@ describe('30k blocks in under 2s', () => {
       db.migrate();
       const { owner } = db.createUser('perf@papertree.test');
 
-      // Calibration first, through the same code path, in the same process. This is what
+      // Untimed, and discarded. See WARMUP_BLOCKS: it exists so the calibration below is not
+      // the insert that pays this database's and this code path's first-touch costs.
+      timedPut(db, owner, {
+        paperId: 'ppr_00000000000000000000000201',
+        sourceHash: `sha256:${'1'.repeat(64)}`,
+        blockCount: WARMUP_BLOCKS,
+      });
+
+      // Calibration next, through the same code path, in the same process. This is what
       // makes the assertion below independent of how fast this machine happens to be today.
       const baselineMs = timedPut(db, owner, {
         paperId: 'ppr_00000000000000000000000101',
@@ -395,6 +419,15 @@ describe('30k blocks in under 2s', () => {
     try {
       db.migrate();
       const { owner } = db.createUser('perf-realistic@papertree.test');
+
+      // Untimed, and discarded — see WARMUP_BLOCKS. This test is where the runner charged
+      // 1776 ms for a 10k calibration and 1857 ms for the 30k insert that followed it.
+      timedPut(db, owner, {
+        paperId: 'ppr_00000000000000000000000242',
+        sourceHash: `sha256:${'2'.repeat(64)}`,
+        blockCount: WARMUP_BLOCKS,
+        payload: 'realistic',
+      });
 
       const baselineMs = timedPut(db, owner, {
         paperId: 'ppr_00000000000000000000000142',
