@@ -132,6 +132,11 @@ never shrink on their own.
   (Lands with #75; until then v1 is still at `apps/api` and `components/canvas/**`, and
   the same advice applies.)
 - `pnpm test` is cached and not a gate (above).
+- **`migrations.spec`'s 30k-block insert is a wall-clock assertion and fails randomly on
+  CI** (#80). Observed on a docs-only PR: `expected 6207 to be less than 5000`, then green
+  on re-run with no change. If your gate goes red *only* there, **re-run before you
+  diagnose** — and do not "fix" it by raising the bound, which is how a guard degrades into
+  a smoke test one increment at a time.
 - **A stacked PR merges into its stated base branch, not into `main`.** Epic 3's four PRs
   all reported MERGED and only one reached `main` — the other three merged into each
   other, leaving `main` 12,564 lines short while the board said done (#73). Prefer a flat
