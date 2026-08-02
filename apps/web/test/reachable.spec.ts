@@ -49,20 +49,10 @@ const EXTENSIONS = ['.tsx', '.ts'] as const;
  * Deleting a listed file is the desired outcome and passes.
  */
 const ORPHAN_LEDGER: readonly { readonly file: string; readonly why: string }[] = [
-  // The v1 canvas. `app/paper/[id]/canvas/page.tsx` is a stood-down placeholder — "no canvas" is an
-  // explicit Epic 2 non-goal and `components/canvas/**` is outside its file ownership — so these
-  // are unreachable BY DESIGN and stay in the tree for Epic 5 to find as they were. #43 deletes
-  // them. `MermaidRenderer.tsx` additionally breaks "no fabricated diagrams" and wants deleting
-  // rather than rebuilding.
-  { file: 'components/canvas/CanvasToolbar.tsx', why: '#43 — Epic 5 owns the canvas' },
-  { file: 'components/canvas/MermaidRenderer.tsx', why: '#43 — and delete, do not restyle' },
-  { file: 'components/canvas/PaperCanvas.tsx', why: '#43 — Epic 5 owns the canvas' },
-  { file: 'components/canvas/RichCanvasNode.tsx', why: '#43 — Epic 5 owns the canvas' },
-  { file: 'components/canvas/nodes/AIResponseNode.tsx', why: '#43 — Epic 5 owns the canvas' },
-  { file: 'components/canvas/nodes/ExplorationNode.tsx', why: '#43 — Epic 5 owns the canvas' },
-  { file: 'components/canvas/nodes/InlineAskInput.tsx', why: '#43 — Epic 5 owns the canvas' },
-  { file: 'components/canvas/nodes/NoteNode.tsx', why: '#43 — Epic 5 owns the canvas' },
-  { file: 'components/canvas/nodes/PageSuperNode.tsx', why: '#43 — Epic 5 owns the canvas' },
+  // Empty, and that is the desired terminal state rather than an accident. Its nine entries were
+  // the v1 canvas, held here for Epic 5 to find as they were; #75 moved that whole surface to
+  // `archive/v1-web-canvas/`, and the ledger's own rule is that deleting a listed file passes.
+  // Re-add an entry only with the issue that owns the debt.
 ];
 
 function sourceFilesUnder(dir: string): string[] {

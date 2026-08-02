@@ -12,7 +12,7 @@ WHY urllib AND NOT AN SDK
     Note the ONE difference from ``vlm.py``, because getting it wrong produces a 404 with an
     unhelpful body: ``vlm.py`` targets MiniMax's **Anthropic-compatible** endpoint
     (``/anthropic/v1/messages``, ``x-api-key`` + ``anthropic-version``, content blocks).
-    ``apps/api/papertree_api/config.py`` documents the **OpenAI-compatible** one
+    ``archive/v1-api/papertree_api/config.py`` (v1, #75) documents the **OpenAI-compatible** one
     (``llm_base_url = "https://api.minimax.io/v1"`` → ``/chat/completions``,
     ``Authorization: Bearer``, ``messages[].content`` as a string or a content-part array). Both
     are real, both are MiniMax, and they are not the same wire format. This module implements the
@@ -72,7 +72,7 @@ __all__ = [
     "VisionModelUnverified",
 ]
 
-#: ``apps/api/papertree_api/config.py``'s values, mirrored rather than imported: ``apps/api`` is
+#: ``archive/v1-api/papertree_api/config.py`` (v1, #75)'s values, mirrored rather than imported: ``apps/api`` is
 #: deliberately NOT a member of this uv workspace (root ``pyproject.toml`` says so and why), so
 #: importing from it is not possible. The duplication is real and is the reason these are named
 #: constants — one place to change per side, and ``tests/test_runtime_swappable.py`` asserts the
@@ -104,7 +104,7 @@ class VisionModelUnverified(ProviderError):
 
 @dataclass(frozen=True, slots=True)
 class ProviderSettings:
-    """The four settings ``apps/api/papertree_api/config.py`` documents, as one object."""
+    """The four settings ``archive/v1-api/papertree_api/config.py`` (v1, #75) documents, as one object."""
 
     api_key: str = ""
     model: str = DEFAULT_MODEL

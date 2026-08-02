@@ -19,12 +19,11 @@
     "  2. The two competing Highlight types are gone: types/highlight.ts was deleted along with",
     "     the legacy highlight stack, and one definition survives in types/index.ts.",
     "",
-    "One thing is deliberately NOT fixed and is recorded in EPIC-02-RESULT.md \u00a76.2: the v1 canvas",
-    "surface (components/canvas/**, hooks/useCanvas.ts) is type-broken independently of Epic 2 \u2014",
-    "useCanvas.ts calls five canvasApi methods that do not exist and imports four types that",
-    "types/canvas.ts does not export. It belongs to Epic 5, so it is EXCLUDED in",
-    "apps/web/tsconfig.json rather than deleted, and the canvas route is stood down. Epic 5 finds",
-    "those components untouched."
+    "Epic 2 left the v1 canvas surface type-broken and EXCLUDED in apps/web/tsconfig.json rather",
+    "than deleted (EPIC-02-RESULT.md \u00a76.2). #75 moved it to archive/v1-web-canvas/ and removed all",
+    "three exclude entries; the 29 type errors they were covering \u2014 25 in useCanvas.ts \u2014 went with",
+    "it, and apps/web now excludes nothing but node_modules. Epic 5 (#43) finds those components",
+    "untouched, in archive/."
   ],
   "scripts": {
     "dev": "turbo run dev",

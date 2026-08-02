@@ -58,7 +58,7 @@ docker-compose up --build -d
 ### Backend (FastAPI)
 
 ```bash
-cd apps/api
+cd archive/v1-api   # PaperTree v1 — see archive/README.md
 
 # Create virtual environment
 python -m venv venv

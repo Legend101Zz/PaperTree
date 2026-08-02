@@ -23,7 +23,6 @@ from __future__ import annotations
 import ast
 import inspect
 import json
-import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -52,7 +51,6 @@ from papertree_agent_tools import runtime as runtime_module
 from papertree_prompts import Toolset
 
 REPO = Path(__file__).resolve().parents[4]
-API_CONFIG = REPO / "apps" / "api" / "papertree_api" / "config.py"
 REGISTRY = build_registry()
 
 
@@ -306,22 +304,64 @@ def test_the_vision_model_setting_is_separate_from_the_model_setting() -> None:
     assert sorted(KNOWN_VISION_MODELS) == ["MiniMax-M3"]
 
 
-def test_the_provider_constants_still_match_the_ones_apps_api_documents() -> None:
-    """``apps/api`` is deliberately outside this uv workspace, so the values are duplicated.
+#: Files outside ``packages/agent-tools`` that write a provider constant out as a literal, with the
+#: issue that owns each. A LEDGER, enforced in both directions like ``reachable.spec``'s: a NEW copy
+#: fails, and a listed file that no longer carries one must be delisted so the ledger cannot outlive
+#: the debt. Session A found these while replacing the cross-tree read against v1 and did not fix
+#: them — ``services/document-worker/**`` is Session B's exclusive path (AGENTS.md §1).
+KNOWN_CONSTANT_COPIES: tuple[tuple[str, str], ...] = (
+    ("services/document-worker/python/papertree_document_worker/vlm.py", "#88"),
+    ("services/document-worker/python/papertree_document_worker/pipeline.py", "#88"),
+)
 
-    Duplication that nothing checks is duplication that drifts. This reads the other file and
-    compares, which is the cheapest thing that can catch a change on either side.
+
+def test_the_provider_constants_have_no_new_live_definition() -> None:
+    """What replaced the drift check against ``apps/api``, and why the replacement is different.
+
+    Until #75 this test read ``apps/api/papertree_api/config.py`` and compared its ``llm_model`` /
+    ``llm_vision_model`` / ``llm_base_url`` against the constants below, because v1 sat outside
+    this uv workspace and the values were duplicated. Duplication that nothing checks drifts.
+
+    v1 is now ``archive/``, and ``archive/README.md`` forbids importing from it or depending on it.
+    A test that reads it would make it load-bearing, which is precisely what that file rules out —
+    so the old assertion was removed rather than re-pointed. It was watched failing first
+    (``.../apps/api/papertree_api/config.py is gone``); the removal is recorded in #75's PR.
+
+    Its premise went with it: there is one live definition now. So this asserts what still holds —
+    that no *new* second definition appears inside the gated tree. It is a ledger rather than a
+    ban because whether ``services/document-worker`` ought to import these from here is a real
+    architectural question this test has no standing to decide (#88); pinning today's two copies
+    catches a third without pretending to have ruled on the first two.
     """
-    assert API_CONFIG.exists(), f"{API_CONFIG} is gone; the provider defaults have no source"
-    source = API_CONFIG.read_text(encoding="utf-8")
-    for setting, expected in (
-        ("llm_model", DEFAULT_MODEL),
-        ("llm_vision_model", DEFAULT_VISION_MODEL),
-        ("llm_base_url", DEFAULT_BASE_URL),
-    ):
-        match = re.search(rf'{setting}: str = "([^"]+)"', source)
-        assert match is not None, setting
-        assert match.group(1) == expected, setting
+    gated = sorted(
+        path
+        for root in ("packages", "services")
+        for path in (REPO / root).rglob("*.py")
+        if path.name != "provider.py" and "/tests/" not in path.as_posix()
+    )
+    assert len(gated) > 50, f"the scan found only {len(gated)} files; it is not scanning the repo"
+
+    ledger = {path for path, _ in KNOWN_CONSTANT_COPIES}
+    carries: set[str] = set()
+    fresh: dict[str, list[str]] = {}
+
+    for constant in (DEFAULT_MODEL, DEFAULT_VISION_MODEL, DEFAULT_BASE_URL):
+        for path in gated:
+            rel = path.relative_to(REPO).as_posix()
+            if f'"{constant}"' not in path.read_text(encoding="utf-8"):
+                continue
+            carries.add(rel)
+            if rel not in ledger:
+                fresh.setdefault(rel, []).append(constant)
+
+    assert fresh == {}, (
+        f"a provider constant is written out afresh in {sorted(fresh)}. Import it from "
+        f"papertree_agent_tools, or add it to KNOWN_CONSTANT_COPIES with the issue that owns it."
+    )
+    assert sorted(ledger - carries) == [], (
+        f"{sorted(ledger - carries)} no longer carries a provider constant - delete those lines "
+        f"from KNOWN_CONSTANT_COPIES. A ledger may not outlive its debt."
+    )
 
 
 def test_a_response_missing_every_optional_field_does_not_crash_a_turn() -> None:

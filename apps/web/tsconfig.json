@@ -34,10 +34,5 @@
     "**/*.tsx",
     ".next/types/**/*.ts"
   ],
-  "exclude": [
-    "node_modules",
-    "src/components/canvas/**",
-    "src/hooks/useCanvas.ts",
-    "src/app/paper/[id]/canvas/**"
-  ]
+  "exclude": ["node_modules"]
 }

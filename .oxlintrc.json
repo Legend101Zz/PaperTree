@@ -6,7 +6,7 @@
     "suspicious": "error",
     "perf": "warn"
   },
-  "ignorePatterns": ["apps/**", "**/dist/**", "**/node_modules/**"],
+  "ignorePatterns": ["apps/**", "archive/**", "**/dist/**", "**/node_modules/**"],
   "rules": {
     "no-console": "off",
     "typescript/no-explicit-any": "warn"

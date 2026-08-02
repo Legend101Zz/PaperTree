@@ -25,7 +25,6 @@
     "react-dom": "^18.2.0",
     "react-katex": "^3.1.0",
     "react-markdown": "^9.0.1",
-    "reactflow": "^11.10.4",
     "rehype-katex": "^7.0.0",
     "remark-gfm": "^4.0.0",
     "remark-math": "^6.0.0",

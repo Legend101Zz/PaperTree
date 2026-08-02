@@ -142,11 +142,18 @@ jobs:
       # `pnpm install --frozen-lockfile` above remains the other half of the guard: it fails if
       # a member is added without relocking.
       #
+      # #75 adds the archive/ clause. `archive/` is outside every workspace by CONSTRUCTION —
+      # pnpm-workspace.yaml lists packages/*, services/* and the literal apps/web, so a top-level
+      # archive/ is never globbed, and nothing had to be excluded to make that true. That is
+      # exactly why it is asserted here: an invariant that holds by accident of glob shape is one
+      # `packages: ['*']` away from silently ceasing to hold, and a v1 tree back inside the
+      # workspace is 4,449 unlinted Python lines and 29 hidden type errors (measured, #75).
+      #
       # Deliberately NOT asserted: that apps/web/package-lock.json still exists. It does, and the
       # v1 npm path (`cd apps/web && npm ci`) still works — but Epic 2 is chartered to delete that
       # lockfile, and a CI assertion demanding it would force Epic 2 to edit this file, which it
       # does not own. That is precisely the deadlock #28 is about; do not re-create it.
-      - name: Assert the pnpm workspace is packages/* plus apps/web — and nothing else under apps/
+      - name: Assert the pnpm workspace is packages/* plus apps/web — nothing else under apps/, nothing under archive/
         run: |
           WORKSPACE_JSON="$(mktemp)"
           export WORKSPACE_JSON
@@ -172,8 +179,18 @@ jobs:
               'assertion deliberately, or take it back out.');
             failed = true;
           }
+          const archived = pkgs.filter((p) => p.path.includes('/archive/'));
+          if (archived.length > 0) {
+            console.log('::error title=a package under archive/ joined the workspace::' +
+              archived.map((p) => p.path).join(', ') +
+              ' — archive/ is v1 (#75) and is outside every workspace, gate and lint path. ' +
+              'A member there is linted, typechecked and built, which is the whole thing the ' +
+              'archive exists to stop. Remove its package.json or move it out of archive/.');
+            failed = true;
+          }
           if (failed) process.exit(1);
-          console.log('workspace membership is as #28 decided: apps/web in, nothing else under apps/');
+          console.log('workspace membership is as #28 decided: apps/web in, nothing else under ' +
+            'apps/, and nothing under archive/ (' + pkgs.length + ' members examined)');
           "
 
       # Runs BEFORE the suites, not after: the checkout is pristine at this point, so anything
