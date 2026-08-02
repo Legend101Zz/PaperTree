@@ -39,6 +39,7 @@ __all__ = [
     "iou",
     "match_regions",
     "reading_order_accuracy",
+    "vector_figure_hits",
     "vector_figure_recall",
 ]
 
@@ -193,17 +194,60 @@ def caption_association(
     }
 
 
+def vector_figure_hits(
+    predicted: list[dict[str, Any]], gold: list[dict[str, Any]], threshold: float = IOU_MATCH
+) -> tuple[int, int]:
+    """`(matched, gold)` over gold figures with `is_vector: true`. The COUNTS, not a rate.
+
+    §4.1 defines the metric as *"Recall over gold figures with `is_vector: true`"* - over
+    FIGURES. So the counts are what pools; a rate cannot be averaged back into one.
+    `vector_figure_recall` below is the single-page convenience over these, and
+    `scoring.PaperScore` pools these across a paper rather than averaging the rates.
+    """
+    vector_gold = [g for g in gold if g.get("type") == "figure" and g.get("is_vector")]
+    if not vector_gold:
+        return 0, 0
+    figures = [p for p in predicted if p.get("type") == "figure"]
+    return len(_match(figures, vector_gold, threshold)), len(vector_gold)
+
+
 def vector_figure_recall(
     predicted: list[dict[str, Any]], gold: list[dict[str, Any]], threshold: float = IOU_MATCH
-) -> float:
+) -> float | None:
     """§4.1's isolated metric: recall over gold figures with `is_vector: true`.
 
     Isolated "because vector-figure blindness is the single defect that most damages PaperTree"
     - findings.md B3 measured ResNet at 0 figures from both extractors, every one of them
     vector. Averaged into an overall figure recall, that catastrophe is invisible.
+
+    NONE, NOT ZERO, WHEN THE PAGE HOLDS NO VECTOR GOLD - AND IT USED TO BE ZERO.
+
+    This returned `0.0` there, and `scoring.score_paper` guarded the call with
+    `if page_vector is not None`, which therefore never fired: EVERY page without a vector
+    figure was averaged into the paper's mean as a zero. `PaperScore.mean_vector_recall`'s
+    docstring already described the behaviour implemented here - *"None when no page in this
+    paper's gold holds a vector figure - absent, not zero"* - and was simply wrong about this
+    function two files away.
+
+    Measured on the 2026-08-02 gold, normalised, per paper - what was printed against what
+    §4.1 asks for:
+
+        paper          pages w/ vector gold   printed (mean over ALL)   pooled (hit/gold)
+        a3c                    3/6                   0.333                0.800  (4/5)
+        attention              1/6                   0.167                1.000  (1/1)
+        bert                   2/6                   0.333                1.000  (2/2)
+        gpt3                   1/6                   0.000                0.000  (0/6)
+        neural-odes            3/6                   0.000                0.000  (0/9)
+        resnet                 3/6                   0.074                0.125  (2/16)
+
+    On `attention` the printed figure had a CEILING OF 0.333 by construction - one page of six
+    holds its vector gold, so five zeros were folded in and no parser could have scored above a
+    third. `EPIC-01-RESULT.md` §3's headline "vector-figure recall is 0.167 / 0.000 / 0.000" is
+    the printed column.
+
+    A zero is a claim about the parser, and this was making that claim about pages whose gold
+    says nothing at all. The four papers the correction does NOT rescue - gpt3 0/6,
+    neural-odes 0/9, resnet 2/16 - are what still says the parser misses vector figures.
     """
-    vector_gold = [g for g in gold if g.get("type") == "figure" and g.get("is_vector")]
-    if not vector_gold:
-        return 0.0
-    figures = [p for p in predicted if p.get("type") == "figure"]
-    return len(_match(figures, vector_gold, threshold)) / len(vector_gold)
+    matched, total = vector_figure_hits(predicted, gold, threshold)
+    return matched / total if total else None

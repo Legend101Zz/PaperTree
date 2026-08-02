@@ -167,6 +167,159 @@ class TestNotEvaluable:
         gold = [_page(_gold("g0", "figure", [0, 0, 100, 20], order=0, is_vector=True, parent="g1"))]
         assert score_paper("a", "p", {"blocks": []}, gold).not_evaluable == {}
 
+    def test_an_all_raster_paper_is_complete_gold_not_missing_gold(self) -> None:
+        """#86. `is_vector: false` on every figure is an ANSWER, not an absence.
+
+        The guard tested `any(r.get("is_vector"))` — truthiness — so a paper whose figures are
+        all raster made that `any()` false and the metric was declared not evaluable over gold
+        that fully supports it, while printing "the annotator tool did not collect it". Measured
+        on the 2026-08-02 gold: a3c (0 vector / 5 raster) and bert (0 / 2) both did, and all 55
+        gold figures across all six papers carry an explicit `is_vector`.
+
+        WATCH IT FAIL: change `is not None` back to truthiness in `score_paper` and this goes
+        red, as does `test_an_all_raster_paper_reports_no_vector_gold_rather_than_zero` below.
+        """
+        gold = [
+            _page(
+                _gold("g0", "figure", [0, 0, 100, 20], order=0, is_vector=False),
+                _gold("g1", "figure", [0, 40, 100, 60], order=1, is_vector=False),
+            )
+        ]
+        assert (
+            "vector_figure_recall" not in score_paper("a", "p", {"blocks": []}, gold).not_evaluable
+        )
+
+    def test_a_present_but_empty_parent_does_not_read_as_absent(self) -> None:
+        """The sibling guard on the same line, which #86 asked to be made to read alike.
+
+        Harmless today — a `parent` is a `gold_id` and 39 of 39 gold captions carry one — and
+        one empty-string annotation away from the `is_vector` bug.
+        """
+        gold = [_page(_gold("g0", "caption", [0, 0, 100, 20], order=0, parent=""))]
+        assert (
+            "caption_association" not in score_paper("a", "p", {"blocks": []}, gold).not_evaluable
+        )
+
+
+class TestVectorRecallIsOverFiguresNotOverPages:
+    """§4.1: *"Recall over gold figures with `is_vector: true`"* — over FIGURES.
+
+    It was a mean of per-page rates that folded in every page with no vector gold as a 0.0,
+    because `metrics.vector_figure_recall` returned `0.0` rather than `None` there and
+    `score_paper`'s `if page_vector is not None` guard could therefore never fire.
+    """
+
+    #: A perfect parser: it finds the one vector figure that exists. Page 1 has no vector gold.
+    DOCUMENT = {"blocks": [_block("f", "figure", [0, 0, 100, 20], page=0, doc_order=0)]}
+    GOLD = [
+        _page(_gold("g0", "figure", [0, 0, 100, 20], order=0, is_vector=True), index=0),
+        _page(_gold("g1", "paragraph", [0, 0, 100, 20], order=0), index=1),
+        _page(_gold("g2", "paragraph", [0, 0, 100, 20], order=0), index=2),
+    ]
+
+    def test_a_page_with_no_vector_gold_is_absent_from_the_mean_not_a_zero(self) -> None:
+        """WATCH IT FAIL: make `metrics.vector_figure_recall` return 0.0 for empty vector gold
+        and this reads 0.333 — a perfect parser scored at a third, which is what
+        `attention-is-all-you-need` was doing on the real gold (printed 0.167, ceiling 0.333)."""
+        score = score_paper("a", "p", self.DOCUMENT, self.GOLD)
+        assert score.vector_recall == [1.0]
+        assert score.mean_vector_recall == 1.0
+
+    def test_the_headline_pools_over_figures(self) -> None:
+        score = score_paper("a", "p", self.DOCUMENT, self.GOLD)
+        assert (score.vector_matched, score.vector_gold) == (1, 1)
+        assert score.vector_recall_pooled == 1.0
+
+    def test_pooling_and_averaging_disagree_when_vector_gold_is_concentrated(self) -> None:
+        """The reason both are printed. One page holds three vector figures and the parser finds
+        one of them; another holds one and the parser finds it. Pooled is 2/4; the mean of the
+        rates is (0.333 + 1.0) / 2."""
+        document = {
+            "blocks": [
+                _block("a", "figure", [0, 0, 100, 20], page=0, doc_order=0),
+                _block("b", "figure", [0, 0, 100, 20], page=1, doc_order=0),
+            ]
+        }
+        gold = [
+            _page(
+                _gold("g0", "figure", [0, 0, 100, 20], order=0, is_vector=True),
+                _gold("g1", "figure", [0, 100, 100, 120], order=1, is_vector=True),
+                _gold("g2", "figure", [0, 200, 100, 220], order=2, is_vector=True),
+                index=0,
+            ),
+            _page(_gold("g3", "figure", [0, 0, 100, 20], order=0, is_vector=True), index=1),
+        ]
+        score = score_paper("a", "p", document, gold)
+        assert score.vector_recall_pooled == 0.5
+        assert score.mean_vector_recall == (1 / 3 + 1.0) / 2
+
+    def test_no_vector_gold_anywhere_is_none_rather_than_zero(self) -> None:
+        """A zero is a claim about the parser. An all-raster paper is not making one."""
+        gold = [_page(_gold("g0", "figure", [0, 0, 100, 20], order=0, is_vector=False))]
+        score = score_paper("a", "p", {"blocks": []}, gold)
+        assert score.vector_recall_pooled is None
+        assert score.mean_vector_recall is None
+
+
+def test_a_metric_is_a_number_or_a_reason_and_never_both() -> None:
+    """#86's second half: `a3c` printed `vector fig recall 0.000` AND
+    `vector_figure_recall: NOT EVALUABLE` three lines apart, for the same adapter on the same
+    paper. Two sections of one report must not disagree about whether a number exists.
+
+    THIS TEST DOES NOT EXERCISE `render_report`'s `not in score.not_evaluable` GUARDS, AND
+    SAYING SO IS THE POINT. I wrote it first as "drop those guards and watch this go red", ran
+    the mutation, and it stayed green — a test asserting nothing, which is the exact defect
+    `AGENTS.md` §2 is about. The reason is that the two conditions are **coupled by
+    construction** once #86 is fixed:
+
+      * `not_evaluable["vector_figure_recall"]` fires only when NO gold region carries the
+        `is_vector` key at all — in which case no region is `is_vector: true`, so `vector_gold`
+        is 0 and `vector_recall_pooled` is already `None`;
+      * `not_evaluable["caption_association"]` fires only when no region carries `parent` — in
+        which case there are no gold links and `caption_links_gold` is already 0.
+
+    So the guards in `render_report` are unreachable belt-and-braces, kept because they state
+    the invariant where a future change to what triggers `not_evaluable` would otherwise
+    silently reintroduce the contradiction. What actually *closed* the a3c contradiction is
+    the pair of fixes above it, and the reachable guard for those is
+    `test_an_all_raster_paper_reports_no_vector_gold_rather_than_zero` below plus
+    `TestNotEvaluable::test_an_all_raster_paper_is_complete_gold_not_missing_gold` — both of
+    which DO go red under the truthiness mutation.
+
+    What this asserts is the invariant itself, over four gold shapes: no report ever carries a
+    metric's value line and its NOT EVALUABLE line at once.
+    """
+    shapes = {
+        "nothing collected": [_gold("g0", "figure", [0, 0, 100, 20], order=0)],
+        "all raster": [_gold("g0", "figure", [0, 0, 100, 20], order=0, is_vector=False)],
+        "vector present": [_gold("g0", "figure", [0, 0, 100, 20], order=0, is_vector=True)],
+        "captions linked": [
+            _gold("g0", "figure", [0, 0, 100, 20], order=0, is_vector=True),
+            _gold("g1", "caption", [0, 30, 100, 40], order=1, parent="g0"),
+        ],
+    }
+    labels = {"vector_figure_recall": "vector fig recall", "caption_association": "caption links"}
+    for name, regions in shapes.items():
+        score = score_paper("a", "p", {"blocks": []}, [_page(*regions)])
+        report = render_report([score])
+        for metric, label in labels.items():
+            if metric in score.not_evaluable:
+                assert f"{metric}: NOT EVALUABLE" in report, name
+                assert label not in report, f"{name}: {label} has a value while {metric} is not"
+
+
+def test_an_all_raster_paper_reports_no_vector_gold_rather_than_zero() -> None:
+    """The line a3c and bert should print: evaluable, and there is nothing vector to recall."""
+    gold = [
+        _page(
+            _gold("g0", "figure", [0, 0, 100, 20], order=0, is_vector=False),
+            _gold("g1", "figure", [0, 40, 100, 60], order=1, is_vector=False),
+        )
+    ]
+    report = render_report([score_paper("a", "p", {"blocks": []}, gold)])
+    assert "no vector gold on these pages" in report
+    assert "vector_figure_recall: NOT EVALUABLE" not in report
+
 
 class TestSanityCheckOverlap:
     def test_an_aligned_frame_reports_full_overlap(self) -> None:

@@ -35,7 +35,20 @@ than reporting nothing - a zero is a claim about the parser.
                        anything for a `parent` to point at.
   Vector-figure recall needs `is_vector` on gold figures. NOW EVALUABLE as of 2026-08-01 - the
                        annotator collects it and the second pass supplied it, so `vector_recall`
-                       carries a number instead of a reason.
+                       carries a number instead of a reason. **On every paper as of #86**: the
+                       guard tested truthiness rather than presence, so an all-raster paper -
+                       `is_vector: false` on every figure, which is a complete annotation -
+                       reported NOT EVALUABLE. a3c and bert both did, over gold that fully
+                       supports the metric.
+
+AND THE HEADLINE IS A POOLED RECALL, NOT A MEAN OF PER-PAGE RATES
+
+§4.1 says *"Recall over gold figures with `is_vector: true`"*. It used to be reported as the mean
+of per-page recalls **including every page with no vector gold as a 0.0**, which is neither that
+definition nor a number a parser can move: `attention-is-all-you-need` holds its vector gold on
+one page of six, so its printed recall had a ceiling of 0.333 whatever the parser did. See
+`metrics.vector_figure_recall` for the per-paper table. Both figures are printed now, pooled
+first, because the gap between them says how concentrated a paper's vector gold is.
 
 What is not evaluable comes back as `None`, and `render_report` prints "not evaluable" with the
 reason rather than a number - a zero is a claim about the parser.
@@ -61,6 +74,7 @@ from papertree_evaluation.metrics import (
     iou,
     match_regions,
     reading_order_accuracy,
+    vector_figure_hits,
     vector_figure_recall,
 )
 
@@ -125,13 +139,20 @@ class PaperScore:
     caption_correct: int = 0
     caption_false: int = 0
     caption_missed: int = 0
-    #: §4.1's ISOLATED vector-figure recall, per page, for pages whose gold has a vector figure.
+    #: §4.1's ISOLATED vector-figure recall, per page, for pages whose gold HAS a vector figure.
     #:
     #: Isolated rather than folded into figure F1 because vector blindness is the specific defect
     #: this benchmark was built around: findings.md B3 measured BOTH old extractors finding 0 of
     #: ResNet's figures, all of which are vector ink, while the overall figure numbers looked
     #: merely poor rather than catastrophic. Averaged in, that distinction disappears.
+    #:
+    #: Kept per page for the spread. The HEADLINE is `vector_recall_pooled` below, because §4.1
+    #: says "recall over gold FIGURES" and a mean of per-page rates is not that: it weights a
+    #: page holding one vector figure the same as a page holding twelve.
     vector_recall: list[float] = field(default_factory=list)
+    #: ...and the counts those rates came from, which are what pools.
+    vector_matched: int = 0
+    vector_gold: int = 0
 
     @property
     def macro_f1(self) -> float:
@@ -155,13 +176,23 @@ class PaperScore:
         return sum(pages) / len(pages) if pages else 0.0
 
     @property
-    def mean_vector_recall(self) -> float | None:
-        """None when no page in this paper's gold holds a vector figure — absent, not zero.
+    def vector_recall_pooled(self) -> float | None:
+        """§4.1's metric as written: matched ÷ gold over the paper's VECTOR FIGURES.
 
-        `metrics.vector_figure_recall` already returns None for a page with no vector gold, and
-        collapsing that to 0.0 here would report a perfect parser as having missed everything on
-        every prose page. `test_an_unavailable_adapter_is_not_a_zero` makes the same distinction
-        one level up.
+        None when the paper's annotated pages hold no vector figure at all — absent, not zero,
+        because a zero is a claim about the parser.
+        """
+        return self.vector_matched / self.vector_gold if self.vector_gold else None
+
+    @property
+    def mean_vector_recall(self) -> float | None:
+        """The mean of the per-page rates, over EVALUABLE pages only. Reported beside the pooled
+        figure rather than instead of it, because the two disagree and the gap is informative:
+        a paper whose vector gold is concentrated on one page reads very differently either way.
+
+        This used to average in every page with no vector gold as a 0.0, because
+        `metrics.vector_figure_recall` returned `0.0` rather than `None` and the `is not None`
+        guard in `score_paper` could never fire. See that function for the measured damage.
         """
         return sum(self.vector_recall) / len(self.vector_recall) if self.vector_recall else None
 
@@ -259,6 +290,14 @@ def score_paper(
         _count_near_misses(score.near_misses, predicted, gold)
         _pool(score.by_type_strict, predicted, gold, IOU_STRICT)
         score.reading_order.append(reading_order_accuracy(predicted, gold))
+        # Counts, then the rate — and the rate only for pages that HAVE vector gold. Both halves
+        # of that sentence were broken: `vector_figure_recall` returned 0.0 rather than None for
+        # a page with none, so the guard below never fired and every prose page was averaged in
+        # as a miss; and the paper's headline was a mean of rates where §4.1 asks for a recall
+        # over figures. See `metrics.vector_figure_recall` for the per-paper damage.
+        matched, gold_vector = vector_figure_hits(predicted, gold, IOU_MATCH)
+        score.vector_matched += matched
+        score.vector_gold += gold_vector
         page_vector = vector_figure_recall(predicted, gold, IOU_MATCH)
         if page_vector is not None:
             score.vector_recall.append(page_vector)
@@ -276,12 +315,25 @@ def score_paper(
     score.gold_only_types -= overlap
     score.predicted_only_types -= overlap
 
-    if not any(r.get("parent") for p in pages for r in p["regions"]):
+    # PRESENCE, NOT TRUTH. Both guards tested `any(r.get(field))`, which is falsy for a value
+    # that is present and legitimately `False` — and `is_vector: false` on every figure is a
+    # COMPLETE annotation, not a missing one. Measured on the 2026-08-02 gold: all 55 figures
+    # carry an explicit `is_vector`, and a3c (0 vector / 5 raster) and bert (0 / 2) both made
+    # that `any()` false, so 2 of 6 papers reported NOT EVALUABLE over gold that fully supports
+    # the metric — while printing the sentence "the annotator tool did not collect it", which
+    # was simply untrue of them. An all-raster paper is the case the flag exists to record and
+    # it was the one case the guard ate. Issue #86.
+    #
+    # The `parent` guard has the same shape and is currently harmless — a `parent` is a
+    # `gold_id` string and is never legitimately falsy-but-present (39 of 39 gold captions
+    # carry one) — but it is one empty-string annotation away from the same bug, and the two
+    # should read alike.
+    if not any(r.get("parent") is not None for p in pages for r in p["regions"]):
         score.not_evaluable["caption_association"] = (
             "gold carries no `parent` links; inferring them would score the parser's own "
             "caption heuristic against a copy of itself"
         )
-    if not any(r.get("is_vector") for p in pages for r in p["regions"]):
+    if not any(r.get("is_vector") is not None for p in pages for r in p["regions"]):
         score.not_evaluable["vector_figure_recall"] = (
             "gold carries no `is_vector` flag on figures; the annotator tool did not collect it "
             "on this pass"
@@ -412,18 +464,34 @@ def render_report(scores: Sequence[PaperScore]) -> str:
             f"    (strict @0.75: {score.macro_f1_strict:.3f})"
         )
         lines.append(f"  {'reading order':18s} {score.mean_reading_order:>34.3f}")
-        if score.caption_links_gold:
+        # A METRIC IS EITHER A NUMBER OR A REASON, NEVER BOTH IN ONE REPORT.
+        #
+        # It used to be both. On `a3c` the detail block printed `vector fig recall 0.000` and
+        # `vector_figure_recall: NOT EVALUABLE` for the same adapter on the same paper, three
+        # lines apart — one saying the parser found nothing and the other saying nothing was
+        # measurable. Two sections of one report disagreeing about whether a number exists is
+        # worse than either answer, because a reader takes whichever one they saw first. #86.
+        if score.caption_links_gold and "caption_association" not in score.not_evaluable:
             correct = f"{score.caption_correct}/{score.caption_links_gold}"
             lines.append(
                 f"  {'caption links':18s} {correct:>34s}"
                 f"    (false {score.caption_false}, missed {score.caption_missed}"
                 " - §4.1 wants these apart)"
             )
-        vector = score.mean_vector_recall
-        if vector is not None:
+        pooled = score.vector_recall_pooled
+        if pooled is not None and "vector_figure_recall" not in score.not_evaluable:
+            spread = score.mean_vector_recall
             lines.append(
-                f"  {'vector fig recall':18s} {vector:>34.3f}"
-                f"    (§4.1's isolated metric - findings.md B3's 0 of 4)"
+                f"  {'vector fig recall':18s} {pooled:>34.3f}"
+                f"    ({score.vector_matched}/{score.vector_gold} gold vector figures"
+                f"; per-page mean {spread:.3f} over {len(score.vector_recall)} evaluable pages)"
+            )
+        elif "vector_figure_recall" not in score.not_evaluable:
+            # Evaluable gold, no vector figure on the annotated pages. Absent, not zero.
+            gold_figures = score.by_type["figure"].gold if "figure" in score.by_type else 0
+            lines.append(
+                f"  {'vector fig recall':18s} {'no vector gold on these pages':>34s}"
+                f"    (annotated and complete - 0 of {gold_figures} gold figures are vector)"
             )
         near = sum(score.near_misses.values())
         if near:
