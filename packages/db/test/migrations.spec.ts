@@ -212,15 +212,22 @@ describe('re-run is a no-op', () => {
  * through the same code path, then the 30k insert. If `putPaper` is linear in block count
  * the second should take `SCALE` times the first, and `elapsed / (baseline * SCALE)` should
  * sit near 1.0 on any machine at any speed — a slow runner slows both halves equally and
- * cancels. Measured on an M-series Mac, 24 runs of this spec: 6 idle and 6 at 3.5x CPU
- * overload (20 busy loops on 10 cores), per payload.
+ * cancels. Measured over 14 runs of this exact spec on two machine classes: an M-series Mac
+ * (5 idle, 5 at 3.5x CPU overload — 20 busy loops on 10 cores) and 4 runs on GitHub-hosted
+ * `ubuntu-latest`, the hardware that actually flaked.
  *
- *     minimal payload    idle 1.048-1.185   loaded 1.000-1.253
- *     realistic payload  idle 0.861-1.023   loaded 1.020-1.191
+ *                        Mac idle      Mac loaded     GitHub runner
+ *     minimal payload    0.967-1.070   0.972-1.035    0.719-0.970
+ *     realistic payload  0.938-1.142   0.926-1.047    0.809-1.090
  *
- * Full observed range 0.861-1.253 against a bound of 2.0, while the underlying measurement
- * swung 3.2x (30k minimal: 660 ms idle, 1508-2092 ms loaded). That swing is exactly what the
- * 6207 ms on #79 was, and it no longer moves this number.
+ * FULL OBSERVED RANGE 0.719-1.142 against a bound of 2.0. The property that matters is in the
+ * middle column: 3.5x CPU overload moved the underlying measurement 2.2x (30k minimal, 660 ms
+ * idle -> 1438 ms loaded) and moved the RATIO by 0.06. That swing is what the 6207 ms on #79
+ * was, and it no longer reaches the assertion.
+ *
+ * DO NOT SUBSTITUTE LOCAL NUMBERS FOR THESE. An earlier revision was measured only on the Mac
+ * and would have shipped a spread of 0.861-1.253; the runner then produced 0.290 on the first
+ * real CI run. Both numbers were honest and only one described the machine the guard protects.
  *
  * WHAT THE RATIO GIVES UP, STATED PLAINLY BECAUSE A GUARD'S BLIND SPOT IS NOT A DETAIL.
  * It catches SUPERLINEAR regressions. It does NOT catch a per-row CONSTANT factor, because
@@ -257,7 +264,7 @@ const LOCAL_BOUND_MS = 2000;
  * while the 30k insert absorbed the contention (1508 ms), and the ratio reached 2.461 — a
  * fresh flake in the guard written to remove one. A calibration must be long enough to
  * experience the same machine the measurement does. At 10,000 blocks it is ~200 ms and the
- * same overload produces 1.000-1.253.
+ * same overload produces 0.972-1.035.
  */
 const BASELINE_BLOCKS = 10_000;
 const TARGET_BLOCKS = 30_000;
@@ -266,15 +273,18 @@ const SCALE = TARGET_BLOCKS / BASELINE_BLOCKS;
 /**
  * How far above perfectly-linear the 30k insert may land.
  *
- * 2.0 is 1.6x the slowest ratio observed in 24 runs (1.253), across both payloads and a 3.2x
- * machine-speed swing — see the block comment above. A truly superlinear insert path lands at
- * SCALE (3.0) or beyond, so this sits between the two with room on both sides.
+ * 2.0 is 1.75x the slowest ratio observed in 14 runs (1.142), across both payloads, a 2.2x
+ * machine-speed swing and two machine classes including the GitHub runner — see the block
+ * comment above. A truly superlinear insert path lands at SCALE (3.0) or beyond, so this sits
+ * between the two with room on both sides.
  *
- * WHAT IT DOES NOT CATCH, MEASURED RATHER THAN GUESSED. A scan of `blocks` every 50th insert
- * — genuinely superlinear, O(n^2/50) — moves the minimal-payload ratio to only 1.475 and
- * PASSES. Weak superlinearity is below this guard's resolution, and so is every per-row
- * constant factor (see above). This bound is set where the data puts it, not where it would
- * have to be to make that claim true.
+ * WHAT IT CATCHES AND WHAT IT DOES NOT, MEASURED AGAINST THIS SPEC RATHER THAN GUESSED. A
+ * scan of `blocks` every 10th insert — genuinely superlinear, O(n^2/10) — gives minimal 2.196
+ * (RED) and realistic 1.984 (green, and only just). The same scan every 50th insert gives
+ * 1.475 and passes on both. So weak superlinearity is below this guard's resolution, the
+ * minimal payload is the more sensitive of the two, and every per-row constant factor is
+ * invisible to both (see above). This bound is set where the data puts it, not where it would
+ * have to be to make a stronger claim true.
  */
 const MAX_SCALING_RATIO = 2.0;
 
@@ -282,15 +292,21 @@ const MAX_SCALING_RATIO = 2.0;
  * Blocks in the UNTIMED warm-up insert that precedes both timed ones.
  *
  * WITHOUT THIS THE CALIBRATION PAYS ONE-TIME COSTS THE MEASUREMENT DOES NOT, and the ratio
- * stops being a linearity measure. Observed on a real GitHub runner (run 30737048653): the
- * realistic calibration took 1776 ms and the 30k insert that followed it took 1857 ms — three
- * times the data in the same time, ratio 0.348, nowhere near the 0.861-1.191 measured
- * locally. Whatever the runner charges for first-touch — file growth, WAL setup, cold page
- * cache, JIT — the calibration was paying all of it and the measurement none.
+ * stops being a linearity measure. Observed on real GitHub runners, not reasoned about: with
+ * no warm-up the realistic calibration took 1776 ms and the 30k insert that followed it took
+ * 1857 ms — three times the data in the same time, ratio 0.348 (run 30737048653), reproduced
+ * at 0.290 on the next run. Nothing was wrong with `putPaper`; the calibration was simply
+ * paying for everything the measurement then got for free.
  *
- * A ratio that is wrong in the SAFE direction is still wrong: the same variance that produced
- * 0.348 can produce a fast calibration and a slow measurement, and that direction goes red.
- * So both timed inserts now run on a warmed database and a warmed code path.
+ * IT IS V8 TIER-UP, and the size below is what identified it. A 2,000-block warm-up did not
+ * fix it (0.290). Raising the warm-up to 10,000 — enough iterations of `putPaper`'s block loop
+ * to reach optimised code before anything is timed — dropped that same calibration from
+ * 2348 ms to 479 ms and moved the ratio to 1.062. So the warm-up must be the SAME ORDER as the
+ * calibration; a token warm-up buys nothing. It costs one extra insert per test, ~0.5-1.6 s.
+ *
+ * A ratio that is wrong in the SAFE direction is still wrong. 0.290 means the guard needed a
+ * 6.9x regression to trip instead of 2x, and the variance that produced it can equally produce
+ * a fast calibration and a slow measurement, which goes red on nothing at all.
  */
 const WARMUP_BLOCKS = 10_000;
 
