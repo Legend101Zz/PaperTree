@@ -142,6 +142,26 @@ never shrink on their own.
   other, leaving `main` 12,564 lines short while the board said done (#73). Prefer a flat
   rebased series off `main`. If you stack, verify with
   `git merge-base --is-ancestor <head> origin/main` afterwards, not by reading PR state.
+  **The cause was a repo setting, and it is now fixed (#81): `deleteBranchOnMerge` was
+  `false`.** GitHub auto-retargets an open PR when its base branch is **deleted** — so
+  merging the bottom of a stack *and deleting its branch* silently re-points the next PR at
+  `main`, and the stack unwinds correctly however fast the merges are clicked. With the
+  setting off, no base was ever deleted, no retarget fired, and each PR merged into a branch
+  that was about to become garbage. That is why "merge bottom-up and let each merge retarget
+  the next" is the safe protocol rather than merely a tidy one: **the retarget is what makes
+  it safe, and it only happens if the branch is deleted.** The setting is on now, so it
+  happens by itself. Two guards in `ci.yml` back it up — a PR-time annotation when
+  `base != main` (a warning, never a failure: stacking is legitimate), and a push-to-`main`
+  guard asserting every recently merged PR's merge commit is an ancestor of `main`
+  (`.github/scripts/assert-merged-prs-reached-main.sh`, runnable by hand against any ref).
+  Note what the second one cannot do: it runs when something reaches `main`, so a stack that
+  breaks and then goes quiet is caught at the *next* push to `main`, not at the moment of
+  breakage. It converts "silent for a day" into "loud at the next merge".
+  Two of Epic 3's merge commits (#68, #69) are **permanently** not ancestors of `main` —
+  #73 remediated the *content* via `epic-3/f3.6-inspector`, but their merge commits live on
+  branches that no longer exist. They are allowlisted in that script, by name and with the
+  commit that remediated them; the entry only suppresses on a history that actually contains
+  that remediation, so it cannot become a mute button.
 - `@papertree/document-ir`'s barrel re-exports `node:crypto`, so importing it into a
   browser bundle breaks webpack — issue #33. `apps/web` aliases it to a throwing stub
   meanwhile; **delete the stub when #33 lands**, and delete this bullet with it.
