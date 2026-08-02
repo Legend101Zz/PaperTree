@@ -4,6 +4,29 @@ Six epics. Each is a GitHub tracking issue **and** a self-contained prompt for o
 dynamic-workflow session. Run them in wave order; within a wave they are parallel-safe
 because their file ownership is disjoint.
 
+> **Current work: issue [#78](https://github.com/Legend101Zz/PaperTree/issues/78)** — a
+> three-session phase that finishes Epics 1–3. Epics 4 and 5 do not start until it closes.
+
+### Deleted docs, and why a stale reference is not a broken link
+
+The **one-shot session prompts are deleted** now that their sessions have run:
+`WAVE-0-PROMPT.md`, `WAVE-1-EPIC-01-PROMPT.md`, `WAVE-1-EPIC-02-PROMPT.md`,
+`EPIC-00.1-HARDENING-PROMPT.md`, `ISSUE-28-WORKSPACE-PROMPT.md`, `create-issues.sh`, and
+the root `task_plan.md` and `progress.md`.
+
+The `EPIC-0N-RESULT.md` files still name them, and that is correct — a record of what
+happened refers to what existed at the time. **Do not go looking for them.**
+
+Deleting them is not tidying. Three of those prompts carried instructions that were
+measured and found wrong — the "reject spans over 1.3× size" rule that would delete the
+arXiv stamp from every arXiv paper (#48), the `doc_order` choice that had only one legal
+answer (#49), and the F1.3/F1.5 dependency stated backwards (#50). Leaving a corrected
+instruction in the tree is an invitation to follow it again. The measurements that
+corrected them are in `AGENTS.md` §4, which is the file every session actually reads.
+
+**Kept:** every `EPIC-0N-RESULT.md` (the record), every epic brief (the acceptance
+criteria), `EPIC-00-GATE.md` and `EPIC-GATE-PROMPT.md` (the reusable between-epic review).
+
 ---
 
 ## Constraints that shape everything
@@ -90,12 +113,13 @@ This is non-negotiable and is Epic 0's most important deliverable.
 # 1. authenticate once
 gh auth login
 
-# 2. create the tracking issues (after auth)
-./research/build/create-issues.sh
-
-# 3. in a new Claude Code session, ultracode mode:
-#    paste the contents of EPIC-0N-*.md  §"WORKFLOW PROMPT"
+# 2. in a new Claude Code session, ultracode mode:
+#    paste the session prompt from the tracking issue
 ```
+
+> The tracking issues exist; `create-issues.sh` was a one-shot and is deleted.
+> **For the current phase the work contract is issue #78, not an epic file** — it carries
+> the backlog, the three session prompts, the design prompt and the handoff protocol.
 
 Within an epic the agent is expected to spawn parallel sub-agents per feature, using
 worktrees where features touch disjoint files. The epic prompt states which features are
@@ -105,31 +129,46 @@ parallel-safe.
 
 ## Epics
 
-| # | Epic | Wave | Features | Owns |
-|---|---|---|---|---|
-| 0 | [Spine](EPIC-00-spine.md) | 0 | 7 | `packages/document-ir`, `packages/db`, `packages/jobs`, CI, fixtures |
-| 1 | [Ingest & document intelligence](EPIC-01-ingest.md) | 1 | 9 | `services/document-worker`, `packages/evaluation` |
-| 2 | [Reader & anchoring](EPIC-02-reader.md) | 1 | 8 | `apps/web` reader, `packages/anchoring`, `packages/ui` |
-| 3 | [Grounded AI](EPIC-03-grounded-ai.md) | 2 | 8 | `packages/retrieval`, `packages/agent-tools`, `packages/prompts`, `packages/memory` |
-| 4 | [Audiobook & Replay](EPIC-04-audiobook.md) | 3 | 7 | `services/audio-worker`, `apps/web` audio |
-| 5 | [Canvas](EPIC-05-canvas.md) | 3 | 8 | `apps/web` canvas, `packages/canvas` |
+| # | Epic | Wave | Features | Status | Owns |
+|---|---|---|---|---|---|
+| 0 | [Spine](EPIC-00-spine.md) | 0 | 7 | **merged, closed** | `packages/document-ir`, `packages/db`, `packages/jobs`, CI, fixtures |
+| 1 | [Ingest & document intelligence](EPIC-01-ingest.md) | 1 | 9 | **merged**, INCOMPLETE — 5/10 MET, 4 PARTIAL, 1 NOT MET | `services/document-worker`, `packages/evaluation` |
+| 2 | [Reader & anchoring](EPIC-02-reader.md) | 1 | 8 | **merged, closed** — 9/9 MET | `apps/web` reader, `packages/anchoring`, `packages/ui` |
+| 3 | [Grounded AI](EPIC-03-grounded-ai.md) | 2 | 8 | **merged**, INCOMPLETE — 6/8 features, 4/7 MET | `packages/retrieval`, `packages/agent-tools`, `packages/prompts`, `packages/memory` |
+| — | **[Epic 1–3 completion](https://github.com/Legend101Zz/PaperTree/issues/78)** | **2.5** | 3 sessions | **← the current target** | the gaps between the epics above |
+| 4 | [Audiobook & Replay](EPIC-04-audiobook.md) | 3 | 7 | **blocked on #78** | `services/audio-worker`, `apps/web` audio |
+| 5 | [Canvas](EPIC-05-canvas.md) | 3 | 8 | **blocked on #78** | `apps/web` canvas, `packages/canvas` |
 
 **47 features total.** That is the honest size of "everything". Waves 1 and 3 are where
 parallelism pays; waves 0 and 2 are throughput-limited by dependency, not by agents.
+
+**Wave 2.5 is not in the original plan, and that is the point.** The plan assigned every
+path to an epic and assigned the *seams between them* to nobody — so nothing serves PaperIR
+over HTTP (#74), because neither Epic 1's nor Epic 3's "Owns (exclusive)" list claims that
+layer. Three epics of measured, tested libraries exist and a user can reach none of them.
+#78 is the correction, and it runs before Wave 3 rather than after.
 
 ---
 
 ## Definition of done for the whole build
 
 The first milestone from `../ROADMAP-AND-CHANGE-MAP.md` §27 remains the architectural
-gate, and it is satisfied at the end of **Wave 2**:
+gate, and it is satisfied at the end of **Wave 2**.
 
-1. Re-parsing produces byte-identical PaperIR and identical block IDs.
-2. A highlight survives reload, zoom 50→400%, and 5 viewport widths, drift <1pt.
-3. A highlight created under parser config A re-anchors under config B, **or fails loudly**.
-4. An answer's citation navigates to the correct polygon.
-5. Figures from an all-vector paper (ResNet) are present with captions linked.
-6. Parse runs as a background job with observable progress and survives a worker restart.
+**Status as of 2026-08-02, `main` at `8573ffc`.** Every number re-measured, not quoted.
 
-If criterion 3 fails, stop and fix the anchoring design before Waves 3 — everything
-downstream inherits it.
+| # | Criterion | | Evidence |
+|---|---|---|---|
+| 1 | Re-parsing produces byte-identical PaperIR and identical block IDs | ✅ **MET** | 20 runs byte-identical, `test_pipeline_end_to_end.py` |
+| 2 | A highlight survives reload, zoom 50→400%, 5 viewport widths, drift <1pt | ✅ **MET** | Epic 2, `EPIC-02-RESULT.md` |
+| 3 | A highlight re-anchors under a different parser config, **or fails loudly** | ✅ **MET** | **100.00%, 0 orphans**, 21 fixture × perturbation combinations — including one retiring 89.5% of ids |
+| 4 | An answer's citation navigates to the correct polygon | 🟡 **PARTIAL** | Resolution **100%** page and polygon; the DOM scroll is a no-op (#64). **Closes in #78 Session A** |
+| 5 | Figures from an all-vector paper (ResNet) present with captions linked | 🟡 **PARTIAL** | ≥5 figures ✅ (9, all vector); captions **58%** against an 80% bar (#51). **Closes in #78 Session B** |
+| 6 | Parse runs as a background job with observable progress, surviving a worker restart | ✅ **MET** | `jobs/durability.spec`, `test_a_job_killed_mid_step_resumes_at_that_step` |
+
+*"If criterion 3 fails, stop and fix the anchoring design before Wave 3 — everything
+downstream inherits it."* **It did not fail**, and it is the strongest measurement in the
+repo: the control shows a bare `block_id` surviving the same re-parse at **3.3%**.
+
+Wave 3 is therefore not blocked on correctness. It is blocked on **4**, on **5**, and on
+there being a product a person can use — which is what **#78** exists to deliver.
