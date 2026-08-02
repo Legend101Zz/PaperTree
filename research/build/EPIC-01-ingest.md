@@ -42,7 +42,50 @@ either way.
 - [ ] **F1.8 — Cross-page joining.** Paragraph continuation across pages as an explicit `continues_on_next_page` relation with confidence.
 - [ ] **F1.9 — PTUB benchmark + gold annotation tool.** Per `research/benchmarks/README.md`. Includes a minimal annotation UI (a local HTML page over page images is fine) so gold data is actually producible. Adapters: deterministic, Docling (opt-in), PyMuPDF-raw, current-PaperTree.
 
+> **ERRATUM — 2026-08-02, issue #50. This dependency was stated backwards, twice (here and in
+> "How to work" below), and building F1.3 first is what showed it.**
+>
+> **F1.5's region-detection half must run BEFORE F1.3, not after it.** ResNet page 3 carries
+> Figure 3's architecture diagram, whose interior is ~40 text labels at 4.92 pt against a
+> 9.96 pt body, *interleaved in y with the body text of both columns*. Fed to paragraph
+> segmentation, every label breaks the run. Re-measured on `main` at `c8bf62e` by disabling
+> the removal and re-running `layout_document`:
+>
+> | paper | blocks/page WITH removal | WITHOUT | ratio |
+> |---|---:|---:|---:|
+> | resnet-cvpr-2col | 45.2 | 60.8 | 1.35× |
+> | bert-2col | 30.9 | 45.1 | 1.46× |
+> | attention-is-all-you-need | 24.0 | 32.8 | 1.37× |
+> | neural-odes-mathheavy | 49.3 | 53.3 | 1.08× |
+>
+> ResNet p3 alone goes **20 → 80** blocks and p7 **28 → 94**. Scored against gold, the same
+> mutation costs macro F1 on every affected paper — a3c 0.374→0.226, attention 0.290→0.215,
+> bert 0.319→0.301, neural-odes 0.197→0.164, resnet 0.258→0.236 — and a3c's reading order
+> 0.667→0.500.
+>
+> *(#50 itself records 95 blocks/page against 41. That was measured 2026-07-31; six
+> segmentation fixes have landed since, and the figures above are the current ones. The
+> mechanism reproduces; the magnitude does not. Numbers get re-derived, not quoted.)*
+>
+> It cannot be fixed inside F1.3: figure interiors distort column detection, paragraph grouping
+> and the full-width test, and reclassifying afterwards cannot undo a segmentation already made
+> on bad input. Only the *region-detection* half of F1.5 is needed early — crops, caption
+> linking and `is_vector` reporting stay downstream and remain parallel-safe.
+>
+> The order Epic 1 shipped, and the order guarded by
+> `tests/worker/test_pipeline_ordering.py`:
+>
+> ```
+> F1.1 classify → F1.2 text+geometry → F1.5 figure REGIONS → F1.3 columns/flows/order → F1.4 …
+> ```
+>
+> **No acceptance criterion is changed by this note.** The table in "Acceptance criteria" above
+> is untouched. This corrects a task-sequencing statement that the implementation already
+> contradicts, which #50 asked for in as many words: *"Correct the dependency line in
+> `EPIC-01-ingest.md` when the epic file is next touched by someone entitled to touch it."*
+
 F1.5, F1.6, F1.7 are parallel-safe once F1.2/F1.3 land. F1.9 is parallel from the start.
+*(Struck by the erratum above: F1.5's region half is a PREREQUISITE of F1.3.)*
 
 ---
 
@@ -168,7 +211,9 @@ them, mark `partial`, defer).
 ## How to work
 
 F1.9 (benchmark) is parallel from the start — build it early so you can measure as you
-go. F1.5/F1.6/F1.7 are parallel once F1.2/F1.3 land. Use worktrees for those three.
+go. ~~F1.5/F1.6/F1.7 are parallel once F1.2/F1.3 land.~~ **See the erratum under "Features":
+F1.5's region-detection half is a PREREQUISITE of F1.3, measured (#50).** F1.6 and F1.7 are
+parallel once F1.2/F1.3 land. Use worktrees for those.
 
 One PR per feature. When done, write `research/build/EPIC-01-RESULT.md` with the PTUB
 comparison table, the zero-ML-vs-Docling verdict, and what Epic 3 needs to know about
