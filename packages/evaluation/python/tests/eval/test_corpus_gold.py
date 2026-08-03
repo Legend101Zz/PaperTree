@@ -594,6 +594,163 @@ def test_floats_found_in_the_right_place_against_floats_found_with_the_right_typ
     assert totals[0] > totals[1], "type-blind and type-aware agree - the split is not measurable"
 
 
+#: The caption pipeline's two stages, separately. `(caption_detected, caption_gold,
+#: linked_given_both_ends, both_ends_detected)` per paper, pooled below. Issue #111.
+#:
+#: WHY THIS EXISTS. `test_the_share_of_floats_carrying_a_caption` reports ONE rate — 58/85 =
+#: 68.2% — and `research/build/README.md`'s gate item 5 quotes it as though it measured caption
+#: LINKING. It does not. It is a sum over three unlike failures:
+#:
+#:     float detection      a float never found cannot carry a caption   FLOAT_DETECTION above
+#:     caption detection    a caption never boxed cannot be linked       this table, cols 1-2
+#:     linking              both ends present, no `caption_of` emitted   this table, cols 3-4
+#:
+#: ...and its DENOMINATOR IS PARSER REGIONS, so `figures._merge_panels` splitting one document
+#: figure into five adds 5 to it while at most 1 can ever be captioned. A pure extent bug (#103)
+#: is charged to it as four caption failures.
+#:
+#: This is #102's defect one metric to the left. #102 split float detection into type-blind and
+#: type-aware because "never found" and "found and typed differently" are different failures with
+#: different owners. The caption rate was left conflated in the same way.
+#:
+#: WHAT THE SPLIT SHOWS, and it changes the verdict on gate item 5: linking given both ends is
+#: **14/15**, which is ABOVE the 80% bar the gate quotes. The residual is detection, on both
+#: sides. #51 reached the same conclusion by classifying 17 misses BY HAND and got 7/8; this is
+#: the same finding as an assertion, over all six annotated papers rather than a subset.
+#:
+#: n = 15 of 39 gold links, and that is the number to be careful with. The other 24 links have an
+#: end the parser never detected, so this rate is measured on the 38% of the gold set where the
+#: question is even askable. It is reported with its n for that reason and MUST NOT be quoted as
+#: "caption linking is 93%" without it (`AGENTS.md` §4: the n goes in the row, not a footnote).
+#:
+#: WATCHED FAILING. Four mutations, each applied in a worktree and re-run; the script verifies the
+#: edit LANDED before believing the result, because a mutation that silently does nothing reports
+#: "no failures" and that is indistinguishable from a test that asserts nothing (#109).
+#:
+#:   mutation                                    DETECTION  LINK|both  composite   this  composite
+#:                                                                     (8 papers)  test  test
+#:   -----------------------------------------  ---------  ---------  ----------  ----  ---------
+#:   baseline                                       25/39      14/15       58/85  pass  pass
+#:   A  drop the appendix label from                17/39      11/12       50/85  RED   RED
+#:      `figures._CAPTION_START`
+#:   B  `CAPTION_MIN_X_OVERLAP` 0.35 -> 0.99        25/39      14/15       56/85  pass  RED
+#:   C  `figures._merge_panels` -> no-op            25/39      14/15      58/171  pass  RED
+#:   D  `CAPTION_MAX_GAP_PT` 90.0 -> 0.4            25/39       1/15        1/85  RED   RED
+#:
+#: READ ROW C. The numerator does not move — 58 before, 58 after — and the composite falls from
+#: 68.2% to 33.9% because the denominator DOUBLES. `_merge_panels` alone swings gate item 5's
+#: headline by 34 points without changing one caption link. That is #111's claim as an experiment
+#: rather than an argument, and it is why the gate table may not quote 68.2% as a caption number.
+#:
+#: ROW D is the one that proves the linking half asserts anything: linking collapses to 1/15 while
+#: detection stays EXACTLY at 25/39. Single-axis, in the direction the split claims to isolate.
+#:
+#: ROW B IS RECORDED BECAUSE IT DID NOT WORK, which is the more useful kind of entry. It was the
+#: mutation this test was designed against, and it moves the composite by two links while leaving
+#: this test green — both of those links are outside the six annotated papers, so no gold covers
+#: them. The linking assertion was therefore UNPROVEN until D was run. Recorded so that nobody
+#: re-derives B, concludes the split is vacuous, and deletes it.
+CAPTION_PIPELINE_BY_PAPER = {
+    "a3c-algorithmheavy": (5, 7, 4, 4),
+    "attention-is-all-you-need": (1, 1, 1, 1),
+    "bert-2col": (4, 6, 4, 4),
+    "gpt3-longform-singlecol": (9, 10, 2, 3),
+    #: Zero askable links: float detection is 1/22, so no gold link on this paper has both ends.
+    #: A rate over an empty denominator is NOT EVALUABLE and is recorded as (0, 0), not as 0%.
+    "neural-odes-mathheavy": (1, 5, 0, 0),
+    "resnet-cvpr-2col": (5, 10, 3, 3),
+}
+CAPTION_PIPELINE = (25, 39, 14, 15)
+
+
+@requires_corpus
+def test_caption_detection_and_caption_linking_are_measured_separately(
+    parsed: dict[str, dict[str, Any]],
+    gold_pages: list[dict[str, Any]],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Issue #111. The two stages of the caption pipeline, each with its own denominator.
+
+    THE JOIN, which is the part that is easy to get wrong. Gold links are
+    `(caption gold_id, parent gold_id)`; the parser's are `(caption block_id, float block_id)`.
+    Two id spaces naming the same page, so comparing them directly scores ZERO ON A PERFECT
+    PARSER. Both sides are translated into gold ids through the same IoU-and-type matcher the F1
+    uses — `scoring._caption_links` already does exactly this and is reused rather than
+    re-derived.
+
+    "Both ends detected" means both the caption region and its parent float matched a prediction
+    at IoU >= 0.5 WITH THE TYPE AGREEING. That is deliberately the strict matcher: it makes the
+    denominator smaller and the rate more conservative, because gpt3's six figure-vs-table
+    convention disagreements (#54) are excluded from it rather than counted as linkable.
+    """
+    from papertree_evaluation.metrics import IOU_MATCH, match_regions
+    from papertree_evaluation.scoring import _relation_source, blocks_to_regions
+
+    by_paper: dict[str, tuple[int, int, int, int]] = {}
+    for paper in ANNOTATED:
+        detected = cap_gold = linked = both_ends = 0
+        for page in (p for p in gold_pages if p["paper_id"] == paper):
+            gold = [r for r in page["regions"] if r.get("bbox")]
+            predicted = blocks_to_regions(parsed[paper], int(page["page"]))
+            pairs = match_regions(predicted, gold, IOU_MATCH)
+            matched = {gi for _, gi in pairs}
+            block_to_gold = {
+                str(predicted[pi]["block_id"]): str(gold[gi]["gold_id"])
+                for pi, gi in pairs
+                if predicted[pi].get("block_id") and gold[gi].get("gold_id")
+            }
+            index_of = {str(r["gold_id"]): i for i, r in enumerate(gold) if r.get("gold_id")}
+
+            captions = [(i, r) for i, r in enumerate(gold) if r.get("type") == "caption"]
+            cap_gold += len(captions)
+            detected += sum(1 for i, _ in captions if i in matched)
+
+            askable = {
+                (str(r["gold_id"]), str(r["parent"]))
+                for _, r in captions
+                if r.get("parent")
+                and index_of.get(str(r["gold_id"])) in matched
+                and index_of.get(str(r["parent"])) in matched
+            }
+            both_ends += len(askable)
+            emitted = {
+                (block_to_gold[src], block_to_gold[dst])
+                for rel in parsed[paper].get("relations") or []
+                if rel.get("type") == "caption_of"
+                for src, dst in [(str(_relation_source(rel)), str(rel.get("to")))]
+                if src in block_to_gold and dst in block_to_gold
+            }
+            linked += len(askable & emitted)
+        by_paper[paper] = (detected, cap_gold, linked, both_ends)
+
+    totals = tuple(sum(v[i] for v in by_paper.values()) for i in range(4))
+    with capsys.disabled():
+        print(
+            f"\n[eval/corpus-gold] caption pipeline, gold as drawn, six papers: "
+            f"DETECTION {totals[0]}/{totals[1]} = {totals[0] / totals[1]:.1%}; "
+            f"LINKING GIVEN BOTH ENDS {totals[2]}/{totals[3]} = {totals[2] / totals[3]:.1%} "
+            f"(n = {totals[3]} of 39 gold links — the rest have an end the parser never found). "
+            f"Per paper (detected, gold, linked, askable): {by_paper}"
+        )
+    assert by_paper == CAPTION_PIPELINE_BY_PAPER
+    assert totals == CAPTION_PIPELINE
+
+    # ANTI-VACUITY, and it is not decoration. If detection and linking moved together this would
+    # be one rate printed twice, which is the defect #111 is about arriving inside its own fix.
+    # The two must be numerically distinguishable AND the linking rate must be the higher one —
+    # that ordering is the whole finding, and a scorer that conflated them again would lose it.
+    detection_rate = totals[0] / totals[1]
+    linking_rate = totals[2] / totals[3]
+    assert linking_rate > detection_rate, (
+        f"linking {linking_rate:.3f} is not above detection {detection_rate:.3f} — the split has "
+        "stopped separating the two failures and gate item 5's residual can no longer be named"
+    )
+    # ...and the composite these decompose is lower than BOTH, which is what makes quoting it as
+    # a caption-linking number wrong. 14/39 is the same numerator over an undecomposed denominator.
+    composite = totals[2] / totals[1]
+    assert composite < detection_rate < linking_rate
+
+
 @requires_corpus
 def test_the_corpus_wide_caption_association(
     parsed: dict[str, dict[str, Any]],
@@ -644,6 +801,20 @@ def test_the_share_of_floats_carrying_a_caption(
 
     Runs over the whole 8-paper corpus, not the 6 annotated ones, because this metric reads the
     parser's own relations and needs no gold.
+
+    THIS IS A COMPOSITE AND MUST NOT BE QUOTED AS A CAPTION-LINKING RATE — issue #111.
+
+    Its denominator is PARSER REGIONS. One caption links to one float, so a document figure the
+    parser splits into five panels adds 5 here while at most 1 can ever be captioned: an extent
+    defect (#103) is charged to this number as four caption failures. Measured, not argued —
+    making `figures._merge_panels` a no-op takes it from **58/85 to 58/171**, an identical
+    numerator and a 34-point fall.
+
+    So 68.2% is float detection, caption detection and caption linking added together.
+    `test_caption_detection_and_caption_linking_are_measured_separately` reports the last two
+    against GOLD denominators, and `..._floats_found_in_the_right_place_...` the first. Linking
+    given both ends is **14/15**, above the 80% bar. Read those three before concluding anything
+    about the parser's captioning from the number below.
     """
     from papertree_evaluation.adapters import DeterministicAdapter
 
