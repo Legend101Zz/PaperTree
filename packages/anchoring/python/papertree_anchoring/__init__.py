@@ -16,7 +16,9 @@ WHAT THIS PACKAGE DELIBERATELY IS NOT
 * **Not a resolver.** No T0-T6 ladder, no thresholds, no fuzzy matcher. See ``capture.py``.
 * **Not a second region type.** ``SourceRegion`` stays the address; this turns an address into
   selectors. There is no dataclass here that competes with it.
-* **Not sub-block.** Whole-block targets only, which is the shape ``SourceRegion`` carries.
+* **Not sub-block.** Whole-block targets only, which is the shape ``SourceRegion`` carries (#123).
+* **Not wired.** No caller mints or persists an anchor yet, and the ``anchors`` table cannot hold a
+  whole one: #124 is the wiring, #121 is the storage gap it is blocked on.
 
 HOW IT IS KEPT HONEST. A Python suite that mints well-formed selectors no resolver ever reaches T1
 on would be green and worthless. So ``packages/anchoring/conformance/python-selector-vectors.json``

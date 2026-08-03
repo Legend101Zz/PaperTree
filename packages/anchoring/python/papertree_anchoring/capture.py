@@ -10,8 +10,8 @@ SCOPE, STATED AS A LIMIT RATHER THAN DISCOVERED AS A BUG. This mints WHOLE-BLOCK
 shape ``SourceRegion`` carries and the shape ``verify_answer_grounding`` produces (one region per
 supporting block, with ``block.bbox``). Sub-block ranges need ``lineband.ts::quadsForRange``, whose
 whole reason to exist is that a span bbox is the extractor's font box and 17 of resnet's 295 are
-~7.33 pt too tall; emitting unclamped span boxes would ship that defect into Python. Filed, not
-ported.
+~7.33 pt too tall; emitting unclamped span boxes would ship that defect into Python. Filed as #123,
+not ported.
 
 THE RESOLVER IS NOT PORTED AND MUST NOT BE. ``resolve.ts`` carries hand-tuned constants — 0.72 /
 0.60 (which ``match.ts:150`` calls "a PROPOSAL, not a measured value" in its own words),
