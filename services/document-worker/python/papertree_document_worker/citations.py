@@ -49,6 +49,22 @@ list and the year in different blocks. bert and pdf-to-tree print "Authors. 2018
 55/71 and 31/61 against a3c's 3/62. One `reference_entry` per printed reference would move this
 number; a looser matcher here would only move the wrong ones.
 
+A SPAN ROLE, NOT A `citation` BLOCK - AND THE IR OFFERS BOTH
+
+`models.py` has a `citation` BLOCK type, and `packages/anchoring/test/make-citation-fixture.ts`
+builds its test data as a `citation` block + a `cites` relation. This module emits a span ROLE
+instead, and the reason is identity. A `citation` block means SPLITTING the paragraph that
+contains the marker into three blocks; `block_id` hashes the quantised top-left anchor, the block
+type and the text prefix, so that retires the paragraph's id and changes its `content_hash` - and
+Epic 2's anchors are built on exactly those. It would also move the block count of every paper
+and the `confidence.overall` mean that `fixtures/README.md` attests to. A span role changes
+neither, which `test_citations.py` asserts by recomputing both from the emitted block.
+
+The anchoring fixture is untouched and still valid: it MINTS its blocks with the real id formula
+rather than parsing, so nothing here reaches it. What this does NOT do is close
+`EPIC-01-RESULT.md`'s "two gold types are still never emitted" - `citation` as a BLOCK type
+remains unemitted, and that gap is still open on purpose.
+
 THE SECOND IMPLEMENTATION, AND WHY IT IS ALLOWED TO EXIST
 
 `packages/retrieval` already has `_CITATION_MARKER` and `_citation_labels`. `document-worker`
@@ -248,11 +264,24 @@ def _resolve_author_year(
 def detect_citations(blocks: list[AssembledBlock]) -> list[CitationLink]:
     """Every in-prose marker that resolves to a `reference_entry` block, in document order.
 
-    MUST RUN AFTER `PaperBuilder.assign_ids()`, and the reason is the whole of #66:
-    `assemble._emit_relations` drops any edge whose endpoints are missing from `by_id` SILENTLY -
-    no raise, no log - so an emitter at the wrong phase, or holding a block object that assembly
-    has since replaced, produces a document with zero `cites` and nothing anywhere says so. The
-    role spans need `target.block_id`, which also does not exist until then.
+    MUST RUN AFTER `PaperBuilder.assign_ids()`, but NOT for the reason #66 predicted, and the
+    difference was measured rather than reasoned about:
+
+      the ROLE half is what forces the phase, and it fails LOUDLY. `apply_citation_roles` writes
+      `target.block_id` into a `Span`, and before `assign_ids()` that value is `""`, which fails
+      `Span`'s own `^blk_[a-z2-7]{16}$` pattern - a pydantic `ValidationError`, not a silent zero.
+
+      the RELATION half is NOT phase-sensitive in that direction at all. `relate()` stores block
+      OBJECTS, `assign_ids()` mutates them in place and `build()` re-runs it, so the ids exist by
+      the time `_emit_relations` reads them. Moving the `relate()` loop above `assign_ids()` was
+      measured to emit the IDENTICAL 133 edges on resnet, status `complete`, zero diagnostics.
+
+    WHAT IS ACTUALLY SILENT IS A DETACHED BLOCK, and that IS #66's shape. `_emit_relations` drops
+    any edge whose endpoint is missing from `by_id` with a bare `continue` - no raise, no log, no
+    counter. Handing `relate()` a block object that is not in `builder.blocks` was measured to
+    yield 0 edges on resnet against a baseline of 133, with `status: "complete"`, zero diagnostics
+    and zero warnings - AND ITS 150 CITATION SPANS INTACT. A suite asserting only the spans would
+    have been fully green. That is why `test_citations.py` asserts exact integers on both halves.
     """
     entries = [b for b in blocks if b.type == "reference_entry"]
     if not entries:

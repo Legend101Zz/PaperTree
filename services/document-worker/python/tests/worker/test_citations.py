@@ -3,12 +3,20 @@
 EVERY NUMBER BELOW IS AN EXACT INTEGER, AND `> 0` WOULD NOT DO.
 
 `assemble._emit_relations` drops any relation whose endpoints are missing from `by_id` with
-`continue` - no raise, no log, no counter. An emitter that runs one phase too early, or that holds
-a block object assembly has since replaced, therefore emits ZERO `cites` and the document is still
-perfectly valid: verified by mutation, `status: "complete"`, zero warnings, zero edges. That
-silence IS #66. `> 0` would catch nothing but a total failure, and a fixture-only assertion would
-catch not even that - the mutation that matters is one where the detector still works and the
-EMISSION does not.
+`continue` - no raise, no log, no counter. MEASURED BY MUTATION: handing `relate()` a block object
+that is not in `builder.blocks` emits 0 `cites` on resnet against a baseline of 133, and the parse
+still returns `status: "complete"` with zero diagnostics and zero warnings - WHILE ITS 150
+CITATION SPANS SURVIVE UNTOUCHED. That silence IS #66, and it is why the relation counts and the
+span counts are asserted SEPARATELY here: under that mutation every span assertion below stays
+green and only the relation ones move. `> 0` would catch nothing but a total failure, and a
+fixture-only assertion would catch not even that - the mutation that matters is one where the
+detector still works and the EMISSION does not.
+
+THE PHASE IS NOT THE SILENT FAILURE, contrary to what #66's brief predicted; re-measured here.
+`relate()` stores block OBJECTS and `build()` re-runs `assign_ids()`, so moving the `relate()`
+loop above `assign_ids()` emits the IDENTICAL 133. Moving the SPAN half above it raises a pydantic
+`ValidationError` instead, because `Span.block_id` would be `""`. The ordering in `pipeline.py` is
+therefore required, but it is enforced by a loud failure rather than by a quiet one.
 
 So these are exact equalities against a real parse, in the shape
 `packages/evaluation/.../test_corpus_gold.py` uses and for its stated reason: the parser is

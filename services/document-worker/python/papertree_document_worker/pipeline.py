@@ -760,12 +760,15 @@ def _assemble(
             "typographic",
         )
 
-    # #66's `cites`, in the SAME phase as the continuations above and for a sharper version of the
-    # same reason. `classify_reference_entries` had to run BEFORE `assign_ids()` because `block_id`
-    # hashes the block TYPE; this has to run AFTER, because `_emit_relations` DROPS SILENTLY any
-    # edge whose endpoints are not in `by_id` and the role spans name `target.block_id`. An emitter
-    # one phase earlier emits nothing, raises nothing and logs nothing - which is exactly how
-    # `cites` came to be 0-on-every-paper in the first place.
+    # #66's `cites`, in the SAME phase as the continuations above. `classify_reference_entries` had
+    # to run BEFORE `assign_ids()` because `block_id` hashes the block TYPE; this has to run AFTER
+    # because `apply_citation_roles` writes `target.block_id` into a Span, and before `assign_ids()`
+    # that is `""`, which fails Span's own pattern. MEASURED, because the obvious story is wrong:
+    # the RELATION half would survive being moved above `assign_ids()` (relate() stores block
+    # OBJECTS and build() re-runs assign_ids(), so the same 133 edges come out on resnet). The
+    # silent failure `_emit_relations` really hides is a DETACHED block - an endpoint absent from
+    # `by_id` is dropped by a bare `continue`, and that parse still reports status "complete" with
+    # zero diagnostics, zero edges and its citation spans intact. See citations.detect_citations.
     citations = detect_citations(builder.blocks)
     for citation in citations:
         builder.relate(
