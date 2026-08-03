@@ -163,8 +163,42 @@ gate, and it is satisfied at the end of **Wave 2**.
 | 2 | A highlight survives reload, zoom 50→400%, 5 viewport widths, drift <1pt | ✅ **MET** | Epic 2, `EPIC-02-RESULT.md` |
 | 3 | A highlight re-anchors under a different parser config, **or fails loudly** | ✅ **MET** | **100.00%, 0 orphans**, 21 fixture × perturbation combinations — including one retiring 89.5% of ids |
 | 4 | An answer's citation navigates to the correct polygon | ✅ **MET** | Resolution **100%** page and polygon; the scroll now fires — #64 closed in #78 Session A (PR #93), asserted click-to-scroller by `apps/web/test/citation-scroll.spec.tsx` |
-| 5 | Figures from an all-vector paper (ResNet) present with captions linked | 🟡 **PARTIAL** | ≥5 figures ✅ (9, all vector); `is_vector` correct ✅; captions **68.2%** (58/85 over figures, 142/226 = 62.8% over floats) against an 80% bar — moved from 58% by #51/#102, **still short**. #51 is closed and the residual is figure-region *extents*, not linking: neural-odes 1/22 and resnet 5/29 type-blind float recall (#103) |
+| 5 | Figures from an all-vector paper (ResNet) present with captions linked | 🟡 **PARTIAL** | ≥5 figures ✅ (9, all vector); `is_vector` correct ✅. **The captions clause is MET and the criterion still is not** — see below. |
 | 6 | Parse runs as a background job with observable progress, surviving a worker restart | ✅ **MET** | `jobs/durability.spec`, `test_a_job_killed_mid_step_resumes_at_that_step` |
+
+### Criterion 5, and why the number this table used to carry was not a caption number
+
+The **68.2 %** this row quoted for four sessions (58/85 over figures, 142/226 over floats)
+is a composite over a denominator of **parser regions**. One caption links to one float, so
+a document figure the parser splits into five panels adds 5 to it while at most 1 can be
+captioned. Measured — `figures._merge_panels` made a no-op — it goes **58/85 → 58/171**,
+an *identical numerator* and a 34-point fall. Extent behaviour alone moves it (#111, PR
+#113).
+
+Split against **gold** denominators, six annotated papers, re-derived on `main`:
+
+| stage | measured | against the 80 % bar |
+|---|---|---|
+| float detection, type-blind | **29/80** | the weak term |
+| caption **detection** | **25/39 = 64.1 %** | short |
+| caption **linking, given both ends detected** | **14/15 = 93.3 %** | ✅ **clears it** |
+
+*n = 15 of 39 gold links — the other 24 have an end the parser never detected, so the rate
+is measured where the question is askable. 36 pp / 6 of 8 papers / 442 regions / **one
+annotator, no inter-annotator agreement** (#54).*
+
+So the clause this criterion actually names — *"with captions linked"* — **is met**, at
+93.3 % corpus-wide and 3/3 on ResNet itself. #51 reached the same conclusion by hand at
+7/8; #111 makes it an assertion.
+
+**The criterion stays 🟡 PARTIAL anyway**, because it says *figures present* **and**
+*captions linked*, and the first half is where the parser is weak: 5 of 29 gold floats on
+resnet, 1 of 22 on neural-odes. That is float **detection**, tracked at #103 — whose
+"blocks gate item 5" line is retracted there, since a metric a no-op moves by 34 points
+cannot be the thing it blocks. Rounding this to MET on the strength of the linking half
+would be exactly the move `AGENTS.md` §2 forbids.
+
+---
 
 *"If criterion 3 fails, stop and fix the anchoring design before Wave 3 — everything
 downstream inherits it."* **It did not fail**, and it is the strongest measurement in the
