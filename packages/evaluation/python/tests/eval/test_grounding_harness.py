@@ -5,6 +5,14 @@ STAYED GREEN UNDER MUTATION and says so in its own docstring. So every assertion
 mutation that turns it red, and each was applied to the source and run. The results are recorded
 in the PR body; the mutations themselves are named here so the next reader can repeat them.
 
+RUN THE MUTATIONS WITH `PYTHONDONTWRITEBYTECODE=1`, and delete `__pycache__` between them. The
+mutate/revert protocol has a silent failure mode that cost this session a red gate: `return 1` ->
+`return 0` is byte-identical in LENGTH, and `git checkout HEAD -- <file>` restored the file inside
+the same mtime second the `.pyc` was written, so CPython's (mtime, size) validity check passed and
+it kept executing the MUTATED bytecode. `inspect.getsource` showed the correct `return 1` while
+`_grounding.__code__.co_consts` held only `0`. Five tests here failed for a defect that was not in
+the source. A same-length mutation is the common case, not the exotic one.
+
 WHAT IS AND IS NOT PROVEN HERE. The inputs are authored by this file, so they prove the harness
 RUNS and refuses what it must; they prove nothing about a producer. There is no producer of Tier
 C answers in this repository to assert against - `EPIC-03-RESULT.md` §2 records F3.4 as making no
