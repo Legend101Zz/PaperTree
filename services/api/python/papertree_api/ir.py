@@ -29,8 +29,9 @@ So blocks are read per page via `list_blocks_on_page`, which has no such filter.
 HOW `Page.flows` AND `Page.block_ids` ARE REBUILT, AND WHY THE RULE IS THE ONE IT IS
 
 Neither is a column, and BOTH ARE REQUIRED by the schema (`Page.model_fields`), so a document that
-went in through `put_paper` cannot come back out valid without them. `0001_core.sql:80-81` says
-`flows` is "reconstructable from `blocks(page_index, flow, "order")` filtered to top-level blocks".
+went in through `put_paper` cannot come back out valid without them. DESIGN.md §10 says `flows` is
+"reconstructable from `blocks(page_index, flow, "order")` filtered to top-level blocks", and
+`0001_core.sql`'s `papers` comment repeated it until #91 corrected it to the rule below.
 The intent is right and the stated filter is not implementable as written: `parent_id` is
 OVERLOADED. On resnet page 2 an included paragraph has `parent_id` -> a *heading* (section
 membership) and an excluded `inline_equation` has `parent_id` -> a *paragraph* (true nesting).
