@@ -28,6 +28,7 @@ from papertree_document_ir import BBox
 from papertree_document_ir.validate import assert_valid_paper, validate_paper
 
 from papertree_document_worker.assemble import AssembledBlock, PaperBuilder, config_hash_for
+from papertree_document_worker.citations import apply_citation_roles, detect_citations
 from papertree_document_worker.classify import classify_document
 from papertree_document_worker.crops import DEFAULT_SCALE, CropStore
 from papertree_document_worker.equations import detect_equation_regions
@@ -758,6 +759,21 @@ def _assemble(
             link.confidence,
             "typographic",
         )
+
+    # #66's `cites`, in the SAME phase as the continuations above and for a sharper version of the
+    # same reason. `classify_reference_entries` had to run BEFORE `assign_ids()` because `block_id`
+    # hashes the block TYPE; this has to run AFTER, because `_emit_relations` DROPS SILENTLY any
+    # edge whose endpoints are not in `by_id` and the role spans name `target.block_id`. An emitter
+    # one phase earlier emits nothing, raises nothing and logs nothing - which is exactly how
+    # `cites` came to be 0-on-every-paper in the first place.
+    citations = detect_citations(builder.blocks)
+    for citation in citations:
+        builder.relate(
+            "cites", citation.source, citation.target, citation.confidence, citation.provenance
+        )
+    # Splitting a style run into before/marker/after changes NO id: `block_id` hashes the type and
+    # the text prefix, `content_hash` the normalised text, and neither reads spans.
+    apply_citation_roles(citations)
 
     # F1.7's VLM half: ONLY flagged regions, only when a budget is configured, and the crop is
     # always retained whatever happens. The LaTeX is a DECLARED INTERPRETATION with its own
