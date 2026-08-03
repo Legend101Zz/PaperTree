@@ -309,6 +309,18 @@ def test_the_vision_model_setting_is_separate_from_the_model_setting() -> None:
 #: fails, and a listed file that no longer carries one must be delisted so the ledger cannot outlive
 #: the debt. Session A found these while replacing the cross-tree read against v1 and did not fix
 #: them — ``services/document-worker/**`` is Session B's exclusive path (AGENTS.md §1).
+#:
+#: **#88 IS NOW DECIDED, AND THE DECISION IS THAT THESE TWO ENTRIES ARE PERMANENT.** The ruling:
+#: ``services/document-worker`` does NOT depend on ``papertree-agent-tools``; the duplication stays
+#: and is DECLARED with a pointer at each of the three sites. The deciding reason is that
+#: ``pipeline.py``'s ``vlm_model`` is a config default feeding ``parser_config_hash``, so an
+#: imported default would silently move every parse's config hash on an unrelated package upgrade.
+#: Written out beside the constants in ``papertree_agent_tools/provider.py``.
+#:
+#: So this ledger is no longer provisional, and what it means changed with the ruling: the entries
+#: are not a debt awaiting repayment, they are the declaration itself. Both assertions below stand
+#: unweakened and both still matter — a THIRD copy is still a defect, and a listed file that stops
+#: carrying a constant must still be delisted rather than left to rot.
 KNOWN_CONSTANT_COPIES: tuple[tuple[str, str], ...] = (
     ("services/document-worker/python/papertree_document_worker/vlm.py", "#88"),
     ("services/document-worker/python/papertree_document_worker/pipeline.py", "#88"),
@@ -328,10 +340,15 @@ def test_the_provider_constants_have_no_new_live_definition() -> None:
     (``.../apps/api/papertree_api/config.py is gone``); the removal is recorded in #75's PR.
 
     Its premise went with it: there is one live definition now. So this asserts what still holds —
-    that no *new* second definition appears inside the gated tree. It is a ledger rather than a
-    ban because whether ``services/document-worker`` ought to import these from here is a real
-    architectural question this test has no standing to decide (#88); pinning today's two copies
-    catches a third without pretending to have ruled on the first two.
+    that no *new* second definition appears inside the gated tree.
+
+    It is a ledger rather than a ban because whether ``services/document-worker`` ought to import
+    these from here was a real architectural question this test had no standing to decide. **It has
+    since been decided, in #88: it should not**, because ``pipeline.py``'s ``vlm_model`` is a config
+    default that feeds ``parser_config_hash`` and an imported default would move every parse's
+    config hash on an unrelated package upgrade. The duplication is therefore declared rather than
+    removed, with a pointer at each of the three sites, and the ledger below is that declaration's
+    enforcement rather than a placeholder for it. See ``KNOWN_CONSTANT_COPIES``.
     """
     gated = sorted(
         path

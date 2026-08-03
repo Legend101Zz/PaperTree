@@ -63,6 +63,24 @@ __all__ = [
     "prompt_hash",
 ]
 
+#: DELIBERATE DUPLICATE OF A PROVIDER CONSTANT. RULED ON IN #88 — DO NOT "FIX" BY IMPORTING.
+#:
+#: ``packages/agent-tools/python/papertree_agent_tools/provider.py`` owns
+#: ``DEFAULT_BASE_URL`` / ``DEFAULT_MODEL`` / ``DEFAULT_VISION_MODEL``, and
+#: ``pipeline.py``'s ``ParserConfig.vlm_model`` is the third copy. #88 asked whether this
+#: service should depend on ``papertree-agent-tools`` and import them instead. **Ruling: no.**
+#: This service's dependency set is ``document-ir`` + ``db`` + ``jobs`` + ``pymupdf``, and the
+#: comment below is a deliberate refusal to grow it; decisively, ``pipeline.py``'s ``vlm_model``
+#: feeds ``parser_config_hash``, so a default that moved on an unrelated package upgrade would
+#: silently change every parse's config hash. The full argument is in ``provider.py`` beside the
+#: constants. The base URLs are not even the same string — that module speaks the
+#: OpenAI-compatible shape and this one the Anthropic-compatible one.
+#:
+#: The duplication is watched, not merely tolerated: ``KNOWN_CONSTANT_COPIES`` in
+#: ``packages/agent-tools/python/tests/test_runtime_swappable.py`` lists this file, fails if a
+#: THIRD copy appears anywhere under ``packages/`` or ``services/``, and fails if this file stops
+#: carrying one. If you delete these constants, delist the file — a ledger may not outlive its debt.
+#:
 #: The endpoint. Anthropic-compatible, so no SDK and no new dependency.
 DEFAULT_BASE_URL = "https://api.minimax.io/anthropic/v1/messages"
 #: The ONLY MiniMax model that accepts an image block. See the module docstring.

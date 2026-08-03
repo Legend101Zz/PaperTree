@@ -78,6 +78,38 @@ __all__ = [
 #: imported OR read (``archive/README.md``). The duplication is real and is why these are named
 #: constants — one place to change per side, and ``tests/test_runtime_swappable.py`` asserts the
 #: values still match the ones documented in that file.
+#:
+#: THERE ARE TWO OTHER LIVE COPIES OF THESE VALUES, AND THAT IS A RULING, NOT AN OVERSIGHT (#88).
+#:
+#:   services/document-worker/python/papertree_document_worker/vlm.py      DEFAULT_MODEL,
+#:                                                                         DEFAULT_BASE_URL
+#:   services/document-worker/python/papertree_document_worker/pipeline.py ParserConfig.vlm_model
+#:
+#: #88 asked whether ``services/document-worker`` should instead depend on
+#: ``papertree-agent-tools`` and import them. **It should not.** Two reasons, in order of weight:
+#:
+#:   1. ``pipeline.py``'s ``vlm_model`` is a CONFIG DEFAULT that feeds ``parser_config_hash``
+#:      (``ParserConfig.as_dict`` -> ``config_hash_for`` -> ``ParserInfo.config_hash`` ->
+#:      ``papers.parser_config_hash``). A default that moves when an unrelated package upgrades
+#:      would silently change every parse's config hash — and that hash is the thing that makes
+#:      "re-parsing is a no-op" checkable. Two runs disagreeing on it are not comparable at all.
+#:      Measured: with ``vlm_max_calls > 0`` the hash DOES move when ``vlm_model`` moves; with the
+#:      default ``vlm_max_calls == 0`` ``as_dict`` masks it to ``None`` and the hash does not. So
+#:      the hazard is live in exactly the runs where the constant is used. That is a hazard, not a
+#:      tidiness win.
+#:   2. ``services/document-worker``'s dependency set is ``document-ir`` + ``db`` + ``jobs`` +
+#:      ``pymupdf``. ``vlm.py``'s own comment — "Anthropic-compatible, so no SDK and no new
+#:      dependency" — is a deliberate refusal, and adding ``agent-tools`` for three string
+#:      literals is a real architectural cost against it.
+#:
+#: The endpoints differ anyway: this module speaks the OPENAI-compatible shape
+#: (``/v1`` -> ``/chat/completions``) and ``vlm.py`` speaks the ANTHROPIC-compatible one
+#: (``/anthropic/v1/messages``). Only the MODEL NAME is genuinely the same string.
+#:
+#: So the duplication STAYS and is DECLARED, in both directions: this comment points at the two
+#: copies, each copy points back here, and ``tests/test_runtime_swappable.py``'s
+#: ``KNOWN_CONSTANT_COPIES`` ledger fails if a THIRD copy appears or if a listed one stops
+#: carrying a constant. Declared duplication that a test watches is not drift.
 DEFAULT_BASE_URL: Final = "https://api.minimax.io/v1"
 DEFAULT_MODEL: Final = "MiniMax-M3"
 DEFAULT_VISION_MODEL: Final = "MiniMax-M3"

@@ -67,6 +67,18 @@ class ParserConfig:
     asset_scheme: str = "asset"
     #: Cap on VLM calls per document. 0 disables the VLM entirely.
     vlm_max_calls: int = 0
+    #: DELIBERATE DUPLICATE OF A PROVIDER CONSTANT. RULED ON IN #88 — DO NOT "FIX" BY IMPORTING.
+    #:
+    #: The other two copies are ``vlm.py``'s ``DEFAULT_MODEL`` and, upstream of both,
+    #: ``packages/agent-tools/python/papertree_agent_tools/provider.py``'s ``DEFAULT_MODEL`` /
+    #: ``DEFAULT_VISION_MODEL``. #88 asked whether to import from that package instead.
+    #: **Ruling: no**, and THIS field is why. It is a config DEFAULT, and `as_dict` below feeds
+    #: `config_hash_for` -> `ParserInfo.config_hash` -> `papers.parser_config_hash`. Importing it
+    #: would let an unrelated package upgrade silently move every parse's config hash — the one
+    #: value that makes "re-parsing is a no-op" checkable, per this class's own docstring. A
+    #: literal cannot move underneath you; an imported default can. Full argument in `provider.py`.
+    #: Watched by `KNOWN_CONSTANT_COPIES` in agent-tools' `tests/test_runtime_swappable.py`, which
+    #: fails on a third copy and on a listed file that stops carrying one.
     vlm_model: str = "MiniMax-M3"
 
     def as_dict(self) -> dict[str, Any]:
