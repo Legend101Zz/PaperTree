@@ -6,6 +6,7 @@
     grounding  verify_grounding: deterministic, offline, flags unsupported claims.
     provider   MiniMax over the OpenAI-compatible shape, stdlib urllib, injectable transport.
     runtime    the Pydantic AI adapter — lazy, reports UNAVAILABLE, under 100 lines.
+    turn       the SHIPPED tool-calling loop, which `services/api`'s /ask endpoint drives.
 
 ═══ THE ONE IDEA ══════════════════════════════════════════════════════════════════════════════
 
@@ -123,6 +124,8 @@ from papertree_agent_tools.answer import (
     SourceRegion,
     VerifiedClaim,
     answer_from_mapping,
+    answer_to_wire,
+    camel_case,
     target_type_for_block_type,
 )
 from papertree_agent_tools.grounding import (
@@ -137,6 +140,7 @@ from papertree_agent_tools.paperview import PaperView, load_paper_view
 from papertree_agent_tools.provider import (
     DEFAULT_BASE_URL,
     DEFAULT_MODEL,
+    DEFAULT_TIMEOUT_SECONDS,
     DEFAULT_VISION_MODEL,
     KNOWN_VISION_MODELS,
     Completion,
@@ -172,6 +176,15 @@ from papertree_agent_tools.schema import (
     validate_arguments,
 )
 from papertree_agent_tools.tools import TOOL_NAMES, build_registry
+from papertree_agent_tools.turn import (
+    DEFAULT_MAX_STEPS,
+    DEFAULT_MAX_TOKENS,
+    ChatCompletionsTurn,
+    DispatchedCall,
+    TurnDidNotFinish,
+    TurnOutcome,
+    strip_reasoning_envelope,
+)
 
 __all__ = [
     "ANNOTATION_KEYWORDS",
@@ -180,7 +193,10 @@ __all__ = [
     "CONSTRAINT_KEYWORDS",
     "DEFAULT_BASE_URL",
     "DEFAULT_COVERAGE_THRESHOLD",
+    "DEFAULT_MAX_STEPS",
+    "DEFAULT_MAX_TOKENS",
     "DEFAULT_MODEL",
+    "DEFAULT_TIMEOUT_SECONDS",
     "DEFAULT_VISION_MODEL",
     "KNOWN_VISION_MODELS",
     "READ_ONLY_TOOLSETS",
@@ -189,8 +205,10 @@ __all__ = [
     "UNVERIFIED_REASON",
     "AdapterStatus",
     "AnswerContractError",
+    "ChatCompletionsTurn",
     "ClaimEvidence",
     "Completion",
+    "DispatchedCall",
     "GroundedAnswer",
     "MiniMaxProvider",
     "PaperView",
@@ -208,17 +226,22 @@ __all__ = [
     "ToolSpec",
     "ToolStatus",
     "Transport",
+    "TurnDidNotFinish",
+    "TurnOutcome",
     "UnknownToolError",
     "UrllibTransport",
     "VerifiedClaim",
     "VisionModelUnverified",
     "answer_from_mapping",
+    "answer_to_wire",
     "build_registry",
+    "camel_case",
     "check_schema",
     "claim_coverage",
     "content_tokens",
     "dispatch",
     "load_paper_view",
+    "strip_reasoning_envelope",
     "target_type_for_block_type",
     "tool_definitions",
     "validate_arguments",

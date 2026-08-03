@@ -415,10 +415,14 @@ version = "1.0.0"
 source = { editable = "services/api/python" }
 dependencies = [
     { name = "fastapi" },
+    { name = "papertree-agent-tools" },
     { name = "papertree-db" },
     { name = "papertree-document-ir" },
     { name = "papertree-document-worker" },
     { name = "papertree-jobs" },
+    { name = "papertree-memory" },
+    { name = "papertree-prompts" },
+    { name = "papertree-retrieval" },
     { name = "python-multipart" },
     { name = "uvicorn" },
 ]
@@ -431,10 +435,14 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115,<1" },
+    { name = "papertree-agent-tools", editable = "packages/agent-tools/python" },
     { name = "papertree-db", editable = "packages/db/python" },
     { name = "papertree-document-ir", editable = "packages/document-ir/python" },
     { name = "papertree-document-worker", editable = "services/document-worker/python" },
     { name = "papertree-jobs", editable = "packages/jobs/python" },
+    { name = "papertree-memory", editable = "packages/memory/python" },
+    { name = "papertree-prompts", editable = "packages/prompts/python" },
+    { name = "papertree-retrieval", editable = "packages/retrieval/python" },
     { name = "python-multipart", specifier = ">=0.0.9" },
     { name = "uvicorn", specifier = ">=0.30,<1" },
 ]

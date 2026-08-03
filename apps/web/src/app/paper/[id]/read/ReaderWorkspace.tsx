@@ -28,7 +28,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { resolveAnchor, type Anchor, type IndexedDocument, type Resolution } from '@papertree/anchoring';
 
-import { createFixtureAnswerSource, Inspector } from '@/components/inspector';
+import {
+  createFixtureAnswerSource,
+  createLiveAnswerSource,
+  Inspector,
+} from '@/components/inspector';
 import { GuidedView } from '@/components/reader/GuidedView';
 import { ModeSwitch } from '@/components/reader/ModeSwitch';
 import { Navigator } from '@/components/reader/Navigator';
@@ -321,21 +325,31 @@ function ReaderWorkspaceView(props: ViewProps) {
   const { doc, mode, orphans } = props;
 
   /**
-   * The Inspector's answer source (#62 — there is no live one).
+   * The Inspector's answer source. THE SWAP #62 PREDICTED, and it is this one expression.
    *
-   * `at` and `client` are fixed rather than defaulted to a wall clock: an `Anchor` records
-   * `created.at`, so a `Date.now()` here would make every captured citation anchor differ between
-   * renders and turn any test that compares them into a flake. Deterministic by construction, not
-   * by the test remembering to freeze time.
+   * An `api` paper exists on `services/api` and can be asked about: `POST /papers/{id}/ask` runs
+   * the tool loop and returns a verified `GroundedAnswer` (#76). A `fixture` paper does NOT exist
+   * on any server — the three committed fixtures are files under `public/` — so there is nothing
+   * for `/ask` to be asked about, and the fixture source stays as the offline path rather than as
+   * a fallback. That is a property of the DOCUMENT, so it needs no new flag;
+   * `NEXT_PUBLIC_PAPERTREE_FIXTURES` gates documents and is deliberately not consulted here.
+   *
+   * The fixture source's `at`/`client` stay fixed rather than defaulted to a wall clock: an
+   * `Anchor` records `created.at`, so a `Date.now()` there would make every captured citation
+   * anchor differ between renders and turn any test that compares them into a flake. The live
+   * source defaults to a real clock, because a real answer's anchor has a real creation time.
    */
+  const paper = props.paper;
   const inspectorAnswerSource = useMemo(
     () =>
-      createFixtureAnswerSource({
-        doc,
-        at: '1970-01-01T00:00:00.000Z',
-        client: 'papertree-web/inspector',
-      }),
-    [doc],
+      paper.kind === 'api'
+        ? createLiveAnswerSource({ doc })
+        : createFixtureAnswerSource({
+            doc,
+            at: '1970-01-01T00:00:00.000Z',
+            client: 'papertree-web/inspector',
+          }),
+    [doc, paper],
   );
 
   const title =
@@ -378,10 +392,11 @@ function ReaderWorkspaceView(props: ViewProps) {
 
         {/* The Inspector slot, filled by EPIC 3 (F3.6).
 
-            `answerSource` is REQUIRED and there is no live implementation to give it: nothing in
-            this repo serves PaperIR over HTTP (#62), so the fixture source is the only one that
-            exists. It is built here rather than inside the Inspector so the seam is visible at the
-            call site — when an endpoint lands, this line changes and nothing else does.
+            `answerSource` is REQUIRED, and #76 is the moment that required-ness paid for itself:
+            an endpoint landed, the compiler named THIS call site and only this one, and the
+            Inspector did not change by a character. `paperId` is the real `paper_id` for an API
+            paper — `paperRefKey` returns `api:ppr_…`, which is a cache key and not an id, and
+            sending it would 404 every ask.
 
             `onNavigate` routes a citation through the SAME `onShowSource` seam every derived
             surface already uses, and that seam now TERMINATES: `SourcePane` populates
@@ -397,7 +412,7 @@ function ReaderWorkspaceView(props: ViewProps) {
           <Inspector
             context={{ kind: 'selection', blockIds: [doc.blocks[0]?.id ?? ''], quote: title }}
             answerSource={inspectorAnswerSource}
-            paperId={paperRefKey(props.paper)}
+            paperId={paper.kind === 'api' ? paper.paperId : paperRefKey(paper)}
             onNavigate={(citation) => {
               props.onShowSource(citation.resolution.blockIds);
             }}

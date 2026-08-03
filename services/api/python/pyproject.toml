@@ -8,6 +8,22 @@ dependencies = [
     "papertree-db",
     "papertree-jobs",
     "papertree-document-worker",
+    # #76's `POST /papers/{id}/ask`. Four workspace members, zero third-party packages, and the
+    # lock does not move by one line — MEASURED: `uv lock` reports 43 packages before and after.
+    # That is the whole reason the agent stack was built stdlib-only, and it is why the endpoint
+    # could land without re-arguing the dependency question:
+    #
+    #   agent-tools  the 18-tool registry, the answer contract, the grounding verifier, the
+    #                MiniMax provider and (since #76) the shipped tool-calling loop.
+    #   memory       `AgentDataHandle` — the READ-ONLY, owner-bound handle. The one object the
+    #                agent side is allowed to hold; see ask.py on why it takes a user_id.
+    #   retrieval    `PaperIndex`, via `load_paper_view`. A transitive of agent-tools, named here
+    #                because this service builds a view directly.
+    #   prompts      `TurnCaps` / `build_system_prompt` — the Rule-of-Two triple and the datamark.
+    "papertree-agent-tools",
+    "papertree-memory",
+    "papertree-retrieval",
+    "papertree-prompts",
     # The only two runtime dependencies that are not already in this workspace, and the reason
     # each is here rather than being written by hand:
     #
@@ -43,6 +59,10 @@ papertree-document-ir = { workspace = true }
 papertree-db = { workspace = true }
 papertree-jobs = { workspace = true }
 papertree-document-worker = { workspace = true }
+papertree-agent-tools = { workspace = true }
+papertree-memory = { workspace = true }
+papertree-retrieval = { workspace = true }
+papertree-prompts = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

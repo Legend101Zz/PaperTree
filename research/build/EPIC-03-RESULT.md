@@ -230,18 +230,49 @@ PARTIAL rather than MET.
 
 ## 6. Deviations from the brief, each with its reason
 
-1. **`pydantic-ai` is not a dependency.** F3.4 says "Pydantic AI over the registry". `uv sync
-   --locked --all-packages` is a CI gate and `packages/evaluation` records the measured precedent —
-   one `docling>=2.0` line took `uv.lock` from 22 packages to 100+. The adapter therefore imports
-   lazily and reports UNAVAILABLE, exactly as `docling_bridge` does. It is **54 executable lines**,
-   which is the epic's own "<100 lines" swappability requirement demonstrated rather than asserted.
-   F3.4 is **PARTIAL** for this reason and for the next one.
-2. **No live provider call is made anywhere.** `MiniMaxProvider` is exercised only through an
-   injected transport. A key exists in the local Keychain; CI has none, and a graded suite that
-   needs one is a suite CI cannot run.
-3. **The Inspector is wired to a fixture answer source.** Nothing serves PaperIR over HTTP (#62).
-   `AnswerSource` is a **required** prop with no default, so the seam is visible at the call site and
-   the compiler will name every site to change when an endpoint lands.
+1. **`pydantic-ai` is not a dependency, and F3.4 is AMENDED IN WRITING to say so.** F3.4 asks for
+   "Pydantic AI over the registry". It was originally declined here by analogy to the `docling`
+   precedent; #76 replaced the analogy with a measurement of the actual package, taken in a
+   throwaway uv workspace containing only this repo's `pyproject.toml` files, on 2026-08-04:
+
+   | | packages in `uv.lock` |
+   |---|---|
+   | this workspace today | **43** |
+   | with `pydantic-ai` added to `packages/agent-tools` | **128** |
+   | delta | **+85 (2.98×)** |
+
+   The 85 include `openai`, `anthropic`, `google-genai`, `mcp`, `logfire`, **nine**
+   `opentelemetry-*`, `cryptography`, `keyring`, `secretstorage`, `jeepney`, `pywin32`,
+   `protobuf`, `tiktoken`, `websockets` and `requests`. **This repository calls none of them.**
+   `uv sync --locked --all-packages` is a CI gate and uv locks a group whether or not it installs
+   it, so all 85 land on every checkout — to replace a **54-line** adapter.
+
+   There is a second, independent reason that is not about size. `test_runtime_swappable.py:103`
+   asserts `find_spec("pydantic_ai") is None` **as the premise of the degradation tests**: the two
+   tests after it check that the adapter reports UNAVAILABLE with a reason and a fix rather than
+   crashing. Installing the package turns that suite red and, worse, stops it testing anything —
+   the degradation path becomes unreachable.
+
+   So: **do not add it.** The adapter stays lazy (`importlib.util.find_spec` at call time), which
+   is the `docling_bridge` shape, and #76 additionally ships a *concrete* runtime —
+   `papertree_agent_tools.turn.ChatCompletionsTurn`, 65 executable lines — that `services/api`'s
+   `/ask` drives. F3.4's real requirement, "the runtime must stay swappable in <100 lines", is now
+   demonstrated three times over: the 54-line adapter, the 37-line one written from scratch inside
+   `test_runtime_swappable.py`, and the 65-line one that ships.
+2. **~~No live provider call is made anywhere.~~ CLOSED by #76.**
+   `packages/agent-tools/python/tests/test_live_provider.py` calls a real MiniMax-M3 through the
+   shipped loop, asserts at least one tool was dispatched, and decodes the reply through the answer
+   contract and the grounding verifier. It is opt-in on `PAPERTREE_LLM_API_KEY` and **skips loudly**
+   — a `UserWarning` naming the variable appears in every run's warnings summary, so a green log
+   cannot quietly mean "no model was called". It found two defects nine scripted tests had not:
+   `ToolArgumentError` escaping the loop as a 500, and a 2048-token output ceiling truncating a
+   reasoning model's JSON answer about one run in four.
+3. **~~The Inspector is wired to a fixture answer source.~~ CLOSED by #76.** `POST
+   /papers/{id}/ask` exists and `createLiveAnswerSource` implements `AnswerSource` against it. The
+   prediction this deviation made held exactly: `AnswerSource` being a **required** prop with no
+   default meant the compiler named one call site — `ReaderWorkspace`'s Inspector slot — and
+   neither `Inspector` nor `AnswerView` changed. The fixture source stays as the offline path,
+   because a fixture paper has no `paper_id` on any server to ask about.
 4. **Four edits outside Epic 3's owned paths**, all declared in #65: the new migration
    `0003_memory.sql`, two hunks of root `pyproject.toml`, a regenerated `uv.lock`, and one assertion
    in `packages/jobs/.../test_jobs_api.py` that pinned *how many migrations exist* — now read from

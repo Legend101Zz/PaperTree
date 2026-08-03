@@ -21,10 +21,20 @@ are the same names in snake_case**, and the mapping is total:
     claim.supported           supported
     claim.reason              reason
 
-There is no code path between the two — nothing serves PaperIR over HTTP yet (#62) — so the
-alignment is maintained by :data:`ANSWER_SCHEMA` being the single written statement of the shape
-and by ``tests/test_answer_contract.py`` asserting the snake_case→camelCase mapping mechanically
-rather than by eye. When an endpoint lands, that test is the thing that has to keep passing.
+**THE CODE PATH NOW EXISTS AND IT IS :func:`answer_to_wire`** (#76). Until then this docstring
+said "there is no code path between the two", and the alignment rested entirely on
+``tests/test_answer_contract.py`` asserting the mapping mechanically. That test is unchanged and
+is still the thing that has to keep passing; what changed is that ``POST /papers/{id}/ask`` now
+serialises through :func:`answer_to_wire`, so a field renamed on one side breaks a request rather
+than only a test. :data:`ANSWER_SCHEMA` remains the single written statement of the shape.
+
+ONE FIELD DOES NOT MEAN THE SAME THING ON THE TWO SIDES, AND THE WIRE SAYS SO
+    ``types.ts``'s ``GroundedAnswer.sourceRegions`` is ``Citation[]`` — anchor plus resolution.
+    :func:`answer_to_wire` emits :class:`SourceRegion` ADDRESSES under that name, because the six
+    selectors an ``Anchor`` needs live in ``@papertree/anchoring``, which is TypeScript-only (see
+    below). The client mints the anchor from the address with ``captureCitation``. A consumer that
+    assigns the wire object straight to a ``GroundedAnswer`` is wrong; ``apps/web``'s
+    ``liveAnswerSource.ts`` is the conversion and it is the only sanctioned one.
 
 THE ONE FIELD THAT IS NOT A CLEAN TWIN, SAID PLAINLY
 
@@ -72,6 +82,8 @@ __all__ = [
     "SourceRegion",
     "VerifiedClaim",
     "answer_from_mapping",
+    "answer_to_wire",
+    "camel_case",
     "target_type_for_block_type",
 ]
 
@@ -285,6 +297,42 @@ def answer_from_mapping(payload: Mapping[str, Any]) -> GroundedAnswer:
         ),
         claims=claims,
     )
+
+
+def camel_case(name: str) -> str:
+    """``supporting_block_ids`` → ``supportingBlockIds``. The whole of the naming difference.
+
+    MECHANICAL rather than a hand-written table, and that is the design decision. A table has to
+    be edited when a field is added, and the failure mode of forgetting is a field that silently
+    never reaches the client — the shape of defect this repo has been bitten by three times. This
+    function cannot forget. ``tests/test_answer_contract.py`` derives the expected camel names
+    with its own independent copy of this rule and compares, so the two would have to be wrong
+    together.
+    """
+    head, *rest = name.split("_")
+    return head + "".join(part.title() for part in rest)
+
+
+def answer_to_wire(answer: GroundedAnswer) -> dict[str, Any]:
+    """:meth:`GroundedAnswer.as_dict` with every key camelCased. The Python→TypeScript path.
+
+    Recursive, so nested claims (``supported_by``) and regions (``block_id``, ``page_index``,
+    ``target_type``) are converted too — those are exactly the keys a per-field table would have
+    left behind, because they are one level down from the ones anybody looks at.
+
+    See the module docstring on ``sourceRegions``: the values under that key are ADDRESSES, not
+    ``types.ts``'s ``Citation``. Key order is inherited from ``as_dict``, so two runs diff.
+    """
+    return {camel_case(key): _camelise(item) for key, item in answer.as_dict().items()}
+
+
+def _camelise(value: Any) -> Any:
+    """Recurses into the two containers ``as_dict`` produces and leaves every scalar alone."""
+    if isinstance(value, Mapping):
+        return {camel_case(str(key)): _camelise(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_camelise(item) for item in value]
+    return value
 
 
 #: What an unverified draft claim carries in ``reason`` until the verifier replaces it.

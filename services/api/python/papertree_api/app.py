@@ -21,6 +21,7 @@ The surface, against #74's table:
     GET    /papers/{id}/blocks/{block_id}/location
     GET    /papers/{id}/file           the original PDF, for pdf.js
     GET    /papers/{id}/assets/{kind}/{block_id}   figure and equation crops
+    POST   /papers/{id}/ask           the grounded agent turn (#76)  <- see ask.py
     GET    /jobs/{id}                  parse status - makes the library's PENDING state real
     GET|POST|PATCH|DELETE  /papers/{id}/highlights[/{highlight_id}]   anchors included
 
@@ -35,12 +36,15 @@ from typing import Annotated, Any
 from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
+from papertree_agent_tools import Transport
 from papertree_db import BlockId, HighlightId, PaperId, generation
 from papertree_document_worker.crops import CropStore
 from papertree_document_worker.job import enqueue_parse
 from pydantic import BaseModel, Field
 
-from .deps import AuthConnDep, Caller, CallerDep, SettingsDep
+from .ask import mount_ask
+from .deps import AuthConnDep, CallerDep, SettingsDep
+from .deps import promoted_or_404 as _promoted
 from .ir import block_location, paper_document
 from .security import create_session, hash_password, now_iso, revoke_session, verify_password
 from .settings import Settings
@@ -141,22 +145,15 @@ def _public(row: Any) -> dict[str, Any]:
     return {key: value for key, value in dict(row).items() if key != "owner_id"}
 
 
-def _promoted(call: Caller, paper_id: str, requested: int | None) -> int:
-    """The generation to read, or 404.
+def create_app(
+    settings: Settings | None = None, *, llm_transport: Transport | None = None
+) -> FastAPI:
+    """`llm_transport` is the ONE seam that lets `/ask` be tested without a socket.
 
-    A caller may pin a generation; the default is the promoted one. Both go through
-    `promoted_generation`/`get_paper`, which are owner-scoped, so an id belonging to another owner
-    is indistinguishable from an id that does not exist — which is the correct answer to give.
+    It is a constructor argument rather than an environment variable because a test that has to
+    set an env var to avoid the network is a test that reaches the network when someone forgets.
+    `deps.provider_for` reads it off `app.state`; `None` means `UrllibTransport`, the real one.
     """
-    if requested is not None:
-        return requested
-    gen = call.db.promoted_generation(call.db_owner, PaperId(paper_id))
-    if gen is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such paper")
-    return gen
-
-
-def create_app(settings: Settings | None = None) -> FastAPI:
     resolved = settings or Settings.from_env()
     resolved.ensure_directories()
 
@@ -168,6 +165,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         ),
     )
     app.state.settings = resolved
+    app.state.llm_transport = llm_transport
 
     # The reader is a separate origin in development (`next dev` on :3000, this on :8000).
     # Credentials are a bearer token in a header, never a cookie, so there is no CSRF surface and
@@ -197,6 +195,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     _mount_papers(app)
     _mount_highlights(app)
     _mount_jobs(app)
+    mount_ask(app)
     return app
 
 
