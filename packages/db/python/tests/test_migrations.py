@@ -18,11 +18,16 @@ import shutil
 import sqlite3
 import subprocess
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 import pytest
 from papertree_db import (
     MigrationError,
+    OwnerId,
+    PaperTreeDb,
     Row,
     generation,
     load_migrations,
@@ -135,7 +140,104 @@ WARMUP_BLOCKS = 10_000
 #: than the `8000` ms constant it replaces — that could not fire on a 6x regression and DID fire
 #: on a docs-only PR — but "better than a broken guard" is not "a good guard". Filed, with this
 #: table, as the Python counterpart to #82.
+#:
+#: #99 CLOSED THAT GAP WITHOUT TOUCHING THIS NUMBER. `test_put_paper_executes_one_statement_per_row`
+#: below counts statements instead of timing them and catches all three mutations in the table
+#: above, on every machine including CI. This bound stays at 2.0 because the healthy range that
+#: set it has not changed; the coverage was added beside it rather than squeezed out of it.
 MAX_SCALING_RATIO = 2.0
+
+# ── the statement-count guard (#99 option 2, which is also #82's answer) ──────────────────
+#
+# WHY THIS EXISTS AT ALL. The ratio above is a TIME ratio, and #82 measured the mechanism that
+# makes it stable — machine speed inflates the calibration and the measurement equally and
+# cancels — cancelling the regressions it most needs to see for exactly the same reason. A
+# per-row constant factor is invisible to it BY CONSTRUCTION, not by bad luck: 20 extra
+# statements on every row scored 1.041 against a bound of 2.0, and a lost transaction — a real
+# 2.4x here — scored 1.013, BELOW the healthy reading it replaced. Tightening the bound was
+# measured and
+# rejected in #99 — the healthy range tops out at 1.197, so a bound at 1.5 is a flake generator
+# and that is the defect #80 exists to prevent, arriving from the other direction.
+#
+# A STATEMENT COUNT HAS NO SPREAD TO TUNE AGAINST. It is a function of the code path and the
+# document and of nothing else, so no amount of disk queue, CPU contention or first-touch cost
+# can move it — the thing that makes every number above need a tolerance cannot reach this one.
+# So the bound is not "a number with slack in it", it is the answer, and any deviation at all is
+# a defect. That turns the question from "is it fast" into "does it do the right amount of work",
+# which is what #82 and #99 are both really about.
+#
+# MEASURED RATHER THAN ASSUMED, on the machine this was written on: the 30,000-block document
+# costs 30,537 statements with the minimal payload and 30,537 with the realistic one, and the
+# TypeScript twin executes 30,537 for the same document. The CI figure is not yet in hand — the
+# count is PRINTED on every run precisely so the first CI run of this test records it, in the
+# same way #82's comment thread collected the ratio's runner spread after the fact.
+#
+# THE DERIVATION. `put_paper` executes, for a document with P pages, B blocks and R relations:
+#
+#     BEGIN                                                          1
+#     INSERT OR IGNORE INTO paper_owners                             1
+#     SELECT owner_id FROM paper_owners   (the cross-owner check)    1
+#     INSERT INTO papers                                             1
+#     INSERT INTO pages       via executemany                        P
+#     INSERT INTO blocks      via executemany                        B
+#     INSERT INTO relations   via executemany                        R
+#     COMMIT                                                         1
+#                                                                    ─────────────
+#                                                                    P + B + R + 5
+#
+# `executemany` prepares once and steps once per row, and SQLite's statement trace fires on each
+# step — so a batched insert costs exactly ONE statement per row and the loop that replaces it
+# costs the same. What is NOT one per row is anything ADDED per row, which is the whole point.
+#
+# WHAT THE TWO CONSTANTS BELOW ASSERT IS A SHAPE, NOT A MAGIC NUMBER. The test measures the
+# count at two sizes and fits `statements = rows * STATEMENTS_PER_ROW + FIXED_STATEMENTS_PER_PUT`
+# to both. The SLOPE catches per-row work; the INTERCEPT must be the SAME INTEGER at both sizes,
+# and that is what rules out a superlinear term: an O(n^2) path contributes c*n^2 to the
+# intercept, which grows NINEFOLD between 10k and 30k. With integer counts and zero tolerance the
+# smallest detectable c is 1/(8*10^8) — i.e. one single extra statement anywhere in the run.
+#
+# MEASURED, ON THIS SPEC, BY APPLYING #99'S THREE MUTATIONS TO `put_paper`, RUNNING THIS TEST AND
+# WATCHING IT GO RED. The `time ratio` column is #99's measurement of the guard above, on the
+# same mutation, for comparison — it is what a time-based guard saw and did not act on.
+#
+#     mutation to put_paper                        10k        30k   per row  time ratio  here
+#     (healthy)                                 10,204     30,537    1.000   0.944-1.197 green
+#     scan `blocks` every 10th insert O(n^2/10) 11,204     33,537    1.098   1.425       RED
+#     scan `blocks` every insert      O(n^2)    20,204     60,537    1.983   1.998       RED
+#     20 no-op statements per row     constant 210,204    630,537   20.652   1.041       RED
+#     no transaction wrapper (#82's M1)         10,202     30,535    1.000   1.013       RED
+#
+# `per row` is `(statements - fixed) / rows` at 30k. Every count above is IDENTICAL in the
+# TypeScript twin — measured by applying the same four mutations to `putPaper`, not assumed.
+#
+# THE LAST ROW IS #82'S HEADLINE DEFECT and the first thing in this repo that has ever seen it on
+# CI. A lost transaction adds no per-row work, so the slope is untouched at exactly 1.000; what
+# moves is the INTERCEPT, from 5 to 3, because the BEGIN and the COMMIT are gone. That is why the
+# test asserts both and not just the slope. The three middle rows are #99's table verbatim, and
+# the time ratio passes all three.
+#
+# ITS RATIO WAS MEASURED HERE RATHER THAN BORROWED, AND IT IS WORSE THAN #82 REPORTED. #82's
+# 1.192 is the TYPESCRIPT half; the Python half had never been measured. On this box — load
+# average ~40 on 10 cores, so a slow one — the healthy 30k minimal insert took 3,858 ms at ratio
+# 1.167 and the same insert with the transaction wrapper deleted took 9,306 ms at ratio 1.013.
+# A 2.4x regression moved the ratio DOWN, TOWARDS the middle of healthy and AWAY from the bound.
+# The realistic payload behaved the same way (1.059 healthy, 1.033 mutated) and that test carries
+# no wall-clock assertion at all, so it stayed green end to end. The ratio is not merely blind to
+# a lost transaction; the reading it produces is actively reassuring.
+#
+# WHAT THIS STILL DOES NOT CATCH, because a guard's blind spot is not a detail: a constant factor
+# that executes no extra SQL. Serialising every block twice, or an O(n^2) pure-Python loop over
+# `paper["blocks"]`, costs time and costs no statements. `LOCAL_BOUND_MS` and the ratio above
+# remain the guards for that, off CI and on. The two guards are complementary and neither
+# replaces the other — this one sees work, those two see time.
+
+#: Statements `put_paper` may execute per row of the document. One INSERT, and nothing else.
+STATEMENTS_PER_ROW = 1
+
+#: Statements `put_paper` executes regardless of size: BEGIN, the ownership INSERT and SELECT,
+#: the `papers` INSERT, COMMIT. See the derivation table above. If you add a fixed statement
+#: deliberately, change this number and say why; if you did not, this guard has found something.
+FIXED_STATEMENTS_PER_PUT = 5
 
 
 def test_empty_to_head(tmp_path: Path) -> None:
@@ -427,6 +529,153 @@ def test_30k_realistic_blocks_are_measured_not_assumed(
         f"the realistic payload scaled at {ratio:.3f}x linear. The minimal fixture is the more "
         f"sensitive of the two, so a regression visible only here is a payload-size effect."
     )
+
+
+class _StatementCounter:
+    """Counts SQL statements via ``sqlite3.Connection.set_trace_callback``.
+
+    INSTALLED BY MONKEYPATCHING ``sqlite3.connect``, NOT BY REACHING FOR ``db._conn``. That
+    attribute is a forbidden token outside ``papertree_db`` and
+    ``test_ownership.py::test_conn_is_a_forbidden_token_outside_papertree_db`` PARSES this file
+    to prove it — gate 1 of the ownership model is language-enforced in TypeScript and only a
+    convention in Python, and a test that quietly exempted itself would be the first crack in
+    it. So the callback is attached to the connection as it is created and this file never holds
+    a ``sqlite3.Connection`` at all. `packages/db/test/migrations.spec.ts` instruments its own
+    driver from the outside for the same reason, and neither half needed a production hook.
+
+    The callback fires for EVERY statement on the connection, including `migrate()` and
+    `create_user()`, so counting is gated on `counting()` and covers exactly one call.
+    """
+
+    def __init__(self) -> None:
+        self.total = 0
+        self._armed = False
+
+    def _trace(self, _statement: str) -> None:
+        if self._armed:
+            self.total += 1
+
+    def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Arms every connection opened from now until the test ends."""
+        real_connect = sqlite3.connect
+
+        def connect(*args: Any, **kwargs: Any) -> sqlite3.Connection:
+            conn: sqlite3.Connection = real_connect(*args, **kwargs)
+            conn.set_trace_callback(self._trace)
+            return conn
+
+        monkeypatch.setattr(sqlite3, "connect", connect)
+
+    @contextmanager
+    def counting(self) -> Iterator[None]:
+        self.total = 0
+        self._armed = True
+        try:
+            yield
+        finally:
+            self._armed = False
+
+
+def _put_and_count(
+    db: PaperTreeDb,
+    owner: OwnerId,
+    counter: _StatementCounter,
+    *,
+    paper_id: str,
+    source_hash: str,
+    block_count: int,
+) -> tuple[int, int]:
+    """``(rows in the document, SQL statements `put_paper` executed)``.
+
+    The row count is taken from the DOCUMENT rather than recomputed from the fixture's rules,
+    so the expectation cannot drift away from what was actually inserted.
+    """
+    paper = make_paper(
+        paper_id=paper_id,
+        source_hash=source_hash,
+        generation=1,
+        block_count=block_count,
+        # Proportional to block_count, matching `_timed_put`, so this guard and the timing
+        # guards above are measuring the same shaped document.
+        page_count=max(1, round(block_count / 60)),
+    )
+    rows = len(paper["pages"]) + len(paper["blocks"]) + len(paper["relations"])
+
+    with counter.counting():
+        db.put_paper(owner, paper)
+    statements = counter.total
+
+    # Correctness is unconditional here too. A `put_paper` that silently inserted nothing would
+    # execute five statements, satisfy no shape at all, and — if this assertion were missing —
+    # be indistinguishable from a document that happened to have no rows.
+    assert db.count_blocks(owner, PaperId(paper_id), generation(1)) == block_count
+    return rows, statements
+
+
+def test_put_paper_executes_one_statement_per_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """#99 / #82: count the SQL statements a 30k insert executes instead of timing it.
+
+    See the block comment above `STATEMENTS_PER_ROW` for the derivation, for the measured
+    counts under #99's three mutations, and for what this still does not catch.
+    """
+    counter = _StatementCounter()
+    counter.install(monkeypatch)
+
+    with open_database(tmp_path / "papertree.sqlite") as db:
+        db.migrate()
+        owner = db.create_user("statements@papertree.test").owner
+        small_rows, small_statements = _put_and_count(
+            db,
+            owner,
+            counter,
+            paper_id="ppr_00000000000000000000000301",
+            source_hash="sha256:" + "7" * 64,
+            block_count=BASELINE_BLOCKS,
+        )
+        big_rows, big_statements = _put_and_count(
+            db,
+            owner,
+            counter,
+            paper_id="ppr_00000000000000000000000302",
+            source_hash="sha256:" + "8" * 64,
+            block_count=TARGET_BLOCKS,
+        )
+
+    with capsys.disabled():
+        print(
+            f"\n[db/migrations.spec::py] {TARGET_BLOCKS:,} blocks cost {big_statements:,} SQL "
+            f"statements ({big_rows:,} rows + {big_statements - big_rows} fixed); the "
+            f"{BASELINE_BLOCKS:,}-block insert cost {small_statements:,} ({small_rows:,} rows + "
+            f"{small_statements - small_rows} fixed). Slope "
+            f"{(big_statements - small_statements) / (big_rows - small_rows):.3f} statements per "
+            f"row, bound exactly {STATEMENTS_PER_ROW}. Deterministic — no timing in it."
+        )
+
+    # THE SLOPE. One INSERT per row and nothing else. A scan every Nth insert, an extra
+    # per-row SELECT, an `executemany` unrolled into a loop that also reads — every one of
+    # them lands here, and none of them moves the time ratio far enough to be seen (#99).
+    assert big_statements - small_statements == (big_rows - small_rows) * STATEMENTS_PER_ROW, (
+        f"{TARGET_BLOCKS - BASELINE_BLOCKS:,} more blocks cost "
+        f"{big_statements - small_statements:,} more statements, not "
+        f"{(big_rows - small_rows) * STATEMENTS_PER_ROW:,}. `put_paper` is doing per-row SQL "
+        f"work it did not do before."
+    )
+
+    # THE INTERCEPT, at BOTH sizes, and it is the same integer or the path is not linear.
+    # A c*n^2 term contributes 9x more here at 30k than at 10k; a c*n term contributes 3x more.
+    # Only a genuine constant survives both equalities.
+    for label, rows, statements in (
+        (f"{BASELINE_BLOCKS:,}", small_rows, small_statements),
+        (f"{TARGET_BLOCKS:,}", big_rows, big_statements),
+    ):
+        assert statements - rows * STATEMENTS_PER_ROW == FIXED_STATEMENTS_PER_PUT, (
+            f"the {label}-block insert executed {statements:,} statements for {rows:,} rows, so "
+            f"{statements - rows * STATEMENTS_PER_ROW} of them were fixed overhead rather than "
+            f"{FIXED_STATEMENTS_PER_PUT}. Fewer means a lost BEGIN/COMMIT (#82); more that is "
+            f"not the same integer at both sizes means a superlinear path (#99)."
+        )
 
 
 def test_generations_share_block_ids(tmp_path: Path) -> None:

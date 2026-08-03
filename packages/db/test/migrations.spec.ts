@@ -285,6 +285,12 @@ const SCALE = TARGET_BLOCKS / BASELINE_BLOCKS;
  * minimal payload is the more sensitive of the two, and every per-row constant factor is
  * invisible to both (see above). This bound is set where the data puts it, not where it would
  * have to be to make a stronger claim true.
+ *
+ * #99 CLOSED THOSE GAPS WITHOUT TOUCHING THIS NUMBER. The `statement budget` describe below
+ * counts statements instead of timing them and catches every mutation listed here plus the
+ * lost transaction, on every machine including CI. This bound stays at 2.0 because the healthy
+ * range that set it has not changed; the coverage was added beside it rather than squeezed out
+ * of it.
  */
 const MAX_SCALING_RATIO = 2.0;
 
@@ -482,6 +488,246 @@ describe('30k blocks in under 2s', () => {
       db.close();
     }
   }, 120_000);
+});
+
+/**
+ * THE STATEMENT-COUNT GUARD (#99 option 2, which is also #82's answer). The twin of
+ * `python/tests/test_migrations.py::test_put_paper_executes_one_statement_per_row`.
+ *
+ * WHY THIS EXISTS. Everything above is a TIME ratio, and #82 measured the mechanism that makes
+ * it stable — machine speed inflates the calibration and the measurement equally and cancels —
+ * cancelling the regressions it most needs to see for exactly the same reason. Deleting
+ * `putPaper`'s transaction wrapper costs 4.6x and moves the ratio to 1.192, dead centre of
+ * healthy. #99 measured the Python half at 1.998 against a 2.0 bound for a genuine O(n^2) insert
+ * path. Tightening `MAX_SCALING_RATIO` was rejected with numbers in both issues: the healthy
+ * range tops out at 1.197, so a tighter bound is a flake generator, which is #80's defect
+ * arriving from the other direction.
+ *
+ * A STATEMENT COUNT HAS NO SPREAD TO TUNE AGAINST. It is a function of the code path and the
+ * document and of nothing else, so no amount of disk queue, CPU contention or V8 tier-up can
+ * move it — the thing that makes every number above need a tolerance cannot reach this one.
+ * There is no slack in the bound because there is no variance to absorb, so any deviation at all
+ * is a defect. Measured rather than assumed, on the machine this was written on: the
+ * 30,000-block document costs 30,537 statements with the minimal payload and 30,537 with the
+ * realistic one, and the PYTHON twin executes 30,537 for the same document. Both halves
+ * executing the same integer is a sharper statement of "one implementation, two languages" than
+ * anything the ratios could say. The CI figure is not yet in hand; the count is printed on every
+ * run precisely so the first CI run of this test records it.
+ *
+ * BETTER-SQLITE3 DOES NOT EXPOSE `sqlite3_trace_v2`, so this is NOT the Python mechanism. It is
+ * an equivalent one, and it was checked rather than assumed (better-sqlite3 11.10.0):
+ *
+ *   - `Database.prototype` is exactly {aggregate, backup, close, defaultSafeIntegers, exec,
+ *     function, loadExtension, pragma, prepare, serialize, table, transaction, unsafeMode}.
+ *     No trace, no profile, no authorizer, no statement counter.
+ *   - The constructor's `verbose` option DOES fire once per statement execution, including the
+ *     BEGIN and COMMIT that `db.transaction()` issues (measured: 102 callbacks for a
+ *     100-row transaction). But it can only be supplied to `new Database(...)`, and
+ *     `openDatabase`'s `OpenOptions` does not thread it through — using it means widening a
+ *     production API for a test.
+ *   - `Statement.prototype.{run,get,all,iterate}` is patchable from the test and gives the
+ *     IDENTICAL count, including BEGIN and COMMIT, with no production change at all. That is
+ *     what is used here, and it is the same choice the Python twin makes for the same reason:
+ *     instrument the driver from outside, never widen the thing under test.
+ *
+ * SO #82 IS NOT RULED "LEAVE IT". Its option 3 — "the local gate is mandatory and catches it via
+ * LOCAL_BOUND_MS" — was the honest answer while the only instrument was a clock. It is no longer
+ * the best available answer: the lost transaction it is about is now caught HERE, on every
+ * machine including CI, as an intercept of 3 where 5 is derived.
+ *
+ * MEASURED, ON THIS SPEC, BY MUTATING `putPaper`, RUNNING THIS TEST AND WATCHING IT GO RED.
+ *
+ *     mutation to putPaper                         10k        30k   per row   this guard
+ *     (healthy)                                 10,204     30,537    1.000    green
+ *     scan `blocks` every 10th insert O(n^2/10) 11,204     33,537    1.098    RED
+ *     scan `blocks` every insert      O(n^2)    20,204     60,537    1.983    RED
+ *     20 no-op statements per row     constant 210,204    630,537   20.652    RED
+ *     no transaction wrapper (#82's M1)         10,202     30,535    1.000    RED
+ *
+ * `per row` is `(statements - fixed) / rows` at 30k. Every count is IDENTICAL to the Python
+ * twin's — measured on both, not assumed on either. The last row adds no per-row work, so the
+ * slope stays at exactly 1.000 and what moves is the INTERCEPT, 5 -> 3, which is why both are
+ * asserted rather than only the slope.
+ *
+ * FOR COMPARISON, WHAT THE TIME RATIO ABOVE SAW ON THE SAME MUTATIONS. Row 2 is the only one it
+ * has ever caught, and only on the lighter payload: 2.196 minimal (RED) against 1.984 realistic
+ * (green, and only just). Row 5 is 1.192, which is #82. In the Python twin #99 measured rows 2-4
+ * at 1.425, 1.998 and 1.041, all green; row 5 was measured for this change and came out at
+ * 1.013 — a 2.4x regression producing a ratio BELOW the healthy reading it replaced.
+ *
+ * WHAT THIS STILL DOES NOT CATCH, because a guard's blind spot is not a detail: a constant
+ * factor that executes no extra SQL. `JSON.stringify` called twice per block, or an O(n^2) loop
+ * in JavaScript over `paper.blocks`, costs time and costs no statements. The ratio and
+ * `LOCAL_BOUND_MS` remain the guards for that. The two guards are complementary and neither
+ * replaces the other — this one sees work, those two see time.
+ */
+const STATEMENTS_PER_ROW = 1;
+
+/**
+ * Statements `putPaper` executes regardless of size. The derivation, for a document with P
+ * pages, B blocks and R relations:
+ *
+ *     BEGIN                                                        1   (db.transaction)
+ *     INSERT OR IGNORE INTO paper_owners                           1
+ *     SELECT owner_id FROM paper_owners   (the cross-owner check)  1
+ *     INSERT INTO papers                                           1
+ *     INSERT INTO pages                                            P
+ *     INSERT INTO blocks                                           B
+ *     INSERT INTO relations                                        R
+ *     COMMIT                                                       1   (db.transaction)
+ *                                                                  ─────────────
+ *                                                                  P + B + R + 5
+ *
+ * If you add a fixed statement deliberately, change this number and say why; if you did not,
+ * this guard has found something.
+ */
+const FIXED_STATEMENTS_PER_PUT = 5;
+
+/**
+ * Runs `body` and returns the number of SQL statements better-sqlite3 executed during it.
+ *
+ * Patches the shared `Statement` prototype for the duration and restores it in `finally`. The
+ * count is of EXECUTIONS, not of prepares: a cached prepared statement run once per row costs
+ * one per row, which is what makes an unrolled loop and a batched insert cost the same and an
+ * added per-row query cost more.
+ *
+ * `exec()` and `pragma()` are the one thing this cannot count through — `exec` runs a whole SQL
+ * string in the C++ layer without creating a `Statement`, so N inserts inside one `exec` would
+ * read as zero. `putPaper` uses neither, and rather than leave that as an assumption they are
+ * counted separately and asserted to be zero, so the total can never be silently short.
+ */
+function countStatements(body: () => void): number {
+  const probe = new Database(':memory:');
+  type Patchable = Record<string, ((...args: never[]) => unknown) | undefined>;
+  const statementProto = Object.getPrototypeOf(probe.prepare('SELECT 1')) as Patchable;
+  const databaseProto = Object.getPrototypeOf(probe) as Patchable;
+  probe.close();
+
+  let statements = 0;
+  let uncountable = 0;
+  const restore: Array<() => void> = [];
+  const patch = (target: Patchable, name: string, tally: () => void): void => {
+    const original = target[name];
+    if (original === undefined) {
+      throw new Error(
+        `better-sqlite3 no longer has ${name}(); the statement-count guard is instrumenting ` +
+          `an API that has moved and would otherwise silently count nothing.`,
+      );
+    }
+    restore.push(() => {
+      target[name] = original;
+    });
+    target[name] = function counted(this: unknown, ...args: never[]): unknown {
+      tally();
+      return Reflect.apply(original, this, args);
+    };
+  };
+
+  for (const method of ['run', 'get', 'all', 'iterate']) {
+    patch(statementProto, method, () => {
+      statements += 1;
+    });
+  }
+  for (const method of ['exec', 'pragma']) {
+    patch(databaseProto, method, () => {
+      uncountable += 1;
+    });
+  }
+
+  try {
+    body();
+  } finally {
+    for (const undo of restore) undo();
+  }
+
+  expect(
+    uncountable,
+    'putPaper called exec() or pragma(), which execute SQL without creating a Statement. The ' +
+      'count below no longer sees every statement, so it must not be asserted as if it did.',
+  ).toBe(0);
+  return statements;
+}
+
+describe('statement budget', () => {
+  it('executes exactly one SQL statement per row, and the same fixed five at any size', () => {
+    const db: PaperTreeDb = openDatabase({ filename: file });
+    try {
+      db.migrate();
+      const { owner } = db.createUser('statements@papertree.test');
+
+      const putAndCount = (
+        paperId: string,
+        sourceHash: string,
+        blockCount: number,
+      ): { rows: number; statements: number } => {
+        const paper = makePaper({
+          paperId,
+          sourceHash,
+          generation: 1,
+          blockCount,
+          // Proportional to blockCount, matching `timedPut`, so this guard and the timing
+          // guards above measure the same shaped document.
+          pageCount: Math.max(1, Math.round(blockCount / 60)),
+        });
+        // Taken from the DOCUMENT rather than recomputed from the fixture's rules, so the
+        // expectation cannot drift away from what was actually inserted.
+        const rows = paper.pages.length + paper.blocks.length + paper.relations.length;
+        const statements = countStatements(() => {
+          db.putPaper(owner, paper);
+        });
+        // Correctness is unconditional here too: a putPaper that silently inserted nothing
+        // would execute five statements and satisfy no shape at all, and without this it
+        // would be indistinguishable from a document that happened to have no rows.
+        expect(db.countBlocks(owner, asPaperId(paperId), generation(1))).toBe(blockCount);
+        return { rows, statements };
+      };
+
+      const small = putAndCount(
+        'ppr_00000000000000000000000301',
+        `sha256:${'7'.repeat(64)}`,
+        BASELINE_BLOCKS,
+      );
+      const big = putAndCount(
+        'ppr_00000000000000000000000302',
+        `sha256:${'8'.repeat(64)}`,
+        TARGET_BLOCKS,
+      );
+
+      console.log(
+        `[db/migrations.spec] ${TARGET_BLOCKS.toLocaleString()} blocks cost ` +
+          `${big.statements.toLocaleString()} SQL statements (${big.rows.toLocaleString()} rows ` +
+          `+ ${big.statements - big.rows} fixed); the ${BASELINE_BLOCKS.toLocaleString()}-block ` +
+          `insert cost ${small.statements.toLocaleString()} (${small.rows.toLocaleString()} rows ` +
+          `+ ${small.statements - small.rows} fixed). Slope ` +
+          `${((big.statements - small.statements) / (big.rows - small.rows)).toFixed(3)} ` +
+          `statements per row, bound exactly ${STATEMENTS_PER_ROW}. Deterministic — no timing in it.`,
+      );
+
+      // THE SLOPE. One INSERT per row and nothing else. A scan every Nth insert, an extra
+      // per-row SELECT, a batched insert unrolled into a loop that also reads — every one of
+      // them lands here, and #99 measured that none of them moves the time ratio far enough
+      // to be seen.
+      expect(
+        big.statements - small.statements,
+        'putPaper is doing per-row SQL work it did not do before',
+      ).toBe((big.rows - small.rows) * STATEMENTS_PER_ROW);
+
+      // THE INTERCEPT, at BOTH sizes, and it is the same integer or the path is not linear.
+      // A c*n^2 term contributes 9x more here at 30k than at 10k and a c*n term 3x more, so
+      // only a genuine constant satisfies both. Fewer than five means a lost BEGIN/COMMIT,
+      // which is #82's headline defect and the reason this guard exists.
+      expect(
+        small.statements - small.rows * STATEMENTS_PER_ROW,
+        `the ${BASELINE_BLOCKS.toLocaleString()}-block insert's fixed-statement overhead`,
+      ).toBe(FIXED_STATEMENTS_PER_PUT);
+      expect(
+        big.statements - big.rows * STATEMENTS_PER_ROW,
+        `the ${TARGET_BLOCKS.toLocaleString()}-block insert's fixed-statement overhead`,
+      ).toBe(FIXED_STATEMENTS_PER_PUT);
+    } finally {
+      db.close();
+    }
+  }, 60_000);
 });
 
 describe('generations (DESIGN.md D13)', () => {
