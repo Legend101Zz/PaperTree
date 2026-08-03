@@ -567,9 +567,16 @@ def render_grounding_report(score: GroundingScore) -> str:
             f"{f'{score.contamination_columns}/{score.contamination_evaluable}':>28s}"
             "    answers citing two x-disjoint regions on one page"
         )
+    # The pointer must track which half actually printed. When no answer cites two regions on one
+    # page the column half is a REASON below, not a number above, and a hard-coded "above" sends
+    # the reader hunting for a figure that is not in the report - #86's defect in navigational
+    # form, and on today's empty set it is the branch that always runs.
+    column_half = (
+        "above" if score.contamination_evaluable else "below, as a reason and not a number"
+    )
     lines.append(
         "  §4.2's single `contamination rate` is NOT reported as one number: its column half is "
-        "above and its caption half is not expressible - see below."
+        f"{column_half} and its caption half is not expressible - see below."
     )
     for metric, reason in sorted(score.not_evaluable.items()):
         lines.append(f"  {metric}: NOT EVALUABLE - {reason}")

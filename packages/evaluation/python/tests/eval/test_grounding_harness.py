@@ -216,6 +216,7 @@ class TestALegitimateZeroIsANumberAndAnAbsentDenominatorIsAReason:
         report = render_grounding_report(score)
         assert "0/1" in report
         assert "contamination_columns: NOT EVALUABLE" not in report
+        assert "its column half is above" in report
 
     def test_no_answer_citing_two_regions_on_a_page_is_a_reason_not_a_zero(
         self, tmp_path: Path
@@ -225,6 +226,11 @@ class TestALegitimateZeroIsANumberAndAnAbsentDenominatorIsAReason:
         report = render_grounding_report(score)
         assert "contamination_columns: NOT EVALUABLE" in report
         assert "Absent, not zero" in score.not_evaluable["contamination_columns"]
+        # MUTATION: hard-code `column_half = "above"` in `render_grounding_report`. Red - the
+        # report would point at a number that is not there, which is the one branch that runs
+        # on today's empty set. The pointer is part of the report's honesty, not decoration.
+        assert "its column half is above" not in report
+        assert "below, as a reason and not a number" in report
 
     def test_no_object_questions_and_no_recorded_object_are_different_reasons(
         self, tmp_path: Path
