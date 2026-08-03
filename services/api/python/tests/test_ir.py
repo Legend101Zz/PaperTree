@@ -97,8 +97,9 @@ def test_flows_round_trip_exactly(tmp_path: Path, slug: str) -> None:
     relaxed is a serialisation detail, and the field that actually carries meaning is pinned here
     exactly, on every page of every fixture.
 
-    MUTATION: derive `flows` from top-level blocks only, as `0001_core.sql:80-81` instructs. resnet
-    page 0 goes from 21 ids to 11 and this fails. That comment is wrong and this test is the proof.
+    MUTATION: derive `flows` from top-level blocks only, as DESIGN.md §10 — and `0001_core.sql`'s
+    `papers` comment, until #91 corrected it — instructs. resnet page 0 goes from 21 ids to 11 and
+    this fails. That rule is wrong and this test is the proof it had to be rewritten.
     """
     with harness(tmp_path) as h:
         token = register(h.client, "alice@example.com")

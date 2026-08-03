@@ -77,8 +77,26 @@ CREATE INDEX paper_owners_by_owner ON paper_owners (owner_id);
 -- MATERIALISED VIEWS over blocks ("derived, never authoritative: if it disagrees with the
 -- blocks, the blocks win"), so they are stored as JSON columns — normalising a derived
 -- view into tables invites querying it as if it were authoritative.
--- Page.flows is NOT stored: DESIGN.md §10 says it is reconstructable from
--- blocks(page_index, flow, "order") filtered to top-level blocks and should not be.
+-- Page.flows is NOT stored, and it IS reconstructable — but NOT by the rule this comment
+-- used to state. DESIGN.md §10 says "reconstructable from blocks(page_index, flow, "order")
+-- filtered to top-level blocks". Measured on all three fixtures, 10 pages, that filter —
+-- read as `parent_id IS NULL` — reproduces the stored value on 0 of 10 pages (#91), because
+-- `parent_id` is OVERLOADED: an included body paragraph points at its *heading* (section
+-- membership) while an excluded inline_equation points at its *paragraph* (true nesting).
+-- The rule that does reproduce it, 10 of 10, is implemented in
+-- services/api/python/papertree_api/ir.py::_flows_for_page:
+--   body    blocks whose `doc_order` is present. Validator rule 15 makes `doc_order` present
+--           on EXACTLY the top-level flow == 'body' blocks, so this half is a schema
+--           invariant (#49, AGENTS.md §4).
+--   others  every block in the flow. Zero non-body blocks are excluded from `flows` on this
+--           corpus — an OBSERVATION, not an invariant.
+-- Because that second half is only an observation, `_flows_for_page` GUARDS it with validator
+-- rule 14: `order` is dense 0..n-1 within each (page_index, flow, container) group, so a
+-- nested block leaking in duplicates an order and the check fails. It then raises
+-- `ReadingOrderUnrecoverable` rather than serving a reading order it cannot vouch for — a
+-- wrong `flows` is a wrong text stream is a wrong citation polygon, silently (AGENTS.md §2).
+-- Do NOT add a `container` column on the strength of #91's recommendation: it is superseded
+-- by the above. See ir.py's module header for the full derivation.
 CREATE TABLE papers (
   owner_id           TEXT    NOT NULL,
   paper_id           TEXT    NOT NULL,
