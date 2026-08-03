@@ -346,9 +346,22 @@ def test_the_column_rule_fires_on_a_real_two_column_parse(tmp_path: Path) -> Non
     this file feeds it bboxes I typed, which proves the arithmetic and nothing about whether a
     real two-column paper produces x-disjoint blocks at all. So: parse `bert-2col.pdf`, take a
     genuinely x-disjoint pair and a genuinely x-overlapping pair off one real page, and assert
-    the rule separates them. MUTATION: `hi <= other_lo or other_hi <= lo` -> `hi < other_hi`.
-    Red on the overlapping pair, which is the direction that matters - a rule that fires on
-    same-column evidence would report contamination everywhere.
+    the rule separates them.
+
+    MUTATIONS, and the first is recorded because it FAILED to be a mutation. I first named
+    `hi <= other_lo or other_hi <= lo` -> `hi < other_hi` and it STAYED GREEN: on the two pairs
+    this test selects, x=[89.0,273.3] vs [307.3,525.5] and [116.5,481.0] vs [220.9,376.7], the
+    weakened predicate happens to agree with the real one in both directions. That is
+    `test_scoring.py:264`'s defect exactly - a probe that changes nothing proves nothing - so it
+    is replaced rather than reported as evidence. What DOES bite, measured:
+
+      * invert the rule to fire on OVERLAP instead of disjointness (`if not (...)`) - RED in
+        both directions, which is the sense error worth defending against;
+      * read `bbox[1]`/`bbox[3]` instead of `bbox[0]`/`bbox[2]` - the copy-paste that measures
+        rows instead of columns - RED;
+      * and on this file rather than the source, raise `_COLUMN_WIDTH_PT` to 1000: the
+        `disjoint is not None` assertion goes RED, which is what shows the search reads real
+        geometry rather than passing vacuously.
 
     Only blocks at least `_COLUMN_WIDTH_PT` wide are paired. Without that filter the first
     x-disjoint pair found on `bert-2col` is the 27 pt arXiv stamp in the left margin against the
