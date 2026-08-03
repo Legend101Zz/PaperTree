@@ -198,6 +198,70 @@ PEAK_RSS_BUDGET_MB = 500
 #: 141 MB, which would pass a 500 MB bar no matter how badly the parser leaked.
 LARGEST_PAPER = "gpt3-longform-singlecol.pdf"
 
+#: Trials per assertion. One parse is ~10 s, so this costs ~50 s of suite time and buys the only
+#: thing that makes the verdict sound: a distribution rather than a coin toss.
+PEAK_RSS_TRIALS = 5
+
+#: WHY THIS ASSERTS A RATCHET AND NOT THE BUDGET — issue #104, measured by #78 Session B-bis.
+#:
+#: #104 reported a ~60 MB spread over identical runs (442.6 / 497.4 / 501.7 after #102, and
+#: 488.3 / 509.1 / 496.3 before it) and concluded the test "decides on a bar inside its own
+#: spread". Confirmed. Re-derived on `main` at `0e63488`, **29 fresh subprocesses**, same code:
+#:
+#:   A  quiesced           (n=7)   496.3 496.7 496.7 496.8 496.8 496.9 497.0        max 497.0
+#:   B  20 busy loops      (n=7)   406.0 413.8 415.9 436.3 468.6 495.4 496.9        max 496.9
+#:   C  20 loops + suite   (n=5)   497.2 497.9 498.5 499.0 499.3                    max 499.3
+#:   D  load 5.2           (n=5)   440.5 498.0 498.0 498.5 498.6                    max 498.6
+#:   E  load 3.9           (n=5)   496.6 496.8 496.8 497.2 500.4                    max 500.4
+#:
+#: THE DISTRIBUTION IS BIMODAL. 23 of 29 sit in a tight upper mode spanning **495.4-500.4**; 5 sit
+#: below 460 and every one of those is from a loaded box. Load does not scatter this number
+#: symmetrically — it occasionally drops the process to a lower high-water mark, and the upper
+#: mode is the parser's actual peak.
+#:
+#: That is why the statistic here is the **maximum over N trials** and not the median. The budget
+#: is an UPPER bound, so a low reading carries no information about it; max-of-N is the
+#: conservative side and is far more stable than any single sample — the five batch maxima span
+#: 3.5 MB against a raw spread of 94 MB. A median is dragged around by exactly the readings that
+#: say nothing about an upper bound: batch D's is 498.0 and batch B's is 436.3.
+#:
+#: AND THE VERDICT AGAINST 500 MB IS NOT ASSERTED HERE, BECAUSE IT CANNOT HONESTLY BE. The upper
+#: mode straddles the budget: **1 observation of 29 is at 500.4 MB, over it.** The typical peak is
+#: ~497 and the margin is under 1 %. No assertion at that bar can distinguish a regression from a
+#: re-run, which is the defect #80, #83 and #53 were each filed about. #104's own recommendation
+#: is taken:
+#:
+#:     the test's job          stop the number getting worse   -> PEAK_RSS_RATCHET_MB, below
+#:     the RESULT file's job   the verdict against 500 MB      -> EPIC-01-RESULT.md, with the n
+#:
+#: SO THE MEMORY HALF OF `worker/perf.spec` IS NOT MET. It is straddled, and a straddled criterion
+#: is PARTIAL (`AGENTS.md` §2). Recorded here as well as in the RESULT file, because this is the
+#: file a reader lands in when the number moves.
+#:
+#: A CORRECTION TO MY OWN FIRST TALLY, left in deliberately. Batches A-D gave **0 of 24 at or
+#: above 500** and were written up as "the budget is met on current code". Batch E, five more runs
+#: of the same command, produced 500.4 on its own. Twenty-four samples were not enough to see the
+#: tail of a distribution whose margin is 0.6 %, and neither is twenty-nine — which is the
+#: argument for a ratchet rather than a sharper bar, not merely a reason to sample more.
+#:
+#: WHAT DID NOT REPRODUCE. #52 records the memory half failing at **746 MB**. It is now ~497.
+#: Something between then and now took ~250 MB off it and nothing recorded what.
+#:
+#: ONE THING #104 SAID THAT DOES NOT HOLD. *"It will land as a random CI red."* It cannot: the
+#: corpus is gitignored, CI does not have it, and this test `skipif`s on its absence. It runs only
+#: against the local gate `AGENTS.md` §1 makes mandatory. The exposure was a developer's, not CI's.
+PEAK_RSS_OBSERVED_MAX_MB = 500.4
+
+#: The regression ratchet. ~4 % above the observed maximum: high enough that the bimodality and a
+#: loaded box can never reach it, low enough that any regression worth the name does. Sized from
+#: the measurement, not chosen round — the gap to the observed max (19.6 MB) is **3.9x** the upper
+#: mode's own span (5.0 MB).
+#:
+#: DO NOT RAISE THIS TO MAKE A RED GO GREEN. That is how a guard degrades into a smoke test one
+#: increment at a time (`AGENTS.md` §4, on `migrations.spec`). If it fires, the parser regressed
+#: or the budget conversation has changed; either way it is a finding, not a constant to edit.
+PEAK_RSS_RATCHET_MB = 520
+
 
 @pytest.mark.skipif(not (CORPUS / LARGEST_PAPER).is_file(), reason="corpus not fetched")
 def test_peak_rss_on_the_largest_paper_is_inside_the_budget(tmp_path: Path) -> None:
@@ -210,8 +274,14 @@ def test_peak_rss_on_the_largest_paper_is_inside_the_budget(tmp_path: Path) -> N
     the third time on that branch a green test turned out to assert less than it appeared to.
 
     A fresh interpreter has no such history, so the number it reports is this parse's own.
+
+    WHY N TRIALS AND A MAXIMUM, rather than one run against the budget — issue #104. See the block
+    comment above `PEAK_RSS_OBSERVED_MAX_MB` for the 29-run distribution, why the statistic is the
+    max and not the median, and why the 500 MB verdict lives in the RESULT file instead of here.
     """
     import json
+    import os
+    import statistics
     import subprocess
     import sys
     import textwrap
@@ -228,18 +298,40 @@ def test_peak_rss_on_the_largest_paper_is_inside_the_budget(tmp_path: Path) -> N
         print(json.dumps({"peak_mb": peak_mb, "pages": result.page_count}))
     """)
 
-    completed = subprocess.run(
-        [sys.executable, "-c", program, str(CORPUS / LARGEST_PAPER), str(tmp_path), PAPER_ID],
-        capture_output=True,
-        text=True,
-        check=True,
+    peaks: list[float] = []
+    pages = 0
+    for trial in range(PEAK_RSS_TRIALS):
+        root = tmp_path / f"trial{trial}"
+        root.mkdir()
+        completed = subprocess.run(
+            [sys.executable, "-c", program, str(CORPUS / LARGEST_PAPER), str(root), PAPER_ID],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        measured = json.loads(completed.stdout.strip().splitlines()[-1])
+        peaks.append(float(measured["peak_mb"]))
+        pages = int(measured["pages"])
+
+    peaks.sort()
+    observed = peaks[-1]
+    report = (
+        f"peak RSS over {pages} pages, {PEAK_RSS_TRIALS} fresh subprocesses: "
+        f"MAX {observed:.1f} MB (median {statistics.median(peaks):.1f}, all: "
+        f"{', '.join(f'{p:.1f}' for p in peaks)}), 1-min load average "
+        f"{os.getloadavg()[0]:.2f}. Ratchet {PEAK_RSS_RATCHET_MB} MB. perf.spec's budget is "
+        f"{PEAK_RSS_BUDGET_MB} MB and the verdict against it is in EPIC-01-RESULT.md (#104)."
     )
-    measured = json.loads(completed.stdout.strip().splitlines()[-1])
-    peak_mb, pages = measured["peak_mb"], measured["pages"]
+    # Printed on every run so the acceptance number stays visible in the gate output even though
+    # it is not asserted here. A verdict nobody can see is the other half of #104's problem.
+    print(f"\n[worker/perf.spec] {report}")
 
     assert pages > 50, f"{LARGEST_PAPER} should be the long paper; got {pages} pages"
-    assert peak_mb < PEAK_RSS_BUDGET_MB, (
-        f"peak RSS {peak_mb:.0f} MB over {pages} pages exceeds the {PEAK_RSS_BUDGET_MB} MB budget. "
-        "The two known terms are pdf.RAWDICT_NO_IMAGES (get_text must not preserve images) and "
-        "the per-page TOOLS.store_shrink in SourceDocument.pages; see issue #52."
+
+    assert observed < PEAK_RSS_RATCHET_MB, (
+        f"{report} Peak RSS regressed past the ratchet. The two known terms are "
+        "pdf.RAWDICT_NO_IMAGES (get_text must not preserve images) and the per-page "
+        "TOOLS.store_shrink in SourceDocument.pages; see issue #52. DO NOT raise the ratchet to "
+        "clear this — re-derive the distribution above and update it in the same diff as the "
+        "change that moved it, or find the regression."
     )
