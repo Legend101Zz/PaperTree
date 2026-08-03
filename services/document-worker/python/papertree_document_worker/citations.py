@@ -8,21 +8,19 @@ TWO MECHANISMS, TWO DENOMINATORS, AND THEY ARE NEVER AVERAGED
 
 The corpus prints citations three ways, but only two of them are separate MECHANISMS:
 
-  `printed_label`   `[12]` (resnet, attention) and `[ADG+16]` (gpt3) are one mechanism, because
+  `printed_label`   `[12]` (resnet, attention) and `[ADG+16]` (gpt3) are ONE mechanism, because
                     the bibliography prints the label on the entry itself - gpt3's first entry
                     literally begins "[ADG+16] Marcin Andrychowicz, ...". Resolution is an exact
-                    string match of a marker against a label the document printed. 3 papers.
+                    string match against a label the document printed. 3 papers, 494/501 markers.
 
   `author_year`     "(Kingma and Ba, 2014)" (a3c, bert, neural-odes, pdf-to-tree, superglue). The
-                    entry prints no label, so there is nothing to match exactly and the surname
-                    has to be found in the entry's TEXT. `Reference.authors` cannot help:
-                    `references.py` leaves it null ON PURPOSE and it is 0-populated on all 8
-                    papers (0/53 resnet, 0/45 attention, 0/6 neural-odes - re-derived). 5 papers.
+                    entry prints no label, so the surname has to be found in the entry's TEXT.
+                    `Reference.authors` cannot help: `references.py` leaves it null ON PURPOSE and
+                    it is 0-populated on all 8 papers (re-derived). 5 papers, 111/325 markers.
 
-The second is measurably weaker than the first, so the two are counted with SEPARATE
-DENOMINATORS wherever they are reported. A blended corpus-wide rate would average a strong
-mechanism over 3 papers with a weak one over 5 and describe neither - the composite-denominator
-defect #111 found in `figures.spec`, in a new place.
+Reported with SEPARATE DENOMINATORS wherever they are reported. A blended corpus-wide rate would
+average a strong mechanism over 3 papers with a weak one over 5 and describe neither - the
+composite-denominator defect #111 found in `figures.spec`, in a new place.
 
 WHY `author_year` MATCHES A *RECORD*, NOT THE WHOLE BLOCK
 
@@ -43,6 +41,13 @@ the second surname in the record's author prefix; that one clause is what stops
 AMBIGUITY IS DROPPED, NEVER GUESSED. When more than one record satisfies a marker, no edge is
 emitted. `references.py` states the same rule for `title`/`authors`: a plausible value is worse
 than none, because nothing downstream would question it.
+
+THE CEILING ON `author_year` IS UPSTREAM OF THIS FILE. On a3c, 58 of 62 markers DO find a record
+their author leads and that record carries no matching year - a NeurIPS-style reference prints the
+year at the very END, and a bibliography segmented into BLOCKS rather than entries puts the author
+list and the year in different blocks. bert and pdf-to-tree print "Authors. 2018. Title" and score
+55/71 and 31/61 against a3c's 3/62. One `reference_entry` per printed reference would move this
+number; a looser matcher here would only move the wrong ones.
 
 THE SECOND IMPLEMENTATION, AND WHY IT IS ALLOWED TO EXIST
 
@@ -205,7 +210,12 @@ def _author_year_markers(text: str) -> list[tuple[int, int, list[str], str]]:
                 if second is not None and second.group("s") != surnames[0]:
                     surnames.append(second.group("s"))
             out.append(
-                (base + match.start("name"), base + match.end("year"), surnames, match.group("year"))
+                (
+                    base + match.start("name"),
+                    base + match.end("year"),
+                    surnames,
+                    match.group("year"),
+                )
             )
     return out
 

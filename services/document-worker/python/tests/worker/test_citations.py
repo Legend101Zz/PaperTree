@@ -5,25 +5,24 @@ EVERY NUMBER BELOW IS AN EXACT INTEGER, AND `> 0` WOULD NOT DO.
 `assemble._emit_relations` drops any relation whose endpoints are missing from `by_id` with
 `continue` - no raise, no log, no counter. An emitter that runs one phase too early, or that holds
 a block object assembly has since replaced, therefore emits ZERO `cites` and the document is still
-perfectly valid. That silence IS #66. A `> 0` assertion would catch nothing but a total failure,
-and a fixture-only assertion would catch not even that: the mutation that matters is one where the
-detector still works and the EMISSION does not.
+perfectly valid: verified by mutation, `status: "complete"`, zero warnings, zero edges. That
+silence IS #66. `> 0` would catch nothing but a total failure, and a fixture-only assertion would
+catch not even that - the mutation that matters is one where the detector still works and the
+EMISSION does not.
 
-So the assertions here are exact equalities against a real parse, in the shape
-`packages/evaluation/.../test_corpus_gold.py` uses and for the same stated reason: the parser is
+So these are exact equalities against a real parse, in the shape
+`packages/evaluation/.../test_corpus_gold.py` uses and for its stated reason: the parser is
 byte-deterministic (`worker/determinism.spec`), so a floor would let a regression hide under an
 unrelated improvement, and equality forces any change to a headline number to move the baseline in
 the same diff a reviewer reads.
 
-THE CORPUS IS NOT COMMITTED. `.gitignore` covers `research/benchmarks/corpus/*.pdf`, so every
-corpus test here SKIPS on CI, loudly, naming `./research/benchmarks/fetch_corpus.sh`
-(`_corpus_manifest`). `test_smoke_*` is the pair that runs everywhere - and it is labelled a SMOKE
-because a suite that only had it would pass while the corpus produced nothing, which is #66 in
-disguise.
+THE CORPUS IS NOT COMMITTED, so every corpus test here SKIPS on CI, loudly, naming
+`./research/benchmarks/fetch_corpus.sh` (`_corpus_manifest`). `test_smoke_*` runs everywhere - and
+is labelled a SMOKE because a suite that only had it would pass while the corpus produced nothing,
+which is #66 in disguise.
 
-BASELINE MEASURED 2026-08-03 on `session-c/66-citation-relations` off `main` at `ee8308b`. Before
-this change the whole table was zero: `cites` 0 corpus-wide, `Span.role` 37 of 63,368 (all
-`undecodable_glyphs`), `Span.block_id` 0 of 63,368.
+BASELINE MEASURED 2026-08-03 off `main` at `ee8308b`, where the whole table was zero: `cites` 0
+corpus-wide, `Span.role` 37 of 63,368 (all `undecodable_glyphs`), `Span.block_id` 0 of 63,368.
 """
 
 from __future__ import annotations
@@ -82,17 +81,10 @@ BASELINE: dict[str, dict[str, int]] = {
 }
 
 #: MARKERS RESOLVED / MARKERS DETECTED, per mechanism, per paper. THE TWO MECHANISMS ARE NEVER
-#: SUMMED INTO ONE RATE. `printed_label` matches a marker against a label the bibliography itself
-#: prints and works on the 3 papers that print one; `author_year` matches a surname against the
-#: text of a `reference_entry` block and works on the other 5. A blended figure would average a
-#: 494/501 mechanism over three papers with a 111/325 one over five and describe neither - the
-#: composite-denominator defect #111 found in `figures.spec`. The n is in the row.
-#:
-#: THE `author_year` COLUMN IS LOW AND THE CAUSE IS UPSTREAM, NOT HERE. On a3c 58 of 62 markers
-#: DO find a record their author leads, and that record carries no matching year, because a
-#: NeurIPS-style reference prints the year at the very END and Epic 1 segments a bibliography into
-#: blocks rather than entries, so the author list and the year land in different blocks. bert and
-#: pdf-to-tree print "Authors. 2018. Title" and score 55/71 and 31/61 against a3c's 3/62.
+#: SUMMED INTO ONE RATE: a blended figure would average a 494/501 mechanism over three papers with
+#: a 111/325 one over five and describe neither - the composite-denominator defect #111 found in
+#: `figures.spec`. The n is in the row. `citations.py` records why the `author_year` column is low
+#: and why the cause is upstream of it.
 MARKER_RATES: dict[str, dict[str, tuple[int, int]]] = {
     "a3c-algorithmheavy": {"printed_label": (0, 2), "author_year": (3, 62)},
     "attention-is-all-you-need": {"printed_label": (78, 78), "author_year": (0, 0)},
@@ -160,14 +152,7 @@ def test_cites_relations_and_citation_spans_per_paper(parsed: dict[str, Paper]) 
 
 @requires_corpus
 def test_marker_resolution_rates_are_reported_per_mechanism(parsed: dict[str, Paper]) -> None:
-    """Resolved / detected, per mechanism, per paper - the denominators the rate needs.
-
-    The DENOMINATOR is recomputed from the emitted block text by the same detectors the emitter
-    uses, which is what makes it a denominator rather than a second measurement. The NUMERATOR is
-    counted off the emitted spans, so it is the parser's own output: one resolved marker is one
-    maximal group of adjacent `citation` spans sharing a target, which is exactly what
-    `apply_citation_roles` writes.
-    """
+    """Resolved / detected, per mechanism, per paper - the denominators the rate needs."""
     measured: dict[str, dict[str, tuple[int, int]]] = {}
     for name, paper in parsed.items():
         detected = {"printed_label": 0, "author_year": 0}
@@ -209,10 +194,9 @@ def test_a_resolved_marker_with_no_span_is_always_in_a_block_that_has_no_spans(
 
     `table_cell` blocks carry `text` and NO spans at all, so there is no run to split and no
     geometry to apportion; 18 of attention's markers and 30 of resnet's sit in result tables
-    ("ByteNet [18]", "GNMT + RL [38]"). The `cites` edge still stands - a table citing a paper is a
-    real citation - and inventing a box for it would be worse than leaving the location absent.
-    Asserted rather than described, so a marker silently losing its span for ANY OTHER reason is a
-    failure.
+    ("ByteNet [18]", "GNMT + RL [38]"). The `cites` edge still stands and inventing a box would be
+    worse than leaving the location absent. Asserted rather than described, so a marker losing its
+    span for ANY OTHER reason is a failure.
     """
     unspanned: Counter[str] = Counter()
     spanned = 0
@@ -311,11 +295,10 @@ def test_the_worker_detector_finds_every_label_retrieval_finds(parsed: dict[str,
     `packages/retrieval` has its own marker scanner (`expansion._citation_labels`) and
     `document-worker` MUST NOT import it - retrieval consumes the IR, so the dependency would run
     backwards. Two implementations of one idea drift; this converts that risk into a red test, on a
-    real parse rather than on strings either author chose.
-
-    The subset direction is the one that matters: retrieval's `cited-label:` fallback fires for any
-    label it finds, so a label it sees and the worker does not is a marker the worker will never
-    emit an edge for while the fallback keeps quietly covering it up.
+    real parse rather than on strings either author chose. The SUBSET direction is the one that
+    matters: retrieval's `cited-label:` fallback fires for any label it finds, so a label it sees
+    and the worker does not is a marker the worker will never emit an edge for while the fallback
+    keeps quietly covering it up.
     """
     from papertree_retrieval.expansion import _citation_labels
 
@@ -337,23 +320,25 @@ def test_the_worker_detector_finds_every_label_retrieval_finds(parsed: dict[str,
 @pytest.fixture(scope="module")
 def smoke(tmp_path_factory: pytest.TempPathFactory) -> Paper:
     root = tmp_path_factory.mktemp("citations-smoke")
-    return parse_document(
+    # `ParseResult.paper` is declared `Any` (pipeline.py:96), so it is narrowed here rather than
+    # returned straight out of a function that promises a `Paper`.
+    paper: Paper = parse_document(
         build_synthetic_pdf(root / "synthetic.pdf"),
         paper_id=PAPER_ID,
         asset_root=root / "assets",
         config=ParserConfig(vlm_max_calls=0),
     ).paper
+    return paper
 
 
 def test_smoke_the_emitter_runs_on_ci_where_there_is_no_corpus(smoke: Paper) -> None:
     """A SMOKE, and the word is load-bearing.
 
-    This is a REAL parse of a real PDF - PyMuPDF builds it in process, page 1 says "See also He et
-    al. [1] for background." and page 2 carries a bracketed bibliography - so it proves the emitter
-    EXECUTES where CI can see it. It is NOT evidence that the producer works on real papers. A
-    suite containing only this test would be fully green while the corpus yielded zero `cites`,
-    which is #66 wearing a different hat. The eight exact-integer tests above are the evidence;
-    this one is the canary that they are skipping for the right reason.
+    A REAL parse of a real PDF - PyMuPDF builds it in process, page 1 says "See also He et al. [1]
+    for background.", page 2 carries a bracketed bibliography - so it proves the emitter EXECUTES
+    where CI can see it. It is NOT evidence that the producer works on real papers: a suite
+    containing only this test would be fully green while the corpus yielded zero `cites`, which is
+    #66 wearing a different hat. The corpus tests above are the evidence.
     """
     cites = [r for r in smoke.relations if r.type == "cites"]
     assert len(cites) == 1

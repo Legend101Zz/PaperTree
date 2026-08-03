@@ -65,8 +65,13 @@ Issue #66 measured the corpus on 2026-08-02: ``prev_id``/``next_id`` populated 0
 ZERO times; ``equation.payload.referenced_by`` and ``figure.payload.caption_block`` never
 populated; and no embeddings anywhere.
 
-``resolve_citation`` and ``search_semantic_blocks`` therefore return nothing on every real paper
-today. **Every empty answer in this package carries a required, non-empty reason** —
+``cites`` is the one that has since moved: the parser emits 525 edges over the 8-paper corpus as
+of 2026-08-03, so ``resolve_citation``'s edge path is reachable on a NEWLY parsed paper. Every
+other row is unchanged, a paper stored before that date still has no edges at all, and an
+author-year bibliography still leaves about two markers in three unresolved.
+
+``search_semantic_blocks`` therefore returns nothing on every real paper today. **Every empty
+answer in this package carries a required, non-empty reason** —
 ``ToolResult`` refuses to construct without one — and the reason distinguishes "there are none"
 from "the parser does not emit these". A bare ``[]`` would tell a model "I looked and found none",
 and the model would write "this equation is not referenced anywhere in the paper": a fabrication

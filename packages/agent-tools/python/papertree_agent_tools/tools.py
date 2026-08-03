@@ -11,17 +11,27 @@ Live parse of the corpus, 2026-08-02, recorded on issue #66:
     prev_id / next_id                         0 of 974 blocks populated. Never emitted.
     relation types emitted                    caption_of, continues_in_next_column,
                                               continues_on_next_page — and NOTHING else.
-    cites / references / defines / explains
+    references / defines / explains
     / result_of / parent_of                   emitted ZERO times.
+    cites                                     ZERO on that date. NO LONGER — see below.
     equation.payload.referenced_by            0 populated.
     figure.payload.caption_block              0 populated.
     parent_id                                 755/974   child_ids 185/974
     doc_order                                 207/974   sections 14
     block_vectors                             0 rows anywhere. Epic 0 computes no embeddings.
 
-So ``resolve_citation`` and ``search_semantic_blocks`` return nothing on every real paper today.
-**That is a data gap (#66), not a bug in this code**, and the whole of this module's honesty
-strategy is making the difference visible to the model that calls it.
+**``cites`` IS NO LONGER ONE OF THEM.** Re-measured 2026-08-03 over all 8 corpus papers: 525
+``cites`` edges, every one landing on a ``reference_entry`` (rule 23), from 605 resolved markers.
+The rate is NOT uniform and is never quoted as one number — 494 of 501 markers on the three papers
+whose bibliography prints a label (``[12]``, ``[ADG+16]``), 111 of 325 on the five that print
+author-year. ``references`` / ``defines`` / ``explains`` / ``result_of`` / ``parent_of`` are still
+ZERO, and so is everything else in the table.
+
+Two consequences for this module, and neither is "the gap is closed". FIRST, a paper stored before
+that change carries no ``cites`` at all, because relations are written at parse time — the edge
+path is now REACHABLE, not guaranteed. SECOND, on an author-year paper two markers in three still
+resolve to nothing, so the printed-label inference below is a fallback that still earns its keep.
+``search_semantic_blocks`` is unchanged and returns nothing on every real paper.
 
 ═══ THE THREE WAYS TO GET THIS WRONG, AND WHAT IS DONE INSTEAD ═════════════════════════════════
 
@@ -828,10 +838,9 @@ async def _resolve_citation(context: ToolContext, arguments: Mapping[str, Any]) 
             reason=(
                 f"{view.paper_id} generation {view.generation} carries 0 bibliography entries. "
                 "There is nothing to resolve a citation to. On a paper WITH a bibliography this "
-                "tool works by matching the printed bracketed label, because the `cites` and "
-                "`references` relation types are emitted ZERO times by the parser that exists "
-                "(#66) — so a resolved citation here is always an INFERENCE from the printed "
-                "label, never a parsed edge."
+                "tool tries the parser's `cites` edges first and falls back to matching the "
+                "printed bracketed label; `cites` was emitted 0 times before #66 landed, so a "
+                "paper stored before then resolves only by the label INFERENCE, never an edge."
             ),
         )
 
@@ -856,8 +865,9 @@ def _resolve_from_label(view: PaperView, raw_label: str) -> ToolResult:
                     if available
                     else "None of this paper's "
                     f"{len(view.index.references)} entries carries a bracketed numeric label at "
-                    "all — an author-year bibliography ('Smith et al., 2015') yields none, and "
-                    "there is no other route because `cites` edges are never emitted (#66)."
+                    "all — an author-year bibliography ('Smith et al., 2015') yields none. Pass "
+                    "`block_id` instead: since #66 the parser resolves author-year markers to "
+                    "`cites` edges, though only about one in three of them (111/325 measured)."
                 )
             ),
         )
@@ -879,8 +889,10 @@ def _resolve_from_block(view: PaperView, block_id: str) -> ToolResult:
         data={"block_id": block_id, "references": len(view.index.references)},
         reason=(
             f"{block_id} has no outgoing citation edge and is not itself a bibliography entry. "
-            "The `cites` and `references` relation types are emitted ZERO times by this parser "
-            "(#66), so this answer is what EVERY block gives today. Read the block's text with "
+            "Since #66 the parser DOES emit `cites`, so this is now a statement about this block "
+            "rather than about every block — but it is still expected: a paper parsed before that "
+            "change carries none at all, and even after it only 605 of the corpus's markers "
+            "resolved. `references` is still emitted ZERO times. Read the block's text with "
             "get_block, take the bracketed marker out of it, and pass that as `label`."
         ),
     )
@@ -1509,7 +1521,11 @@ def build_registry() -> ToolRegistry:
             },
             handler=_resolve_citation,
             returns_paper_text=True,
-            data_gap="cites / references relations are emitted 0 times (#66)",
+            data_gap=(
+                "`references` relations are emitted 0 times; `cites` resolves 494/501 markers on "
+                "a labelled bibliography and 111/325 on an author-year one, and 0 on any paper "
+                "parsed before #66 (#66)"
+            ),
         )
     )
     registry.register(
