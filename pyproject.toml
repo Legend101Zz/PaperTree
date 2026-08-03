@@ -32,6 +32,11 @@ dependencies = [
     # The vacuous-green the comment above describes is real, but it needs a package whose tests do
     # not import it. That is not this one.
     "papertree-api",
+    # #72's selector derivation. THIS one is the package the comment above describes: nothing else
+    # in the workspace imports it yet, so without this line `uv sync` (no `--all-packages`) leaves it
+    # uninstalled, `uv run pytest` collects ZERO tests from it, and the run still says PASS. See
+    # EPIC-03-RESULT.md §9.
+    "papertree-anchoring",
 ]
 
 # apps/api is the v1 application. It has its own pyproject.toml and uv.lock and is
@@ -58,6 +63,7 @@ papertree-prompts = { workspace = true }
 papertree-retrieval = { workspace = true }
 papertree-agent-tools = { workspace = true }
 papertree-api = { workspace = true }
+papertree-anchoring = { workspace = true }
 
 [tool.uv]
 package = false

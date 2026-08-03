@@ -9,6 +9,10 @@ uv.lock
 research/
 packages/document-ir/fixtures/
 packages/document-ir/conformance/
+# Same reason as the line above, plus one of its own: the vectors are written one-per-LINE by
+# `packages/anchoring/python/tests/_fixtures.py::render_vectors`, and prettier would reflow them
+# into several thousand lines that the generator would then rewrite on every run.
+packages/anchoring/conformance/
 
 # Generated bindings — codegen owns their formatting; prettier here would fight the drift test.
 packages/*/src/generated/
