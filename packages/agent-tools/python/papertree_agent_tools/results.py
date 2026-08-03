@@ -10,8 +10,15 @@ the design of this module:
     equation.payload.referenced_by           0 populated
     block_vectors                            0 rows; Epic 0 computes no embeddings
 
-So ``resolve_citation`` and ``search_semantic_blocks`` return nothing on every real paper today,
-and ``get_equation``'s ``referenced_by`` is empty on every equation. **A tool that returned a
+``cites`` MOVED on 2026-08-03: the parser now emits it, 525 edges over the 8-paper corpus. The
+row above is kept because it is what this type was designed against and because it is still true
+of every paper parsed before that date — relations are written at parse time, so an old document
+has none. ``references``, ``prev_id``/``next_id``, ``referenced_by`` and ``block_vectors`` are
+unchanged, and even a freshly parsed author-year paper resolves only about a third of its markers.
+
+So ``search_semantic_blocks`` returns nothing on every real paper, ``get_equation``'s
+``referenced_by`` is empty on every equation, and ``resolve_citation`` returns nothing on any
+paper stored before #66. **A tool that returned a
 bare ``[]`` for those would be telling the model something false**: an empty list, in a tool
 result, reads as "I looked, and there are none". The truth is "the parser never emits this, so I
 cannot look". A model that receives the first will confidently answer "this equation is not

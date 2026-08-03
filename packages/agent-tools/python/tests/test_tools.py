@@ -399,7 +399,9 @@ def test_resolve_citation_is_empty_because_this_document_has_no_bibliography(
     assert result.status is ToolStatus.EMPTY
     assert "0 bibliography entries" in result.reason
     # The reason must also explain the SEPARATE fact that would bite on a paper that has one.
-    assert "emitted ZERO times" in result.reason
+    # It used to be "cites is emitted ZERO times"; #66 made that false, and the fact that
+    # replaced it is that relations are written AT PARSE TIME, so an older document has none.
+    assert "before #66 landed" in result.reason
 
 
 def test_resolve_citation_with_neither_argument_is_refused(
@@ -409,14 +411,21 @@ def test_resolve_citation_with_neither_argument_is_refused(
     assert result.status is ToolStatus.REFUSED
 
 
-def test_resolving_a_citation_from_a_block_reports_that_cites_edges_do_not_exist(
+def test_resolving_a_citation_from_a_block_reports_the_gap_it_actually_has(
     synthetic: Seeded, handle: AgentDataHandle
 ) -> None:
+    """Renamed with #66: `cites` edges DO exist now, so "they never exist" was the wrong reason.
+
+    This fixture has 0 bibliography entries, so the answer is EMPTY for the FIRST of the two
+    reasons rather than the second, and that is what the reason string has to say. The contract
+    asserted is the package's own: an empty answer carries a non-empty reason naming #66.
+    """
     result = call(
         synthetic, handle, "resolve_citation", block_id=synthetic.first_of_type("paragraph")
     )
     assert result.status is ToolStatus.EMPTY
     assert "#66" in result.reason
+    assert "0 bibliography entries" in result.reason
 
 
 # ── session memory ───────────────────────────────────────────────────────────────────────

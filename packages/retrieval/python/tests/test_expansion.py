@@ -8,8 +8,8 @@ PDF and that `papertree_db` really stored. There is no hand-written block graph 
 file, because a hand-written graph asserts that the retriever matches the author's idea of the
 schema, and the author's idea of the schema is the thing that has been wrong three times in this
 repo (AGENTS.md §2). Two of this package's design decisions exist ONLY because a real parse
-contradicted the spec-shaped assumption: `prev_id`/`next_id` are never emitted, and three of the
-twelve relation types are.
+contradicted the spec-shaped assumption: `prev_id`/`next_id` are never emitted, and only four of
+the twelve relation types are — `caption_of`, the two `continues_*`, and, since #66, `cites`.
 
 THE DETERMINISM HALF IS THE HALF THAT IS EASY TO FAKE. Running `expand` twice inside one process
 and comparing proves almost nothing: Python interns short strings, a dict built the same way
@@ -36,7 +36,13 @@ import sys
 
 import pytest
 from _retrieval_corpus import CORPUS_PAPER, requires_corpus
-from _retrieval_fixtures import UNKNOWN_RELATION_TYPE, ParsedPaper, augmented_paper, corpus_paper
+from _retrieval_fixtures import (
+    UNKNOWN_RELATION_TYPE,
+    ParsedPaper,
+    augmented_paper,
+    corpus_paper,
+    pre_citation_paper,
+)
 from _retrieval_fixtures import synthetic_paper as _synthetic_paper
 from papertree_retrieval import (
     DEFAULT_EXPANSION_POLICY,
@@ -116,12 +122,17 @@ def test_the_related_figure_edge_was_produced_by_the_parser_not_by_this_test(
     """Guards the test above from becoming vacuous if the fixture ever starts authoring relations.
 
     The criterion is only interesting if the `caption_of` edge is real. This asserts it against the
-    stored document: exactly one relation, of type `caption_of`, with the parser's own provenance
-    string. If somebody later adds an authored edge to the unaugmented fixture, this fails.
+    stored document: every relation, with the parser's own provenance string. If somebody later
+    adds an authored edge to the unaugmented fixture, this fails.
+
+    MOVED BY #66. The `("cites", "printed_label")` row is new and is the parser's, not this test's
+    — the paragraph says "See also He et al. [1]" and page 2 prints "[1] K. He, ...". An authored
+    edge would carry `provenance: "authored-by-test"`, so the guard still distinguishes them.
     """
     relations = paper.document["relations"]
-    assert [(r["type"], r["provenance"]) for r in relations] == [
-        ("caption_of", "geometric+numbering")
+    assert sorted((r["type"], r["provenance"]) for r in relations) == [
+        ("caption_of", "geometric+numbering"),
+        ("cites", "printed_label"),
     ]
 
 
@@ -383,27 +394,35 @@ def test_an_unknown_relation_type_can_be_switched_off_but_is_on_by_default() -> 
     assert DEFAULT_EXPANSION_POLICY.follow_unknown_relation_types is True
 
 
-def test_a_cites_edge_resolves_the_reference_entry() -> None:
-    """The edge-driven citation path. USES THE AUGMENTED FIXTURE — the parser emits no `cites`."""
-    paper = augmented_paper()
-    index = PaperIndex.load(paper.db, paper.owner, paper.paper_id, paper.generation)
+def test_a_cites_edge_resolves_the_reference_entry(index: PaperIndex) -> None:
+    """The edge-driven citation path, on UNAUGMENTED parser output.
+
+    MOVED BY #66. This used to need `augmented_paper()` because the parser emitted no `cites` at
+    all; the edge is now the parser's own, so the path is exercised by real output and the reason
+    string says `cites->` rather than `cited-label:`. That difference is the whole point: a
+    consumer must be able to tell a PARSED citation from an INFERRED one.
+    """
     paragraph = _only(index, "paragraph")
 
     citations = expand(index, [paragraph], DEFAULT_EXPANSION_POLICY, None).by_stage(Stage.CITATIONS)
     assert [block.type for block in citations] == ["reference_entry"]
     assert citations[0].reason.startswith("cites->")
+    assert citations[0].text.startswith("[1] K. He")
 
 
-def test_a_bracketed_marker_resolves_the_reference_entry_with_no_relation_at_all(
-    index: PaperIndex,
-) -> None:
-    """The documented fallback, on UNAUGMENTED parser output — no `cites` edge exists.
+def test_a_bracketed_marker_resolves_the_reference_entry_with_no_relation_at_all() -> None:
+    """The documented fallback, on a document with the `cites` edges stripped out.
 
-    Without it the citation rung would be permanently unreachable on every paper this parser can
-    produce, which is findings.md §A's failure (1,698 lines with zero importers) in a new epic.
-    The hit is labelled `cited-label:[1]`, distinctly from an edge-driven hit, so a consumer can
-    tell an inferred citation from a parsed one.
+    MOVED BY #66, AND NOT BY LOOSENING ANYTHING. This used to run on the plain fixture, because
+    the parser emitted no `cites` and the fallback was the only route. It now runs on
+    `pre_citation_paper()` — the same parse with `cites` removed, which is the shape of EVERY
+    paper stored before #66, since relations are written at parse time. On the plain fixture the
+    real edge claims the entry first (`_Accumulator` is first-claim-wins) and this path would
+    never execute, so moving the test is what keeps it from silently ceasing to test anything —
+    findings.md §A's failure arriving by improvement rather than by neglect.
     """
+    paper = pre_citation_paper()
+    index = PaperIndex.load(paper.db, paper.owner, paper.paper_id, paper.generation)
     paragraph = _only(index, "paragraph")
     citations = expand(index, [paragraph], DEFAULT_EXPANSION_POLICY, None).by_stage(Stage.CITATIONS)
 
@@ -412,12 +431,31 @@ def test_a_bracketed_marker_resolves_the_reference_entry_with_no_relation_at_all
     assert citations[0].text.startswith("[1] K. He")
 
 
-def test_the_label_fallback_can_be_switched_off(index: PaperIndex) -> None:
+def test_the_label_fallback_can_be_switched_off() -> None:
     """Inference is a policy, and switching it off leaves nothing — proving the fallback is what
-    produced the hit above, rather than something else that happened to be there."""
+    produced the hit above, rather than something else that happened to be there.
+
+    On the same pre-#66 document, for the same reason: with a real `cites` edge present, switching
+    the inference off leaves the EDGE, and this assertion would be about the wrong mechanism.
+    """
+    paper = pre_citation_paper()
+    index = PaperIndex.load(paper.db, paper.owner, paper.paper_id, paper.generation)
     paragraph = _only(index, "paragraph")
     policy = ExpansionPolicy(infer_citation_labels=False)
     assert expand(index, [paragraph], policy, None).by_stage(Stage.CITATIONS) == ()
+
+
+def test_switching_the_label_fallback_off_leaves_the_parsed_edge(index: PaperIndex) -> None:
+    """The other side of the pair, which only became askable with #66.
+
+    `infer_citation_labels=False` must disable the INFERENCE and nothing else. On parser output
+    that carries a real edge the rung still returns the entry, labelled as parsed.
+    """
+    paragraph = _only(index, "paragraph")
+    policy = ExpansionPolicy(infer_citation_labels=False)
+    citations = expand(index, [paragraph], policy, None).by_stage(Stage.CITATIONS)
+    assert [block.type for block in citations] == ["reference_entry"]
+    assert citations[0].reason.startswith("cites->")
 
 
 # ── the answers that are supposed to be empty ────────────────────────────────────────────────

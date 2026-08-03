@@ -10,8 +10,12 @@ would not have been in a fixture anyone wrote from the spec:
     prev_id / next_id           0 of 974 blocks on resnet. Never emitted. An adjacency rung built
                                 on them is dead code that passes its unit test.
     relation types emitted      caption_of, continues_on_next_page, continues_in_next_column.
-                                Three of twelve. No cites, no explains, no parent_of.
+                                Three of twelve when this was measured; no explains, no parent_of.
     doc_order coverage          207 of 974. Absent on every caption, footnote and table cell.
+
+`cites` IS NOW A FOURTH (#66, 2026-08-03): the parser emits 133 of them on resnet and 1 on the
+synthetic PDF below. `explains` and `parent_of` are still never emitted, which is why
+`build_augmented_paper` still exists.
 
 THE SYNTHETIC PDF IS THE ONE THAT MATTERS FOR CI. The corpus is gitignored and CI does not have
 it (`_retrieval_corpus.py`), so the acceptance assertions run against a two-page PDF built here in
@@ -21,10 +25,11 @@ in-prose citation marker, a display equation, a drawn rectangle with a "Figure 1
 it (so the parser emits a REAL `caption_of` relation), and a bracketed bibliography on page two.
 
 WHERE THE PARSER'S OUTPUT IS AUGMENTED, AND WHY IT IS SAID OUT LOUD. `build_augmented_paper` adds
-three relations to the parsed document before it is stored: an `explains`, a `cites`, and a type
-this schema has never heard of. They are AUTHORED, not parsed, and they exist because the parser
-emits none of those types today — without them the relation rung's unknown-type handling and the
-whole citation-by-edge path would be untestable and would ship unexecuted. Every assertion that
+two relations to the parsed document before it is stored: an `explains` and a type this schema has
+never heard of. They are AUTHORED, not parsed, and they exist because the parser emits neither
+today. There used to be a third, an authored `cites`; #66 REMOVED it, because the parser now emits
+a real one on this very PDF and `relations` is UNIQUE on (paper, generation, type, from, to). Every
+assertion that
 depends on an authored relation says so in its own docstring, and the assertions for the epic's
 acceptance criterion (`test_expansion.py`) run against the UNAUGMENTED parse, where the
 figure-from-caption edge is one the parser really produced — asserted by its provenance string.
@@ -205,8 +210,31 @@ def _store(pdf: Path, scratch: Path) -> ParsedPaper:
 
 _SYNTHETIC: ParsedPaper | None = None
 _AUGMENTED: ParsedPaper | None = None
+_PRE_CITATION: ParsedPaper | None = None
 _VECTORISED: ParsedPaper | None = None
 _CORPUS: ParsedPaper | None = None
+
+
+def pre_citation_paper() -> ParsedPaper:
+    """The same parse with every ``cites`` relation REMOVED — the shape of a pre-#66 document.
+
+    Not a hypothetical. Relations are written at PARSE time, so every paper stored before #66
+    landed has exactly this shape: markers printed in the text, a bibliography, and no edges. The
+    `cited-label:` fallback is the only thing that reaches the citation rung on those papers, and
+    on the unaugmented fixture the fallback is now UNREACHABLE (the real edge claims the entry
+    first, and `_Accumulator` is first-claim-wins). Without this fixture the fallback would keep
+    running in production and stop being executed by any test — findings.md §A's defect, arriving
+    by improvement rather than by neglect.
+    """
+    global _PRE_CITATION
+    if _PRE_CITATION is None:
+        scratch = _scratch()
+        paper_id, document = _parse(build_synthetic_pdf(scratch / "synthetic.pdf"), scratch)
+        document["relations"] = [
+            relation for relation in document.get("relations", ()) if relation["type"] != "cites"
+        ]
+        _PRE_CITATION = _persist(paper_id, document, scratch)
+    return _PRE_CITATION
 
 
 def synthetic_paper() -> ParsedPaper:
@@ -219,15 +247,20 @@ def synthetic_paper() -> ParsedPaper:
 
 
 def augmented_paper() -> ParsedPaper:
-    """The same parse plus three AUTHORED relations. See the module docstring.
+    """The same parse plus two AUTHORED relations. See the module docstring.
 
     ``explains``  paragraph -> equation      the "related equation" edge the parser cannot emit
-    ``cites``     paragraph -> reference     the citation edge the parser cannot emit
     UNKNOWN       paragraph -> figure        a type this schema version has never heard of
 
-    Authored so the relation rung's unknown-type handling and the edge-driven citation path are
-    EXECUTED rather than merely written. Nothing that asserts the acceptance criterion uses this
-    paper.
+    THE AUTHORED ``cites`` WAS REMOVED BY #66 AND ITS ABSENCE IS LOAD-BEARING. The parser now emits
+    a real ``cites`` on this very PDF, paragraph -> ``reference_entry``, which is the SAME pair the
+    authored one used. `relations` is UNIQUE on (paper, generation, type, from, to) in
+    0001_core.sql, so keeping both is not "belt and braces" - it is an `sqlite3.IntegrityError` at
+    `put_paper`. The edge-driven citation path is now exercised by genuine parser output instead,
+    which is what this module wanted all along.
+
+    Authored so the relation rung's unknown-type handling is EXECUTED rather than merely written.
+    Nothing that asserts the acceptance criterion uses this paper.
     """
     global _AUGMENTED
     if _AUGMENTED is None:
@@ -241,13 +274,6 @@ def augmented_paper() -> ParsedPaper:
                 "type": "explains",
                 "from": by_type["paragraph"],
                 "to": by_type["equation"],
-                "confidence": 0.9,
-                "provenance": "authored-by-test",
-            },
-            {
-                "type": "cites",
-                "from": by_type["paragraph"],
-                "to": by_type["reference_entry"],
                 "confidence": 0.9,
                 "provenance": "authored-by-test",
             },
