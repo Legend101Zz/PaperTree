@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import unicodedata
+from collections import Counter
 
 import pytest
 from _fixtures import (
@@ -180,3 +181,24 @@ def test_committed_vectors_cover_every_block_type_and_carry_the_stream_digest() 
     for slug in FIXTURE_SLUGS:
         digest = "sha256:" + hashlib.sha256(load_document(slug).stream.encode("utf-8")).hexdigest()
         assert payload["stream_sha256"][slug] == digest
+
+
+def test_the_vectors_actually_carry_the_selectors_they_claim_to() -> None:
+    """A census with hard denominators, and it exists to close a hole in the vector design.
+
+    ``_expectations`` derives the predicted tier from the anchor, so DELETING a selector would move
+    the claim and the outcome together and the TypeScript side would stay green — the drop would be
+    invisible on both. These counts are not derived from anything: 46 blocks, all six selector kinds
+    where the block supports them, 39 with text and 18 inside a section. Delete an emit and this is
+    the test that goes red.
+    """
+    payload = json.loads(VECTOR_FILE.read_text(encoding="utf-8"))
+    census = Counter(s["type"] for v in payload["vectors"] for s in v["anchor"]["selectors"])
+    assert dict(census) == {
+        "BlockSelector": 46,
+        "PageSelector": 46,
+        "TextPositionSelector": 46,
+        "TextQuoteSelector": 39,
+        "ShapeSelector": 46,
+        "SectionPathSelector": 18,
+    }
