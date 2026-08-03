@@ -37,7 +37,7 @@ issues is the same defect as a result table quoting a number nobody re-ran.
 |---|---|---|
 | Region detection blocks `figures.spec` | [#51](https://github.com/Legend101Zz/PaperTree/issues/51) ✅ closed | **[#103](https://github.com/Legend101Zz/PaperTree/issues/103)** — float **detection**: neural-odes 1/22, resnet 5/29 type-blind. Extents are a minor term (1.27 parser regions per matched gold float); `_merge_panels` under-merges resnet p3 and would over-merge neural-odes p17, so no tolerance fixes it. Its "blocks `figures.spec`" claim is **retracted** — that metric moves 34 points under a `_merge_panels` no-op, so it was never measuring this (#111) |
 | Peak RSS vs a 500 MB bar | [#52](https://github.com/Legend101Zz/PaperTree/issues/52) | ✅ closed by PR #116 — the test ratchets at 520 MB and the 500 MB verdict moved here, where the n sits beside it. 1 of 29 runs reads 500.4, so the clause is **NOT MET** |
-| The speed half is unmeasured, not failed | [#53](https://github.com/Legend101Zz/PaperTree/issues/53) ✅ closed | **[#108](https://github.com/Legend101Zz/PaperTree/issues/108)** — the harness exists and refuses correctly; the ruling run needs both arms on one commit |
+| The speed half is unmeasured, not failed | [#53](https://github.com/Legend101Zz/PaperTree/issues/53) ✅ closed | ✅ **[#108](https://github.com/Legend101Zz/PaperTree/issues/108) closed** — ruling run done, both arms one commit: **22.06× (19.65–22.74)**, MET at 10×, NOT ESTABLISHABLE at 20× |
 | Gold coverage limits every remaining verdict | [#54](https://github.com/Legend101Zz/PaperTree/issues/54) | **[#54](https://github.com/Legend101Zz/PaperTree/issues/54)** — item 4 done (outline floor on all 8 papers); the other three need a **second annotator**, which no code closes |
 | Equation extents, 4th adapter, WebP | [#55](https://github.com/Legend101Zz/PaperTree/issues/55) ✅ closed | **[#101](https://github.com/Legend101Zz/PaperTree/issues/101)** — `inline_equation` is unemittable on this gold (oracle ceiling 7 of 13) and `Span.role` is 0 of 15,241 spans |
 | — | — | **[#100](https://github.com/Legend101Zz/PaperTree/issues/100)** — `adapters.py` cites a `DOCLING.md` that does not exist |
@@ -72,12 +72,12 @@ still needs an owner's ruling on whether the bar or the parser moves — this de
 not answer it. Recorded here rather than in a commit message so a later reader finds the
 reasoning attached to the evidence.
 
-### Verdict on the rule itself: **accuracy PASSES. Speed is NOT ESTABLISHED — the measurement cannot resolve it.**
+### Verdict on the rule itself: **accuracy PASSES. Speed PASSES at the ruled 10x bar, and would NOT be establishable at the original 20x.**
 
 | half | bar | measured | |
 |---|---|---|---|
 | **accuracy** | ≥ 85 % of Docling's F1 | **97 %** | **PASS** |
-| **speed** | ≥ **10×** Docling (ruled down from 20× by the owner, 2026-08-02, [#53](https://github.com/Legend101Zz/PaperTree/issues/53)) | deterministic arm re-derived 2026-08-03 at **0.1690 s/page** corpus-amortised (min 0.1679 – max 0.1712 over 3 warmed trials, 195 pp); **no Docling arm on this code**, so no ratio exists | **NOT ESTABLISHED** |
+| **speed** | ≥ **10×** Docling (ruled down from 20× by the owner, 2026-08-02, [#53](https://github.com/Legend101Zz/PaperTree/issues/53)) | **corpus ratio 22.06× (min 19.65 – max 22.74, spread 3.10×)**. Both arms in ONE invocation on ONE commit, 8 papers / 195 pages, 1 warm-up discarded per parser per paper + 3 counted trials. Deterministic **28.31 s** corpus wall-clock (min 28.08 – max 31.41), 0.1452 s/page; Docling **624.51 s** (min 617.21 – max 638.63), 3.2026 s/page. Spread 3.10× against a 12.06× distance to the bar, and the whole interval clears 10× ([#108](https://github.com/Legend101Zz/PaperTree/issues/108)) | **MET** |
 
 **Updated 2026-08-03 (#53). The harness now exists; the ratio still does not.**
 `packages/evaluation/python/papertree_evaluation/speed.py` and
@@ -88,12 +88,32 @@ and a **refusal** to emit a ratio when the interval's spread exceeds the distanc
 to the bar. The hardcoded `"speed: measured separately at 12x against a 20x bar -> FAIL"` that
 `_decision_rule` printed unconditionally, from no measurement, is deleted.
 
-**Why the row still says NOT ESTABLISHED, and it is not the refusal rule that says so.** The
-deterministic arm was measured on this code and is in the row. The **Docling arm was not run to
-completion on it** — the session reached 3 of 32 comparison passes and stopped. So no interval
-was formed and the refusal predicate was never evaluated. That is a *different* reason from
-2026-08-01's, and conflating the two would be the error this row exists to prevent: then the
-number was too noisy to rule, now there is no number.
+**The ruling run landed 2026-08-03 (#108, #78 Session B-bis), and the row is now MET.** Both arms
+in one invocation on one commit, 8 papers / 195 pages, one warm-up pass discarded per parser per
+paper plus three counted trials. It replaces two earlier states this file passed through — *"too
+noisy to rule"* (2026-08-01) and *"there is no number"* (2026-08-03 morning, when the Docling arm
+reached 3 of 32 passes and stopped). Those were different failures and the harness now
+distinguishes them.
+
+**THE RULED-DOWN BAR IS WHAT MAKES THE RULE DECIDABLE, AND THAT IS THE FINDING.** Apply the
+harness's own refusal predicate to this interval at each bar:
+
+| bar | distance from the 22.06× median | spread | verdict |
+|---|---|---|---|
+| **10×** (the owner's ruling) | 12.06× | 3.10× | **MET** — and the whole interval, 19.65–22.74, clears it |
+| **20×** (the original) | 2.06× | 3.10× | **NOT ESTABLISHED** — spread exceeds distance, and the interval STRADDLES 20× |
+
+So the parser is *probably* faster than 20× and this measurement cannot say so. The owner's
+2026-08-02 ruling down to 10× was not a concession to a slow parser — it is the difference
+between a rule that decides and a rule that refuses forever at this sample size. Note what that
+does **not** license: the 20× row is refused, not failed. A quieter machine or more trials could
+still establish it.
+
+**Machine state, stated because the harness refuses to imply it.** `--quiesced` was NOT passed;
+load average 4.13 at start, one sibling agent session possibly active. The deterministic arm's
+spread here (3.33 s) is 5× Session B's quiesced 0.63 s, which is exactly what that load buys. It
+does not touch the verdict — 3.10× of spread against 12.06× of distance — and a *quieter* box can
+only narrow the interval, never move it across the bar it clears by 9.65× at its worst trial.
 
 Both re-runs on the *pre*-rebase tree are excluded from everything above, and the reason is
 itself evidence for #53. The same deterministic arm measured **36.46 s** corpus median with a
