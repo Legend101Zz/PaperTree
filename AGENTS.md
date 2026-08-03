@@ -123,6 +123,50 @@ never shrink on their own.
 
 **Quote every path: the repo path contains a space.**
 
+### A fresh worktree needs BOTH installs
+
+```bash
+uv sync --locked --all-packages     # without it, services/api gives 3 collection ERRORS
+pnpm install --frozen-lockfile      # without it, turbo is missing
+```
+
+- **The uv one is the dangerous one, because it fails as a green subset.** `httpx` is in
+  `services/api/python/pyproject.toml`'s `[dependency-groups] dev`, and a plain `uv sync` does
+  not install a non-root member's dev group. `tests/api_support.py` imports Starlette's
+  httpx-backed `TestClient`, and all three API test modules import `api_support` — so
+  `test_end_to_end.py`, `test_ir.py` and `test_isolation.py` all fail to *collect* while
+  everything else passes. Three ERRORS at the top of a run that ends in a wall of dots is
+  exactly §2's failure class: **a green subset that looks like a green whole.** It cost one
+  session a full gate run and another a misdiagnosed red.
+- Without `pnpm install`, `turbo` is absent, so the gate cannot run at all, and
+  `test_a_database_migrated_by_typescript_is_a_noop_for_python` fails **by design** on an
+  absent `packages/db/node_modules` — a real failure that means nothing about your change.
+
+### The scratchpad is shared with your SUBAGENTS, not with other sessions
+
+#109 filed this as "two concurrent sessions get the same scratchpad path". **That mechanism is
+wrong**, and the corrected one changes who has to defend against it.
+
+- **Measured on this box: `/private/tmp/claude-501/-Users-comreton-Desktop/` holds 69
+  directories, every one named for a session UUID, 65 of them carrying their own
+  `scratchpad/`.** The path is keyed by *(project, session UUID)*, so **two independent
+  sessions cannot collide** no matter how concurrent they are.
+- **What is shared is one session and every subagent it spawns.** A subagent's scratchpad path
+  is byte-identical to its parent's, because a subagent inherits the parent's session UUID.
+  (Measured by the parent session of #78 Session B-bis, which handed its subagents the path and
+  observed it; a subagent cannot observe the other end.)
+- **So the defence belongs to the PARENT.** It must hand each subagent a distinct subdirectory
+  and say so in the brief. **A subagent cannot detect the collision** — the path it is given
+  looks private, and *is* private to the session, just not to its siblings. Nothing errors, and
+  nothing can.
+- What it cost, twice in #78 Session B: one agent wrote a mutation script at the scratchpad
+  root and a sibling silently replaced it with its own. It was caught only because the surviving
+  script's output was visibly about the wrong subject — equation extents where the reader
+  expected timings. **A mutation script that silently runs against the wrong worktree reports
+  no failures, and "no failures" from a mutation run is indistinguishable from "the tests do not
+  assert anything"** — the defect this repo has been bitten by three times (`findings.md` §A,
+  #26's fixture script, the cross-language test that skipped and reported green).
+
 ---
 
 ## 4. Things about this repo that will bite you

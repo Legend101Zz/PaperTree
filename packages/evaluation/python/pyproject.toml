@@ -17,8 +17,10 @@ dependencies = [
 # adding one `docling>=2.0` line took uv.lock from 22 packages to 100+, including xlsxwriter
 # and websockets, for a benchmark row that runs at most once per epic.
 #
-# findings.md §E already established the pattern this repo uses instead - a separate
-# gitignored probe venv - and research/benchmarks/DOCLING.md records the exact commands.
+# findings.md §E already established the pattern this repo uses instead - a separate probe
+# venv outside the repo and outside ~ - and research/benchmarks/DOCLING.md records the exact
+# commands, the resolved version (docling 2.117.0 on CPython 3.12.8, 101 distributions) and
+# $PAPERTREE_DOCLING_PYTHON, which is the override for the interpreter path.
 # The adapter imports lazily and reports itself UNAVAILABLE rather than crashing, and the
 # harness records "not run" as a distinct outcome from "scored 0".
 [tool.uv.sources]

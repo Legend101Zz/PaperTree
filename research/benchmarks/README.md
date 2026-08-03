@@ -188,7 +188,7 @@ Candidates to evaluate:
 | 2 | **PaperTree dead structured** (`extraction.PDFExtractor`) | ✅ implemented — measures what the unused code would have given |
 | 3 | **PyMuPDF raw** (`get_text("dict")` + naive order) | ✅ implemented — the honest floor |
 | 4 | PyMuPDF + XY-cut + heuristic hierarchy | to build (the proposed fast path) |
-| 5 | Docling | install in progress |
+| 5 | Docling | ✅ opt-in probe venv, `docling 2.117.0` — build it with [`DOCLING.md`](DOCLING.md) |
 | 6 | Marker / Surya | licence-gated — see literature |
 | 7 | MinerU | licence-gated — see literature |
 | 8 | GROBID | Docker |
