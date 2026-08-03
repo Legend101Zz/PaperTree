@@ -88,6 +88,34 @@ def _expectations(anchor: dict[str, Any]) -> dict[str, int]:
     }
 
 
+def _expect_block(doc: IndexedDocument, block_id: str) -> dict[str, bool]:
+    """Whether the tier that answers is expected to name THIS block, per subset.
+
+    Without this, "reached tier 4" is a weak claim: measured, a ShapeSelector whose quads were
+    y-flipped into pdf.js space still answered at tier 4 for 39 of 46 vectors, because a wrong
+    rectangle on a dense two-column page still overlaps SOMETHING. Tier alone therefore cannot tell
+    a correct capture from a coordinate-space error, and the block identity is what closes it.
+
+    The two exceptions are structural, not tolerances:
+
+    * ``shape`` — ``blocksOverlappingQuads`` drops a match that is an ANCESTOR of another match, so
+      a ``table`` or a ``table_row`` legitimately resolves to its cells rather than to itself. Only
+      leaves are claimed.
+    * ``sectionPath`` — T5 indexes ``section.block_ids``, and a HEADING block is not in its own
+      section's ``block_ids`` (``Section`` is ``{heading_block_id, level, block_ids}``), so T5
+      lands on the section's first paragraph. Only members are claimed.
+    """
+    section = doc.section_containing(block_id)
+    is_leaf = not any(indexed.block.parent_id == block_id for indexed in doc.blocks)
+    return {
+        "full": True,
+        "position": True,
+        "quote": True,
+        "shape": is_leaf,
+        "sectionPath": section is not None and block_id in section.block_ids,
+    }
+
+
 def build_vectors() -> dict[str, Any]:
     streams: dict[str, str] = {}
     vectors: list[dict[str, Any]] = []
@@ -113,6 +141,7 @@ def build_vectors() -> dict[str, Any]:
                     "blockType": block_type,
                     "blockId": block_id,
                     "expect": _expectations(anchor),
+                    "expectBlock": _expect_block(doc, block_id),
                     "anchor": anchor,
                 }
             )

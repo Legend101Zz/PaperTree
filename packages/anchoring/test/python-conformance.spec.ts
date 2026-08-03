@@ -35,6 +35,7 @@ interface Vector {
   readonly blockType: string;
   readonly blockId: string;
   readonly expect: Readonly<Record<string, number>>;
+  readonly expectBlock: Readonly<Record<string, boolean>>;
   readonly anchor: Anchor;
 }
 
@@ -120,10 +121,16 @@ describe('anchoring/python-conformance — Python mints, the real ladder resolve
         const doc = documentFor(vector.fixture);
         const resolution = resolveAnchor(subsetOf(vector.anchor, keep), doc, { useCache: false });
         expect(resolution.tier).toBe(vector.expect[subset]);
-        // A tier without the right block is a tier that answered about something else. Asserted on
-        // the three tiers that claim to have IDENTIFIED the target rather than approximated it.
-        if (resolution.tier === Tier.Block || resolution.tier === Tier.Position) {
+        // A TIER IS NOT ENOUGH, and this line is why. Measured: a ShapeSelector whose quads were
+        // y-flipped into pdf.js space still answered at tier 4 on 39 of 46 vectors, because a wrong
+        // rectangle on a dense two-column page still overlaps something. Python declares, per
+        // subset, whether the answering tier should NAME this block; the two structural exceptions
+        // (an ancestor of its own match, a heading outside its section's block_ids) are in
+        // `_expect_block`'s docstring rather than tolerated silently here.
+        if (resolution.tier !== Tier.Orphan && vector.expectBlock[subset] === true) {
           expect(resolution.blockIds).toContain(vector.blockId);
+        }
+        if (resolution.tier === Tier.Block || resolution.tier === Tier.Position) {
           expect(resolution.state).toBe('anchored');
         }
       },
