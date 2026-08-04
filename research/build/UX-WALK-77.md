@@ -265,8 +265,35 @@ violation it is not.)
 | | |
 |---|---|
 | **Fixed with a regression test** | D1, D2, D3, D4, D6, D8 |
-| **Filed, needs a design decision** | D5 (cross-mode position), D7 (ask-again affordance) |
-| **Corrected in the issue itself** | #77's `color-contrast`/`target-size` premise |
+| **Filed, needs a design decision** | D5 → **#132**; D7 and the missing `page_count` → **#133** |
+| **Corrected in the issue itself** | #77's `color-contrast`/`target-size` premise, [as a comment with the file:line evidence](https://github.com/Legend101Zz/PaperTree/issues/77#issuecomment-5178173471) |
 
 Journey 4 (highlight → reload) is **not claimed**: it was blocked behind D1/D2 for a clean session
 and was not walked. It is listed as unwalked rather than assumed working.
+
+### Verification after the fix, split by how it was verified
+
+Every defect above was **found** in a foregrounded browser. Not every fix was **re-verified** there,
+and the difference is recorded rather than blurred.
+
+| defect | re-verified in the live browser | how |
+|---|---|---|
+| D1 | **yes** | registered a new account through the form; landed on `/dashboard` signed in, no bounce |
+| D2 | **yes** | same session then loaded an API paper — 773 blocks, no `missing or invalid session token` |
+| D3 | **yes** | `POST /papers` → **202 Accepted** with the session the app now stores |
+| D4 | **yes** | the uploaded card renders **"Attention Is All You Need · Ashish Vaswani, Noam Shazeer, Niki Parmar +4 more · Ready"** (screenshot in the PR). `0 pages` remains — see below |
+| D8 | **yes** | login inputs now `#ffffff` on `#111827` = **17.74:1**, up from 1.87:1 |
+| — | **yes** | axe re-run: **dashboard 0 violations** (was 1 critical `button-name`), **login 0 violations** (was 1 serious `color-contrast`) |
+| **D6** | **NO — unit-verified only** | see below |
+
+**D6's fix was not re-walked in the browser.** The Chrome session became unavailable partway through
+verification, and rather than keep seizing a browser that may have had someone else using it, the
+re-walk was stopped. What backs D6 instead is a mutation-tested assertion on the mount site itself
+(`journey-wiring.spec.tsx`): restoring the hardcoded
+`blockIds: [doc.blocks[0]?.id ?? '']` turns that test red. That is strong evidence the wiring is
+right and it is **not** the same thing as having watched the Inspector answer about a selection, so
+it is not claimed as such.
+
+`0 pages` on the card is **not** a regression and not an oversight: `GET /papers` returns no page
+count in any form, and `libraryPaperFromPaperRow` leaves it at 0 rather than deriving one from
+`sections`, which would be a guess rendered as a fact. Filed, not invented.
