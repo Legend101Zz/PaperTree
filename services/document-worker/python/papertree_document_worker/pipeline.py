@@ -31,6 +31,11 @@ from papertree_document_worker.assemble import AssembledBlock, PaperBuilder, con
 from papertree_document_worker.citations import apply_citation_roles, detect_citations
 from papertree_document_worker.classify import classify_document
 from papertree_document_worker.crops import DEFAULT_SCALE, CropStore
+from papertree_document_worker.crossrefs import (
+    REFERENCES_RELATION,
+    apply_payload_mirrors,
+    detect_float_references,
+)
 from papertree_document_worker.equations import detect_equation_regions
 from papertree_document_worker.figures import detect_figure_regions, is_caption_line
 from papertree_document_worker.frontmatter import classify_front_matter
@@ -520,6 +525,19 @@ def _assemble(
         ]
         equation_regions = detect_equation_regions(body_lines, column_width, body_size)
         equation_lines = {id(line) for region in equation_regions for line in region.lines}
+        # `EquationRegion.number` is parsed by `equations._equation_number` and, until now, was
+        # thrown away here: the payload below was built as `{"display", "image"}` and
+        # `EquationPayload.equation_number` came out 0-populated on all 81 equations in the
+        # corpus. That is what made #66's "equation `payload.referenced_by`" rung unreachable —
+        # a callout resolves by matching the PRINTED NUMBER, and the number was not being kept.
+        # Keyed by line identity because `_merge_equation_blocks` re-groups lines into layout
+        # blocks and the region object itself does not survive that.
+        equation_numbers = {
+            id(line): region.number
+            for region in equation_regions
+            if region.number is not None
+            for line in region.lines
+        }
 
         # HEADINGS ARE DETECTED LAST, and that ordering is the fix for a measured defect.
         #
@@ -565,6 +583,20 @@ def _assemble(
                 # D16 / rule 36: `image` is required-and-NULLABLE. Null while the render step is
                 # outstanding, which is why `status` is not `complete` until crops exist.
                 payload = {"display": True, "image": None}
+                # The number as PRINTED, per the field's own docstring ("A string, not an
+                # integer: papers number equations 'A.2', '3a', '(iv)'"). Omitted rather than
+                # nulled when the equation is unnumbered — `equation_number` is
+                # NON_NULLABLE_OPTIONAL, so an explicit null is rejected (D11).
+                numbered = next(
+                    (
+                        equation_numbers[id(line)]
+                        for line in layout_block.lines
+                        if id(line) in equation_numbers
+                    ),
+                    None,
+                )
+                if numbered is not None:
+                    payload["equation_number"] = numbered
                 # THE BANDS ARE WIDENED, NOT THE BLOCK'S bbox, because the bbox is COMPUTED.
                 # `assemble._geometry` builds the polygon from `line_bands` and rule 1 makes
                 # `bbox` the polygon's extent, so a `LayoutBlock.bbox` set here is discarded.
@@ -777,6 +809,30 @@ def _assemble(
     # Splitting a style run into before/marker/after changes NO id: `block_id` hashes the type and
     # the text prefix, `content_hash` the normalised text, and neither reads spans.
     apply_citation_roles(citations)
+
+    # #66's remaining rungs. `references` is the LAST relation type with a consumer and no
+    # producer, and it is why both `referenced_by` fields are 0-populated: the schema defines
+    # them as its inverse (`models.py:995`, `:1082`). `caption_block` (`:1076`) mirrors
+    # `caption_of`, which has existed all along at 142 edges and was simply never mirrored.
+    #
+    # THE RELATION IS AUTHORITATIVE AND THE PAYLOAD IS ITS MIRROR — all three field docstrings
+    # say so. So the edges are emitted FIRST and `apply_payload_mirrors` reads them back; nothing
+    # here computes a payload value beside an edge. Same phase as the citations above, and for
+    # the sharper of the two reasons: the mirrors write `block_id` STRINGS, which are `""` until
+    # `assign_ids()` has run and then fail the schema's `BlockId` pattern LOUDLY.
+    caption_edges = [
+        (source, target) for kind, source, target, _, _ in builder.relations if kind == "caption_of"
+    ]
+    float_links = detect_float_references(builder.blocks, caption_edges)
+    for float_link in float_links:
+        builder.relate(
+            REFERENCES_RELATION,
+            float_link.source,
+            float_link.target,
+            0.8,
+            float_link.mechanism,
+        )
+    apply_payload_mirrors(caption_edges, float_links)
 
     # F1.7's VLM half: ONLY flagged regions, only when a budget is configured, and the crop is
     # always retained whatever happens. The LaTeX is a DECLARED INTERPRETATION with its own

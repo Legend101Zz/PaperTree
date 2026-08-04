@@ -279,8 +279,23 @@ def augmented_paper() -> ParsedPaper:
             },
             {
                 "type": UNKNOWN_RELATION_TYPE,
+                # THE TARGET MOVED figure -> caption, AND THE REASON IS THE SAME ONE THAT DELETED
+                # THE AUTHORED `cites` ABOVE. #66's float half emits a real `references` edge
+                # paragraph -> figure on this very PDF ("Figure 1 below" against a printed
+                # "Figure 1" caption). `_Accumulator` is FIRST-CLAIM-WINS (expansion.py:341), so a
+                # real edge and an authored one aimed at the same block means the authored one
+                # never names it — and `test_an_unknown_relation_type_is_followed_and_reaches_the
+                # _caller_named` silently stops testing unknown-type handling while still passing
+                # its `explains` half.
+                #
+                # `caption` is the target because it is the only sensible block NO rung already
+                # claims. Measured on this PDF under the test's isolating policy: SELECTION takes
+                # the paragraph, STRUCTURE takes the heading as `section-heading`, RELATED takes
+                # the figure (`references`) and the equation (`explains`), CITATIONS takes the
+                # reference_entry (`cites`). `heading` was tried first and lost to STRUCTURE,
+                # which is why this comment names the rung rather than just the block.
                 "from": by_type["paragraph"],
-                "to": by_type["figure"],
+                "to": by_type["caption"],
                 "confidence": 0.5,
                 "provenance": "authored-by-test",
             },

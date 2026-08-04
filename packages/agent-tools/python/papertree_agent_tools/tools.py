@@ -14,8 +14,8 @@ Live parse of the corpus, 2026-08-02, recorded on issue #66:
     references / defines / explains
     / result_of / parent_of                   emitted ZERO times.
     cites                                     ZERO on that date. NO LONGER — see below.
-    equation.payload.referenced_by            0 populated.
-    figure.payload.caption_block              0 populated.
+    equation.payload.referenced_by            0 populated. NO LONGER - see below.
+    figure.payload.caption_block              0 populated. NO LONGER - see below.
     parent_id                                 755/974   child_ids 185/974
     doc_order                                 207/974   sections 14
     block_vectors                             0 rows anywhere. Epic 0 computes no embeddings.
@@ -24,8 +24,16 @@ Live parse of the corpus, 2026-08-02, recorded on issue #66:
 ``cites`` edges, every one landing on a ``reference_entry`` (rule 23), from 605 resolved markers.
 The rate is NOT uniform and is never quoted as one number — 494 of 501 markers on the three papers
 whose bibliography prints a label (``[12]``, ``[ADG+16]``), 111 of 325 on the five that print
-author-year. ``references`` / ``defines`` / ``explains`` / ``result_of`` / ``parent_of`` are still
-ZERO, and so is everything else in the table.
+author-year. ``defines`` / ``explains`` / ``result_of`` / ``parent_of`` are still ZERO, and so
+is everything else in the table.
+
+**``references`` AND THE TWO PAYLOAD MIRRORS ARE ALSO NO LONGER ZERO** (#66's second half,
+re-measured over all 8 corpus papers): 115 ``references`` edges, ``figure.payload.caption_block``
+on **58 of 85** figures and ``table``'s on 84 more, ``figure.payload.referenced_by`` on **43 of
+85**, and ``equation.payload.referenced_by`` on **7 of 81** — that last denominator is the wrong
+one to judge it by, because the corpus contains only **8** in-prose callouts to a numbered
+equation at all. ``EquationPayload.equation_number``, which was parsed and then discarded before
+that change, is now populated on 46 of 81 and is what makes the equation half possible.
 
 Two consequences for this module, and neither is "the gap is closed". FIRST, a paper stored before
 that change carries no ``cites`` at all, because relations are written at parse time — the edge
@@ -474,12 +482,21 @@ def _typed_block(
 
 
 def _caption_for(view: PaperView, block_id: str, payload: Mapping[str, Any]) -> dict[str, Any]:
-    """The caption of a float, and how it was found. Measured: ``caption_block`` is never set.
+    """The caption of a float, and how it was found.
 
-    ``figure.payload.caption_block`` and ``table.payload.caption_block`` are populated 0 times
-    (#66), so the denormalised field is dead and the ``caption_of`` RELATION — one of the three
-    types the parser actually emits — is the working path. Both directions are read because a
-    relation's direction is a modelling choice this package does not get to make.
+    THE FAST PATH BELOW WAS DEAD CODE UNTIL #66's SECOND HALF. ``caption_block`` was populated 0
+    times, so every call fell through to the ``caption_of`` relation and ``found_via`` was always
+    ``"caption_of relation"``. It is now populated on 58 of 85 corpus figures (and 84 tables), so
+    the declared branch fires and the relation is the FALLBACK it was always written to be.
+
+    Reading the mirror first is safe only because the producer derives it FROM the edge —
+    ``models.py:1076`` is explicit that "the caption_of relation REMAINS AUTHORITATIVE", and
+    ``test_crossrefs.py`` asserts the two agree in both directions on every corpus paper. If that
+    ever stops being true this function will prefer the wrong answer silently, which is why the
+    agreement is asserted at the producer rather than assumed here.
+
+    Both relation directions are read because a relation's direction is a modelling choice this
+    package does not get to make.
     """
     declared = payload.get("caption_block")
     if isinstance(declared, str) and view.index.block(declared) is not None:

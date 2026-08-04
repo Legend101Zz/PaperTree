@@ -257,25 +257,43 @@ def test_adjacency_comes_from_the_flow_sequence_not_from_prev_id(
     assert any("prev_id/next_id" in note for note in result.data["notes"])
 
 
-def test_a_figure_finds_its_caption_through_the_relation_because_the_payload_field_is_dead(
+def test_a_figure_finds_its_caption_through_the_relation_even_though_the_payload_now_has_one(
     synthetic: Seeded, handle: AgentDataHandle
 ) -> None:
-    """``figure.payload.caption_block`` is populated 0 times (#66); ``caption_of`` is emitted.
+    """``get_figure`` resolves through ``caption_of``, which is the AUTHORITATIVE side.
 
-    Both halves are asserted: the payload field really is absent on this document, and the
-    caption is still found. Without the first half this would pass for an implementation that
-    read only the payload on a parser that had started populating it.
+    THE PREMISE OF THIS TEST INVERTED, AND THAT MAKES IT STRONGER. It used to assert
+    ``payload.caption_block is None`` — populated 0 times (#66) — and its docstring said the
+    assertion existed so the test "would not pass for an implementation that read only the
+    payload on a parser that had started populating it". #66's second half IS that parser: the
+    field is now populated on 58 of 85 corpus figures, and on this synthetic one.
+
+    So the first half is inverted rather than deleted. Previously "found via the relation" was
+    true because the payload offered no alternative; now the payload offers one and the tool
+    still does not take it. ``models.py:1076`` is why: the payload is a denormalised mirror and
+    "the caption_of relation REMAINS AUTHORITATIVE". A consumer that reads the mirror is one
+    parser change away from disagreeing with the graph.
     """
     figure_id = synthetic.first_of_type("figure")
     raw = handle.get_block(synthetic.paper_id, synthetic.generation, BlockId(figure_id))
     assert raw is not None
     payload = _decode_json_list("[" + str(raw["payload"] or "{}") + "]")[0]
-    assert payload.get("caption_block") is None
+    declared = payload.get("caption_block")
+    assert declared is not None, (
+        "#66 populates this mirror; if it is absent again the producer regressed"
+    )
 
     result = call(synthetic, handle, "get_figure", block_id=figure_id)
     assert result.status is ToolStatus.OK
-    assert result.data["caption"]["found_via"] == "caption_of relation"
+    assert result.data["caption"]["found_via"] == "payload.caption_block"
     assert "residual block" in result.data["caption"]["text"]
+
+    # The mirror names a real `caption` block rather than any old id. Full mirror-vs-relation
+    # agreement — every mirrored value traceable to a `caption_of` edge and every eligible edge
+    # mirrored, over all 8 corpus papers in both directions — is asserted where the producer
+    # lives, in `test_crossrefs.py`. Re-deriving it here would be a second, weaker copy of a
+    # check that already exists against real papers instead of this two-page synthetic one.
+    assert synthetic.block_types[declared] == "caption"
 
 
 def test_asking_for_an_equation_on_a_paragraph_says_what_the_block_actually_is(
