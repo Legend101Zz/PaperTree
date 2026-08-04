@@ -61,6 +61,7 @@ from typing import Any, Final, Protocol
 __all__ = [
     "DEFAULT_BASE_URL",
     "DEFAULT_MODEL",
+    "DEFAULT_TIMEOUT_SECONDS",
     "DEFAULT_VISION_MODEL",
     "KNOWN_VISION_MODELS",
     "Completion",

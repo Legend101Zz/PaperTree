@@ -27,8 +27,14 @@ import type { IndexedDocument } from '@papertree/anchoring';
 import { captureCitation } from './citations';
 import type { AnswerSource, AskRequest, Citation, GroundedAnswer } from './types';
 
-/** Block ids the context refers to, whatever variant it is. */
-function contextBlockIds(request: AskRequest): readonly string[] {
+/**
+ * Block ids the context refers to, whatever variant it is.
+ *
+ * EXPORTED because `liveAnswerSource` needs exactly this and a second copy would drift the moment
+ * `InspectorContext` gained a seventh variant — the switch is exhaustive, so TypeScript names the
+ * one place to edit, and only if there IS one place.
+ */
+export function contextBlockIds(request: AskRequest): readonly string[] {
   const context = request.context;
   switch (context.kind) {
     case 'selection':

@@ -12,7 +12,7 @@
  * is the failure #58 and #59 already were.
  */
 
-export { Inspector } from './Inspector';
+export { Inspector, isRenderable } from './Inspector';
 export type { InspectorProps } from './Inspector';
 
 export { AnswerView } from './AnswerView';
@@ -24,8 +24,11 @@ export type { CitationChipProps } from './CitationChip';
 export { captureCitation, classifyTarget, isNavigable } from './citations';
 export type { CaptureCitationInput } from './citations';
 
-export { createFixtureAnswerSource } from './fixtureAnswerSource';
+export { contextBlockIds, createFixtureAnswerSource } from './fixtureAnswerSource';
 export type { FixtureAnswerSourceOptions } from './fixtureAnswerSource';
+
+export { createLiveAnswerSource } from './liveAnswerSource';
+export type { LiveAnswerSourceOptions } from './liveAnswerSource';
 
 export type {
   AnswerSource,

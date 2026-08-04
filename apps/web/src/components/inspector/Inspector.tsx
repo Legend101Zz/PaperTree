@@ -13,9 +13,11 @@
  * WHAT THIS COMPONENT DELIBERATELY DOES NOT DO
  *
  * It does not fetch. `AnswerSource` is a REQUIRED prop and there is no default implementation
- * reachable from here. That is #62 made visible: nothing serves PaperIR over HTTP, so the only
- * implementation today is `fixtureAnswerSource`, and when an endpoint lands the compiler will name
- * every call site that has to change. A default would have hidden exactly that.
+ * reachable from here. That was #62 made visible, and the prediction held: when `POST
+ * /papers/{id}/ask` landed (#76) the compiler named the one call site that had to change —
+ * `ReaderWorkspace`'s Inspector slot — and nothing in this file moved. There are two
+ * implementations now, `liveAnswerSource` and `fixtureAnswerSource`, and this component still
+ * cannot tell them apart. A default prop would have hidden exactly that.
  *
  * It does not own scrolling either. `onNavigate` is passed out to `ReaderWorkspace`, which routes
  * it through the `onShowSource` seam Epic 2 declared. That seam was unterminated when this
@@ -31,7 +33,13 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AnswerView } from './AnswerView';
-import type { AnswerSource, AskState, Citation, InspectorContext } from './types';
+import type {
+  AnswerSource,
+  AskState,
+  Citation,
+  GroundedAnswer,
+  InspectorContext,
+} from './types';
 
 export interface InspectorProps {
   /** What the reader is asking about. */
@@ -71,6 +79,18 @@ function contextLabel(context: InspectorContext): string {
     case 'answer':
       return 'Answer';
   }
+}
+
+/**
+ * Can this answer be rendered at all?
+ *
+ * The single condition `DerivedBlock` enforces by throwing, asked one frame earlier so the throw
+ * becomes a designed state instead of a blank panel. Exported so a test can assert the two halves
+ * separately: that `AnswerView` still throws for such an answer (the guard is load-bearing, not
+ * decorative) and that `Inspector` shows the designed state instead of reaching it.
+ */
+export function isRenderable(answer: GroundedAnswer): boolean {
+  return answer.supportingBlockIds.length > 0;
 }
 
 export function Inspector({
@@ -163,7 +183,34 @@ export function Inspector({
         </div>
       ) : null}
 
-      {state.status === 'done' ? (
+      {state.status === 'done' && !isRenderable(state.answer) ? (
+        // THE DESIGNED FAILURE STATE FOR AN UNGROUNDED ANSWER (§19.8 — every state is a designed
+        // screen, and "AI actions … visibly disabled with the reason, not silently broken" is the
+        // register).
+        //
+        // `DerivedBlock` THROWS on an empty `derivedFrom`, and `AnswerView` passes
+        // `supportingBlockIds` into it eleven times over. That throw is correct and is deliberately
+        // not guarded away: `?? []`, `|| []` or a try/catch that renders anyway would each ship
+        // unattributed derived content, which is the one thing §11.4 exists to make impossible.
+        // What is wrong is the throw reaching the user as a blank panel or a React error overlay.
+        // So this checks BEFORE rendering and shows a state that was designed, with the reason.
+        //
+        // The server already refuses to produce such an answer (`GroundedAnswer.__post_init__`
+        // raises, and `/ask` answers 502). This is not redundant with that: `AnswerSource` is an
+        // interface anyone can implement, and the `answer` context variant arrives ALREADY
+        // answered from outside this component.
+        <div
+          className="pt-inspector__error"
+          role="alert"
+          data-inspector-error
+          data-inspector-ungrounded
+        >
+          This answer named no source block, so it is not shown. Derived content that cannot name
+          its source must not render at all — you would have no way to check it against the paper.
+        </div>
+      ) : null}
+
+      {state.status === 'done' && isRenderable(state.answer) ? (
         <AnswerView answer={state.answer} onNavigate={onNavigate} onShowSource={onShowSource} />
       ) : null}
 

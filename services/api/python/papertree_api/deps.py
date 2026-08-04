@@ -53,6 +53,16 @@ CONNECTIONS ARE PER REQUEST, NOT PER PROCESS, and that is not an oversight. An `
 to the connection that minted it, so a pooled connection shared between requests would let a handle
 minted for user A be resolvable while serving user B. Opening a connection per request costs
 ~100 µs against a local SQLite file and removes that class of bug entirely.
+
+THE ONE CROSSING WORTH READING TWICE — `AgentDataHandle` TAKES A `user_id`, NOT AN `OwnerId`
+
+Everything else below resolves a token to a `user_id` and then immediately converts it to an
+opaque per-connection handle. `AgentDataHandle.__init__(database_path, user_id)` does NOT: it opens
+its own guarded read-only connection and binds the RAW user_id, checking it exists in `users`
+first. So `agent_handle` passes `call.user_id` and never `call.db_owner` — a handle minted on the
+`PaperTreeDb` connection would not resolve on the agent connection anyway, and `owner_for` is not
+what that class wants. This is undocumented anywhere else; it is written here because it is the one
+place in this service where "always pass the OwnerId inward" is the wrong instruction.
 """
 
 from __future__ import annotations
@@ -64,8 +74,10 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from papertree_db import OwnerId, PaperTreeDb
+from papertree_agent_tools import MiniMaxProvider, ProviderSettings, Transport, UrllibTransport
+from papertree_db import OwnerId, PaperId, PaperTreeDb
 from papertree_jobs import JobStore
+from papertree_memory import AgentDataHandle
 
 from .security import user_for_token
 from .settings import Settings
@@ -163,6 +175,69 @@ async def caller(
     )
 
 
+async def agent_handle(
+    call: Annotated[Caller, Depends(caller)],
+    settings: Annotated[Settings, Depends(settings_of)],
+) -> AsyncIterator[AgentDataHandle]:
+    """The READ-ONLY handle the agent turn reads through. Opens its own guarded connection.
+
+    `call.user_id`, NOT `call.db_owner` — see the module header. The handle refuses construction
+    for a user_id that is not in `users`, so this cannot open a connection bound to nothing.
+    """
+    handle = AgentDataHandle(str(settings.database_file), call.user_id)
+    try:
+        yield handle
+    finally:
+        handle.close()
+
+
+def provider_for(request: Request) -> MiniMaxProvider:
+    """The model client for one request. Its TRANSPORT is injectable and that is load-bearing.
+
+    `create_app(..., llm_transport=...)` puts a scripted callable on `app.state`, so the whole
+    `/ask` route — dependency graph, ownership, tool loop, verifier, serialiser — runs in the test
+    suite with no socket. Without the seam the only testable thing would be the route's signature.
+
+    Built per request rather than once: `MiniMaxProvider` is a frozen dataclass over settings and
+    a transport, so there is nothing to pool, and a process-level client would have to be rebuilt
+    anyway the moment settings became per-tenant.
+    """
+    settings: Settings = request.app.state.settings
+    transport: Transport | None = getattr(request.app.state, "llm_transport", None)
+    return MiniMaxProvider(
+        ProviderSettings(
+            api_key=settings.llm_api_key,
+            model=settings.llm_model,
+            base_url=settings.llm_base_url,
+            timeout_seconds=settings.llm_timeout_seconds,
+        ),
+        transport if transport is not None else UrllibTransport(),
+    )
+
+
+def promoted_or_404(call: Caller, paper_id: str, requested: int | None) -> int:
+    """The generation to read, or 404.
+
+    A caller may pin a generation; the default is the promoted one. Both go through
+    `promoted_generation`/`get_paper`, which are owner-scoped, so an id belonging to another owner
+    is indistinguishable from an id that does not exist — which is the correct answer to give.
+
+    NOTE WHAT A PINNED `?gen=` SKIPS: the branch returns the caller's number without a query, so
+    for a pinned request this function performs NO ownership check at all and the check is entirely
+    downstream (`get_paper`, `list_pages`, `AgentDataHandle`). That is fine and it is also what
+    `tests/test_ask.py::test_user_b_cannot_ask_even_with_the_generation_pinned` exploits: pinning
+    removes one of `/ask`'s two gates, so the remaining one can be watched failing on its own.
+    """
+    if requested is not None:
+        return requested
+    gen = call.db.promoted_generation(call.db_owner, PaperId(paper_id))
+    if gen is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such paper")
+    return gen
+
+
 CallerDep = Annotated[Caller, Depends(caller)]
 SettingsDep = Annotated[Settings, Depends(settings_of)]
 AuthConnDep = Annotated[sqlite3.Connection, Depends(open_auth)]
+AgentHandleDep = Annotated[AgentDataHandle, Depends(agent_handle)]
+ProviderDep = Annotated[MiniMaxProvider, Depends(provider_for)]

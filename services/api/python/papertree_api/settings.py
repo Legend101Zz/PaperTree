@@ -40,6 +40,14 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+# IMPORTED, NEVER RE-TYPED. `tests/test_runtime_swappable.py::
+# test_the_provider_constants_have_no_new_live_definition` scans every .py under `packages/` and
+# `services/` for these three strings as LITERALS and fails on a fresh copy. #88 ruled that the two
+# existing copies in `services/document-worker` stay and are declared; a third is a defect. So this
+# service names the constants and never their values — which is also what makes
+# `PAPERTREE_LLM_MODEL` unset behave identically to `papertree_agent_tools`' default.
+from papertree_agent_tools import DEFAULT_BASE_URL, DEFAULT_MODEL, DEFAULT_TIMEOUT_SECONDS
+
 #: How long a session token is good for. Twenty-four hours, matching v1's `jwt_expiration_hours`
 #: default so nothing about the user-visible behaviour changes with the scheme.
 DEFAULT_SESSION_HOURS = 24
@@ -58,6 +66,16 @@ class Settings:
 
     root: Path
     session_hours: int = DEFAULT_SESSION_HOURS
+
+    #: The model credential for `POST /papers/{id}/ask`. EMPTY IS A SUPPORTED STATE, not a broken
+    #: one: `MiniMaxProvider.available` is False, the route answers 503 naming this variable, and
+    #: nothing else in the service changes. That is the `DoclingAdapter` shape — "an adapter that
+    #: was never INSTALLED has not failed at anything" — applied to a credential, and it is why a
+    #: developer with no key still gets a working reader.
+    llm_api_key: str = ""
+    llm_model: str = DEFAULT_MODEL
+    llm_base_url: str = DEFAULT_BASE_URL
+    llm_timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
 
     @property
     def database_file(self) -> Path:
@@ -88,4 +106,10 @@ class Settings:
         return cls(
             root=Path(root).expanduser() if root else Path.home() / ".papertree",
             session_hours=int(os.environ.get("PAPERTREE_SESSION_HOURS", DEFAULT_SESSION_HOURS)),
+            llm_api_key=os.environ.get("PAPERTREE_LLM_API_KEY", ""),
+            llm_model=os.environ.get("PAPERTREE_LLM_MODEL", DEFAULT_MODEL),
+            llm_base_url=os.environ.get("PAPERTREE_LLM_BASE_URL", DEFAULT_BASE_URL),
+            llm_timeout_seconds=float(
+                os.environ.get("PAPERTREE_LLM_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS)
+            ),
         )
