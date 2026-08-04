@@ -47,7 +47,7 @@ are the real gate.
 |---|---|---|
 | `retrieval/expansion.spec` | **MET** | `packages/retrieval/python/tests/test_expansion.py`. Parent section, adjacent blocks and related equation/figure returned; determinism asserted by running twice and comparing exactly. |
 | `retrieval/budget.spec` | **MET**, with the ceiling stated as an *upper bound* | `tests/test_budget.py`. Never exceeds 8,100; truncation recorded as data. See §3 for what the estimator can and cannot claim. |
-| `qa/grounding.spec` | **DEFERRED — not attempted** | The 120 Tier C questions do not exist. Schema, loader and scorer ship; the spec is not written because there is nothing to run it on. See §2. |
+| `qa/grounding.spec` | **DEFERRED — harness shipped, dataset absent** | The Tier C questions still do not exist (#62, **open**). As of #78 Session C the schema, loader and §4.2 scorer ship for the QUESTION SET too — `packages/evaluation/.../grounding.py`, `python -m papertree_evaluation grounding` — and refuse an absent, empty or zero-question set by name with a non-zero exit. **Scored on 0 questions of 0**, which is coverage, not a verdict. See §2. |
 | `qa/citation-nav.spec` | **MET** | Resolution accuracy measured and met (§4). The end-to-end scroll was a no-op (**#64**); closed in #78 Session A (PR #93), asserted by `apps/web/test/citation-scroll.spec.tsx`. |
 | `qa/interpretation.spec` | **MET** | `apps/web/test/interpretation.spec.tsx`, 6 tests. Falsified on purpose: replacing the flag with a filter fails 2 of them. |
 | `security/injection.spec` | **MET** | `packages/memory/python/tests/test_security_injection.py`, 12 tests. See §5 — this is the strongest result in the epic. |
@@ -89,6 +89,17 @@ evidence. So:
 
 One scoping note for whoever picks it up: README §1.2 sizes Tier C at **12 papers × 10**, and
 `fetch_corpus.sh` provides **8**. "120" is quoted in four documents and is not currently reachable.
+
+**Updated by #78 Session C (#62's ruling of 2026-08-02: option 2, a 20–30 question subset).** The
+ruling reduced the QUANTITY owed and changed nothing about who may produce it, so no agent authored
+the questions and **#62 stays open**. What shipped is the harness: a JSON Schema + dataclass +
+loader for the question set, the `grounding` subcommand, and §4.2's five metrics — of which
+**support validity is reported NOT EVALUABLE** (§4.2 requires a rubric adjudicated by a human on a
+30-item sample; no proxy is substituted) and **§4.2's single "contamination rate" is not reported
+as one number**, because `answer.py:100-108` buckets `caption` and `paragraph` both into
+`target_type: "text"` and its caption half is therefore not expressible. `DEFAULT_COVERAGE_THRESHOLD
+= 0.6` remains a **judgement, not a calibration** — a 20–30 question subset would move it from
+unscored to scored thinly, and today it is neither.
 
 ### The token estimator, stated precisely
 

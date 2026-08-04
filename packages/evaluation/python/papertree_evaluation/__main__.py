@@ -270,6 +270,44 @@ def _region_texts(corpus: Path, pages: list[dict[str, Any]]) -> dict[tuple[str, 
     return out
 
 
+DEFAULT_QUESTIONS = REPO / "research" / "benchmarks" / "questions" / "tier-c-questions.json"
+
+
+def _grounding(args: argparse.Namespace) -> int:
+    """#62's harness: §4.2's Tier C metrics in one command, and a LOUD refusal when it must.
+
+    `score` is parser GEOMETRY against §4.1 and never sees an answer; this is §4.2, over answers.
+    Two subcommands because they are two benchmarks with two datasets, and folding the second
+    into the first would make "no question set" look like a quiet subsection of a green run.
+
+    Returns 1 on every unscoreable shape - absent set, empty file, zero questions, zero answered
+    - with the specific reason on stderr. `grounding.py`'s module docstring says why that is the
+    graded behaviour rather than a nicety.
+    """
+    from papertree_evaluation.grounding import (
+        GroundingHarnessError,
+        load_answers,
+        load_question_set,
+        render_grounding_report,
+        score_grounding,
+    )
+
+    try:
+        questions = load_question_set(Path(args.questions))
+        answers = load_answers(Path(args.answers)) if args.answers else {}
+        if not args.answers:
+            raise GroundingHarnessError(
+                f"{len(questions.questions)} question(s) loaded and no --answers file given. "
+                "Loading the gold is not scoring it."
+            )
+        score = score_grounding(questions, answers)
+    except GroundingHarnessError as exc:
+        print(f"\nGROUNDING NOT SCORED - {type(exc).__name__}\n  {exc}", file=sys.stderr)
+        return 1
+    print(render_grounding_report(score))
+    return 0
+
+
 def _compare(args: argparse.Namespace) -> int:
     from papertree_evaluation.harness import render_matrix, run_comparison, write_results
 
@@ -371,6 +409,13 @@ def main(argv: list[str] | None = None) -> int:
         help="also score docling and form the decision rule's ratio (slow: ~5 s/page)",
     )
     sco.set_defaults(func=_score)
+
+    # NOT `score`: that name is taken by §4.1's parser geometry, which never imports the answer
+    # contract. Two benchmarks, two datasets, two verbs.
+    grn = sub.add_parser("grounding", help="#62: §4.2's Tier C grounding metrics over answers")
+    grn.add_argument("--questions", default=str(DEFAULT_QUESTIONS))
+    grn.add_argument("--answers", help="{question_id: <GroundedAnswer>} from a run you did")
+    grn.set_defaults(func=_grounding)
 
     cmp_ = sub.add_parser("compare", help="run every adapter and emit the matrix")
     cmp_.add_argument("--corpus", default=str(DEFAULT_CORPUS))

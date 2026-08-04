@@ -492,12 +492,14 @@ name = "papertree-evaluation"
 version = "1.0.0"
 source = { editable = "packages/evaluation/python" }
 dependencies = [
+    { name = "papertree-agent-tools" },
     { name = "papertree-document-ir" },
     { name = "papertree-document-worker" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "papertree-agent-tools", editable = "packages/agent-tools/python" },
     { name = "papertree-document-ir", editable = "packages/document-ir/python" },
     { name = "papertree-document-worker", editable = "services/document-worker/python" },
 ]
