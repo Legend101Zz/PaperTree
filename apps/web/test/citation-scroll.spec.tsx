@@ -128,6 +128,7 @@ describe('reader/citation-scroll.spec — clicking a citation moves the page (#6
         anchors={[]}
         onAnchorCaptured={() => undefined}
         onViewportResize={() => undefined}
+        onSelectionChange={() => undefined}
         documentRef={ref}
       />,
     );
@@ -162,6 +163,7 @@ describe('reader/citation-scroll.spec — clicking a citation moves the page (#6
         anchors={[]}
         onAnchorCaptured={() => undefined}
         onViewportResize={() => undefined}
+        onSelectionChange={() => undefined}
         documentRef={ref}
       />,
     );
@@ -186,6 +188,7 @@ describe('reader/citation-scroll.spec — clicking a citation moves the page (#6
         anchors={[]}
         onAnchorCaptured={() => undefined}
         onViewportResize={() => undefined}
+        onSelectionChange={() => undefined}
         documentRef={ref}
       />,
     );

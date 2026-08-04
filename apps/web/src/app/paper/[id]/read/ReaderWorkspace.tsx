@@ -33,10 +33,12 @@ import {
   createLiveAnswerSource,
   Inspector,
 } from '@/components/inspector';
+import type { InspectorContext } from '@/components/inspector/types';
 import { GuidedView } from '@/components/reader/GuidedView';
 import { ModeSwitch } from '@/components/reader/ModeSwitch';
 import { Navigator } from '@/components/reader/Navigator';
 import { SourcePane } from '@/components/reader/SourcePane';
+import type { PendingSelection } from '@/components/reader/useSelectionCapture';
 import { SplitView } from '@/components/reader/SplitView';
 import { UnanchoredTray } from '@/components/reader/UnanchoredTray';
 import { resolveZoom, ZoomControl, type ZoomMode } from '@/components/reader/ZoomControl';
@@ -86,6 +88,14 @@ export function ReaderWorkspace({ paper }: ReaderWorkspaceProps) {
    */
   const [zoomMode, setZoomMode] = useState<ZoomMode>({ kind: 'scale', scale: 1 });
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
+  /**
+   * The reader's live text selection — #77's D6.
+   *
+   * Held HERE rather than in `SourcePane` because the Inspector is a sibling of the document
+   * surface, not a child of it: this is the nearest common ancestor and therefore the only place
+   * the two can agree on what is selected.
+   */
+  const [selection, setSelection] = useState<PendingSelection | null>(null);
 
   // Mode, zoom and scroll are remembered PER PAPER (IA §18.2's persistence column), so returning
   // to a paper returns you to how you were reading it, not to a global default.
@@ -288,6 +298,8 @@ export function ReaderWorkspace({ paper }: ReaderWorkspaceProps) {
       documentRef={documentRef}
       pdfSource={pdfSource}
       onJumpToPage={jumpToPage}
+      selection={selection}
+      onSelectionChange={setSelection}
     />
   );
 }
@@ -319,6 +331,9 @@ interface ViewProps {
   readonly pdfSource: string | ArrayBuffer | null;
   /** A page-level jump for an anchor that could not be placed — never a delete. */
   readonly onJumpToPage: (pageIndex: number, anchorId: string) => void;
+  /** The live text selection, or `null` when nothing is selected — #77's D6. */
+  readonly selection: PendingSelection | null;
+  readonly onSelectionChange: (selection: PendingSelection | null) => void;
 }
 
 function ReaderWorkspaceView(props: ViewProps) {
@@ -355,6 +370,39 @@ function ReaderWorkspaceView(props: ViewProps) {
   const title =
     doc.blocks.find((block) => block.type === 'title')?.text.replace(/\n/g, ' ') ??
     paperRefKey(props.paper);
+
+  /**
+   * What the Inspector is asked ABOUT — #77's D6, and the defect this replaces was one line.
+   *
+   * It used to be a hardcoded literal:
+   *
+   *     context={{ kind: 'selection', blockIds: [doc.blocks[0]?.id ?? ''], quote: title }}
+   *
+   * — so "Explain this selection" explained the paper's FIRST BLOCK, forever, whatever the reader
+   * had highlighted. Measured in a real browser: selecting 182 characters of the ResNet abstract
+   * and asking produced an answer about the title, two authors, the affiliation and the email line.
+   * The tool loop, the expansion, the verifier and the citation chips were all working correctly on
+   * an input nobody had connected.
+   *
+   * NO TEST COULD SEE IT. `ask-wiring.spec.tsx` builds a context itself and asserts what the
+   * Inspector does with one; it has no view of what this mount site passes. That is #77's whole
+   * thesis — "every acceptance test imports the component it tests" — in one prop.
+   *
+   * THE FALLBACK IS NOT THE OLD BUG. With nothing selected there is no selection to explain, and
+   * the first block (the title) is a defensible document-level subject. The difference is that it
+   * is now what happens when the reader has selected nothing, rather than what happens always.
+   * `blockIds` is filtered against `doc.byId` because a selection can span a region the parse has
+   * no block for, and an id the document does not contain would be dropped by the answer source
+   * with a less useful message than "nothing is selected".
+   */
+  const inspectorContext = useMemo<InspectorContext>(() => {
+    const selected = (props.selection?.blockIds ?? []).filter((id) => doc.byId.has(id));
+    if (selected.length > 0) {
+      return { kind: 'selection', blockIds: selected, quote: props.selection?.text ?? '' };
+    }
+    return { kind: 'selection', blockIds: [doc.blocks[0]?.id ?? ''], quote: title };
+  }, [props.selection, doc, title]);
+
 
   return (
     <div className="flex h-dvh flex-col bg-[--pt-page-ground]">
@@ -410,7 +458,7 @@ function ReaderWorkspaceView(props: ViewProps) {
           data-epic="3"
         >
           <Inspector
-            context={{ kind: 'selection', blockIds: [doc.blocks[0]?.id ?? ''], quote: title }}
+            context={inspectorContext}
             answerSource={inspectorAnswerSource}
             paperId={paper.kind === 'api' ? paper.paperId : paperRefKey(paper)}
             onNavigate={(citation) => {
@@ -522,6 +570,7 @@ function DocumentSlot(props: ViewProps) {
             anchors={props.anchors}
             onAnchorCaptured={props.onAnchorCaptured}
             onViewportResize={props.onViewportResize}
+            onSelectionChange={props.onSelectionChange}
             documentRef={props.documentRef}
           />
         }
@@ -538,6 +587,7 @@ function DocumentSlot(props: ViewProps) {
       anchors={props.anchors}
       onAnchorCaptured={props.onAnchorCaptured}
       onViewportResize={props.onViewportResize}
+      onSelectionChange={props.onSelectionChange}
       documentRef={props.documentRef}
     />
   );

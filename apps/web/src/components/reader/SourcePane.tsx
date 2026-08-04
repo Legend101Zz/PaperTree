@@ -9,7 +9,7 @@
  * the same thing with a worse name.
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Anchor, IndexedDocument, Resolution } from '@papertree/anchoring';
 
@@ -19,7 +19,10 @@ import { PdfDocumentProvider } from '@/components/reader/PdfDocumentProvider';
 import type { TextLayerInfo } from '@/components/reader/PdfPage';
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar';
 import { stampTextLayer } from '@/components/reader/stampTextLayer';
-import { useSelectionCapture } from '@/components/reader/useSelectionCapture';
+import {
+  useSelectionCapture,
+  type PendingSelection,
+} from '@/components/reader/useSelectionCapture';
 import { VirtualPageList, type VirtualPageListHandle } from '@/components/reader/VirtualPageList';
 
 export interface SourcePaneAnchor {
@@ -49,6 +52,20 @@ export interface SourcePaneProps {
    */
   readonly onViewportResize: (size: { readonly width: number; readonly height: number }) => void;
   /**
+   * The live text selection, reported upward — #77's D6.
+   *
+   * REQUIRED, deliberately, and for the reason the comment above `onViewportResize` gives. The
+   * Inspector's `context` used to be a hardcoded `blockIds: [doc.blocks[0]?.id]`, so "Explain this
+   * selection" explained the title of the paper no matter what the reader had highlighted. That
+   * survived every test because `ask-wiring.spec.tsx` constructs the context itself and can only
+   * see what the Inspector does with one, never what the mount site passes. An optional prop would
+   * have let the shell silently not supply this and reproduce the bug exactly.
+   *
+   * `null` means "nothing is selected", which is a real state and not an error: the Inspector
+   * falls back to the document-level context.
+   */
+  readonly onSelectionChange: (selection: PendingSelection | null) => void;
+  /**
    * Populated by this pane while it is mounted, and nulled when it unmounts — #64.
    *
    * REQUIRED, not optional. `DocumentSlot` renders this component in Source and Split modes and
@@ -76,7 +93,7 @@ export interface SourcePaneProps {
  * `pointer-events: none`, and the toolbar opts back in.
  */
 export function SourcePane(props: SourcePaneProps) {
-  const { doc, onAnchorCaptured } = props;
+  const { doc, onAnchorCaptured, onSelectionChange } = props;
   const listRef = useRef<VirtualPageListHandle | null>(null);
   // State, not a ref: the hook must re-bind when the scroller mounts, and a ref write does not
   // re-render. Null until then, which is exactly when the hook is meant to be inert.
@@ -89,6 +106,18 @@ export function SourcePane(props: SourcePaneProps) {
     mode: 'source',
     provenanceClass: 'source',
   });
+
+  /**
+   * Report the live selection upward, so the Inspector asks about what the reader highlighted.
+   *
+   * In an effect rather than inside `useSelectionCapture`'s own handlers: the hook is shared with
+   * Guided mode and owns anchor capture, not shell state, and calling a parent's setter from inside
+   * a `selectionchange` listener would re-enter React's render on every caret move. Reacting to the
+   * settled value keeps the hook's contract unchanged.
+   */
+  useEffect(() => {
+    onSelectionChange(selection);
+  }, [selection, onSelectionChange]);
 
   /**
    * Stamp the text layer as each page renders.

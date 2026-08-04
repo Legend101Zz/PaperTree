@@ -10,23 +10,28 @@
  * "designed states: parsing, partial, uncertainty, failure, offline, empty" all existed and no user
  * could reach one of them. Issue #59; `components/dashboard/` is deleted in the same commit.
  *
- * THE UPLOAD DECISION, because it is the one thing here that could be dishonest.
+ * THE UPLOAD, REWRITTEN — #77 required this paragraph to change and it was right to.
  *
- * `papersApi.upload` posts to `apps/api`, which is the **v1** application: MongoDB, its own JWT, its
- * own extractor. It does not produce PaperIR, and `services/document-worker` — which does — has no
- * HTTP surface for the web app to call. A paper uploaded here therefore cannot open in the v2
- * reader, and the honest thing is to say so when it lands rather than when the user clicks it.
+ * WHAT IT USED TO SAY, and why it is gone: that `papersApi.upload` posts to `apps/api`, the v1
+ * application, which does not produce PaperIR — so an uploaded paper "cannot open in the v2 reader"
+ * and appears as PENDING forever, deliberately.
  *
- * `libraryPaperFromApi` already defaults `processing` to `'pending'` for exactly this reason. Its
- * own comment: "a row that has never been told about a job is a paper nobody has parsed yet, and
- * defaulting to `complete` would light up Guided mode over an IR that does not exist." So an
- * uploaded paper appears as PENDING, its Guided and audio affordances stay gated by
- * `derivedFeaturesReady`, and opening it lands on the reader's designed "not parsed yet" state.
- * That is the truth, rendered — instead of a card that looks ready and opens onto nothing.
+ * **Every clause of that is now false, and one of them was actively harmful.** `apps/api` is
+ * archived; `NEXT_PUBLIC_API_URL` resolves to `services/api`, which is v2; and `POST /papers` +
+ * `python -m papertree_api.worker` (#74, #76) produce a real, promoted PaperIR generation. The
+ * harmful part: this file kept importing the v1 client while pointing at the v2 service, so the
+ * dropzone posted to `/papers/upload` — a route v2 does not have. Measured in a real browser during
+ * the #77 walk: **405 Method Not Allowed**. The upload button could not work at all, and the
+ * docstring explained the resulting emptiness as a design decision.
  *
- * Hiding upload until Epic 1 exposes an ingest endpoint was the alternative, and it is worse:
- * §19.8 makes the upload states part of the deliverable, and a dropzone reporting "uploaded —
- * queued for reading" about a queue that does exist is not a lie about anything.
+ * WHAT HAPPENS NOW. `papersApi` is `@/lib/papertree`'s — v2's — so upload posts to `POST /papers`,
+ * the worker parses it, and the row comes back `status: "complete"`. `libraryPaperFromPaperRow`
+ * reads `processing` FROM that status rather than defaulting it, so a parsed paper says Ready and
+ * an unparsed one still says Queued. The old default of `'pending'` was correct when nothing could
+ * ever parse; keeping it once something could was the bug that made a finished paper look queued.
+ *
+ * Samples remain first-class for the reason §19.8 gives — the product must be evaluable before
+ * committing a PDF.
  *
  * SAMPLES ARE FIRST-CLASS. §19.8 requires the product to be evaluable before committing a PDF, and
  * `SAMPLE_PAPERS` is the repo's own three golden fixtures — the documents every anchoring test runs
@@ -43,13 +48,13 @@ import { PaperList } from '@/components/library/PaperList';
 import { pointerActivate, TOUCH_TARGET } from '@/components/library/primitives';
 import { EmptyLibrary, OfflineState } from '@/components/library/SystemStates';
 import {
-  libraryPaperFromApi,
+  libraryPaperFromPaperRow,
   SAMPLE_PAPERS,
-  type ApiPaperRow,
   type LibraryPaper,
+  type PaperRow,
 } from '@/components/library/types';
 import { UploadDropzone } from '@/components/library/UploadDropzone';
-import { papersApi } from '@/lib/api';
+import { papersApi } from '@/lib/papertree';
 import { useAuthStore } from '@/store/authStore';
 
 type LibraryLayout = 'grid' | 'list';
@@ -115,7 +120,9 @@ function Library() {
     isError,
   } = useQuery({
     queryKey: ['papers'],
-    queryFn: papersApi.list as () => Promise<ApiPaperRow[]>,
+    // No cast: `papersApi.list` is typed as the rows the service really sends, and `PaperRow` is
+    // structurally the same four fields. A cast here is what hid #77's D4 for an entire epic.
+    queryFn: (): Promise<readonly PaperRow[]> => papersApi.list(),
     // Offline is a designed state, not a retry storm.
     retry: online ? 1 : false,
   });
@@ -136,7 +143,7 @@ function Library() {
    */
   const papers = useMemo<readonly LibraryPaper[]>(() => {
     const own = (Array.isArray(rows) ? rows : [])
-      .map((row) => libraryPaperFromApi(row))
+      .map((row) => libraryPaperFromPaperRow(row))
       .sort((a, b) => b.addedAt.localeCompare(a.addedAt));
     return [...SAMPLE_PAPERS, ...own];
   }, [rows]);
