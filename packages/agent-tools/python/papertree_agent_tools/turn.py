@@ -51,9 +51,11 @@ thought of, and *omitting a required argument* was not one of them.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
+from functools import partial
 from typing import Any, Final
 
 from papertree_agent_tools.provider import MiniMaxProvider
@@ -183,7 +185,22 @@ class ChatCompletionsTurn:
         model, prompt_tokens, completion_tokens = "", 0, 0
 
         for step in range(1, self._max_steps + 1):
-            completion = self._provider.complete(messages, tools=tools, max_tokens=self._max_tokens)
+            # OFF THE EVENT LOOP, and this is the one line in the file that is about deployment
+            # rather than about the protocol. `provider.complete` is synchronous and bottoms out in
+            # `urllib.request.urlopen` — a blocking socket read for up to `timeout_seconds`. The
+            # API's `deps.py` deliberately made every dependency and every route `async` so that
+            # thread-bound sqlite connections stay on one thread, which means `POST /ask` awaits
+            # this ON the event loop. Calling `complete` inline there stops the entire service —
+            # every other reader's page fetch included — for up to `_max_steps` model calls.
+            # deps.py accepts blocking the loop for sqlite and says why: "the reads are
+            # milliseconds". A model call is seconds, so that argument does not extend here.
+            #
+            # ONLY this call moves. Tool dispatch below stays on the loop thread because it reads
+            # through sqlite; both halves are pinned in `test_turn_loop.py`.
+            call_model = partial(
+                self._provider.complete, messages, tools=tools, max_tokens=self._max_tokens
+            )
+            completion = await asyncio.get_running_loop().run_in_executor(None, call_model)
             model = completion.model or model
             prompt_tokens += completion.input_tokens
             completion_tokens += completion.output_tokens

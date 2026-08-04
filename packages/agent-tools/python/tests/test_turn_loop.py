@@ -20,6 +20,7 @@ from __future__ import annotations
 import ast
 import inspect
 import json
+import threading
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -37,6 +38,12 @@ from papertree_agent_tools import (
 )
 from papertree_agent_tools import turn as turn_module
 
+# The real `dispatch`, taken from the module that DEFINES it. `turn.py` imports it and does not
+# re-export it, so reading `turn_module.dispatch` is an `attr-defined` error under strict mypy;
+# `monkeypatch.setattr(turn_module, "dispatch", …)` below still patches the name the loop calls,
+# because `turn.py` bound it at import time.
+from papertree_agent_tools.runtime import dispatch as real_dispatch
+
 REGISTRY = build_registry()
 
 
@@ -50,6 +57,22 @@ class ScriptedTransport:
     def __call__(self, url: str, body: bytes, headers: Mapping[str, str], timeout: float) -> bytes:
         self.requests.append({"url": url, "body": json.loads(body)})
         return json.dumps(self.responses.pop(0)).encode("utf-8")
+
+
+class _ThreadRecordingTransport(ScriptedTransport):
+    """A ``ScriptedTransport`` that also records WHICH THREAD each model call was made on.
+
+    The transport is the innermost point of ``provider.complete``, so its thread is the thread the
+    blocking ``urlopen`` would have run on in production.
+    """
+
+    def __init__(self, responses: Sequence[Mapping[str, Any]]) -> None:
+        super().__init__(responses)
+        self.threads: list[int] = []
+
+    def __call__(self, url: str, body: bytes, headers: Mapping[str, str], timeout: float) -> bytes:
+        self.threads.append(threading.get_ident())
+        return super().__call__(url, body, headers, timeout)
 
 
 def _text(text: str) -> dict[str, Any]:
@@ -332,6 +355,83 @@ def test_a_turn_that_needs_no_tool_still_answers(synthetic: Seeded) -> None:
     assert (outcome.text, outcome.dispatched, outcome.steps) == ("no lookup needed", 0, 1)
 
 
+# ── the one blocking call in an all-async chain ──────────────────────────────────────────
+
+
+def test_the_model_call_happens_off_the_event_loop_thread(synthetic: Seeded) -> None:
+    """``provider.complete`` is SYNCHRONOUS, and this turn is awaited by an ``async def`` route.
+
+    ``provider.py:181`` is ``urllib.request.urlopen`` — a blocking socket read, for as long as
+    ``timeout_seconds``. ``services/api``'s ``deps.py`` made every dependency and every route
+    ``async`` on purpose (sqlite connections are thread-bound), so ``POST /ask`` runs ON the event
+    loop thread; calling the model from there stops the whole service — every other reader's page
+    fetch included — for the length of up to ``DEFAULT_MAX_STEPS`` model calls.
+
+    deps.py's header accepts blocking the loop for sqlite and says why: *"the reads are
+    milliseconds"*. A model call is seconds. That argument does not extend to this one, so the
+    provider call is handed to the default executor and the loop stays free.
+
+    ASSERTED ON THE THREAD ID, NOT ON A CLOCK. ``run()`` is ``asyncio.run``, which drives the loop
+    on THIS thread, so the transport recording a different id is exactly the property, with no
+    sleep to make it flaky. Watched failing before the fix: ``complete`` called inline recorded
+    this thread and the assertion read ``assert 8758964480 not in [8758964480]``.
+    """
+    transport = _ThreadRecordingTransport([_text("answered")])
+    with synthetic.handle() as handle:
+        run(
+            _turn(transport).run(
+                system_prompt="s", user_message="q", context=synthetic.context(handle)
+            )
+        )
+
+    assert transport.threads, "the transport was never called"
+    assert threading.get_ident() not in transport.threads, (
+        "provider.complete ran on the event loop thread; a blocking urlopen there stalls every "
+        "other request the service is serving"
+    )
+
+
+def test_tool_dispatch_stays_on_the_event_loop_thread(
+    synthetic: Seeded, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The COMPLEMENT of the test above, and the reason the fix is one call and not a policy.
+
+    ONLY the provider call moves. Tool dispatch must NOT: it reads through ``AgentDataHandle``'s
+    sqlite connection, and ``sqlite3`` objects belong to the thread that created them — the exact
+    ``ProgrammingError`` ``deps.py``'s header quotes from ``app.py:271``. A well-meaning "run the
+    whole loop in a thread" would reintroduce that bug, and intermittently, because a threadpool
+    only sometimes hands back a different worker. So the boundary is pinned by a test rather than
+    described in a comment.
+
+    Recorded by wrapping the ``dispatch`` the loop actually calls — ``turn.py`` binds it at import,
+    so patching the module attribute is patching the real edge.
+    """
+    dispatch_threads: list[int] = []
+
+    async def recording(*args: Any, **kwargs: Any) -> Any:
+        dispatch_threads.append(threading.get_ident())
+        return await real_dispatch(*args, **kwargs)
+
+    monkeypatch.setattr(turn_module, "dispatch", recording)
+
+    block_id = synthetic.first_of_type("paragraph")
+    transport = _ThreadRecordingTransport(
+        [_tool_call("get_block", json.dumps({"block_id": block_id})), _text("done")]
+    )
+    with synthetic.handle() as handle:
+        outcome = run(
+            _turn(transport).run(
+                system_prompt="s", user_message="q", context=synthetic.context(handle)
+            )
+        )
+
+    assert outcome.dispatched == 1
+    assert dispatch_threads == [threading.get_ident()], (
+        f"tool dispatch left the event loop thread: {dispatch_threads} vs "
+        f"{threading.get_ident()}; sqlite connections are bound to their creating thread"
+    )
+
+
 # ── the swappability bound, preserved rather than moved ──────────────────────────────────
 
 
@@ -383,6 +483,17 @@ def test_the_shipped_loop_imports_no_agent_framework() -> None:
             imported.update(alias.name.split(".")[0] for alias in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module is not None:
             imported.add(node.module.split(".")[0])
-    assert imported <= {"__future__", "collections", "dataclasses", "json", "typing"} | {
-        "papertree_agent_tools"
-    }, sorted(imported)
+    # An ALLOWLIST OF STDLIB MODULES, not a count. `asyncio` and `functools` were added for the
+    # executor hand-off above; both are stdlib, which is what `pyproject.toml`'s "Stdlib only by
+    # design" promises, and neither is framework-shaped. The guard is unchanged in kind: any
+    # third-party name — `pydantic_ai`, `langchain`, `openai` — still fails it, and `pyproject`'s
+    # dependency list is separately gated by `uv sync --locked`.
+    assert imported <= {
+        "__future__",
+        "asyncio",
+        "collections",
+        "dataclasses",
+        "functools",
+        "json",
+        "typing",
+    } | {"papertree_agent_tools"}, sorted(imported)
