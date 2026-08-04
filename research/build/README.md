@@ -155,14 +155,15 @@ layer. Three epics of measured, tested libraries exist and a user can reach none
 The first milestone from `../ROADMAP-AND-CHANGE-MAP.md` §27 remains the architectural
 gate, and it is satisfied at the end of **Wave 2**.
 
-**Status as of 2026-08-03, `main` at `dff69e5`.** Every number re-measured, not quoted.
+**Status as of 2026-08-04, `main` at `e950f23`** (was `dff69e5`, which predated #78 Sessions B-bis
+and C). Every number re-measured, not quoted.
 
 | # | Criterion | | Evidence |
 |---|---|---|---|
 | 1 | Re-parsing produces byte-identical PaperIR and identical block IDs | ✅ **MET** | 20 runs byte-identical, `test_pipeline_end_to_end.py` |
 | 2 | A highlight survives reload, zoom 50→400%, 5 viewport widths, drift <1pt | ✅ **MET** | Epic 2, `EPIC-02-RESULT.md` |
 | 3 | A highlight re-anchors under a different parser config, **or fails loudly** | ✅ **MET** | **100.00%, 0 orphans**, 21 fixture × perturbation combinations — including one retiring 89.5% of ids |
-| 4 | An answer's citation navigates to the correct polygon | ✅ **MET** | Resolution **100%** page and polygon; the scroll now fires — #64 closed in #78 Session A (PR #93), asserted click-to-scroller by `apps/web/test/citation-scroll.spec.tsx` |
+| 4 | An answer's citation navigates to the correct polygon | ✅ **MET**, and now on a **real** answer | Resolution **100%** page and polygon; the scroll fires — #64 closed in #78 Session A (PR #93), asserted click-to-scroller by `apps/web/test/citation-scroll.spec.tsx`. **The verdict did not move; its subject did.** Until #76 the answer being cited was a fixture. Since PR #131 it is a live MiniMax-M3 turn through `POST /papers/{id}/ask`, and the region is **rebuilt from the parse** rather than taken from the model — measured on a real upload, answer bbox ≡ block bbox to six decimals (`EPIC-03-RESULT.md` §10) |
 | 5 | Figures from an all-vector paper (ResNet) present with captions linked | 🟡 **PARTIAL** | ≥5 figures ✅ (9, all vector); `is_vector` correct ✅. **The captions clause is MET and the criterion still is not** — see below. |
 | 6 | Parse runs as a background job with observable progress, surviving a worker restart | ✅ **MET** | `jobs/durability.spec`, `test_a_job_killed_mid_step_resumes_at_that_step` |
 
@@ -204,5 +205,24 @@ would be exactly the move `AGENTS.md` §2 forbids.
 downstream inherits it."* **It did not fail**, and it is the strongest measurement in the
 repo: the control shows a bare `block_id` surviving the same re-parse at **3.3%**.
 
-Wave 3 is therefore not blocked on correctness. It is blocked on **4**, on **5**, and on
+Wave 3 is therefore not blocked on correctness. It was blocked on **4**, on **5**, and on
 there being a product a person can use — which is what **#78** exists to deliver.
+
+**As of 2026-08-04 (#78 Session C), two of those three are discharged.** Criterion **4** is MET on a
+live answer rather than a fixture (row above). **There is a product**: a person registers, uploads a
+PDF, watches it parse, reads it in three modes, asks a question and clicks a citation that moves the
+page to the right polygon — walked in a real foregrounded browser under #77 (PR #134), which found
+eight defects, fixed six and filed two (#132, #133).
+
+**One clause of that sentence is deliberately absent: highlighting.** Journey 4 (highlight → reload)
+was **blocked behind D1/D2 in a clean session and was never walked**, so `UX-WALK-77.md` lists it as
+unwalked rather than assumed working, and this table does the same. The capability is measured
+elsewhere — gate criteria **2** and **3** above are exactly it, at 100.00 % re-anchoring over 21
+fixture × perturbation combinations — but *a person doing it in a browser after signing in* has not
+been observed and is not claimed here.
+
+**Criterion 5 is the one that remains**, and it remains for the reason stated above — float
+**detection** (#103), not caption linking. It is Epic 1 parser work with an unknown floor: #51 and
+Session B between them measured and rejected five discriminator candidates. **Wave 3 is not blocked
+on it** — nothing in Epics 4 or 5 consumes float detection — but this table should not say MET until
+somebody moves that number.
