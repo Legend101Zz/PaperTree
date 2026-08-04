@@ -125,14 +125,18 @@ def test_the_related_figure_edge_was_produced_by_the_parser_not_by_this_test(
     stored document: every relation, with the parser's own provenance string. If somebody later
     adds an authored edge to the unaugmented fixture, this fails.
 
-    MOVED BY #66. The `("cites", "printed_label")` row is new and is the parser's, not this test's
-    — the paragraph says "See also He et al. [1]" and page 2 prints "[1] K. He, ...". An authored
-    edge would carry `provenance: "authored-by-test"`, so the guard still distinguishes them.
+    MOVED BY #66, TWICE. The `("cites", "printed_label")` row came with the citation half — the
+    paragraph says "See also He et al. [1]" and page 2 prints "[1] K. He, ...". The
+    `("references", "caption-label")` row comes with the float half: the same paragraph says
+    "Figure 1 below" and the caption printed on that page is "Figure 1". Both are the parser's.
+    An authored edge would carry `provenance: "authored-by-test"`, so the guard still
+    distinguishes them, and it is now strictly stronger than when it was written.
     """
     relations = paper.document["relations"]
     assert sorted((r["type"], r["provenance"]) for r in relations) == [
         ("caption_of", "geometric+numbering"),
         ("cites", "printed_label"),
+        ("references", "caption-label"),
     ]
 
 
