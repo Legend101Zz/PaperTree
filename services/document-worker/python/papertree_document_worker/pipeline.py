@@ -29,13 +29,13 @@ from papertree_document_ir.validate import assert_valid_paper, validate_paper
 
 from papertree_document_worker.assemble import AssembledBlock, PaperBuilder, config_hash_for
 from papertree_document_worker.citations import apply_citation_roles, detect_citations
+from papertree_document_worker.classify import classify_document
+from papertree_document_worker.crops import DEFAULT_SCALE, CropStore
 from papertree_document_worker.crossrefs import (
     REFERENCES_RELATION,
     apply_payload_mirrors,
     detect_float_references,
 )
-from papertree_document_worker.classify import classify_document
-from papertree_document_worker.crops import DEFAULT_SCALE, CropStore
 from papertree_document_worker.equations import detect_equation_regions
 from papertree_document_worker.figures import detect_figure_regions, is_caption_line
 from papertree_document_worker.frontmatter import classify_front_matter
@@ -824,8 +824,14 @@ def _assemble(
         (source, target) for kind, source, target, _, _ in builder.relations if kind == "caption_of"
     ]
     float_links = detect_float_references(builder.blocks, caption_edges)
-    for link in float_links:
-        builder.relate(REFERENCES_RELATION, link.source, link.target, 0.8, link.mechanism)
+    for float_link in float_links:
+        builder.relate(
+            REFERENCES_RELATION,
+            float_link.source,
+            float_link.target,
+            0.8,
+            float_link.mechanism,
+        )
     apply_payload_mirrors(caption_edges, float_links)
 
     # F1.7's VLM half: ONLY flagged regions, only when a budget is configured, and the crop is

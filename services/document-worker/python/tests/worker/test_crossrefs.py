@@ -32,10 +32,12 @@ from __future__ import annotations
 import pathlib
 import tempfile
 from collections import Counter
+from typing import Any
 
 import pytest
 from _corpus_manifest import CORPUS_DIR as CORPUS
 from _corpus_manifest import EXPECTED_CORPUS, requires_corpus
+from papertree_document_ir import Paper
 from papertree_document_worker.pipeline import parse_document
 
 PAPER_ID = "ppr_CEK11Y5AX9M390QSB1724ED8KT"
@@ -48,9 +50,9 @@ _ALL = sorted(name.removesuffix(".pdf") for name in EXPECTED_CORPUS)
 
 
 @pytest.fixture(scope="module")
-def parsed() -> dict[str, object]:
+def parsed() -> dict[str, Paper]:
     """Parse all eight once. ~15 s total, which is why nothing here settles for a fixture."""
-    out = {}
+    out: dict[str, Paper] = {}
     for name in _ALL:
         with tempfile.TemporaryDirectory() as td:
             result = parse_document(
@@ -61,15 +63,16 @@ def parsed() -> dict[str, object]:
     return out
 
 
-def _blocks(paper, kind: str) -> list:
+def _blocks(paper: Paper, kind: str) -> list[Any]:
     return [b for b in paper.blocks if b.type == kind]
 
 
 @requires_corpus
-def test_references_edges_are_emitted_on_every_paper(parsed) -> None:
+def test_references_edges_are_emitted_on_every_paper(parsed: dict[str, Paper]) -> None:
     """`references` was emitted 0 times corpus-wide before this change.
 
-    WATCH IT FAIL: delete the `builder.relate(REFERENCES_RELATION, ...)` loop in `pipeline._assemble`
+    WATCH IT FAIL: delete the `builder.relate(REFERENCES_RELATION, ...)` loop in
+    `pipeline._assemble`
     and every count below goes to 0. Move the loop to hold a detached block object and it ALSO goes
     to 0 — silently, with `status: "complete"` — which is why this asserts the total rather than
     "some edges exist".
@@ -92,7 +95,7 @@ def test_references_edges_are_emitted_on_every_paper(parsed) -> None:
 
 
 @requires_corpus
-def test_the_pre_existing_relation_types_did_not_move(parsed) -> None:
+def test_the_pre_existing_relation_types_did_not_move(parsed: dict[str, Paper]) -> None:
     """A new emitter must not perturb the three types that were already there.
 
     `caption_of` in particular is READ by this change (it is the caption→float join) and a bug
@@ -108,14 +111,14 @@ def test_the_pre_existing_relation_types_did_not_move(parsed) -> None:
 
 
 @requires_corpus
-def test_caption_block_mirrors_caption_of_in_both_directions(parsed) -> None:
+def test_caption_block_mirrors_caption_of_in_both_directions(parsed: dict[str, Paper]) -> None:
     """The mirror agrees with the authoritative edge, and NOT merely by being non-empty.
 
     WATCH IT FAIL: point `apply_payload_mirrors` at `link.source` instead of `caption` and the
     forward direction breaks (a `caption_block` naming a non-caption); skip the write and the
     reverse breaks (an eligible edge with no mirror).
     """
-    mirrored = Counter()
+    mirrored: Counter[str] = Counter()
     for paper in parsed.values():
         by_id = {b.block_id: b for b in paper.blocks}
         edges = {
@@ -146,7 +149,7 @@ def test_caption_block_mirrors_caption_of_in_both_directions(parsed) -> None:
 
 
 @requires_corpus
-def test_figure_caption_block_reaches_the_share_111_measured(parsed) -> None:
+def test_figure_caption_block_reaches_the_share_111_measured(parsed: dict[str, Paper]) -> None:
     """58 of 85 — the same numerator and denominator #111 measured for `figures.spec`.
 
     Independent corroboration rather than a coincidence: #111 counted figures whose caption the
@@ -159,7 +162,7 @@ def test_figure_caption_block_reaches_the_share_111_measured(parsed) -> None:
 
 
 @requires_corpus
-def test_referenced_by_mirrors_the_references_edges(parsed) -> None:
+def test_referenced_by_mirrors_the_references_edges(parsed: dict[str, Paper]) -> None:
     """Every mirrored id traces to an edge, and every eligible edge is mirrored.
 
     NOTE THE SCHEMA ASYMMETRY, enumerated from `models.py` rather than assumed: `referenced_by`
@@ -201,7 +204,7 @@ def test_referenced_by_mirrors_the_references_edges(parsed) -> None:
 
 @requires_corpus
 def test_equation_number_is_populated_and_is_what_makes_equation_referencing_possible(
-    parsed,
+    parsed: dict[str, Paper],
 ) -> None:
     """0 → 46 of 81. `equations._equation_number` always parsed it; `pipeline` discarded it.
 
@@ -216,7 +219,7 @@ def test_equation_number_is_populated_and_is_what_makes_equation_referencing_pos
 
 
 @requires_corpus
-def test_the_askable_denominator_for_equations_is_8_not_81(parsed) -> None:
+def test_the_askable_denominator_for_equations_is_8_not_81(parsed: dict[str, Paper]) -> None:
     """7 of 81 equations is the wrong shape of number on its own, and this is the control.
 
     Papers refer to equations by restating them far more often than by writing "Eq. (3)". The
@@ -237,7 +240,9 @@ def test_the_askable_denominator_for_equations_is_8_not_81(parsed) -> None:
 
 
 @requires_corpus
-def test_prev_id_and_next_id_are_still_empty_and_that_is_the_ruling(parsed) -> None:
+def test_prev_id_and_next_id_are_still_empty_and_that_is_the_ruling(
+    parsed: dict[str, Paper],
+) -> None:
     """RULED: `prev_id`/`next_id` stay unpopulated, and this test is the ruling made checkable.
 
     #66 asked whether they are "intended to stay empty (derivable from flows) or unimplemented".
