@@ -1,11 +1,17 @@
 # EPIC 3 — Grounded AI · RESULT
 
-**Status: INCOMPLETE.** Six of eight features landed; two of the seven acceptance criteria are
-PARTIAL, one is DEFERRED with no dataset to score it against, and the "Must delete" list is NOT
-DONE. Every one of those is filed as an issue, and none of them is rounded up.
+**Status: COMPLETE, with one PARTIAL that no code can move and four follow-ups filed.**
+**Seven of eight features MET**; F3.5 stays PARTIAL because the Tier C question set does not exist
+and no agent may author it (**#62**, open). Of the seven acceptance criteria, five are MET, one is
+DEFERRED for that same dataset, and `security/isolation.spec` stays PARTIAL on a claim it has always
+declined to make. **Nothing is rounded up**, and §8 states the condition this file set for closing
+**#4** and shows it met.
 
-Written 2026-08-02, against `main` at `14c1f3c`. PRs #67 → #68 → #69 → #70, stacked in that order,
-all three CI jobs green on each.
+> **Revised 2026-08-04 by #78 Session C.** The original was written 2026-08-02 against `main` at
+> `14c1f3c` (PRs #67 → #68 → #69 → #70). Since then Session A closed #64/#71/#74/#75/#33, Session B
+> and B-bis moved Epic 1, and **Session C closed #66 (PRs #127 + #130), #72 (#126), #76 (#131) and
+> #77 (#134), and shipped the grounding harness (#125)**. Four feature verdicts moved as a result and
+> each says why below. Where a verdict did **not** move, the reason is named rather than softened.
 
 > Epic 1 rounded four PARTIALs up to MET and the correction cost more than the honesty would have
 > (`AGENTS.md` §2). This file does not repeat that. Where a number is missing, it says the number is
@@ -16,23 +22,37 @@ all three CI jobs green on each.
 ## 0. Verify this file rather than reading it
 
 `AGENTS.md` §1: *"the previous session's claims and the result file disagree more often than you
-would think, and the disagreement is the finding."* Everything below was measured on the top of the
-stack (`epic-3/f3.1-agent-tools`), uncached:
+would think, and the disagreement is the finding."*
+
+**Re-measured 2026-08-04 on the merged `main` at `e950f23`**, uncached, after every Session C PR had
+been verified an ancestor of `main` with `git merge-base --is-ancestor` rather than by a MERGED badge:
 
 ```
-pnpm exec turbo run lint typecheck test --force   19 successful, 0 cached
-uv run pytest                                     1493 passed, 1 skipped (196 s)
+pnpm exec turbo run lint typecheck test --force   19 successful / 19 total, 0 cached, 11.4 s
+uv run pytest                                     1733 passed, 2 skipped, 0 failed, 335.3 s
 uv run ruff check packages services               All checks passed!
-uv run ruff format --check packages services      136 files already formatted
-uv run mypy packages/*/python services/*/python   Success: no issues found in 130 source files
+uv run ruff format --check packages services      171 files already formatted
+uv run mypy packages/*/python services/*/python   Success: no issues found in 165 source files
+.github/scripts/assert-merged-prs-reached-main.sh examined 50, on main 48, known-good 2,
+                                                  violations 0 — PASS
 ```
 
-**Baseline correction.** `EPIC-03-grounded-ai.md` §5 states `uv run pytest` → "962 passed". On
-`main` at `14c1f3c` it is **1095 passed, 1 skipped**. Stale by 133. The TypeScript figure (19/19,
-0 cached) is correct. Numbers get re-derived, not quoted.
+**The second skip is not a regression and it matters that it is not.** `main` carried one
+pre-existing skip; Session C adds exactly one more — `test_live_provider.py`, which skips when
+`PAPERTREE_LLM_API_KEY` is unset and emits a `UserWarning` naming the variable, so a green log
+cannot quietly mean "no model was called". Neither skip is a corpus skip in this run.
 
-Added by this epic: **+398 Python tests** (prompts 170 · memory 74 · retrieval 41 · agent-tools 113)
-and **+13 web tests** (103 → 116).
+**As originally measured** (2026-08-02, `14c1f3c`, top of the Epic 3 stack): turbo 19/19 0 cached,
+pytest **1493 passed / 1 skipped**, 136 files formatted, mypy **130** source files. So the tree has
+gained **+240 tests, +35 formatted files and +35 mypy source files** since this epic was written —
+most of it from #78's three sessions, not from Epic 3.
+
+**Baseline correction, kept because it is the reason this section exists.**
+`EPIC-03-grounded-ai.md` §5 states `uv run pytest` → "962 passed". At `14c1f3c` it was **1095 passed,
+1 skipped** — stale by 133. Numbers get re-derived, not quoted.
+
+Added by this epic itself: **+398 Python tests** (prompts 170 · memory 74 · retrieval 41 ·
+agent-tools 113) and **+13 web tests** (103 → 116).
 
 **Note on the Python gate.** `AGENTS.md`'s pre-push gate lists only the three turbo targets, which
 is incomplete for Python work: turbo does not cover the Python packages at all. CI additionally runs
@@ -57,15 +77,15 @@ are the real gate.
 
 | | Feature | Verdict |
 |---|---|---|
-| F3.1 | Tool registry | **MET** — 18 tools, plain registry, stdlib schema validator. 6 are honestly degraded by #66 and each says why. |
-| F3.2 | Structure-aware retrieval | **PARTIAL** — the ladder is built and deterministic, but **three of six rungs have no data to return** (#66). |
+| F3.1 | Tool registry | **MET** — 18 tools, plain registry, stdlib schema validator. The 6 that were "honestly degraded by #66" are no longer: `resolve_citation`'s edge branch (`tools.py:870`) was unreachable code and is now reached, and `get_equation`/`get_figure` read the payload mirrors rather than working around their absence. |
+| F3.2 | Structure-aware retrieval | **MET** — the ladder is built, deterministic, and **every rung now has data**. #66 closed by PRs #127 + #130: `cites` **0 → 525**, `references` **0 → 115**, figure `caption_block` **0 → 58/85**, equation `referenced_by` **0 → 7/81**. `prev_id`/`next_id` stay empty **by ruling, not by omission** — `test_prev_id_and_next_id_are_still_empty_and_that_is_the_ruling` pins it at 0 of 9,903, because `Page.flows` is the authoritative reading order and a second one would drift. |
 | F3.3 | Evidence package assembly | **MET** |
-| F3.4 | Agent runtime | **PARTIAL** — registry + provider layer + a 54-line lazy Pydantic AI adapter. `pydantic-ai` is **not** a dependency (§6), and **no live provider call is made anywhere in the suite**. |
-| F3.5 | Answer contract + grounding verifier | **PARTIAL** — contract and verifier built, tested, and aligned with the TS twin mechanically. **Unscored**, because §2's dataset does not exist. |
-| F3.6 | Inspector UI | **PARTIAL** — built, reachable, measured, and the last DOM hop now works (#64 closed). Still wired to a **fixture** answer source (#62), which is Session C. |
+| F3.4 | Agent runtime | **MET** — and the two clauses that made it PARTIAL are both discharged in §6. `pydantic-ai` stays out **by an amendment argued from a measurement** (43 → 128 packages, +85), not by silence; and a live provider call now happens in `test_live_provider.py`, opt-in and skipping loudly. `ChatCompletionsTurn` (65 executable lines) is the shipped loop `/ask` drives. |
+| F3.5 | Answer contract + grounding verifier | **PARTIAL — and this is the one verdict Session C could not move.** Contract and verifier are built, tested and aligned with the TS twin. The §4.2 scorer now ships too (`papertree_evaluation grounding`). It remains **UNSCORED**, because the Tier C question set does not exist and **no agent may author it** (#62, open). Scored on **0 questions of 0**. See §3. |
+| F3.6 | Inspector UI | **MET, with one filed follow-up.** `POST /papers/{id}/ask` is live and `createLiveAnswerSource` feeds the panel; a real question against a real uploaded paper returns a real answer whose citations land on the right polygon (§10). **#133** records that the panel allows one ask per page load — filed rather than invented, because §19.8 does not design the return path from an answer to the idle state. |
 | F3.7 | Memory stores | **MET** — four stores + proposal queue + append-only audit. |
 | F3.8 | Injection defence | **MET** — structural, measured, and falsified on purpose. |
-| — | **Must delete** (4 v1 AI clients) | **NOT DONE** — #71. The replacement layer exists; the deletion needs Epic 5 for two of the four. |
+| — | **Must delete** (4 v1 AI clients) | **DONE** — **#71 closed** by #78 Session A (PR #89). `apps/api` and the v1 canvas surface are in `archive/`, outside every workspace, gate and lint path. |
 
 ---
 
@@ -307,16 +327,38 @@ surface that puts paper text in front of a model should go through these rather 
 
 | # | What |
 |---|---|
-| #64 | `documentRef.scrollToBlock` is never assigned — `onShowSource`/`onJumpToPage` are no-ops, and the capability exists one layer down under a different signature. **CLOSED** by #78 Session A (PR #93). |
-| #65 | The migration and three other edits outside Epic 3's owned paths, declared. |
-| #66 | Three of the retrieval ladder's six rungs have no data: no `cites`/`references`/`defines`, no `prev_id`/`next_id`, no equation `referenced_by`. |
-| #71 | The must-delete list is NOT done; two of the four need Epic 5 (#43) first. |
-| #72 | Python cannot mint an `Anchor`, so a server-side citation is a bare `block_id` — measured at 3.3 % survival. |
+| #64 | `documentRef.scrollToBlock` is never assigned. **CLOSED** — #78 Session A (PR #93). |
+| #65 | The migration and three other edits outside Epic 3's owned paths, declared. **CLOSED.** |
+| #66 | Three of the retrieval ladder's six rungs have no data. **CLOSED** — #78 Session C (PRs #127 + #130). |
+| #71 | The must-delete list is NOT done. **CLOSED** — #78 Session A (PR #89). |
+| #72 | Python cannot mint an `Anchor`, so a server-side citation is a bare `block_id` — 3.3 % survival. **CLOSED** — #78 Session C (PR #126). |
+| #76 | The Inspector answers from a hardcoded fixture. **CLOSED** — #78 Session C (PR #131). |
+| #77 | The end-to-end journey has never been walked. **CLOSED** — #78 Session C (PR #134). |
 
 Answered on an existing issue: **#62** (the dataset ruling, and the `mode=ro`/ATTACH finding).
 
-**Epic issue #4 must not be closed** while #64, #66, #71 and #72 are open — `AGENTS.md` §1, and the
-rule Epic 1's #2 exists to enforce.
+### The condition this file set for closing #4, and whether it is met
+
+The previous revision of this section said, in its own words:
+
+> **Epic issue #4 must not be closed** while #64, #66, #71 and #72 are open — `AGENTS.md` §1, and the
+> rule Epic 1's #2 exists to enforce.
+
+**All four are closed**, as are #76 and #77, which were filed later against this epic. So Epic 3's own
+stated closing condition is satisfied and **#4 is closed** by #78 Session C.
+
+**What that does NOT claim.** Four things are open and each is named rather than absorbed:
+
+| # | What it is | Why it does not block #4 |
+|---|---|---|
+| **#62** | the Tier C question set | Needs a **human author** — §4.4 requires the questions written before seeing parser output, which an agent that has read the corpus cannot honestly satisfy. The harness ships; the dataset cannot be agent-made. #78 §8 lists "#4 closed" and "#62 open" as simultaneously true. **F3.5 stays PARTIAL because of it, and that is stated in §2 rather than rounded up.** |
+| **#121** ·  **#123** ·  **#124** | anchoring follow-ups filed while landing #72 | #72's scope was the *derivation*, and it is done and proved against the real TS resolver. #124 (nothing calls it yet) costs **zero today** by its own measurement — nothing persists a citation. #121 (the `anchors` table cannot store a T4/T5/T6 verdict) bites the day something does. |
+| **#133** | the Inspector allows one ask per page load | A design question §19.8 does not answer, filed under #77's own "file it, do not invent it" rule. |
+| **#132** | mode switching loses reading position | Epic 2 surface, same rule. |
+
+**If a reader judges #124 or #133 to be unfinished Epic 3 scope rather than follow-ups, reopening #4
+is one click and this table is the argument to overrule.** It is written here so the decision is
+reviewable rather than implicit.
 
 ---
 
@@ -333,7 +375,81 @@ that nothing depends on is **not installed into the root `.venv`**, and `uv run 
 **zero tests from it** — which reports as a pass. That is the same vacuous green in the other
 language, and it is why those four lines exist.
 
-**Where the lesson was only partly applied:** F3.6 is reachable from a route and its citations
-resolve correctly, and since #64 closed the click moves the page — but the panel is still fed by a fixture
-rather than an agent (#62). A user can reach the Inspector. They cannot yet get a real answer out of
-it. That is stated here rather than counted as a working feature.
+**Where the lesson was only partly applied — and where it now is.** This section previously read:
+*"A user can reach the Inspector. They cannot yet get a real answer out of it."* Since #76 (PR #131)
+they can: `POST /papers/{id}/ask` composes retrieval → evidence → runtime → verifier, and
+`createLiveAnswerSource` feeds the panel. §10 records the question, the answer and the cited block
+ids from a real uploaded paper.
+
+**The lesson's harder half was re-learned in a new place, and it is worth recording.** `reachable.spec`
+walks the import graph and would have caught an unmounted component. It could not have caught what
+the #77 walk actually found: surfaces that are reachable at every step and incoherent as a whole —
+a mode switch that discards the reading position (#132), an ask affordance that vanishes after one
+use (#133). **The only instrument that finds that class is a person driving the product**, which is
+why #77 existed and why its output is a defect list rather than a feature.
+
+---
+
+## 10. The headline claim, recorded rather than asserted
+
+Epic 3's goal sentence is *"every answer cites blocks, pages and regions — and clicking a citation
+lands on the exact polygon."* #78's done-when for Session C asks for it **recorded with the question,
+the answer and the block ids**. This is that record, taken by the session's own orchestrator against
+the merged `main` at `e950f23`, not by the PR that built it.
+
+**Setup.** `python -m papertree_api` + `python -m papertree_api.worker` against a scratch
+`PAPERTREE_DATA_ROOT`, `PAPERTREE_LLM_API_KEY` from the local Keychain. Registered a new user,
+uploaded `research/benchmarks/corpus/resnet-cvpr-2col.pdf` over HTTP, waited for the job to reach
+`state: "succeeded"` (2/2 steps), then selected the paper's two abstract blocks as the seed —
+the same path a reader takes.
+
+```
+paper_id   ppr_2ZWQKB8WKZ71DSM5CD58ET4T37     (12 pages, 955 blocks, real upload)
+seed       blk_yaup3uye2fwqce6n, blk_2iep3dd7a7j27kx7   (type "abstract")
+```
+
+**Question asked:**
+
+> What error rate did the ensemble of residual nets achieve on the ImageNet test set, and how deep
+> were the networks the authors evaluated?
+
+**Answer returned** — `HTTP 200` in **6.6 s**, MiniMax-M3 through `ChatCompletionsTurn`:
+
+> On the ImageNet dataset the authors evaluate residual nets with a depth of up to 152 layers—8×
+> deeper than VGG nets [41] but still having lower complexity. An ensemble of these residual nets
+> achieves 3.57 % error on the ImageNet test set.
+
+`interpretation: null` — correctly, the answer is purely extractive and the contract has one
+spelling for that. `confidence: 0.95`. `unresolvedAmbiguities: []`.
+
+**The verifier's three claims, all `supported: true`, each naming the block it came from:**
+
+| claim | supported by |
+|---|---|
+| An ensemble of the evaluated residual nets achieved 3.57 % error on the ImageNet test set. | `blk_yaup3uye2fwqce6n` |
+| On ImageNet, the authors evaluated residual nets with a depth of up to 152 layers. | `blk_yaup3uye2fwqce6n` |
+| The evaluated residual nets were 8× deeper than VGG nets while still having lower complexity. | `blk_yaup3uye2fwqce6n` |
+
+**Checked independently against the parse, not taken on trust.** The cited block is
+`type: "abstract"`, `page_index: 0`, and its text contains `"3.57"`, `"152 layers"` and
+`"152 layers—8× deeper than VGG nets [41]"` verbatim. So all three claims are grounded in the block
+the answer names.
+
+**The region is the parser's, not the model's** — which is the property that makes the citation
+land on the right polygon:
+
+```
+answer.sourceRegions[0].bbox   [50.111961, 247.113036, 286.365112, 519.141593]
+blocks[blk_yaup3…].bbox        [50.111961, 247.113036, 286.365112, 519.141593]   identical
+blocks[blk_yaup3…].polygon     56 points
+label                          "p1 · abstract"
+```
+
+`ANSWER_SCHEMA` permits a draft to carry `source_regions`, and a model will invent a bbox given the
+chance. `ask.py` discards them and rebuilds from `verified.supporting_block_ids` against the indexed
+view. The identity above is that rule holding on a live answer.
+
+**One thing this record does NOT establish.** It is a single question on one paper — it is an
+existence proof that the path works end to end, not a rate. **The rate is what `qa/grounding.spec`
+would measure and it cannot be run, because the Tier C question set does not exist (#62).** Scored
+on 0 questions of 0. That distinction is the whole reason F3.5 stays PARTIAL in §2.
