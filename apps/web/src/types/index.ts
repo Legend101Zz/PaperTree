@@ -2,7 +2,15 @@
 export interface User {
   id: string;
   email: string;
-  created_at: string;
+  /**
+   * OPTIONAL because `services/api`'s `GET /auth/me` does not return one (#77).
+   *
+   * It was required while `apps/api` (v1) served this type. Making it optional is the honest
+   * option: the alternative was `authStore` filling it with `new Date()`, which would put a
+   * fabricated account-creation time into application state that reads exactly like a real one.
+   * Nothing renders it.
+   */
+  created_at?: string;
 }
 
 // ============ PDF/CONTENT TYPES ============

@@ -143,6 +143,102 @@ export function libraryPaperFromApi(
 }
 
 /**
+ * The row `services/api`'s `GET /papers` actually returns — #77's D4.
+ *
+ * IT IS NOT `ApiPaperRow`, and the difference is why a fully parsed paper rendered as an untitled
+ * card reading "Authors not identified · 0 pages · Queued". Measured against the live service:
+ *
+ *   * there is **no** `title`, `authors`, `page_count` or `processing` field;
+ *   * `metadata` is a **JSON STRING**, not an object — `typeof row.metadata === 'string'`;
+ *   * the id key is `paper_id`, not `id`;
+ *   * the real title is inside that string, at `metadata.title.value`.
+ *
+ * The consequence was not only cosmetic. With no title, the card's button had no accessible name,
+ * and axe reported `button-name` at **critical** on `#paper-title-undefined`.
+ */
+export interface PaperRow {
+  readonly paper_id: string;
+  readonly created_at: string;
+  /** `"complete" | "partial"`. A row exists only once the parser produced an IR. */
+  readonly status?: string | null;
+  readonly partial_reason?: string | null;
+  /** JSON, as a string. See `parseMetadata`. */
+  readonly metadata?: string | null;
+}
+
+/** One `MetadataField` — `{value, source_block_id, confidence}`. Only `value` is rendered. */
+interface MetadataField {
+  readonly value?: unknown;
+}
+
+interface PaperMetadata {
+  readonly title?: MetadataField | null;
+  readonly authors?: readonly MetadataField[] | null;
+}
+
+/**
+ * `row.metadata` as an object, or `null` when it is absent or not parseable.
+ *
+ * Returns `null` rather than throwing: one malformed row must not take down the whole library, and
+ * a card that falls back to its untitled state is a smaller failure than a blank page. Accepts an
+ * already-parsed object too, so this keeps working the day the endpoint stops double-encoding.
+ */
+function parseMetadata(raw: unknown): PaperMetadata | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === 'object') return raw as PaperMetadata;
+  if (typeof raw !== 'string') return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed !== null ? (parsed as PaperMetadata) : null;
+  } catch {
+    return null;
+  }
+}
+
+function fieldText(field: MetadataField | null | undefined): string | null {
+  const value = field?.value;
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
+
+/**
+ * Bridge a `services/api` row into the library view model.
+ *
+ * `pageCount` stays **0**: the list endpoint returns no page count in any form, and deriving one
+ * from `sections` would be a guess rendered as a fact. Filed rather than invented — see
+ * `UX-WALK-77.md` §D4.
+ *
+ * The title falls back to the paper id rather than to an empty string. An untitled card is the
+ * accessibility defect this function exists to close, so the fallback has to be something a screen
+ * reader can announce and a human can tell apart from the next card.
+ */
+export function libraryPaperFromPaperRow(row: PaperRow): LibraryPaper {
+  const metadata = parseMetadata(row.metadata);
+  const authors = (metadata?.authors ?? [])
+    .map(fieldText)
+    .filter((name): name is string => name !== null);
+
+  const processing: ProcessingState =
+    row.status === 'complete' ? 'complete' : row.status === 'partial' ? 'partial' : 'pending';
+
+  const base: LibraryPaper = {
+    id: row.paper_id,
+    title: fieldText(metadata?.title) ?? row.paper_id,
+    authors,
+    pageCount: 0,
+    pagesParsed: 0,
+    readingProgress: 0,
+    processing,
+    audio: 'none',
+    highlightCount: 0,
+    addedAt: row.created_at,
+  };
+  return {
+    ...base,
+    ...(row.partial_reason ? { partialReason: row.partial_reason } : {}),
+  };
+}
+
+/**
  * The three sample papers §19.8 requires, so the product can be evaluated before committing a PDF.
  *
  * These are the repository's own golden fixtures, which is the point: they are the three documents

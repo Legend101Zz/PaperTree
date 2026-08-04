@@ -17,7 +17,15 @@ import type { PaperSource } from '@papertree/anchoring';
 
 const BASE = process.env.NEXT_PUBLIC_PAPERTREE_API_URL ?? 'http://localhost:8000';
 
-/** Where the v2 session token lives. Separate from v1's `token`, so signing into one is not the other. */
+/**
+ * Where the session token lives — THE ONLY KEY, since #77.
+ *
+ * This used to say "separate from v1's `token`, so signing into one is not the other", which was
+ * right while `apps/api` was live and wrong the moment it was archived: `lib/auth.ts` wrote
+ * `"token"`, this read `"papertree.session"`, and a valid session loaded the dashboard while the
+ * reader answered `missing or invalid session token`. `lib/auth.ts` now delegates here, so there
+ * is one key and one session (UX-WALK-77 §D2).
+ */
 const TOKEN_KEY = 'papertree.session';
 
 export function getSessionToken(): string | null {
@@ -25,10 +33,12 @@ export function getSessionToken(): string | null {
 }
 
 export function setSessionToken(token: string): void {
+  if (typeof window === 'undefined') return;
   window.localStorage.setItem(TOKEN_KEY, token);
 }
 
 export function clearSessionToken(): void {
+  if (typeof window === 'undefined') return;
   window.localStorage.removeItem(TOKEN_KEY);
 }
 
@@ -162,13 +172,38 @@ export interface AskBody {
   readonly block_ids: readonly string[];
 }
 
+/**
+ * One row of `GET /papers`, as the service actually sends it (#77 D4).
+ *
+ * Deliberately not `{ id, title, page_count }`: there is no such shape on this endpoint. The id key
+ * is `paper_id`, there is no title or page count at all, and `metadata` arrives as a JSON STRING.
+ * Extra keys the library does not read (`generation`, `source_hash`, `parser_*`, `sections`, …) are
+ * omitted rather than typed, since naming them here would imply this module keeps up with them.
+ */
+export interface PaperListRow {
+  readonly paper_id: string;
+  readonly created_at: string;
+  readonly status?: string | null;
+  readonly partial_reason?: string | null;
+  readonly metadata?: string | null;
+}
+
 export const papersApi = {
   upload: (file: File) => {
     const form = new FormData();
     form.append('file', file);
     return request<UploadResponse>('/papers', { method: 'POST', body: form });
   },
-  list: () => request<readonly Record<string, unknown>[]>('/papers'),
+  /**
+   * Every promoted paper this caller owns.
+   *
+   * Typed as `PaperListRow`, which names the four fields the library actually reads, rather than as
+   * `Record<string, unknown>` — the untyped version is what let `dashboard/page.tsx` cast the result
+   * to a shape with `id`, `title` and `page_count`, none of which this endpoint returns (#77 D4).
+   * `metadata` is `string` here because that is what comes off the wire: it is JSON, double-encoded,
+   * and `libraryPaperFromPaperRow` is the one place that parses it.
+   */
+  list: () => request<readonly PaperListRow[]>('/papers'),
   ir: (paperId: string) => request<PaperSource & { ir_version?: string }>(`/papers/${paperId}/ir`),
   job: (jobId: string) => request<JobStatus>(`/jobs/${jobId}`),
 
