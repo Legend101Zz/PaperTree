@@ -8,10 +8,12 @@ dependencies = [
     "papertree-db",
     "papertree-jobs",
     "papertree-document-worker",
-    # #76's `POST /papers/{id}/ask`. Four workspace members, zero third-party packages, and the
-    # lock does not move by one line — MEASURED: `uv lock` reports 43 packages before and after.
-    # That is the whole reason the agent stack was built stdlib-only, and it is why the endpoint
-    # could land without re-arguing the dependency question:
+    # #76's `POST /papers/{id}/ask`. Four workspace members and ZERO third-party packages —
+    # MEASURED: `uv.lock` holds 43 packages before this line and 43 after. It does move by 8
+    # lines, and all 8 are workspace edges on this service's own entry (`papertree-agent-tools`,
+    # `-memory`, `-prompts`, `-retrieval` in `dependencies` and `requires-dist`); no `[[package]]`
+    # block is added. That is the whole reason the agent stack was built stdlib-only, and it is
+    # why the endpoint could land without re-arguing the dependency question:
     #
     #   agent-tools  the 18-tool registry, the answer contract, the grounding verifier, the
     #                MiniMax provider and (since #76) the shipped tool-calling loop.
