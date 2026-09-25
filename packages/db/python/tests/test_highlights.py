@@ -451,6 +451,28 @@ def test_integers_past_sqlite_range_are_rejected_before_any_sql(env: Env) -> Non
         conn.close()
 
 
+def test_an_empty_note_means_no_note_on_create_as_on_update(env: Env) -> None:
+    """``note=""`` is "no note" everywhere. ``update_highlight`` already stored NULL for it;
+    ``create_highlight`` stored ``''``, so one input had two meanings depending on the call.
+
+    WATCHED FAILING before the fix: ``assert '' is None``.
+    """
+    created = _create(env, note="")
+    assert created.note is None
+    [listed] = env.db.list_highlights(env.owner, env.paper_id, 1)
+    assert listed.note is None
+    conn = sqlite3.connect(env.file)
+    try:
+        assert conn.execute("SELECT note FROM highlights").fetchone()[0] is None
+    finally:
+        conn.close()
+    # Both spellings of "no note" replay as the same body, not as a conflict.
+    assert _create(env, note="").created is False
+    assert _create(env, note=None).created is False
+    with pytest.raises(HighlightConflict):
+        _create(env, note="a note")
+
+
 def test_the_stored_record_never_carries_a_resolution(env: Env) -> None:
     with_resolution = {**env.record, "resolution": {"tier": 0}}
     _create(env, anchors=[AnchorIn(with_resolution)])

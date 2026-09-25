@@ -192,12 +192,17 @@ class HighlightsMixin(_Base):
         bad body: an ``IntegrityError`` the checks below did not foresee is re-raised as
         ``validation_failed``, after the transaction has rolled back, and every integer is bounded
         to SQLite's range before it is bound (``SQLITE_INTEGER_MAX``), so none overflows.
+
+        ``note=""`` is stored as no note (NULL), as :meth:`update_highlight` stores it: one
+        meaning for the empty string, and a replay spelling "no note" either way is the same body.
         """
         owner_id = self._resolve(owner)
         _check_prefixed_id("highlight_id", highlight_id)
         _check_color(color)
         if note is not None and not isinstance(note, str):
             raise HighlightRejected("validation_failed", "note must be a string or null")
+        if note == "":
+            note = None
         _check_generation("created_generation", created_generation)
         if isinstance(anchors, (str, bytes)) or not isinstance(anchors, Sequence):
             raise HighlightRejected("validation_failed", "anchors must be a list")
