@@ -1,53 +1,93 @@
-"""The parse as a DURABLE, RESUMABLE job. `packages/jobs` is not optional here.
+"""The parse as a DURABLE, RESUMABLE job: ``parse`` -> ``persist`` -> ``promote`` (contracts §2.2).
 
-findings.md C1 is the defect: generation ran **inside the HTTP request**. That is unworkable
-independently of anything else - findings.md H2 measured Docling at 19 s/page on ResNet, and even
-the deterministic path at 134 ms/page is ~10 s for a 75-page paper. A request that long is a
-request that times out.
+findings.md C1 is the defect this module exists for: generation ran **inside the HTTP request**,
+and findings.md H2 measured even the deterministic path at ~10 s for a 75-page paper. So the upload
+route enqueues, and a worker runs this handler.
 
-WHAT PER-STEP CHECKPOINTING ACTUALLY BUYS, AND WHERE THE SEAM MUST GO
+THE JOB CONTRACT (contracts.md §2.2, "Worker job contract")
 
-`ctx.step(name, fn)` runs `fn` **once per job, ever**. A step whose record is `succeeded` is
-never re-run: on resume the recorded RESULT is returned instead. So the seam between steps has
-to fall where the intermediate value is small and JSON-round-trippable, because that is what
-gets stored and handed back.
+    payload   {paper_id, source_path, source_hash, generation, attempt_seq}
+    key       parse:{source_hash}:{paper_id}:g{generation}:a{attempt_seq}
+    steps     parse    the PDF -> a validated PaperIR document, staged as JSON on disk
+              persist  the staged document -> the database, as generation N
+              promote  generation N becomes the one readers get, if the STORED N validates;
+                       then the staged JSON is deleted (it grew forever before: §R17)
 
-That rules out the obvious split. "extract every page" cannot be a step whose result is the page
-objects - they are `PageContent` dataclasses holding thousands of spans, and `json.loads` would
-hand back dicts on resume. The steps here are therefore coarse and their results are SMALL:
+Each step is a ``ctx.step``: its body runs ONCE PER JOB, EVER, and a worker killed between two
+steps resumes at the next one (``packages/jobs``). That is what makes promotion durable: before the
+reader release it ran in the worker LOOP after the job had already finished, so a worker killed
+there left a parsed, stored, succeeded paper that nobody could open, and nothing would ever retry
+it. It is a step now, so a restart finishes it.
 
-    parse     -> a summary dict (counts, status). The document goes to disk, not through the
-                 step result, because a 3,000-block document is not a checkpoint value.
-    persist   -> the (paper_id, generation) that was written.
+WHAT MAKES EACH STEP SAFE TO RE-RUN, because a kill can land INSIDE a body too (after its side
+effect committed, before its checkpoint did):
 
-`ctx.progress(done, total, note)` both publishes progress AND RENEWS THE LEASE, so it is called
-between steps rather than only at the end - a parse that takes 10 s under a 30 s lease is fine,
-one that takes 60 s without renewing is a job another worker steals mid-flight.
+    parse    rewrites the same staging file and the same crops (deterministic parser, same bytes)
+    persist  finds generation N already stored and keeps it (``put_paper`` is one transaction, so
+             a stored N is a whole N)
+    promote  ``promote_generation`` is an upsert; deleting a missing staging file is a no-op
 
-THE ONE THING THIS EPIC IS FIRST TO DO FOR REAL
+THE WRITES ARE FENCED ON THE LEASE, INSIDE THEIR TRANSACTION. ``packages/jobs`` checks the lease
+before and after a step body, never during it, so a body that was already running when its worker
+lost the job (superseded after a stall, or its paper deleted: ``DELETE /papers/{id}`` removes the
+paper's jobs first) would still write before the next check noticed. For persist that would be
+worse than a duplicate: ``put_paper`` INSERTs a missing ``paper_owners`` row, so it would
+RESURRECT a deleted paper. So persist and promote write inside a ``transaction()`` whose first
+statement asks the job store whether this worker still holds the lease (``ctx.holds_lease``). The
+``BEGIN IMMEDIATE`` holds the file's write lock, so no other process can take the job or delete it
+between that answer and the commit, and a WAL read on the job store's connection sees every commit
+before it.
 
-Epic 0.1 (#24) fenced `_fail_step` so a superseded worker cannot overwrite a live worker's
-committed `succeeded`. Nothing had exercised it: Epic 1 is the first epic to run multi-step jobs
-at all, which is why `test_job_resume.py` kills a job mid-step and asserts the completed step is
-NOT re-run rather than merely that the job finishes.
+ERROR CODES (``JobErrorCode``, contracts.md §2.2): a failure the parser cannot get past is raised
+as ``JobFailed(code)`` and dead-letters on THAT attempt; retrying a PDF PyMuPDF cannot open spent
+~11 s of backoff at base to reach the same answer (S1 report §1). ``timeout`` is written by the
+job store itself (a worker that died on every attempt). Anything unclassified is retried and
+reads as ``internal``.
 """
 
 from __future__ import annotations
 
 import json
+import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
-from papertree_db import OwnerId, PaperTreeDb
-from papertree_jobs import JobContext, JobRunner, JobStore
+from papertree_db import OwnerId, PaperId, PaperTreeDb, generation
+from papertree_document_ir.validate import SemanticValidationError
+from papertree_jobs import JobContext, JobFailed, JobObserver, JobRunner, JobStore, LeaseLost
+from pydantic import ValidationError
 
+from papertree_document_worker.assemble import PARSER_VERSION
+from papertree_document_worker.pdf import pymupdf
 from papertree_document_worker.pipeline import ParserConfig, parse_document
 
-__all__ = ["PARSE_KIND", "ParseJobDeps", "enqueue_parse", "make_parse_handler"]
+__all__ = [
+    "ERROR_CODES",
+    "PARSE_KIND",
+    "PARSE_STEPS",
+    "PARSER_VERSION",
+    "ParseJobDeps",
+    "StoredVerifier",
+    "build_runner",
+    "enqueue_parse",
+    "make_parse_handler",
+    "parse_idempotency_key",
+    "payload_generation",
+    "staging_path",
+]
 
 #: The job kind. One string, used by the enqueuer and the runner registration alike.
-PARSE_KIND = "parse"
+PARSE_KIND: Final = "parse"
+#: The steps, in order (contracts.md §2.2). ``LibraryPaper.job.total`` is their count.
+PARSE_STEPS: Final = ("parse", "persist", "promote")
+#: The codes a parse job's ``jobs.error`` can carry (``[code] message``), §2.2's ``error_code``.
+ERROR_CODES: Final = ("pdf_unreadable", "validation_failed", "timeout", "internal")
+
+#: Checks the STORED generation before it is promoted; raises if it is not servable. Given the
+#: database, the owner handle minted on it, the paper and the generation.
+StoredVerifier = Callable[[PaperTreeDb, OwnerId, PaperId, int], None]
 
 
 @dataclass(slots=True)
@@ -64,6 +104,43 @@ class ParseJobDeps:
     #: Where the parsed document JSON is staged between the parse and persist steps.
     staging_root: Path
     config: ParserConfig | None = None
+    #: The promote step's validation of what was STORED. The parse already validated the document
+    #: it produced (``assert_valid_paper``); this checks what readers will actually be served,
+    #: which is the stored rows recomposed. ``papertree_api.worker`` passes the ``/ir``
+    #: recomposition plus the same validator. None: only the stored row's existence and its match
+    #: with the parse's own summary are checked.
+    verify_stored: StoredVerifier | None = None
+
+
+def parse_idempotency_key(
+    source_hash: str, paper_id: str, generation: int, attempt_seq: int
+) -> str:
+    """contracts.md §2.2: ``parse:{source_hash}:{paper_id}:g{generation}:a{attempt_seq}``.
+
+    The generation and attempt are IN the key, which is what lets a dead-lettered upload be retried
+    at all: with ``parse:{source_hash}:{paper_id}`` (before S1) the same bytes always mapped to the
+    same job, so re-uploading a dead-lettered PDF handed back the dead job and nothing ever parsed
+    it again (S1 report §1).
+    """
+    return f"{PARSE_KIND}:{source_hash}:{paper_id}:g{generation}:a{attempt_seq}"
+
+
+def payload_generation(payload: Any) -> tuple[int, int]:
+    """``(generation, attempt_seq)`` of a parse payload. A pre-S1 payload has neither: it parsed
+    generation 1 (the worker's hard-coded value then), on its first attempt."""
+    values: list[int] = []
+    for key in ("generation", "attempt_seq"):
+        value = payload.get(key, 1) if isinstance(payload, dict) else 1
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise JobFailed("internal", f"the job payload's {key} is not a positive integer")
+        values.append(value)
+    return values[0], values[1]
+
+
+def staging_path(staging_root: Path, paper_id: str, generation: int, job_id: str) -> Path:
+    """Where one job stages its document: per job, so a retry or a re-parse never reads another
+    job's half-written file. ``DELETE /papers/{id}`` removes ``<paper_id>.*`` here."""
+    return staging_root / f"{paper_id}.g{generation}.{job_id}.paperir.json"
 
 
 def enqueue_parse(
@@ -73,89 +150,208 @@ def enqueue_parse(
     paper_id: str,
     source_path: str,
     source_hash: str,
+    generation: int = 1,
+    attempt_seq: int = 1,
 ) -> str:
-    """Enqueue one parse, idempotently.
+    """Enqueue one parse, idempotently (``parse_idempotency_key``).
 
     `owner` MUST come from `JobStore.owner_for()`, not from `PaperTreeDb.owner_for()`. An
-    `OwnerId` is an opaque PER-CONNECTION handle - 32 bytes of CSPRNG output resolved through a
-    dict that lives on the connection and nowhere else - so a handle minted by a `PaperTreeDb`
-    is rejected by a `JobStore` even when both are open on the same file:
+    `OwnerId` is an opaque PER-CONNECTION handle, so a handle minted by a `PaperTreeDb` is
+    rejected by a `JobStore` even when both are open on the same file:
 
         OwnershipError: that value was not minted by this JobStore.
 
-    That is the design working, not an inconvenience. `ids.py` records three separate ways the
-    previous user-id-based scheme was broken in one afternoon, each a full cross-tenant read AND
-    write. The handler bridges the two sides through `ctx.owner_id`, which is a bare string, and
-    re-authenticates it against the database with `PaperTreeDb.owner_for()`.
-
-    The idempotency key is `parse:<source_hash>:<paper_id>`, so re-uploading identical bytes for
-    the same paper returns the EXISTING job rather than queueing a second parse of the same file.
-    `JobStore.enqueue` reads the unique index inside the same IMMEDIATE transaction as the
-    insert, so two concurrent enqueues produce one job rather than a race.
+    The handler bridges the two sides through `ctx.owner_id`, a bare string it re-authenticates
+    against the database with `PaperTreeDb.owner_for()`; the payload never carries an owner.
+    `JobStore.enqueue` reads the unique index inside the same IMMEDIATE transaction as the insert,
+    so two concurrent enqueues of one key produce one job rather than a race.
     """
     return store.enqueue(
         owner,
         PARSE_KIND,
-        f"{PARSE_KIND}:{source_hash}:{paper_id}",
-        {"paper_id": paper_id, "source_path": source_path, "source_hash": source_hash},
+        parse_idempotency_key(source_hash, paper_id, generation, attempt_seq),
+        {
+            "paper_id": paper_id,
+            "source_path": source_path,
+            "source_hash": source_hash,
+            "generation": generation,
+            "attempt_seq": attempt_seq,
+        },
     )
 
 
+def _describe(exc: BaseException) -> str:
+    text = str(exc).strip() or "(no message)"
+    return f"{type(exc).__name__}: {text}"[:2000]
+
+
+def _write_atomically(path: Path, text: str) -> None:
+    """Staged JSON is written whole or not at all: a worker killed mid-write must not leave a
+    truncated document for the resumed persist step to choke on."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_name(path.name + ".tmp")
+    partial.write_text(text, encoding="utf-8")
+    os.replace(partial, path)
+
+
+def _fenced(ctx: JobContext) -> None:
+    """Inside a ``transaction()``: refuse to write unless this worker still holds the job."""
+    if not ctx.holds_lease():
+        raise LeaseLost(f"job {ctx.job_id} was re-claimed or deleted; nothing written")
+
+
 def make_parse_handler(deps: ParseJobDeps) -> Any:
-    """Build the handler `JobRunner` will call. Two steps, both resumable."""
+    """Build the handler `JobRunner` will call. Three steps, each resumable."""
 
     def handle(ctx: JobContext) -> None:
         payload = ctx.payload
-        paper_id = str(payload["paper_id"])
+        paper_id = PaperId(str(payload["paper_id"]))
         source_path = str(payload["source_path"])
-        staged = deps.staging_root / f"{paper_id}.paperir.json"
+        gen, _attempt_seq = payload_generation(payload)
+        staged = staging_path(deps.staging_root, paper_id, gen, ctx.job_id)
+        total = len(PARSE_STEPS)
 
         def do_parse() -> dict[str, Any]:
-            result = parse_document(
-                source_path,
-                paper_id=paper_id,
-                asset_root=deps.asset_root,
-                config=deps.config,
-            )
+            try:
+                result = parse_document(
+                    source_path,
+                    paper_id=paper_id,
+                    asset_root=deps.asset_root,
+                    config=deps.config,
+                    generation=gen,
+                )
+            except FileNotFoundError as exc:
+                raise JobFailed(
+                    "internal", f"the uploaded file is missing: {_describe(exc)}"
+                ) from exc
+            except (pymupdf.FileDataError, pymupdf.EmptyFileError) as exc:
+                # PyMuPDF could not read the bytes. Deterministic: the same on every attempt.
+                raise JobFailed("pdf_unreadable", _describe(exc)) from exc
+            except (SemanticValidationError, ValidationError) as exc:
+                # The parser produced a document the IR validator refuses. Also deterministic.
+                raise JobFailed("validation_failed", _describe(exc)) from exc
             # The DOCUMENT goes to disk; only a summary becomes the step result. A step result
             # is stored as JSON and handed back on resume, and a 3,000-block document is not a
             # checkpoint value - it is the output.
-            staged.parent.mkdir(parents=True, exist_ok=True)
-            staged.write_text(
+            _write_atomically(
+                staged,
                 json.dumps(
                     result.paper.model_dump(mode="json", by_alias=True, exclude_unset=True),
                     ensure_ascii=False,
                 ),
-                encoding="utf-8",
             )
             return {
+                "generation": gen,
                 "blocks": len(result.paper.blocks),
                 "pages": result.page_count,
                 "status": result.paper.status,
                 "crops": result.crops_written,
-                "staged": str(staged),
+                "parser_version": result.paper.parser.version,
+                "staged": staged.name,
             }
 
         summary = ctx.step("parse", do_parse)
         # Publishes progress AND renews the lease. Between steps, not only at the end: a parse
         # that outlives its lease is a job another worker takes over mid-flight.
-        ctx.progress(1, 2, f"parsed {summary['pages']} pages, {summary['blocks']} blocks")
+        ctx.progress(1, total, f"parsed {summary['pages']} pages, {summary['blocks']} blocks")
 
         def do_persist() -> dict[str, Any]:
-            document = json.loads(Path(summary["staged"]).read_text(encoding="utf-8"))
-            # `authenticate` is what turns the job's bare owner_id string into an OwnerId. It
-            # performs NO authentication - it checks a users row exists - and the caller is the
-            # trust boundary, which is why the job payload never carries one.
+            # `owner_for` turns the job's bare owner_id string into a handle on THIS connection.
+            # It performs NO authentication - it checks a users row exists - and the caller (the
+            # route that enqueued) is the trust boundary, which is why the payload carries none.
             owner = deps.database.owner_for(ctx.owner_id)
-            deps.database.put_paper(owner, document)
-            return {"paper_id": document["paper_id"], "generation": document["generation"]}
+            with deps.database.transaction():
+                _fenced(ctx)
+                stored = deps.database.get_paper(owner, paper_id, generation(gen))
+                if stored is None:
+                    try:
+                        text = staged.read_text(encoding="utf-8")
+                    except FileNotFoundError as exc:
+                        raise JobFailed(
+                            "internal",
+                            f"the staged document {staged.name} is gone; retry to parse again",
+                        ) from exc
+                    document = json.loads(text)
+                    deps.database.put_paper(owner, document)
+                    outcome = "stored"
+                else:
+                    # A previous attempt's put_paper COMMITTED and it died before this step's
+                    # checkpoint did. put_paper is one transaction, so what is there is whole.
+                    outcome = "already stored"
+            return {
+                "paper_id": paper_id,
+                "generation": gen,
+                "parser_version": (stored or {}).get("parser_version", summary["parser_version"]),
+                "outcome": outcome,
+            }
 
         written = ctx.step("persist", do_persist)
-        ctx.progress(2, 2, f"stored {written['paper_id']} generation {written['generation']}")
+        ctx.progress(2, total, f"stored {written['paper_id']} generation {written['generation']}")
+
+        def do_promote() -> dict[str, Any]:
+            owner = deps.database.owner_for(ctx.owner_id)
+            stored = deps.database.get_paper(owner, paper_id, generation(gen))
+            if stored is None:
+                ctx.check_lease()  # a deleted paper takes its generations with it
+                raise JobFailed("internal", f"generation {gen} of {paper_id} is not stored")
+            # PROMOTE ONLY A VALIDATED GENERATION (contracts.md §2.2): what is checked is the
+            # STORED generation, i.e. what `/ir` will serve, not only the document the parse held.
+            if deps.verify_stored is not None:
+                try:
+                    deps.verify_stored(deps.database, owner, paper_id, gen)
+                except Exception as exc:
+                    raise JobFailed(
+                        "validation_failed",
+                        f"stored generation {gen} does not validate: {_describe(exc)}",
+                    ) from exc
+            # What THIS job stored must be what THIS job parsed. (A generation an earlier attempt
+            # stored, "already stored", was that attempt's parse; the verifier above judges it.)
+            blocks = deps.database.count_blocks(owner, paper_id, generation(gen))
+            if written["outcome"] == "stored" and (
+                stored["status"] != summary["status"] or blocks != summary["blocks"]
+            ):
+                raise JobFailed(
+                    "validation_failed",
+                    f"stored generation {gen} is not the parsed one: status {stored['status']} "
+                    f"and {blocks} blocks, parsed {summary['status']} and {summary['blocks']}",
+                )
+            with deps.database.transaction():
+                _fenced(ctx)
+                current = deps.database.promoted_generation(owner, paper_id)
+                # Never replace a NEWER promoted generation with an older one (a retry of an old
+                # generation that finished after a re-parse did).
+                promoted = current is None or current <= gen
+                if promoted:
+                    deps.database.promote_generation(owner, paper_id, generation(gen))
+            staged.unlink(missing_ok=True)
+            return {
+                "paper_id": paper_id,
+                "generation": gen,
+                "parser_version": stored["parser_version"],
+                "promoted": promoted,
+                "kept": gen if promoted else current,
+            }
+
+        promoted = ctx.step("promote", do_promote)
+        ctx.progress(
+            3,
+            total,
+            f"generation {promoted['kept']} is the one readers get"
+            + ("" if promoted["promoted"] else f" (generation {gen} is stored, not promoted)"),
+        )
 
     return handle
 
 
-def build_runner(store: JobStore, deps: ParseJobDeps) -> JobRunner:
+def build_runner(
+    store: JobStore,
+    deps: ParseJobDeps,
+    *,
+    observer: JobObserver | None = None,
+    lease_seconds: float | None = None,
+) -> JobRunner:
     """A runner with the parse handler registered. `run_once()` returns None when idle."""
-    return JobRunner(store, {PARSE_KIND: make_parse_handler(deps)})
+    handlers = {PARSE_KIND: make_parse_handler(deps)}
+    if lease_seconds is None:
+        return JobRunner(store, handlers, observer=observer)
+    return JobRunner(store, handlers, observer=observer, lease_seconds=lease_seconds)
