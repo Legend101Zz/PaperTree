@@ -79,6 +79,12 @@ retriever that returned wrong or empty results:
     package.truncation                      # what did not, and why — data, not a log line
     package.block_ids                       # what every answer must cite from
 
+THE READER RELEASE ADDED THREE MODULES (contracts.md §3.2, §4), for the agent's paper tools and the
+run seed: ``cache.PaperIndexCache`` (an LRU of 8 detached indexes keyed by user, paper and
+generation), ``lexical.LexicalIndex`` (BM25 over the reading-order text blocks, for
+``search_passages``) and ``seed.build_seed`` (the selected blocks first, then the ladder, under
+<= 3,000 estimated tokens).
+
 Determinism is an acceptance criterion, not a nicety: identical input produces byte-identical
 output ordering, in a fresh process, with hash randomisation on — asserted by running the
 expansion in two subprocesses under two different ``PYTHONHASHSEED`` values. No set's iteration
@@ -105,6 +111,7 @@ from papertree_retrieval.budget import (
     TruncationRecord,
     assemble_evidence,
 )
+from papertree_retrieval.cache import DEFAULT_CACHE_ENTRIES, CachedPaper, PaperIndexCache
 from papertree_retrieval.expansion import (
     CITATION_RELATION_TYPES,
     DEFAULT_EXPANSION_POLICY,
@@ -129,9 +136,12 @@ from papertree_retrieval.index import (
     PaperIndex,
     PaperReader,
 )
+from papertree_retrieval.lexical import LexicalHit, LexicalIndex, tokenize
+from papertree_retrieval.seed import SEED_BUDGET_TOKENS, Seed, SeedPassage, build_seed
 
 __all__ = [
     "CITATION_RELATION_TYPES",
+    "DEFAULT_CACHE_ENTRIES",
     "DEFAULT_BUDGET_POLICY",
     "DEFAULT_EXPANSION_POLICY",
     "DEFAULT_REGION_TYPES",
@@ -140,10 +150,12 @@ __all__ = [
     "FLOW_READING_ORDER",
     "KNOWN_RELATION_ORDER",
     "RELATED_RELATION_TYPES",
+    "SEED_BUDGET_TOKENS",
     "STAGE_ORDER",
     "TEXT_TRUNCATION_MARKER",
     "TOKENIZER_AGNOSTIC_ESTIMATOR",
     "AtomTokenEstimator",
+    "CachedPaper",
     "BudgetPolicy",
     "Component",
     "ComponentUsage",
@@ -155,15 +167,22 @@ __all__ = [
     "IndexedReference",
     "IndexedRelation",
     "IndexedSection",
+    "LexicalHit",
+    "LexicalIndex",
     "PaperIndex",
+    "PaperIndexCache",
     "PaperReader",
     "RegionRequest",
     "RetrievedBlock",
     "SemanticQuery",
+    "Seed",
+    "SeedPassage",
     "Stage",
     "TokenEstimator",
     "TruncationReason",
     "TruncationRecord",
     "assemble_evidence",
+    "build_seed",
     "expand",
+    "tokenize",
 ]
