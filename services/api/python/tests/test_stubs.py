@@ -40,16 +40,7 @@ class Stub:
 
 
 STUBS = [
-    # §2.2 (S1)
-    Stub("DELETE", f"/papers/{PAPER}", "S1"),
-    Stub("POST", f"/papers/{PAPER}/retry", "S1"),
-    Stub(
-        "POST",
-        f"/papers/{PAPER}/reparse",
-        "S1",
-        {"reason": "a better parser"},
-        ({"reason": 5}, "reason"),
-    ),
+    # §2.2 (S1): built; their contract tests are `test_ingest_*.py`.
     # §2.5 (S5)
     Stub(
         "POST",
@@ -169,7 +160,7 @@ def test_a_stub_enforces_its_contract_then_answers_501(stub: Stub, tmp_path: Pat
 
 #: (stub, a body whose one fault is an explicit null in an omittable field, the field)
 NULLS = [
-    (f"/papers/{PAPER}/reparse", "POST", {"reason": None}, "reason"),
+    # `/papers/{id}/reparse`'s `reason: null`: built by S1, pinned in `test_ingest_routes.py`.
     (f"/papers/{PAPER}/threads", "POST", {"kind": "ask", "anchor": None}, "anchor"),
     (
         f"/papers/{PAPER}/threads/{THREAD}/messages",

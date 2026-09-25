@@ -76,7 +76,7 @@ def test_a_real_pdf_uploads_parses_and_comes_back_indexable(tmp_path: Path) -> N
 
         job = h.client.get(f"/jobs/{job_id}", headers=auth(token)).json()
         assert job["state"] == "succeeded", job
-        assert [step["name"] for step in job["steps"]] == ["parse", "persist"]
+        assert [step["name"] for step in job["steps"]] == ["parse", "persist", "promote"]
 
         # 4. THE DOCUMENT IS THERE, AND IT IS A VALID PaperIR DOCUMENT.
         #    Promotion first: the worker persists a generation, and `promoted_generation` is what
