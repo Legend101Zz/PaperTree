@@ -30,8 +30,10 @@ Same two gates as ``packages/db`` (findings.md §F), for the same reason:
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import time
+from collections.abc import Callable, Mapping
 from dataclasses import fields
 from datetime import UTC, datetime
 from pathlib import Path
@@ -48,7 +50,7 @@ from papertree_db import (
     new_id,
 )
 
-from .model import DEFAULT_MAX_ATTEMPTS, Job, JobState, StepRecord
+from .model import CRASH_LOOP_CODE, DEFAULT_MAX_ATTEMPTS, Job, JobState, StepRecord, coded_error
 
 # The SELECT lists are DERIVED from the dataclasses, and the row mappers below splat the
 # row straight in. Restating eighteen column names in three places is how a column gets
@@ -59,11 +61,16 @@ _JOB_COLUMNS: Final = ", ".join(f.name for f in fields(Job))
 _STEP_COLUMNS: Final = ", ".join(f.name for f in fields(StepRecord))
 
 #: Recorded on a job whose worker died repeatedly without ever raising. There is no
-#: exception to quote, so the runner never got to write one — see `_claim`.
-_CRASH_LOOP_ERROR: Final = (
+#: exception to quote, so the runner never got to write one — see `_claim`. Coded (`JobFailed`'s
+#: `[code] message` form) so a reader of `jobs.error` can classify it without parsing prose.
+_CRASH_LOOP_ERROR: Final = coded_error(
+    CRASH_LOOP_CODE,
     "worker died without finishing the job and the retry budget is exhausted "
-    "(lease expired with attempt >= max_attempts)"
+    "(lease expired with attempt >= max_attempts)",
 )
+#: A payload key `list_jobs(payload=…)` may filter on: a plain identifier, so it can be spliced
+#: into a JSON path (`$.<key>`) without becoming a path expression of the caller's choosing.
+_PAYLOAD_KEY: Final = re.compile(r"[a-z_][a-z0-9_]{0,63}")
 
 
 class JobStore:
@@ -211,15 +218,56 @@ class JobStore:
         ).fetchone()
         return None if row is None else _job(row)
 
-    def list_jobs(self, owner: OwnerId) -> list[Job]:
+    def list_jobs(
+        self,
+        owner: OwnerId,
+        *,
+        kind: str | None = None,
+        payload: Mapping[str, str | int] | None = None,
+    ) -> list[Job]:
+        """This owner's jobs, newest first; optionally one ``kind`` and payload fields EQUAL to
+        the given values (``payload={"paper_id": p}``: every parse of one paper).
+
+        The filter keys are identifiers (``_PAYLOAD_KEY``), spliced into ``$.<key>``; the values
+        are bound. Newest first is ``created_at`` then ``job_id`` (a ULID, so time-ordered too),
+        which keeps two jobs created in the same microsecond in a stable order.
+        """
         owner_id = self._resolve(owner)
+        where = ["owner_id = ?"]
+        params: list[Any] = [owner_id]
+        if kind is not None:
+            where.append("kind = ?")
+            params.append(kind)
+        for key, value in (payload or {}).items():
+            if _PAYLOAD_KEY.fullmatch(key) is None:
+                raise ValueError(f"not a payload key: {key!r}")
+            where.append(f"json_extract(payload, '$.{key}') = ?")
+            params.append(value)
         return [
             _job(r)
             for r in self._conn.execute(
-                f"SELECT {_JOB_COLUMNS} FROM jobs WHERE owner_id = ? ORDER BY created_at DESC",
-                (owner_id,),
+                f"SELECT {_JOB_COLUMNS} FROM jobs WHERE {' AND '.join(where)} "
+                "ORDER BY created_at DESC, job_id DESC",
+                tuple(params),
             )
         ]
+
+    def delete_job(self, owner: OwnerId, job_id: str) -> bool:
+        """Deletes one of this owner's jobs and (by the composite FK's cascade) its step ledger.
+
+        For a paper that is being deleted: its jobs are its rows too, and a job left behind would
+        be found again by the next upload of the same bytes (the idempotency key is a function of
+        the bytes), which would then return a finished job for a paper that no longer exists.
+
+        A worker running the job when its row goes is NOT interrupted mid-step; it finds out at
+        its next checkpoint, where the lease check (``_holds_lease``) fails on the missing row and
+        it abandons without writing (``LeaseLost``), exactly as if it had been superseded.
+        """
+        owner_id = self._resolve(owner)
+        cursor = self._conn.execute(
+            "DELETE FROM jobs WHERE owner_id = ? AND job_id = ?", (owner_id, job_id)
+        )
+        return cursor.rowcount > 0
 
     def list_steps(self, owner: OwnerId, job_id: str) -> list[StepRecord]:
         """The checkpoint ledger: which steps are done, which is running, which failed."""
@@ -308,6 +356,46 @@ class JobStore:
         claimed = self._read(str(row["job_id"]))
         assert claimed is not None
         return claimed
+
+    def _expire_dead_leases(self, host: str, alive: Callable[[int], bool]) -> list[str]:
+        """Expires the leases held by workers ON THIS HOST whose process is gone. Worker path.
+
+        THE RESTART STORY WITHOUT THIS. A SIGKILLed worker's lease simply stops being renewed, so
+        its job becomes claimable once ``lease_expires_at`` passes (``_claim``): up to a full lease
+        (60 s by default) during which a restarted worker sits idle beside a job that no process
+        is running, and the user watches "Reading… step 3 of 3" not move.
+
+        A worker id is ``<hostname>:<pid>`` by default (``JobRunner``). For a lease held under
+        THIS hostname, whether that pid is alive can be ASKED rather than waited out; a dead one
+        cannot renew, so expiring it now changes nothing but the wait. Everything else is left
+        alone: another host's workers (they are not ours to judge), an id in another format, and
+        a pid that is alive — including a pid the OS has since reused for an unrelated process,
+        which errs toward waiting, never toward stealing a live worker's job. The claim that
+        follows still goes through ``_claim``, so the attempt budget and the crash-loop
+        dead-letter apply exactly as they do to a lease that expired by time.
+
+        Returns the job ids whose lease was expired.
+        """
+        prefix = f"{host}:"
+        now = time.time()
+        expired: list[str] = []
+        rows = self._conn.execute(
+            "SELECT job_id, lease_owner FROM jobs WHERE state = 'running' "
+            "AND lease_expires_at > ? AND substr(lease_owner, 1, ?) = ?",
+            (now, len(prefix), prefix),
+        ).fetchall()
+        for row in rows:
+            pid_text = str(row["lease_owner"])[len(prefix) :]
+            if not pid_text.isdecimal() or not pid_text.isascii() or alive(int(pid_text)):
+                continue
+            cursor = self._conn.execute(
+                "UPDATE jobs SET lease_expires_at = ?, updated_at = ? "
+                "WHERE job_id = ? AND state = 'running' AND lease_owner = ?",
+                (now, _iso(), row["job_id"], row["lease_owner"]),
+            )
+            if cursor.rowcount:
+                expired.append(str(row["job_id"]))
+        return expired
 
     def _read(self, job_id: str) -> Job | None:
         row = self._conn.execute(

@@ -39,6 +39,7 @@ USAGE
 """
 
 from .model import (
+    CRASH_LOOP_CODE,
     DEFAULT_BACKOFF_BASE_SECONDS,
     DEFAULT_BACKOFF_CAP_SECONDS,
     DEFAULT_BACKOFF_FACTOR,
@@ -48,16 +49,22 @@ from .model import (
     Cancelled,
     Job,
     JobError,
+    JobFailed,
     JobState,
     LeaseLost,
+    RunOutcome,
+    StepOutcome,
     StepRecord,
     StepState,
     backoff_delay,
+    coded_error,
+    error_code,
 )
-from .runner import Handler, JobContext, JobRunner
+from .runner import Handler, JobContext, JobObserver, JobRunner, pid_is_alive
 from .store import JobStore
 
 __all__ = [
+    "CRASH_LOOP_CODE",
     "DEFAULT_BACKOFF_BASE_SECONDS",
     "DEFAULT_BACKOFF_CAP_SECONDS",
     "DEFAULT_BACKOFF_FACTOR",
@@ -69,11 +76,18 @@ __all__ = [
     "Job",
     "JobContext",
     "JobError",
+    "JobFailed",
+    "JobObserver",
     "JobRunner",
     "JobState",
     "JobStore",
     "LeaseLost",
+    "RunOutcome",
+    "StepOutcome",
     "StepRecord",
     "StepState",
     "backoff_delay",
+    "coded_error",
+    "error_code",
+    "pid_is_alive",
 ]
