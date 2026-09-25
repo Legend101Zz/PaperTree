@@ -80,6 +80,7 @@ from papertree_jobs import JobStore
 from papertree_memory import AgentDataHandle
 
 from .errors import ApiError
+from .logging import user_ref
 from .security import user_for_token
 from .settings import Settings
 
@@ -126,10 +127,14 @@ async def open_auth(
 
 
 async def current_user_id(
+    request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     conn: Annotated[sqlite3.Connection, Depends(open_auth)],
 ) -> str:
-    """The verified `user_id`. THE ONLY PLACE a token becomes an identity."""
+    """The verified `user_id`. THE ONLY PLACE a token becomes an identity.
+
+    It also leaves `user_ref` (`sha256(user_id)[:12]`, contracts.md §8) in the request state for
+    the access log line; the id itself is never logged."""
     unauthorised = ApiError(
         "auth_required",
         "missing or invalid session token",
@@ -140,6 +145,7 @@ async def current_user_id(
     user_id = user_for_token(conn, credentials.credentials)
     if user_id is None:
         raise unauthorised
+    request.state.user_ref = user_ref(user_id)
     return user_id
 
 

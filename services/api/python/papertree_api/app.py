@@ -21,6 +21,7 @@ from papertree_agent_tools import Transport
 
 from .ask import mount_ask
 from .errors import InternalErrorMiddleware, install_error_handlers
+from .middleware import REQUEST_ID_HEADER, RequestIdMiddleware, log_unhandled
 from .routers import auth, highlights, jobs, papers
 from .routers.papers import derive_paper_id  # re-exported: it lived here before the split
 from .settings import Settings
@@ -50,21 +51,29 @@ def create_app(
     app.state.settings = resolved
     app.state.llm_transport = llm_transport
 
-    # Every non-2xx is the contracts.md §0 envelope: the typed handlers, plus a 500 for anything
-    # nothing else caught. `add_middleware` wraps what is already there, so this is INSIDE CORS:
-    # the browser can read the 500's envelope because CORS still stamps its headers on it.
+    # MIDDLEWARE, outermost first. `add_middleware` wraps what is already there, so they are
+    # added innermost first:
+    #
+    #   RequestIdMiddleware     every response gets X-Request-Id, every request one log line
+    #   CORSMiddleware          so even the 500 below carries Access-Control-Allow-Origin
+    #   InternalErrorMiddleware an exception nothing caught -> the §0 envelope, 500 `internal`
+    #
+    # Every other non-2xx is the envelope through the typed handlers (`errors.py`).
     install_error_handlers(app)
-    app.add_middleware(InternalErrorMiddleware)
+    app.add_middleware(InternalErrorMiddleware, on_error=log_unhandled)
 
     # The reader is a separate origin in development (`next dev` on :3000, this on :8000).
     # Credentials are a bearer token in a header, never a cookie, so there is no CSRF surface and
-    # no need for `allow_credentials`.
+    # no need for `allow_credentials`. `expose_headers`: a cross-origin fetch can only READ the
+    # request id if CORS says so.
     app.add_middleware(
         CORSMiddleware,
         allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=[REQUEST_ID_HEADER],
     )
+    app.add_middleware(RequestIdMiddleware)
 
     # Migrations run at startup rather than in a separate step, because "git clone && install &&
     # run" is a stated project constraint and a service that needs a second command to be usable
