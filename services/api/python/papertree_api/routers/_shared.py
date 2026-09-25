@@ -1,4 +1,5 @@
-"""What more than one router needs: the JSON body reader and the `?gen=` parameter.
+"""What more than one router needs: the JSON body reader, the `?gen=` parameter, and rows as
+response bodies.
 
 WHY BODIES ARE READ HERE AND NOT BY FASTAPI. A FastAPI body parameter decodes with the stdlib
 `json.loads`, which accepts what pydantic's own JSON parser refuses: a lone surrogate (`"\\ud800"`,
@@ -23,6 +24,7 @@ from pydantic import BaseModel, ValidationError
 from pydantic_core import from_json
 
 from ..errors import ApiError, validation_detail
+from ..wiretime import wire_time
 
 
 async def read_json[M: BaseModel](request: Request, model: type[M]) -> tuple[M, Any]:
@@ -70,3 +72,22 @@ async def gen_param(request: Request) -> int | None:
 
 
 GenParam = Annotated[int | None, Depends(gen_param)]
+
+
+def public_row(row: Any) -> dict[str, Any]:
+    """A DB row as a response body: minus `owner_id`, and every `*_at` in the §0 wire shape.
+
+    Every owned table carries `owner_id` and several of the reads are `SELECT *`, so `dict(row)`
+    puts an opaque owner handle straight into a JSON response — which is precisely what AGENTS.md
+    §4 forbids, and it happened: `test_no_response_anywhere_carries_an_owner_handle` caught it on
+    `GET /papers` before anything shipped. Stripping it centrally rather than per route is the
+    point: a per-route `del` is one route away from being forgotten, and the failure is silent.
+
+    The times: the row keeps what its writer stamped (`isoformat()`, `…Z`, a legacy value), and
+    the response gets contracts.md §0's one shape (`wiretime.wire_time`).
+    """
+    return {
+        key: wire_time(value) if key.endswith("_at") and isinstance(value, str) else value
+        for key, value in dict(row).items()
+        if key != "owner_id"
+    }

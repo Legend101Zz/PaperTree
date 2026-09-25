@@ -58,6 +58,23 @@ ErrorCode = Literal[
     "internal",
 ]
 
+#: contracts.md §2.9's second list: `done.error.code` of a run (the agent's own classification,
+#: §3.3), which a stored `Message.error.code` may also carry.
+RunErrorCode = Literal[
+    "provider_auth",
+    "rate_limited",
+    "quota",
+    "upstream_unavailable",
+    "timeout",
+    "aborted",
+    "bad_request",
+    "tool_failed",
+    "tool_budget_exhausted",
+    "output_truncated",
+    "agent_unavailable",
+    "internal",
+]
+
 #: The status each code is sent with (contracts.md §2.9).
 ERROR_STATUS: Final[dict[ErrorCode, int]] = {
     "auth_required": 401,

@@ -28,7 +28,7 @@ from ..deps import CallerDep, SettingsDep
 from ..deps import promoted_or_404 as _promoted
 from ..errors import ApiError
 from ..ir import block_location, paper_document
-from ._shared import GenParam
+from ._shared import GenParam, public_row
 
 router = APIRouter()
 
@@ -81,20 +81,6 @@ def derive_paper_id(user_id: str, source_hash: str) -> str:
     return "ppr_" + "".join(reversed(out))
 
 
-def _public(row: Any) -> dict[str, Any]:
-    """A DB row as a response body, minus `owner_id`.
-
-    Every owned table carries `owner_id` and several of the reads here are `SELECT *`, so
-    `dict(row)` puts an opaque owner handle straight into a JSON response — which is precisely what
-    AGENTS.md §4 forbids, and it happened: `test_no_response_anywhere_carries_an_owner_handle`
-    caught it on `GET /papers` in this PR before anything shipped.
-
-    Stripping it centrally rather than per route is the point. A per-route `del` is one route away
-    from being forgotten, and the failure mode is silent.
-    """
-    return {key: value for key, value in dict(row).items() if key != "owner_id"}
-
-
 @router.post("/papers", response_model=Upload, status_code=status.HTTP_202_ACCEPTED)
 async def upload(
     call: CallerDep,
@@ -133,7 +119,7 @@ async def upload(
 
 @router.get("/papers")
 async def list_papers(call: CallerDep) -> list[dict[str, Any]]:
-    return [_public(row) for row in call.db.list_papers(call.db_owner)]
+    return [public_row(row) for row in call.db.list_papers(call.db_owner)]
 
 
 @router.get("/papers/{paper_id}")
@@ -143,7 +129,7 @@ async def get_paper(call: CallerDep, paper_id: str, gen: GenParam) -> dict[str, 
     )
     if row is None:
         raise ApiError("not_found", "no such paper")
-    return _public(row)
+    return public_row(row)
 
 
 @router.get("/papers/{paper_id}/ir")
@@ -160,7 +146,7 @@ async def get_ir(call: CallerDep, paper_id: str, gen: GenParam) -> dict[str, Any
 @router.get("/papers/{paper_id}/pages")
 async def pages(call: CallerDep, paper_id: str, gen: GenParam) -> list[dict[str, Any]]:
     g = generation(_promoted(call, paper_id, gen))
-    return [_public(row) for row in call.db.list_pages(call.db_owner, PaperId(paper_id), g)]
+    return [public_row(row) for row in call.db.list_pages(call.db_owner, PaperId(paper_id), g)]
 
 
 @router.get("/papers/{paper_id}/blocks")
@@ -184,13 +170,13 @@ async def blocks(
                 call.db_owner, PaperId(paper_id), g, p["page_index"]
             )
         ]
-    return [_public(row) for row in rows]
+    return [public_row(row) for row in rows]
 
 
 @router.get("/papers/{paper_id}/relations")
 async def relations(call: CallerDep, paper_id: str, gen: GenParam) -> list[dict[str, Any]]:
     g = generation(_promoted(call, paper_id, gen))
-    return [_public(row) for row in call.db.list_relations(call.db_owner, PaperId(paper_id), g)]
+    return [public_row(row) for row in call.db.list_relations(call.db_owner, PaperId(paper_id), g)]
 
 
 @router.get("/papers/{paper_id}/blocks/{block_id}/location")

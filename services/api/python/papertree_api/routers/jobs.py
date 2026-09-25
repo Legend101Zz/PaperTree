@@ -8,6 +8,7 @@ from fastapi import APIRouter
 
 from ..deps import CallerDep
 from ..errors import ApiError
+from ..wiretime import wire_time
 
 router = APIRouter()
 
@@ -34,8 +35,8 @@ async def get_job(call: CallerDep, job_id: str) -> dict[str, Any]:
         "progress_note": job.progress_note,
         "error": job.error,
         "is_terminal": job.is_terminal,
-        "created_at": job.created_at,
-        "updated_at": job.updated_at,
+        "created_at": wire_time(job.created_at),
+        "updated_at": wire_time(job.updated_at),
         # `owner_id` is on the Job dataclass and is DELIBERATELY not in this dict. It is the
         # opaque handle, and #74's one non-negotiable is that it never crosses the wire.
         "steps": [

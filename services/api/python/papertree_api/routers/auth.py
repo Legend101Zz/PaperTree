@@ -1,4 +1,5 @@
-"""contracts.md §2.1: register, login, logout, me. Shapes unchanged from #74."""
+"""contracts.md §2.1: register, login, logout, me. Shapes unchanged from #74; the models are
+`schemas.py`'s (`Credentials`, `Session`, `Me`)."""
 
 from __future__ import annotations
 
@@ -7,32 +8,14 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import Response
 from fastapi.security import HTTPBearer
-from pydantic import BaseModel, Field
 
 from ..deps import AuthConnDep, CallerDep, SettingsDep
 from ..errors import ApiError
+from ..schemas import Credentials, Me, Session
 from ..security import create_session, hash_password, now_iso, revoke_session, verify_password
 from ._shared import json_body
 
 router = APIRouter()
-
-
-class Credentials(BaseModel):
-    # A constrained `str`, not pydantic's `EmailStr`. `EmailStr` needs `email-validator`, which
-    # needs `dnspython` — two packages for a check that guards nothing here. `users.email` is a
-    # unique login string; no mail is sent, no address is trusted, and RFC 5322 conformance is not
-    # a security property. The pattern rejects the typo class (no `@`, no dot, whitespace) and
-    # stops there. If this service ever sends mail, that is the moment to add the dependency.
-    email: str = Field(min_length=3, max_length=320, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-    # 8 is the floor, not a policy. A policy belongs in a product decision nobody has made;
-    # accepting a one-character password because no rule was written is worse than a stated floor.
-    password: str = Field(min_length=8, max_length=1024)
-
-
-class Session(BaseModel):
-    token: str
-    user_id: str
-    email: str
 
 
 _optional_bearer = HTTPBearer(auto_error=False)
@@ -108,7 +91,7 @@ async def logout(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/auth/me")
+@router.get("/auth/me", response_model=Me)
 async def me(call: CallerDep, conn: AuthConnDep) -> dict[str, str]:
     row = conn.execute("SELECT email FROM users WHERE user_id = ?", (call.user_id,)).fetchone()
     if row is None:

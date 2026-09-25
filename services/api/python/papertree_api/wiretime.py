@@ -3,8 +3,11 @@
 UTC, millisecond precision, `Z`. Storage is NOT this shape and is not changed: `packages/db` and
 `packages/jobs` stamp `datetime.isoformat()` (`…274228+00:00`), `security.py` stamps seconds with a
 `Z`, the worker stamps milliseconds with a `Z`, and a legacy 0001 row keeps what its runner wrote.
-So the shape is made on the way OUT, here: the highlight routes (wave 1's `_wire_time`, moved
-here) and the log lines' `ts`.
+So the shape is made on the way OUT, here, for every response: the highlight routes (wave 1's
+`_wire_time`, moved here), the row-shaped responses (`routers/_shared.public_row`, every `*_at`),
+`GET /jobs/{id}`, the pydantic response models (`schemas.WireTime`), and the log lines' `ts`.
+`tests/test_wire_times.py` walks every JSON response for it. The PaperIR document (`/ir`) is the
+one exception: it is served verbatim, under its own schema.
 """
 
 from __future__ import annotations
