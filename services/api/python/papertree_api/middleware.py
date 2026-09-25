@@ -1,4 +1,4 @@
-"""Request ids and the access log line (contracts.md §0 "Request ids", §8).
+"""Request ids, the access log line, and compression (contracts.md §0 "Request ids", §2, §8).
 
 `RequestIdMiddleware` is the OUTERMOST middleware `create_app` installs, so that EVERY response —
 a route's, CORS's preflight answer, a 404 from the router, a 422, the 500 envelope — passes through
@@ -18,6 +18,7 @@ from typing import Final
 
 from papertree_db import new_id
 from starlette.datastructures import Headers, MutableHeaders
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .errors import where
@@ -94,3 +95,27 @@ def log_unhandled(scope: Scope, exc: BaseException) -> None:
         where=where(exc),
         user_ref=state.get("user_ref"),
     )
+
+
+#: The two routes whose bodies are already compressed formats (the PDF, the PNG crops).
+_BINARY_ROUTE: Final = re.compile(r"/papers/[^/]+/(?:file|assets/.*)")
+
+
+class CompressJson:
+    """`GZipMiddleware(minimum_size=1024)` (contracts.md §2), except for the binary routes.
+
+    Starlette's middleware compresses any body of 1 KiB or more that is not an event stream, at
+    level 9. For the PDF that is CPU on every read of a multi-megabyte file that is already
+    deflate-compressed inside, for next to no bytes saved, so `/file` and `/assets/…` bypass it.
+    SSE is excluded by Starlette itself (`text/event-stream`), which the threads routes need.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+        self.gzip = GZipMiddleware(app, minimum_size=1024)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and _BINARY_ROUTE.fullmatch(str(scope.get("path", ""))):
+            await self.app(scope, receive, send)
+        else:
+            await self.gzip(scope, receive, send)

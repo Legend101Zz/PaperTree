@@ -21,7 +21,7 @@ from papertree_agent_tools import Transport
 
 from .ask import mount_ask
 from .errors import InternalErrorMiddleware, install_error_handlers
-from .middleware import REQUEST_ID_HEADER, RequestIdMiddleware, log_unhandled
+from .middleware import REQUEST_ID_HEADER, CompressJson, RequestIdMiddleware, log_unhandled
 from .routers import auth, highlights, jobs, papers
 from .routers.papers import derive_paper_id  # re-exported: it lived here before the split
 from .settings import Settings
@@ -57,9 +57,11 @@ def create_app(
     #   RequestIdMiddleware     every response gets X-Request-Id, every request one log line
     #   CORSMiddleware          so even the 500 below carries Access-Control-Allow-Origin
     #   InternalErrorMiddleware an exception nothing caught -> the §0 envelope, 500 `internal`
+    #   CompressJson            GZipMiddleware(minimum_size=1024), minus the PDF and the PNGs
     #
     # Every other non-2xx is the envelope through the typed handlers (`errors.py`).
     install_error_handlers(app)
+    app.add_middleware(CompressJson)
     app.add_middleware(InternalErrorMiddleware, on_error=log_unhandled)
 
     # The reader is a separate origin in development (`next dev` on :3000, this on :8000).
