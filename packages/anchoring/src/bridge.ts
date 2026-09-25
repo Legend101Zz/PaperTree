@@ -192,5 +192,102 @@ export function irPolygonToSvgPoints(polygon: readonly Point[]): string {
   return polygon.map((p) => `${p[0]},${p[1]}`).join(' ');
 }
 
+/**
+ * One pdf.js text item, as `getTextContent()` returns it — the typesetter's numbers, not the DOM's.
+ *
+ * `transform` is the item's text matrix in RAW PDF user space (`[a, b, c, d, e, f]`, `e`/`f` the
+ * baseline origin, bottom-left, y up); `width` is the advance width and `height` the font height,
+ * both in the same space. `ascent`/`descent` are the font's metrics as fractions of the font height
+ * (`textContent.styles[item.fontName]`); absent, pdf.js's own text-layer defaults apply.
+ */
+export interface PdfTextItemGeometry {
+  readonly str: string;
+  readonly transform: readonly number[];
+  readonly width: number;
+  readonly height: number;
+  readonly ascent?: number;
+  readonly descent?: number;
+}
+
+/** pdf.js `text_layer.js` DEFAULT_FONT_ASCENT, and the descent it implies for a 1-em box. */
+const DEFAULT_ASCENT = 0.8;
+const DEFAULT_DESCENT = -0.2;
+
+function codePointLength(text: string): number {
+  return Array.from(text).length;
+}
+
+/**
+ * The IR quad covering code points `[from, to)` of one pdf.js text item — contracts.md §6's
+ * pdf.js capture path ("the item `transform` and `width`, interpolated by the range's character
+ * ratio inside the item, through `bridge.ts`").
+ *
+ * GLYPH GEOMETRY, NEVER A DOM RECT. The box is built in PDF space from the item's own matrix and
+ * then taken through `pdfRectToIr`, the same frame conversion `stampTextLayer` uses, so it is the
+ * same at every zoom, window size and device pixel ratio.
+ *
+ * Vertically it spans descent..ascent about the baseline — the box pdf.js sizes its own text-layer
+ * span to, which is what the reader's selection highlight is drawn over. Horizontally it is the
+ * advance width, narrowed to the selected fraction BY CODE POINT: an item is one run of one font,
+ * usually a word or a short phrase, so the interpolation is wrong by less than a glyph.
+ *
+ * Axis-aligned text (the matrix's shear terms are zero) is interpolated exactly as described.
+ * Rotated text (an axis label, the arXiv margin stamp) gets the whole item's box: the selected
+ * fraction of a rotated run is not worth a second implementation of the rotation here.
+ */
+export function pdfItemRangeToIrQuad(
+  frame: PageFrame,
+  item: PdfTextItemGeometry,
+  from: number,
+  to: number,
+): BBox | null {
+  const [a, b, c, d, e, f] = item.transform as [number, number, number, number, number, number];
+  if (![a, b, c, d, e, f].every((v) => typeof v === 'number' && Number.isFinite(v))) return null;
+  const length = codePointLength(item.str);
+  if (length === 0 || !(item.width > 0)) return null;
+  const lo = Math.max(0, Math.min(length, from));
+  const hi = Math.max(lo, Math.min(length, to));
+  if (hi <= lo) return null;
+
+  const height = item.height > 0 ? item.height : Math.hypot(c, d);
+  const ascent = item.ascent !== undefined && item.ascent > 0 ? item.ascent : DEFAULT_ASCENT;
+  const descent = item.descent !== undefined && item.descent < 0 ? item.descent : DEFAULT_DESCENT;
+
+  const axisAligned = Math.abs(b) < 1e-6 && Math.abs(c) < 1e-6;
+  if (!axisAligned) {
+    // The whole item's advance box, corners through the rotation, re-extented.
+    const dir = Math.hypot(a, b) > 0 ? [a / Math.hypot(a, b), b / Math.hypot(a, b)] : [1, 0];
+    const up = [-(dir[1] as number), dir[0] as number];
+    const corners: [number, number][] = [];
+    for (const along of [0, item.width]) {
+      for (const across of [descent * height, ascent * height]) {
+        corners.push([
+          e + (dir[0] as number) * along + (up[0] as number) * across,
+          f + (dir[1] as number) * along + (up[1] as number) * across,
+        ]);
+      }
+    }
+    const ir = corners.map((point) => normalisePoint(frame, point));
+    return [
+      Math.min(...ir.map((p) => p[0])),
+      Math.min(...ir.map((p) => p[1])),
+      Math.max(...ir.map((p) => p[0])),
+      Math.max(...ir.map((p) => p[1])),
+    ];
+  }
+
+  // `a` is negative for text set right-to-left by a mirrored matrix; the advance runs the other way.
+  const sign = a < 0 ? -1 : 1;
+  const x0 = e + sign * item.width * (lo / length);
+  const x1 = e + sign * item.width * (hi / length);
+  const flip = d < 0 ? -1 : 1;
+  return pdfRectToIr(frame, [
+    Math.min(x0, x1),
+    f + flip * descent * height,
+    Math.max(x0, x1),
+    f + flip * ascent * height,
+  ]);
+}
+
 /** Round-trip helpers, re-exported so consumers never reach for a second implementation. */
 export { pdfToViewport, viewportToPdf };

@@ -10,11 +10,12 @@
  * the ShapeSelector is legitimately absent; everything the document can support is present.
  */
 
-import type { BBox, Polygon } from '@papertree/document-ir';
+import { unionOfLineRects, type BBox, type PageFrame, type Polygon } from '@papertree/document-ir';
 
+import { pdfItemRangeToIrQuad, type PdfTextItemGeometry } from './bridge.js';
 import type { IndexedBlock, IndexedDocument } from './document.js';
 import { quadsForRange } from './lineband.js';
-import { normaliseForMatch, snapToWordBoundary } from './quotenorm.js';
+import { normaliseForMatch, snapToWordBoundary, toCodePoints } from './quotenorm.js';
 import type { Anchor, ProvenanceClass, Selector, SubTarget, TargetKind } from './types.js';
 
 /**
@@ -264,4 +265,231 @@ function sectionPath(
     current = doc.sections.find((s) => s.heading_block_id === parentId);
   }
   return path;
+}
+
+// ─── the pdf.js path: text-layer items the IR does not stamp ─────────────────────────────────────
+
+/**
+ * The `doc.textStreamId` of a capture made from pdf.js item geometry (contracts.md §6):
+ * `pdfjs@<version>/page-text`. The version is pdf.js's own (`pdfjs.version`), because two pdf.js
+ * releases are not required to read a page's text identically.
+ */
+export function pageTextStreamId(pdfjsVersion: string): string {
+  return `pdfjs@${pdfjsVersion}/page-text`;
+}
+
+/** One page's text as pdf.js reads it, and where each item starts in it (code points). */
+export interface PageText {
+  readonly text: string;
+  readonly itemStarts: readonly number[];
+}
+
+/**
+ * The page text: every item's `str` in content-stream order, with a newline after an item that
+ * ends a line (`hasEOL`). It is the stream a page-text quote's prefix and suffix are cut from — the
+ * PAGE's own words, which is what the contract asks for ("a quote from the page's own text") and
+ * what a T3 search in the IR stream then matches against.
+ */
+export function pageTextOf(
+  items: readonly (PdfTextItemGeometry & { readonly hasEOL?: boolean })[],
+): PageText {
+  let text = '';
+  let cursor = 0;
+  const itemStarts: number[] = [];
+  for (const item of items) {
+    itemStarts.push(cursor);
+    text += item.str;
+    cursor += toCodePoints(item.str).length;
+    if (item.hasEOL === true) {
+      text += '\n';
+      cursor += 1;
+    }
+  }
+  return { text, itemStarts };
+}
+
+/** A selection endpoint on the pdf.js path: an item, and a code-point offset inside its `str`. */
+export interface PageTextEndpoint {
+  readonly item: number;
+  readonly offset: number;
+}
+
+export interface PageTextCaptureInput {
+  readonly doc: IndexedDocument;
+  readonly pageIndex: number;
+  /** `frameForPdfPage(page)` for the page the items are on. */
+  readonly frame: PageFrame;
+  /** `getTextContent()` items with a defined `str`, in content order (`alignedItems`). */
+  readonly items: readonly (PdfTextItemGeometry & { readonly hasEOL?: boolean })[];
+  readonly start: PageTextEndpoint;
+  /** Exclusive. */
+  readonly end: PageTextEndpoint;
+  /** `pageTextStreamId(pdfjs.version)`. */
+  readonly textStreamId: string;
+  readonly id: string;
+  readonly at: string;
+  readonly client: string;
+  readonly mode?: 'source' | 'guided';
+  readonly provenanceClass?: ProvenanceClass;
+}
+
+/** Items closer than this many line heights on one line are one run of words: one quad. */
+const WORD_GAP_LINE_HEIGHTS = 1.5;
+
+function sameLineBox(a: BBox, b: BBox): boolean {
+  const overlap = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
+  const shorter = Math.min(a[3] - a[1], b[3] - b[1]);
+  return shorter > 0 && overlap > 0.5 * shorter;
+}
+
+/**
+ * The quads for a page-text range: one per item run, joined along a line while the gap between
+ * items is a word space. A table row's cells, a column gutter, a figure's scattered labels all have
+ * gaps wider than that, and stay separate quads — painting the gap would paint text that was not
+ * selected.
+ */
+function pageTextQuads(input: PageTextCaptureInput): BBox[] {
+  const { items, start, end, frame } = input;
+  const boxes: BBox[] = [];
+  for (let i = Math.max(0, start.item); i <= Math.min(items.length - 1, end.item); i += 1) {
+    const item = items[i];
+    if (item === undefined || item.str.trim() === '') continue;
+    const length = toCodePoints(item.str).length;
+    const from = i === start.item ? start.offset : 0;
+    const to = i === end.item ? end.offset : length;
+    const quad = pdfItemRangeToIrQuad(frame, item, from, to);
+    if (quad !== null && quad[2] > quad[0] && quad[3] > quad[1]) boxes.push(quad);
+  }
+  const merged: BBox[] = [];
+  for (const box of boxes) {
+    const last = merged[merged.length - 1];
+    if (last !== undefined && sameLineBox(last, box)) {
+      const lineHeight = Math.min(last[3] - last[1], box[3] - box[1]);
+      const gap = box[0] - last[2];
+      if (gap >= -lineHeight && gap <= WORD_GAP_LINE_HEIGHTS * lineHeight) {
+        merged[merged.length - 1] = [
+          Math.min(last[0], box[0]),
+          Math.min(last[1], box[1]),
+          Math.max(last[2], box[2]),
+          Math.max(last[3], box[3]),
+        ];
+        continue;
+      }
+    }
+    merged.push(box);
+  }
+  return merged;
+}
+
+function areaOf(bbox: BBox): number {
+  return Math.max(0, bbox[2] - bbox[0]) * Math.max(0, bbox[3] - bbox[1]);
+}
+
+/**
+ * `table_cell` or `figure_region` when the captured region sits inside a table-cell or figure block
+ * BY GEOMETRY (contracts.md §6), `text` otherwise. The smallest containing block decides, because
+ * blocks nest: a cell is inside its row inside its table.
+ */
+function targetKindByGeometry(doc: IndexedDocument, pageIndex: number, extent: BBox): TargetKind {
+  const cx = (extent[0] + extent[2]) / 2;
+  const cy = (extent[1] + extent[3]) / 2;
+  let best: IndexedBlock | null = null;
+  for (const block of doc.byPage.get(pageIndex) ?? []) {
+    const [x0, y0, x1, y1] = block.bbox;
+    if (cx < x0 || cx > x1 || cy < y0 || cy > y1) continue;
+    if (best === null || areaOf(block.bbox) < areaOf(best.bbox)) best = block;
+  }
+  if (best === null) return 'text';
+  if (best.type === 'table_cell') return 'table_cell';
+  if (best.type === 'figure') return 'figure_region';
+  return 'text';
+}
+
+/**
+ * An anchor for a selection the IR could not stamp — a table cell, a figure label, rotated text —
+ * captured from pdf.js item geometry (ADR-002 §3.3, contracts.md §6).
+ *
+ * WHAT IT CARRIES: `PageSelector`, a `TextQuoteSelector` cut from the page's own text, and a
+ * `ShapeSelector` whose quads come from the items' matrices. NO `BlockSelector` and NO
+ * `TextPositionSelector`: both are offsets into the IR's text stream, and this selection has none —
+ * inventing them from a guess at which block the item belongs to is precisely `locateByText`'s
+ * first-occurrence defect, removed in S4. The ladder links this anchor at T3 (the quote) or T4 (the
+ * geometry), and Source paints the stored quads regardless.
+ *
+ * Returns `null` when the range selects no visible glyph (only whitespace items).
+ */
+export function capturePageTextAnchor(input: PageTextCaptureInput): Anchor | null {
+  const { doc, pageIndex, items } = input;
+  const quads = pageTextQuads(input);
+  if (quads.length === 0) return null;
+
+  const pageText = pageTextOf(items);
+  const stream = toCodePoints(pageText.text);
+  const startAt = (pageText.itemStarts[input.start.item] ?? 0) + input.start.offset;
+  const endAt = (pageText.itemStarts[input.end.item] ?? 0) + input.end.offset;
+  const exactPoints = stream.slice(startAt, endAt);
+  const exact = String.fromCodePoint(...exactPoints);
+
+  const prefixFrom = snapToWordBoundary(stream, Math.max(0, startAt - CONTEXT_CODE_POINTS), -1);
+  const suffixTo = snapToWordBoundary(
+    stream,
+    Math.min(stream.length, endAt + CONTEXT_CODE_POINTS),
+    1,
+  );
+  const prefix = String.fromCodePoint(...stream.slice(prefixFrom, startAt));
+  const suffix = String.fromCodePoint(...stream.slice(endAt, suffixTo));
+
+  const extent: BBox = [
+    Math.min(...quads.map((q) => q[0])),
+    Math.min(...quads.map((q) => q[1])),
+    Math.max(...quads.map((q) => q[2])),
+    Math.max(...quads.map((q) => q[3])),
+  ];
+  const page = doc.pages.find((p) => p.index === pageIndex);
+  const width = page?.width ?? input.frame.width;
+  const height = page?.height ?? input.frame.height;
+
+  const selectors: Selector[] = [
+    {
+      type: 'PageSelector',
+      index: pageIndex,
+      ...(page?.label === undefined ? {} : { label: page.label }),
+    },
+    {
+      type: 'TextQuoteSelector',
+      exact,
+      prefix,
+      suffix,
+      exactNormalised: normaliseForMatch(exact).text,
+      prefixNormalised: normaliseForMatch(prefix).text,
+      suffixNormalised: normaliseForMatch(suffix).text,
+    },
+    {
+      type: 'ShapeSelector',
+      pageIndex,
+      quads,
+      polygons: unionOfLineRects(quads),
+      pageWidth: width,
+      pageHeight: height,
+      rotation: (page?.rotation ?? input.frame.rotation) as 0 | 90 | 180 | 270,
+      userUnit: page?.user_unit ?? input.frame.userUnit,
+      cropBox: (page?.crop_box as unknown as BBox | undefined) ?? [0, 0, width, height],
+    },
+  ];
+
+  return {
+    anchorVersion: 1,
+    offsetUnit: 'unicode',
+    id: input.id,
+    doc: {
+      paperId: doc.paperId,
+      pdfSha256: doc.sourceHash,
+      parserVersion: doc.parserVersion,
+      textStreamId: input.textStreamId,
+    },
+    targetKind: targetKindByGeometry(doc, pageIndex, extent),
+    provenanceClass: input.provenanceClass ?? 'source',
+    selectors,
+    created: { mode: input.mode ?? 'source', at: input.at, client: input.client },
+  };
 }
