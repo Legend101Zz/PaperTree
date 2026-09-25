@@ -45,14 +45,11 @@ dependencies = [
     # Multipart bodies are how a PDF arrives. FastAPI raises at import time on a `File(...)`
     # parameter without it, so it is a runtime dependency rather than an optional extra.
     "python-multipart>=0.0.9",
-]
-
-[dependency-groups]
-dev = [
-    # Starlette's TestClient is httpx-backed. The isolation test in `tests/test_isolation.py` is
-    # #74's one non-negotiable and it has to run over the real ASGI app, not over the route
-    # functions — an isolation check that bypasses the dependency graph is checking the wrong
-    # thing, since the dependency graph is where `owner_for` is called.
+    # PROMOTED from the dev group by the reader release's S0 (contracts.md §3.4): the API now
+    # makes HTTP calls of its own — `GET /healthz` probes the agent, and S5's `agent_client.py`
+    # streams `POST /v1/runs` with `httpx.AsyncClient`. It was already locked (Starlette's
+    # TestClient is httpx-backed, which is why it was a dev dependency), so the lock gains no
+    # package: the delta is this service's own dependency edges, recorded in the S0 report.
     "httpx>=0.27",
 ]
 
