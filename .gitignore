@@ -51,3 +51,4 @@ apps/api/
 # supplied root; the default is OUTSIDE the repo, but a run pointed here must not turn CI's
 # codegen-drift step (a whole-tree `git status --untracked-files=all`) red.
 /.papertree-assets/
+research/benchmarks/fresh/pdfs/
