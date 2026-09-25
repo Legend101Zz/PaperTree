@@ -19,10 +19,10 @@ packages:
   - 'services/*'
   - 'apps/web'
 
-# better-sqlite3 ships prebuilt binaries but needs its install script to place them.
-# pnpm 10 blocks lifecycle scripts by default; this is the explicit allowlist.
+# pnpm 10 blocks lifecycle scripts by default; this is the explicit allowlist. (better-sqlite3 was
+# the first entry: nothing depends on it since the TypeScript db twin was deleted in the reader
+# release's S0, and `pnpm-lock.yaml` holds no copy of it.)
 onlyBuiltDependencies:
-  - better-sqlite3
   # esbuild backs tsx (codegen) and vitest (tests); its postinstall places the binary.
   - esbuild
   # unrs-resolver is the native module resolver behind eslint-import-resolver-typescript,
