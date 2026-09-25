@@ -12,6 +12,8 @@ handler to make that true, because non-2xx responses come out of different machi
                                    field and NEVER echoing the rejected value (FastAPI's default
                                    422 body carries `input`, which for `/auth/register` is the
                                    password the user just typed)
+    a body no parser could read    FastAPI's and Starlette's 400: answered as 422
+                                   `validation_failed`, `body: …`
     Starlette's router             404 for an unknown path, 405 for a known path with the wrong
                                    method: both answered before any route runs
     anything else                  500 `internal` from `InternalErrorMiddleware`, with a fixed
@@ -105,6 +107,8 @@ ERROR_STATUS: Final[dict[ErrorCode, int]] = {
 
 #: The sentence a 500 carries. Fixed on purpose: see the module docstring.
 INTERNAL_DETAIL: Final = "Something went wrong on the server. Nothing was changed; try again."
+#: The detail of the 422 for a body no parser could read (see `_http_exception`).
+BODY_UNPARSEABLE: Final = "body: the request body could not be parsed"
 
 
 class ErrorEnvelope(BaseModel):
@@ -187,9 +191,9 @@ def validation_detail(errors: Sequence[Mapping[str, Any]], *, from_fastapi: bool
 
 
 #: Starlette's own HTTPExceptions carry only a status. These are the codes they get; a status
-#: with no single §2.9 meaning is `internal`, never a guessed code.
+#: with no single §2.9 meaning is `internal`, never a guessed code. (A 400 never gets here:
+#: `_http_exception` answers it as the 422 it is.)
 _STATUS_CODE: Final[dict[int, ErrorCode]] = {
-    400: "validation_failed",
     401: "auth_required",
     404: "not_found",
     # A known path with a method it does not serve: "no such route", as far as a client can act.
@@ -203,6 +207,13 @@ _STATUS_CODE: Final[dict[int, ErrorCode]] = {
 
 def _http_exception(_: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, StarletteHTTPException)
+    if exc.status_code == 400:
+        # A body no parser could read: FastAPI's own ("There was an error parsing the body", e.g.
+        # JSON nested past the recursion limit on `/ask`, which still takes a FastAPI body) or
+        # Starlette's multipart one ("Missing boundary in multipart."). It is a bad body like any
+        # other, so it is §2.9's 422 `validation_failed`, not a 400 carrying 422's code; and the
+        # sentence is fixed, because a parser's message is not written for the client.
+        return envelope_response(ApiError("validation_failed", BODY_UNPARSEABLE))
     code = _STATUS_CODE.get(exc.status_code, "internal")
     detail = exc.detail if isinstance(exc.detail, str) and exc.detail else code
     return envelope_response(
