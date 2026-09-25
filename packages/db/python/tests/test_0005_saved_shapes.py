@@ -22,6 +22,7 @@ database (contracts.md §6.1 / ADR-002 §6.1), and 0005's all-or-nothing guard.
 
 from __future__ import annotations
 
+import importlib
 import json
 import sqlite3
 import time
@@ -33,6 +34,7 @@ import sqlite_vec  # type: ignore[import-untyped]
 from papertree_db import (
     AnchorIn,
     HighlightRejected,
+    MigrationResult,
     PaperId,
     ResolutionIn,
     generation,
@@ -58,6 +60,8 @@ from .saved_shapes import (
 )
 
 SHAPES = sorted(BUILDERS)
+#: The runner MODULE: ``papertree_db.migrate`` the attribute is the function, which shadows it.
+migrate_module = importlib.import_module("papertree_db.migrate")
 
 
 def _fk_and_integrity(conn: sqlite3.Connection) -> tuple[list[Any], str]:
@@ -601,6 +605,60 @@ def test_no_backup_once_0005_is_applied(tmp_path: Path) -> None:
         assert db.migrate().backups == ()
     assert backup.read_bytes() == first
     assert backup.stat().st_mtime_ns == stamp
+
+
+def test_a_concurrent_start_never_replaces_the_backup_with_a_migrated_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The API and the worker BOTH run ``migrate()`` at start (``app.py``, ``worker.py``), on one
+    file. The race the S0 review found: process B reads "0005 is pending"; process A then backs
+    up, applies 0005 and commits; B, still acting on its stale read, copied the MIGRATED database
+    over A's pre-0005 backup (the only rollback, lost silently) and then crashed applying 0005 a
+    second time (``duplicate column name: original_filename``).
+
+    Reproduced deterministically: B's first read of the record returns, and A's whole
+    ``migrate()`` runs before B does anything else.
+
+    WATCHED FAILING before the fix: the backup's head was ``[1, 2, 3, 4, 5]``, and B raised
+    ``OperationalError: duplicate column name: original_filename``.
+    """
+    shape = build_demo_shape(tmp_path)
+    backup = shape.file.with_name(shape.file.name + ".pre-0005.bak")
+    process_a = raw_connect(shape.file)
+    process_b = raw_connect(shape.file)
+    real_read = migrate_module.applied_migrations
+    fired: list[MigrationResult] = []
+
+    def read_then_a_finishes(conn: sqlite3.Connection) -> Any:
+        rows = real_read(conn)
+        if conn is process_b and not fired:
+            fired.append(migrate(process_a, MIGRATIONS_DIR))
+        return rows
+
+    monkeypatch.setattr(migrate_module, "applied_migrations", read_then_a_finishes)
+    try:
+        try:
+            outcome: MigrationResult | Exception = migrate(process_b, MIGRATIONS_DIR)
+        except Exception as exc:  # recorded, so the backup is checked first: it is the data
+            outcome = exc
+        assert [r.applied for r in fired] == [(5,)]
+        assert fired[0].backups == (backup,)
+
+        copy = sqlite3.connect(f"file:{backup}?mode=ro", uri=True)
+        try:
+            head = [r[0] for r in copy.execute("SELECT version FROM schema_migrations")]
+            columns = {r[1] for r in copy.execute("PRAGMA table_info(highlights)")}
+        finally:
+            copy.close()
+        assert head == [1, 2, 3, 4]
+        assert "generation" in columns  # the 0001 highlight shape: still the rollback
+
+        # B saw A's work under the lock and did nothing twice: no second backup, no re-apply.
+        assert outcome == MigrationResult(applied=(), head=(1, 2, 3, 4, 5), backups=())
+    finally:
+        process_a.close()
+        process_b.close()
+    assert not backup.with_name(backup.name + ".tmp").exists()
 
 
 def test_an_in_memory_database_migrates_without_a_backup(tmp_path: Path) -> None:

@@ -11,6 +11,14 @@ only rollback is a copy of the file taken BEFORE they run: when a version in
 database is copied with the SQLite backup API to ``<db>.pre-NNNN.bak`` first. A brand-new database
 (nothing applied yet) and an in-memory one are not backed up — there is nothing to lose, and
 nowhere beside ``:memory:`` to put it.
+
+TWO PROCESSES MIGRATE THE SAME FILE. The API and the worker both call ``migrate()`` at start. So the
+decision "0005 is pending, back up" and the copy are made while this runner holds the database's
+write lock (``BEGIN IMMEDIATE`` on a second connection: SQLite's backup API hangs when run on the
+connection that holds the lock itself), and each migration re-reads the record inside its own
+``BEGIN IMMEDIATE`` before applying. Without that, a process acting on a stale read copied the
+MIGRATED database over the pre-0005 backup — the only rollback, lost silently — and then crashed
+applying 0005 twice (S0 review, S1).
 """
 
 from __future__ import annotations
@@ -34,6 +42,11 @@ STATEMENT_SEPARATOR = re.compile(r"^\s*--;;\s*$", re.MULTILINE)
 
 #: Versions that rebuild user-owned tables, and so are preceded by a backup of the whole file.
 BACKUP_BEFORE_VERSIONS: Final = frozenset({5})
+
+#: How long a starting runner waits for the write lock while ANOTHER runner backs up or migrates
+#: the same file. SQLite's default (5 s) is shorter than copying a large database can take, and a
+#: runner that gives up there fails its start ("database is locked") instead of waiting its turn.
+LOCK_WAIT_SECONDS: Final = 60.0
 
 _RECORD_TABLE = """
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -157,11 +170,23 @@ def _main_database_file(conn: sqlite3.Connection) -> Path | None:
     return None
 
 
+def _recorded(conn: sqlite3.Connection) -> dict[int, str]:
+    """``{version: checksum}`` of the record table, read on ``conn`` whatever its row factory."""
+    previous = conn.row_factory
+    conn.row_factory = None
+    try:
+        rows = conn.execute("SELECT version, checksum FROM schema_migrations").fetchall()
+    finally:
+        conn.row_factory = previous
+    return {int(version): str(checksum) for version, checksum in rows}
+
+
 def _backup(conn: sqlite3.Connection, target: Path) -> None:
     """A consistent copy of the whole database through the SQLite backup API.
 
     Written to ``<target>.tmp`` and renamed into place, so a crash mid-copy never leaves a
-    truncated file wearing the name of a backup.
+    truncated file wearing the name of a backup. The caller holds the write lock (see
+    :func:`_backups_before`), so no second runner is ever writing the same ``.tmp``.
     """
     partial = target.with_name(target.name + ".tmp")
     partial.unlink(missing_ok=True)
@@ -173,13 +198,46 @@ def _backup(conn: sqlite3.Connection, target: Path) -> None:
     os.replace(partial, target)
 
 
+def _backups_before(
+    conn: sqlite3.Connection, migrations: tuple[Migration, ...]
+) -> tuple[Path, ...]:
+    """Writes ``<db>.pre-NNNN.bak`` for each due version, deciding UNDER the write lock.
+
+    ``guard`` is a second connection holding ``BEGIN IMMEDIATE``: while it does, no other process
+    can commit a migration, so the record it reads is the database the copy is taken of. A version
+    another runner applied since this one first looked is no longer pending, and is not copied.
+    """
+    database_file = _main_database_file(conn)
+    if database_file is None:
+        return ()
+    guard = sqlite3.connect(database_file, isolation_level=None, timeout=LOCK_WAIT_SECONDS)
+    try:
+        guard.execute("BEGIN IMMEDIATE")
+        try:
+            recorded = _recorded(guard)
+            pending = {m.version for m in migrations} - set(recorded)
+            due = sorted(BACKUP_BEFORE_VERSIONS & pending) if recorded else []
+            backups: list[Path] = []
+            for version in due:
+                target = backup_path_for(database_file, version)
+                _backup(conn, target)
+                backups.append(target)
+        finally:
+            guard.execute("ROLLBACK")  # it only held the lock; it wrote nothing
+    finally:
+        guard.close()
+    return tuple(backups)
+
+
 def migrate(conn: sqlite3.Connection, directory: Path | None = None) -> MigrationResult:
     """Applies every unapplied migration in order, each in ONE transaction of its own.
 
     Re-running is a no-op. An already-applied migration whose file has since changed is an
     ERROR, not a silent skip: forward-only means the file is immutable once shipped. Before a
     pending version in ``BACKUP_BEFORE_VERSIONS`` touches a database that already holds an
-    earlier schema, the file is backed up (see the module docstring).
+    earlier schema, the file is backed up (see the module docstring). Safe against a second
+    process migrating the same file at the same time: whatever that process applied first is
+    skipped here, not applied twice, and never copied as if it were the pre-migration state.
     """
     migrations = load_migrations(directory)
     already = {m.version: m for m in applied_migrations(conn)}
@@ -195,21 +253,28 @@ def migrate(conn: sqlite3.Connection, directory: Path | None = None) -> Migratio
             )
 
     pending = [m.version for m in migrations if m.version not in already]
-    backups: list[Path] = []
+    backups: tuple[Path, ...] = ()
     if already and BACKUP_BEFORE_VERSIONS.intersection(pending):
-        database_file = _main_database_file(conn)
-        if database_file is not None:
-            for version in sorted(BACKUP_BEFORE_VERSIONS.intersection(pending)):
-                target = backup_path_for(database_file, version)
-                _backup(conn, target)
-                backups.append(target)
+        backups = _backups_before(conn, migrations)
 
     applied: list[int] = []
     for migration in migrations:
         if migration.version in already:
             continue
-        conn.execute("BEGIN")
+        conn.execute("BEGIN IMMEDIATE")
         try:
+            done_elsewhere = _recorded(conn).get(migration.version)
+            if done_elsewhere is not None:
+                # Another runner (the API or the worker, started together) applied it since this
+                # one read the record. Same forward-only rule as above for what it recorded.
+                if done_elsewhere != migration.checksum:
+                    raise MigrationError(
+                        f"migration {migration.version} ({migration.name}) was applied by another "
+                        f"runner with checksum {done_elsewhere}, but the file on disk is "
+                        f"{migration.checksum}"
+                    )
+                conn.execute("COMMIT")
+                continue
             for statement in migration.statements:
                 conn.execute(statement)
             conn.execute(
@@ -231,5 +296,5 @@ def migrate(conn: sqlite3.Connection, directory: Path | None = None) -> Migratio
     return MigrationResult(
         applied=tuple(applied),
         head=tuple(m.version for m in migrations),
-        backups=tuple(backups),
+        backups=backups,
     )
