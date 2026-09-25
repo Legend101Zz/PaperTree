@@ -1,0 +1,22 @@
+{
+  "name": "@papertree/agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The Pi agent service (ADR-002 §3.4): Node 22, Pi pinned exactly, MiniMax-M3, four read-only paper tools. S0 adds the manifest and the pins only; S5 writes the source.",
+  "engines": {
+    "node": ">=22.19"
+  },
+  "scripts": {
+    "start": "node -e \"console.log('@papertree/agent: no server yet. S5 implements this (contracts.md §3); nothing was started.')\"",
+    "test": "node -e \"console.log('@papertree/agent: no tests yet. S5 implements this (contracts.md §9, node --test); 0 tests ran.')\""
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "0.87.1",
+    "@earendil-works/pi-coding-agent": "0.87.1",
+    "typebox": "1.3.27"
+  },
+  "devDependencies": {
+    "ajv": "8.20.0"
+  }
+}
