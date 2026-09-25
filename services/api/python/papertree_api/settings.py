@@ -43,14 +43,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
 
-# IMPORTED, NEVER RE-TYPED. `tests/test_runtime_swappable.py::
-# test_the_provider_constants_have_no_new_live_definition` scans every .py under `packages/` and
-# `services/` for these three strings as LITERALS and fails on a fresh copy. #88 ruled that the two
-# existing copies in `services/document-worker` stay and are declared; a third is a defect. So this
-# service names the constants and never their values — which is also what makes
-# `PAPERTREE_LLM_MODEL` unset behave identically to `papertree_agent_tools`' default.
-from papertree_agent_tools import DEFAULT_BASE_URL, DEFAULT_MODEL, DEFAULT_TIMEOUT_SECONDS
-
 #: How long a session token is good for. Twenty-four hours, matching v1's `jwt_expiration_hours`
 #: default so nothing about the user-visible behaviour changes with the scheme.
 DEFAULT_SESSION_HOURS = 24
@@ -81,15 +73,10 @@ class Settings:
     root: Path
     session_hours: int = DEFAULT_SESSION_HOURS
 
-    #: The model credential for `POST /papers/{id}/ask`. EMPTY IS A SUPPORTED STATE, not a broken
-    #: one: `MiniMaxProvider.available` is False, the route answers 503 naming this variable, and
-    #: nothing else in the service changes. That is the `DoclingAdapter` shape — "an adapter that
-    #: was never INSTALLED has not failed at anything" — applied to a credential, and it is why a
-    #: developer with no key still gets a working reader.
-    llm_api_key: str = ""
-    llm_model: str = DEFAULT_MODEL
-    llm_base_url: str = DEFAULT_BASE_URL
-    llm_timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
+    # NO MODEL CREDENTIAL LIVES HERE (contracts.md §7). The `PAPERTREE_LLM_*` fields went with
+    # `/ask` (slice-plan §R R9): the model key is `PAPERTREE_MINIMAX_API_KEY`, read by
+    # `services/agent` ONLY, and this process never sees it. What the API holds is the shared
+    # secret it presents to the agent, below.
 
     # ── contracts.md §7 (the reader release). Parsed and refused in `from_env`; wired by the
     # slice that uses each: the upload cap by S1, the signing secret by S1's signed asset URLs,
@@ -102,8 +89,9 @@ class Settings:
     signing_secret: str = field(default_factory=_random_signing_secret, repr=False)
     #: `PAPERTREE_AGENT_URL`: the Pi agent service (§3), without a trailing slash.
     agent_url: str = DEFAULT_AGENT_URL
-    #: `PAPERTREE_AGENT_SECRET`: the shared API<->agent secret. EMPTY IS A SUPPORTED STATE: the AI
-    #: routes answer 503 `not_configured` and nothing else changes (§7).
+    #: `PAPERTREE_AGENT_SECRET`: the shared API<->agent secret, sent as `X-PaperTree-Agent-Secret`.
+    #: EMPTY IS A SUPPORTED STATE: the AI routes answer 503 `not_configured` before any row is
+    #: written, and the reader, the document and every highlight still work (§7).
     agent_secret: str = field(default="", repr=False)
     #: `PAPERTREE_DAILY_BUDGET_USD`: per user, rolling 24 h, from `ai_runs.cost_usd_est` (§3.4).
     daily_budget_usd: float = DEFAULT_DAILY_BUDGET_USD
@@ -143,12 +131,6 @@ class Settings:
         return cls(
             root=Path(root).expanduser() if root else Path.home() / ".papertree",
             session_hours=int(os.environ.get("PAPERTREE_SESSION_HOURS", DEFAULT_SESSION_HOURS)),
-            llm_api_key=os.environ.get("PAPERTREE_LLM_API_KEY", ""),
-            llm_model=os.environ.get("PAPERTREE_LLM_MODEL", DEFAULT_MODEL),
-            llm_base_url=os.environ.get("PAPERTREE_LLM_BASE_URL", DEFAULT_BASE_URL),
-            llm_timeout_seconds=float(
-                os.environ.get("PAPERTREE_LLM_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS)
-            ),
             max_upload_mb=_positive_int("PAPERTREE_MAX_UPLOAD_MB", DEFAULT_MAX_UPLOAD_MB),
             signing_secret=os.environ.get("PAPERTREE_SIGNING_SECRET") or _random_signing_secret(),
             agent_url=_http_url("PAPERTREE_AGENT_URL", DEFAULT_AGENT_URL),

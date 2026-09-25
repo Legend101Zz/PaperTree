@@ -20,7 +20,7 @@ WHAT MAKES A HAND-ROLLED VALIDATOR DANGEROUS, AND THE ONE RULE THAT DEFUSES IT
     So this module's load-bearing rule is not in :func:`validate_arguments`, it is in
     :func:`check_schema`: **every keyword in a registered schema must be one this validator
     implements, or registration fails.** An unimplemented keyword is a registration-time error
-    with the keyword's name in it, never a call-time no-op. ``tests/test_registry.py`` asserts
+    with the keyword's name in it, never a call-time no-op. ``tests/test_schema.py`` asserts
     this with ``"multipleOf"``, which is real JSON Schema and is not implemented here.
 
     The corollary is that the supported set can grow deliberately and can never grow by
@@ -31,8 +31,9 @@ WHAT IS DELIBERATELY ABSENT
     ``$ref``, ``$defs``, ``allOf``/``anyOf``/``oneOf``/``not``, ``if``/``then``/``else``,
     ``patternProperties``, ``propertyNames``, ``dependentRequired``, ``format``, ``const``,
     ``multipleOf``, ``uniqueItems``, ``exclusiveMinimum``/``exclusiveMaximum``, tuple-form
-    ``items``, and ``additionalProperties`` as a subschema. None of the eighteen tool schemas in
-    ``tools.py`` needs one, and every one of them is a place where a partial implementation
+    ``items``, and ``additionalProperties`` as a subschema. None of the schemas it checks (the
+    evaluation scorer's question files; the deleted registry's eighteen tools before them)
+    needs one, and every one of them is a place where a partial implementation
     could be subtly wrong in a way that reads as correct. A tool that grows a need for one
     should get the keyword implemented here with a test, not a ``# type: ignore`` at the call
     site.
@@ -41,7 +42,7 @@ TWO PYTHON FACTS THIS MODULE IS BUILT AROUND, BOTH MEASURED IN A REPL BEFORE BEI
     1. ``isinstance(True, int)`` is ``True``. ``bool`` is a subclass of ``int``, so the obvious
        ``isinstance(value, int)`` accepts ``True`` for an ``"integer"`` argument and a model that
        emitted ``{"radius": true}`` would get ``radius == 1`` with no error anywhere. Every
-       numeric check here excludes ``bool`` explicitly, and ``tests/test_registry.py`` asserts
+       numeric check here excludes ``bool`` explicitly, and ``tests/test_schema.py`` asserts
        it, because this is the exact class of bug that is invisible in review.
     2. ``json.loads`` produces ``int`` for ``2`` and ``float`` for ``2.0``. A ``"number"``
        therefore accepts both, and an ``"integer"`` accepts only ``int`` — ``2.0`` is rejected

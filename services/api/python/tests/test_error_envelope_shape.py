@@ -144,42 +144,40 @@ def test_route_refusals_are_envelopes(tmp_path: Path) -> None:
             415,
             "unsupported_media_type",
         )
-        # /ask without a model key: the provider is not configured, which is §2.9's own code.
-        assert_envelope(
-            h.client.post(
-                f"/papers/{paper_id}/ask",
-                headers=auth(alice),
-                json={"question": "q", "block_ids": ["blk_x"]},
-            ),
-            503,
-            "not_configured",
-        )
 
 
 def test_a_body_that_cannot_be_parsed_is_422_like_every_other_bad_body(tmp_path: Path) -> None:
-    """S0 review S4. WATCHED FAILING: FastAPI's own body parser (the one `/ask` still uses) and
-    Starlette's multipart parser answer a body they cannot parse with a 400 HTTPException, which
-    went out as `400 validation_failed` — §2.9 ties `validation_failed` to 422, and a 400 is
-    `empty_upload`'s status. Both are now 422 `validation_failed` naming `body`, with a fixed
-    sentence (a parser's message is not the client's to read)."""
+    """S0 review S4. WATCHED FAILING: FastAPI's own body parser and Starlette's multipart parser
+    answer a body they cannot parse with a 400 HTTPException, which went out as `400
+    validation_failed` — §2.9 ties `validation_failed` to 422, and a 400 is `empty_upload`'s
+    status. Both are now 422 `validation_failed` naming `body`, with a fixed sentence (a parser's
+    message is not the client's to read). `/ask` was the last route with a FastAPI-parsed JSON
+    body and S5 deleted it, so the JSON half now goes through the threads route's pydantic
+    parser, which must refuse the same 100k-deep body as a 422 too (never a 500)."""
     with harness(tmp_path) as h:
         alice = register(h.client, "alice@example.com")
         paper_id = seed_paper(h.settings, h.client, alice, SLUG)
         deep = "[" * 100_000 + "]" * 100_000  # RecursionError in `json.loads`, FastAPI's 400
-        for response in (
-            h.client.post(
-                f"/papers/{paper_id}/ask",
-                content=deep,
-                headers={**auth(alice), "content-type": "application/json"},
-            ),
+        body = assert_envelope(
             h.client.post(
                 "/papers",
                 content=b"not multipart",
                 headers={**auth(alice), "content-type": "multipart/form-data"},
             ),
-        ):
-            body = assert_envelope(response, 422, "validation_failed")
-            assert body["detail"] == BODY_UNPARSEABLE, body
+            422,
+            "validation_failed",
+        )
+        assert body["detail"] == BODY_UNPARSEABLE, body
+        body = assert_envelope(
+            h.client.post(
+                f"/papers/{paper_id}/threads",
+                content=deep,
+                headers={**auth(alice), "content-type": "application/json"},
+            ),
+            422,
+            "validation_failed",
+        )
+        assert body["detail"].startswith("body: "), body
         # `empty_upload` keeps its own 400: it is a route's refusal, not a parser's.
         assert_envelope(
             h.client.post(

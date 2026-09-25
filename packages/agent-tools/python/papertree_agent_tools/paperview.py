@@ -1,65 +1,22 @@
 """One paper generation, read through the read-only handle, indexed by ``papertree_retrieval``.
 
-WHY THIS MODULE EXISTS AT ALL — A SEAM, NAMED RATHER THAN PAPERED OVER
+``PaperIndex`` encodes the measured PaperIR traps a second implementation would get wrong —
+reading order rebuilt from per-page flows because ``doc_order`` exists only on top-level body
+blocks; adjacency from the flow sequence because ``prev_id``/``next_id`` are never populated;
+``section_of`` returning ``None`` as a NORMAL answer for front matter. So a view is built with
+``PaperIndex.from_reader(handle, …)``: the read-only ``AgentDataHandle`` satisfies
+``papertree_retrieval.PaperReader`` structurally, with no cast, no forged ``OwnerId`` and no private
+import, and the read-only and read-write paths share one loader.
 
-``PaperIndex`` is the right structure for eight of this package's eighteen tools:
-``get_block_children`` is ``index.children``, ``get_parent_section`` is ``index.section_of`` plus
-``index.section_path``, ``get_adjacent_blocks`` is ``index.adjacent``. Every one of those methods
-encodes a measured PaperIR trap that a second implementation would get wrong — reading order
-rebuilt from per-page flows because ``doc_order`` is present on 207 of 974 blocks; adjacency
-derived from the flow sequence because ``prev_id``/``next_id`` are populated 0 of 974 times;
-``section_of`` returning ``None`` as a NORMAL answer for front matter. Re-deriving them here is
-precisely the "every feature invents its own representation" failure that
-``papertree_document_ir.identity`` exists to kill.
+(This module's earlier header described a workaround — a cast facade and three private imports —
+that ``PaperIndex.from_reader`` replaced; the reader release removed the eighteen-tool registry it
+served, slice-plan §R R10. The API's internal paper tools use ``papertree_retrieval``'s
+``PaperIndexCache`` directly; this view is kept for callers that also want the page rows, the
+channels and the raw, unrepaired text.)
 
-**But ``PaperIndex.load`` takes a ``PaperTreeDb``, which opens read-WRITE — the one object an
-agent tool may never hold.** ``papertree_memory.agent_handle``'s docstring is explicit about why
-wrapping one and exposing only its read methods is not acceptable: it gives an object whose
-``__slots__`` contain a live writable connection, which is a boundary made of method visibility.
-
-There are three ways out and only one of them is honest:
-
-  1. Hand ``PaperIndex.load`` a ``PaperTreeDb``. Rejected: it destroys F3.8 outright.
-  2. Re-implement the index over ``AgentDataHandle``. Rejected: ~300 lines duplicating four
-     documented traps, which drift on the first schema change.
-  3. Construct ``PaperIndex`` directly — its ``__init__`` takes already-built rows — and supply
-     the two constructor arguments it holds only for the semantic rung. That is this module.
-
-WHAT THE THIRD OPTION COSTS, STATED IN FULL SO A REVIEWER DOES NOT HAVE TO FIND IT
-
-  * **A cast.** ``PaperIndex.__slots__`` includes ``_db: PaperTreeDb``, used in exactly one
-    place: ``search_vectors`` calls ``self._db.search_block_vectors(self._owner, paper_id,
-    generation, embedding, k)``. :class:`_VectorSearchFacade` implements that one method with
-    that exact positional signature, delegating to ``AgentDataHandle.search_block_vectors``,
-    which is the SAME SQL against the SAME vec0 partition — verified by
-    ``packages/memory/python/tests/test_agent_handle_reads.py``, which asserts a vector written
-    through ``PaperTreeDb`` is found through the handle. The ``cast`` is a lie to mypy and it is
-    the smallest one available; ``tests/test_tools.py`` asserts the facade is still call-
-    compatible, so a signature change in ``papertree_db`` fails here loudly.
-  * **An ``OwnerId`` that authorises nothing.** ``mint_owner()`` returns a handle no connection
-    has recorded, and ``ids.py``'s own docstring says such an object "authorises nothing" —
-    resolution fails. It fills a constructor slot the facade never reads. This is fail-CLOSED by
-    construction: if a future ``PaperIndex`` started resolving the owner, every call would raise
-    ``OwnershipError`` rather than quietly reading a tenant we did not mean.
-  * **Three private imports** from ``papertree_retrieval.index``. ``_to_indexed_block`` is the
-    one that matters: it is the code that calls ``resolved_text(block, apply_proposed=False)``
-    with the right adapter, and DESIGN.md D4 forbids every other consumer from concatenating
-    ``text`` and ``repairs`` by hand. ``_decode_json_list`` and ``_reference_label`` come along
-    because forking the bibliography-label matcher would fork the citation contract.
-    ``tests/test_tools.py`` asserts all three still exist, so a rename is a failing test in this
-    package rather than a silent behaviour change.
-
-**The right fix is a ``PaperIndex.from_rows`` / ``PaperIndex.load_readonly`` classmethod in
-``papertree-retrieval``, which this package does not own.** AGENTS.md §1: *"Found something
-outside your owned paths? File an issue, do not edit."* This module is the workaround, and its
-whole cost is the three lines above.
-
-CACHING, AND WHY IT IS PER TURN AND NOT PER CALL
-    Building a view reads every page and every block: 974 rows on the largest corpus paper, ~60
-    KB of text (``index.py``'s measurement). A turn makes several tool calls against one paper,
-    so :class:`ToolContext` builds the view once and holds it. It is NOT a process-level cache:
-    two turns are two handles, and a cache that outlived a handle would outlive the owner
-    binding that makes the handle safe.
+CACHING. A view is NOT cached: its index keeps the handle it was read through (for the vector
+rung), and a handle is closed at the end of the request that opened it. The bounded, cross-request
+cache is ``papertree_retrieval.PaperIndexCache``, which stores DETACHED indexes for that reason.
 """
 
 from __future__ import annotations

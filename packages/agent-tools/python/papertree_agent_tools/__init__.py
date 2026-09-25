@@ -1,116 +1,37 @@
-"""papertree_agent_tools — F3.1 (tool registry), F3.4 (agent runtime), F3.5 (answer + verifier).
+"""papertree_agent_tools — the answer contract, the grounding verifier, the read-only paper view.
 
-    registry   ToolRegistry: name -> JSON Schema -> async callable. Owned here, framework-free.
-    tools      the eighteen tools EPIC-03 F3.1 names, over a READ-ONLY AgentDataHandle.
-    answer     the grounded-answer contract; the Python twin of the Inspector's types.ts.
-    grounding  verify_grounding: deterministic, offline, flags unsupported claims.
-    provider   MiniMax over the OpenAI-compatible shape, stdlib urllib, injectable transport.
-    runtime    the Pydantic AI adapter — lazy, reports UNAVAILABLE, under 100 lines.
-    turn       the SHIPPED tool-calling loop, which `services/api`'s /ask endpoint drives.
+    answer     the grounded-answer contract: ``GroundedAnswer``, ``VerifiedClaim``, ``SourceRegion``
+    grounding  ``verify_grounding``: deterministic, offline; FLAGS unsupported claims, drops none
+    paperview  ``load_paper_view``: one paper generation through the read-only ``AgentDataHandle``
+    schema     a 14-keyword JSON Schema subset, used by ``packages/evaluation``'s scorer
 
-═══ THE ONE IDEA ══════════════════════════════════════════════════════════════════════════════
+WHAT LEFT THIS PACKAGE, AND WHY (reader release, ADR-002 §3.4, slice-plan §R R10)
 
-**THE REGISTRY IS THE PRODUCT; THE RUNTIME IS A DETAIL.** EPIC-03 §4: *"The ~20 tools live in a
-plain registry the project owns; Pydantic AI merely adapts it. The runtime must stay swappable in
-<100 lines."*
+The Python agent loop is gone: ``turn.py`` (the chat-completions tool loop), ``provider.py`` (the
+OpenAI-compatible MiniMax client), ``runtime.py`` (the Pydantic AI adapter), ``registry.py`` and
+``tools.py`` (the eighteen-tool registry, six of whose tools could never return data), and
+``results.py``. The owner ruled that AI runs through the Pi SDK in ``services/agent`` (Node), which
+calls MiniMax and reads the paper through four tools the API serves at
+``/internal/agent/runs/{run_id}/…``. So there is ONE MiniMax client in the repository, and it is not
+here. The model-facing corpus counts ``tools.py`` carried ("974 blocks", #120) went with it.
 
-Everything below follows from taking that literally. ``registry.py`` and ``tools.py`` import the
-standard library, ``papertree_db``, ``papertree_memory``, ``papertree_retrieval``,
-``papertree_document_ir`` and ``papertree_prompts`` — and no agent framework, no HTTP client, no
-model SDK, at any depth. ``runtime.py`` is the only file that knows an agent framework exists, it
-is **54 executable lines** (measured by ``tests/test_runtime_swappable.py``, which counts them
-and fails over 100), and that same test writes a SECOND adapter from scratch — 37 executable
-lines — and drives this registry to a finished two-step tool-calling turn with it against a real
-parsed database. A swappability claim is checkable only by swapping.
+WHAT STAYED, AND WHO CALLS IT
 
-═══ WHAT IS NOT A DEPENDENCY, AND THE MEASUREMENT BEHIND IT ═══════════════════════════════════
+  * ``verify_grounding`` runs on EVERY answer the API brokers: ``services/api``'s ``evidence.py``
+    splits the agent's final text into claims, maps each claim's ``[bN]`` markers to the blocks the
+    run was shown, and asks this verifier whether the claim's vocabulary is in those blocks. The
+    verdict becomes ``Citation.supported``; the verifier's REASONS (which name the missing words)
+    are not shown to the reader.
+  * ``answer`` is the verifier's input and output type, and ``packages/evaluation``'s grounding
+    scorer reads it.
+  * ``schema`` is that scorer's argument checker.
+  * ``paperview`` is the read-only way to hold one paper generation through ``AgentDataHandle``.
 
-**No pydantic-ai. No jsonschema. No httpx. No openai.** ``uv sync --locked --all-packages`` is a
-CI gate, and ``packages/evaluation``'s pyproject records what one line does: ``docling>=2.0`` took
-the workspace lock from 22 packages to 100+, because uv locks a dependency group whether or not it
-installs it. So this package follows the pattern that repo already established rather than
-inventing one:
+═══ WHAT THE VERIFIER CAN AND CANNOT DO — unchanged, and still the honest position ═══════════
 
-  * the Pydantic AI adapter does ``importlib.util.find_spec`` at CALL time and reports itself
-    ``unavailable`` with the reason, exactly like ``papertree_evaluation.adapters.DoclingAdapter``
-    — whose own docstring insists that *"an adapter that was never INSTALLED has not failed at
-    anything"*;
-  * the provider speaks HTTP through stdlib ``urllib``, exactly like
-    ``services/document-worker``'s ``vlm.py`` already does against MiniMax;
-  * argument validation is a 14-keyword JSON Schema subset in ``schema.py``, which REJECTS a
-    schema keyword it cannot enforce at registration time rather than ignoring it at call time.
-
-═══ THE TRUST BOUNDARY, WHICH IS STRUCTURAL AND NOT POLITE ════════════════════════════════════
-
-A tool receives a :class:`~papertree_agent_tools.registry.ToolContext`: an ``AgentDataHandle``
-plus which paper, generation and session it is. Nothing else — no ``PaperTreeDb``, no
-``MemoryStore``, no ``pathlib.Path`` (a ``Path`` carries ``write_bytes``), no callback into
-privileged code, no network client. The handle opens ``file:…?mode=ro`` with an sqlite3
-authorizer denying INSERT/UPDATE/DELETE/DDL/**ATTACH**; ``papertree_memory.guard``'s docstring
-records why the second layer is not optional (a bare ``mode=ro`` connection can ``ATTACH`` a
-writable database, and ``VACUUM INTO`` copies the whole library to a path of the attacker's
-choosing — both measured on this workspace).
-
-So ``save_user_note`` **cannot** write, and does not try: it returns a PROPOSAL object, already
-checked against both gates ``MemoryStore.create_proposal`` will apply, which the privileged
-runtime persists after the user confirms it. ``tests/test_tools.py`` asserts the call leaves
-``memory_proposals``, ``user_learning_memory`` and ``memory_audit`` all empty, and then feeds the
-returned proposal to ``MemoryStore`` and watches a row appear — because "it did not write" and
-"it produced something real" are two claims, and asserting only the first would pass for a tool
-that does nothing at all.
-
-═══ HONESTY ABOUT THE DATA, WHICH IS THIS PACKAGE'S MAIN DESIGN CONSTRAINT ════════════════════
-
-Issue #66 measured the corpus on 2026-08-02: ``prev_id``/``next_id`` populated 0 of 974 times;
-``cites``, ``references``, ``defines``, ``explains``, ``result_of`` and ``parent_of`` emitted
-ZERO times; ``equation.payload.referenced_by`` and ``figure.payload.caption_block`` never
-populated; and no embeddings anywhere.
-
-``cites`` is the one that has since moved: the parser emits 525 edges over the 8-paper corpus as
-of 2026-08-03, so ``resolve_citation``'s edge path is reachable on a NEWLY parsed paper. Every
-other row is unchanged, a paper stored before that date still has no edges at all, and an
-author-year bibliography still leaves about two markers in three unresolved.
-
-``search_semantic_blocks`` therefore returns nothing on every real paper today. **Every empty
-answer in this package carries a required, non-empty reason** —
-``ToolResult`` refuses to construct without one — and the reason distinguishes "there are none"
-from "the parser does not emit these". A bare ``[]`` would tell a model "I looked and found none",
-and the model would write "this equation is not referenced anywhere in the paper": a fabrication
-manufactured by an honest-looking empty list.
-
-═══ WHAT THIS PACKAGE DOES NOT DO, STATED BEFORE ANYONE HAS TO FIND OUT ═══════════════════════
-
-  * **No answer is scored.** EPIC-03 §7 records that the 120 Tier C questions ``qa/grounding.spec``
-    evaluates against DO NOT EXIST — "Tier C" appears in four prose documents and zero data files.
-    The verifier's threshold is a judgement between three measured coverages, not a calibration,
-    and ``grounding.py`` says so in the file rather than in a result document.
-  * **The verifier is lexical.** It catches fabricated vocabulary and fabricated numbers. It
-    cannot see negation, comparator swaps or causal inversion, and it flags correct paraphrases.
-    ``supported`` means "necessary condition met", never "true".
-  * **``crop_pdf_region`` and ``search_visual_regions`` can never work from here.** They are
-    registered, callable and permanently ``unavailable`` with the reason, because omitting them
-    would leave nobody able to tell "considered and impossible" from "forgotten".
-  * **No ``Anchor`` is minted.** ``@papertree/anchoring`` is TypeScript-only, so
-    ``SourceRegion`` carries the address an anchor would be minted from and the anchor is minted
-    on the client. A Python consumer that stores one and re-parses is storing a bare block id.
-  * **``PaperIndex`` has no read-only constructor.** ``paperview.py`` documents the cast and the
-    three private imports that work around it. The right fix belongs to ``papertree-retrieval``,
-    which this package does not own.
-
-═══ USAGE ═════════════════════════════════════════════════════════════════════════════════════
-
-    registry = build_registry()                        # once per process
-    with AgentDataHandle(db_path, user_id) as handle:  # once per turn
-        context = ToolContext(
-            handle,
-            paper_id=paper_id,
-            generation=generation(1),
-            session_id="ses_…",
-            caps=TurnCaps(untrusted_input=True, sensitive_scope=False, state_or_egress=False),
-        )
-        tools = tool_definitions(registry, context=context)   # OpenAI wire shape
-        result = await registry.call("get_block", {"block_id": block_id}, context=context)
-        result.status, result.reason, result.data
+**It is lexical.** It catches fabricated vocabulary and fabricated numbers. It cannot see negation,
+comparator swaps or causal inversion, and it flags correct paraphrases. ``supported`` means
+"necessary condition met", never "true". ``grounding.py``'s docstring carries the measurements.
 """
 
 from __future__ import annotations
@@ -137,36 +58,6 @@ from papertree_agent_tools.grounding import (
     verify_grounding,
 )
 from papertree_agent_tools.paperview import PaperView, load_paper_view
-from papertree_agent_tools.provider import (
-    DEFAULT_BASE_URL,
-    DEFAULT_MODEL,
-    DEFAULT_TIMEOUT_SECONDS,
-    DEFAULT_VISION_MODEL,
-    KNOWN_VISION_MODELS,
-    Completion,
-    MiniMaxProvider,
-    ProviderError,
-    ProviderSettings,
-    Transport,
-    UrllibTransport,
-    VisionModelUnverified,
-)
-from papertree_agent_tools.registry import (
-    READ_ONLY_TOOLSETS,
-    ToolContext,
-    ToolHandler,
-    ToolNotPermittedError,
-    ToolRegistry,
-    ToolSpec,
-    UnknownToolError,
-)
-from papertree_agent_tools.results import ToolResult, ToolStatus
-from papertree_agent_tools.runtime import (
-    AdapterStatus,
-    PydanticAiAdapter,
-    dispatch,
-    tool_definitions,
-)
 from papertree_agent_tools.schema import (
     ANNOTATION_KEYWORDS,
     CONSTRAINT_KEYWORDS,
@@ -175,75 +66,31 @@ from papertree_agent_tools.schema import (
     check_schema,
     validate_arguments,
 )
-from papertree_agent_tools.tools import TOOL_NAMES, build_registry
-from papertree_agent_tools.turn import (
-    DEFAULT_MAX_STEPS,
-    DEFAULT_MAX_TOKENS,
-    ChatCompletionsTurn,
-    DispatchedCall,
-    TurnDidNotFinish,
-    TurnOutcome,
-    strip_reasoning_envelope,
-)
 
 __all__ = [
     "ANNOTATION_KEYWORDS",
     "ANSWER_SCHEMA",
     "CITATION_TARGET_TYPES",
     "CONSTRAINT_KEYWORDS",
-    "DEFAULT_BASE_URL",
     "DEFAULT_COVERAGE_THRESHOLD",
-    "DEFAULT_MAX_STEPS",
-    "DEFAULT_MAX_TOKENS",
-    "DEFAULT_MODEL",
-    "DEFAULT_TIMEOUT_SECONDS",
-    "DEFAULT_VISION_MODEL",
-    "KNOWN_VISION_MODELS",
-    "READ_ONLY_TOOLSETS",
     "STOPWORDS",
-    "TOOL_NAMES",
     "UNVERIFIED_REASON",
-    "AdapterStatus",
     "AnswerContractError",
-    "ChatCompletionsTurn",
     "ClaimEvidence",
-    "Completion",
-    "DispatchedCall",
     "GroundedAnswer",
-    "MiniMaxProvider",
     "PaperView",
-    "ProviderError",
-    "ProviderSettings",
-    "PydanticAiAdapter",
     "SchemaError",
     "SourceRegion",
     "ToolArgumentError",
-    "ToolContext",
-    "ToolHandler",
-    "ToolNotPermittedError",
-    "ToolRegistry",
-    "ToolResult",
-    "ToolSpec",
-    "ToolStatus",
-    "Transport",
-    "TurnDidNotFinish",
-    "TurnOutcome",
-    "UnknownToolError",
-    "UrllibTransport",
     "VerifiedClaim",
-    "VisionModelUnverified",
     "answer_from_mapping",
     "answer_to_wire",
-    "build_registry",
     "camel_case",
     "check_schema",
     "claim_coverage",
     "content_tokens",
-    "dispatch",
     "load_paper_view",
-    "strip_reasoning_envelope",
     "target_type_for_block_type",
-    "tool_definitions",
     "validate_arguments",
     "verify_grounding",
 ]

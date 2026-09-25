@@ -18,7 +18,8 @@ PDF built here with PyMuPDF, in process, and the corpus-backed tests are
 :data:`requires_corpus`-marked, skip loudly and print the fetch script.
 
 WHAT THE SYNTHETIC PAPER ACTUALLY YIELDS, MEASURED RATHER THAN INTENDED
-    Parsed on this machine, 2026-08-02, ``ParserConfig(vlm_max_calls=0)``, generation 1:
+    Parsed on this machine, 2026-08-02, generation 1 (the ``vlm_max_calls`` knob that date's
+    config named was removed with ``vlm.py``, slice-plan §R R6):
 
         10 blocks   title 1, author 1, heading 2, paragraph 3, caption 1, figure 1, footnote 1
         3 sections
@@ -27,16 +28,9 @@ WHAT THE SYNTHETIC PAPER ACTUALLY YIELDS, MEASURED RATHER THAN INTENDED
         0 equations, 0 tables
         pages.image is NULL on every page
 
-    Every one of those zeros is load-bearing and is asserted somewhere: they are what make the
-    "honest empty" paths reachable in a test rather than only in a docstring. ``resolve_citation``
-    on this document returns EMPTY because the bibliography genuinely has no entries, which is
-    the same shape as its answer on a real paper (where the entries exist but ``cites`` edges do
-    not) and a weaker case than it — hence the corpus layer, which exercises the real one.
-
-    ``get_equation`` and ``get_table`` have NO positive path on this document. That is stated
-    rather than worked around: their positive paths are corpus-only
-    (``neural-odes-mathheavy.pdf``, ``superglue-tableheavy.pdf``) and therefore skip on CI. The
-    negative paths — wrong block type, missing block — run everywhere.
+    The eighteen-tool registry these builders were written for was deleted in the reader release
+    (slice-plan §R R10); ``test_grounding_verifier.py`` still seeds a real parse through them, so
+    the verifier is measured against a document the parser produced, not one a test authored.
 """
 
 from __future__ import annotations
@@ -49,12 +43,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from papertree_agent_tools import ToolContext
 from papertree_db import BlockId, Generation, PaperId, PaperTreeDb, generation, new_id
 from papertree_document_worker.pdf import pymupdf
 from papertree_document_worker.pipeline import ParserConfig, parse_document
 from papertree_memory import AgentDataHandle
-from papertree_prompts import TurnCaps
 
 #: ``parents[4]`` == the repo root from ``packages/agent-tools/python/tests/<this file>``.
 REPO = Path(__file__).resolve().parents[4]
@@ -189,25 +181,6 @@ class Seeded:
 
     def handle(self) -> AgentDataHandle:
         return AgentDataHandle(self.path, self.user_id)
-
-    def context(
-        self,
-        handle: AgentDataHandle,
-        *,
-        session_id: str = "ses_agent_tools_test",
-        caps: TurnCaps | None = None,
-    ) -> ToolContext:
-        return ToolContext(
-            handle,
-            paper_id=self.paper_id,
-            generation=self.generation,
-            session_id=session_id,
-            # The ordinary reading turn: document text in context, no library reach, no writes.
-            # `toolset_for` maps it to READ_ONLY_SINGLE_PAPER, which is §13.6(e) Attack 2's
-            # stopping point.
-            caps=caps
-            or TurnCaps(untrusted_input=True, sensitive_scope=False, state_or_egress=False),
-        )
 
 
 def seed(root: Path, pdf: Path, *, email: str = "reader@papertree.test") -> Seeded:
