@@ -117,7 +117,11 @@ def test_the_pre_existing_relation_types_did_not_move(parsed: dict[str, Paper]) 
     # Encoding`, `3.9.4 News Article Generation`, `5.1 Baselines BERT`) or into a caption's second
     # line; the rest re-point to the paragraph that really continues. `cites` 525 -> 532: see
     # test_citations.BASELINE.
-    assert totals["continues_on_next_page"] == 90
+    # ...and 90 -> 89 in the numeric-only commit: resnet's body-flow page numbers (`2`, `3`, `6`,
+    # `11`) were `paragraph`, so each was the SOURCE of a page continuation into the next page's
+    # first paragraph. Typed `unknown`, they continue nothing, and six of those edges now start at
+    # the paragraph that really runs over the page break; one false one is simply gone.
+    assert totals["continues_on_next_page"] == 89
     assert totals["continues_in_next_column"] == 37
     assert totals["cites"] == 532
 

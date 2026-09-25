@@ -86,6 +86,13 @@ HEADING_SIZE_RATIO = 1.12
 _CONTACT = re.compile(r"[@]|https?://|\bdoi\b", re.IGNORECASE)
 #: ...or bold at body size, which is how most `\subsubsection` is set.
 _BOLD_FLAG = 1 << 4
+#: Digits and the punctuation of numbers ONLY: `66.4`, `830`, `(3)`, `18.2`. A section title always
+#: carries a letter, so a heading candidate made of nothing else is a table value, an equation
+#: number or a page number that escaped its own detector - never a heading (S2, #141). Measured at
+#: 18f69ec: `yolo-1506.02640`'s bold table value `66.4`, `flashattention-2205.14135`'s nine
+#: speed-up figures (`66.6`, `41.7`, `18.2`, ...), fifteen of `maskrcnn-1703.06870`'s AP values
+#: and gpt3's `3.66` / `21.7` / `37.9` were headings, each opening a one-block section.
+_NUMERIC_ONLY = re.compile(r"^[\s\d.,:;%±+\-−–()×x*/]+$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,13 +235,22 @@ def detect_headings(layout: PageLayout, body_size: float) -> list[Heading]:
         parsed = parse_section_number(text)
         if parsed is not None and _looks_like_heading_by_font(block, body_size):
             number, title = parsed
-            if not (_could_be_an_author_line(text, layout.index) and _is_name_list(title)):
+            if not (_could_be_an_author_line(text, layout.index) and _is_name_list(title)) and (
+                not _NUMERIC_ONLY.match(title)
+            ):
                 headings.append(Heading(block, number, title, _level_of(number)))
                 continue
 
         # 2. `1` alone, with `Introduction` in the next block. THE B6 JOIN.
         bare = _is_bare_number(text)
-        if bare is not None and index + 1 < len(body):
+        # A split section number is set in the heading face, like its title; a table value or a
+        # page number is not. YOLO p5's `21` (an FPS value) joined the bold row after it and
+        # became a one-number heading (S2, #141).
+        if (
+            bare is not None
+            and index + 1 < len(body)
+            and _looks_like_heading_by_font(block, body_size)
+        ):
             following = body[index + 1]
             title = " ".join(line.text for line in following.lines).strip()
             if (
@@ -245,6 +261,9 @@ def detect_headings(layout: PageLayout, body_size: float) -> list[Heading]:
                 # it: `2` (a stray page number) above `2. Related Work` made `2` the heading and
                 # swallowed the real one (maskrcnn p1, S2 #141). It is detected on its own turn.
                 and parse_section_number(title) is None
+                # `66.4` above `44.1` in a results table is a "bare number" and a "title" to every
+                # other test here; a title has letters (`_NUMERIC_ONLY`).
+                and not _NUMERIC_ONLY.match(title)
                 and (
                     not _is_name_list(title)
                     # Title Case is fine for a SECTION title - but then the title block must be
@@ -261,7 +280,11 @@ def detect_headings(layout: PageLayout, body_size: float) -> list[Heading]:
                 skip.add(index + 1)
                 continue
 
-        # 3. A named heading every paper has, or a short line set larger than the body.
+        # 3. A named heading every paper has, or a short line set larger than the body - never
+        # one that is only a number (`_NUMERIC_ONLY`): with no title joined to it in step 2, a
+        # bold `66.4` or a lone `1` is a table value or a page number, not a section.
+        if _NUMERIC_ONLY.match(text):
+            continue
         lowered = text.lower().rstrip(".:")
         if lowered in _NAMED_HEADINGS:
             headings.append(Heading(block, None, text, 1))

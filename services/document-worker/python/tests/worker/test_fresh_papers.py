@@ -107,3 +107,16 @@ def test_unified_detection_is_a_heading_on_yolo(yolo: Any) -> None:
     types = {(b.text or "").replace("\n", " ").strip(): b.type for b in yolo.blocks}
     for heading in ("2. Uniﬁed Detection", "2.1. Network Design", "4.4. VOC 2012 Results"):
         assert types.get(heading) == "heading", (heading, types.get(heading))
+
+
+def test_no_numeric_only_headings_on_yolo(yolo: Any) -> None:
+    """Slice-plan §S2 merge rule: 0 numeric headings on YOLO. At 18f69ec it had `66.4`, a bold
+    table value standing alone; in development a bare-number join also married p5's `21` (an FPS
+    value, regular face) to the bold row below it, which is why the join now wants the NUMBER in
+    a heading face as well."""
+    numeric = [
+        b.text
+        for b in yolo.blocks
+        if b.type == "heading" and not any(c.isalpha() for c in (b.text or ""))
+    ]
+    assert numeric == []

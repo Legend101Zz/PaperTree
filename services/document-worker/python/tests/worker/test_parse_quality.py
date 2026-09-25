@@ -180,3 +180,41 @@ def test_a_run_in_lead_is_its_paragraphs_first_line_not_a_heading(
     head = _containing(paper, "4.1 Task Descriptions")
     assert head is not None and head.type == "heading"
     assert "MNLI" not in (head.text or "")
+
+
+# ── numeric-only text is never a heading, and is not prose either ───────────────────────────
+
+
+@pytest.fixture(scope="module")
+def numbers_between_paragraphs(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Page 2 of a paper: a bold table value standing alone (YOLO's `66.4`), a larger one (`830`),
+    a regular-face value directly above a bold row (YOLO p5's `21`, which the bare-number join
+    married to the row), and a real split section number with its title."""
+    document = pymupdf.open()
+    _column(document.new_page(width=W, height=H), LEFT, 80, "first", 20)
+    page = document.new_page(width=W, height=H)
+    y = _column(page, LEFT, 80, "alpha", 6) + 20
+    page.insert_text((LEFT, y), "66.4", fontsize=10, fontname="hebo")
+    y = _column(page, LEFT, y + 24, "bravo", 6) + 20
+    page.insert_text((LEFT, y), "830", fontsize=12, fontname="hebo")
+    y = _column(page, LEFT, y + 24, "charlie", 6) + 20
+    page.insert_text((LEFT, y), "21", fontsize=10, fontname="helv")
+    page.insert_text((LEFT, y + 14), "Real Time Detectors", fontsize=10, fontname="hebo")
+    y = _column(page, LEFT, y + 38, "delta", 6) + 20
+    page.insert_text((LEFT, y), "3", fontsize=12, fontname="hebo")
+    page.insert_text((LEFT, y + 16), "Method Overview", fontsize=12, fontname="hebo")
+    _column(page, LEFT, y + 36, "echo", 6)
+    return _save(document, tmp_path_factory.mktemp("numeric") / "numeric.pdf")
+
+
+def test_a_number_is_never_a_heading(numbers_between_paragraphs: Path, tmp_path: Path) -> None:
+    paper = _parse(numbers_between_paragraphs, tmp_path)
+    by_text = {(b.text or "").strip(): b for b in paper.blocks}
+    for number in ("66.4", "830", "21"):
+        assert number in by_text, f"{number} is not its own block"
+        assert by_text[number].type != "heading", number
+    # Not prose either: a block with no letters is kept, with its text, as `unknown`.
+    assert by_text["66.4"].type == by_text["830"].type == "unknown"
+    # ...and a real numbered head is untouched.
+    head = _containing(paper, "Method Overview")
+    assert head is not None and head.type == "heading"

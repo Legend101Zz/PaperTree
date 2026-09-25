@@ -26,6 +26,7 @@ raises.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -379,6 +380,10 @@ def _extend_to_right_margin(bands: list[BBox], margin: float | None) -> list[BBo
     return [[band[0], band[1], max(band[2], margin), band[3]] for band in bands]
 
 
+#: Same character class as `hierarchy._NUMERIC_ONLY`: digits and number punctuation, no letter.
+_NUMERIC_ONLY_TEXT = re.compile(r"^[\s\d.,:;%±+\-−–()×x*/]+$")
+
+
 def _block_type(flow: str, text: str, is_heading: bool, is_equation: bool) -> str:
     # A block opening `Figure 3.` / `Table 1:` IS a caption, whatever flow it landed in.
     # Rule 22 requires `caption_of.from` to be a `caption` block, and the flow classifier does
@@ -398,6 +403,14 @@ def _block_type(flow: str, text: str, is_heading: bool, is_equation: bool) -> st
         return "page_number" if text.strip().isdigit() else flow
     if flow == "margin":
         return "margin_note"
+    # A BODY BLOCK WITH NO LETTERS IS NOT PROSE (S2, #141). `66.4`, `830`, `(3)`, a stray `11`: a
+    # table value outside any detected table, a plot's tick label, an equation number, a page
+    # number that missed the footer band. `hierarchy.py` no longer lets one be a heading, and
+    # typing it `paragraph` instead would still claim it is running text - a one-number card in
+    # Guided and a false paragraph in every paragraph metric. `unknown` is the schema's type for a
+    # region kept, with its geometry and text, but not classified; the text layer still has it.
+    if _NUMERIC_ONLY_TEXT.match(text):
+        return "unknown"
     return "paragraph"
 
 

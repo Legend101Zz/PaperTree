@@ -161,6 +161,11 @@ requires_corpus = pytest.mark.skipif(
 # newly matched heading below a figure is a new pair that order gets wrong. The floats commit later
 # in this branch places them.
 
+# NUMERIC-ONLY COMMIT (S2): blocks with no letter are never headings and are typed `unknown`
+# rather than `paragraph`. Only precision moves: gpt3 0.3436 -> 0.3474, resnet 0.3396 -> 0.3434,
+# neural-odes +0.0003 macro-F1, each from table values and tick labels no longer predicted as
+# paragraphs on gold pages. Nothing else in these rows moves.
+
 RAW: dict[str, dict[str, Any]] = {
     "a3c-algorithmheavy": {
         "macro_f1": 0.4213,
@@ -217,8 +222,8 @@ RAW: dict[str, dict[str, Any]] = {
         "figure_predicted": 2,
     },
     "gpt3-longform-singlecol": {
-        "macro_f1": 0.3436,
-        "macro_f1_strict": 0.1821,
+        "macro_f1": 0.3474,
+        "macro_f1_strict": 0.184,
         "reading_order": 0.2222,
         "reading_order_pairs": [7, 9],
         "zero_pair_pages": 4,
@@ -235,8 +240,8 @@ RAW: dict[str, dict[str, Any]] = {
         "figure_predicted": 2,
     },
     "neural-odes-mathheavy": {
-        "macro_f1": 0.2176,
-        "macro_f1_strict": 0.1183,
+        "macro_f1": 0.218,
+        "macro_f1_strict": 0.1185,
         "reading_order": 0.6111,
         "reading_order_pairs": [39, 40],
         "zero_pair_pages": 2,
@@ -253,8 +258,8 @@ RAW: dict[str, dict[str, Any]] = {
         "figure_predicted": 8,
     },
     "resnet-cvpr-2col": {
-        "macro_f1": 0.3396,
-        "macro_f1_strict": 0.1607,
+        "macro_f1": 0.3433,
+        "macro_f1_strict": 0.1629,
         "reading_order": 0.9282,
         "reading_order_pairs": [108, 116],
         "zero_pair_pages": 0,
@@ -328,8 +333,8 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "figure_predicted": 2,
     },
     "gpt3-longform-singlecol": {
-        "macro_f1": 0.3436,
-        "macro_f1_strict": 0.1821,
+        "macro_f1": 0.3474,
+        "macro_f1_strict": 0.184,
         "reading_order": 0.2222,
         "reading_order_pairs": [7, 9],
         "zero_pair_pages": 4,
@@ -346,8 +351,8 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "figure_predicted": 2,
     },
     "neural-odes-mathheavy": {
-        "macro_f1": 0.2138,
-        "macro_f1_strict": 0.1192,
+        "macro_f1": 0.2141,
+        "macro_f1_strict": 0.1193,
         "reading_order": 0.3889,
         "reading_order_pairs": [61, 66],
         "zero_pair_pages": 2,
@@ -364,8 +369,8 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "figure_predicted": 8,
     },
     "resnet-cvpr-2col": {
-        "macro_f1": 0.3323,
-        "macro_f1_strict": 0.158,
+        "macro_f1": 0.336,
+        "macro_f1_strict": 0.1602,
         "reading_order": 0.9667,
         "reading_order_pairs": [99, 101],
         "zero_pair_pages": 0,
