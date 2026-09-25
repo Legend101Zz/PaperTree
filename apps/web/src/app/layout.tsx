@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
 // THE PROVENANCE REGISTER LIVES IN THIS STYLESHEET, and until 2026-08-01 nothing imported it.
 //
@@ -16,7 +15,12 @@ import './globals.css';
 import '@papertree/ui/styles.css';
 import { Providers } from './providers';
 
-const inter = Inter({ subsets: ['latin'] });
+// THE SYSTEM FONT STACK, NOT `next/font/google` (S0). `next/font/google` downloads `Inter` from
+// fonts.googleapis.com when `next build` runs and when `next dev` compiles, so neither worked without
+// network — a CI sandbox, the e2e harness's scratch environment, a train. The UI face is now
+// Tailwind's `font-sans` (ui-sans-serif, system-ui, …), and the two faces that carry MEANING — the
+// paper's serif and the derived register's rounded sans — were always system stacks in
+// `@papertree/ui/styles.css` (`--pt-font-body`, `--pt-font-derived`), so no register changes.
 
 export const metadata: Metadata = {
     title: 'PaperTree - Research Paper Reader',
@@ -30,7 +34,7 @@ export default function RootLayout({
 }) {
     return (
         <html lang="en" suppressHydrationWarning>
-            <body className={inter.className}>
+            <body className="font-sans antialiased">
                 <Providers>{children}</Providers>
             </body>
         </html>

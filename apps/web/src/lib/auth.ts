@@ -1,7 +1,7 @@
 /**
  * The session token, stored in EXACTLY ONE PLACE — #77's D2.
  *
- * There were two. This module wrote `localStorage["token"]`; `lib/papertree.ts` — the client the
+ * There were two. This module wrote `localStorage["token"]`; the v2 client — the one the
  * READER uses — reads `localStorage["papertree.session"]`. Both were live at once, so a user could
  * hold a perfectly valid session and still be told the paper could not be loaded.
  *
@@ -15,13 +15,13 @@
  * into one was not signing into the other. `apps/api` is now archived, so the reason is gone and
  * only the bug is left.
  *
- * These are therefore THIN DELEGATIONS to `lib/papertree.ts`, which owns the key. Keeping the
+ * These are therefore THIN DELEGATIONS to `lib/api/client.ts`, which owns the key. Keeping the
  * functions rather than rewriting their call sites means the delegation is the only thing anyone
  * has to trust, and a second key has to be introduced deliberately rather than by forgetting that
  * this file exists.
  */
 
-import { clearSessionToken, getSessionToken, setSessionToken } from './papertree';
+import { clearSessionToken, getSessionToken, setSessionToken } from './api/client';
 
 export const getToken = (): string | null => getSessionToken();
 

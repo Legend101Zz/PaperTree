@@ -24,7 +24,7 @@
  * the #77 walk: **405 Method Not Allowed**. The upload button could not work at all, and the
  * docstring explained the resulting emptiness as a design decision.
  *
- * WHAT HAPPENS NOW. `papersApi` is `@/lib/papertree`'s — v2's — so upload posts to `POST /papers`,
+ * WHAT HAPPENS NOW. `papersApi` is `@/lib/api/papers`'s — v2's — so upload posts to `POST /papers`,
  * the worker parses it, and the row comes back `status: "complete"`. `libraryPaperFromPaperRow`
  * reads `processing` FROM that status rather than defaulting it, so a parsed paper says Ready and
  * an unparsed one still says Queued. The old default of `'pending'` was correct when nothing could
@@ -54,7 +54,7 @@ import {
   type PaperRow,
 } from '@/components/library/types';
 import { UploadDropzone } from '@/components/library/UploadDropzone';
-import { papersApi } from '@/lib/papertree';
+import { papersApi } from '@/lib/api/papers';
 import { useAuthStore } from '@/store/authStore';
 
 type LibraryLayout = 'grid' | 'list';

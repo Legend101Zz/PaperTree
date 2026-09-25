@@ -17,7 +17,8 @@
     "     definition and 62 errors were 'Definition for rule was not found'. The plugin is now a",
     "     devDependency and the rules actually enforce something. 62 errors -> 0.",
     "  2. The two competing Highlight types are gone: types/highlight.ts was deleted along with",
-    "     the legacy highlight stack, and one definition survives in types/index.ts.",
+    "     the legacy highlight stack, and one definition survived in types/index.ts (itself deleted",
+    "     in S0 with the rest of the v1 types; User moved to store/authStore.ts).",
     "",
     "Epic 2 left the v1 canvas surface type-broken and EXCLUDED in apps/web/tsconfig.json rather",
     "than deleted (EPIC-02-RESULT.md \u00a76.2). #75 moved it to archive/v1-web-canvas/ and removed all",
@@ -29,6 +30,8 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "test": "turbo run test",
+    "e2e": "tsc -p e2e/tsconfig.json && playwright test -c e2e/playwright.config.ts",
+    "typecheck:e2e": "tsc -p e2e/tsconfig.json",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "codegen": "turbo run codegen",
@@ -41,6 +44,8 @@
     "py:typecheck": "uv run mypy packages/*/python services/*/python"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "^22.10.2",
     "oxlint": "^1.5.0",
     "prettier": "^3.4.2",
     "tsx": "^4.19.2",

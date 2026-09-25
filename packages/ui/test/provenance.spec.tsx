@@ -25,6 +25,8 @@ import {
   DerivedBlock,
   EquationView,
   FigureView,
+  PaperText,
+  ReflowedText,
   TableView,
 } from '../src/provenance.js';
 import { IconButton, Panel, SegmentedControl, Sheet, Tabs } from '../src/primitives.js';
@@ -231,10 +233,21 @@ describe('TableView — the html payload is escaped text, never markup', () => {
 });
 
 describe('the ⊙ marker is reserved', () => {
-  it('is emitted by nothing in the package except DerivedBlock', () => {
+  it('is emitted by nothing in the package except DerivedBlock and AiText', () => {
     // The marker means "not the paper" only while it is unique. `provenance.tsx`'s header promises
     // the spec greps for it; this is that grep, over every other component the package exports.
+    // `AiText` (ADR-002 §3.6) is the one addition, and `registers.spec` pins it; the two registers
+    // for the paper's own words are listed here because they are the likeliest to be given it.
     const cases: readonly { readonly name: string; readonly node: ReactNode }[] = [
+      { name: 'PaperText', node: <PaperText pageLabel="p. 1">Deep residual learning.</PaperText> },
+      {
+        name: 'ReflowedText',
+        node: (
+          <ReflowedText blockIds={['blk_a']} onShowSource={noop}>
+            Deep residual learning.
+          </ReflowedText>
+        ),
+      },
       {
         name: 'FigureView',
         node: (

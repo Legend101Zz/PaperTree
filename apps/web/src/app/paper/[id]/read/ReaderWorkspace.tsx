@@ -34,6 +34,10 @@ import {
   Inspector,
 } from '@/components/inspector';
 import type { InspectorContext } from '@/components/inspector/types';
+import { sendToCanvas } from '@/components/canvas/sendToCanvas';
+import { ExplainPanel } from '@/components/explain';
+import { useExplainActions } from '@/components/explain/useExplainActions';
+import { ReaderActionsProvider, type ReaderActions } from '@/components/reader/actions';
 import { GuidedView } from '@/components/reader/GuidedView';
 import { ModeSwitch } from '@/components/reader/ModeSwitch';
 import { Navigator } from '@/components/reader/Navigator';
@@ -280,27 +284,72 @@ export function ReaderWorkspace({ paper }: ReaderWorkspaceProps) {
   }
 
   return (
-    <ReaderWorkspaceView
-      doc={doc}
-      paper={paper}
-      mode={mode}
-      onModeChange={setMode}
-      zoom={zoom}
-      zoomMode={zoomMode}
-      onZoomChange={setZoomMode}
-      onViewportResize={setViewport}
-      navigatorOpen={navigatorOpen}
-      onNavigatorToggle={() => setNavigatorOpen((open) => !open)}
-      anchors={anchors}
-      orphans={orphans}
-      onAnchorCaptured={addAnchor}
-      onShowSource={showSource}
-      documentRef={documentRef}
-      pdfSource={pdfSource}
-      onJumpToPage={jumpToPage}
-      selection={selection}
-      onSelectionChange={setSelection}
-    />
+    <ReaderActionsMount paper={paper} doc={doc} onShowSource={showSource}>
+      <ReaderWorkspaceView
+        doc={doc}
+        paper={paper}
+        mode={mode}
+        onModeChange={setMode}
+        zoom={zoom}
+        zoomMode={zoomMode}
+        onZoomChange={setZoomMode}
+        onViewportResize={setViewport}
+        navigatorOpen={navigatorOpen}
+        onNavigatorToggle={() => setNavigatorOpen((open) => !open)}
+        anchors={anchors}
+        orphans={orphans}
+        onAnchorCaptured={addAnchor}
+        onShowSource={showSource}
+        documentRef={documentRef}
+        pdfSource={pdfSource}
+        onJumpToPage={jumpToPage}
+        selection={selection}
+        onSelectionChange={setSelection}
+      />
+    </ReaderActionsMount>
+  );
+}
+
+/**
+ * The `ReaderActions` mount (contracts.md §5) — S0's lines in this file, and the only ones.
+ *
+ * It decides which implementation fills each action; the callers (`SourcePane`'s toolbar in S4,
+ * the explain panel's chips in S6, the canvas in S7) reach them through `useReaderActions()`.
+ * `openExplain` and `sendToCanvas` are S0 stubs owned by S6 and S7 and change behind these same
+ * lines. `focusAnchor` is S4's to replace with resolve → scroll → 1.2 s flash; until then it scrolls
+ * to the anchor's resolved blocks through the same `onShowSource` seam every derived surface uses.
+ *
+ * A component of its own because the workspace returns early (loading, error) and hooks may not
+ * follow an early return.
+ */
+function ReaderActionsMount({
+  paper,
+  doc,
+  onShowSource,
+  children,
+}: {
+  readonly paper: PaperRef;
+  readonly doc: IndexedDocument;
+  readonly onShowSource: (blockIds: readonly string[]) => void;
+  readonly children: React.ReactNode;
+}) {
+  const paperId = paper.kind === 'api' ? paper.paperId : null;
+  const explain = useExplainActions({ paperId });
+  const { openExplain } = explain;
+  const actions = useMemo<ReaderActions>(
+    () => ({
+      openExplain,
+      sendToCanvas: (input) => sendToCanvas(paperId, input),
+      focusAnchor: (anchor) => onShowSource(resolveAnchor(anchor, doc).blockIds),
+    }),
+    [openExplain, paperId, doc, onShowSource],
+  );
+
+  return (
+    <ReaderActionsProvider value={actions}>
+      {children}
+      <ExplainPanel controller={explain} />
+    </ReaderActionsProvider>
   );
 }
 

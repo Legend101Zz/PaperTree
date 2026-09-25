@@ -32,7 +32,8 @@
     "zustand": "^4.5.0",
     "@papertree/document-ir": "workspace:*",
     "@papertree/anchoring": "workspace:*",
-    "@papertree/ui": "workspace:*"
+    "@papertree/ui": "workspace:*",
+    "@xyflow/react": "^12.12.0"
   },
   "devDependencies": {
     "@types/katex": "^0.16.7",
@@ -51,6 +52,7 @@
     "@testing-library/dom": "^10.4.0",
     "@vitejs/plugin-react": "^4.3.4",
     "axe-core": "^4.10.2",
-    "@typescript-eslint/eslint-plugin": "^8.18.0"
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "ajv": "8.20.0"
   }
 }
