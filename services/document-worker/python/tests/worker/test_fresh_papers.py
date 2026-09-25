@@ -11,7 +11,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from _corpus_manifest import FRESH_DIR, requires_fresh
+import pytest
+from _corpus_manifest import FRESH_DIR, FRESH_PARAMS, requires_fresh
 from papertree_document_ir.validate import validate_paper
 from papertree_document_worker.pipeline import parse_document
 
@@ -36,3 +37,12 @@ def test_ddpm_parses(tmp_path: Path) -> None:
     for number in ("4.2", "4.3"):
         section = next(i for i, t in headings.items() if t.startswith(number))
         assert parents[section] == experiments, f"{number} should sit under 4 Experiments"
+
+
+@pytest.mark.parametrize("path", FRESH_PARAMS, ids=lambda p: p.name if p else "no-fresh-set")
+def test_every_fresh_paper_parses(path: Path, tmp_path: Path) -> None:
+    """Complete or partial, never raised: partial counts as parsed (slice-plan §S2 merge rule)."""
+    paper = parse_document(path, paper_id=PAPER_ID, asset_root=tmp_path).paper
+    assert validate_paper(paper).ok
+    assert paper.blocks and paper.status in ("complete", "partial")
+    assert (paper.partial_reason is None) == (paper.status == "complete")

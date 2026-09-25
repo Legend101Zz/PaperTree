@@ -151,18 +151,41 @@ def _nearest_float(
     return min(viable, key=lambda item: item[0])[1]
 
 
+def _union_area(boxes: list[BBox]) -> float:
+    """Exact area of a union of rects, by coordinate compression. A page holds a handful of table
+    regions, so the O(n^3) sweep is a few hundred cell tests at most."""
+    xs = sorted({v for b in boxes for v in (b[0], b[2])})
+    ys = sorted({v for b in boxes for v in (b[1], b[3])})
+    area = 0.0
+    for x0, x1 in zip(xs, xs[1:], strict=False):
+        for y0, y1 in zip(ys, ys[1:], strict=False):
+            if any(b[0] <= x0 and x1 <= b[2] and b[1] <= y0 and y1 <= b[3] for b in boxes):
+                area += (x1 - x0) * (y1 - y0)
+    return area
+
+
 def _dedupe_tables(regions: list[Any]) -> list[Any]:
-    """Drop table regions that substantially overlap one already kept.
+    """Drop table regions that are substantially covered by the regions already kept.
 
     Rule groups can produce two regions over the same table when a mid-rule is slightly narrower
     than the top rule. Emitting both gives two sets of cells at identical positions with
     identical text - and identical block ids, because the id hashes exactly (page, anchor, type,
     text). Measured on ResNet: 858 blocks producing 856 ids, which `PaperBuilder` rejects rather
     than salting, since a collision here is a segmentation bug and not an id bug.
+
+    COVERAGE IS BY THE UNION OF THE KEPT REGIONS, NOT BY ANY ONE OF THEM (S2, #141). Measured on
+    `maskrcnn-1703.06870` page 5: two side-by-side ruled tables, plus a third ruled region
+    [205.0, 227.9, 334.9, 248.4] straddling the gap between them. It overlaps each table by under
+    half of its own area, so a one-at-a-time test kept it - and its cells are the same text at the
+    same place as cells both tables emit, so 848 blocks produced 842 ids and the paper
+    dead-lettered. Together the two tables cover 85 % of it. Two real tables never share page
+    area, so a region more than half covered by tables already kept is not a table. The share is
+    the one the single-region test already used; only what it is measured against changed.
     """
     kept: list[Any] = []
     for region in sorted(regions, key=lambda r: -(r.bbox[2] - r.bbox[0]) * (r.bbox[3] - r.bbox[1])):
-        overlapping = False
+        area = (region.bbox[2] - region.bbox[0]) * (region.bbox[3] - region.bbox[1])
+        overlaps: list[BBox] = []
         for existing in kept:
             lo_x, hi_x = (
                 max(region.bbox[0], existing.bbox[0]),
@@ -173,12 +196,10 @@ def _dedupe_tables(regions: list[Any]) -> list[Any]:
                 min(region.bbox[3], existing.bbox[3]),
             )
             if hi_x > lo_x and hi_y > lo_y:
-                area = (region.bbox[2] - region.bbox[0]) * (region.bbox[3] - region.bbox[1])
-                if area > 0 and (hi_x - lo_x) * (hi_y - lo_y) / area > 0.5:
-                    overlapping = True
-                    break
-        if not overlapping:
-            kept.append(region)
+                overlaps.append([lo_x, lo_y, hi_x, hi_y])
+        if area > 0 and overlaps and _union_area(overlaps) / area > 0.5:
+            continue
+        kept.append(region)
     return kept
 
 

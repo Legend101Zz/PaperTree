@@ -165,3 +165,29 @@ def test_an_orphan_with_no_section_one_level_up_becomes_top_level() -> None:
         (True, 1, None)
     ]
     assert out[1].parent_heading_block is orphan and out[1].level == 2
+
+
+# ── rule 8: a table region straddling two tables re-emits both tables' cells ──────────────────
+
+
+def test_a_table_region_covered_by_two_kept_tables_is_dropped() -> None:
+    """`maskrcnn-1703.06870` page 5, measured: two side-by-side ruled tables at
+    [52.6, 227.9, 269.5, 339.8] and [288.6, 227.7, 545.9, 339.4], plus a third ruled region
+    [205.0, 227.9, 334.9, 248.4] straddling both. Its cells ('softmax', '24.8', '25.1', ...)
+    are the SAME text at the SAME place as cells the two real tables already emitted, so their
+    content-derived ids collide: `848 blocks produced 842 ids`, a dead letter. It overlaps each
+    table by under half its own area, so the one-at-a-time test kept it; together they cover
+    85 % of it. Two real tables never share page area, so a region mostly covered by tables
+    already kept is not a table.
+    """
+    from types import SimpleNamespace
+
+    from papertree_document_worker.pipeline import _dedupe_tables
+
+    left = SimpleNamespace(bbox=[52.6, 227.9, 269.5, 339.8])
+    right = SimpleNamespace(bbox=[288.6, 227.7, 545.9, 339.4])
+    straddle = SimpleNamespace(bbox=[205.0, 227.9, 334.9, 248.4])
+    elsewhere = SimpleNamespace(bbox=[52.6, 500.0, 269.5, 600.0])
+    kept = _dedupe_tables([right, straddle, left, elsewhere])
+    assert straddle not in kept
+    assert {id(r) for r in kept} == {id(left), id(right), id(elsewhere)}
