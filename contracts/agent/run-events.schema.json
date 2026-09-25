@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PaperTree agent run events (POST /v1/runs, 200 text/event-stream)",
+  "description": "HAND-WRITTEN from contracts.md §3.2 (reader release S0). The agent streams `event: <name>\\ndata: <one-line JSON>\\n\\n` frames and a `: ping\\n\\n` comment every 5 s. Validate one parsed frame `{event, data}` against the root, or one event's `data` against `$defs[<event name>]`. The API's pydantic twin is `services/api/python/papertree_api/schemas.py` (`AGENT_EVENTS`); `contracts/agent/fixtures/*.sse` are validated against both (services/api tests/test_agent_contracts.py, apps/web test/contracts.spec.ts). `text` carries deltas of the FINAL assistant message only: the text of a message that ends `stopReason: toolUse` is dropped (spike §6).",
+  "type": "object",
+  "required": ["event", "data"],
+  "additionalProperties": false,
+  "properties": {
+    "event": { "enum": ["run", "status", "text", "usage", "done"] },
+    "data": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "event": { "const": "run" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/run" } } }
+    },
+    {
+      "if": { "properties": { "event": { "const": "status" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/status" } } }
+    },
+    {
+      "if": { "properties": { "event": { "const": "text" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/text" } } }
+    },
+    {
+      "if": { "properties": { "event": { "const": "usage" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/usage" } } }
+    },
+    {
+      "if": { "properties": { "event": { "const": "done" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/done" } } }
+    }
+  ],
+  "$defs": {
+    "Handle": {
+      "description": "A handle the API issued for one block in THIS run (the seed plus tool responses; ai_run_handles).",
+      "type": "string",
+      "pattern": "^b[0-9]+$"
+    },
+    "NonNegative": { "type": "integer", "minimum": 0 },
+    "ToolName": { "enum": ["get_outline", "get_section", "get_passage", "search_passages"] },
+    "RunErrorCode": {
+      "description": "contracts.md §2.9, the second list: the agent's own classification (§3.3), never Pi's regex.",
+      "enum": [
+        "provider_auth",
+        "rate_limited",
+        "quota",
+        "upstream_unavailable",
+        "timeout",
+        "aborted",
+        "bad_request",
+        "tool_failed",
+        "tool_budget_exhausted",
+        "output_truncated",
+        "agent_unavailable",
+        "internal"
+      ]
+    },
+    "RunError": {
+      "description": "`message` is short, user-safe text: never a provider's raw errorMessage, a URL, an id or a stack (§3.3).",
+      "type": "object",
+      "required": ["code", "retryable", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "code": { "$ref": "#/$defs/RunErrorCode" },
+        "retryable": { "type": "boolean" },
+        "message": { "type": "string", "minLength": 1 }
+      }
+    },
+    "Usage": {
+      "description": "Per assistant message (the `usage` event) and summed over the run (`done.usage_totals`). `reasoning` is null when the provider does not report it.",
+      "type": "object",
+      "required": ["input", "output", "cache_read", "cache_write", "reasoning", "cost_usd_est"],
+      "additionalProperties": false,
+      "properties": {
+        "input": { "$ref": "#/$defs/NonNegative" },
+        "output": { "$ref": "#/$defs/NonNegative" },
+        "cache_read": { "$ref": "#/$defs/NonNegative" },
+        "cache_write": { "$ref": "#/$defs/NonNegative" },
+        "reasoning": { "anyOf": [{ "$ref": "#/$defs/NonNegative" }, { "type": "null" }] },
+        "cost_usd_est": { "type": "number", "minimum": 0 }
+      }
+    },
+    "SessionEntry": {
+      "description": "One entry of Pi's exportEntries() (SessionManager, pi-coding-agent 0.87.1). Opaque to the API, which stores and returns them verbatim.",
+      "type": "object",
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "type": "string", "minLength": 1 },
+        "id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "run": {
+      "description": "First event.",
+      "type": "object",
+      "required": ["run_id", "model", "sdk"],
+      "additionalProperties": false,
+      "properties": {
+        "run_id": { "type": "string", "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$" },
+        "model": { "const": "minimax/MiniMax-M3" },
+        "sdk": { "type": "string", "pattern": "^pi-coding-agent@[0-9]+\\.[0-9]+\\.[0-9]+$" }
+      }
+    },
+    "status": {
+      "description": "As the agent reports it. `tool` names the tool of a `tool` phase; `attempt`/`delay_ms` belong to `retrying`.",
+      "type": "object",
+      "required": ["phase"],
+      "additionalProperties": false,
+      "properties": {
+        "phase": { "enum": ["thinking", "tool", "retrying", "writing"] },
+        "tool": { "$ref": "#/$defs/ToolName" },
+        "label": { "type": "string", "minLength": 1 },
+        "attempt": { "type": "integer", "minimum": 1 },
+        "delay_ms": { "$ref": "#/$defs/NonNegative" }
+      }
+    },
+    "text": {
+      "type": "object",
+      "required": ["delta"],
+      "additionalProperties": false,
+      "properties": { "delta": { "type": "string" } }
+    },
+    "usage": { "$ref": "#/$defs/Usage" },
+    "done": {
+      "description": "Last event. `entries` is exportEntries() after this turn, or the entries from BEFORE this prompt when the status is `aborted` or `error` with no final text (spike-verify must-fix 5). `markers` are the [bN] handles parsed from final_text with /\\[(b\\d+(?:\\s*,\\s*b\\d+)*)\\]/g, deduplicated, in first-seen order; the API re-checks them against the handles it issued.",
+      "type": "object",
+      "required": [
+        "status",
+        "stop_reason",
+        "error",
+        "final_text",
+        "handles_seen",
+        "markers",
+        "usage_totals",
+        "tool_calls",
+        "turns",
+        "retries",
+        "first_text_ms",
+        "latency_ms",
+        "entries"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "enum": ["complete", "partial", "error", "aborted"] },
+        "stop_reason": {
+          "description": "Pi's StopReason of the last assistant message, null when there was none.",
+          "enum": ["pending", "stop", "length", "toolUse", "error", "aborted", "deferred", null]
+        },
+        "error": { "anyOf": [{ "$ref": "#/$defs/RunError" }, { "type": "null" }] },
+        "final_text": { "type": "string" },
+        "handles_seen": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Handle" },
+          "uniqueItems": true
+        },
+        "markers": { "type": "array", "items": { "$ref": "#/$defs/Handle" }, "uniqueItems": true },
+        "usage_totals": { "$ref": "#/$defs/Usage" },
+        "tool_calls": { "$ref": "#/$defs/NonNegative" },
+        "turns": { "$ref": "#/$defs/NonNegative" },
+        "retries": { "$ref": "#/$defs/NonNegative" },
+        "first_text_ms": { "anyOf": [{ "$ref": "#/$defs/NonNegative" }, { "type": "null" }] },
+        "latency_ms": { "$ref": "#/$defs/NonNegative" },
+        "entries": { "type": "array", "items": { "$ref": "#/$defs/SessionEntry" } }
+      },
+      "if": { "properties": { "status": { "const": "complete" } } },
+      "then": { "properties": { "error": { "type": "null" } } },
+      "else": { "properties": { "error": { "$ref": "#/$defs/RunError" } } }
+    }
+  }
+}

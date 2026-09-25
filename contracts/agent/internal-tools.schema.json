@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PaperTree internal paper tools (agent -> API, contracts.md §4)",
+  "description": "HAND-WRITTEN from contracts.md §4 (reader release S0). The agent's four read-only tools, served by the API at /internal/agent/runs/{run_id}/... to loopback callers only, with `Authorization: Bearer <run token>` checked through run_grant. Routes: get_outline() -> GET .../outline; get_section({handle, cursor?}) -> GET .../sections/{handle}?cursor=; get_passage({handle}) -> GET .../passages/{handle}; search_passages({query, limit <= 8}) -> GET .../search?q=&limit= (on zero hits it returns the outline). The `*Params` defs are the TypeBox parameter shapes the agent registers; every 200 is a ToolResult; errors are 401 auth_required (bad or expired token), 404 not_found (unknown handle: the agent's tool throws 'Passage bN is not available.') and 429 tool_budget_exhausted (the 17th request of a run). The API's pydantic ToolResult is exported in contracts/api/internal.schema.json.",
+  "$defs": {
+    "Handle": { "type": "string", "pattern": "^b[0-9]+$" },
+    "GetOutlineParams": { "type": "object", "additionalProperties": false, "properties": {} },
+    "GetSectionParams": {
+      "type": "object",
+      "required": ["handle"],
+      "additionalProperties": false,
+      "properties": {
+        "handle": { "$ref": "#/$defs/Handle" },
+        "cursor": { "type": "string", "minLength": 1, "maxLength": 64 }
+      }
+    },
+    "GetPassageParams": {
+      "type": "object",
+      "required": ["handle"],
+      "additionalProperties": false,
+      "properties": { "handle": { "$ref": "#/$defs/Handle" } }
+    },
+    "SearchPassagesParams": {
+      "type": "object",
+      "required": ["query"],
+      "additionalProperties": false,
+      "properties": {
+        "query": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 8 }
+      }
+    },
+    "ToolResult": {
+      "description": "`text` is model-facing, datamarked with the run's datamark; every block in it is headed `[bN] (p. {page_label} · {section title} · {type})`. `handles` are the handles this response introduced, first-seen, persisted to ai_run_handles.",
+      "type": "object",
+      "required": ["text", "handles"],
+      "additionalProperties": false,
+      "properties": {
+        "text": { "type": "string" },
+        "handles": { "type": "array", "items": { "$ref": "#/$defs/Handle" } },
+        "next_cursor": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
+      }
+    },
+    "ToolError": {
+      "description": "The contracts.md §0 envelope. NOTE: `tool_budget_exhausted` is a run error code (§2.9's second list), not a member of the API's ErrorCode enum; which enum the 429 draws from is an open contracts question (S0 report).",
+      "type": "object",
+      "required": ["detail", "code", "retryable"],
+      "additionalProperties": false,
+      "properties": {
+        "detail": { "type": "string", "minLength": 1 },
+        "code": { "enum": ["auth_required", "not_found", "tool_budget_exhausted"] },
+        "retryable": { "type": "boolean" }
+      }
+    }
+  }
+}

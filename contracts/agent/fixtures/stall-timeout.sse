@@ -1,0 +1,32 @@
+event: run
+data: {"run_id":"run_01K63AJE5G7K9N1Q3S5V7X9Z1B","model":"minimax/MiniMax-M3","sdk":"pi-coding-agent@0.87.1"}
+
+event: status
+data: {"phase":"thinking"}
+
+event: status
+data: {"phase":"writing"}
+
+event: text
+data: {"delta":"The sentence says YOLO does not propose"}
+
+event: text
+data: {"delta":" regions at all. It treats detection as"}
+
+event: text
+data: {"delta":" regression onto boxes and class"}
+
+event: text
+data: {"delta":" probabilities [b1], so"}
+
+: ping
+
+: ping
+
+: ping
+
+: ping
+
+event: done
+data: {"status":"partial","stop_reason":"aborted","error":{"code":"timeout","retryable":true,"message":"The model stopped responding, so this answer is incomplete."},"final_text":"The sentence says YOLO does not propose regions at all. It treats detection as regression onto boxes and class probabilities [b1], so","handles_seen":["b1","b2"],"markers":["b1"],"usage_totals":{"input":0,"output":0,"cache_read":0,"cache_write":0,"reasoning":0,"cost_usd_est":0},"tool_calls":0,"turns":1,"retries":0,"first_text_ms":3490,"latency_ms":23611,"entries":[{"type":"message","id":"d9e21f40","parentId":null,"timestamp":"2026-09-25T15:20:11.300Z","message":{"role":"user","content":[{"type":"text","text":"Explain this passage.\n\nInstead, we frame object detection as a regression problem to spatially separated bounding boxes and associated class probabilities."}],"timestamp":1790350811300}},{"type":"message","id":"d9e21f41","parentId":"d9e21f40","timestamp":"2026-09-25T15:20:34.910Z","message":{"role":"assistant","content":[{"type":"text","text":"The sentence says YOLO does not propose regions at all. It treats detection as regression onto boxes and class probabilities [b1], so"}],"api":"anthropic-messages","provider":"minimax","model":"MiniMax-M3","usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"reasoning":null,"totalTokens":0,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0.0}},"stopReason":"aborted","timestamp":1790350834910}}]}
+
