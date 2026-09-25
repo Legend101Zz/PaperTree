@@ -178,7 +178,7 @@ def _parse(pdf: Path, scratch: Path) -> tuple[PaperId, dict[str, Any]]:
         pdf,
         paper_id=str(paper_id),
         asset_root=scratch / "assets",
-        config=ParserConfig(vlm_max_calls=0),
+        config=ParserConfig(),
     )
     document: dict[str, Any] = result.paper.model_dump(
         mode="json", by_alias=True, exclude_unset=True

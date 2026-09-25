@@ -37,14 +37,6 @@ from papertree_document_worker.equations import (
 from papertree_document_worker.layout import layout_document
 from papertree_document_worker.pdf import SourceDocument
 from papertree_document_worker.pipeline import _extend_to_right_margin, _right_text_margins
-from papertree_document_worker.vlm import (
-    LATEX_PROMPT,
-    NOT_MATH,
-    VlmBudget,
-    VlmClient,
-    _clean,
-    prompt_hash,
-)
 
 #: findings.md B1's measured false positives, VERBATIM. Each was classified as math by the old
 #: extractor purely because of its typeface.
@@ -122,58 +114,6 @@ def test_a_math_heavy_paper_yields_equation_regions_and_a_prose_paper_far_fewer(
         f"the math-heavy paper should carry far more equations than the table-heavy one "
         f"({math_heavy:.1f} vs {table_heavy:.1f} per page)"
     )
-
-
-# ── the VLM boundary ───────────────────────────────────────────────────────────────────────
-
-
-def test_the_vlm_client_is_unavailable_without_a_key_and_never_falls_back() -> None:
-    """No key means unavailable, and unavailable means the equation keeps its crop with no
-    `latex`. That is a valid document, not a failure.
-
-    The client reads its OWN key and its OWN model. It never inherits a general "which LLM are
-    we using" setting, because a text model accepts this call's shape and answers anyway.
-    """
-    client = VlmClient(api_key=None)
-    assert not client.available
-    assert client.read_equation(b"not-a-real-png", VlmBudget(max_calls=10)) is None
-
-
-def test_the_budget_is_a_hard_stop() -> None:
-    client = VlmClient(api_key="test-key-not-used")
-    budget = VlmBudget(max_calls=0)
-    assert budget.exhausted
-    # Returns None WITHOUT making a request - if it tried, this would raise a network error.
-    assert client.read_equation(b"png", budget) is None
-    assert budget.calls == 0
-
-
-def test_prompt_hash_covers_the_model_and_the_token_cap() -> None:
-    """A prompt digest that ignores the model would claim two experiments were one."""
-    base = prompt_hash(LATEX_PROMPT, "MiniMax-M3", 512)
-    assert base.startswith("sha256:") and len(base) == len("sha256:") + 64
-    assert base != prompt_hash(LATEX_PROMPT, "MiniMax-M2", 512), "model must be in the digest"
-    assert base != prompt_hash(LATEX_PROMPT, "MiniMax-M3", 256), "token cap must be in the digest"
-    assert base != prompt_hash(LATEX_PROMPT + " ", "MiniMax-M3", 512)
-    assert base == VlmClient(api_key="x").prompt_digest
-
-
-@pytest.mark.parametrize(
-    ("raw", "expected"),
-    [
-        ("\\frac{a}{b}", "\\frac{a}{b}"),
-        ("$$\\frac{a}{b}$$", "\\frac{a}{b}"),
-        ("\\[\\frac{a}{b}\\]", "\\frac{a}{b}"),
-        ("```latex\n\\frac{a}{b}\n```", "\\frac{a}{b}"),
-        (NOT_MATH, None),
-        ("", None),
-        ("   ", None),
-    ],
-)
-def test_the_cleaner_strips_wrappers_and_nothing_else(raw: str, expected: str | None) -> None:
-    """It removes fences and delimiters. It must NOT rewrite the body - a stored `latex` that no
-    model actually produced is worse than a wrong one, because it is unattributable."""
-    assert _clean(raw) == expected
 
 
 # ── extents, not counts: the right-margin extension (issue #55) ─────────────────────────────

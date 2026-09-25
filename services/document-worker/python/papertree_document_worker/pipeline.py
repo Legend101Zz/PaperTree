@@ -48,7 +48,6 @@ from papertree_document_worker.references import (
 )
 from papertree_document_worker.tables import detect_tables
 from papertree_document_worker.text import build_block_text
-from papertree_document_worker.vlm import VlmBudget, VlmClient, VlmError
 
 __all__ = ["ParseResult", "ParserConfig", "parse_document"]
 
@@ -71,28 +70,15 @@ class ParserConfig:
     crop_scale: float = DEFAULT_SCALE
     #: URI scheme for stored crops. Opaque by default - see crops.py.
     asset_scheme: str = "asset"
-    #: Cap on VLM calls per document. 0 disables the VLM entirely.
-    vlm_max_calls: int = 0
-    #: DELIBERATE DUPLICATE OF A PROVIDER CONSTANT. RULED ON IN #88 — DO NOT "FIX" BY IMPORTING.
-    #:
-    #: The other two copies are ``vlm.py``'s ``DEFAULT_MODEL`` and, upstream of both,
-    #: ``packages/agent-tools/python/papertree_agent_tools/provider.py``'s ``DEFAULT_MODEL`` /
-    #: ``DEFAULT_VISION_MODEL``. #88 asked whether to import from that package instead.
-    #: **Ruling: no**, and THIS field is why. It is a config DEFAULT, and `as_dict` below feeds
-    #: `config_hash_for` -> `ParserInfo.config_hash` -> `papers.parser_config_hash`. Importing it
-    #: would let an unrelated package upgrade silently move every parse's config hash — the one
-    #: value that makes "re-parsing is a no-op" checkable, per this class's own docstring. A
-    #: literal cannot move underneath you; an imported default can. Full argument in `provider.py`.
-    #: Watched by `KNOWN_CONSTANT_COPIES` in agent-tools' `tests/test_runtime_swappable.py`, which
-    #: fails on a third copy and on a listed file that stops carrying one.
-    vlm_model: str = "MiniMax-M3"
+    # The VLM knobs (`vlm_max_calls`, `vlm_model`) are gone with `vlm.py` (ADR-002 §5, R6): gated
+    # off since Epic 1 (no setter, default 0), a second MiniMax client and a second key that
+    # bypassed the Pi ruling. Their removal changes `as_dict`, so every new parse's
+    # `config_hash` differs from one made before it — correctly: the configuration changed.
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "crop_scale": self.crop_scale,
             "asset_scheme": self.asset_scheme,
-            "vlm_max_calls": self.vlm_max_calls,
-            "vlm_model": self.vlm_model if self.vlm_max_calls else None,
         }
 
 
@@ -105,9 +91,6 @@ class ParseResult:
     diagnostics: list[Any] = field(default_factory=list)
     multi_polygon_blocks: int = 0
     page_count: int = 0
-    #: VLM calls made, and what they cost. Reported so a run's spend is a fact, not a guess.
-    vlm_calls: int = 0
-    vlm_tokens: int = 0
 
 
 #: A caption sits directly under its float, or occasionally over it. Beyond this many points
@@ -834,28 +817,6 @@ def _assemble(
         )
     apply_payload_mirrors(caption_edges, float_links)
 
-    # F1.7's VLM half: ONLY flagged regions, only when a budget is configured, and the crop is
-    # always retained whatever happens. The LaTeX is a DECLARED INTERPRETATION with its own
-    # confidence sitting beside the ground truth, never a source field (DESIGN.md §2.2).
-    vlm_budget = VlmBudget(max_calls=config.vlm_max_calls)
-    if config.vlm_max_calls > 0:
-        client = VlmClient(model=config.vlm_model)
-        if client.available:
-            for block in builder.blocks:
-                if block.type != "equation" or block.payload is None or vlm_budget.exhausted:
-                    continue
-                try:
-                    reading = client.read_equation(
-                        store.read("equations", block.block_id), vlm_budget
-                    )
-                except VlmError:
-                    # A failed call leaves the crop and no latex, which is a valid document.
-                    # Never a partial reading.
-                    continue
-                if reading is not None and reading.latex:
-                    block.payload["latex"] = reading.latex
-                    block.payload["latex_confidence"] = reading.confidence
-
     paper = builder.build(
         config_hash=config_hash_for(config.as_dict()),
         parsed_at=parsed_at,
@@ -871,6 +832,4 @@ def _assemble(
         multi_polygon_blocks=builder.multi_polygon_blocks,
         page_count=len(pages),
         crops_written=store.written,
-        vlm_calls=vlm_budget.calls,
-        vlm_tokens=vlm_budget.input_tokens + vlm_budget.output_tokens,
     )

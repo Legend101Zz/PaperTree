@@ -307,24 +307,15 @@ def test_the_vision_model_setting_is_separate_from_the_model_setting() -> None:
 #: Files outside ``packages/agent-tools`` that write a provider constant out as a literal, with the
 #: issue that owns each. A LEDGER, enforced in both directions like ``reachable.spec``'s: a NEW copy
 #: fails, and a listed file that no longer carries one must be delisted so the ledger cannot outlive
-#: the debt. Session A found these while replacing the cross-tree read against v1 and did not fix
-#: them — ``services/document-worker/**`` is Session B's exclusive path (AGENTS.md §1).
+#: the debt.
 #:
-#: **#88 IS NOW DECIDED, AND THE DECISION IS THAT THESE TWO ENTRIES ARE PERMANENT.** The ruling:
-#: ``services/document-worker`` does NOT depend on ``papertree-agent-tools``; the duplication stays
-#: and is DECLARED with a pointer at each of the three sites. The deciding reason is that
-#: ``pipeline.py``'s ``vlm_model`` is a config default feeding ``parser_config_hash``, so an
-#: imported default would silently move every parse's config hash on an unrelated package upgrade.
-#: Written out beside the constants in ``papertree_agent_tools/provider.py``.
-#:
-#: So this ledger is no longer provisional, and what it means changed with the ruling: the entries
-#: are not a debt awaiting repayment, they are the declaration itself. Both assertions below stand
-#: unweakened and both still matter — a THIRD copy is still a defect, and a listed file that stops
-#: carrying a constant must still be delisted rather than left to rot.
-KNOWN_CONSTANT_COPIES: tuple[tuple[str, str], ...] = (
-    ("services/document-worker/python/papertree_document_worker/vlm.py", "#88"),
-    ("services/document-worker/python/papertree_document_worker/pipeline.py", "#88"),
-)
+#: EMPTY SINCE THE READER RELEASE'S S0 (ADR-002 §5, R6). #88 had declared two permanent entries:
+#: ``document-worker``'s ``vlm.py`` (``DEFAULT_MODEL``) and ``pipeline.py``
+#: (``ParserConfig.vlm_model``, a config default feeding ``parser_config_hash``). Both copies went
+#: with the VLM itself, so both entries were delisted in the same change, exactly as the second
+#: assertion below demands. The assertions stand unweakened: a new copy anywhere in the gated tree
+#: is still a defect.
+KNOWN_CONSTANT_COPIES: tuple[tuple[str, str], ...] = ()
 
 
 def test_the_provider_constants_have_no_new_live_definition() -> None:
@@ -348,7 +339,8 @@ def test_the_provider_constants_have_no_new_live_definition() -> None:
     default that feeds ``parser_config_hash`` and an imported default would move every parse's
     config hash on an unrelated package upgrade. The duplication is therefore declared rather than
     removed, with a pointer at each of the three sites, and the ledger below is that declaration's
-    enforcement rather than a placeholder for it. See ``KNOWN_CONSTANT_COPIES``.
+    enforcement rather than a placeholder for it. See ``KNOWN_CONSTANT_COPIES``. (Both declared
+    copies left with the VLM in the reader release's S0, R6; the ledger is empty now.)
     """
     gated = sorted(
         path
