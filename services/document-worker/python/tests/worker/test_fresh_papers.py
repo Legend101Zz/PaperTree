@@ -10,6 +10,7 @@ because a producer-side fix that only passes on a fixture its author wrote is th
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 from _corpus_manifest import FRESH_DIR, FRESH_PARAMS, requires_fresh
@@ -57,7 +58,6 @@ def test_colliding_cells_salvage_to_partial_on_maskrcnn(
 
     The salvage lane drops the LATER colliding block's region - the phantom table - and nothing
     else, so the salvaged document holds exactly the clean parse's blocks, marked `partial`."""
-    from typing import Any
 
     from papertree_document_worker import pipeline
 
@@ -87,3 +87,23 @@ def test_colliding_cells_salvage_to_partial_on_maskrcnn(
     # Payloads too: the kept tables' grids still name their own cells, whose ids the dropped
     # phantom's cells shared.
     assert [b.payload for b in salvaged.blocks] == [b.payload for b in clean.blocks]
+
+
+@pytest.fixture(scope="module")
+def yolo(tmp_path_factory: pytest.TempPathFactory) -> Any:
+    """YOLO (arXiv 1506.02640v5), parsed once: the slice-plan merge rule's named paper."""
+    path = FRESH_DIR / "yolo-1506.02640.pdf"
+    if not path.is_file():
+        pytest.skip(
+            "the fresh set is gitignored; fetch it with ./research/benchmarks/fresh/fetch_fresh.sh"
+        )
+    root = tmp_path_factory.mktemp("yolo")
+    return parse_document(path, paper_id=PAPER_ID, asset_root=root).paper
+
+
+def test_unified_detection_is_a_heading_on_yolo(yolo: Any) -> None:
+    """Slice-plan §S2 merge rule: '2. Unified Detection' typed `heading`. At 18f69ec it was a
+    paragraph, and so were `2.1. Network Design` and three more Title-Case section heads."""
+    types = {(b.text or "").replace("\n", " ").strip(): b.type for b in yolo.blocks}
+    for heading in ("2. Uniﬁed Detection", "2.1. Network Design", "4.4. VOC 2012 Results"):
+        assert types.get(heading) == "heading", (heading, types.get(heading))

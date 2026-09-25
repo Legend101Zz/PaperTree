@@ -81,17 +81,24 @@ def test_references_edges_are_emitted_on_every_paper(parsed: dict[str, Paper]) -
         name: sum(1 for r in paper.relations if r.type == "references")
         for name, paper in parsed.items()
     }
+    # S2 (#141) moved four rows. gpt3 33 -> 31: two callouts sat in text that was really a
+    # caption's continuation line (`Figure 1.3: ...` is set with a bold label, and the weight rule
+    # cut the caption after its first line); now inside the caption, they are not text references.
+    # pdf-to-tree 7 -> 8, resnet 18 -> 19, superglue 4 -> 5: callouts in text that was dropped or
+    # mistyped before - resnet's p5 table reference now comes from the recovered bottleneck
+    # paragraph. Several sources also re-point to the same paragraph with its run-in lead joined
+    # (`Maximum Likelihood Training A useful property ...` instead of `A useful property ...`).
     assert per_paper == {
         "a3c-algorithmheavy": 13,
         "attention-is-all-you-need": 11,
         "bert-2col": 14,
-        "gpt3-longform-singlecol": 33,
+        "gpt3-longform-singlecol": 31,
         "neural-odes-mathheavy": 15,
-        "pdf-to-tree-acl2col": 7,
-        "resnet-cvpr-2col": 18,
-        "superglue-tableheavy": 4,
+        "pdf-to-tree-acl2col": 8,
+        "resnet-cvpr-2col": 19,
+        "superglue-tableheavy": 5,
     }
-    assert sum(per_paper.values()) == 115
+    assert sum(per_paper.values()) == 116
 
 
 @requires_corpus
@@ -105,9 +112,14 @@ def test_the_pre_existing_relation_types_did_not_move(parsed: dict[str, Paper]) 
     for paper in parsed.values():
         totals.update(r.type for r in paper.relations)
     assert totals["caption_of"] == 142
-    assert totals["continues_on_next_page"] == 94
-    assert totals["continues_in_next_column"] == 36
-    assert totals["cites"] == 525
+    # 94 -> 90 and 36 -> 37 in S2 (#141). The lost page continuations pointed INTO section heads
+    # that were typed `paragraph` (`8. Experimental Setup`, `5.1. Atari 2600 Games`, `3.5 Positional
+    # Encoding`, `3.9.4 News Article Generation`, `5.1 Baselines BERT`) or into a caption's second
+    # line; the rest re-point to the paragraph that really continues. `cites` 525 -> 532: see
+    # test_citations.BASELINE.
+    assert totals["continues_on_next_page"] == 90
+    assert totals["continues_in_next_column"] == 37
+    assert totals["cites"] == 532
 
 
 @requires_corpus
@@ -199,7 +211,7 @@ def test_referenced_by_mirrors_the_references_edges(parsed: dict[str, Paper]) ->
                 figures += 1
             elif block.type == "equation":
                 equations += 1
-    assert (figures, equations) == (43, 7)
+    assert (figures, equations) == (44, 7)  # 43 at 18f69ec; pdf-to-tree p10's figure gained one
 
 
 @requires_corpus
@@ -214,7 +226,9 @@ def test_equation_number_is_populated_and_is_what_makes_equation_referencing_pos
     """
     equations = [b for paper in parsed.values() for b in _blocks(paper, "equation")]
     numbered = [b for b in equations if (b.payload or {}).get("equation_number")]
-    assert (len(numbered), len(equations)) == (46, 81)
+    # 81 -> 80 equations in S2 (#141): superglue p7's `BERT++`, a model name set in the heading
+    # face, is no longer an equation block. The 46 numbered ones are unchanged.
+    assert (len(numbered), len(equations)) == (46, 80)
     assert all(isinstance(b.payload["equation_number"], str) for b in numbered)
 
 
@@ -268,4 +282,4 @@ def test_prev_id_and_next_id_are_still_empty_and_that_is_the_ruling(
         if b.prev_id is not None or b.next_id is not None
     )
     total = sum(len(paper.blocks) for paper in parsed.values())
-    assert (populated, total) == (0, 9903)
+    assert (populated, total) == (0, 9826)  # 9,903 at 18f69ec; S2 (#141) joins run-in leads

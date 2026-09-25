@@ -33,7 +33,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from statistics import median
 
-from papertree_document_worker.layout import LayoutBlock, PageLayout
+from papertree_document_worker.layout import LayoutBlock, PageLayout, is_run_in_lead
 
 __all__ = [
     "Heading",
@@ -148,6 +148,30 @@ def _is_bare_number(text: str) -> str | None:
     return number
 
 
+#: A section number in a form no affiliation marker takes: multi-level (`2.1`) or closed by a
+#: period or parenthesis (`2.`, `A.`, `IV)`). An author's superscript marker is a lone digit or
+#: symbol glued to the name - `1Shaoqing Ren` - and never carries either.
+_DOTTED_NUMBER = re.compile(r"^\s*(?:\d+|[A-Z]|[IVXL]+)(?:(?:\.\d+)+\.?|[.)])(?:\s|$)")
+
+
+def _could_be_an_author_line(text: str, page_index: int) -> bool:
+    """Whether a NUMBERED line might really be an author line whose affiliation marker parsed as
+    a section number - the one reason `_is_name_list` is applied to numbered headings at all.
+
+    S2 (#141). Author lines exist on the TITLE PAGE only, and their markers are never dotted. So
+    off page 0, or with a dotted number, the number is a section number and a Title-Case title is
+    just a title. Measured at 18f69ec: `yolo-1506.02640`'s `2. Unified Detection` and `2.1. Network
+    Design` came out `paragraph` - every word capitalised and no function word, so the guard took
+    them for a list of names - and the same rule dropped `resnet-cvpr-2col`'s appendix heads
+    `A. Object Detection Baselines` / `B. ...` / `C. ImageNet Localization`, BERT's `2 Related
+    Work` and `2.1 Unsupervised Feature-based Approaches`, and dozens more across the corpus.
+
+    Page 0 keeps the guard for an UNDOTTED number, which is the only shape the `1Shaoqing Ren`
+    case this guard exists for can take.
+    """
+    return page_index == 0 and _DOTTED_NUMBER.match(text) is None
+
+
 def _is_name_list(text: str) -> bool:
     """Whether a line is a list of proper nouns - an author or affiliation line.
 
@@ -174,6 +198,10 @@ def _looks_like_heading_by_font(block: LayoutBlock, body_size: float) -> bool:
     size = median([span.size for span in spans])
     if size >= HEADING_SIZE_RATIO * body_size:
         return True
+    # A bold RUN-IN lead is a paragraph's first line, never a heading (`layout.is_run_in_lead`,
+    # S2 #141): testing `spans[0]` alone typed every such line a heading once it stood as a block.
+    if block.lines and is_run_in_lead(block.lines[0]):
+        return False
     return bool(spans[0].flags & _BOLD_FLAG) and size >= body_size * 0.98
 
 
@@ -200,7 +228,7 @@ def detect_headings(layout: PageLayout, body_size: float) -> list[Heading]:
         parsed = parse_section_number(text)
         if parsed is not None and _looks_like_heading_by_font(block, body_size):
             number, title = parsed
-            if not _is_name_list(title):
+            if not (_could_be_an_author_line(text, layout.index) and _is_name_list(title)):
                 headings.append(Heading(block, number, title, _level_of(number)))
                 continue
 
@@ -213,7 +241,21 @@ def detect_headings(layout: PageLayout, body_size: float) -> list[Heading]:
                 title
                 and len(title) <= MAX_HEADING_CHARS
                 and not title[0].islower()
-                and not _is_name_list(title)
+                # A block that is itself a numbered heading is not a title for the number above
+                # it: `2` (a stray page number) above `2. Related Work` made `2` the heading and
+                # swallowed the real one (maskrcnn p1, S2 #141). It is detected on its own turn.
+                and parse_section_number(title) is None
+                and (
+                    not _is_name_list(title)
+                    # Title Case is fine for a SECTION title - but then the title block must be
+                    # set in a heading face, because the join has no other evidence: a table's
+                    # `50` above `75 M L`, or a page number above a reference, pass every other
+                    # test here.
+                    or (
+                        not _could_be_an_author_line(f"{text} {title}", layout.index)
+                        and _looks_like_heading_by_font(following, body_size)
+                    )
+                )
             ):
                 headings.append(Heading(block, bare, title, _level_of(bare)))
                 skip.add(index + 1)

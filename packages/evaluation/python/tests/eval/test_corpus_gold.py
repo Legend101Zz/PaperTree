@@ -152,12 +152,21 @@ requires_corpus = pytest.mark.skipif(
 # 11 of 36 pages scoring no pair - the architecture judge's re-run exactly. Every later S2 commit
 # that moves a pin records what moved and why beside the code that moved it.
 
+# HEADINGS COMMIT (S2): Title-Case numbered heads are headings, run-in leads are not, and the
+# reference sweep reads in reading order. macro-F1 rises on all six (a3c 0.3932 -> 0.4213, bert
+# 0.3523 -> 0.3702, resnet 0.3257 -> 0.3396, attention 0.2899 -> 0.3019, gpt3 +0.0007, neural-odes
+# +0.0001) because the heads now MATCH gold heading boxes, and pooled pairs grow with them. Two
+# pooled rates dip - attention 35/38 -> 39/43, resnet 96/103 -> 108/116 - and the new wrong pairs
+# are all against a FIGURE: floats were read after all the page's text by emission order, and a
+# newly matched heading below a figure is a new pair that order gets wrong. The floats commit later
+# in this branch places them.
+
 RAW: dict[str, dict[str, Any]] = {
     "a3c-algorithmheavy": {
-        "macro_f1": 0.3932,
-        "macro_f1_strict": 0.35,
+        "macro_f1": 0.4213,
+        "macro_f1_strict": 0.3533,
         "reading_order": 0.6667,
-        "reading_order_pairs": [4, 4],
+        "reading_order_pairs": [9, 9],
         "zero_pair_pages": 2,
         "caption_correct": 4,
         "caption_false": 0,
@@ -172,10 +181,10 @@ RAW: dict[str, dict[str, Any]] = {
         "figure_predicted": 4,
     },
     "attention-is-all-you-need": {
-        "macro_f1": 0.2899,
-        "macro_f1_strict": 0.0941,
-        "reading_order": 0.3889,
-        "reading_order_pairs": [35, 38],
+        "macro_f1": 0.3019,
+        "macro_f1_strict": 0.0951,
+        "reading_order": 0.5278,
+        "reading_order_pairs": [39, 43],
         "zero_pair_pages": 2,
         "caption_correct": 1,
         "caption_false": 0,
@@ -190,10 +199,10 @@ RAW: dict[str, dict[str, Any]] = {
         "figure_predicted": 3,
     },
     "bert-2col": {
-        "macro_f1": 0.3523,
-        "macro_f1_strict": 0.2098,
-        "reading_order": 0.6992,
-        "reading_order_pairs": [54, 67],
+        "macro_f1": 0.3702,
+        "macro_f1_strict": 0.2134,
+        "reading_order": 0.7071,
+        "reading_order_pairs": [63, 77],
         "zero_pair_pages": 1,
         "caption_correct": 4,
         "caption_false": 0,
@@ -208,8 +217,8 @@ RAW: dict[str, dict[str, Any]] = {
         "figure_predicted": 2,
     },
     "gpt3-longform-singlecol": {
-        "macro_f1": 0.3429,
-        "macro_f1_strict": 0.1817,
+        "macro_f1": 0.3436,
+        "macro_f1_strict": 0.1821,
         "reading_order": 0.2222,
         "reading_order_pairs": [7, 9],
         "zero_pair_pages": 4,
@@ -226,7 +235,7 @@ RAW: dict[str, dict[str, Any]] = {
         "figure_predicted": 2,
     },
     "neural-odes-mathheavy": {
-        "macro_f1": 0.2175,
+        "macro_f1": 0.2176,
         "macro_f1_strict": 0.1183,
         "reading_order": 0.6111,
         "reading_order_pairs": [39, 40],
@@ -244,10 +253,10 @@ RAW: dict[str, dict[str, Any]] = {
         "figure_predicted": 8,
     },
     "resnet-cvpr-2col": {
-        "macro_f1": 0.3257,
-        "macro_f1_strict": 0.1588,
-        "reading_order": 0.9288,
-        "reading_order_pairs": [96, 103],
+        "macro_f1": 0.3396,
+        "macro_f1_strict": 0.1607,
+        "reading_order": 0.9282,
+        "reading_order_pairs": [108, 116],
         "zero_pair_pages": 0,
         "caption_correct": 3,
         "caption_false": 0,
@@ -265,10 +274,10 @@ RAW: dict[str, dict[str, Any]] = {
 
 NORMALISED: dict[str, dict[str, Any]] = {
     "a3c-algorithmheavy": {
-        "macro_f1": 0.3932,
-        "macro_f1_strict": 0.35,
+        "macro_f1": 0.4213,
+        "macro_f1_strict": 0.3533,
         "reading_order": 0.6667,
-        "reading_order_pairs": [4, 4],
+        "reading_order_pairs": [9, 9],
         "zero_pair_pages": 2,
         "caption_correct": 4,
         "caption_false": 0,
@@ -283,11 +292,11 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "figure_predicted": 4,
     },
     "attention-is-all-you-need": {
-        "macro_f1": 0.2832,
-        "macro_f1_strict": 0.0997,
-        "reading_order": 0.3889,
-        "reading_order_pairs": [35, 37],
-        "zero_pair_pages": 3,
+        "macro_f1": 0.2952,
+        "macro_f1_strict": 0.1007,
+        "reading_order": 0.5833,
+        "reading_order_pairs": [38, 41],
+        "zero_pair_pages": 2,
         "caption_correct": 1,
         "caption_false": 0,
         "caption_gold": 1,
@@ -301,10 +310,10 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "figure_predicted": 3,
     },
     "bert-2col": {
-        "macro_f1": 0.3523,
-        "macro_f1_strict": 0.2098,
-        "reading_order": 0.6992,
-        "reading_order_pairs": [54, 67],
+        "macro_f1": 0.3702,
+        "macro_f1_strict": 0.2134,
+        "reading_order": 0.7071,
+        "reading_order_pairs": [63, 77],
         "zero_pair_pages": 1,
         "caption_correct": 4,
         "caption_false": 0,
@@ -319,8 +328,8 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "figure_predicted": 2,
     },
     "gpt3-longform-singlecol": {
-        "macro_f1": 0.3429,
-        "macro_f1_strict": 0.1817,
+        "macro_f1": 0.3436,
+        "macro_f1_strict": 0.1821,
         "reading_order": 0.2222,
         "reading_order_pairs": [7, 9],
         "zero_pair_pages": 4,
@@ -337,8 +346,8 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "figure_predicted": 2,
     },
     "neural-odes-mathheavy": {
-        "macro_f1": 0.2137,
-        "macro_f1_strict": 0.1191,
+        "macro_f1": 0.2138,
+        "macro_f1_strict": 0.1192,
         "reading_order": 0.3889,
         "reading_order_pairs": [61, 66],
         "zero_pair_pages": 2,
@@ -355,10 +364,10 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "figure_predicted": 8,
     },
     "resnet-cvpr-2col": {
-        "macro_f1": 0.3184,
-        "macro_f1_strict": 0.1561,
+        "macro_f1": 0.3323,
+        "macro_f1_strict": 0.158,
         "reading_order": 0.9667,
-        "reading_order_pairs": [87, 89],
+        "reading_order_pairs": [99, 101],
         "zero_pair_pages": 0,
         "caption_correct": 1,
         "caption_false": 2,

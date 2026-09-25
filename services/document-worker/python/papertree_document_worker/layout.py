@@ -57,6 +57,7 @@ from papertree_document_worker.pdf import Line, PageContent
 
 __all__ = [
     "Column",
+    "is_run_in_lead",
     "DocumentLayout",
     "FlowKind",
     "LayoutBlock",
@@ -290,6 +291,25 @@ def _flow_for(
 # ── block segmentation and ordering ────────────────────────────────────────────────────────
 
 
+def is_run_in_lead(line: Line) -> bool:
+    """A bold RUN-IN lead: the line opens in bold and continues, on the same line, in the body
+    face with at least two words of text - `Exploring Over 1000 layers. We explore an ...`.
+
+    LaTeX's `\\paragraph{}`. It is the first line of a paragraph, not a heading, and both golds
+    say so: the fresh gold lists such leads under `run_in_headings` with their paragraph as one
+    body unit, and the hand-counted outlines exclude them (`test_outline_floor.py`). S2 (#141):
+    at 18f69ec resnet typed four as headings ("Residual Network. Based on the abo...",
+    "Identity vs. Projection Shortcuts.", "Analysis of Layer Responses. Fig. ...").
+    """
+    last_bold = max(
+        (index for index, span in enumerate(line.spans) if span.flags & _BOLD_FLAG), default=None
+    )
+    if last_bold is None or not line.spans[0].flags & _BOLD_FLAG:
+        return False
+    tail = "".join(span.text for span in line.spans[last_bold + 1 :])
+    return len([word for word in tail.split() if any(c.isalpha() for c in word)]) >= 2
+
+
 def _is_bold_line(line: Line) -> bool:
     """Whether MOST of a line's glyphs are bold, by character count.
 
@@ -298,6 +318,8 @@ def _is_bold_line(line: Line) -> bool:
     such paragraph, and a heading whose first span is a non-bold section number would not start
     one at all.
     """
+    if is_run_in_lead(line):
+        return False  # the lead's paragraph continues on this very line; see `is_run_in_lead`
     bold = sum(len(s.text) for s in line.spans if s.flags & _BOLD_FLAG)
     total = sum(len(s.text) for s in line.spans)
     return total > 0 and bold * 2 > total
@@ -344,6 +366,31 @@ def _continues_numbered_heading(previous: Line, current: Line) -> bool:
     return bool(title) and title[0].isalpha() and _shares_a_baseline(previous, current)
 
 
+def _continues_run_in_lead(previous: Line, current: Line) -> bool:
+    """A bold run-in lead and the regular text after it, returned as two `Line`s on ONE baseline.
+
+    `is_run_in_lead` recognises the lead when MuPDF returns it as one line. BERT's appendix sets
+    each GLUE task as `MNLI` (bold) then `Multi-Genre Natural Language Inference is...` (regular)
+    on the same baseline 11 pt to the right, and MuPDF returns two lines; the weight rule below
+    then split the lead off as a one-word block and the heading font rule typed it a heading -
+    nine on BERT p13-14 (`MNLI`, `QQP`, `QNLI`, `SST-2`, ...), S2 (#141). One visual line is one
+    line of its paragraph: same baseline, regular text continuing to the right within a tab's
+    width (the 1.3 line heights `assemble._TAB_GAP_HEIGHTS` measured).
+
+    KNOWN LIMIT: lines are sorted by band TOP, so this sees the pair only when the lead sorts
+    first. When the regular face has the taller ascender the regular fragment sorts first and the
+    pair is missed. Sorting each visual line left to right was measured and REVERTED: it moved
+    60 metrics the wrong way across the 14 papers (it reorders every same-baseline pair, and
+    most of those are equation and table fragments).
+    """
+    if not _is_bold_line(previous) or _is_bold_line(current):
+        return False
+    if not _shares_a_baseline(previous, current):
+        return False
+    height = previous.band[3] - previous.band[1]
+    return 0 <= current.band[0] - previous.band[2] <= 1.3 * height
+
+
 def _same_block(previous: Line, current: Line, line_gap: float) -> bool:
     """Whether `current` continues the paragraph `previous` belongs to.
 
@@ -355,7 +402,7 @@ def _same_block(previous: Line, current: Line, line_gap: float) -> bool:
     ...and one way to be a continuation that all three would otherwise reject: a numbered
     heading whose number and title MuPDF returned as two lines on one baseline.
     """
-    if _continues_numbered_heading(previous, current):
+    if _continues_numbered_heading(previous, current) or _continues_run_in_lead(previous, current):
         return True
     gap = current.band[1] - previous.band[3]
     if gap > line_gap:
@@ -396,9 +443,20 @@ def _group(lines: list[Line], line_gap: float) -> list[list[Line]]:
     handles; only the opening needed forcing.
     """
     groups: list[list[Line]] = []
-    for line in lines:
+    for index, line in enumerate(lines):
         starts_caption = _CAPTION_START.match(line.text.strip()) is not None
-        if groups and not starts_caption and _same_block(groups[-1][-1], line, line_gap):
+        # A bold lead whose paragraph continues on its own baseline OPENS that paragraph, so it
+        # does not join the (bold) heading above it: superglue p5 sets `3.4 Tools for Model
+        # Analysis` directly above `Analyzing Linguistic and World Knowledge in Models` +
+        # `GLUE includes ...`, and the heading block swallowed the lead (S2, #141).
+        following = lines[index + 1] if index + 1 < len(lines) else None
+        opens_run_in = following is not None and _continues_run_in_lead(line, following)
+        if (
+            groups
+            and not starts_caption
+            and not opens_run_in
+            and _same_block(groups[-1][-1], line, line_gap)
+        ):
             groups[-1].append(line)
         else:
             groups.append([line])
