@@ -200,6 +200,53 @@ def test_a_broken_frame_fails_both_checkers() -> None:
         parse_agent_event("citations", "{}")  # a browser event, not an agent event
 
 
+_RUN = {"run_id": "run_01K62ZX4Y6C0G6Y7T3N2E6Q9VB", "model": "minimax/MiniMax-M3"}
+_USAGE = {"input": 1, "output": 1, "cache_read": 0, "cache_write": 0, "cost_usd_est": 0.0}
+
+#: Frames on the edge of §3.2, valid and not. The lesson of S0 review M1: two checkers that
+#: disagree let one side's records through to the other (the model took `null` where the schema
+#: said "omit"), so the answer is compared, not only the refusals.
+EDGE_FRAMES: list[tuple[str, dict[str, Any]]] = [
+    ("status", {"phase": "tool", "label": "Reading p. 4"}),
+    # WATCHED FAILING: the model took an empty label the schema refuses (`minLength: 1`).
+    ("status", {"phase": "tool", "label": ""}),
+    ("status", {"phase": "tool", "tool": "get_outline"}),
+    ("status", {"phase": "tool", "tool": None}),
+    ("status", {"phase": "tool", "tool": "read_file"}),
+    ("status", {"phase": "retrying", "attempt": 1, "delay_ms": 0}),
+    ("status", {"phase": "retrying", "attempt": 0}),
+    ("status", {"phase": "retrying", "attempt": None}),
+    ("status", {"phase": "retrying", "delay_ms": -1}),
+    ("status", {"phase": "resting"}),
+    ("text", {"delta": ""}),
+    ("text", {"delta": None}),
+    ("usage", {**_USAGE, "reasoning": None}),
+    ("usage", {**_USAGE, "reasoning": 7}),
+    ("usage", _USAGE),
+    ("usage", {**_USAGE, "reasoning": None, "cost_usd_est": -1}),
+    ("usage", {**_USAGE, "reasoning": None, "input": 1.5}),
+    ("usage", {**_USAGE, "reasoning": None, "input": "1"}),
+    ("run", {**_RUN, "sdk": "pi-coding-agent@0.87.1"}),
+    ("run", {**_RUN, "sdk": "pi-coding-agent"}),
+    ("run", {**_RUN, "run_id": "run_short", "sdk": "pi-coding-agent@0.87.1"}),
+]
+
+
+@pytest.mark.parametrize(
+    ("event", "data"), EDGE_FRAMES, ids=[str(i) for i in range(len(EDGE_FRAMES))]
+)
+def test_the_model_and_the_hand_schema_give_one_answer_frame_by_frame(
+    event: str, data: dict[str, Any]
+) -> None:
+    by_schema = not validate({"event": event, "data": data}, EVENTS_SCHEMA)
+    try:
+        parse_agent_event(event, json.dumps(data))
+        by_model = True
+    except ValidationError:
+        by_model = False
+    assert by_model == by_schema, f"model {by_model}, schema {by_schema}: {event} {data}"
+
+
 @pytest.mark.parametrize("name", ["explain", "followup", "summary"])
 def test_the_run_request_examples(name: str) -> None:
     body = json.loads((AGENT / "examples" / f"run-request-{name}.json").read_text("utf-8"))

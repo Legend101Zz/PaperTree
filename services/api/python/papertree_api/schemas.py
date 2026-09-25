@@ -988,7 +988,8 @@ class AgentRun(Wire):
 class AgentStatus(Wire):
     phase: Literal["thinking", "tool", "retrying", "writing"]
     tool: ToolName | None = omittable()
-    label: str | None = omittable()
+    #: `minLength: 1` in `run-events.schema.json`: an agent that has nothing to say omits it.
+    label: str | None = omittable(min_length=1)
     attempt: Positive | None = omittable()
     delay_ms: NonNegative | None = omittable()
 

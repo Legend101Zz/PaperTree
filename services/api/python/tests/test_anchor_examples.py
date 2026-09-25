@@ -31,6 +31,7 @@ from jsonschema_lite import validate
 from papertree_api import contracts
 from papertree_api.schemas import AnchorV1
 from papertree_db import find_migrations_dir, migrate
+from pydantic import ValidationError
 
 REPO = Path(__file__).resolve().parents[4]
 ANCHOR = REPO / "contracts" / "anchor"
@@ -119,3 +120,95 @@ def test_the_hand_written_schema_and_the_model_have_the_same_fields(hand_name: s
     assert set(hand["properties"]) == set(model["properties"]), hand_name
     assert set(hand.get("required", [])) == set(model.get("required", [])), hand_name
     assert hand.get("additionalProperties") is False and model["additionalProperties"] is False
+
+
+def _sel(anchor: dict[str, Any], kind: str) -> dict[str, Any]:
+    found: dict[str, Any] = next(s for s in anchor["selectors"] if s["type"] == kind)
+    return found
+
+
+#: (label, base example, mutation). Edges of §6 in every direction, after the S0 review's own 48
+#: (`anchor_agree.py`): the model and the hand-written schema must give ONE answer, because a
+#: record one of them accepts and the other refuses is exactly how a stored anchor stops being an
+#: anchor (M1: explicit nulls, which the model took).
+MUTATIONS: list[tuple[str, str, Any]] = [
+    ("a prefixed id", "text", lambda a: a.update(id="cit_01K63A9W4XJ7Q2N8R5T0V3Y6ZE")),
+    ("an id that is no id", "text", lambda a: a.update(id="not-a-uuid")),
+    ("paperId empty", "text", lambda a: a["doc"].update(paperId="")),
+    ("textStreamId empty", "text", lambda a: a["doc"].update(textStreamId="")),
+    ("pdfSha256 upper case", "text", lambda a: a["doc"].update(pdfSha256="sha256:" + "A" * 64)),
+    ("created.mode split", "text", lambda a: a["created"].update(mode="split")),
+    ("no selectors", "text", lambda a: a.update(selectors=[])),
+    ("blockId empty", "text", lambda a: _sel(a, "BlockSelector").update(blockId="")),
+    ("startOffset -1", "text", lambda a: _sel(a, "BlockSelector").update(startOffset=-1)),
+    ("startOffset 1.5", "text", lambda a: _sel(a, "BlockSelector").update(startOffset=1.5)),
+    ("startOffset null", "text", lambda a: _sel(a, "BlockSelector").update(startOffset=None)),
+    ("startOffset huge", "text", lambda a: _sel(a, "BlockSelector").update(startOffset=10**20)),
+    ("page index 2**63", "text", lambda a: _sel(a, "PageSelector").update(index=2**63)),
+    ("page label null", "text", lambda a: _sel(a, "PageSelector").update(label=None)),
+    ("page label empty", "text", lambda a: _sel(a, "PageSelector").update(label="")),
+    ("no quads", "text", lambda a: _sel(a, "ShapeSelector").update(quads=[])),
+    ("a quad of ints", "text", lambda a: _sel(a, "ShapeSelector").update(quads=[[1, 2, 3, 4]])),
+    ("a quad string", "text", lambda a: _sel(a, "ShapeSelector").update(quads=[["1", 2, 3, 4]])),
+    ("a 3-point", "text", lambda a: _sel(a, "ShapeSelector").update(polygons=[[[1, 2, 3]]])),
+    ("rotation 90.0", "text", lambda a: _sel(a, "ShapeSelector").update(rotation=90.0)),
+    ("rotation false", "text", lambda a: _sel(a, "ShapeSelector").update(rotation=False)),
+    ("rotation '90'", "text", lambda a: _sel(a, "ShapeSelector").update(rotation="90")),
+    ("anchorVersion 1.0", "text", lambda a: a.update(anchorVersion=1.0)),
+    ("no suffix", "text", lambda a: _sel(a, "TextQuoteSelector").pop("suffix")),
+    ("a selector's extra key", "text", lambda a: _sel(a, "PageSelector").update(foo=1)),
+    ("subTarget null", "text", lambda a: a.update(subTarget=None)),
+    (
+        "rect past the unit square",
+        "figure-region",
+        lambda a: a["subTarget"].update(normalisedRect=[0, 0, 1.5, 1]),
+    ),
+    ("rect of 3", "figure-region", lambda a: a["subTarget"].update(normalisedRect=[0, 0, 1])),
+    ("subTarget empty", "figure-region", lambda a: a.update(subTarget={})),
+    ("subTarget rect null", "figure-region", lambda a: a["subTarget"].update(normalisedRect=None)),
+    ("cellRef of 3", "table-cell", lambda a: _sel(a, "BlockSelector").update(cellRef=[1, 2, 3])),
+    ("cellRef null", "table-cell", lambda a: _sel(a, "BlockSelector").update(cellRef=None)),
+    (
+        "a path that is a string",
+        "text",
+        lambda a: a["selectors"].append(
+            {
+                "type": "SectionPathSelector",
+                "path": "x",
+                "headingText": "h",
+                "paraIndexInSection": 0,
+                "charOffsetInPara": 0,
+            }
+        ),
+    ),
+    ("a cache", "text", lambda a: a.update(resolution={"tier": 0})),
+]
+
+#: The one disagreement kept, in the harmless direction: JSON Schema's `integer` is any number
+#: with a zero fraction, and strict pydantic takes only an int. The schema accepts MORE here, so
+#: nothing the model accepts is refused on the other side.
+SCHEMA_ONLY: list[tuple[str, str, Any]] = [
+    ("startOffset 2.0", "text", lambda a: _sel(a, "BlockSelector").update(startOffset=2.0))
+]
+
+
+@pytest.mark.parametrize(("label", "base", "mutate"), MUTATIONS, ids=[m[0] for m in MUTATIONS])
+def test_the_model_and_the_hand_schema_give_one_answer(label: str, base: str, mutate: Any) -> None:
+    anchor = json.loads((EXAMPLES / f"{base}.json").read_text("utf-8"))
+    mutate(anchor)
+    by_schema = validate(anchor, SCHEMA) == []
+    try:
+        AnchorV1.model_validate_json(json.dumps(anchor))
+        by_model = True
+    except ValidationError:
+        by_model = False
+    assert by_model == by_schema, f"{label}: model {by_model}, schema {by_schema}"
+
+
+def test_where_the_two_differ_the_schema_is_the_wider() -> None:
+    for label, base, mutate in SCHEMA_ONLY:
+        anchor = json.loads((EXAMPLES / f"{base}.json").read_text("utf-8"))
+        mutate(anchor)
+        assert validate(anchor, SCHEMA) == [], label
+        with pytest.raises(ValidationError):
+            AnchorV1.model_validate_json(json.dumps(anchor))
