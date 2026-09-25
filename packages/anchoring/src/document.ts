@@ -461,7 +461,11 @@ export function indexDocument(paper: PaperSource, textStreamId: string): Indexed
     }
     if (found < 0) return null;
     const block = blocks[found] as IndexedBlock;
-    return offset < block.streamEnd ? block : block;
+    if (offset < block.streamEnd) return block;
+    // `offset` is the separator after `block` (or past the end of the stream). It used to return
+    // `block` on both branches of this test — a no-op ternary, slice-plan §S4 "document.ts:462". A
+    // range starting on a separator starts in the NEXT block, so that is the block at this offset.
+    return blocks[found + 1] ?? null;
   };
 
   const pageAtNormalisedOffset = (offset: number): number | null => {
