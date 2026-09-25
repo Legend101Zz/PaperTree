@@ -120,7 +120,18 @@
       "headings: every section and subsection heading on pp1-2 as printed, with its numbering. Bold paragraph lead-ins go under run_in_headings; their paragraph is one body unit.",
       "A unit is [page, kind, anchor] or [page, kind, anchor, {extras}]. Readers expecting three fields should use u[:3]. extras.disputed = true marks a unit where the adjudicator overrode at least one annotator on the unit's existence, extent, kind or anchor words. Case-only harmonisation is listed per paper under adjudication.case_harmonised_anchors instead."
     ],
-    "pages": "1-2 of each paper (1-based)"
+    "pages": "1-2 of each paper (1-based)",
+    "corrections": [
+      {
+        "date": "2026-09-26",
+        "by": "S2 builder session (Claude Opus 5.5), after the adjudicated gold was committed",
+        "unit": "sbert-1908.10084 p2 cont 'new state-of-the-art performance on the Semantic Textual ...'",
+        "change": "anchor 'Similarity' -> 'Semilarity', as printed",
+        "how_found": "the S2 fresh scorer reported this one anchor missing on every parse. The crop was LOCATED with the paragraph's position on the page; the word itself was read from a 300 dpi render of the page image, not from any text layer or parser output.",
+        "evidence": "hard-cases/sbert-p2-semilarity-typo.png in the S2 evidence folder (outside the repository)",
+        "effect": "the unit is found; no other unit, kind or count changes"
+      }
+    ]
   },
   "ddpm-2006.11239": {
     "source": "https://arxiv.org/pdf/2006.11239v2",
@@ -867,7 +878,13 @@
       [
         2,
         "cont",
-        "new state-of-the-art performance on the Semantic Textual Similarity"
+        "new state-of-the-art performance on the Semantic Textual Semilarity",
+        {
+          "corrected": true,
+          "was": "new state-of-the-art performance on the Semantic Textual Similarity",
+          "ruling": "Transcription error, corrected from the page image. The printed page reads 'Semantic Textual Semilarity' (the paper's own typo); both annotators wrote the correctly spelled word, which the gold's 'as printed' anchor rule excludes. One word changed; the unit's page, kind and extent are unchanged.",
+          "evidence": "300 dpi render of page 2 (PyMuPDF get_pixmap) of the right-column paragraph opening 'new state-of-the-art performance on the Semantic'; S2 evidence hard-cases/sbert-p2-semilarity-typo.png (not committed)."
+        }
       ],
       [
         2,
