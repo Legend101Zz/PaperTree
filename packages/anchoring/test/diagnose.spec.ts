@@ -69,11 +69,11 @@ describe('diagnose — what the residue actually is', () => {
           const r = resolveAnchor(anchor, after);
           if (r.state === 'anchored') continue;
           const block = source.byId.get(
-            (anchor.selectors.find((s) => s.type === 'BlockSelector') as { blockId: string }).blockId,
+            (anchor.selectors.find((s) => s.type === 'BlockSelector') as { blockId: string })
+              .blockId,
           );
           const quote = anchor.selectors.find((s) => s.type === 'TextQuoteSelector') as
-            | { exactNormalised: string }
-            | undefined;
+            { exactNormalised: string } | undefined;
           lines.push(
             `${slug.slice(0, 12).padEnd(12)} ${kind.padEnd(15)} ${r.state.padEnd(11)} tier=${r.tier} ` +
               `reason=${(r.reason ?? '-').padEnd(24)} type=${(block?.type ?? '?').padEnd(14)} ` +

@@ -229,7 +229,11 @@ export interface Anchor {
   readonly subTarget?: SubTarget;
   readonly selectors: readonly Selector[];
   readonly resolution?: ResolutionCache;
-  readonly created: { readonly mode: 'source' | 'guided'; readonly at: string; readonly client: string };
+  readonly created: {
+    readonly mode: 'source' | 'guided';
+    readonly at: string;
+    readonly client: string;
+  };
 }
 
 // ─── the verdict ────────────────────────────────────────────────────────────────────────────────

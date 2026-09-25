@@ -15,13 +15,7 @@ import type { BBox, Polygon } from '@papertree/document-ir';
 import type { IndexedBlock, IndexedDocument } from './document.js';
 import { quadsForRange } from './lineband.js';
 import { normaliseForMatch, snapToWordBoundary } from './quotenorm.js';
-import type {
-  Anchor,
-  ProvenanceClass,
-  Selector,
-  SubTarget,
-  TargetKind,
-} from './types.js';
+import type { Anchor, ProvenanceClass, Selector, SubTarget, TargetKind } from './types.js';
 
 /**
  * Context window, in code points, either side of the quote.
@@ -85,7 +79,11 @@ export function captureAnchor(input: CaptureInput): Anchor {
   const stream = doc.streamCodePoints;
   const exactPoints = stream.slice(streamStart, streamEnd);
   if (exactPoints.length > 0) {
-    const prefixFrom = snapToWordBoundary(stream, Math.max(0, streamStart - CONTEXT_CODE_POINTS), -1);
+    const prefixFrom = snapToWordBoundary(
+      stream,
+      Math.max(0, streamStart - CONTEXT_CODE_POINTS),
+      -1,
+    );
     const suffixTo = snapToWordBoundary(
       stream,
       Math.min(stream.length, streamEnd + CONTEXT_CODE_POINTS),
@@ -228,7 +226,12 @@ function codePointToUtf16(text: string, codePointOffset: number): number {
 function sectionContaining(
   doc: IndexedDocument,
   blockId: string,
-): { heading_block_id: string; level: number; block_ids: readonly string[]; parent_heading_block_id?: string } | null {
+): {
+  heading_block_id: string;
+  level: number;
+  block_ids: readonly string[];
+  parent_heading_block_id?: string;
+} | null {
   for (const section of doc.sections) {
     if (section.block_ids.includes(blockId) || section.heading_block_id === blockId) {
       return section;

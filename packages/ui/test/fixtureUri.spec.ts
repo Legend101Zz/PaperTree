@@ -27,7 +27,9 @@ function everyFixtureUri(): readonly string[] {
   const uris = new Set<string>();
   for (const name of readdirSync(FIXTURE_DIR)) {
     if (!name.endsWith('.json')) continue;
-    for (const match of readFileSync(join(FIXTURE_DIR, name), 'utf8').matchAll(/fixture:\/\/[^"]+/g)) {
+    for (const match of readFileSync(join(FIXTURE_DIR, name), 'utf8').matchAll(
+      /fixture:\/\/[^"]+/g,
+    )) {
       uris.add(match[0]);
     }
   }
@@ -48,7 +50,8 @@ describe('resolveFixtureUri — against the real assets', () => {
       expect(url.startsWith('/fixtures/')).toBe(true);
       // `/fixtures/<slug>/<rest>` is the URL contract; `fixtures/assets/<slug>/<rest>` is where the
       // bytes are. Whatever serves them owns that mapping — this reproduces it to check the tail.
-      if (!existsSync(join(FIXTURE_DIR, 'assets', url.slice('/fixtures/'.length)))) missing.push(uri);
+      if (!existsSync(join(FIXTURE_DIR, 'assets', url.slice('/fixtures/'.length))))
+        missing.push(uri);
     }
     expect(missing).toEqual([]);
   });
@@ -64,9 +67,9 @@ describe('resolveFixtureUri — against the real assets', () => {
   });
 
   it('leaves `@` unescaped — it is a legal path character and every crop filename uses it', () => {
-    expect(resolveFixtureUri('fixture://neural-odes-mathheavy/equations/blk_izoxetonhyvkprln@8x.png')).toContain(
-      '@8x.png',
-    );
+    expect(
+      resolveFixtureUri('fixture://neural-odes-mathheavy/equations/blk_izoxetonhyvkprln@8x.png'),
+    ).toContain('@8x.png');
   });
 });
 

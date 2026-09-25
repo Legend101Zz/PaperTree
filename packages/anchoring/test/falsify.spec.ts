@@ -23,9 +23,7 @@ const STREAM_ID = 'fixture-1.0.0';
 
 function anchorOverFirstParagraph(paper: PaperSource, streamId = STREAM_ID) {
   const doc = indexDocument(paper, streamId);
-  const block = doc.blocks.find(
-    (b) => b.type === 'paragraph' && b.textCodePoints.length > 200,
-  );
+  const block = doc.blocks.find((b) => b.type === 'paragraph' && b.textCodePoints.length > 200);
   if (block === undefined) throw new Error('fixture has no long paragraph');
   return {
     doc,

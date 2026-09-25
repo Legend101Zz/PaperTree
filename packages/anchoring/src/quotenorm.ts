@@ -94,8 +94,7 @@ export function normaliseForMatch(raw: string): NormalisedQuote {
       // Look past the hyphen for a newline, tolerating a CR before the LF.
       let j = i + 1;
       while (j < points.length && NEWLINES.has(points[j] as number)) j += 1;
-      const joinsAWord =
-        j > i + 1 && isLowerAlphabetic(points[j]) && isAlphabetic(points[i - 1]);
+      const joinsAWord = j > i + 1 && isLowerAlphabetic(points[j]) && isAlphabetic(points[i - 1]);
       if (joinsAWord) {
         i = j - 1; // skip the hyphen AND the newline run; the loop's i += 1 lands on `points[j]`
         continue;
@@ -171,10 +170,13 @@ function isWhitespaceCodePoint(point: number): boolean {
 }
 
 /** Snap an offset outward to the nearest word boundary, so context is words and not fragments. */
-export function snapToWordBoundary(points: readonly number[], offset: number, direction: -1 | 1): number {
+export function snapToWordBoundary(
+  points: readonly number[],
+  offset: number,
+  direction: -1 | 1,
+): number {
   let index = Math.max(0, Math.min(points.length, offset));
-  const isWord = (p: number | undefined): boolean =>
-    p !== undefined && !isWhitespaceCodePoint(p);
+  const isWord = (p: number | undefined): boolean => p !== undefined && !isWhitespaceCodePoint(p);
   while (index > 0 && index < points.length && isWord(points[index - 1]) && isWord(points[index])) {
     index += direction;
     if (index <= 0 || index >= points.length) break;

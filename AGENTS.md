@@ -42,7 +42,7 @@ done, the result file said not done, and only the result file was right.
 ### At the START of a session
 
 1. `gh issue list --state open` — read it. Do not create what exists.
-2. Open the epic issue and the result file of the epic *before* yours. Both. They
+2. Open the epic issue and the result file of the epic _before_ yours. Both. They
    disagree more often than you would think, and the disagreement is the finding.
 3. Verify the previous session's claims by **running them**, not by reading them.
    `pnpm test` is not a gate — turbo caches and will reprint a pass it did not execute.
@@ -134,7 +134,7 @@ pnpm install --frozen-lockfile      # without it, turbo is missing
   `services/api/python/pyproject.toml`'s `[dependency-groups] dev`, and a plain `uv sync` does
   not install a non-root member's dev group. `tests/api_support.py` imports Starlette's
   httpx-backed `TestClient`, and all three API test modules import `api_support` — so
-  `test_end_to_end.py`, `test_ir.py` and `test_isolation.py` all fail to *collect* while
+  `test_end_to_end.py`, `test_ir.py` and `test_isolation.py` all fail to _collect_ while
   everything else passes. Three ERRORS at the top of a run that ends in a wall of dots is
   exactly §2's failure class: **a green subset that looks like a green whole.** It cost one
   session a full gate run and another a misdiagnosed red.
@@ -149,7 +149,7 @@ wrong**, and the corrected one changes who has to defend against it.
 
 - **Measured on this box: `/private/tmp/claude-501/-Users-comreton-Desktop/` holds 69
   directories, every one named for a session UUID, 65 of them carrying their own
-  `scratchpad/`.** The path is keyed by *(project, session UUID)*, so **two independent
+  `scratchpad/`.** The path is keyed by _(project, session UUID)_, so **two independent
   sessions cannot collide** no matter how concurrent they are.
 - **What is shared is one session and every subagent it spawns.** A subagent's scratchpad path
   is byte-identical to its parent's, because a subagent inherits the parent's session UUID.
@@ -157,7 +157,7 @@ wrong**, and the corrected one changes who has to defend against it.
   observed it; a subagent cannot observe the other end.)
 - **So the defence belongs to the PARENT.** It must hand each subagent a distinct subdirectory
   and say so in the brief. **A subagent cannot detect the collision** — the path it is given
-  looks private, and *is* private to the session, just not to its siblings. Nothing errors, and
+  looks private, and _is_ private to the session, just not to its siblings. Nothing errors, and
   nothing can.
 - What it cost, twice in #78 Session B: one agent wrote a mutation script at the scratchpad
   root and a sibling silently replaced it with its own. It was caught only because the surviving
@@ -181,7 +181,7 @@ wrong**, and the corrected one changes who has to defend against it.
 - `pnpm test` is cached and not a gate (above).
 - **`migrations.spec`'s 30k-block insert is a wall-clock assertion and fails randomly on
   CI** (#80). Observed on a docs-only PR: `expected 6207 to be less than 5000`, then green
-  on re-run with no change. If your gate goes red *only* there, **re-run before you
+  on re-run with no change. If your gate goes red _only_ there, **re-run before you
   diagnose** — and do not "fix" it by raising the bound, which is how a guard degrades into
   a smoke test one increment at a time.
 - **A stacked PR merges into its stated base branch, not into `main`.** Epic 3's four PRs
@@ -191,7 +191,7 @@ wrong**, and the corrected one changes who has to defend against it.
   `git merge-base --is-ancestor <head> origin/main` afterwards, not by reading PR state.
   **The cause was a repo setting, and it is now fixed (#81): `deleteBranchOnMerge` was
   `false`.** GitHub auto-retargets an open PR when its base branch is **deleted** — so
-  merging the bottom of a stack *and deleting its branch* silently re-points the next PR at
+  merging the bottom of a stack _and deleting its branch_ silently re-points the next PR at
   `main`, and the stack unwinds correctly however fast the merges are clicked. With the
   setting off, no base was ever deleted, no retarget fired, and each PR merged into a branch
   that was about to become garbage. That is why "merge bottom-up and let each merge retarget
@@ -202,10 +202,10 @@ wrong**, and the corrected one changes who has to defend against it.
   guard asserting every recently merged PR's merge commit is an ancestor of `main`
   (`.github/scripts/assert-merged-prs-reached-main.sh`, runnable by hand against any ref).
   Note what the second one cannot do: it runs when something reaches `main`, so a stack that
-  breaks and then goes quiet is caught at the *next* push to `main`, not at the moment of
+  breaks and then goes quiet is caught at the _next_ push to `main`, not at the moment of
   breakage. It converts "silent for a day" into "loud at the next merge".
   Two of Epic 3's merge commits (#68, #69) are **permanently** not ancestors of `main` —
-  #73 remediated the *content* via `epic-3/f3.6-inspector`, but their merge commits live on
+  #73 remediated the _content_ via `epic-3/f3.6-inspector`, but their merge commits live on
   branches that no longer exist. They are allowlisted in that script, by name and with the
   commit that remediated them; the entry only suppresses on a history that actually contains
   that remediation, so it cannot become a mute button.
@@ -213,7 +213,7 @@ wrong**, and the corrected one changes who has to defend against it.
   closed and the `node:crypto` stub in `apps/web` is gone. `blockId`/`contentHash` live behind
   `@papertree/document-ir/identity` and `validatePaper` behind `.../validate` — both import
   `node:crypto` at module scope, and webpack 5 will not resolve a `node:`-prefixed specifier
-  (it is a URI *scheme*, so `resolve.alias` never fires; the error is `UnhandledSchemeError`).
+  (it is a URI _scheme_, so `resolve.alias` never fires; the error is `UnhandledSchemeError`).
   Re-exporting either from `src/index.ts` re-breaks every browser import of the package,
   including one that only wants `polygonExtent`. `test/browser-safety.spec.ts` fails if you do,
   and that is the guard rather than the build. Two paths reached the builtin, not one, and the
@@ -230,7 +230,7 @@ wrong**, and the corrected one changes who has to defend against it.
   `page.mediabox` is the raw `/MediaBox`; `page.cropbox` is **already y-flipped** into
   MuPDF's top-left space about the MediaBox's top edge. Passing `page.cropbox` to
   `normalise_page_frame` intersects a top-left rect with a bottom-left one. The flip is the
-  *identity* whenever the MediaBox starts at `(0,0)` and CropBox equals it — true of **8 of
+  _identity_ whenever the MediaBox starts at `(0,0)` and CropBox equals it — true of **8 of
   8** corpus papers — so nothing catches it, and a wrong page frame was priced at **99.93%**
   of block ids by ADR-001 Amendment 1. Handled in `pdf.py::raw_page_boxes`, guarded by
   `test_geometry_contract.py`. Any future parser, adapter or probe hits this (#47).
@@ -238,13 +238,13 @@ wrong**, and the corrected one changes who has to defend against it.
   `size`" deletes the arXiv margin stamp from every arXiv paper (`h/size` **17.55** on
   resnet, `line["dir"] == (0,-1)`), every rotated matplotlib axis label, and the large
   delimiters of every display equation (`h/size ≈ 1.73` at `dir == (1,0)`). `size` is the
-  *nominal font size*, not the glyph's extent, and a tall box usually means **rotated
+  _nominal font size_, not the glyph's extent, and a tall box usually means **rotated
   text** — the extent across the writing direction is 1.00–1.33× size. Use `Span.line_band`
   (baseline + font metrics, exactly one line high by construction) and keep `Block.text`'s
   bbox truthful (#48).
 - `Section` is `{heading_block_id, level, block_ids}` — no title, no path. The display
   title lives in `blocks[heading_block_id].text`.
-- `Block.text` keeps the *unrepaired* reading permanently by design (deviation D4).
+- `Block.text` keeps the _unrepaired_ reading permanently by design (deviation D4).
   `resolvedText(block, {applyProposed})` is the only sanctioned reader. Never concatenate
   `text` and `repairs` by hand.
 - **The gold set measures; it does not authorise.** 442 regions, 36 pages, 6 of 8 corpus
@@ -252,7 +252,7 @@ wrong**, and the corrected one changes who has to defend against it.
   §1.2's Tier B. Every verdict derived from it carries that n **in the row, not in a
   footnote**. 27% of gold regions are found in the right place and boxed differently
   (IoU 0.25–0.5), and Docling's own absolute F1 against this gold is **0.168–0.308** — a
-  mature converter scoring 0.28 says the boxing conventions differ from *both* parsers,
+  mature converter scoring 0.28 says the boxing conventions differ from _both_ parsers,
   not that both parsers are bad.
 - **Never derive gold from parser output.** `ANNOTATION_GUIDE.md` §1 and
   `benchmarks/README.md` §4.4 both forbid it, for the same reason: it scores an
@@ -275,16 +275,16 @@ wrong**, and the corrected one changes who has to defend against it.
   974 blocks and **25** relations; `cites`, `references`, `defines`, `explains`,
   `result_of`, `visually_associated_with` and `parent_of` appear **zero** times, and
   `prev_id`/`next_id` are **0/974**. A consumer written against `prev_id` returns nothing
-  on every real paper *while passing against a fixture that sets it* — that is #66, and it
+  on every real paper _while passing against a fixture that sets it_ — that is #66, and it
   is the defect class `findings.md` §A records. **Any test for a producer-side field must
   run against a real parse of a corpus paper, not only against a fixture you authored.**
 - **A citation stored as a bare `block_id` does not survive a re-parse.** Measured on
   resnet under `worst_case` with ids re-minted by the real `blockId` function: bare
   `block_id` **3.3%**, `Anchor` **100.0%**. Block ids are content-derived, so any edit to a
-  block retires its id and the link breaks *silently*. `@papertree/anchoring` is
+  block retires its id and the link breaks _silently_. `@papertree/anchoring` is
   TypeScript-only, so Python can currently only return a `SourceRegion` (#72). Store an
   `Anchor`, never a `block_id` — this applies to canvas nodes, saved answers, audit trails
   and replay sync alike.
 - **`OwnerId` is an opaque per-connection handle and must never cross a wire or a
   boundary.** Resolve a token to a `user_id`, call `owner_for(user_id)`, pass the handle
-  inward. Isolation that has never been observed *failing* has not been tested.
+  inward. Isolation that has never been observed _failing_ has not been tested.

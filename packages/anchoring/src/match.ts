@@ -78,7 +78,8 @@ export function search(
     const textChar = text[j - 1] as number;
 
     for (let i = 1; i <= m; i += 1) {
-      const substitute = (prev[i - 1] as number) + ((pattern[i - 1] as number) === textChar ? 0 : 1);
+      const substitute =
+        (prev[i - 1] as number) + ((pattern[i - 1] as number) === textChar ? 0 : 1);
       const deleteFromText = (prev[i] as number) + 1; // consume text, not pattern
       const insertIntoText = (cur[i - 1] as number) + 1; // consume pattern, not text
 
@@ -194,7 +195,8 @@ export function scoreMatch(args: {
       ? 1
       : Math.max(0, 1 - Math.abs(args.matchStart - args.hint) / args.textLength);
   return (
-    (WEIGHT_QUOTE * q + WEIGHT_PREFIX * p + WEIGHT_SUFFIX * s + WEIGHT_POSITION * pos) / WEIGHT_TOTAL
+    (WEIGHT_QUOTE * q + WEIGHT_PREFIX * p + WEIGHT_SUFFIX * s + WEIGHT_POSITION * pos) /
+    WEIGHT_TOTAL
   );
 }
 

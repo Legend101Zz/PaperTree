@@ -19,14 +19,10 @@ export const FIXTURE_SLUGS = [
 
 export type FixtureSlug = (typeof FIXTURE_SLUGS)[number];
 
-const FIXTURE_DIR = fileURLToPath(
-  new URL('../../document-ir/fixtures/', import.meta.url),
-);
+const FIXTURE_DIR = fileURLToPath(new URL('../../document-ir/fixtures/', import.meta.url));
 
 export function loadFixture(slug: FixtureSlug): PaperSource {
-  return JSON.parse(
-    readFileSync(`${FIXTURE_DIR}${slug}.paperir.json`, 'utf8'),
-  ) as PaperSource;
+  return JSON.parse(readFileSync(`${FIXTURE_DIR}${slug}.paperir.json`, 'utf8')) as PaperSource;
 }
 
 export function loadAllFixtures(): { slug: FixtureSlug; paper: PaperSource }[] {

@@ -279,7 +279,8 @@ function readingOrder(paper: PaperSource): IndexedBlockSource[] {
     childrenOf.set(
       parent,
       bucket.toSorted(
-        (a, b) => topOf(a) - topOf(b) || leftOf(a) - leftOf(b) || a.block_id.localeCompare(b.block_id),
+        (a, b) =>
+          topOf(a) - topOf(b) || leftOf(a) - leftOf(b) || a.block_id.localeCompare(b.block_id),
       ),
     );
   }
@@ -305,7 +306,8 @@ function readingOrder(paper: PaperSource): IndexedBlockSource[] {
     const stragglers = paper.blocks
       .filter((b) => b.page_index === page.index && !seen.has(b.block_id))
       .toSorted(
-        (a, b) => topOf(a) - topOf(b) || leftOf(a) - leftOf(b) || a.block_id.localeCompare(b.block_id),
+        (a, b) =>
+          topOf(a) - topOf(b) || leftOf(a) - leftOf(b) || a.block_id.localeCompare(b.block_id),
       );
     for (const block of stragglers) emit(block);
   }
@@ -463,7 +465,10 @@ export function indexDocument(paper: PaperSource, textStreamId: string): Indexed
   };
 
   const pageAtNormalisedOffset = (offset: number): number | null => {
-    const raw = normalisedStream.rawOffsetAt[Math.max(0, Math.min(offset, normalisedStreamCodePoints.length))];
+    const raw =
+      normalisedStream.rawOffsetAt[
+        Math.max(0, Math.min(offset, normalisedStreamCodePoints.length))
+      ];
     if (raw === undefined) return null;
     const block = blockAtStreamOffset(raw);
     return block === null ? null : block.pageIndex;

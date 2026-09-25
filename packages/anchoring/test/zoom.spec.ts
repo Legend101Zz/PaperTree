@@ -79,7 +79,9 @@ describe('anchoring/zoom.spec — centroid drift < 1pt across 50%–400%', () =>
       expect(checked).toBeGreaterThan(0);
       expect(worst).toBeLessThan(DRIFT_TOLERANCE_PT);
       // eslint-disable-next-line no-console
-      console.log(`  zoom  ${slug.padEnd(26)} ${checked} round-trips, worst drift ${worst.toExponential(2)} pt`);
+      console.log(
+        `  zoom  ${slug.padEnd(26)} ${checked} round-trips, worst drift ${worst.toExponential(2)} pt`,
+      );
     });
   }
 
@@ -143,7 +145,9 @@ describe('anchoring/resize.spec — drift < 1pt across 5 viewport widths', () =>
 
       expect(worst).toBeLessThan(DRIFT_TOLERANCE_PT);
       // eslint-disable-next-line no-console
-      console.log(`  resize ${slug.padEnd(26)} worst drift across 5 widths: ${worst.toExponential(2)} pt`);
+      console.log(
+        `  resize ${slug.padEnd(26)} worst drift across 5 widths: ${worst.toExponential(2)} pt`,
+      );
     });
   }
 });

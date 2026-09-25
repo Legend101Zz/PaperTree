@@ -225,9 +225,7 @@ export function resolveAnchor(
   if (maxTier >= Tier.Position && posSel !== undefined && quoteSel !== undefined) {
     const slice = doc.streamCodePoints.slice(posSel.start, posSel.end);
     if (slice.length > 0) {
-      const sliceNormalised = toCodePoints(
-        normaliseSlice(String.fromCodePoint(...slice)),
-      );
+      const sliceNormalised = toCodePoints(normaliseSlice(String.fromCodePoint(...slice)));
       if (codePointsEqual(sliceNormalised, quotePoints)) {
         const block = doc.blockAtStreamOffset(posSel.start);
         if (block !== null) {
@@ -249,16 +247,14 @@ export function resolveAnchor(
 
   // ── T3 — TextQuoteSelector, fuzzy ──
   if (maxTier >= Tier.Quote && quoteSel !== undefined && quotePoints.length > 0) {
-    const hasContext =
-      quoteSel.prefixNormalised.length > 0 && quoteSel.suffixNormalised.length > 0;
+    const hasContext = quoteSel.prefixNormalised.length > 0 && quoteSel.suffixNormalised.length > 0;
     if (quotePoints.length < MIN_QUOTE_WITHOUT_CONTEXT && !hasContext) {
       lastReason = 'quote_too_short_no_context';
     } else {
       const found = searchQuote(doc, quoteSel, quotePoints, posSel);
       if (found !== null && found.score >= SCORE_APPROXIMATE) {
         const rawStart = doc.normalisedStream.rawOffsetAt[found.start] ?? 0;
-        const rawEnd =
-          doc.normalisedStream.rawOffsetAt[found.end] ?? doc.streamCodePoints.length;
+        const rawEnd = doc.normalisedStream.rawOffsetAt[found.end] ?? doc.streamCodePoints.length;
         const blocks = blocksOverlappingStream(doc, rawStart, rawEnd);
         if (blocks.length > 0) {
           const geometry = geometryOf(blocks);
@@ -425,8 +421,7 @@ function searchQuote(
   const haystack = doc.normalisedStreamCodePoints;
   const prefixPoints = toCodePoints(quote.prefixNormalised);
   const suffixPoints = toCodePoints(quote.suffixNormalised);
-  const hint =
-    posSel === undefined ? null : normalisedHintFor(doc, posSel.start);
+  const hint = posSel === undefined ? null : normalisedHintFor(doc, posSel.start);
 
   // Exact pass first, over every occurrence, scored with context.
   let best: QuoteHit | null = null;
@@ -451,7 +446,10 @@ function searchQuote(
       best = { start: at, end: at + quotePoints.length, score };
     }
     // Early exit: exact quote AND an exact context on at least one side.
-    if ((prefixErrors === 0 && prefixPoints.length > 0) || (suffixErrors === 0 && suffixPoints.length > 0)) {
+    if (
+      (prefixErrors === 0 && prefixPoints.length > 0) ||
+      (suffixErrors === 0 && suffixPoints.length > 0)
+    ) {
       return best;
     }
     from = at + 1;
@@ -461,7 +459,12 @@ function searchQuote(
   // Fuzzy pass.
   const match = search(quotePoints, haystack, maxErrorsFor(quotePoints.length));
   if (match === null) return null;
-  const prefixErrors = contextErrors(haystack, prefixPoints, match.start - prefixPoints.length, true);
+  const prefixErrors = contextErrors(
+    haystack,
+    prefixPoints,
+    match.start - prefixPoints.length,
+    true,
+  );
   const suffixErrors = contextErrors(haystack, suffixPoints, match.end, false);
   const score = scoreMatch({
     quoteErrors: match.errors,
@@ -612,8 +615,7 @@ function nearestBlock(doc: IndexedDocument, shape: ShapeSelector): IndexedBlock 
     const cy = (block.bbox[1] + block.bbox[3]) / 2;
     const distance = Math.hypot(cx - tcx, cy - tcy);
     const area = areaOf(block.bbox);
-    const areaRatio =
-      tArea <= 0 || area <= 0 ? 1 : Math.max(tArea, area) / Math.min(tArea, area);
+    const areaRatio = tArea <= 0 || area <= 0 ? 1 : Math.max(tArea, area) / Math.min(tArea, area);
     const key = distance * Math.min(areaRatio, 16);
     if (key < bestKey) {
       bestKey = key;
