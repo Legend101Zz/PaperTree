@@ -146,11 +146,19 @@ requires_corpus = pytest.mark.skipif(
 #                    0.9333 -> 0.9394. The new wrong pair is (r190 footnote, r192 equation) -
 #                    the same footnote already misplaced against three paragraphs.
 
+# S2 (#141) ADDS `reading_order_pairs` (agreeing, scored - pooled over the paper) and
+# `zero_pair_pages` to every row, measured at 7051862 (`s2/parse-robustness`) where no parser
+# behaviour on these six papers differs from 18f69ec. Pooled over the six: RAW 235/261 = 0.900 with
+# 11 of 36 pages scoring no pair - the architecture judge's re-run exactly. Every later S2 commit
+# that moves a pin records what moved and why beside the code that moved it.
+
 RAW: dict[str, dict[str, Any]] = {
     "a3c-algorithmheavy": {
         "macro_f1": 0.3932,
         "macro_f1_strict": 0.35,
         "reading_order": 0.6667,
+        "reading_order_pairs": [4, 4],
+        "zero_pair_pages": 2,
         "caption_correct": 4,
         "caption_false": 0,
         "caption_gold": 7,
@@ -167,6 +175,8 @@ RAW: dict[str, dict[str, Any]] = {
         "macro_f1": 0.2899,
         "macro_f1_strict": 0.0941,
         "reading_order": 0.3889,
+        "reading_order_pairs": [35, 38],
+        "zero_pair_pages": 2,
         "caption_correct": 1,
         "caption_false": 0,
         "caption_gold": 1,
@@ -183,6 +193,8 @@ RAW: dict[str, dict[str, Any]] = {
         "macro_f1": 0.3523,
         "macro_f1_strict": 0.2098,
         "reading_order": 0.6992,
+        "reading_order_pairs": [54, 67],
+        "zero_pair_pages": 1,
         "caption_correct": 4,
         "caption_false": 0,
         "caption_gold": 6,
@@ -199,6 +211,8 @@ RAW: dict[str, dict[str, Any]] = {
         "macro_f1": 0.3429,
         "macro_f1_strict": 0.1817,
         "reading_order": 0.2222,
+        "reading_order_pairs": [7, 9],
+        "zero_pair_pages": 4,
         "caption_correct": 2,
         "caption_false": 1,
         "caption_gold": 10,
@@ -215,6 +229,8 @@ RAW: dict[str, dict[str, Any]] = {
         "macro_f1": 0.2175,
         "macro_f1_strict": 0.1183,
         "reading_order": 0.6111,
+        "reading_order_pairs": [39, 40],
+        "zero_pair_pages": 2,
         "caption_correct": 0,
         "caption_false": 0,
         "caption_gold": 5,
@@ -231,6 +247,8 @@ RAW: dict[str, dict[str, Any]] = {
         "macro_f1": 0.3257,
         "macro_f1_strict": 0.1588,
         "reading_order": 0.9288,
+        "reading_order_pairs": [96, 103],
+        "zero_pair_pages": 0,
         "caption_correct": 3,
         "caption_false": 0,
         "caption_gold": 10,
@@ -250,6 +268,8 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "macro_f1": 0.3932,
         "macro_f1_strict": 0.35,
         "reading_order": 0.6667,
+        "reading_order_pairs": [4, 4],
+        "zero_pair_pages": 2,
         "caption_correct": 4,
         "caption_false": 0,
         "caption_gold": 7,
@@ -266,6 +286,8 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "macro_f1": 0.2832,
         "macro_f1_strict": 0.0997,
         "reading_order": 0.3889,
+        "reading_order_pairs": [35, 37],
+        "zero_pair_pages": 3,
         "caption_correct": 1,
         "caption_false": 0,
         "caption_gold": 1,
@@ -282,6 +304,8 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "macro_f1": 0.3523,
         "macro_f1_strict": 0.2098,
         "reading_order": 0.6992,
+        "reading_order_pairs": [54, 67],
+        "zero_pair_pages": 1,
         "caption_correct": 4,
         "caption_false": 0,
         "caption_gold": 6,
@@ -298,6 +322,8 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "macro_f1": 0.3429,
         "macro_f1_strict": 0.1817,
         "reading_order": 0.2222,
+        "reading_order_pairs": [7, 9],
+        "zero_pair_pages": 4,
         "caption_correct": 2,
         "caption_false": 1,
         "caption_gold": 10,
@@ -314,6 +340,8 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "macro_f1": 0.2137,
         "macro_f1_strict": 0.1191,
         "reading_order": 0.3889,
+        "reading_order_pairs": [61, 66],
+        "zero_pair_pages": 2,
         "caption_correct": 0,
         "caption_false": 0,
         "caption_gold": 5,
@@ -330,6 +358,8 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "macro_f1": 0.3184,
         "macro_f1_strict": 0.1561,
         "reading_order": 0.9667,
+        "reading_order_pairs": [87, 89],
+        "zero_pair_pages": 0,
         "caption_correct": 1,
         "caption_false": 2,
         "caption_gold": 10,
@@ -408,6 +438,15 @@ def _measure(paper: str, document: dict[str, Any], pages: list[dict[str, Any]]) 
         "macro_f1": round(score.macro_f1, 4),
         "macro_f1_strict": round(score.macro_f1_strict, 4),
         "reading_order": round(score.mean_reading_order, 4),
+        # S2 (#141): the POOLED pairs and the pages that score none, beside the per-page mean.
+        # The mean counts a zero-pair page as 0.0, the same as a page with every pair wrong; the
+        # slice-plan merge rule reads the pooled figure, so it is pinned here to move in the same
+        # diff as whatever moves it.
+        "reading_order_pairs": [
+            sum(a for a, _ in score.reading_order_pairs),
+            sum(t for _, t in score.reading_order_pairs),
+        ],
+        "zero_pair_pages": score.zero_pair_pages,
         "caption_correct": score.caption_correct,
         "caption_false": score.caption_false,
         "caption_gold": score.caption_links_gold,

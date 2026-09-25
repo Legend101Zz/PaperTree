@@ -39,6 +39,7 @@ __all__ = [
     "iou",
     "match_regions",
     "reading_order_accuracy",
+    "reading_order_counts",
     "vector_figure_hits",
     "vector_figure_recall",
 ]
@@ -144,21 +145,20 @@ def element_detection(
     )
 
 
-def reading_order_accuracy(
+def reading_order_counts(
     predicted: list[dict[str, Any]], gold: list[dict[str, Any]], threshold: float = IOU_MATCH
-) -> float:
-    """§4.1: PAIRWISE accuracy over gold BODY-FLOW regions.
+) -> tuple[int, int]:
+    """§4.1's pairwise reading order as COUNTS: (agreeing pairs, scored pairs) on one page.
 
-    Pairwise because it "degrades gracefully when a parser misses regions": a parser that finds
-    8 of 10 still scores on the 28 pairs it can express, where a rank correlation would be
-    undefined or wildly punished.
-
-    Only regions with a non-null `reading_order` participate - §2 gives captions, footnotes and
-    furniture `null` precisely so a parser is not punished for correctly excluding them.
+    Only gold BODY-FLOW regions (non-null `reading_order`) participate - §2 gives captions,
+    footnotes and furniture `null` so a parser is not punished for excluding them - and a pair
+    is scored only when BOTH its regions matched a prediction, which is what makes the metric
+    "degrade gracefully when a parser misses regions". A page on which fewer than two regions
+    matched scores NO pair at all: `(0, 0)`, which is not the same thing as `(0, n)`.
     """
     body = [g for g in gold if g.get("reading_order") is not None]
     if len(body) < 2:
-        return 0.0
+        return 0, 0
 
     pairs = dict(_match(predicted, body, threshold))
     gold_to_predicted = {gi: pi for pi, gi in pairs.items()}
@@ -171,6 +171,25 @@ def reading_order_accuracy(
         gold_before = body[left]["reading_order"] < body[right]["reading_order"]
         predicted_before = gold_to_predicted[left] < gold_to_predicted[right]
         agree += gold_before == predicted_before
+    return agree, total
+
+
+def reading_order_accuracy(
+    predicted: list[dict[str, Any]], gold: list[dict[str, Any]], threshold: float = IOU_MATCH
+) -> float:
+    """§4.1: PAIRWISE accuracy over gold BODY-FLOW regions, for one page.
+
+    Pairwise because it "degrades gracefully when a parser misses regions": a parser that finds
+    8 of 10 still scores on the 28 pairs it can express, where a rank correlation would be
+    undefined or wildly punished.
+
+    A page with NO scored pair returns 0.0 - the same number as a page on which every pair is
+    wrong. `reading_order_counts` keeps the difference, and `scoring.PaperScore` reports the
+    pooled rate and the zero-pair page count beside the per-page mean for exactly that reason
+    (S2, #141: 11 of the repo gold's 36 pages score no pair, which is what drags a per-page mean
+    of 0.586 under a pooled 0.900).
+    """
+    agree, total = reading_order_counts(predicted, gold, threshold)
     return agree / total if total else 0.0
 
 
