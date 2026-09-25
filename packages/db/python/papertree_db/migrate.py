@@ -1,26 +1,39 @@
-"""Forward-only migration runner — the Python twin of ``packages/db/src/migrate.ts``.
+"""Forward-only migration runner — the ONE runner for ``infrastructure/migrations/*.sql``.
 
-Both runners read the SAME directory of plain ``.sql`` files, so the two languages cannot
-end up on different schemas. The only duplicated thing is this bookkeeping; the checksums
-recorded by either runner are byte-identical, which ``test_migrations.py`` asserts.
+There was a TypeScript twin reading the same directory; it was deleted in the reader release's S0
+(ADR-002 §5, R5) because it had no importer and doubled every schema change, and it went BEFORE
+``0005_reader_release.sql`` landed so that no second runner ever applied 0005.
+
+THE PRE-MIGRATION BACKUP (contracts.md §6.1, ADR-002 §6.1). Some migrations rebuild tables that
+hold user data — 0005 rebuilds ``highlights`` and ``anchors``. Migrations are forward-only, so the
+only rollback is a copy of the file taken BEFORE they run: when a version in
+``BACKUP_BEFORE_VERSIONS`` is pending on a database that already has an earlier schema, the whole
+database is copied with the SQLite backup API to ``<db>.pre-NNNN.bak`` first. A brand-new database
+(nothing applied yet) and an in-memory one are not backed up — there is nothing to lose, and
+nowhere beside ``:memory:`` to put it.
 """
 
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Final
 
 from .errors import MigrationError
 
 MIGRATION_FILENAME = re.compile(r"^(\d{4})_([a-z0-9_]+)\.sql$")
 
 # A bare ';' split cuts `CREATE TRIGGER ... BEGIN ... END;` in half, so statements are
-# separated by an explicit delimiter line. Must match STATEMENT_SEPARATOR in migrate.ts.
+# separated by an explicit delimiter line.
 STATEMENT_SEPARATOR = re.compile(r"^\s*--;;\s*$", re.MULTILINE)
+
+#: Versions that rebuild user-owned tables, and so are preceded by a backup of the whole file.
+BACKUP_BEFORE_VERSIONS: Final = frozenset({5})
 
 _RECORD_TABLE = """
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -53,6 +66,8 @@ class MigrationResult:
     applied: tuple[int, ...]
     #: Every version now recorded in the database, ascending.
     head: tuple[int, ...]
+    #: Backups THIS call wrote before applying (``<db>.pre-NNNN.bak``). Empty on a re-run.
+    backups: tuple[Path, ...] = ()
 
 
 def find_migrations_dir(start_from: Path | None = None) -> Path:
@@ -123,11 +138,48 @@ def applied_migrations(conn: sqlite3.Connection) -> tuple[AppliedMigration, ...]
     return tuple(AppliedMigration(int(r[0]), str(r[1]), str(r[2]), str(r[3])) for r in rows)
 
 
+def backup_path_for(database_file: Path, version: int) -> Path:
+    """``papertree.sqlite`` -> ``papertree.sqlite.pre-0005.bak``."""
+    return database_file.with_name(f"{database_file.name}.pre-{version:04d}.bak")
+
+
+def _main_database_file(conn: sqlite3.Connection) -> Path | None:
+    """The file behind ``main``, or None for ``:memory:`` / a temporary database."""
+    previous = conn.row_factory
+    conn.row_factory = None
+    try:
+        rows = conn.execute("PRAGMA database_list").fetchall()
+    finally:
+        conn.row_factory = previous
+    for _seq, name, file in rows:
+        if name == "main":
+            return Path(file) if file else None
+    return None
+
+
+def _backup(conn: sqlite3.Connection, target: Path) -> None:
+    """A consistent copy of the whole database through the SQLite backup API.
+
+    Written to ``<target>.tmp`` and renamed into place, so a crash mid-copy never leaves a
+    truncated file wearing the name of a backup.
+    """
+    partial = target.with_name(target.name + ".tmp")
+    partial.unlink(missing_ok=True)
+    copy = sqlite3.connect(partial)
+    try:
+        conn.backup(copy)
+    finally:
+        copy.close()
+    os.replace(partial, target)
+
+
 def migrate(conn: sqlite3.Connection, directory: Path | None = None) -> MigrationResult:
-    """Applies every unapplied migration in order, each in its own transaction.
+    """Applies every unapplied migration in order, each in ONE transaction of its own.
 
     Re-running is a no-op. An already-applied migration whose file has since changed is an
-    ERROR, not a silent skip: forward-only means the file is immutable once shipped.
+    ERROR, not a silent skip: forward-only means the file is immutable once shipped. Before a
+    pending version in ``BACKUP_BEFORE_VERSIONS`` touches a database that already holds an
+    earlier schema, the file is backed up (see the module docstring).
     """
     migrations = load_migrations(directory)
     already = {m.version: m for m in applied_migrations(conn)}
@@ -141,6 +193,16 @@ def migrate(conn: sqlite3.Connection, directory: Path | None = None) -> Migratio
                 f"Migrations are forward-only; add a new numbered file instead of editing "
                 f"this one."
             )
+
+    pending = [m.version for m in migrations if m.version not in already]
+    backups: list[Path] = []
+    if already and BACKUP_BEFORE_VERSIONS.intersection(pending):
+        database_file = _main_database_file(conn)
+        if database_file is not None:
+            for version in sorted(BACKUP_BEFORE_VERSIONS.intersection(pending)):
+                target = backup_path_for(database_file, version)
+                _backup(conn, target)
+                backups.append(target)
 
     applied: list[int] = []
     for migration in migrations:
@@ -166,4 +228,8 @@ def migrate(conn: sqlite3.Connection, directory: Path | None = None) -> Migratio
         conn.execute("COMMIT")
         applied.append(migration.version)
 
-    return MigrationResult(applied=tuple(applied), head=tuple(m.version for m in migrations))
+    return MigrationResult(
+        applied=tuple(applied),
+        head=tuple(m.version for m in migrations),
+        backups=tuple(backups),
+    )

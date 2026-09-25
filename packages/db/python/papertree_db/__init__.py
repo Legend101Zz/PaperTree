@@ -3,8 +3,8 @@
 Two guarantees, and nothing else:
 
   1. The schema lives in ``infrastructure/migrations/*.sql`` and is applied forward-only by
-     ``migrate.py``, the ONE runner (the TypeScript twin was deleted in the reader release's S0;
-     ADR-002 §5, R5).
+     ``migrate.py``, the ONE runner (the TypeScript twin was deleted in the reader release's S0,
+     before ``0005_reader_release.sql`` landed; ADR-002 §5, R5).
   2. Every query helper structurally requires an owner. Omitting it raises (and mypy
      rejects it); forging one raises. See ``database.py``'s module docstring.
 
@@ -31,7 +31,23 @@ from .database import (
     open_database,
     to_vector_blob,
 )
-from .errors import MigrationError, OwnershipError
+from .errors import (
+    GenerationNotFound,
+    HighlightConflict,
+    HighlightRejectCode,
+    HighlightRejected,
+    MigrationError,
+    OwnershipError,
+    PaperNotFound,
+)
+from .highlights import (
+    AnchorIn,
+    AnchorRow,
+    HighlightRow,
+    HighlightWithAnchors,
+    ResolutionIn,
+    ResolutionRow,
+)
 from .ids import (
     AnchorId,
     BlockId,
@@ -51,6 +67,7 @@ from .migrate import (
     Migration,
     MigrationResult,
     applied_migrations,
+    backup_path_for,
     find_migrations_dir,
     load_migrations,
     migrate,
@@ -61,6 +78,8 @@ __all__ = [
     "MAX_DERIVATION_DEPTH",
     "VECTOR_DIMENSIONS",
     "AnchorId",
+    "AnchorIn",
+    "AnchorRow",
     "AppliedMigration",
     "BlockId",
     "BoardRow",
@@ -70,7 +89,13 @@ __all__ = [
     "DerivationId",
     "EdgeRow",
     "Generation",
+    "GenerationNotFound",
+    "HighlightConflict",
     "HighlightId",
+    "HighlightRejectCode",
+    "HighlightRejected",
+    "HighlightRow",
+    "HighlightWithAnchors",
     "LibraryRow",
     "Migration",
     "MigrationError",
@@ -80,12 +105,16 @@ __all__ = [
     "OwnershipError",
     "PageId",
     "PaperId",
+    "PaperNotFound",
     "PaperTreeDb",
+    "ResolutionIn",
+    "ResolutionRow",
     "Row",
     "RunGrant",
     "StaleVersion",
     "UsageTotals",
     "applied_migrations",
+    "backup_path_for",
     "find_migrations_dir",
     "generation",
     "load_migrations",

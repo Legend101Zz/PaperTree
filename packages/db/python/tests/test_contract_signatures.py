@@ -37,6 +37,23 @@ CONTRACT: dict[str, list[str]] = {
     "set_latest_job": ["owner", "paper_id", "job_id"],
     "next_generation": ["owner", "paper_id"],
     "list_library": ["owner"],
+    # highlights.py (S0 -> S4)
+    "create_highlight": [
+        "owner",
+        "paper_id",
+        "*",
+        "highlight_id",
+        "color",
+        "note",
+        "created_generation",
+        "anchors",
+        "resolutions",
+    ],
+    "list_highlights": ["owner", "paper_id", "generation"],
+    "update_highlight": ["owner", "paper_id", "highlight_id", "*", "color", "note"],
+    "delete_highlight": ["owner", "paper_id", "highlight_id"],
+    "put_resolutions": ["owner", "paper_id", "generation", "items"],
+    "upgrade_legacy_anchor": ["owner", "paper_id", "anchor_id", "anchor_json"],
     # ai.py (S5)
     "create_run": [
         "owner",
@@ -96,6 +113,9 @@ PROPOSED: dict[str, list[str]] = {
     "patch_edge": ["owner", "board_id", "edge_id", "fields"],
     "delete_edge": ["owner", "board_id", "edge_id"],
     "patch_board": ["owner", "board_id", "fields"],
+    # Additive, implemented in S0 because the highlight routes need them.
+    "get_highlight": ["owner", "paper_id", "highlight_id", "generation"],
+    "owned_paper": ["owner", "paper_id"],
 }
 
 #: THE LEDGER. Delete a line in the PR that implements the method.

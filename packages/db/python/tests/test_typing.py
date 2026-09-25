@@ -24,14 +24,21 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from papertree_db import DatabaseCore, OwnershipError, PaperTreeDb, generation, open_database
+from papertree_db import (
+    AnchorIn,
+    DatabaseCore,
+    OwnershipError,
+    PaperTreeDb,
+    generation,
+    open_database,
+)
 from papertree_db.ai import AiMixin
 from papertree_db.canvas import CanvasMixin
 from papertree_db.highlights import HighlightsMixin
 from papertree_db.ids import BlockId, DerivationId, OwnerId, PaperId
 from papertree_db.library import LibraryMixin
 
-from .fixtures import make_paper
+from .fixtures import block_id_for, make_anchor, make_paper
 
 GEN = generation(1)
 
@@ -69,7 +76,7 @@ def test_an_owner_whose_constructor_was_BYPASSED_authorises_nothing(db: PaperTre
     victim = db.create_user("victim@papertree.test").owner
     paper_id = PaperId("ppr_000000000000000000000FORGE")
     db.put_paper(victim, make_paper(paper_id, "sha256:" + "7" * 64, 1, 2))
-    highlight_id = db.create_highlight(victim, paper_id, GEN, "yellow", "victim private note")
+    highlight_id = _highlight(db, victim, paper_id, "7", "victim private note")
 
     forged = object.__new__(OwnerId)  # never calls __init__, still isinstance(OwnerId)
     object.__setattr__(forged, "_handle", victim.handle)
@@ -78,14 +85,34 @@ def test_an_owner_whose_constructor_was_BYPASSED_authorises_nothing(db: PaperTre
     with pytest.raises(OwnershipError):
         _ = forged.handle
     with pytest.raises(OwnershipError):
-        db.get_highlight(forged, highlight_id)
+        db.get_highlight(forged, paper_id, highlight_id, 1)
     with pytest.raises(OwnershipError):
-        db.update_highlight_note(forged, highlight_id, "pwned")
+        db.update_highlight(forged, paper_id, highlight_id, note="pwned")
     with pytest.raises(OwnershipError):
         db.list_papers(forged)
 
-    row = db.get_highlight(victim, highlight_id)
-    assert row is not None and row["note"] == "victim private note"
+    row = db.get_highlight(victim, paper_id, highlight_id, 1)
+    assert row is not None and row.note == "victim private note"
+
+
+def _highlight(
+    db: PaperTreeDb, owner: OwnerId, paper_id: PaperId, hash_char: str, note: str | None = None
+) -> str:
+    highlight_id = "hl_" + "0" * 22 + "TYPE"
+    anchor = make_anchor(
+        paper_id, "sha256:" + hash_char * 64, block_id_for(0), "anc_" + "0" * 22 + "TYPE"
+    )
+    db.create_highlight(
+        owner,
+        paper_id,
+        highlight_id=highlight_id,
+        color="amber",
+        note=note,
+        created_generation=1,
+        anchors=[AnchorIn(anchor)],
+        resolutions=[],
+    )
+    return highlight_id
 
 
 def test_omitting_the_owner_does_not_typecheck_and_does_not_run(db: PaperTreeDb) -> None:
@@ -97,7 +124,7 @@ def test_omitting_the_owner_does_not_typecheck_and_does_not_run(db: PaperTreeDb)
     with pytest.raises(TypeError):
         db.list_blocks_in_doc_order(paper_id, GEN)  # type: ignore[call-arg]
     with pytest.raises(TypeError):
-        db.resolve_highlights(paper_id, GEN)  # type: ignore[call-arg]
+        db.list_highlights(paper_id, GEN)  # type: ignore[call-arg]
     with pytest.raises(TypeError):
         db.search_block_vectors(paper_id, GEN, [0.0] * 768, 5)  # type: ignore[call-arg]
 
@@ -131,13 +158,16 @@ def test_the_write_vectors_from_findings_f1_and_f3_do_not_typecheck(db: PaperTre
     owner = db.create_user("typing2@papertree.test").owner
     paper_id = PaperId("ppr_0000000000000000000TYPING2")
     db.put_paper(owner, make_paper(paper_id, "sha256:" + "8" * 64, 1, 2))
-    highlight_id = db.create_highlight(owner, paper_id, GEN, "yellow")
+    highlight_id = _highlight(db, owner, paper_id, "8")
 
     with pytest.raises(TypeError):
         # §F1: update by id alone, no owner filter.
-        db.update_highlight_note(highlight_id, "pwned")  # type: ignore[call-arg]
+        db.update_highlight(highlight_id, note="pwned")  # type: ignore[call-arg,arg-type]
     with pytest.raises(TypeError):
         db.delete_highlight(highlight_id)  # type: ignore[call-arg,arg-type]
+    with pytest.raises(TypeError):
+        # 0005's version of the same vector: no paper either, so no path check.
+        db.delete_highlight(owner, highlight_id)  # type: ignore[call-arg]
     with pytest.raises(TypeError):
         # §F3: walk an explanation tree without an owner.
         db.derivation_tree(DerivationId("drv_x"))  # type: ignore[call-arg,arg-type]

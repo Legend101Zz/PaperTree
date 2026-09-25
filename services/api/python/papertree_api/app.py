@@ -23,7 +23,9 @@ The surface, against #74's table:
     GET    /papers/{id}/assets/{kind}/{block_id}   figure and equation crops
     POST   /papers/{id}/ask           the grounded agent turn (#76)  <- see ask.py
     GET    /jobs/{id}                  parse status - makes the library's PENDING state real
-    GET|POST|PATCH|DELETE  /papers/{id}/highlights[/{highlight_id}]   anchors included
+    GET|POST  /papers/{id}/highlights          contracts.md §2.4 on 0005's schema (S0)
+    PATCH|DELETE  /papers/{id}/highlights/{highlight_id}
+    PUT   /papers/{id}/highlights/resolutions
 
 `OwnerId` never appears in a request or a response. See `deps.py`.
 """
@@ -31,19 +33,29 @@ The surface, against #74's table:
 from __future__ import annotations
 
 import hashlib
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
-from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile, status
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from papertree_agent_tools import Transport
-from papertree_db import BlockId, HighlightId, PaperId, generation
+from papertree_db import (
+    AnchorIn,
+    BlockId,
+    GenerationNotFound,
+    HighlightRejected,
+    HighlightWithAnchors,
+    PaperId,
+    PaperNotFound,
+    ResolutionIn,
+    generation,
+)
 from papertree_document_worker.crops import CropStore
 from papertree_document_worker.job import enqueue_parse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from .ask import mount_ask
-from .deps import AuthConnDep, CallerDep, SettingsDep
+from .deps import AuthConnDep, Caller, CallerDep, SettingsDep
 from .deps import promoted_or_404 as _promoted
 from .ir import block_location, paper_document
 from .security import create_session, hash_password, now_iso, revoke_session, verify_password
@@ -77,16 +89,6 @@ class Upload(BaseModel):
     #: `parse:{source_hash}:{paper_id}`, so the second upload returns the FIRST job rather than
     #: parsing again. The client needs to be able to tell those apart.
     created: bool
-
-
-class HighlightIn(BaseModel):
-    color: str = Field(min_length=1, max_length=32)
-    note: str | None = None
-    anchors: list[dict[str, Any]] = Field(default_factory=list)
-
-
-class NoteIn(BaseModel):
-    note: str | None = None
 
 
 # ─── helpers ──────────────────────────────────────────────────────────────────────────────────
@@ -432,74 +434,283 @@ def _mount_papers(app: FastAPI) -> None:
         return Response(payload, media_type="image/png")
 
 
-# ─── highlights ───────────────────────────────────────────────────────────────────────────────
+# ─── highlights (contracts.md §2.4) ───────────────────────────────────────────────────────────
+#
+# SELF-CONTAINED ON PURPOSE: wave 2 (S0b) moves this block into `routers/highlights.py` unchanged
+# and swaps the local models for `schemas.py`'s. Until then it carries its own request models, its
+# own error envelope (`{detail, code, retryable}`, contracts.md §0) and its own body parsing, so
+# that "422 validation_failed", "never 500 on a bad body" and "never a partial write" hold for
+# these routes without a global exception handler (that is S0b's).
+
+#: contracts.md §2.4.
+HighlightColor = Literal["amber", "green", "blue", "pink", "purple"]
+
+
+class _AnchorItem(BaseModel):
+    anchor: dict[str, Any]
+
+
+class _ResolutionItem(BaseModel):
+    anchor_id: str = Field(min_length=1)
+    tier: int = Field(ge=0, le=6)
+    state: Literal["anchored", "approximate", "orphan"]
+    block_ids: list[str]
+    score: float | None = Field(default=None, ge=0, le=1)
+    reason: str | None = None
+    resolver_version: str = Field(min_length=1)
+
+
+class _CreateResolution(_ResolutionItem):
+    generation: int = Field(ge=1)
+
+
+class _HighlightCreate(BaseModel):
+    highlight_id: str = Field(pattern=r"^[a-z]{2,4}_[0-9A-Za-z-]{8,64}$")
+    color: HighlightColor
+    note: str | None = None
+    anchors: list[_AnchorItem] = Field(min_length=1, max_length=64)
+    resolutions: list[_CreateResolution] = Field(default_factory=list)
+
+
+class _HighlightPatch(BaseModel):
+    color: HighlightColor | None = None
+    note: str | None = None
+
+
+class _PutItem(_ResolutionItem):
+    upgraded_anchor: dict[str, Any] | None = None
+
+
+class _ResolutionsPut(BaseModel):
+    generation: int = Field(ge=1)
+    items: list[_PutItem] = Field(max_length=500)
+
+
+class _Refused(Exception):
+    """A contract error response, raised inside a handler and rendered by `_refusal`."""
+
+    def __init__(self, status_code: int, code: str, detail: str) -> None:
+        super().__init__(detail)
+        self.status_code = status_code
+        self.code = code
+        self.detail = detail
+
+
+def _refusal(exc: _Refused) -> JSONResponse:
+    return JSONResponse(
+        {"detail": exc.detail, "code": exc.code, "retryable": False},
+        status_code=exc.status_code,
+    )
+
+
+async def _parse_body[M: BaseModel](request: Request, model: type[M]) -> M:
+    """The body as `model`, or 422 `validation_failed` naming the first failing field."""
+    raw = await request.body()
+    try:
+        return model.model_validate_json(raw)
+    except ValidationError as exc:
+        first = exc.errors(include_url=False)[0]
+        where = ".".join(str(part) for part in first["loc"]) or "body"
+        raise _Refused(422, "validation_failed", f"{where}: {first['msg']}") from exc
+
+
+def _gen_param(request: Request) -> int | None:
+    raw = request.query_params.get("gen")
+    if raw is None:
+        return None
+    if not raw.isdigit() or int(raw) < 1:
+        raise _Refused(422, "validation_failed", "gen: must be a positive integer")
+    return int(raw)
+
+
+def _owned_or_404(call: Caller, paper_id: str) -> None:
+    if call.db.owned_paper(call.db_owner, PaperId(paper_id)) is None:
+        raise _Refused(404, "not_found", "no such paper")
+
+
+def _highlight_wire(highlight: HighlightWithAnchors) -> dict[str, Any]:
+    """contracts.md §2.4 `Highlight`. Built field by field: nothing here can carry `owner_id`."""
+    return {
+        "highlight_id": highlight.highlight_id,
+        "color": highlight.color,
+        "note": highlight.note,
+        "created_generation": highlight.created_generation,
+        "created_at": highlight.created_at,
+        "updated_at": highlight.updated_at,
+        "anchors": [
+            {
+                "anchor_id": anchor.anchor_id,
+                "ordinal": anchor.ordinal,
+                "anchor": anchor.anchor,
+                "resolution": None
+                if anchor.resolution is None
+                else {
+                    "generation": anchor.resolution.generation,
+                    "tier": anchor.resolution.tier,
+                    "state": anchor.resolution.state,
+                    "block_ids": list(anchor.resolution.block_ids),
+                    "score": anchor.resolution.score,
+                    "reason": anchor.resolution.reason,
+                    "resolver_version": anchor.resolution.resolver_version,
+                },
+            }
+            for anchor in highlight.anchors
+        ],
+    }
+
+
+def _db_refusal(exc: Exception) -> _Refused:
+    """The data layer's typed refusals, as contract errors. Anything else is not a bad body."""
+    if isinstance(exc, PaperNotFound):
+        return _Refused(404, "not_found", "no such paper")
+    if isinstance(exc, GenerationNotFound):
+        return _Refused(409, "generation_not_found", str(exc))
+    if isinstance(exc, HighlightRejected):
+        return _Refused(422, exc.code, exc.detail)
+    raise exc
 
 
 def _mount_highlights(app: FastAPI) -> None:
     @app.get("/papers/{paper_id}/highlights")
-    async def list_highlights(
-        call: CallerDep, paper_id: str, gen: Annotated[int | None, Query()] = None
-    ) -> list[dict[str, Any]]:
-        g = generation(_promoted(call, paper_id, gen))
-        # `resolve_highlights` is the pre-joined highlight-with-anchors view; a caller that wanted
-        # to rebuild that join client-side would be reimplementing a query that exists.
-        return [
-            _public(row) for row in call.db.resolve_highlights(call.db_owner, PaperId(paper_id), g)
-        ]
+    async def list_highlights(call: CallerDep, paper_id: str, request: Request) -> Response:
+        """Every highlight, INCLUDING orphans and legacy rows, with each anchor's cache entry for
+        `?gen=` (default: the promoted generation; none promoted means every resolution is null)."""
+        try:
+            gen = _gen_param(request)
+            _owned_or_404(call, paper_id)
+            if gen is None:
+                gen = call.db.promoted_generation(call.db_owner, PaperId(paper_id))
+            rows = call.db.list_highlights(call.db_owner, PaperId(paper_id), gen)
+        except _Refused as refused:
+            return _refusal(refused)
+        return JSONResponse([_highlight_wire(row) for row in rows])
 
-    @app.post("/papers/{paper_id}/highlights", status_code=status.HTTP_201_CREATED)
-    async def create_highlight(
-        call: CallerDep,
-        paper_id: str,
-        body: HighlightIn,
-        gen: Annotated[int | None, Query()] = None,
-    ) -> dict[str, Any]:
-        g = generation(_promoted(call, paper_id, gen))
-        highlight_id = call.db.create_highlight(
-            call.db_owner, PaperId(paper_id), g, color=body.color, note=body.note
-        )
-        # Anchors are created in the SAME request, never in a follow-up. A highlight with no anchor
-        # is a highlight that cannot be resolved, and #72's measurement is the reason to insist:
-        # a bare block_id survives a re-parse 3.3% of the time and an Anchor 100%.
-        for anchor in body.anchors:
-            call.db.create_anchor(
-                call.db_owner,
-                highlight_id,
-                PaperId(paper_id),
-                g,
-                BlockId(str(anchor["block_id"])),
-                int(anchor["tier"]),
-                anchor["polygon"],
-                anchor["bbox"],
-                char_start=anchor.get("char_start"),
-                char_end=anchor.get("char_end"),
-                text_quote=anchor.get("text_quote"),
-                quote_prefix=anchor.get("quote_prefix"),
-                quote_suffix=anchor.get("quote_suffix"),
-                content_hash=anchor.get("content_hash"),
+    @app.post("/papers/{paper_id}/highlights")
+    async def create_highlight(call: CallerDep, paper_id: str, request: Request) -> Response:
+        """201 on create, 200 on an idempotent replay (same `highlight_id` and body). One
+        transaction: the highlight, every anchor and every resolution, or nothing."""
+        try:
+            body = await _parse_body(request, _HighlightCreate)
+            _owned_or_404(call, paper_id)
+            promoted = call.db.promoted_generation(call.db_owner, PaperId(paper_id))
+            if promoted is None:
+                # In this release the reader enables Highlight only once the IR is loaded, and a
+                # highlight's `created_generation` is the promoted one (contracts.md §2.4).
+                raise _Refused(409, "not_parsed", "this paper has not been parsed yet")
+            try:
+                stored = call.db.create_highlight(
+                    call.db_owner,
+                    PaperId(paper_id),
+                    highlight_id=body.highlight_id,
+                    color=body.color,
+                    note=body.note,
+                    created_generation=promoted,
+                    anchors=[AnchorIn(item.anchor) for item in body.anchors],
+                    resolutions=[
+                        ResolutionIn(
+                            anchor_id=r.anchor_id,
+                            generation=r.generation,
+                            tier=r.tier,
+                            state=r.state,
+                            block_ids=r.block_ids,
+                            score=r.score,
+                            reason=r.reason,
+                            resolver_version=r.resolver_version,
+                        )
+                        for r in body.resolutions
+                    ],
+                )
+            except (PaperNotFound, GenerationNotFound, HighlightRejected) as exc:
+                raise _db_refusal(exc) from exc
+            highlight = call.db.get_highlight(
+                call.db_owner, PaperId(paper_id), stored.highlight_id, promoted
             )
-        row = call.db.get_highlight(call.db_owner, highlight_id)
-        if row is None:  # pragma: no cover - it was created one statement ago
-            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "highlight vanished")
-        return _public(row)
+        except _Refused as refused:
+            return _refusal(refused)
+        assert highlight is not None  # stored one statement ago, in a committed transaction
+        return JSONResponse(_highlight_wire(highlight), status_code=201 if stored.created else 200)
+
+    @app.put("/papers/{paper_id}/highlights/resolutions")
+    async def put_resolutions(call: CallerDep, paper_id: str, request: Request) -> Response:
+        """Upserts the T0 cache for one generation; an `upgraded_anchor` replaces a legacy-0001
+        record in the same transaction (contracts.md §2.4, ADR-002 §6.3)."""
+        try:
+            body = await _parse_body(request, _ResolutionsPut)
+            _owned_or_404(call, paper_id)
+            try:
+                with call.db.transaction():
+                    for item in body.items:
+                        if item.upgraded_anchor is not None:
+                            call.db.upgrade_legacy_anchor(
+                                call.db_owner,
+                                PaperId(paper_id),
+                                item.anchor_id,
+                                item.upgraded_anchor,
+                            )
+                    call.db.put_resolutions(
+                        call.db_owner,
+                        PaperId(paper_id),
+                        body.generation,
+                        [
+                            ResolutionIn(
+                                anchor_id=item.anchor_id,
+                                generation=body.generation,
+                                tier=item.tier,
+                                state=item.state,
+                                block_ids=item.block_ids,
+                                score=item.score,
+                                reason=item.reason,
+                                resolver_version=item.resolver_version,
+                            )
+                            for item in body.items
+                        ],
+                    )
+            except (PaperNotFound, GenerationNotFound, HighlightRejected) as exc:
+                raise _db_refusal(exc) from exc
+        except _Refused as refused:
+            return _refusal(refused)
+        return Response(status_code=204)
 
     @app.patch("/papers/{paper_id}/highlights/{highlight_id}")
-    async def update_note(
-        call: CallerDep, paper_id: str, highlight_id: str, body: NoteIn
-    ) -> dict[str, Any]:
-        changed = call.db.update_highlight_note(call.db_owner, HighlightId(highlight_id), body.note)
-        if changed == 0:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "no such highlight")
-        row = call.db.get_highlight(call.db_owner, HighlightId(highlight_id))
-        return _public(row) if row is not None else {}
+    async def update_highlight(
+        call: CallerDep, paper_id: str, highlight_id: str, request: Request
+    ) -> Response:
+        """`{color?, note?}`. An absent field is unchanged; `note: null` clears the note."""
+        try:
+            body = await _parse_body(request, _HighlightPatch)
+            _owned_or_404(call, paper_id)
+            given = body.model_fields_set
+            if "color" in given and body.color is None:
+                raise _Refused(422, "validation_failed", "color: may not be null")
+            note = None if "note" not in given else (body.note if body.note is not None else "")
+            try:
+                updated = call.db.update_highlight(
+                    call.db_owner, PaperId(paper_id), highlight_id, color=body.color, note=note
+                )
+            except HighlightRejected as exc:
+                raise _db_refusal(exc) from exc
+            if updated is None:
+                raise _Refused(404, "not_found", "no such highlight on this paper")
+            highlight = call.db.get_highlight(
+                call.db_owner,
+                PaperId(paper_id),
+                highlight_id,
+                call.db.promoted_generation(call.db_owner, PaperId(paper_id)),
+            )
+        except _Refused as refused:
+            return _refusal(refused)
+        assert highlight is not None
+        return JSONResponse(_highlight_wire(highlight))
 
-    @app.delete(
-        "/papers/{paper_id}/highlights/{highlight_id}", status_code=status.HTTP_204_NO_CONTENT
-    )
+    @app.delete("/papers/{paper_id}/highlights/{highlight_id}")
     async def delete_highlight(call: CallerDep, paper_id: str, highlight_id: str) -> Response:
-        if call.db.delete_highlight(call.db_owner, HighlightId(highlight_id)) == 0:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "no such highlight")
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
+        try:
+            _owned_or_404(call, paper_id)
+            if call.db.delete_highlight(call.db_owner, PaperId(paper_id), highlight_id) == 0:
+                raise _Refused(404, "not_found", "no such highlight on this paper")
+        except _Refused as refused:
+            return _refusal(refused)
+        return Response(status_code=204)
 
 
 # ─── jobs ─────────────────────────────────────────────────────────────────────────────────────

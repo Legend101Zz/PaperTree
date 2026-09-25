@@ -49,6 +49,19 @@ F0_5_TABLES = (
     "schema_migrations",
 )
 
+#: 0005_reader_release.sql (ADR-002). ``highlights`` and ``anchors`` are REBUILT by it, not added.
+R0005_TABLES = (
+    "anchor_resolutions",
+    "ai_threads",
+    "ai_messages",
+    "ai_citations",
+    "ai_runs",
+    "ai_run_handles",
+    "canvas_boards",
+    "canvas_nodes",
+    "canvas_edges",
+)
+
 # EPIC-00's acceptance criterion, and the SHAPE of the regression guard beside it.
 #
 # #83 — WHY THERE IS NO LONGER A WALL-CLOCK CONSTANT ON CI. This file used to assert
@@ -253,8 +266,9 @@ def test_empty_to_head(tmp_path: Path) -> None:
         }
     finally:
         raw.close()
-    for table in F0_5_TABLES:
+    for table in (*F0_5_TABLES, *R0005_TABLES):
         assert table in names, f"{table} missing after migrate"
+    assert "highlights_new" not in names and "anchors_new" not in names
     # jobs / job_steps are F0.6's, and 0002_jobs.sql has since landed. This assertion was
     # written inverted to pin the split while F0.6 was outstanding; flipping it is the
     # only edit F0.6 made to packages/db.

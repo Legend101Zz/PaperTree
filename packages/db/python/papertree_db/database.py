@@ -245,6 +245,22 @@ class DatabaseCore:
             raise
         conn.execute("COMMIT")
 
+    # ── ownership of a paper, independent of any parse ───────────────────────────────
+
+    def owned_paper(self, owner: OwnerId, paper_id: PaperId) -> Row | None:
+        """This owner's ``paper_owners`` row for ``paper_id``, or None (absent or not theirs).
+
+        Additive in S0, beside contracts.md §1.1: the highlight routes need "is this the caller's
+        paper?" for a paper that may have NO promoted generation yet (409 ``not_parsed`` vs 404),
+        and ``promoted_generation`` cannot tell those apart. ``owner_id`` is not in the row.
+        """
+        owner_id = self._resolve(owner)
+        return self._one(
+            "SELECT paper_id, source_hash, created_at, original_filename, byte_size, page_count, "
+            "latest_job_id FROM paper_owners WHERE owner_id = ? AND paper_id = ?",
+            (owner_id, paper_id),
+        )
+
     # ── papers ───────────────────────────────────────────────────────────────────────
 
     def put_paper(self, owner: OwnerId, paper: Mapping[str, Any]) -> None:
