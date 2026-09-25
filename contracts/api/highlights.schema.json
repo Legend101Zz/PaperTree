@@ -1,0 +1,906 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PaperTree API contract: highlights",
+  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: Highlight, AnchorWire, ResolutionWire, HighlightCreate, HighlightPatch, ResolutionsPut.",
+  "$defs": {
+    "AnchorCreated": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": ["source", "guided"],
+          "type": "string"
+        },
+        "at": {
+          "type": "string"
+        },
+        "client": {
+          "type": "string"
+        }
+      },
+      "required": ["mode", "at", "client"],
+      "title": "AnchorCreated",
+      "type": "object"
+    },
+    "AnchorDoc": {
+      "additionalProperties": false,
+      "properties": {
+        "paperId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "pdfSha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "parserVersion": {
+          "type": "string"
+        },
+        "textStreamId": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["paperId", "pdfSha256", "parserVersion", "textStreamId"],
+      "title": "AnchorDoc",
+      "type": "object"
+    },
+    "AnchorV1": {
+      "additionalProperties": false,
+      "description": "The persisted Anchor, verbatim (contracts.md §6): `@papertree/anchoring`'s `Anchor` v1\nwithout `resolution`. `contracts/anchor/anchor-v1.schema.json` is the same record, written by\nhand; `tests/test_anchor_examples.py` holds this model to every committed example.",
+      "properties": {
+        "anchorVersion": {
+          "const": 1,
+          "type": "integer"
+        },
+        "offsetUnit": {
+          "const": "unicode",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^(?:[a-z]{2,4}_[0-9A-Za-z-]{8,64}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+          "type": "string"
+        },
+        "doc": {
+          "$ref": "#/$defs/AnchorDoc"
+        },
+        "targetKind": {
+          "enum": [
+            "text",
+            "guided_para",
+            "equation",
+            "equation_part",
+            "figure",
+            "figure_region",
+            "table_row",
+            "table_cell",
+            "algorithm",
+            "citation"
+          ],
+          "type": "string"
+        },
+        "provenanceClass": {
+          "enum": ["source", "ai_generated"],
+          "type": "string"
+        },
+        "subTarget": {
+          "$ref": "#/$defs/SubTarget"
+        },
+        "selectors": {
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/BlockSelector"
+              },
+              {
+                "$ref": "#/$defs/PageSelector"
+              },
+              {
+                "$ref": "#/$defs/TextPositionSelector"
+              },
+              {
+                "$ref": "#/$defs/TextQuoteSelector"
+              },
+              {
+                "$ref": "#/$defs/ShapeSelector"
+              },
+              {
+                "$ref": "#/$defs/SectionPathSelector"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "created": {
+          "$ref": "#/$defs/AnchorCreated"
+        }
+      },
+      "required": [
+        "anchorVersion",
+        "offsetUnit",
+        "id",
+        "doc",
+        "targetKind",
+        "provenanceClass",
+        "selectors",
+        "created"
+      ],
+      "title": "AnchorV1",
+      "type": "object"
+    },
+    "AnchorV1In": {
+      "additionalProperties": false,
+      "description": "An Anchor as a client sends it: it may still carry the client's T0 cache (`resolution`),\nwhich the server strips before storing (§2.4). Anything else extra is still refused.",
+      "properties": {
+        "anchorVersion": {
+          "const": 1,
+          "type": "integer"
+        },
+        "offsetUnit": {
+          "const": "unicode",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^(?:[a-z]{2,4}_[0-9A-Za-z-]{8,64}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+          "type": "string"
+        },
+        "doc": {
+          "$ref": "#/$defs/AnchorDoc"
+        },
+        "targetKind": {
+          "enum": [
+            "text",
+            "guided_para",
+            "equation",
+            "equation_part",
+            "figure",
+            "figure_region",
+            "table_row",
+            "table_cell",
+            "algorithm",
+            "citation"
+          ],
+          "type": "string"
+        },
+        "provenanceClass": {
+          "enum": ["source", "ai_generated"],
+          "type": "string"
+        },
+        "subTarget": {
+          "$ref": "#/$defs/SubTarget"
+        },
+        "selectors": {
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/BlockSelector"
+              },
+              {
+                "$ref": "#/$defs/PageSelector"
+              },
+              {
+                "$ref": "#/$defs/TextPositionSelector"
+              },
+              {
+                "$ref": "#/$defs/TextQuoteSelector"
+              },
+              {
+                "$ref": "#/$defs/ShapeSelector"
+              },
+              {
+                "$ref": "#/$defs/SectionPathSelector"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "created": {
+          "$ref": "#/$defs/AnchorCreated"
+        },
+        "resolution": {
+          "default": null
+        }
+      },
+      "required": [
+        "anchorVersion",
+        "offsetUnit",
+        "id",
+        "doc",
+        "targetKind",
+        "provenanceClass",
+        "selectors",
+        "created"
+      ],
+      "title": "AnchorV1In",
+      "type": "object"
+    },
+    "AnchorWire": {
+      "additionalProperties": false,
+      "properties": {
+        "anchor_id": {
+          "type": "string"
+        },
+        "ordinal": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "anchor": {
+          "$ref": "#/$defs/AnchorV1"
+        },
+        "resolution": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResolutionWire"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["anchor_id", "ordinal", "anchor", "resolution"],
+      "title": "AnchorWire",
+      "type": "object"
+    },
+    "BlockSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "BlockSelector",
+          "type": "string"
+        },
+        "blockId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "blockTextHash": {
+          "type": "string"
+        },
+        "startOffset": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "endOffset": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cellRef": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "rowIndex": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["type", "blockId", "blockTextHash"],
+      "title": "BlockSelector",
+      "type": "object"
+    },
+    "Highlight": {
+      "additionalProperties": false,
+      "properties": {
+        "highlight_id": {
+          "type": "string"
+        },
+        "color": {
+          "enum": ["amber", "green", "blue", "pink", "purple"],
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "created_generation": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "created_at": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+          "type": "string"
+        },
+        "updated_at": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+          "type": "string"
+        },
+        "anchors": {
+          "items": {
+            "$ref": "#/$defs/AnchorWire"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "highlight_id",
+        "color",
+        "note",
+        "created_generation",
+        "created_at",
+        "updated_at",
+        "anchors"
+      ],
+      "title": "Highlight",
+      "type": "object"
+    },
+    "HighlightAnchorIn": {
+      "additionalProperties": false,
+      "properties": {
+        "anchor": {
+          "$ref": "#/$defs/AnchorV1In"
+        }
+      },
+      "required": ["anchor"],
+      "title": "HighlightAnchorIn",
+      "type": "object"
+    },
+    "HighlightCreate": {
+      "additionalProperties": false,
+      "description": "`POST /papers/{id}/highlights`. `anchors[i]`'s ordinal is `i`.",
+      "properties": {
+        "highlight_id": {
+          "pattern": "^[a-z]{2,4}_[0-9A-Za-z-]{8,64}$",
+          "type": "string"
+        },
+        "color": {
+          "enum": ["amber", "green", "blue", "pink", "purple"],
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "anchors": {
+          "items": {
+            "$ref": "#/$defs/HighlightAnchorIn"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "type": "array"
+        },
+        "resolutions": {
+          "items": {
+            "$ref": "#/$defs/HighlightResolutionIn"
+          },
+          "type": "array"
+        }
+      },
+      "required": ["highlight_id", "color", "anchors"],
+      "title": "HighlightCreate",
+      "type": "object"
+    },
+    "HighlightPatch": {
+      "additionalProperties": false,
+      "description": "`{color?, note?}`: absent is unchanged, `note: null` clears the note, `color: null` is 422\n(an omittable field: a colour is never removed).",
+      "properties": {
+        "color": {
+          "enum": ["amber", "green", "blue", "pink", "purple"],
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "HighlightPatch",
+      "type": "object"
+    },
+    "HighlightResolutionIn": {
+      "additionalProperties": false,
+      "properties": {
+        "anchor_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "tier": {
+          "maximum": 6,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "state": {
+          "enum": ["anchored", "approximate", "orphan"],
+          "type": "string"
+        },
+        "block_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "block_id_missing",
+                "block_text_changed",
+                "quote_below_threshold",
+                "quote_too_short_no_context",
+                "no_geometric_overlap",
+                "section_not_found",
+                "page_out_of_range",
+                "no_selectors"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "resolver_version": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "generation": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": ["anchor_id", "tier", "state", "block_ids", "resolver_version", "generation"],
+      "title": "HighlightResolutionIn",
+      "type": "object"
+    },
+    "PageSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "PageSelector",
+          "type": "string"
+        },
+        "index": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": ["type", "index"],
+      "title": "PageSelector",
+      "type": "object"
+    },
+    "ResolutionPutItem": {
+      "additionalProperties": false,
+      "properties": {
+        "anchor_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "tier": {
+          "maximum": 6,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "state": {
+          "enum": ["anchored", "approximate", "orphan"],
+          "type": "string"
+        },
+        "block_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "block_id_missing",
+                "block_text_changed",
+                "quote_below_threshold",
+                "quote_too_short_no_context",
+                "no_geometric_overlap",
+                "section_not_found",
+                "page_out_of_range",
+                "no_selectors"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "resolver_version": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "upgraded_anchor": {
+          "$ref": "#/$defs/AnchorV1In"
+        }
+      },
+      "required": ["anchor_id", "tier", "state", "block_ids", "resolver_version"],
+      "title": "ResolutionPutItem",
+      "type": "object"
+    },
+    "ResolutionWire": {
+      "additionalProperties": false,
+      "properties": {
+        "generation": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "tier": {
+          "maximum": 6,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "state": {
+          "enum": ["anchored", "approximate", "orphan"],
+          "type": "string"
+        },
+        "block_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "block_id_missing",
+                "block_text_changed",
+                "quote_below_threshold",
+                "quote_too_short_no_context",
+                "no_geometric_overlap",
+                "section_not_found",
+                "page_out_of_range",
+                "no_selectors"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resolver_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "generation",
+        "tier",
+        "state",
+        "block_ids",
+        "score",
+        "reason",
+        "resolver_version"
+      ],
+      "title": "ResolutionWire",
+      "type": "object"
+    },
+    "ResolutionsPut": {
+      "additionalProperties": false,
+      "properties": {
+        "generation": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/ResolutionPutItem"
+          },
+          "maxItems": 500,
+          "type": "array"
+        }
+      },
+      "required": ["generation", "items"],
+      "title": "ResolutionsPut",
+      "type": "object"
+    },
+    "SectionPathSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "SectionPathSelector",
+          "type": "string"
+        },
+        "path": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "headingText": {
+          "type": "string"
+        },
+        "paraIndexInSection": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "charOffsetInPara": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["type", "path", "headingText", "paraIndexInSection", "charOffsetInPara"],
+      "title": "SectionPathSelector",
+      "type": "object"
+    },
+    "ShapeSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "ShapeSelector",
+          "type": "string"
+        },
+        "pageIndex": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "quads": {
+          "items": {
+            "maxItems": 4,
+            "minItems": 4,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "polygons": {
+          "items": {
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "pageWidth": {
+          "type": "number"
+        },
+        "pageHeight": {
+          "type": "number"
+        },
+        "rotation": {
+          "enum": [0, 90, 180, 270],
+          "type": "integer"
+        },
+        "userUnit": {
+          "type": "number"
+        },
+        "cropBox": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "pageIndex",
+        "quads",
+        "polygons",
+        "pageWidth",
+        "pageHeight",
+        "rotation",
+        "userUnit",
+        "cropBox"
+      ],
+      "title": "ShapeSelector",
+      "type": "object"
+    },
+    "SubTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": ["equation_part", "figure_region", "table_cell", "table_row", "algorithm_line"],
+          "type": "string"
+        },
+        "normalisedRect": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        "latexStart": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "latexEnd": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "lineIndex": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["kind"],
+      "title": "SubTarget",
+      "type": "object"
+    },
+    "TextPositionSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "TextPositionSelector",
+          "type": "string"
+        },
+        "start": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "end": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["type", "start", "end"],
+      "title": "TextPositionSelector",
+      "type": "object"
+    },
+    "TextQuoteSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "TextQuoteSelector",
+          "type": "string"
+        },
+        "exact": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "suffix": {
+          "type": "string"
+        },
+        "exactNormalised": {
+          "type": "string"
+        },
+        "prefixNormalised": {
+          "type": "string"
+        },
+        "suffixNormalised": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "exact",
+        "prefix",
+        "suffix",
+        "exactNormalised",
+        "prefixNormalised",
+        "suffixNormalised"
+      ],
+      "title": "TextQuoteSelector",
+      "type": "object"
+    }
+  }
+}

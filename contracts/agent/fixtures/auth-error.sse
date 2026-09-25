@@ -1,0 +1,12 @@
+event: run
+data: {"run_id":"run_01K63AKF6H8M0P2R4T6W8Y0A2C","model":"minimax/MiniMax-M3","sdk":"pi-coding-agent@0.87.1"}
+
+event: status
+data: {"phase":"thinking"}
+
+event: usage
+data: {"input":0,"output":0,"cache_read":0,"cache_write":0,"reasoning":null,"cost_usd_est":0.0}
+
+event: done
+data: {"status":"error","stop_reason":"error","error":{"code":"provider_auth","retryable":false,"message":"The AI provider rejected this service's API key."},"final_text":"","handles_seen":["b1","b2"],"markers":[],"usage_totals":{"input":0,"output":0,"cache_read":0,"cache_write":0,"reasoning":null,"cost_usd_est":0.0},"tool_calls":0,"turns":1,"retries":0,"first_text_ms":null,"latency_ms":412,"entries":[]}
+

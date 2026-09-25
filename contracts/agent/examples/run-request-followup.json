@@ -1,0 +1,165 @@
+{
+  "run_id": "run_01K63AFB2D4G6J8K0M2P4R6T8V",
+  "request_id": "req_01K63AFB2D4G6J8K0M2P4R6T8W",
+  "kind": "explain",
+  "prompt_version": "explain-v1",
+  "tool": {
+    "base_url": "http://127.0.0.1:8000/internal/agent/runs/run_01K63AFB2D4G6J8K0M2P4R6T8V",
+    "token": "fixture_run_token_not_a_secret_000000000000"
+  },
+  "datamark": "^7f3a91c2",
+  "paper": {
+    "title": "You Only Look Once: Unified, Real-Time Object Detection",
+    "page_count": 10,
+    "generation": 1
+  },
+  "seed": {
+    "quote": "Instead, we frame object detection as a regression problem to spatially separated bounding boxes and associated class probabilities.",
+    "page_label": "p. 1",
+    "section": "Abstract",
+    "passages": [
+      {
+        "handle": "b1",
+        "label": "p. 1 · Abstract · paragraph",
+        "text": "^7f3a91c2 We ^7f3a91c2 present ^7f3a91c2 YOLO, ^7f3a91c2 a ^7f3a91c2 new ^7f3a91c2 approach ^7f3a91c2 to ^7f3a91c2 object ^7f3a91c2 detection. ^7f3a91c2 Prior ^7f3a91c2 work ^7f3a91c2 on ^7f3a91c2 object ^7f3a91c2 detection ^7f3a91c2 repurposes ^7f3a91c2 classifiers ^7f3a91c2 to ^7f3a91c2 perform ^7f3a91c2 detection. ^7f3a91c2 Instead, ^7f3a91c2 we ^7f3a91c2 frame ^7f3a91c2 object ^7f3a91c2 detection ^7f3a91c2 as ^7f3a91c2 a ^7f3a91c2 regression ^7f3a91c2 problem ^7f3a91c2 to ^7f3a91c2 spatially ^7f3a91c2 separated ^7f3a91c2 bounding ^7f3a91c2 boxes ^7f3a91c2 and ^7f3a91c2 associated ^7f3a91c2 class ^7f3a91c2 probabilities. ^7f3a91c2 A ^7f3a91c2 single ^7f3a91c2 neural ^7f3a91c2 network ^7f3a91c2 predicts ^7f3a91c2 bounding ^7f3a91c2 boxes ^7f3a91c2 and ^7f3a91c2 class ^7f3a91c2 probabilities ^7f3a91c2 directly ^7f3a91c2 from ^7f3a91c2 full ^7f3a91c2 images ^7f3a91c2 in ^7f3a91c2 one ^7f3a91c2 evaluation. ^7f3a91c2"
+      },
+      {
+        "handle": "b2",
+        "label": "p. 1 · 1. Introduction · paragraph",
+        "text": "^7f3a91c2 Current ^7f3a91c2 detection ^7f3a91c2 systems ^7f3a91c2 repurpose ^7f3a91c2 classifiers ^7f3a91c2 to ^7f3a91c2 perform ^7f3a91c2 detection. ^7f3a91c2 More ^7f3a91c2 recent ^7f3a91c2 approaches ^7f3a91c2 like ^7f3a91c2 R-CNN ^7f3a91c2 use ^7f3a91c2 region ^7f3a91c2 proposal ^7f3a91c2 methods ^7f3a91c2 to ^7f3a91c2 first ^7f3a91c2 generate ^7f3a91c2 potential ^7f3a91c2 bounding ^7f3a91c2 boxes ^7f3a91c2 in ^7f3a91c2 an ^7f3a91c2 image ^7f3a91c2 and ^7f3a91c2 then ^7f3a91c2 run ^7f3a91c2 a ^7f3a91c2 classifier ^7f3a91c2 on ^7f3a91c2 these ^7f3a91c2 proposed ^7f3a91c2 boxes. ^7f3a91c2"
+      }
+    ]
+  },
+  "question": "Why does that make it faster than R-CNN?",
+  "history": {
+    "session_id": "thr_01K63A9W4XJ7Q2N8R5T0V3Y6ZB",
+    "entries": [
+      {
+        "type": "message",
+        "id": "a1f04c2e",
+        "parentId": null,
+        "timestamp": "2026-09-25T15:09:25.123Z",
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Explain this passage.\n\nInstead, we frame object detection as a regression problem to spatially separated bounding boxes and associated class probabilities."
+            }
+          ],
+          "timestamp": 1790350165123
+        }
+      },
+      {
+        "type": "message",
+        "id": "a1f04c2f",
+        "parentId": "a1f04c2e",
+        "timestamp": "2026-09-25T15:09:27.004Z",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "The seed covers the abstract; the grid mechanism is in section 2."
+            },
+            {
+              "type": "toolCall",
+              "id": "call_b7d1",
+              "name": "search_passages",
+              "arguments": {
+                "query": "grid cell predicts bounding boxes",
+                "limit": 4
+              }
+            }
+          ],
+          "api": "anthropic-messages",
+          "provider": "minimax",
+          "model": "MiniMax-M3",
+          "usage": {
+            "input": 1846,
+            "output": 97,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 41,
+            "totalTokens": 1943,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0.000622
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1790350167004
+        }
+      },
+      {
+        "type": "message",
+        "id": "a1f04c30",
+        "parentId": "a1f04c2f",
+        "timestamp": "2026-09-25T15:09:27.355Z",
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "call_b7d1",
+          "toolName": "search_passages",
+          "content": [
+            {
+              "type": "text",
+              "text": "[b3] (p. 2 · 2. Unified Detection · paragraph)\n<paper_text paper_id=\"ppr_C425DTWW1KYMYDSWR205HB2069\" block_id=\"blk_b3yolo\" page=\"1\" channel=\"paper\" trust=\"untrusted\">\n^7f3a91c2 Our ^7f3a91c2 system ^7f3a91c2 divides ^7f3a91c2 the ^7f3a91c2 input ^7f3a91c2 image ^7f3a91c2 into ^7f3a91c2 an ^7f3a91c2 S ^7f3a91c2 x ^7f3a91c2 S ^7f3a91c2 grid. ^7f3a91c2 If ^7f3a91c2 the ^7f3a91c2 center ^7f3a91c2 of ^7f3a91c2 an ^7f3a91c2 object ^7f3a91c2 falls ^7f3a91c2 into ^7f3a91c2 a ^7f3a91c2 grid ^7f3a91c2 cell, ^7f3a91c2 that ^7f3a91c2 grid ^7f3a91c2 cell ^7f3a91c2 is ^7f3a91c2 responsible ^7f3a91c2 for ^7f3a91c2 detecting ^7f3a91c2 that ^7f3a91c2 object. ^7f3a91c2 Each ^7f3a91c2 grid ^7f3a91c2 cell ^7f3a91c2 predicts ^7f3a91c2 B ^7f3a91c2 bounding ^7f3a91c2 boxes ^7f3a91c2 and ^7f3a91c2 confidence ^7f3a91c2 scores ^7f3a91c2 for ^7f3a91c2 those ^7f3a91c2 boxes. ^7f3a91c2\n</paper_text>\n\n[b4] (p. 2 · 2. Unified Detection · paragraph)\n<paper_text paper_id=\"ppr_C425DTWW1KYMYDSWR205HB2069\" block_id=\"blk_b4yolo\" page=\"1\" channel=\"paper\" trust=\"untrusted\">\n^7f3a91c2 Each ^7f3a91c2 grid ^7f3a91c2 cell ^7f3a91c2 also ^7f3a91c2 predicts ^7f3a91c2 C ^7f3a91c2 conditional ^7f3a91c2 class ^7f3a91c2 probabilities, ^7f3a91c2 Pr(Class_i ^7f3a91c2 | ^7f3a91c2 Object). ^7f3a91c2\n</paper_text>"
+            }
+          ],
+          "isError": false,
+          "timestamp": 1790350167355
+        }
+      },
+      {
+        "type": "message",
+        "id": "a1f04c31",
+        "parentId": "a1f04c30",
+        "timestamp": "2026-09-25T15:09:32.790Z",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "Contrast with R-CNN, then the grid, cite b2, b1, b3."
+            },
+            {
+              "type": "text",
+              "text": "This sentence is the paper's central move. Earlier detectors such as R-CNN first propose candidate regions and then run a classifier on each one, so detection is a pipeline of separately trained stages [b2]. YOLO instead treats the whole job as one regression: a single network looks at the full image once and directly outputs box coordinates and class probabilities [b1]. Concretely, the image is divided into an S × S grid, and each grid cell predicts B bounding boxes, a confidence score for each box, and C conditional class probabilities [b3]. Because there is only one network evaluation per image, the detector can be optimised end to end and runs in real time."
+            }
+          ],
+          "api": "anthropic-messages",
+          "provider": "minimax",
+          "model": "MiniMax-M3",
+          "usage": {
+            "input": 2433,
+            "output": 214,
+            "cacheRead": 1664,
+            "cacheWrite": 0,
+            "reasoning": 58,
+            "totalTokens": 2647,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0.000931
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1790350172790
+        }
+      }
+    ]
+  },
+  "limits": {
+    "deadline_ms": 45000,
+    "idle_ms": 20000,
+    "max_tool_calls": 8,
+    "max_turns": 6,
+    "max_output_tokens": 4096,
+    "max_retries": 1
+  }
+}

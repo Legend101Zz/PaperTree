@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PaperTree agent run request (POST /v1/runs)",
+  "description": "HAND-WRITTEN from contracts.md §3.2 (reader release S0). The API sends it with headers X-PaperTree-Agent-Secret, X-Request-Id, Content-Type: application/json and Accept: text/event-stream. The API's pydantic twin is `AgentRunRequest` in services/api/python/papertree_api/schemas.py; contracts/agent/examples/run-request-*.json are validated against both. `seed` is null for a summary run and required for an explain run; `history` is null on a thread's first turn. The limits by kind are filled in by the API: explain 45 s / 20 s idle / 8 tools / 4096 tokens, ask 60 s / 20 s / 8 / 4096, summary 90 s / 20 s / 12 / 6144.",
+  "type": "object",
+  "required": [
+    "run_id",
+    "request_id",
+    "kind",
+    "prompt_version",
+    "tool",
+    "datamark",
+    "paper",
+    "seed",
+    "question",
+    "history",
+    "limits"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "run_id": { "type": "string", "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "request_id": { "type": "string", "pattern": "^req_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "kind": { "enum": ["explain", "ask", "summary"] },
+    "prompt_version": { "enum": ["explain-v1", "ask-v1", "summary-v1"] },
+    "tool": {
+      "description": "Where the agent's four paper tools are served (§4) and the run token they take as `Authorization: Bearer <token>`. The API stores only the token's sha256.",
+      "type": "object",
+      "required": ["base_url", "token"],
+      "additionalProperties": false,
+      "properties": {
+        "base_url": {
+          "type": "string",
+          "pattern": "^https?://[^/]+/internal/agent/runs/run_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "token": {
+          "description": "secrets.token_urlsafe(32): 43 base64url characters.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43}$"
+        }
+      }
+    },
+    "datamark": {
+      "description": "papertree_prompts.mint_datamark(), per run: `^` and 8 lowercase hex digits. The agent's system prompt names it; every tool text is marked with it.",
+      "type": "string",
+      "pattern": "^\\^[0-9a-f]{8}$"
+    },
+    "paper": {
+      "type": "object",
+      "required": ["title", "page_count", "generation"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string" },
+        "page_count": { "anyOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }] },
+        "generation": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "seed": {
+      "anyOf": [
+        {
+          "description": "The selected blocks expanded by packages/retrieval under <= 3,000 estimated tokens, the exact selected text first.",
+          "type": "object",
+          "required": ["quote", "page_label", "section", "passages"],
+          "additionalProperties": false,
+          "properties": {
+            "quote": { "type": "string" },
+            "page_label": { "type": "string" },
+            "section": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+            "passages": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["handle", "label", "text"],
+                "additionalProperties": false,
+                "properties": {
+                  "handle": { "type": "string", "pattern": "^b[0-9]+$" },
+                  "label": { "type": "string" },
+                  "text": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        { "type": "null" }
+      ]
+    },
+    "question": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "history": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": ["session_id", "entries"],
+          "additionalProperties": false,
+          "properties": {
+            "session_id": { "type": "string", "pattern": "^thr_[0-9A-HJKMNP-TV-Z]{26}$" },
+            "entries": {
+              "description": "Pi exportEntries() as of the thread's last completed turn.",
+              "type": "array",
+              "items": { "type": "object" }
+            }
+          }
+        },
+        { "type": "null" }
+      ]
+    },
+    "limits": {
+      "type": "object",
+      "required": [
+        "deadline_ms",
+        "idle_ms",
+        "max_tool_calls",
+        "max_turns",
+        "max_output_tokens",
+        "max_retries"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "deadline_ms": { "type": "integer", "minimum": 1 },
+        "idle_ms": { "type": "integer", "minimum": 1 },
+        "max_tool_calls": { "type": "integer", "minimum": 0 },
+        "max_turns": { "type": "integer", "minimum": 1 },
+        "max_output_tokens": { "type": "integer", "minimum": 1 },
+        "max_retries": { "type": "integer", "minimum": 0 }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "kind": { "const": "summary" } } },
+      "then": { "properties": { "seed": { "type": "null" } } }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "explain" } } },
+      "then": { "properties": { "seed": { "type": "object" } } }
+    }
+  ]
+}

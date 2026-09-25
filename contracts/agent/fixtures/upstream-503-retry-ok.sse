@@ -1,0 +1,44 @@
+event: run
+data: {"run_id":"run_01K63ANH8K0P2R4T6W8Y0A2C4E","model":"minimax/MiniMax-M3","sdk":"pi-coding-agent@0.87.1"}
+
+event: status
+data: {"phase":"thinking"}
+
+event: usage
+data: {"input":0,"output":0,"cache_read":0,"cache_write":0,"reasoning":null,"cost_usd_est":0.0}
+
+event: status
+data: {"phase":"retrying","label":"The model service is busy; trying again","attempt":1,"delay_ms":1000}
+
+: ping
+
+event: status
+data: {"phase":"thinking"}
+
+event: status
+data: {"phase":"writing"}
+
+event: text
+data: {"delta":"It means YOLO skips the region-proposal"}
+
+event: text
+data: {"delta":" stage entirely: one network reads the whole"}
+
+event: text
+data: {"delta":" image and regresses boxes and class"}
+
+event: text
+data: {"delta":" probabilities in a single pass [b1], unlike"}
+
+event: text
+data: {"delta":" R-CNN's propose-then-classify pipeline"}
+
+event: text
+data: {"delta":" [b2]."}
+
+event: usage
+data: {"input":1788,"output":131,"cache_read":0,"cache_write":0,"reasoning":47,"cost_usd_est":0.000649}
+
+event: done
+data: {"status":"complete","stop_reason":"stop","error":null,"final_text":"It means YOLO skips the region-proposal stage entirely: one network reads the whole image and regresses boxes and class probabilities in a single pass [b1], unlike R-CNN's propose-then-classify pipeline [b2].","handles_seen":["b1","b2"],"markers":["b1","b2"],"usage_totals":{"input":1788,"output":131,"cache_read":0,"cache_write":0,"reasoning":null,"cost_usd_est":0.000649},"tool_calls":0,"turns":1,"retries":1,"first_text_ms":4208,"latency_ms":5546,"entries":[{"type":"message","id":"f1b38c60","parentId":null,"timestamp":"2026-09-25T15:30:09.004Z","message":{"role":"user","content":[{"type":"text","text":"Explain this passage.\n\nInstead, we frame object detection as a regression problem to spatially separated bounding boxes and associated class probabilities."}],"timestamp":1790351409004}},{"type":"message","id":"f1b38c62","parentId":"f1b38c60","timestamp":"2026-09-25T15:30:14.550Z","message":{"role":"assistant","content":[{"type":"text","text":"It means YOLO skips the region-proposal stage entirely: one network reads the whole image and regresses boxes and class probabilities in a single pass [b1], unlike R-CNN's propose-then-classify pipeline [b2]."}],"api":"anthropic-messages","provider":"minimax","model":"MiniMax-M3","usage":{"input":1788,"output":131,"cacheRead":0,"cacheWrite":0,"reasoning":47,"totalTokens":1919,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0.000649}},"stopReason":"stop","timestamp":1790351414550}}]}
+

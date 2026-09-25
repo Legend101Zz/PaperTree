@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PaperTree API contract: internal",
+  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: ToolResult.",
+  "$defs": {
+    "ToolResult": {
+      "additionalProperties": false,
+      "description": "Every internal tool answers this: model-facing `text` (datamarked), the handles it\nintroduced, and a cursor where the tool pages (`get_section`).",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "handles": {
+          "items": {
+            "pattern": "^b[0-9]+$",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": ["text", "handles", "next_cursor"],
+      "title": "ToolResult",
+      "type": "object"
+    }
+  }
+}

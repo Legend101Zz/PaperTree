@@ -53,9 +53,20 @@ from .wiretime import wire_time
 
 
 class Wire(BaseModel):
-    """The base of every wire model."""
+    """The base of every wire model.
 
-    model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
+    `json_schema_serialization_defaults_required`: a response field with a default is still
+    ALWAYS sent (only an `omittable()` one is ever left out, and pydantic keeps those optional),
+    so the exported response schema marks it required. Without it a defaulted field the server
+    always sends looked optional, and a web type that lacked it passed `contracts.spec.ts`.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        strict=True,
+        allow_inf_nan=False,
+        json_schema_serialization_defaults_required=True,
+    )
 
     @model_validator(mode="after")
     def _omitted_not_null(self) -> Self:
@@ -980,15 +991,16 @@ class AgentRunRequest(Wire):
 
 
 class AgentRun(Wire):
-    run_id: str
-    model: str
-    sdk: str
+    run_id: str = Field(pattern=server_id("run"))
+    model: Literal["minimax/MiniMax-M3"]
+    sdk: str = Field(pattern=r"^pi-coding-agent@[0-9]+\.[0-9]+\.[0-9]+$")
 
 
 class AgentStatus(Wire):
     phase: Literal["thinking", "tool", "retrying", "writing"]
     tool: ToolName | None = omittable()
-    label: str | None = omittable()
+    #: `minLength: 1` in `run-events.schema.json`: an agent that has nothing to say omits it.
+    label: str | None = omittable(min_length=1)
     attempt: Positive | None = omittable()
     delay_ms: NonNegative | None = omittable()
 

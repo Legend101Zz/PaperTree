@@ -1,0 +1,30 @@
+event: run
+data: {"run_id":"run_01K63AMG7J9N1Q3S5V7X9Z1B3D","model":"minimax/MiniMax-M3","sdk":"pi-coding-agent@0.87.1"}
+
+event: status
+data: {"phase":"thinking"}
+
+event: status
+data: {"phase":"tool","tool":"search_passages","label":"Searching the paper · confidence score definition"}
+
+event: usage
+data: {"input":2051,"output":63,"cache_read":0,"cache_write":0,"reasoning":24,"cost_usd_est":0.000571}
+
+event: status
+data: {"phase":"writing"}
+
+event: text
+data: {"delta":"YOLO's confidence score is"}
+
+event: text
+data: {"delta":" Pr(Object) × IOU between the"}
+
+event: text
+data: {"delta":" predicted box and the truth"}
+
+event: text
+data: {"delta":" [b7]. It"}
+
+event: done
+data: {"status":"aborted","stop_reason":"aborted","error":{"code":"aborted","retryable":true,"message":"The answer was stopped."},"final_text":"YOLO's confidence score is Pr(Object) × IOU between the predicted box and the truth [b7]. It","handles_seen":["b7"],"markers":["b7"],"usage_totals":{"input":2051,"output":63,"cache_read":0,"cache_write":0,"reasoning":24,"cost_usd_est":0.000571},"tool_calls":1,"turns":2,"retries":0,"first_text_ms":3642,"latency_ms":3914,"entries":[{"type":"message","id":"e4a07b50","parentId":null,"timestamp":"2026-09-25T15:24:02.817Z","message":{"role":"user","content":[{"type":"text","text":"What is the confidence score?"}],"timestamp":1790351042817}},{"type":"message","id":"e4a07b51","parentId":"e4a07b50","timestamp":"2026-09-25T15:24:04.402Z","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_e501","name":"search_passages","arguments":{"query":"confidence score definition","limit":4}}],"api":"anthropic-messages","provider":"minimax","model":"MiniMax-M3","usage":{"input":2051,"output":63,"cacheRead":0,"cacheWrite":0,"reasoning":24,"totalTokens":2114,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0.000571}},"stopReason":"toolUse","timestamp":1790351044402}},{"type":"message","id":"e4a07b52","parentId":"e4a07b51","timestamp":"2026-09-25T15:24:04.690Z","message":{"role":"toolResult","toolCallId":"call_e501","toolName":"search_passages","content":[{"type":"text","text":"[b7] (p. 2 · 2. Unified Detection · paragraph)\n<paper_text paper_id=\"ppr_C425DTWW1KYMYDSWR205HB2069\" block_id=\"blk_b7yolo\" page=\"1\" channel=\"paper\" trust=\"untrusted\">\n^7f3a91c2 Formally ^7f3a91c2 we ^7f3a91c2 define ^7f3a91c2 confidence ^7f3a91c2 as ^7f3a91c2 Pr(Object) ^7f3a91c2 * ^7f3a91c2 IOU ^7f3a91c2 truth ^7f3a91c2 pred. ^7f3a91c2\n</paper_text>"}],"isError":false,"timestamp":1790351044690}},{"type":"message","id":"e4a07b53","parentId":"e4a07b52","timestamp":"2026-09-25T15:24:06.731Z","message":{"role":"assistant","content":[{"type":"text","text":"YOLO's confidence score is Pr(Object) × IOU between the predicted box and the truth [b7]. It"}],"api":"anthropic-messages","provider":"minimax","model":"MiniMax-M3","usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"reasoning":null,"totalTokens":0,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0.0}},"stopReason":"aborted","timestamp":1790351046731}}]}
+

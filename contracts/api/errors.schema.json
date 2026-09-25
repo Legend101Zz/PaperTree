@@ -1,0 +1,607 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PaperTree API contract: errors",
+  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: ErrorEnvelope, StaleVersion.",
+  "$defs": {
+    "AnchorCreated": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": ["source", "guided"],
+          "type": "string"
+        },
+        "at": {
+          "type": "string"
+        },
+        "client": {
+          "type": "string"
+        }
+      },
+      "required": ["mode", "at", "client"],
+      "title": "AnchorCreated",
+      "type": "object"
+    },
+    "AnchorDoc": {
+      "additionalProperties": false,
+      "properties": {
+        "paperId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "pdfSha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "parserVersion": {
+          "type": "string"
+        },
+        "textStreamId": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["paperId", "pdfSha256", "parserVersion", "textStreamId"],
+      "title": "AnchorDoc",
+      "type": "object"
+    },
+    "AnchorV1": {
+      "additionalProperties": false,
+      "description": "The persisted Anchor, verbatim (contracts.md §6): `@papertree/anchoring`'s `Anchor` v1\nwithout `resolution`. `contracts/anchor/anchor-v1.schema.json` is the same record, written by\nhand; `tests/test_anchor_examples.py` holds this model to every committed example.",
+      "properties": {
+        "anchorVersion": {
+          "const": 1,
+          "type": "integer"
+        },
+        "offsetUnit": {
+          "const": "unicode",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^(?:[a-z]{2,4}_[0-9A-Za-z-]{8,64}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+          "type": "string"
+        },
+        "doc": {
+          "$ref": "#/$defs/AnchorDoc"
+        },
+        "targetKind": {
+          "enum": [
+            "text",
+            "guided_para",
+            "equation",
+            "equation_part",
+            "figure",
+            "figure_region",
+            "table_row",
+            "table_cell",
+            "algorithm",
+            "citation"
+          ],
+          "type": "string"
+        },
+        "provenanceClass": {
+          "enum": ["source", "ai_generated"],
+          "type": "string"
+        },
+        "subTarget": {
+          "$ref": "#/$defs/SubTarget"
+        },
+        "selectors": {
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/BlockSelector"
+              },
+              {
+                "$ref": "#/$defs/PageSelector"
+              },
+              {
+                "$ref": "#/$defs/TextPositionSelector"
+              },
+              {
+                "$ref": "#/$defs/TextQuoteSelector"
+              },
+              {
+                "$ref": "#/$defs/ShapeSelector"
+              },
+              {
+                "$ref": "#/$defs/SectionPathSelector"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "created": {
+          "$ref": "#/$defs/AnchorCreated"
+        }
+      },
+      "required": [
+        "anchorVersion",
+        "offsetUnit",
+        "id",
+        "doc",
+        "targetKind",
+        "provenanceClass",
+        "selectors",
+        "created"
+      ],
+      "title": "AnchorV1",
+      "type": "object"
+    },
+    "BlockSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "BlockSelector",
+          "type": "string"
+        },
+        "blockId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "blockTextHash": {
+          "type": "string"
+        },
+        "startOffset": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "endOffset": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cellRef": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "rowIndex": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["type", "blockId", "blockTextHash"],
+      "title": "BlockSelector",
+      "type": "object"
+    },
+    "CanvasNode": {
+      "additionalProperties": false,
+      "properties": {
+        "node_id": {
+          "type": "string"
+        },
+        "board_id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": ["excerpt", "explanation", "note", "group"],
+          "type": "string"
+        },
+        "group_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "w": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "h": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "z": {
+          "maximum": 9223372036854775807,
+          "minimum": -9223372036854775807,
+          "type": "integer"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "body": {
+          "type": "string"
+        },
+        "source_anchor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AnchorV1"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_message_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "version": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "created_at": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+          "type": "string"
+        },
+        "updated_at": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "node_id",
+        "board_id",
+        "kind",
+        "group_id",
+        "x",
+        "y",
+        "w",
+        "h",
+        "z",
+        "title",
+        "body",
+        "source_anchor",
+        "source_message_id",
+        "version",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "CanvasNode",
+      "type": "object"
+    },
+    "ErrorEnvelope": {
+      "additionalProperties": false,
+      "description": "contracts.md §0. `extra=\"forbid\"` so the exported schema says `additionalProperties: false`\nand a client-side envelope type with a stray field fails `contracts.spec.ts`.",
+      "properties": {
+        "detail": {
+          "type": "string"
+        },
+        "code": {
+          "enum": [
+            "auth_required",
+            "invalid_credentials",
+            "email_taken",
+            "not_found",
+            "validation_failed",
+            "empty_upload",
+            "payload_too_large",
+            "unsupported_media_type",
+            "not_parsed",
+            "not_failed",
+            "busy",
+            "stale_version",
+            "generation_not_found",
+            "anchor_incomplete",
+            "anchor_mismatch",
+            "budget_exhausted",
+            "agent_unavailable",
+            "not_configured",
+            "internal",
+            "not_implemented"
+          ],
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      },
+      "required": ["detail", "code", "retryable"],
+      "title": "ErrorEnvelope",
+      "type": "object"
+    },
+    "PageSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "PageSelector",
+          "type": "string"
+        },
+        "index": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": ["type", "index"],
+      "title": "PageSelector",
+      "type": "object"
+    },
+    "SectionPathSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "SectionPathSelector",
+          "type": "string"
+        },
+        "path": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "headingText": {
+          "type": "string"
+        },
+        "paraIndexInSection": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "charOffsetInPara": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["type", "path", "headingText", "paraIndexInSection", "charOffsetInPara"],
+      "title": "SectionPathSelector",
+      "type": "object"
+    },
+    "ShapeSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "ShapeSelector",
+          "type": "string"
+        },
+        "pageIndex": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "quads": {
+          "items": {
+            "maxItems": 4,
+            "minItems": 4,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "polygons": {
+          "items": {
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "pageWidth": {
+          "type": "number"
+        },
+        "pageHeight": {
+          "type": "number"
+        },
+        "rotation": {
+          "enum": [0, 90, 180, 270],
+          "type": "integer"
+        },
+        "userUnit": {
+          "type": "number"
+        },
+        "cropBox": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "pageIndex",
+        "quads",
+        "polygons",
+        "pageWidth",
+        "pageHeight",
+        "rotation",
+        "userUnit",
+        "cropBox"
+      ],
+      "title": "ShapeSelector",
+      "type": "object"
+    },
+    "StaleVersion": {
+      "additionalProperties": false,
+      "description": "`409 stale_version` (§2.7): the §0 envelope plus the node as it now is, under `current`.",
+      "properties": {
+        "detail": {
+          "type": "string"
+        },
+        "code": {
+          "const": "stale_version",
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "current": {
+          "$ref": "#/$defs/CanvasNode"
+        }
+      },
+      "required": ["detail", "code", "retryable", "current"],
+      "title": "StaleVersion",
+      "type": "object"
+    },
+    "SubTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": ["equation_part", "figure_region", "table_cell", "table_row", "algorithm_line"],
+          "type": "string"
+        },
+        "normalisedRect": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        "latexStart": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "latexEnd": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "lineIndex": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["kind"],
+      "title": "SubTarget",
+      "type": "object"
+    },
+    "TextPositionSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "TextPositionSelector",
+          "type": "string"
+        },
+        "start": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "end": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["type", "start", "end"],
+      "title": "TextPositionSelector",
+      "type": "object"
+    },
+    "TextQuoteSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "TextQuoteSelector",
+          "type": "string"
+        },
+        "exact": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "suffix": {
+          "type": "string"
+        },
+        "exactNormalised": {
+          "type": "string"
+        },
+        "prefixNormalised": {
+          "type": "string"
+        },
+        "suffixNormalised": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "exact",
+        "prefix",
+        "suffix",
+        "exactNormalised",
+        "prefixNormalised",
+        "suffixNormalised"
+      ],
+      "title": "TextQuoteSelector",
+      "type": "object"
+    }
+  }
+}

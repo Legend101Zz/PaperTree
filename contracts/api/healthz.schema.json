@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PaperTree API contract: healthz",
+  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: Healthz.",
+  "$defs": {
+    "AgentHealth": {
+      "additionalProperties": false,
+      "description": "What the API learned by asking `GET {PAPERTREE_AGENT_URL}/healthz` (§3.2).\n\n`reachable` is True only for an HTTP 200 whose body is a JSON object. When it is False the\nother two are null: the API does not know, and saying `key_present: false` would claim it did.",
+      "properties": {
+        "reachable": {
+          "type": "boolean"
+        },
+        "key_present": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sdk": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["reachable", "key_present", "sdk"],
+      "title": "AgentHealth",
+      "type": "object"
+    },
+    "Healthz": {
+      "additionalProperties": false,
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": "string"
+        },
+        "db": {
+          "const": "ok",
+          "type": "string"
+        },
+        "migrations": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "agent": {
+          "$ref": "#/$defs/AgentHealth"
+        }
+      },
+      "required": ["ok", "version", "db", "migrations", "agent"],
+      "title": "Healthz",
+      "type": "object"
+    }
+  }
+}

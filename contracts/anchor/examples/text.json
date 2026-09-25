@@ -1,0 +1,77 @@
+{
+  "anchorVersion": 1,
+  "offsetUnit": "unicode",
+  "id": "3f1c9a52-7d4e-4b8a-9c21-000000000100",
+  "doc": {
+    "paperId": "ppr_8XZBZEK3A5T716GZKHVFF7TKMP",
+    "pdfSha256": "sha256:1e0651b6810ecba34a3dbc5b5b0209226f889004607c1f203540a48d64e5a93a",
+    "parserVersion": "0.1.0",
+    "textStreamId": "api/ppr_8XZBZEK3A5T716GZKHVFF7TKMP/g1/0.1.0"
+  },
+  "targetKind": "text",
+  "provenanceClass": "source",
+  "selectors": [
+    {
+      "type": "BlockSelector",
+      "blockId": "blk_dog5ufrf3mc2bwqy",
+      "blockTextHash": "sha256:f9c23980cd765ac4a51d01453618faa6a897bddb90c5aa7a88862728e77fe957",
+      "startOffset": 10,
+      "endOffset": 90
+    },
+    {
+      "type": "PageSelector",
+      "index": 1
+    },
+    {
+      "type": "TextPositionSelector",
+      "start": 1601,
+      "end": 1681
+    },
+    {
+      "type": "TextQuoteSelector",
+      "exact": "est set, and won the 1st place in the ILSVRC\n2015 classiﬁcation competition. The",
+      "prefix": "http://mscoco.org/dataset/#detections-challenge2015.\n1. Introduction\nImageNet t",
+      "suffix": " extremely deep rep-\nresentations also have excellent generalization",
+      "exactNormalised": "estset,andwonthe1stplaceintheilsvrc2015classificationcompetition.the",
+      "prefixNormalised": "http://mscoco.org/dataset/#detections-challenge2015.1.introductionimagenett",
+      "suffixNormalised": "extremelydeeprepresentationsalsohaveexcellentgeneralization"
+    },
+    {
+      "type": "ShapeSelector",
+      "pageIndex": 1,
+      "quads": [
+        [352.61, 74.23, 545.11, 84.37],
+        [308.86, 86.19, 459.20090909090914, 96.32]
+      ],
+      "polygons": [
+        [
+          [545.11, 74.23],
+          [545.11, 85.28],
+          [459.20090909090914, 85.28],
+          [459.20090909090914, 96.32],
+          [308.86, 96.32],
+          [308.86, 85.28],
+          [352.61, 85.28],
+          [352.61, 74.23]
+        ]
+      ],
+      "pageWidth": 612,
+      "pageHeight": 792,
+      "rotation": 0,
+      "userUnit": 1,
+      "cropBox": [0, 0, 612, 792]
+    },
+    {
+      "type": "SectionPathSelector",
+      "path": ["1. Introduction"],
+      "headingText": "1. Introduction",
+      "paraIndexInSection": 13,
+      "charOffsetInPara": 10
+    }
+  ],
+  "created": {
+    "mode": "source",
+    "at": "2026-09-25T15:09:25.123Z",
+    "client": "papertree-web"
+  }
+}

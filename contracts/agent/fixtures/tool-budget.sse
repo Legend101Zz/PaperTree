@@ -1,0 +1,55 @@
+event: run
+data: {"run_id":"run_01K63AHD4F6J8M0P2R4T6W8Y0A","model":"minimax/MiniMax-M3","sdk":"pi-coding-agent@0.87.1"}
+
+event: status
+data: {"phase":"thinking"}
+
+event: status
+data: {"phase":"tool","tool":"search_passages","label":"Searching the paper · mAP on VOC 2012"}
+
+event: status
+data: {"phase":"tool","tool":"get_section","label":"Reading p. 6 · 4. Experiments"}
+
+event: status
+data: {"phase":"tool","tool":"get_passage","label":"Reading p. 7 · b15"}
+
+event: usage
+data: {"input":1402,"output":58,"cache_read":0,"cache_write":0,"reasoning":22,"cost_usd_est":0.000418}
+
+event: status
+data: {"phase":"tool","tool":"search_passages","label":"Searching the paper · Fast R-CNN combined"}
+
+event: status
+data: {"phase":"tool","tool":"get_section","label":"Reading p. 7 · 4.3. Combining Fast R-CNN and YOLO"}
+
+: ping
+
+event: status
+data: {"phase":"tool","tool":"get_passage","label":"Reading p. 8 · b21"}
+
+event: usage
+data: {"input":3310,"output":61,"cache_read":1280,"cache_write":0,"reasoning":25,"cost_usd_est":0.000611}
+
+event: status
+data: {"phase":"tool","tool":"search_passages","label":"Searching the paper · Picasso dataset"}
+
+event: status
+data: {"phase":"tool","tool":"get_section","label":"Reading p. 8 · 4.5. Generalizability"}
+
+event: status
+data: {"phase":"tool","tool":"get_passage","label":"Tool budget exhausted"}
+
+event: usage
+data: {"input":5217,"output":66,"cache_read":3200,"cache_write":0,"reasoning":27,"cost_usd_est":0.000806}
+
+: ping
+
+event: status
+data: {"phase":"tool","tool":"search_passages","label":"Tool budget exhausted"}
+
+event: usage
+data: {"input":6994,"output":49,"cache_read":5120,"cache_write":0,"reasoning":19,"cost_usd_est":0.000932}
+
+event: done
+data: {"status":"error","stop_reason":"aborted","error":{"code":"tool_budget_exhausted","retryable":false,"message":"The question needed more of the paper than one answer may read. Try a narrower question."},"final_text":"","handles_seen":["b1","b2","b3","b4","b5","b6","b7","b8","b9","b10","b11","b12","b13","b14","b15","b16","b17","b18","b19","b20","b21","b22","b23","b24","b25","b26"],"markers":[],"usage_totals":{"input":16923,"output":234,"cache_read":9600,"cache_write":0,"reasoning":93,"cost_usd_est":0.002767},"tool_calls":10,"turns":4,"retries":0,"first_text_ms":null,"latency_ms":14206,"entries":[]}
+
