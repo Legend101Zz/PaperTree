@@ -3,20 +3,17 @@
   "Migrate up from empty -> head; re-running is a no-op; a paper with 30k blocks inserts
    in <2s."
 
-Also asserts that the checksums this runner records are byte-identical to the ones the
-TypeScript runner records — which is what makes "one source of truth" a fact rather than an
-intention. (The TS side records the same `sha256:<hex of the file bytes>`; both are computed
-here from the same files, so a divergence in either runner's hashing would show up.)
+Also pins what this runner records as a migration's checksum: ``sha256:<hex of the file
+bytes>``. (That used to be asserted against a TypeScript twin runner as well; the twin and
+``test_a_database_migrated_by_typescript_is_a_noop_for_python`` were deleted in the reader
+release's S0, ADR-002 §5 / R5, before 0005 landed. There is one runner now.)
 """
 
 from __future__ import annotations
 
 import hashlib
-import json
 import os
-import shutil
 import sqlite3
-import subprocess
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -89,7 +86,7 @@ F0_5_TABLES = (
 # machine speed does. #82 carries that, and `LOCAL_BOUND_MS` below is what still sees it —
 # off CI only, exactly as the TypeScript side keeps its own.
 #
-# Keep both halves of the twin (this file and `test/migrations.spec.ts`) in step.
+# (The TypeScript half, `test/migrations.spec.ts`, was deleted with the twin in S0; R5.)
 LOCAL_BOUND_MS = 2000
 
 #: Blocks in the calibration insert each timing test runs before the real one.
@@ -266,11 +263,10 @@ def test_empty_to_head(tmp_path: Path) -> None:
 
 
 def test_recorded_checksums_match_the_files_on_disk(tmp_path: Path) -> None:
-    """Both runners record `sha256:<hex of the file bytes>`; this pins that definition.
+    """The runner records `sha256:<hex of the file bytes>`; this pins that definition.
 
-    If either language ever hashed something else — normalised text, statements after
-    splitting — the other language's re-migrate would report drift on a database it did
-    not write. Pinning it on both sides is what makes that impossible.
+    If it ever hashed something else — normalised text, statements after splitting — every
+    database migrated by an earlier release would report drift on its next start.
     """
     from papertree_db import applied_migrations, find_migrations_dir
 
@@ -301,54 +297,6 @@ def test_rerun_is_a_noop(tmp_path: Path) -> None:
         assert db.migrate().applied == ()
 
     # …and across a fresh connection.
-    with open_database(file) as db:
-        assert db.migrate().applied == ()
-
-
-def test_a_database_migrated_by_typescript_is_a_noop_for_python(tmp_path: Path) -> None:
-    """THE DRIFT TEST. The TypeScript runner migrates a file; the Python runner then reads
-    it and must apply nothing and report no checksum conflict.
-
-    This is what "both languages read ONE source of truth" means operationally: if the two
-    runners disagreed about statement splitting, checksums, or the schema_migrations shape,
-    this test fails.
-    """
-    package_root = Path(__file__).resolve().parents[2]  # packages/db
-    # SYMMETRIC WITH THE TYPESCRIPT TWIN. migrations.spec.ts fails rather than skips when `uv`
-    # is missing, because a skip reports as a pass and CI then certifies a check it never ran.
-    # This side skipped silently instead, and CI's Python job installs no Node — so the
-    # Python->TS direction was disabled there permanently while the TS->Python direction ran.
-    # Caught by watching the first real CI run: "717 passed, 1 skipped" against 718 locally.
-    opted_out = os.environ.get("PT_SKIP_CROSS_LANGUAGE_DRIFT") == "1"
-    node = shutil.which("node")
-    if node is None or not (package_root / "node_modules").exists():
-        if opted_out:
-            pytest.skip("cross-language drift check explicitly opted out")
-        raise AssertionError(
-            "db/migrations.spec cannot run the Python->TypeScript drift check because node or "
-            "packages/db/node_modules is missing. Run `pnpm install`, or set "
-            "PT_SKIP_CROSS_LANGUAGE_DRIFT=1 to acknowledge that you are running without it."
-        )
-
-    file = tmp_path / "cross.sqlite"
-    completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
-        [node, "--import", "tsx", "test/support/migrate-cli.ts", str(file)],
-        cwd=package_root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if completed.returncode != 0:
-        if opted_out:
-            pytest.skip(f"TypeScript runner unavailable, opted out: {completed.stderr[-200:]}")
-        raise AssertionError(
-            f"the TypeScript migration runner failed, so the drift check did not run: "
-            f"{completed.stderr[-400:]}"
-        )
-
-    applied_by_ts = json.loads(completed.stdout.strip().splitlines()[-1])["applied"]
-    assert applied_by_ts == [m.version for m in load_migrations()]
-
     with open_database(file) as db:
         assert db.migrate().applied == ()
 
@@ -540,7 +488,7 @@ class _StatementCounter:
     to prove it — gate 1 of the ownership model is language-enforced in TypeScript and only a
     convention in Python, and a test that quietly exempted itself would be the first crack in
     it. So the callback is attached to the connection as it is created and this file never holds
-    a ``sqlite3.Connection`` at all. `packages/db/test/migrations.spec.ts` instruments its own
+    a ``sqlite3.Connection`` at all. The deleted TypeScript twin instrumented its own
     driver from the outside for the same reason, and neither half needed a production hook.
 
     The callback fires for EVERY statement on the connection, including `migrate()` and
