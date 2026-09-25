@@ -24,8 +24,12 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from papertree_db import OwnershipError, PaperTreeDb, generation, open_database
+from papertree_db import DatabaseCore, OwnershipError, PaperTreeDb, generation, open_database
+from papertree_db.ai import AiMixin
+from papertree_db.canvas import CanvasMixin
+from papertree_db.highlights import HighlightsMixin
 from papertree_db.ids import BlockId, DerivationId, OwnerId, PaperId
+from papertree_db.library import LibraryMixin
 
 from .fixtures import make_paper
 
@@ -145,7 +149,12 @@ def test_there_is_no_connection_to_reach(db: PaperTreeDb) -> None:
     assert not hasattr(db, "execute")
     assert not hasattr(db, "cursor")
     assert not hasattr(db, "connection")
-    assert PaperTreeDb.__slots__ == ("_conn", "_handles", "_migrations_dir")
+    # ALL of the state is DatabaseCore's; PaperTreeDb and its four mixins add none (contracts.md
+    # §1.1's split must not open a second place a connection could live).
+    assert DatabaseCore.__slots__ == ("_conn", "_handles", "_migrations_dir")
+    for part in (PaperTreeDb, LibraryMixin, HighlightsMixin, AiMixin, CanvasMixin):
+        assert part.__slots__ == (), part.__name__
+    assert not hasattr(db, "__dict__")
     with pytest.raises(AttributeError):
         db.connection = object()  # type: ignore[attr-defined]
 
@@ -155,7 +164,9 @@ def test_every_public_helper_takes_the_owner_first(db: PaperTreeDb) -> None:
 
     A new helper that forgets the owner parameter fails here the moment it is added.
     """
-    exempt = {"migrate", "close", "create_user", "owner_for"}
+    # `transaction()` binds nothing; `run_grant` is contracts.md §1.1's one un-owned read (a run
+    # token is the credential) and is exempt by name, not by accident.
+    exempt = {"migrate", "close", "create_user", "owner_for", "transaction", "run_grant"}
     checked = 0
     for name in dir(db):
         if name.startswith("_") or name in exempt:

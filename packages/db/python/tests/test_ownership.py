@@ -237,6 +237,13 @@ def test_conn_is_a_forbidden_token_outside_papertree_db() -> None:
         "packages/db/python/papertree_db/database.py",
         "packages/db/python/papertree_db/migrate.py",
         "packages/jobs/python/papertree_jobs/store.py",
+        # The four feature mixins of PaperTreeDb (contracts.md §1.1). They ARE papertree_db: each
+        # is a slice of the one class that owns the connection, split into files only so that one
+        # slice owns each file. They hold no connection of their own (`__slots__ = ()`).
+        "packages/db/python/papertree_db/library.py",
+        "packages/db/python/papertree_db/highlights.py",
+        "packages/db/python/papertree_db/ai.py",
+        "packages/db/python/papertree_db/canvas.py",
     }
     # Parsed, not grepped: an `ast.Attribute` named `_conn` is a real access, whereas a grep also
     # hits every docstring that explains the rule — including the ones in this repo that do.
