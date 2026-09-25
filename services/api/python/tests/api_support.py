@@ -61,6 +61,7 @@ def harness(
     *,
     llm_transport: Transport | None = None,
     llm_api_key: str = "",
+    settings: Settings | None = None,
 ) -> Iterator[Harness]:
     # Faster scrypt is NOT configured. A test that runs against a weakened KDF is not testing the
     # thing that ships. Two registrations per test at ~50 ms is affordable; if that stops being
@@ -69,7 +70,8 @@ def harness(
     # `llm_transport` defaults to None, which means `UrllibTransport` — the REAL one. Nothing
     # reaches it, because with `llm_api_key=""` the provider is unavailable and `/ask` answers 503
     # before a request is built. A default scripted transport would have hidden that path.
-    settings = Settings(root=tmp_path / "data", llm_api_key=llm_api_key)
+    if settings is None:
+        settings = Settings(root=tmp_path / "data", llm_api_key=llm_api_key)
     with TestClient(create_app(settings, llm_transport=llm_transport)) as client:
         yield Harness(client=client, settings=settings)
 

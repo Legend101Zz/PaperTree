@@ -66,11 +66,13 @@ def create_app(
 
     # The reader is a separate origin in development (`next dev` on :3000, this on :8000).
     # Credentials are a bearer token in a header, never a cookie, so there is no CSRF surface and
-    # no need for `allow_credentials`. `expose_headers`: a cross-origin fetch can only READ the
+    # no need for `allow_credentials`. `allow_origins` is `PAPERTREE_CORS_ORIGINS` (contracts.md
+    # §2), beside the localhost regex. `expose_headers`: a cross-origin fetch can only READ the
     # request id if CORS says so.
     app.add_middleware(
         CORSMiddleware,
         allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
+        allow_origins=list(resolved.cors_origins),
         allow_methods=["*"],
         allow_headers=["*"],
         expose_headers=[REQUEST_ID_HEADER],
