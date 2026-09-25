@@ -20,6 +20,7 @@ is a document `packages/db` would store and every downstream consumer would then
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from statistics import median
 from typing import Any
@@ -48,14 +49,18 @@ from papertree_document_worker.references import (
 )
 from papertree_document_worker.tables import detect_tables
 from papertree_document_worker.text import build_block_text
-from papertree_document_worker.vlm import VlmBudget, VlmClient, VlmError
 
 __all__ = ["ParseResult", "ParserConfig", "parse_document"]
 
-#: A fixed timestamp is NOT used - `parsed_at` is the one field excluded from the determinism
-#: comparison (DESIGN.md §7.1), so it may vary between runs without breaking byte-identity.
-#: The caller supplies it so tests can pin it.
-DEFAULT_PARSED_AT = "2026-07-31T00:00:00Z"
+
+def utc_now_iso() -> str:
+    """``parsed_at`` when the caller does not pin one: the real UTC time, ``…T…:…:….mmmZ``.
+
+    It used to be the constant ``2026-07-31T00:00:00Z`` for every parse. It may vary: it is the one
+    field excluded from the determinism comparison (DESIGN.md §7.1), so a real clock does not
+    break byte-identity, and a caller (a test, a replay) may still pass a fixed value.
+    """
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,28 +76,15 @@ class ParserConfig:
     crop_scale: float = DEFAULT_SCALE
     #: URI scheme for stored crops. Opaque by default - see crops.py.
     asset_scheme: str = "asset"
-    #: Cap on VLM calls per document. 0 disables the VLM entirely.
-    vlm_max_calls: int = 0
-    #: DELIBERATE DUPLICATE OF A PROVIDER CONSTANT. RULED ON IN #88 — DO NOT "FIX" BY IMPORTING.
-    #:
-    #: The other two copies are ``vlm.py``'s ``DEFAULT_MODEL`` and, upstream of both,
-    #: ``packages/agent-tools/python/papertree_agent_tools/provider.py``'s ``DEFAULT_MODEL`` /
-    #: ``DEFAULT_VISION_MODEL``. #88 asked whether to import from that package instead.
-    #: **Ruling: no**, and THIS field is why. It is a config DEFAULT, and `as_dict` below feeds
-    #: `config_hash_for` -> `ParserInfo.config_hash` -> `papers.parser_config_hash`. Importing it
-    #: would let an unrelated package upgrade silently move every parse's config hash — the one
-    #: value that makes "re-parsing is a no-op" checkable, per this class's own docstring. A
-    #: literal cannot move underneath you; an imported default can. Full argument in `provider.py`.
-    #: Watched by `KNOWN_CONSTANT_COPIES` in agent-tools' `tests/test_runtime_swappable.py`, which
-    #: fails on a third copy and on a listed file that stops carrying one.
-    vlm_model: str = "MiniMax-M3"
+    # The VLM knobs (`vlm_max_calls`, `vlm_model`) are gone with `vlm.py` (ADR-002 §5, R6): gated
+    # off since Epic 1 (no setter, default 0), a second MiniMax client and a second key that
+    # bypassed the Pi ruling. Their removal changes `as_dict`, so every new parse's
+    # `config_hash` differs from one made before it — correctly: the configuration changed.
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "crop_scale": self.crop_scale,
             "asset_scheme": self.asset_scheme,
-            "vlm_max_calls": self.vlm_max_calls,
-            "vlm_model": self.vlm_model if self.vlm_max_calls else None,
         }
 
 
@@ -105,9 +97,6 @@ class ParseResult:
     diagnostics: list[Any] = field(default_factory=list)
     multi_polygon_blocks: int = 0
     page_count: int = 0
-    #: VLM calls made, and what they cost. Reported so a run's spend is a fact, not a guess.
-    vlm_calls: int = 0
-    vlm_tokens: int = 0
 
 
 #: A caption sits directly under its float, or occasionally over it. Beyond this many points
@@ -387,9 +376,14 @@ def parse_document(
     paper_id: str,
     asset_root: Path,
     config: ParserConfig | None = None,
-    parsed_at: str = DEFAULT_PARSED_AT,
+    parsed_at: str | None = None,
+    generation: int = 1,
 ) -> ParseResult:
     """Parse one PDF into a validated PaperIR document.
+
+    ``generation`` is the caller's (default 1): the parse job passes its payload's generation, so
+    a re-parse is stored, and its crops are written, as generation N+1 (contracts.md §2.2).
+    ``parsed_at`` defaults to the real UTC time (:func:`utc_now_iso`).
 
     `asset_root` must live OUTSIDE the repository: CI's codegen-drift step is a whole-tree
     `git status --porcelain --untracked-files=all`, and `.gitignore` covers none of these paths.
@@ -403,7 +397,16 @@ def parse_document(
         layout = layout_document(pages)
         source_hash = document.source_hash
         return _assemble(
-            document, pages, layout, profile, source_hash, paper_id, asset_root, config, parsed_at
+            document,
+            pages,
+            layout,
+            profile,
+            source_hash,
+            paper_id,
+            asset_root,
+            config,
+            parsed_at if parsed_at is not None else utc_now_iso(),
+            generation,
         )
     finally:
         document.close()
@@ -419,6 +422,7 @@ def _assemble(
     asset_root: Path,
     config: ParserConfig,
     parsed_at: str,
+    generation: int = 1,
 ) -> ParseResult:
 
     builder = PaperBuilder(source_hash=source_hash, paper_id=paper_id, profile=profile)
@@ -752,7 +756,11 @@ def _assemble(
         ]
 
     store = CropStore(
-        root=asset_root, paper_id=paper_id, scheme=config.asset_scheme, scale=config.crop_scale
+        root=asset_root,
+        paper_id=paper_id,
+        generation=generation,
+        scheme=config.asset_scheme,
+        scale=config.crop_scale,
     )
     for block in builder.blocks:
         if block.type not in ("equation", "inline_equation", "figure") or block.payload is None:
@@ -834,31 +842,10 @@ def _assemble(
         )
     apply_payload_mirrors(caption_edges, float_links)
 
-    # F1.7's VLM half: ONLY flagged regions, only when a budget is configured, and the crop is
-    # always retained whatever happens. The LaTeX is a DECLARED INTERPRETATION with its own
-    # confidence sitting beside the ground truth, never a source field (DESIGN.md §2.2).
-    vlm_budget = VlmBudget(max_calls=config.vlm_max_calls)
-    if config.vlm_max_calls > 0:
-        client = VlmClient(model=config.vlm_model)
-        if client.available:
-            for block in builder.blocks:
-                if block.type != "equation" or block.payload is None or vlm_budget.exhausted:
-                    continue
-                try:
-                    reading = client.read_equation(
-                        store.read("equations", block.block_id), vlm_budget
-                    )
-                except VlmError:
-                    # A failed call leaves the crop and no latex, which is a valid document.
-                    # Never a partial reading.
-                    continue
-                if reading is not None and reading.latex:
-                    block.payload["latex"] = reading.latex
-                    block.payload["latex_confidence"] = reading.confidence
-
     paper = builder.build(
         config_hash=config_hash_for(config.as_dict()),
         parsed_at=parsed_at,
+        generation=generation,
     )
     # `assert_valid_paper` raises on any ERROR and returns None; `validate_paper` yields the
     # full report. Both are called: the assertion is the gate, the report is what surfaces the
@@ -871,6 +858,4 @@ def _assemble(
         multi_polygon_blocks=builder.multi_polygon_blocks,
         page_count=len(pages),
         crops_written=store.written,
-        vlm_calls=vlm_budget.calls,
-        vlm_tokens=vlm_budget.input_tokens + vlm_budget.output_tokens,
     )

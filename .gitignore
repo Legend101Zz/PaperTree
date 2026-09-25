@@ -41,6 +41,12 @@ research/benchmarks/corpus/*.pdf
 # Uploaded papers (user data)
 archive/v1-api/storage/papers/*.pdf
 
+# #136: an untracked copy of the v1 backend lingers at apps/api/ in older checkouts (a .env, a
+# .venv and uploaded third-party PDFs under storage/papers/). Nothing under apps/api/ is tracked
+# (v1 lives in archive/v1-api/), so ignore the whole directory: a `git add -A` in such a checkout
+# must not commit those uploads. Deleting the directory is the owner's call, not an agent's.
+apps/api/
+
 # Epic 1: parsed asset crops. The worker writes figure/equation/page renders under a caller-
 # supplied root; the default is OUTSIDE the repo, but a run pointed here must not turn CI's
 # codegen-drift step (a whole-tree `git status --untracked-files=all`) red.

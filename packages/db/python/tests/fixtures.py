@@ -1,7 +1,8 @@
-"""Synthetic PaperIR documents for the db tests — the twin of packages/db/test/fixtures.ts.
+"""Synthetic PaperIR documents and Anchor records for the db tests.
 
 NOT the golden fixtures (F0.7 owns those). Shape-correct, cheap to generate at 30k blocks,
-and deliberately not hand-checked against any real PDF.
+and deliberately not hand-checked against any real PDF. (Tests that need a REAL parse and a REAL
+``captureAnchor`` record use ``saved_shapes.py`` instead.)
 """
 
 from __future__ import annotations
@@ -25,8 +26,8 @@ def page_id_for(index: int) -> str:
     return "pg_" + block_id_for(index)[4:]
 
 
-#: A parser-shaped body paragraph, for the payload="realistic" measurement. See the twin
-#: comment in packages/db/test/fixtures.ts: the "<2s for 30k blocks" acceptance bound is met
+#: A parser-shaped body paragraph, for the payload="realistic" measurement. As the deleted
+#: TypeScript twin's fixtures.ts also recorded: the "<2s for 30k blocks" acceptance bound is met
 #: by the MINIMAL payload and not by this one, and both numbers are measured and printed.
 _WORDS = 60
 _SPANS = 12
@@ -173,4 +174,32 @@ def make_paper(
             "weakest_pages": [],
             "needs_review": False,
         },
+    }
+
+
+def make_anchor(paper_id: str, source_hash: str, block_id: str, anchor_id: str) -> dict[str, Any]:
+    """A minimal Anchor v1 record that ``create_highlight`` accepts, for ``make_paper`` papers.
+
+    Hand-built on purpose and only for ownership tests, where what is under test is WHO may write,
+    not what an anchor contains: page 0, a quote and one quad on the block's line.
+    """
+    return {
+        "anchorVersion": 1,
+        "offsetUnit": "unicode",
+        "id": anchor_id,
+        "doc": {
+            "paperId": paper_id,
+            "pdfSha256": source_hash,
+            "parserVersion": "0.0.0",
+            "textStreamId": f"api/{paper_id}/g1/0.0.0",
+        },
+        "targetKind": "text",
+        "provenanceClass": "source",
+        "selectors": [
+            {"type": "BlockSelector", "blockId": block_id, "blockTextHash": "sha256:" + "0" * 64},
+            {"type": "PageSelector", "index": 0},
+            {"type": "TextQuoteSelector", "exact": "Paragraph 3", "prefix": "", "suffix": ""},
+            {"type": "ShapeSelector", "pageIndex": 0, "quads": [[72, 100, 540, 110]]},
+        ],
+        "created": {"mode": "source", "at": "2026-09-25T00:00:00.000Z", "client": "db-tests"},
     }

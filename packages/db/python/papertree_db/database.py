@@ -1,32 +1,43 @@
-"""PaperTreeDb — the Python twin of ``packages/db/src/database.ts``.
+"""PaperTreeDb — the core of the SQLite data layer, and the class that assembles the mixins.
 
-THE OWNERSHIP MECHANISM (the full argument is in the TypeScript header; this is the same
-design, expressed in the two things Python can enforce):
+THE SPLIT (contracts.md §1.1, S0). ``PaperTreeDb`` is ``DatabaseCore`` plus four feature mixins,
+each owned by one later slice (slice-plan.md §3), so call sites keep ``db.<method>``:
+
+  * ``database.py``   this module: the connection, owner minting, ``transaction()``, and the
+                      parse-derived tables (papers, pages, blocks, relations, derivations, vectors).
+  * ``library.py``    S1 — the library listing and upload registration.
+  * ``highlights.py`` S0 -> S4 — highlights, anchors, the per-generation resolution cache.
+  * ``ai.py``         S5 — threads, messages, runs, citations, summaries.
+  * ``canvas.py``     S7 — boards, nodes, edges.
+
+The mixins hold no state (``__slots__ = ()``) and reach the connection only through the members
+this class defines; for the type checker they subclass ``DatabaseCore``, at runtime ``object``.
+
+THE OWNERSHIP MECHANISM, expressed in the two things Python can enforce:
 
   1. THE CONNECTION IS PRIVATE BY CONVENTION, AND THAT IS THE HONEST WORDING. ``_conn`` is
      not exported from ``papertree_db`` and there is no accessor, so no SQL exists outside
-     this module in any code anyone writes on purpose. It is NOT unreachable: ``db._conn``
+     this package in any code anyone writes on purpose. It is NOT unreachable: ``db._conn``
      is an ordinary attribute lookup and hands back a live ``sqlite3.Connection``, which
      restores exactly the capability findings.md §F describes — an unscoped query, and an
-     unscoped cross-tenant UPDATE, at a call site. Python cannot make that impossible; the
-     TypeScript twin can and does (``#db`` is an ES private field). So the two languages do
-     NOT deliver this gate equally, and pretending otherwise is how a reviewer stops
-     looking. ``_conn`` is a FORBIDDEN TOKEN outside this module: ``test_ownership.py``
-     greps every consumer package for the token ``._conn`` and fails if one appears.
+     unscoped cross-tenant UPDATE, at a call site. Python cannot make that impossible. (The
+     deleted TypeScript twin could: ``#db`` was an ES private field.) ``_conn`` is a FORBIDDEN
+     TOKEN outside this package: ``test_ownership.py`` parses every consumer package for the
+     attribute ``._conn`` and fails if one appears.
   2. EVERY DATA METHOD TAKES ``owner: OwnerId`` FIRST. Omitting it is a ``TypeError`` at
      runtime and ``call-arg`` under mypy; passing a ``str`` is ``arg-type`` under mypy and
      ``OwnershipError`` at runtime, because ``_resolve`` refuses anything but a handle THIS
-     connection minted.
+     connection minted. (``run_grant`` is the one documented exception: a run token is the
+     credential, contracts.md §1.1.)
   3. ``OwnerId`` IS AN UNGUESSABLE PER-CONNECTION HANDLE, NOT A USER ID (ids.py). This is the
-     second design and the first one was WRONG in the same way the TypeScript one was: it
-     kept a set of minted USER IDS, so naming a tenant's user id was enough, and an
-     adversarial review reproduced findings.md §F1 through it three separate ways — see
-     ids.py's docstring, which lists them. A ``user_id`` is public: it appears in URLs, logs
-     and emails. The handle is 32 CSPRNG bytes that appear nowhere at all, so a forged
-     ``OwnerId`` — however it was built — holds a string no connection has heard of.
+     second design and the first one was WRONG: it kept a set of minted USER IDS, so naming a
+     tenant's user id was enough, and an adversarial review reproduced findings.md §F1 through
+     it three separate ways — see ids.py's docstring, which lists them. A ``user_id`` is public:
+     it appears in URLs, logs and emails. The handle is 32 CSPRNG bytes that appear nowhere at
+     all, so a forged ``OwnerId`` — however it was built — holds a string no connection has
+     heard of.
   4. THE SCHEMA CARRIES THE OWNER IN EVERY FOREIGN KEY, so a cross-tenant row cannot be
-     INSERTed and every join key is owner-qualified. That gate lives in the .sql and is
-     shared with the TypeScript side by construction.
+     INSERTed and every join key is owner-qualified. That gate lives in the .sql.
 
 WHAT NONE OF THE FOUR GATES DOES: authenticate anybody. ``owner_for`` checks that a ``users``
 row exists and nothing more — see its docstring. The caller is the trust boundary.
@@ -34,30 +45,31 @@ row exists and nothing more — see its docstring. The caller is the trust bound
 The acceptance criterion for Python is "raises". Both halves are tested: ``test_typing.py``
 carries ``# type: ignore[...]`` comments on the illegal calls, which — because
 ``warn_unused_ignores`` is on under ``mypy --strict`` — fail the typecheck if the call ever
-becomes legal, exactly as ``@ts-expect-error`` does on the TypeScript side.
+becomes legal.
 """
 
 from __future__ import annotations
 
-import json
 import sqlite3
 import struct
 from collections.abc import Iterable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Final
+from typing import Any, Final, Self
 
 import sqlite_vec  # type: ignore[import-untyped]
 
+from ._support import Row, now_iso, opt_json, row_to_dict, to_json
+from .ai import AiMixin
+from .canvas import CanvasMixin
 from .errors import OwnershipError
+from .highlights import HighlightsMixin
 from .ids import (
-    AnchorId,
     BlockId,
     DerivationId,
     Generation,
-    HighlightId,
     OwnerId,
     PaperId,
     mint_owner,
@@ -66,20 +78,25 @@ from .ids import (
 from .ids import (
     generation as brand_generation,
 )
+from .library import LibraryMixin
 from .migrate import MigrationResult, migrate
+
+__all__ = [
+    "MAX_DERIVATION_DEPTH",
+    "VECTOR_DIMENSIONS",
+    "CreatedUser",
+    "DatabaseCore",
+    "PaperTreeDb",
+    "Row",
+    "open_database",
+    "to_vector_blob",
+]
 
 #: Embedding width declared by ``block_vectors`` in 0001_core.sql.
 VECTOR_DIMENSIONS: Final = 768
 
 #: Hard cap on derivation-tree traversal. findings.md §F3: "no depth or cycle guard".
 MAX_DERIVATION_DEPTH: Final = 64
-
-#: A result row. Keys mirror the columns exactly; there is deliberately no rename layer.
-Row = dict[str, Any]
-
-
-def _row_to_dict(cursor: sqlite3.Cursor, row: tuple[Any, ...]) -> Row:
-    return {column[0]: value for column, value in zip(cursor.description, row, strict=True)}
 
 
 def to_vector_blob(values: Sequence[float]) -> bytes:
@@ -91,7 +108,7 @@ def to_vector_blob(values: Sequence[float]) -> bytes:
 
 @dataclass(frozen=True, slots=True)
 class CreatedUser:
-    """What ``create_user`` returns. The mirror of TypeScript's ``{ userId, owner }``.
+    """What ``create_user`` returns: ``(user_id, owner)``.
 
     ``user_id`` is public data — it appears in URLs, logs and emails. ``owner`` is a bearer
     credential for this connection. They are returned together and must be treated apart.
@@ -101,14 +118,19 @@ class CreatedUser:
     owner: OwnerId
 
 
-class PaperTreeDb:
-    """The only way to reach the SQLite connection, and therefore the only place SQL is."""
+class DatabaseCore:
+    """The connection, owner minting, ``transaction()`` and the parse-derived tables.
+
+    Not used directly: ``PaperTreeDb`` below is this class plus the four feature mixins. It holds
+    ALL of the instance state (the mixins declare ``__slots__ = ()``), so there is still exactly
+    one place a connection lives.
+    """
 
     __slots__ = ("_conn", "_handles", "_migrations_dir")
 
     def __init__(self, filename: str | Path = ":memory:", migrations_dir: Path | None = None):
         conn = sqlite3.connect(str(filename), isolation_level=None)
-        conn.row_factory = _row_to_dict
+        conn.row_factory = row_to_dict
         conn.enable_load_extension(True)
         sqlite_vec.load(conn)
         conn.enable_load_extension(False)
@@ -132,7 +154,7 @@ class PaperTreeDb:
     def close(self) -> None:
         self._conn.close()
 
-    def __enter__(self) -> PaperTreeDb:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(
@@ -150,7 +172,7 @@ class PaperTreeDb:
         user_id = new_id("usr")
         self._conn.execute(
             "INSERT INTO users (user_id, email, created_at) VALUES (?, ?, ?)",
-            (user_id, email, _now()),
+            (user_id, email, now_iso()),
         )
         return CreatedUser(user_id=user_id, owner=self._mint(user_id))
 
@@ -183,23 +205,78 @@ class PaperTreeDb:
         self._handles[handle] = user_id
         return owner
 
+    # ── transactions ─────────────────────────────────────────────────────────────────
+
+    @contextmanager
+    def transaction(self) -> Iterator[None]:
+        """ONE ``BEGIN IMMEDIATE … COMMIT`` around the block; ``ROLLBACK`` if it raises.
+
+        The connection is in autocommit (``isolation_level=None``) outside this, so a single
+        statement needs no transaction and every multi-row write must use one (contracts.md
+        §1.1). ``IMMEDIATE`` takes the write lock at ``BEGIN`` rather than at the first write, so
+        two processes (the API and the worker share this file) cannot both read and then both try
+        to upgrade — the loser waits at ``BEGIN`` instead of failing mid-way with ``SQLITE_BUSY``.
+
+        NESTING IS A SAVEPOINT. Inside an open transaction the block runs as ``SAVEPOINT`` /
+        ``RELEASE``, and an exception rolls back to the savepoint only, then propagates. So a
+        caller can group several methods that each use ``transaction()`` into one atomic unit —
+        ``PUT …/highlights/resolutions`` does — and each still protects itself when called alone.
+        """
+        conn = self._conn
+        if conn.in_transaction:
+            conn.execute("SAVEPOINT papertree_nested")
+            try:
+                yield
+            except BaseException:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK TO papertree_nested")
+                    conn.execute("RELEASE papertree_nested")
+                raise
+            conn.execute("RELEASE papertree_nested")
+            return
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            yield
+        except BaseException:
+            # SQLite rolls some errors back by itself (SQLITE_FULL, SQLITE_IOERR, …); a second
+            # ROLLBACK would then raise and mask the error that matters.
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            raise
+        conn.execute("COMMIT")
+
+    # ── ownership of a paper, independent of any parse ───────────────────────────────
+
+    def owned_paper(self, owner: OwnerId, paper_id: PaperId) -> Row | None:
+        """This owner's ``paper_owners`` row for ``paper_id``, or None (absent or not theirs).
+
+        Additive in S0, beside contracts.md §1.1: the highlight routes need "is this the caller's
+        paper?" for a paper that may have NO promoted generation yet (409 ``not_parsed`` vs 404),
+        and ``promoted_generation`` cannot tell those apart. ``owner_id`` is not in the row.
+        """
+        owner_id = self._resolve(owner)
+        return self._one(
+            "SELECT paper_id, source_hash, created_at, original_filename, byte_size, page_count, "
+            "latest_job_id FROM paper_owners WHERE owner_id = ? AND paper_id = ?",
+            (owner_id, paper_id),
+        )
+
     # ── papers ───────────────────────────────────────────────────────────────────────
 
     def put_paper(self, owner: OwnerId, paper: Mapping[str, Any]) -> None:
-        """Writes one PaperIR generation in a single transaction with prepared statements.
+        """Writes one PaperIR generation in ONE ``transaction()`` with prepared statements.
 
         ``paper`` is the PaperIR document as plain JSON data — i.e. what
         ``papertree_document_ir`` produces, via ``model_dump(mode="json")``. Validating it
         is document-ir's job; this package's job is to store it without losing anything.
         """
         owner_id = self._resolve(owner)
-        now = _now()
+        now = now_iso()
         gen = brand_generation(int(paper["generation"]))
         paper_id = str(paper["paper_id"])
         parser = paper["parser"]
 
-        self._conn.execute("BEGIN")
-        try:
+        with self.transaction():
             self._conn.execute(
                 "INSERT OR IGNORE INTO paper_owners (paper_id, owner_id, source_hash, created_at) "
                 "VALUES (?, ?, ?, ?)",
@@ -231,10 +308,10 @@ class PaperTreeDb:
                     parser["parsed_at"],
                     paper["status"],
                     paper["partial_reason"],
-                    _json(paper["metadata"]),
-                    _json(paper["sections"]),
-                    _json(paper["references"]),
-                    _json(paper["confidence"]),
+                    to_json(paper["metadata"]),
+                    to_json(paper["sections"]),
+                    to_json(paper["references"]),
+                    to_json(paper["confidence"]),
                     now,
                 ),
             )
@@ -259,10 +336,6 @@ class PaperTreeDb:
                    VALUES (?,?,?,?,?,?,?,?)""",
                 _relation_params(owner_id, paper_id, gen, paper["relations"]),
             )
-        except Exception:
-            self._conn.execute("ROLLBACK")
-            raise
-        self._conn.execute("COMMIT")
 
     def get_paper(self, owner: OwnerId, paper_id: PaperId, generation: Generation) -> Row | None:
         owner_id = self._resolve(owner)
@@ -293,7 +366,7 @@ class PaperTreeDb:
             "INSERT INTO paper_promotions (owner_id, paper_id, generation, promoted_at) "
             "VALUES (?,?,?,?) ON CONFLICT (owner_id, paper_id) DO UPDATE SET "
             "generation = excluded.generation, promoted_at = excluded.promoted_at",
-            (owner_id, paper_id, generation, _now()),
+            (owner_id, paper_id, generation, now_iso()),
         )
 
     def promoted_generation(self, owner: OwnerId, paper_id: PaperId) -> int | None:
@@ -371,148 +444,6 @@ class PaperTreeDb:
             (owner_id, paper_id, generation),
         )
 
-    # ── highlights + anchors ─────────────────────────────────────────────────────────
-
-    def create_highlight(
-        self,
-        owner: OwnerId,
-        paper_id: PaperId,
-        generation: Generation,
-        color: str,
-        note: str | None = None,
-    ) -> HighlightId:
-        owner_id = self._resolve(owner)
-        highlight_id = new_id("hl")
-        now = _now()
-        self._conn.execute(
-            "INSERT INTO highlights (highlight_id, owner_id, paper_id, generation, color, note, "
-            "created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)",
-            (highlight_id, owner_id, paper_id, generation, color, note, now, now),
-        )
-        return HighlightId(highlight_id)
-
-    def get_highlight(self, owner: OwnerId, highlight_id: HighlightId) -> Row | None:
-        owner_id = self._resolve(owner)
-        return self._one(
-            "SELECT * FROM highlights WHERE owner_id = ? AND highlight_id = ?",
-            (owner_id, highlight_id),
-        )
-
-    def list_highlights(
-        self, owner: OwnerId, paper_id: PaperId, generation: Generation
-    ) -> list[Row]:
-        owner_id = self._resolve(owner)
-        return self._all(
-            "SELECT * FROM highlights WHERE owner_id = ? AND paper_id = ? AND generation = ? "
-            "ORDER BY created_at",
-            (owner_id, paper_id, generation),
-        )
-
-    def update_highlight_note(
-        self, owner: OwnerId, highlight_id: HighlightId, note: str | None
-    ) -> int:
-        """The write findings.md §F1 got wrong: update by id alone, no owner filter."""
-        owner_id = self._resolve(owner)
-        cursor = self._conn.execute(
-            "UPDATE highlights SET note = ?, updated_at = ? "
-            "WHERE owner_id = ? AND highlight_id = ?",
-            (note, _now(), owner_id, highlight_id),
-        )
-        return cursor.rowcount
-
-    def delete_highlight(self, owner: OwnerId, highlight_id: HighlightId) -> int:
-        owner_id = self._resolve(owner)
-        cursor = self._conn.execute(
-            "DELETE FROM highlights WHERE owner_id = ? AND highlight_id = ?",
-            (owner_id, highlight_id),
-        )
-        return cursor.rowcount
-
-    def create_anchor(
-        self,
-        owner: OwnerId,
-        highlight_id: HighlightId,
-        paper_id: PaperId,
-        generation: Generation,
-        block_id: BlockId,
-        tier: int,
-        polygon: Sequence[Sequence[float]],
-        bbox: Sequence[float],
-        *,
-        char_start: int | None = None,
-        char_end: int | None = None,
-        text_quote: str | None = None,
-        quote_prefix: str | None = None,
-        quote_suffix: str | None = None,
-        content_hash: str | None = None,
-    ) -> AnchorId:
-        owner_id = self._resolve(owner)
-        anchor_id = new_id("anc")
-        self._conn.execute(
-            """INSERT INTO anchors (anchor_id, owner_id, highlight_id, paper_id, generation,
-                 block_id, tier, char_start, char_end, text_quote, quote_prefix, quote_suffix,
-                 content_hash, polygon, bbox_x0, bbox_y0, bbox_x1, bbox_y1, resolved_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (
-                anchor_id,
-                owner_id,
-                highlight_id,
-                paper_id,
-                generation,
-                block_id,
-                tier,
-                char_start,
-                char_end,
-                text_quote,
-                quote_prefix,
-                quote_suffix,
-                content_hash,
-                _json([list(point) for point in polygon]),
-                bbox[0],
-                bbox[1],
-                bbox[2],
-                bbox[3],
-                _now(),
-            ),
-        )
-        return AnchorId(anchor_id)
-
-    def list_anchors(self, owner: OwnerId, highlight_id: HighlightId) -> list[Row]:
-        owner_id = self._resolve(owner)
-        return self._all(
-            "SELECT * FROM anchors WHERE owner_id = ? AND highlight_id = ? "
-            "ORDER BY tier, anchor_id",
-            (owner_id, highlight_id),
-        )
-
-    def resolve_highlights(
-        self, owner: OwnerId, paper_id: PaperId, generation: Generation
-    ) -> list[Row]:
-        """THE MULTI-TABLE JOIN, with the owner predicate on EVERY joined table.
-
-        findings.md §F3 is the version of this query that filters the root only. Note the
-        join keys themselves carry owner_id, so ``anchors -> blocks`` cannot straddle two
-        owners even if a predicate were dropped.
-        """
-        owner_id = self._resolve(owner)
-        return self._all(
-            """SELECT h.highlight_id, a.anchor_id, b.block_id, a.tier, h.color, h.note,
-                      a.text_quote, a.content_hash AS anchor_content_hash,
-                      b.content_hash AS block_content_hash, b.text AS block_text,
-                      b.page_index, b.polygon AS block_polygon
-                 FROM highlights h
-                 JOIN anchors a
-                   ON a.owner_id = h.owner_id AND a.highlight_id = h.highlight_id
-                  AND a.owner_id = ?
-                 JOIN blocks b
-                   ON b.owner_id = a.owner_id AND b.paper_id = a.paper_id
-                  AND b.generation = a.generation AND b.block_id = a.block_id
-                  AND b.owner_id = h.owner_id
-                WHERE h.owner_id = ? AND h.paper_id = ? AND h.generation = ?
-                ORDER BY h.created_at, a.tier""",
-            (owner_id, owner_id, paper_id, generation),
-        )
-
     # ── derivations ──────────────────────────────────────────────────────────────────
 
     def create_derivation(
@@ -543,9 +474,9 @@ class PaperTreeDb:
                 kind,
                 model_id,
                 prompt_hash,
-                _json(content),
-                _json(list(derived_from)),
-                _now(),
+                to_json(content),
+                to_json(list(derived_from)),
+                now_iso(),
             ),
         )
         return DerivationId(derivation_id)
@@ -605,8 +536,7 @@ class PaperTreeDb:
         blob = to_vector_blob(embedding)
         partition = _paper_key(owner_id, paper_id, generation)
         vec_key = f"{partition}#{block_id}"
-        self._conn.execute("BEGIN")
-        try:
+        with self.transaction():
             # vec0 has no UPSERT; delete-then-insert is the supported replace.
             self._conn.execute("DELETE FROM block_vectors WHERE vec_key = ?", (vec_key,))
             self._conn.execute(
@@ -614,10 +544,6 @@ class PaperTreeDb:
                 "VALUES (?,?,?,?,?)",
                 (partition, vec_key, block_id, model, blob),
             )
-        except Exception:
-            self._conn.execute("ROLLBACK")
-            raise
-        self._conn.execute("COMMIT")
 
     def search_block_vectors(
         self,
@@ -682,15 +608,22 @@ class PaperTreeDb:
         return list(self._conn.execute(sql, params).fetchall())
 
 
+class PaperTreeDb(LibraryMixin, HighlightsMixin, AiMixin, CanvasMixin, DatabaseCore):
+    """The only way to reach the SQLite connection, and therefore the only place SQL is.
+
+    ``DatabaseCore`` plus the four feature mixins (see the module docstring for who owns which).
+    No state of its own: ``__slots__ = ()`` here and in every mixin, so the instance has exactly
+    ``DatabaseCore``'s three slots and no ``__dict__`` to attach a connection accessor to.
+    """
+
+    __slots__ = ()
+
+
 def open_database(
     filename: str | Path = ":memory:", migrations_dir: Path | None = None
 ) -> PaperTreeDb:
     """Opens a PaperTree database. Does NOT migrate — call ``migrate()`` explicitly."""
     return PaperTreeDb(filename, migrations_dir)
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 def _paper_key(owner_id: str, paper_id: PaperId, generation: Generation) -> str:
@@ -712,9 +645,9 @@ def _page_params(
             page["height"],
             page["rotation"],
             page["user_unit"],
-            _json(page["crop_box"]),
-            _json(page["media_box"]),
-            None if page["image"] is None else _json(page["image"]),
+            to_json(page["crop_box"]),
+            to_json(page["media_box"]),
+            None if page["image"] is None else to_json(page["image"]),
             1 if page["has_text_layer"] else 0,
             1 if page["is_scanned"] else 0,
             page["confidence"],
@@ -742,8 +675,8 @@ def _block_params(
             block.get("parent_id"),
             block.get("prev_id"),
             block.get("next_id"),
-            _opt_json(block.get("child_ids")),
-            _json(block["polygon"]),
+            opt_json(block.get("child_ids")),
+            to_json(block["polygon"]),
             block["bbox"][0],
             block["bbox"][1],
             block["bbox"][2],
@@ -751,13 +684,13 @@ def _block_params(
             block.get("text"),
             block.get("text_normalised"),
             block.get("content_hash"),
-            _opt_json(block.get("spans")),
-            _opt_json(block.get("payload")),
+            opt_json(block.get("spans")),
+            opt_json(block.get("payload")),
             block["source"],
             block["confidence"],
-            _json(block["provenance"]),
-            _opt_json(block.get("repairs")),
-            _opt_json(block.get("alternatives")),
+            to_json(block["provenance"]),
+            opt_json(block.get("repairs")),
+            opt_json(block.get("alternatives")),
         )
         for block in blocks
     )
@@ -779,14 +712,3 @@ def _relation_params(
         )
         for relation in relations
     )
-
-
-#: Compact, separator-pinned JSON. Smaller rows, and — because the separators are fixed
-#: rather than defaulted — the same bytes on every write, which matters for a store whose
-#: definition of done includes "re-parsing produces byte-identical PaperIR".
-def _json(value: object) -> str:
-    return json.dumps(value, separators=(",", ":"))
-
-
-def _opt_json(value: object) -> str | None:
-    return None if value is None else _json(value)

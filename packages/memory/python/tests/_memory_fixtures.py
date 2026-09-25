@@ -280,7 +280,7 @@ def seed_database(root: Path, pdfs: dict[str, Path], *, email: str) -> SeededDat
                 pdf,
                 paper_id=paper_id,
                 asset_root=root / "assets",
-                config=ParserConfig(vlm_max_calls=0),
+                config=ParserConfig(),
             )
             document = result.paper.model_dump(mode="json", by_alias=True, exclude_unset=True)
             database.put_paper(created.owner, document)
@@ -353,7 +353,7 @@ def seed_two_tenants(root: Path) -> TwoTenants:
                 pdf,
                 paper_id=paper_id,
                 asset_root=root / "assets",
-                config=ParserConfig(vlm_max_calls=0),
+                config=ParserConfig(),
             )
             document = result.paper.model_dump(mode="json", by_alias=True, exclude_unset=True)
             database.put_paper(created.owner, document)

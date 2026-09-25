@@ -120,7 +120,7 @@ def parsed(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Paper]:
             CORPUS / f"{name}.pdf",
             paper_id=PAPER_ID,
             asset_root=root / name,
-            config=ParserConfig(vlm_max_calls=0),
+            config=ParserConfig(),
         ).paper
         for name in BASELINE
     }
@@ -334,7 +334,7 @@ def smoke(tmp_path_factory: pytest.TempPathFactory) -> Paper:
         build_synthetic_pdf(root / "synthetic.pdf"),
         paper_id=PAPER_ID,
         asset_root=root / "assets",
-        config=ParserConfig(vlm_max_calls=0),
+        config=ParserConfig(),
     ).paper
     return paper
 

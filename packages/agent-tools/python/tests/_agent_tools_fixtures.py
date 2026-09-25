@@ -234,7 +234,7 @@ def seed(root: Path, pdf: Path, *, email: str = "reader@papertree.test") -> Seed
             pdf,
             paper_id=paper_id,
             asset_root=root / "assets",
-            config=ParserConfig(vlm_max_calls=0),
+            config=ParserConfig(),
         )
         document = result.paper.model_dump(mode="json", by_alias=True, exclude_unset=True)
         database.put_paper(created.owner, document)
