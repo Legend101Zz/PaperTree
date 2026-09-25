@@ -4,10 +4,10 @@ HOW THIS IS A REAL ASSERTION AND NOT A COMMENT:
 
 ``mypy --strict`` turns on ``warn_unused_ignores``. Every ``# type: ignore[...]`` below MUST
 suppress a real error; if the call ever starts typechecking, mypy reports
-``error: Unused "type: ignore" comment`` and exits non-zero. That is the exact mirror of
-``@ts-expect-error`` in packages/db/test/ownership-types.spec.ts, and it fails the same way
-round: weakening the API turns the typecheck red rather than turning this file into a stale
-claim.
+``error: Unused "type: ignore" comment`` and exits non-zero. (It mirrored ``@ts-expect-error``
+in the TypeScript twin's ``ownership-types.spec.ts``; the twin was deleted in the reader release's
+S0, so this file is now the only static half.) Weakening the API turns the typecheck red rather
+than turning this file into a stale claim.
 
 THE FIXTURES ARE FULLY ANNOTATED ON PURPOSE. An unannotated pytest fixture makes ``db`` an
 implicit ``Any``, every call on it typechecks, and every ignore below silently becomes

@@ -108,7 +108,7 @@ def to_vector_blob(values: Sequence[float]) -> bytes:
 
 @dataclass(frozen=True, slots=True)
 class CreatedUser:
-    """What ``create_user`` returns. The mirror of TypeScript's ``{ userId, owner }``.
+    """What ``create_user`` returns: ``(user_id, owner)``.
 
     ``user_id`` is public data — it appears in URLs, logs and emails. ``owner`` is a bearer
     credential for this connection. They are returned together and must be treated apart.

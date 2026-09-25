@@ -73,7 +73,7 @@ R0005_TABLES = (
 # insert path could regress SIXFOLD and stay green, which is a smoke test that the code still
 # terminates.
 #
-# The TypeScript twin shed this in #80. Both halves are back in step.
+# The TypeScript twin shed this in #80, and was itself deleted in the reader release's S0 (R5).
 #
 # WHAT REPLACES IT IS A RATIO. Each test times a small insert first, in the same process,
 # through the same code path, then the 30k insert. If `put_paper` is linear in block count the
@@ -97,7 +97,7 @@ R0005_TABLES = (
 # catches SUPERLINEAR regressions. It does NOT catch a per-row CONSTANT factor, because a
 # constant inflates the calibration and the measurement equally and cancels exactly the way
 # machine speed does. #82 carries that, and `LOCAL_BOUND_MS` below is what still sees it —
-# off CI only, exactly as the TypeScript side keeps its own.
+# off CI only, as the deleted TypeScript twin kept its own.
 #
 # (The TypeScript half, `test/migrations.spec.ts`, was deleted with the twin in S0; R5.)
 LOCAL_BOUND_MS = 2000
@@ -499,11 +499,12 @@ class _StatementCounter:
     INSTALLED BY MONKEYPATCHING ``sqlite3.connect``, NOT BY REACHING FOR ``db._conn``. That
     attribute is a forbidden token outside ``papertree_db`` and
     ``test_ownership.py::test_conn_is_a_forbidden_token_outside_papertree_db`` PARSES this file
-    to prove it — gate 1 of the ownership model is language-enforced in TypeScript and only a
-    convention in Python, and a test that quietly exempted itself would be the first crack in
-    it. So the callback is attached to the connection as it is created and this file never holds
-    a ``sqlite3.Connection`` at all. The deleted TypeScript twin instrumented its own
-    driver from the outside for the same reason, and neither half needed a production hook.
+    to prove it — gate 1 of the ownership model is only a convention in Python (the deleted
+    TypeScript twin had it from the language), and a test that quietly exempted itself would be
+    the first crack in it. So the callback is attached to the connection as it is created and
+    this file never holds a ``sqlite3.Connection`` at all. The deleted TypeScript twin
+    instrumented its own driver from the outside for the same reason, and neither half needed a
+    production hook.
 
     The callback fires for EVERY statement on the connection, including `migrate()` and
     `create_user()`, so counting is gated on `counting()` and covers exactly one call.

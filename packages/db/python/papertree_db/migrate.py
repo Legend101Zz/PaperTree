@@ -86,9 +86,8 @@ class MigrationResult:
 def find_migrations_dir(start_from: Path | None = None) -> Path:
     """Walks up looking for ``infrastructure/migrations``.
 
-    Resolving by walking rather than by a fixed ``../../..`` keeps this runner and the
-    TypeScript one agreeing on one directory even though their sources sit at different
-    depths in the tree.
+    Resolving by walking rather than by a fixed ``../../..`` finds the one directory from
+    wherever this package is imported: the source tree, or an editable install beside it.
     """
     directory = (start_from or Path(__file__).resolve().parent).resolve()
     while True:

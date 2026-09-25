@@ -5,7 +5,7 @@
 
 The static half is in ``test_typing.py``: ``# type: ignore[...]`` comments on the illegal
 calls, which fail ``mypy --strict`` (``warn_unused_ignores``) if the call ever becomes
-legal — the exact mirror of ``@ts-expect-error`` on the TypeScript side.
+legal (the deleted TypeScript twin did the same with ``@ts-expect-error``).
 """
 
 from __future__ import annotations
@@ -260,7 +260,8 @@ def test_the_user_id_is_not_the_credential(env: Env) -> None:
 
 
 def test_conn_is_a_forbidden_token_outside_papertree_db() -> None:
-    """Gate 1 is language-enforced in TypeScript and CONVENTION in Python - so lint the convention.
+    """Gate 1 is CONVENTION in Python (the deleted TypeScript twin had it from the language) - so
+    lint the convention.
 
     ``db._conn`` is one attribute lookup from a live ``sqlite3.Connection`` and therefore from an
     unscoped cross-tenant UPDATE. Nothing in Python can make that impossible, so the honest move

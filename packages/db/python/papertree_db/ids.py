@@ -1,12 +1,13 @@
 """Identifier types for :mod:`papertree_db`.
 
-The Python twin of ``packages/db/src/ids.ts``. ``PaperId``/``BlockId``/``Generation`` are
+(They began as the Python twin of ``packages/db/src/ids.ts``; the TypeScript twin was deleted in
+the reader release's S0, so this is the only definition.) ``PaperId``/``BlockId``/``Generation`` are
 ``NewType``s: distinct to mypy, plain ``str``/``int`` at runtime, so they cost nothing and
 still stop a ``paper_id`` being passed where a ``block_id`` was meant.
 
 ``OwnerId`` is not a ``NewType``. It is an opaque object wrapping an UNGUESSABLE PER-CONNECTION
-HANDLE — 32 bytes of CSPRNG output — and it is the Python mirror of the branded handle string in
-``src/ids.ts``.
+HANDLE — 32 bytes of CSPRNG output — the design the deleted TypeScript twin used as a branded
+handle string.
 
 WHY A HANDLE AND NOT THE user_id, AND WHY THE GUARDED CONSTRUCTOR WAS NOT ENOUGH. The previous
 design stored the ``user_id`` behind a ``_mint`` sentinel that proved only that ``__init__`` had
@@ -83,10 +84,10 @@ class OwnerId:
     def handle(self) -> str:
         """The opaque per-connection handle. NOT a user id; it names nothing outside the process.
 
-        It is a bearer secret: whoever holds it acts as that tenant on that connection, exactly
-        like the branded handle string on the TypeScript side. So it must never be logged,
-        serialised, stored in a row, or put in a URL — which is why ``__repr__`` and ``__str__``
-        below redact it, and why nothing in the package ever binds it into a statement.
+        It is a bearer secret: whoever holds it acts as that tenant on that connection. So it
+        must never be logged, serialised, stored in a row, or put in a URL — which is why
+        ``__repr__`` and ``__str__`` below redact it, and why nothing in the package ever binds
+        it into a statement.
 
         Only ``PaperTreeDb._resolve`` and ``JobStore._resolve`` should read this.
         """
