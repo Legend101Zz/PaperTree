@@ -19,6 +19,9 @@
  * ready names that file. Teardown sends SIGTERM to each process GROUP (next dev forks), then
  * SIGKILL after a grace period.
  *
+ * A child's environment is BUILT, not inherited: `INHERITED_ENV` names the few variables it takes
+ * from the shell running the suite, and everything else it needs is passed explicitly (`childEnv`).
+ *
  * Never `~/.papertree`, never `~/.papertree-demo`: the data root is always a new directory.
  */
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
@@ -47,7 +50,7 @@ export interface StackInfo {
   readonly health: { readonly api: string; readonly worker: string; readonly web: string };
 }
 
-interface Proc {
+export interface Proc {
   readonly name: string;
   readonly child: ChildProcess;
   readonly log: string;
@@ -84,7 +87,49 @@ function envPort(name: string): number | null {
   return port;
 }
 
-function start(
+/**
+ * The ONLY variables a child inherits from the shell that runs the suite.
+ *
+ * An allowlist, not `process.env` minus a few names, because what must never reach these processes
+ * is a model key (contracts.md §7: `PAPERTREE_MINIMAX_API_KEY` belongs to the agent alone), and a
+ * denylist is only as complete as the list of every name a key has ever had — `MINIMAX_API_KEY`
+ * (Pi's ambient fallback), `PAPERTREE_LLM_API_KEY`, `LLM_API_KEY`, `PAPERTREE_VLM_API_KEY`, and
+ * whatever comes next. It also keeps a developer's own `PAPERTREE_*` settings (a signing secret, a
+ * data root, CORS origins) out of a stack that is meant to be fresh.
+ *
+ * `PATH` is here because `next`'s `.bin` shim execs `node` by name. Anything else a process needs
+ * goes in its own `env` explicitly — including, from S5, the faux agent's settings.
+ */
+export const INHERITED_ENV: readonly string[] = [
+  'PATH',
+  'HOME',
+  'USER',
+  'LOGNAME',
+  'SHELL',
+  'TMPDIR',
+  'TMP',
+  'TEMP',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+  'TZ',
+  'CI',
+];
+
+/** A child's whole environment: the allowlisted inherited variables, then its own (which win). */
+export function childEnv(
+  own: Readonly<Record<string, string>>,
+  parent: NodeJS.ProcessEnv = process.env,
+): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const name of INHERITED_ENV) {
+    const value = parent[name];
+    if (value !== undefined) env[name] = value;
+  }
+  return { ...env, ...own };
+}
+
+export function start(
   name: string,
   command: string,
   args: readonly string[],
@@ -94,7 +139,7 @@ function start(
   const out = createWriteStream(log);
   const child = spawn(command, [...args], {
     cwd: options.cwd,
-    env: { ...process.env, ...options.env },
+    env: childEnv(options.env),
     // Its own process group, so teardown reaches the children `next dev` forks.
     detached: true,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -203,8 +248,8 @@ export async function startStack(): Promise<{
     say(`stopped; data root and logs kept at ${dataRoot}`);
   };
 
-  // Only what the processes need, and never a model key: the API's AI paths are S5's, and a key
-  // in this environment would reach a process that must not hold one (contracts.md §7).
+  // On top of INHERITED_ENV, only what each process needs. Never a model key: the API's AI paths
+  // are S5's, and a key here would reach a process that must not hold one (contracts.md §7).
   const pythonEnv = { PAPERTREE_DATA_ROOT: dataRoot, PYTHONUNBUFFERED: '1' };
 
   try {
