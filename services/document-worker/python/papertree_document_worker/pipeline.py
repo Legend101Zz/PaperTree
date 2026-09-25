@@ -15,6 +15,13 @@ WHAT THIS FUNCTION GUARANTEES
 Its output passes BOTH `Paper.model_validate` (well-formed) and `validate_paper` (internally
 consistent) or it raises. There is no "mostly valid" return: a document that trips a Tier-A ERROR
 is a document `packages/db` would store and every downstream consumer would then trust.
+
+What there IS (S2, #141) is a SALVAGED return: when the document as built fails validation,
+`salvage.build_or_salvage` removes what the validator names - a region, a relation, a section,
+never a text block's text - until it validates, and the paper comes back `status: "partial"`
+with every removal written into `partial_reason`. Still validating, never `complete`, never a
+dead letter for a PDF whose text could be read. Only a document no salvage stage can make valid
+raises.
 """
 
 from __future__ import annotations
@@ -26,7 +33,6 @@ from statistics import median
 from typing import Any
 
 from papertree_document_ir import BBox
-from papertree_document_ir.validate import assert_valid_paper, validate_paper
 
 from papertree_document_worker.assemble import AssembledBlock, PaperBuilder, config_hash_for
 from papertree_document_worker.citations import apply_citation_roles, detect_citations
@@ -47,6 +53,7 @@ from papertree_document_worker.pdf import SourceDocument
 from papertree_document_worker.references import (
     classify_reference_entries,
 )
+from papertree_document_worker.salvage import build_or_salvage
 from papertree_document_worker.tables import detect_tables
 from papertree_document_worker.text import build_block_text
 
@@ -97,6 +104,9 @@ class ParseResult:
     diagnostics: list[Any] = field(default_factory=list)
     multi_polygon_blocks: int = 0
     page_count: int = 0
+    #: What the salvage lane removed, when the first build failed validation; empty otherwise.
+    #: The same text is in `paper.partial_reason`, which is what persists.
+    salvage: tuple[str, ...] = ()
 
 
 #: A caption sits directly under its float, or occasionally over it. Beyond this many points
@@ -868,20 +878,22 @@ def _assemble(
         )
     apply_payload_mirrors(caption_edges, float_links)
 
-    paper = builder.build(
-        config_hash=config_hash_for(config.as_dict()),
-        parsed_at=parsed_at,
-        generation=generation,
+    config_hash = config_hash_for(config.as_dict())
+    # THE GATE, WITH A SALVAGE LANE (S2, #141; contracts.md §2.2). A document that validates is
+    # returned as built. One that does not is repaired by removing what the validator names -
+    # a region, a relation, a section, never a text block's text - and returned `partial` with
+    # every removal in `partial_reason`; only a document that no salvage stage can make valid
+    # raises, and that is the dead letter. The report is kept either way: it is what surfaces
+    # the WARN-level findings (rule 3, G6, G8) that are legal but worth carrying.
+    paper, report = build_or_salvage(
+        builder,
+        lambda: builder.build(config_hash=config_hash, parsed_at=parsed_at, generation=generation),
     )
-    # `assert_valid_paper` raises on any ERROR and returns None; `validate_paper` yields the
-    # full report. Both are called: the assertion is the gate, the report is what surfaces the
-    # WARN-level findings (rule 3, G6, G8) that are legal but worth carrying.
-    assert_valid_paper(paper)
-    report = validate_paper(paper)
     return ParseResult(
         paper=paper,
         diagnostics=list(report.diagnostics),
         multi_polygon_blocks=builder.multi_polygon_blocks,
         page_count=len(pages),
         crops_written=store.written,
+        salvage=tuple(builder.salvage_notes),
     )
