@@ -503,7 +503,7 @@ class SourceDocument:
             frame=frame,
             text_blocks=tuple(blocks),
             drawings=_drawings(page, transform),
-            images=_images(page, transform),
+            images=_images(page, transform, frame.crop_box),
             raw_boxes=raw,
             _transform=transform,
         )
@@ -611,8 +611,33 @@ def _drawings(page: Any, transform: _PageTransform) -> tuple[Drawing, ...]:
     return tuple(out)
 
 
-def _images(page: Any, transform: _PageTransform) -> tuple[RasterImage, ...]:
+def _clip_to_crop_box(box: BBox, crop_box: BBox) -> BBox | None:
+    """`box` intersected with the page's crop box (IR space), or `None` if nothing is visible.
+
+    A placement rect is where the image was PUT, not where it can be SEEN: MuPDF reports the full
+    `cm`-transformed rect even when part of it lies off the page. Only the visible part is on the
+    page, so only the visible part may become block geometry - validator rule 3 / G7 requires
+    every polygon inside the crop box, and G7 fails the WHOLE document once more than 5 % of a
+    page's blocks leave it. The crop box, not the media box, because the crop box is the page
+    (PDF 1.7 §14.11.2) and IR geometry is crop-relative (D23).
+    """
+    x0, y0 = max(box[0], crop_box[0]), max(box[1], crop_box[1])
+    x1, y1 = min(box[2], crop_box[2]), min(box[3], crop_box[3])
+    if x1 <= x0 or y1 <= y0:
+        return None
+    return [x0, y0, x1, y1]
+
+
+def _images(page: Any, transform: _PageTransform, crop_box: BBox) -> tuple[RasterImage, ...]:
     """Embedded rasters, ONE ENTRY PER PLACEMENT, with on-page rects not intrinsic pixel sizes.
+
+    CLIPPED TO THE CROP BOX - S2 (#141), validator G7. `ddpm-2006.11239` page 0 places a raster
+    at [347.6, 467.9, 661.5, 781.9] on a 612 pt page: 49.5 pt of it hangs off the right edge.
+    Carried through unclipped, it became a figure polygon outside the crop box, 1 of 16 blocks on
+    the page, and G7 dead-lettered the paper. A placement wholly off the page has NO visible part
+    and is dropped: kept, its crop is a zero-size pixmap that MuPDF refuses to encode
+    (`Invalid bandwriter header dimensions/setup`), which crashed the parse before validation.
+    `tests/worker/test_parse_robustness.py` builds both shapes in process.
 
     THE ON-PAGE RECT IS THE POINT, AND THAT HALF HAS NOT CHANGED. findings.md B3 records BERT's
     34 rasters being dropped wholesale by code that looked only at intrinsic pixel size. A
@@ -661,9 +686,12 @@ def _images(page: Any, transform: _PageTransform) -> tuple[RasterImage, ...]:
         box = _rect4(info["bbox"])
         if not _finite(box):
             continue
+        visible = _clip_to_crop_box(transform.rect(box), crop_box)
+        if visible is None:
+            continue
         out.append(
             RasterImage(
-                bbox=transform.rect(box),
+                bbox=visible,
                 xref=int(info.get("xref", 0)),
                 width=int(info.get("width", 0)),
                 height=int(info.get("height", 0)),
