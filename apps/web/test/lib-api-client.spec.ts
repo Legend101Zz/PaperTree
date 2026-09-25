@@ -341,6 +341,71 @@ describe('the 401 policy — only a 401 signs the user out', () => {
   });
 });
 
+/**
+ * THE DEFAULT HANDLER — the half of the policy that actually moves the browser.
+ *
+ * Every other test in this file installs a spy with `setUnauthorizedHandler(spy)`, so on its own
+ * this file proved that a 401 CALLS a handler, not that the product's handler NAVIGATES: with
+ * `window.location.assign` deleted from `redirectToLogin`, all of them stayed green (review
+ * mutant R3). These restore the real handler and stub only `window.location` — the one browser
+ * API it touches. (`window` is `globalThis` under vitest's DOM environments, so `stubGlobal`
+ * replaces what the handler reads, and `unstubAllGlobals` in `afterEach` puts it back.)
+ */
+describe('the 401 policy — the default handler really goes to /login?next=', () => {
+  function stubLocation(pathname: string, search: string): ReturnType<typeof vi.fn> {
+    const assign = vi.fn();
+    vi.stubGlobal('location', { pathname, search, assign });
+    return assign;
+  }
+
+  beforeEach(() => {
+    setUnauthorizedHandler(null);
+  });
+
+  it('a 401 clears the session and assigns /login?next=<the page the user was on>', async () => {
+    const assign = stubLocation('/paper/ppr_x/read', '?focus=cn_1');
+    setSessionToken(TOKEN);
+    fetchMock.mockResolvedValue(
+      fakeResponse({ status: 401, body: envelope('auth_required', 'Please sign in again.') }),
+    );
+
+    const error = await caught(request('/papers/ppr_x/ir'));
+
+    expect((error as ApiError).status).toBe(401);
+    expect(getSessionToken()).toBeNull();
+    expect(assign).toHaveBeenCalledTimes(1);
+    expect(assign).toHaveBeenCalledWith('/login?next=%2Fpaper%2Fppr_x%2Fread%3Ffocus%3Dcn_1');
+    expect(unauthorized).not.toHaveBeenCalled();
+  });
+
+  it('on /login already, a 401 still clears the session but does not navigate (no loop)', async () => {
+    const assign = stubLocation('/login', '?next=%2Fdashboard');
+    setSessionToken(TOKEN);
+    fetchMock.mockResolvedValue(
+      fakeResponse({ status: 401, body: envelope('auth_required', 'Please sign in again.') }),
+    );
+
+    await caught(request('/auth/me'));
+
+    expect(getSessionToken()).toBeNull();
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it('a 500, a 503, a 403 or a network error never navigates, and the token survives', async () => {
+    const assign = stubLocation('/dashboard', '');
+    setSessionToken(TOKEN);
+    for (const status of [500, 503, 403]) {
+      fetchMock.mockResolvedValueOnce(fakeResponse({ status, body: '{"detail":"no"}' }));
+      await caught(request('/papers'));
+    }
+    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    await caught(request('/papers'));
+
+    expect(assign).not.toHaveBeenCalled();
+    expect(getSessionToken()).toBe(TOKEN);
+  });
+});
+
 // ─── SSE ──────────────────────────────────────────────────────────────────────────────────────
 
 /** A recorded-shape §2.6 stream: every event kind, with pings between and inside frames. */
