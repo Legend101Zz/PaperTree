@@ -36,9 +36,12 @@ job id instead of parsing again. That behaviour is asserted in `tests/test_paper
 
 from __future__ import annotations
 
+import math
 import os
-from dataclasses import dataclass
+import secrets
+from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlsplit
 
 # IMPORTED, NEVER RE-TYPED. `tests/test_runtime_swappable.py::
 # test_the_provider_constants_have_no_new_live_definition` scans every .py under `packages/` and
@@ -59,6 +62,17 @@ SCRYPT_N = 1 << 14
 SCRYPT_R = 8
 SCRYPT_P = 1
 
+#: contracts.md §7 defaults for the reader release's API variables.
+DEFAULT_MAX_UPLOAD_MB = 100
+DEFAULT_AGENT_URL = "http://127.0.0.1:8200"
+DEFAULT_DAILY_BUDGET_USD = 1.00
+
+
+def _random_signing_secret() -> str:
+    """contracts.md §2.3: with no `PAPERTREE_SIGNING_SECRET`, a random one PER BOOT. Signed asset
+    URLs then stop working across a restart, which is acceptable: the reader re-fetches `/ir`."""
+    return secrets.token_urlsafe(32)
+
 
 @dataclass(frozen=True, slots=True)
 class Settings:
@@ -76,6 +90,29 @@ class Settings:
     llm_model: str = DEFAULT_MODEL
     llm_base_url: str = DEFAULT_BASE_URL
     llm_timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
+
+    # ── contracts.md §7 (the reader release). Parsed and refused in `from_env`; wired by the
+    # slice that uses each: the upload cap by S1, the signing secret by S1's signed asset URLs,
+    # the agent and the budget by S5. CORS origins are wired here (`create_app`).
+
+    #: `PAPERTREE_MAX_UPLOAD_MB`: larger uploads are 413 `payload_too_large` (§2.2).
+    max_upload_mb: int = DEFAULT_MAX_UPLOAD_MB
+    #: `PAPERTREE_SIGNING_SECRET`: the asset URL HMAC key (§2.3). `repr=False`: a Settings that
+    #: reaches a log line or a traceback must not carry it.
+    signing_secret: str = field(default_factory=_random_signing_secret, repr=False)
+    #: `PAPERTREE_AGENT_URL`: the Pi agent service (§3), without a trailing slash.
+    agent_url: str = DEFAULT_AGENT_URL
+    #: `PAPERTREE_AGENT_SECRET`: the shared API<->agent secret. EMPTY IS A SUPPORTED STATE: the AI
+    #: routes answer 503 `not_configured` and nothing else changes (§7).
+    agent_secret: str = field(default="", repr=False)
+    #: `PAPERTREE_DAILY_BUDGET_USD`: per user, rolling 24 h, from `ai_runs.cost_usd_est` (§3.4).
+    daily_budget_usd: float = DEFAULT_DAILY_BUDGET_USD
+    #: `PAPERTREE_CORS_ORIGINS`: extra allowed origins beyond the localhost regex (§2).
+    cors_origins: tuple[str, ...] = ()
+
+    @property
+    def max_upload_bytes(self) -> int:
+        return self.max_upload_mb * 1024 * 1024
 
     @property
     def database_file(self) -> Path:
@@ -112,4 +149,58 @@ class Settings:
             llm_timeout_seconds=float(
                 os.environ.get("PAPERTREE_LLM_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS)
             ),
+            max_upload_mb=_positive_int("PAPERTREE_MAX_UPLOAD_MB", DEFAULT_MAX_UPLOAD_MB),
+            signing_secret=os.environ.get("PAPERTREE_SIGNING_SECRET") or _random_signing_secret(),
+            agent_url=_http_url("PAPERTREE_AGENT_URL", DEFAULT_AGENT_URL),
+            agent_secret=os.environ.get("PAPERTREE_AGENT_SECRET", ""),
+            daily_budget_usd=_budget("PAPERTREE_DAILY_BUDGET_USD", DEFAULT_DAILY_BUDGET_USD),
+            cors_origins=_origins("PAPERTREE_CORS_ORIGINS"),
         )
+
+
+# ── parsing. Each refuses a value that cannot mean anything, NAMING the variable: a service that
+# boots on `PAPERTREE_MAX_UPLOAD_MB=lots` fails later, somewhere else, for a reason nobody links.
+
+
+def _positive_int(name: str, default: int) -> int:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ValueError(f"{name}={raw!r} is not a whole number") from None
+    if value < 1:
+        raise ValueError(f"{name}={raw!r} must be at least 1")
+    return value
+
+
+def _budget(name: str, default: float) -> float:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        raise ValueError(f"{name}={raw!r} is not a number of US dollars") from None
+    if not math.isfinite(value) or value < 0:
+        raise ValueError(f"{name}={raw!r} must be a finite amount of at least 0")
+    return value
+
+
+def _http_url(name: str, default: str) -> str:
+    raw = os.environ.get(name, "").strip() or default
+    parts = urlsplit(raw)
+    if parts.scheme not in {"http", "https"} or not parts.netloc:
+        raise ValueError(f"{name}={raw!r} must be an http(s) URL such as {default}")
+    return raw.rstrip("/")
+
+
+def _origins(name: str) -> tuple[str, ...]:
+    origins = tuple(o.strip() for o in os.environ.get(name, "").split(",") if o.strip())
+    for origin in origins:
+        parts = urlsplit(origin)
+        if parts.scheme not in {"http", "https"} or not parts.netloc or parts.path not in {"", "/"}:
+            # `*` included: a wildcard is a policy decision, not a list entry.
+            raise ValueError(f"{name}: {origin!r} is not an origin such as https://reader.example")
+    return tuple(o.rstrip("/") for o in origins)

@@ -27,11 +27,12 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 from fastapi.testclient import TestClient
 from papertree_agent_tools import Transport
 from papertree_api import create_app
+from papertree_api.errors import ErrorCode
 from papertree_api.settings import Settings
 from papertree_db import PaperTreeDb, generation
 
@@ -60,6 +61,7 @@ def harness(
     *,
     llm_transport: Transport | None = None,
     llm_api_key: str = "",
+    settings: Settings | None = None,
 ) -> Iterator[Harness]:
     # Faster scrypt is NOT configured. A test that runs against a weakened KDF is not testing the
     # thing that ships. Two registrations per test at ~50 ms is affordable; if that stops being
@@ -68,7 +70,8 @@ def harness(
     # `llm_transport` defaults to None, which means `UrllibTransport` — the REAL one. Nothing
     # reaches it, because with `llm_api_key=""` the provider is unavailable and `/ask` answers 503
     # before a request is built. A default scripted transport would have hidden that path.
-    settings = Settings(root=tmp_path / "data", llm_api_key=llm_api_key)
+    if settings is None:
+        settings = Settings(root=tmp_path / "data", llm_api_key=llm_api_key)
     with TestClient(create_app(settings, llm_transport=llm_transport)) as client:
         yield Harness(client=client, settings=settings)
 
@@ -109,3 +112,16 @@ def seed_paper(settings: Settings, client: TestClient, token: str, slug: str) ->
     finally:
         db.close()
     return str(document["paper_id"])
+
+
+def assert_envelope(response: Any, status: int, code: str) -> dict[str, Any]:
+    """contracts.md §0: the response is `status` and EXACTLY `{detail, code, retryable}`."""
+    assert response.status_code == status, response.text
+    assert response.headers["content-type"].startswith("application/json"), response.headers
+    body: dict[str, Any] = response.json()
+    assert set(body) == {"detail", "code", "retryable"}, body
+    assert body["code"] == code, body
+    assert body["code"] in get_args(ErrorCode)
+    assert isinstance(body["retryable"], bool)
+    assert isinstance(body["detail"], str) and body["detail"].strip(), body
+    return body

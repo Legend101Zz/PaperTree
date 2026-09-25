@@ -9,8 +9,7 @@
  *
  * WHAT "READY" MEANS, per process, because a harness that starts things and hopes is how an e2e
  * suite measures its own startup race instead of the product:
- *   - api: `GET /healthz` answers 200. Before S0's wave 2 adds that route the API answers 404 there,
- *     which still proves it is serving HTTP, and the harness says so rather than pretending.
+ *   - api: `GET /healthz` answers 200 with `ok: true` and `db: "ok"` (contracts.md §2.8).
  *   - worker: its process is alive once the API is (it migrates the same SQLite file and then
  *     polls), and it is still alive after a settle period. It has no port to probe.
  *   - web: `GET /login` answers 200, which means `next dev` has compiled a route.
@@ -261,11 +260,15 @@ export async function startStack(): Promise<{
     procs.push(api);
     const apiHealth = await waitUntil(api, 60_000, async () => {
       const response = await fetch(`${apiUrl}/healthz`);
-      if (response.status === 200) return `GET /healthz 200 ${await response.text()}`;
-      if (response.status === 404) {
-        return 'GET /healthz 404: the route does not exist yet (S0 wave 2 adds it); the API is serving HTTP';
+      if (response.status !== 200) return null;
+      const text = await response.text();
+      // contracts.md §2.8. `ok` means the database answers and every migration is applied; an
+      // absent agent is `agent.reachable: false` inside a 200, not a reason to wait.
+      const body = JSON.parse(text) as { ok?: unknown; db?: unknown };
+      if (body.ok !== true || body.db !== 'ok') {
+        throw new Error(`GET /healthz 200 but not healthy: ${text}`);
       }
-      return null;
+      return `GET /healthz 200 ${text}`;
     });
     say(`api ready at ${apiUrl}: ${apiHealth}`);
 

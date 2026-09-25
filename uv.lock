@@ -415,6 +415,7 @@ version = "1.0.0"
 source = { editable = "services/api/python" }
 dependencies = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "papertree-agent-tools" },
     { name = "papertree-db" },
     { name = "papertree-document-ir" },
@@ -427,14 +428,10 @@ dependencies = [
     { name = "uvicorn" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "httpx" },
-]
-
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115,<1" },
+    { name = "httpx", specifier = ">=0.27" },
     { name = "papertree-agent-tools", editable = "packages/agent-tools/python" },
     { name = "papertree-db", editable = "packages/db/python" },
     { name = "papertree-document-ir", editable = "packages/document-ir/python" },
@@ -446,9 +443,6 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.9" },
     { name = "uvicorn", specifier = ">=0.30,<1" },
 ]
-
-[package.metadata.requires-dev]
-dev = [{ name = "httpx", specifier = ">=0.27" }]
 
 [[package]]
 name = "papertree-db"

@@ -57,9 +57,9 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from dataclasses import replace
-from typing import Annotated, Any
+from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query, status
+from fastapi import FastAPI
 from papertree_agent_tools import (
     ANSWER_SCHEMA,
     AnswerContractError,
@@ -82,6 +82,8 @@ from papertree_prompts import TurnCaps, prompt_hash
 from pydantic import BaseModel, Field
 
 from .deps import AgentHandleDep, CallerDep, ProviderDep, promoted_or_404
+from .errors import ApiError
+from .routers._shared import GenParam
 
 #: Built once per process, shared across turns, holds no handle and no tenant. `tools.py` is
 #: explicit that this is cheap and side-effect-free, and that a registry needing a handle would be
@@ -128,11 +130,11 @@ def mount_ask(app: FastAPI) -> None:
         provider: ProviderDep,
         paper_id: str,
         body: Ask,
-        gen: Annotated[int | None, Query()] = None,
+        gen: GenParam,
     ) -> dict[str, Any]:
         if not provider.available:
-            raise HTTPException(
-                status.HTTP_503_SERVICE_UNAVAILABLE,
+            raise ApiError(
+                "not_configured",
                 "no model credential is configured: set PAPERTREE_LLM_API_KEY. The reader, the "
                 "document and every highlight still work; only /ask needs a key.",
             )
@@ -151,7 +153,7 @@ def mount_ask(app: FastAPI) -> None:
         except KeyError as exc:
             # The handle is owner-bound, so "not yours" and "not there" arrive identically. That
             # is the answer that leaks least — `test_isolation.py`'s "WHY 404 AND NOT 403".
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "no such paper") from exc
+            raise ApiError("not_found", "no such paper") from exc
 
         built = await REGISTRY.call(
             "generate_explanation",
@@ -159,7 +161,7 @@ def mount_ask(app: FastAPI) -> None:
             context=context,
         )
         if not built.ok:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, built.reason)
+            raise ApiError("not_found", built.reason)
 
         system_prompt = str(built.data["system_prompt"]) + ANSWER_INSTRUCTION
         user_message = f"{body.question}\n\n{built.data['untrusted_evidence']}"
@@ -168,7 +170,7 @@ def mount_ask(app: FastAPI) -> None:
                 system_prompt=system_prompt, user_message=user_message, context=context
             )
         except TurnDidNotFinish as exc:
-            raise HTTPException(status.HTTP_504_GATEWAY_TIMEOUT, str(exc)) from exc
+            raise ApiError("internal", str(exc), status=504) from exc
 
         verified = verify_grounding(_decode(outcome.text), _resolved_text(view))
         # The model's own `source_regions` are DISCARDED and rebuilt from the parse. See the header:
@@ -218,22 +220,22 @@ def _decode(text: str) -> GroundedAnswer:
     try:
         payload = json.loads(stripped)
     except json.JSONDecodeError as exc:
-        raise HTTPException(
-            status.HTTP_502_BAD_GATEWAY,
+        raise ApiError(
+            "internal",
             f"the model did not answer with JSON: {exc}. Nothing was returned to the reader, "
             "because a failed generation is never presented as content (EPIC-03 §4).",
+            status=502,
         ) from exc
     if not isinstance(payload, Mapping):
-        raise HTTPException(
-            status.HTTP_502_BAD_GATEWAY, "the model answered with JSON that is not an object"
-        )
+        raise ApiError("internal", "the model answered with JSON that is not an object", status=502)
     try:
         return answer_from_mapping(payload)
     except AnswerContractError as exc:
-        raise HTTPException(
-            status.HTTP_502_BAD_GATEWAY,
+        raise ApiError(
+            "internal",
             f"the model's answer violates the answer contract and was NOT patched into shape: "
             f"{exc}",
+            status=502,
         ) from exc
 
 

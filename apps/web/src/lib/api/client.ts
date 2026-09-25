@@ -91,6 +91,7 @@ const ERROR_CODES: Record<ErrorCode, true> = {
   agent_unavailable: true,
   not_configured: true,
   internal: true,
+  not_implemented: true,
 };
 
 export function isErrorCode(value: unknown): value is ErrorCode {

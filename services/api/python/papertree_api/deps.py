@@ -72,13 +72,15 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from papertree_agent_tools import MiniMaxProvider, ProviderSettings, Transport, UrllibTransport
 from papertree_db import OwnerId, PaperId, PaperTreeDb
 from papertree_jobs import JobStore
 from papertree_memory import AgentDataHandle
 
+from .errors import ApiError
+from .logging import user_ref
 from .security import user_for_token
 from .settings import Settings
 
@@ -125,13 +127,17 @@ async def open_auth(
 
 
 async def current_user_id(
+    request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     conn: Annotated[sqlite3.Connection, Depends(open_auth)],
 ) -> str:
-    """The verified `user_id`. THE ONLY PLACE a token becomes an identity."""
-    unauthorised = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="missing or invalid session token",
+    """The verified `user_id`. THE ONLY PLACE a token becomes an identity.
+
+    It also leaves `user_ref` (`sha256(user_id)[:12]`, contracts.md §8) in the request state for
+    the access log line; the id itself is never logged."""
+    unauthorised = ApiError(
+        "auth_required",
+        "missing or invalid session token",
         headers={"WWW-Authenticate": "Bearer"},
     )
     if credentials is None or credentials.scheme.lower() != "bearer":
@@ -139,6 +145,7 @@ async def current_user_id(
     user_id = user_for_token(conn, credentials.credentials)
     if user_id is None:
         raise unauthorised
+    request.state.user_ref = user_ref(user_id)
     return user_id
 
 
@@ -232,7 +239,7 @@ def promoted_or_404(call: Caller, paper_id: str, requested: int | None) -> int:
         return requested
     gen = call.db.promoted_generation(call.db_owner, PaperId(paper_id))
     if gen is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such paper")
+        raise ApiError("not_found", "no such paper")
     return gen
 
 
