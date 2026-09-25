@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PaperTree API contract: usage",
+  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: UsageTotals, UsageBucket.",
+  "$defs": {
+    "UsageBucket": {
+      "additionalProperties": false,
+      "description": "One kind's share. §2.5 leaves the inner shape open; this is the web client's\n(`lib/api/usage.ts::UsageBucket`), which the totals repeat at the top level.",
+      "properties": {
+        "runs": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "input_tokens": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "output_tokens": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cost_usd_est": {
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "required": ["runs", "input_tokens", "output_tokens", "cost_usd_est"],
+      "title": "UsageBucket",
+      "type": "object"
+    },
+    "UsageByKind": {
+      "additionalProperties": false,
+      "properties": {
+        "explain": {
+          "$ref": "#/$defs/UsageBucket"
+        },
+        "ask": {
+          "$ref": "#/$defs/UsageBucket"
+        },
+        "summary": {
+          "$ref": "#/$defs/UsageBucket"
+        }
+      },
+      "required": ["explain", "ask", "summary"],
+      "title": "UsageByKind",
+      "type": "object"
+    },
+    "UsageTotals": {
+      "additionalProperties": false,
+      "properties": {
+        "since": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+          "type": "string"
+        },
+        "runs": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "input_tokens": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "output_tokens": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cost_usd_est": {
+          "minimum": 0,
+          "type": "number"
+        },
+        "budget_usd": {
+          "minimum": 0,
+          "type": "number"
+        },
+        "by_kind": {
+          "$ref": "#/$defs/UsageByKind"
+        }
+      },
+      "required": [
+        "since",
+        "runs",
+        "input_tokens",
+        "output_tokens",
+        "cost_usd_est",
+        "budget_usd",
+        "by_kind"
+      ],
+      "title": "UsageTotals",
+      "type": "object"
+    }
+  }
+}

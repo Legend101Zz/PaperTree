@@ -1,0 +1,763 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PaperTree API contract: sse",
+  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: SseRun, SseStatus, SseText, SseCitations, RunSummary, SseDone.",
+  "$defs": {
+    "AnchorCreated": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": ["source", "guided"],
+          "type": "string"
+        },
+        "at": {
+          "type": "string"
+        },
+        "client": {
+          "type": "string"
+        }
+      },
+      "required": ["mode", "at", "client"],
+      "title": "AnchorCreated",
+      "type": "object"
+    },
+    "AnchorDoc": {
+      "additionalProperties": false,
+      "properties": {
+        "paperId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "pdfSha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "parserVersion": {
+          "type": "string"
+        },
+        "textStreamId": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["paperId", "pdfSha256", "parserVersion", "textStreamId"],
+      "title": "AnchorDoc",
+      "type": "object"
+    },
+    "AnchorV1": {
+      "additionalProperties": false,
+      "description": "The persisted Anchor, verbatim (contracts.md §6): `@papertree/anchoring`'s `Anchor` v1\nwithout `resolution`. `contracts/anchor/anchor-v1.schema.json` is the same record, written by\nhand; `tests/test_anchor_examples.py` holds this model to every committed example.",
+      "properties": {
+        "anchorVersion": {
+          "const": 1,
+          "type": "integer"
+        },
+        "offsetUnit": {
+          "const": "unicode",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^(?:[a-z]{2,4}_[0-9A-Za-z-]{8,64}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+          "type": "string"
+        },
+        "doc": {
+          "$ref": "#/$defs/AnchorDoc"
+        },
+        "targetKind": {
+          "enum": [
+            "text",
+            "guided_para",
+            "equation",
+            "equation_part",
+            "figure",
+            "figure_region",
+            "table_row",
+            "table_cell",
+            "algorithm",
+            "citation"
+          ],
+          "type": "string"
+        },
+        "provenanceClass": {
+          "enum": ["source", "ai_generated"],
+          "type": "string"
+        },
+        "subTarget": {
+          "$ref": "#/$defs/SubTarget"
+        },
+        "selectors": {
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/BlockSelector"
+              },
+              {
+                "$ref": "#/$defs/PageSelector"
+              },
+              {
+                "$ref": "#/$defs/TextPositionSelector"
+              },
+              {
+                "$ref": "#/$defs/TextQuoteSelector"
+              },
+              {
+                "$ref": "#/$defs/ShapeSelector"
+              },
+              {
+                "$ref": "#/$defs/SectionPathSelector"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "created": {
+          "$ref": "#/$defs/AnchorCreated"
+        }
+      },
+      "required": [
+        "anchorVersion",
+        "offsetUnit",
+        "id",
+        "doc",
+        "targetKind",
+        "provenanceClass",
+        "selectors",
+        "created"
+      ],
+      "title": "AnchorV1",
+      "type": "object"
+    },
+    "BlockSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "BlockSelector",
+          "type": "string"
+        },
+        "blockId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "blockTextHash": {
+          "type": "string"
+        },
+        "startOffset": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "endOffset": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cellRef": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "rowIndex": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["type", "blockId", "blockTextHash"],
+      "title": "BlockSelector",
+      "type": "object"
+    },
+    "Citation": {
+      "additionalProperties": false,
+      "properties": {
+        "citation_id": {
+          "type": "string"
+        },
+        "ordinal": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "marker": {
+          "pattern": "^b[0-9]+$",
+          "type": "string"
+        },
+        "page_index": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "anchor": {
+          "$ref": "#/$defs/AnchorV1"
+        },
+        "supported": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["citation_id", "ordinal", "marker", "page_index", "anchor", "supported"],
+      "title": "Citation",
+      "type": "object"
+    },
+    "MessageError": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "anyOf": [
+            {
+              "enum": [
+                "provider_auth",
+                "rate_limited",
+                "quota",
+                "upstream_unavailable",
+                "timeout",
+                "aborted",
+                "bad_request",
+                "tool_failed",
+                "tool_budget_exhausted",
+                "output_truncated",
+                "agent_unavailable",
+                "internal"
+              ],
+              "type": "string"
+            },
+            {
+              "enum": [
+                "auth_required",
+                "invalid_credentials",
+                "email_taken",
+                "not_found",
+                "validation_failed",
+                "empty_upload",
+                "payload_too_large",
+                "unsupported_media_type",
+                "not_parsed",
+                "not_failed",
+                "busy",
+                "stale_version",
+                "generation_not_found",
+                "anchor_incomplete",
+                "anchor_mismatch",
+                "budget_exhausted",
+                "agent_unavailable",
+                "not_configured",
+                "internal",
+                "not_implemented"
+              ],
+              "type": "string"
+            }
+          ]
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": ["code", "retryable", "message"],
+      "title": "MessageError",
+      "type": "object"
+    },
+    "PageSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "PageSelector",
+          "type": "string"
+        },
+        "index": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": ["type", "index"],
+      "title": "PageSelector",
+      "type": "object"
+    },
+    "RunSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "agent_sdk": {
+          "type": "string"
+        },
+        "input_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cache_read_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasoning_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cost_usd_est": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "first_text_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "latency_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "retries": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "tool_calls": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "run_id",
+        "model",
+        "provider",
+        "agent_sdk",
+        "input_tokens",
+        "output_tokens",
+        "cache_read_tokens",
+        "reasoning_tokens",
+        "cost_usd_est",
+        "first_text_ms",
+        "latency_ms",
+        "retries",
+        "tool_calls"
+      ],
+      "title": "RunSummary",
+      "type": "object"
+    },
+    "SectionPathSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "SectionPathSelector",
+          "type": "string"
+        },
+        "path": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "headingText": {
+          "type": "string"
+        },
+        "paraIndexInSection": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "charOffsetInPara": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["type", "path", "headingText", "paraIndexInSection", "charOffsetInPara"],
+      "title": "SectionPathSelector",
+      "type": "object"
+    },
+    "ShapeSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "ShapeSelector",
+          "type": "string"
+        },
+        "pageIndex": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "quads": {
+          "items": {
+            "maxItems": 4,
+            "minItems": 4,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "polygons": {
+          "items": {
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "pageWidth": {
+          "type": "number"
+        },
+        "pageHeight": {
+          "type": "number"
+        },
+        "rotation": {
+          "enum": [0, 90, 180, 270],
+          "type": "integer"
+        },
+        "userUnit": {
+          "type": "number"
+        },
+        "cropBox": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "pageIndex",
+        "quads",
+        "polygons",
+        "pageWidth",
+        "pageHeight",
+        "rotation",
+        "userUnit",
+        "cropBox"
+      ],
+      "title": "ShapeSelector",
+      "type": "object"
+    },
+    "SseCitations": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/Citation"
+          },
+          "type": "array"
+        }
+      },
+      "required": ["items"],
+      "title": "SseCitations",
+      "type": "object"
+    },
+    "SseDone": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": ["complete", "partial", "error", "aborted"],
+          "type": "string"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MessageError"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message_id": {
+          "type": "string"
+        }
+      },
+      "required": ["status", "error", "message_id"],
+      "title": "SseDone",
+      "type": "object"
+    },
+    "SseRun": {
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "type": "string"
+        },
+        "thread_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user_message_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message_id": {
+          "type": "string"
+        },
+        "generation": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": ["run_id", "thread_id", "user_message_id", "message_id", "generation"],
+      "title": "SseRun",
+      "type": "object"
+    },
+    "SseStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "phase": {
+          "enum": ["thinking", "tool", "retrying", "writing"],
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "attempt": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "delay_ms": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["phase"],
+      "title": "SseStatus",
+      "type": "object"
+    },
+    "SseText": {
+      "additionalProperties": false,
+      "properties": {
+        "delta": {
+          "type": "string"
+        }
+      },
+      "required": ["delta"],
+      "title": "SseText",
+      "type": "object"
+    },
+    "SubTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": ["equation_part", "figure_region", "table_cell", "table_row", "algorithm_line"],
+          "type": "string"
+        },
+        "normalisedRect": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        "latexStart": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "latexEnd": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "lineIndex": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["kind"],
+      "title": "SubTarget",
+      "type": "object"
+    },
+    "TextPositionSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "TextPositionSelector",
+          "type": "string"
+        },
+        "start": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "end": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["type", "start", "end"],
+      "title": "TextPositionSelector",
+      "type": "object"
+    },
+    "TextQuoteSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "TextQuoteSelector",
+          "type": "string"
+        },
+        "exact": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "suffix": {
+          "type": "string"
+        },
+        "exactNormalised": {
+          "type": "string"
+        },
+        "prefixNormalised": {
+          "type": "string"
+        },
+        "suffixNormalised": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "exact",
+        "prefix",
+        "suffix",
+        "exactNormalised",
+        "prefixNormalised",
+        "suffixNormalised"
+      ],
+      "title": "TextQuoteSelector",
+      "type": "object"
+    }
+  }
+}

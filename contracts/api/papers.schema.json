@@ -1,0 +1,340 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PaperTree API contract: papers",
+  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: LibraryPaper, JobSummary, UploadAccepted, JobAccepted, JobStatus, ReparseRequest.",
+  "$defs": {
+    "JobAccepted": {
+      "additionalProperties": false,
+      "description": "`202` from `POST /papers/{id}/retry` and `…/reparse`.",
+      "properties": {
+        "job_id": {
+          "type": "string"
+        },
+        "generation": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": ["job_id", "generation"],
+      "title": "JobAccepted",
+      "type": "object"
+    },
+    "JobStatus": {
+      "additionalProperties": false,
+      "description": "`GET /jobs/{job_id}` once S1 lands: \"the existing shape plus `error_code`\", with the raw\n`error` text kept in logs and the DB only (§2.2).",
+      "properties": {
+        "job_id": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "parse",
+          "type": "string"
+        },
+        "state": {
+          "enum": ["pending", "running", "succeeded", "dead_letter", "cancelled"],
+          "type": "string"
+        },
+        "attempt": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_attempts": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "progress_done": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "progress_total": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "progress_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "enum": ["pdf_unreadable", "validation_failed", "timeout", "internal"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "is_terminal": {
+          "type": "boolean"
+        },
+        "created_at": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+          "type": "string"
+        },
+        "updated_at": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+          "type": "string"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/JobStepStatus"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "job_id",
+        "kind",
+        "state",
+        "attempt",
+        "max_attempts",
+        "progress_done",
+        "progress_total",
+        "progress_note",
+        "error_code",
+        "is_terminal",
+        "created_at",
+        "updated_at",
+        "steps"
+      ],
+      "title": "JobStatus",
+      "type": "object"
+    },
+    "JobStepStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "enum": ["parse", "persist", "promote"],
+          "type": "string"
+        },
+        "index": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "state": {
+          "enum": ["running", "succeeded", "failed"],
+          "type": "string"
+        }
+      },
+      "required": ["name", "index", "state"],
+      "title": "JobStepStatus",
+      "type": "object"
+    },
+    "JobSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "job_id": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "parse",
+          "type": "string"
+        },
+        "state": {
+          "enum": ["pending", "running", "succeeded", "dead_letter", "cancelled"],
+          "type": "string"
+        },
+        "step": {
+          "anyOf": [
+            {
+              "enum": ["parse", "persist", "promote"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "done": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "total": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "attempt": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_attempts": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "enum": ["pdf_unreadable", "validation_failed", "timeout", "internal"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "job_id",
+        "kind",
+        "state",
+        "step",
+        "done",
+        "total",
+        "attempt",
+        "max_attempts",
+        "error_code"
+      ],
+      "title": "JobSummary",
+      "type": "object"
+    },
+    "LibraryPaper": {
+      "additionalProperties": false,
+      "description": "The row shape used everywhere a paper is listed (§2.2).",
+      "properties": {
+        "paper_id": {
+          "pattern": "^ppr_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "authors": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "original_filename": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_hash": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "page_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "processing": {
+          "enum": ["queued", "reading", "ready", "partial", "failed"],
+          "type": "string"
+        },
+        "job": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JobSummary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "generation": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parser_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "highlight_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "created_at": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+          "type": "string"
+        },
+        "updated_at": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "paper_id",
+        "title",
+        "authors",
+        "original_filename",
+        "source_hash",
+        "page_count",
+        "processing",
+        "job",
+        "generation",
+        "parser_version",
+        "highlight_count",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "LibraryPaper",
+      "type": "object"
+    },
+    "ReparseRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "maxLength": 500,
+          "type": "string"
+        }
+      },
+      "title": "ReparseRequest",
+      "type": "object"
+    },
+    "UploadAccepted": {
+      "additionalProperties": false,
+      "description": "`202` from `POST /papers` once S1 lands. Until then the route answers the pre-release\n`{paper_id, job_id, created}` (`routers/papers.py::Upload`).",
+      "properties": {
+        "paper_id": {
+          "type": "string"
+        },
+        "job_id": {
+          "type": "string"
+        },
+        "created": {
+          "type": "boolean"
+        },
+        "paper": {
+          "$ref": "#/$defs/LibraryPaper"
+        }
+      },
+      "required": ["paper_id", "job_id", "created", "paper"],
+      "title": "UploadAccepted",
+      "type": "object"
+    }
+  }
+}
