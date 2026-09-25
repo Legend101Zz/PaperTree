@@ -48,6 +48,10 @@ MAX_ANCHORS_PER_HIGHLIGHT: Final = 64
 MAX_RESOLUTIONS_PER_PUT: Final = 500
 RESOLUTION_STATES: Final = frozenset({"anchored", "approximate", "orphan"})
 PROVENANCE_CLASSES: Final = frozenset({"source", "ai_generated"})
+#: The largest value SQLite's INTEGER holds (a signed 64-bit integer). JSON integers are unbounded,
+#: so every integer this module binds — a generation, a page index — is checked against it FIRST:
+#: one past it raised ``OverflowError`` out of the driver, which the route turned into a 500.
+SQLITE_INTEGER_MAX: Final = 2**63 - 1
 #: What 0005 writes into ``doc.textStreamId`` for a row it converted from the 0001 shape. Only those
 #: may be replaced through :meth:`HighlightsMixin.upgrade_legacy_anchor` (contracts.md §1.1).
 LEGACY_TEXT_STREAM_ID: Final = "legacy-0001"
@@ -186,7 +190,8 @@ class HighlightsMixin(_Base):
         :class:`HighlightRejected` with ``code`` ``validation_failed`` / ``anchor_incomplete`` /
         ``anchor_mismatch``, or :class:`HighlightConflict`. Never a bare ``sqlite3`` error for a
         bad body: an ``IntegrityError`` the checks below did not foresee is re-raised as
-        ``validation_failed``, after the transaction has rolled back.
+        ``validation_failed``, after the transaction has rolled back, and every integer is bounded
+        to SQLite's range before it is bound (``SQLITE_INTEGER_MAX``), so none overflows.
         """
         owner_id = self._resolve(owner)
         _check_prefixed_id("highlight_id", highlight_id)
@@ -312,6 +317,9 @@ class HighlightsMixin(_Base):
         cache entry for this generation (``resolution is None``) are both STILL LISTED. N2 was the
         inner join that silently dropped them. Owner-scoped on every table: each join key carries
         ``owner_id`` and the root is filtered by it.
+
+        Raises :class:`HighlightRejected` (``validation_failed``) for a ``generation`` that is not
+        an integer from 1 to ``SQLITE_INTEGER_MAX`` — it is bound as a SQL parameter.
         """
         owner_id = self._resolve(owner)
         return self._select_highlights(owner_id, paper_id, generation, None)
@@ -529,6 +537,8 @@ class HighlightsMixin(_Base):
     def _select_highlights(
         self, owner_id: str, paper_id: str, generation: int | None, highlight_id: str | None
     ) -> list[HighlightWithAnchors]:
+        if generation is not None:
+            _check_generation("generation", generation)
         rows = self._all(
             """SELECT h.highlight_id, h.paper_id, h.color, h.note, h.created_generation,
                       h.created_at, h.updated_at,
@@ -647,11 +657,14 @@ def _is_int(value: object) -> bool:
 
 
 def _is_number(value: object) -> bool:
-    return (
-        isinstance(value, (int, float))
-        and not isinstance(value, bool)
-        and math.isfinite(float(value))
-    )
+    """A finite JSON number. An integer past float range (10**400) is not one: ``float()`` raises
+    ``OverflowError`` on it, and no PDF-space coordinate or score is that large."""
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(float(value))
+    except OverflowError:
+        return False
 
 
 def _check_prefixed_id(field: str, value: object) -> None:
@@ -666,9 +679,20 @@ def _check_color(color: object) -> None:
         raise HighlightRejected("validation_failed", "color must be a non-empty string")
 
 
+def _is_sql_int(value: object, minimum: int) -> bool:
+    """An int (not a bool) from ``minimum`` to ``SQLITE_INTEGER_MAX``: one SQLite can bind."""
+    return (
+        isinstance(value, int)
+        and not isinstance(value, bool)
+        and minimum <= value <= SQLITE_INTEGER_MAX
+    )
+
+
 def _check_generation(field: str, value: object) -> None:
-    if not (isinstance(value, int) and not isinstance(value, bool) and value >= 1):
-        raise HighlightRejected("validation_failed", f"{field} must be an integer >= 1")
+    if not _is_sql_int(value, 1):
+        raise HighlightRejected(
+            "validation_failed", f"{field} must be an integer from 1 to {SQLITE_INTEGER_MAX}"
+        )
 
 
 def _selectors_of(record: Mapping[str, Any], where: str) -> list[Mapping[str, Any]]:
@@ -772,9 +796,10 @@ def _prepare_anchor(
         shape.get("pageIndex") if shape else None,
     ):
         if candidate is not None:
-            if not _is_int(candidate) or candidate < 0:
+            if not _is_sql_int(candidate, 0):
                 raise HighlightRejected(
-                    "validation_failed", f"{where}: a page index must be an integer >= 0"
+                    "validation_failed",
+                    f"{where}: a page index must be an integer from 0 to {SQLITE_INTEGER_MAX}",
                 )
             page_index = int(candidate)
             break

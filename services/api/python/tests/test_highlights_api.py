@@ -77,6 +77,14 @@ def _rows(settings: Settings) -> dict[str, int]:
 
 NO_ROWS = {"highlights": 0, "anchors": 0, "anchor_resolutions": 0}
 
+#: The largest value SQLite's INTEGER holds. One more is a bad body, not a server error.
+SQLITE_INTEGER_MAX = 2**63 - 1
+
+
+def _selector(anchor: dict[str, Any], kind: str) -> dict[str, Any]:
+    selector: dict[str, Any] = next(s for s in anchor["selectors"] if s["type"] == kind)
+    return selector
+
 
 def _assert_envelope(response: Any, status: int, code: str) -> None:
     assert response.status_code == status, response.text
@@ -296,6 +304,23 @@ def test_bad_bodies_are_422_and_never_500_and_never_write(tmp_path: Path) -> Non
         "an unknown state": resolution(state="lost"),
         "score 2": resolution(score=2),
         "block_ids a string": resolution(block_ids="blk_x"),
+        # JSON integers are unbounded and SQLite's INTEGER is 64-bit: each of these reached a
+        # bound parameter and raised OverflowError (a 500) until the bound was checked first.
+        "a resolution generation of 10**20": resolution(generation=10**20),
+        "a resolution generation of 2**63": resolution(generation=SQLITE_INTEGER_MAX + 1),
+        "a PageSelector.index of 10**20": with_anchor(
+            lambda a: _selector(a, "PageSelector").update(index=10**20)
+        ),
+        "a ShapeSelector.pageIndex of 2**63 and no PageSelector": with_anchor(
+            lambda a: (
+                a.update(selectors=[s for s in a["selectors"] if s["type"] != "PageSelector"]),
+                _selector(a, "ShapeSelector").update(pageIndex=SQLITE_INTEGER_MAX + 1),
+            )
+        ),
+        # Past float range, so `float()` itself raised OverflowError: not a finite quad.
+        "a quad coordinate of 10**400": with_anchor(
+            lambda a: _selector(a, "ShapeSelector").update(quads=[[10**400, 170.0, 343.0, 180.0]])
+        ),
     }
     with harness(tmp_path) as h:
         alice = register(h.client, "alice@example.com")
@@ -311,6 +336,82 @@ def test_bad_bodies_are_422_and_never_500_and_never_write(tmp_path: Path) -> Non
         )
         _assert_envelope(not_json, 422, "validation_failed")
         assert _rows(h.settings) == NO_ROWS
+
+
+def test_bad_gen_params_are_422_and_never_500(tmp_path: Path) -> None:
+    """``?gen=`` is a generation: ASCII digits, 1 to 2**63-1.
+
+    WATCHED FAILING before the bound: ``str.isdigit()`` is True for ``²`` (then ``int()`` raised
+    ValueError, a 500) and for ``٣`` (silently read as generation 3), and an unbounded integer
+    overflowed the bound SQL parameter (OverflowError, a 500).
+    """
+    with harness(tmp_path) as h:
+        alice = register(h.client, "alice@example.com")
+        paper_id = seed_paper(h.settings, h.client, alice, SLUG)
+        assert _post(h.client, alice, paper_id, _body()).status_code == 201
+        base = f"/papers/{paper_id}/highlights"
+        for raw in (
+            "",
+            "0",
+            "-1",
+            "abc",
+            "1.0",
+            "+1",
+            "%201",
+            "%C2%B2",  # superscript two
+            "%D9%A3",  # ARABIC-INDIC DIGIT THREE
+            "99999999999999999999999",
+            str(SQLITE_INTEGER_MAX + 1),
+        ):
+            response = h.client.get(f"{base}?gen={raw}", headers=auth(alice))
+            assert response.status_code == 422, f"?gen={raw}: {response.status_code}"
+            _assert_envelope(response, 422, "validation_failed")
+        # Non-vacuous: a real generation still answers with its cache entry, and the bound is
+        # SQLite's own, not a smaller one — 2**63-1 is simply a generation no parse has.
+        [one] = h.client.get(f"{base}?gen=1", headers=auth(alice)).json()
+        assert one["anchors"][0]["resolution"]["generation"] == 1
+        [edge] = h.client.get(f"{base}?gen={SQLITE_INTEGER_MAX}", headers=auth(alice)).json()
+        assert edge["highlight_id"] == HIGHLIGHT_ID
+        assert edge["anchors"][0]["resolution"] is None
+
+
+def test_bad_resolution_puts_are_422_and_never_500_and_never_write(tmp_path: Path) -> None:
+    """The PUT twin of the bad-body matrix. WATCHED FAILING before the bound: a ``generation``
+    above 2**63-1 overflowed the bound SQL parameter (OverflowError, a 500)."""
+    with harness(tmp_path) as h:
+        alice = register(h.client, "alice@example.com")
+        paper_id = seed_paper(h.settings, h.client, alice, SLUG)
+        assert _post(h.client, alice, paper_id, _body()).status_code == 201
+        url = f"/papers/{paper_id}/highlights/resolutions"
+        item = {k: v for k, v in _body()["resolutions"][0].items() if k != "generation"}
+        item["tier"] = 4
+        bad_bodies: dict[str, Any] = {
+            "generation 10**20, no items": {"generation": 10**20, "items": []},
+            "generation 2**63 with an item": {
+                "generation": SQLITE_INTEGER_MAX + 1,
+                "items": [item],
+            },
+            "generation 0": {"generation": 0, "items": [item]},
+            "generation missing": {"items": [item]},
+            "items not a list": {"generation": 1, "items": item},
+            "tier 7": {"generation": 1, "items": [{**item, "tier": 7}]},
+        }
+        for label, body in bad_bodies.items():
+            response = h.client.put(url, headers=auth(alice), json=body)
+            assert response.status_code == 422, f"{label}: {response.status_code}"
+            _assert_envelope(response, 422, "validation_failed")
+        # In range but never stored: the contract's 409, neither a 422 nor a 500.
+        _assert_envelope(
+            h.client.put(
+                url, headers=auth(alice), json={"generation": SQLITE_INTEGER_MAX, "items": [item]}
+            ),
+            409,
+            "generation_not_found",
+        )
+        # Nothing above wrote: the cache entry is the one the POST stored (tier 1, not 4).
+        [listed] = h.client.get(f"/papers/{paper_id}/highlights", headers=auth(alice)).json()
+        assert listed["anchors"][0]["resolution"]["tier"] == 1
+        assert _rows(h.settings) == {"highlights": 1, "anchors": 1, "anchor_resolutions": 1}
 
 
 # ── ownership and the path ───────────────────────────────────────────────────────────────────

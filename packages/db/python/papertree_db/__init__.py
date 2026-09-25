@@ -41,6 +41,7 @@ from .errors import (
     PaperNotFound,
 )
 from .highlights import (
+    SQLITE_INTEGER_MAX,
     AnchorIn,
     AnchorRow,
     HighlightRow,
@@ -76,6 +77,7 @@ from .migrate import (
 
 __all__ = [
     "MAX_DERIVATION_DEPTH",
+    "SQLITE_INTEGER_MAX",
     "VECTOR_DIMENSIONS",
     "AnchorId",
     "AnchorIn",

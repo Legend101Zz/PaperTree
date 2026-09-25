@@ -33,6 +33,7 @@ The surface, against #74's table:
 from __future__ import annotations
 
 import hashlib
+import re
 from typing import Annotated, Any, Literal
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile, status
@@ -40,6 +41,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from papertree_agent_tools import Transport
 from papertree_db import (
+    SQLITE_INTEGER_MAX,
     AnchorIn,
     BlockId,
     GenerationNotFound,
@@ -441,6 +443,10 @@ def _mount_papers(app: FastAPI) -> None:
 # own error envelope (`{detail, code, retryable}`, contracts.md §0) and its own body parsing, so
 # that "422 validation_failed", "never 500 on a bad body" and "never a partial write" hold for
 # these routes without a global exception handler (that is S0b's).
+#
+# Every integer a body or `?gen=` carries is bounded to SQLite's INTEGER (`SQLITE_INTEGER_MAX`)
+# here AND in `papertree_db.highlights`: JSON integers are unbounded, and one past 2**63-1 raised
+# OverflowError at the SQL bind, a 500 (S0 review F1).
 
 #: contracts.md §2.4.
 HighlightColor = Literal["amber", "green", "blue", "pink", "purple"]
@@ -461,7 +467,7 @@ class _ResolutionItem(BaseModel):
 
 
 class _CreateResolution(_ResolutionItem):
-    generation: int = Field(ge=1)
+    generation: int = Field(ge=1, le=SQLITE_INTEGER_MAX)
 
 
 class _HighlightCreate(BaseModel):
@@ -482,7 +488,7 @@ class _PutItem(_ResolutionItem):
 
 
 class _ResolutionsPut(BaseModel):
-    generation: int = Field(ge=1)
+    generation: int = Field(ge=1, le=SQLITE_INTEGER_MAX)
     items: list[_PutItem] = Field(max_length=500)
 
 
@@ -514,12 +520,19 @@ async def _parse_body[M: BaseModel](request: Request, model: type[M]) -> M:
         raise _Refused(422, "validation_failed", f"{where}: {first['msg']}") from exc
 
 
+#: `?gen=`: ASCII digits only. `str.isdigit()` is also True for "²" (then `int()` raises, a 500)
+#: and for "٣" (which `int()` silently reads as 3); 19 digits cover SQLite's range.
+_GEN_PARAM = re.compile(r"[0-9]{1,19}")
+
+
 def _gen_param(request: Request) -> int | None:
     raw = request.query_params.get("gen")
     if raw is None:
         return None
-    if not raw.isdigit() or int(raw) < 1:
-        raise _Refused(422, "validation_failed", "gen: must be a positive integer")
+    if _GEN_PARAM.fullmatch(raw) is None or not 1 <= int(raw) <= SQLITE_INTEGER_MAX:
+        raise _Refused(
+            422, "validation_failed", f"gen: must be an integer from 1 to {SQLITE_INTEGER_MAX}"
+        )
     return int(raw)
 
 

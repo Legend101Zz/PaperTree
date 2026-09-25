@@ -341,6 +341,14 @@ def test_upgrade_legacy_anchor_only_replaces_a_legacy_row(tmp_path: Path) -> Non
         owner = db.owner_for(user_id)
         full = copy.deepcopy(load_capture_anchor())
         full["id"] = LEGACY_ANCHOR
+        # An upgrade is a bad body like any other: an index past SQLite's INTEGER range is refused
+        # before the UPDATE binds it (it raised OverflowError), and the legacy record stays.
+        oversized = copy.deepcopy(full)
+        next(s for s in oversized["selectors"] if s["type"] == "PageSelector")["index"] = 2**63
+        with pytest.raises(HighlightRejected):
+            db.upgrade_legacy_anchor(owner, PaperId(paper_id), LEGACY_ANCHOR, oversized)
+        [still] = db.list_highlights(owner, PaperId(paper_id), 1)
+        assert still.anchors[0].anchor["doc"]["textStreamId"] == "legacy-0001"
         db.upgrade_legacy_anchor(owner, PaperId(paper_id), LEGACY_ANCHOR, full)
         [listed] = db.list_highlights(owner, PaperId(paper_id), 1)
         assert listed.highlight_id == LEGACY_HIGHLIGHT
@@ -371,6 +379,76 @@ def test_transaction_nests_through_savepoints(env: Env) -> None:
         raise RuntimeError("outer")
     assert len(env.db.list_highlights(env.owner, env.paper_id, 1)) == 1
     assert _rows(env.file)["highlights"] == 1
+
+
+#: The largest value SQLite's INTEGER holds.
+SQLITE_INTEGER_MAX = 2**63 - 1
+
+
+def _with_selector(record: dict[str, Any], kind: str, **fields: Any) -> dict[str, Any]:
+    changed = copy.deepcopy(record)
+    next(s for s in changed["selectors"] if s["type"] == kind).update(fields)
+    return changed
+
+
+def test_integers_past_sqlite_range_are_rejected_before_any_sql(env: Env) -> None:
+    """JSON integers are unbounded and SQLite's INTEGER is 64-bit. Every integer this module binds
+    is bounded first, so an oversized one is a :class:`HighlightRejected` (the route's 422), never
+    an ``OverflowError`` out of the driver (the route's 500).
+
+    WATCHED FAILING before the bounds: every call below raised ``OverflowError: Python int too
+    large to convert to SQLite INTEGER``, except the quad (``int too large to convert to float``).
+    """
+    big = SQLITE_INTEGER_MAX + 1
+    shape_only = copy.deepcopy(env.record)
+    shape_only["selectors"] = [s for s in shape_only["selectors"] if s["type"] != "PageSelector"]
+    shape_only = _with_selector(shape_only, "ShapeSelector", pageIndex=big)
+    huge_quad = _with_selector(env.record, "ShapeSelector", quads=[[10**400, 170.0, 343.0, 180.0]])
+    cases: dict[str, Any] = {
+        "created_generation": lambda: _create(env, created_generation=big),
+        "a resolution's generation": lambda: _create(
+            env, resolutions=[_resolution(env.record, generation=big)]
+        ),
+        "PageSelector.index": lambda: _create(
+            env,
+            anchors=[AnchorIn(_with_selector(env.record, "PageSelector", index=big))],
+            resolutions=[],
+        ),
+        "ShapeSelector.pageIndex": lambda: _create(
+            env, anchors=[AnchorIn(shape_only)], resolutions=[]
+        ),
+        "a quad coordinate past float range": lambda: _create(
+            env, anchors=[AnchorIn(huge_quad)], resolutions=[]
+        ),
+        "put_resolutions' generation": lambda: env.db.put_resolutions(
+            env.owner, env.paper_id, big, []
+        ),
+        "list_highlights' generation": lambda: env.db.list_highlights(env.owner, env.paper_id, big),
+        "get_highlight's generation": lambda: env.db.get_highlight(
+            env.owner, env.paper_id, HID, big
+        ),
+    }
+    for label, call in cases.items():
+        try:
+            call()
+        except HighlightRejected as rejected:
+            assert rejected.code in {"validation_failed", "anchor_incomplete"}, label
+        except Exception as exc:  # the defect IS an unexpected exception type
+            pytest.fail(f"{label}: {type(exc).__name__}: {exc}")
+        else:
+            pytest.fail(f"{label}: accepted")
+    assert _rows(env.file) == NO_ROWS
+
+    # Non-vacuous, and the bound is SQLite's own: 2**63-1 is stored and read like any value.
+    at_edge = _with_selector(env.record, "PageSelector", index=SQLITE_INTEGER_MAX)
+    assert _create(env, anchors=[AnchorIn(at_edge)], resolutions=[]).created
+    [listed] = env.db.list_highlights(env.owner, env.paper_id, SQLITE_INTEGER_MAX)
+    assert listed.anchors[0].resolution is None
+    conn = sqlite3.connect(env.file)
+    try:
+        assert conn.execute("SELECT page_index FROM anchors").fetchone()[0] == SQLITE_INTEGER_MAX
+    finally:
+        conn.close()
 
 
 def test_the_stored_record_never_carries_a_resolution(env: Env) -> None:
