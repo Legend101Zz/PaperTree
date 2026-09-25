@@ -1,4 +1,4 @@
-"""What more than one router needs: the JSON body reader.
+"""What more than one router needs: the JSON body reader and the `?gen=` parameter.
 
 WHY BODIES ARE READ HERE AND NOT BY FASTAPI. A FastAPI body parameter decodes with the stdlib
 `json.loads`, which accepts what pydantic's own JSON parser refuses: a lone surrogate (`"\\ud800"`,
@@ -13,10 +13,12 @@ body is looked at, and a malformed body is a 422 before the handler runs.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Annotated, Any, Final
 
-from fastapi import Request
+from fastapi import Depends, Request
+from papertree_db import SQLITE_INTEGER_MAX
 from pydantic import BaseModel, ValidationError
 from pydantic_core import from_json
 
@@ -47,3 +49,24 @@ def json_body[M: BaseModel](model: type[M]) -> Callable[[Request], Awaitable[M]]
 
     dependency.__name__ = f"json_body_{model.__name__}"
     return dependency
+
+
+#: `?gen=`: ASCII digits only. `str.isdigit()` is also True for "²" (then `int()` raises, a 500)
+#: and for "٣" (which `int()` silently reads as 3); 19 digits cover SQLite's range. Wave 1's grammar
+#: for the highlight routes, now the ONE grammar for every route that takes `?gen=`.
+_GEN_PARAM: Final = re.compile(r"[0-9]{1,19}")
+
+
+async def gen_param(request: Request) -> int | None:
+    """`?gen=` as a generation (1 to `SQLITE_INTEGER_MAX`), absent as None, anything else 422."""
+    raw = request.query_params.get("gen")
+    if raw is None:
+        return None
+    if _GEN_PARAM.fullmatch(raw) is None or not 1 <= int(raw) <= SQLITE_INTEGER_MAX:
+        raise ApiError(
+            "validation_failed", f"gen: must be an integer from 1 to {SQLITE_INTEGER_MAX}"
+        )
+    return int(raw)
+
+
+GenParam = Annotated[int | None, Depends(gen_param)]

@@ -57,9 +57,9 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from dataclasses import replace
-from typing import Annotated, Any
+from typing import Any
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI
 from papertree_agent_tools import (
     ANSWER_SCHEMA,
     AnswerContractError,
@@ -83,6 +83,7 @@ from pydantic import BaseModel, Field
 
 from .deps import AgentHandleDep, CallerDep, ProviderDep, promoted_or_404
 from .errors import ApiError
+from .routers._shared import GenParam
 
 #: Built once per process, shared across turns, holds no handle and no tenant. `tools.py` is
 #: explicit that this is cheap and side-effect-free, and that a registry needing a handle would be
@@ -129,7 +130,7 @@ def mount_ask(app: FastAPI) -> None:
         provider: ProviderDep,
         paper_id: str,
         body: Ask,
-        gen: Annotated[int | None, Query()] = None,
+        gen: GenParam,
     ) -> dict[str, Any]:
         if not provider.available:
             raise ApiError(

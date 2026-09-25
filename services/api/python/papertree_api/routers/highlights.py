@@ -10,7 +10,6 @@ Registration order is GET, POST, PUT `/resolutions`, PATCH, DELETE: `PUT …/res
 
 from __future__ import annotations
 
-import re
 from datetime import UTC, datetime
 from typing import Any, Literal
 
@@ -27,7 +26,7 @@ from pydantic import BaseModel, Field
 
 from ..deps import Caller, CallerDep
 from ..errors import ApiError
-from ._shared import read_json
+from ._shared import GenParam, read_json
 
 router = APIRouter()
 
@@ -82,22 +81,6 @@ class _PutItem(_ResolutionItem):
 class _ResolutionsPut(BaseModel):
     generation: int = Field(ge=1, le=SQLITE_INTEGER_MAX)
     items: list[_PutItem] = Field(max_length=500)
-
-
-#: `?gen=`: ASCII digits only. `str.isdigit()` is also True for "²" (then `int()` raises, a 500)
-#: and for "٣" (which `int()` silently reads as 3); 19 digits cover SQLite's range.
-_GEN_PARAM = re.compile(r"[0-9]{1,19}")
-
-
-def _gen_param(request: Request) -> int | None:
-    raw = request.query_params.get("gen")
-    if raw is None:
-        return None
-    if _GEN_PARAM.fullmatch(raw) is None or not 1 <= int(raw) <= SQLITE_INTEGER_MAX:
-        raise ApiError(
-            "validation_failed", f"gen: must be an integer from 1 to {SQLITE_INTEGER_MAX}"
-        )
-    return int(raw)
 
 
 def _wire_time(stored: str) -> str:
@@ -155,10 +138,9 @@ def _highlight_wire(highlight: HighlightWithAnchors) -> dict[str, Any]:
 
 
 @router.get("/papers/{paper_id}/highlights")
-async def list_highlights(call: CallerDep, paper_id: str, request: Request) -> Response:
+async def list_highlights(call: CallerDep, paper_id: str, gen: GenParam) -> Response:
     """Every highlight, INCLUDING orphans and legacy rows, with each anchor's cache entry for
     `?gen=` (default: the promoted generation; none promoted means every resolution is null)."""
-    gen = _gen_param(request)
     _owned_or_404(call, paper_id)
     if gen is None:
         gen = call.db.promoted_generation(call.db_owner, PaperId(paper_id))

@@ -19,7 +19,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, File, Query, UploadFile, status
 from fastapi.responses import FileResponse, Response
-from papertree_db import BlockId, PaperId, generation
+from papertree_db import SQLITE_INTEGER_MAX, BlockId, PaperId, generation
 from papertree_document_worker.crops import CropStore
 from papertree_document_worker.job import enqueue_parse
 from pydantic import BaseModel
@@ -28,6 +28,7 @@ from ..deps import CallerDep, SettingsDep
 from ..deps import promoted_or_404 as _promoted
 from ..errors import ApiError
 from ..ir import block_location, paper_document
+from ._shared import GenParam
 
 router = APIRouter()
 
@@ -136,9 +137,7 @@ async def list_papers(call: CallerDep) -> list[dict[str, Any]]:
 
 
 @router.get("/papers/{paper_id}")
-async def get_paper(
-    call: CallerDep, paper_id: str, gen: Annotated[int | None, Query()] = None
-) -> dict[str, Any]:
+async def get_paper(call: CallerDep, paper_id: str, gen: GenParam) -> dict[str, Any]:
     row = call.db.get_paper(
         call.db_owner, PaperId(paper_id), generation(_promoted(call, paper_id, gen))
     )
@@ -148,9 +147,7 @@ async def get_paper(
 
 
 @router.get("/papers/{paper_id}/ir")
-async def get_ir(
-    call: CallerDep, paper_id: str, gen: Annotated[int | None, Query()] = None
-) -> dict[str, Any]:
+async def get_ir(call: CallerDep, paper_id: str, gen: GenParam) -> dict[str, Any]:
     """The one that matters: the shape `indexDocument` takes. See `ir.py`."""
     document = paper_document(
         call.db, call.db_owner, PaperId(paper_id), generation(_promoted(call, paper_id, gen))
@@ -161,9 +158,7 @@ async def get_ir(
 
 
 @router.get("/papers/{paper_id}/pages")
-async def pages(
-    call: CallerDep, paper_id: str, gen: Annotated[int | None, Query()] = None
-) -> list[dict[str, Any]]:
+async def pages(call: CallerDep, paper_id: str, gen: GenParam) -> list[dict[str, Any]]:
     g = generation(_promoted(call, paper_id, gen))
     return [_public(row) for row in call.db.list_pages(call.db_owner, PaperId(paper_id), g)]
 
@@ -172,8 +167,8 @@ async def pages(
 async def blocks(
     call: CallerDep,
     paper_id: str,
-    page: Annotated[int | None, Query(ge=0)] = None,
-    gen: Annotated[int | None, Query()] = None,
+    gen: GenParam,
+    page: Annotated[int | None, Query(ge=0, le=SQLITE_INTEGER_MAX)] = None,
 ) -> list[dict[str, Any]]:
     g = generation(_promoted(call, paper_id, gen))
     if page is not None:
@@ -193,17 +188,13 @@ async def blocks(
 
 
 @router.get("/papers/{paper_id}/relations")
-async def relations(
-    call: CallerDep, paper_id: str, gen: Annotated[int | None, Query()] = None
-) -> list[dict[str, Any]]:
+async def relations(call: CallerDep, paper_id: str, gen: GenParam) -> list[dict[str, Any]]:
     g = generation(_promoted(call, paper_id, gen))
     return [_public(row) for row in call.db.list_relations(call.db_owner, PaperId(paper_id), g)]
 
 
 @router.get("/papers/{paper_id}/blocks/{block_id}/location")
-async def location(
-    call: CallerDep, paper_id: str, block_id: str, gen: Annotated[int | None, Query()] = None
-) -> dict[str, Any]:
+async def location(call: CallerDep, paper_id: str, block_id: str, gen: GenParam) -> dict[str, Any]:
     found = block_location(
         call.db,
         call.db_owner,
@@ -235,7 +226,7 @@ async def asset(
     paper_id: str,
     kind: str,
     block_id: str,
-    gen: Annotated[int | None, Query()] = None,
+    gen: GenParam,
 ) -> Response:
     g = _promoted(call, paper_id, gen)
     # Resolve the block through the OWNER-SCOPED query before touching disk: that is what

@@ -27,11 +27,12 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 from fastapi.testclient import TestClient
 from papertree_agent_tools import Transport
 from papertree_api import create_app
+from papertree_api.errors import ErrorCode
 from papertree_api.settings import Settings
 from papertree_db import PaperTreeDb, generation
 
@@ -109,3 +110,16 @@ def seed_paper(settings: Settings, client: TestClient, token: str, slug: str) ->
     finally:
         db.close()
     return str(document["paper_id"])
+
+
+def assert_envelope(response: Any, status: int, code: str) -> dict[str, Any]:
+    """contracts.md §0: the response is `status` and EXACTLY `{detail, code, retryable}`."""
+    assert response.status_code == status, response.text
+    assert response.headers["content-type"].startswith("application/json"), response.headers
+    body: dict[str, Any] = response.json()
+    assert set(body) == {"detail", "code", "retryable"}, body
+    assert body["code"] == code, body
+    assert body["code"] in get_args(ErrorCode)
+    assert isinstance(body["retryable"], bool)
+    assert isinstance(body["detail"], str) and body["detail"].strip(), body
+    return body

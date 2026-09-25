@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import Any, get_args
+from typing import get_args
 
-from api_support import auth, harness, register, seed_paper
+from api_support import assert_envelope, auth, harness, register, seed_paper
 from papertree_api import create_app
 from papertree_api.errors import ERROR_STATUS, ErrorCode
 from papertree_api.settings import Settings
@@ -45,18 +45,6 @@ CONTRACT_CODES: dict[ErrorCode, int] = {
     "not_configured": 503,
     "internal": 500,
 }
-
-
-def assert_envelope(response: Any, status: int, code: str) -> dict[str, Any]:
-    assert response.status_code == status, response.text
-    assert response.headers["content-type"].startswith("application/json"), response.headers
-    body: dict[str, Any] = response.json()
-    assert set(body) == {"detail", "code", "retryable"}, body
-    assert body["code"] == code, body
-    assert body["code"] in get_args(ErrorCode)
-    assert isinstance(body["retryable"], bool)
-    assert isinstance(body["detail"], str) and body["detail"].strip(), body
-    return body
 
 
 def test_the_error_enum_is_the_contracts_enum() -> None:
