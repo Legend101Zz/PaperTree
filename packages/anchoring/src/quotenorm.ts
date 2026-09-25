@@ -22,12 +22,23 @@
  * context-independent — and adds hyphen joining and the position map on top.
  *
  * THE HYPHEN RULE, stated precisely because over-eager joining corrupts real hyphens.
- * A `-` (or U+2010 HYPHEN) is dropped ONLY when it is immediately followed by a newline AND the
- * character before it and the first character after the newline are both alphabetic. That keeps
- * `state-\nof-the-art` joining to `stateof-the-art`? No — it keeps `of-the-art` intact because the
- * hyphens there are not before a newline, and it joins `transduc-\ntion` to `transduction`, which
- * is the case that actually occurs. A hyphen at a line end followed by a digit or a capital is left
- * alone: `2015-\n2016` and `Kaiming-\nHe` are ranges and names, not broken words.
+ * A `-` (or U+2010 HYPHEN, or U+00AD SOFT HYPHEN) is dropped ONLY when it is immediately followed
+ * by a newline AND the character before it is alphabetic AND the first character after the newline
+ * is a LOWER-CASE letter. So `transduc-\ntion` joins to `transduction`, which is the case that
+ * actually occurs, while `state-of-the-art` keeps every hyphen (none is before a newline), and a
+ * line-end hyphen followed by a digit or a capital is left alone: `2015-\n2016` and `Kaiming-\nHe`
+ * are ranges and names, not broken words.
+ *
+ * WHITESPACE IS DELETED, NOT COLLAPSED (#122). This header and `types.ts` used to say the result is
+ * "ws-collapsed" — every run of whitespace becomes one U+0020. It is not, and has never been: pass 3
+ * folds each code point through `normaliseText` INDIVIDUALLY, and `normaliseText(' ')` is `''`
+ * because the identity fold strips whitespace at both ends of its input. So every internal space
+ * disappears: `normaliseForMatch('a b').text === 'ab'`. The behaviour is KEPT, deliberately:
+ * Hypothesis's PDF anchoring strips all whitespace before matching for the same reason — extracted
+ * PDF text differs between extractors mainly in its whitespace — and every persisted `*Normalised`
+ * field in every stored anchor was produced this way, so "fixing" it would orphan them at T3.
+ * `test/quotenorm-pin.spec.ts` pins it with the cases the Python binding pins
+ * (`packages/anchoring/python/tests/test_selectors.py`), so the two cannot drift silently.
  */
 
 import { normaliseText } from '@papertree/document-ir';
@@ -50,7 +61,7 @@ function isLowerAlphabetic(codePoint: number | undefined): boolean {
 }
 
 export interface NormalisedQuote {
-  /** The folded, de-hyphenated, whitespace-collapsed text. Match against this. */
+  /** The folded, de-hyphenated text with every whitespace code point DELETED. Match against this. */
   readonly text: string;
   /**
    * `rawOffsetAt[i]` is the RAW code-point offset that produced normalised code point `i`.
@@ -75,12 +86,14 @@ function toCodePoints(text: string): number[] {
  * from.
  *
  * Runs in three passes rather than one so that each is separately testable and the hyphen rule can
- * see the raw newline it depends on (pass 2 would have collapsed it to a space):
+ * see the raw newline it depends on (pass 2 would have turned it into a space):
  *
  *   1. drop line-break hyphens and the newline after them;
- *   2. collapse whitespace runs to one U+0020 and strip the ends;
+ *   2. turn each whitespace run into one U+0020 and strip the ends;
  *   3. fold each code point through `document-ir`'s `normaliseText`, which is the SAME fold block
  *      identity uses, so a T3 match and a T1 hit cannot disagree about what two strings are equal.
+ *      Folding the U+0020 left by pass 2 ON ITS OWN yields the empty string, so the net effect of
+ *      passes 2 and 3 is that whitespace is DELETED (#122; see the module header).
  */
 export function normaliseForMatch(raw: string): NormalisedQuote {
   const points = toCodePoints(raw);

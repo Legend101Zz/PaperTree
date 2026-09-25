@@ -113,7 +113,10 @@ export interface TextQuoteSelector {
   readonly exact: string;
   readonly prefix: string;
   readonly suffix: string;
-  /** NFC + ws-collapsed + ligatures folded + line-break hyphens joined. MATCH ON THIS. */
+  /**
+   * NFC + case- and ligature-folded + line-break hyphens joined + whitespace DELETED (not collapsed:
+   * `normaliseForMatch('a b').text === 'ab'`, #122). MATCH ON THIS.
+   */
   readonly exactNormalised: string;
   readonly prefixNormalised: string;
   readonly suffixNormalised: string;
