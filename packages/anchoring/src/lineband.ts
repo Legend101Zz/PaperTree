@@ -146,7 +146,8 @@ export function clampLineBands(lines: readonly SpanLike[][]): BBox[] {
     const maxHeight = pitch * BAND_PITCH_TOLERANCE;
     for (let i = 0; i < bands.length; i += 1) {
       const band = bands[i] as BBox;
-      if (band[3] - band[1] > maxHeight) bands[i] = [band[0], band[1], band[2], band[1] + maxHeight];
+      if (band[3] - band[1] > maxHeight)
+        bands[i] = [band[0], band[1], band[2], band[1] + maxHeight];
     }
   }
 

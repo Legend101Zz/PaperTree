@@ -108,9 +108,7 @@ describe('lineband — the span-box defect', () => {
             nextLine === undefined
               ? Number.POSITIVE_INFINITY
               : Math.max(0, Math.min(...nextLine.map((s) => s.bbox[1])) - rawTop);
-          expect(newHeight).toBeGreaterThanOrEqual(
-            Math.min(rawHeight, pitch, available) - 1e-9,
-          );
+          expect(newHeight).toBeGreaterThanOrEqual(Math.min(rawHeight, pitch, available) - 1e-9);
 
           if (Math.abs(newHeight - rawHeight) < 1e-9) unchanged += 1;
           else shrunk += 1;

@@ -198,7 +198,10 @@ const out = {
       return {
         ...page,
         block_ids: [...page.block_ids, referenceEntry.block_id as string],
-        flows: { ...page.flows, body: [...(page.flows.body ?? []), referenceEntry.block_id as string] },
+        flows: {
+          ...page.flows,
+          body: [...(page.flows.body ?? []), referenceEntry.block_id as string],
+        },
       };
     }
     return page;

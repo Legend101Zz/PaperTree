@@ -28,11 +28,7 @@ import { describe, expect, it } from 'vitest';
 import { captureAnchor } from '../src/capture.js';
 import { indexDocument } from '../src/document.js';
 import type { IndexedBlock, IndexedDocument } from '../src/document.js';
-import {
-  GUIDED_FURNITURE_TYPES,
-  projectGuided,
-  resolveCrossMode,
-} from '../src/guided.js';
+import { GUIDED_FURNITURE_TYPES, projectGuided, resolveCrossMode } from '../src/guided.js';
 import { loadAllFixtures, loadFixture } from './fixtures.js';
 
 function anchorOn(
@@ -73,7 +69,12 @@ describe('anchoring/cross-mode.spec — Source ⇄ Guided', () => {
     const sourceSlice = Array.from(block.text).slice(start, end).join('');
     expect(sourceSlice).toContain('\n');
 
-    const result = resolveCrossMode(anchorOn(doc, block, { startOffset: start, endOffset: end }), doc, 'guided', view);
+    const result = resolveCrossMode(
+      anchorOn(doc, block, { startOffset: start, endOffset: end }),
+      doc,
+      'guided',
+      view,
+    );
 
     expect(result.state).toBe('resolved');
     expect(result.message).not.toBe('');
@@ -158,9 +159,7 @@ describe('anchoring/cross-mode.spec — Source ⇄ Guided', () => {
 
   it('a Guided-mode highlight resolves back in Source', () => {
     const doc = indexDocument(loadFixture('neural-odes-mathheavy'), 'cross-mode');
-    const block = doc.blocks.find(
-      (b) => b.type === 'paragraph' && b.textCodePoints.length > 200,
-    );
+    const block = doc.blocks.find((b) => b.type === 'paragraph' && b.textCodePoints.length > 200);
     if (block === undefined) throw new Error('no paragraph');
 
     const guidedAnchor = captureAnchor({
@@ -233,7 +232,7 @@ describe('anchoring/cross-mode.spec — Source ⇄ Guided', () => {
     const doc = indexDocument(loadFixture('neural-odes-mathheavy'), 'cross-mode');
     const view = projectGuided(doc);
     const cell = doc.blocks.find((b) => b.type === 'table_cell');
-    if (cell === undefined) throw new Error('neural-odes has the set\'s only table');
+    if (cell === undefined) throw new Error("neural-odes has the set's only table");
 
     const result = resolveCrossMode(anchorOn(doc, cell), doc, 'guided', view);
     expect(result.state).toBe('resolved');

@@ -25,7 +25,10 @@ import { Tier, type SubTarget, type TargetKind } from '../src/types.js';
 import { loadFixture } from './fixtures.js';
 
 const CITATION_FIXTURE = JSON.parse(
-  readFileSync(fileURLToPath(new URL('./fixtures/citation-nav.paperir.json', import.meta.url)), 'utf8'),
+  readFileSync(
+    fileURLToPath(new URL('./fixtures/citation-nav.paperir.json', import.meta.url)),
+    'utf8',
+  ),
 ) as PaperSource;
 
 function firstOfType(doc: ReturnType<typeof indexDocument>, type: string): IndexedBlock {
@@ -36,8 +39,7 @@ function firstOfType(doc: ReturnType<typeof indexDocument>, type: string): Index
 
 function firstQuad(anchor: { selectors: readonly { type: string }[] }): number[] {
   const shape = anchor.selectors.find((s) => s.type === 'ShapeSelector') as
-    | { quads: readonly number[][] }
-    | undefined;
+    { quads: readonly number[][] } | undefined;
   const quad = shape?.quads[0];
   if (quad === undefined) throw new Error('anchor carries no ShapeSelector quad');
   return [...quad];

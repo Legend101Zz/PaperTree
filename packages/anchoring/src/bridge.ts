@@ -111,12 +111,7 @@ export function pdfPointToIr(frame: PageFrame, rawPoint: Point): Point {
 export function pdfRectToIr(frame: PageFrame, rawRect: BBox): BBox {
   const a = normalisePoint(frame, [rawRect[0], rawRect[1]]);
   const b = normalisePoint(frame, [rawRect[2], rawRect[3]]);
-  return [
-    Math.min(a[0], b[0]),
-    Math.min(a[1], b[1]),
-    Math.max(a[0], b[0]),
-    Math.max(a[1], b[1]),
-  ];
+  return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
 }
 
 /**

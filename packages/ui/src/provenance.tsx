@@ -188,13 +188,26 @@ export function EquationView({
  */
 export interface TableViewProps {
   readonly blockId: string;
-  readonly rows: readonly { readonly id: string; readonly cells: readonly { readonly id: string; readonly text: string; readonly isHeader?: boolean }[] }[];
+  readonly rows: readonly {
+    readonly id: string;
+    readonly cells: readonly {
+      readonly id: string;
+      readonly text: string;
+      readonly isHeader?: boolean;
+    }[];
+  }[];
   readonly caption?: string;
   readonly html?: string;
   readonly onShowSource: (blockIds: readonly string[]) => void;
 }
 
-export function TableView({ blockId, rows, caption, html, onShowSource }: TableViewProps): ReactNode {
+export function TableView({
+  blockId,
+  rows,
+  caption,
+  html,
+  onShowSource,
+}: TableViewProps): ReactNode {
   return (
     <figure className="pt-table" data-block-id={blockId}>
       <table className="pt-table__grid">
@@ -246,7 +259,9 @@ export function FigureView({ blockId, imageSrc, imageAlt, caption }: FigureViewP
   return (
     <figure className="pt-figure" data-block-id={blockId}>
       <img className="pt-figure__crop" src={imageSrc} alt={imageAlt} />
-      {caption === undefined ? null : <figcaption className="pt-figure__caption">{caption}</figcaption>}
+      {caption === undefined ? null : (
+        <figcaption className="pt-figure__caption">{caption}</figcaption>
+      )}
     </figure>
   );
 }

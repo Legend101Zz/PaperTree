@@ -78,7 +78,8 @@ export function parseFixtureUri(uri: string): ParsedFixtureUri {
   if (rest.length === 0) fail(uri, 'it names no slug and no path');
   // A query or fragment would have to be stripped or preserved, and either choice is a guess about
   // an intent the fixtures never express. There are none; say so rather than pick.
-  if (rest.includes('?') || rest.includes('#')) fail(uri, 'query strings and fragments are not part of the scheme');
+  if (rest.includes('?') || rest.includes('#'))
+    fail(uri, 'query strings and fragments are not part of the scheme');
 
   const slash = rest.indexOf('/');
   if (slash < 0) fail(uri, 'it names a slug but no asset path');
@@ -87,13 +88,19 @@ export function parseFixtureUri(uri: string): ParsedFixtureUri {
   const path = rest.slice(slash + 1);
   if (slug.length === 0) fail(uri, 'the slug is empty');
   if (path.length === 0) fail(uri, 'the asset path is empty');
-  if (!SEGMENT_PATTERN.test(slug)) fail(uri, `the slug ${JSON.stringify(slug)} contains characters outside [A-Za-z0-9._~@+-]`);
+  if (!SEGMENT_PATTERN.test(slug))
+    fail(uri, `the slug ${JSON.stringify(slug)} contains characters outside [A-Za-z0-9._~@+-]`);
 
   for (const segment of path.split('/')) {
-    if (segment.length === 0) fail(uri, 'the asset path contains an empty segment (a doubled or trailing "/")');
-    if (segment === '.' || segment === '..') fail(uri, 'the asset path contains a relative segment');
+    if (segment.length === 0)
+      fail(uri, 'the asset path contains an empty segment (a doubled or trailing "/")');
+    if (segment === '.' || segment === '..')
+      fail(uri, 'the asset path contains a relative segment');
     if (!SEGMENT_PATTERN.test(segment)) {
-      fail(uri, `the path segment ${JSON.stringify(segment)} contains characters outside [A-Za-z0-9._~@+-]`);
+      fail(
+        uri,
+        `the path segment ${JSON.stringify(segment)} contains characters outside [A-Za-z0-9._~@+-]`,
+      );
     }
   }
   if (slug === '.' || slug === '..') fail(uri, 'the slug is a relative segment');

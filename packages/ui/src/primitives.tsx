@@ -680,7 +680,8 @@ export function Sheet({
 
   const step = useCallback(
     (delta: number): void => {
-      const next = SHEET_DETENTS[Math.min(SHEET_DETENTS.length - 1, Math.max(0, detentIndex + delta))];
+      const next =
+        SHEET_DETENTS[Math.min(SHEET_DETENTS.length - 1, Math.max(0, detentIndex + delta))];
       if (next !== undefined && next !== detent) onDetentChange(next);
     },
     [detent, detentIndex, onDetentChange],

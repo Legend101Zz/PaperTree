@@ -256,7 +256,12 @@ function splitParagraphs(paper: PaperSource, rng: () => number, rate: number): P
   }
 
   const next = rewriteReferences({ ...paper, blocks: out }, rename);
-  return { paper: next, idsBefore: paper.blocks.length, idsRetired: countRetired(paper, next), sites };
+  return {
+    paper: next,
+    idsBefore: paper.blocks.length,
+    idsRetired: countRetired(paper, next),
+    sites,
+  };
 }
 
 /**
@@ -304,7 +309,12 @@ function jitterGeometry(paper: PaperSource, rng: () => number, amplitude: number
     return minted;
   });
   const next = rewriteReferences({ ...paper, blocks }, rename);
-  return { paper: next, idsBefore: paper.blocks.length, idsRetired: countRetired(paper, next), sites: blocks.length };
+  return {
+    paper: next,
+    idsBefore: paper.blocks.length,
+    idsRetired: countRetired(paper, next),
+    sites: blocks.length,
+  };
 }
 
 /** Reclassify blocks. `block_type` is in the id payload, so every reclassification retires an id. */
@@ -319,7 +329,12 @@ function retypeBlocks(paper: PaperSource, rng: () => number, rate: number): Pert
     return minted;
   });
   const next = rewriteReferences({ ...paper, blocks }, rename);
-  return { paper: next, idsBefore: paper.blocks.length, idsRetired: countRetired(paper, next), sites };
+  return {
+    paper: next,
+    idsBefore: paper.blocks.length,
+    idsRetired: countRetired(paper, next),
+    sites,
+  };
 }
 
 /**
@@ -369,7 +384,12 @@ function textNoise(paper: PaperSource, rng: () => number, rate: number): Perturb
     return minted;
   });
   const next = rewriteReferences({ ...paper, blocks }, rename);
-  return { paper: next, idsBefore: paper.blocks.length, idsRetired: countRetired(paper, next), sites };
+  return {
+    paper: next,
+    idsBefore: paper.blocks.length,
+    idsRetired: countRetired(paper, next),
+    sites,
+  };
 }
 
 function countRetired(before: PaperSource, after: PaperSource): number {

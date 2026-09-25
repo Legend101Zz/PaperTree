@@ -287,13 +287,7 @@ describe('the ⊙ marker is reserved', () => {
       {
         name: 'Sheet',
         node: (
-          <Sheet
-            open
-            title="Inspector"
-            detent="peek"
-            onDetentChange={noop}
-            onDismiss={noop}
-          >
+          <Sheet open title="Inspector" detent="peek" onDetentChange={noop} onDismiss={noop}>
             answer
           </Sheet>
         ),

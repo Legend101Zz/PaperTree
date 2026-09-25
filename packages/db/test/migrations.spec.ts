@@ -337,9 +337,7 @@ function timedPut(
   // Correctness is UNCONDITIONAL and applies to the calibration insert too: a baseline that
   // silently inserted nothing would be fast, would make every ratio pass, and would look
   // exactly like a healthy run.
-  expect(db.countBlocks(owner, asPaperId(options.paperId), generation(1))).toBe(
-    options.blockCount,
-  );
+  expect(db.countBlocks(owner, asPaperId(options.paperId), generation(1))).toBe(options.blockCount);
   return elapsedMs;
 }
 
