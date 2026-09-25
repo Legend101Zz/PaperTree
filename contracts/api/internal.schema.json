@@ -29,7 +29,7 @@
           "default": null
         }
       },
-      "required": ["text", "handles"],
+      "required": ["text", "handles", "next_cursor"],
       "title": "ToolResult",
       "type": "object"
     }

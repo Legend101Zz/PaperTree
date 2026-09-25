@@ -290,10 +290,16 @@ def test_the_internal_tool_result_is_one_shape_on_both_sides() -> None:
     hand = TOOLS_SCHEMA["$defs"]["ToolResult"]
     exported = contracts.render("internal")["$defs"]["ToolResult"]
     assert set(hand["properties"]) == set(exported["properties"])
-    assert set(hand["required"]) == set(exported["required"])
+    # §4 `next_cursor?: string|null`: the agent takes it absent, and the API always SENDS it (null
+    # when the tool does not page), which the exported response schema says by requiring it.
+    assert set(exported["required"]) == set(hand["required"]) | {"next_cursor"}
     sample = {"text": "[b3] (p. 2 · 2. Unified Detection · paragraph) …", "handles": ["b3"]}
     assert not validate(sample, TOOLS_SCHEMA, "#/$defs/ToolResult")
     ToolResult.model_validate_json(json.dumps(sample))
+    sent = ToolResult.model_validate_json(json.dumps(sample)).model_dump(mode="json")
+    assert sent == {**sample, "next_cursor": None}
+    assert not validate(sent, contracts.render("internal"), "#/$defs/ToolResult")
+    assert not validate(sent, TOOLS_SCHEMA, "#/$defs/ToolResult")
     for bad in ({"text": "x"}, {"text": "x", "handles": ["3"]}, {**sample, "extra": 1}):
         assert validate(bad, TOOLS_SCHEMA, "#/$defs/ToolResult"), bad
         with pytest.raises(ValidationError):

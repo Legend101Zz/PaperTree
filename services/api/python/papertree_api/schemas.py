@@ -53,9 +53,20 @@ from .wiretime import wire_time
 
 
 class Wire(BaseModel):
-    """The base of every wire model."""
+    """The base of every wire model.
 
-    model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
+    `json_schema_serialization_defaults_required`: a response field with a default is still
+    ALWAYS sent (only an `omittable()` one is ever left out, and pydantic keeps those optional),
+    so the exported response schema marks it required. Without it a defaulted field the server
+    always sends looked optional, and a web type that lacked it passed `contracts.spec.ts`.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        strict=True,
+        allow_inf_nan=False,
+        json_schema_serialization_defaults_required=True,
+    )
 
     @model_validator(mode="after")
     def _omitted_not_null(self) -> Self:
