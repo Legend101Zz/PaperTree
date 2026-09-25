@@ -52,7 +52,11 @@ BEFORE: frozenset[tuple[str, str]] = frozenset(
 )
 
 #: What S0 added. Every entry is a contracts.md route; see the report for the section of each.
-ADDED: frozenset[tuple[str, str]] = frozenset()
+ADDED: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("GET", "/healthz"),  # §2.8
+    }
+)
 
 
 def _served(tmp_path: Path) -> set[tuple[str, str]]:

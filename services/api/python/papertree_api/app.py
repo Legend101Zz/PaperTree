@@ -22,7 +22,7 @@ from papertree_agent_tools import Transport
 from .ask import mount_ask
 from .errors import InternalErrorMiddleware, install_error_handlers
 from .middleware import REQUEST_ID_HEADER, CompressJson, RequestIdMiddleware, log_unhandled
-from .routers import auth, highlights, jobs, papers
+from .routers import auth, health, highlights, jobs, papers
 from .routers.papers import derive_paper_id  # re-exported: it lived here before the split
 from .settings import Settings
 
@@ -99,4 +99,5 @@ def create_app(
     app.include_router(highlights.router)
     app.include_router(jobs.router)
     mount_ask(app)
+    app.include_router(health.router)
     return app
