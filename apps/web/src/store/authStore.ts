@@ -20,17 +20,33 @@
  * time.
  *
  * So this imports `authApi` from `@/lib/api/papers` — the client that talks to the service actually
- * listening on `NEXT_PUBLIC_PAPERTREE_API_URL` — rather than from `@/lib/api.ts`, whose own header
- * says it talks to the archived v1 app. (`lib/papertree.ts`, which `lib/api/*` replaced, was deleted
- * in S0.)
+ * listening on `NEXT_PUBLIC_PAPERTREE_API_URL`. (The v1 client it was confused with, `lib/api.ts`,
+ * was deleted in S0; so was `lib/papertree.ts`, which `lib/api/*` replaced.)
  * `test/journey-wiring.spec.tsx` asserts the field names against a stub shaped like the real
  * response, so a rename on either side fails a test instead of silently signing nobody in.
  */
 
 import { create } from "zustand";
-import { User } from "@/types";
 import { authApi } from "@/lib/api/papers";
 import { setToken, removeToken, getToken } from "@/lib/auth";
+
+/**
+ * The signed-in user. It lived in `types/index.ts` with the v1 types, and this store was its only
+ * live consumer, so it moved here when that file was deleted (S0, slice-plan §R R4).
+ */
+export interface User {
+  id: string;
+  email: string;
+  /**
+   * OPTIONAL because `services/api`'s `GET /auth/me` does not return one (#77).
+   *
+   * It was required while `apps/api` (v1) served this type. Making it optional is the honest
+   * option: the alternative was filling it with `new Date()`, which would put a fabricated
+   * account-creation time into application state that reads exactly like a real one. Nothing
+   * renders it.
+   */
+  created_at?: string;
+}
 
 /**
  * `/auth/me` returns `{ user_id, email }`. `User` calls it `id`.

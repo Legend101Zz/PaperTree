@@ -108,7 +108,11 @@ describe('D3 — the library page talks to the service that is actually running'
     const source = readFileSync(resolve(process.cwd(), 'src/app/dashboard/page.tsx'), 'utf8');
 
     expect(source).toContain("import { papersApi } from '@/lib/api/papers'");
-    expect(source).not.toContain("from '@/lib/api'");
+    // The v1 client is not merely unimported, it is GONE (S0, slice-plan §R R1), so no file can
+    // pick up its `papersApi` by accident again. `@/lib/api` now names the v2 DIRECTORY, whose
+    // modules are imported by their own paths — a string check on `from '@/lib/api'` would no
+    // longer distinguish the two, and the file's absence does.
+    expect(existsSync(resolve(process.cwd(), 'src/lib/api.ts'))).toBe(false);
     expect(existsSync(resolve(process.cwd(), 'src/lib/papertree.ts'))).toBe(false);
     expect(source).not.toContain("from '@/lib/papertree'");
   });
