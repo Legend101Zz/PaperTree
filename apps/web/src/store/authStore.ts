@@ -19,16 +19,17 @@
  * A registered user could never get in, no error was ever shown, and the account existed the whole
  * time.
  *
- * So this imports `authApi` from `@/lib/papertree` — the client that talks to the service actually
- * listening on `NEXT_PUBLIC_API_URL` — rather than from `@/lib/api`, whose own header says it talks
- * to the archived v1 app. `test/auth-wiring.spec.tsx` asserts the field names against a stub shaped
- * like the real response, so a rename on either side fails a test instead of silently signing
- * nobody in.
+ * So this imports `authApi` from `@/lib/api/papers` — the client that talks to the service actually
+ * listening on `NEXT_PUBLIC_PAPERTREE_API_URL` — rather than from `@/lib/api.ts`, whose own header
+ * says it talks to the archived v1 app. (`lib/papertree.ts`, which `lib/api/*` replaced, was deleted
+ * in S0.)
+ * `test/journey-wiring.spec.tsx` asserts the field names against a stub shaped like the real
+ * response, so a rename on either side fails a test instead of silently signing nobody in.
  */
 
 import { create } from "zustand";
 import { User } from "@/types";
-import { authApi } from "@/lib/papertree";
+import { authApi } from "@/lib/api/papers";
 import { setToken, removeToken, getToken } from "@/lib/auth";
 
 /**

@@ -44,7 +44,7 @@
 import { indexDocument, type IndexedDocument, type PaperSource } from '@papertree/anchoring';
 
 import { isFixtureSlug, pdfUrlFor, textStreamIdFor, type FixtureSlug } from './fixtures';
-import { papersApi } from './papertree';
+import { papersApi } from './api/papers';
 
 export type PaperRef =
   | { readonly kind: 'fixture'; readonly slug: FixtureSlug }
@@ -116,7 +116,7 @@ export async function loadDocument(ref: PaperRef): Promise<IndexedDocument> {
  *
  * A `string` for a fixture (a same-origin path under `public/`) and an `ArrayBuffer` for the API,
  * because the API needs an `Authorization` header and pdf.js cannot send one — see
- * `papertree.ts::papersApi.file` for why this is bytes rather than v1's token-in-the-query-string.
+ * `api/papers.ts::papersApi.file` for why this is bytes rather than v1's token-in-the-query-string.
  */
 export async function pdfSourceFor(ref: PaperRef): Promise<string | ArrayBuffer> {
   return ref.kind === 'fixture' ? pdfUrlFor(ref.slug) : papersApi.file(ref.paperId);

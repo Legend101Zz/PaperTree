@@ -35,7 +35,7 @@
 
 import type { IndexedDocument } from '@papertree/anchoring';
 
-import { papersApi, type WireAnswer } from '@/lib/papertree';
+import { papersApi, type WireAnswer } from '@/lib/api/papers';
 
 import { captureCitation } from './citations';
 import { contextBlockIds } from './fixtureAnswerSource';
