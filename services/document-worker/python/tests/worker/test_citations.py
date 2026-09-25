@@ -328,7 +328,9 @@ def test_the_worker_detector_finds_every_label_retrieval_finds(parsed: dict[str,
             labels += len(theirs)
             assert theirs <= set(bracketed_marker_keys(text)), f"{name}: {block.block_id}"
     # Without this the assertion above is satisfied by an empty set on every block.
-    assert (blocks, labels) == (9826, 300)
+    # 9,825 blocks since the title-first commit: pdf-to-tree's three affiliation lines are one
+    # block (see test_crossrefs); no label moves.
+    assert (blocks, labels) == (9825, 300)
 
 
 # ── the CI smoke ─────────────────────────────────────────────────────────────────────────────

@@ -122,7 +122,15 @@ def test_the_pre_existing_relation_types_did_not_move(parsed: dict[str, Paper]) 
     # first paragraph. Typed `unknown`, they continue nothing, and six of those edges now start at
     # the paragraph that really runs over the page break; one false one is simply gone.
     assert totals["continues_on_next_page"] == 89
-    assert totals["continues_in_next_column"] == 37
+    # 37 -> 38 in the title-first commit, and the new edge is FALSE: pdf-to-tree p0's left column
+    # ends "...dhSegment(Ares Oliveira et al.," (one continuation signal, confidence 0.6) and the
+    # right column's first body block is now "Additionally, some applications, like RAG..." - the
+    # tail of Figure 1's CAPTION, broken off because MuPDF returned "to confusion." and
+    # "Additionally, ..." as two lines on one baseline and `_same_block` read the second's 63 pt
+    # offset as an indent. The affiliation lines used to be read first in that column, and the
+    # pair failed rule 24b's x test, which hid it. The real continuation is "2018). Later
+    # research ..."; hard case `pdf-to-tree-p0-caption-tail`.
+    assert totals["continues_in_next_column"] == 38
     assert totals["cites"] == 532
 
 
@@ -286,4 +294,6 @@ def test_prev_id_and_next_id_are_still_empty_and_that_is_the_ruling(
         if b.prev_id is not None or b.next_id is not None
     )
     total = sum(len(paper.blocks) for paper in parsed.values())
-    assert (populated, total) == (0, 9826)  # 9,903 at 18f69ec; S2 (#141) joins run-in leads
+    # 9,903 at 18f69ec; S2 (#141) joins run-in leads (9,826) and title-first ordering reads
+    # pdf-to-tree's three affiliation lines as one block (9,825).
+    assert (populated, total) == (0, 9825)

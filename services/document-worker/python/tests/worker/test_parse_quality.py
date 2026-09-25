@@ -385,3 +385,48 @@ def test_a_float_is_read_where_it_stands(floats_mid_column: Path, tmp_path: Path
     assert spanning[0].type == "figure", [b.type for b in spanning]
     foot = _body_order(paper, 3)
     assert foot[-1].type == "figure", [(b.type, (b.text or "")[:12]) for b in foot]
+
+
+# ── the title page reads title, authors, then the columns ─────────────────────────────────
+
+
+@pytest.fixture(scope="module")
+def title_right_of_the_split(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """YOLO's page 0: a centred title and author line narrower than a full-width line, whose
+    centre falls a few points right of the column split - so each went to column 1 and was read
+    after the whole left column. Page 1 holds the opposite case the rule must NOT touch: a wide
+    line crossing the split in mid-page (a display equation) between two columns of prose."""
+    document = pymupdf.open()
+    page = document.new_page(width=W, height=H)
+    title = "A Title Set Right Of Centre"
+    width = pymupdf.get_text_length(title, fontname="hebo", fontsize=18)
+    page.insert_text((330 - width / 2, 80), title, fontsize=18, fontname="hebo")
+    authors = "Alice Smith and Bob Jones"
+    width = pymupdf.get_text_length(authors, fontname="helv", fontsize=10)
+    page.insert_text((330 - width / 2, 110), authors, fontsize=10, fontname="helv")
+    page.insert_text((LEFT + 90, 150), "Abstract", fontsize=12, fontname="hebo")
+    _column(page, LEFT, 168, "leftcol", 40)
+    _column(page, RIGHT, 150, "rightcol", 40)
+    page = document.new_page(width=W, height=H)
+    _column(page, LEFT, 80, "lefttop", 20)
+    _column(page, RIGHT, 80, "righttop", 20)
+    page.insert_text((200, 340), "x = y + z  (1)  crossing the split", fontsize=10)
+    _column(page, LEFT, 370, "leftbottom", 20)
+    _column(page, RIGHT, 370, "rightbottom", 20)
+    return _save(document, tmp_path_factory.mktemp("title") / "title.pdf")
+
+
+def test_the_title_is_read_first(title_right_of_the_split: Path, tmp_path: Path) -> None:
+    paper = _parse(title_right_of_the_split, tmp_path)
+    order = _body_order(paper, 0)
+    assert order[0].type == "title", [(b.type, (b.text or "")[:20]) for b in order[:4]]
+    assert "A Title Set Right Of Centre" in (order[0].text or "")
+
+    def at(page: list[Any], seed: str) -> int:
+        return next(i for i, b in enumerate(page) if seed in (b.text or ""))
+
+    assert at(order, "Alice Smith") < at(order, "leftcol0") < at(order, "rightcol0")
+    # Mid-page, a line crossing the split keeps the centre rule: it is not a barrier, so the left
+    # column is read to its foot before the right column starts.
+    middle = _body_order(paper, 1)
+    assert at(middle, "leftbottom0") < at(middle, "righttop0")

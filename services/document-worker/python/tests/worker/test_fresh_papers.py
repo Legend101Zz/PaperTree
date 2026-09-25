@@ -173,3 +173,13 @@ def test_sberts_introduction_is_not_front_matter(tmp_path: Path) -> None:
 
     assert type_of("BERT (Devlin et al., 2018) and RoBERTa") == "abstract"
     assert type_of("BERT set new state-of-the-art performance on various") == "paragraph"
+
+
+def test_title_first_on_yolo(yolo: Any) -> None:
+    """Slice-plan §S2 merge rule `test_title_first[yolo]`: at 18f69ec page 0 read Abstract, the
+    abstract, 1. Introduction and its paragraph, and only then the title and its authors."""
+    by_id = {b.block_id: b for b in yolo.blocks}
+    body = dict(yolo.pages[0].flows)["body"]
+    first = by_id[body[0]]
+    assert first.type == "title", (first.type, first.text)
+    assert "You Only Look Once" in (first.text or "")

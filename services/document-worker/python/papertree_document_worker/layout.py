@@ -473,6 +473,37 @@ def _bounds(lines: list[Line]) -> BBox:
     ]
 
 
+def _above_the_columns(lines: list[Line], columns: tuple[Column, ...]) -> set[int]:
+    """`id()`s of lines that CROSS the column split and sit above where the columns begin.
+
+    TITLE FIRST, S2 (#141). A centred title, author line or affiliation line on a two-column title
+    page is narrower than `FULL_WIDTH_SHARE` of the text block, so it went to whichever column its
+    CENTRE fell in - and a centre just right of the split sends the title into column 1, read
+    after the whole left column. Measured on `yolo-1506.02640` p0 (title centre x 297.5, split at
+    287): the reading order ran
+    Abstract, the abstract, 1. Introduction, the introduction, and only then "You Only Look Once:
+    Unified, Real-Time Object Detection" and its authors.
+
+    A line that crosses the split belongs to NEITHER column, and one that does so above the first
+    line confined to a column is read before both: a spanning element, a barrier, exactly as a
+    full-width line is. Below that point a crossing line keeps the centre rule - a float or a wide
+    equation in mid-page must not cut the columns into slabs (XY-cut's interleaving failure, which
+    this module's docstring exists to prevent).
+    """
+    if len(columns) < 2:
+        return set()
+    split = columns[1].x0
+
+    def crosses(line: Line) -> bool:
+        return line.band[0] < split < line.band[2]
+
+    confined = [line.band[1] for line in lines if not crosses(line)]
+    if not confined:
+        return set()
+    top = min(confined)
+    return {id(line) for line in lines if crosses(line) and line.band[3] <= top}
+
+
 def _order_body(
     groups: list[tuple[list[Line], int | None]], columns: tuple[Column, ...]
 ) -> list[tuple[list[Line], int | None]]:
@@ -584,10 +615,14 @@ def layout_page(page: PageContent, heads: set[str]) -> PageLayout:
             # exist. `_order_body` already short-circuits on `len(columns) < 2` for the same
             # reason.
             single_column = len(columns) < 2
+            above_columns = _above_the_columns(flow_lines, columns)
             per_column: dict[int | None, list[Line]] = {}
             for line in flow_lines:
                 band = line.band
-                if not single_column and band[2] - band[0] > FULL_WIDTH_SHARE * content_width:
+                if not single_column and (
+                    band[2] - band[0] > FULL_WIDTH_SHARE * content_width
+                    or id(line) in above_columns
+                ):
                     key: int | None = None
                 else:
                     found = next((c.index for c in columns if c.contains(band)), None)
