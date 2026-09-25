@@ -323,6 +323,8 @@ def test_a_generation_already_stored_by_a_dead_attempt_is_kept_and_promoted(tmp_
                 (body["job_id"],),
             )
             gate.release["promote"].set()  # the held worker's lease is gone: it abandons
+        # ...without promoting: its promote body ran, and its write was fenced on the lease.
+        assert sql(h.settings, "SELECT * FROM paper_promotions") == []
         drain(h.settings)
         row = row_for(h.client, token, body["paper_id"])
         assert (row["processing"], row["generation"], row["job"]["attempt"]) == ("ready", 1, 2)
@@ -332,6 +334,34 @@ def test_a_generation_already_stored_by_a_dead_attempt_is_kept_and_promoted(tmp_
             (body["job_id"],),
         )
         assert json.loads(persist["result"])["outcome"] == "already stored"
+
+
+@pytest.mark.parametrize("step", ["persist", "promote"])
+def test_a_worker_that_lost_its_lease_mid_step_writes_nothing(tmp_path: Path, step: str) -> None:
+    """The lease is checked before and after a step body, never during it. So a worker held at
+    the start of `step` has its job taken by another worker (its lease reassigned), then resumes:
+    its body must NOT store the generation / promote it. The write is fenced on the lease inside
+    the same `BEGIN IMMEDIATE` (`job.py`). WATCHED FAILING with the fence removed: the held worker
+    wrote a `papers` row (persist) / a `paper_promotions` row (promote) for a job it no longer
+    held."""
+    with harness(tmp_path) as h:
+        token = register(h.client, "reader@example.com")
+        body = upload(h.client, token, synthetic_pdf()).json()
+        gate = Gate(step)
+        with worker_thread(h.settings, gate):
+            gate.wait_for(step)
+            write_sql(
+                h.settings,
+                "UPDATE jobs SET lease_owner = 'another-host:1', lease_expires_at = ? "
+                "WHERE job_id = ?",
+                (time.time() + 600, body["job_id"]),
+            )
+            gate.release[step].set()
+        table = "papers" if step == "persist" else "paper_promotions"
+        assert sql(h.settings, f"SELECT * FROM {table}") == [], f"a superseded {step} wrote"
+        (job,) = sql(h.settings, "SELECT state, lease_owner FROM jobs")
+        assert (job["state"], job["lease_owner"]) == ("running", "another-host:1")
+        assert row_for(h.client, token, body["paper_id"])["processing"] == "reading"
 
 
 _HOLD_BEFORE_PROMOTE = textwrap.dedent(
