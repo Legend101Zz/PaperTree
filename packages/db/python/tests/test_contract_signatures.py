@@ -116,16 +116,15 @@ PROPOSED: dict[str, list[str]] = {
     # Additive, implemented in S0 because the highlight routes need them.
     "get_highlight": ["owner", "paper_id", "highlight_id", "generation"],
     "owned_paper": ["owner", "paper_id"],
+    # Additive, S1 (library.py): the one-paper row, and contracts.md §2.3's signed-asset owner
+    # lookup (un-owned, like `run_grant`).
+    "library_row": ["owner", "paper_id"],
+    "asset_grant": ["paper_id"],
 }
 
 #: THE LEDGER. Delete a line in the PR that implements the method.
 STILL_STUBS: frozenset[str] = frozenset(
     {
-        # S1
-        "register_upload",
-        "set_latest_job",
-        "next_generation",
-        "list_library",
         # S5
         "create_thread",
         "append_message",
