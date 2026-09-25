@@ -30,7 +30,8 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "test": "turbo run test",
-    "e2e": "playwright test -c e2e/playwright.config.ts",
+    "e2e": "tsc -p e2e/tsconfig.json && playwright test -c e2e/playwright.config.ts",
+    "typecheck:e2e": "tsc -p e2e/tsconfig.json",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "codegen": "turbo run codegen",
@@ -44,6 +45,7 @@
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
+    "@types/node": "^22.10.2",
     "oxlint": "^1.5.0",
     "prettier": "^3.4.2",
     "tsx": "^4.19.2",
