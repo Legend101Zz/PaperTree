@@ -27,7 +27,13 @@ a versioned arXiv URL. Slice-plan §S2 "Paper sets (b)".
 
 ```bash
 ./research/benchmarks/fresh/fetch_fresh.sh
+uv run python -m papertree_evaluation fresh --verbose   # parse the six and score pages 1-2
 ```
+
+The scorer is `packages/evaluation/python/papertree_evaluation/fresh.py`; its module docstring
+defines every column (merged paragraphs under both readings of the `cont` ruling, split anchors,
+unanchored fragments, mistyped body units, headings, title first, pairwise order, caption
+pairing).
 
 ## How the gold was made (summary; the full record is `_provenance`)
 
