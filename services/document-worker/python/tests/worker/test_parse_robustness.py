@@ -83,3 +83,85 @@ def test_a_paper_with_an_overhanging_image_parses_and_validates(
     assert len(figures) == 1
     x0, y0, x1, y1 = figures[0].bbox
     assert 0 <= x0 < x1 <= PAGE_W and 0 <= y0 < y1 <= PAGE_H
+
+
+# ── R21: a section orphaned when its parent's heading is retyped as a caption ─────────────────
+
+
+@pytest.fixture(scope="module")
+def retyped_heading(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """DDPM's shape: `Algorithm 3 Sending x0` is set bold, so it is detected as a heading, pushed
+    on the section stack, and parents the numbered `4.2` and `4.3` that follow. Then
+    `_block_type` retypes it `caption` (it opens `Algorithm N`), its section is filtered out, and
+    `4.2`/`4.3` point at a heading that no longer opens a section: validator R21, dead letter.
+    """
+    out = tmp_path_factory.mktemp("retyped") / "retyped.pdf"
+    document = pymupdf.open()
+    page = document.new_page(width=PAGE_W, height=PAGE_H)
+    y = 80.0
+
+    def line(text: str, font: str = "helv", size: float = 10, gap: float = 13) -> None:
+        nonlocal y
+        page.insert_text((72, y), text, fontsize=size, fontname=font)
+        y += gap
+
+    def paragraph(name: str) -> None:
+        nonlocal y
+        for index in range(3):
+            line(f"Paragraph text line {index} of {name}, set in the body font at body size here.")
+        y += 6
+
+    line("1 Introduction", "hebo", 12, 18)
+    paragraph("intro")
+    line("2 Method", "hebo", 12, 18)
+    paragraph("method")
+    line("Algorithm 1 Training the model", "hebo", 10, 14)
+    paragraph("algorithm")
+    line("2.1 Details", "hebo", 10, 14)
+    paragraph("details")
+    line("3 Results", "hebo", 12, 18)
+    paragraph("results")
+    document.save(str(out))
+    document.close()
+    return out
+
+
+def test_retyped_heading_reparents(retyped_heading: Path, tmp_path: Path) -> None:
+    """`2.1` is re-parented to `2 Method`, the nearest preceding section one level up, and the
+    retyped caption's blocks stay inside a section instead of falling out of the tree."""
+    paper = parse_document(retyped_heading, paper_id=PAPER_ID, asset_root=tmp_path).paper
+    assert validate_paper(paper).ok
+    text = {b.block_id: (b.text or "") for b in paper.blocks}
+    by_title = {text[s.heading_block_id].split("\n")[0]: s for s in paper.sections}
+    assert sorted(by_title) == ["1 Introduction", "2 Method", "2.1 Details", "3 Results"]
+    details, method = by_title["2.1 Details"], by_title["2 Method"]
+    assert details.parent_heading_block_id == method.heading_block_id
+    assert (details.level, method.level) == (2, 1)
+    caption = next(b for b in paper.blocks if (b.text or "").startswith("Algorithm 1"))
+    assert caption.type == "caption"
+    # The caption and the paragraph under it read inside section 2, where they are printed.
+    algorithm_body = next(b for b in paper.blocks if "of algorithm" in (b.text or ""))
+    assert caption.block_id in method.block_ids
+    assert algorithm_body.block_id in method.block_ids
+
+
+def test_an_orphan_with_no_section_one_level_up_becomes_top_level() -> None:
+    """The fallback: with no preceding section one level up, the orphan is level 1, and every
+    descendant's level is re-derived from its parent (rule 21: level == parent.level + 1)."""
+    from papertree_document_worker.hierarchy import SectionNode, reparent_orphans
+    from papertree_document_worker.layout import LayoutBlock
+
+    def block() -> LayoutBlock:
+        return LayoutBlock(lines=(), flow="body", column=None, bbox=[0.0, 0.0, 1.0, 1.0])
+
+    dropped, orphan, child = block(), block(), block()
+    kept = [
+        SectionNode(orphan, 2, dropped, [block()]),
+        SectionNode(child, 3, orphan, []),
+    ]
+    dropped_node = SectionNode(dropped, 1, None, [block()])
+    out = reparent_orphans([dropped_node, *kept], keep=lambda node: node is not dropped_node)
+    assert [(n.heading_block is orphan, n.level, n.parent_heading_block) for n in out[:1]] == [
+        (True, 1, None)
+    ]
+    assert out[1].parent_heading_block is orphan and out[1].level == 2

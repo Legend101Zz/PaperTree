@@ -105,3 +105,47 @@ CORPUS_PARAMS: list[Path | ParameterSet] = list(CORPUS_FILES) or [
         ),
     )
 ]
+
+
+# ── the S2 fresh set (#141): six out-of-sample arXiv papers, fetched the same way ──────────────
+
+FRESH_DIR = REPO / "research" / "benchmarks" / "fresh" / "pdfs"
+
+#: `research/benchmarks/fresh/fresh.sha256`, by name, so a partial fetch is detectable.
+EXPECTED_FRESH = (
+    "adam-1412.6980.pdf",
+    "ddpm-2006.11239.pdf",
+    "flashattention-2205.14135.pdf",
+    "maskrcnn-1703.06870.pdf",
+    "sbert-1908.10084.pdf",
+    "yolo-1506.02640.pdf",
+)
+
+FRESH_FILES: list[Path] = sorted(Path(p) for p in glob.glob(str(FRESH_DIR / "*.pdf")))
+HAVE_FRESH = len(FRESH_FILES) == len(EXPECTED_FRESH)
+
+_FRESH_ABSENT = (
+    f"the S2 fresh set is gitignored and not present ({len(FRESH_FILES)} of "
+    f"{len(EXPECTED_FRESH)} found in {FRESH_DIR}). Fetch it with "
+    f"`./research/benchmarks/fresh/fetch_fresh.sh` to run these real-parse tests; the synthetic "
+    f"cases in test_parse_robustness.py cover the same defects everywhere."
+)
+
+#: For tests that name a fresh paper directly.
+requires_fresh = pytest.mark.skipif(not HAVE_FRESH, reason=_FRESH_ABSENT)
+
+#: Same trap as `CORPUS_PARAMS`: an empty parametrisation collects ZERO cases and reports nothing,
+#: so an absent fresh set becomes ONE explicitly skipped placeholder with the reason attached.
+FRESH_PARAMS: list[Path | ParameterSet] = list(FRESH_FILES) or [
+    pytest.param(None, marks=pytest.mark.skip(reason=_FRESH_ABSENT))
+]
+
+
+def test_fresh_presence_is_all_or_nothing() -> None:
+    """A PARTIAL fresh set is a broken environment, exactly like a partial corpus."""
+    found = {p.name for p in FRESH_FILES}
+    expected = set(EXPECTED_FRESH)
+    assert found in (set(), expected), (
+        f"partial fresh set: {len(found)} of {len(expected)} papers present. "
+        f"Missing {sorted(expected - found)}; unexpected {sorted(found - expected)}."
+    )

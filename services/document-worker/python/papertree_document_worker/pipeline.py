@@ -40,7 +40,7 @@ from papertree_document_worker.crossrefs import (
 from papertree_document_worker.equations import detect_equation_regions
 from papertree_document_worker.figures import detect_figure_regions, is_caption_line
 from papertree_document_worker.frontmatter import classify_front_matter
-from papertree_document_worker.hierarchy import build_sections, detect_headings
+from papertree_document_worker.hierarchy import build_sections, detect_headings, reparent_orphans
 from papertree_document_worker.joining import find_continuations
 from papertree_document_worker.layout import LayoutBlock, layout_document
 from papertree_document_worker.pdf import SourceDocument
@@ -700,12 +700,19 @@ def _assemble(
             builder.relate("caption_of", caption, match[1], 0.8, "geometric+numbering")
             unlinked.remove(match)
 
-    sections = build_sections(all_headings, all_body)
     # RULE 21: a section's `heading_block_id` must name a block of a KNOWN HEADING type - only
     # `title` or `heading`. `detect_headings` works on layout blocks, but the final type is
     # decided later and a heading-shaped line that opens `Figure 3.` becomes a `caption`, so a
     # node can survive detection and then point at a non-heading. Filtered here rather than
-    # earlier, because this is the first point at which the emitted type is known.
+    # earlier, because this is the first point at which the emitted type is known - and the
+    # sections it parented are re-attached (`reparent_orphans`), or they fail R21 in turn.
+    sections = reparent_orphans(
+        build_sections(all_headings, all_body),
+        keep=lambda node: (
+            id(node.heading_block) in emitted
+            and emitted[id(node.heading_block)].type in ("heading", "title")
+        ),
+    )
     builder.sections = [
         (
             emitted[id(node.heading_block)],
@@ -714,8 +721,6 @@ def _assemble(
             [emitted[id(b)] for b in node.member_blocks if id(b) in emitted],
         )
         for node in sections
-        if id(node.heading_block) in emitted
-        and emitted[id(node.heading_block)].type in ("heading", "title")
     ]
 
     # FRONT MATTER IS TYPED HERE, AND THE POSITION IS LOAD-BEARING TWICE OVER.

@@ -29,6 +29,7 @@ and that is exactly how `'Kaiming He'` became a heading.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from statistics import median
 
@@ -40,6 +41,7 @@ __all__ = [
     "build_sections",
     "detect_headings",
     "parse_section_number",
+    "reparent_orphans",
 ]
 
 #: `1`, `1.2`, `1.2.3`, `A`, `A.1`, `IV` - optionally followed by `.` or `)`, then the title.
@@ -285,3 +287,45 @@ def build_sections(headings: list[Heading], body_blocks: list[LayoutBlock]) -> l
         _pop_depth[id(node)] = heading.level
         stack.append(node)
     return sections
+
+
+def reparent_orphans(
+    sections: list[SectionNode], keep: Callable[[SectionNode], bool]
+) -> list[SectionNode]:
+    """The sections `keep` accepts, with every one left without a parent re-attached. RULE 21.
+
+    WHY A SECTION CAN BE ORPHANED. `build_sections` runs on DETECTED headings, but a heading's
+    final type is decided later: a bold `Algorithm 3 Sending x0` is detected as a heading, pushed
+    on the section stack, and becomes the parent of the numbered `4.2` and `4.3` that follow it.
+    Then `_block_type` types it `caption` (it opens `Algorithm N`), and rule 21 lets only a
+    `heading` or `title` open a section, so its section is dropped - and `4.2`/`4.3` still name
+    it as `parent_heading_block_id`. Measured on `ddpm-2006.11239`: 2 R21 errors, a dead letter.
+
+    THE NEW PARENT is the nearest PRECEDING kept section one level up (level - 1). For DDPM that
+    is `Experiments` - where `4.2` belongs by its own number - not the dropped section's parent,
+    which is None there and would have flattened `4.2` to a top-level section. With no such
+    section (or at level 1) the orphan becomes top level. Levels are then re-derived in document
+    order from the parent, so every descendant satisfies rule 21's `level == parent.level + 1`.
+
+    A dropped section's members, and its (retyped) heading block, move to the nearest preceding
+    kept section: they are printed there, and dropping them would leave body text in no section
+    at all. Before the first kept section they stay section-less, like the rest of front matter.
+    """
+    kept: list[SectionNode] = []
+    new_parent: dict[int, SectionNode | None] = {}
+    for node in sections:
+        if not keep(node):
+            if kept:
+                kept[-1].member_blocks.extend([node.heading_block, *node.member_blocks])
+            continue
+        parent_id = id(node.parent_heading_block) if node.parent_heading_block else None
+        parent = next((k for k in kept if id(k.heading_block) == parent_id), None)
+        if parent_id is not None and parent is None:
+            parent = next((k for k in reversed(kept) if k.level == node.level - 1), None)
+        new_parent[id(node)] = parent
+        kept.append(node)
+    for node in kept:
+        parent = new_parent[id(node)]
+        node.parent_heading_block = parent.heading_block if parent else None
+        node.level = parent.level + 1 if parent else 1
+    return kept
