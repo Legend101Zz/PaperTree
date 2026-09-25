@@ -203,6 +203,38 @@ def test_a_stub_refuses_an_explicit_null_where_the_contract_says_omit(
         assert h.client.request(method, path, headers=auth(token), json=rest).status_code == 501
 
 
+def test_usage_since_is_an_iso_time_already(tmp_path: Path) -> None:
+    """contracts.md §2.5 `GET /usage?since=ISO`. S0 review S2, WATCHED FAILING: the stub took any
+    1 to 64 characters, so `?since=yesterday` was the 501 (and S5 would have inherited a `str`).
+    It is now an ISO-8601 date-time WITH its zone; a bare date, a naive time and a Unix number
+    (each of which pydantic's lax `datetime` would take) are refused, as is a date that is none."""
+    with harness(tmp_path) as h:
+        token = register(h.client, "alice@example.com")
+        for good in (
+            "2026-09-25T15:09:25.123Z",
+            "2026-09-25T15:09:25Z",
+            "2026-09-25T20:39:25.5+05:30",
+        ):
+            answer = h.client.get("/usage", params={"since": good}, headers=auth(token))
+            assert answer.status_code == 501, (good, answer.text)
+        for bad in (
+            "yesterday",
+            "1695000000",
+            "2026-09-25",
+            "2026-09-25T15:09:25",
+            "2026-13-01T00:00:00Z",
+            "2026-02-30T00:00:00Z",
+            "2026-09-25T15:09:25.123Zjunk",
+            "",
+        ):
+            refused = assert_envelope(
+                h.client.get("/usage", params={"since": bad}, headers=auth(token)),
+                422,
+                "validation_failed",
+            )
+            assert refused["detail"].startswith("since: "), (bad, refused)
+
+
 def test_the_internal_tools_validate_their_parameters_already(tmp_path: Path) -> None:
     base = f"/internal/agent/runs/{RUN}"
     with harness(tmp_path) as h:

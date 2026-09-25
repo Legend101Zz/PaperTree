@@ -27,6 +27,8 @@ already declare them (the 501 stubs, `routers/*.py`).
 
 from __future__ import annotations
 
+import re
+from datetime import UTC, datetime
 from typing import Annotated, Any, Final, Literal, Self
 
 from papertree_db import SQLITE_INTEGER_MAX
@@ -139,6 +141,35 @@ WireTime = Annotated[
     str,
     BeforeValidator(_to_wire_time),
     WithJsonSchema({"type": "string", "pattern": WIRE_TIME_PATTERN}),
+]
+
+#: A time a CLIENT sends (`GET /usage?since=`, §2.5 "ISO"): an ISO-8601 date and time WITH its zone,
+#: `Z` or `±HH:MM`, seconds required, up to six fraction digits. §0's wire shape is one of these.
+ISO_TIME_PATTERN: Final = (
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$"
+)
+_ISO_TIME: Final = re.compile(ISO_TIME_PATTERN)
+
+
+def _iso_time(value: object) -> object:
+    """pydantic's lax `datetime` (a query parameter is lax) also takes a bare date, a time with
+    no zone and a Unix number as a string; none of them is "ISO" in §2.5's sense, and a naive time
+    would be read in the server's zone. So the grammar is checked first, then the calendar."""
+    if isinstance(value, str) and _ISO_TIME.fullmatch(value) is not None:
+        try:
+            return datetime.fromisoformat(value).astimezone(UTC)
+        except ValueError:
+            pass  # `2026-02-30…`: the grammar's shape, not a date
+    raise PydanticCustomError(
+        "iso_time", "Input should be an ISO-8601 time with a zone, e.g. 2026-09-25T15:09:25.123Z"
+    )
+
+
+#: A client-sent time, parsed to an aware UTC `datetime`.
+IsoTime = Annotated[
+    datetime,
+    BeforeValidator(_iso_time),
+    WithJsonSchema({"type": "string", "pattern": ISO_TIME_PATTERN}),
 ]
 
 #: contracts.md §0: client-minted ids (`hl_…`, `cn_…`, `ce_…`).

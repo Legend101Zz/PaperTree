@@ -11,7 +11,7 @@ from fastapi import APIRouter, Query
 
 from ..deps import CallerDep
 from ..errors import ErrorEnvelope, not_implemented
-from ..schemas import UsageTotals
+from ..schemas import IsoTime, UsageTotals
 
 router = APIRouter()
 
@@ -24,6 +24,8 @@ NOT_YET: Final[dict[int | str, dict[str, Any]]] = {
 @router.get("/usage", response_model=UsageTotals, responses=NOT_YET)
 async def get_usage(
     call: CallerDep,
-    since: Annotated[str | None, Query(min_length=1, max_length=64)] = None,
+    #: An aware UTC `datetime`, or a 422 naming `since` (`schemas.IsoTime`); absent is S5's
+    #: "now - 24 h".
+    since: Annotated[IsoTime | None, Query()] = None,
 ) -> UsageTotals:
     raise not_implemented(SLICE)
