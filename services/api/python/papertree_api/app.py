@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from papertree_agent_tools import Transport
 
 from .ask import mount_ask
+from .errors import InternalErrorMiddleware, install_error_handlers
 from .routers import auth, highlights, jobs, papers
 from .routers.papers import derive_paper_id  # re-exported: it lived here before the split
 from .settings import Settings
@@ -48,6 +49,12 @@ def create_app(
     )
     app.state.settings = resolved
     app.state.llm_transport = llm_transport
+
+    # Every non-2xx is the contracts.md §0 envelope: the typed handlers, plus a 500 for anything
+    # nothing else caught. `add_middleware` wraps what is already there, so this is INSIDE CORS:
+    # the browser can read the 500's envelope because CORS still stamps its headers on it.
+    install_error_handlers(app)
+    app.add_middleware(InternalErrorMiddleware)
 
     # The reader is a separate origin in development (`next dev` on :3000, this on :8000).
     # Credentials are a bearer token in a header, never a cookie, so there is no CSRF surface and

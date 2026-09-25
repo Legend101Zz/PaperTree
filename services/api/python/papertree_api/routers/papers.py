@@ -17,7 +17,7 @@ from __future__ import annotations
 import hashlib
 from typing import Annotated, Any
 
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, File, Query, UploadFile, status
 from fastapi.responses import FileResponse, Response
 from papertree_db import BlockId, PaperId, generation
 from papertree_document_worker.crops import CropStore
@@ -26,6 +26,7 @@ from pydantic import BaseModel
 
 from ..deps import CallerDep, SettingsDep
 from ..deps import promoted_or_404 as _promoted
+from ..errors import ApiError
 from ..ir import block_location, paper_document
 
 router = APIRouter()
@@ -103,11 +104,11 @@ async def upload(
 ) -> Upload:
     raw = await file.read()
     if not raw:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "empty upload")
+        raise ApiError("empty_upload", "empty upload")
     if not raw.startswith(b"%PDF-"):
         # The parser will fail on a non-PDF anyway; failing here means the caller learns it
         # synchronously instead of by polling a job that dead-letters.
-        raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "not a PDF")
+        raise ApiError("unsupported_media_type", "not a PDF")
 
     source_hash = hashlib.sha256(raw).hexdigest()
     paper_id = derive_paper_id(call.user_id, source_hash)
@@ -142,7 +143,7 @@ async def get_paper(
         call.db_owner, PaperId(paper_id), generation(_promoted(call, paper_id, gen))
     )
     if row is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such paper")
+        raise ApiError("not_found", "no such paper")
     return _public(row)
 
 
@@ -155,7 +156,7 @@ async def get_ir(
         call.db, call.db_owner, PaperId(paper_id), generation(_promoted(call, paper_id, gen))
     )
     if document is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such paper")
+        raise ApiError("not_found", "no such paper")
     return document
 
 
@@ -211,7 +212,7 @@ async def location(
         BlockId(block_id),
     )
     if found is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such block")
+        raise ApiError("not_found", "no such block")
     return found
 
 
@@ -223,7 +224,7 @@ async def original(call: CallerDep, settings: SettingsDep, paper_id: str) -> Fil
     _promoted(call, paper_id, None)
     path = settings.upload_root / f"{paper_id}.pdf"
     if not path.is_file():
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "the original file is not on this host")
+        raise ApiError("not_found", "the original file is not on this host")
     return FileResponse(path, media_type="application/pdf")
 
 
@@ -244,11 +245,11 @@ async def asset(
         block_location(call.db, call.db_owner, PaperId(paper_id), generation(g), BlockId(block_id))
         is None
     ):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such block")
+        raise ApiError("not_found", "no such block")
     store = CropStore(root=settings.asset_root, paper_id=paper_id, generation=g)
     try:
         payload = store.read(kind, block_id)
     except (FileNotFoundError, OSError) as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "no crop for that block") from exc
+        raise ApiError("not_found", "no crop for that block") from exc
     # PNG at 3x is what `crops.py` writes today. F1.5 asks for WebP; that is Session B's #55.
     return Response(payload, media_type="image/png")

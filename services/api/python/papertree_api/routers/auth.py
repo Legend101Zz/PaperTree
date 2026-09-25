@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from fastapi.responses import Response
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel, Field
 
 from ..deps import AuthConnDep, CallerDep, SettingsDep
+from ..errors import ApiError
 from ..security import create_session, hash_password, now_iso, revoke_session, verify_password
+from ._shared import json_body
 
 router = APIRouter()
 
@@ -43,7 +45,11 @@ def _raw_bearer(
 
 
 @router.post("/auth/register", response_model=Session, status_code=status.HTTP_201_CREATED)
-async def register(body: Credentials, conn: AuthConnDep, settings: SettingsDep) -> Session:
+async def register(
+    body: Annotated[Credentials, Depends(json_body(Credentials))],
+    conn: AuthConnDep,
+    settings: SettingsDep,
+) -> Session:
     from papertree_db import PaperTreeDb
 
     db = PaperTreeDb(settings.database_file)
@@ -53,7 +59,7 @@ async def register(body: Credentials, conn: AuthConnDep, settings: SettingsDep) 
         except Exception as exc:  # sqlite3.IntegrityError on users_email_unique
             # 409 rather than a 500, and deliberately not "that email is taken" phrasing in a
             # way that differs from a wrong-password response — see `login`.
-            raise HTTPException(status.HTTP_409_CONFLICT, "could not create that account") from exc
+            raise ApiError("email_taken", "could not create that account") from exc
     finally:
         db.close()
 
@@ -68,7 +74,11 @@ async def register(body: Credentials, conn: AuthConnDep, settings: SettingsDep) 
 
 
 @router.post("/auth/login", response_model=Session)
-async def login(body: Credentials, conn: AuthConnDep, settings: SettingsDep) -> Session:
+async def login(
+    body: Annotated[Credentials, Depends(json_body(Credentials))],
+    conn: AuthConnDep,
+    settings: SettingsDep,
+) -> Session:
     row = conn.execute(
         "SELECT u.user_id AS user_id, u.email AS email, c.password_hash AS password_hash "
         "FROM users u JOIN user_credentials c ON c.user_id = u.user_id WHERE u.email = ?",
@@ -78,8 +88,8 @@ async def login(body: Credentials, conn: AuthConnDep, settings: SettingsDep) -> 
     # ONE message and ONE status for "no such user" and "wrong password". Distinguishing them
     # turns the login route into an account-enumeration oracle.
     if row is None or not verify_password(body.password, row["password_hash"]):
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED,
+        raise ApiError(
+            "invalid_credentials",
             "invalid email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
@@ -102,5 +112,5 @@ async def logout(
 async def me(call: CallerDep, conn: AuthConnDep) -> dict[str, str]:
     row = conn.execute("SELECT email FROM users WHERE user_id = ?", (call.user_id,)).fetchone()
     if row is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such user")
+        raise ApiError("not_found", "no such user")
     return {"user_id": call.user_id, "email": row["email"]}

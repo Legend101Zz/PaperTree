@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter
 
 from ..deps import CallerDep
+from ..errors import ApiError
 
 router = APIRouter()
 
@@ -21,7 +22,7 @@ async def get_job(call: CallerDep, job_id: str) -> dict[str, Any]:
     """
     job = call.store.get_job(call.store_owner, job_id)
     if job is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such job")
+        raise ApiError("not_found", "no such job")
     return {
         "job_id": job.job_id,
         "kind": job.kind,
