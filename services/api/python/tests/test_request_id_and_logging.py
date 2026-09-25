@@ -160,9 +160,12 @@ def test_a_500_is_logged_once_by_class_and_place_with_its_request_id(
     app.add_api_route("/__test/boom", boom)
     with TestClient(app, raise_server_exceptions=False) as client:
         capsys.readouterr()
-        response = client.get("/__test/boom")
+        response = client.get("/__test/boom", headers={"Origin": "http://localhost:3000"})
         out = capsys.readouterr().out
     assert response.status_code == 500
+    # The 500 is rendered INSIDE CORS, so a cross-origin reader can read the envelope.
+    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+    assert response.json()["code"] == "internal"
     request_id = response.headers["X-Request-Id"]
     records = _lines(out)
     [error] = [r for r in records if r["event"] == "http.error"]
