@@ -42,6 +42,16 @@
   --pt-ground-raised: #ffffff;
   --pt-rule: #e3ddd3;
 
+  /*
+   * The two grounds the reader shell paints (`ReaderWorkspace`: `bg-[--pt-page-ground]` behind the
+   * pages, `bg-[--pt-panel-ground]` under the Navigator and the explain panel). They were
+   * referenced and defined nowhere until S0, so both surfaces were transparent. The page ground is
+   * a step DARKER than the paper so a white PDF page reads as a sheet; the panel ground sits
+   * between the two so a panel reads as furniture, not as more paper.
+   */
+  --pt-page-ground: #efebe4;
+  --pt-panel-ground: #f8f6f1;
+
   /* The derived register: a warm tint that is clearly a different ground, not a hover state. */
   --pt-derived-ground: #f4f1fb;
   --pt-derived-rule: #6d5ae0;
@@ -77,6 +87,9 @@
     --pt-ground-raised: #1f1e25;
     --pt-rule: #34323c;
 
+    --pt-page-ground: #0e0d11;
+    --pt-panel-ground: #1b1a20;
+
     --pt-derived-ground: #1e1b2e;
     --pt-derived-rule: #9d8cff;
     --pt-derived-ink: #ece9fb;
@@ -99,6 +112,9 @@
   --pt-ground: #16151a;
   --pt-ground-raised: #1f1e25;
   --pt-rule: #34323c;
+
+  --pt-page-ground: #0e0d11;
+  --pt-panel-ground: #1b1a20;
 
   --pt-derived-ground: #1e1b2e;
   --pt-derived-rule: #9d8cff;
@@ -141,7 +157,8 @@
 .pt-tabs__panel:focus-visible,
 .pt-sheet:focus-visible,
 .pt-sheet__grip:focus-visible,
-.pt-derived__source:focus-visible {
+.pt-derived__source:focus-visible,
+.pt-reflowed__source:focus-visible {
   outline: 2px solid var(--pt-focus);
   outline-offset: 2px;
 }
@@ -222,6 +239,116 @@
 }
 
 .pt-derived__body > :last-child {
+  margin-block-end: 0;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+ * the three text registers — ADR-002 §3.6
+ *
+ * PAPER and REFLOWED share the paper's register (its family, its ink, its measure) because the
+ * words ARE the paper's. AI changes all four signals `.pt-derived` changes — family, ground, a 3px
+ * rule, a shorter measure — and carries the reserved marker (in the markup; the character itself is
+ * never written in this file, see `.pt-derived__marker`).
+ * ───────────────────────────────────────────────────────────────────────────────────────────── */
+
+.pt-paper {
+  font-family: var(--pt-font-body);
+  line-height: 1.6;
+  max-inline-size: var(--pt-measure-body);
+  color: var(--pt-ink);
+  margin: 0;
+}
+
+blockquote.pt-paper {
+  margin-block: 8px;
+  padding-inline-start: 12px;
+  border-inline-start: 2px solid var(--pt-rule);
+}
+
+.pt-paper__cite {
+  display: block;
+  margin-block-start: 4px;
+  font-size: 0.75rem;
+  font-style: normal;
+  color: var(--pt-ink-muted);
+}
+
+span.pt-paper .pt-paper__cite {
+  display: inline;
+  margin-inline-start: 0.5ch;
+}
+
+.pt-reflowed__marker {
+  display: flex;
+  align-items: center;
+  gap: var(--pt-gap);
+  margin-block-end: 4px;
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pt-ink-muted);
+}
+
+.pt-reflowed__label {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.pt-reflowed__source {
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  padding-inline: 10px;
+  font: inherit;
+  color: var(--pt-ink-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--pt-radius);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.pt-reflowed__source:hover,
+.pt-reflowed__source:focus-visible {
+  border-color: var(--pt-rule);
+}
+
+.pt-ai {
+  font-family: var(--pt-font-derived);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  max-inline-size: var(--pt-measure-derived);
+  color: var(--pt-derived-ink);
+  background: var(--pt-derived-ground);
+  border-inline-start: 3px solid var(--pt-derived-rule);
+  border-radius: 0 var(--pt-radius) var(--pt-radius) 0;
+  padding: 10px 14px 12px;
+  margin-block: 12px;
+}
+
+.pt-ai__header {
+  display: flex;
+  align-items: center;
+  gap: var(--pt-gap);
+  margin-block-end: 6px;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pt-derived-ink-muted);
+}
+
+.pt-ai__marker {
+  flex: none;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--pt-derived-rule);
+}
+
+.pt-ai__body > :first-child {
+  margin-block-start: 0;
+}
+
+.pt-ai__body > :last-child {
   margin-block-end: 0;
 }
 

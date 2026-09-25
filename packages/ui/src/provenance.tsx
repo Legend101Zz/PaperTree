@@ -29,6 +29,19 @@
  *
  * `DerivedBlock` is the ONLY export that renders derived content, so "did we mark it?" reduces to
  * "did it go through here?", which is a question a test can answer.
+ *
+ * THE THREE TEXT REGISTERS (ADR-002 §3.6, added in S0). The brief says the UI must distinguish
+ * paper content from AI interpretation, and Guided taught the lesson the hard way: it reflows the
+ * paper's OWN words, rendered them under ⊙ "our reading", and so dressed the paper up as AI
+ * (proposal B §655: 181 verbatim text cards labelled as derived). So there are three registers,
+ * and the ⊙ belongs to exactly one of them:
+ *
+ *   `PaperText`     the paper's words, quoted (the explain panel's passage, an excerpt card).
+ *   `ReflowedText`  the paper's words re-laid out by Guided: the paper register plus a
+ *                   "Reflowed from the PDF" marker. Verbatim text never wears ⊙.
+ *   `AiText`        what a model wrote: the derived register and the reserved ⊙.
+ *
+ * `registers.spec` asserts they differ in the DOM and in the stylesheet, in both themes.
  */
 
 import type { ReactNode } from 'react';
@@ -263,5 +276,138 @@ export function FigureView({ blockId, imageSrc, imageAlt, caption }: FigureViewP
         <figcaption className="pt-figure__caption">{caption}</figcaption>
       )}
     </figure>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────────────────────────────
+ * The three text registers — ADR-002 §3.6.
+ * ──────────────────────────────────────────────────────────────────────────────────────────────── */
+
+function classes(base: string, extra: string | undefined): string {
+  return extra === undefined ? base : `${base} ${extra}`;
+}
+
+export interface PaperTextProps {
+  /** The paper's words, verbatim. Never a paraphrase: a paraphrase is `AiText`. */
+  readonly children: ReactNode;
+  /** `blockquote` for a quoted passage; `span` for an inline quote. Default `p`. */
+  readonly as?: 'p' | 'div' | 'span' | 'blockquote';
+  /** Where the words are, e.g. `"p. 4"` — attribution, rendered AFTER the words as a `<cite>`. */
+  readonly pageLabel?: string;
+  readonly className?: string;
+}
+
+/** The paper's own words, in the paper's register: the serif, the ink, no marker, no tint. */
+export function PaperText({
+  children,
+  as: Element = 'p',
+  pageLabel,
+  className,
+}: PaperTextProps): ReactNode {
+  return (
+    <Element className={classes('pt-paper', className)} data-register="paper">
+      <span className="pt-paper__text">{children}</span>
+      {pageLabel === undefined ? null : <cite className="pt-paper__cite">{pageLabel}</cite>}
+    </Element>
+  );
+}
+
+/** The marker `ReflowedText` carries. Exported so a test or a legend can name it exactly. */
+export const REFLOWED_LABEL = 'Reflowed from the PDF';
+
+export interface ReflowedTextProps {
+  /** The PaperIR blocks whose text this is, published as `data-block-ids`. */
+  readonly blockIds: readonly string[];
+  /**
+   * Navigate to the blocks in Source. OPTIONAL, unlike `DerivedBlock`'s: this is the paper's own
+   * text, so it needs no proof of origin — but when given, the affordance must work, and when not
+   * given there is no button at all rather than an inert one.
+   */
+  readonly onShowSource?: (blockIds: readonly string[]) => void;
+  readonly children: ReactNode;
+  readonly as?: 'div' | 'section' | 'article';
+  readonly className?: string;
+}
+
+/**
+ * The paper's words re-laid out (Guided). The paper register, plus a marker saying so.
+ *
+ * It says "reflowed", not "our reading": the TEXT is the paper's, and only the LAYOUT is ours. The
+ * ⊙ is withheld on purpose — it means "a model wrote this", and here nobody did.
+ */
+export function ReflowedText({
+  blockIds,
+  onShowSource,
+  children,
+  as: Element = 'div',
+  className,
+}: ReflowedTextProps): ReactNode {
+  const canShow = onShowSource !== undefined && blockIds.length > 0;
+  return (
+    <Element
+      className={classes('pt-paper pt-reflowed', className)}
+      data-register="reflowed"
+      data-block-ids={blockIds.join(' ')}
+    >
+      <div className="pt-reflowed__marker">
+        <span className="pt-reflowed__label">{REFLOWED_LABEL}</span>
+        {canShow ? (
+          <button
+            type="button"
+            className="pt-reflowed__source"
+            onPointerUp={() => onShowSource(blockIds)}
+            // Pointer Events throughout (F2.7); the click handler is the keyboard path, and
+            // `detail === 0` keeps a real tap (pointerup + click) from firing twice.
+            onClick={(event) => {
+              if (event.detail === 0) onShowSource(blockIds);
+            }}
+          >
+            show in PDF
+          </button>
+        ) : null}
+      </div>
+      <div className="pt-reflowed__text">{children}</div>
+    </Element>
+  );
+}
+
+export interface AiTextProps {
+  /** What the model wrote. Citation chips go inside, next to the claims they support. */
+  readonly children: ReactNode;
+  /** The model that wrote it, e.g. `"MiniMax-M3"`, named in the label. */
+  readonly model?: string;
+  readonly as?: 'div' | 'section';
+  readonly className?: string;
+}
+
+/**
+ * Model output, in the derived register, with the reserved ⊙ — the ONLY text register that has it.
+ *
+ * Announced as AI-generated to assistive technology too: the ⊙ and the left rule are both
+ * invisible to a screen reader.
+ */
+export function AiText({
+  children,
+  model,
+  as: Element = 'div',
+  className,
+}: AiTextProps): ReactNode {
+  return (
+    <Element
+      className={classes('pt-ai', className)}
+      data-register="ai"
+      role="note"
+      aria-label={`AI-generated${model === undefined ? '' : ` by ${model}`}, not the paper's words`}
+    >
+      <div className="pt-ai__header">
+        <span className="pt-ai__marker" aria-hidden="true">
+          {DERIVED_MARKER}
+        </span>
+        <span className="pt-ai__label">
+          {model === undefined ? 'AI interpretation' : `AI · ${model}`}
+        </span>
+      </div>
+      <div className="pt-ai__body">{children}</div>
+    </Element>
   );
 }
