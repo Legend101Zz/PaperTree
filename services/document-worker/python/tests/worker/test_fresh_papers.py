@@ -83,10 +83,16 @@ def test_colliding_cells_salvage_to_partial_on_maskrcnn(
     assert validate_paper(salvaged).ok
     assert salvaged.status == "partial"
     assert salvaged.partial_reason is not None and "R8" in salvaged.partial_reason
-    assert [b.block_id for b in salvaged.blocks] == [b.block_id for b in clean.blocks]
+    # The same blocks, keyed by id. Not the same ARRAY: `blocks` is emission order across flows,
+    # and the floats rule writes a page's body blocks back into that page's body slots - the
+    # phantom held one, so a body block and a margin note trade array places. Reading order lives
+    # in `Page.flows` (AGENTS.md §4), and that is compared exactly, page by page.
+    assert sorted(b.block_id for b in salvaged.blocks) == sorted(b.block_id for b in clean.blocks)
     # Payloads too: the kept tables' grids still name their own cells, whose ids the dropped
     # phantom's cells shared.
-    assert [b.payload for b in salvaged.blocks] == [b.payload for b in clean.blocks]
+    payloads = {b.block_id: b.payload for b in clean.blocks}
+    assert all(b.payload == payloads[b.block_id] for b in salvaged.blocks)
+    assert [p.flows for p in salvaged.pages] == [p.flows for p in clean.pages]
 
 
 @pytest.fixture(scope="module")

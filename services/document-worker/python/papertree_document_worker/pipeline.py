@@ -414,6 +414,73 @@ def _block_type(flow: str, text: str, is_heading: bool, is_equation: bool) -> st
     return "paragraph"
 
 
+#: Top-level body blocks that are FLOATS: placed by position, not by emission order.
+_FLOAT_TYPES = frozenset({"table", "figure"})
+
+
+def _top_of(block: AssembledBlock) -> float:
+    return min((band[1] for band in block.line_bands), default=0.0)
+
+
+def _float_column(block: AssembledBlock, columns: Any) -> int | None:
+    """The column a float sits in, or `None` when it spans the split. One column: column 0."""
+    if len(columns) < 2:
+        return 0
+    x0 = min(band[0] for band in block.line_bands)
+    x1 = max(band[2] for band in block.line_bands)
+    split = columns[1].x0
+    if x0 < split < x1:
+        return None
+    return 0 if (x0 + x1) / 2 < split else 1
+
+
+def _place_floats(blocks: list[AssembledBlock], start: int, columns: Any) -> None:
+    """Give each table and figure on the page its PLACE in the body reading order (S2, #141).
+
+    Floats took the order they were EMITTED in: tables are built before the page's text (they
+    claim their lines first), figures after it. So every table was read before the page's first
+    paragraph and every figure after its last, wherever it sat. Measured on the repo gold at
+    18f69ec: 22 of the 26 discordant reading-order pairs involve a float (bert 13 of 13,
+    attention 3 of 3, gpt3 2 of 2, neural-odes 1 of 1, resnet 3 of 7). `ANNOTATION_GUIDE.md` rule 1
+    puts floats in the BODY flow, drawn in reading order; a reader meets a float where it stands,
+    between the text above and below it, and that is what the fix encodes. This is the ordering
+    `layout.py`'s B5.1 note was after ("figures were emitted before their page's text") without
+    its opposite error.
+
+    A float confined to a column goes before the first text block of THAT column below its top, or
+    after the column's last block when nothing in the column is below it. A float spanning the
+    split goes before the first text block, in reading order, whose top is below its own. Only
+    floats move: every text block keeps its position relative to every other.
+    """
+    positions = [
+        index
+        for index in range(start, len(blocks))
+        if blocks[index].flow == "body" and not blocks[index].is_nested
+    ]
+    top_level = [blocks[index] for index in positions]
+    floats = [b for b in top_level if b.type in _FLOAT_TYPES and b.line_bands]
+    moving = {id(b) for b in floats}
+    ordered = [b for b in top_level if id(b) not in moving]
+    if not floats or not ordered:
+        return
+    for float_block in sorted(floats, key=lambda b: (_top_of(b), b.line_bands[0][0])):
+        column = _float_column(float_block, columns)
+        top = _top_of(float_block)
+        text = [(i, b) for i, b in enumerate(ordered) if b.type not in _FLOAT_TYPES]
+        same = [(i, b) for i, b in text if column is None or b.column == column]
+        below = [i for i, b in same if _top_of(b) >= top]
+        if below:
+            at = below[0]
+        elif same and column is not None:
+            at = same[-1][0] + 1
+        else:
+            later = [i for i, b in text if _top_of(b) >= top]
+            at = later[0] if later else len(ordered)
+        ordered.insert(at, float_block)
+    for index, block in zip(positions, ordered, strict=True):
+        blocks[index] = block
+
+
 def parse_document(
     path: str | Path,
     *,
@@ -482,6 +549,7 @@ def _assemble(
     front_matter_body_size = 10.0
 
     for page, page_layout in zip(pages, layout.pages, strict=True):
+        page_start = len(builder.blocks)
         sizes = [
             span.size
             for block in page_layout.blocks
@@ -726,6 +794,9 @@ def _assemble(
                     ),
                 )
             )
+
+        # Tables and figures take their place in the body reading order (S2, #141).
+        _place_floats(builder.blocks, page_start, page_layout.columns)
 
         # Caption -> float linking, by NUMBERING first and proximity second. Proximity alone
         # attaches a caption to whichever float is nearest, which is wrong the moment two floats

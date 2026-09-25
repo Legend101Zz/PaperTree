@@ -312,3 +312,76 @@ def test_an_abstract_may_start_a_headings_space_below_it(
     gap = min(y for _, y in abstract.polygon) - max(y for _, y in heading.polygon)
     assert gap > 15.0, f"the fixture must exceed ABSTRACT_MAX_GAP_PT, measured {gap:.1f} pt"
     assert abstract.type == "abstract"
+
+
+# ── a float is read where it stands, not where it was emitted ──────────────────────────────
+
+
+def _png() -> bytes:
+    pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 16, 16))
+    pixmap.set_rect(pixmap.irect, (20, 120, 200))
+    return bytes(pixmap.tobytes("png"))
+
+
+def _booktabs(page: Any, x: float, top: float) -> float:
+    """A three-rule-free booktabs table of 4 x 3 numeric cells from `top`; returns its bottom."""
+    bottom = top + 70
+    page.draw_line((x, top), (x + MEASURE, top), width=0.8)
+    page.draw_line((x, bottom), (x + MEASURE, bottom), width=0.8)
+    for row, y in enumerate((top + 15, top + 32, top + 49, top + 63)):
+        for column, cx in enumerate((x + 4, x + 90, x + 170)):
+            page.insert_text((cx, y), f"t{row}{column} {10 * row + column}.5", fontsize=9)
+    return bottom
+
+
+@pytest.fixture(scope="module")
+def floats_mid_column(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Page 2 of a two-column paper: a raster figure in the middle of the LEFT column, a booktabs
+    table in the middle of the RIGHT column, prose above and below each; page 3 opens with a
+    figure spanning both columns above two columns of prose. Emitted order put every table
+    before its page's text and every figure after it."""
+    document = pymupdf.open()
+    _column(document.new_page(width=W, height=H), LEFT, 80, "first", 20)
+    page = document.new_page(width=W, height=H)
+    y = _column(page, LEFT, 80, "leftabove", 14)
+    page.insert_image(pymupdf.Rect(LEFT, y + 6, LEFT + MEASURE, y + 150), stream=_png())
+    _column(page, LEFT, y + 176, "leftbelow", 20)
+    y = _column(page, RIGHT, 80, "rightabove", 14)
+    bottom = _booktabs(page, RIGHT, y + 6)
+    _column(page, RIGHT, bottom + 26, "rightbelow", 20)
+    page = document.new_page(width=W, height=H)
+    page.insert_image(pymupdf.Rect(LEFT, 72, RIGHT + MEASURE, 260), stream=_png())
+    _column(page, LEFT, 290, "spanleft", 30)
+    _column(page, RIGHT, 290, "spanright", 30)
+    # ...and one spanning both columns at the FOOT of a page, below both: read after both, not
+    # between them.
+    page = document.new_page(width=W, height=H)
+    _column(page, LEFT, 80, "footleft", 26)
+    _column(page, RIGHT, 80, "footright", 26)
+    page.insert_image(pymupdf.Rect(LEFT, 440, RIGHT + MEASURE, 700), stream=_png())
+    return _save(document, tmp_path_factory.mktemp("floats") / "floats.pdf")
+
+
+def _body_order(paper: Any, page_index: int) -> list[Any]:
+    by_id = {b.block_id: b for b in paper.blocks}
+    flows = dict(paper.pages[page_index].flows)
+    return [by_id[i] for i in flows.get("body") or []]
+
+
+def test_a_float_is_read_where_it_stands(floats_mid_column: Path, tmp_path: Path) -> None:
+    paper = _parse(floats_mid_column, tmp_path)
+    order = _body_order(paper, 1)
+    kinds = [b.type for b in order]
+    assert "figure" in kinds and "table" in kinds, kinds
+
+    def at(seed: str) -> int:
+        return next(i for i, b in enumerate(order) if seed in (b.text or ""))
+
+    figure, table = kinds.index("figure"), kinds.index("table")
+    assert at("leftabove0") < figure < at("leftbelow0"), kinds
+    assert at("rightabove0") < table < at("rightbelow0"), kinds
+    # A float spanning the columns at the top of a page is read before both of them.
+    spanning = _body_order(paper, 2)
+    assert spanning[0].type == "figure", [b.type for b in spanning]
+    foot = _body_order(paper, 3)
+    assert foot[-1].type == "figure", [(b.type, (b.text or "")[:12]) for b in foot]

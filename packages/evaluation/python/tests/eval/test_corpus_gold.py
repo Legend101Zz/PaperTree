@@ -178,6 +178,16 @@ requires_corpus = pytest.mark.skipif(
 # right by the page and by gold's own label; the IoU convention is what dips (hard case
 # `repo-gold-multi-paragraph-*`). a3c stays above 18f69ec's 0.3932.
 
+# FLOATS COMMIT (S2): a table or figure is read where it stands - before the first text block of
+# its column below its top - instead of in emission order (tables before the page's text, figures
+# after it). Pooled order: attention 43/47 -> 47/47, bert 63/77 -> 77/77, gpt3 7/9 -> 9/9,
+# normalised neural-odes 61/66 -> 63/66. resnet moves DOWN, 108/116 -> 107/116 (per-page mean
+# 0.9282 -> 0.8782): its two p11 table pairs are fixed and three new ones appear on p7, all against
+# gold r#14 - a SECOND box around Figure 6 (the union of its panels r#0-r#2, which gold reads
+# FIRST), drawn after the page's text. The parser's one figure box matches the union, so reading
+# the figure where it stands - first, as the panels are - disagrees with the duplicate. No order
+# satisfies both gold boxes (hard case `resnet-p7-duplicate-figure-box`).
+
 RAW: dict[str, dict[str, Any]] = {
     "a3c-algorithmheavy": {
         "macro_f1": 0.4193,
@@ -200,8 +210,8 @@ RAW: dict[str, dict[str, Any]] = {
     "attention-is-all-you-need": {
         "macro_f1": 0.3694,
         "macro_f1_strict": 0.1621,
-        "reading_order": 0.5278,
-        "reading_order_pairs": [43, 47],
+        "reading_order": 0.6667,
+        "reading_order_pairs": [47, 47],
         "zero_pair_pages": 2,
         "caption_correct": 1,
         "caption_false": 0,
@@ -218,8 +228,8 @@ RAW: dict[str, dict[str, Any]] = {
     "bert-2col": {
         "macro_f1": 0.3815,
         "macro_f1_strict": 0.2123,
-        "reading_order": 0.7071,
-        "reading_order_pairs": [63, 77],
+        "reading_order": 0.8333,
+        "reading_order_pairs": [77, 77],
         "zero_pair_pages": 1,
         "caption_correct": 4,
         "caption_false": 0,
@@ -236,8 +246,8 @@ RAW: dict[str, dict[str, Any]] = {
     "gpt3-longform-singlecol": {
         "macro_f1": 0.3474,
         "macro_f1_strict": 0.184,
-        "reading_order": 0.2222,
-        "reading_order_pairs": [7, 9],
+        "reading_order": 0.3333,
+        "reading_order_pairs": [9, 9],
         "zero_pair_pages": 4,
         "caption_correct": 2,
         "caption_false": 1,
@@ -272,8 +282,8 @@ RAW: dict[str, dict[str, Any]] = {
     "resnet-cvpr-2col": {
         "macro_f1": 0.3652,
         "macro_f1_strict": 0.1856,
-        "reading_order": 0.9282,
-        "reading_order_pairs": [108, 116],
+        "reading_order": 0.8782,
+        "reading_order_pairs": [107, 116],
         "zero_pair_pages": 0,
         "caption_correct": 3,
         "caption_false": 0,
@@ -311,8 +321,8 @@ NORMALISED: dict[str, dict[str, Any]] = {
     "attention-is-all-you-need": {
         "macro_f1": 0.3627,
         "macro_f1_strict": 0.1677,
-        "reading_order": 0.5833,
-        "reading_order_pairs": [42, 45],
+        "reading_order": 0.6667,
+        "reading_order_pairs": [45, 45],
         "zero_pair_pages": 2,
         "caption_correct": 1,
         "caption_false": 0,
@@ -329,8 +339,8 @@ NORMALISED: dict[str, dict[str, Any]] = {
     "bert-2col": {
         "macro_f1": 0.3815,
         "macro_f1_strict": 0.2123,
-        "reading_order": 0.7071,
-        "reading_order_pairs": [63, 77],
+        "reading_order": 0.8333,
+        "reading_order_pairs": [77, 77],
         "zero_pair_pages": 1,
         "caption_correct": 4,
         "caption_false": 0,
@@ -347,8 +357,8 @@ NORMALISED: dict[str, dict[str, Any]] = {
     "gpt3-longform-singlecol": {
         "macro_f1": 0.3474,
         "macro_f1_strict": 0.184,
-        "reading_order": 0.2222,
-        "reading_order_pairs": [7, 9],
+        "reading_order": 0.3333,
+        "reading_order_pairs": [9, 9],
         "zero_pair_pages": 4,
         "caption_correct": 2,
         "caption_false": 1,
@@ -365,8 +375,8 @@ NORMALISED: dict[str, dict[str, Any]] = {
     "neural-odes-mathheavy": {
         "macro_f1": 0.2141,
         "macro_f1_strict": 0.1193,
-        "reading_order": 0.3889,
-        "reading_order_pairs": [61, 66],
+        "reading_order": 0.5,
+        "reading_order_pairs": [63, 66],
         "zero_pair_pages": 2,
         "caption_correct": 0,
         "caption_false": 0,
@@ -383,8 +393,8 @@ NORMALISED: dict[str, dict[str, Any]] = {
     "resnet-cvpr-2col": {
         "macro_f1": 0.3579,
         "macro_f1_strict": 0.1829,
-        "reading_order": 0.9667,
-        "reading_order_pairs": [99, 101],
+        "reading_order": 0.9167,
+        "reading_order_pairs": [98, 101],
         "zero_pair_pages": 0,
         "caption_correct": 1,
         "caption_false": 2,
