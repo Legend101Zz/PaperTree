@@ -167,6 +167,42 @@ def test_a_stub_enforces_its_contract_then_answers_501(stub: Stub, tmp_path: Pat
         assert _counts(h.settings.database_file) == before, "a stub wrote a row"
 
 
+#: (stub, a body whose one fault is an explicit null in an omittable field, the field)
+NULLS = [
+    (f"/papers/{PAPER}/reparse", "POST", {"reason": None}, "reason"),
+    (f"/papers/{PAPER}/threads", "POST", {"kind": "ask", "anchor": None}, "anchor"),
+    (
+        f"/papers/{PAPER}/threads/{THREAD}/messages",
+        "POST",
+        {"question": "q", "retry_of": None},
+        "retry_of",
+    ),
+    (f"/boards/{BOARD}/nodes/{NODE}", "PATCH", {"version": 1, "body": None}, "body"),
+    (f"/boards/{BOARD}/nodes/{NODE}", "PATCH", {"version": 1, "w": None}, "w"),
+    (f"/boards/{BOARD}/edges/{EDGE}", "PATCH", {"kind": None}, "kind"),
+    (f"/boards/{BOARD}", "PATCH", {"title": None}, "title"),
+]
+
+
+@pytest.mark.parametrize(
+    ("path", "method", "body", "field"), NULLS, ids=[f"{p} {f}" for p, _, _, f in NULLS]
+)
+def test_a_stub_refuses_an_explicit_null_where_the_contract_says_omit(
+    path: str, method: str, body: dict[str, Any], field: str, tmp_path: Path
+) -> None:
+    """S0 review M1 on the stubs: each of these was a 501 (the model accepted the null), so the
+    slice that builds the route would have inherited it; `NodePatch.body: null` would have reached
+    S7's NOT NULL `canvas_nodes.body`. Without the null field each body is the stub's 501."""
+    with harness(tmp_path) as h:
+        token = register(h.client, "alice@example.com")
+        refused = assert_envelope(
+            h.client.request(method, path, headers=auth(token), json=body), 422, "validation_failed"
+        )
+        assert refused["detail"].startswith(f"{field}: "), refused
+        rest = {key: value for key, value in body.items() if key != field}
+        assert h.client.request(method, path, headers=auth(token), json=rest).status_code == 501
+
+
 def test_the_internal_tools_validate_their_parameters_already(tmp_path: Path) -> None:
     base = f"/internal/agent/runs/{RUN}"
     with harness(tmp_path) as h:

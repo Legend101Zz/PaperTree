@@ -10,12 +10,16 @@ summary run has no seed, a complete run carries no error), `omittable` fields, a
 from __future__ import annotations
 
 import copy
+import inspect
 import json
 from pathlib import Path
 from typing import Any
 
 import pytest
 from api_support import assert_envelope, auth, harness, register, seed_paper
+from omittable_cases import CASES, null_cases, with_null
+from papertree_api import schemas
+from papertree_api.schemas import NULL_NOT_ALLOWED as NULL_MESSAGE
 from papertree_api.schemas import (
     AgentDone,
     AgentRunRequest,
@@ -26,6 +30,8 @@ from papertree_api.schemas import (
     NodeCreate,
     SseStatus,
     ThreadCreate,
+    Wire,
+    is_omittable,
 )
 from pydantic import ValidationError
 
@@ -229,6 +235,158 @@ def test_omittable_fields_are_absent_not_null() -> None:
     schema = SseStatus.model_json_schema(mode="serialization")
     assert schema["properties"]["label"] == {"type": "string", "title": "Label"}
     assert schema["required"] == ["phase"]
+
+
+def _omittable_fields() -> dict[str, tuple[str, ...]]:
+    """Every wire model in `schemas.py` that has an `omittable()` field, and those fields."""
+    found: dict[str, tuple[str, ...]] = {}
+    for name, value in vars(schemas).items():
+        if inspect.isclass(value) and issubclass(value, Wire) and value is not Wire:
+            fields = tuple(n for n, f in value.model_fields.items() if is_omittable(f))
+            if fields:
+                found[name] = fields
+    return found
+
+
+def test_every_omittable_field_has_a_null_case() -> None:
+    """`omittable_cases.CASES` is complete: a model that gains an omittable field fails here
+    until its null case is written, so the refusal below cannot silently skip it."""
+    assert _omittable_fields() == {model: fields for model, (_, fields) in CASES.items()}
+
+
+@pytest.mark.parametrize(("model", "field"), null_cases())
+def test_an_omittable_field_may_be_absent_but_never_null(model: str, field: str) -> None:
+    """S0 review M1. WATCHED FAILING (`DID NOT RAISE`) on all 33 cases while `omittable()` only
+    dropped `null` from the exported schema: the validator still took `null`, so the server
+    accepted what every schema refuses."""
+    cls = getattr(schemas, model)
+    example, _ = CASES[model]
+    parsed = cls.model_validate_json(json.dumps(example))
+    assert getattr(parsed, field) is None
+    assert field not in parsed.model_dump(mode="json")
+    with pytest.raises(ValidationError) as refused:
+        cls.model_validate_json(json.dumps(with_null(model, field)))
+    first = refused.value.errors()[0]
+    assert (first["type"], first["loc"]) == ("null_not_allowed", (field,)), first
+
+
+def test_a_null_is_named_where_it_is_nested_and_every_one_is_reported() -> None:
+    anchor = copy.deepcopy(_anchor())
+    page = next(i for i, s in enumerate(anchor["selectors"]) if s["type"] == "PageSelector")
+    anchor["selectors"][page]["label"] = None
+    anchor["subTarget"] = None
+    body = {"highlight_id": "hl_01K0NULLNESTED000000000001", "color": "amber"}
+    with pytest.raises(ValidationError) as refused:
+        schemas.HighlightCreate.model_validate_json(
+            json.dumps({**body, "anchors": [{"anchor": anchor}]})
+        )
+    # The selector's own null first (it is validated first); the anchor's once its fields pass.
+    assert [(e["type"], e["loc"]) for e in refused.value.errors()] == [
+        (
+            "null_not_allowed",
+            ("anchors", 0, "anchor", "selectors", page, "PageSelector", "label"),
+        ),
+    ]
+    anchor["selectors"][page].pop("label")
+    with pytest.raises(ValidationError) as refused:
+        schemas.HighlightCreate.model_validate_json(
+            json.dumps({**body, "anchors": [{"anchor": anchor}]})
+        )
+    assert [(e["type"], e["loc"]) for e in refused.value.errors()] == [
+        ("null_not_allowed", ("anchors", 0, "anchor", "subTarget"))
+    ]
+    with pytest.raises(ValidationError) as both:
+        schemas.NodePatch.model_validate_json('{"version": 1, "x": null, "body": null}')
+    assert [e["loc"] for e in both.value.errors()] == [("x",), ("body",)]
+    # The FakeAgent's parser (S5) is the same model: an agent frame with a null is not a frame.
+    with pytest.raises(ValidationError):
+        schemas.parse_agent_event("status", '{"phase": "tool", "tool": null}')
+    assert schemas.parse_agent_event("status", '{"phase": "tool", "tool": "get_outline"}')
+    # A nullable field is not an omittable one: `note: null` still clears the note.
+    assert schemas.HighlightPatch.model_validate_json('{"note": null}').note is None
+
+
+def test_an_explicit_null_never_reaches_the_store(tmp_path: Path) -> None:
+    """S0 review M1, end to end. WATCHED FAILING: the three anchors below were each a 201 and
+    STORED (and the stored record then failed `anchor-v1.schema.json`); `color: null` was the one
+    null a route checked by hand. Every one is now the model's 422, and nothing is written."""
+
+    def selector(anchor: dict[str, Any], kind: str) -> tuple[int, dict[str, Any]]:
+        return next((i, s) for i, s in enumerate(anchor["selectors"]) if s["type"] == kind)
+
+    def page(anchor: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+        return selector(anchor, "PageSelector")
+
+    def block(anchor: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+        return selector(anchor, "BlockSelector")
+
+    anchor = _anchor()
+    at = "anchors.0.anchor"
+    cases: dict[str, tuple[Any, str]] = {
+        "subTarget": (lambda a: a.update(subTarget=None), f"{at}.subTarget"),
+        "PageSelector.label": (
+            lambda a: page(a)[1].update(label=None),
+            f"{at}.selectors.{page(anchor)[0]}.PageSelector.label",
+        ),
+        "BlockSelector offsets": (
+            lambda a: block(a)[1].update(startOffset=None, endOffset=None),
+            f"{at}.selectors.{block(anchor)[0]}.BlockSelector.startOffset",
+        ),
+    }
+    with harness(tmp_path) as h:
+        alice = register(h.client, "alice@example.com")
+        paper_id = seed_paper(h.settings, h.client, alice, SLUG)
+        url = f"/papers/{paper_id}/highlights"
+        for n, (label, (mutate, where)) in enumerate(cases.items()):
+            sent = copy.deepcopy(anchor)
+            mutate(sent)
+            body = {
+                "highlight_id": f"hl_01K0NULLNEVERSTORED0000{n:02d}",
+                "color": "amber",
+                "anchors": [{"anchor": sent}],
+            }
+            found = assert_envelope(
+                h.client.post(url, headers=auth(alice), json=body), 422, "validation_failed"
+            )
+            assert found["detail"] == f"{where}: {NULL_MESSAGE}", (label, found)
+        assert h.client.get(url, headers=auth(alice)).json() == []
+
+        created = h.client.post(
+            url,
+            headers=auth(alice),
+            json={
+                "highlight_id": "hl_01K0NULLNEVERSTORED000099",
+                "color": "amber",
+                "anchors": [{"anchor": anchor}],
+            },
+        )
+        assert created.status_code == 201, created.text
+        one = f"{url}/hl_01K0NULLNEVERSTORED000099"
+        refused = assert_envelope(
+            h.client.patch(one, headers=auth(alice), json={"color": None}), 422, "validation_failed"
+        )
+        assert refused["detail"] == f"color: {NULL_MESSAGE}"
+        put = h.client.put(
+            f"{url}/resolutions",
+            headers=auth(alice),
+            json={
+                "generation": 1,
+                "items": [
+                    {
+                        "anchor_id": anchor["id"],
+                        "tier": 1,
+                        "state": "anchored",
+                        "block_ids": [],
+                        "resolver_version": "anchoring@test",
+                        "upgraded_anchor": None,
+                    }
+                ],
+            },
+        )
+        refused = assert_envelope(put, 422, "validation_failed")
+        assert refused["detail"] == f"items.0.upgraded_anchor: {NULL_MESSAGE}"
+        (listed,) = h.client.get(url, headers=auth(alice)).json()
+        assert listed["color"] == "amber" and listed["anchors"][0]["resolution"] is None
 
 
 def test_times_serialise_in_the_one_wire_shape() -> None:

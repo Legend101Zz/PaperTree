@@ -181,12 +181,11 @@ async def put_resolutions(call: CallerDep, paper_id: str, request: Request) -> R
 async def update_highlight(
     call: CallerDep, paper_id: str, highlight_id: str, request: Request
 ) -> Response:
-    """`{color?, note?}`. An absent field is unchanged; `note: null` clears the note."""
+    """`{color?, note?}`. An absent field is unchanged; `note: null` clears the note; `color: null`
+    is the model's 422 (an omittable field), before anything is read."""
     body, _ = await read_json(request, HighlightPatch)
     _owned_or_404(call, paper_id)
     given = body.model_fields_set
-    if "color" in given and body.color is None:
-        raise ApiError("validation_failed", "color: may not be null")
     note = None if "note" not in given else (body.note if body.note is not None else "")
     updated = call.db.update_highlight(
         call.db_owner, PaperId(paper_id), highlight_id, color=body.color, note=note

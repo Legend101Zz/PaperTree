@@ -16,8 +16,8 @@ TIMES are `WireTime`: whatever the store holds, serialised in contracts.md §0's
 `wiretime.wire_time`, and exported with that shape as a `pattern`.
 
 OPTIONAL-BUT-NOT-NULL fields (`label?: string` in §5, as opposed to `label: string | null`) are
-`omittable()`: absent from the JSON when unset, and exported without `null`, so the schema says
-what the TypeScript type says.
+`omittable()`: absent from the JSON when unset, REFUSED when sent as `null`, and exported without
+`null`, so the validator, the schema and the TypeScript type say the same thing.
 
 What these models are NOT: the stored rows. The existing routes whose response is still the
 pre-release shape (`POST /papers`, `GET /papers`, `GET /jobs/{id}`) keep it until their slice
@@ -27,7 +27,7 @@ already declare them (the 501 stubs, `routers/*.py`).
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Final, Literal
+from typing import Annotated, Any, Final, Literal, Self
 
 from papertree_db import SQLITE_INTEGER_MAX
 from pydantic import (
@@ -35,11 +35,14 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
+    ValidationError,
     ValidationInfo,
     WithJsonSchema,
     field_validator,
+    model_validator,
 )
-from pydantic_core import PydanticCustomError
+from pydantic.fields import FieldInfo
+from pydantic_core import InitErrorDetails, PydanticCustomError
 
 from .errors import ErrorCode, RunErrorCode
 from .wiretime import wire_time
@@ -51,6 +54,33 @@ class Wire(BaseModel):
     """The base of every wire model."""
 
     model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def _omitted_not_null(self) -> Self:
+        """An `omittable()` field that was GIVEN as `null` is refused (see `omittable`).
+
+        Checked here, on the fields the input actually set, because that is the one place that
+        tells "absent" from "null": both leave the attribute None. A field-level validator
+        cannot (a `validate_default` field sees its default None too), and a `before` one would
+        hand pydantic Python objects where it had JSON, which strict mode then reads differently
+        (a JSON array is a tuple, a Python list is not). The error is raised with the FIELD's
+        location, which pydantic nests under the model's own, so the 422 names
+        `anchors.0.anchor.subTarget` rather than `anchors.0.anchor`.
+        """
+        fields = type(self).model_fields
+        given = self.model_fields_set
+        errors = [
+            InitErrorDetails(
+                type=PydanticCustomError("null_not_allowed", NULL_NOT_ALLOWED),
+                loc=(name,),
+                input=None,
+            )
+            for name, field in fields.items()
+            if name in given and getattr(self, name) is None and is_omittable(field)
+        ]
+        if errors:
+            raise ValidationError.from_exception_data(type(self).__name__, errors)
+        return self
 
 
 def _drop_null_branch(schema: dict[str, Any]) -> None:
@@ -69,10 +99,26 @@ def _is_none(value: object) -> bool:
 
 
 def omittable(**constraints: Any) -> Any:
-    """A field that is ABSENT or a value, never `null` on the wire (TypeScript's `field?: T`)."""
+    """A field that is ABSENT or a value, never `null` on the wire (TypeScript's `field?: T`).
+
+    Both directions: unset, it is left out of the JSON (`exclude_if`); sent as `null`, it is a 422
+    (`Wire._omitted_not_null`); and its exported schema has no `null` branch (`_drop_null_branch`),
+    so the schema, the validator and the TypeScript type say the same thing. Until S0's review
+    (M1) only the schema said it: the validator took `null`, and a highlight whose anchor carried
+    `"subTarget": null` was stored, a record `anchor-v1.schema.json` refuses."""
     return Field(
         default=None, exclude_if=_is_none, json_schema_extra=_drop_null_branch, **constraints
     )
+
+
+#: The message of the 422 an explicit `null` in an omittable field gets.
+NULL_NOT_ALLOWED: Final = "Field may be omitted, but not sent as null"
+
+
+def is_omittable(field: FieldInfo) -> bool:
+    """Whether `field` was declared with `omittable()`: the same mark that drops `null` from the
+    exported schema, so the schema and the validator are keyed to one fact."""
+    return field.json_schema_extra is _drop_null_branch
 
 
 def _reject_bool(value: object) -> object:
@@ -437,7 +483,7 @@ class HighlightCreate(Wire):
 
 class HighlightPatch(Wire):
     """`{color?, note?}`: absent is unchanged, `note: null` clears the note, `color: null` is 422
-    (the route checks it: a colour is never removed)."""
+    (an omittable field: a colour is never removed)."""
 
     color: HighlightColor | None = omittable()
     note: str | None = None
