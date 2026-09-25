@@ -54,7 +54,34 @@ BEFORE: frozenset[tuple[str, str]] = frozenset(
 #: What S0 added. Every entry is a contracts.md route; see the report for the section of each.
 ADDED: frozenset[tuple[str, str]] = frozenset(
     {
-        ("GET", "/healthz"),  # §2.8
+        ("GET", "/healthz"),  # §2.8, implemented
+        # §2.2 (S1)
+        ("DELETE", "/papers/{paper_id}"),
+        ("POST", "/papers/{paper_id}/retry"),
+        ("POST", "/papers/{paper_id}/reparse"),
+        # §2.5 (S5)
+        ("POST", "/papers/{paper_id}/threads"),
+        ("GET", "/papers/{paper_id}/threads"),
+        ("GET", "/papers/{paper_id}/threads/{thread_id}"),
+        ("POST", "/papers/{paper_id}/threads/{thread_id}/messages"),
+        ("POST", "/runs/{run_id}/cancel"),
+        ("GET", "/papers/{paper_id}/summary"),
+        ("POST", "/papers/{paper_id}/summary"),
+        ("GET", "/usage"),
+        # §2.7 (S7)
+        ("GET", "/papers/{paper_id}/board"),
+        ("POST", "/papers/{paper_id}/board/nodes"),
+        ("PATCH", "/boards/{board_id}/nodes/{node_id}"),
+        ("DELETE", "/boards/{board_id}/nodes/{node_id}"),
+        ("POST", "/boards/{board_id}/edges"),
+        ("PATCH", "/boards/{board_id}/edges/{edge_id}"),
+        ("DELETE", "/boards/{board_id}/edges/{edge_id}"),
+        ("PATCH", "/boards/{board_id}"),
+        # §4 (S5)
+        ("GET", "/internal/agent/runs/{run_id}/outline"),
+        ("GET", "/internal/agent/runs/{run_id}/sections/{handle}"),
+        ("GET", "/internal/agent/runs/{run_id}/passages/{handle}"),
+        ("GET", "/internal/agent/runs/{run_id}/search"),
     }
 )
 
@@ -85,3 +112,21 @@ def test_every_route_is_either_pre_split_or_a_listed_addition(tmp_path: Path) ->
         f"{sorted((BEFORE | ADDED) - served)}"
     )
     assert not BEFORE & ADDED, "a pre-split route is also listed as an addition"
+
+
+def test_the_openapi_document_builds_and_lists_every_api_route(tmp_path: Path) -> None:
+    """`/openapi.json` is a served route, and it is built from the models the routes declare, so a
+    model the generator cannot render would break it at request time, not import time."""
+    from fastapi.testclient import TestClient
+
+    with TestClient(create_app(Settings(root=tmp_path / "data"))) as client:
+        response = client.get("/openapi.json")
+    assert response.status_code == 200
+    paths = response.json()["paths"]
+    documented = {(method.upper(), path) for path, item in paths.items() for method in item}
+    api_routes = {
+        (method, path)
+        for method, path in BEFORE | ADDED
+        if method != "HEAD" and not path.startswith(("/docs", "/redoc", "/openapi"))
+    }
+    assert api_routes <= documented, sorted(api_routes - documented)

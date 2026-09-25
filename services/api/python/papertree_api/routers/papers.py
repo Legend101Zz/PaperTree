@@ -17,7 +17,7 @@ from __future__ import annotations
 import hashlib
 from typing import Annotated, Any
 
-from fastapi import APIRouter, File, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from fastapi.responses import FileResponse, Response
 from papertree_db import SQLITE_INTEGER_MAX, BlockId, PaperId, generation
 from papertree_document_worker.crops import CropStore
@@ -26,11 +26,17 @@ from pydantic import BaseModel
 
 from ..deps import CallerDep, SettingsDep
 from ..deps import promoted_or_404 as _promoted
-from ..errors import ApiError
+from ..errors import ApiError, ErrorEnvelope, not_implemented
 from ..ir import block_location, paper_document
-from ._shared import GenParam, public_row
+from ..schemas import JobAccepted, ReparseRequest
+from ._shared import GenParam, json_body, public_row
 
 router = APIRouter()
+
+#: The routes of §2.2 that S1 builds.
+S1_NOT_YET: dict[int | str, dict[str, Any]] = {
+    501: {"model": ErrorEnvelope, "description": "Not implemented yet (slice S1)"}
+}
 
 
 class Upload(BaseModel):
@@ -230,3 +236,39 @@ async def asset(
         raise ApiError("not_found", "no crop for that block") from exc
     # PNG at 3x is what `crops.py` writes today. F1.5 asks for WebP; that is Session B's #55.
     return Response(payload, media_type="image/png")
+
+
+# ── §2.2 routes S1 builds: 501 stubs with their final models (S0) ────────────────────────────
+
+
+@router.delete("/papers/{paper_id}", status_code=status.HTTP_204_NO_CONTENT, responses=S1_NOT_YET)
+async def delete_paper(call: CallerDep, paper_id: str) -> Response:
+    """204: the rows (the `delete_paper` cascade) plus `uploads/<id>.pdf`, `assets/<id>/` and
+    staging."""
+    raise not_implemented("S1")
+
+
+@router.post(
+    "/papers/{paper_id}/retry",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses=S1_NOT_YET,
+)
+async def retry_paper(call: CallerDep, paper_id: str) -> JobAccepted:
+    """202: the same generation, a new `attempt_seq`; 409 `not_failed` unless dead-lettered."""
+    raise not_implemented("S1")
+
+
+@router.post(
+    "/papers/{paper_id}/reparse",
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses=S1_NOT_YET,
+)
+async def reparse_paper(
+    call: CallerDep,
+    paper_id: str,
+    body: Annotated[ReparseRequest, Depends(json_body(ReparseRequest))],
+) -> JobAccepted:
+    """202 with `generation = next_generation`; 409 `busy` while a parse is pending or running."""
+    raise not_implemented("S1")

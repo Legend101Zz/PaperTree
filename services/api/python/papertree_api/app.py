@@ -22,7 +22,18 @@ from papertree_agent_tools import Transport
 from .ask import mount_ask
 from .errors import InternalErrorMiddleware, install_error_handlers
 from .middleware import REQUEST_ID_HEADER, CompressJson, RequestIdMiddleware, log_unhandled
-from .routers import auth, health, highlights, jobs, papers
+from .routers import (
+    auth,
+    boards,
+    health,
+    highlights,
+    internal,
+    jobs,
+    papers,
+    summary,
+    threads,
+    usage,
+)
 from .routers.papers import derive_paper_id  # re-exported: it lived here before the split
 from .settings import Settings
 
@@ -93,11 +104,16 @@ def create_app(
         finally:
             db.close()
 
-    # The order the pre-split `app.py` mounted them in.
+    # The pre-split `app.py`'s order first, then what S0 added (`routers/__init__.py` lists them).
     app.include_router(auth.router)
     app.include_router(papers.router)
     app.include_router(highlights.router)
     app.include_router(jobs.router)
     mount_ask(app)
     app.include_router(health.router)
+    app.include_router(threads.router)
+    app.include_router(summary.router)
+    app.include_router(usage.router)
+    app.include_router(boards.router)
+    app.include_router(internal.router)
     return app

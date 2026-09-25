@@ -47,12 +47,16 @@ CONTRACT_CODES: dict[ErrorCode, int] = {
 }
 
 
-def test_the_error_enum_is_the_contracts_enum() -> None:
+def test_the_error_enum_is_the_contracts_enum_plus_one_addition() -> None:
     codes = set(get_args(ErrorCode))
     assert CONTRACT_CODES.keys() <= codes
     for code, status in CONTRACT_CODES.items():
         assert ERROR_STATUS[code] == status, code
     assert set(ERROR_STATUS) == codes
+    # The ONE addition to §2.9, and it is reported as a contract addition (S0 report): the 501
+    # of a route whose slice has not built it yet.
+    assert codes - set(CONTRACT_CODES) == {"not_implemented"}
+    assert ERROR_STATUS["not_implemented"] == 501
 
 
 def test_auth_errors_are_envelopes(tmp_path: Path) -> None:

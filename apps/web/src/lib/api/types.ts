@@ -40,7 +40,9 @@ export type ErrorCode =
   | 'budget_exhausted'
   | 'agent_unavailable'
   | 'not_configured'
-  | 'internal';
+  | 'internal'
+  // S0b contract addition: the 501 every not-yet-built route answers with (services/api errors.py).
+  | 'not_implemented';
 
 export type RunErrorCode =
   | 'provider_auth'

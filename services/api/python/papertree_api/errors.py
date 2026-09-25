@@ -56,6 +56,10 @@ ErrorCode = Literal[
     "agent_unavailable",
     "not_configured",
     "internal",
+    # A CONTRACT ADDITION (S0b): the dedicated code of the 501 every not-yet-built route answers
+    # with (`not_implemented()` below). The 501 is a non-2xx JSON response, so it is the §0
+    # envelope, and its code has to be a member of the one enum the web mirrors.
+    "not_implemented",
 ]
 
 #: contracts.md §2.9's second list: `done.error.code` of a run (the agent's own classification,
@@ -96,6 +100,7 @@ ERROR_STATUS: Final[dict[ErrorCode, int]] = {
     "agent_unavailable": 503,
     "not_configured": 503,
     "internal": 500,
+    "not_implemented": 501,
 }
 
 #: The sentence a 500 carries. Fixed on purpose: see the module docstring.
@@ -141,6 +146,16 @@ class ApiError(Exception):
         self.extra = dict(extra or {})
 
 
+def not_implemented(slice_name: str) -> ApiError:
+    """The 501 every route in contracts.md §2 answers until the slice that owns it builds it.
+
+    Raised AFTER the route's final models have validated the request (auth, path, query, body),
+    so a stub already refuses what the finished route will refuse, and a client written against
+    the contract gets its 401s and 422s now.
+    """
+    return ApiError("not_implemented", f"Not implemented yet (slice {slice_name})")
+
+
 def envelope_response(error: ApiError) -> JSONResponse:
     body: dict[str, Any] = {
         "detail": error.detail,
@@ -182,6 +197,7 @@ _STATUS_CODE: Final[dict[int, ErrorCode]] = {
     413: "payload_too_large",
     415: "unsupported_media_type",
     422: "validation_failed",
+    501: "not_implemented",
 }
 
 
