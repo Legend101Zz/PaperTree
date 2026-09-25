@@ -162,14 +162,26 @@ requires_corpus = pytest.mark.skipif(
 # in this branch places them.
 
 # NUMERIC-ONLY COMMIT (S2): blocks with no letter are never headings and are typed `unknown`
-# rather than `paragraph`. Only precision moves: gpt3 0.3436 -> 0.3474, resnet 0.3396 -> 0.3434,
+# rather than `paragraph`. Only precision moves: gpt3 0.3436 -> 0.3474, resnet 0.3396 -> 0.3433,
 # neural-odes +0.0003 macro-F1, each from table values and tick labels no longer predicted as
 # paragraphs on gold pages. Nothing else in these rows moves.
 
+# ABSTRACT COMMIT (S2): the abstract is swept in READING ORDER and ends at the first heading or at
+# its column's foot; the heading's own space-below no longer counts as a gap inside the abstract.
+# attention's abstract is typed at last (F1 abstract 0 -> 1.0, macro-F1 0.3019 -> 0.3694, and its
+# matched region adds 4 pooled pairs, all agreeing: 39/43 -> 43/47); resnet (0.3433 -> 0.3652) and
+# bert (0.3702 -> 0.3815) lose right-column introduction blocks from `abstract`. a3c moves DOWN,
+# 0.4213 -> 0.4193, and so do bert's and resnet's paragraph F1: the blocks that stop being
+# `abstract` become `paragraph` - the type gold itself gives that right column - but gold boxes
+# the whole right column as ONE paragraph (a3c [304,279,548,723], bert [304,211,554,788]), so no
+# single printed paragraph reaches IoU 0.5 and each is a new unmatched prediction. The types are
+# right by the page and by gold's own label; the IoU convention is what dips (hard case
+# `repo-gold-multi-paragraph-*`). a3c stays above 18f69ec's 0.3932.
+
 RAW: dict[str, dict[str, Any]] = {
     "a3c-algorithmheavy": {
-        "macro_f1": 0.4213,
-        "macro_f1_strict": 0.3533,
+        "macro_f1": 0.4193,
+        "macro_f1_strict": 0.3521,
         "reading_order": 0.6667,
         "reading_order_pairs": [9, 9],
         "zero_pair_pages": 2,
@@ -186,10 +198,10 @@ RAW: dict[str, dict[str, Any]] = {
         "figure_predicted": 4,
     },
     "attention-is-all-you-need": {
-        "macro_f1": 0.3019,
-        "macro_f1_strict": 0.0951,
+        "macro_f1": 0.3694,
+        "macro_f1_strict": 0.1621,
         "reading_order": 0.5278,
-        "reading_order_pairs": [39, 43],
+        "reading_order_pairs": [43, 47],
         "zero_pair_pages": 2,
         "caption_correct": 1,
         "caption_false": 0,
@@ -204,8 +216,8 @@ RAW: dict[str, dict[str, Any]] = {
         "figure_predicted": 3,
     },
     "bert-2col": {
-        "macro_f1": 0.3702,
-        "macro_f1_strict": 0.2134,
+        "macro_f1": 0.3815,
+        "macro_f1_strict": 0.2123,
         "reading_order": 0.7071,
         "reading_order_pairs": [63, 77],
         "zero_pair_pages": 1,
@@ -258,8 +270,8 @@ RAW: dict[str, dict[str, Any]] = {
         "figure_predicted": 8,
     },
     "resnet-cvpr-2col": {
-        "macro_f1": 0.3433,
-        "macro_f1_strict": 0.1629,
+        "macro_f1": 0.3652,
+        "macro_f1_strict": 0.1856,
         "reading_order": 0.9282,
         "reading_order_pairs": [108, 116],
         "zero_pair_pages": 0,
@@ -279,8 +291,8 @@ RAW: dict[str, dict[str, Any]] = {
 
 NORMALISED: dict[str, dict[str, Any]] = {
     "a3c-algorithmheavy": {
-        "macro_f1": 0.4213,
-        "macro_f1_strict": 0.3533,
+        "macro_f1": 0.4193,
+        "macro_f1_strict": 0.3521,
         "reading_order": 0.6667,
         "reading_order_pairs": [9, 9],
         "zero_pair_pages": 2,
@@ -297,10 +309,10 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "figure_predicted": 4,
     },
     "attention-is-all-you-need": {
-        "macro_f1": 0.2952,
-        "macro_f1_strict": 0.1007,
+        "macro_f1": 0.3627,
+        "macro_f1_strict": 0.1677,
         "reading_order": 0.5833,
-        "reading_order_pairs": [38, 41],
+        "reading_order_pairs": [42, 45],
         "zero_pair_pages": 2,
         "caption_correct": 1,
         "caption_false": 0,
@@ -315,8 +327,8 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "figure_predicted": 3,
     },
     "bert-2col": {
-        "macro_f1": 0.3702,
-        "macro_f1_strict": 0.2134,
+        "macro_f1": 0.3815,
+        "macro_f1_strict": 0.2123,
         "reading_order": 0.7071,
         "reading_order_pairs": [63, 77],
         "zero_pair_pages": 1,
@@ -369,8 +381,8 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "figure_predicted": 8,
     },
     "resnet-cvpr-2col": {
-        "macro_f1": 0.336,
-        "macro_f1_strict": 0.1602,
+        "macro_f1": 0.3579,
+        "macro_f1_strict": 0.1829,
         "reading_order": 0.9667,
         "reading_order_pairs": [99, 101],
         "zero_pair_pages": 0,

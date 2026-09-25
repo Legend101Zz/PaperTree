@@ -218,3 +218,97 @@ def test_a_number_is_never_a_heading(numbers_between_paragraphs: Path, tmp_path:
     # ...and a real numbered head is untouched.
     head = _containing(paper, "Method Overview")
     assert head is not None and head.type == "heading"
+
+
+# ── an abstract ends at the first heading or at its column's foot ──────────────────────────
+
+
+def _title_page(page: Any) -> None:
+    page.insert_text((190, 72), "A Paper Title Set Large", fontsize=18, fontname="hebo")
+    page.insert_text((240, 100), "Alice Smith and Bob Jones", fontsize=10, fontname="helv")
+    page.insert_text((245, 114), "University of Somewhere", fontsize=10, fontname="helv")
+
+
+@pytest.fixture(scope="module")
+def abstract_beside_the_introduction(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """YOLO's and SBERT's page 0: `Abstract`, the abstract and `1. Introduction` in the left
+    column, and the introduction's continuation in the right column, level with the abstract.
+    Sorted by height, the right column's paragraphs sat between `Abstract` and the next heading
+    and were typed `abstract`; and `_band_rows` put [`Abstract`, the tall right-column paragraph]
+    in one "row" below the authors, which typed that paragraph `affiliation`."""
+    document = pymupdf.open()
+    page = document.new_page(width=W, height=H)
+    _title_page(page)
+    page.insert_text((LEFT + 90, 150), "Abstract", fontsize=12, fontname="hebo")
+    _column(page, LEFT, 168, "abstr", 14)
+    page.insert_text((LEFT, 372), "1. Introduction", fontsize=12, fontname="hebo")
+    _column(page, LEFT, 392, "introleft", 24)
+    y = _column(page, RIGHT, 150, "rightone", 8)
+    y = _column(page, RIGHT, y + 26, "righttwo", 8)
+    _column(page, RIGHT, y + 26, "rightthree", 24)
+    return _save(document, tmp_path_factory.mktemp("abstract") / "abstract.pdf")
+
+
+def test_the_other_column_beside_an_abstract_is_body(
+    abstract_beside_the_introduction: Path, tmp_path: Path
+) -> None:
+    paper = _parse(abstract_beside_the_introduction, tmp_path)
+    abstract = _containing(paper, "abstr0")
+    assert abstract is not None and abstract.type == "abstract"
+    for seed in ("rightone0", "righttwo0", "introleft0"):
+        block = _containing(paper, seed)
+        assert block is not None and block.type == "paragraph", (seed, block and block.type)
+
+
+@pytest.fixture(scope="module")
+def abstract_at_a_column_foot(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The abstract fills the left column to its foot and the right column opens with prose, not
+    a heading. In reading order the next block is that prose - and "until the next heading" alone
+    would run the abstract into it: the column boundary ends an abstract as a heading does."""
+    document = pymupdf.open()
+    page = document.new_page(width=W, height=H)
+    _title_page(page)
+    page.insert_text((LEFT + 90, 150), "Abstract", fontsize=12, fontname="hebo")
+    _column(page, LEFT, 168, "abstr", 46)
+    y = _column(page, RIGHT, 150, "spill", 8)
+    page.insert_text((RIGHT, y + 20), "1. Introduction", fontsize=12, fontname="hebo")
+    _column(page, RIGHT, y + 40, "introright", 30)
+    return _save(document, tmp_path_factory.mktemp("abstract-foot") / "abstract-foot.pdf")
+
+
+def test_an_abstract_ends_at_its_columns_foot(
+    abstract_at_a_column_foot: Path, tmp_path: Path
+) -> None:
+    paper = _parse(abstract_at_a_column_foot, tmp_path)
+    abstract = _containing(paper, "abstr0")
+    assert abstract is not None and abstract.type == "abstract"
+    spill = _containing(paper, "spill0")
+    assert spill is not None and spill.type == "paragraph", spill and spill.type
+
+
+@pytest.fixture(scope="module")
+def abstract_well_below_its_heading(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """ACL's `Abstract` heading has a larger space-below than the abstract's own internal gaps:
+    sbert measures 15.3 pt and attention 16.9 pt, beyond the 15 pt bound that ends an abstract
+    at a footnote. Here the abstract starts about 18 pt below its heading."""
+    document = pymupdf.open()
+    page = document.new_page(width=W, height=H)
+    _title_page(page)
+    page.insert_text((LEFT + 90, 150), "Abstract", fontsize=12, fontname="hebo")
+    _column(page, LEFT, 183, "abstr", 12)
+    page.insert_text((LEFT, 350), "1. Introduction", fontsize=12, fontname="hebo")
+    _column(page, LEFT, 370, "introleft", 28)
+    _column(page, RIGHT, 150, "introright", 40)
+    return _save(document, tmp_path_factory.mktemp("abstract-gap") / "abstract-gap.pdf")
+
+
+def test_an_abstract_may_start_a_headings_space_below_it(
+    abstract_well_below_its_heading: Path, tmp_path: Path
+) -> None:
+    paper = _parse(abstract_well_below_its_heading, tmp_path)
+    heading = _containing(paper, "Abstract")
+    abstract = _containing(paper, "abstr0")
+    assert heading is not None and abstract is not None
+    gap = min(y for _, y in abstract.polygon) - max(y for _, y in heading.polygon)
+    assert gap > 15.0, f"the fixture must exceed ABSTRACT_MAX_GAP_PT, measured {gap:.1f} pt"
+    assert abstract.type == "abstract"

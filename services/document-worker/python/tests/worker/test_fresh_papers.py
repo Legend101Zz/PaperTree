@@ -120,3 +120,50 @@ def test_no_numeric_only_headings_on_yolo(yolo: Any) -> None:
         if b.type == "heading" and not any(c.isalpha() for c in (b.text or ""))
     ]
     assert numeric == []
+
+
+def test_the_abstract_does_not_spill_into_yolos_right_column(yolo: Any) -> None:
+    """Slice-plan §S2 rule: an abstract ends at the first heading or its column's foot. At
+    18f69ec the height-sorted abstract sweep typed YOLO p0's right-column introduction `abstract`
+    (the judge's 6 mistyped body paragraphs; Guided labelled them OUR SUMMARY). The printed
+    anchors are the fresh gold's, which was written from the page image."""
+
+    def type_of(printed: str) -> str | None:
+        wanted = printed.replace(" ", "")
+        for block in yolo.blocks:
+            if block.page_index == 0 and wanted in (block.text or "").replace("\n", " ").replace(
+                " ", ""
+            ):
+                return str(block.type)
+        return None
+
+    assert type_of("We present YOLO, a new approach to object detection.") == "abstract"
+    for printed in (
+        "methods to ﬁrst generate potential bounding boxes",
+        "We reframe object detection as a single",
+        "YOLO is refreshingly simple: see Figure 1.",
+        "First, YOLO is extremely fast.",
+    ):
+        assert type_of(printed) == "paragraph", printed
+
+
+@requires_fresh
+def test_sberts_introduction_is_not_front_matter(tmp_path: Path) -> None:
+    """SBERT p0: `_band_rows` grouped [the abstract, `Abstract`, the right-column introduction]
+    as one row below the authors, and both prose blocks became `affiliation` - hidden until the
+    abstract sweep stopped overwriting it."""
+    paper = parse_document(
+        FRESH_DIR / "sbert-1908.10084.pdf", paper_id=PAPER_ID, asset_root=tmp_path
+    ).paper
+
+    def type_of(printed: str) -> str | None:
+        wanted = printed.replace(" ", "")
+        for block in paper.blocks:
+            if block.page_index == 0 and wanted in (block.text or "").replace("\n", " ").replace(
+                " ", ""
+            ):
+                return str(block.type)
+        return None
+
+    assert type_of("BERT (Devlin et al., 2018) and RoBERTa") == "abstract"
+    assert type_of("BERT set new state-of-the-art performance on various") == "paragraph"
