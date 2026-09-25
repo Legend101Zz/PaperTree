@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -412,6 +413,58 @@ def test_bad_resolution_puts_are_422_and_never_500_and_never_write(tmp_path: Pat
         [listed] = h.client.get(f"/papers/{paper_id}/highlights", headers=auth(alice)).json()
         assert listed["anchors"][0]["resolution"]["tier"] == 1
         assert _rows(h.settings) == {"highlights": 1, "anchors": 1, "anchor_resolutions": 1}
+
+
+#: contracts.md §0: "Times are ISO-8601 UTC strings (`2026-09-25T15:09:25.123Z`)".
+CONTRACT_TIME = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
+
+
+def test_highlight_times_on_the_wire_are_the_contract_shape(tmp_path: Path) -> None:
+    """Every ``created_at``/``updated_at`` a highlight route returns is §0's shape.
+
+    WATCHED FAILING before the wire formatting: the store stamps ``datetime.isoformat()``, so the
+    routes returned ``2026-09-25T19:05:35.274228+00:00``. A legacy 0001 row keeps whatever its
+    runner wrote (the demo data root's one is ``…752375+00:00``), so the shape is fixed on the way
+    out, not only on the way in.
+    """
+    with harness(tmp_path) as h:
+        alice = register(h.client, "alice@example.com")
+        paper_id = seed_paper(h.settings, h.client, alice, SLUG)
+        base = f"/papers/{paper_id}/highlights"
+        created = _post(h.client, alice, paper_id, _body())
+        patched = h.client.patch(f"{base}/{HIGHLIGHT_ID}", headers=auth(alice), json={"note": "x"})
+        for response in (created, patched):
+            assert response.status_code in (200, 201), response.text
+            for field in ("created_at", "updated_at"):
+                assert CONTRACT_TIME.fullmatch(response.json()[field]), response.json()[field]
+
+        # Rows written by older runners, inserted as they are stored in a saved data root.
+        user_id = h.client.get("/auth/me", headers=auth(alice)).json()["user_id"]
+        conn = sqlite3.connect(h.settings.database_file)
+        try:
+            for highlight_id, stamp in (
+                ("hl_01K0LEGACYPYTHONSTAMP0001", "2026-08-06T09:37:32.752375+00:00"),
+                ("hl_01K0LEGACYTSSTAMP00000001", "2026-08-06T09:37:33.100Z"),
+                ("hl_01K0LEGACYNOTATIME0000001", "z"),
+            ):
+                conn.execute(
+                    "INSERT INTO highlights (highlight_id, owner_id, paper_id, color, note, "
+                    "created_generation, created_at, updated_at) "
+                    "VALUES (?, ?, ?, 'amber', NULL, 1, ?, ?)",
+                    (highlight_id, user_id, paper_id, stamp, stamp),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+        listed = {
+            row["highlight_id"]: row for row in h.client.get(base, headers=auth(alice)).json()
+        }
+        assert listed["hl_01K0LEGACYPYTHONSTAMP0001"]["created_at"] == "2026-08-06T09:37:32.752Z"
+        assert listed["hl_01K0LEGACYTSSTAMP00000001"]["updated_at"] == "2026-08-06T09:37:33.100Z"
+        assert CONTRACT_TIME.fullmatch(listed[HIGHLIGHT_ID]["created_at"])
+        # A stored value that is not a time at all is passed through as stored: a GET of a user's
+        # highlights never becomes a 500 over a timestamp.
+        assert listed["hl_01K0LEGACYNOTATIME0000001"]["created_at"] == "z"
 
 
 # ── ownership and the path ───────────────────────────────────────────────────────────────────

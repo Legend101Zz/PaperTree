@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile, status
@@ -536,6 +537,24 @@ def _gen_param(request: Request) -> int | None:
     return int(raw)
 
 
+def _wire_time(stored: str) -> str:
+    """A stored time in contracts.md §0's shape, `2026-09-25T15:09:25.123Z`.
+
+    The store stamps `datetime.isoformat()` (`…274228+00:00`), and a legacy 0001 row keeps what
+    its runner wrote, so the one wire shape is made here, on the way out. Every writer in this
+    repo stamps UTC, so a time without an offset is read as UTC. A value that is not a time at all
+    is returned as stored: listing a user's highlights must not fail over a timestamp.
+    """
+    try:
+        moment = datetime.fromisoformat(stored)
+    except ValueError:
+        return stored
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    moment = moment.astimezone(UTC)
+    return f"{moment:%Y-%m-%dT%H:%M:%S}.{moment.microsecond // 1000:03d}Z"
+
+
 def _owned_or_404(call: Caller, paper_id: str) -> None:
     if call.db.owned_paper(call.db_owner, PaperId(paper_id)) is None:
         raise _Refused(404, "not_found", "no such paper")
@@ -548,8 +567,8 @@ def _highlight_wire(highlight: HighlightWithAnchors) -> dict[str, Any]:
         "color": highlight.color,
         "note": highlight.note,
         "created_generation": highlight.created_generation,
-        "created_at": highlight.created_at,
-        "updated_at": highlight.updated_at,
+        "created_at": _wire_time(highlight.created_at),
+        "updated_at": _wire_time(highlight.updated_at),
         "anchors": [
             {
                 "anchor_id": anchor.anchor_id,
