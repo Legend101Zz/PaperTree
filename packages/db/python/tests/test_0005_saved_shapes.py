@@ -25,6 +25,7 @@ from __future__ import annotations
 import importlib
 import json
 import sqlite3
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -659,6 +660,69 @@ def test_a_concurrent_start_never_replaces_the_backup_with_a_migrated_copy(
         process_a.close()
         process_b.close()
     assert not backup.with_name(backup.name + ".tmp").exists()
+
+
+#: How long B, inside its backup, gives A to finish (see the test below).
+HOLD_SECONDS = 1.0
+
+
+def test_a_runner_cannot_commit_a_migration_while_another_takes_the_backup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The other half of the race: A starts migrating WHILE B is copying the backup.
+
+    B's copy is taken while B holds the write lock, so A waits for it instead of committing 0005
+    underneath it. A runs in a thread started from inside B's backup, and B gives it
+    ``HOLD_SECONDS`` to finish before copying. Under the lock A cannot finish in that window.
+    Without it (the guard's ``BEGIN IMMEDIATE`` made a deferred ``BEGIN``, mutant M3 in the S0
+    fix report, which the test above does not see) A commits 0005 first and B copies the
+    MIGRATED file over the backup. A slow machine can only make that mutant easier to miss; it
+    cannot turn this test red on the locked code, because the end state is checked, not A's time.
+    """
+    shape = build_demo_shape(tmp_path)
+    backup = shape.file.with_name(shape.file.name + ".pre-0005.bak")
+    process_b = raw_connect(shape.file)
+    real_backup = migrate_module._backup
+    results: dict[str, MigrationResult | Exception] = {}
+
+    def run_a() -> None:
+        conn = raw_connect(shape.file)
+        try:
+            results["A"] = migrate(conn, MIGRATIONS_DIR)
+        except Exception as exc:  # recorded and asserted on below
+            results["A"] = exc
+        finally:
+            conn.close()
+
+    process_a = threading.Thread(target=run_a)
+
+    def backup_while_a_starts(conn: sqlite3.Connection, target: Path) -> None:
+        if conn is process_b and not process_a.is_alive() and "A" not in results:
+            process_a.start()
+            process_a.join(HOLD_SECONDS)
+        real_backup(conn, target)
+
+    monkeypatch.setattr(migrate_module, "_backup", backup_while_a_starts)
+    try:
+        results["B"] = migrate(process_b, MIGRATIONS_DIR)
+    finally:
+        process_b.close()
+    process_a.join(migrate_module.LOCK_WAIT_SECONDS)
+    assert not process_a.is_alive()
+
+    copy = sqlite3.connect(f"file:{backup}?mode=ro", uri=True)
+    try:
+        head = [r[0] for r in copy.execute("SELECT version FROM schema_migrations")]
+    finally:
+        copy.close()
+    assert head == [1, 2, 3, 4]
+    outcomes = dict(results)
+    assert all(isinstance(r, MigrationResult) for r in outcomes.values()), outcomes
+    # Exactly one of the two applied 0005; the other found it applied and skipped it.
+    assert sorted(r.applied for r in outcomes.values() if isinstance(r, MigrationResult)) == [
+        (),
+        (5,),
+    ]
 
 
 def test_an_in_memory_database_migrates_without_a_backup(tmp_path: Path) -> None:
