@@ -20,6 +20,7 @@ is a document `packages/db` would store and every downstream consumer would then
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from statistics import median
 from typing import Any
@@ -51,10 +52,15 @@ from papertree_document_worker.text import build_block_text
 
 __all__ = ["ParseResult", "ParserConfig", "parse_document"]
 
-#: A fixed timestamp is NOT used - `parsed_at` is the one field excluded from the determinism
-#: comparison (DESIGN.md §7.1), so it may vary between runs without breaking byte-identity.
-#: The caller supplies it so tests can pin it.
-DEFAULT_PARSED_AT = "2026-07-31T00:00:00Z"
+
+def utc_now_iso() -> str:
+    """``parsed_at`` when the caller does not pin one: the real UTC time, ``…T…:…:….mmmZ``.
+
+    It used to be the constant ``2026-07-31T00:00:00Z`` for every parse. It may vary: it is the one
+    field excluded from the determinism comparison (DESIGN.md §7.1), so a real clock does not
+    break byte-identity, and a caller (a test, a replay) may still pass a fixed value.
+    """
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
 @dataclass(frozen=True, slots=True)
@@ -370,9 +376,14 @@ def parse_document(
     paper_id: str,
     asset_root: Path,
     config: ParserConfig | None = None,
-    parsed_at: str = DEFAULT_PARSED_AT,
+    parsed_at: str | None = None,
+    generation: int = 1,
 ) -> ParseResult:
     """Parse one PDF into a validated PaperIR document.
+
+    ``generation`` is the caller's (default 1): the parse job passes its payload's generation, so
+    a re-parse is stored, and its crops are written, as generation N+1 (contracts.md §2.2).
+    ``parsed_at`` defaults to the real UTC time (:func:`utc_now_iso`).
 
     `asset_root` must live OUTSIDE the repository: CI's codegen-drift step is a whole-tree
     `git status --porcelain --untracked-files=all`, and `.gitignore` covers none of these paths.
@@ -386,7 +397,16 @@ def parse_document(
         layout = layout_document(pages)
         source_hash = document.source_hash
         return _assemble(
-            document, pages, layout, profile, source_hash, paper_id, asset_root, config, parsed_at
+            document,
+            pages,
+            layout,
+            profile,
+            source_hash,
+            paper_id,
+            asset_root,
+            config,
+            parsed_at if parsed_at is not None else utc_now_iso(),
+            generation,
         )
     finally:
         document.close()
@@ -402,6 +422,7 @@ def _assemble(
     asset_root: Path,
     config: ParserConfig,
     parsed_at: str,
+    generation: int = 1,
 ) -> ParseResult:
 
     builder = PaperBuilder(source_hash=source_hash, paper_id=paper_id, profile=profile)
@@ -735,7 +756,11 @@ def _assemble(
         ]
 
     store = CropStore(
-        root=asset_root, paper_id=paper_id, scheme=config.asset_scheme, scale=config.crop_scale
+        root=asset_root,
+        paper_id=paper_id,
+        generation=generation,
+        scheme=config.asset_scheme,
+        scale=config.crop_scale,
     )
     for block in builder.blocks:
         if block.type not in ("equation", "inline_equation", "figure") or block.payload is None:
@@ -820,6 +845,7 @@ def _assemble(
     paper = builder.build(
         config_hash=config_hash_for(config.as_dict()),
         parsed_at=parsed_at,
+        generation=generation,
     )
     # `assert_valid_paper` raises on any ERROR and returns None; `validate_paper` yields the
     # full report. Both are called: the assertion is the gate, the report is what surfaces the

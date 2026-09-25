@@ -273,7 +273,16 @@ class PaperBuilder:
                 )
             )
 
-    def build(self, *, config_hash: str, parsed_at: str, profile_name: str | None = None) -> Paper:
+    def build(
+        self,
+        *,
+        config_hash: str,
+        parsed_at: str,
+        profile_name: str | None = None,
+        generation: int = 1,
+    ) -> Paper:
+        """The validated PaperIR document. ``generation`` is the CALLER's (the parse job's payload
+        carries it; contracts.md §2.2): 1 for a first parse, N+1 for a re-parse."""
         self.assign_ids()
         by_id = {block.block_id: block for block in self.blocks}
         if len(by_id) != len(self.blocks):
@@ -296,7 +305,7 @@ class PaperBuilder:
             "ir_version": IR_VERSION,
             "paper_id": self.paper_id,
             "source_hash": f"sha256:{self.source_hash}",
-            "generation": 1,
+            "generation": generation,
             "coordinate_space": COORDINATE_SPACE,
             "parser": {
                 "name": PARSER_NAME,
