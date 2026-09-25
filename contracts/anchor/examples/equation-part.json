@@ -1,0 +1,72 @@
+{
+  "anchorVersion": 1,
+  "offsetUnit": "unicode",
+  "id": "3f1c9a52-7d4e-4b8a-9c21-000000000102",
+  "doc": {
+    "paperId": "ppr_Z5HWSXAX9T44MQV8BHQZCMB0E4",
+    "pdfSha256": "sha256:bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+    "parserVersion": "0.1.0",
+    "textStreamId": "api/ppr_Z5HWSXAX9T44MQV8BHQZCMB0E4/g1/0.1.0"
+  },
+  "targetKind": "equation_part",
+  "provenanceClass": "source",
+  "subTarget": {
+    "kind": "equation_part",
+    "normalisedRect": [0, 0, 0.34, 1]
+  },
+  "selectors": [
+    {
+      "type": "BlockSelector",
+      "blockId": "blk_cjj3c7fwhp2ce7lz",
+      "blockTextHash": "sha256:3323e2b26864ca1edf6422f3049d0e456f82fa8f98ec48c6617827ded41c27f9"
+    },
+    {
+      "type": "PageSelector",
+      "index": 3
+    },
+    {
+      "type": "TextPositionSelector",
+      "start": 9574,
+      "end": 9618
+    },
+    {
+      "type": "TextQuoteSelector",
+      "exact": "Attention(Q, K, V ) = softmax(QKT\n√dk\n)V\n(1)",
+      "prefix": "together into matrices K and V . We compute\nthe matrix of outputs as:\n",
+      "suffix": "\nThe two most commonly used attention functions are additive attention",
+      "exactNormalised": "attention(q,k,v)=softmax(qkt√dk)v(1)",
+      "prefixNormalised": "togetherintomatriceskandv.wecomputethematrixofoutputsas:",
+      "suffixNormalised": "thetwomostcommonlyusedattentionfunctionsareadditiveattention"
+    },
+    {
+      "type": "ShapeSelector",
+      "pageIndex": 3,
+      "quads": [[219.97, 464.97, 316.76800000000003, 491.23]],
+      "polygons": [
+        [
+          [219.97, 464.97],
+          [316.76800000000003, 464.97],
+          [316.76800000000003, 491.23],
+          [219.97, 491.23]
+        ]
+      ],
+      "pageWidth": 612,
+      "pageHeight": 792,
+      "rotation": 0,
+      "userUnit": 1,
+      "cropBox": [0, 0, 612, 792]
+    },
+    {
+      "type": "SectionPathSelector",
+      "path": ["3 Model Architecture", "3.2 Attention", "3.2.1 Scaled Dot-Product Attention"],
+      "headingText": "3.2.1 Scaled Dot-Product Attention",
+      "paraIndexInSection": 2,
+      "charOffsetInPara": 0
+    }
+  ],
+  "created": {
+    "mode": "source",
+    "at": "2026-09-25T15:09:25.123Z",
+    "client": "papertree-web"
+  }
+}

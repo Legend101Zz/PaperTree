@@ -1,0 +1,61 @@
+{
+  "anchorVersion": 1,
+  "offsetUnit": "unicode",
+  "id": "3f1c9a52-7d4e-4b8a-9c21-000000000106",
+  "doc": {
+    "paperId": "ppr_8M48B5QEQYQVY8CYTN39FRMSP0",
+    "pdfSha256": "sha256:435299cc42b75f9ad43d9aa246c96d3d7bdcc3297aa57f419bdc571b9c25137c",
+    "parserVersion": "0.1.0",
+    "textStreamId": "api/ppr_8M48B5QEQYQVY8CYTN39FRMSP0/g1/0.1.0"
+  },
+  "targetKind": "table_cell",
+  "provenanceClass": "source",
+  "selectors": [
+    {
+      "type": "BlockSelector",
+      "blockId": "blk_6ctpvczjf7oa6gfr",
+      "blockTextHash": "sha256:4274b1899eba687801198c89f64a3fdade080a475c8a54881ba8fa10e7f45691"
+    },
+    {
+      "type": "PageSelector",
+      "index": 2
+    },
+    {
+      "type": "TextPositionSelector",
+      "start": 10211,
+      "end": 10221
+    },
+    {
+      "type": "TextQuoteSelector",
+      "exact": "Test Error",
+      "prefix": "same performance as the ResNet.\n\nTest Error\n# Params\nMemory\nTime\n",
+      "suffix": "\n# Params\nMemory\nTime\n1-Layer MLP†\n1.60%\n0.24 M\n-\n-\n1-Layer MLP†",
+      "exactNormalised": "testerror",
+      "prefixNormalised": "sameperformanceastheresnet.testerror#paramsmemorytime",
+      "suffixNormalised": "#paramsmemorytime1-layermlp†1.60%0.24m--1-layermlp†"
+    },
+    {
+      "type": "ShapeSelector",
+      "pageIndex": 2,
+      "quads": [[369.26, 565.02, 401.24, 572.99]],
+      "polygons": [
+        [
+          [401.24, 565.02],
+          [401.24, 572.99],
+          [369.26, 572.99],
+          [369.26, 565.02]
+        ]
+      ],
+      "pageWidth": 612,
+      "pageHeight": 792,
+      "rotation": 0,
+      "userUnit": 1,
+      "cropBox": [0, 0, 612, 792]
+    }
+  ],
+  "created": {
+    "mode": "source",
+    "at": "2026-09-25T15:09:25.123Z",
+    "client": "papertree-web"
+  }
+}

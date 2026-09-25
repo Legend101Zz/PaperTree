@@ -1,0 +1,61 @@
+{
+  "anchorVersion": 1,
+  "offsetUnit": "unicode",
+  "id": "3f1c9a52-7d4e-4b8a-9c21-000000000108",
+  "doc": {
+    "paperId": "ppr_8XZBZEK3A5T716GZKHVFF7TKMP",
+    "pdfSha256": "sha256:1e0651b6810ecba34a3dbc5b5b0209226f889004607c1f203540a48d64e5a93a",
+    "parserVersion": "0.1.0",
+    "textStreamId": "api/ppr_8XZBZEK3A5T716GZKHVFF7TKMP/g1/0.1.0"
+  },
+  "targetKind": "citation",
+  "provenanceClass": "source",
+  "selectors": [
+    {
+      "type": "BlockSelector",
+      "blockId": "blk_pkuijawg6vbccdrc",
+      "blockTextHash": "sha256:985a873b4386205608c404a6a6dc025c70859abfe3462028a027514efe0fb648"
+    },
+    {
+      "type": "PageSelector",
+      "index": 0
+    },
+    {
+      "type": "TextPositionSelector",
+      "start": 5927,
+      "end": 5935
+    },
+    {
+      "type": "TextQuoteSelector",
+      "exact": "[22, 21]",
+      "prefix": "non-\ntrivial visual recognition tasks [8, 12, 7, 32, 27] have also\n",
+      "suffix": "\nSimilar phenomena are also shown on the CIFAR-10 set\n[20], suggesting",
+      "exactNormalised": "[22,21]",
+      "prefixNormalised": "nontrivialvisualrecognitiontasks[8,12,7,32,27]havealso",
+      "suffixNormalised": "similarphenomenaarealsoshownonthecifar-10set[20],suggesting"
+    },
+    {
+      "type": "ShapeSelector",
+      "pageIndex": 0,
+      "quads": [[213.03, 556.2, 247.54, 566.16]],
+      "polygons": [
+        [
+          [213.03, 556.2],
+          [247.54, 556.2],
+          [247.54, 566.16],
+          [213.03, 566.16]
+        ]
+      ],
+      "pageWidth": 612,
+      "pageHeight": 792,
+      "rotation": 0,
+      "userUnit": 1,
+      "cropBox": [0, 0, 612, 792]
+    }
+  ],
+  "created": {
+    "mode": "source",
+    "at": "2026-09-25T15:09:25.123Z",
+    "client": "papertree-web"
+  }
+}

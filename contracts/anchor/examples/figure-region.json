@@ -1,0 +1,63 @@
+{
+  "anchorVersion": 1,
+  "offsetUnit": "unicode",
+  "id": "3f1c9a52-7d4e-4b8a-9c21-000000000104",
+  "doc": {
+    "paperId": "ppr_8XZBZEK3A5T716GZKHVFF7TKMP",
+    "pdfSha256": "sha256:1e0651b6810ecba34a3dbc5b5b0209226f889004607c1f203540a48d64e5a93a",
+    "parserVersion": "0.1.0",
+    "textStreamId": "api/ppr_8XZBZEK3A5T716GZKHVFF7TKMP/g1/0.1.0"
+  },
+  "targetKind": "figure_region",
+  "provenanceClass": "source",
+  "subTarget": {
+    "kind": "figure_region",
+    "normalisedRect": [0.25, 0.1, 0.75, 0.6]
+  },
+  "selectors": [
+    {
+      "type": "BlockSelector",
+      "blockId": "blk_vd6i5hijwlkso3vs",
+      "blockTextHash": ""
+    },
+    {
+      "type": "PageSelector",
+      "index": 1
+    },
+    {
+      "type": "TextPositionSelector",
+      "start": 2106,
+      "end": 2106
+    },
+    {
+      "type": "ShapeSelector",
+      "pageIndex": 1,
+      "quads": [[131.60500000000002, 86.144, 198.255, 124.864]],
+      "polygons": [
+        [
+          [131.60500000000002, 86.144],
+          [198.255, 86.144],
+          [198.255, 124.864],
+          [131.60500000000002, 124.864]
+        ]
+      ],
+      "pageWidth": 612,
+      "pageHeight": 792,
+      "rotation": 0,
+      "userUnit": 1,
+      "cropBox": [0, 0, 612, 792]
+    },
+    {
+      "type": "SectionPathSelector",
+      "path": ["1. Introduction"],
+      "headingText": "1. Introduction",
+      "paraIndexInSection": 6,
+      "charOffsetInPara": 0
+    }
+  ],
+  "created": {
+    "mode": "source",
+    "at": "2026-09-25T15:09:25.123Z",
+    "client": "papertree-web"
+  }
+}

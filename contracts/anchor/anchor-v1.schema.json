@@ -1,0 +1,251 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PaperTree Anchor v1 (persisted)",
+  "description": "HAND-WRITTEN from packages/anchoring/src/types.ts (`Anchor`, anchorVersion 1) MINUS `resolution`, which is the client's T0 cache and is never stored (contracts.md §2.4, §6). This is the record in anchors.anchor_json, ai_citations.anchor_json, canvas_nodes.source_anchor_json and ai_threads.origin_anchor_json. Kept honest from both sides: packages/anchoring/test/anchor-schema.spec.ts validates every captureAnchor() output against it with ajv and writes contracts/anchor/examples/*.json, and the API's pydantic AnchorV1 (services/api/python/papertree_api/schemas.py) must accept every example (tests/test_anchor_examples.py). Geometry is IR space: PDF points, top-left origin, /Rotate applied, /UserUnit recorded not applied; never pixels. Offsets are Unicode code points.",
+  "type": "object",
+  "required": [
+    "anchorVersion",
+    "offsetUnit",
+    "id",
+    "doc",
+    "targetKind",
+    "provenanceClass",
+    "selectors",
+    "created"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "anchorVersion": { "type": "integer", "const": 1 },
+    "offsetUnit": { "type": "string", "const": "unicode" },
+    "id": {
+      "description": "A client crypto.randomUUID(), or a prefixed id (a 0001 `anc_…` converted by 0005, a server-minted `cit_…`).",
+      "type": "string",
+      "pattern": "^(?:[a-z]{2,4}_[0-9A-Za-z-]{8,64}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$"
+    },
+    "doc": { "$ref": "#/$defs/AnchorDoc" },
+    "targetKind": { "$ref": "#/$defs/TargetKind" },
+    "provenanceClass": {
+      "description": "A HARD RULE, not a label: a highlight over derived prose is not a highlight of the paper.",
+      "enum": ["source", "ai_generated"]
+    },
+    "subTarget": { "$ref": "#/$defs/SubTarget" },
+    "selectors": { "type": "array", "items": { "$ref": "#/$defs/Selector" } },
+    "created": {
+      "type": "object",
+      "required": ["mode", "at", "client"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "enum": ["source", "guided"] },
+        "at": { "type": "string" },
+        "client": { "type": "string" }
+      }
+    }
+  },
+  "$defs": {
+    "NonNegativeInteger": { "type": "integer", "minimum": 0 },
+    "PageIndex": {
+      "description": "0-based; bound as a SQLite INTEGER, so at most 2**63-1.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9223372036854775807
+    },
+    "BBox": {
+      "description": "[x0, y0, x1, y1] in IR space.",
+      "type": "array",
+      "prefixItems": [
+        { "type": "number" },
+        { "type": "number" },
+        { "type": "number" },
+        { "type": "number" }
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "Point": {
+      "type": "array",
+      "prefixItems": [{ "type": "number" }, { "type": "number" }],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "Polygon": { "type": "array", "items": { "$ref": "#/$defs/Point" } },
+    "TargetKind": {
+      "enum": [
+        "text",
+        "guided_para",
+        "equation",
+        "equation_part",
+        "figure",
+        "figure_region",
+        "table_row",
+        "table_cell",
+        "algorithm",
+        "citation"
+      ]
+    },
+    "AnchorDoc": {
+      "type": "object",
+      "required": ["paperId", "pdfSha256", "parserVersion", "textStreamId"],
+      "additionalProperties": false,
+      "properties": {
+        "paperId": { "type": "string", "minLength": 1 },
+        "pdfSha256": {
+          "description": "`sha256:` + hex of the PDF bytes: the paper's paper_owners.source_hash.",
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "parserVersion": { "type": "string" },
+        "textStreamId": {
+          "description": "`api/<paper_id>/g<generation>/<parser_version>` (IR offsets), `pdfjs@5.7.284/page-text` (pdf.js item geometry) or `legacy-0001` (converted by 0005).",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "SubTarget": {
+      "description": "Part of a block: a normalised rect relative to the PARENT block's bbox, so it re-projects onto a re-parsed block of a different size.",
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": ["equation_part", "figure_region", "table_cell", "table_row", "algorithm_line"]
+        },
+        "normalisedRect": {
+          "type": "array",
+          "prefixItems": [
+            { "type": "number", "minimum": 0, "maximum": 1 },
+            { "type": "number", "minimum": 0, "maximum": 1 },
+            { "type": "number", "minimum": 0, "maximum": 1 },
+            { "type": "number", "minimum": 0, "maximum": 1 }
+          ],
+          "items": false,
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "latexStart": { "$ref": "#/$defs/NonNegativeInteger" },
+        "latexEnd": { "$ref": "#/$defs/NonNegativeInteger" },
+        "lineIndex": { "$ref": "#/$defs/NonNegativeInteger" }
+      }
+    },
+    "Selector": {
+      "oneOf": [
+        { "$ref": "#/$defs/BlockSelector" },
+        { "$ref": "#/$defs/PageSelector" },
+        { "$ref": "#/$defs/TextPositionSelector" },
+        { "$ref": "#/$defs/TextQuoteSelector" },
+        { "$ref": "#/$defs/ShapeSelector" },
+        { "$ref": "#/$defs/SectionPathSelector" }
+      ]
+    },
+    "BlockSelector": {
+      "description": "T1. blockTextHash is Block.content_hash AT CAPTURE; both offsets absent means the whole block.",
+      "type": "object",
+      "required": ["type", "blockId", "blockTextHash"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "BlockSelector" },
+        "blockId": { "type": "string", "minLength": 1 },
+        "blockTextHash": { "type": "string" },
+        "startOffset": { "$ref": "#/$defs/NonNegativeInteger" },
+        "endOffset": { "$ref": "#/$defs/NonNegativeInteger" },
+        "cellRef": {
+          "type": "array",
+          "prefixItems": [
+            { "$ref": "#/$defs/NonNegativeInteger" },
+            { "$ref": "#/$defs/NonNegativeInteger" }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "rowIndex": { "$ref": "#/$defs/NonNegativeInteger" }
+      }
+    },
+    "PageSelector": {
+      "type": "object",
+      "required": ["type", "index"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "PageSelector" },
+        "index": { "$ref": "#/$defs/PageIndex" },
+        "label": { "type": "string" }
+      }
+    },
+    "TextPositionSelector": {
+      "description": "T2. Document-global code-point offsets into the text stream: a hint only.",
+      "type": "object",
+      "required": ["type", "start", "end"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "TextPositionSelector" },
+        "start": { "$ref": "#/$defs/NonNegativeInteger" },
+        "end": { "$ref": "#/$defs/NonNegativeInteger" }
+      }
+    },
+    "TextQuoteSelector": {
+      "description": "T3. `exact` is raw for display; matching runs on the *Normalised fields, persisted as produced.",
+      "type": "object",
+      "required": [
+        "type",
+        "exact",
+        "prefix",
+        "suffix",
+        "exactNormalised",
+        "prefixNormalised",
+        "suffixNormalised"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "TextQuoteSelector" },
+        "exact": { "type": "string" },
+        "prefix": { "type": "string" },
+        "suffix": { "type": "string" },
+        "exactNormalised": { "type": "string" },
+        "prefixNormalised": { "type": "string" },
+        "suffixNormalised": { "type": "string" }
+      }
+    },
+    "ShapeSelector": {
+      "description": "T4. quads: one axis-aligned rect per typographic line, from glyph geometry, never DOM rects. An empty `quads` is schema-valid (types.ts sets no minimum); a NEW user highlight without a quad is §2.4's anchor_incomplete, checked by the API's data layer.",
+      "type": "object",
+      "required": [
+        "type",
+        "pageIndex",
+        "quads",
+        "polygons",
+        "pageWidth",
+        "pageHeight",
+        "rotation",
+        "userUnit",
+        "cropBox"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "ShapeSelector" },
+        "pageIndex": { "$ref": "#/$defs/PageIndex" },
+        "quads": { "type": "array", "items": { "$ref": "#/$defs/BBox" } },
+        "polygons": { "type": "array", "items": { "$ref": "#/$defs/Polygon" } },
+        "pageWidth": { "type": "number" },
+        "pageHeight": { "type": "number" },
+        "rotation": { "enum": [0, 90, 180, 270] },
+        "userUnit": { "type": "number" },
+        "cropBox": { "$ref": "#/$defs/BBox" }
+      }
+    },
+    "SectionPathSelector": {
+      "description": "T5, for reflowed representations. path holds heading TEXTS (a Section has no number and no path).",
+      "type": "object",
+      "required": ["type", "path", "headingText", "paraIndexInSection", "charOffsetInPara"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "SectionPathSelector" },
+        "path": { "type": "array", "items": { "type": "string" } },
+        "headingText": { "type": "string" },
+        "paraIndexInSection": { "$ref": "#/$defs/NonNegativeInteger" },
+        "charOffsetInPara": { "$ref": "#/$defs/NonNegativeInteger" }
+      }
+    }
+  }
+}

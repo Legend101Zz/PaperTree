@@ -1,0 +1,51 @@
+{
+  "anchorVersion": 1,
+  "offsetUnit": "unicode",
+  "id": "anc_01KZB6YSJGNJ007KERYG4EEXS0",
+  "doc": {
+    "paperId": "ppr_8XZBZEK3A5T716GZKHVFF7TKMP",
+    "pdfSha256": "sha256:1e0651b6810ecba34a3dbc5b5b0209226f889004607c1f203540a48d64e5a93a",
+    "parserVersion": "0.1.0",
+    "textStreamId": "legacy-0001"
+  },
+  "targetKind": "text",
+  "provenanceClass": "source",
+  "selectors": [
+    {
+      "type": "BlockSelector",
+      "blockId": "blk_5zsa4uze7d6kq6zl",
+      "blockTextHash": "sha256:8558304ebf1303ca623dd1f63a31bf0e6001fb6ce81a4cc8f8471e49f725ab86"
+    },
+    {
+      "type": "PageSelector",
+      "index": 0
+    },
+    {
+      "type": "ShapeSelector",
+      "pageIndex": 0,
+      "quads": [[195.49, 169.13, 399.73, 202.1]],
+      "polygons": [
+        [
+          [343.1, 169.13],
+          [343.1, 182.95],
+          [399.73, 182.95],
+          [399.73, 202.1],
+          [195.49, 202.1],
+          [195.49, 182.95],
+          [249.14, 182.95],
+          [249.14, 169.13]
+        ]
+      ],
+      "pageWidth": 612.0,
+      "pageHeight": 792.0,
+      "rotation": 0,
+      "userUnit": 1.0,
+      "cropBox": [0.0, 0.0, 612.0, 792.0]
+    }
+  ],
+  "created": {
+    "mode": "source",
+    "at": "2026-08-06T09:37:32.752375+00:00",
+    "client": "legacy-0001"
+  }
+}
