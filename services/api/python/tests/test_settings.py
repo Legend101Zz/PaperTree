@@ -122,3 +122,19 @@ def test_the_api_reads_no_model_credential(clean_env: pytest.MonkeyPatch) -> Non
     assert not [value for value in values if marker in value]
     assert marker not in repr(settings)
     assert not [name for name in settings.__dataclass_fields__ if name.startswith("llm_")]
+
+
+def test_the_agent_reaches_the_tools_on_loopback_at_the_api_port(
+    clean_env: pytest.MonkeyPatch,
+) -> None:
+    """`tool.base_url` (contracts.md §3.2) is this process on 127.0.0.1 whatever it binds: the
+    internal tools answer loopback callers only (§4)."""
+    clean_env.delenv("PAPERTREE_PORT", raising=False)
+    assert Settings.from_env().api_internal_url == "http://127.0.0.1:8000"
+    clean_env.setenv("PAPERTREE_HOST", "0.0.0.0")
+    clean_env.setenv("PAPERTREE_PORT", "18711")
+    assert Settings.from_env().api_internal_url == "http://127.0.0.1:18711"
+    for bad in ("70000", "0", "port"):
+        clean_env.setenv("PAPERTREE_PORT", bad)
+        with pytest.raises(ValueError, match="PAPERTREE_PORT"):
+            Settings.from_env()
