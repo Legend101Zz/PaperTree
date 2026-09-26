@@ -114,6 +114,70 @@ class TestReadingOrderIsNotStorageOrder:
         assert score_paper("a", "p", document, self.GOLD).mean_reading_order == 0.0
 
 
+class TestPooledReadingOrder:
+    """S2 (#141): the per-page mean, the POOLED rate and the zero-pair page count, apart.
+
+    Three pages, hand-computed:
+      * page 0 - three matched body regions in gold order: 3 of 3 pairs agree (page 1.000);
+      * page 1 - two gold body regions, only one matched: NO pair is scored (page 0.000 in the
+        mean, which is the number a page with every pair WRONG would also get);
+      * page 2 - three matched, the last two swapped: 2 of 3 pairs agree (page 0.667).
+
+    mean = (1 + 0 + 0.667) / 3 = 0.556, pooled = 5 / 6 = 0.833, zero-pair pages = 1.
+    """
+
+    DOCUMENT = {
+        "blocks": [
+            _block("a0", "paragraph", [0, 0, 100, 20], page=0, doc_order=0),
+            _block("a1", "paragraph", [0, 100, 100, 120], page=0, doc_order=1),
+            _block("a2", "paragraph", [0, 200, 100, 220], page=0, doc_order=2),
+            _block("b0", "paragraph", [0, 0, 100, 20], page=1, doc_order=3),
+            _block("c0", "paragraph", [0, 0, 100, 20], page=2, doc_order=4),
+            _block("c2", "paragraph", [0, 200, 100, 220], page=2, doc_order=5),
+            _block("c1", "paragraph", [0, 100, 100, 120], page=2, doc_order=6),
+        ]
+    }
+    GOLD = [
+        _page(
+            _gold("g0", "paragraph", [0, 0, 100, 20], order=0),
+            _gold("g1", "paragraph", [0, 100, 100, 120], order=1),
+            _gold("g2", "paragraph", [0, 200, 100, 220], order=2),
+            index=0,
+        ),
+        _page(
+            _gold("h0", "paragraph", [0, 0, 100, 20], order=0),
+            _gold("h1", "paragraph", [300, 300, 400, 320], order=1),
+            index=1,
+        ),
+        _page(
+            _gold("k0", "paragraph", [0, 0, 100, 20], order=0),
+            _gold("k1", "paragraph", [0, 100, 100, 120], order=1),
+            _gold("k2", "paragraph", [0, 200, 100, 220], order=2),
+            index=2,
+        ),
+    ]
+
+    def test_the_three_numbers_disagree_as_computed_by_hand(self) -> None:
+        score = score_paper("a", "p", self.DOCUMENT, self.GOLD)
+        assert score.reading_order_pairs == [(3, 3), (0, 0), (2, 3)]
+        assert round(score.mean_reading_order, 3) == 0.556
+        assert score.pooled_reading_order is not None
+        assert round(score.pooled_reading_order, 3) == 0.833
+        assert score.zero_pair_pages == 1
+
+    def test_no_scored_pair_anywhere_is_absent_not_zero(self) -> None:
+        document = {"blocks": [_block("x", "paragraph", [500, 500, 510, 510], doc_order=0)]}
+        score = score_paper("a", "p", document, self.GOLD)
+        assert score.pooled_reading_order is None
+        assert score.zero_pair_pages == 3
+
+    def test_the_report_prints_all_three(self) -> None:
+        report = render_report([score_paper("a", "p", self.DOCUMENT, self.GOLD)])
+        line = next(row for row in report.splitlines() if "reading order" in row)
+        assert "0.556" in line and "pooled 0.833 over 5/6 pairs" in line
+        assert "1/3 pages score no pair" in line
+
+
 class TestPooling:
     def test_counts_pool_across_pages(self) -> None:
         document = {

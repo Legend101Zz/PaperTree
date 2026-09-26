@@ -97,9 +97,18 @@ RULE_MIN_ASPECT = 8.0
 #:
 #: A digit is required somewhere in every alternative, so "Figure S shows" cannot open a caption
 #: on the strength of a bare capital.
+#:
+#: AND A SENTENCE THAT NAMES A FIGURE IS NOT ITS CAPTION (S2, #141). The label may be followed by
+#: `.`, `:` or `)`, or by whitespace - but after bare whitespace the next word must not be lower
+#: case. "Figure 4 shows the breakdown ..." (yolo p5), "Table 3 shows results for all baselines"
+#: (superglue), "Figure 5 shows speedup ..." (flashattention) are running text; a caption set
+#: without punctuation ("Figure 2 Results on ...") starts its title with a capital. Measured: 10
+#: such paragraphs typed `caption` across the 14 papers before paragraph splitting, 18 after it -
+#: splitting makes each of them the start of its own block.
 _CAPTION_START = re.compile(
     r"^\s*(?:figure|fig\.?|table|algorithm|listing)\s*"
-    r"([0-9]+(?:\.[0-9]+)*|[A-Z]\.?[0-9]+(?:\.[0-9]+)*|[IVXivx]+)\s*[.:)\s]",
+    r"([0-9]+(?:\.[0-9]+)*|[A-Z]\.?[0-9]+(?:\.[0-9]+)*|[IVXivx]+)"
+    r"(?:\s*[.:)]|\s+(?!(?-i:[a-z])))",  # the lookahead is case-SENSITIVE: `(?-i:...)`
     re.IGNORECASE,
 )
 
@@ -319,10 +328,18 @@ def detect_figure_regions(page: PageContent) -> list[FigureRegion]:
     claimed: set[int] = set()
     resolved: list[FigureRegion] = []
     for region in regions:
+        # A CAPTION IS NEVER A FIGURE'S INTERIOR (S2, #141), exactly as it is never a table cell
+        # (`pipeline.py`). A raster's PLACEMENT rectangle can run well past its visible pixels:
+        # `ddpm-2006.11239` p0 places a 348-661 x 468-782 image whose content ends near y 704, and
+        # the region claimed `Figure 1: Generated samples on CelebA-HQ ...` (y 711-721) as interior
+        # text - the paper's first caption was in no block. A line that OPENS a caption is the
+        # caption's, never the float's. (Its venue line below it, at body size and no marker, is
+        # still swallowed: telling padding from content needs the pixels - an S2 hard case.)
         taken = [
             index
             for index, line in enumerate(page.lines)
             if index not in claimed
+            and is_caption_line(line.text.strip()) is None
             and _claims(
                 line.band,
                 region.bbox,

@@ -77,15 +77,37 @@ PAPER_ID = "ppr_0123456789ABCDEFGHJKMNP0TV"
 #: on `(type, from, to)`, so a paragraph citing [16] three times contributes ONE relation, while
 #: each printed marker keeps its own span. Spans also outnumber markers, because a marker that
 #: straddles several PDF style runs is clipped to each - see `apply_citation_roles`.
+#: S2 (#141) moved two rows, both through the reference sweep (`references._ordered_body` now
+#: reads in reading order, and the Title-Case appendix heads it closes on are now detected):
+#: pdf-to-tree's bibliography gained the entries a height-sort had cut off, so `author_year` went
+#: 29 -> 35 edges (31 -> 36 of 61 markers resolved) and 3 spans inside those entries went with
+#: them; BERT gained 9 entries, 49 -> 50 edges, 55 -> 54 of 71 markers resolved, and 17 fewer
+#: spans - the bibliography's own years and names, which a paragraph-typed entry had exposed to
+#: the author-year scanner as if it were citing text. Two BERT p11 blocks (the supplement's title
+#: and its one-line contents note) are now swept into the bibliography too; recorded as an open
+#: defect in the S2 report, not hidden here.
+#: The paragraph-splitting commit (S2) moves six rows. A paragraph is now its own block, so a
+#: reference cited in two paragraphs that were one block is two (from, to) pairs: printed-label
+#: edges attention 73 -> 77, gpt3 219 -> 228, resnet 133 -> 142, superglue author-year 9 -> 11,
+#: BERT 50 -> 54, every span unmoved. Reference lists split BETWEEN entries (a blank-line skip),
+#: so an author-year marker that used to resolve to a block holding one entry's tail and the
+#: next entry's head now resolves to the entry itself - 27 targets on pdf-to-tree and
+#: neural-odes re-point (e.g. `Dinh et al., 2014` from "...Sylvester normalizing flows..." to
+#: "Laurent Dinh, David Krueger, and Yoshua Bengio. NICE ..."). DOWN: neural-odes 10 -> 7 edges
+#: (11 -> 7 of 56 markers, 12 spans) - all four lost markers had resolved to a WRONG entry;
+#: pdf-to-tree 35 -> 33 (36 -> 33 of 61, 19 spans) - `Jaume et al., 2019` resolved to a block
+#: that did hold Jaume's entry head, and no longer resolves because the PRE-EXISTING hanging-
+#: indent cut (`layout._same_block`: a 20 pt hanging indent exceeds the line gap) leaves the
+#: year on the entry's second line. Recorded in the S2 report as a cost of the rule.
 BASELINE: dict[str, dict[str, int]] = {
     "a3c-algorithmheavy": {"printed_label": 0, "author_year": 3, "spans": 19},
-    "attention-is-all-you-need": {"printed_label": 73, "author_year": 0, "spans": 60},
-    "bert-2col": {"printed_label": 0, "author_year": 49, "spans": 298},
-    "gpt3-longform-singlecol": {"printed_label": 219, "author_year": 0, "spans": 478},
-    "neural-odes-mathheavy": {"printed_label": 0, "author_year": 10, "spans": 43},
-    "pdf-to-tree-acl2col": {"printed_label": 0, "author_year": 29, "spans": 156},
-    "resnet-cvpr-2col": {"printed_label": 133, "author_year": 0, "spans": 150},
-    "superglue-tableheavy": {"printed_label": 0, "author_year": 9, "spans": 17},
+    "attention-is-all-you-need": {"printed_label": 77, "author_year": 0, "spans": 60},
+    "bert-2col": {"printed_label": 0, "author_year": 54, "spans": 281},
+    "gpt3-longform-singlecol": {"printed_label": 228, "author_year": 0, "spans": 478},
+    "neural-odes-mathheavy": {"printed_label": 0, "author_year": 7, "spans": 31},
+    "pdf-to-tree-acl2col": {"printed_label": 0, "author_year": 33, "spans": 134},
+    "resnet-cvpr-2col": {"printed_label": 142, "author_year": 0, "spans": 150},
+    "superglue-tableheavy": {"printed_label": 0, "author_year": 11, "spans": 17},
 }
 
 #: MARKERS RESOLVED / MARKERS DETECTED, per mechanism, per paper. THE TWO MECHANISMS ARE NEVER
@@ -96,10 +118,10 @@ BASELINE: dict[str, dict[str, int]] = {
 MARKER_RATES: dict[str, dict[str, tuple[int, int]]] = {
     "a3c-algorithmheavy": {"printed_label": (0, 2), "author_year": (3, 62)},
     "attention-is-all-you-need": {"printed_label": (78, 78), "author_year": (0, 0)},
-    "bert-2col": {"printed_label": (0, 33), "author_year": (55, 71)},
+    "bert-2col": {"printed_label": (0, 33), "author_year": (54, 71)},
     "gpt3-longform-singlecol": {"printed_label": (236, 241), "author_year": (0, 1)},
-    "neural-odes-mathheavy": {"printed_label": (0, 2), "author_year": (11, 56)},
-    "pdf-to-tree-acl2col": {"printed_label": (0, 21), "author_year": (31, 61)},
+    "neural-odes-mathheavy": {"printed_label": (0, 2), "author_year": (7, 56)},
+    "pdf-to-tree-acl2col": {"printed_label": (0, 21), "author_year": (33, 61)},
     "resnet-cvpr-2col": {"printed_label": (180, 182), "author_year": (0, 0)},
     "superglue-tableheavy": {"printed_label": (0, 2), "author_year": (11, 75)},
 }
@@ -154,8 +176,8 @@ def test_cites_relations_and_citation_spans_per_paper(parsed: dict[str, Paper]) 
             "spans": len(_citation_spans(paper)),
         }
     assert measured == BASELINE
-    assert sum(v["printed_label"] + v["author_year"] for v in measured.values()) == 525
-    assert sum(v["spans"] for v in measured.values()) == 1221
+    assert sum(v["printed_label"] + v["author_year"] for v in measured.values()) == 555
+    assert sum(v["spans"] for v in measured.values()) == 1170
 
 
 @requires_corpus
@@ -184,7 +206,7 @@ def test_marker_resolution_rates_are_reported_per_mechanism(parsed: dict[str, Pa
     labelled = [measured[p]["printed_label"] for p in LABELLED_PAPERS]
     assert (sum(a for a, _ in labelled), sum(b for _, b in labelled)) == (494, 501)
     author_year = [measured[p]["author_year"] for p in AUTHOR_YEAR_PAPERS]
-    assert (sum(a for a, _ in author_year), sum(b for _, b in author_year)) == (111, 325)
+    assert (sum(a for a, _ in author_year), sum(b for _, b in author_year)) == (108, 325)
 
 
 def _links(paper: Paper) -> list[CitationLink]:
@@ -221,7 +243,7 @@ def test_a_resolved_marker_with_no_span_is_always_in_a_block_that_has_no_spans(
             else:
                 assert not block.spans, "a block WITH spans must be able to carry the marker"
                 unspanned[block.type] += 1
-    assert (spanned, dict(unspanned)) == (547, {"table_cell": 58})
+    assert (spanned, dict(unspanned)) == (541, {"table_cell": 61})
 
 
 @requires_corpus
@@ -246,7 +268,7 @@ def test_every_cites_edge_satisfies_rule_23_and_its_blind_spots(parsed: dict[str
                 f"{name}: a reference_entry citing another is not what this detects"
             )
             assert relation.provenance in ("printed_label", "author_year")
-    assert seen == 525
+    assert seen == 555
 
 
 @requires_corpus
@@ -264,7 +286,7 @@ def test_citation_spans_carry_the_reference_entry_they_resolve_to(
             assert block.text is not None
             marked = block.text[span.start : span.end]
             assert marked and "\n" not in marked, f"{name}: implausible marker text {marked!r}"
-    assert total == 1221
+    assert total == 1170
 
 
 @requires_corpus
@@ -293,7 +315,7 @@ def test_splitting_a_style_run_retires_no_block_id_and_changes_no_content_hash(
                 )
             ), f"{name}: id changed under span splitting"
             assert block.content_hash == content_hash(normalise_text(block.text or ""))
-    assert checked == 1221
+    assert checked == 1170
 
 
 @requires_corpus
@@ -319,7 +341,11 @@ def test_the_worker_detector_finds_every_label_retrieval_finds(parsed: dict[str,
             labels += len(theirs)
             assert theirs <= set(bracketed_marker_keys(text)), f"{name}: {block.block_id}"
     # Without this the assertion above is satisfied by an empty set on every block.
-    assert (blocks, labels) == (9903, 300)
+    # 9,825 blocks since the title-first commit: pdf-to-tree's three affiliation lines are one
+    # block (see test_crossrefs). 10,642 / 313 since paragraph splitting: a label cited in two
+    # paragraphs of one former block is now counted in both blocks. 10,648 since a caption line
+    # is never a figure's interior (six captions back in the corpus).
+    assert (blocks, labels) == (10648, 313)
 
 
 # ── the CI smoke ─────────────────────────────────────────────────────────────────────────────

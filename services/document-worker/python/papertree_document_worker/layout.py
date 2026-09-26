@@ -57,6 +57,7 @@ from papertree_document_worker.pdf import Line, PageContent
 
 __all__ = [
     "Column",
+    "is_run_in_lead",
     "DocumentLayout",
     "FlowKind",
     "LayoutBlock",
@@ -141,6 +142,12 @@ class LayoutBlock:
     bbox: BBox
     #: Position within `flow` on this page, dense from 0. This becomes `Block.order`.
     order: int = 0
+    #: The RUN this block belongs to, unique on its page: blocks that share a run were ONE block
+    #: under `_same_block` alone and were split apart only by the paragraph cues
+    #: (`_paragraph_break`, S2 #141). `-1` means a run of its own. The pipeline asks "is this
+    #: text already a table's?" of the whole run, so a paragraph split changes how text is
+    #: segmented and never which text is in the document - see `pipeline.py` at the table skip.
+    run: int = -1
 
     @property
     def is_full_width(self) -> bool:
@@ -290,6 +297,25 @@ def _flow_for(
 # ── block segmentation and ordering ────────────────────────────────────────────────────────
 
 
+def is_run_in_lead(line: Line) -> bool:
+    """A bold RUN-IN lead: the line opens in bold and continues, on the same line, in the body
+    face with at least two words of text - `Exploring Over 1000 layers. We explore an ...`.
+
+    LaTeX's `\\paragraph{}`. It is the first line of a paragraph, not a heading, and both golds
+    say so: the fresh gold lists such leads under `run_in_headings` with their paragraph as one
+    body unit, and the hand-counted outlines exclude them (`test_outline_floor.py`). S2 (#141):
+    at 18f69ec resnet typed four as headings ("Residual Network. Based on the abo...",
+    "Identity vs. Projection Shortcuts.", "Analysis of Layer Responses. Fig. ...").
+    """
+    last_bold = max(
+        (index for index, span in enumerate(line.spans) if span.flags & _BOLD_FLAG), default=None
+    )
+    if last_bold is None or not line.spans[0].flags & _BOLD_FLAG:
+        return False
+    tail = "".join(span.text for span in line.spans[last_bold + 1 :])
+    return len([word for word in tail.split() if any(c.isalpha() for c in word)]) >= 2
+
+
 def _is_bold_line(line: Line) -> bool:
     """Whether MOST of a line's glyphs are bold, by character count.
 
@@ -298,6 +324,8 @@ def _is_bold_line(line: Line) -> bool:
     such paragraph, and a heading whose first span is a non-bold section number would not start
     one at all.
     """
+    if is_run_in_lead(line):
+        return False  # the lead's paragraph continues on this very line; see `is_run_in_lead`
     bold = sum(len(s.text) for s in line.spans if s.flags & _BOLD_FLAG)
     total = sum(len(s.text) for s in line.spans)
     return total > 0 and bold * 2 > total
@@ -344,6 +372,31 @@ def _continues_numbered_heading(previous: Line, current: Line) -> bool:
     return bool(title) and title[0].isalpha() and _shares_a_baseline(previous, current)
 
 
+def _continues_run_in_lead(previous: Line, current: Line) -> bool:
+    """A bold run-in lead and the regular text after it, returned as two `Line`s on ONE baseline.
+
+    `is_run_in_lead` recognises the lead when MuPDF returns it as one line. BERT's appendix sets
+    each GLUE task as `MNLI` (bold) then `Multi-Genre Natural Language Inference is...` (regular)
+    on the same baseline 11 pt to the right, and MuPDF returns two lines; the weight rule below
+    then split the lead off as a one-word block and the heading font rule typed it a heading -
+    nine on BERT p13-14 (`MNLI`, `QQP`, `QNLI`, `SST-2`, ...), S2 (#141). One visual line is one
+    line of its paragraph: same baseline, regular text continuing to the right within a tab's
+    width (the 1.3 line heights `assemble._TAB_GAP_HEIGHTS` measured).
+
+    KNOWN LIMIT: lines are sorted by band TOP, so this sees the pair only when the lead sorts
+    first. When the regular face has the taller ascender the regular fragment sorts first and the
+    pair is missed. Sorting each visual line left to right was measured and REVERTED: it moved
+    60 metrics the wrong way across the 14 papers (it reorders every same-baseline pair, and
+    most of those are equation and table fragments).
+    """
+    if not _is_bold_line(previous) or _is_bold_line(current):
+        return False
+    if not _shares_a_baseline(previous, current):
+        return False
+    height = previous.band[3] - previous.band[1]
+    return 0 <= current.band[0] - previous.band[2] <= 1.3 * height
+
+
 def _same_block(previous: Line, current: Line, line_gap: float) -> bool:
     """Whether `current` continues the paragraph `previous` belongs to.
 
@@ -355,7 +408,7 @@ def _same_block(previous: Line, current: Line, line_gap: float) -> bool:
     ...and one way to be a continuation that all three would otherwise reject: a numbered
     heading whose number and title MuPDF returned as two lines on one baseline.
     """
-    if _continues_numbered_heading(previous, current):
+    if _continues_numbered_heading(previous, current) or _continues_run_in_lead(previous, current):
         return True
     gap = current.band[1] - previous.band[3]
     if gap > line_gap:
@@ -380,7 +433,107 @@ def _same_block(previous: Line, current: Line, line_gap: float) -> bool:
     return current.band[0] - previous.band[0] <= line_gap
 
 
-def _group(lines: list[Line], line_gap: float) -> list[list[Line]]:
+#: PARAGRAPH CUES (S2, #141), as multiples of the body font size so they transfer across 9-12 pt
+#: faces. `_same_block`'s indent test splits only at an indent LARGER than the line gap (1.6 x
+#: size, ~16 pt) - wider than every paragraph indent here, so it never fired on one - and its gap
+#: test only at a gap wider than that too. Measured at 7051862 on the fresh set's pages 1-2: 58 of
+#: 71 gold paragraphs sat in a block holding another gold paragraph (YOLO 21 of 22, in 9 blocks),
+#: so a highlight or a citation on one paragraph covered several.
+#:
+#: FIRST-LINE INDENT. LaTeX's `\parindent` is 1-1.5 em in every indented style here (measured:
+#: YOLO/CVPR 12 pt at 10 pt, every one of the 23 indented lines on its pp1-2); justified lines start
+#: at the column edge to within a fraction of a point. Half an em separates the two either way.
+PARAGRAPH_INDENT_EM = 0.5
+#: PARAGRAPH SKIP, for the unindented styles (NeurIPS: DDPM, FlashAttention; ICLR: Adam), which
+#: mark a new paragraph only with `\parskip` - 5.5 pt, about 0.55 em, on top of the leading. The
+#: gap between consecutive lines of one paragraph stays within 0.2 em of its column's mode
+#: (YOLO pp1-2: 126 of 151 gaps AT the mode, all but 4 within 2 pt), so a gap more than 0.4 em above
+#: the mode is a paragraph break and nothing in the jitter reaches it.
+PARAGRAPH_SKIP_EM = 0.4
+#: The modal gap needs this many consecutive-line pairs to be a mode; with fewer only the indent
+#: cue and the original rules apply.
+MIN_GAP_SAMPLES = 6
+#: A line whose text is mostly set this much smaller than the body is a FRAGMENT - a subscript
+#: run, a fraction's numerator or denominator, an inline-math piece MuPDF returned as its own line
+#: - never a paragraph's first line, and never a reliable neighbour to measure a paragraph from.
+TEXT_LINE_SIZE_SHARE = 0.85
+
+
+def _is_text_line(line: Line, size: float) -> bool:
+    """Whether most of a line's glyphs are at body size (by character count)."""
+    full = sum(len(s.text) for s in line.spans if s.size >= TEXT_LINE_SIZE_SHARE * size)
+    total = sum(len(s.text) for s in line.spans)
+    return total > 0 and full * 2 > total
+
+
+def _modal_gap(lines: list[Line], line_gap: float, size: float) -> float | None:
+    """A column's usual gap from one body-size line to the next, in 0.5 pt bins, or `None`."""
+    gaps: Counter[float] = Counter()
+    text_lines = [line for line in lines if _is_text_line(line, size)]
+    for previous, current in zip(text_lines, text_lines[1:], strict=False):
+        gap = current.band[1] - previous.band[3]
+        overlaps = min(previous.band[2], current.band[2]) > max(previous.band[0], current.band[0])
+        # Same-baseline fragments overlap by a whole line height, and a gap past `line_gap` is no
+        # line of the same paragraph at all: neither says anything about the leading.
+        if overlaps and -0.5 * size < gap <= line_gap:
+            gaps[round(gap * 2) / 2] += 1
+    if sum(gaps.values()) < MIN_GAP_SAMPLES:
+        return None
+    return max(sorted(gaps), key=lambda gap: gaps[gap])
+
+
+def _paragraph_break(
+    group: list[Line],
+    line: Line,
+    following: Line | None,
+    modal: float | None,
+    line_gap: float,
+    size: float,
+) -> bool:
+    """Whether `line` opens a new paragraph that `_same_block` would have run on into `group`.
+
+    Measured against the GROUP, not the previous line: the previous line may be a fragment (a
+    fraction's denominator returned as its own line sits right of the margin and below the
+    baseline), and a paragraph's margin, measure and lowest point belong to the lines it already
+    holds. Both cues need `line` to be a FULL body-size line - a multi-line paragraph's first line
+    in justified text runs to the right margin - so no fragment can open a paragraph.
+
+      * First-line indent: `line` starts `PARAGRAPH_INDENT_EM` or more right of the paragraph's
+        margin (and no further than `line_gap`, where the original rule already split), the text
+        line before it sits AT the margin, and the line after it comes BACK to the margin. An
+        indent that holds on either side is a list item's hanging text or an indented block, not a
+        first line. At a column foot there is no line after it: the paragraph continues in the
+        next column, and the indent is enough.
+      * Paragraph skip: the gap from the paragraph's lowest point down to `line` exceeds the
+        column's modal gap by `PARAGRAPH_SKIP_EM`.
+    """
+    if not _is_text_line(line, size):
+        return False
+    left = min(member.band[0] for member in group)
+    right = max(member.band[2] for member in group)
+    bottom = max(member.band[3] for member in group)
+    if line.band[2] < right - size:
+        return False
+    indent = line.band[0] - left
+    previous = next((m for m in reversed(group) if _is_text_line(m, size)), group[-1])
+    at_margin = previous.band[0] <= left + PARAGRAPH_INDENT_EM * size
+    if (
+        at_margin
+        and PARAGRAPH_INDENT_EM * size < indent <= line_gap
+        and (following is None or following.band[0] <= line.band[0] - PARAGRAPH_INDENT_EM * size)
+    ):
+        return True
+    return modal is not None and line.band[1] - bottom > modal + PARAGRAPH_SKIP_EM * size
+
+
+def _group(lines: list[Line], line_gap: float, size: float | None = None) -> list[list[Line]]:
+    """`_group_runs` without the runs."""
+    return _group_runs(lines, line_gap, size)[0]
+
+
+def _group_runs(
+    lines: list[Line], line_gap: float, size: float | None = None
+) -> tuple[list[list[Line]], list[int]]:
     """Group lines into blocks, STARTING A NEW BLOCK at every caption marker.
 
     A caption line must open its own block, because `is_caption_line` needs the `Figure N` /
@@ -394,15 +547,38 @@ def _group(lines: list[Line], line_gap: float) -> list[list[Line]]:
 
     A caption also ENDS at the next line that starts a new region, which `_same_block` already
     handles; only the opening needed forcing.
+
+    Returns the groups and, per group, its RUN (`LayoutBlock.run`): a group opened only by a
+    paragraph cue shares the previous group's run.
     """
     groups: list[list[Line]] = []
-    for line in lines:
+    runs: list[int] = []
+    # `size` switches the paragraph cues on - for the BODY flow only; captions, footnotes and
+    # furniture keep the original rules. See `PARAGRAPH_INDENT_EM` / `PARAGRAPH_SKIP_EM`.
+    modal = _modal_gap(lines, line_gap, size) if size else None
+    for index, line in enumerate(lines):
         starts_caption = _CAPTION_START.match(line.text.strip()) is not None
-        if groups and not starts_caption and _same_block(groups[-1][-1], line, line_gap):
+        # A bold lead whose paragraph continues on its own baseline OPENS that paragraph, so it
+        # does not join the (bold) heading above it: superglue p5 sets `3.4 Tools for Model
+        # Analysis` directly above `Analyzing Linguistic and World Knowledge in Models` +
+        # `GLUE includes ...`, and the heading block swallowed the lead (S2, #141).
+        following = lines[index + 1] if index + 1 < len(lines) else None
+        opens_run_in = following is not None and _continues_run_in_lead(line, following)
+        joins = (
+            bool(groups)
+            and not starts_caption
+            and not opens_run_in
+            and _same_block(groups[-1][-1], line, line_gap)
+        )
+        if joins and not (
+            size is not None
+            and _paragraph_break(groups[-1], line, following, modal, line_gap, size)
+        ):
             groups[-1].append(line)
         else:
             groups.append([line])
-    return groups
+            runs.append(runs[-1] if joins else len(runs))
+    return groups, runs
 
 
 def _bounds(lines: list[Line]) -> BBox:
@@ -413,6 +589,37 @@ def _bounds(lines: list[Line]) -> BBox:
         max(b[2] for b in bands),
         max(b[3] for b in bands),
     ]
+
+
+def _above_the_columns(lines: list[Line], columns: tuple[Column, ...]) -> set[int]:
+    """`id()`s of lines that CROSS the column split and sit above where the columns begin.
+
+    TITLE FIRST, S2 (#141). A centred title, author line or affiliation line on a two-column title
+    page is narrower than `FULL_WIDTH_SHARE` of the text block, so it went to whichever column its
+    CENTRE fell in - and a centre just right of the split sends the title into column 1, read
+    after the whole left column. Measured on `yolo-1506.02640` p0 (title centre x 297.5, split at
+    287): the reading order ran
+    Abstract, the abstract, 1. Introduction, the introduction, and only then "You Only Look Once:
+    Unified, Real-Time Object Detection" and its authors.
+
+    A line that crosses the split belongs to NEITHER column, and one that does so above the first
+    line confined to a column is read before both: a spanning element, a barrier, exactly as a
+    full-width line is. Below that point a crossing line keeps the centre rule - a float or a wide
+    equation in mid-page must not cut the columns into slabs (XY-cut's interleaving failure, which
+    this module's docstring exists to prevent).
+    """
+    if len(columns) < 2:
+        return set()
+    split = columns[1].x0
+
+    def crosses(line: Line) -> bool:
+        return line.band[0] < split < line.band[2]
+
+    confined = [line.band[1] for line in lines if not crosses(line)]
+    if not confined:
+        return set()
+    top = min(confined)
+    return {id(line) for line in lines if crosses(line) and line.band[3] <= top}
 
 
 def _order_body(
@@ -490,6 +697,8 @@ def layout_page(page: PageContent, heads: set[str]) -> PageLayout:
     content_width = (max(b[2] for b in content) - min(b[0] for b in content)) if content else 1.0
 
     blocks: list[LayoutBlock] = []
+    run_of: dict[int, int] = {}  # id(first line of a body group) -> its run (`LayoutBlock.run`)
+    run_base = 0
     for flow, flow_lines in by_flow.items():
         flow_lines.sort(key=lambda line: (line.band[1], line.band[0]))
         if flow != "body":
@@ -526,10 +735,14 @@ def layout_page(page: PageContent, heads: set[str]) -> PageLayout:
             # exist. `_order_body` already short-circuits on `len(columns) < 2` for the same
             # reason.
             single_column = len(columns) < 2
+            above_columns = _above_the_columns(flow_lines, columns)
             per_column: dict[int | None, list[Line]] = {}
             for line in flow_lines:
                 band = line.band
-                if not single_column and band[2] - band[0] > FULL_WIDTH_SHARE * content_width:
+                if not single_column and (
+                    band[2] - band[0] > FULL_WIDTH_SHARE * content_width
+                    or id(line) in above_columns
+                ):
                     key: int | None = None
                 else:
                     found = next((c.index for c in columns if c.contains(band)), None)
@@ -538,8 +751,12 @@ def layout_page(page: PageContent, heads: set[str]) -> PageLayout:
 
             assigned: list[tuple[list[Line], int | None]] = []
             for key, column_lines in per_column.items():
-                for group in _group(column_lines, line_gap):
+                column_groups, column_runs = _group_runs(column_lines, line_gap, body_size)
+                for group, run in zip(column_groups, column_runs, strict=True):
                     assigned.append((group, key))
+                    # Page-unique: a column's runs are offset past every run already seen.
+                    run_of[id(group[0])] = run_base + run
+                run_base += len(column_runs) + 1
             groups = _order_body(assigned, columns)
         for position, (group, column) in enumerate(groups):
             blocks.append(
@@ -549,6 +766,7 @@ def layout_page(page: PageContent, heads: set[str]) -> PageLayout:
                     column=column,
                     bbox=_bounds(group),
                     order=position,
+                    run=run_of.get(id(group[0]), -1),
                 )
             )
 

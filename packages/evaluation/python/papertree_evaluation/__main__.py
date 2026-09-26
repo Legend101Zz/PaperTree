@@ -3,6 +3,7 @@
     uv run python -m papertree_evaluation annotate --out ~/ptub-gold
     uv run python -m papertree_evaluation compare  --out research/experiment-results
     uv run python -m papertree_evaluation speed    --with-docling --quiesced
+    uv run python -m papertree_evaluation fresh    # S2: the fresh set's pages 1-2 anchor gold
 
 The annotate subcommand is the one that matters: `research/benchmarks/README.md` §7 records gold
 as *"not started — the critical path item"* and *"No parser selection is authorised until Tier B
@@ -27,6 +28,7 @@ from papertree_evaluation.annotate import (
     stratified_pages,
     write_manifest,
 )
+from papertree_evaluation.fresh import FRESH_GOLD, FRESH_PDFS
 from papertree_evaluation.speed import SPEED_BAR, SpeedVerdict
 
 REPO = Path(__file__).resolve().parents[4]
@@ -159,6 +161,46 @@ def _score(args: argparse.Namespace) -> int:
             print("  ", repair.describe())
         for warning in normalised.warnings:
             print("  ", warning.describe())
+    return 0
+
+
+def _fresh(args: argparse.Namespace) -> int:
+    """S2 (#141): parse the six fresh papers and score them on the pages 1-2 anchor gold.
+
+    The gold is provisional - two model annotators and an adjudicator, owner review pending
+    (#54) - and every row of the table says so.
+    """
+    from papertree_evaluation.adapters import DeterministicAdapter
+    from papertree_evaluation.fresh import load_fresh_gold, render_fresh_report, score_fresh_paper
+
+    gold = load_fresh_gold(Path(args.gold))
+    papers = [paper for paper in gold if not paper.startswith("_")]
+    pdfs = Path(args.pdfs)
+    missing = [paper for paper in papers if not (pdfs / f"{paper}.pdf").is_file()]
+    if missing:
+        print(
+            f"missing fresh PDFs in {pdfs}: {', '.join(missing)}. "
+            "Fetch them with ./research/benchmarks/fresh/fetch_fresh.sh",
+            file=sys.stderr,
+        )
+        return 1
+    scores = []
+    for paper in papers:
+        outcome = DeterministicAdapter(Path(args.assets)).parse(str(pdfs / f"{paper}.pdf"))
+        if outcome.status != "ok" or outcome.document is None:
+            print(f"{paper}: parser {outcome.status} - {outcome.error}", file=sys.stderr)
+            return 1
+        scores.append(score_fresh_paper(paper, outcome.document, gold))
+    print(render_fresh_report(scores))
+    if args.verbose:
+        for score in scores:
+            print(f"\n{score.paper}")
+            print(f"  missing        {score.missing}")
+            print(f"  split anchors  {score.split_anchors}")
+            print(f"  mistyped       {score.mistyped}")
+            print(f"  false headings {score.false_headings}")
+            print(f"  fragments      {score.unanchored_prose}")
+            print(f"  captions       {score.caption_detail}")
     return 0
 
 
@@ -409,6 +451,13 @@ def main(argv: list[str] | None = None) -> int:
         help="also score docling and form the decision rule's ratio (slow: ~5 s/page)",
     )
     sco.set_defaults(func=_score)
+
+    fre = sub.add_parser("fresh", help="S2: score the fresh set on its pages 1-2 anchor gold")
+    fre.add_argument("--gold", default=str(FRESH_GOLD))
+    fre.add_argument("--pdfs", default=str(FRESH_PDFS))
+    fre.add_argument("--assets", default="/tmp/ptub-assets", help="where figure crops go")
+    fre.add_argument("--verbose", action="store_true", help="list every miss, split and mistype")
+    fre.set_defaults(func=_fresh)
 
     # NOT `score`: that name is taken by §4.1's parser geometry, which never imports the answer
     # contract. Two benchmarks, two datasets, two verbs.

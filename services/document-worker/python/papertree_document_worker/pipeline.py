@@ -15,10 +15,18 @@ WHAT THIS FUNCTION GUARANTEES
 Its output passes BOTH `Paper.model_validate` (well-formed) and `validate_paper` (internally
 consistent) or it raises. There is no "mostly valid" return: a document that trips a Tier-A ERROR
 is a document `packages/db` would store and every downstream consumer would then trust.
+
+What there IS (S2, #141) is a SALVAGED return: when the document as built fails validation,
+`salvage.build_or_salvage` removes what the validator names - a region, a relation, a section,
+never a text block's text - until it validates, and the paper comes back `status: "partial"`
+with every removal written into `partial_reason`. Still validating, never `complete`, never a
+dead letter for a PDF whose text could be read. Only a document no salvage stage can make valid
+raises.
 """
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -26,7 +34,6 @@ from statistics import median
 from typing import Any
 
 from papertree_document_ir import BBox
-from papertree_document_ir.validate import assert_valid_paper, validate_paper
 
 from papertree_document_worker.assemble import AssembledBlock, PaperBuilder, config_hash_for
 from papertree_document_worker.citations import apply_citation_roles, detect_citations
@@ -40,13 +47,14 @@ from papertree_document_worker.crossrefs import (
 from papertree_document_worker.equations import detect_equation_regions
 from papertree_document_worker.figures import detect_figure_regions, is_caption_line
 from papertree_document_worker.frontmatter import classify_front_matter
-from papertree_document_worker.hierarchy import build_sections, detect_headings
+from papertree_document_worker.hierarchy import build_sections, detect_headings, reparent_orphans
 from papertree_document_worker.joining import find_continuations
 from papertree_document_worker.layout import LayoutBlock, layout_document
 from papertree_document_worker.pdf import SourceDocument
 from papertree_document_worker.references import (
     classify_reference_entries,
 )
+from papertree_document_worker.salvage import build_or_salvage
 from papertree_document_worker.tables import detect_tables
 from papertree_document_worker.text import build_block_text
 
@@ -97,6 +105,9 @@ class ParseResult:
     diagnostics: list[Any] = field(default_factory=list)
     multi_polygon_blocks: int = 0
     page_count: int = 0
+    #: What the salvage lane removed, when the first build failed validation; empty otherwise.
+    #: The same text is in `paper.partial_reason`, which is what persists.
+    salvage: tuple[str, ...] = ()
 
 
 #: A caption sits directly under its float, or occasionally over it. Beyond this many points
@@ -151,18 +162,41 @@ def _nearest_float(
     return min(viable, key=lambda item: item[0])[1]
 
 
+def _union_area(boxes: list[BBox]) -> float:
+    """Exact area of a union of rects, by coordinate compression. A page holds a handful of table
+    regions, so the O(n^3) sweep is a few hundred cell tests at most."""
+    xs = sorted({v for b in boxes for v in (b[0], b[2])})
+    ys = sorted({v for b in boxes for v in (b[1], b[3])})
+    area = 0.0
+    for x0, x1 in zip(xs, xs[1:], strict=False):
+        for y0, y1 in zip(ys, ys[1:], strict=False):
+            if any(b[0] <= x0 and x1 <= b[2] and b[1] <= y0 and y1 <= b[3] for b in boxes):
+                area += (x1 - x0) * (y1 - y0)
+    return area
+
+
 def _dedupe_tables(regions: list[Any]) -> list[Any]:
-    """Drop table regions that substantially overlap one already kept.
+    """Drop table regions that are substantially covered by the regions already kept.
 
     Rule groups can produce two regions over the same table when a mid-rule is slightly narrower
     than the top rule. Emitting both gives two sets of cells at identical positions with
     identical text - and identical block ids, because the id hashes exactly (page, anchor, type,
     text). Measured on ResNet: 858 blocks producing 856 ids, which `PaperBuilder` rejects rather
     than salting, since a collision here is a segmentation bug and not an id bug.
+
+    COVERAGE IS BY THE UNION OF THE KEPT REGIONS, NOT BY ANY ONE OF THEM (S2, #141). Measured on
+    `maskrcnn-1703.06870` page 5: two side-by-side ruled tables, plus a third ruled region
+    [205.0, 227.9, 334.9, 248.4] straddling the gap between them. It overlaps each table by under
+    half of its own area, so a one-at-a-time test kept it - and its cells are the same text at the
+    same place as cells both tables emit, so 848 blocks produced 842 ids and the paper
+    dead-lettered. Together the two tables cover 85 % of it. Two real tables never share page
+    area, so a region more than half covered by tables already kept is not a table. The share is
+    the one the single-region test already used; only what it is measured against changed.
     """
     kept: list[Any] = []
     for region in sorted(regions, key=lambda r: -(r.bbox[2] - r.bbox[0]) * (r.bbox[3] - r.bbox[1])):
-        overlapping = False
+        area = (region.bbox[2] - region.bbox[0]) * (region.bbox[3] - region.bbox[1])
+        overlaps: list[BBox] = []
         for existing in kept:
             lo_x, hi_x = (
                 max(region.bbox[0], existing.bbox[0]),
@@ -173,12 +207,10 @@ def _dedupe_tables(regions: list[Any]) -> list[Any]:
                 min(region.bbox[3], existing.bbox[3]),
             )
             if hi_x > lo_x and hi_y > lo_y:
-                area = (region.bbox[2] - region.bbox[0]) * (region.bbox[3] - region.bbox[1])
-                if area > 0 and (hi_x - lo_x) * (hi_y - lo_y) / area > 0.5:
-                    overlapping = True
-                    break
-        if not overlapping:
-            kept.append(region)
+                overlaps.append([lo_x, lo_y, hi_x, hi_y])
+        if area > 0 and overlaps and _union_area(overlaps) / area > 0.5:
+            continue
+        kept.append(region)
     return kept
 
 
@@ -348,6 +380,10 @@ def _extend_to_right_margin(bands: list[BBox], margin: float | None) -> list[BBo
     return [[band[0], band[1], max(band[2], margin), band[3]] for band in bands]
 
 
+#: Same character class as `hierarchy._NUMERIC_ONLY`: digits and number punctuation, no letter.
+_NUMERIC_ONLY_TEXT = re.compile(r"^[\s\d.,:;%±+\-−–()×x*/]+$")
+
+
 def _block_type(flow: str, text: str, is_heading: bool, is_equation: bool) -> str:
     # A block opening `Figure 3.` / `Table 1:` IS a caption, whatever flow it landed in.
     # Rule 22 requires `caption_of.from` to be a `caption` block, and the flow classifier does
@@ -367,7 +403,82 @@ def _block_type(flow: str, text: str, is_heading: bool, is_equation: bool) -> st
         return "page_number" if text.strip().isdigit() else flow
     if flow == "margin":
         return "margin_note"
+    # A BODY BLOCK WITH NO LETTERS IS NOT PROSE (S2, #141). `66.4`, `830`, `(3)`, a stray `11`: a
+    # table value outside any detected table, a plot's tick label, an equation number, a page
+    # number that missed the footer band. `hierarchy.py` no longer lets one be a heading, and
+    # typing it `paragraph` instead would still claim it is running text - a one-number card in
+    # Guided and a false paragraph in every paragraph metric. `unknown` is the schema's type for a
+    # region kept, with its geometry and text, but not classified; the text layer still has it.
+    if _NUMERIC_ONLY_TEXT.match(text):
+        return "unknown"
     return "paragraph"
+
+
+#: Top-level body blocks that are FLOATS: placed by position, not by emission order.
+_FLOAT_TYPES = frozenset({"table", "figure"})
+
+
+def _top_of(block: AssembledBlock) -> float:
+    return min((band[1] for band in block.line_bands), default=0.0)
+
+
+def _float_column(block: AssembledBlock, columns: Any) -> int | None:
+    """The column a float sits in, or `None` when it spans the split. One column: column 0."""
+    if len(columns) < 2:
+        return 0
+    x0 = min(band[0] for band in block.line_bands)
+    x1 = max(band[2] for band in block.line_bands)
+    split = columns[1].x0
+    if x0 < split < x1:
+        return None
+    return 0 if (x0 + x1) / 2 < split else 1
+
+
+def _place_floats(blocks: list[AssembledBlock], start: int, columns: Any) -> None:
+    """Give each table and figure on the page its PLACE in the body reading order (S2, #141).
+
+    Floats took the order they were EMITTED in: tables are built before the page's text (they
+    claim their lines first), figures after it. So every table was read before the page's first
+    paragraph and every figure after its last, wherever it sat. Measured on the repo gold at
+    18f69ec: 22 of the 26 discordant reading-order pairs involve a float (bert 13 of 13,
+    attention 3 of 3, gpt3 2 of 2, neural-odes 1 of 1, resnet 3 of 7). `ANNOTATION_GUIDE.md` rule 1
+    puts floats in the BODY flow, drawn in reading order; a reader meets a float where it stands,
+    between the text above and below it, and that is what the fix encodes. This is the ordering
+    `layout.py`'s B5.1 note was after ("figures were emitted before their page's text") without
+    its opposite error.
+
+    A float confined to a column goes before the first text block of THAT column below its top, or
+    after the column's last block when nothing in the column is below it. A float spanning the
+    split goes before the first text block, in reading order, whose top is below its own. Only
+    floats move: every text block keeps its position relative to every other.
+    """
+    positions = [
+        index
+        for index in range(start, len(blocks))
+        if blocks[index].flow == "body" and not blocks[index].is_nested
+    ]
+    top_level = [blocks[index] for index in positions]
+    floats = [b for b in top_level if b.type in _FLOAT_TYPES and b.line_bands]
+    moving = {id(b) for b in floats}
+    ordered = [b for b in top_level if id(b) not in moving]
+    if not floats or not ordered:
+        return
+    for float_block in sorted(floats, key=lambda b: (_top_of(b), b.line_bands[0][0])):
+        column = _float_column(float_block, columns)
+        top = _top_of(float_block)
+        text = [(i, b) for i, b in enumerate(ordered) if b.type not in _FLOAT_TYPES]
+        same = [(i, b) for i, b in text if column is None or b.column == column]
+        below = [i for i, b in same if _top_of(b) >= top]
+        if below:
+            at = below[0]
+        elif same and column is not None:
+            at = same[-1][0] + 1
+        else:
+            later = [i for i, b in text if _top_of(b) >= top]
+            at = later[0] if later else len(ordered)
+        ordered.insert(at, float_block)
+    for index, block in zip(positions, ordered, strict=True):
+        blocks[index] = block
 
 
 def parse_document(
@@ -438,6 +549,7 @@ def _assemble(
     front_matter_body_size = 10.0
 
     for page, page_layout in zip(pages, layout.pages, strict=True):
+        page_start = len(builder.blocks)
         sizes = [
             span.size
             for block in page_layout.blocks
@@ -566,9 +678,23 @@ def _assemble(
 
         right_margins = _right_text_margins(page_layout)
 
+        # "ALREADY EMITTED AS TABLE CELLS" IS ASKED OF THE WHOLE RUN (S2, #141). A table claims
+        # every line level with it, and a block whose lines are all claimed is skipped. Paragraph
+        # splitting (`layout._paragraph_break`) cuts a block into paragraphs, and a paragraph that
+        # happens to lie wholly within a table's height in the OTHER column would then be skipped
+        # although its block, taken whole, was not: measured before this, 52 MuPDF lines of body
+        # prose left 5 papers (a3c p2 "In contrast to value-based methods, policy-based model-
+        # free methods ...", bert-2col p6, resnet-cvpr-2col p5, sbert p4). A run is the block
+        # `_same_block` alone would have formed, so the text kept is exactly what it was before
+        # the split. (Why the claim itself was not narrowed: `test_parse_quality.py`'s xfail.)
+        run_lines: dict[int, list[int]] = {}
+        for block in page_layout.blocks:
+            if block.run >= 0:
+                run_lines.setdefault(block.run, []).extend(id(line) for line in block.lines)
         for layout_block in _merge_equation_blocks(page_layout.blocks, equation_regions):
-            if layout_block.lines and all(id(line) in table_lines for line in layout_block.lines):
-                continue  # every line already emitted as a table cell
+            tested = run_lines.get(layout_block.run) or [id(line) for line in layout_block.lines]
+            if tested and all(line_id in table_lines for line_id in tested):
+                continue  # every line of its run already emitted as a table cell
             built = build_block_text(list(layout_block.lines))
             if not built.text.strip():
                 continue
@@ -683,6 +809,9 @@ def _assemble(
                 )
             )
 
+        # Tables and figures take their place in the body reading order (S2, #141).
+        _place_floats(builder.blocks, page_start, page_layout.columns)
+
         # Caption -> float linking, by NUMBERING first and proximity second. Proximity alone
         # attaches a caption to whichever float is nearest, which is wrong the moment two floats
         # share a page.
@@ -700,12 +829,19 @@ def _assemble(
             builder.relate("caption_of", caption, match[1], 0.8, "geometric+numbering")
             unlinked.remove(match)
 
-    sections = build_sections(all_headings, all_body)
     # RULE 21: a section's `heading_block_id` must name a block of a KNOWN HEADING type - only
     # `title` or `heading`. `detect_headings` works on layout blocks, but the final type is
     # decided later and a heading-shaped line that opens `Figure 3.` becomes a `caption`, so a
     # node can survive detection and then point at a non-heading. Filtered here rather than
-    # earlier, because this is the first point at which the emitted type is known.
+    # earlier, because this is the first point at which the emitted type is known - and the
+    # sections it parented are re-attached (`reparent_orphans`), or they fail R21 in turn.
+    sections = reparent_orphans(
+        build_sections(all_headings, all_body),
+        keep=lambda node: (
+            id(node.heading_block) in emitted
+            and emitted[id(node.heading_block)].type in ("heading", "title")
+        ),
+    )
     builder.sections = [
         (
             emitted[id(node.heading_block)],
@@ -714,8 +850,6 @@ def _assemble(
             [emitted[id(b)] for b in node.member_blocks if id(b) in emitted],
         )
         for node in sections
-        if id(node.heading_block) in emitted
-        and emitted[id(node.heading_block)].type in ("heading", "title")
     ]
 
     # FRONT MATTER IS TYPED HERE, AND THE POSITION IS LOAD-BEARING TWICE OVER.
@@ -842,20 +976,22 @@ def _assemble(
         )
     apply_payload_mirrors(caption_edges, float_links)
 
-    paper = builder.build(
-        config_hash=config_hash_for(config.as_dict()),
-        parsed_at=parsed_at,
-        generation=generation,
+    config_hash = config_hash_for(config.as_dict())
+    # THE GATE, WITH A SALVAGE LANE (S2, #141; contracts.md §2.2). A document that validates is
+    # returned as built. One that does not is repaired by removing what the validator names -
+    # a region, a relation, a section, never a text block's text - and returned `partial` with
+    # every removal in `partial_reason`; only a document that no salvage stage can make valid
+    # raises, and that is the dead letter. The report is kept either way: it is what surfaces
+    # the WARN-level findings (rule 3, G6, G8) that are legal but worth carrying.
+    paper, report = build_or_salvage(
+        builder,
+        lambda: builder.build(config_hash=config_hash, parsed_at=parsed_at, generation=generation),
     )
-    # `assert_valid_paper` raises on any ERROR and returns None; `validate_paper` yields the
-    # full report. Both are called: the assertion is the gate, the report is what surfaces the
-    # WARN-level findings (rule 3, G6, G8) that are legal but worth carrying.
-    assert_valid_paper(paper)
-    report = validate_paper(paper)
     return ParseResult(
         paper=paper,
         diagnostics=list(report.diagnostics),
         multi_polygon_blocks=builder.multi_polygon_blocks,
         page_count=len(pages),
         crops_written=store.written,
+        salvage=tuple(builder.salvage_notes),
     )

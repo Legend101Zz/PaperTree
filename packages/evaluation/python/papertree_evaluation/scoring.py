@@ -74,6 +74,7 @@ from papertree_evaluation.metrics import (
     iou,
     match_regions,
     reading_order_accuracy,
+    reading_order_counts,
     vector_figure_hits,
     vector_figure_recall,
 )
@@ -173,6 +174,8 @@ class PaperScore:
     by_type_strict: dict[str, TypeScore] = field(default_factory=dict)
     #: Pairwise reading-order accuracy per page, in page order.
     reading_order: list[float] = field(default_factory=list)
+    #: ...and the (agreeing, scored) PAIR COUNTS behind each page's rate, which are what pool.
+    reading_order_pairs: list[tuple[int, int]] = field(default_factory=list)
     #: Gold regions with a SAME-TYPE prediction that overlaps well but misses the bar. Counted
     #: per type, because "not detected" and "detected, boxed to a different convention" are
     #: different failures and the headline F1 cannot tell them apart.
@@ -245,6 +248,26 @@ class PaperScore:
     def mean_reading_order(self) -> float:
         pages = [score for score in self.reading_order if score >= 0]
         return sum(pages) / len(pages) if pages else 0.0
+
+    @property
+    def pooled_reading_order(self) -> float | None:
+        """Agreeing pairs over scored pairs, pooled across the paper's pages (S2, #141).
+
+        The per-page MEAN counts a page with no scored pair as 0.0 - the number a page with every
+        pair WRONG also gets - so it reads a gold/prediction mismatch as an ordering failure. On
+        the repo gold at 18f69ec that is 11 of 36 pages, and it is why the mean was 0.586 while
+        the pooled rate was 0.900 (235/261). Both are reported; neither replaces the other.
+        `None` when no page scored a pair: absent, not zero.
+        """
+        agree = sum(a for a, _ in self.reading_order_pairs)
+        total = sum(t for _, t in self.reading_order_pairs)
+        return agree / total if total else None
+
+    @property
+    def zero_pair_pages(self) -> int:
+        """Pages on which no gold body pair was scored at all - their 0.0 in the mean is absent
+        evidence, not a wrong order."""
+        return sum(1 for _, total in self.reading_order_pairs if total == 0)
 
     @property
     def vector_recall_pooled(self) -> float | None:
@@ -361,6 +384,7 @@ def score_paper(
         _count_near_misses(score.near_misses, predicted, gold)
         _pool(score.by_type_strict, predicted, gold, IOU_STRICT)
         score.reading_order.append(reading_order_accuracy(predicted, gold))
+        score.reading_order_pairs.append(reading_order_counts(predicted, gold))
         # Counts, then the rate — and the rate only for pages that HAVE vector gold. Both halves
         # of that sentence were broken: `vector_figure_recall` returned 0.0 rather than None for
         # a page with none, so the guard below never fired and every prose page was averaged in
@@ -597,7 +621,14 @@ def render_report(scores: Sequence[PaperScore]) -> str:
                 f"  {'MACRO F1 excl. gap':18s} {score.macro_f1_excluding_convention_gaps:>34.3f}"
                 f"    (drops {excluded}; NOT §4.1's metric - the line above is)"
             )
-        lines.append(f"  {'reading order':18s} {score.mean_reading_order:>34.3f}")
+        pooled = score.pooled_reading_order
+        agree = sum(a for a, _ in score.reading_order_pairs)
+        pairs = sum(t for _, t in score.reading_order_pairs)
+        lines.append(
+            f"  {'reading order':18s} {score.mean_reading_order:>34.3f}"
+            f"    (per-page mean; pooled {'-' if pooled is None else f'{pooled:.3f}'} over "
+            f"{agree}/{pairs} pairs; {score.zero_pair_pages}/{score.pages} pages score no pair)"
+        )
         # A METRIC IS EITHER A NUMBER OR A REASON, NEVER BOTH IN ONE REPORT.
         #
         # It used to be both. On `a3c` the detail block printed `vector fig recall 0.000` and

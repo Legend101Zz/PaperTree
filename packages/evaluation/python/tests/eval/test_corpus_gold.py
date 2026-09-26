@@ -146,11 +146,84 @@ requires_corpus = pytest.mark.skipif(
 #                    0.9333 -> 0.9394. The new wrong pair is (r190 footnote, r192 equation) -
 #                    the same footnote already misplaced against three paragraphs.
 
+# S2 (#141) ADDS `reading_order_pairs` (agreeing, scored - pooled over the paper) and
+# `zero_pair_pages` to every row, measured at 7051862 (`s2/parse-robustness`) where no parser
+# behaviour on these six papers differs from 18f69ec. Pooled over the six: RAW 235/261 = 0.900 with
+# 11 of 36 pages scoring no pair - the architecture judge's re-run exactly. Every later S2 commit
+# that moves a pin records what moved and why beside the code that moved it.
+
+# HEADINGS COMMIT (S2): Title-Case numbered heads are headings, run-in leads are not, and the
+# reference sweep reads in reading order. macro-F1 rises on all six (a3c 0.3932 -> 0.4213, bert
+# 0.3523 -> 0.3702, resnet 0.3257 -> 0.3396, attention 0.2899 -> 0.3019, gpt3 +0.0007, neural-odes
+# +0.0001) because the heads now MATCH gold heading boxes, and pooled pairs grow with them. Two
+# pooled rates dip - attention 35/38 -> 39/43, resnet 96/103 -> 108/116 - and the new wrong pairs
+# are all against a FIGURE: floats were read after all the page's text by emission order, and a
+# newly matched heading below a figure is a new pair that order gets wrong. The floats commit later
+# in this branch places them.
+
+# NUMERIC-ONLY COMMIT (S2): blocks with no letter are never headings and are typed `unknown`
+# rather than `paragraph`. Only precision moves: gpt3 0.3436 -> 0.3474, resnet 0.3396 -> 0.3433,
+# neural-odes +0.0003 macro-F1, each from table values and tick labels no longer predicted as
+# paragraphs on gold pages. Nothing else in these rows moves.
+
+# ABSTRACT COMMIT (S2): the abstract is swept in READING ORDER and ends at the first heading or at
+# its column's foot; the heading's own space-below no longer counts as a gap inside the abstract.
+# attention's abstract is typed at last (F1 abstract 0 -> 1.0, macro-F1 0.3019 -> 0.3694, and its
+# matched region adds 4 pooled pairs, all agreeing: 39/43 -> 43/47); resnet (0.3433 -> 0.3652) and
+# bert (0.3702 -> 0.3815) lose right-column introduction blocks from `abstract`. a3c moves DOWN,
+# 0.4213 -> 0.4193, and so do bert's and resnet's paragraph F1: the blocks that stop being
+# `abstract` become `paragraph` - the type gold itself gives that right column - but gold boxes
+# the whole right column as ONE paragraph (a3c [304,279,548,723], bert [304,211,554,788]), so no
+# single printed paragraph reaches IoU 0.5 and each is a new unmatched prediction. The types are
+# right by the page and by gold's own label; the IoU convention is what dips (hard case
+# `repo-gold-multi-paragraph-*`). a3c stays above 18f69ec's 0.3932.
+
+# FLOATS COMMIT (S2): a table or figure is read where it stands - before the first text block of
+# its column below its top - instead of in emission order (tables before the page's text, figures
+# after it). Pooled order: attention 43/47 -> 47/47, bert 63/77 -> 77/77, gpt3 7/9 -> 9/9,
+# normalised neural-odes 61/66 -> 63/66. resnet moves DOWN, 108/116 -> 107/116 (per-page mean
+# 0.9282 -> 0.8782): its two p11 table pairs are fixed and three new ones appear on p7, all against
+# gold r#14 - a SECOND box around Figure 6 (the union of its panels r#0-r#2, which gold reads
+# FIRST), drawn after the page's text. The parser's one figure box matches the union, so reading
+# the figure where it stands - first, as the panels are - disagrees with the duplicate. No order
+# satisfies both gold boxes (hard case `resnet-p7-duplicate-figure-box`).
+
+# PARAGRAPH-SPLITTING COMMIT (S2): one block per printed paragraph (first-line indent, paragraph
+# skip). Caption F1 rises on four papers (a3c 0.769 -> 0.857, bert 0.667 -> 0.769, neural-odes 0.222
+# -> 0.4, resnet 0.625 -> 0.818) and neural-odes' macro-F1 with it (0.218 -> 0.228). DOWN, and not
+# a parsing regression: paragraph F1 on all six and macro-F1 on five (a3c 0.4193 -> 0.4185,
+# attention 0.3694 -> 0.3639, bert 0.3815 -> 0.3706, gpt3 0.3474 -> 0.3416, resnet 0.3652 ->
+# 0.3508), and matched pairs (bert 77 -> 49, resnet 116 -> 80): this gold boxes RUNS of printed
+# paragraphs as ONE `paragraph` region (resnet p2: three boxes of three indented paragraphs each;
+# gpt3 p30: seven in one box - hard cases `repo-gold-multi-paragraph-*`), so a parser that emits
+# the printed paragraphs matches none of them, and their correctly ordered pairs leave the
+# denominator. resnet's pooled order falls 107/116 -> 72/80: 9 discordant pairs before, 8 after,
+# all against footnote r#11 (a body order against ANNOTATION_GUIDE rule 1), the p0 footnote, or
+# the duplicate Figure 6 box.
+# The fresh gold, which defines a paragraph as the printed one, measures the opposite: merged
+# paragraphs on pp1-2 fall 58 -> 10. The two golds disagree on this convention; see the report.
+
+# CAPTION-NOT-INTERIOR COMMIT (S2): a line that opens a caption is never a figure's interior text.
+# Only attention moves: its p13/p14 captions (Figures 4, 5) sat inside their rasters' placement
+# boxes. Normalised macro-F1 0.3572 -> 0.375; RAW 0.3639 -> 0.3528 - the raw gold boxes p14's
+# caption as type `figure` (flow `caption`; its figure has flow `footnote`), one of the
+# sticky-dropdown contradictions `normalise.py` exists for, so a correct caption scores as a
+# false positive there. The normalised `caption_false` 0 -> 1 is the same page: the parser links
+# Figure 5's caption to the Figure 5 raster above it, which gold records no link for.
+
+# CAPTION-OPENER COMMIT (S2): "Figure 4 shows ..." / "Table 3 summarizes ..." opens no caption (a
+# lower-case word after a bare label is a sentence). 20 paragraphs stop being `caption` corpus-wide;
+# on the repo gold bert 0.3706 -> 0.3752 and resnet 0.3508 -> 0.3575 (caption F1 up on both,
+# resnet paragraph F1 up), resnet pooled order 72/80 -> 77/85 (the five new pairs agree). bert's
+# paragraph F1 dips 0.347 -> 0.342: one retyped paragraph matches no gold paragraph box.
+
 RAW: dict[str, dict[str, Any]] = {
     "a3c-algorithmheavy": {
-        "macro_f1": 0.3932,
-        "macro_f1_strict": 0.35,
+        "macro_f1": 0.4185,
+        "macro_f1_strict": 0.3568,
         "reading_order": 0.6667,
+        "reading_order_pairs": [9, 9],
+        "zero_pair_pages": 2,
         "caption_correct": 4,
         "caption_false": 0,
         "caption_gold": 7,
@@ -164,9 +237,11 @@ RAW: dict[str, dict[str, Any]] = {
         "figure_predicted": 4,
     },
     "attention-is-all-you-need": {
-        "macro_f1": 0.2899,
-        "macro_f1_strict": 0.0941,
-        "reading_order": 0.3889,
+        "macro_f1": 0.3528,
+        "macro_f1_strict": 0.1598,
+        "reading_order": 0.6667,
+        "reading_order_pairs": [47, 47],
+        "zero_pair_pages": 2,
         "caption_correct": 1,
         "caption_false": 0,
         "caption_gold": 1,
@@ -174,16 +249,18 @@ RAW: dict[str, dict[str, Any]] = {
         "vector_gold": 3,
         "equation_matched": 0,
         "equation_gold": 1,
-        "equation_predicted": 3,
+        "equation_predicted": 4,
         "figure_matched": 2,
         "figure_gold": 5,
         "figure_predicted": 3,
     },
     "bert-2col": {
-        "macro_f1": 0.3523,
-        "macro_f1_strict": 0.2098,
-        "reading_order": 0.6992,
-        "caption_correct": 4,
+        "macro_f1": 0.3752,
+        "macro_f1_strict": 0.2065,
+        "reading_order": 0.8333,
+        "reading_order_pairs": [49, 49],
+        "zero_pair_pages": 1,
+        "caption_correct": 5,
         "caption_false": 0,
         "caption_gold": 6,
         "vector_matched": 0,
@@ -196,9 +273,11 @@ RAW: dict[str, dict[str, Any]] = {
         "figure_predicted": 2,
     },
     "gpt3-longform-singlecol": {
-        "macro_f1": 0.3429,
-        "macro_f1_strict": 0.1817,
-        "reading_order": 0.2222,
+        "macro_f1": 0.3416,
+        "macro_f1_strict": 0.181,
+        "reading_order": 0.3333,
+        "reading_order_pairs": [9, 9],
+        "zero_pair_pages": 4,
         "caption_correct": 2,
         "caption_false": 1,
         "caption_gold": 10,
@@ -212,10 +291,12 @@ RAW: dict[str, dict[str, Any]] = {
         "figure_predicted": 2,
     },
     "neural-odes-mathheavy": {
-        "macro_f1": 0.2175,
+        "macro_f1": 0.228,
         "macro_f1_strict": 0.1183,
         "reading_order": 0.6111,
-        "caption_correct": 0,
+        "reading_order_pairs": [39, 40],
+        "zero_pair_pages": 2,
+        "caption_correct": 1,
         "caption_false": 0,
         "caption_gold": 5,
         "vector_matched": 0,
@@ -228,10 +309,12 @@ RAW: dict[str, dict[str, Any]] = {
         "figure_predicted": 8,
     },
     "resnet-cvpr-2col": {
-        "macro_f1": 0.3257,
-        "macro_f1_strict": 0.1588,
-        "reading_order": 0.9288,
-        "caption_correct": 3,
+        "macro_f1": 0.3575,
+        "macro_f1_strict": 0.1323,
+        "reading_order": 0.8944,
+        "reading_order_pairs": [77, 85],
+        "zero_pair_pages": 0,
+        "caption_correct": 4,
         "caption_false": 0,
         "caption_gold": 10,
         "vector_matched": 0,
@@ -247,9 +330,11 @@ RAW: dict[str, dict[str, Any]] = {
 
 NORMALISED: dict[str, dict[str, Any]] = {
     "a3c-algorithmheavy": {
-        "macro_f1": 0.3932,
-        "macro_f1_strict": 0.35,
+        "macro_f1": 0.4185,
+        "macro_f1_strict": 0.3568,
         "reading_order": 0.6667,
+        "reading_order_pairs": [9, 9],
+        "zero_pair_pages": 2,
         "caption_correct": 4,
         "caption_false": 0,
         "caption_gold": 7,
@@ -263,26 +348,30 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "figure_predicted": 4,
     },
     "attention-is-all-you-need": {
-        "macro_f1": 0.2832,
-        "macro_f1_strict": 0.0997,
-        "reading_order": 0.3889,
+        "macro_f1": 0.375,
+        "macro_f1_strict": 0.1653,
+        "reading_order": 0.6667,
+        "reading_order_pairs": [45, 45],
+        "zero_pair_pages": 2,
         "caption_correct": 1,
-        "caption_false": 0,
+        "caption_false": 1,
         "caption_gold": 1,
         "vector_matched": 1,
         "vector_gold": 1,
         "equation_matched": 0,
         "equation_gold": 1,
-        "equation_predicted": 3,
+        "equation_predicted": 4,
         "figure_matched": 2,
         "figure_gold": 3,
         "figure_predicted": 3,
     },
     "bert-2col": {
-        "macro_f1": 0.3523,
-        "macro_f1_strict": 0.2098,
-        "reading_order": 0.6992,
-        "caption_correct": 4,
+        "macro_f1": 0.3752,
+        "macro_f1_strict": 0.2065,
+        "reading_order": 0.8333,
+        "reading_order_pairs": [49, 49],
+        "zero_pair_pages": 1,
+        "caption_correct": 5,
         "caption_false": 0,
         "caption_gold": 6,
         "vector_matched": 2,
@@ -295,9 +384,11 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "figure_predicted": 2,
     },
     "gpt3-longform-singlecol": {
-        "macro_f1": 0.3429,
-        "macro_f1_strict": 0.1817,
-        "reading_order": 0.2222,
+        "macro_f1": 0.3416,
+        "macro_f1_strict": 0.181,
+        "reading_order": 0.3333,
+        "reading_order_pairs": [9, 9],
+        "zero_pair_pages": 4,
         "caption_correct": 2,
         "caption_false": 1,
         "caption_gold": 10,
@@ -311,10 +402,12 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "figure_predicted": 2,
     },
     "neural-odes-mathheavy": {
-        "macro_f1": 0.2137,
+        "macro_f1": 0.2209,
         "macro_f1_strict": 0.1191,
-        "reading_order": 0.3889,
-        "caption_correct": 0,
+        "reading_order": 0.5,
+        "reading_order_pairs": [63, 66],
+        "zero_pair_pages": 2,
+        "caption_correct": 1,
         "caption_false": 0,
         "caption_gold": 5,
         "vector_matched": 0,
@@ -327,11 +420,13 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "figure_predicted": 8,
     },
     "resnet-cvpr-2col": {
-        "macro_f1": 0.3184,
-        "macro_f1_strict": 0.1561,
-        "reading_order": 0.9667,
+        "macro_f1": 0.3471,
+        "macro_f1_strict": 0.1285,
+        "reading_order": 0.9333,
+        "reading_order_pairs": [69, 73],
+        "zero_pair_pages": 0,
         "caption_correct": 1,
-        "caption_false": 2,
+        "caption_false": 3,
         "caption_gold": 10,
         "vector_matched": 2,
         "vector_gold": 16,
@@ -408,6 +503,15 @@ def _measure(paper: str, document: dict[str, Any], pages: list[dict[str, Any]]) 
         "macro_f1": round(score.macro_f1, 4),
         "macro_f1_strict": round(score.macro_f1_strict, 4),
         "reading_order": round(score.mean_reading_order, 4),
+        # S2 (#141): the POOLED pairs and the pages that score none, beside the per-page mean.
+        # The mean counts a zero-pair page as 0.0, the same as a page with every pair wrong; the
+        # slice-plan merge rule reads the pooled figure, so it is pinned here to move in the same
+        # diff as whatever moves it.
+        "reading_order_pairs": [
+            sum(a for a, _ in score.reading_order_pairs),
+            sum(t for _, t in score.reading_order_pairs),
+        ],
+        "zero_pair_pages": score.zero_pair_pages,
         "caption_correct": score.caption_correct,
         "caption_false": score.caption_false,
         "caption_gold": score.caption_links_gold,
@@ -650,17 +754,21 @@ def test_floats_found_in_the_right_place_against_floats_found_with_the_right_typ
 #: this test green — both of those links are outside the six annotated papers, so no gold covers
 #: them. The linking assertion was therefore UNPROVEN until D was run. Recorded so that nobody
 #: re-derives B, concludes the split is vacuous, and deletes it.
+#: S2 (#141) paragraph splitting moves four rows, all UP: detection 25 -> 32 of 39, linking 14/15
+#: -> 17/18. A caption glued under a stray table value in one `paragraph` block ("84.9 Table 5:
+#: Ablation ...") is its own block again, so its `Table N` marker is at position 0 (see
+#: test_crossrefs.test_the_pre_existing_relation_types_did_not_move).
 CAPTION_PIPELINE_BY_PAPER = {
-    "a3c-algorithmheavy": (5, 7, 4, 4),
+    "a3c-algorithmheavy": (6, 7, 4, 4),
     "attention-is-all-you-need": (1, 1, 1, 1),
-    "bert-2col": (4, 6, 4, 4),
+    "bert-2col": (5, 6, 5, 5),
     "gpt3-longform-singlecol": (9, 10, 2, 3),
-    #: Zero askable links: float detection is 1/22, so no gold link on this paper has both ends.
-    #: A rate over an empty denominator is NOT EVALUABLE and is recorded as (0, 0), not as 0%.
-    "neural-odes-mathheavy": (1, 5, 0, 0),
-    "resnet-cvpr-2col": (5, 10, 3, 3),
+    #: One askable link since S2's paragraph splitting (zero before: float detection is 1/22, so
+    #: no gold link had both ends, and a rate over an empty denominator was recorded as (0, 0)).
+    "neural-odes-mathheavy": (2, 5, 1, 1),
+    "resnet-cvpr-2col": (9, 10, 4, 4),
 }
-CAPTION_PIPELINE = (25, 39, 14, 15)
+CAPTION_PIPELINE = (32, 39, 17, 18)
 
 
 @requires_corpus
@@ -777,7 +885,7 @@ def test_the_corpus_wide_caption_association(
             f"{correct}/{total} correct, {false} false "
             f"(n = 36 pages / 6 of 8 papers / 1 annotator, #54)"
         )
-    assert (correct, false, total) == (14, 1, 39)
+    assert (correct, false, total) == (17, 1, 39)  # 14 -> 17 with S2's paragraph splitting
 
 
 @requires_corpus
@@ -843,5 +951,8 @@ def test_the_share_of_floats_carrying_a_caption(
             f"over FLOATS (figures+tables) {floats_captioned}/{floats} = "
             f"{floats_captioned / floats:.1%}. The bar is 80%."
         )
-    assert (figures_captioned, figures) == (58, 85)
-    assert (floats_captioned, floats) == (142, 226)
+    # S2 (#141): 58 -> 59 figures and 142 -> 176 floats captioned with paragraph splitting; 61 and
+    # 178 once a caption line is never a figure's interior; 177 once a sentence naming a figure
+    # stops opening a caption (superglue's "Figure 2 shows ..." had been linked as one).
+    assert (figures_captioned, figures) == (61, 85)
+    assert (floats_captioned, floats) == (177, 226)

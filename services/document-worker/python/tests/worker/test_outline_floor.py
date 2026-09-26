@@ -44,7 +44,13 @@ pytestmark = requires_corpus
 #: nobody can act on; a test that asserts the CURRENT number stops the number getting worse and
 #: says out loud that it is not yet the bar.
 OUTLINE_EXPECTATIONS = {
-    "superglue-tableheavy": (0.80, 1.20),
+    # 21 against 20 bookmarks at 18f69ec, 25 after S2 (#141): 1.25x, a RECORDED ratchet. The rise is
+    # real headings: `3.1`, `3.2`, `3.4`, `A`, `C`, `C.1`-`C.3`, `D` are Title Case and the
+    # author-line guard had rejected them. What keeps it over 1.20 is five FALSE heads that were
+    # already there at 18f69ec - the appendix example boxes' `In the following examples the
+    # correct ...` (x2), `Examples,` (x2) and `Empathy and Distress Analysis Instructions` - plus
+    # `Abstract` and `References`, which are real and which this paper does not bookmark.
+    "superglue-tableheavy": (0.80, 1.25),
     "attention-is-all-you-need": (0.80, 1.20),
     # Known over-detection, measured 2026-08-01. Not the spec band - a ratchet, so the number
     # cannot silently drift further while the real fix is outstanding.
@@ -87,18 +93,27 @@ def test_outline_size_against_the_authors_own_bookmarks(paper: str, tmp_path) ->
 #: RECORDED RATCHET where it does not — the same convention `OUTLINE_EXPECTATIONS` uses, so a
 #: failing paper cannot drift further while its real fix is outstanding.
 HAND_COUNTED_OUTLINE = {
-    # Abstract, 1-6, 5.1-5.6, References, and the supplement's 7-9. Measured 17 against 17.
+    # Abstract, 1-6, 5.1-5.6, References, and the supplement's 7-9. Measured 17 against 17 at
+    # 18f69ec; 20 against 17 = 1.18x after S2 (#141) recovered the Title-Case numbered heads
+    # `2. Related Work`, `3. Reinforcement Learning Background`, ... that the author-line guard
+    # rejected, and dropped the run-in leads.
     "a3c-algorithmheavy": (17, 0.80, 1.20),
     # Abstract, 1-6 with 2.1-2.3/3.1-3.2/4.1-4.4/5.1-5.3, References, A-C with A.1-A.5/B.1/
-    # C.1-C.2. Measured 32 against 31. The extra one is the supplement's own title.
+    # C.1-C.2. Measured 32 against 31 at 18f69ec - but nine of those 32 were the appendix's bold
+    # run-in task names (`MNLI`, `QQP`, `QNLI`, ...), and eight real heads (`2 Related Work`, `2.1`,
+    # `2.2`, `3.1`, `3.2`, `4.4 SWAG`, `5 Ablation Studies`, `A.2`, `A.3`) were missing. After S2
+    # (#141): 30 against 31.
     "bert-2col": (31, 0.80, 1.20),
-    # Abstract, 1-4 with 3.1-3.4/4.1-4.3, References, appendices A-C. Measured 13 against 16.
+    # Abstract, 1-4 with 3.1-3.4/4.1-4.3, References, appendices A-C. Measured 13 against 16 at
+    # 18f69ec, four of them run-in leads; 16 against 16 after S2 (#141).
     "resnet-cvpr-2col": (16, 0.80, 1.20),
     # Abstract, 1-8 with 2.1-2.2/2.2.1-2.2.4/3.1-3.4/4.1-4.5/5.1-5.3, References, appendix A.
-    # Measured 19 against 29 = 0.66x — UNDER-detection, and the only one of the four outside the
-    # band. Its subsection heads are bold at body size in a two-column ACL layout, which is the
-    # weakest signal `detect_headings` has. Ratcheted, not excused.
-    "pdf-to-tree-acl2col": (29, 0.60, 0.80),
+    # Measured 19 against 29 = 0.66x at 18f69ec - UNDER-detection, ratcheted at 0.60-0.80. The
+    # cause was not the weak bold-at-body-size signal the old note suspected: `2.2 Transition
+    # Prediction`, `2.2.1 Text Embedding`, `5.1 Entity Labeling` ... are Title Case, and the
+    # author-line guard rejected them. S2 (#141): 27 against 29 = 0.93x, so the ratchet is
+    # retired and the paper holds the spec band like the other three.
+    "pdf-to-tree-acl2col": (29, 0.80, 1.20),
 }
 
 

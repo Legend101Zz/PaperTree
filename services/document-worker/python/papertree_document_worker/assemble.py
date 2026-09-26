@@ -174,6 +174,15 @@ class PaperBuilder:
         # the process, so two documents parsed in one worker would overwrite each other's order.
         self._order: dict[str, int] = {}
         self._doc_order: dict[str, int] = {}
+        #: Set only by `salvage.build_or_salvage` when the first build failed validation: what
+        #: was removed, and the rules that failed. Either one being non-empty makes the paper
+        #: `partial` with both written into `partial_reason` - a salvaged document is never
+        #: `complete` (contracts.md §2.2).
+        self.salvage_notes: list[str] = []
+        self.salvage_rules: tuple[str, ...] = ()
+        #: Salvage switches: emit empty metadata values / no `references`.
+        self.bare_metadata = False
+        self.emit_references = True
 
     def add(self, block: AssembledBlock) -> AssembledBlock:
         self.blocks.append(block)
@@ -319,7 +328,7 @@ class PaperBuilder:
             # Every one of the seven keys is required and `authors` must be `[]` rather than
             # null. Values are extracted from the document's OWN blocks and each cites the block
             # it came from verbatim - rule 6b makes anything else an ERROR.
-            "metadata": extract_metadata(blocks),
+            "metadata": _BARE_METADATA if self.bare_metadata else extract_metadata(blocks),
             "pages": pages,
             "blocks": blocks,
             "relations": self._emit_relations(by_id),
@@ -327,7 +336,7 @@ class PaperBuilder:
             # One record per `reference_entry` block. Runs on the SERIALISED blocks because
             # every record is required to name the block it came from, and those ids
             # do not exist until `assign_ids()` has run.
-            "references": extract_references(blocks),
+            "references": extract_references(blocks) if self.emit_references else [],
             "confidence": {
                 "overall": overall,
                 "by_page": [p.confidence for p in self.profile.pages],
@@ -470,6 +479,12 @@ class PaperBuilder:
     def _status(self) -> tuple[str, str | None]:
         """Rule 41, decided once so `status` and `partial_reason` cannot contradict."""
         reason = self.profile.partial_reason
+        if self.salvage_notes or self.salvage_rules:
+            salvaged = (
+                f"salvaged after validation failed ({', '.join(self.salvage_rules)}): "
+                + "; ".join(self.salvage_notes)
+            )
+            return "partial", f"{reason}; {salvaged}" if reason else salvaged
         if reason is not None:
             return "partial", reason
         if not self.blocks:
@@ -477,6 +492,19 @@ class PaperBuilder:
             # total extraction failure, so it is reported as partial rather than claimed clean.
             return "partial", "no blocks were extracted from this document"
         return "complete", None
+
+
+#: `Paper.metadata` with every value absent: the salvage lane's last resort when a metadata value
+#: itself fails validation (rule 6/6b). All seven keys are required; `authors` is `[]`, not null.
+_BARE_METADATA: dict[str, Any] = {
+    "title": None,
+    "authors": [],
+    "abstract": None,
+    "doi": None,
+    "arxiv_id": None,
+    "venue": None,
+    "year": None,
+}
 
 
 #: How much of the shorter band's height must overlap the other's for the two to be one visual

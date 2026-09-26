@@ -239,7 +239,14 @@ def _title_authors_affiliations(
     # authors sit in a single row.
     for index, row in enumerate(rows[title_row + 1 :]):
         text = " ".join((block.text or "") for block in row).strip()
-        if not text or _is_abstract_boundary(text):
+        # A row HOLDING the abstract heading or the first section ends the attribution rows,
+        # whatever else shares it. `_band_rows` groups by centre within a share of the TALLER
+        # block's height, so a tall abstract or a right-column introduction lands in the same
+        # "row" as the one-line `Abstract` beside it - measured on `sbert-1908.10084` p0, where
+        # [abstract, "Abstract", right-column introduction] formed one row whose joined text is no
+        # boundary, and both prose blocks were typed `affiliation` (S2, #141; the abstract pass
+        # used to overwrite that, which is why it never showed).
+        if not text or any(_is_abstract_boundary(block.text or "") for block in row):
             break
         if index == 0:
             kind, rule = "author", "first-row-below-title"
@@ -281,28 +288,50 @@ def _abstract(blocks: list[AssembledBlock]) -> list[FrontMatterRetype]:
     under it as `abstract`, and rule 21 needs a section's `heading_block_id` to name a block of a
     known heading type - retyping it here would break the section tree to gain one region.
     """
-    body = [
+    # READING ORDER, NOT HEIGHT (S2, #141). This sorted on `(page, top)`, which interleaves the
+    # two columns of a two-column page by height: on `yolo-1506.02640` p0 the right column's
+    # introduction ("methods to first generate ...", "We reframe object detection ...", "First,
+    # YOLO is extremely fast ...") sits beside the left column's abstract, so it was swept in and
+    # typed `abstract` - 6 gold body paragraphs mistyped, and Guided labelled them OUR SUMMARY.
+    # The builder holds blocks in `layout.py`'s reading order, a column run before the next.
+    ordered = [
         b
         for b in blocks
         if b.flow == "body" and not b.is_nested and (b.type == "heading" or _is_retypeable(b))
     ]
-    ordered = sorted(body, key=lambda b: (b.page_index, _extent(b)[1]))
 
     out: list[FrontMatterRetype] = []
     inside = False
     previous_bottom: float | None = None
+    #: The column of the abstract's first block. An abstract is contiguous prose in ONE column
+    #: lane (or full width): the next block in reading order sitting in another column means the
+    #: column ended, and what follows it is the body, whatever its height on the page.
+    lane: int | None | str = "unset"
     for block in ordered:
         text = (block.text or "").strip()
         if block.type == "heading":
             if _ABSTRACT_HEADING.match(text.rstrip(".:").strip()):
                 inside = True
-                previous_bottom = _extent(block)[3]
+                # NO GAP BOUND FROM THE HEADING TO THE ABSTRACT'S FIRST BLOCK (S2, #141). That gap
+                # is the heading's space-below, set by the document class, not a gap inside the
+                # abstract: measured on pp1-2 of all 14 papers it runs 6.1 pt (FlashAttention) to
+                # 16.9 pt (attention), with maskrcnn at 15.0, sbert at 15.3 and ddpm at 14.8 - so
+                # `ABSTRACT_MAX_GAP_PT`, measured for the gaps BETWEEN abstract blocks, cut
+                # attention's abstract at base and sbert's once the other column stopped bridging
+                # the gap (it was typed `abstract` only because a right-column block sorted in
+                # between). The first block in reading order after `Abstract` starts the abstract;
+                # the bound applies from its bottom on.
+                previous_bottom = None
                 continue
             if inside:
                 break  # the next heading of any kind closes the abstract
         if not inside or not text:
             continue
 
+        if lane == "unset":
+            lane = block.column
+        elif block.column != lane:
+            break
         top, bottom = _extent(block)[1], _extent(block)[3]
         # AN ABSTRACT IS CONTIGUOUS PROSE, and on `attention-is-all-you-need` the next heading is
         # on the following page - so "until the next heading" alone ran the abstract through the
@@ -315,5 +344,9 @@ def _abstract(blocks: list[AssembledBlock]) -> list[FrontMatterRetype]:
             break
 
         out.append(FrontMatterRetype(block, "abstract", "between-abstract-and-next-heading"))
-        previous_bottom = bottom
+        # The abstract's lowest point SO FAR, not the last block's: in reading order a line broken
+        # into word fragments (a3c p0 sets its abstract's first lines as one block per word) is
+        # read after the long block beside it, and measuring the next gap from a fragment's
+        # bottom would end the abstract in its own middle.
+        previous_bottom = bottom if previous_bottom is None else max(previous_bottom, bottom)
     return out

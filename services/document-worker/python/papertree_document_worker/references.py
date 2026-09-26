@@ -75,18 +75,18 @@ class ReferenceRetype:
 
 
 def _ordered_body(blocks: list[AssembledBlock]) -> list[AssembledBlock]:
-    """Body blocks in document order, using `line_bands` - `bbox` is empty before `assign_ids`."""
+    """Top-level body blocks in READING order - the order `PaperBuilder` holds them in.
 
-    def key(block: AssembledBlock) -> tuple[int, float, float]:
-        bands = block.line_bands
-        top = min((b[1] for b in bands), default=0.0)
-        left = min((b[0] for b in bands), default=0.0)
-        return (block.page_index, top, left)
-
-    return sorted(
-        (b for b in blocks if b.flow == "body" and not b.is_nested),
-        key=key,
-    )
+    It used to sort on `(page, top, left)`, which is not document order on a TWO-COLUMN page: it
+    interleaves the columns by height. Measured (S2, #141): once `pdf-to-tree-acl2col`'s appendix
+    head `A Dataset Annotation` at the top of the RIGHT column was detected as a heading, the
+    y-sort put it before the LEFT column's remaining bibliography entries and closed the sweep, so
+    real references came out `paragraph`; the same sort left 9 of BERT's p11 entries untyped.
+    The builder's order is `layout.py`'s reading order - page by page, one column run before the
+    next - which is the order a reader meets the heading in. (A page's tables come first in it;
+    they are `table`, and a table is never retyped here.)
+    """
+    return [b for b in blocks if b.flow == "body" and not b.is_nested]
 
 
 def classify_reference_entries(blocks: list[AssembledBlock]) -> list[ReferenceRetype]:

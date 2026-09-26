@@ -29,10 +29,11 @@ and that is exactly how `'Kaiming He'` became a heading.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from statistics import median
 
-from papertree_document_worker.layout import LayoutBlock, PageLayout
+from papertree_document_worker.layout import LayoutBlock, PageLayout, is_run_in_lead
 
 __all__ = [
     "Heading",
@@ -40,6 +41,7 @@ __all__ = [
     "build_sections",
     "detect_headings",
     "parse_section_number",
+    "reparent_orphans",
 ]
 
 #: `1`, `1.2`, `1.2.3`, `A`, `A.1`, `IV` - optionally followed by `.` or `)`, then the title.
@@ -84,6 +86,13 @@ HEADING_SIZE_RATIO = 1.12
 _CONTACT = re.compile(r"[@]|https?://|\bdoi\b", re.IGNORECASE)
 #: ...or bold at body size, which is how most `\subsubsection` is set.
 _BOLD_FLAG = 1 << 4
+#: Digits and the punctuation of numbers ONLY: `66.4`, `830`, `(3)`, `18.2`. A section title always
+#: carries a letter, so a heading candidate made of nothing else is a table value, an equation
+#: number or a page number that escaped its own detector - never a heading (S2, #141). Measured at
+#: 18f69ec: `yolo-1506.02640`'s bold table value `66.4`, `flashattention-2205.14135`'s nine
+#: speed-up figures (`66.6`, `41.7`, `18.2`, ...), fifteen of `maskrcnn-1703.06870`'s AP values
+#: and gpt3's `3.66` / `21.7` / `37.9` were headings, each opening a one-block section.
+_NUMERIC_ONLY = re.compile(r"^[\s\d.,:;%±+\-−–()×x*/]+$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,6 +155,30 @@ def _is_bare_number(text: str) -> str | None:
     return number
 
 
+#: A section number in a form no affiliation marker takes: multi-level (`2.1`) or closed by a
+#: period or parenthesis (`2.`, `A.`, `IV)`). An author's superscript marker is a lone digit or
+#: symbol glued to the name - `1Shaoqing Ren` - and never carries either.
+_DOTTED_NUMBER = re.compile(r"^\s*(?:\d+|[A-Z]|[IVXL]+)(?:(?:\.\d+)+\.?|[.)])(?:\s|$)")
+
+
+def _could_be_an_author_line(text: str, page_index: int) -> bool:
+    """Whether a NUMBERED line might really be an author line whose affiliation marker parsed as
+    a section number - the one reason `_is_name_list` is applied to numbered headings at all.
+
+    S2 (#141). Author lines exist on the TITLE PAGE only, and their markers are never dotted. So
+    off page 0, or with a dotted number, the number is a section number and a Title-Case title is
+    just a title. Measured at 18f69ec: `yolo-1506.02640`'s `2. Unified Detection` and `2.1. Network
+    Design` came out `paragraph` - every word capitalised and no function word, so the guard took
+    them for a list of names - and the same rule dropped `resnet-cvpr-2col`'s appendix heads
+    `A. Object Detection Baselines` / `B. ...` / `C. ImageNet Localization`, BERT's `2 Related
+    Work` and `2.1 Unsupervised Feature-based Approaches`, and dozens more across the corpus.
+
+    Page 0 keeps the guard for an UNDOTTED number, which is the only shape the `1Shaoqing Ren`
+    case this guard exists for can take.
+    """
+    return page_index == 0 and _DOTTED_NUMBER.match(text) is None
+
+
 def _is_name_list(text: str) -> bool:
     """Whether a line is a list of proper nouns - an author or affiliation line.
 
@@ -172,6 +205,10 @@ def _looks_like_heading_by_font(block: LayoutBlock, body_size: float) -> bool:
     size = median([span.size for span in spans])
     if size >= HEADING_SIZE_RATIO * body_size:
         return True
+    # A bold RUN-IN lead is a paragraph's first line, never a heading (`layout.is_run_in_lead`,
+    # S2 #141): testing `spans[0]` alone typed every such line a heading once it stood as a block.
+    if block.lines and is_run_in_lead(block.lines[0]):
+        return False
     return bool(spans[0].flags & _BOLD_FLAG) and size >= body_size * 0.98
 
 
@@ -198,26 +235,56 @@ def detect_headings(layout: PageLayout, body_size: float) -> list[Heading]:
         parsed = parse_section_number(text)
         if parsed is not None and _looks_like_heading_by_font(block, body_size):
             number, title = parsed
-            if not _is_name_list(title):
+            if not (_could_be_an_author_line(text, layout.index) and _is_name_list(title)) and (
+                not _NUMERIC_ONLY.match(title)
+            ):
                 headings.append(Heading(block, number, title, _level_of(number)))
                 continue
 
         # 2. `1` alone, with `Introduction` in the next block. THE B6 JOIN.
         bare = _is_bare_number(text)
-        if bare is not None and index + 1 < len(body):
+        # A split section number is set in the heading face, like its title; a table value or a
+        # page number is not. YOLO p5's `21` (an FPS value) joined the bold row after it and
+        # became a one-number heading (S2, #141).
+        if (
+            bare is not None
+            and index + 1 < len(body)
+            and _looks_like_heading_by_font(block, body_size)
+        ):
             following = body[index + 1]
             title = " ".join(line.text for line in following.lines).strip()
             if (
                 title
                 and len(title) <= MAX_HEADING_CHARS
                 and not title[0].islower()
-                and not _is_name_list(title)
+                # A block that is itself a numbered heading is not a title for the number above
+                # it: `2` (a stray page number) above `2. Related Work` made `2` the heading and
+                # swallowed the real one (maskrcnn p1, S2 #141). It is detected on its own turn.
+                and parse_section_number(title) is None
+                # `66.4` above `44.1` in a results table is a "bare number" and a "title" to every
+                # other test here; a title has letters (`_NUMERIC_ONLY`).
+                and not _NUMERIC_ONLY.match(title)
+                and (
+                    not _is_name_list(title)
+                    # Title Case is fine for a SECTION title - but then the title block must be
+                    # set in a heading face, because the join has no other evidence: a table's
+                    # `50` above `75 M L`, or a page number above a reference, pass every other
+                    # test here.
+                    or (
+                        not _could_be_an_author_line(f"{text} {title}", layout.index)
+                        and _looks_like_heading_by_font(following, body_size)
+                    )
+                )
             ):
                 headings.append(Heading(block, bare, title, _level_of(bare)))
                 skip.add(index + 1)
                 continue
 
-        # 3. A named heading every paper has, or a short line set larger than the body.
+        # 3. A named heading every paper has, or a short line set larger than the body - never
+        # one that is only a number (`_NUMERIC_ONLY`): with no title joined to it in step 2, a
+        # bold `66.4` or a lone `1` is a table value or a page number, not a section.
+        if _NUMERIC_ONLY.match(text):
+            continue
         lowered = text.lower().rstrip(".:")
         if lowered in _NAMED_HEADINGS:
             headings.append(Heading(block, None, text, 1))
@@ -285,3 +352,45 @@ def build_sections(headings: list[Heading], body_blocks: list[LayoutBlock]) -> l
         _pop_depth[id(node)] = heading.level
         stack.append(node)
     return sections
+
+
+def reparent_orphans(
+    sections: list[SectionNode], keep: Callable[[SectionNode], bool]
+) -> list[SectionNode]:
+    """The sections `keep` accepts, with every one left without a parent re-attached. RULE 21.
+
+    WHY A SECTION CAN BE ORPHANED. `build_sections` runs on DETECTED headings, but a heading's
+    final type is decided later: a bold `Algorithm 3 Sending x0` is detected as a heading, pushed
+    on the section stack, and becomes the parent of the numbered `4.2` and `4.3` that follow it.
+    Then `_block_type` types it `caption` (it opens `Algorithm N`), and rule 21 lets only a
+    `heading` or `title` open a section, so its section is dropped - and `4.2`/`4.3` still name
+    it as `parent_heading_block_id`. Measured on `ddpm-2006.11239`: 2 R21 errors, a dead letter.
+
+    THE NEW PARENT is the nearest PRECEDING kept section one level up (level - 1). For DDPM that
+    is `Experiments` - where `4.2` belongs by its own number - not the dropped section's parent,
+    which is None there and would have flattened `4.2` to a top-level section. With no such
+    section (or at level 1) the orphan becomes top level. Levels are then re-derived in document
+    order from the parent, so every descendant satisfies rule 21's `level == parent.level + 1`.
+
+    A dropped section's members, and its (retyped) heading block, move to the nearest preceding
+    kept section: they are printed there, and dropping them would leave body text in no section
+    at all. Before the first kept section they stay section-less, like the rest of front matter.
+    """
+    kept: list[SectionNode] = []
+    new_parent: dict[int, SectionNode | None] = {}
+    for node in sections:
+        if not keep(node):
+            if kept:
+                kept[-1].member_blocks.extend([node.heading_block, *node.member_blocks])
+            continue
+        parent_id = id(node.parent_heading_block) if node.parent_heading_block else None
+        parent = next((k for k in kept if id(k.heading_block) == parent_id), None)
+        if parent_id is not None and parent is None:
+            parent = next((k for k in reversed(kept) if k.level == node.level - 1), None)
+        new_parent[id(node)] = parent
+        kept.append(node)
+    for node in kept:
+        parent = new_parent[id(node)]
+        node.parent_heading_block = parent.heading_block if parent else None
+        node.level = parent.level + 1 if parent else 1
+    return kept

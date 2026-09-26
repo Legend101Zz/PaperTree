@@ -1,0 +1,1323 @@
+{
+  "_provenance": {
+    "annotators": [
+      "annotator-1",
+      "annotator-2"
+    ],
+    "adjudicator": "adjudicator",
+    "adjudicator_detail": "Claude Opus 5.5 subagent (S2 adjudication pass). No parser output was viewed and no text was extracted from any PDF.",
+    "annotator_detail": "annotator-1's file records a Claude Opus 5.5 subagent; annotator-2's file records only its label. Both came from the same workflow run. Treat them as two runs of one model, not two independent humans. annotator-1 also read the seed gold.json (agent C's YOLO/DDPM anchors) before annotating, so its YOLO and DDPM are not blind to the seed.",
+    "method": "Both annotators wrote gold from page images at 130 dpi (pdftoppm), with 220-300 dpi crops where a reading was ambiguous, and no text extraction. The adjudicator aligned their units with iaa.py and re-rendered every page at 130 dpi. Each disagreement was decided from the image, using 200-300 dpi crops and, for DDPM p2, a row ink profile of a 300 dpi grey render (image analysis only). The merge is mechanical (adjudicate.py), with every ruling listed there.",
+    "pdf_operations": "curl download of the versioned arXiv URL; shasum -a 256; pdfinfo (page count only); pdftoppm rendering. Nothing else.",
+    "iaa": {
+      "annotator-1_vs_annotator-2": {
+        "units_a": 125,
+        "units_b": 125,
+        "matched": 124,
+        "unit_match_rate": 0.992,
+        "anchor_exact": 123,
+        "kind_raw": 0.9919,
+        "kind_kappa": 0.9863,
+        "kendall_tau_pooled": 1.0,
+        "discordant_pairs": 0,
+        "heading_jaccard_ci_pooled": 1.0,
+        "papers_float_counts_agree": "6/6",
+        "papers_equation_counts_agree": "6/6",
+        "per_paper": {
+          "ddpm-2006.11239": {
+            "units_a": 16,
+            "units_b": 16,
+            "matched": 16,
+            "unit_match_rate": 1.0,
+            "kind_raw": 1.0,
+            "kind_kappa": 1.0,
+            "kendall_tau": 1.0,
+            "disagreements": 0
+          },
+          "yolo-1506.02640": {
+            "units_a": 34,
+            "units_b": 34,
+            "matched": 34,
+            "unit_match_rate": 1.0,
+            "kind_raw": 0.9706,
+            "kind_kappa": 0.9439,
+            "kendall_tau": 1.0,
+            "disagreements": 2
+          },
+          "flashattention-2205.14135": {
+            "units_a": 15,
+            "units_b": 16,
+            "matched": 15,
+            "unit_match_rate": 0.9677,
+            "kind_raw": 1.0,
+            "kind_kappa": 1.0,
+            "kendall_tau": 1.0,
+            "disagreements": 1
+          },
+          "sbert-1908.10084": {
+            "units_a": 25,
+            "units_b": 24,
+            "matched": 24,
+            "unit_match_rate": 0.9796,
+            "kind_raw": 1.0,
+            "kind_kappa": 1.0,
+            "kendall_tau": 1.0,
+            "disagreements": 1
+          },
+          "adam-1412.6980": {
+            "units_a": 15,
+            "units_b": 15,
+            "matched": 15,
+            "unit_match_rate": 1.0,
+            "kind_raw": 1.0,
+            "kind_kappa": 1.0,
+            "kendall_tau": 1.0,
+            "disagreements": 0
+          },
+          "maskrcnn-1703.06870": {
+            "units_a": 20,
+            "units_b": 20,
+            "matched": 20,
+            "unit_match_rate": 1.0,
+            "kind_raw": 1.0,
+            "kind_kappa": 1.0,
+            "kendall_tau": 1.0,
+            "disagreements": 0
+          }
+        }
+      },
+      "annotator-1_vs_consensus": {
+        "units_a": 125,
+        "units_b": 125,
+        "matched": 125,
+        "kind_raw": 0.984,
+        "kind_kappa": 0.9735
+      },
+      "annotator-2_vs_consensus": {
+        "units_a": 125,
+        "units_b": 125,
+        "matched": 124,
+        "kind_raw": 0.9758,
+        "kind_kappa": 0.9594
+      },
+      "caveat": "The two annotators share a model and annotator-1 saw the seed, so this agreement is an upper bound on what independent humans would reach, not a ceiling for parser scores. The adjudicator overrode BOTH annotators on two DDPM units where they agreed, so agreement is not correctness."
+    },
+    "date": "2026-09-25",
+    "owner_review": "pending",
+    "owner_rulings_needed": [
+      "cont after a display equation. Three units: YOLO 'which gives us', DDPM 'What distinguishes', DDPM 'The forward process variances'. Each carries alt_kind 'body' for the case where cont is restricted to column and page breaks.",
+      "Front-unit granularity: one unit per role group (names / affiliations / contacts / date), or per stacked author column. Two units depend on this: FlashAttention affiliations and the SBERT URL.",
+      "Small caps are written in typographic case. The scorer must compare case-insensitively whichever way this is ruled."
+    ],
+    "conventions": [
+      "order holds running content only: front, heading, body (one unit per printed paragraph), cont. Captions go in floats, display equations in equations, and running heads, page numbers, the arXiv stamp, venue footers, footnotes and figure-internal text in furniture.",
+      "front: the title is one unit, however many lines it has. A centred block gives one unit per role group: names line(s), affiliation line(s), contact line(s) (URL / e-mail), date. Stacked per-author columns (name / affiliation / e-mail) give one unit per column, anchored by the name.",
+      "body: a printed paragraph, cut where an indent (indented styles) or a paragraph skip (unindented styles) says one starts.",
+      "cont: the same paragraph resuming after a column break or a page break (including one that a float sits in), or after a display equation (pending owner ruling, alt_kind 'body').",
+      "anchor: the words both annotators wrote (the shared prefix), as printed. Line-break hyphens are removed and real hyphens kept; ligatures are plain letters; footnote and affiliation markers are dropped, so front anchors stop before the first marker; citation brackets are kept; inline math is flattened (βt, S × S); apostrophes are printed curly. A word split across a column break is anchored as printed in the new column (SBERT 'tic').",
+      "Small caps are written in typographic case: a full-size capital in upper case, a small capital in lower case ('FlashAttention', 'Pascal', 'Adam: A Method for Stochastic Optimization'). Compare case-insensitively.",
+      "Caption anchors include the printed label ('Figure 1:', 'Figure 1.', 'Algorithm 1:'). Strip ^(Figure|Table|Algorithm)\\s*\\d+[:.] to get the seed's label-free form.",
+      "headings: every section and subsection heading on pp1-2 as printed, with its numbering. Bold paragraph lead-ins go under run_in_headings; their paragraph is one body unit.",
+      "A unit is [page, kind, anchor] or [page, kind, anchor, {extras}]. Readers expecting three fields should use u[:3]. extras.disputed = true marks a unit where the adjudicator overrode at least one annotator on the unit's existence, extent, kind or anchor words. Case-only harmonisation is listed per paper under adjudication.case_harmonised_anchors instead."
+    ],
+    "pages": "1-2 of each paper (1-based)",
+    "corrections": [
+      {
+        "date": "2026-09-26",
+        "by": "S2 builder session (Claude Opus 5.5), after the adjudicated gold was committed",
+        "unit": "sbert-1908.10084 p2 cont 'new state-of-the-art performance on the Semantic Textual ...'",
+        "change": "anchor 'Similarity' -> 'Semilarity', as printed",
+        "how_found": "the S2 fresh scorer reported this one anchor missing on every parse. The crop was LOCATED with the paragraph's position on the page; the word itself was read from a 300 dpi render of the page image, not from any text layer or parser output.",
+        "evidence": "hard-cases/sbert-p2-semilarity-typo.png in the S2 evidence folder (outside the repository)",
+        "effect": "the unit is found; no other unit, kind or count changes"
+      }
+    ]
+  },
+  "ddpm-2006.11239": {
+    "source": "https://arxiv.org/pdf/2006.11239v2",
+    "sha256": "aee5e07a802e8dfd2a386374c94fd61d1d056cb7e1e0fec4f28e8120ff5d8505",
+    "page_count": 25,
+    "layout": "single-column NeurIPS 2020; paragraphs unindented, separated by \\parskip",
+    "order": [
+      [
+        1,
+        "front",
+        "Denoising Diffusion Probabilistic Models"
+      ],
+      [
+        1,
+        "front",
+        "Jonathan Ho"
+      ],
+      [
+        1,
+        "front",
+        "Ajay Jain"
+      ],
+      [
+        1,
+        "front",
+        "Pieter Abbeel"
+      ],
+      [
+        1,
+        "heading",
+        "Abstract"
+      ],
+      [
+        1,
+        "body",
+        "We present high quality image synthesis results using diffusion probabilistic"
+      ],
+      [
+        1,
+        "heading",
+        "1 Introduction"
+      ],
+      [
+        1,
+        "body",
+        "Deep generative models of all kinds have recently exhibited"
+      ],
+      [
+        2,
+        "body",
+        "This paper presents progress in diffusion probabilistic models [53]"
+      ],
+      [
+        2,
+        "body",
+        "Diffusion models are straightforward to define and efficient to train"
+      ],
+      [
+        2,
+        "body",
+        "Despite their sample quality, our models do not have competitive"
+      ],
+      [
+        2,
+        "heading",
+        "2 Background"
+      ],
+      [
+        2,
+        "body",
+        "Diffusion models [53] are latent variable models of the form"
+      ],
+      [
+        2,
+        "cont",
+        "What distinguishes diffusion models from other types of latent variable",
+        {
+          "disputed": true,
+          "field": "kind",
+          "annotator-1": "body",
+          "annotator-2": "body",
+          "ruling": "cont (overrides BOTH). NeurIPS has no paragraph indent, so the only cue is \\parskip. The gap below eq (1) is 22 px at 300 dpi, the plain display skip (23 px above it), with no paragraph skip, whereas the gap below the identically built eq (2) is 46 px, one \\parskip more. The paragraph 'Diffusion models [53] are latent variable models ...' therefore continues here, although a new sentence starts. Both annotators marked it body as a stated judgement call. cont is used for a paragraph that resumes after a display equation. The kind definition given to the annotators covered only column and page breaks, so this needs an OWNER RULING; if the owner restricts cont to column and page breaks, use alt_kind.",
+          "evidence": "evidence/ddpm-p2-gaps.txt, evidence/ddpm-p2-display-gaps.png",
+          "alt_kind": "body"
+        }
+      ],
+      [
+        2,
+        "body",
+        "Training is performed by optimizing the usual variational bound"
+      ],
+      [
+        2,
+        "cont",
+        "The forward process variances βt can be learned by reparameterization",
+        {
+          "disputed": true,
+          "field": "kind",
+          "annotator-1": "body",
+          "annotator-2": "body",
+          "ruling": "cont (overrides BOTH). The gap below eq (3) is 23-28 px at 300 dpi, the plain display skip, against 46 px below eq (2), where 'Training is performed ...' does open a new paragraph. So 'Training is performed ...' continues here. cont is used for a paragraph that resumes after a display equation. The kind definition given to the annotators covered only column and page breaks, so this needs an OWNER RULING; if the owner restricts cont to column and page breaks, use alt_kind.",
+          "evidence": "evidence/ddpm-p2-gaps.txt, evidence/ddpm-p2-display-gaps.png",
+          "alt_kind": "body"
+        }
+      ]
+    ],
+    "floats": [
+      [
+        1,
+        "caption",
+        "Figure 1: Generated samples on CelebA-HQ 256 × 256 (left) and unconditional CIFAR10",
+        "figure"
+      ],
+      [
+        2,
+        "caption",
+        "Figure 2: The directed graphical model considered in this work.",
+        "figure"
+      ]
+    ],
+    "equations": [
+      [
+        2,
+        "display",
+        "(1) pθ(x0:T) := p(xT) ∏_{t=1}^{T} pθ(xt−1|xt), pθ(xt−1|xt) := N(xt−1; μθ(xt,t), Σθ(xt,t)) — reverse process"
+      ],
+      [
+        2,
+        "display",
+        "(2) q(x1:T|x0) := ∏_{t=1}^{T} q(xt|xt−1), q(xt|xt−1) := N(xt; sqrt(1−βt) xt−1, βt I) — forward process"
+      ],
+      [
+        2,
+        "display",
+        "(3) E[−log pθ(x0)] ≤ Eq[−log pθ(x0:T)/q(x1:T|x0)] = Eq[−log p(xT) − Σ_{t≥1} log pθ(xt−1|xt)/q(xt|xt−1)] =: L — variational bound"
+      ],
+      [
+        2,
+        "display",
+        "(4) q(xt|x0) = N(xt; sqrt(ᾱt) x0, (1−ᾱt) I) — closed-form forward sampling"
+      ]
+    ],
+    "headings": [
+      "Abstract",
+      "1 Introduction",
+      "2 Background"
+    ],
+    "run_in_headings": [],
+    "furniture": [
+      [
+        1,
+        "margin",
+        "arXiv:2006.11239v2 [cs.LG] 16 Dec 2020"
+      ],
+      [
+        1,
+        "footer",
+        "34th Conference on Neural Information Processing Systems (NeurIPS 2020), Vancouver, Canada."
+      ],
+      [
+        2,
+        "page_number",
+        "2"
+      ]
+    ],
+    "counts": {
+      "order_units_p1": 8,
+      "order_units_p2": 8,
+      "front": 4,
+      "heading": 3,
+      "body": 7,
+      "cont": 2,
+      "cont_after_display_equation": 2,
+      "disputed_units": 2,
+      "figures_p1_p2": 2,
+      "tables_p1_p2": 0,
+      "algorithms_p1_p2": 0,
+      "display_equations_p1_p2": 4
+    },
+    "notes": [
+      "Front: title, then three stacked author columns (name / UC Berkeley / e-mail). Each column is one unit, anchored by the name.",
+      "The p1 intro paragraph ends on an unjustified last line, which ends 51 px short of the measure at 300 dpi. So p2 'This paper presents ...' opens a new paragraph (body).",
+      "Figure 2 is a strip at the top of p2 (a float). p2 has four numbered displays, (1)-(4).",
+      "After a display: text after eq (1) and eq (3) continues its paragraph (cont, disputed); text after eq (2) opens one (body). Measured in evidence/ddpm-p2-gaps.txt.",
+      "p2 ends with eq (4); whether that paragraph resumes on p3 is out of scope."
+    ],
+    "adjudication": {
+      "disputed_units": 2,
+      "case_harmonised_anchors": [],
+      "anchor_rule": "shared prefix of the two annotators' anchors (the words both wrote), annotator-2's letter case"
+    }
+  },
+  "yolo-1506.02640": {
+    "source": "https://arxiv.org/pdf/1506.02640v5",
+    "sha256": "54bcd2dd05dc618849e8a94d8b88fe3eeb37f80e96e200600d38f1f733931678",
+    "page_count": 10,
+    "layout": "two-column CVPR 2016; single-column centred front block",
+    "order": [
+      [
+        1,
+        "front",
+        "You Only Look Once: Unified, Real-Time Object Detection"
+      ],
+      [
+        1,
+        "front",
+        "Joseph Redmon"
+      ],
+      [
+        1,
+        "front",
+        "University of Washington"
+      ],
+      [
+        1,
+        "front",
+        "http://pjreddie.com/yolo/"
+      ],
+      [
+        1,
+        "heading",
+        "Abstract"
+      ],
+      [
+        1,
+        "body",
+        "We present YOLO, a new approach to object detection."
+      ],
+      [
+        1,
+        "body",
+        "Our unified architecture is extremely fast."
+      ],
+      [
+        1,
+        "heading",
+        "1. Introduction"
+      ],
+      [
+        1,
+        "body",
+        "Humans glance at an image and instantly know what objects"
+      ],
+      [
+        1,
+        "body",
+        "Current detection systems repurpose classifiers to perform detection."
+      ],
+      [
+        1,
+        "body",
+        "More recent approaches like R-CNN use region proposal"
+      ],
+      [
+        1,
+        "cont",
+        "methods to first generate potential bounding boxes in an image"
+      ],
+      [
+        1,
+        "body",
+        "We reframe object detection as a single regression problem,"
+      ],
+      [
+        1,
+        "body",
+        "YOLO is refreshingly simple: see Figure 1."
+      ],
+      [
+        1,
+        "body",
+        "First, YOLO is extremely fast. Since we frame detection",
+        {
+          "disputed": true,
+          "field": "anchor",
+          "annotator-1": "First, YOLO is extremely fast. Since we frame object detection",
+          "annotator-2": "First, YOLO is extremely fast. Since we frame detection",
+          "ruling": "annotator-2. The printed line is 'Since we frame detection as a regression problem'; there is no 'object'.",
+          "evidence": "evidence/yolo-p1-first-frame-detection.png (250 dpi crop)"
+        }
+      ],
+      [
+        1,
+        "body",
+        "Second, YOLO reasons globally about the image when"
+      ],
+      [
+        2,
+        "cont",
+        "making predictions. Unlike sliding window and region proposal-based techniques,"
+      ],
+      [
+        2,
+        "body",
+        "Third, YOLO learns generalizable representations of objects."
+      ],
+      [
+        2,
+        "body",
+        "YOLO still lags behind state-of-the-art detection systems in accuracy."
+      ],
+      [
+        2,
+        "body",
+        "All of our training and testing code is open source."
+      ],
+      [
+        2,
+        "heading",
+        "2. Unified Detection"
+      ],
+      [
+        2,
+        "body",
+        "We unify the separate components of object detection into"
+      ],
+      [
+        2,
+        "body",
+        "Our system divides the input image into an S × S grid."
+      ],
+      [
+        2,
+        "body",
+        "Each grid cell predicts B bounding boxes and confidence scores"
+      ],
+      [
+        2,
+        "body",
+        "Each bounding box consists of 5 predictions: x, y, w, h,"
+      ],
+      [
+        2,
+        "body",
+        "Each grid cell also predicts C conditional class probabilities,"
+      ],
+      [
+        2,
+        "cont",
+        "one set of class probabilities per grid cell, regardless of"
+      ],
+      [
+        2,
+        "body",
+        "At test time we multiply the conditional class probabilities"
+      ],
+      [
+        2,
+        "cont",
+        "which gives us class-specific confidence scores for each box.",
+        {
+          "disputed": true,
+          "field": "kind",
+          "annotator-1": "cont",
+          "annotator-2": "body",
+          "ruling": "cont (annotator-1). The line is flush left, starts lower-case and completes the sentence 'At test time we multiply ... predictions,' that eq (1) interrupts, so it is the same paragraph. annotator-2 followed the seed's 'new body after a display' convention. cont is used for a paragraph that resumes after a display equation. The kind definition given to the annotators covered only column and page breaks, so this needs an OWNER RULING; if the owner restricts cont to column and page breaks, use alt_kind.",
+          "evidence": "evidence/yolo-p2-which-gives-us.png (250 dpi crop)",
+          "alt_kind": "body"
+        }
+      ],
+      [
+        2,
+        "body",
+        "For evaluating YOLO on Pascal VOC, we use S = 7,"
+      ],
+      [
+        2,
+        "heading",
+        "2.1. Network Design"
+      ],
+      [
+        2,
+        "body",
+        "We implement this model as a convolutional neural network"
+      ],
+      [
+        2,
+        "body",
+        "Our network architecture is inspired by the GoogLeNet model"
+      ],
+      [
+        2,
+        "body",
+        "We also train a fast version of YOLO designed to push"
+      ]
+    ],
+    "floats": [
+      [
+        1,
+        "caption",
+        "Figure 1: The YOLO Detection System. Processing images with YOLO is simple",
+        "figure"
+      ],
+      [
+        2,
+        "caption",
+        "Figure 2: The Model. Our system models detection as a regression problem.",
+        "figure"
+      ]
+    ],
+    "equations": [
+      [
+        2,
+        "display",
+        "(1) Pr(Class_i|Object) ∗ Pr(Object) ∗ IOU^truth_pred = Pr(Class_i) ∗ IOU^truth_pred — class-specific confidence"
+      ]
+    ],
+    "headings": [
+      "Abstract",
+      "1. Introduction",
+      "2. Unified Detection",
+      "2.1. Network Design"
+    ],
+    "run_in_headings": [],
+    "furniture": [
+      [
+        1,
+        "margin",
+        "arXiv:1506.02640v5 [cs.CV] 9 May 2016"
+      ],
+      [
+        1,
+        "page_number",
+        "1"
+      ],
+      [
+        1,
+        "figure_text",
+        "1. Resize image. 2. Run convolutional network. 3. Non-max suppression."
+      ],
+      [
+        2,
+        "figure_text",
+        "S × S grid on input / Bounding boxes + confidence / Class probability map / Final detections"
+      ]
+    ],
+    "counts": {
+      "order_units_p1": 16,
+      "order_units_p2": 18,
+      "front": 4,
+      "heading": 4,
+      "body": 22,
+      "cont": 4,
+      "cont_after_display_equation": 1,
+      "disputed_units": 2,
+      "figures_p1_p2": 2,
+      "tables_p1_p2": 0,
+      "algorithms_p1_p2": 0,
+      "display_equations_p1_p2": 1
+    },
+    "notes": [
+      "Front: title (two lines, one unit), names line, affiliation line, URL line. Anchors stop before the first footnote marker.",
+      "Abstract: two italic paragraphs; the second is indented.",
+      "Figure 1 heads the p1 right column. 'More recent approaches ...' leaves the left column mid-sentence and resumes below the Figure 1 caption (cont).",
+      "Column and page breaks inside paragraphs: p1 right column to p2 left column ('... about the image when' / 'making predictions.'), and p2 left column to p2 right column ('We only predict' / 'one set of class probabilities'). Both are cont.",
+      "'which gives us ...' resumes the sentence that eq (1) interrupts (cont, disputed).",
+      "'Our final prediction is a 7 × 7 × 30 tensor.' is the flush-left third line of the 'For evaluating YOLO ...' paragraph, not a paragraph. Both annotators and the adjudicator agree (evidence/yolo-p2-our-final-prediction.png). The seed gold.json listed it as a paragraph and lacked 'For evaluating ...', so the seed's 23 YOLO paragraphs are 22 here, one of them a different paragraph.",
+      "PASCAL is set in small caps (P + small-cap ASCAL) and written 'Pascal'. No page number is printed on p2."
+    ],
+    "adjudication": {
+      "disputed_units": 2,
+      "case_harmonised_anchors": [
+        "For evaluating YOLO on Pascal VOC, we use S = 7,"
+      ],
+      "anchor_rule": "shared prefix of the two annotators' anchors (the words both wrote), annotator-2's letter case"
+    }
+  },
+  "flashattention-2205.14135": {
+    "source": "https://arxiv.org/pdf/2205.14135v2",
+    "sha256": "ca7f9fda10b90fc05dd291a3accc85e9c1a4a860b99b31928dab03ed3fcb14e4",
+    "page_count": 34,
+    "layout": "single-column article-class preprint (NeurIPS-style content); indented paragraphs",
+    "order": [
+      [
+        1,
+        "front",
+        "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness"
+      ],
+      [
+        1,
+        "front",
+        "Tri Dao"
+      ],
+      [
+        1,
+        "front",
+        "Department of Computer Science, Stanford University",
+        {
+          "disputed": true,
+          "field": "extent",
+          "annotator-1": "one unit: both affiliation lines",
+          "annotator-2": "two units, one per affiliation line ('Department of Computer Science, Stanford University' / 'Department of Computer Science and Engineering, University at Buffalo, SUNY')",
+          "ruling": "one unit (annotator-1). The two lines (dagger = Stanford, double dagger = Buffalo) are set at body line spacing as one block, and the e-mail block below is set apart. Rule: one front unit per role group (names / affiliations / contacts / date). It is the rule both annotators applied to YOLO.",
+          "evidence": "page 1 image; front block is lines 3-4 under the title"
+        }
+      ],
+      [
+        1,
+        "front",
+        "{trid,danfu}@cs.stanford.edu, ermon@stanford.edu, atri@buffalo.edu,"
+      ],
+      [
+        1,
+        "front",
+        "June 24, 2022"
+      ],
+      [
+        1,
+        "heading",
+        "Abstract"
+      ],
+      [
+        1,
+        "body",
+        "Transformers are slow and memory-hungry on long sequences, since the"
+      ],
+      [
+        1,
+        "heading",
+        "1 Introduction"
+      ],
+      [
+        1,
+        "body",
+        "Transformer models [82] have emerged as the most widely used architecture"
+      ],
+      [
+        1,
+        "body",
+        "Many approximate attention methods have aimed to reduce the compute"
+      ],
+      [
+        1,
+        "body",
+        "In this paper, we argue that a missing principle is making"
+      ],
+      [
+        2,
+        "cont",
+        "GPUs, compute speed has out-paced memory speed [61, 62, 63],"
+      ],
+      [
+        2,
+        "body",
+        "We propose FlashAttention, a new attention algorithm that computes exact"
+      ],
+      [
+        2,
+        "body",
+        "We analyze the IO complexity [1] of FlashAttention, proving that"
+      ],
+      [
+        2,
+        "body",
+        "We also show that FlashAttention can serve as a useful primitive"
+      ]
+    ],
+    "floats": [
+      [
+        2,
+        "caption",
+        "Figure 1: Left: FlashAttention uses tiling to prevent materialization of the large",
+        "figure"
+      ]
+    ],
+    "equations": [],
+    "headings": [
+      "Abstract",
+      "1 Introduction"
+    ],
+    "run_in_headings": [],
+    "furniture": [
+      [
+        1,
+        "margin",
+        "arXiv:2205.14135v2 [cs.LG] 23 Jun 2022"
+      ],
+      [
+        1,
+        "page_number",
+        "1"
+      ],
+      [
+        2,
+        "page_number",
+        "2"
+      ],
+      [
+        2,
+        "figure_text",
+        "Memory Hierarchy with Bandwidth & Memory Size / FlashAttention / Attention on GPT-2 (bar chart: Matmul, Dropout, Softmax, Mask, Fused Kernel, PyTorch)"
+      ]
+    ],
+    "counts": {
+      "order_units_p1": 11,
+      "order_units_p2": 4,
+      "front": 5,
+      "heading": 2,
+      "body": 7,
+      "cont": 1,
+      "cont_after_display_equation": 0,
+      "disputed_units": 1,
+      "figures_p1_p2": 1,
+      "tables_p1_p2": 0,
+      "algorithms_p1_p2": 0,
+      "display_equations_p1_p2": 0
+    },
+    "notes": [
+      "Front: title (two lines, one unit), names line, affiliation block (the two tightly set lines, dagger Stanford and double dagger Buffalo, one unit, disputed), e-mail block (two lines, one unit), date.",
+      "FLASHATTENTION is small caps throughout and written 'FlashAttention' (typographic case).",
+      "'In this paper, ...' breaks mid-sentence at the foot of p1 ('On modern') and resumes on p2 below Figure 1 (cont).",
+      "No display equations on pp1-2: O(N²d²M⁻¹) and Ω(Nd + N²) are inline. The last p2 paragraph runs on to p3."
+    ],
+    "adjudication": {
+      "disputed_units": 1,
+      "case_harmonised_anchors": [
+        "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness",
+        "We propose FlashAttention, a new attention algorithm that computes exact",
+        "We analyze the IO complexity [1] of FlashAttention, proving that",
+        "We also show that FlashAttention can serve as a useful primitive"
+      ],
+      "anchor_rule": "shared prefix of the two annotators' anchors (the words both wrote), annotator-2's letter case"
+    }
+  },
+  "sbert-1908.10084": {
+    "source": "https://arxiv.org/pdf/1908.10084v1",
+    "sha256": "92366d22fc0521350d6cbe0ad72bcee754f90e88181d7b4a8e2adb1e7e594fec",
+    "page_count": 11,
+    "layout": "two-column ACL/EMNLP 2019; single-column centred front block; abstract inset in the left column",
+    "order": [
+      [
+        1,
+        "front",
+        "Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks"
+      ],
+      [
+        1,
+        "front",
+        "Nils Reimers and Iryna Gurevych"
+      ],
+      [
+        1,
+        "front",
+        "Ubiquitous Knowledge Processing Lab (UKP-TUDA)"
+      ],
+      [
+        1,
+        "front",
+        "www.ukp.tu-darmstadt.de",
+        {
+          "disputed": true,
+          "field": "extent",
+          "annotator-1": "its own front unit",
+          "annotator-2": "the third line of the affiliation unit 'Ubiquitous Knowledge Processing Lab (UKP-TUDA)'",
+          "ruling": "own unit (annotator-1). The URL is a contact line set in a different (monospace, link-coloured) face. Rule: one front unit per role group. Both annotators split the identical URL line in YOLO.",
+          "evidence": "page 1 image; the URL is the fourth centred line under the title"
+        }
+      ],
+      [
+        1,
+        "heading",
+        "Abstract"
+      ],
+      [
+        1,
+        "body",
+        "BERT (Devlin et al., 2018) and RoBERTa (Liu et al., 2019)"
+      ],
+      [
+        1,
+        "body",
+        "In this publication, we present Sentence-BERT (SBERT), a modification of the pretrained"
+      ],
+      [
+        1,
+        "body",
+        "We evaluate SBERT and SRoBERTa on common STS tasks"
+      ],
+      [
+        1,
+        "heading",
+        "1 Introduction"
+      ],
+      [
+        1,
+        "body",
+        "In this publication, we present Sentence-BERT (SBERT), a modification of the BERT"
+      ],
+      [
+        1,
+        "cont",
+        "tic similarity comparison, clustering, and information retrieval via semantic search."
+      ],
+      [
+        1,
+        "body",
+        "BERT set new state-of-the-art performance on various sentence"
+      ],
+      [
+        1,
+        "body",
+        "A common method to address clustering and semantic search is"
+      ],
+      [
+        1,
+        "body",
+        "To alleviate this issue, we developed SBERT."
+      ],
+      [
+        2,
+        "cont",
+        "most similar sentence pair in a collection of 10,000 sentences"
+      ],
+      [
+        2,
+        "body",
+        "We fine-tune SBERT on NLI data, which creates sentence embeddings"
+      ],
+      [
+        2,
+        "body",
+        "SBERT can be adapted to a specific task."
+      ],
+      [
+        2,
+        "body",
+        "The paper is structured in the following way:"
+      ],
+      [
+        2,
+        "heading",
+        "2 Related Work"
+      ],
+      [
+        2,
+        "body",
+        "We first introduce BERT, then, we discuss state-of-the-art"
+      ],
+      [
+        2,
+        "body",
+        "BERT (Devlin et al., 2018) is a pre-trained transformer network"
+      ],
+      [
+        2,
+        "cont",
+        "new state-of-the-art performance on the Semantic Textual Semilarity",
+        {
+          "corrected": true,
+          "was": "new state-of-the-art performance on the Semantic Textual Similarity",
+          "ruling": "Transcription error, corrected from the page image. The printed page reads 'Semantic Textual Semilarity' (the paper's own typo); both annotators wrote the correctly spelled word, which the gold's 'as printed' anchor rule excludes. One word changed; the unit's page, kind and extent are unchanged.",
+          "evidence": "300 dpi render of page 2 (PyMuPDF get_pixmap) of the right-column paragraph opening 'new state-of-the-art performance on the Semantic'; S2 evidence hard-cases/sbert-p2-semilarity-typo.png (not committed)."
+        }
+      ],
+      [
+        2,
+        "body",
+        "A large disadvantage of the BERT network structure is that"
+      ],
+      [
+        2,
+        "body",
+        "Sentence embeddings are a well studied area with dozens"
+      ],
+      [
+        2,
+        "body",
+        "Humeau et al. (2019) addresses the run-time overhead"
+      ]
+    ],
+    "floats": [],
+    "equations": [],
+    "headings": [
+      "Abstract",
+      "1 Introduction",
+      "2 Related Work"
+    ],
+    "run_in_headings": [],
+    "furniture": [
+      [
+        1,
+        "margin",
+        "arXiv:1908.10084v1 [cs.CL] 27 Aug 2019"
+      ],
+      [
+        1,
+        "footnote",
+        "1Code available: https://github.com/UKPLab/sentence-transformers"
+      ],
+      [
+        1,
+        "footnote",
+        "2With semantically meaningful we mean that semantically similar sentences are close in vector space."
+      ],
+      [
+        2,
+        "footnote",
+        "3https://github.com/hanxiao/bert-as-service/"
+      ]
+    ],
+    "counts": {
+      "order_units_p1": 14,
+      "order_units_p2": 11,
+      "front": 4,
+      "heading": 3,
+      "body": 15,
+      "cont": 3,
+      "cont_after_display_equation": 0,
+      "disputed_units": 1,
+      "figures_p1_p2": 0,
+      "tables_p1_p2": 0,
+      "algorithms_p1_p2": 0,
+      "display_equations_p1_p2": 0
+    },
+    "notes": [
+      "Front: title, names line, affiliation lines (lab + department, one unit), URL line (its own unit, disputed).",
+      "Abstract: three unindented paragraphs, inset in the left column.",
+      "Abstract paragraph 2 and Introduction paragraph 1 share their first ten words. Their anchors run to 12 words to stay distinct ('... of the pretrained' / '... of the BERT').",
+      "Intro paragraph 1 is split across the p1 column break inside the word 'seman-tic'. The cont anchor starts at the fragment 'tic' as printed at the top of the right column. A scorer that de-hyphenates across the column break must match it as a substring.",
+      "p1 right column to p2 left column ('The complexity for finding the' / 'most similar sentence pair') and p2 left to right column ('BERT set a' / 'new state-of-the-art') are both cont.",
+      "No floats and no display equations; n·(n−1)/2 = 49 995 000 is inline. Three footnotes are listed under furniture."
+    ],
+    "adjudication": {
+      "disputed_units": 1,
+      "case_harmonised_anchors": [],
+      "anchor_rule": "shared prefix of the two annotators' anchors (the words both wrote), annotator-2's letter case"
+    }
+  },
+  "adam-1412.6980": {
+    "source": "https://arxiv.org/pdf/1412.6980v9",
+    "sha256": "eab9c73ae2ceda884b94830bda99312254bac4806f6c9f045cbab90721ecda31",
+    "page_count": 15,
+    "layout": "single-column ICLR 2015; paragraphs unindented, separated by vertical space; small-caps title and headings",
+    "order": [
+      [
+        1,
+        "front",
+        "Adam: A Method for Stochastic Optimization"
+      ],
+      [
+        1,
+        "front",
+        "Diederik P. Kingma"
+      ],
+      [
+        1,
+        "front",
+        "Jimmy Lei Ba"
+      ],
+      [
+        1,
+        "heading",
+        "Abstract"
+      ],
+      [
+        1,
+        "body",
+        "We introduce Adam, an algorithm for first-order gradient-based optimization of"
+      ],
+      [
+        1,
+        "heading",
+        "1 Introduction"
+      ],
+      [
+        1,
+        "body",
+        "Stochastic gradient-based optimization is of core practical importance in many"
+      ],
+      [
+        1,
+        "body",
+        "We propose Adam, a method for efficient stochastic optimization that"
+      ],
+      [
+        2,
+        "body",
+        "In section 2 we describe the algorithm and the properties of"
+      ],
+      [
+        2,
+        "heading",
+        "2 Algorithm"
+      ],
+      [
+        2,
+        "body",
+        "See algorithm 1 for pseudo-code of our proposed algorithm Adam."
+      ],
+      [
+        2,
+        "body",
+        "The algorithm updates exponential moving averages of the gradient (mt)"
+      ],
+      [
+        2,
+        "body",
+        "Note that the efficiency of algorithm 1 can, at the expense"
+      ],
+      [
+        2,
+        "heading",
+        "2.1 Adam’s update rule"
+      ],
+      [
+        2,
+        "body",
+        "An important property of Adam’s update rule is its careful choice"
+      ]
+    ],
+    "floats": [
+      [
+        2,
+        "caption",
+        "Algorithm 1: Adam, our proposed algorithm for stochastic optimization.",
+        "algorithm"
+      ]
+    ],
+    "equations": [],
+    "headings": [
+      "Abstract",
+      "1 Introduction",
+      "2 Algorithm",
+      "2.1 Adam’s update rule"
+    ],
+    "run_in_headings": [],
+    "furniture": [
+      [
+        1,
+        "header",
+        "Published as a conference paper at ICLR 2015"
+      ],
+      [
+        1,
+        "margin",
+        "arXiv:1412.6980v9 [cs.LG] 30 Jan 2017"
+      ],
+      [
+        1,
+        "footnote",
+        "∗Equal contribution. Author ordering determined by coin flip over a Google Hangout."
+      ],
+      [
+        1,
+        "page_number",
+        "1"
+      ],
+      [
+        2,
+        "header",
+        "Published as a conference paper at ICLR 2015"
+      ],
+      [
+        2,
+        "page_number",
+        "2"
+      ],
+      [
+        2,
+        "algorithm_body",
+        "Require: α: Stepsize ... return θt (Resulting parameters) — pseudo-code lines inside the Algorithm 1 box"
+      ]
+    ],
+    "counts": {
+      "order_units_p1": 8,
+      "order_units_p2": 7,
+      "front": 3,
+      "heading": 4,
+      "body": 8,
+      "cont": 0,
+      "cont_after_display_equation": 0,
+      "disputed_units": 0,
+      "figures_p1_p2": 0,
+      "tables_p1_p2": 0,
+      "algorithms_p1_p2": 1,
+      "display_equations_p1_p2": 0
+    },
+    "notes": [
+      "The title and headings are small caps, written in typographic case (checked at 300 dpi: evidence/adam-p1-title-small-caps.png, evidence/adam-p2-heading-2.1-small-caps.png).",
+      "Front: title, then two stacked author columns (name / affiliation / e-mail), one unit each.",
+      "p1 ends on a short last line ('form of step size annealing.'), so p2 'In section 2 ...' is a new paragraph (body).",
+      "Algorithm 1 is a ruled float at the top of p2. Its caption sits above the pseudo-code, and the pseudo-code lines are float content.",
+      "No display equations on pp1-2. The αt and θt formulas close 'Note that the efficiency ...' inside a running line, and the |Δt| bounds are inline.",
+      "A running header is printed on both pages."
+    ],
+    "adjudication": {
+      "disputed_units": 0,
+      "case_harmonised_anchors": [
+        "Adam: A Method for Stochastic Optimization",
+        "Abstract",
+        "1 Introduction",
+        "2 Algorithm",
+        "2.1 Adam’s update rule"
+      ],
+      "anchor_rule": "shared prefix of the two annotators' anchors (the words both wrote), annotator-2's letter case"
+    }
+  },
+  "maskrcnn-1703.06870": {
+    "source": "https://arxiv.org/pdf/1703.06870v3",
+    "sha256": "b595a882b763d55d933543131f32a2c4b6f41d0818d418ef46a2b66f946b67a8",
+    "page_count": 12,
+    "layout": "two-column ICCV 2017 (IEEE/CVF); single-column front block; full-width figure at the top of p2",
+    "order": [
+      [
+        1,
+        "front",
+        "Mask R-CNN"
+      ],
+      [
+        1,
+        "front",
+        "Kaiming He"
+      ],
+      [
+        1,
+        "front",
+        "Facebook AI Research (FAIR)"
+      ],
+      [
+        1,
+        "heading",
+        "Abstract"
+      ],
+      [
+        1,
+        "body",
+        "We present a conceptually simple, flexible, and general framework for"
+      ],
+      [
+        1,
+        "heading",
+        "1. Introduction"
+      ],
+      [
+        1,
+        "body",
+        "The vision community has rapidly improved object detection and semantic"
+      ],
+      [
+        1,
+        "body",
+        "Instance segmentation is challenging because it requires the correct detection"
+      ],
+      [
+        1,
+        "cont",
+        "segmentation, where the goal is to classify each pixel into"
+      ],
+      [
+        1,
+        "body",
+        "Our method, called Mask R-CNN, extends Faster R-CNN [36]"
+      ],
+      [
+        1,
+        "body",
+        "In principle Mask R-CNN is an intuitive extension of Faster R-CNN,"
+      ],
+      [
+        2,
+        "cont",
+        "a seemingly minor change, RoIAlign has a large impact: it"
+      ],
+      [
+        2,
+        "body",
+        "Without bells and whistles, Mask R-CNN surpasses all previous"
+      ],
+      [
+        2,
+        "body",
+        "Our models can run at about 200ms per frame on a GPU,"
+      ],
+      [
+        2,
+        "body",
+        "Finally, we showcase the generality of our framework via the"
+      ],
+      [
+        2,
+        "body",
+        "We have released code to facilitate future research."
+      ],
+      [
+        2,
+        "heading",
+        "2. Related Work"
+      ],
+      [
+        2,
+        "body",
+        "R-CNN: The Region-based CNN (R-CNN) approach [13] to bounding-box"
+      ],
+      [
+        2,
+        "body",
+        "Instance Segmentation: Driven by the effectiveness of R-CNN, many approaches"
+      ],
+      [
+        2,
+        "body",
+        "Most recently, Li et al. [26] combined the segment proposal system"
+      ]
+    ],
+    "floats": [
+      [
+        1,
+        "caption",
+        "Figure 1. The Mask R-CNN framework for instance segmentation.",
+        "figure"
+      ],
+      [
+        2,
+        "caption",
+        "Figure 2. Mask R-CNN results on the COCO test set.",
+        "figure"
+      ]
+    ],
+    "equations": [],
+    "headings": [
+      "Abstract",
+      "1. Introduction",
+      "2. Related Work"
+    ],
+    "run_in_headings": [
+      [
+        2,
+        "R-CNN:"
+      ],
+      [
+        2,
+        "Instance Segmentation:"
+      ]
+    ],
+    "furniture": [
+      [
+        1,
+        "margin",
+        "arXiv:1703.06870v3 [cs.CV] 24 Jan 2018"
+      ],
+      [
+        1,
+        "footnote",
+        "1Following common terminology, we use object detection to denote detection via bounding boxes,"
+      ],
+      [
+        1,
+        "page_number",
+        "1"
+      ],
+      [
+        1,
+        "figure_text",
+        "RoIAlign / class box / conv / conv"
+      ],
+      [
+        2,
+        "page_number",
+        "2"
+      ]
+    ],
+    "counts": {
+      "order_units_p1": 11,
+      "order_units_p2": 9,
+      "front": 3,
+      "heading": 3,
+      "body": 12,
+      "cont": 2,
+      "cont_after_display_equation": 0,
+      "disputed_units": 0,
+      "figures_p1_p2": 2,
+      "tables_p1_p2": 0,
+      "algorithms_p1_p2": 0,
+      "display_equations_p1_p2": 0
+    },
+    "notes": [
+      "Front: title, one names line (wide spaces, no markers), one affiliation line.",
+      "Abstract: one italic paragraph.",
+      "Figure 1 heads the p1 right column. 'Instance segmentation is challenging ...' leaves the left column at 'and semantic' and resumes below the Figure 1 caption (cont).",
+      "The p1 right column ends 'Despite being' and resumes on p2 below the full-width Figure 2 (cont).",
+      "'2. Related Work' opens the p2 right column. Its first two paragraphs begin with bold run-in headings 'R-CNN:' and 'Instance Segmentation:'. These are body units, listed under run_in_headings, not headings."
+    ],
+    "adjudication": {
+      "disputed_units": 0,
+      "case_harmonised_anchors": [],
+      "anchor_rule": "shared prefix of the two annotators' anchors (the words both wrote), annotator-2's letter case"
+    }
+  }
+}

@@ -294,6 +294,12 @@ def test_gpt3_appendix_captions_are_captions_rather_than_headings(
             f"{len(appendix)} 'Figure G.N' captions"
         )
     assert len(appendix) >= 24, "the appendix captions are back in the heading stream"
-    assert len(headings) <= 61, (
+    # 61 was this ratchet at 18f69ec. S2 (#141) moved it to 64 and none of the three is an
+    # un-claimed line: fourteen numbered Title-Case subsections the author-line guard used to
+    # reject came back (`2.2 Training Dataset`, `3.1.1 Language Modeling`, `6.3 Energy Usage`, ...,
+    # all in the PDF's own outline) and two bold run-in leads stopped being headings
+    # (`Initial training set filtering`, `Overlap results`). 64 against 32 bookmarks is inside
+    # `test_outline_floor`'s gpt3 band.
+    assert len(headings) <= 64, (
         f"{len(headings)} headings - the split un-claimed lines that are not captions either"
     )
