@@ -169,5 +169,11 @@ def test_the_job_payload_carries_no_owner_id(wiring: dict) -> None:  # type: ign
     job_id = _enqueue(wiring)
     job = wiring["store"].get_job(wiring["job_owner"], job_id)
     assert job is not None
-    assert set(job.payload) == {"paper_id", "source_path", "source_hash"}
+    assert set(job.payload) == {
+        "paper_id",
+        "source_path",
+        "source_hash",
+        "generation",
+        "attempt_seq",
+    }
     assert "owner" not in job.payload and "owner_id" not in job.payload

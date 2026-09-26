@@ -195,8 +195,17 @@ def test_every_public_helper_takes_the_owner_first(db: PaperTreeDb) -> None:
     A new helper that forgets the owner parameter fails here the moment it is added.
     """
     # `transaction()` binds nothing; `run_grant` is contracts.md §1.1's one un-owned read (a run
-    # token is the credential) and is exempt by name, not by accident.
-    exempt = {"migrate", "close", "create_user", "owner_for", "transaction", "run_grant"}
+    # token is the credential) and is exempt by name, not by accident. So is `asset_grant` (S1):
+    # §2.3's signed asset URL, whose verified HMAC is the credential for one paper's assets.
+    exempt = {
+        "migrate",
+        "close",
+        "create_user",
+        "owner_for",
+        "transaction",
+        "run_grant",
+        "asset_grant",
+    }
     checked = 0
     for name in dir(db):
         if name.startswith("_") or name in exempt:
