@@ -145,6 +145,36 @@ describe('s4: the PDF bytes survive a remount', () => {
     expect(pdf.opens).toBe(2);
   });
 
+  it('a PDF pdf.js cannot open is a designed state with Try again, not a blank pane', async () => {
+    const { SourcePane } = await import('@/components/reader/SourcePane');
+    const { ReaderActionsProvider } = await import('@/components/reader/actions');
+    render(
+      <PdfDocumentProvider src={new ArrayBuffer(0)}>
+        <ReaderActionsProvider value={{ openExplain: () => undefined, sendToCanvas: async () => undefined, focusAnchor: () => undefined }}>
+          <SourcePane
+            doc={doc}
+            zoom={1}
+            highlights={[]}
+            onCreateHighlight={() => undefined}
+            highlightUnavailableReason={null}
+            onActivateHighlight={() => undefined}
+            activeHighlightId={null}
+            flash={null}
+            narrow={false}
+            onViewportResize={() => undefined}
+            onSelectionChange={() => undefined}
+            documentRef={{ current: null }}
+            initialPosition={null}
+            onPositionChange={() => undefined}
+          />
+        </ReaderActionsProvider>
+      </PdfDocumentProvider>,
+    );
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('This PDF could not be opened');
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+  });
+
   it('the workspace opens the PDF once across Source → Guided → Source → Split → Source', async () => {
     const { ReaderWorkspace } = await import('@/app/paper/[id]/read/ReaderWorkspace');
     render(<ReaderWorkspace paper={{ kind: 'api', paperId: paper.paper_id }} />);

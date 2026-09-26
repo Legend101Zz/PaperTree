@@ -290,8 +290,20 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
     await page.getByRole('radio', { name: 'Guided' }).click();
     await expect(page.locator('[data-guided-root]')).toBeVisible();
     await expect
-      .poll(() => page.locator('.pt-guided mark').count(), { timeout: 15_000 })
+      .poll(() => page.locator(`.pt-guided mark[data-highlight-id="${a}"]`).count(), {
+        timeout: 15_000,
+      })
       .toBeGreaterThan(0);
+    const guidedReport = await page.evaluate(() => ({
+      marks: document.querySelectorAll('.pt-guided mark').length,
+      elementMarks: Array.from(document.querySelectorAll('.pt-guided [data-guided-mark]')).map(
+        (el) => `${el.tagName.toLowerCase()}:${(el.textContent ?? '').trim().slice(0, 24)}`,
+      ),
+      notInView: Array.from(
+        document.querySelectorAll('.pt-guided aside[aria-label="Highlights not shown here"] p'),
+      ).map((p) => (p.textContent ?? '').slice(0, 90)),
+    }));
+    note(`Guided: (a) marked in its paragraph; ${JSON.stringify(guidedReport)}`);
     await page.screenshot({ path: shot('b08-guided-1440.png') });
     await page.getByRole('radio', { name: 'Source' }).click();
     await expect.poll(() => spanCount(page), { timeout: 60_000 }).toBeGreaterThan(50);

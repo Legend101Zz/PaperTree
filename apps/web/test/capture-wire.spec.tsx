@@ -297,6 +297,33 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
     }
   });
 
+  it('one selection across a paragraph break is ONE capture with an anchor per block', async () => {
+    const next = doc.blocks.find(
+      (b) => b.readingIndex > target.readingIndex && b.pageIndex === target.pageIndex && b.type === 'paragraph' && b.spans.length > 0,
+    );
+    if (next === undefined) throw new Error('fixture has no second paragraph on the page');
+    const captured: SelectionCapture[] = [];
+    renderPane(doc, { onCreateHighlight: (capture) => captured.push(capture) });
+    const from = await stampedSpan(target);
+    const to = await stampedSpan(next);
+    const range = document.createRange();
+    range.setStart(from.firstChild as Text, 0);
+    range.setEnd(to.firstChild as Text, Math.min(10, (to.textContent ?? '').length));
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    fireEvent(document, new Event('selectionchange'));
+    fireEvent.pointerUp(to);
+    fireEvent.click(await screen.findByRole('button', { name: 'Highlight' }));
+    await waitFor(() => expect(captured.length).toBe(1));
+    const blocks = captured[0]?.anchors.map(
+      (a) => (a.selectors.find((s) => s.type === 'BlockSelector') as { blockId: string } | undefined)?.blockId,
+    );
+    expect(blocks?.[0]).toBe(target.id);
+    expect(blocks).toContain(next.id);
+    expect(new Set(captured[0]?.anchors.map((a) => a.id)).size).toBe(captured[0]?.anchors.length);
+  });
+
   it('Ask sends the captured anchor and the quote to openExplain', async () => {
     const asked: { anchor: Anchor; quote: string }[] = [];
     renderPane(doc, { actions: { openExplain: (input) => asked.push(input) } });
