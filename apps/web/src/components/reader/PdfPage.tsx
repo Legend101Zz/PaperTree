@@ -79,13 +79,28 @@ export interface PdfPageProps {
   readonly onTextLayer?: (info: TextLayerInfo) => void;
 }
 
+/** One `getTextContent()` item with a defined `str`: the typesetter's numbers for one text run. */
+export interface PdfTextItem {
+  readonly str: string;
+  readonly transform: readonly number[];
+  readonly width: number;
+  readonly height: number;
+  readonly fontName?: string;
+  readonly hasEOL?: boolean;
+}
+
+/** The attribute every text-layer div carries: its index into `TextLayerInfo.items` (S4). */
+export const ITEM_INDEX_ATTR = 'data-item-index';
+
 /** What `onTextLayer` hands back. Everything needed to map items to blocks, and nothing measured. */
 export interface TextLayerInfo {
   readonly pageIndex: number;
   /** `TextLayer.textDivs`, render order. */
   readonly divs: readonly HTMLElement[];
   /** The items those divs were built from, `str`-defined only — index-aligned with `divs`. */
-  readonly items: readonly { readonly str: string; readonly transform: readonly number[] }[];
+  readonly items: readonly PdfTextItem[];
+  /** `textContent.styles`: the fonts' ascent/descent, for `bridge.ts`'s item boxes. */
+  readonly styles: Readonly<Record<string, { readonly ascent?: number; readonly descent?: number }>>;
   readonly viewport: { convertToPdfPoint(x: number, y: number): number[] };
   /** `PDFPageProxy.view` / `.rotate`. Raw PDF space; `bridge.ts` turns them into an IR frame. */
   readonly page: { readonly view: BBox; readonly rotate: number };
@@ -255,10 +270,14 @@ export function PdfPage({
 
           const divs = layer.textDivs;
           if (divs !== undefined) {
+            // Every div learns which item it is, so a selection endpoint in ANY div — stamped with an
+            // IR block or not — can be turned into item geometry (`useSelectionCapture`).
+            divs.forEach((div, index) => div.setAttribute(ITEM_INDEX_ATTR, String(index)));
             onTextLayerRef.current?.({
               pageIndex,
               divs,
-              items: alignedItems(content.items as readonly { str?: string }[]) as TextLayerInfo['items'],
+              items: alignedItems(content.items as readonly { str?: string }[]) as unknown as TextLayerInfo['items'],
+              styles: ((content as { styles?: TextLayerInfo['styles'] }).styles ?? {}) as TextLayerInfo['styles'],
               viewport: cssViewport as unknown as TextLayerInfo['viewport'],
               page: { view: page.view as BBox, rotate: page.rotate },
             });

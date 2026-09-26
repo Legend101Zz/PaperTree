@@ -29,6 +29,7 @@ import {
   useContext,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -288,6 +289,48 @@ export function offsetForBlock(
   };
 }
 
+/**
+ * A reading position in PAPER terms: the page, and how far down it the top of the viewport is, in
+ * IR points (contracts.md §5's `{page, yPt}`). A position in pixels is meaningless across a zoom or
+ * a window resize; this one is not, which is what lets a zoom keep the top line where it was (#132).
+ */
+export interface ReadingPosition {
+  readonly page: number;
+  readonly yPt: number;
+}
+
+/** The position at `y` (content px from the first page's top), or null for an empty document. */
+export function positionAt(
+  layout: PageLayout,
+  y: number,
+  irScaleOf: (pageIndex: number) => number,
+): ReadingPosition | null {
+  if (layout.offsets.length === 0) return null;
+  const page = pageIndexAtOffset(layout, Math.max(0, y));
+  const scale = irScaleOf(page);
+  const yPt = scale > 0 ? (Math.max(0, y) - (layout.offsets[page] as number)) / scale : 0;
+  return { page, yPt };
+}
+
+/** The content y (px) of a position: the inverse of `positionAt` under `layout`. */
+export function offsetOfPosition(
+  layout: PageLayout,
+  position: ReadingPosition,
+  irScaleOf: (pageIndex: number) => number,
+): number {
+  return offsetForPage(layout, position.page) + position.yPt * irScaleOf(position.page);
+}
+
+/** Where a page sits in the content box, for anything drawn above the pages. */
+export interface FloatingGeometry {
+  /** Content px: `left`/`top` of the page's box inside the content column. */
+  pageBox(pageIndex: number): { left: number; top: number; width: number; height: number } | null;
+  /** IR points → CSS px on that page: `zoom × userUnit`. */
+  irScale(pageIndex: number): number;
+  /** The content column's width, px. */
+  readonly contentWidth: number;
+}
+
 /* ────────────────────────────── visible-page publication ────────────────────────────── */
 
 export interface VisiblePages {
@@ -367,6 +410,9 @@ export interface VirtualPageListHandle {
   scrollToBlock(pageIndex: number, bbox: BBox, opts?: ScrollToOptions): void;
   getVisiblePages(): VisiblePages;
   getScrollElement(): HTMLDivElement | null;
+  /** Put this position at the top of the viewport. */
+  scrollToPosition?(position: ReadingPosition): void;
+  getPosition?(): ReadingPosition | null;
 }
 
 /** Pointer plumbing the reader shell forwards from `usePinchZoom`. */
@@ -399,7 +445,20 @@ export interface VirtualPageListProps {
   readonly onVisibleChange?: (visible: VisiblePages) => void;
   /** Pinch handlers and `touch-action`, from `usePinchZoom` in `ZoomControl`. */
   readonly surfaceProps?: PointerSurfaceProps;
+  /**
+   * Drawn in a layer ABOVE every page, in content coordinates (S4): the selection toolbar lives
+   * here, out of the pages' `overflow: hidden` and out of their `pointer-events: none` overlay slot.
+   */
+  readonly renderFloating?: (geometry: FloatingGeometry) => ReactNode;
+  /** Applied once, when the pages are first known: where this paper was last left. */
+  readonly initialPosition?: ReadingPosition | null;
+  /** Reported on scroll (rAF-coalesced): the reading position at the viewport's top edge. */
+  readonly onPositionChange?: (position: ReadingPosition) => void;
 }
+
+/** The desk above the first page: pages never sit flush against the toolbar. */
+export const CONTENT_PAD_TOP = 16;
+export const CONTENT_PAD_BOTTOM = 48;
 
 export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageListProps>(
   function VirtualPageList(
@@ -413,6 +472,9 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
       onViewportResize,
       onVisibleChange,
       surfaceProps,
+      renderFloating,
+      initialPosition = null,
+      onPositionChange,
     },
     ref,
   ) {
@@ -435,9 +497,48 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
 
     const layout = useMemo(() => computePageLayout(units, zoom, gap), [units, zoom, gap]);
     const win = useMemo(
-      () => computePageWindow(layout, scrollTop, viewportHeight, overscan),
+      () =>
+        computePageWindow(layout, Math.max(0, scrollTop - CONTENT_PAD_TOP), viewportHeight, overscan),
       [layout, scrollTop, viewportHeight, overscan],
     );
+
+    const irScaleOfRef = useRef<(pageIndex: number) => number>(() => zoom);
+    irScaleOfRef.current = (pageIndex: number) => zoom * (pageMeta.get(pageIndex)?.userUnit ?? 1);
+
+    /**
+     * THE READING POSITION, kept in paper terms (#132). Updated from every scroll against the
+     * layout that scroll happened under, so when the layout changes (a zoom, a fit-width resize)
+     * the position still describes the line the reader was on, and the effect below puts that
+     * line back at the top. The baseline kept `scrollTop` in pixels, so "+" moved the reader half
+     * a page.
+     */
+    const positionRef = useRef<ReadingPosition | null>(null);
+    const xRatioRef = useRef<number | null>(null);
+    const layoutRef = useRef<PageLayout | null>(null);
+    const onPositionChangeRef = useRef(onPositionChange);
+    onPositionChangeRef.current = onPositionChange;
+    const initialRef = useRef(initialPosition);
+
+    useLayoutEffect(() => {
+      const el = scrollRef.current;
+      if (el === null || layout.offsets.length === 0) return;
+      const previous = layoutRef.current;
+      layoutRef.current = layout;
+      const target =
+        previous === null ? (initialRef.current ?? null) : (positionRef.current ?? null);
+      if (target === null) return;
+      const clamped: ReadingPosition = {
+        page: Math.min(Math.max(0, target.page), layout.offsets.length - 1),
+        yPt: Math.max(0, target.yPt),
+      };
+      const top = CONTENT_PAD_TOP + offsetOfPosition(layout, clamped, irScaleOfRef.current);
+      el.scrollTop = top;
+      if (previous !== null && xRatioRef.current !== null && layout.maxWidth > el.clientWidth) {
+        el.scrollLeft = Math.max(0, xRatioRef.current * layout.maxWidth - el.clientWidth / 2);
+      }
+      positionRef.current = clamped;
+      setScrollTop(el.scrollTop);
+    }, [layout]);
 
     /**
      * rAF-coalesced. A trackpad fling delivers scroll events faster than frames; without the gate
@@ -450,7 +551,16 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
       frameRef.current = window.requestAnimationFrame(() => {
         frameRef.current = null;
         const el = scrollRef.current;
-        if (el !== null) setScrollTop(el.scrollTop);
+        if (el === null) return;
+        setScrollTop(el.scrollTop);
+        const current = layoutRef.current;
+        if (current === null) return;
+        const position = positionAt(current, el.scrollTop - CONTENT_PAD_TOP, irScaleOfRef.current);
+        if (position === null) return;
+        positionRef.current = position;
+        xRatioRef.current =
+          current.maxWidth > 0 ? (el.scrollLeft + el.clientWidth / 2) / current.maxWidth : null;
+        onPositionChangeRef.current?.(position);
       });
     }, []);
 
@@ -510,7 +620,10 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
         scrollToPage(pageIndex, opts) {
           const el = scrollRef.current;
           if (el === null) return;
-          el.scrollTo({ top: offsetForPage(layout, pageIndex), behavior: opts?.behavior ?? 'auto' });
+          el.scrollTo({
+            top: CONTENT_PAD_TOP + offsetForPage(layout, pageIndex),
+            behavior: opts?.behavior ?? 'auto',
+          });
         },
         scrollToBlock(pageIndex, bbox, opts) {
           const el = scrollRef.current;
@@ -519,7 +632,19 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
             margin: opts?.margin ?? 24,
             viewportHeight,
           });
-          el.scrollTo({ top: target.top, left: target.left, behavior: opts?.behavior ?? 'auto' });
+          // Horizontally only when the page is wider than the viewport: otherwise a column on the
+          // right would drag a centred page sideways for nothing.
+          const left = layout.maxWidth > el.clientWidth ? target.left : el.scrollLeft;
+          el.scrollTo({ top: CONTENT_PAD_TOP + target.top, left, behavior: opts?.behavior ?? 'auto' });
+        },
+        scrollToPosition(position) {
+          const el = scrollRef.current;
+          if (el === null || layout.offsets.length === 0) return;
+          el.scrollTop = CONTENT_PAD_TOP + offsetOfPosition(layout, position, irScaleFor);
+          positionRef.current = position;
+        },
+        getPosition() {
+          return positionRef.current;
         },
         getVisiblePages() {
           return visible;
@@ -559,7 +684,15 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
         role="region"
         aria-label="Paper pages"
       >
-        <div style={{ width: `${layout.maxWidth}px`, margin: '0 auto' }}>
+        <div aria-hidden="true" style={{ height: `${String(CONTENT_PAD_TOP)}px` }} />
+        <div
+          style={{
+            position: 'relative',
+            width: `${layout.maxWidth}px`,
+            margin: '0 auto',
+            paddingBottom: `${String(CONTENT_PAD_BOTTOM)}px`,
+          }}
+        >
           {/* Exact-height spacers: the scroll height never depends on what happens to be mounted. */}
           <div aria-hidden="true" style={{ height: `${win.leadingSpacer}px` }} />
           {win.mounted.map((pageIndex) => {
@@ -583,6 +716,24 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
             );
           })}
           <div aria-hidden="true" style={{ height: `${win.trailingSpacer}px` }} />
+          {renderFloating === undefined ? null : (
+            <div
+              data-papertree-floating=""
+              style={{ position: 'absolute', inset: 0, zIndex: 30, pointerEvents: 'none' }}
+            >
+              {renderFloating({
+                pageBox(pageIndex) {
+                  const top = layout.offsets[pageIndex];
+                  const width = layout.widths[pageIndex];
+                  const height = layout.heights[pageIndex];
+                  if (top === undefined || width === undefined || height === undefined) return null;
+                  return { left: Math.max(0, (layout.maxWidth - width) / 2), top, width, height };
+                },
+                irScale: irScaleFor,
+                contentWidth: layout.maxWidth,
+              })}
+            </div>
+          )}
         </div>
       </div>
     );

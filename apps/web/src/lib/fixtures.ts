@@ -6,12 +6,12 @@
  * `public/fixtures/` on prebuild/predev/pretest, so everything below is a plain `fetch` of a
  * same-origin file.
  *
- * WHEN EPIC 1'S PARSER LANDS, only `loadPaper` changes: it fetches from the API instead of from
- * `public/`, and everything downstream — which consumes an `IndexedDocument`, not a fixture —
- * is untouched. That is the point of routing every consumer through `indexDocument`.
+ * Loading lives in `lib/paperSource.ts::loadDocument`, the ONE loader for fixtures and API papers
+ * alike; the duplicate `loadPaper` this file used to carry was removed in S4 (slice-plan §R, R8).
+ * The fixtures are reachable only when `NEXT_PUBLIC_PAPERTREE_FIXTURES=on` (contracts.md §7).
  */
 
-import { indexDocument, type IndexedDocument, type PaperSource } from '@papertree/anchoring';
+import type { PaperSource } from '@papertree/anchoring';
 
 export const FIXTURE_SLUGS = [
   'attention-is-all-you-need',
@@ -52,36 +52,4 @@ export function pdfUrlFor(slug: FixtureSlug): string {
  */
 export function textStreamIdFor(paper: PaperSource & { ir_version?: string }): string {
   return `fixture/${paper.ir_version ?? 'unknown'}`;
-}
-
-const cache = new Map<FixtureSlug, Promise<IndexedDocument>>();
-
-/**
- * Fetch and index a fixture. Memoised per slug — `indexDocument` walks every block, builds four
- * indices and normalises the whole text stream, and the Navigator, the overlay and the Guided view
- * all want the same one.
- */
-export async function loadPaper(slug: FixtureSlug): Promise<IndexedDocument> {
-  const existing = cache.get(slug);
-  if (existing !== undefined) return existing;
-
-  const promise = (async () => {
-    const response = await fetch(`/fixtures/${slug}.paperir.json`);
-    if (!response.ok) {
-      throw new Error(
-        `could not load fixture "${slug}" (${String(response.status)}). ` +
-          `Run \`pnpm --filter papertree-web prepare:assets\` to stage public/fixtures/.`,
-      );
-    }
-    const paper = (await response.json()) as PaperSource;
-    return indexDocument(paper, textStreamIdFor(paper));
-  })();
-
-  cache.set(slug, promise);
-  return promise;
-}
-
-/** Drop the memo. Tests only. */
-export function __clearPaperCache(): void {
-  cache.clear();
 }

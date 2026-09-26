@@ -44,8 +44,40 @@ import type { BBox, PageFrame } from '@papertree/document-ir';
 
 import { getPdfjs } from '@/lib/pdf/worker';
 
-/** What `getDocument` will accept. An `ArrayBuffer` is TRANSFERRED to the worker — do not reuse it. */
+/**
+ * What the reader opens. Bytes are COPIED before each `getDocument` (pdf.js transfers what it is
+ * given to its worker, which detaches it), so the caller's buffer is never consumed.
+ */
 export type PdfSource = string | URL | ArrayBuffer | Uint8Array;
+
+interface PapertreeDebug {
+  getDocumentCalls: number;
+}
+
+declare global {
+  interface Window {
+    /** Read by the e2e walk: how many times this page called pdf.js `getDocument`. */
+    __PAPERTREE_DEBUG__?: PapertreeDebug;
+  }
+}
+
+function debugState(): PapertreeDebug | null {
+  if (typeof window === 'undefined') return null;
+  window.__PAPERTREE_DEBUG__ ??= { getDocumentCalls: 0 };
+  return window.__PAPERTREE_DEBUG__;
+}
+
+/** How many times this page has called `getDocument` — the one-open-per-session invariant. */
+export function getDocumentCalls(): number {
+  return debugState()?.getDocumentCalls ?? 0;
+}
+
+/** A private copy of the bytes, so the transfer to pdf.js's worker detaches the copy, not ours. */
+function openable(src: PdfSource): string | URL | { data: Uint8Array } {
+  if (typeof src === 'string' || src instanceof URL) return src;
+  if (src instanceof Uint8Array) return { data: src.slice() };
+  return { data: new Uint8Array(src.slice(0)) };
+}
 
 export interface PdfPageMeta {
   /** 0-based. `PDFPageProxy.pageNumber` is 1-based; every API in this epic is 0-based. */
@@ -66,6 +98,8 @@ export interface PdfPageMeta {
 
 export interface PdfDocumentValue {
   readonly pdf: PDFDocumentProxy | null;
+  /** `pdfjs.version`, once pdf.js has loaded — the page-text capture path names it (§6). */
+  readonly pdfjsVersion: string | null;
   readonly numPages: number;
   readonly pageMeta: ReadonlyMap<number, PdfPageMeta>;
   /** A designed state, not a thrown exception: the reader renders a retry affordance from it. */
@@ -168,6 +202,7 @@ async function describeAllPages(
 
 interface LoadState {
   readonly pdf: PDFDocumentProxy | null;
+  readonly pdfjsVersion: string | null;
   readonly numPages: number;
   readonly pageMeta: ReadonlyMap<number, PdfPageMeta>;
   readonly error: Error | null;
@@ -176,6 +211,7 @@ interface LoadState {
 
 const IDLE: LoadState = {
   pdf: null,
+  pdfjsVersion: null,
   numPages: 0,
   pageMeta: EMPTY_META,
   error: null,
@@ -204,38 +240,60 @@ export function PdfDocumentProvider({ src, children }: PdfDocumentProviderProps)
 
     let cancelled = false;
     let task: PDFDocumentLoadingTask | null = null;
+    let started: ReturnType<typeof setTimeout> | null = null;
 
-    setState({ pdf: null, numPages: 0, pageMeta: EMPTY_META, error: null, loading: true });
+    setState({
+      pdf: null,
+      pdfjsVersion: null,
+      numPages: 0,
+      pageMeta: EMPTY_META,
+      error: null,
+      loading: true,
+    });
 
-    void (async () => {
+    // One macrotask late, on purpose: React StrictMode (development) mounts, unmounts and mounts
+    // again synchronously, and the unmount clears this timer — so the discarded first mount never
+    // calls `getDocument`, and the one-open-per-session count means what it says.
+    started = setTimeout(() => void (async () => {
       try {
         const pdfjs = await getPdfjs();
         if (cancelled) return;
 
-        task = pdfjs.getDocument(src);
+        const debug = debugState();
+        if (debug !== null) debug.getDocumentCalls += 1;
+        task = pdfjs.getDocument(openable(src) as Parameters<typeof pdfjs.getDocument>[0]);
         const doc = await task.promise;
         if (cancelled) return;
 
         const pageMeta = await describeAllPages(doc, () => cancelled);
         if (cancelled) return;
 
-        setState({ pdf: doc, numPages: doc.numPages, pageMeta, error: null, loading: false });
+        setState({
+          pdf: doc,
+          pdfjsVersion: typeof pdfjs.version === 'string' ? pdfjs.version : null,
+          numPages: doc.numPages,
+          pageMeta,
+          error: null,
+          loading: false,
+        });
       } catch (cause) {
         // A cancelled load rejects too; reporting that as an error would flash a failure screen on
         // every navigation away.
         if (cancelled) return;
         setState({
           pdf: null,
+          pdfjsVersion: null,
           numPages: 0,
           pageMeta: EMPTY_META,
           error: toError(cause),
           loading: false,
         });
       }
-    })();
+    })(), 0);
 
     return () => {
       cancelled = true;
+      if (started !== null) clearTimeout(started);
       // `destroy()` tears down the worker and the transport; without it every reload leaks one.
       void task?.destroy().catch(() => undefined);
     };
@@ -244,6 +302,7 @@ export function PdfDocumentProvider({ src, children }: PdfDocumentProviderProps)
   const value = useMemo<PdfDocumentValue>(
     () => ({
       pdf: state.pdf,
+      pdfjsVersion: state.pdfjsVersion,
       numPages: state.numPages,
       pageMeta: state.pageMeta,
       error: state.error,

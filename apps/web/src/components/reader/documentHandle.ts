@@ -22,6 +22,8 @@
  */
 import type { MutableRefObject } from 'react';
 
+import type { BBox } from '@papertree/document-ir';
+
 export interface DocumentHandle {
   /**
    * Scroll the block into view. The pane resolves `blockId` to a `(pageIndex, bbox)` itself —
@@ -42,6 +44,12 @@ export interface DocumentHandle {
    * string parsed by convention is a second contract nobody declared (#64, step 3).
    */
   scrollToPage(pageIndex: number): void;
+
+  /**
+   * Bring an IR-space rectangle on a page into view — what `focusAnchor` scrolls to: the extent of
+   * the passage it is about to flash, which for a user highlight is its STORED quads, not a block.
+   */
+  scrollToRect(pageIndex: number, bbox: BBox): void;
 }
 
 export type DocumentRef = MutableRefObject<DocumentHandle | null>;
@@ -49,7 +57,8 @@ export type DocumentRef = MutableRefObject<DocumentHandle | null>;
 /** What the shell wants done once a document pane exists to do it. */
 export type PendingScroll =
   | { readonly kind: 'block'; readonly blockId: string }
-  | { readonly kind: 'page'; readonly pageIndex: number };
+  | { readonly kind: 'page'; readonly pageIndex: number }
+  | { readonly kind: 'rect'; readonly pageIndex: number; readonly bbox: BBox };
 
 /**
  * Run a scroll request against a handle.
@@ -60,5 +69,6 @@ export type PendingScroll =
  */
 export function applyScroll(handle: DocumentHandle, request: PendingScroll): void {
   if (request.kind === 'block') handle.scrollToBlock(request.blockId);
+  else if (request.kind === 'rect') handle.scrollToRect(request.pageIndex, request.bbox);
   else handle.scrollToPage(request.pageIndex);
 }
