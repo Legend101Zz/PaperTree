@@ -209,8 +209,15 @@ export interface PdfTextItemGeometry {
   readonly descent?: number;
 }
 
-/** pdf.js `text_layer.js` DEFAULT_FONT_ASCENT, and the descent it implies for a 1-em box. */
-const DEFAULT_ASCENT = 0.8;
+/**
+ * The glyph band's floor: ascent 0.85 and descent 0.2 of the font height. pdf.js's text layer
+ * defaults to 0.8/0.2; 0.85 reaches Latin ascenders and accents (0.68–0.8 em in the corpus fonts)
+ * with a hair to spare. MEASURED on YOLO at 125 % against the browser's own selection rects: the
+ * font's declared ascent (0.678) put the paint's top 3.5 px under the selection's, a 0.8 floor 2.0
+ * px, 0.85 1.4 px. The rest is the browser's fallback font (its content box reaches ~0.96 em), not
+ * the PDF's glyphs, so the band is not stretched further to meet it.
+ */
+const DEFAULT_ASCENT = 0.85;
 const DEFAULT_DESCENT = -0.2;
 
 function codePointLength(text: string): number {
@@ -226,10 +233,12 @@ function codePointLength(text: string): number {
  * then taken through `pdfRectToIr`, the same frame conversion `stampTextLayer` uses, so it is the
  * same at every zoom, window size and device pixel ratio.
  *
- * Vertically it spans descent..ascent about the baseline — the box pdf.js sizes its own text-layer
- * span to, which is what the reader's selection highlight is drawn over. Horizontally it is the
- * advance width, narrowed to the selected fraction BY CODE POINT: an item is one run of one font,
- * usually a word or a short phrase, so the interpolation is wrong by less than a glyph.
+ * Vertically it spans the LINE'S GLYPH BAND about the baseline: at least the floor below (ascent
+ * 0.85, descent 0.2 of the font height), widened to the font's declared ascent and descent when
+ * they are larger. A font descriptor's Ascent is often the cap height (Times: 0.678 in YOLO), which
+ * would paint a band that clips accents and superscripts and sits visibly inside the reader's own
+ * selection highlight. Horizontally it is the advance width, narrowed to the selected fraction BY
+ * CODE POINT inside the item.
  *
  * Axis-aligned text (the matrix's shear terms are zero) is interpolated exactly as described.
  * Rotated text (an axis label, the arXiv margin stamp) gets the whole item's box: the selected
@@ -250,8 +259,14 @@ export function pdfItemRangeToIrQuad(
   if (hi <= lo) return null;
 
   const height = item.height > 0 ? item.height : Math.hypot(c, d);
-  const ascent = item.ascent !== undefined && item.ascent > 0 ? item.ascent : DEFAULT_ASCENT;
-  const descent = item.descent !== undefined && item.descent < 0 ? item.descent : DEFAULT_DESCENT;
+  const ascent = Math.max(
+    DEFAULT_ASCENT,
+    item.ascent !== undefined && item.ascent > 0 ? item.ascent : 0,
+  );
+  const descent = Math.min(
+    DEFAULT_DESCENT,
+    item.descent !== undefined && item.descent < 0 ? item.descent : 0,
+  );
 
   const axisAligned = Math.abs(b) < 1e-6 && Math.abs(c) < 1e-6;
   if (!axisAligned) {

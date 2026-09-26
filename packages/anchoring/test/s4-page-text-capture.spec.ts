@@ -11,7 +11,14 @@ import { normalisePageFrame } from '@papertree/document-ir';
 import { describe, expect, it } from 'vitest';
 
 import { pdfItemRangeToIrQuad } from '../src/bridge.js';
-import { capturePageTextAnchor, pageTextOf, pageTextStreamId } from '../src/capture.js';
+import {
+  captureAnchor,
+  capturePageTextAnchor,
+  itemPieceQuads,
+  pageTextOf,
+  pageTextStreamId,
+  piecesBetween,
+} from '../src/capture.js';
 import { indexDocument, type PaperSource } from '../src/document.js';
 import type { ShapeSelector, TextQuoteSelector } from '../src/types.js';
 
@@ -51,18 +58,31 @@ const doc = indexDocument(paper, 'api/ppr_S4REPARSE00000000000000000/g1/1.0.0');
 
 describe('pdfItemRangeToIrQuad', () => {
   it('covers descent..ascent about the baseline and the whole advance for the whole item', () => {
-    // Baseline at IR y 92; ascent 0.8 * 10 above, descent 0.2 * 10 below.
-    expect(pdfItemRangeToIrQuad(frame, cell, 0, 4)).toEqual([300, 84, 320, 94]);
+    // Baseline at IR y 92; the band's floor is 0.85 * 10 above and 0.2 * 10 below.
+    expect(pdfItemRangeToIrQuad(frame, cell, 0, 4)).toEqual([300, 83.5, 320, 94]);
   });
 
   it('narrows a sub-range by the code-point ratio inside the item', () => {
     // "6.4" of "66.4": characters [1, 4) are 3/4 of 20 pt, starting 5 pt in.
-    expect(pdfItemRangeToIrQuad(frame, cell, 1, 4)).toEqual([305, 84, 320, 94]);
+    expect(pdfItemRangeToIrQuad(frame, cell, 1, 4)).toEqual([305, 83.5, 320, 94]);
   });
 
   it('uses the font metrics when pdf.js reports them', () => {
     const quad = pdfItemRangeToIrQuad(frame, { ...cell, ascent: 0.9, descent: -0.25 }, 0, 4);
     expect(quad).toEqual([300, 83, 320, 94.5]);
+  });
+
+  it("never paints a band shorter than the floor (YOLO's Times declares 0.678/-0.216)", () => {
+    // Ascent is floored at 0.85, descent keeps the font's -0.216: baseline IR 92, height 10.
+    const [x0, y0, x1, y1] = pdfItemRangeToIrQuad(
+      frame,
+      { ...cell, ascent: 0.678, descent: -0.216 },
+      0,
+      4,
+    ) as number[];
+    expect([x0, y0, x1, y1].map((v) => Math.round((v ?? 0) * 1000) / 1000)).toEqual([
+      300, 83.5, 320, 94.16,
+    ]);
   });
 
   it('refuses an empty range and an empty item', () => {
@@ -98,7 +118,7 @@ describe('capturePageTextAnchor', () => {
     expect(quote.exact).toBe('66.4');
     expect(quote.prefix).toBe('person ');
     const shape = anchor?.selectors.find((s) => s.type === 'ShapeSelector') as ShapeSelector;
-    expect(shape.quads).toEqual([[300, 84, 320, 94]]);
+    expect(shape.quads).toEqual([[300, 83.5, 320, 94]]);
     // Inside the table-cell block by geometry.
     expect(anchor?.targetKind).toBe('table_cell');
   });
@@ -185,5 +205,123 @@ describe('capturePageTextAnchor', () => {
       text: 'person\n66.4',
       itemStarts: [0, 7],
     });
+  });
+});
+
+describe('the IR-stamped path measures its ShapeSelector from item geometry', () => {
+  const fixture = JSON.parse(
+    readFileSync(
+      new URL('../../document-ir/fixtures/resnet-cvpr-2col.paperir.json', import.meta.url),
+      'utf8',
+    ),
+  ) as PaperSource;
+  const ir = indexDocument(fixture, 'api/ppr_x/g1/0.1.0');
+  const block = ir.blocks.find((b) => b.type === 'paragraph' && b.textCodePoints.length > 120);
+
+  it('stores the caller-measured quads, and keeps the IR offsets and the quote', () => {
+    expect(block).toBeDefined();
+    const measured: [number, number, number, number][] = [[100, 200, 180, 210]];
+    const anchor = captureAnchor({
+      doc: ir,
+      blockId: block!.id,
+      startOffset: 10,
+      endOffset: 40,
+      targetKind: 'text',
+      id: '00000000-0000-4000-8000-000000000010',
+      at: '2026-09-26T00:00:00.000Z',
+      client: 'test',
+      quads: measured,
+    });
+    const shape = anchor.selectors.find((s) => s.type === 'ShapeSelector') as ShapeSelector;
+    expect(shape.quads).toEqual(measured);
+    expect(shape.polygons).toHaveLength(1);
+    expect(anchor.selectors.map((s) => s.type)).toContain('BlockSelector');
+    expect(anchor.selectors.map((s) => s.type)).toContain('TextPositionSelector');
+  });
+
+  it('falls back to quadsForRange when no measured quad is paintable', () => {
+    const withoutQuads = captureAnchor({
+      doc: ir,
+      blockId: block!.id,
+      startOffset: 10,
+      endOffset: 40,
+      targetKind: 'text',
+      id: '00000000-0000-4000-8000-000000000011',
+      at: '2026-09-26T00:00:00.000Z',
+      client: 'test',
+    });
+    const degenerate = captureAnchor({
+      doc: ir,
+      blockId: block!.id,
+      startOffset: 10,
+      endOffset: 40,
+      targetKind: 'text',
+      id: '00000000-0000-4000-8000-000000000011',
+      at: '2026-09-26T00:00:00.000Z',
+      client: 'test',
+      quads: [[5, 5, 5, 9]],
+    });
+    expect(degenerate).toEqual(withoutQuads);
+  });
+});
+
+describe('itemPieceQuads / piecesBetween', () => {
+  // Two words on one line with a word space between them, then a cell 60 pt further along.
+  const words = [
+    { str: 'Residual', transform: [10, 0, 0, 10, 100, 700], width: 40, height: 10 },
+    { str: ' ', transform: [10, 0, 0, 10, 140, 700], width: 3, height: 10 },
+    { str: 'learning', transform: [10, 0, 0, 10, 143, 700], width: 38, height: 10 },
+    { str: '66.4', transform: [10, 0, 0, 10, 241, 700], width: 20, height: 10 },
+  ];
+
+  it('cuts the endpoints inside their items and skips whitespace-only pieces', () => {
+    expect(piecesBetween(words, { item: 0, offset: 3 }, { item: 2, offset: 5 })).toEqual([
+      { item: 0, from: 3, to: 8 },
+      { item: 1, from: 0, to: 1 },
+      { item: 2, from: 0, to: 5 },
+    ]);
+  });
+
+  it('joins a phrase into one quad and keeps a far cell separate', () => {
+    const quads = itemPieceQuads(frame, words, [
+      { item: 0, from: 0, to: 8 },
+      { item: 2, from: 0, to: 8 },
+      { item: 3, from: 0, to: 4 },
+    ]);
+    expect(quads).toEqual([
+      [100, 83.5, 181, 94],
+      [241, 83.5, 261, 94],
+    ]);
+  });
+});
+
+describe('targetKind by geometry', () => {
+  it('a cell and its one-cell row with the same box: the cell (the deeper block) wins', () => {
+    const tied: PaperSource = {
+      ...paper,
+      blocks: [
+        { block_id: 'blk_row', type: 'table_row', page_index: 0, bbox: [295, 85, 330, 100] },
+        {
+          block_id: 'blk_cell2',
+          type: 'table_cell',
+          page_index: 0,
+          bbox: [295, 85, 330, 100],
+          parent_id: 'blk_row',
+        },
+      ],
+    };
+    const anchor = capturePageTextAnchor({
+      doc: indexDocument(tied, 'api/ppr_S4REPARSE00000000000000000/g1/1.0.0'),
+      pageIndex: 0,
+      frame,
+      items: [cell],
+      start: { item: 0, offset: 0 },
+      end: { item: 0, offset: 4 },
+      textStreamId: pageTextStreamId('5.7.284'),
+      id: '00000000-0000-4000-8000-000000000020',
+      at: '2026-09-26T00:00:00.000Z',
+      client: 'test',
+    });
+    expect(anchor?.targetKind).toBe('table_cell');
   });
 });

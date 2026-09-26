@@ -28,6 +28,10 @@ import type { Anchor, ProvenanceClass, Selector, SubTarget, TargetKind } from '.
  */
 export const CONTEXT_CODE_POINTS = 64;
 
+function isPaintableQuad(quad: BBox): boolean {
+  return quad.every((v) => Number.isFinite(v)) && quad[2] > quad[0] && quad[3] > quad[1];
+}
+
 export interface CaptureInput {
   readonly doc: IndexedDocument;
   readonly blockId: string;
@@ -41,6 +45,17 @@ export interface CaptureInput {
   readonly at: string;
   readonly client: string;
   readonly mode?: 'source' | 'guided';
+  /**
+   * The selection's own glyph quads, IR space, measured by the caller from the text layer's pdf.js
+   * ITEM GEOMETRY (`itemPieceQuads`, through `bridge.ts`) — never from DOM rects. When given (and
+   * non-empty) the ShapeSelector stores these instead of `quadsForRange` over the IR spans.
+   *
+   * Why the reader passes them (S4): a live worker parse's span is usually a whole LINE, so
+   * `quadsForRange` narrows a mid-line selection by a code-point ratio across ~90 characters and
+   * lands points away from the glyphs; pdf.js items are words or short runs, so the same ratio is
+   * wrong by less than a character. The Block/Position/Quote selectors still come from the IR.
+   */
+  readonly quads?: readonly BBox[];
 }
 
 export function captureAnchor(input: CaptureInput): Anchor {
@@ -105,7 +120,14 @@ export function captureAnchor(input: CaptureInput): Anchor {
   }
 
   // ── T4 ── geometry, in IR space
-  const geometry = geometryFor(block, start, end, input.subTarget);
+  const measured = (input.quads ?? []).filter(isPaintableQuad);
+  const geometry =
+    measured.length > 0 && input.subTarget === undefined
+      ? {
+          quads: measured.map((q): BBox => [q[0], q[1], q[2], q[3]]),
+          polygons: unionOfLineRects(measured),
+        }
+      : geometryFor(block, start, end, input.subTarget);
   if (geometry !== null && page !== undefined) {
     selectors.push({
       type: 'ShapeSelector',
@@ -342,22 +364,32 @@ function sameLineBox(a: BBox, b: BBox): boolean {
   return shorter > 0 && overlap > 0.5 * shorter;
 }
 
+/** A run of characters inside one pdf.js item: code points `[from, to)` of item `item`'s `str`. */
+export interface ItemPiece {
+  readonly item: number;
+  readonly from: number;
+  readonly to: number;
+}
+
 /**
- * The quads for a page-text range: one per item run, joined along a line while the gap between
- * items is a word space. A table row's cells, a column gutter, a figure's scattered labels all have
- * gaps wider than that, and stay separate quads — painting the gap would paint text that was not
- * selected.
+ * The quads for a set of item pieces: one per run of items, joined along a line while the gap
+ * between them is a word space. A table row's cells, a column gutter, a figure's scattered labels
+ * all have gaps wider than that and stay separate quads — painting the gap would paint text that
+ * was not selected. Whitespace-only pieces carry no glyph and contribute nothing.
+ *
+ * Exported for the reader's IR-stamped path too, which measures its ShapeSelector from the same
+ * item geometry (`CaptureInput.quads`).
  */
-function pageTextQuads(input: PageTextCaptureInput): BBox[] {
-  const { items, start, end, frame } = input;
+export function itemPieceQuads(
+  frame: PageFrame,
+  items: readonly PdfTextItemGeometry[],
+  pieces: readonly ItemPiece[],
+): BBox[] {
   const boxes: BBox[] = [];
-  for (let i = Math.max(0, start.item); i <= Math.min(items.length - 1, end.item); i += 1) {
-    const item = items[i];
+  for (const piece of pieces) {
+    const item = items[piece.item];
     if (item === undefined || item.str.trim() === '') continue;
-    const length = toCodePoints(item.str).length;
-    const from = i === start.item ? start.offset : 0;
-    const to = i === end.item ? end.offset : length;
-    const quad = pdfItemRangeToIrQuad(frame, item, from, to);
+    const quad = pdfItemRangeToIrQuad(frame, item, piece.from, piece.to);
     if (quad !== null && quad[2] > quad[0] && quad[3] > quad[1]) boxes.push(quad);
   }
   const merged: BBox[] = [];
@@ -381,27 +413,72 @@ function pageTextQuads(input: PageTextCaptureInput): BBox[] {
   return merged;
 }
 
+/** Every item piece between two page-text endpoints (the end exclusive), in content order. */
+export function piecesBetween(
+  items: readonly PdfTextItemGeometry[],
+  start: PageTextEndpoint,
+  end: PageTextEndpoint,
+): ItemPiece[] {
+  const pieces: ItemPiece[] = [];
+  for (let i = Math.max(0, start.item); i <= Math.min(items.length - 1, end.item); i += 1) {
+    const item = items[i];
+    if (item === undefined) continue;
+    const length = toCodePoints(item.str).length;
+    const from = i === start.item ? start.offset : 0;
+    const to = i === end.item ? end.offset : length;
+    if (to > from) pieces.push({ item: i, from, to });
+  }
+  return pieces;
+}
+
+function pageTextQuads(input: PageTextCaptureInput): BBox[] {
+  return itemPieceQuads(
+    input.frame,
+    input.items,
+    piecesBetween(input.items, input.start, input.end),
+  );
+}
+
 function areaOf(bbox: BBox): number {
   return Math.max(0, bbox[2] - bbox[0]) * Math.max(0, bbox[3] - bbox[1]);
 }
 
 /**
  * `table_cell` or `figure_region` when the captured region sits inside a table-cell or figure block
- * BY GEOMETRY (contracts.md §6), `text` otherwise. The smallest containing block decides, because
+ * BY GEOMETRY (contracts.md §6), `text` otherwise. The deepest containing block decides, because
  * blocks nest: a cell is inside its row inside its table.
  */
 function targetKindByGeometry(doc: IndexedDocument, pageIndex: number, extent: BBox): TargetKind {
   const cx = (extent[0] + extent[2]) / 2;
   const cy = (extent[1] + extent[3]) / 2;
-  let best: IndexedBlock | null = null;
+  const depthOf = (block: IndexedBlock): number => {
+    let depth = 0;
+    const seen = new Set<string>();
+    for (let parent = block.parentId; parent !== null && !seen.has(parent); depth += 1) {
+      seen.add(parent);
+      parent = doc.byId.get(parent)?.parentId ?? null;
+    }
+    return depth;
+  };
+  let best: { block: IndexedBlock; depth: number; area: number } | null = null;
   for (const block of doc.byPage.get(pageIndex) ?? []) {
     const [x0, y0, x1, y1] = block.bbox;
     if (cx < x0 || cx > x1 || cy < y0 || cy > y1) continue;
-    if (best === null || areaOf(block.bbox) < areaOf(best.bbox)) best = block;
+    const candidate = { block, depth: depthOf(block), area: areaOf(block.bbox) };
+    // The DEEPEST containing block decides, and area only breaks a tie: blocks nest (a cell in
+    // its row in its table), but their boxes need not — on ResNet's live parse a cell's box is a
+    // hair larger than its own row's, and "smallest box" answered with the row.
+    if (
+      best === null ||
+      candidate.depth > best.depth ||
+      (candidate.depth === best.depth && candidate.area < best.area)
+    ) {
+      best = candidate;
+    }
   }
   if (best === null) return 'text';
-  if (best.type === 'table_cell') return 'table_cell';
-  if (best.type === 'figure') return 'figure_region';
+  if (best.block.type === 'table_cell') return 'table_cell';
+  if (best.block.type === 'figure') return 'figure_region';
   return 'text';
 }
 
