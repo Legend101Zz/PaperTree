@@ -25,11 +25,13 @@ still names the same passage, and the explain seed is rebuilt from the thread's 
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime
 from typing import Annotated, Any, Final
 
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse, Response
 from papertree_db import OwnerId, PaperId, PaperTreeDb, new_id
+from papertree_db.ai import normalise_time
 from papertree_prompts import mint_datamark
 from pydantic_core import from_json
 
@@ -450,20 +452,35 @@ def thread_wire(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _run_is_live(run: dict[str, Any] | None) -> bool:
+    return (
+        run is not None
+        and run["status"] == "running"
+        and normalise_time(run["expires_at"]) > normalise_time(datetime.now(UTC))
+    )
+
+
 def message_wire(
     row: dict[str, Any],
     run: dict[str, Any] | None,
     citations: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    failed = row["status"] in ("error", "partial", "aborted")
+    status, error_code = row["status"], row["error_code"]
+    if status == "streaming" and not _run_is_live(run):
+        # An answer whose run can no longer finish (the API process stopped mid-stream, so no
+        # `done` was ever persisted, and the token has expired): shown as ended, with its text,
+        # not as a stream a reader would wait on forever. The stored row is not rewritten.
+        status = "partial" if row["content"] else "error"
+        error_code = "agent_unavailable"
+    failed = status in ("error", "partial", "aborted")
     return {
         "message_id": row["message_id"],
         "thread_id": row["thread_id"],
         "ordinal": row["ordinal"],
         "role": row["role"],
         "content": row["content"],
-        "status": row["status"],
-        "error": runs.error_wire(row["error_code"]) if failed and row["error_code"] else None,
+        "status": status,
+        "error": runs.error_wire(error_code) if failed and error_code else None,
         "generation": row["generation"],
         "run": runs.run_summary(run) if run is not None else None,
         "citations": [

@@ -741,3 +741,58 @@ def _count(settings: Settings, table: str) -> int:
         return int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
     finally:
         conn.close()
+
+
+def test_an_answer_whose_run_can_no_longer_finish_reads_back_as_ended(tmp_path: Path) -> None:
+    """The API process died mid-answer: the row says `streaming`, its run token has expired, and
+    no `done` will ever come. It reads back as `partial` (it has text) with `agent_unavailable`,
+    so a reader is not left waiting; a LIVE run's message still reads `streaming`."""
+    with ai_harness(tmp_path, Script("explain-ok")) as h:
+        token, paper_id = alice_with_paper(h)
+        run = events(read_sse(explain(h, token, paper_id, paragraph_anchor()))[0], "run")[0]
+        user_id = h.client.get("/auth/me", headers=auth(token)).json()["user_id"]
+        db = PaperTreeDb(h.settings.database_file)
+        owner = db.owner_for(user_id)
+        for run_id, expires, message_id in (
+            (
+                "run_01K63AE8M4Q2T7V9X3B5N6R0X1",
+                "2026-01-01T00:00:00Z",
+                "msg_01K63AE8M4Q2T7V9X3B5N6R0X1",
+            ),
+            (
+                "run_01K63AE8M4Q2T7V9X3B5N6R0X2",
+                "2099-01-01T00:00:00Z",
+                "msg_01K63AE8M4Q2T7V9X3B5N6R0X2",
+            ),
+        ):
+            db.create_run(
+                owner,
+                run_id=run_id,
+                paper_id=paper_id,  # type: ignore[arg-type]
+                generation=1,
+                kind="explain",
+                thread_id=run["thread_id"],
+                message_id=message_id,
+                token_sha256="0" * 64,
+                datamark="^00000000",
+                expires_at=expires,
+                code_path="x",
+                request_id=None,
+                prompt_version=None,
+            )
+            db.append_message(
+                owner,
+                run["thread_id"],
+                message_id=message_id,
+                role="assistant",
+                generation=1,
+                content="half an answer",
+                status="streaming",
+                run_id=run_id,
+            )
+        db.close()
+        detail = h.client.get(f"/papers/{paper_id}/threads/{run['thread_id']}", headers=auth(token))
+        stale, live = detail.json()["messages"][-2:]
+        assert (stale["status"], stale["error"]["code"]) == ("partial", "agent_unavailable")
+        assert (live["status"], live["error"]) == ("streaming", None)
+        assert contract_errors(stale, "api/threads.schema.json", "Message", Message) == []
