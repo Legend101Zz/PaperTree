@@ -836,9 +836,17 @@ def require_budget(db: PaperTreeDb, owner: Any, settings: Settings) -> None:
     if spent >= settings.daily_budget_usd:
         raise ApiError(
             "budget_exhausted",
-            f"Today's AI budget (${settings.daily_budget_usd:.2f}) is used up. "
+            f"Today's AI budget (${usd(settings.daily_budget_usd)}) is used up. "
             "It frees up as the last 24 hours roll over.",
         )
+
+
+def usd(amount: float) -> str:
+    """Dollars as a reader should see them: cents, or more digits for a sub-cent budget (a
+    `$0.007` budget printed as `$0.01` states a limit that is not the one enforced)."""
+    if amount >= 0.1 or amount == 0:
+        return f"{amount:.2f}"
+    return f"{amount:.6f}".rstrip("0")
 
 
 def paper_title(db: PaperTreeDb, owner: Any, paper_id: str, generation: int) -> str:
