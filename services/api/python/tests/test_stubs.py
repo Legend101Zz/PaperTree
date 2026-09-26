@@ -160,7 +160,8 @@ def test_a_stub_enforces_its_contract_then_answers_501(stub: Stub, tmp_path: Pat
 
 #: (stub, a body whose one fault is an explicit null in an omittable field, the field)
 NULLS = [
-    # `/papers/{id}/reparse`'s `reason: null`: built by S1, pinned in `test_ingest_routes.py`.
+    # `/papers/{id}/reparse`'s `reason: null`: built by S1, pinned in
+    # `test_ingest_jobs.py::test_reparse_creates_generation_2`.
     (f"/papers/{PAPER}/threads", "POST", {"kind": "ask", "anchor": None}, "anchor"),
     (
         f"/papers/{PAPER}/threads/{THREAD}/messages",
