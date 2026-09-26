@@ -198,3 +198,10 @@ def test_ddpms_figure_1_caption_is_in_the_document(tmp_path: Path) -> None:
     )
     assert caption is not None, "DDPM's Figure 1 caption left the document"
     assert caption.type == "caption" and caption.page_index == 0
+
+
+def test_a_figure_callout_opening_a_paragraph_is_not_a_caption_on_yolo(yolo: Any) -> None:
+    """yolo p5 "Figure 4 shows the breakdown of each error type averaged across all 20 classes."
+    is running text; typed `caption`, it left the body reading order and Guided."""
+    block = next(b for b in yolo.blocks if "shows the breakdown of each error" in (b.text or ""))
+    assert block.type == "paragraph", block.type

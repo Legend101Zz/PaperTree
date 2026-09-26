@@ -629,3 +629,31 @@ def test_a_caption_inside_a_raster_placement_is_kept(
         r.type == "caption_of" and r.from_ == caption.block_id and r.to in figures
         for r in paper.relations
     ), "the caption is not linked to its figure"
+
+
+# ── a sentence that names a figure is not its caption ──────────────────────────────────────
+
+
+def test_a_sentence_opening_with_a_figure_label_is_not_a_caption() -> None:
+    """`Figure 4 shows the breakdown ...` opens a PARAGRAPH on yolo p5 once paragraphs are split,
+    and the caption opener accepted a label followed by any whitespace: 18 prose paragraphs across
+    the 14 papers were typed `caption` (10 before splitting). A caption set without punctuation
+    starts its title with a capital; a sentence that names a figure goes on in lower case."""
+    from papertree_document_worker.figures import is_caption_line
+
+    for sentence in (
+        "Figure 4 shows the breakdown of each error type",
+        "Table 3 summarizes the results",
+        "Fig. 2 compares both models",
+    ):
+        assert is_caption_line(sentence) is None, sentence
+    for caption in (
+        "Figure 4: Error Analysis",
+        "Figure 4. Error Analysis",
+        "Table 1: Real-Time Systems",
+        "Fig. 3. Architecture",
+        "Figure G.2: Formatted dataset example",
+        "Figure 2 Results on the development set",
+        "Table 2 (top) and Table 3 (bottom)",
+    ):
+        assert is_caption_line(caption) is not None, caption

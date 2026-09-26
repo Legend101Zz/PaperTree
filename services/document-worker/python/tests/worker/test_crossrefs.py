@@ -92,18 +92,20 @@ def test_references_edges_are_emitted_on_every_paper(parsed: dict[str, Paper]) -
     # and a block that held several printed paragraphs now is several blocks, each citing the
     # table or figure its own sentences name (resnet 19 -> 34, whose section 4 paragraphs name a
     # table apiece). No callout was added or lost; they are attributed to the paragraph that
-    # prints them.
+    # prints them. 145 -> 155 when a sentence naming a figure stopped being typed `caption`
+    # ("Table 3 shows results for all baselines", superglue 5 -> 9): as a paragraph it is a text
+    # reference to the float it names, which is what it always was.
     assert per_paper == {
         "a3c-algorithmheavy": 17,
-        "attention-is-all-you-need": 13,
-        "bert-2col": 17,
+        "attention-is-all-you-need": 14,
+        "bert-2col": 19,
         "gpt3-longform-singlecol": 33,
         "neural-odes-mathheavy": 16,
-        "pdf-to-tree-acl2col": 10,
-        "resnet-cvpr-2col": 34,
-        "superglue-tableheavy": 5,
+        "pdf-to-tree-acl2col": 11,
+        "resnet-cvpr-2col": 36,
+        "superglue-tableheavy": 9,
     }
-    assert sum(per_paper.values()) == 145
+    assert sum(per_paper.values()) == 155
 
 
 @requires_corpus
@@ -122,7 +124,10 @@ def test_the_pre_existing_relation_types_did_not_move(parsed: dict[str, Paper]) 
     # marker was not at position 0 and nothing linked it. Split apart, 33 table captions and 1
     # figure caption carry their edge. 176 -> 178 when a caption line stopped being a figure's
     # interior text (attention p13's Figure 4 and p14's Figure 5 were inside their rasters' box).
-    assert totals["caption_of"] == 178
+    # 178 -> 177: superglue's "Figure 2 shows the performance on the GLUE diagnostics ..." was a
+    # paragraph typed `caption` and LINKED to a float; a sentence that names a figure is no longer a
+    # caption opener (`figures._CAPTION_START`), so that false edge is gone.
+    assert totals["caption_of"] == 177
     # 94 -> 90 and 36 -> 37 in S2 (#141). The lost page continuations pointed INTO section heads
     # that were typed `paragraph` (`8. Experimental Setup`, `5.1. Atari 2600 Games`, `3.5 Positional
     # Encoding`, `3.9.4 News Article Generation`, `5.1 Baselines BERT`) or into a caption's second
@@ -185,8 +190,8 @@ def test_caption_block_mirrors_caption_of_in_both_directions(parsed: dict[str, P
     # table, and every one is mirrored. My first guess here was 100 and the test caught it —
     # which is the only reason this comment can state the split with any confidence.
     # 142 -> 176 in S2's paragraph-splitting commit: see test_the_pre_existing_relation_types.
-    assert dict(mirrored) == {"figure": 61, "table": 117}  # 59 -> 61: captions out of figures
-    assert sum(mirrored.values()) == 178
+    assert dict(mirrored) == {"figure": 61, "table": 116}  # 59 -> 61: captions out of figures
+    assert sum(mirrored.values()) == 177  # and one false edge from a sentence gone: see above
 
 
 @requires_corpus
@@ -242,7 +247,9 @@ def test_referenced_by_mirrors_the_references_edges(parsed: dict[str, Paper]) ->
                 figures += 1
             elif block.type == "equation":
                 equations += 1
-    assert (figures, equations) == (44, 7)  # 43 at 18f69ec; pdf-to-tree p10's figure gained one
+    # 43 at 18f69ec; pdf-to-tree p10's figure gained one; 47 once "Figure N shows ..." sentences
+    # are paragraphs (text references) instead of captions.
+    assert (figures, equations) == (47, 7)
 
 
 @requires_corpus

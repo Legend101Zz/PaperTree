@@ -97,9 +97,18 @@ RULE_MIN_ASPECT = 8.0
 #:
 #: A digit is required somewhere in every alternative, so "Figure S shows" cannot open a caption
 #: on the strength of a bare capital.
+#:
+#: AND A SENTENCE THAT NAMES A FIGURE IS NOT ITS CAPTION (S2, #141). The label may be followed by
+#: `.`, `:` or `)`, or by whitespace - but after bare whitespace the next word must not be lower
+#: case. "Figure 4 shows the breakdown ..." (yolo p5), "Table 3 shows results for all baselines"
+#: (superglue), "Figure 5 shows speedup ..." (flashattention) are running text; a caption set
+#: without punctuation ("Figure 2 Results on ...") starts its title with a capital. Measured: 10
+#: such paragraphs typed `caption` across the 14 papers before paragraph splitting, 18 after it -
+#: splitting makes each of them the start of its own block.
 _CAPTION_START = re.compile(
     r"^\s*(?:figure|fig\.?|table|algorithm|listing)\s*"
-    r"([0-9]+(?:\.[0-9]+)*|[A-Z]\.?[0-9]+(?:\.[0-9]+)*|[IVXivx]+)\s*[.:)\s]",
+    r"([0-9]+(?:\.[0-9]+)*|[A-Z]\.?[0-9]+(?:\.[0-9]+)*|[IVXivx]+)"
+    r"(?:\s*[.:)]|\s+(?!(?-i:[a-z])))",  # the lookahead is case-SENSITIVE: `(?-i:...)`
     re.IGNORECASE,
 )
 

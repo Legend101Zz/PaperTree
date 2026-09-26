@@ -211,6 +211,12 @@ requires_corpus = pytest.mark.skipif(
 # false positive there. The normalised `caption_false` 0 -> 1 is the same page: the parser links
 # Figure 5's caption to the Figure 5 raster above it, which gold records no link for.
 
+# CAPTION-OPENER COMMIT (S2): "Figure 4 shows ..." / "Table 3 summarizes ..." opens no caption (a
+# lower-case word after a bare label is a sentence). 20 paragraphs stop being `caption` corpus-wide;
+# on the repo gold bert 0.3706 -> 0.3752 and resnet 0.3508 -> 0.3575 (caption F1 up on both,
+# resnet paragraph F1 up), resnet pooled order 72/80 -> 77/85 (the five new pairs agree). bert's
+# paragraph F1 dips 0.347 -> 0.342: one retyped paragraph matches no gold paragraph box.
+
 RAW: dict[str, dict[str, Any]] = {
     "a3c-algorithmheavy": {
         "macro_f1": 0.4185,
@@ -249,8 +255,8 @@ RAW: dict[str, dict[str, Any]] = {
         "figure_predicted": 3,
     },
     "bert-2col": {
-        "macro_f1": 0.3706,
-        "macro_f1_strict": 0.2047,
+        "macro_f1": 0.3752,
+        "macro_f1_strict": 0.2065,
         "reading_order": 0.8333,
         "reading_order_pairs": [49, 49],
         "zero_pair_pages": 1,
@@ -303,10 +309,10 @@ RAW: dict[str, dict[str, Any]] = {
         "figure_predicted": 8,
     },
     "resnet-cvpr-2col": {
-        "macro_f1": 0.3508,
-        "macro_f1_strict": 0.1293,
+        "macro_f1": 0.3575,
+        "macro_f1_strict": 0.1323,
         "reading_order": 0.8944,
-        "reading_order_pairs": [72, 80],
+        "reading_order_pairs": [77, 85],
         "zero_pair_pages": 0,
         "caption_correct": 4,
         "caption_false": 0,
@@ -360,8 +366,8 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "figure_predicted": 3,
     },
     "bert-2col": {
-        "macro_f1": 0.3706,
-        "macro_f1_strict": 0.2047,
+        "macro_f1": 0.3752,
+        "macro_f1_strict": 0.2065,
         "reading_order": 0.8333,
         "reading_order_pairs": [49, 49],
         "zero_pair_pages": 1,
@@ -414,10 +420,10 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "figure_predicted": 8,
     },
     "resnet-cvpr-2col": {
-        "macro_f1": 0.343,
-        "macro_f1_strict": 0.1269,
+        "macro_f1": 0.3471,
+        "macro_f1_strict": 0.1285,
         "reading_order": 0.9333,
-        "reading_order_pairs": [64, 68],
+        "reading_order_pairs": [69, 73],
         "zero_pair_pages": 0,
         "caption_correct": 1,
         "caption_false": 3,
@@ -946,6 +952,7 @@ def test_the_share_of_floats_carrying_a_caption(
             f"{floats_captioned / floats:.1%}. The bar is 80%."
         )
     # S2 (#141): 58 -> 59 figures and 142 -> 176 floats captioned with paragraph splitting; 61 and
-    # 178 once a caption line is never a figure's interior.
+    # 178 once a caption line is never a figure's interior; 177 once a sentence naming a figure
+    # stops opening a caption (superglue's "Figure 2 shows ..." had been linked as one).
     assert (figures_captioned, figures) == (61, 85)
-    assert (floats_captioned, floats) == (178, 226)
+    assert (floats_captioned, floats) == (177, 226)
