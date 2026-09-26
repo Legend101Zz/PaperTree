@@ -139,6 +139,11 @@ def test_signed_asset_url(tmp_path: Path) -> None:
             # A Bearer still works without a signature; another user's Bearer is a 404.
             assert h.client.get(path, headers=auth(alice)).content == png.content
             assert_envelope(h.client.get(path, headers=auth(bob)), 404, "not_found")
+            # ...and so is it WITH `?gen=`, which skips the promoted-generation lookup that 404s
+            # Bob above: only the owner-scoped block lookup stands between him and Alice's crop
+            # (S1 review mutant M8, which dropped it, survived this test without this line).
+            assert h.client.get(f"{path}?gen=1", headers=auth(alice)).content == png.content
+            assert_envelope(h.client.get(f"{path}?gen=1", headers=auth(bob)), 404, "not_found")
 
         # One figure's signature does not open the other figure.
         first, second = (urlsplit(uri) for uri in uris)
