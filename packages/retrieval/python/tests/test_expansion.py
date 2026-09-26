@@ -33,6 +33,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from dataclasses import replace
 
 import pytest
 from _retrieval_corpus import CORPUS_PAPER, requires_corpus
@@ -104,16 +105,27 @@ def test_expansion_returns_parent_section_adjacent_blocks_and_related_figure(
     assert section_heading.type == "heading"
     assert section_heading.text == "1  Introduction"
 
-    assert by_reason["adjacent:-1"].type == "equation"
+    # S2 (#141): the worker reads a figure WHERE IT STANDS in the body order - directly above its
+    # caption here - instead of after all of its page's text, so the caption's nearest neighbour
+    # is its own figure and the equation is one further back.
+    assert by_reason["adjacent:-1"].type == "figure"
+    assert by_reason["adjacent:-2"].type == "equation"
     assert by_reason["adjacent:+1"].type == "heading"
     assert by_reason["adjacent:+1"].text == "2  Method"
 
-    related = expansion.by_stage(Stage.RELATED)
+    # The ladder credits a block to the FIRST rung that reaches it, so under the default radius
+    # that figure arrives as `adjacent:-1`. The relation rung is asserted with adjacency off: the
+    # same figure, reached through the real `caption_of` edge, by reason.
+    no_adjacency = replace(DEFAULT_EXPANSION_POLICY, adjacent_radius=0)
+    related = expand(index, [caption], no_adjacency, None).by_stage(Stage.RELATED)
     assert [block.type for block in related] == ["figure"]
+    assert related[0].reason.startswith("caption_of->")
+    assert related[0].block_id == by_reason["adjacent:-1"].block_id
     assert related[0].reason == f"caption_of->{caption}"
 
-    # ...and the region-crop rung offered a crop for the figure it just found.
-    assert [region.type for region in expansion.regions] == ["equation", "figure"]
+    # ...and the region-crop rung offered a crop for the figure it just found - first, since S2
+    # (#141), because regions follow the order blocks were reached and the figure is `adjacent:-1`.
+    assert [region.type for region in expansion.regions] == ["figure", "equation"]
 
 
 def test_the_related_figure_edge_was_produced_by_the_parser_not_by_this_test(
@@ -268,7 +280,17 @@ def test_the_structural_ladder_returns_a_full_expansion_with_zero_embeddings(
     assert expansion.semantic_requested is False
     assert expansion.by_stage(Stage.SEMANTIC) == ()
     stages = {block.stage for block in expansion.blocks}
-    assert stages == {Stage.SELECTION, Stage.STRUCTURE, Stage.ADJACENT, Stage.RELATED}
+    # RELATED is reached with adjacency off: the caption's figure is its reading-order neighbour
+    # since S2 (#141), and the first rung to reach a block is the one it is credited to.
+    related = expand(
+        index, [caption], replace(DEFAULT_EXPANSION_POLICY, adjacent_radius=0), None
+    ).by_stage(Stage.RELATED)
+    assert stages | {block.stage for block in related} == {
+        Stage.SELECTION,
+        Stage.STRUCTURE,
+        Stage.ADJACENT,
+        Stage.RELATED,
+    }
     assert len(expansion.blocks) >= 6
 
 
@@ -538,7 +560,12 @@ def test_expansion_on_a_real_two_column_paper() -> None:
     caption = with_edge[0]
 
     expansion = expand(index, [caption], DEFAULT_EXPANSION_POLICY, None)
-    related_types = {block.type for block in expansion.by_stage(Stage.RELATED)}
+    # Floats are read where they stand since S2 (#141), so a caption's float is usually its
+    # reading-order neighbour and is credited to adjacency; the relation rung is checked with
+    # adjacency off.
+    no_adjacency = replace(DEFAULT_EXPANSION_POLICY, adjacent_radius=0)
+    related = expand(index, [caption], no_adjacency, None).by_stage(Stage.RELATED)
+    related_types = {block.type for block in related}
     assert related_types & {"figure", "table"}, related_types
     assert expansion.by_stage(Stage.ADJACENT) != ()
     assert expand(index, [caption], DEFAULT_EXPANSION_POLICY, None) == expansion
