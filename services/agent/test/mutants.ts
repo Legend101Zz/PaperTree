@@ -7,6 +7,8 @@
  *           `tools` allowlist, or `defaultTools: []` — must fail the suite.
  *   G1–G7   the host guards: the idle watchdog, the retry veto, the seen-handle filter, the
  *           pre-prompt history rule, the tool-call cap, the narration rule, the raw-error redaction.
+ *   G8–G10  from the review: the idle watchdog's reset on every event, the delivered 413, and no
+ *           tool step after the first delta.
  *
  * An edit that does not match EXACTLY once is itself a failure (a mutant that silently changed
  * nothing would "pass" and prove nothing).
@@ -103,6 +105,13 @@ export const MUTANTS: readonly Mutant[] = [
     file: 'src/app.ts',
     find: 'if (bodyIsComing) discardRest(request);',
     replace: 'if (bodyIsComing) request.destroy();',
+  },
+  {
+    id: 'G10',
+    what: 'the tools stay open after text was sent (a tool step after the first delta, review P2)',
+    file: 'src/run.ts',
+    find: '        if (this.finalText.length > 0) {\n          this.refused.add(event.toolCallId);',
+    replace: '        if (false) {\n          this.refused.add(event.toolCallId);',
   },
 ];
 

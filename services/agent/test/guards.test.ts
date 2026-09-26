@@ -8,6 +8,7 @@ import { after, before, describe, test } from 'node:test';
 import type { RunRequest } from '../src/contract.ts';
 import type { FauxStep } from '../src/faux.ts';
 import { createLogger } from '../src/log.ts';
+import { TOOLS_CLOSED_TEXT } from '../src/run.ts';
 import { createPaperSession, DisposedSessionError } from '../src/session.ts';
 import { BUDGET_TEXT, createPaperTools } from '../src/tools.ts';
 
@@ -254,6 +255,72 @@ describe('text: only an answer reaches the caller', () => {
     // The narration stays in the model's own history (entries), never in what the reader is sent.
     const assistant = (d['entries'] as Json[]).filter((e) => e['message']['role'] === 'assistant');
     assert.match(JSON.stringify(assistant[0]?.['message']['content']), /Let me search/);
+  });
+
+  test('once text is sent the tools are closed: no tool step ever follows the first delta', async () => {
+    // Review P2: a message that cites (so it streams) and THEN asks for a tool. Its text is already
+    // on the reader's screen, so it stays; the tool call is refused (not run, not counted, no
+    // status), and so is a later one; the answer continues in the next message.
+    const hitsBefore = tools.hits.length;
+    toolAnswer = () => passage('b3');
+    let toldClosed: unknown[] = [];
+    const body = explain([
+      {
+        text: ['The design is simple [b1].', ' Let me check section 2.'],
+        toolCalls: [{ name: 'get_passage', arguments: { handle: 'b3' } }],
+      },
+      (context) => {
+        toldClosed = context.messages.filter((m) => (m as { role?: string }).role === 'toolResult');
+        return { toolCalls: [{ name: 'search_passages', arguments: { query: 'stage' } }] };
+      },
+      { text: ['It has one stage [b2].'] },
+    ]);
+    const result = await postRun(agent.url, body);
+    assert.deepEqual(semanticProblems(result.events), []);
+    assert.deepEqual(
+      result.events.map((e) =>
+        e.event === 'status' ? `status:${String(e.data['phase'])}` : e.event,
+      ),
+      [
+        'run',
+        'status:thinking',
+        'status:writing',
+        'text',
+        'text',
+        'usage',
+        'usage',
+        'text',
+        'text',
+        'usage',
+        'done',
+      ],
+      'the pinned shape: one writing status, text, and never a tool step after it',
+    );
+    const d = doneOf(result.events);
+    assert.equal(d['status'], 'complete');
+    assert.equal(
+      d['final_text'],
+      'The design is simple [b1]. Let me check section 2.\n\nIt has one stage [b2].',
+    );
+    assert.deepEqual(d['markers'], ['b1', 'b2']);
+    assert.equal(d['tool_calls'], 0, 'a refused call is not a tool call');
+    assert.equal(d['turns'], 3);
+    assert.equal(tools.hits.length - hitsBefore, 0, 'no refused call reached the API');
+    assert.equal(toldClosed.length, 1);
+    const results = (d['entries'] as Json[])
+      .filter((e) => e['message']['role'] === 'toolResult')
+      .map((e) => String(e['message']['content'][0]['text']));
+    assert.deepEqual(results, [TOOLS_CLOSED_TEXT, TOOLS_CLOSED_TEXT], 'the model was told why');
+    const refusedLogs = agent.logs.filter(
+      (l) =>
+        l.event === 'agent.tool' &&
+        l['run_id'] === body['run_id'] &&
+        l['status'] === 'refused_after_text',
+    );
+    assert.deepEqual(
+      refusedLogs.map((l) => l['name']),
+      ['get_passage', 'search_passages'],
+    );
   });
 
   test('an answer streams from its first citation; uncited answer text is sent at its end', async () => {

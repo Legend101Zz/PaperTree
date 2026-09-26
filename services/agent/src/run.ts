@@ -20,6 +20,13 @@
  * ends with anything but `toolUse` — and then streams live. Text of a message that never cites and
  * ends in `toolUse` ("Let me search the paper…") is dropped (spike §6). So the deltas sent are
  * exactly `done.final_text`.
+ *
+ * Once any text has been sent, the tools are closed: a tool call after that point is refused (not
+ * run, not counted, no `status: tool`), and the model is told to finish from what it has. So no
+ * tool step ever follows the first delta — the shape every recorded stream has
+ * (`services/api/.../test_agent_contracts.py`) and the one the API and the UI are built against. A
+ * message that cites and THEN asks for a tool therefore keeps its text (the reader already has it)
+ * and the answer continues in the next message, joined with a blank line.
  */
 import type { AssistantMessage, Model } from '@earendil-works/pi-ai';
 import type {
@@ -95,6 +102,9 @@ export interface DoneData {
 }
 
 const RETRY_LABEL = 'The model service is busy; trying again';
+/** What a tool call answers once the answer has started (see "Text" above). */
+export const TOOLS_CLOSED_TEXT =
+  'The answer is already being shown to the reader, so no tool can be used now. Finish the answer from what you have.';
 const BUDGET_LABEL = 'Tool budget exhausted';
 /** After the host aborts, the session must settle within this long, or the run is closed anyway. */
 const SETTLE_AFTER_ABORT_MS = 5_000;
@@ -171,6 +181,8 @@ class Run {
   private readonly resultHandles = new Map<number, readonly string[]>();
   private readonly info = new Map<string, HandleInfo>();
   private readonly callIndex = new Map<string, number>();
+  /** Tool calls made after the first text was sent: refused, not run, not counted. */
+  private readonly refused = new Set<string>();
   private toolCalls = 0;
   private turnsStarted = 0;
   private agentStarts = 0;
@@ -189,6 +201,7 @@ class Run {
   private readonly usages: Usage[] = [];
   private current: MessageState | null = null;
   private finalText = '';
+  private writing = false;
   private firstTextMs: number | null = null;
   /** Latency breakdown for the done log (not the stream): the model's first delta of any kind, its
    * first text delta (sent or held), and how much thinking and text it produced. */
@@ -265,7 +278,10 @@ class Run {
   private commit(state: MessageState): void {
     if (state.committed) return;
     state.committed = true;
-    this.sse.event('status', { phase: 'writing' });
+    if (!this.writing) {
+      this.writing = true;
+      this.sse.event('status', { phase: 'writing' });
+    }
     if (this.finalText.length > 0 && state.text.length > 0) this.sendText('\n\n');
     for (const delta of state.deltas) this.sendText(delta);
   }
@@ -411,6 +427,17 @@ class Run {
         break;
       }
       case 'tool_execution_start': {
+        if (this.finalText.length > 0) {
+          this.refused.add(event.toolCallId);
+          this.deps.log.info('agent.tool', {
+            run_id: this.request.run_id,
+            request_id: this.request.request_id,
+            name: event.toolName,
+            status: 'refused_after_text',
+            ms: 0,
+          });
+          break;
+        }
         this.toolCalls++;
         const index = this.toolCalls;
         this.callIndex.set(event.toolCallId, index);
@@ -482,6 +509,7 @@ class Run {
         },
         onFatal: () => this.hostAbort('tool_failed'),
         budgetNote: (id) => this.budgetNote(id),
+        closed: (id) => (this.refused.has(id) ? TOOLS_CLOSED_TEXT : undefined),
       });
       if (deps.faux) deps.faux.model.load(this.sessionId, deps.faux.brain(request));
       this.paper = await createPaperSession({

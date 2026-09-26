@@ -109,6 +109,8 @@ export interface ToolRunContext {
   onFatal(): void;
   /** A note to append to this call's result when the run's tool budget is nearly spent. */
   budgetNote?(toolCallId: string): string | undefined;
+  /** The text to answer instead of running this call, when the tools are closed (run.ts "Text"). */
+  closed?(toolCallId: string): string | undefined;
 }
 
 class ToolFailure extends Error {}
@@ -211,6 +213,13 @@ async function call(
   }
 }
 
+/** A call the run has refused (the answer already started), or undefined to run it. */
+function refusal(ctx: ToolRunContext, toolCallId: string) {
+  const text = ctx.closed?.(toolCallId);
+  if (text === undefined) return undefined;
+  return { content: [{ type: 'text' as const, text }], details: { refused: true } };
+}
+
 function budgetExhausted(ctx: ToolRunContext, toolCallId: string): boolean {
   const index = ctx.callIndex(toolCallId);
   return index === undefined || index > ctx.maxToolCalls;
@@ -232,6 +241,8 @@ export function createPaperTools(ctx: ToolRunContext): ToolDefinition[] {
     parameters: TOOL_PARAMETERS.get_outline,
     executionMode: 'parallel',
     async execute(toolCallId, _params, signal) {
+      const refused = refusal(ctx, toolCallId);
+      if (refused) return refused;
       if (budgetExhausted(ctx, toolCallId)) return BUDGET_RESULT();
       return call(
         ctx,
@@ -252,6 +263,8 @@ export function createPaperTools(ctx: ToolRunContext): ToolDefinition[] {
     parameters: TOOL_PARAMETERS.get_section,
     executionMode: 'parallel',
     async execute(toolCallId, params, signal) {
+      const refused = refusal(ctx, toolCallId);
+      if (refused) return refused;
       if (budgetExhausted(ctx, toolCallId)) return BUDGET_RESULT();
       const query =
         params.cursor === undefined ? '' : `?cursor=${encodeURIComponent(params.cursor)}`;
@@ -274,6 +287,8 @@ export function createPaperTools(ctx: ToolRunContext): ToolDefinition[] {
     parameters: TOOL_PARAMETERS.get_passage,
     executionMode: 'parallel',
     async execute(toolCallId, params, signal) {
+      const refused = refusal(ctx, toolCallId);
+      if (refused) return refused;
       if (budgetExhausted(ctx, toolCallId)) return BUDGET_RESULT();
       return call(
         ctx,
@@ -295,6 +310,8 @@ export function createPaperTools(ctx: ToolRunContext): ToolDefinition[] {
     parameters: TOOL_PARAMETERS.search_passages,
     executionMode: 'parallel',
     async execute(toolCallId, params, signal) {
+      const refused = refusal(ctx, toolCallId);
+      if (refused) return refused;
       if (budgetExhausted(ctx, toolCallId)) return BUDGET_RESULT();
       const limit = params.limit ?? 5;
       return call(

@@ -63,6 +63,8 @@ function rules(request: RunRequest): string {
       'get_section reads the section a handle belongs to, get_passage reads one passage, and ' +
       'search_passages finds passages by words.',
     budget(request),
+    '- Tools can be used only before the answer starts: once you have written any of the answer, a ' +
+      'tool call is refused. Read first, then write.',
     summary
       ? '- Do not write anything before or between tool calls. Write only the bullets, each one ending ' +
         'with its [bN] citation.'
