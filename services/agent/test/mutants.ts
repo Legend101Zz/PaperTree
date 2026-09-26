@@ -97,6 +97,13 @@ export const MUTANTS: readonly Mutant[] = [
     find: '    if (this.settled) return;\n    this.resetIdle();\n',
     replace: '    if (this.settled) return;\n',
   },
+  {
+    id: 'G9',
+    what: 'an oversize body is cut off instead of answered (the reset the review found)',
+    file: 'src/app.ts',
+    find: 'if (bodyIsComing) discardRest(request);',
+    replace: 'if (bodyIsComing) request.destroy();',
+  },
 ];
 
 const pkg = dirname(dirname(fileURLToPath(import.meta.url)));

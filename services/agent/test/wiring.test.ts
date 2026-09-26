@@ -6,6 +6,7 @@
  */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { request as httpRequest } from 'node:http';
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -397,14 +398,103 @@ describe('HTTP (§3.2)', () => {
     }
   });
 
-  test('an oversize body is 413', async () => {
-    const huge = request(9, (b) => (b['question'] = 'x'.repeat(9 * 1024 * 1024)));
-    const r = await fetch(`${agent.url}/v1/runs`, {
+  test('an oversize body is answered 413 payload_too_large, never a reset', async () => {
+    const TOO_LARGE = {
+      detail: 'The run request is too large.',
+      code: 'payload_too_large',
+      retryable: false,
+    };
+    const headers = {
+      'content-type': 'application/json',
+      'x-papertree-agent-secret': SECRET,
+      'x-request-id': 'req_oversize',
+    };
+    const url = `${agent.url}/v1/runs`;
+    // 1. A declared length over 8 MB (fetch sends content-length for a string body): refused before
+    //    reading, and the body the client is still sending is read and thrown away.
+    const huge = JSON.stringify(request(9, (b) => (b['question'] = 'x'.repeat(9 * 1024 * 1024))));
+    const declared = await fetch(url, { method: 'POST', headers, body: huge });
+    assert.equal(declared.status, 413);
+    assert.equal(declared.headers.get('x-request-id'), 'req_oversize');
+    assert.deepEqual(await declared.json(), TOO_LARGE);
+
+    // 2. No length (chunked): found while reading, answered at once.
+    const mb = new Uint8Array(1024 * 1024).fill(0x78);
+    let sent = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (sent++ < 12) controller.enqueue(mb);
+        else controller.close();
+      },
+    });
+    const chunked = await fetch(url, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-papertree-agent-secret': SECRET },
-      body: JSON.stringify(huge),
-    }).catch((e: unknown) => e);
-    // The server answers 413 and closes; a client may see the answer or the reset.
-    if (r instanceof Response) assert.equal(r.status, 413);
+      headers,
+      body,
+      duplex: 'half',
+    } as RequestInit);
+    assert.equal(chunked.headers.get('transfer-encoding'), null, 'the answer is a plain JSON body');
+    assert.equal(chunked.status, 413);
+    assert.deepEqual(await chunked.json(), TOO_LARGE);
+
+    // 3. `Expect: 100-continue` (curl sends it for a big body): the 413 comes INSTEAD of the 100, so
+    //    the body is never sent at all.
+    const expect = await new Promise<{ status: number; continued: boolean; json: unknown }>(
+      (resolve, reject) => {
+        let continued = false;
+        const req = httpRequest(url, {
+          method: 'POST',
+          headers: {
+            ...headers,
+            expect: '100-continue',
+            'content-length': String(9 * 1024 * 1024),
+          },
+        });
+        req.on('continue', () => {
+          continued = true;
+          req.destroy();
+        });
+        req.on('response', (res) => {
+          let text = '';
+          res.on('data', (d: Buffer) => (text += d.toString()));
+          res.on('end', () =>
+            resolve({ status: res.statusCode ?? 0, continued, json: JSON.parse(text) }),
+          );
+        });
+        req.on('error', reject);
+        req.flushHeaders();
+      },
+    );
+    assert.equal(expect.continued, false, 'no 100 Continue for a body over the limit');
+    assert.equal(expect.status, 413);
+    assert.deepEqual(expect.json, TOO_LARGE);
+
+    // The agent is still serving, and an ordinary Expect request still gets its 100 and its answer.
+    assert.equal((await fetch(`${agent.url}/healthz`)).status, 200);
+    const small = JSON.stringify(request(10, (b) => (b['datamark'] = '^XYZ')));
+    const smallExpect = await new Promise<{ status: number; continued: boolean }>(
+      (resolve, reject) => {
+        let continued = false;
+        const req = httpRequest(url, {
+          method: 'POST',
+          headers: {
+            ...headers,
+            expect: '100-continue',
+            'content-length': String(Buffer.byteLength(small)),
+          },
+        });
+        req.on('continue', () => {
+          continued = true;
+          req.end(small);
+        });
+        req.on('response', (res) => {
+          res.resume();
+          res.on('end', () => resolve({ status: res.statusCode ?? 0, continued }));
+        });
+        req.on('error', reject);
+        req.flushHeaders();
+      },
+    );
+    assert.deepEqual(smallExpect, { status: 422, continued: true });
   });
 });

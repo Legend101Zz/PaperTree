@@ -121,24 +121,68 @@ function sendError(
   sendJson(response, status, { detail, code, retryable }, requestId);
 }
 
-class BodyTooLarge extends Error {}
+/** What `readBody` answers for a body over the limit. */
+const TOO_LARGE = Symbol('too large');
 
-function readBody(request: IncomingMessage, limit: number): Promise<string> {
+/**
+ * After a 413 the rest of an oversize body is read and thrown away — closing the socket while the
+ * client is still sending would reset the connection, and the client would lose the answer (review
+ * finding: the 413 used to arrive as ECONNRESET). A client that keeps sending past this many bytes,
+ * or for longer than DRAIN_MS, is cut off.
+ */
+const DRAIN_BYTES = 64 * 1024 * 1024;
+const DRAIN_MS = 10_000;
+
+function discardRest(request: IncomingMessage): void {
+  if (request.readableEnded) return;
+  let dropped = 0;
+  const timer = setTimeout(() => request.destroy(), DRAIN_MS);
+  timer.unref();
+  const stop = (): void => clearTimeout(timer);
+  request.on('data', (chunk: Buffer) => {
+    dropped += chunk.length;
+    if (dropped > DRAIN_BYTES) {
+      stop();
+      request.destroy();
+    }
+  });
+  request.once('end', stop);
+  request.once('close', stop);
+  request.resume();
+}
+
+/**
+ * The body as text, or TOO_LARGE as soon as it passes `limit` (the caller answers 413 at once; the
+ * rest of the body is then discarded, see `discardRest`).
+ */
+function readBody(request: IncomingMessage, limit: number): Promise<string | typeof TOO_LARGE> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
-    request.on('data', (chunk: Buffer) => {
+    const onData = (chunk: Buffer): void => {
       size += chunk.length;
       if (size > limit) {
-        reject(new BodyTooLarge());
-        request.destroy();
+        request.off('data', onData);
+        request.off('end', onEnd);
+        request.off('error', reject);
+        chunks.length = 0;
+        resolve(TOO_LARGE);
         return;
       }
       chunks.push(chunk);
-    });
-    request.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    };
+    const onEnd = (): void => resolve(Buffer.concat(chunks).toString('utf8'));
+    request.on('data', onData);
+    request.on('end', onEnd);
     request.on('error', reject);
   });
+}
+
+/** The declared body length, when the client sent one that is a number. */
+function declaredLength(request: IncomingMessage): number | undefined {
+  const raw = request.headers['content-length'];
+  if (raw === undefined || !/^\d+$/.test(raw)) return undefined;
+  return Number(raw);
 }
 
 /** The §3.1 wiring, checked on a probe session built exactly as every run's is. */
@@ -259,11 +303,21 @@ export async function createAgentApp(options: AppOptions): Promise<AgentApp> {
     faux: config.faux,
   });
 
-  const postRun = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
+  /**
+   * `expectsContinue`: the client sent `Expect: 100-continue` and is waiting to send its body. A
+   * refusal before the body is then answered without the 100 — the client never sends the body —
+   * and the connection is closed, since the body it announced will not follow.
+   */
+  const postRun = async (
+    request: IncomingMessage,
+    response: ServerResponse,
+    expectsContinue: boolean,
+  ): Promise<void> => {
     const requestId =
       typeof request.headers['x-request-id'] === 'string'
         ? request.headers['x-request-id']
         : undefined;
+    if (expectsContinue) response.setHeader('connection', 'close');
     const secret = request.headers['x-papertree-agent-secret'];
     if (!sameSecret(typeof secret === 'string' ? secret : undefined, config.secret)) {
       sendError(
@@ -276,14 +330,31 @@ export async function createAgentApp(options: AppOptions): Promise<AgentApp> {
       );
       return;
     }
-    let raw: string;
+    /** 413 at once; if the body is on its way, it is then read and thrown away (`discardRest`). */
+    const tooLarge = (bodyIsComing: boolean): void => {
+      sendError(
+        response,
+        413,
+        'payload_too_large',
+        'The run request is too large.',
+        false,
+        requestId,
+      );
+      if (bodyIsComing) discardRest(request);
+    };
+    const declared = declaredLength(request);
+    if (declared !== undefined && declared > MAX_BODY_BYTES) return tooLarge(!expectsContinue);
+    if (expectsContinue) {
+      response.removeHeader('connection');
+      response.writeContinue();
+    }
+    let raw: string | typeof TOO_LARGE;
     try {
       raw = await readBody(request, MAX_BODY_BYTES);
-    } catch (error) {
-      if (error instanceof BodyTooLarge)
-        sendError(response, 413, 'payload_too_large', 'The run request is too large.');
-      return;
+    } catch {
+      return; // The client went away mid-body: there is no one to answer.
     }
+    if (raw === TOO_LARGE) return tooLarge(true);
     let body: unknown;
     try {
       body = JSON.parse(raw);
@@ -385,19 +456,24 @@ export async function createAgentApp(options: AppOptions): Promise<AgentApp> {
     sendError(response, 404, 'not_found', 'No such run.');
   };
 
-  const server = createServer((request, response) => {
+  const route = (
+    request: IncomingMessage,
+    response: ServerResponse,
+    expectsContinue: boolean,
+  ): void => {
     const url = new URL(request.url ?? '/', 'http://127.0.0.1');
     const path = url.pathname;
     const method = request.method ?? 'GET';
     const handle = async (): Promise<void> => {
+      if (path === '/v1/runs' && method === 'POST')
+        return postRun(request, response, expectsContinue);
+      // No other route reads a body; Node discards it.
+      if (expectsContinue) response.writeContinue();
       if (path === '/healthz') {
         if (method !== 'GET') return sendError(response, 405, 'not_found', 'GET only.');
         return sendJson(response, 200, health());
       }
-      if (path === '/v1/runs') {
-        if (method !== 'POST') return sendError(response, 405, 'not_found', 'POST only.');
-        return postRun(request, response);
-      }
+      if (path === '/v1/runs') return sendError(response, 405, 'not_found', 'POST only.');
       const match = /^\/v1\/runs\/([^/]+)$/.exec(path);
       if (match?.[1]) {
         if (method !== 'DELETE') return sendError(response, 405, 'not_found', 'DELETE only.');
@@ -413,7 +489,10 @@ export async function createAgentApp(options: AppOptions): Promise<AgentApp> {
       if (!response.headersSent) sendError(response, 500, 'internal', 'Something went wrong.');
       else response.end();
     });
-  });
+  };
+  const server = createServer((request, response) => route(request, response, false));
+  // Without this listener Node answers every `Expect: 100-continue` with 100 before any check.
+  server.on('checkContinue', (request, response) => route(request, response, true));
   server.keepAliveTimeout = 5_000;
 
   return {
