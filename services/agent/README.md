@@ -8,7 +8,7 @@ The small Node service that runs PaperTree's AI through the **Pi SDK** (ADR-002 
 ```sh
 pnpm --filter @papertree/agent start   # node --experimental-strip-types src/server.ts
 pnpm --filter @papertree/agent test    # the offline suite (network denied) + the M5/M6 mutants
-pnpm --filter @papertree/agent test:mutants   # every mutant (M5, M6, G1–G6), ~3 min
+pnpm --filter @papertree/agent test:mutants   # every mutant (M5, M6, G1–G7), ~2.5 min
 ```
 
 ## Configuration (contracts.md §7, the agent's rows)
