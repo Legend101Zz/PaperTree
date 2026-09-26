@@ -817,7 +817,8 @@ class AiMixin(_Base):
             raise ValueError("a summary must cite at least one block")
         if (
             self._one(
-                "SELECT generation FROM papers WHERE owner_id = ? AND paper_id = ? AND generation = ?",
+                "SELECT generation FROM papers "
+                "WHERE owner_id = ? AND paper_id = ? AND generation = ?",
                 (owner_id, paper_id, generation),
             )
             is None

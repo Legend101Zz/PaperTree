@@ -6,10 +6,10 @@ contracts.md §4: the agent's paper tools read through a ``PaperIndex`` that is 
 
 THREE RULES, EACH A BUG THE OBVIOUS CACHE HAS:
 
-  1. THE USER IS IN THE KEY. A paper id is derived from the PDF bytes, so two users who upload the
-     same PDF have the SAME ``paper_id`` (their rows are separate, owner-keyed). A cache keyed by
-     ``(paper_id, generation)`` would hand user B the index user A's handle loaded — the right text
-     today, by coincidence, and a cross-tenant read the day anything per-user enters an index.
+  1. THE USER IS IN THE KEY (contracts.md §4). Today a ``paper_id`` is derived from (user, bytes),
+     so two users never share one — but a cache must not make isolation depend on how an id is
+     minted elsewhere. Keyed by ``(user_id, paper_id, generation)``, a hit can only ever be an
+     index that the SAME user's read-only handle loaded.
   2. WHAT IS CACHED IS DETACHED (``PaperIndex.detached``). The index a loader returns keeps the
      reader it was read through — an ``AgentDataHandle`` the request closes when it ends. Caching
      that object would cache a closed connection bound to the first requester.

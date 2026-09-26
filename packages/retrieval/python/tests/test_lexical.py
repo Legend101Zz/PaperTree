@@ -42,7 +42,7 @@ def test_no_match_is_empty_and_furniture_is_never_searched() -> None:
     assert lexical.search("transformer quantum lattice", 8) == ()
     assert lexical.search("the of and", 8) == (), "a stopword-only query matches nothing"
     # "Preprint. Under review." is printed on both pages, in the header flow, and nowhere else.
-    flows = {index.block(b).flow for b in index.reading_order if index.block(b) is not None}
+    flows = {block.flow for b in index.reading_order if (block := index.block(b)) is not None}
     assert "header" in flows, "the fixture has furniture, so the exclusion is exercised"
     assert lexical.search("preprint review", 8) == (), "the running head is never a passage"
 
@@ -61,6 +61,6 @@ def test_on_resnet_a_real_query_finds_the_passage_that_answers_it() -> None:
     index = PaperIndex.load(paper.db, paper.owner, paper.paper_id, paper.generation)
     lexical = LexicalIndex.build(index)
     hits = lexical.search("identity shortcut projection", 5)
-    texts = [index.block(h.block_id).text.lower() for h in hits if index.block(h.block_id)]
+    texts = [block.text.lower() for h in hits if (block := index.block(h.block_id)) is not None]
     print(f"\n[lexical] resnet: {len(lexical)} searchable blocks; top hit: {texts[0][:100]!r}")
     assert texts and "shortcut" in texts[0] and "identity" in texts[0]

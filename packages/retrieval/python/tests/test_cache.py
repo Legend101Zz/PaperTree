@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import pytest
 from _retrieval_fixtures import ParsedPaper, synthetic_paper
+from papertree_db import generation
 from papertree_memory import AgentDataHandle
 from papertree_retrieval import DEFAULT_CACHE_ENTRIES, PaperIndex, PaperIndexCache
 
@@ -34,7 +35,11 @@ def test_a_hit_serves_the_same_detached_index_without_loading_again() -> None:
     # structural question, because a detached copy holds only the loaded rows.
     index = first.index
     assert len(index) == len(paper.document["blocks"])
-    body = [b for b in index.reading_order if index.block(b) and index.block(b).flow == "body"]
+    body = [
+        b
+        for b in index.reading_order
+        if (block := index.block(b)) is not None and block.flow == "body"
+    ]
     assert len(body) > 2 and index.sections, "structural reads work on the detached copy"
     assert index.adjacent(body[1], 1) == ((body[0],), (body[2],))
     with pytest.raises(RuntimeError, match="detached"):
@@ -42,8 +47,8 @@ def test_a_hit_serves_the_same_detached_index_without_loading_again() -> None:
 
 
 def test_the_user_is_part_of_the_key() -> None:
-    """Two users who uploaded the same PDF share a paper_id (it is derived from the bytes); the
-    cache must never hand one of them the index the other's handle loaded."""
+    """The same (paper, generation) under another user is another entry: a hit is only ever an
+    index the same user's handle loaded, whatever the paper-id scheme is."""
     paper = synthetic_paper()
     cache = PaperIndexCache()
     calls: list[int] = []
@@ -87,7 +92,7 @@ def test_a_failing_load_caches_nothing() -> None:
 
     def missing() -> PaperIndex:
         with AgentDataHandle(paper.database_path, paper.user_id) as handle:
-            return PaperIndex.from_reader(handle, paper.paper_id, 99)
+            return PaperIndex.from_reader(handle, paper.paper_id, generation(99))
 
     with pytest.raises(KeyError):
         cache.get(paper.user_id, paper.paper_id, 99, stamp="s", load=missing)
