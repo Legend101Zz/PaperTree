@@ -26,8 +26,15 @@ ON DONE (§3.4). The final text's ``[bN]`` markers are mapped to blocks through 
 ``papertree_anchoring.capture_citation`` (``capture_anchor(..., target_kind="citation")``)
 against the generation the answer was grounded in; the text is split into claims (sentences, or
 bullets for a summary) and ``verify_grounding`` runs per claim over the cited blocks' resolved
-text. A citation is ``supported`` when every claim that cites it is; the verifier's REASONS (which
-list the words it could not find) never leave this module.
+text — only the blocks THAT claim cites, never every block the run was shown. A citation is
+``supported`` when every claim that cites it is; the verifier's REASONS (which list the words it
+could not find) never leave this module.
+
+WHICH CLAIM A MARKER BELONGS TO. The contract fixes a marker's shape (§3.2), not where a model puts
+it: ``Claim. [b1] Next.`` and ``Claim [b1]. Next.`` both give ``b1`` to ``Claim``. Markers written
+right after a stop, or opening a line, belong to the claim BEFORE them; given to the next sentence
+instead, a fabricated claim's citation could read ``supported``. An abbreviation's stop
+(``Fig. 3``) does not end a claim, so no marker-less fragment escapes the verifier.
 """
 
 from __future__ import annotations
@@ -83,7 +90,21 @@ QUOTE_MATCH_CHARS: Final = 80
 PAPER_CHANNEL: Final = "text_layer"
 
 _WHITESPACE: Final = re.compile(r"\s+")
-_SENTENCE_END: Final = re.compile(r"(?<=[.!?])\s+(?=[\"'(\[A-Z0-9])")
+_MARKER_GROUPS: Final = rf"(?:\s*{MARKER.pattern})*"
+#: A claim ends at `.`/`!`/`?` (and any closing quote or paren), TOGETHER WITH the marker groups
+#: written right after it: `Claim. [b1] Next.` gives `b1` to `Claim.`, exactly as `Claim [b1].`
+#: does (the contract fixes the marker's shape, not which side of the stop a model puts it).
+_CLAIM_END: Final = re.compile(rf"(?P<stop>[.!?])[\"'”’)]*{_MARKER_GROUPS}(?=\s+[\"'“‘(\[A-Z0-9])")
+#: Marker groups at the very start of a claim (a line that opens with, or is only, markers).
+_LEADING_MARKERS: Final = re.compile(rf"^{_MARKER_GROUPS}\s*")
+#: Words whose `.` does not end a sentence: `Fig. 3 shows …` is one claim, and a split there would
+#: leave a marker-less fragment (`As Fig.`) that no verifier reads. A wrong merge costs precision
+#: (two sentences checked together); a wrong split leaves words unchecked.
+_ABBREVIATIONS: Final = frozenset(
+    {"al", "approx", "cf", "ch", "e.g", "eq", "eqs", "fig", "figs", "i.e", "no", "nos", "p", "pp"}
+    | {"ref", "refs", "resp", "sec", "secs", "tab", "tabs", "vol", "vs"}
+)
+_LAST_WORD: Final = re.compile(r"([\w.]+)$")
 _BULLET: Final = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+")
 
 
@@ -377,22 +398,53 @@ def strip_markers(text: str) -> str:
     return _WHITESPACE.sub(" ", MARKER.sub(" ", text)).strip()
 
 
+def _sentences(line: str) -> list[str]:
+    parts: list[str] = []
+    start = 0
+    for end in _CLAIM_END.finditer(line):
+        if end.group("stop") == ".":
+            word = _LAST_WORD.search(line[start : end.start("stop")])
+            if word is not None and word.group(1).lower() in _ABBREVIATIONS:
+                continue
+        parts.append(line[start : end.end()])
+        start = end.end()
+    parts.append(line[start:])
+    return [part.strip() for part in parts if part.strip()]
+
+
+def _attach_leading_markers(claims: list[str], part: str) -> None:
+    """Appends ``part`` to ``claims``; marker groups that OPEN it (or are all of it) belong to
+    the claim before it, when there is one (``Claim.\\n[b1]``)."""
+    lead = _LEADING_MARKERS.match(part)
+    if claims and lead is not None and lead.end() > 0:
+        claims[-1] = f"{claims[-1]} {part[: lead.end()].strip()}"
+        part = part[lead.end() :].strip()
+    if part:
+        claims.append(part)
+
+
 def split_claims(text: str) -> list[str]:
-    """Sentences of an answer; a line-broken answer is split per line first."""
+    """Sentences of an answer, each with the markers written right after its stop; a
+    line-broken answer is split per line first."""
     claims: list[str] = []
     for line in text.splitlines():
-        for part in _SENTENCE_END.split(line.strip()):
-            if part.strip():
-                claims.append(part.strip())
+        for part in _sentences(line):
+            _attach_leading_markers(claims, part)
     return claims
 
 
 def split_bullets(text: str) -> list[str]:
-    """A summary's bullets (``- …``). Lines that are not bullets are ignored, unless there are no
-    bullets at all, in which case every non-empty line is one."""
-    lines = [line for line in text.splitlines() if line.strip()]
-    bullets = [_BULLET.sub("", line, count=1).strip() for line in lines if _BULLET.match(line)]
-    return bullets if bullets else [line.strip() for line in lines]
+    """A summary's bullets (``- …``). Lines that are not bullets are ignored, except a line of
+    markers only, which belongs to the bullet before it; with no bullets at all, every non-empty
+    line is one."""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    bullets: list[str] = []
+    for line in lines:
+        if _BULLET.match(line):
+            bullets.append(_BULLET.sub("", line, count=1).strip())
+        elif bullets and strip_markers(line) == "":
+            _attach_leading_markers(bullets, line)
+    return bullets if bullets else lines
 
 
 def claim_supported(claim: str, cited_blocks: Sequence[str], texts: Mapping[str, str]) -> bool:

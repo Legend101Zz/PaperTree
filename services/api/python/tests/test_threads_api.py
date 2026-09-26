@@ -202,6 +202,75 @@ def test_grounding_flags_the_fabrication_and_not_the_quote(tmp_path: Path) -> No
             assert reason_text not in shown
 
 
+def _farthest(context: RunContext, sentence: str) -> str:
+    """The handle (other than b1) whose shown text shares the fewest of ``sentence``'s words."""
+    words = set(sentence.lower().split())
+    others = [h for h in context.seen if h != context.seen[0]]
+    return min(others, key=lambda h: len(words & set(context.texts.get(h, "").lower().split())))
+
+
+def test_a_marker_after_the_full_stop_is_checked_against_the_sentence_before_it(
+    tmp_path: Path,
+) -> None:
+    """Review M1, over the whole path (fake agent → API `done` → stream → rows): `Claim. [b1]`
+    attributes b1 to the claim BEFORE the marker, exactly as `Claim [b1].` does."""
+    fabricated = "The method reaches 99.9 percent accuracy on the Mars benchmark"
+    shown: list[tuple[str, str]] = []  # per run: (the quote's handle, a block not holding it)
+
+    def true_first(context: RunContext) -> str:
+        sentence = _first_sentence(context)
+        quote, other = context.seen[0], _farthest(context, sentence)
+        shown.append((quote, other))
+        return f"{sentence}. [{quote}] {fabricated}. [{other}]"
+
+    def fabricated_first(context: RunContext) -> str:
+        sentence = _first_sentence(context)
+        quote, other = context.seen[0], _farthest(context, sentence)
+        shown.append((quote, other))
+        return f"{fabricated}. [{quote}] {sentence}. [{other}]"
+
+    scripts = [
+        Script("explain-ok", final_text=true_first),
+        Script("explain-ok", final_text=fabricated_first),
+    ]
+    with ai_harness(tmp_path, scripts) as h:
+        token, paper_id = alice_with_paper(h)
+        for run, quote_supported in enumerate((True, False)):
+            # Run 1: the quote's sentence cites its block. Run 2: the FABRICATION cites the
+            # quote's block, so that chip must NOT read supported.
+            frames, _ = read_sse(explain(h, token, paper_id, paragraph_anchor()))
+            quote, other = shown[run]
+            expected = {quote: quote_supported, other: False}
+            items = events(frames, "citations")[0]["items"]
+            assert {c["marker"]: c["supported"] for c in items} == expected
+            message_id = events(frames, "done")[0]["message_id"]
+            stored = h.rows(
+                "SELECT marker, supported FROM ai_citations WHERE message_id = ?", message_id
+            )
+            assert {r["marker"]: bool(r["supported"]) for r in stored} == expected
+
+
+def test_a_claim_is_checked_only_against_the_blocks_it_cites(tmp_path: Path) -> None:
+    """Review M2 (§3.4 "per claim over the CITED blocks"): the quote's own sentence citing
+    another block the run was shown is not supported; grounding over every block the run saw
+    would pass it."""
+    shown: dict[str, str] = {}
+
+    def answer(context: RunContext) -> str:
+        sentence = _first_sentence(context)
+        shown["quote"], shown["other"] = context.seen[0], _farthest(context, sentence)
+        return f"{sentence} [{shown['quote']}]. {sentence} [{shown['other']}]."
+
+    with ai_harness(tmp_path, Script("explain-ok", final_text=answer)) as h:
+        token, paper_id = alice_with_paper(h)
+        frames, _ = read_sse(explain(h, token, paper_id, paragraph_anchor()))
+        by_marker = {c["marker"]: c["supported"] for c in events(frames, "citations")[0]["items"]}
+        assert by_marker == {shown["quote"]: True, shown["other"]: False}
+        # Both were issued to this run: the other block was shown, it is just not what b1 says.
+        handles = {r["handle"] for r in h.rows("SELECT handle FROM ai_run_handles")}
+        assert {shown["quote"], shown["other"]} <= handles
+
+
 def test_a_marker_the_run_never_issued_is_dropped_and_logged(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
