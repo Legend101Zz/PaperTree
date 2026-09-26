@@ -83,6 +83,8 @@ def pid_is_alive(pid: int) -> bool:
 
     ``PermissionError`` means it exists but belongs to another user: alive. Only a definite
     ``ProcessLookupError`` is dead, so a doubtful answer errs toward waiting out the lease.
+    A pid too large for the OS to be asked about (``OverflowError``: a hand-made worker id such as
+    ``host:99999999999999999999``) is doubt too; before, it escaped and killed the worker.
     """
     if pid <= 0:
         return True
@@ -91,6 +93,8 @@ def pid_is_alive(pid: int) -> bool:
     except ProcessLookupError:
         return False
     except OSError:  # PermissionError included: the process exists, it is not ours
+        return True
+    except OverflowError:  # no such pid can exist, so it is not a worker of ours: leave it
         return True
     return True
 

@@ -341,6 +341,27 @@ def test_a_paper_deleted_mid_parse_is_not_resurrected_by_its_worker(tmp_path: Pa
         assert list(h.settings.staging_root.iterdir()) == []
 
 
+def test_a_drain_goes_on_past_a_job_whose_paper_was_deleted_under_it(tmp_path: Path) -> None:
+    """`run(max_jobs=...)` drains until the queue is EMPTY. A job whose row vanished mid-run makes
+    `run_once` return None too, and that is not an empty queue (S1 review nit)."""
+    with harness(tmp_path) as h:
+        token = register(h.client, "reader@example.com")
+        papers = [
+            upload(h.client, token, synthetic_pdf(title=title)).json()["paper_id"]
+            for title in ("The First Paper", "The Second Paper")
+        ]
+        gate = Gate("persist")
+        with worker_thread(h.settings, gate, max_jobs=10):
+            gate.wait_for("persist")
+            (held,) = sql(h.settings, "SELECT payload FROM jobs WHERE state = 'running'")
+            doomed = json.loads(held["payload"])["paper_id"]
+            assert h.client.delete(f"/papers/{doomed}", headers=auth(token)).status_code == 204
+            gate.release["persist"].set()
+        (survivor,) = [paper_id for paper_id in papers if paper_id != doomed]
+        rows = library(h.client, token)
+        assert [(row["paper_id"], row["processing"]) for row in rows] == [(survivor, "ready")]
+
+
 def test_a_generation_already_stored_by_a_dead_attempt_is_kept_and_promoted(tmp_path: Path) -> None:
     """A kill can land INSIDE persist: after `put_paper` committed, before the step's checkpoint.
     The resumed persist must find the generation and keep it, not fail on the duplicate key.

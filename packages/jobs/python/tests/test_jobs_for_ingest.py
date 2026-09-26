@@ -339,6 +339,9 @@ def test_release_leaves_other_hosts_and_other_id_formats_alone(env: Env) -> None
         f"elsewhere.example:{dead.pid}",
         f"worker:{dead.pid}",
         f"{socket.gethostname()}:x1",
+        # Decimal, on this host, and no pid at all: past pid_t, `os.kill` raises OverflowError,
+        # which killed the worker at start and when idle (S1 review nit). Left alone, like the rest.
+        f"{socket.gethostname()}:99999999999999999999",
     ):
         job_id = env.store.enqueue(env.owner, "parse", owner_id, {})
         claimed = env.store._claim(owner_id, ("parse",), lease_seconds=600.0)
@@ -353,6 +356,8 @@ def test_release_leaves_other_hosts_and_other_id_formats_alone(env: Env) -> None
 
 def test_pid_is_alive_answers_for_this_process_and_a_reaped_one() -> None:
     assert pid_is_alive(os.getpid())
+    # No process can have it, but "cannot ask" is doubt, and doubt waits (never raises).
+    assert pid_is_alive(10**20) is True
     gone = subprocess.Popen([sys.executable, "-c", "pass"])
     gone.wait()
     assert pid_is_alive(gone.pid) is False

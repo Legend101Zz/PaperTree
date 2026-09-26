@@ -229,6 +229,18 @@ class JobLog(JobObserver):
             shutil.rmtree(self._settings.asset_root / paper_id, ignore_errors=True)
 
 
+class _Claims(JobObserver):
+    """Counts claims. `run_once` returns None both when nothing was due AND when the job it ran
+    lost its row mid-run (its paper was deleted): only the first means the queue is empty, so a
+    drain (`max_jobs`) that stopped on either quit with work still queued (S1 review nit)."""
+
+    def __init__(self) -> None:
+        self.count = 0
+
+    def claimed(self, job: Job) -> None:
+        self.count += 1
+
+
 class _Fanout(JobObserver):
     """Tells every observer, even when one raises; then re-raises the first error so the runner
     counts it (`JobRunner.observer_errors`)."""
@@ -290,6 +302,7 @@ def run(
         database.migrate()
         store.migrate()
         log = JobLog(database, settings)
+        claims = _Claims()
         runner = build_runner(
             store,
             ParseJobDeps(
@@ -298,7 +311,7 @@ def run(
                 staging_root=settings.staging_root,
                 verify_stored=verify_stored_generation,
             ),
-            observer=log if observer is None else _Fanout(observer, log),
+            observer=_Fanout(claims, log) if observer is None else _Fanout(observer, claims, log),
             lease_seconds=lease_seconds,
         )
 
@@ -325,8 +338,9 @@ def run(
         release()
         ran = 0
         while not stopping and (max_jobs is None or ran < max_jobs):
-            job = runner.run_once()
-            if job is None:
+            before = claims.count
+            runner.run_once()
+            if claims.count == before:  # nothing was due (not: a job whose row vanished)
                 if max_jobs is not None:
                     break  # draining, and the queue is empty
                 release()
