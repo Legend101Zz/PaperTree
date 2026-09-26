@@ -430,3 +430,53 @@ def test_the_title_is_read_first(title_right_of_the_split: Path, tmp_path: Path)
     # column is read to its foot before the right column starts.
     middle = _body_order(paper, 1)
     assert at(middle, "leftbottom0") < at(middle, "righttop0")
+
+
+# ── KNOWN DEFECT: text level with a table in the other column leaves the document ────────
+
+
+@pytest.fixture(scope="module")
+def table_beside_prose(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """A booktabs table in the left column, and a short right-column paragraph set entirely
+    within the table's height. The paragraph is its own layout block (a clear gap above and
+    below), which is the shape that lost its text: every one of its lines was "claimed" by a
+    table in the other column, so the block was skipped as already emitted - and it never was."""
+    document = pymupdf.open()
+    page = document.new_page(width=W, height=H)
+    _column(page, LEFT, 80, "lefttop", 12)
+    top, bottom = 240.0, 310.0
+    page.draw_line((LEFT, top), (LEFT + MEASURE, top), width=0.8)
+    page.draw_line((LEFT, bottom), (LEFT + MEASURE, bottom), width=0.8)
+    for row, y in enumerate((255.0, 272.0, 289.0, 303.0)):
+        for column, x in enumerate((LEFT + 4, LEFT + 90, LEFT + 170)):
+            page.insert_text(
+                (x, y), f"c{row}{column} {10 * row + column}.5", fontsize=9, fontname="helv"
+            )
+    _column(page, LEFT, 340, "leftbottom", 14)
+    _column(page, RIGHT, 80, "righttop", 10)
+    _column(page, RIGHT, 262, "beside", 3)
+    _column(page, RIGHT, 360, "rightbottom", 12)
+    return _save(document, tmp_path_factory.mktemp("claim") / "claim.pdf")
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "known defect, not fixed in S2 (#141): a table claims every line level with it at any x, "
+        "so a block of the OTHER column wholly within its height is skipped as 'already emitted "
+        "as table cells'. Three narrower claims were measured and each also released the table's "
+        "own undetected columns as body fragments (22-24 metrics worse); see "
+        "research/benchmarks/READER-RELEASE-PARSER.md. Strict, so a fix must remove this marker."
+    ),
+)
+def test_text_level_with_a_table_in_the_other_column_is_kept(
+    table_beside_prose: Path, tmp_path: Path
+) -> None:
+    paper = _parse(table_beside_prose, tmp_path)
+    assert [b for b in paper.blocks if b.type == "table"], "the synthetic table was not detected"
+    beside = _containing(paper, "beside0")
+    assert beside is not None, "the right-column paragraph beside the table left the document"
+    assert beside.type == "paragraph" and "beside ends." in (beside.text or "")
+    # ...and the table's own text is still a table's, not prose.
+    cell = _containing(paper, "c11")
+    assert cell is not None and cell.type == "table_cell"
