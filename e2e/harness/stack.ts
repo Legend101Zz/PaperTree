@@ -4,7 +4,9 @@
  *
  *   api     `python -m papertree_api`         PAPERTREE_HOST=127.0.0.1, PAPERTREE_PORT=<free>
  *   worker  `python -m papertree_api.worker`  the same PAPERTREE_DATA_ROOT, so it parses uploads
- *   agent   `services/agent`                  SKIPPED, loudly, until S5 writes it
+ *   agent   `services/agent` in FAUX mode     PAPERTREE_AGENT_FAUX=1: the scripted model, never a
+ *                                             network model and never a key; its port and a fresh
+ *                                             shared secret go to the API
  *   web     `next dev`                        NEXT_PUBLIC_PAPERTREE_API_URL=<the api above>
  *
  * WHAT "READY" MEANS, per process, because a harness that starts things and hopes is how an e2e
@@ -24,6 +26,7 @@
  * Never `~/.papertree`, never `~/.papertree-demo`: the data root is always a new directory.
  */
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import {
   createWriteStream,
   existsSync,
@@ -38,7 +41,8 @@ import { join, resolve } from 'node:path';
 
 export const REPO_ROOT = resolve(__dirname, '..', '..');
 const WEB_DIR = join(REPO_ROOT, 'apps', 'web');
-const AGENT_ENTRY = join(REPO_ROOT, 'services', 'agent', 'src', 'server.ts');
+const AGENT_DIR = join(REPO_ROOT, 'services', 'agent');
+const AGENT_ENTRY = join(AGENT_DIR, 'src', 'server.ts');
 
 export interface StackInfo {
   readonly apiUrl: string;
@@ -237,7 +241,11 @@ export async function startStack(): Promise<{
 
   const apiPort = envPort('PAPERTREE_E2E_API_PORT') ?? (await freePort());
   const webPort = envPort('PAPERTREE_E2E_WEB_PORT') ?? (await freePort());
+  const agentPort = envPort('PAPERTREE_E2E_AGENT_PORT') ?? (await freePort());
   const apiUrl = `http://127.0.0.1:${String(apiPort)}`;
+  const agentUrl = `http://127.0.0.1:${String(agentPort)}`;
+  // A fresh shared secret per stack: the API and the agent get it, nothing else does.
+  const agentSecret = randomBytes(24).toString('hex');
   const webUrl = `http://127.0.0.1:${String(webPort)}`;
   say(`fresh data root ${dataRoot}`);
 
@@ -252,9 +260,46 @@ export async function startStack(): Promise<{
   const pythonEnv = { PAPERTREE_DATA_ROOT: dataRoot, PYTHONUNBUFFERED: '1' };
 
   try {
+    // The agent first, so the API starts with its URL. FAUX mode: `services/agent`'s scripted model
+    // (contracts.md §3.1), so no key exists anywhere in this stack. The same command as
+    // `pnpm --filter @papertree/agent start`, without the pnpm layer.
+    const agentProc = start(
+      'agent',
+      process.execPath,
+      ['--experimental-strip-types', '--disable-warning=ExperimentalWarning', AGENT_ENTRY],
+      {
+        cwd: AGENT_DIR,
+        env: {
+          PAPERTREE_AGENT_FAUX: '1',
+          PAPERTREE_AGENT_SECRET: agentSecret,
+          PAPERTREE_AGENT_PORT: String(agentPort),
+          PAPERTREE_API_INTERNAL_URL: apiUrl,
+        },
+        logDir,
+      },
+    );
+    procs.push(agentProc);
+    const agentHealth = await waitUntil(agentProc, 60_000, async () => {
+      const response = await fetch(`${agentUrl}/healthz`);
+      if (response.status !== 200) return null;
+      const text = await response.text();
+      const body = JSON.parse(text) as { ok?: unknown; wiring_ok?: unknown; faux?: unknown };
+      if (body.ok !== true || body.wiring_ok !== true || body.faux !== true) {
+        throw new Error(`agent GET /healthz 200 but not a healthy faux agent: ${text}`);
+      }
+      return `GET /healthz 200 ${text}`;
+    });
+    say(`agent (faux) ready at ${agentUrl}: ${agentHealth}`);
+
     const api = start('api', python, ['-m', 'papertree_api'], {
       cwd: REPO_ROOT,
-      env: { ...pythonEnv, PAPERTREE_HOST: '127.0.0.1', PAPERTREE_PORT: String(apiPort) },
+      env: {
+        ...pythonEnv,
+        PAPERTREE_HOST: '127.0.0.1',
+        PAPERTREE_PORT: String(apiPort),
+        PAPERTREE_AGENT_URL: agentUrl,
+        PAPERTREE_AGENT_SECRET: agentSecret,
+      },
       logDir,
     });
     procs.push(api);
@@ -283,19 +328,14 @@ export async function startStack(): Promise<{
     const workerHealth = `alive after 1.5 s (pid ${String(worker.child.pid)}), polling ${dataRoot}`;
     say(`worker ${workerHealth}`);
 
-    const agent: StackInfo['agent'] = 'skipped';
-    if (existsSync(AGENT_ENTRY)) {
-      // S5 replaces this branch: start `pnpm --filter @papertree/agent start` in faux mode on a
-      // free port, wait for its /healthz, and pass PAPERTREE_AGENT_URL + _SECRET to the API.
-      throw new Error(
-        `${AGENT_ENTRY} exists, so services/agent has source, but this harness does not start it ` +
-          'yet. S5: wire the faux agent into e2e/harness/stack.ts.',
-      );
+    // The API reaches the agent (its /healthz probes it: contracts.md §2.8).
+    const probed = JSON.parse(apiHealth.slice(apiHealth.indexOf('{'))) as {
+      agent?: { reachable?: unknown };
+    };
+    if (probed.agent?.reachable !== true) {
+      throw new Error(`the API does not reach the faux agent at ${agentUrl}: ${apiHealth}`);
     }
-    say('');
-    say('!!! AGENT SKIPPED: services/agent has no source yet (S5 implements it). No AI journey');
-    say('!!! can run against this stack; specs that need it must skip and say so.');
-    say('');
+    const agent: StackInfo['agent'] = 'running';
 
     prepareWebAssets(logDir);
     const web = start(
