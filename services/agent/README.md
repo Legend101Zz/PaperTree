@@ -8,7 +8,7 @@ The small Node service that runs PaperTree's AI through the **Pi SDK** (ADR-002 
 ```sh
 pnpm --filter @papertree/agent start   # node --experimental-strip-types src/server.ts
 pnpm --filter @papertree/agent test    # the offline suite (network denied) + the M5/M6 mutants
-pnpm --filter @papertree/agent test:mutants   # every mutant (M5, M6, G1–G7), ~2.5 min
+pnpm --filter @papertree/agent test:mutants   # every mutant (M5, M6, G1–G13), ~4 min
 ```
 
 ## Configuration (contracts.md §7, the agent's rows)
@@ -43,7 +43,9 @@ compaction off, cache warming off, telemetry off and the §3.1 retry settings.
 | `GET /healthz`            | `{ok, sdk, pi_ai, model, key_present, wiring_ok, active_runs, faux}`; no auth, no secrets              |
 
 Errors before the stream starts are the §0 envelope `{detail, code, retryable}`: 401 `auth_required`,
-413 `payload_too_large`, 422 `validation_failed` (the detail names the field), 409 `busy` (a run is
+413 `payload_too_large` (a body over 8 MB; the answer is delivered — the rest of the body is read
+and thrown away — and an `Expect: 100-continue` client gets it instead of the 100), 422
+`validation_failed` (the detail names the field), 409 `busy` (a run is
 live on this thread, or the run id was already used), 404/405 `not_found`.
 
 ## What a run does
@@ -67,7 +69,11 @@ through one method that refuses a disposed session and always passes `expandProm
 - **Text**: only an answer reaches the caller. A message's text is held until it proves to be an
   answer — it carries a `[bN]` marker, or the message ends with anything but `toolUse` — then it
   streams live. Narration before a tool call ("Let me search…") is dropped. The deltas sent are
-  exactly `done.final_text`.
+  exactly `done.final_text`. Once any text has been sent the tools are closed: a later tool call is
+  refused (not run, not counted, no `status: tool`; the model is told to finish from what it has,
+  and `agent.tool` logs `status: "refused_after_text"`), so no tool step ever follows the first
+  delta. A message that cites and then asks for a tool keeps its text — the reader already has it —
+  and the answer continues in the next message after a blank line.
 - **Citations**: `markers` are the §3.2 regex over `final_text`, restricted to handles issued in THIS
   run (the seed, then each tool response in call order); an invented marker is logged
   (`agent.run.done.unseen_markers`).
@@ -109,9 +115,9 @@ it; every mutant must make it fail.
 | File                 | What it pins                                                                                   |
 | -------------------- | ---------------------------------------------------------------------------------------------- |
 | `fixtures.test.ts`   | the 8 recorded streams, emitted by the agent, event by event                                  |
-| `errors.test.ts`     | every §3.3 error row on a mock Anthropic server (the real provider path), watchdog, deadline  |
-| `guards.test.ts`     | tool loop, caps, narration, citations, history restore / pre-prompt rule, busy, DELETE, tools |
-| `wiring.test.ts`     | the four tools, both isolation layers, settings, canary cwd, boot refusals, HTTP envelope      |
+| `errors.test.ts`     | every §3.3 error row on a mock Anthropic server (the real provider path), watchdog (fires after idle_ms of silence; reset by every event), deadline |
+| `guards.test.ts`     | tool loop, caps, narration, tools closed after text, citations, system-prompt text, history restore / pre-prompt rule, busy, DELETE, tools |
+| `wiring.test.ts`     | the four tools, both isolation layers, settings, prompt options, canary cwd, boot refusals, HTTP envelope, limit bounds, the 413 |
 | `contract.test.ts`   | the runtime request check and the tool parameters agree with ajv on the committed schemas     |
 | `audit.test.ts`      | the audit is loaded; positive and negative controls; the kernel deny                          |
 | `heartbeat.test.ts`  | one `: ping` per interval, and at the real 5 s                                                |
@@ -143,6 +149,14 @@ scripts; nothing here needs them.
   rebuilt each run.
 - `kind` and `prompt_version` must pair (`explain`/`explain-v1`, `ask`/`ask-v1`,
   `summary`/`summary-v1`), and `tool.base_url` must end with the run id; the schema allows both.
+  `limits.deadline_ms` and `limits.idle_ms` must be at most 2,147,483,647 (Node's longest timer);
+  the schema sets no maximum.
+- Paper-derived text the API has not datamarked — the title and the selection's section name — is
+  flattened to one line (no controls, no datamark look-alikes, ≤ 300 characters) and datamarked
+  word by word in the system prompt; passage and page labels are flattened. The quote in the user
+  turn is verbatim (the recordings' `entries` hold it so).
+- `markers` are the handles issued in THIS run; the prompt tells the model that an earlier turn's
+  handle is not valid now and to find that passage again with a tool.
 - A `usage` event is emitted for every assistant message except an aborted one that carries no usage
   (nothing was billed). A real stream aborted after `message_start` carries input tokens, so it does
   get one.
