@@ -10,7 +10,9 @@
 import type { PromptVersion, RunRequest } from './contract.ts';
 
 /** C0/C1 controls (tab, newline and the rest), DEL, and the Unicode line/paragraph separators. */
-const CONTROLS = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g;
+function isControl(code: number): boolean {
+  return code < 0x20 || (code >= 0x7f && code <= 0x9f) || code === 0x2028 || code === 0x2029;
+}
 /** Anything shaped like a datamark (`^` + 8 or more hex), so paper text cannot forge the run's. */
 const DATAMARK_SHAPE = /\^[0-9A-Fa-f]{8,}/g;
 /** Longest paper-derived label or name put in the system prompt. */
@@ -22,7 +24,11 @@ const MAX_LABEL = 300;
  * look-alikes are removed, whitespace is collapsed, and the length is capped.
  */
 export function flatten(text: string): string {
-  const flat = text.replace(CONTROLS, ' ').replace(DATAMARK_SHAPE, ' ').replace(/\s+/g, ' ').trim();
+  const flat = Array.from(text, (ch) => (isControl(ch.codePointAt(0) ?? 0) ? ' ' : ch))
+    .join('')
+    .replace(DATAMARK_SHAPE, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   return flat.length <= MAX_LABEL ? flat : `${flat.slice(0, MAX_LABEL - 1)}…`;
 }
 
