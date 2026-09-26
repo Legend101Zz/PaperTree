@@ -1,5 +1,5 @@
 """contracts.md §7, the API's variables: defaults, parsing, refusal of nonsense, and no secret in a
-repr. The LLM fields are S5's to remove and are not asserted here."""
+repr. The `PAPERTREE_LLM_*` fields are gone (S5): the API reads no model credential at all."""
 
 from __future__ import annotations
 
@@ -100,3 +100,41 @@ def test_extra_cors_origins_are_allowed_and_others_are_not(tmp_path: Path) -> No
     assert listed.headers["access-control-allow-origin"] == "https://reader.example"
     assert "access-control-allow-origin" not in other.headers
     assert local.headers["access-control-allow-origin"] == "http://localhost:3000"
+
+
+def test_the_api_reads_no_model_credential(clean_env: pytest.MonkeyPatch) -> None:
+    """contracts.md §7: `PAPERTREE_MINIMAX_API_KEY` is the AGENT's only, and the four
+    `PAPERTREE_LLM_*` variables were removed with `/ask`. Set every one of them to a marker and
+    the marker appears nowhere in the resolved settings — no field, no repr."""
+    marker = "sk-should-never-reach-the-api-0000"
+    for name in (
+        "PAPERTREE_MINIMAX_API_KEY",
+        "MINIMAX_API_KEY",
+        "PAPERTREE_LLM_API_KEY",
+        "PAPERTREE_LLM_MODEL",
+        "PAPERTREE_LLM_BASE_URL",
+        "PAPERTREE_LLM_TIMEOUT_SECONDS",
+        "LLM_API_KEY",
+    ):
+        clean_env.setenv(name, marker)
+    settings = Settings.from_env()
+    values = [str(getattr(settings, name)) for name in settings.__dataclass_fields__]
+    assert not [value for value in values if marker in value]
+    assert marker not in repr(settings)
+    assert not [name for name in settings.__dataclass_fields__ if name.startswith("llm_")]
+
+
+def test_the_agent_reaches_the_tools_on_loopback_at_the_api_port(
+    clean_env: pytest.MonkeyPatch,
+) -> None:
+    """`tool.base_url` (contracts.md §3.2) is this process on 127.0.0.1 whatever it binds: the
+    internal tools answer loopback callers only (§4)."""
+    clean_env.delenv("PAPERTREE_PORT", raising=False)
+    assert Settings.from_env().api_internal_url == "http://127.0.0.1:8000"
+    clean_env.setenv("PAPERTREE_HOST", "0.0.0.0")
+    clean_env.setenv("PAPERTREE_PORT", "18711")
+    assert Settings.from_env().api_internal_url == "http://127.0.0.1:18711"
+    for bad in ("70000", "0", "port"):
+        clean_env.setenv("PAPERTREE_PORT", bad)
+        with pytest.raises(ValueError, match="PAPERTREE_PORT"):
+            Settings.from_env()

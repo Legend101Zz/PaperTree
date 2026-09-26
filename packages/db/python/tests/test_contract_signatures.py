@@ -125,19 +125,6 @@ PROPOSED: dict[str, list[str]] = {
 #: THE LEDGER. Delete a line in the PR that implements the method.
 STILL_STUBS: frozenset[str] = frozenset(
     {
-        # S5
-        "create_thread",
-        "append_message",
-        "update_message",
-        "list_threads",
-        "get_thread",
-        "create_run",
-        "finish_run",
-        "put_run_handles",
-        "run_grant",
-        "cost_since",
-        "usage_since",
-        "get_summary",
         # S7
         "get_board",
         "create_node",

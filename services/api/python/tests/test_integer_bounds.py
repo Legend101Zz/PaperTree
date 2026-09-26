@@ -57,13 +57,6 @@ def test_every_gen_param_is_one_bounded_grammar(tmp_path: Path) -> None:
         # Non-vacuous: a real generation still answers.
         for path in _gen_routes(paper_id, block_id)[:6]:
             assert h.client.get(f"{path}?gen=1", headers=auth(alice)).status_code == 200, path
-        # POST /ask takes ?gen= too; its body is checked first only when the gen is fine.
-        response = h.client.post(
-            f"/papers/{paper_id}/ask?gen={SQLITE_INTEGER_MAX + 1}",
-            headers=auth(alice),
-            json={"question": "q", "block_ids": ["blk_x"]},
-        )
-        assert_envelope(response, 422, "validation_failed")
 
 
 def test_page_is_bounded_too(tmp_path: Path) -> None:

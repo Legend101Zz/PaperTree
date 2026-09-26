@@ -2,9 +2,11 @@
 
 `BEFORE` is the table `create_app()` served at `b33d8f8` (the last commit before the split),
 captured by introspecting the app, not by reading the code. `ADDED` is everything S0 added on top.
-A route that disappears, changes its path or changes its method fails the first test; a route that
-appears without being listed in `ADDED` fails the second. Both directions matter: a silently added
-route is a surface nobody reviewed.
+`REMOVED` is the one deliberate removal since: `POST /papers/{id}/ask`, deleted by S5 with `ask.py`
+(slice-plan §R R9; threads and summary replace it). A route that disappears, changes its path or
+changes its method fails the first test; a route that appears without being listed in `ADDED`
+fails the second. Both directions matter: a silently added route is a surface nobody reviewed, and
+a silently removed one is a client that breaks.
 """
 
 from __future__ import annotations
@@ -86,6 +88,15 @@ ADDED: frozenset[tuple[str, str]] = frozenset(
 )
 
 
+#: Deliberate removals, each with the slice that made it. Removing a route is a contract change the
+#: report must name; listing it here is what lets the first test keep failing on an ACCIDENTAL one.
+REMOVED: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("POST", "/papers/{paper_id}/ask"),  # S5, R9: ask.py deleted; threads replace it
+    }
+)
+
+
 def _served(tmp_path: Path) -> set[tuple[str, str]]:
     """Every (method, path) the app matches. `app.routes` is NOT that list: FastAPI 0.14x keeps an
     included router as one lazy `_IncludedRouter` entry, so a table read off `app.routes` shows
@@ -101,15 +112,18 @@ def _served(tmp_path: Path) -> set[tuple[str, str]]:
 
 
 def test_no_route_that_existed_before_the_split_moved_or_disappeared(tmp_path: Path) -> None:
-    missing = BEFORE - _served(tmp_path)
+    served = _served(tmp_path)
+    missing = BEFORE - REMOVED - served
     assert not missing, f"routes the split dropped or moved: {sorted(missing)}"
+    assert not REMOVED & served, f"a route listed as removed is still served: {REMOVED & served}"
+    assert REMOVED <= BEFORE, "only a route that existed can be removed"
 
 
 def test_every_route_is_either_pre_split_or_a_listed_addition(tmp_path: Path) -> None:
     served = _served(tmp_path)
-    assert served == BEFORE | ADDED, (
-        f"unlisted: {sorted(served - BEFORE - ADDED)}; listed but not served: "
-        f"{sorted((BEFORE | ADDED) - served)}"
+    expected = (BEFORE - REMOVED) | ADDED
+    assert served == expected, (
+        f"unlisted: {sorted(served - expected)}; listed but not served: {sorted(expected - served)}"
     )
     assert not BEFORE & ADDED, "a pre-split route is also listed as an addition"
 
@@ -126,7 +140,7 @@ def test_the_openapi_document_builds_and_lists_every_api_route(tmp_path: Path) -
     documented = {(method.upper(), path) for path, item in paths.items() for method in item}
     api_routes = {
         (method, path)
-        for method, path in BEFORE | ADDED
+        for method, path in (BEFORE - REMOVED) | ADDED
         if method != "HEAD" and not path.startswith(("/docs", "/redoc", "/openapi"))
     }
     assert api_routes <= documented, sorted(api_routes - documented)

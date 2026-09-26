@@ -23,21 +23,19 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from _agent_tools_fixtures import run, seed_synthetic
+from _agent_tools_fixtures import Seeded, seed_synthetic
 from papertree_agent_tools import (
     DEFAULT_COVERAGE_THRESHOLD,
     STOPWORDS,
+    UNVERIFIED_REASON,
     ClaimEvidence,
     GroundedAnswer,
-    ToolStatus,
     VerifiedClaim,
-    build_registry,
     claim_coverage,
     content_tokens,
+    load_paper_view,
     verify_grounding,
 )
-
-REGISTRY = build_registry()
 
 #: The paragraph the synthetic paper carries, quoted here so the coverage numbers in
 #: ``grounding.py``'s docstring are computable from this file alone.
@@ -276,75 +274,64 @@ def test_the_verifier_runs_with_the_network_physically_unavailable(
     assert verified.claims[1].supported is False
 
 
-# ── through the tool, against a real parsed paper ────────────────────────────────────────
+# ── against a real parsed paper, through the read-only handle ────────────────────────────
 
 
-def test_verify_answer_grounding_flags_a_fabrication_against_a_real_document(
-    tmp_path: Path,
-) -> None:
-    """End to end: real PDF, real parse, real handle, and the flagged claim survives the tool.
+def _resolved_text(seeded: Seeded) -> dict[str, str]:
+    """``block_id -> resolved text`` exactly as the API's ``evidence.py`` builds it: from the
+    index's ``IndexedBlock.text`` (``resolved_text``, never ``text`` plus ``repairs`` by hand)."""
+    with seeded.handle() as handle:
+        view = load_paper_view(handle, seeded.paper_id, seeded.generation)
+        return {
+            block_id: block.text
+            for block_id in view.index.reading_order
+            if (block := view.index.block(block_id)) is not None
+        }
 
-    The tool layer is where a filter would be easiest to slip in — "clean up the answer before
-    returning it" — so the assertion is repeated at this level rather than trusted from the unit
-    test above.
-    """
+
+def test_a_fabrication_is_flagged_against_a_real_document(tmp_path: Path) -> None:
+    """End to end on a real parse: real PDF, real parser, real handle, and the flagged claim
+    survives. (Until the reader release this went through the registry's
+    ``verify_answer_grounding`` tool; the registry is gone and the API calls the verifier
+    directly, so this does too.)"""
     seeded = seed_synthetic(tmp_path / "verify")
     block_id = seeded.first_of_type("paragraph")
-    with seeded.handle() as handle:
-        result = run(
-            REGISTRY.call(
-                "verify_answer_grounding",
-                {
-                    "states": "The paper presents a residual learning framework.",
-                    "interpretation": None,
-                    "supporting_block_ids": [block_id],
-                    "claims": [
-                        {"text": "residual learning framework", "supported_by": [block_id]},
-                        {
-                            "text": "the model reaches 99.9 percent accuracy on ImageNet",
-                            "supported_by": [block_id],
-                        },
-                    ],
-                },
-                context=seeded.context(handle),
-            )
-        )
-    assert result.status is ToolStatus.OK
-    claims = result.data["answer"]["claims"]
-    assert len(claims) == 2, "the tool dropped a claim"
-    assert claims[0]["supported"] is True
-    assert claims[1]["supported"] is False
-    assert "99.9" in claims[1]["reason"]
-    assert result.data["claims_flagged"] == 1
-    assert result.data["fully_grounded"] is False
-    # The citation chips F3.6 needs, resolved from the answer's own block ids.
-    assert result.data["resolved_source_regions"][0]["block_id"] == block_id
-    assert len(result.data["resolved_source_regions"][0]["bbox"]) == 4
+    verified = verify_grounding(
+        _answer(
+            (
+                VerifiedClaim(
+                    text="residual learning framework",
+                    supported_by=(block_id,),
+                    reason=UNVERIFIED_REASON,
+                ),
+                VerifiedClaim(
+                    text="the model reaches 99.9 percent accuracy on ImageNet",
+                    supported_by=(block_id,),
+                    reason=UNVERIFIED_REASON,
+                ),
+            ),
+            supporting_block_ids=(block_id,),
+        ),
+        _resolved_text(seeded),
+    )
+    assert len(verified.claims) == 2, "the verifier dropped a claim"
+    assert verified.claims[0].supported is True
+    assert verified.claims[1].supported is False
+    assert verified.claims[1].reason is not None and "99.9" in verified.claims[1].reason
+    assert verified.fully_grounded is False
 
 
-def test_verify_answer_grounding_refuses_a_draft_that_violates_the_contract(
+def test_a_claim_citing_a_block_this_generation_lacks_is_flagged_not_refused(
     tmp_path: Path,
 ) -> None:
-    """An ungrounded draft is REFUSED, never repaired into shape.
-
-    The field a repair would invent is exactly the field the reader is being asked to trust.
-    """
-    seeded = seed_synthetic(tmp_path / "refuse")
-    with seeded.handle() as handle:
-        result = run(
-            REGISTRY.call(
-                "verify_answer_grounding",
-                {
-                    "states": "Something true.",
-                    "interpretation": None,
-                    "supporting_block_ids": ["blk_gone"],
-                    "claims": [{"text": "a claim", "supported_by": []}],
-                },
-                context=seeded.context(handle),
-            )
-        )
-    # The schema admits it (the ids are well-formed strings); the VERIFIER is what discovers the
-    # blocks do not exist, and it flags rather than refuses. Refusal is for contract violations.
-    assert result.status is ToolStatus.OK
-    assert result.data["answer"]["claims"][0]["supported"] is False
-    assert "blk_gone" in result.data["answer"]["claims"][0]["reason"]
+    """A stale block id (a survivor from another generation) is FLAGGED with the id named."""
+    seeded = seed_synthetic(tmp_path / "stale")
+    verified = verify_grounding(
+        _answer(
+            (VerifiedClaim(text="a claim", supported_by=("blk_gone",), reason=UNVERIFIED_REASON),),
+            supporting_block_ids=("blk_gone",),
+        ),
+        _resolved_text(seeded),
+    )
+    assert verified.claims[0].supported is False
+    assert verified.claims[0].reason is not None and "blk_gone" in verified.claims[0].reason

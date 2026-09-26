@@ -30,9 +30,21 @@ SERVICE: Final = "api"
 Level = Literal["debug", "info", "warning", "error"]
 
 #: contracts.md §8's fields, plus `method` (beside `route`), and `error_type` / `where` for
-#: `http.error` (an exception's class and `file:function:line`, never its message).
+#: `http.error` (an exception's class and `file:function:line`, never its message). S5 adds the
+#: run record's numbers for `run.done` (the agent's `agent.run.done` carries the same: §8) and
+#: `marker` (a `bN` handle, never text) for `run.citation_dropped`, and `tool` for `internal.tool`.
 FIELDS: Final = frozenset(
     {
+        "kind",
+        "stop_reason",
+        "input_tokens",
+        "output_tokens",
+        "cost_usd_est",
+        "retries",
+        "tool_calls",
+        "first_text_ms",
+        "marker",
+        "tool",
         "request_id",
         "run_id",
         "job_id",

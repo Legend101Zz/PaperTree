@@ -7,19 +7,18 @@ already has `enqueue_parse` / `make_parse_handler` / `build_runner`.
 
 This module only BUILDS the app: settings, CORS, the startup migration, and the routers. The routes
 live in `routers/`, one module per slice that owns them (contracts.md §2, slice-plan.md §3); the
-list is in `routers/__init__.py`. `POST /papers/{id}/ask` (#76) is still `ask.py`'s until S5
-replaces it with threads.
+list is in `routers/__init__.py`. (`POST /papers/{id}/ask`, #76, is gone: S5 replaced it with the
+threads and summary routes, which broker `services/agent`; slice-plan §R R9.)
 
 `OwnerId` never appears in a request or a response. See `deps.py`.
 """
 
 from __future__ import annotations
 
+import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from papertree_agent_tools import Transport
 
-from .ask import mount_ask
 from .errors import InternalErrorMiddleware, install_error_handlers
 from .middleware import REQUEST_ID_HEADER, CompressJson, RequestIdMiddleware, log_unhandled
 from .routers import (
@@ -41,13 +40,15 @@ __all__ = ["create_app", "derive_paper_id"]
 
 
 def create_app(
-    settings: Settings | None = None, *, llm_transport: Transport | None = None
+    settings: Settings | None = None, *, agent_transport: httpx.AsyncBaseTransport | None = None
 ) -> FastAPI:
-    """`llm_transport` is the ONE seam that lets `/ask` be tested without a socket.
+    """`agent_transport` is the ONE seam that lets the AI routes be tested without the agent.
 
-    It is a constructor argument rather than an environment variable because a test that has to
-    set an env var to avoid the network is a test that reaches the network when someone forgets.
-    `deps.provider_for` reads it off `app.state`; `None` means `UrllibTransport`, the real one.
+    An `httpx` transport the API's agent client sends `POST /v1/runs` and `DELETE /v1/runs/{id}`
+    through (the tests' `FakeAgent`, which replays `contracts/agent/fixtures/*.sse`). It is a
+    constructor argument rather than an environment variable because a test that has to set an env
+    var to avoid the network is a test that reaches the network when someone forgets.
+    `deps.agent_transport_of` reads it off `app.state`; `None` means the real network.
     """
     resolved = settings or Settings.from_env()
     resolved.ensure_directories()
@@ -60,7 +61,7 @@ def create_app(
         ),
     )
     app.state.settings = resolved
-    app.state.llm_transport = llm_transport
+    app.state.agent_transport = agent_transport
 
     # MIDDLEWARE, outermost first. `add_middleware` wraps what is already there, so they are
     # added innermost first:
@@ -109,7 +110,6 @@ def create_app(
     app.include_router(papers.router)
     app.include_router(highlights.router)
     app.include_router(jobs.router)
-    mount_ask(app)
     app.include_router(health.router)
     app.include_router(threads.router)
     app.include_router(summary.router)

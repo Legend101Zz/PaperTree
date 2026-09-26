@@ -29,8 +29,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, get_args
 
+import httpx
 from fastapi.testclient import TestClient
-from papertree_agent_tools import Transport
 from papertree_api import create_app
 from papertree_api.errors import ErrorCode
 from papertree_api.settings import Settings
@@ -59,20 +59,19 @@ class Harness:
 def harness(
     tmp_path: Path,
     *,
-    llm_transport: Transport | None = None,
-    llm_api_key: str = "",
+    agent_transport: httpx.AsyncBaseTransport | None = None,
     settings: Settings | None = None,
 ) -> Iterator[Harness]:
     # Faster scrypt is NOT configured. A test that runs against a weakened KDF is not testing the
     # thing that ships. Two registrations per test at ~50 ms is affordable; if that stops being
     # true the fix is fewer registrations, not a weaker hash.
     #
-    # `llm_transport` defaults to None, which means `UrllibTransport` — the REAL one. Nothing
-    # reaches it, because with `llm_api_key=""` the provider is unavailable and `/ask` answers 503
-    # before a request is built. A default scripted transport would have hidden that path.
+    # `agent_transport` defaults to None, which means the REAL network. Nothing reaches it, because
+    # the default settings carry no `agent_secret`, so every AI route answers 503 `not_configured`
+    # before a request is built. A default fake agent would have hidden that path.
     if settings is None:
-        settings = Settings(root=tmp_path / "data", llm_api_key=llm_api_key)
-    with TestClient(create_app(settings, llm_transport=llm_transport)) as client:
+        settings = Settings(root=tmp_path / "data")
+    with TestClient(create_app(settings, agent_transport=agent_transport)) as client:
         yield Harness(client=client, settings=settings)
 
 

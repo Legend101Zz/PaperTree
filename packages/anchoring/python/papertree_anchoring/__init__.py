@@ -17,8 +17,9 @@ WHAT THIS PACKAGE DELIBERATELY IS NOT
 * **Not a second region type.** ``SourceRegion`` stays the address; this turns an address into
   selectors. There is no dataclass here that competes with it.
 * **Not sub-block.** Whole-block targets only, which is the shape ``SourceRegion`` carries (#123).
-* **Not wired.** No caller mints or persists an anchor yet, and the ``anchors`` table cannot hold a
-  whole one: #124 is the wiring, #121 is the storage gap it is blocked on.
+* **Wired for citations (#124, reader release S5).** ``services/api`` mints every citation of an
+  AI answer with :func:`capture_citation` against the generation the answer was grounded in, and
+  stores the whole record (``ai_citations.anchor_json``, 0005 closed #121's storage gap).
 
 HOW IT IS KEPT HONEST. A Python suite that mints well-formed selectors no resolver ever reaches T1
 on would be green and worthless. So ``packages/anchoring/conformance/python-selector-vectors.json``
@@ -28,6 +29,7 @@ and checks the claim. The producer commits; the consumer verifies.
 """
 
 from papertree_anchoring.capture import (
+    CITATION_CLIENT,
     CONTEXT_CODE_POINTS,
     Anchor,
     AnchorDoc,
@@ -40,7 +42,9 @@ from papertree_anchoring.capture import (
     TargetKind,
     TextPositionSelector,
     TextQuoteSelector,
+    api_text_stream_id,
     capture_anchor,
+    capture_citation,
     capture_selectors,
 )
 from papertree_anchoring.document import (
@@ -62,6 +66,7 @@ from papertree_anchoring.quotenorm import (
 
 __all__ = [
     "BLOCK_SEPARATOR",
+    "CITATION_CLIENT",
     "CONTEXT_CODE_POINTS",
     "FLOW_ORDER",
     "HYPHENS",
@@ -80,7 +85,9 @@ __all__ = [
     "TargetKind",
     "TextPositionSelector",
     "TextQuoteSelector",
+    "api_text_stream_id",
     "capture_anchor",
+    "capture_citation",
     "capture_selectors",
     "index_document",
     "is_whitespace",

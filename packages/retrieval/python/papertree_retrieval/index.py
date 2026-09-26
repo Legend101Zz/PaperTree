@@ -371,6 +371,42 @@ class _OwnerBoundDb:
         return self._db.search_block_vectors(self._owner, paper_id, generation, query, k)
 
 
+@final
+class _DetachedReader:
+    """What a :meth:`PaperIndex.detached` index reads through: nothing. The structural rungs never
+    call a reader after construction; only the vector rung does, and it is told why it cannot."""
+
+    __slots__ = ()
+
+    def _refuse(self) -> RuntimeError:
+        return RuntimeError(
+            "this PaperIndex is detached from its reader (it is a cached copy); the vector rung "
+            "needs a live reader: load a fresh index with PaperIndex.from_reader"
+        )
+
+    def get_paper(self, paper_id: PaperId, generation: Generation) -> Row | None:
+        raise self._refuse()
+
+    def list_pages(self, paper_id: PaperId, generation: Generation) -> list[Row]:
+        raise self._refuse()
+
+    def list_blocks_on_page(
+        self, paper_id: PaperId, generation: Generation, page_index: int
+    ) -> list[Row]:
+        raise self._refuse()
+
+    def list_relations(self, paper_id: PaperId, generation: Generation) -> list[Row]:
+        raise self._refuse()
+
+    def count_block_vectors(self, paper_id: PaperId, generation: Generation) -> int:
+        raise self._refuse()
+
+    def search_block_vectors(
+        self, paper_id: PaperId, generation: Generation, query: Sequence[float], k: int
+    ) -> list[Row]:
+        raise self._refuse()
+
+
 class PaperIndex:
     """One paper generation, indexed for the expansion ladder. Read-only; build with ``load``."""
 
@@ -531,6 +567,18 @@ class PaperIndex:
             references=references,
             vector_count=reader.count_block_vectors(paper_id, generation),
         )
+
+    def detached(self) -> PaperIndex:
+        """The same index with NO reader behind it: every structural read works, the vector rung
+        raises. For a cache that outlives the request that loaded it (``cache.PaperIndexCache``):
+        the reader is a connection (an ``AgentDataHandle``) the request closes, and a cached index
+        that kept it would hold a closed handle — or worse, a handle bound to the first requester.
+        The copy shares the immutable per-block data; nothing is re-indexed."""
+        copy = object.__new__(PaperIndex)
+        for slot in PaperIndex.__slots__:
+            object.__setattr__(copy, slot, getattr(self, slot))
+        object.__setattr__(copy, "_reader", _DetachedReader())
+        return copy
 
     # ── blocks and reading order ─────────────────────────────────────────────────────────
 

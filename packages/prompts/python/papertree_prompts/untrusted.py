@@ -5,7 +5,9 @@ true: "Every prompt is assembled by one server-side function. No call site conca
 strings." That is an architectural claim, and it is only as good as the number of ways a
 caller has to bypass it. There is exactly one public path to a rendered untrusted region —
 `render_untrusted` — and the chunk type it accepts validates its own attributes, so a caller
-cannot build a wrapper by hand without noticing that it is doing so.
+cannot build a wrapper by hand without noticing that it is doing so. (`datamark_text` is the same
+four steps without the wrapper, for a record whose field already says it is document text — the
+agent run request's seed passages; it shares the body code, so it cannot drift.)
 
 THIS IS THE SECOND LINE OF THE DEFENCE, NOT THE FIRST, AND IT MUST BE SIZED THAT WAY
   The first line is structural (§13.6(b)): the agent's database handle physically cannot
@@ -140,9 +142,11 @@ class UntrustedRenderError(Exception):
 class RenderedUntrusted(NamedTuple):
     """`(token, text)` — §13.6(a)'s return value, named.
 
-    `token` MUST be given to `build_system_prompt`. A rendered region whose datamark the
-    system prompt never names is marked text the model has not been told to distrust, which
-    is strictly worse than unmarked text: it looks defended and is not.
+    `token` MUST be named by the system prompt of the model that reads the text (in the reader
+    release: `services/api` sends it as the run request's `datamark` and `services/agent`'s
+    system prompt names it). A rendered region whose datamark the system prompt never names is
+    marked text the model has not been told to distrust, which is strictly worse than unmarked
+    text: it looks defended and is not.
     """
 
     token: str
@@ -233,8 +237,28 @@ def render_untrusted_with_datamark(chunks: Sequence[UntrustedChunk], *, datamark
     return "\n\n".join(_render_one(chunk, datamark) for chunk in chunks)
 
 
-def _render_one(chunk: UntrustedChunk, datamark: str) -> str:
-    text = sanitise(chunk.text)  # steps 1 and 2 — see sanitise.py for the ordering argument
+def datamark_text(text: str, *, datamark: str) -> str:
+    """Steps 1-4 on one string, WITHOUT the ``<untrusted_document>`` wrapper.
+
+    For a place that already says, structurally, that its text is document content, and where a
+    per-string tag would be noise: the reader release's agent run request carries seed passages
+    as ``{handle, label, text}`` records (contracts.md §3.2), and ``text`` is exactly this. It is
+    the SAME function the wrapped renderer uses for its body, so the two can never disagree about
+    what is stripped or where a datamark goes; ``tests/test_untrusted.py`` pins the equality.
+
+    An empty result (text that sanitised away to nothing) is ONE bare datamark, never ``""``: an
+    unmarked empty string is still a string the model might read as ours.
+    """
+    if not is_datamark(datamark):
+        raise UntrustedRenderError(
+            f"datamark={datamark!r} was not minted by mint_datamark(); it must match "
+            f"{DATAMARK_PATTERN.pattern}"
+        )
+    return _marked_body(text, datamark)
+
+
+def _marked_body(raw: str, datamark: str) -> str:
+    text = sanitise(raw)  # steps 1 and 2 — see sanitise.py for the ordering argument
     text = DATAMARK_SHAPE.sub(" ", text)  # step 3, AFTER step 1: control chars can build a shape
     # Step 4. A replacement FUNCTION, not a replacement string: `re.sub` interprets
     # backslashes and group references in the replacement, and the datamark is data, not
@@ -246,11 +270,14 @@ def _render_one(chunk: UntrustedChunk, datamark: str) -> str:
     # would emit three datamarks around no content at all. The block existed and was empty is
     # a statement worth making; making it three times is noise in a budgeted context window.
     if not text.strip():
-        return _wrap(chunk, datamark)
+        return datamark
     # Deviation 3: mark the edges too, so no chunk with content is ever unmarked.
     marked = WHITESPACE.sub(lambda _match: f" {datamark} ", text).strip()
-    body = f"{datamark} {marked} {datamark}"
-    return _wrap(chunk, body)
+    return f"{datamark} {marked} {datamark}"
+
+
+def _render_one(chunk: UntrustedChunk, datamark: str) -> str:
+    return _wrap(chunk, _marked_body(chunk.text, datamark))
 
 
 def _wrap(chunk: UntrustedChunk, body: str) -> str:

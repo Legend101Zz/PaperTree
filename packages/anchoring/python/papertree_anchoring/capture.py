@@ -298,3 +298,31 @@ def capture_anchor(
         selectors=capture_selectors(doc, block_id),
         created=Created(mode=mode, at=at, client=client),
     )
+
+
+#: contracts.md §3.4: the ``created.client`` of every citation Anchor the API mints.
+CITATION_CLIENT = "papertree-api/citations"
+
+
+def api_text_stream_id(paper_id: str, generation: int, parser_version: str) -> str:
+    """contracts.md §6: ``doc.textStreamId`` of an anchor captured against the API's IR of one
+    generation — ``api/<paper_id>/g<generation>/<parser_version>`` (fixes N22, where every API
+    paper was labelled ``fixture/…``)."""
+    return f"api/{paper_id}/g{generation}/{parser_version}"
+
+
+def capture_citation(doc: IndexedDocument, block_id: str, *, citation_id: str, at: str) -> Anchor:
+    """A citation: the WHOLE cited block, minted server-side (contracts.md §3.4, §6).
+
+    ``capture_anchor(doc, block_id, anchor_id=cit_…, at, client='papertree-api/citations',
+    target_kind='citation')``, spelled once. ``provenanceClass`` stays ``source``: the anchor
+    targets the paper's text, which is what a chip click scrolls to, not the model's prose.
+    """
+    return capture_anchor(
+        doc,
+        block_id,
+        anchor_id=citation_id,
+        at=at,
+        client=CITATION_CLIENT,
+        target_kind="citation",
+    )

@@ -125,8 +125,8 @@ class ErrorEnvelope(BaseModel):
 class ApiError(Exception):
     """A contract error, raised anywhere below a route and rendered as the envelope.
 
-    `status` defaults to the code's §2.9 status. It is overridable for the few responses whose
-    status the contract does not tie to a code (ask.py's 502/504, until S5 deletes it).
+    `status` defaults to the code's §2.9 status. It is overridable for a response whose status the
+    contract does not tie to a code (`contracts/README.md`, "Statuses §2.9 does not list").
     `extra` adds fields beside the three, for the one contract error that carries a body:
     `409 stale_version` with the current node (§2.7).
     """
@@ -209,10 +209,12 @@ def _http_exception(_: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, StarletteHTTPException)
     if exc.status_code == 400:
         # A body no parser could read: FastAPI's own ("There was an error parsing the body", e.g.
-        # JSON nested past the recursion limit on `/ask`, which still takes a FastAPI body) or
+        # JSON nested past the recursion limit) or
         # Starlette's multipart one ("Missing boundary in multipart."). It is a bad body like any
         # other, so it is §2.9's 422 `validation_failed`, not a 400 carrying 422's code; and the
         # sentence is fixed, because a parser's message is not written for the client.
+        # (`/ask`, the last FastAPI-parsed JSON body, is gone since S5; the branch stays for
+        # multipart and for any future route that takes a FastAPI body.)
         return envelope_response(ApiError("validation_failed", BODY_UNPARSEABLE))
     code = _STATUS_CODE.get(exc.status_code, "internal")
     detail = exc.detail if isinstance(exc.detail, str) and exc.detail else code
