@@ -236,7 +236,9 @@ export function SourcePane(props: SourcePaneProps) {
         listRef.current?.scrollToPage(pageIndex, { behavior: 'smooth' });
       },
       scrollToRect(pageIndex, bbox) {
-        listRef.current?.scrollToBlock(pageIndex, bbox, { behavior: 'smooth' });
+        // Instant, not smooth: `focusAnchor` flashes the passage for 1.2 s, and a smooth scroll
+        // spends most of that travelling — the flash would play before the passage is on screen.
+        listRef.current?.scrollToBlock(pageIndex, bbox, { behavior: 'auto' });
       },
     }),
     [doc],

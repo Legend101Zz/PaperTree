@@ -230,6 +230,40 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
       await expect(page.locator(`[data-highlight-row="${id}"]`)).toHaveCount(1);
     await page.keyboard.press('Escape');
 
+    // ── focusAnchor: a Navigator row scrolls to the passage and flashes it 1.2 s ──
+    await page.getByRole('button', { name: 'Navigator' }).click();
+    await page.getByRole('tab', { name: /Highlights/ }).click();
+    await page.locator(`[data-highlight-row="${b}"] .pt-hlrow`).click();
+    const flash = page.locator('svg [data-flash="true"] polygon');
+    await expect(flash.first()).toBeVisible({ timeout: 10_000 });
+    const flashBox = await flash.first().boundingBox();
+    const underFlash =
+      flashBox === null
+        ? 'none'
+        : await page.evaluate(
+            ([x, y]) => {
+              const el = document.elementFromPoint(x, y);
+              return el?.closest('.papertree-page')?.getAttribute('data-page-index') ?? 'none';
+            },
+            [flashBox.x + flashBox.width / 2, flashBox.y + flashBox.height / 2] as const,
+          );
+    note(`focusAnchor from the Navigator: flash painted on page index ${underFlash}`);
+    const paintedOn = await page
+      .locator(`svg .pt-hl[data-highlight-id="${b}"]`)
+      .first()
+      .evaluate((g) => g.closest('.papertree-page')?.getAttribute('data-page-index') ?? 'none');
+    expect(underFlash).toBe(paintedOn);
+    await page.screenshot({ path: shot('b06b-focus-flash-1440.png') });
+    await expect(flash).toHaveCount(0, { timeout: 5_000 });
+    await page.keyboard.press('Escape');
+
+    // ── the keyboard reaches a highlight: focus it, Enter opens its card ──
+    await page.locator(`svg .pt-hl[data-highlight-id="${b}"]`).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('dialog', { name: 'Highlight' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Highlight' })).toHaveCount(0);
+
     // ── zoom keeps the top line ──
     await reveal(page, 'Humans glance at an image');
     const zoomTo = async (value: string, label: string) => {
@@ -356,6 +390,12 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
       `orphan: in the tray ("${(await tray.locator('[data-anchor-id] p').first().textContent())?.slice(0, 90) ?? ''}"), painted on 0 pages`,
     );
     await page.screenshot({ path: shot('b11-orphan-tray-1440.png') });
+
+    // ── the dark theme, for the record ──
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await reveal(page, 'We reframe object');
+    await page.screenshot({ path: shot('b11b-dark-1440.png') });
+    await page.emulateMedia({ colorScheme: 'light' });
 
     // ── 390 px ──
     const phone = await browser.newContext({

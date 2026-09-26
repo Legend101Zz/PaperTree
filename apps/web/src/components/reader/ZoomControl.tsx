@@ -328,7 +328,10 @@ export function ZoomControl({ mode, zoom, onModeChange, className }: ZoomControl
 
       {/* A live region, not a tooltip: the current zoom must be readable without hovering. It is
           what a fit mode currently works out to, shown beside the select on wider screens. */}
-      <output className="pt-zoom__pct pt-num" aria-live="polite">
+      <output
+        className={mode.kind === 'scale' ? 'pt-sr-only' : 'pt-zoom__pct pt-num'}
+        aria-live="polite"
+      >
         {percent}%
       </output>
     </div>
