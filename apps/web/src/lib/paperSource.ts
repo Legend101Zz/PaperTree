@@ -50,6 +50,7 @@
 import { indexDocument, type IndexedDocument, type PaperSource } from '@papertree/anchoring';
 
 import { isFixtureSlug, pdfUrlFor, textStreamIdFor, type FixtureSlug } from './fixtures';
+import { getSessionToken } from './api/client';
 import { papersApi } from './api/papers';
 
 export type PaperRef =
@@ -117,12 +118,60 @@ export function documentGeneration(doc: IndexedDocument): number | null {
   return Number.isSafeInteger(value) ? value : null;
 }
 
-/** Memoised per ref — `indexDocument` walks every block and builds four indices. */
+/**
+ * THE MEMOS BELONG TO ONE SESSION AND HOLD A FEW PAPERS (s4-review.md F8).
+ *
+ * A paper's indexed parse and its PDF bytes are memoised so a remount (React StrictMode's double
+ * effect, the reader reopened from the library) neither re-downloads nor re-indexes. They are a
+ * user's data in memory, so:
+ *   - they are keyed to the session token: when it changes (sign-out, another account signs in in
+ *     the same tab) every memo is dropped before anything is read from them;
+ *   - they keep the `MEMO_PAPERS` most recently used papers, not every paper the tab ever opened.
+ */
+const MEMO_PAPERS = 2;
+let memoSession: string | null | undefined;
+
+function currentSession(): string | null {
+  try {
+    return getSessionToken();
+  } catch {
+    return null;
+  }
+}
+
+/** Drop every memo when the signed-in session is not the one they were filled under. */
+function scopeMemosToSession(): void {
+  const session = currentSession();
+  if (session === memoSession) return;
+  cache.clear();
+  bytes.clear();
+  memoSession = session;
+}
+
+/** Most-recently-used first out of the map's insertion order; the oldest beyond the bound go. */
+function remember<T>(memo: Map<string, T>, key: string, value: T): void {
+  memo.delete(key);
+  memo.set(key, value);
+  while (memo.size > MEMO_PAPERS) {
+    const oldest = memo.keys().next().value as string | undefined;
+    if (oldest === undefined) break;
+    memo.delete(oldest);
+  }
+}
+
+function recall<T>(memo: Map<string, T>, key: string): T | undefined {
+  const value = memo.get(key);
+  if (value !== undefined) remember(memo, key, value);
+  return value;
+}
+
+/** Memoised per ref (see above) — `indexDocument` walks every block and builds four indices. */
 const cache = new Map<string, Promise<IndexedDocument>>();
 
 export async function loadDocument(ref: PaperRef): Promise<IndexedDocument> {
+  scopeMemosToSession();
   const key = paperRefKey(ref);
-  const existing = cache.get(key);
+  const existing = recall(cache, key);
   if (existing !== undefined) return existing;
 
   const promise = (async () => {
@@ -145,7 +194,7 @@ export async function loadDocument(ref: PaperRef): Promise<IndexedDocument> {
     return indexDocument(paper, apiTextStreamId(paper));
   })();
 
-  cache.set(key, promise);
+  remember(cache, key, promise);
   // A failure is not memoised: "still reading" (409) and a dropped connection both clear on retry.
   promise.catch(() => {
     if (cache.get(key) === promise) cache.delete(key);
@@ -167,11 +216,12 @@ export async function pdfSourceFor(ref: PaperRef): Promise<string | ArrayBuffer>
   // Memoised like the document: a remount (React StrictMode's double effect in development, the
   // reader opened again from the library) must not download the PDF a second time. The bytes are
   // never handed to pdf.js themselves — the provider opens a copy — so one buffer serves them all.
+  scopeMemosToSession();
   const key = paperRefKey(ref);
-  const existing = bytes.get(key);
+  const existing = recall(bytes, key);
   if (existing !== undefined) return existing;
   const promise = papersApi.file(ref.paperId);
-  bytes.set(key, promise);
+  remember(bytes, key, promise);
   promise.catch(() => {
     if (bytes.get(key) === promise) bytes.delete(key);
   });
@@ -184,4 +234,5 @@ const bytes = new Map<string, Promise<ArrayBuffer>>();
 export function __clearDocumentCache(): void {
   cache.clear();
   bytes.clear();
+  memoSession = undefined;
 }
