@@ -64,6 +64,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { indexDocument, type PaperSource } from '@papertree/anchoring';
 
+import { ReaderActionsProvider, type ReaderActions } from '@/components/reader/actions';
+import type { DocumentRef } from '@/components/reader/documentHandle';
+
 const FIXTURE = join(process.cwd(), '../../packages/document-ir/fixtures/resnet-cvpr-2col.paperir.json');
 
 /** Everything the scroller was asked to do, in order. */
@@ -98,6 +101,38 @@ vi.mock('@/components/reader/PdfDocumentProvider', () => ({
   usePdfDocument: () => ({ document: null, pages: [], error: null }),
 }));
 
+/**
+ * The pane as the workspace mounts it: inside `ReaderActionsProvider` (its toolbar reaches Ask and
+ * Send to canvas through `useReaderActions()`, which refuses to hand out no-ops), with the S4 props.
+ */
+function renderPane(SourcePane: typeof import('@/components/reader/SourcePane').SourcePane, ref: DocumentRef) {
+  const actions: ReaderActions = {
+    openExplain: () => undefined,
+    sendToCanvas: async () => undefined,
+    focusAnchor: () => undefined,
+  };
+  return render(
+    <ReaderActionsProvider value={actions}>
+      <SourcePane
+        doc={doc}
+        zoom={1}
+        highlights={[]}
+        onCreateHighlight={() => undefined}
+        highlightUnavailableReason={null}
+        onActivateHighlight={() => undefined}
+        activeHighlightId={null}
+        flash={null}
+        narrow={false}
+        onViewportResize={() => undefined}
+        onSelectionChange={() => undefined}
+        documentRef={ref}
+        initialPosition={null}
+        onPositionChange={() => undefined}
+      />
+    </ReaderActionsProvider>,
+  );
+}
+
 const paper = JSON.parse(readFileSync(FIXTURE, 'utf8')) as PaperSource & { ir_version?: string };
 const doc = indexDocument(paper, `fixture/${paper.ir_version ?? 'unknown'}`);
 
@@ -117,21 +152,8 @@ describe('reader/citation-scroll.spec — clicking a citation moves the page (#6
     const target = doc.blocks.find((block) => block.pageIndex > 0);
     expect(target, 'the fixture must have a block off page 0, or this asserts nothing').toBeDefined();
 
-    const ref: { current: { scrollToBlock(id: string): void; scrollToPage(n: number): void } | null } = {
-      current: null,
-    };
-    render(
-      <SourcePane
-        doc={doc}
-        pdfSource="fixture://paper.pdf"
-        zoom={1}
-        anchors={[]}
-        onAnchorCaptured={() => undefined}
-        onViewportResize={() => undefined}
-        onSelectionChange={() => undefined}
-        documentRef={ref}
-      />,
-    );
+    const ref: DocumentRef = { current: null };
+    renderPane(SourcePane, ref);
 
     await waitFor(() => expect(screen.getByTestId('scroller')).toBeTruthy());
 
@@ -152,21 +174,8 @@ describe('reader/citation-scroll.spec — clicking a citation moves the page (#6
 
   it('an unknown block id is a no-op, not a throw', async () => {
     const { SourcePane } = await import('@/components/reader/SourcePane');
-    const ref: { current: { scrollToBlock(id: string): void; scrollToPage(n: number): void } | null } = {
-      current: null,
-    };
-    render(
-      <SourcePane
-        doc={doc}
-        pdfSource="fixture://paper.pdf"
-        zoom={1}
-        anchors={[]}
-        onAnchorCaptured={() => undefined}
-        onViewportResize={() => undefined}
-        onSelectionChange={() => undefined}
-        documentRef={ref}
-      />,
-    );
+    const ref: DocumentRef = { current: null };
+    renderPane(SourcePane, ref);
     await waitFor(() => expect(ref.current).not.toBeNull());
 
     // Block ids are content-derived, so an edit retires them (AGENTS.md §4) and a citation from an
@@ -177,21 +186,8 @@ describe('reader/citation-scroll.spec — clicking a citation moves the page (#6
 
   it('scrollToPage is its own method — the `page:${n}` sentinel is gone', async () => {
     const { SourcePane } = await import('@/components/reader/SourcePane');
-    const ref: { current: { scrollToBlock(id: string): void; scrollToPage(n: number): void } | null } = {
-      current: null,
-    };
-    render(
-      <SourcePane
-        doc={doc}
-        pdfSource="fixture://paper.pdf"
-        zoom={1}
-        anchors={[]}
-        onAnchorCaptured={() => undefined}
-        onViewportResize={() => undefined}
-        onSelectionChange={() => undefined}
-        documentRef={ref}
-      />,
-    );
+    const ref: DocumentRef = { current: null };
+    renderPane(SourcePane, ref);
     await waitFor(() => expect(ref.current).not.toBeNull());
 
     ref.current?.scrollToPage(2);
@@ -202,5 +198,15 @@ describe('reader/citation-scroll.spec — clicking a citation moves the page (#6
     calls.length = 0;
     ref.current?.scrollToBlock('page:2');
     expect(calls).toEqual([]);
+  });
+
+  it('scrollToRect — what focusAnchor uses — reaches the scroller with the passage extent', async () => {
+    const { SourcePane } = await import('@/components/reader/SourcePane');
+    const ref: DocumentRef = { current: null };
+    renderPane(SourcePane, ref);
+    await waitFor(() => expect(ref.current).not.toBeNull());
+
+    ref.current?.scrollToRect(3, [72, 400, 300, 412]);
+    expect(calls).toEqual([{ method: 'block', page: 3, bbox: [72, 400, 300, 412] }]);
   });
 });

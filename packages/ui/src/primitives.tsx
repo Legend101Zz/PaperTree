@@ -432,14 +432,14 @@ export interface TabsProps {
 }
 
 /**
- * The Navigator's six tabs — Outline · Pages · Highlights · Notes · Questions · Chapters — and the
- * single component that replaces `OutlinePanel` + `SmartOutlinePanel` + `HighlightsPanel` +
- * `PDFMinimap` (§18.2).
+ * The reader's Contents tabs — Outline · Pages · Highlights, and Questions when the explain panel
+ * supplies them (S4 removed the Notes and Chapters placeholders) — and the single component that
+ * replaces `OutlinePanel` + `SmartOutlinePanel` + `HighlightsPanel` + `PDFMinimap` (§18.2).
  *
  * Controlled, because §18.2 requires the last-used tab to be REMEMBERED per paper: state that has
  * to outlive the component cannot live inside it.
  *
- * Only the selected panel is mounted — six eager panels is the perf failure `reader/perf.spec`
+ * Only the selected panel is mounted — eager panels are the perf failure `reader/perf.spec`
  * exists to catch. `aria-controls` is therefore set only on the selected tab: pointing it at a
  * `<div>` that is not in the document is an `aria-valid-attr-value` violation, and the attribute's
  * whole job is to name something a screen reader can actually go to.

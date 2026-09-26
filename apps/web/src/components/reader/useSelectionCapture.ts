@@ -1,75 +1,84 @@
 'use client';
 
 /**
- * reader/useSelectionCapture — a DOM text selection becomes an ADR-004 anchor.
+ * reader/useSelectionCapture — a DOM text selection becomes one or more Anchor v1 records.
  *
  * THE ONE RULE, because this is the exact line the v1 app crossed:
  *
  *   Range/Selection tell us WHICH characters the user picked. They never tell us WHERE those
  *   characters are. `getClientRects()` is not called here, and must never be: it returns viewport
- *   pixels that depend on the zoom, the window width, the device pixel ratio and the scroll
- *   position at the instant of the call, and storing any of that is why every v1 highlight is
- *   unrecoverable. The geometry comes from `quadsForRange(block.spans, …)` — the IR's own span
- *   boxes, in IR points — and from nowhere else.
+ *   pixels that depend on the zoom, the window, the device pixel ratio and the scroll position at
+ *   the instant of the call. The geometry comes from pdf.js ITEM GEOMETRY — each text item's own
+ *   matrix and advance width, in PDF space, through `bridge.ts` (`itemPieceQuads`) — and from
+ *   nowhere else.
  *
- * So the hook does exactly two things: it turns DOM endpoints into CODE-POINT OFFSETS into an IR
- * block's resolved text, and it hands those offsets to `captureAnchor`, which writes all six
- * selectors at once. Everything geometric downstream of that is the anchoring package's.
+ * TWO PATHS, chosen per selection (contracts.md §6, ADR-002 §3.3):
  *
- * THE TEXT-LAYER CONTRACT. pdf.js's text layer is a pile of absolutely-positioned <span>s that know
- * nothing about PaperIR. The page component that builds it must stamp each item with:
+ *   IR-STAMPED. Both endpoints fall in text-layer items `stampTextLayer` placed in an IR block
+ *   (`data-block-id` + `data-cp-start`). The selection becomes code-point ranges in those blocks,
+ *   one anchor PER BLOCK (a selection across a paragraph break is two targets, and dropping the
+ *   second silently is the failure this epic exists to remove), each with Block, Page,
+ *   TextPosition, TextQuote, Shape and SectionPath selectors and the IR text stream id. The
+ *   ShapeSelector's quads are measured from the items the selection covers in that block
+ *   (`CaptureInput.quads`), because a live parse's span is a whole line and `quadsForRange`'s
+ *   code-point interpolation across it lands points away from the glyphs.
  *
- *   data-block-id   the IR block the item's glyphs belong to           (REQUIRED for the exact path)
- *   data-cp-start   code-point offset into that block's resolved text  (REQUIRED for the exact path)
- *                   at which THIS item's text begins
- *   data-span-index index into `IndexedBlock.spans`                    (optional; used when
- *                   `data-cp-start` is absent, since `span.start` is a UTF-16 offset we can convert)
- *   data-page-index the page, on any ancestor                          (optional; scopes the fallback)
+ *   PAGE TEXT. An endpoint falls in an item the IR does not stamp — a table cell, a figure label,
+ *   rotated text (ADR-002 §3.3: table cells 2–5 % stamped, figure text 0 %). The selection becomes
+ *   item ranges on each page and `capturePageTextAnchor` writes Page + TextQuote (from the page's
+ *   own text) + Shape selectors under `pdfjs@<version>/page-text`, with NO Block or Position
+ *   selector: those are IR offsets this path does not have.
  *
- * `PdfPage` owns those attributes; the constants below are the shared names so the two files cannot
- * drift apart silently. WHEN THEY ARE ABSENT the hook still works, via `locateByText`: it normalises
- * the selected string and searches the candidate blocks' normalised text for it. THAT PATH IS A
- * LIMITATION, not a design — it picks the FIRST block on the page containing the string, so a phrase
- * that occurs twice on one page ("of the model", "we show that") anchors to the first occurrence.
- * The exact path has no such failure mode. `viaFallback` on the returned selection says which ran,
- * so a caller can warn rather than guess.
+ * WHAT IS GONE: `locateByText`. It searched the page's blocks for the selected string and took the
+ * FIRST block containing it, so "of the model" anchored to its first occurrence on the page. A
+ * selection the IR cannot place is now captured from the glyphs the user actually selected.
+ *
+ * THE TEXT-LAYER CONTRACT. `PdfPage` writes `data-item-index` on every div (its index into the
+ * page's `getTextContent()` items), `stampTextLayer` adds `data-block-id` / `data-cp-start` where it
+ * can, and `.papertree-page` carries `data-page-index`. The page's items and frame reach this hook
+ * through `pageText(pageIndex)`, a registry `SourcePane` fills from `onTextLayer`.
  *
  * iOS. There is no reliable mouseup: a selection is a long-press followed by dragging two handles,
  * and the handle drag emits `selectionchange` only. So the hook listens to `selectionchange` with a
- * short debounce (the handles fire it continuously) AND to `pointerup`, which cancels the pending
- * debounce and reconciles immediately. Neither alone is sufficient — `pointerup` alone misses every
- * handle adjustment, and `selectionchange` alone adds the debounce delay to every mouse selection.
+ * short debounce AND to `pointerup`, which cancels the pending debounce and reconciles immediately.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   captureAnchor,
-  extentOf,
-  indexOfCodePoints,
-  normaliseForMatch,
-  quadsForRange,
-  toCodePoints,
+  capturePageTextAnchor,
+  itemPieceQuads,
+  piecesBetween,
+  type AdvanceMeasure,
   type Anchor,
-  type IndexedBlock,
   type IndexedDocument,
+  type ItemPiece,
+  type PageTextEndpoint,
+  type PdfTextItemGeometry,
   type ProvenanceClass,
   type TargetKind,
 } from '@papertree/anchoring';
-import type { BBox, Polygon } from '@papertree/document-ir';
+import { unionOfLineRects, type BBox, type PageFrame, type Polygon } from '@papertree/document-ir';
 
-/** Stamped by `PdfPage` on every text-layer item. Imported there rather than re-typed. */
+import { ITEM_INDEX_ATTR } from './PdfPage';
+
+/** Stamped by `stampTextLayer` on the items it places in an IR block. */
 export const BLOCK_ID_ATTR = 'data-block-id';
 export const CP_START_ATTR = 'data-cp-start';
-export const SPAN_INDEX_ATTR = 'data-span-index';
 export const PAGE_INDEX_ATTR = 'data-page-index';
 
 /**
  * Long enough that an iOS handle drag settles, short enough that a mouse selection feels immediate.
- * `pointerup` short-circuits it for every pointer device that has one, so this delay is only ever
- * paid on the touch path where the user is still holding a handle.
+ * `pointerup` short-circuits it for every pointer device that has one.
  */
 export const DEFAULT_SELECTION_DEBOUNCE_MS = 180;
+
+/** One page's text as pdf.js read it, and the frame that maps its PDF space to IR space. */
+export interface PageTextSource {
+  readonly frame: PageFrame;
+  readonly items: readonly (PdfTextItemGeometry & { readonly hasEOL?: boolean })[];
+}
 
 export interface BlockRange {
   readonly blockId: string;
@@ -78,29 +87,51 @@ export interface BlockRange {
   readonly end: number;
 }
 
+export interface PageTextRange {
+  readonly pageIndex: number;
+  readonly start: PageTextEndpoint;
+  /** Exclusive. */
+  readonly end: PageTextEndpoint;
+}
+
 export interface PendingSelection {
   readonly text: string;
+  /** The page the selection STARTS on — where the toolbar goes. */
   readonly pageIndex: number;
+  /**
+   * Which capture path(s) this selection takes. `mixed`: prose the IR stamped AND text it did not
+   * (a paragraph dragged into a figure's labels) — one highlight, anchors of both kinds.
+   */
+  readonly kind: 'ir' | 'page-text' | 'mixed';
+  /**
+   * Every anchor this selection becomes, in the order the browser selected them. Each selected
+   * glyph is in exactly one (see `partition`). `targets.length` is the anchor count a Highlight
+   * would POST, which contracts.md §2.4 caps at 64.
+   */
+  readonly targets: readonly SelectionTarget[];
+  /** IR path: one range per block the browser selected, in the order it selected them. */
   readonly ranges: readonly BlockRange[];
   readonly blockIds: readonly string[];
-  /**
-   * The selection's paintable geometry, IR space. Position the toolbar from THIS and the zoom —
-   * never from a DOM rect. Null only when the blocks carry no spans and no bbox.
-   */
+  /** IR path: the measured quads per block (item geometry). */
+  readonly quadsByBlock: ReadonlyMap<string, readonly BBox[]>;
+  /** Page-text path: each run of selected items the IR did not stamp. */
+  readonly pageTextRanges: readonly PageTextRange[];
+  /** The selection's geometry on `pageIndex`, IR space. Position the toolbar from THIS. */
   readonly irExtent: BBox | null;
+  /**
+   * The page the selection ENDS on and its geometry there. A selection across pages was dragged
+   * (the page auto-scrolling) to its end, so its start is usually off screen by the time the
+   * pointer is released: the toolbar goes by the end instead.
+   */
+  readonly endPageIndex: number;
+  readonly endExtent: BBox | null;
   readonly irPolygons: readonly Polygon[];
-  /** True when the text-layer attributes were missing and `locateByText` guessed. See the header. */
-  readonly viaFallback: boolean;
 }
 
 export interface SelectionCapture {
-  /** The anchor for the block the selection STARTS in. The one a single-block selection produces. */
+  /** The anchor for the first target. The one a single-block selection produces. */
   readonly anchor: Anchor;
-  /**
-   * One anchor per block the selection touches. A selection crossing a paragraph boundary is
-   * genuinely more than one target; returning only the first would drop the rest silently, which is
-   * the failure mode this epic exists to remove.
-   */
+  /** One anchor per target (an IR block range or a page-text run), in the order selected. */
   readonly anchors: readonly Anchor[];
   readonly selection: PendingSelection;
 }
@@ -110,9 +141,11 @@ export interface UseSelectionCaptureOptions {
   readonly doc: IndexedDocument | null;
   /** The element the text layer lives in. Selections outside it are ignored. */
   readonly root: HTMLElement | null;
-  /** Scopes the fallback search. Omit when the root spans several pages. */
-  readonly pageIndex?: number;
   readonly client: string;
+  /** The page registry `SourcePane` fills from `onTextLayer`. */
+  readonly pageText?: (pageIndex: number) => PageTextSource | null;
+  /** `pageTextStreamId(pdfjs.version)`. `null` (pdf.js not loaded yet) disables the page-text path. */
+  readonly pageTextStreamId?: string | null;
   readonly newAnchorId?: () => string;
   readonly now?: () => string;
   readonly mode?: 'source' | 'guided';
@@ -129,38 +162,7 @@ export interface UseSelectionCaptureResult {
   readonly clear: () => void;
 }
 
-// ─── offsets ────────────────────────────────────────────────────────────────────────────────────
-
-/**
- * Code-point offset → UTF-16 offset, and back.
- *
- * `Span.start` / `Span.end` are UTF-16 offsets into `Block.text`; `Anchor.offsetUnit` is `'unicode'`
- * and everything in `@papertree/anchoring` counts CODE POINTS. The two coincide on all three
- * fixtures (measured: zero astral code points in any `text` field) and diverge the moment a paper
- * contains an emoji, a 𝕄 or a rare CJK ideograph — so the conversion is explicit here for the same
- * reason `capture.ts` makes it explicit rather than assumed.
- */
-function codePointToUtf16(text: string, codePointOffset: number): number {
-  let seen = 0;
-  let index = 0;
-  for (const char of text) {
-    if (seen >= codePointOffset) return index;
-    index += char.length;
-    seen += 1;
-  }
-  return index;
-}
-
-function utf16ToCodePoint(text: string, utf16Offset: number): number {
-  let seen = 0;
-  let index = 0;
-  for (const char of text) {
-    if (index >= utf16Offset) return seen;
-    index += char.length;
-    seen += 1;
-  }
-  return seen;
-}
+// ─── DOM endpoints → item endpoints ─────────────────────────────────────────────────────────────
 
 function countCodePoints(text: string): number {
   let count = 0;
@@ -168,178 +170,417 @@ function countCodePoints(text: string): number {
   return count;
 }
 
-// ─── DOM → block offsets ────────────────────────────────────────────────────────────────────────
-
-function closestElement(node: Node | null): HTMLElement | null {
+function closestElement(node: Node | null): Element | null {
   if (node === null) return null;
-  if (node.nodeType === Node.ELEMENT_NODE) return node as HTMLElement;
+  if (node.nodeType === Node.ELEMENT_NODE) return node as Element;
   return node.parentElement;
 }
 
-function closestWithAttr(node: Node | null, attr: string): HTMLElement | null {
-  return closestElement(node)?.closest(`[${attr}]`) ?? null;
+/** A selection endpoint, resolved to a text-layer item and a code-point offset inside its text. */
+interface ItemEndpoint {
+  readonly page: HTMLElement;
+  readonly pageIndex: number;
+  readonly element: HTMLElement;
+  readonly item: number;
+  readonly offset: number;
 }
 
-/**
- * One endpoint of the DOM range → a (block, code-point offset) pair.
- *
- * The offset is `data-cp-start` plus the code points of the item's own text that precede the
- * endpoint. That preceding text is read with a Range and `toString()` — a TEXT read, which is
- * legitimate and has nothing to do with geometry. `Range.toString()` and not `textContent.slice()`
- * because a text-layer item can contain more than one text node once a browser normalises it.
- */
-function endpointToOffset(
-  doc: IndexedDocument,
-  container: Node,
-  offset: number,
-): { block: IndexedBlock; codePoint: number } | null {
-  const item = closestWithAttr(container, BLOCK_ID_ATTR);
-  if (item === null) return null;
+function itemIndexOf(element: Element): number | null {
+  const raw = element.getAttribute(ITEM_INDEX_ATTR);
+  if (raw === null || raw === '') return null;
+  const value = Number.parseInt(raw, 10);
+  return Number.isInteger(value) && value >= 0 ? value : null;
+}
 
-  const blockId = item.getAttribute(BLOCK_ID_ATTR);
-  if (blockId === null) return null;
-  const block = doc.byId.get(blockId);
-  if (block === undefined) return null;
+function pageOf(element: Element): { page: HTMLElement; pageIndex: number } | null {
+  const page = element.closest(`.papertree-page[${PAGE_INDEX_ATTR}]`);
+  if (!(page instanceof HTMLElement)) return null;
+  const value = Number.parseInt(page.getAttribute(PAGE_INDEX_ATTR) ?? '', 10);
+  return Number.isInteger(value) && value >= 0 ? { page, pageIndex: value } : null;
+}
 
-  let base: number | null = null;
-  const cpStart = item.getAttribute(CP_START_ATTR);
-  if (cpStart !== null && cpStart !== '') {
-    const parsed = Number.parseInt(cpStart, 10);
-    if (Number.isFinite(parsed)) base = parsed;
-  }
-  if (base === null) {
-    // `data-span-index` is the weaker of the two contracts: it locates the RUN, and the run's start
-    // is a UTF-16 offset, so it needs the conversion above. Kept because a page component that
-    // already knows which span it is rendering gets it for free.
-    const spanIndex = item.getAttribute(SPAN_INDEX_ATTR);
-    if (spanIndex !== null && spanIndex !== '') {
-      const parsed = Number.parseInt(spanIndex, 10);
-      const span = Number.isFinite(parsed) ? block.spans[parsed] : undefined;
-      if (span !== undefined) base = utf16ToCodePoint(block.text, span.start);
-    }
-  }
-  if (base === null) return null;
-
-  const ownerDocument = item.ownerDocument;
-  const prefix = ownerDocument.createRange();
-  prefix.setStart(item, 0);
+function endpointIn(element: HTMLElement, container: Node, offset: number): ItemEndpoint | null {
+  const item = itemIndexOf(element);
+  const where = pageOf(element);
+  if (item === null || where === null) return null;
+  const prefix = element.ownerDocument.createRange();
+  prefix.setStart(element, 0);
   try {
     prefix.setEnd(container, offset);
   } catch {
-    // The endpoint is outside this item — the browser handed us a container the item does not own.
-    // Falling back to the item's start is better than throwing away the whole selection.
-    return { block, codePoint: Math.min(base, block.textCodePoints.length) };
+    return { ...where, element, item, offset: 0 };
   }
-  const within = countCodePoints(prefix.toString());
-  return { block, codePoint: Math.min(base + within, block.textCodePoints.length) };
+  const length = countCodePoints(element.textContent ?? '');
+  return { ...where, element, item, offset: Math.min(length, countCodePoints(prefix.toString())) };
 }
 
 /**
- * THE FALLBACK. Normalised-text search when the text layer carries no attributes.
+ * Where the browser put one end of the selection, as an item endpoint.
  *
- * Documented as a limitation in the header and reported as `viaFallback` on the result: it returns
- * the FIRST block whose normalised text contains the normalised selection, so a phrase repeated on
- * one page anchors to its first occurrence. Matching is on `normaliseForMatch` output — the same
- * fold `block_id` and T3 use — so a selection that spans a line-break hyphen ("resid-\nual") still
- * finds "residual", which a raw `indexOf` would not.
+ * Usually the container is a text node inside an item's span. A drag that ends in the gap past a
+ * line puts it on an ELEMENT instead (the text layer div, with a child index), so the nearest item
+ * on the right side of that point is used: the first one at or after it for a start, the last one
+ * at or before it for an end.
  */
-function locateByText(
-  doc: IndexedDocument,
-  pageIndex: number | null,
-  selectionText: string,
-): BlockRange | null {
-  const needle = normaliseForMatch(selectionText).text;
-  if (needle.length === 0) return null;
-  const needlePoints = toCodePoints(needle);
+function toItemEndpoint(
+  root: HTMLElement,
+  container: Node,
+  offset: number,
+  edge: 'start' | 'end',
+): ItemEndpoint | null {
+  const direct = closestElement(container)?.closest(`[${ITEM_INDEX_ATTR}]`);
+  if (direct instanceof HTMLElement) return endpointIn(direct, container, offset);
 
-  const candidates =
-    pageIndex === null ? doc.blocks : (doc.byPage.get(pageIndex) ?? doc.blocks);
-
-  for (const block of candidates) {
-    // figure / table / unknown blocks have no text at all — 64 of the 199 fixture blocks. Guarding
-    // rather than trusting `.length` on an absent field.
-    if (block.text.length === 0) continue;
-    const normalised = normaliseForMatch(block.text);
-    const at = indexOfCodePoints(needlePoints, toCodePoints(normalised.text));
-    if (at < 0) continue;
-    const start = normalised.rawOffsetAt[at];
-    const end = normalised.rawOffsetAt[at + needlePoints.length];
-    if (start === undefined || end === undefined) continue;
-    return { blockId: block.id, start, end };
+  const point = root.ownerDocument.createRange();
+  try {
+    point.setStart(container, offset);
+  } catch {
+    return null;
+  }
+  point.collapse(true);
+  const items = root.querySelectorAll<HTMLElement>(`.papertree-text-layer [${ITEM_INDEX_ATTR}]`);
+  if (edge === 'start') {
+    for (let i = 0; i < items.length; i += 1) {
+      const element = items[i] as HTMLElement;
+      if (point.comparePoint(element, 0) >= 0) {
+        const at = endpointIn(element, element, 0);
+        if (at !== null) return { ...at, offset: 0 };
+      }
+    }
+    return null;
+  }
+  for (let i = items.length - 1; i >= 0; i -= 1) {
+    const element = items[i] as HTMLElement;
+    if (point.comparePoint(element, element.childNodes.length) <= 0) {
+      const at = endpointIn(element, element, element.childNodes.length);
+      if (at !== null) return { ...at, offset: countCodePoints(element.textContent ?? '') };
+    }
   }
   return null;
 }
 
-// ─── geometry, from the IR only ─────────────────────────────────────────────────────────────────
+// ─── selected items → IR block ranges ───────────────────────────────────────────────────────────
 
-/**
- * The IR-space polygons a set of block ranges covers.
- *
- * `quadsForRange` for a sub-range (it clamps the line bands, which the 29 over-tall spans in the
- * corpus need), the block's own polygon for a whole-block or span-less target. This is the SAME
- * function `captureAnchor` uses internally, so the preview the toolbar is positioned against and
- * the geometry the anchor stores cannot disagree.
- */
-function geometryForRanges(doc: IndexedDocument, ranges: readonly BlockRange[]): Polygon[] {
-  const polygons: Polygon[] = [];
-  for (const range of ranges) {
-    const block = doc.byId.get(range.blockId);
-    if (block === undefined) continue;
-
-    const wholeBlock = range.start <= 0 && range.end >= block.textCodePoints.length;
-    if (wholeBlock || block.spans.length === 0) {
-      if (block.polygon.length >= 3) polygons.push(block.polygon);
-      continue;
-    }
-
-    const result = quadsForRange(
-      block.spans,
-      codePointToUtf16(block.text, range.start),
-      codePointToUtf16(block.text, range.end),
-    );
-    for (const polygon of result.polygons) polygons.push(polygon);
-  }
-  return polygons;
+function stampOf(element: Element): { blockId: string; cpStart: number } | null {
+  const blockId = element.getAttribute(BLOCK_ID_ATTR);
+  const cpStart = Number.parseInt(element.getAttribute(CP_START_ATTR) ?? '', 10);
+  if (blockId === null || blockId === '' || !Number.isInteger(cpStart)) return null;
+  return { blockId, cpStart };
 }
 
-// ─── the reading-order walk between two endpoints ───────────────────────────────────────────────
+function itemElements(page: HTMLElement): Map<number, HTMLElement> {
+  const out = new Map<number, HTMLElement>();
+  page.querySelectorAll<HTMLElement>(`[${ITEM_INDEX_ATTR}]`).forEach((element) => {
+    const index = itemIndexOf(element);
+    if (index !== null) out.set(index, element);
+  });
+  return out;
+}
 
 /**
- * Every block between two endpoints, in READING ORDER, each with its selected sub-range.
- *
- * `IndexedDocument.blocks` is already in reading order and `readingIndex` is the position in it —
- * built from `Page.flows` plus the parent/child walk, NOT from `doc_order`, which is absent on 64
- * of the corpus's 199 blocks and would collapse all of them to position 0.
+ * An offset inside an item → an offset inside its IR block. `data-cp-start` is where the item's
+ * text begins in the block AFTER its leading whitespace (the stamp matches trimmed text), so the
+ * item's own leading spaces are taken off first.
  */
-function rangesBetween(
+function blockOffset(text: string, cpStart: number, offsetInItem: number): number {
+  const leading = countCodePoints(text) - countCodePoints(text.replace(/^\s+/u, ''));
+  return cpStart + Math.max(0, offsetInItem - leading);
+}
+
+/** What one text-layer item holds, in code points: its length and its leading/trailing whitespace. */
+function shapeOf(text: string): { length: number; leading: number; trailing: number } {
+  const length = countCodePoints(text);
+  const leading = length - countCodePoints(text.replace(/^\s+/u, ''));
+  const trailing = length - countCodePoints(text.replace(/\s+$/u, ''));
+  return { length, leading, trailing };
+}
+
+function isSpace(codePoint: number | undefined): boolean {
+  return codePoint !== undefined && /\s/u.test(String.fromCodePoint(codePoint));
+}
+
+/** A stamped item of one block: where its text starts and ends in the block (code points). */
+interface StampedItem {
+  readonly item: number;
+  readonly start: number;
+  readonly end: number;
+}
+
+/** Every stamped item on the page, per block, in content order. */
+function stampedItemsByBlock(doc: IndexedDocument, elements: ReadonlyMap<number, HTMLElement>): Map<string, StampedItem[]> {
+  const out = new Map<string, StampedItem[]>();
+  const indices = Array.from(elements.keys()).sort((a, b) => a - b);
+  for (const index of indices) {
+    const element = elements.get(index) as HTMLElement;
+    const stamp = stampOf(element);
+    const block = stamp === null ? undefined : doc.byId.get(stamp.blockId);
+    if (stamp === null || block === undefined) continue;
+    const text = element.textContent ?? '';
+    const { length: itemLength, trailing } = shapeOf(text);
+    const limit = block.textCodePoints.length;
+    const entry = {
+      item: index,
+      start: Math.min(limit, stamp.cpStart),
+      end: Math.min(limit, blockOffset(text, stamp.cpStart, itemLength - trailing)),
+    };
+    const list = out.get(block.id);
+    if (list === undefined) out.set(block.id, [entry]);
+    else list.push(entry);
+  }
+  return out;
+}
+
+/**
+ * The IR text an UNSTAMPED item of `block` stands for, when it can be known exactly.
+ *
+ * `stampTextLayer` places an item in a block by geometry (`data-block-id`) and gives it an offset
+ * (`data-cp-start`) only when its characters match — so a line whose ligature the IR spells as one
+ * code point ("ﬁcing") and pdf.js as two ("ficing") is in the paragraph with no offset. Its text is
+ * still pinned by its neighbours: it lies after the previous stamped item of the block (or the
+ * block's start) and before the next one (or the block's end). The GAP is that stretch and every
+ * unstamped item of the block inside it; it is known when the IR holds some text there.
+ */
+interface Gap {
+  readonly key: string;
+  readonly from: number;
+  readonly to: number;
+  /** The gap's unstamped, non-whitespace items of the block, by index. */
+  readonly members: readonly number[];
+}
+
+function gapAround(
+  item: number,
+  block: IndexedDocument['blocks'][number],
+  stamped: readonly StampedItem[],
+  elements: ReadonlyMap<number, HTMLElement>,
+): Gap | null {
+  let prev: StampedItem | undefined;
+  let next: StampedItem | undefined;
+  for (const entry of stamped) {
+    if (entry.item < item) prev = entry;
+    else if (entry.item > item) {
+      next = entry;
+      break;
+    }
+  }
+  const lo = prev?.item ?? -1;
+  const hi = next?.item ?? Number.POSITIVE_INFINITY;
+  const members: number[] = [];
+  elements.forEach((element, index) => {
+    if (index <= lo || index >= hi) return;
+    if (element.getAttribute(BLOCK_ID_ATTR) !== block.id || stampOf(element) !== null) return;
+    if ((element.textContent ?? '').trim() === '') return;
+    members.push(index);
+  });
+  const points = block.textCodePoints;
+  let from = prev?.end ?? 0;
+  let to = next?.start ?? points.length;
+  while (from < to && isSpace(points[from])) from += 1;
+  while (to > from && isSpace(points[to - 1])) to -= 1;
+  if (to <= from) return null;
+  return { key: `${block.id}:${String(lo)}:${String(hi)}`, from, to, members };
+}
+
+/** One thing a selection becomes, in the order the browser selected it — the anchors' order. */
+export type SelectionTarget =
+  | { readonly kind: 'ir'; readonly range: BlockRange }
+  | { readonly kind: 'page-text'; readonly range: PageTextRange };
+
+/**
+ * THE SELECTION IS WHAT THE BROWSER SELECTED, AND EACH GLYPH OF IT GOES TO EXACTLY ONE ANCHOR.
+ *
+ * Walk the selected pieces in content order (the order the browser selects in). A piece of a
+ * STAMPED item belongs to its block. A piece of an UNSTAMPED item belongs to the block that holds it
+ * by geometry when its whole gap (`gapAround`) is selected — the IR text there is then known, and
+ * the block's range simply covers it. Anything else — a figure label, a table cell the IR did not
+ * stamp, a line selected only part-way whose IR offsets are unknown — joins a page-text run, which
+ * becomes its own `pdfjs@…/page-text` anchor. Whitespace-only items hold no glyph and belong to none.
+ *
+ * The quads are measured from the SAME assignment (`quadsByBlock`; a run's from its own items), so
+ * no glyph can be stored, or painted, twice. The reviewer's defect (s4-review.md F1) was two
+ * independent walks: this one sent a ligature line to a page-text run while a second walk also filed
+ * that line's quad under the paragraph, and one drag across one paragraph stored the line twice.
+ *
+ * It used to take the two endpoints' blocks and every block BETWEEN them in the parse's reading
+ * order. On YOLO's live parse the title is read after the introduction, so a drag across the
+ * abstract painted the title too — text the reader never selected.
+ */
+function partition(
   doc: IndexedDocument,
-  from: { block: IndexedBlock; codePoint: number },
-  to: { block: IndexedBlock; codePoint: number },
-): BlockRange[] {
-  // A backwards selection (dragged right-to-left) hands the endpoints back in DOM order, which is
-  // reading order for the text layer — but a user can also select across a float, so order by the
-  // IR's own index rather than trusting the DOM.
-  const forwards = from.block.readingIndex <= to.block.readingIndex;
-  const head = forwards ? from : to;
-  const tail = forwards ? to : from;
+  pages: readonly PagePieces[],
+  measure: AdvanceMeasure | undefined,
+): { targets: SelectionTarget[]; quadsByBlock: Map<string, BBox[]> } {
+  type Slot = { kind: 'ir'; blockId: string } | { kind: 'page-text'; range: PageTextRange };
+  const slots: Slot[] = [];
+  const byBlock = new Map<string, { start: number; end: number; page: PagePieces; pieces: ItemPiece[] }>();
 
-  if (head.block.id === tail.block.id) {
-    const start = Math.min(head.codePoint, tail.codePoint);
-    const end = Math.max(head.codePoint, tail.codePoint);
-    return start === end ? [] : [{ blockId: head.block.id, start, end }];
+  for (const page of pages) {
+    const elements = page.page === null ? new Map<number, HTMLElement>() : itemElements(page.page);
+    const stamped = stampedItemsByBlock(doc, elements);
+    const selectedWhole = new Set<number>();
+    for (const piece of page.pieces) {
+      const text = elements.get(piece.item)?.textContent ?? page.source.items[piece.item]?.str ?? '';
+      const { length, leading, trailing } = shapeOf(text);
+      if (piece.from <= leading && piece.to >= length - trailing) selectedWhole.add(piece.item);
+    }
+    const absorbable = new Map<string, Gap | null>();
+
+    let run: { first: ItemPiece; last: ItemPiece } | null = null;
+    const closeRun = (): void => {
+      if (run === null) return;
+      slots.push({
+        kind: 'page-text',
+        range: {
+          pageIndex: page.pageIndex,
+          start: { item: run.first.item, offset: run.first.from },
+          end: { item: run.last.item, offset: run.last.to },
+        },
+      });
+      run = null;
+    };
+    const give = (blockId: string, from: number, to: number, piece: ItemPiece): void => {
+      closeRun();
+      const seen = byBlock.get(blockId);
+      if (seen === undefined) {
+        byBlock.set(blockId, { start: from, end: to, page, pieces: [piece] });
+        slots.push({ kind: 'ir', blockId });
+        return;
+      }
+      seen.start = Math.min(seen.start, from);
+      seen.end = Math.max(seen.end, to);
+      seen.pieces.push(piece);
+    };
+
+    for (const piece of page.pieces) {
+      const element = elements.get(piece.item);
+      const text = element?.textContent ?? page.source.items[piece.item]?.str ?? '';
+      if (text.trim() === '') continue;
+      const stamp = element === undefined ? null : stampOf(element);
+      const stampedBlock = stamp === null ? undefined : doc.byId.get(stamp.blockId);
+      if (stamp !== null && stampedBlock !== undefined) {
+        const limit = stampedBlock.textCodePoints.length;
+        give(
+          stampedBlock.id,
+          Math.min(limit, blockOffset(text, stamp.cpStart, piece.from)),
+          Math.min(limit, blockOffset(text, stamp.cpStart, piece.to)),
+          piece,
+        );
+        continue;
+      }
+      const placedIn = stamp === null ? element?.getAttribute(BLOCK_ID_ATTR) : null;
+      const block = placedIn === null || placedIn === undefined || placedIn === '' ? undefined : doc.byId.get(placedIn);
+      if (block !== undefined) {
+        const gap = gapAround(piece.item, block, stamped.get(block.id) ?? [], elements);
+        if (gap !== null) {
+          if (!absorbable.has(gap.key)) {
+            absorbable.set(gap.key, gap.members.every((member) => selectedWhole.has(member)) ? gap : null);
+          }
+          const whole = absorbable.get(gap.key);
+          if (whole !== null && whole !== undefined) {
+            give(block.id, whole.from, whole.to, piece);
+            continue;
+          }
+        }
+      }
+      run = run === null ? { first: piece, last: piece } : { first: run.first, last: piece };
+    }
+    closeRun();
   }
 
-  const ranges: BlockRange[] = [];
-  for (const block of doc.blocks) {
-    if (block.readingIndex < head.block.readingIndex) continue;
-    if (block.readingIndex > tail.block.readingIndex) break;
-    if (block.text.length === 0) continue;
-
-    const start = block.id === head.block.id ? head.codePoint : 0;
-    const end = block.id === tail.block.id ? tail.codePoint : block.textCodePoints.length;
-    if (end > start) ranges.push({ blockId: block.id, start, end });
+  const targets: SelectionTarget[] = [];
+  const quadsByBlock = new Map<string, BBox[]>();
+  for (const slot of slots) {
+    if (slot.kind === 'page-text') {
+      targets.push(slot);
+      continue;
+    }
+    const entry = byBlock.get(slot.blockId);
+    if (entry === undefined || entry.end <= entry.start) continue;
+    targets.push({ kind: 'ir', range: { blockId: slot.blockId, start: entry.start, end: entry.end } });
+    quadsByBlock.set(slot.blockId, itemPieceQuads(entry.page.source.frame, entry.page.source.items, entry.pieces, measure));
   }
-  return ranges;
+  return { targets, quadsByBlock };
+}
+
+// ─── pieces per page ────────────────────────────────────────────────────────────────────────────
+
+interface PagePieces {
+  readonly pageIndex: number;
+  readonly page: HTMLElement | null;
+  readonly source: PageTextSource;
+  readonly start: PageTextEndpoint;
+  readonly end: PageTextEndpoint;
+  readonly pieces: readonly ItemPiece[];
+}
+
+function piecesPerPage(
+  root: HTMLElement,
+  start: ItemEndpoint,
+  end: ItemEndpoint,
+  pageText: (pageIndex: number) => PageTextSource | null,
+): PagePieces[] | null {
+  const [first, last] =
+    start.pageIndex <= end.pageIndex ? [start, end] : [end, start];
+  const out: PagePieces[] = [];
+  for (let pageIndex = first.pageIndex; pageIndex <= last.pageIndex; pageIndex += 1) {
+    const source = pageText(pageIndex);
+    if (source === null || source.items.length === 0) return null;
+    const lastItem = source.items.length - 1;
+    const s: PageTextEndpoint =
+      pageIndex === first.pageIndex ? { item: first.item, offset: first.offset } : { item: 0, offset: 0 };
+    const e: PageTextEndpoint =
+      pageIndex === last.pageIndex
+        ? { item: last.item, offset: last.offset }
+        : { item: lastItem, offset: countCodePoints(source.items[lastItem]?.str ?? '') };
+    // Within one page a backwards drag hands back the endpoints in DOM order already; guard anyway.
+    const [a, b] =
+      s.item < e.item || (s.item === e.item && s.offset <= e.offset) ? [s, e] : [e, s];
+    const page =
+      root.querySelector<HTMLElement>(`.papertree-page[${PAGE_INDEX_ATTR}="${String(pageIndex)}"]`) ??
+      null;
+    out.push({ pageIndex, page, source, start: a, end: b, pieces: piecesBetween(source.items, a, b) });
+  }
+  return out;
+}
+
+function extent(quads: readonly BBox[]): BBox | null {
+  if (quads.length === 0) return null;
+  return [
+    Math.min(...quads.map((q) => q[0])),
+    Math.min(...quads.map((q) => q[1])),
+    Math.max(...quads.map((q) => q[2])),
+    Math.max(...quads.map((q) => q[3])),
+  ];
+}
+
+// ─── glyph advances in the text layer's own font ────────────────────────────────────────────────
+
+/**
+ * An `AdvanceMeasure` over a 2D canvas, in the family pdf.js set each span in — the same measurement
+ * `TextLayer` makes to scale the span onto the item's advance, so a quad's edge inside an item lands
+ * where the selected glyphs are (s4-review.md F5). It measures TEXT, never the DOM. Undefined where
+ * there is no canvas (tests in happy-dom, SSR): the code-point ratio applies there.
+ */
+function canvasAdvanceMeasure(): AdvanceMeasure | undefined {
+  if (typeof document === 'undefined') return undefined;
+  let context: CanvasRenderingContext2D | null = null;
+  try {
+    context = document.createElement('canvas').getContext('2d');
+  } catch {
+    context = null;
+  }
+  if (context === null || typeof context.measureText !== 'function') return undefined;
+  const ctx = context;
+  let family = '';
+  return (item, text) => {
+    if (item.fontFamily === undefined || item.fontFamily === '') return null;
+    if (family !== item.fontFamily) {
+      ctx.font = `100px ${item.fontFamily}`;
+      family = item.fontFamily;
+    }
+    const width = ctx.measureText(text).width;
+    return Number.isFinite(width) ? width : null;
+  };
 }
 
 // ─── the hook ───────────────────────────────────────────────────────────────────────────────────
@@ -349,25 +590,36 @@ function defaultAnchorId(): string {
   if (cryptoObj !== undefined && typeof cryptoObj.randomUUID === 'function') {
     return cryptoObj.randomUUID();
   }
-  // Non-secure contexts (plain http on a LAN device, which is how the iPad gets tested) have no
-  // `randomUUID`. Collision risk is irrelevant here: ids are namespaced per document and local.
-  return `anchor-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  // Non-secure contexts (plain http on a LAN device) have no `randomUUID`. A v4-shaped id from
+  // `getRandomValues`, so the server's id rule (a UUID or a prefixed id) still holds.
+  const bytes = new Uint8Array(16);
+  cryptoObj?.getRandomValues(bytes);
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 /** A stable signature, so an unchanged selection does not re-render on every `selectionchange`. */
 function signatureOf(selection: PendingSelection | null): string {
   if (selection === null) return '';
-  return selection.ranges.map((r) => `${r.blockId}:${String(r.start)}-${String(r.end)}`).join('|');
+  return selection.targets
+    .map((target) =>
+      target.kind === 'ir'
+        ? `${target.range.blockId}:${String(target.range.start)}-${String(target.range.end)}`
+        : `p${String(target.range.pageIndex)}:${String(target.range.start.item)}.${String(target.range.start.offset)}-` +
+          `${String(target.range.end.item)}.${String(target.range.end.offset)}`,
+    )
+    .join('|');
 }
 
-export function useSelectionCapture(
-  options: UseSelectionCaptureOptions,
-): UseSelectionCaptureResult {
+export function useSelectionCapture(options: UseSelectionCaptureOptions): UseSelectionCaptureResult {
   const {
     doc,
     root,
-    pageIndex,
     client,
+    pageText,
+    pageTextStreamId = null,
     newAnchorId = defaultAnchorId,
     now = () => new Date().toISOString(),
     mode = 'source',
@@ -388,8 +640,15 @@ export function useSelectionCapture(
   rootRef.current = root;
   const notifyRef = useRef(onSelectionChange);
   notifyRef.current = onSelectionChange;
-  const pageIndexRef = useRef(pageIndex);
-  pageIndexRef.current = pageIndex;
+  const pageTextRef = useRef(pageText);
+  pageTextRef.current = pageText;
+  const streamRef = useRef(pageTextStreamId);
+  streamRef.current = pageTextStreamId;
+  const measureRef = useRef<AdvanceMeasure | undefined | null>(null);
+  const measureOf = (): AdvanceMeasure | undefined => {
+    if (measureRef.current === null) measureRef.current = canvasAdvanceMeasure();
+    return measureRef.current;
+  };
 
   const read = useCallback((): PendingSelection | null => {
     const indexed = docRef.current;
@@ -403,44 +662,71 @@ export function useSelectionCapture(
     }
     const range = domSelection.getRangeAt(0);
     if (!container.contains(range.commonAncestorContainer)) return null;
-
     const text = domSelection.toString();
     if (text.trim().length === 0) return null;
 
-    const start = endpointToOffset(indexed, range.startContainer, range.startOffset);
-    const end = endpointToOffset(indexed, range.endContainer, range.endOffset);
+    const start = toItemEndpoint(container, range.startContainer, range.startOffset, 'start');
+    const end = toItemEndpoint(container, range.endContainer, range.endOffset, 'end');
+    if (start === null || end === null) return null;
 
-    let ranges: BlockRange[];
-    let viaFallback: boolean;
-    if (start !== null && end !== null) {
-      ranges = rangesBetween(indexed, start, end);
-      viaFallback = false;
-    } else {
-      const scope =
-        pageIndexRef.current ??
-        readPageIndexAttr(range.commonAncestorContainer) ??
-        null;
-      const located = locateByText(indexed, scope, text);
-      if (located === null) return null;
-      ranges = [located];
-      viaFallback = true;
-    }
-    if (ranges.length === 0) return null;
+    const lookup = pageTextRef.current ?? (() => null);
+    const pages = piecesPerPage(container, start, end, lookup);
+    if (pages === null) return null;
 
-    const first = ranges[0];
-    if (first === undefined) return null;
-    const firstBlock = indexed.byId.get(first.blockId);
-    if (firstBlock === undefined) return null;
+    const measure = measureOf();
+    const partitioned = partition(indexed, pages, measure);
+    // A run the IR did not stamp needs pdf.js's version for its text stream id; until pdf.js has
+    // loaded there is nothing honest to capture it under, so it is left out rather than guessed.
+    const targets =
+      streamRef.current === null
+        ? partitioned.targets.filter((target) => target.kind === 'ir')
+        : partitioned.targets;
+    if (targets.length === 0) return null;
+    const ranges = targets.flatMap((target) => (target.kind === 'ir' ? [target.range] : []));
+    const pageTextRuns = targets.flatMap((target) => (target.kind === 'page-text' ? [target.range] : []));
 
-    const polygons = geometryForRanges(indexed, ranges);
+    const { quadsByBlock } = partitioned;
+    /** The selection's quads on one of its pages (IR ranges and page-text runs alike). */
+    const quadsOn = (pageIndex: number): BBox[] => {
+      const out: BBox[] = [];
+      for (const range of ranges) {
+        if (indexed.byId.get(range.blockId)?.pageIndex === pageIndex) {
+          out.push(...(quadsByBlock.get(range.blockId) ?? []));
+        }
+      }
+      const page = pages.find((p) => p.pageIndex === pageIndex);
+      if (page !== undefined) {
+        for (const run of pageTextRuns) {
+          if (run.pageIndex !== pageIndex) continue;
+          out.push(
+            ...itemPieceQuads(
+              page.source.frame,
+              page.source.items,
+              piecesBetween(page.source.items, run.start, run.end),
+              measure,
+            ),
+          );
+        }
+      }
+      return out;
+    };
+    const firstPageIndex = pages[0]?.pageIndex ?? start.pageIndex;
+    const lastPageIndex = pages[pages.length - 1]?.pageIndex ?? firstPageIndex;
+    const onFirstPage = quadsOn(firstPageIndex);
+    const onLastPage = lastPageIndex === firstPageIndex ? onFirstPage : quadsOn(lastPageIndex);
     return {
       text,
-      pageIndex: firstBlock.pageIndex,
+      pageIndex: firstPageIndex,
+      kind: pageTextRuns.length === 0 ? 'ir' : ranges.length === 0 ? 'page-text' : 'mixed',
+      targets,
       ranges,
       blockIds: ranges.map((r) => r.blockId),
-      irExtent: extentOf(polygons),
-      irPolygons: polygons,
-      viaFallback,
+      quadsByBlock,
+      pageTextRanges: pageTextRuns,
+      irExtent: extent(onFirstPage),
+      endPageIndex: lastPageIndex,
+      endExtent: extent(onLastPage),
+      irPolygons: unionOfLineRects(onFirstPage),
     };
   }, []);
 
@@ -466,15 +752,12 @@ export function useSelectionCapture(
 
     // iOS: the handles fire this continuously through the drag, so it is debounced.
     const onSelectionChangeEvent = (): void => schedule(debounceMs);
-    // Every pointer device that HAS an up event: reconcile at once and cancel the debounce, so a
-    // mouse selection never waits out the delay. Registered on the document rather than the root
+    // Every pointer device that HAS an up event: reconcile at once. Registered on the document
     // because a drag frequently ends outside the page element.
     const onPointerUp = (): void => schedule(0);
 
     document.addEventListener('selectionchange', onSelectionChangeEvent);
     document.addEventListener('pointerup', onPointerUp);
-    // A cancelled touch (the system takes over the gesture, or a call arrives) leaves the selection
-    // as it was; reconciling keeps the toolbar consistent with what is actually selected.
     document.addEventListener('pointercancel', onPointerUp);
 
     return () => {
@@ -491,22 +774,55 @@ export function useSelectionCapture(
       const indexed = docRef.current;
       const pending = read() ?? selection;
       if (indexed === null || pending === null) return null;
-
       const at = now();
-      const anchors = pending.ranges.map((range) =>
-        captureAnchor({
+
+      const stream = streamRef.current;
+      const lookup = pageTextRef.current;
+      const anchors: Anchor[] = [];
+      // In the order the browser selected them: a paragraph, the figure label after it, the next
+      // paragraph — so the Navigator's quote and the card read the way the page does.
+      for (const target of pending.targets) {
+        if (target.kind === 'ir') {
+          const range = target.range;
+          anchors.push(
+            captureAnchor({
+              doc: indexed,
+              blockId: range.blockId,
+              startOffset: range.start,
+              endOffset: range.end,
+              // A table cell is a table-cell target whichever path captured it (contracts.md §6).
+              targetKind: indexed.byId.get(range.blockId)?.type === 'table_cell' ? 'table_cell' : targetKind,
+              provenanceClass,
+              id: newAnchorId(),
+              at,
+              client,
+              mode,
+              quads: pending.quadsByBlock.get(range.blockId) ?? [],
+            }),
+          );
+          continue;
+        }
+        if (stream === null || lookup === undefined) continue;
+        const range = target.range;
+        const source = lookup(range.pageIndex);
+        if (source === null) continue;
+        const anchor = capturePageTextAnchor({
           doc: indexed,
-          blockId: range.blockId,
-          startOffset: range.start,
-          endOffset: range.end,
-          targetKind,
-          provenanceClass,
+          pageIndex: range.pageIndex,
+          frame: source.frame,
+          items: source.items,
+          start: range.start,
+          end: range.end,
+          textStreamId: stream,
           id: newAnchorId(),
           at,
           client,
           mode,
-        }),
-      );
+          provenanceClass,
+          ...(measureOf() === undefined ? {} : { measure: measureOf() as AdvanceMeasure }),
+        });
+        if (anchor !== null) anchors.push(anchor);
+      }
 
       const primary = anchors[0];
       if (primary === undefined) return null;
@@ -523,13 +839,4 @@ export function useSelectionCapture(
   }, []);
 
   return useMemo(() => ({ selection, capture, clear }), [selection, capture, clear]);
-}
-
-function readPageIndexAttr(node: Node): number | null {
-  const element = closestWithAttr(node, PAGE_INDEX_ATTR);
-  if (element === null) return null;
-  const raw = element.getAttribute(PAGE_INDEX_ATTR);
-  if (raw === null) return null;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) ? parsed : null;
 }

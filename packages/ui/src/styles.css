@@ -58,7 +58,38 @@
   --pt-derived-ink: #241f3a;
   --pt-derived-ink-muted: #574d80;
 
-  --pt-focus: #2f6fd0;
+  --pt-focus: #2a4e8c;
+
+  /*
+   * THE READER'S ONE ACCENT: ink blue, for interactive state only (the current mode, a pressed
+   * control, the focus flash). Paper and highlights never use it, so "blue" always means "you can
+   * act on this" and never "this is the paper".
+   */
+  --pt-accent: #2a4e8c;
+  --pt-accent-ink: #ffffff;
+  --pt-accent-soft: rgb(42 78 140 / 10%);
+  --pt-font-ui: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --pt-radius-panel: 12px;
+  --pt-sheet-shadow: 0 1px 1px rgb(46 36 24 / 10%), 0 0 0 1px rgb(46 36 24 / 6%);
+  --pt-float-shadow: 0 6px 20px rgb(46 36 24 / 12%), 0 0 0 1px rgb(46 36 24 / 8%);
+  --pt-danger: #9b2c2c;
+
+  /*
+   * The five highlight colours. Drawn OVER the white PDF page in both themes (the paper stays
+   * paper-white in dark mode), so they are one set: a low-alpha tint the text reads through, and a
+   * darker ink for the underline along each line's baseline — the underline is what keeps a pale
+   * tint legible on a bright screen and for a reader who cannot tell amber from green.
+   */
+  --pt-hl-amber: rgb(242 172 32 / 30%);
+  --pt-hl-amber-ink: #a8650a;
+  --pt-hl-green: rgb(78 166 100 / 26%);
+  --pt-hl-green-ink: #2c7442;
+  --pt-hl-blue: rgb(80 132 212 / 25%);
+  --pt-hl-blue-ink: #2d56a0;
+  --pt-hl-pink: rgb(224 102 152 / 25%);
+  --pt-hl-pink-ink: #a8356a;
+  --pt-hl-purple: rgb(142 104 212 / 25%);
+  --pt-hl-purple-ink: #6442ae;
 
   /* Highlights. Alpha, always: the paper must remain readable through its own annotation. */
   --pt-highlight-fill: rgb(255 208 0 / 30%);
@@ -83,19 +114,25 @@
   :root:not([data-pt-theme='light']) {
     --pt-ink: #ece7df;
     --pt-ink-muted: #a09889;
-    --pt-ground: #16151a;
-    --pt-ground-raised: #1f1e25;
-    --pt-rule: #34323c;
+    --pt-ground: #1f1e1b;
+    --pt-ground-raised: #282723;
+    --pt-rule: #3a3833;
 
-    --pt-page-ground: #0e0d11;
-    --pt-panel-ground: #1b1a20;
+    --pt-page-ground: #171614;
+    --pt-panel-ground: #1f1e1b;
 
     --pt-derived-ground: #1e1b2e;
     --pt-derived-rule: #9d8cff;
     --pt-derived-ink: #ece9fb;
     --pt-derived-ink-muted: #b3aad8;
 
-    --pt-focus: #79aaf5;
+    --pt-focus: #8fb0ea;
+    --pt-accent: #8fb0ea;
+    --pt-accent-ink: #10141c;
+    --pt-accent-soft: rgb(143 176 234 / 14%);
+    --pt-sheet-shadow: 0 0 0 1px rgb(0 0 0 / 40%);
+    --pt-float-shadow: 0 8px 24px rgb(0 0 0 / 45%), 0 0 0 1px rgb(255 255 255 / 8%);
+    --pt-danger: #f08a8a;
 
     --pt-highlight-fill: rgb(255 214 64 / 26%);
     --pt-highlight-stroke: rgb(255 214 64 / 65%);
@@ -109,19 +146,25 @@
 :root[data-pt-theme='dark'] {
   --pt-ink: #ece7df;
   --pt-ink-muted: #a09889;
-  --pt-ground: #16151a;
-  --pt-ground-raised: #1f1e25;
-  --pt-rule: #34323c;
+  --pt-ground: #1f1e1b;
+  --pt-ground-raised: #282723;
+  --pt-rule: #3a3833;
 
-  --pt-page-ground: #0e0d11;
-  --pt-panel-ground: #1b1a20;
+  --pt-page-ground: #171614;
+  --pt-panel-ground: #1f1e1b;
 
   --pt-derived-ground: #1e1b2e;
   --pt-derived-rule: #9d8cff;
   --pt-derived-ink: #ece9fb;
   --pt-derived-ink-muted: #b3aad8;
 
-  --pt-focus: #79aaf5;
+  --pt-focus: #8fb0ea;
+  --pt-accent: #8fb0ea;
+  --pt-accent-ink: #10141c;
+  --pt-accent-soft: rgb(143 176 234 / 14%);
+  --pt-sheet-shadow: 0 0 0 1px rgb(0 0 0 / 40%);
+  --pt-float-shadow: 0 8px 24px rgb(0 0 0 / 45%), 0 0 0 1px rgb(255 255 255 / 8%);
+  --pt-danger: #f08a8a;
 
   --pt-highlight-fill: rgb(255 214 64 / 26%);
   --pt-highlight-stroke: rgb(255 214 64 / 65%);
@@ -283,9 +326,8 @@ span.pt-paper .pt-paper__cite {
   align-items: center;
   gap: var(--pt-gap);
   margin-block-end: 4px;
-  font-size: 0.6875rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-family: var(--pt-font-ui);
+  font-size: 0.75rem;
   color: var(--pt-ink-muted);
 }
 
@@ -598,11 +640,9 @@ span.pt-paper .pt-paper__cite {
   flex: 1 1 auto;
   min-inline-size: 0;
   margin: 0;
-  font-size: 0.8125rem;
+  font-size: 0.9375rem;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--pt-ink-muted);
+  color: var(--pt-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -794,6 +834,834 @@ span.pt-paper .pt-paper__cite {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────────────────────
+ * the reader (S4) — a calm desk, the paper as the hero, the chrome receding
+ *
+ * The page is the only bright thing on screen: a paper-white sheet on a warm stone desk
+ * (`--pt-page-ground`). Chrome sits on `--pt-panel-ground` behind hairlines, in the UI sans;
+ * anything that is the paper's own words is in the serif. Ink blue marks interactive state only.
+ * Spacing is an 8 px grid; floating things get one soft shadow and 12 px radii; nothing else
+ * casts one.
+ * ───────────────────────────────────────────────────────────────────────────────────────────── */
+
+.pt-reader {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  font-family: var(--pt-font-ui);
+  color: var(--pt-ink);
+  background: var(--pt-page-ground);
+}
+
+.pt-reader .papertree-page {
+  box-shadow: var(--pt-sheet-shadow);
+}
+
+.pt-reader__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--pt-panel-ground);
+  border-block-end: 1px solid var(--pt-rule);
+}
+
+.pt-reader__title {
+  flex: 1 1 12rem;
+  min-inline-size: 0;
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--pt-font-body);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pt-reader__controls {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Below 640 px the controls take a row of their own, full width, the mode switch first. */
+@media (max-width: 639px) {
+  .pt-reader__bar {
+    padding: 8px 16px;
+  }
+  .pt-reader__controls {
+    flex: 1 1 100%;
+    justify-content: space-between;
+    min-inline-size: 0;
+  }
+  .pt-reader__controls .pt-segmented {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+  }
+  /* The select says "Fit width (56%)"; on a phone it truncates rather than pushing "+" off-screen. */
+  .pt-zoom__select {
+    max-inline-size: 6.75rem;
+  }
+  .pt-reader__controls .pt-segmented__option {
+    flex: 1 1 0;
+    padding-inline: 8px;
+  }
+}
+
+.pt-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-block-size: 40px;
+  min-inline-size: 40px;
+  padding-inline: 12px;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--pt-ink);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    background-color 120ms ease-out,
+    border-color 120ms ease-out;
+}
+
+.pt-btn:hover {
+  background: rgb(120 108 90 / 10%);
+}
+
+.pt-btn:focus-visible,
+.pt-swatch:focus-visible,
+.pt-hlrow:focus-visible,
+.pt-thumb:focus-visible,
+.pt-field:focus-visible {
+  outline: 2px solid var(--pt-focus);
+  outline-offset: 2px;
+}
+
+.pt-btn[disabled] {
+  color: var(--pt-ink-muted);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.pt-btn--outline {
+  border-color: var(--pt-rule);
+  background: var(--pt-ground);
+}
+
+.pt-btn--primary {
+  color: var(--pt-accent-ink);
+  background: var(--pt-accent);
+}
+
+.pt-btn--primary:hover {
+  background: var(--pt-accent);
+  filter: brightness(1.08);
+}
+
+.pt-btn--danger {
+  color: var(--pt-danger);
+}
+
+.pt-btn[aria-pressed='true'] {
+  color: var(--pt-accent);
+  background: var(--pt-accent-soft);
+}
+
+.pt-reader .pt-segmented__option[aria-checked='true'] {
+  color: var(--pt-accent);
+}
+
+.pt-zoom {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.pt-zoom__select {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  max-inline-size: 11rem;
+  min-block-size: 40px;
+  padding-inline: 8px 4px;
+  font: inherit;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--pt-ink);
+  background: transparent;
+  border: 1px solid var(--pt-rule);
+  border-radius: 10px;
+}
+
+.pt-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.pt-zoom__pct {
+  min-inline-size: 3.25rem;
+  padding-inline: 4px;
+  font-size: 0.8125rem;
+  color: var(--pt-ink-muted);
+  text-align: end;
+}
+
+/* The select already offers "Fit width"; the button is a shortcut for wide screens only. */
+@media (max-width: 1023px) {
+  .pt-zoom__fit {
+    display: none;
+  }
+}
+
+@media (max-width: 639px) {
+  .pt-zoom__pct {
+    display: none;
+  }
+}
+
+/* ── status and loading ────────────────────────────────────────────────────────────────────── */
+
+.pt-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px auto 0;
+  padding: 10px 16px;
+  max-inline-size: 42rem;
+  font-size: 0.875rem;
+  color: var(--pt-ink);
+  background: var(--pt-ground);
+  border: 1px solid var(--pt-rule);
+  border-radius: var(--pt-radius-panel);
+}
+
+.pt-state {
+  max-inline-size: 30rem;
+  margin: 12vh auto 0;
+  padding: 0 16px;
+  text-align: center;
+}
+
+.pt-state__title {
+  margin: 0 0 8px;
+  font-family: var(--pt-font-body);
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.pt-state__body {
+  margin: 0 0 16px;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--pt-ink-muted);
+}
+
+.pt-skeleton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 16px;
+}
+
+.pt-skeleton__page {
+  inline-size: min(612px, 100%);
+  aspect-ratio: 612 / 792;
+  background: linear-gradient(90deg, #fbfaf8 0%, #f3f1ed 50%, #fbfaf8 100%) 0 0 / 200% 100%;
+  border-radius: 2px;
+  box-shadow: var(--pt-sheet-shadow);
+  animation: pt-shimmer 1400ms ease-in-out infinite;
+}
+
+@keyframes pt-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+/* ── the highlight paint ───────────────────────────────────────────────────────────────────── */
+
+.pt-hl-fill {
+  fill: var(--pt-hl-amber);
+}
+
+.pt-hl-line {
+  stroke: var(--pt-hl-amber-ink);
+  stroke-width: 1.25px;
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+}
+
+.pt-hl[data-color='green'] .pt-hl-fill {
+  fill: var(--pt-hl-green);
+}
+.pt-hl[data-color='green'] .pt-hl-line {
+  stroke: var(--pt-hl-green-ink);
+}
+.pt-hl[data-color='blue'] .pt-hl-fill {
+  fill: var(--pt-hl-blue);
+}
+.pt-hl[data-color='blue'] .pt-hl-line {
+  stroke: var(--pt-hl-blue-ink);
+}
+.pt-hl[data-color='pink'] .pt-hl-fill {
+  fill: var(--pt-hl-pink);
+}
+.pt-hl[data-color='pink'] .pt-hl-line {
+  stroke: var(--pt-hl-pink-ink);
+}
+.pt-hl[data-color='purple'] .pt-hl-fill {
+  fill: var(--pt-hl-purple);
+}
+.pt-hl[data-color='purple'] .pt-hl-line {
+  stroke: var(--pt-hl-purple-ink);
+}
+
+.pt-hl[data-saving='true'] .pt-hl-fill {
+  opacity: 0.55;
+}
+
+.pt-hl[data-active='true'] .pt-hl-line,
+.pt-hl:focus-visible .pt-hl-line {
+  stroke-width: 2.5px;
+}
+
+.pt-hl:focus {
+  outline: none;
+}
+
+.pt-hl:focus-visible .pt-hl-fill {
+  stroke: var(--pt-focus);
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Approximate: a dashed outline, a different SHAPE, so it survives greyscale and a colour-blind eye. */
+.pt-hl[data-approximate='true'] .pt-hl-fill {
+  stroke: var(--pt-hl-amber-ink);
+  stroke-width: 1px;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.pt-flash {
+  fill: var(--pt-accent-soft);
+  stroke: var(--pt-accent);
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+  animation: pt-flash 1200ms ease-out forwards;
+}
+
+@keyframes pt-flash {
+  0% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ── the selection toolbar ─────────────────────────────────────────────────────────────────── */
+
+.pt-seltool {
+  position: absolute;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  font-family: var(--pt-font-ui);
+  color: var(--pt-ink);
+  background: var(--pt-ground-raised);
+  border-radius: var(--pt-radius-panel);
+  box-shadow: var(--pt-float-shadow);
+  pointer-events: auto;
+  animation: pt-rise 140ms ease-out;
+}
+
+.pt-seltool--sheet {
+  position: fixed;
+  inset-inline: 16px;
+  inset-block-end: calc(16px + env(safe-area-inset-bottom, 0px));
+  justify-content: space-between;
+}
+
+/* Highlight is unavailable for this selection: the reason is a sentence under the buttons, in the
+   bar itself, never only a tooltip. The note takes the buttons' width and never sets it (its own
+   width is 0, its minimum the full line), so the buttons stay on one row. */
+.pt-seltool--noted {
+  flex-wrap: wrap;
+}
+
+/* Floating, the bar is as wide as its buttons whatever column it is positioned in (a page at 50 %
+   is narrower than the bar), so a note never wraps the buttons onto a second row. */
+.pt-seltool--noted:not(.pt-seltool--sheet) {
+  inline-size: max-content;
+}
+
+.pt-seltool__note {
+  flex-basis: 100%;
+  inline-size: 0;
+  min-inline-size: 100%;
+  margin: 0;
+  padding: 4px 8px 6px;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--pt-ink-muted);
+}
+
+.pt-seltool__sep {
+  inline-size: 1px;
+  block-size: 24px;
+  margin-inline: 2px;
+  background: var(--pt-rule);
+}
+
+.pt-seltool__dot {
+  inline-size: 12px;
+  block-size: 12px;
+  border-radius: 50%;
+  background: var(--pt-hl-amber-ink);
+}
+
+@keyframes pt-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── the highlight card (colour, note, delete) ─────────────────────────────────────────────── */
+
+.pt-hlcard {
+  position: fixed;
+  z-index: 60;
+  inline-size: min(320px, calc(100vw - 32px));
+  padding: 12px;
+  color: var(--pt-ink);
+  background: var(--pt-ground-raised);
+  border-radius: var(--pt-radius-panel);
+  box-shadow: var(--pt-float-shadow);
+  animation: pt-rise 140ms ease-out;
+}
+
+.pt-hlcard__quote {
+  margin: 0 0 12px;
+  font-family: var(--pt-font-body);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pt-swatches {
+  display: flex;
+  gap: 4px;
+  margin-block-end: 12px;
+}
+
+.pt-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 40px;
+  block-size: 40px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.pt-swatch__chip {
+  inline-size: 24px;
+  block-size: 24px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px var(--chip-ink);
+  background: var(--chip-fill);
+}
+
+.pt-swatch[aria-pressed='true'] .pt-swatch__chip {
+  box-shadow:
+    inset 0 0 0 2px var(--chip-ink),
+    0 0 0 2px var(--pt-ground-raised),
+    0 0 0 4px var(--chip-ink);
+}
+
+.pt-field {
+  display: block;
+  inline-size: 100%;
+  min-block-size: 72px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--pt-ink);
+  background: var(--pt-ground);
+  border: 1px solid var(--pt-rule);
+  border-radius: 10px;
+  resize: vertical;
+}
+
+.pt-hlcard__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-block-start: 12px;
+}
+
+.pt-hlcard__meta {
+  margin: 8px 0 0;
+  font-size: 0.75rem;
+  color: var(--pt-ink-muted);
+}
+
+/* ── navigator ─────────────────────────────────────────────────────────────────────────────── */
+
+.pt-drawer {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  z-index: 30;
+  inline-size: min(340px, 88vw);
+  background: var(--pt-panel-ground);
+  border-inline-end: 1px solid var(--pt-rule);
+}
+
+@media (max-width: 639px) {
+  .pt-drawer {
+    /* Above the selection bar: an open sheet is where the reader's thumb is now. */
+    z-index: 45;
+    inset-inline: 0;
+    inset-block: auto 0;
+    inline-size: 100%;
+    block-size: min(78dvh, 640px);
+    border-inline-end: 0;
+    border-block-start: 1px solid var(--pt-rule);
+    border-start-start-radius: 16px;
+    border-start-end-radius: 16px;
+    box-shadow: var(--pt-float-shadow);
+  }
+}
+
+/* Wide screens: the drawer takes its own column and the document narrows beside it, instead of
+   covering the page's left edge (s4-review.md F10). Below 1024 px it floats over the page, and
+   below 640 px it is a bottom sheet. */
+@media (min-width: 1024px) {
+  .pt-drawer {
+    position: relative;
+    inset: auto;
+    z-index: auto;
+    flex: 0 0 auto;
+  }
+}
+
+.pt-drawer .pt-panel {
+  block-size: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.pt-hlrow {
+  display: flex;
+  gap: 10px;
+  inline-size: 100%;
+  padding: 10px 8px;
+  text-align: start;
+  color: var(--pt-ink);
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.pt-hlrow:hover {
+  background: rgb(120 108 90 / 8%);
+}
+
+.pt-hlrow__bar {
+  flex: none;
+  inline-size: 4px;
+  border-radius: 2px;
+  background: var(--pt-hl-amber-ink);
+}
+
+.pt-hlrow__quote {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-family: var(--pt-font-body);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.pt-hlrow__meta {
+  display: block;
+  margin-block-start: 4px;
+  font-size: 0.75rem;
+  color: var(--pt-ink-muted);
+}
+
+.pt-hlrow__note {
+  display: block;
+  margin-block-start: 4px;
+  font-size: 0.8125rem;
+  color: var(--pt-ink);
+}
+
+.pt-group-title {
+  margin: 12px 8px 4px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--pt-ink-muted);
+}
+
+.pt-thumbs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 4px;
+}
+
+.pt-thumb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  color: var(--pt-ink-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+.pt-thumb[aria-current='true'] {
+  color: var(--pt-accent);
+  border-color: var(--pt-accent);
+}
+
+.pt-thumb__sheet {
+  position: relative;
+  overflow: hidden;
+  inline-size: 100%;
+  background: #fff;
+  box-shadow: var(--pt-sheet-shadow);
+}
+
+/* ── the unanchored tray ───────────────────────────────────────────────────────────────────── */
+
+.pt-tray {
+  border-block-start: 1px solid var(--pt-rule);
+  background: var(--pt-panel-ground);
+}
+
+.pt-tray__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  inline-size: 100%;
+  min-block-size: 44px;
+  padding: 4px 16px;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--pt-ink);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: start;
+}
+
+.pt-tray__body {
+  max-block-size: 40dvh;
+  overflow: auto;
+  border-block-start: 1px solid var(--pt-rule);
+}
+
+/* ── toast ─────────────────────────────────────────────────────────────────────────────────── */
+
+.pt-toast {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: calc(24px + env(safe-area-inset-bottom, 0px));
+  z-index: 70;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.pt-toast__body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-inline-size: calc(100vw - 32px);
+  padding: 8px 8px 8px 16px;
+  font-size: 0.875rem;
+  color: var(--pt-ink);
+  background: var(--pt-ground-raised);
+  border-radius: var(--pt-radius-panel);
+  box-shadow: var(--pt-float-shadow);
+  pointer-events: auto;
+}
+
+/* ── guided ────────────────────────────────────────────────────────────────────────────────── */
+
+.pt-guided__head {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 5;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 0.8125rem;
+  color: var(--pt-ink-muted);
+  background: var(--pt-panel-ground);
+  border-block-end: 1px solid var(--pt-rule);
+}
+
+.pt-guided__sheet {
+  max-inline-size: 44rem;
+  margin: 24px auto 48px;
+  padding: 40px 48px;
+  background: var(--pt-ground-raised);
+  box-shadow: var(--pt-sheet-shadow);
+}
+
+@media (max-width: 639px) {
+  .pt-guided__sheet {
+    margin: 0;
+    padding: 24px 16px 48px;
+    box-shadow: none;
+  }
+}
+
+.pt-guided__sheet .pt-paper {
+  font-size: 1.0625rem;
+  line-height: 1.7;
+}
+
+.pt-guided__sheet .pt-reflowed {
+  position: relative;
+  margin-block-end: 16px;
+}
+
+/* One persistent header says "reflowed"; each paragraph keeps the words for assistive tech. */
+.pt-guided__sheet .pt-reflowed__label {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.pt-guided__sheet .pt-reflowed__marker {
+  float: inline-end;
+  margin: 0 0 0 8px;
+}
+
+.pt-guided__sheet .pt-reflowed__source {
+  min-width: 40px;
+  min-height: 32px;
+  padding-inline: 8px;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pt-guided mark {
+  color: inherit;
+  background: var(--pt-hl-amber);
+  box-shadow: inset 0 -1.5px 0 var(--pt-hl-amber-ink);
+  border-radius: 2px;
+}
+
+.pt-guided mark[data-color='green'] {
+  background: var(--pt-hl-green);
+  box-shadow: inset 0 -1.5px 0 var(--pt-hl-green-ink);
+}
+.pt-guided mark[data-color='blue'] {
+  background: var(--pt-hl-blue);
+  box-shadow: inset 0 -1.5px 0 var(--pt-hl-blue-ink);
+}
+.pt-guided mark[data-color='pink'] {
+  background: var(--pt-hl-pink);
+  box-shadow: inset 0 -1.5px 0 var(--pt-hl-pink-ink);
+}
+.pt-guided mark[data-color='purple'] {
+  background: var(--pt-hl-purple);
+  box-shadow: inset 0 -1.5px 0 var(--pt-hl-purple-ink);
+}
+
+.pt-guided [data-guided-mark] {
+  background: var(--pt-hl-amber);
+  box-shadow: inset 0 -2px 0 var(--pt-hl-amber-ink);
+}
+.pt-guided [data-guided-mark='green'] {
+  background: var(--pt-hl-green);
+  box-shadow: inset 0 -2px 0 var(--pt-hl-green-ink);
+}
+.pt-guided [data-guided-mark='blue'] {
+  background: var(--pt-hl-blue);
+  box-shadow: inset 0 -2px 0 var(--pt-hl-blue-ink);
+}
+.pt-guided [data-guided-mark='pink'] {
+  background: var(--pt-hl-pink);
+  box-shadow: inset 0 -2px 0 var(--pt-hl-pink-ink);
+}
+.pt-guided [data-guided-mark='purple'] {
+  background: var(--pt-hl-purple);
+  box-shadow: inset 0 -2px 0 var(--pt-hl-purple-ink);
+}
+
+.pt-guided [data-guided-flash='true'] {
+  outline: 2px solid var(--pt-accent);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.pt-crop-missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 120px;
+  padding: 16px;
+  font-size: 0.8125rem;
+  color: var(--pt-ink-muted);
+  text-align: center;
+  background: var(--pt-ground);
+  border: 1px dashed var(--pt-rule);
+  border-radius: 8px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
  * reduced motion
  * ───────────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -805,7 +1673,27 @@ span.pt-paper .pt-paper__cite {
  */
 @media (prefers-reduced-motion: reduce) {
   .pt-sheet,
-  .pt-iconbutton--label-tooltip .pt-iconbutton__label {
+  .pt-iconbutton--label-tooltip .pt-iconbutton__label,
+  .pt-btn {
     transition: none;
+  }
+  .pt-seltool,
+  .pt-hlcard,
+  .pt-skeleton__page {
+    animation: none;
+  }
+  /* The flash still happens — it is information, not decoration — but as a steady outline. */
+  .pt-flash {
+    animation: pt-flash-steady 1200ms linear forwards;
+  }
+}
+
+@keyframes pt-flash-steady {
+  0%,
+  99% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
   }
 }

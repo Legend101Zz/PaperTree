@@ -1,168 +1,199 @@
 'use client';
 
 /**
- * reader/SelectionToolbar — the four-item floating toolbar of wireframe §19.2.
+ * reader/SelectionToolbar — what a reader can do with a selection: Highlight, Ask, Send to canvas,
+ * Copy.
  *
- *   ⟨ ✎  [marker] Ask  ⌗  ⇱ ⟩     highlight · ask · to canvas · copy
+ * THE BASELINE DEFECT: IT WAS UNDER THE TEXT LAYER. The toolbar used to render inside the page's
+ * overlay slot, a `pointer-events: none` box, so the toolbar inherited `pointer-events: none` and a
+ * real mouse click on Highlight fell through to the text-layer span underneath — which collapsed
+ * the selection and captured nothing (journey-baseline §B: `elementFromPoint` at the button's
+ * centre was a `<span>`; only the keyboard path worked). It also sat inside `.papertree-page`,
+ * whose `overflow: hidden` clipped it at the page edge.
  *
- * POSITIONED FROM THE IR, NOT FROM A DOM RECT. `irExtent` is the selection's extent in IR points —
- * `PendingSelection.irExtent`, which `useSelectionCapture` derives from `quadsForRange`. Multiplying
- * it by `zoom * userUnit` gives the position inside the page's own scaled coordinate box, so the
- * toolbar moves with the page for free and stays put across a resize. Calling
- * `getBoundingClientRect()` on the selection here would work today and be wrong at the next zoom
- * step, which is precisely the v1 failure this epic is undoing.
+ * NOW IT IS ABOVE EVERYTHING, in one of two places:
  *
- * ABOVE THE SELECTION. Wireframe §19.5: on a tablet the toolbar appears above what is selected so
- * the thumb does not occlude it. It flips below only when the selection is too near the top of the
- * page for "above" to be on screen — which is a decision about the IR's y, not about the viewport.
+ *   `float` — in the scroller's FLOATING LAYER (`VirtualPageList.renderFloating`), a sibling of the
+ *     pages stacked above all of them, at a position computed from the selection's IR extent and
+ *     the page's arithmetic offset. It scrolls with the page for free and is never clipped.
+ *   `sheet` — below 640 px, a bottom action bar PORTALLED to `document.body`: a phone's selection
+ *     sits under the thumb, so the actions go where the thumb is, and never cover the text.
  *
- * THE AI AFFORDANCE CARRIES THE RESERVED MARKER, and it is the SAME one — `DERIVED_MARKER`,
- * imported from `@papertree/ui`. It is never typed as a literal here, not even in this comment:
- * the marker means "this is AI, not the paper" everywhere in the product, and the whole value of a
- * reserved character is that there is exactly one place it comes from. A second copy in a second
- * file is how a reserved mark quietly stops being reserved, and `reader/provenance.spec` greps for
- * exactly that. Inventing a second AI glyph for the toolbar would be the same failure by another
- * route: the marker in the wireframe's "Ask" item IS that mark, deliberately.
+ * `e2e/s4/toolbar-hit-test.spec.ts` asserts the fix the way the baseline found the bug: the element
+ * at the Highlight button's centre IS the button.
  *
- * ASK IS A NON-GOAL FOR EPIC 2. It renders DISABLED, with a title saying so. A button that looks
- * live and does nothing is worse than one that says what it is waiting for.
+ * `onPointerDown` prevents the default on the whole bar: a pointerdown collapses the very
+ * selection the toolbar acts on in WebKit and Blink. Buttons activate on `click` (mouse, touch and
+ * keyboard alike), which fires after that prevented pointerdown with the selection still alive.
+ *
+ * THE ASK BUTTON CARRIES THE RESERVED AI MARKER — the same `DERIVED_MARKER` from `@papertree/ui`,
+ * never typed as a literal: what Ask produces is model output, and the mark says so before the
+ * reader presses it.
  */
 
-import type { ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 import { DERIVED_MARKER } from '@papertree/ui';
-import type { BBox } from '@papertree/document-ir';
 
-/** Wireframe §19.5 — iPad targets are 44x44 pt minimum. Applied on every device, not just touch. */
-const MIN_TARGET_CSS_PX = 44;
-/** Gap between the toolbar and the selection, CSS px. Constant on screen, so it is not scaled. */
-const GAP_CSS_PX = 10;
-/** The toolbar's own height, used only to decide whether "above" fits. */
-const TOOLBAR_HEIGHT_CSS_PX = 52;
+export type ToolbarPlacement =
+  | {
+      readonly kind: 'float';
+      /** Content coordinates (CSS px inside the scroller's content box) of the selection's extent. */
+      readonly extent: { readonly left: number; readonly top: number; readonly right: number; readonly bottom: number };
+      /** The content box's width, to keep the bar inside it. */
+      readonly boundsWidth: number;
+      /** Above the extent (a selection on one page), or below it (the end of one across pages). */
+      readonly prefer?: 'above' | 'below';
+    }
+  | { readonly kind: 'sheet' };
 
 export interface SelectionToolbarProps {
-  /** The selection's extent in IR space. From `PendingSelection.irExtent` — never from the DOM. */
-  readonly irExtent: BBox;
-  readonly zoom: number;
-  readonly userUnit?: number;
+  readonly placement: ToolbarPlacement;
   readonly onHighlight: () => void;
-  readonly onSendToCanvas: () => void;
   readonly onCopy: () => void;
-  /** Epic 3 wires this. Until it does, the Ask button is disabled and says why. */
   readonly onAsk?: () => void;
+  readonly onSendToCanvas?: () => void;
   /**
-   * The Inspector slot of §19.2. Epic 3 owns the panel itself; this is the mounting point, left
-   * deliberately empty so that landing it is an addition rather than a rearrangement.
+   * Why Highlight cannot be used on this selection (the paper is still being read; the selection is
+   * longer than one highlight may hold), or undefined. SHOWN in the bar, not only as a tooltip: a
+   * disabled button with no visible reason is a dead end.
    */
-  readonly inspectorSlot?: ReactNode;
-  readonly className?: string;
+  readonly highlightDisabledReason?: string;
 }
 
-interface ToolbarButtonProps {
-  readonly glyph: string;
-  readonly label: string;
-  readonly onActivate?: (() => void) | undefined;
-  readonly disabled?: boolean;
-  readonly title?: string;
-  readonly marker?: boolean;
-}
+const GAP = 8;
+const EDGE = 8;
+
+const NOTE_ID = 'pt-seltool-note';
 
 function ToolbarButton({
-  glyph,
   label,
   onActivate,
   disabled = false,
   title,
-  marker = false,
-}: ToolbarButtonProps): JSX.Element {
+  describedBy,
+  children,
+  primary = false,
+}: {
+  readonly label: string;
+  readonly onActivate?: (() => void) | undefined;
+  readonly disabled?: boolean;
+  readonly title?: string;
+  readonly describedBy?: string;
+  readonly children: ReactNode;
+  readonly primary?: boolean;
+}): JSX.Element {
   return (
     <button
       type="button"
+      className={`pt-btn${primary ? ' pt-btn--seltool-primary' : ''}`}
       aria-label={label}
+      {...(describedBy === undefined ? {} : { 'aria-describedby': describedBy })}
       title={title ?? label}
-      disabled={disabled}
-      className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 rounded-lg px-2 text-lg text-stone-800 transition-colors hover:bg-stone-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600 disabled:cursor-not-allowed disabled:text-stone-400 disabled:hover:bg-transparent"
-      style={{ touchAction: 'manipulation' }}
-      // Pointer Events first (F2.7). `onClick` is kept ONLY for the keyboard: Enter and Space on a
-      // <button> synthesise a click with `detail === 0` and never fire a pointer event, so without
-      // it the toolbar would be mouse- and touch-only.
-      onPointerUp={() => {
+      disabled={disabled || onActivate === undefined}
+      onClick={() => {
         if (!disabled) onActivate?.();
       }}
-      onClick={(event) => {
-        if (!disabled && event.detail === 0) onActivate?.();
-      }}
     >
-      <span aria-hidden="true" className={marker ? 'font-normal' : undefined}>
-        {glyph}
-      </span>
-      {marker ? <span className="text-sm">Ask</span> : null}
+      {children}
     </button>
   );
 }
 
-export function SelectionToolbar({
-  irExtent,
-  zoom,
-  userUnit = 1,
-  onHighlight,
-  onSendToCanvas,
-  onCopy,
-  onAsk,
-  inspectorSlot,
-  className,
-}: SelectionToolbarProps): JSX.Element {
-  const scale = zoom * userUnit;
-  const centreX = ((irExtent[0] + irExtent[2]) / 2) * scale;
-  const topY = irExtent[1] * scale;
-  const bottomY = irExtent[3] * scale;
-
-  // "Above" unless above would be off the top of the page. Decided from IR y x zoom, so it is the
-  // same decision at every window size — no `window.innerHeight`, no scroll position.
-  const above = topY >= TOOLBAR_HEIGHT_CSS_PX + GAP_CSS_PX;
-
+function Buttons(props: SelectionToolbarProps): JSX.Element {
+  const highlightDisabled = props.highlightDisabledReason !== undefined;
   return (
+    <>
+      <ToolbarButton
+        label="Highlight"
+        onActivate={props.onHighlight}
+        disabled={highlightDisabled}
+        {...(props.highlightDisabledReason === undefined
+          ? {}
+          : { title: props.highlightDisabledReason, describedBy: NOTE_ID })}
+        primary
+      >
+        <span className="pt-seltool__dot" aria-hidden="true" />
+        Highlight
+      </ToolbarButton>
+      <span className="pt-seltool__sep" aria-hidden="true" />
+      <ToolbarButton label="Ask about this passage" onActivate={props.onAsk}>
+        <span aria-hidden="true">{DERIVED_MARKER}</span>
+        Ask
+      </ToolbarButton>
+      <ToolbarButton label="Send to canvas" onActivate={props.onSendToCanvas}>
+        Canvas
+      </ToolbarButton>
+      <ToolbarButton label="Copy" onActivate={props.onCopy}>
+        Copy
+      </ToolbarButton>
+      {props.highlightDisabledReason === undefined ? null : (
+        <p id={NOTE_ID} className="pt-seltool__note">
+          {props.highlightDisabledReason}
+        </p>
+      )}
+    </>
+  );
+}
+
+export function SelectionToolbar(props: SelectionToolbarProps): JSX.Element | null {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+
+  // The bar's OWN box, so it can be kept inside the page column. This measures the toolbar, never
+  // the selection: where the selection is comes from the IR.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el === null) return;
+    const next = { width: el.offsetWidth, height: el.offsetHeight };
+    setSize((current) =>
+      current !== null && current.width === next.width && current.height === next.height ? current : next,
+    );
+  }, [props.placement.kind, props.highlightDisabledReason]);
+
+  const bar = (
     <div
-      className={`pt-selection-toolbar absolute z-30 ${className ?? ''}`}
-      data-placement={above ? 'above' : 'below'}
-      style={{
-        left: centreX,
-        top: above ? topY - GAP_CSS_PX : bottomY + GAP_CSS_PX,
-        transform: above ? 'translate(-50%, -100%)' : 'translate(-50%, 0)',
-        touchAction: 'manipulation',
-      }}
-      // A pointerdown inside the toolbar collapses the very selection the toolbar is acting on in
-      // WebKit and Blink. Preventing the default keeps the selection alive long enough for the
-      // pointerup handler to capture it — without this, every button is a no-op on the first tap.
+      ref={ref}
+      role="toolbar"
+      aria-label="Selection actions"
+      aria-orientation="horizontal"
+      className={[
+        'pt-seltool',
+        props.placement.kind === 'sheet' ? 'pt-seltool--sheet' : '',
+        props.highlightDisabledReason === undefined ? '' : 'pt-seltool--noted',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      data-placement={props.placement.kind}
+      style={props.placement.kind === 'float' ? floatStyle(props.placement, size) : undefined}
+      // Preventing pointerdown also suppresses the compatibility mousedown, whose default action
+      // is what would collapse the selection.
       onPointerDown={(event) => event.preventDefault()}
     >
-      <div
-        role="toolbar"
-        aria-label="Selection actions"
-        aria-orientation="horizontal"
-        className="flex items-center gap-1 rounded-xl border border-stone-200 bg-white/95 p-1 shadow-lg backdrop-blur"
-      >
-        <ToolbarButton glyph="✎" label="Highlight" onActivate={onHighlight} />
-        <ToolbarButton
-          glyph={DERIVED_MARKER}
-          label="Ask about this selection"
-          marker
-          disabled={onAsk === undefined}
-          onActivate={onAsk}
-          title={
-            onAsk === undefined
-              ? 'Ask arrives in Epic 3 (Q&A with provenance). Epic 2 ships the anchoring it will cite.'
-              : 'Ask about this selection'
-          }
-        />
-        <ToolbarButton glyph="⌗" label="Send to canvas" onActivate={onSendToCanvas} />
-        <ToolbarButton glyph="⇱" label="Copy" onActivate={onCopy} />
-      </div>
-
-      {/* §19.2's Inspector. Empty by design until Epic 3 fills it. */}
-      <div data-slot="inspector" className="pt-selection-toolbar__inspector">
-        {inspectorSlot}
-      </div>
+      <Buttons {...props} />
     </div>
   );
+
+  if (props.placement.kind === 'sheet') {
+    if (typeof document === 'undefined') return null;
+    return createPortal(bar, document.body);
+  }
+  return bar;
+}
+
+/** Above the selection, centred on it, kept inside the content column; below it if no room. */
+function floatStyle(
+  placement: Extract<ToolbarPlacement, { kind: 'float' }>,
+  size: { width: number; height: number } | null,
+): React.CSSProperties {
+  const width = size?.width ?? 320;
+  const height = size?.height ?? 48;
+  const centre = (placement.extent.left + placement.extent.right) / 2;
+  const maxLeft = Math.max(EDGE, placement.boundsWidth - width - EDGE);
+  const left = Math.min(maxLeft, Math.max(EDGE, centre - width / 2));
+  const above = placement.extent.top - GAP - height;
+  const below = placement.extent.bottom + GAP;
+  const top = placement.prefer === 'below' ? below : above >= EDGE ? above : below;
+  return { left, top, visibility: size === null ? 'hidden' : 'visible' };
 }

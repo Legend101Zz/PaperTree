@@ -1,7 +1,13 @@
 'use client';
 
 /**
- * reader/Navigator — F2.4. ONE panel, six tabs.
+ * reader/Navigator — F2.4. ONE panel: Outline, Pages, Highlights (and Questions, once S6 mounts it).
+ *
+ * S4: the Notes and Chapters tabs are gone — two placeholder tabs that promised features nothing
+ * delivered (Chapters promised audio, which this release defers). The Pages tab now works: real
+ * thumbnails of the PDF's own pages, each one a jump. The Highlights tab is fed from the reader's
+ * persisted highlights, with each one's colour, note and state, and every row both goes to the
+ * passage and opens it for editing.
  *
  * This replaces `OutlinePanel` + `SmartOutlinePanel` + `HighlightsPanel` + `PDFMinimap`. §18.1's
  * count was twelve competing surfaces, of which three mounted their own `<Document>` instance of
@@ -37,24 +43,15 @@ import type { IndexedDocument } from '@papertree/anchoring';
 
 import { assetSrc } from './assetSrc';
 
-export type NavigatorTab = 'outline' | 'pages' | 'highlights' | 'notes' | 'questions' | 'chapters';
+export type NavigatorTab = 'outline' | 'pages' | 'highlights' | 'questions';
 
-const TAB_ORDER: readonly NavigatorTab[] = [
-  'outline',
-  'pages',
-  'highlights',
-  'notes',
-  'questions',
-  'chapters',
-];
+const TAB_ORDER: readonly NavigatorTab[] = ['outline', 'pages', 'highlights', 'questions'];
 
 const TAB_LABEL: Record<NavigatorTab, string> = {
   outline: 'Outline',
   pages: 'Pages',
   highlights: 'Highlights',
-  notes: 'Notes',
   questions: 'Questions',
-  chapters: 'Chapters',
 };
 
 function isNavigatorTab(value: string): value is NavigatorTab {
@@ -81,7 +78,13 @@ export interface NavigatorHighlight {
   readonly quote: string;
   readonly state: 'anchored' | 'approximate' | 'orphan';
   readonly pageIndex: number | null;
+  /** One of the five highlight colours; the row's bar is drawn in its ink. */
   readonly colour?: string;
+  readonly note?: string | null;
+  /** `saving` / `unsaved` / `session` are said in the row; `saved` is the quiet default. */
+  readonly status?: 'saved' | 'saving' | 'unsaved' | 'session';
+  /** Painted nowhere in Source (it is in the unanchored tray). */
+  readonly unplaced?: boolean;
 }
 
 export interface NavigatorProps {
@@ -100,6 +103,12 @@ export interface NavigatorProps {
   readonly onNavigateToBlock: (blockId: string) => void;
   readonly onNavigateToPage: (pageIndex: number) => void;
   readonly onSelectHighlight?: (highlightId: string) => void;
+  /** Open the highlight's card (colour, note, delete). */
+  readonly onEditHighlight?: (highlightId: string) => void;
+  /** A page's thumbnail, drawn by the caller (the PDF lives above this panel). */
+  readonly renderThumbnail?: (pageIndex: number) => ReactNode;
+  /** S6 mounts its thread list here; the tab is not shown until it does. */
+  readonly questions?: ReactNode;
   readonly open: boolean;
   readonly onClose: () => void;
   /**
@@ -107,7 +116,7 @@ export interface NavigatorProps {
    * it opens"). `push` = it takes width in the layout (desktop).
    */
   readonly layout?: 'sheet' | 'push';
-  readonly resolveAssetSrc?: (uri: string) => string;
+  readonly resolveAssetSrc?: (uri: string) => string | null;
 }
 
 // ─── outline ────────────────────────────────────────────────────────────────────────────────────
@@ -342,9 +351,16 @@ interface RowProps {
   readonly current?: boolean;
   readonly expanded?: boolean;
   readonly label?: string;
+  /**
+   * The row's width class. `w-full` by default; the outline's expand/collapse toggle passes its own
+   * (`w-11`). It is a separate prop because both classes in one list is a tie Tailwind resolves by
+   * stylesheet order, not by position: `w-full` won, the toggle took the whole row and the section
+   * title beside it rendered nowhere (s4-review.md F4).
+   */
+  readonly width?: string;
 }
 
-function Row({ onPress, children, className, style, current, expanded, label }: RowProps): ReactNode {
+function Row({ onPress, children, className, style, current, expanded, label, width = 'w-full' }: RowProps): ReactNode {
   const press = usePressRow(onPress);
   return (
     <button
@@ -355,9 +371,9 @@ function Row({ onPress, children, className, style, current, expanded, label }: 
       {...(label === undefined ? {} : { 'aria-label': label })}
       style={{ ...TAP, ...style }}
       className={[
-        'flex w-full items-center gap-2 rounded-md px-2 text-left text-sm',
-        'hover:bg-gray-100 focus-visible:bg-gray-100 dark:hover:bg-gray-800 dark:focus-visible:bg-gray-800',
-        current === true ? 'bg-amber-50 font-medium dark:bg-amber-500/10' : '',
+        `flex ${width} items-center gap-2 rounded-[10px] px-2 text-left text-sm text-[--pt-ink]`,
+        'hover:bg-[rgb(120_108_90/0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[--pt-focus]',
+        current === true ? 'bg-[--pt-accent-soft] font-medium text-[--pt-accent]' : '',
         className ?? '',
       ].join(' ')}
     >
@@ -381,6 +397,9 @@ export function Navigator({
   onNavigateToBlock,
   onNavigateToPage,
   onSelectHighlight,
+  onEditHighlight,
+  renderThumbnail,
+  questions,
   open,
   onClose,
   layout = 'sheet',
@@ -414,9 +433,12 @@ export function Navigator({
 
   const tabs = useMemo(
     () =>
-      TAB_ORDER.map((id) => ({
+      TAB_ORDER.filter((id) => id !== 'questions' || questions !== undefined).map((id) => ({
         id,
-        label: TAB_LABEL[id],
+        label:
+          id === 'highlights' && highlights.length > 0
+            ? `${TAB_LABEL[id]} ${String(highlights.length)}`
+            : TAB_LABEL[id],
         content:
           id === 'outline' ? (
             <OutlineTab
@@ -433,6 +455,7 @@ export function Navigator({
               activePageIndex={activePageIndex}
               onNavigateToPage={onNavigateToPage}
               resolveAssetSrc={resolveAssetSrc}
+              renderThumbnail={renderThumbnail}
             />
           ) : id === 'highlights' ? (
             <HighlightsTab
@@ -440,23 +463,11 @@ export function Navigator({
               outline={outline}
               doc={doc}
               onSelectHighlight={onSelectHighlight}
+              onEditHighlight={onEditHighlight}
               onNavigateToBlock={onNavigateToBlock}
             />
-          ) : id === 'notes' ? (
-            <EmptyState
-              title="No notes yet"
-              body="A note you write on a selection collects here, next to the passage it came from."
-            />
-          ) : id === 'questions' ? (
-            <EmptyState
-              title="Nothing asked yet"
-              body="Questions you ask about a passage collect here with their answers and the blocks those answers are grounded in."
-            />
           ) : (
-            <EmptyState
-              title="No chapters yet"
-              body="Chapters appear once this paper has been prepared for listening. They follow the section tree, not the page breaks."
-            />
+            questions
           ),
       })),
     [
@@ -470,19 +481,22 @@ export function Navigator({
       activePageIndex,
       onNavigateToPage,
       resolveAssetSrc,
+      renderThumbnail,
       highlights,
       onSelectHighlight,
+      onEditHighlight,
+      questions,
     ],
   );
 
   if (!open) return null;
 
   const panel = (
-    <Panel title="Navigator" onClose={onClose} className="h-full w-[min(360px,86vw)]">
+    <Panel title="Contents" onClose={onClose} className="h-full w-full">
       {/* `Tabs` from `@papertree/ui`: roving tabindex, arrow/Home/End, one mounted panel. Written
-          for exactly these six tabs — reimplementing it here is the duplication §18.1 is about. */}
+          for exactly these tabs — reimplementing it here is the duplication §18.1 is about. */}
       <Tabs
-        label="Navigator sections"
+        label="Contents sections"
         tabs={tabs}
         value={activeTab}
         onChange={select}
@@ -520,8 +534,8 @@ function EmptyState({ title, body }: { readonly title: string; readonly body: st
   // indistinguishable from source" failure wearing a different hat.
   return (
     <div className="px-3 py-10 text-center">
-      <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{title}</p>
-      <p className="mx-auto mt-2 max-w-[34ch] text-[13px] leading-6 text-gray-400">{body}</p>
+      <p className="text-sm font-medium text-[--pt-ink]">{title}</p>
+      <p className="mx-auto mt-2 max-w-[34ch] text-[13px] leading-6 text-[--pt-ink-muted]">{body}</p>
     </div>
   );
 }
@@ -610,19 +624,19 @@ function OutlineGroupRows({
       <Row
         onPress={toggle}
         expanded={expanded}
-        className="text-[11px] font-semibold uppercase tracking-wide text-gray-400"
+        className="text-[13px] font-semibold text-[--pt-ink-muted]"
       >
         <span aria-hidden="true" className="w-3">
           {expanded ? '▾' : '▸'}
         </span>
         <span className="flex-1">{heading}</span>
-        <span className="text-[11px] font-normal normal-case text-gray-400">
+        <span className="pt-num text-[12px] font-normal text-[--pt-ink-muted]">
           {group.leaves.length + group.unlabelled}
         </span>
       </Row>
       {/* The explanation is TEXT, not a `title` attribute: a native tooltip is reachable by neither
           a finger nor a screen reader. */}
-      <p className="px-2 pb-1 text-[11px] leading-4 text-gray-400">{note}</p>
+      <p className="px-2 pb-1 text-[12px] leading-4 text-[--pt-ink-muted]">{note}</p>
       {expanded ? (
         <ul>
           {group.leaves.map((leaf) => (
@@ -634,7 +648,7 @@ function OutlineGroupRows({
                 current={leaf.blockId === activeBlockId}
                 className="pl-7"
               >
-                <span className="w-[72px] shrink-0 text-[11px] uppercase tracking-wide text-gray-400">
+                <span className="w-[72px] shrink-0 text-[11px] text-[--pt-ink-muted]">
                   {leaf.type}
                 </span>
                 <span className="min-w-0 flex-1 truncate">{leaf.label}</span>
@@ -645,7 +659,7 @@ function OutlineGroupRows({
             // `unknown` blocks: hairline rules 0.4–4pt tall, confidence 0.3, no text. There is
             // nothing to label and nothing to draw — but "we found N regions we could not read" is
             // information, so it is counted rather than deleted.
-            <li className="px-2 py-2 pl-7 text-[12px] text-gray-400">
+            <li className="px-2 py-2 pl-7 text-[12px] text-[--pt-ink-muted]">
               + {group.unlabelled} region{group.unlabelled === 1 ? '' : 's'} with no readable text
             </li>
           )}
@@ -688,7 +702,8 @@ function OutlineRow({
             onPress={toggle}
             expanded={expanded}
             label={`${expanded ? 'Collapse' : 'Expand'} ${node.title}`}
-            className="w-11 shrink-0 justify-center text-gray-400"
+            width="w-11"
+            className="shrink-0 justify-center text-[--pt-ink-muted]"
             style={{ marginLeft: depth * 12 }}
           >
             <span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
@@ -696,12 +711,12 @@ function OutlineRow({
         ) : (
           <span aria-hidden="true" className="w-11 shrink-0" style={{ marginLeft: depth * 12 }} />
         )}
-        <Row onPress={navigate} current={isActive}>
+        <Row onPress={navigate} current={isActive} width="min-w-0 flex-1">
           <span className="min-w-0 flex-1 truncate">{node.title}</span>
           {/* The page is a FOOTNOTE to the section, never the organising fact. §19.2: "not 'page 4'
               but '§3.1 Residual Learning · p.4'". */}
           {page === undefined ? null : (
-            <span className="shrink-0 text-[11px] text-gray-400">p.{page + 1}</span>
+            <span className="pt-num shrink-0 text-[12px] text-[--pt-ink-muted]">p. {page + 1}</span>
           )}
         </Row>
       </div>
@@ -730,13 +745,15 @@ function PagesTab({
   activePageIndex,
   onNavigateToPage,
   resolveAssetSrc,
+  renderThumbnail,
 }: {
   readonly pages: readonly NavigatorPage[];
   readonly status: string | undefined;
   readonly partialReason: string | null | undefined;
   readonly activePageIndex: number | undefined;
   readonly onNavigateToPage: (pageIndex: number) => void;
-  readonly resolveAssetSrc: (uri: string) => string;
+  readonly resolveAssetSrc: (uri: string) => string | null;
+  readonly renderThumbnail: ((pageIndex: number) => ReactNode) | undefined;
 }): ReactNode {
   const named = useMemo(() => pagesNamedInPartialReason(partialReason), [partialReason]);
   const isPartial = status === 'partial' || (partialReason !== null && partialReason !== undefined);
@@ -755,18 +772,26 @@ function PagesTab({
         </div>
       ) : null}
 
-      <ul className="grid grid-cols-2 gap-2">
-        {pages.map((page) => (
-          <PageThumb
-            key={page.index}
-            page={page}
-            named={named.has(page.index)}
-            active={page.index === activePageIndex}
-            onNavigateToPage={onNavigateToPage}
-            resolveAssetSrc={resolveAssetSrc}
-          />
-        ))}
-      </ul>
+      {pages.length === 0 ? (
+        <EmptyState
+          title="No pages yet"
+          body="The page list appears as soon as the PDF has opened."
+        />
+      ) : (
+        <ul className="pt-thumbs">
+          {pages.map((page) => (
+            <PageThumb
+              key={page.index}
+              page={page}
+              named={named.has(page.index)}
+              active={page.index === activePageIndex}
+              onNavigateToPage={onNavigateToPage}
+              resolveAssetSrc={resolveAssetSrc}
+              thumbnail={renderThumbnail?.(page.index)}
+            />
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -777,53 +802,34 @@ function PageThumb({
   active,
   onNavigateToPage,
   resolveAssetSrc,
+  thumbnail,
 }: {
   readonly page: NavigatorPage;
   readonly named: boolean;
   readonly active: boolean;
   readonly onNavigateToPage: (pageIndex: number) => void;
-  readonly resolveAssetSrc: (uri: string) => string;
+  readonly resolveAssetSrc: (uri: string) => string | null;
+  readonly thumbnail: ReactNode;
 }): ReactNode {
-  const navigate = useCallback(() => {
-    onNavigateToPage(page.index);
-  }, [onNavigateToPage, page.index]);
-
-  const src = page.imageUri === undefined ? undefined : resolveAssetSrc(page.imageUri);
-  // The aspect ratio comes from `Page.width`/`Page.height` — IR space, already `/Rotate`-applied.
-  // Nothing here measures the DOM; a thumbnail that sized itself from `offsetWidth` would be wrong
-  // on the first paint and wrong again at every zoom.
+  const src = page.imageUri === undefined ? null : resolveAssetSrc(page.imageUri);
+  // The aspect ratio comes from the page's IR size, `/Rotate` already applied — never measured.
   const aspect = page.width > 0 ? (page.height / page.width) * 100 : 129.4;
-
   return (
     <li>
-      <Row
-        onPress={navigate}
-        current={active}
-        label={named ? `Page ${String(page.index + 1)}, named in the parse note` : undefined}
-        className={`flex-col items-stretch border p-1 ${
-          active ? 'border-gray-900 dark:border-gray-100' : 'border-gray-200 dark:border-gray-800'
-        }`}
+      <button
+        type="button"
+        className="pt-thumb w-full"
+        aria-current={active ? 'true' : undefined}
+        aria-label={`Go to page ${String(page.index + 1)}${named ? ', named in the parse note' : ''}`}
+        onClick={() => onNavigateToPage(page.index)}
       >
-        <span
-          className="relative block w-full overflow-hidden rounded-sm bg-gray-100 dark:bg-gray-900"
-          style={{ paddingTop: `${String(aspect)}%` }}
-        >
-          {src === undefined ? (
-            // §19.8 "Parsing": thumbnails fill in progressively. An empty frame is the DESIGNED
-            // state, not a broken image.
-            <span className="absolute inset-0 flex items-center justify-center text-[11px] text-gray-400">
-              rendering…
-            </span>
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element -- a fixture:// or storage URI
-            // resolved by the caller; next/image cannot be configured for either here.
-            <img
-              src={src}
-              alt=""
-              className="absolute inset-0 h-full w-full object-contain"
-              loading="lazy"
-            />
-          )}
+        <span className="pt-thumb__sheet" style={{ paddingTop: `${String(aspect)}%` }}>
+          <span className="absolute inset-0 block">
+            {thumbnail ?? (src === null ? null : (
+              // eslint-disable-next-line @next/next/no-img-element -- a resolved fixture or signed URI
+              <img src={src} alt="" className="h-full w-full object-contain" loading="lazy" />
+            ))}
+          </span>
           {named ? (
             <span
               aria-hidden="true"
@@ -835,14 +841,11 @@ function PageThumb({
             />
           ) : null}
         </span>
-        <span className="mt-1 flex min-h-[20px] items-center justify-between text-[11px] text-gray-400">
-          <span>p.{page.index + 1}</span>
-          {/* "the note mentions this page" is the WEAKEST claim the data supports. `neural-odes`
-              names its GOOD pages; the brief's example names the bad ones. Asserting either
-              polarity would be a guess printed as a fact. */}
-          {named ? <span className="text-amber-700 dark:text-amber-400">in note</span> : null}
+        <span className="pt-num">
+          Page {page.index + 1}
+          {named ? ' · in the parse note' : ''}
         </span>
-      </Row>
+      </button>
     </li>
   );
 }
@@ -852,22 +855,24 @@ function HighlightsTab({
   outline,
   doc,
   onSelectHighlight,
+  onEditHighlight,
   onNavigateToBlock,
 }: {
   readonly highlights: readonly NavigatorHighlight[];
   readonly outline: Outline;
   readonly doc: IndexedDocument;
   readonly onSelectHighlight: ((highlightId: string) => void) | undefined;
+  readonly onEditHighlight: ((highlightId: string) => void) | undefined;
   readonly onNavigateToBlock: (blockId: string) => void;
 }): ReactNode {
-  const { orphans, groups } = useMemo(() => {
-    const orphaned: NavigatorHighlight[] = [];
+  const { unplaced, groups } = useMemo(() => {
+    const notPlaced: NavigatorHighlight[] = [];
     const bySection = new Map<string, NavigatorHighlight[]>();
     const unsectioned: NavigatorHighlight[] = [];
 
     for (const highlight of highlights) {
-      if (highlight.state === 'orphan' || highlight.blockIds.length === 0) {
-        orphaned.push(highlight);
+      if (highlight.unplaced === true) {
+        notPlaced.push(highlight);
         continue;
       }
       const sectionId = highlight.blockIds
@@ -882,53 +887,48 @@ function HighlightsTab({
       else bucket.push(highlight);
     }
 
+    const byPage = (a: NavigatorHighlight, b: NavigatorHighlight): number =>
+      (a.pageIndex ?? 0) - (b.pageIndex ?? 0);
     const sections = Array.from(bySection.entries())
       .sort(
         (a, b) => (doc.byId.get(a[0])?.readingIndex ?? 0) - (doc.byId.get(b[0])?.readingIndex ?? 0),
       )
       .map(([sectionId, items]) => ({
         key: sectionId,
-        title: firstLine(doc.byId.get(sectionId)?.text ?? '') || '(untitled section)',
-        items,
+        title: firstLine(doc.byId.get(sectionId)?.text ?? '') || 'Untitled section',
+        items: [...items].sort(byPage),
       }));
-
     if (unsectioned.length > 0) {
-      // Front matter again: in `neural-odes` a highlight on the title or the abstract belongs to no
-      // section, and dropping it because the tree has no home for it is not an option.
-      sections.unshift({ key: '__front__', title: 'Front matter (no section)', items: unsectioned });
+      // Front matter, and anything the parse did not put in a section: kept, never dropped.
+      sections.unshift({ key: '__front__', title: 'Outside any section', items: unsectioned.sort(byPage) });
     }
-    return { orphans: orphaned, groups: sections };
+    return { unplaced: notPlaced, groups: sections };
   }, [highlights, outline, doc]);
 
   if (highlights.length === 0) {
     return (
       <EmptyState
         title="No highlights yet"
-        body="Select text in Source and choose Highlight. Highlights collect here, grouped by the section they live in."
+        body="Select text on a page and choose Highlight. Your highlights collect here, by section."
       />
     );
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {orphans.length === 0 ? null : (
-        <section aria-label="Orphaned highlights">
-          <h3 className="px-2 text-[11px] font-semibold uppercase tracking-wide text-rose-600 dark:text-rose-400">
-            Orphaned · {orphans.length}
-          </h3>
-          {/* SURFACED, NEVER DELETED. An orphan means the ladder reached T6 — the text this was
-              attached to is not in this parse. That is the user's information to act on, and a
-              re-parse that silently drops annotations is the failure Epic 2 exists to prevent. */}
-          <p className="px-2 pb-1 text-[12px] leading-5 text-gray-400">
-            The passage these were attached to is not in this parse. They are kept with their quote
-            so they can be re-placed by hand.
+    <div className="flex flex-col">
+      {unplaced.length === 0 ? null : (
+        <section aria-label="Highlights that could not be placed">
+          <h3 className="pt-group-title">Could not be placed on the page</h3>
+          <p className="px-2 pb-1 text-[12px] leading-5 text-[--pt-ink-muted]">
+            Each is kept with its quote. The tray at the bottom of the reader says why.
           </p>
           <ul>
-            {orphans.map((highlight) => (
+            {unplaced.map((highlight) => (
               <HighlightRow
                 key={highlight.id}
                 highlight={highlight}
                 onSelectHighlight={onSelectHighlight}
+                onEditHighlight={onEditHighlight}
                 onNavigateToBlock={onNavigateToBlock}
               />
             ))}
@@ -938,8 +938,8 @@ function HighlightsTab({
 
       {groups.map((group) => (
         <section key={group.key} aria-label={group.title}>
-          <h3 className="truncate px-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-            {group.title} · {group.items.length}
+          <h3 className="pt-group-title truncate">
+            {group.title} <span className="pt-num font-normal">({group.items.length})</span>
           </h3>
           <ul>
             {group.items.map((highlight) => (
@@ -947,6 +947,7 @@ function HighlightsTab({
                 key={highlight.id}
                 highlight={highlight}
                 onSelectHighlight={onSelectHighlight}
+                onEditHighlight={onEditHighlight}
                 onNavigateToBlock={onNavigateToBlock}
               />
             ))}
@@ -957,13 +958,22 @@ function HighlightsTab({
   );
 }
 
+const STATUS_TEXT: Record<NonNullable<NavigatorHighlight['status']>, string | null> = {
+  saved: null,
+  saving: 'Saving…',
+  unsaved: 'Not saved',
+  session: 'Kept for this session only',
+};
+
 function HighlightRow({
   highlight,
   onSelectHighlight,
+  onEditHighlight,
   onNavigateToBlock,
 }: {
   readonly highlight: NavigatorHighlight;
   readonly onSelectHighlight: ((highlightId: string) => void) | undefined;
+  readonly onEditHighlight: ((highlightId: string) => void) | undefined;
   readonly onNavigateToBlock: (blockId: string) => void;
 }): ReactNode {
   const target = highlight.blockIds[0];
@@ -971,25 +981,39 @@ function HighlightRow({
     if (onSelectHighlight !== undefined) onSelectHighlight(highlight.id);
     else if (target !== undefined) onNavigateToBlock(target);
   }, [onSelectHighlight, onNavigateToBlock, highlight.id, target]);
+  const status = highlight.status === undefined ? null : STATUS_TEXT[highlight.status];
+  const where = highlight.pageIndex === null ? 'Page unknown' : `Page ${String(highlight.pageIndex + 1)}`;
 
   return (
-    <li>
-      <Row onPress={act} className="items-start py-2">
+    <li className="flex items-start gap-1" data-highlight-row={highlight.id}>
+      <button type="button" className="pt-hlrow min-w-0 flex-1" onClick={act}>
         <span
           aria-hidden="true"
-          className="mt-1 h-4 w-1 shrink-0 rounded-full"
-          style={{ background: highlight.colour ?? '#f59e0b' }}
+          className="pt-hlrow__bar self-stretch"
+          style={{ background: `var(--pt-hl-${highlight.colour ?? 'amber'}-ink)` }}
         />
         <span className="min-w-0 flex-1">
-          <span className="line-clamp-3 block text-[13px] leading-5">{highlight.quote}</span>
-          <span className="mt-0.5 block text-[11px] text-gray-400">
-            {highlight.pageIndex === null ? 'page unknown' : `p.${highlight.pageIndex + 1}`}
-            {/* "approximate" is a DIFFERENT CLAIM from "anchored" and the two must never look the
-                same — the resolver's tier says how it was found and the UI is obliged to repeat it. */}
-            {highlight.state === 'approximate' ? ' · approximate' : ''}
+          <span className="pt-hlrow__quote">{highlight.quote}</span>
+          {highlight.note === null || highlight.note === undefined || highlight.note === '' ? null : (
+            <span className="pt-hlrow__note">{highlight.note}</span>
+          )}
+          <span className="pt-hlrow__meta pt-num">
+            {where}
+            {highlight.state === 'approximate' ? ', placed approximately' : ''}
+            {status === null ? '' : `, ${status.toLowerCase()}`}
           </span>
         </span>
-      </Row>
+      </button>
+      {onEditHighlight === undefined ? null : (
+        <button
+          type="button"
+          className="pt-btn shrink-0"
+          aria-label={`Edit highlight: ${highlight.quote.slice(0, 60)}`}
+          onClick={() => onEditHighlight(highlight.id)}
+        >
+          Edit
+        </button>
+      )}
     </li>
   );
 }

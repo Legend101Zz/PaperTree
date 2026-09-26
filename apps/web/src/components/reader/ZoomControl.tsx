@@ -34,7 +34,12 @@ export type ZoomMode =
   | { readonly kind: 'fit-width' }
   | { readonly kind: 'fit-page' };
 
-export const ZOOM_PRESETS: readonly number[] = [0.5, 0.75, 1, 1.5, 2, 4];
+/**
+ * The steps "+" and "−" walk. Fine near 100 % (S4: the baseline's "+" jumped straight from 100 % to
+ * 150 %, and — worse — lost the reader's place doing it; the place is now kept by
+ * `VirtualPageList`'s reading position).
+ */
+export const ZOOM_PRESETS: readonly number[] = [0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 3, 4];
 export const MIN_ZOOM = 0.25;
 export const MAX_ZOOM = 6;
 
@@ -227,13 +232,9 @@ function pressHandlers(action: () => void): {
   };
 }
 
-const BUTTON_CLASS =
-  'inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md border ' +
-  'border-neutral-300 bg-white px-2 text-sm font-medium text-neutral-800 ' +
-  'disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ' +
-  'focus-visible:outline-blue-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100';
+const BUTTON_CLASS = 'pt-btn';
 
-const ACTIVE_CLASS = 'border-blue-600 bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-200';
+const ACTIVE_CLASS = '';
 
 export interface ZoomControlProps {
   readonly mode: ZoomMode;
@@ -254,7 +255,6 @@ export function ZoomControl({ mode, zoom, onModeChange, className }: ZoomControl
   const zoomOut = useMemo(() => pressHandlers(() => setScale(nextZoomDown(zoom))), [setScale, zoom]);
   const zoomIn = useMemo(() => pressHandlers(() => setScale(nextZoomUp(zoom))), [setScale, zoom]);
   const fitWidth = useMemo(() => pressHandlers(() => onModeChange(FIT_WIDTH)), [onModeChange]);
-  const fitPage = useMemo(() => pressHandlers(() => onModeChange(FIT_PAGE)), [onModeChange]);
 
   // A native <select> rather than a bespoke menu: it is keyboard- and screen-reader-correct for
   // free, and on touch it opens the platform picker instead of a 20px-tall dropdown.
@@ -267,7 +267,7 @@ export function ZoomControl({ mode, zoom, onModeChange, className }: ZoomControl
 
   return (
     <div
-      className={joinClasses('flex items-center gap-1', className)}
+      className={joinClasses('pt-zoom', className)}
       role="group"
       aria-label="Zoom"
       style={{ touchAction: 'manipulation' }}
@@ -287,7 +287,7 @@ export function ZoomControl({ mode, zoom, onModeChange, className }: ZoomControl
       </label>
       <select
         id="papertree-zoom-select"
-        className={joinClasses(BUTTON_CLASS, 'px-3')}
+        className="pt-zoom__select"
         value={selectValue}
         onChange={(event) => {
           const value = event.target.value;
@@ -296,13 +296,13 @@ export function ZoomControl({ mode, zoom, onModeChange, className }: ZoomControl
           else if (value !== 'custom') setScale(Number(value));
         }}
       >
+        <option value="fit-width">Fit width</option>
+        <option value="fit-page">Fit page</option>
         {ZOOM_PRESETS.map((preset) => (
           <option key={preset} value={String(preset)}>
             {Math.round(preset * 100)}%
           </option>
         ))}
-        <option value="fit-width">Fit width</option>
-        <option value="fit-page">Fit page</option>
         {selectValue === 'custom' ? <option value="custom">{percent}%</option> : null}
       </select>
 
@@ -318,25 +318,20 @@ export function ZoomControl({ mode, zoom, onModeChange, className }: ZoomControl
 
       <button
         type="button"
-        className={joinClasses(BUTTON_CLASS, mode.kind === 'fit-width' ? ACTIVE_CLASS : undefined)}
+        className={joinClasses(BUTTON_CLASS, 'pt-zoom__fit', ACTIVE_CLASS)}
         aria-label="Fit width"
         aria-pressed={mode.kind === 'fit-width'}
         {...fitWidth}
       >
-        Width
-      </button>
-      <button
-        type="button"
-        className={joinClasses(BUTTON_CLASS, mode.kind === 'fit-page' ? ACTIVE_CLASS : undefined)}
-        aria-label="Fit page"
-        aria-pressed={mode.kind === 'fit-page'}
-        {...fitPage}
-      >
-        Page
+        Fit width
       </button>
 
-      {/* A live region, not a tooltip: the current zoom must be readable without hovering. */}
-      <output className="min-w-[52px] px-1 text-sm tabular-nums text-neutral-600 dark:text-neutral-300" aria-live="polite">
+      {/* A live region, not a tooltip: the current zoom must be readable without hovering. It is
+          what a fit mode currently works out to, shown beside the select on wider screens. */}
+      <output
+        className={mode.kind === 'scale' ? 'pt-sr-only' : 'pt-zoom__pct pt-num'}
+        aria-live="polite"
+      >
         {percent}%
       </output>
     </div>

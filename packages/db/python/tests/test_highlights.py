@@ -257,6 +257,8 @@ def test_an_id_held_by_another_owner_is_a_conflict_not_a_crash(env: Env) -> None
     env.db.put_paper(other.owner, document)
     record = copy.deepcopy(env.record)
     record["doc"]["paperId"] = document["paper_id"]
+    # §6: the textStreamId names the paper too, so a record for the other paper names it there.
+    record["doc"]["textStreamId"] = f"api/{document['paper_id']}/g1/0.1.0"
     with pytest.raises(HighlightConflict):
         env.db.create_highlight(
             other.owner,
@@ -440,7 +442,12 @@ def test_integers_past_sqlite_range_are_rejected_before_any_sql(env: Env) -> Non
     assert _rows(env.file) == NO_ROWS
 
     # Non-vacuous, and the bound is SQLite's own: 2**63-1 is stored and read like any value.
-    at_edge = _with_selector(env.record, "PageSelector", index=SQLITE_INTEGER_MAX)
+    # Both page fields: §6 requires the PageSelector and the ShapeSelector to name one page.
+    at_edge = _with_selector(
+        _with_selector(env.record, "PageSelector", index=SQLITE_INTEGER_MAX),
+        "ShapeSelector",
+        pageIndex=SQLITE_INTEGER_MAX,
+    )
     assert _create(env, anchors=[AnchorIn(at_edge)], resolutions=[]).created
     [listed] = env.db.list_highlights(env.owner, env.paper_id, SQLITE_INTEGER_MAX)
     assert listed.anchors[0].resolution is None
@@ -482,3 +489,116 @@ def test_the_stored_record_never_carries_a_resolution(env: Env) -> None:
     finally:
         conn.close()
     assert "resolution" not in stored and stored == env.record
+
+
+# ── contracts.md §6: what a NEW user highlight's anchor must carry (S4) ──────────────────────
+
+
+def _without(record: dict[str, Any], kind: str) -> dict[str, Any]:
+    changed = copy.deepcopy(record)
+    changed["selectors"] = [s for s in changed["selectors"] if s["type"] != kind]
+    return changed
+
+
+def _stream(record: dict[str, Any], text_stream_id: str) -> dict[str, Any]:
+    changed = copy.deepcopy(record)
+    changed["doc"]["textStreamId"] = text_stream_id
+    return changed
+
+
+def _page_text(record: dict[str, Any]) -> dict[str, Any]:
+    """The same capture as the pdf.js path writes it: Page + TextQuote + Shape, no IR offsets."""
+    changed = _stream(record, "pdfjs@5.7.284/page-text")
+    changed["selectors"] = [
+        s
+        for s in changed["selectors"]
+        if s["type"] in {"PageSelector", "TextQuoteSelector", "ShapeSelector"}
+    ]
+    return changed
+
+
+def _refused(env: Env, record: dict[str, Any]) -> HighlightRejected:
+    with pytest.raises(HighlightRejected) as refused:
+        _create(env, anchors=[AnchorIn(record)], resolutions=[])
+    assert _rows(env.file) == NO_ROWS
+    return refused.value
+
+
+def test_a_new_user_anchor_must_carry_a_page_selector(env: Env) -> None:
+    """§6: "User highlights must include PageSelector, TextQuoteSelector and a ShapeSelector with
+    >= 1 quad". §2.4's ``anchor_incomplete`` named only the last two, so a record without a page
+    was stored (S0 db-report §6.6, api-report §10.2: enforced nowhere)."""
+    refused = _refused(env, _without(env.record, "PageSelector"))
+    assert refused.code == "anchor_incomplete"
+    assert "PageSelector" in str(refused)
+
+
+def test_the_page_selector_and_the_shape_name_the_same_page(env: Env) -> None:
+    """The quads are IR space OF ONE PAGE; a PageSelector naming another page is a record that
+    would paint on one page and be listed, linked and jumped-to on another."""
+    record = _with_selector(env.record, "PageSelector", index=3)
+    assert _refused(env, record).code == "validation_failed"
+
+
+@pytest.mark.parametrize(
+    ("text_stream_id", "code"),
+    [
+        ("fixture/1.0.0", "validation_failed"),  # N22: what every API paper used to be labelled
+        ("", "validation_failed"),
+        ("api/ppr_8XZBZEK3A5T716GZKHVFF7TKMP/g0/0.1.0", "validation_failed"),  # no generation 0
+        ("api/ppr_8XZBZEK3A5T716GZKHVFF7TKMP/1/0.1.0", "validation_failed"),
+        ("api/ppr_8XZBZEK3A5T716GZKHVFF7TKMP/g1/", "validation_failed"),
+        ("api/ppr_OTHERPAPER0000000000000000/g1/0.1.0", "anchor_mismatch"),  # another paper's
+        ("pdfjs/page-text", "validation_failed"),
+        ("pdfjs@5.7.284/page", "validation_failed"),
+        # 0005 writes this for rows it converted; a client must never mint one, because a
+        # legacy-0001 record is the one kind `upgrade_legacy_anchor` may overwrite later.
+        ("legacy-0001", "validation_failed"),
+    ],
+)
+def test_text_stream_id_takes_one_of_the_section_6_forms(
+    env: Env, text_stream_id: str, code: str
+) -> None:
+    assert _refused(env, _stream(env.record, text_stream_id)).code == code
+
+
+def test_a_page_text_capture_is_stored_and_carries_no_ir_offsets(env: Env) -> None:
+    """The pdf.js path (§6: ``pdfjs@<version>/page-text``) is accepted with Page + TextQuote +
+    Shape only — and REFUSED when it also carries a Block or TextPosition selector, which are
+    offsets into the IR's text stream that such a capture does not have."""
+    record = _page_text(env.record)
+    assert _create(env, anchors=[AnchorIn(record)], resolutions=[]).created
+    [listed] = env.db.list_highlights(env.owner, env.paper_id, 1)
+    assert listed.anchors[0].anchor == record
+    env.db.delete_highlight(env.owner, env.paper_id, HID)
+
+    block = next(s for s in env.record["selectors"] if s["type"] == "BlockSelector")
+    position = next(s for s in env.record["selectors"] if s["type"] == "TextPositionSelector")
+    for extra in (block, position):
+        mixed = copy.deepcopy(record)
+        mixed["selectors"] = [extra, *mixed["selectors"]]
+        assert _refused(env, mixed).code == "validation_failed"
+
+
+def test_an_upgrade_is_held_to_the_same_rules(tmp_path: Path) -> None:
+    """``upgrade_legacy_anchor`` writes a NEW record over a legacy row, so the replacement must
+    meet §6 like any new one: a page, a quote, a quad, and a non-legacy textStreamId."""
+    shape = build_demo_shape(tmp_path)
+    assert shape.legacy is not None
+    user_id, paper_id = shape.legacy
+    with open_database(shape.file) as db:
+        db.migrate()
+        owner = db.owner_for(user_id)
+        full = copy.deepcopy(load_capture_anchor())
+        full["id"] = LEGACY_ANCHOR
+        for bad, code in (
+            (_without(full, "PageSelector"), "anchor_incomplete"),
+            (_stream(full, "legacy-0001"), "validation_failed"),
+            (_stream(full, "fixture/1.0.0"), "validation_failed"),
+        ):
+            with pytest.raises(HighlightRejected) as refused:
+                db.upgrade_legacy_anchor(owner, PaperId(paper_id), LEGACY_ANCHOR, bad)
+            assert refused.value.code == code
+        [still] = db.list_highlights(owner, PaperId(paper_id), 1)
+        assert still.anchors[0].anchor["doc"]["textStreamId"] == "legacy-0001"
+        db.upgrade_legacy_anchor(owner, PaperId(paper_id), LEGACY_ANCHOR, full)

@@ -192,5 +192,157 @@ export function irPolygonToSvgPoints(polygon: readonly Point[]): string {
   return polygon.map((p) => `${p[0]},${p[1]}`).join(' ');
 }
 
+/**
+ * One pdf.js text item, as `getTextContent()` returns it — the typesetter's numbers, not the DOM's.
+ *
+ * `transform` is the item's text matrix in RAW PDF user space (`[a, b, c, d, e, f]`, `e`/`f` the
+ * baseline origin, bottom-left, y up); `width` is the advance width and `height` the font height,
+ * both in the same space. `ascent`/`descent` are the font's metrics as fractions of the font height
+ * (`textContent.styles[item.fontName]`); absent, pdf.js's own text-layer defaults apply.
+ */
+export interface PdfTextItemGeometry {
+  readonly str: string;
+  readonly transform: readonly number[];
+  readonly width: number;
+  readonly height: number;
+  readonly ascent?: number;
+  readonly descent?: number;
+  /**
+   * The CSS font family pdf.js's text layer sets this item's span in
+   * (`textContent.styles[item.fontName].fontFamily`), for an `AdvanceMeasure`.
+   */
+  readonly fontFamily?: string;
+}
+
+/**
+ * The advance width of `text` set in `item`'s text-layer font, in any unit (only ratios are used),
+ * or null when it cannot be measured (no canvas, no font family).
+ *
+ * WHY. pdf.js's text layer sets each item's string in a fallback font and scales the span so that
+ * `measureText(str)` spans exactly the item's advance (`TextLayer.#layout`, `--scale-x`). A glyph's
+ * place inside the item is therefore the MEASURED fraction of the string, not its code-point
+ * fraction: in "mil" the "m" is ~70 % of the advance, not 33 %. A code-point ratio put the last
+ * line of a selection ~one character past its end (+4.5 px at 125 %, +7.2 px at 200 % on YOLO;
+ * s4-review.md F5). The browser supplies the measure (a canvas); where there is none, the
+ * code-point ratio of contracts.md §6 applies.
+ */
+export type AdvanceMeasure = (item: PdfTextItemGeometry, text: string) => number | null;
+
+/** How far into the item's advance code point `at` falls, 0..1. */
+function advanceFraction(
+  item: PdfTextItemGeometry,
+  at: number,
+  length: number,
+  measure: AdvanceMeasure | undefined,
+): number {
+  if (at <= 0) return 0;
+  if (at >= length) return 1;
+  if (measure !== undefined) {
+    const whole = measure(item, item.str);
+    if (whole !== null && Number.isFinite(whole) && whole > 0) {
+      const part = measure(item, Array.from(item.str).slice(0, at).join(''));
+      if (part !== null && Number.isFinite(part) && part >= 0) return Math.min(1, part / whole);
+    }
+  }
+  return at / length;
+}
+
+/**
+ * The glyph band's floor: ascent 0.85 and descent 0.2 of the font height. pdf.js's text layer
+ * defaults to 0.8/0.2; 0.85 reaches Latin ascenders and accents (0.68–0.8 em in the corpus fonts)
+ * with a hair to spare. MEASURED on YOLO at 125 % against the browser's own selection rects: the
+ * font's declared ascent (0.678) put the paint's top 3.5 px under the selection's, a 0.8 floor 2.0
+ * px, 0.85 1.4 px. The rest is the browser's fallback font (its content box reaches ~0.96 em), not
+ * the PDF's glyphs, so the band is not stretched further to meet it.
+ */
+const DEFAULT_ASCENT = 0.85;
+const DEFAULT_DESCENT = -0.2;
+
+function codePointLength(text: string): number {
+  return Array.from(text).length;
+}
+
+/**
+ * The IR quad covering code points `[from, to)` of one pdf.js text item — contracts.md §6's
+ * pdf.js capture path ("the item `transform` and `width`, interpolated by the range's character
+ * ratio inside the item, through `bridge.ts`").
+ *
+ * GLYPH GEOMETRY, NEVER A DOM RECT. The box is built in PDF space from the item's own matrix and
+ * then taken through `pdfRectToIr`, the same frame conversion `stampTextLayer` uses, so it is the
+ * same at every zoom, window size and device pixel ratio.
+ *
+ * Vertically it spans the LINE'S GLYPH BAND about the baseline: at least the floor below (ascent
+ * 0.85, descent 0.2 of the font height), widened to the font's declared ascent and descent when
+ * they are larger. A font descriptor's Ascent is often the cap height (Times: 0.678 in YOLO), which
+ * would paint a band that clips accents and superscripts and sits visibly inside the reader's own
+ * selection highlight. Horizontally it is the advance width, narrowed to the selected fraction
+ * inside the item — by the text layer's font advance when `measure` is given (`AdvanceMeasure`),
+ * else by code point.
+ *
+ * Axis-aligned text (the matrix's shear terms are zero) is interpolated exactly as described.
+ * Rotated text (an axis label, the arXiv margin stamp) gets the whole item's box: the selected
+ * fraction of a rotated run is not worth a second implementation of the rotation here.
+ */
+export function pdfItemRangeToIrQuad(
+  frame: PageFrame,
+  item: PdfTextItemGeometry,
+  from: number,
+  to: number,
+  measure?: AdvanceMeasure,
+): BBox | null {
+  const [a, b, c, d, e, f] = item.transform as [number, number, number, number, number, number];
+  if (![a, b, c, d, e, f].every((v) => typeof v === 'number' && Number.isFinite(v))) return null;
+  const length = codePointLength(item.str);
+  if (length === 0 || !(item.width > 0)) return null;
+  const lo = Math.max(0, Math.min(length, from));
+  const hi = Math.max(lo, Math.min(length, to));
+  if (hi <= lo) return null;
+
+  const height = item.height > 0 ? item.height : Math.hypot(c, d);
+  const ascent = Math.max(
+    DEFAULT_ASCENT,
+    item.ascent !== undefined && item.ascent > 0 ? item.ascent : 0,
+  );
+  const descent = Math.min(
+    DEFAULT_DESCENT,
+    item.descent !== undefined && item.descent < 0 ? item.descent : 0,
+  );
+
+  const axisAligned = Math.abs(b) < 1e-6 && Math.abs(c) < 1e-6;
+  if (!axisAligned) {
+    // The whole item's advance box, corners through the rotation, re-extented.
+    const dir = Math.hypot(a, b) > 0 ? [a / Math.hypot(a, b), b / Math.hypot(a, b)] : [1, 0];
+    const up = [-(dir[1] as number), dir[0] as number];
+    const corners: [number, number][] = [];
+    for (const along of [0, item.width]) {
+      for (const across of [descent * height, ascent * height]) {
+        corners.push([
+          e + (dir[0] as number) * along + (up[0] as number) * across,
+          f + (dir[1] as number) * along + (up[1] as number) * across,
+        ]);
+      }
+    }
+    const ir = corners.map((point) => normalisePoint(frame, point));
+    return [
+      Math.min(...ir.map((p) => p[0])),
+      Math.min(...ir.map((p) => p[1])),
+      Math.max(...ir.map((p) => p[0])),
+      Math.max(...ir.map((p) => p[1])),
+    ];
+  }
+
+  // `a` is negative for text set right-to-left by a mirrored matrix; the advance runs the other way.
+  const sign = a < 0 ? -1 : 1;
+  const x0 = e + sign * item.width * advanceFraction(item, lo, length, measure);
+  const x1 = e + sign * item.width * advanceFraction(item, hi, length, measure);
+  const flip = d < 0 ? -1 : 1;
+  return pdfRectToIr(frame, [
+    Math.min(x0, x1),
+    f + flip * descent * height,
+    Math.max(x0, x1),
+    f + flip * ascent * height,
+  ]);
+}
+
 /** Round-trip helpers, re-exported so consumers never reach for a second implementation. */
 export { pdfToViewport, viewportToPdf };

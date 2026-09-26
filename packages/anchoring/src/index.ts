@@ -22,3 +22,4 @@ export * from './capture.js';
 export * from './lineband.js';
 export * from './bridge.js';
 export * from './guided.js';
+export * from './paint.js';

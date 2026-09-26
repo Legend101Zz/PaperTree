@@ -21,6 +21,13 @@ written, so every caller — the HTTP route today, an import tool tomorrow — g
 :class:`~papertree_db.errors.HighlightRejected` whose ``code`` is the contract's error code, so the
 route maps it to a 422 without re-deriving anything. The full JSON-schema check of the record
 (``contracts/anchor/anchor-v1.schema.json``) is the API's job (S0 wave 2) and is not duplicated.
+
+WHAT S4 ADDED: contracts.md §6's rules for a NEW user record (a create, or what an upgrade writes),
+which S0 left enforced nowhere (db-report §6.6, api-report §10.2): a ``PageSelector`` beside the
+quote and the quad (``anchor_incomplete``), a ``doc.textStreamId`` in one of the release's forms —
+``api/<this paper>/g<N>/<parser_version>`` or ``pdfjs@<version>/page-text``, never a client-minted
+``legacy-0001`` — no IR offsets on a page-text capture, and one page named by the Page and Shape
+selectors (``_check_new_record``).
 """
 
 from __future__ import annotations
@@ -55,6 +62,16 @@ SQLITE_INTEGER_MAX: Final = 2**63 - 1
 #: What 0005 writes into ``doc.textStreamId`` for a row it converted from the 0001 shape. Only those
 #: may be replaced through :meth:`HighlightsMixin.upgrade_legacy_anchor` (contracts.md §1.1).
 LEGACY_TEXT_STREAM_ID: Final = "legacy-0001"
+
+#: contracts.md §6: the ``doc.textStreamId`` of a capture that used IR offsets,
+#: ``api/<paper_id>/g<generation>/<parser_version>``. The generation is 1..SQLITE_INTEGER_MAX
+#: (19 digits at most; the bound itself is checked in code) and the paper must be THIS paper.
+API_TEXT_STREAM: Final = re.compile(r"^api/(?P<paper>[^/\s]+)/g(?P<gen>[1-9][0-9]{0,18})/[^/\s]+$")
+#: contracts.md §6: the ``doc.textStreamId`` of a capture made from pdf.js item geometry.
+PAGE_TEXT_STREAM: Final = re.compile(r"^pdfjs@[0-9A-Za-z.+-]+/page-text$")
+#: Offsets into the IR's text stream. A pdf.js page-text capture has none to give (§6: "included
+#: only when the capture was IR-stamped"), so a page-text record carrying one is refused.
+IR_OFFSET_SELECTORS: Final = frozenset({"BlockSelector", "TextPositionSelector"})
 
 #: contracts.md §0: client-minted ids. ``highlight_id`` must match the prefixed form; ``anchor.id``
 #: may also be a bare UUID (``crypto.randomUUID()``, which is what ``captureAnchor`` is given).
@@ -783,19 +800,25 @@ def _prepare_anchor(
         ),
         None,
     )
-    if require_complete and (quote is None or shape is None):
+    page = next((s for s in selectors if s["type"] == "PageSelector"), None)
+    if require_complete and (quote is None or shape is None or page is None):
+        # contracts.md §6: "User highlights must include PageSelector, TextQuoteSelector and a
+        # ShapeSelector with >= 1 quad". §2.4's `anchor_incomplete` named only the last two; the
+        # page is the same kind of absence, so it gets the same code (S4; listed in the report).
         missing = [
             name
             for name, found in (
+                ("a PageSelector", page),
                 ("a TextQuoteSelector", quote),
                 ("a ShapeSelector with >= 1 quad", shape),
             )
             if found is None
         ]
         raise HighlightRejected("anchor_incomplete", f"{where} lacks {' and '.join(missing)}")
+    if require_complete:
+        _check_new_record(record, selectors, where, paper_id=paper_id, page=page, shape=shape)
 
     page_index: int | None = None
-    page = next((s for s in selectors if s["type"] == "PageSelector"), None)
     for candidate in (
         page.get("index") if page else None,
         shape.get("pageIndex") if shape else None,
@@ -824,6 +847,62 @@ def _prepare_anchor(
         quote_exact=None if quote is None else str(quote["exact"]),
         page_index=page_index,
     )
+
+
+def _check_new_record(
+    record: Mapping[str, Any],
+    selectors: Sequence[Mapping[str, Any]],
+    where: str,
+    *,
+    paper_id: str,
+    page: Mapping[str, Any] | None,
+    shape: Mapping[str, Any] | None,
+) -> None:
+    """contracts.md §6's rules for a NEW user record (a create, or the record an upgrade writes).
+
+    - ``doc.textStreamId`` is ``api/<this paper>/g<N>/<parser_version>`` (an IR-offset capture) or
+      ``pdfjs@<version>/page-text`` (a pdf.js item-geometry capture). ``legacy-0001`` is 0005's
+      label for rows it converted and is refused here: it is the one kind of record
+      :meth:`HighlightsMixin.upgrade_legacy_anchor` may overwrite, so a client that could mint one
+      could later replace its own anchor wholesale.
+    - A page-text capture carries no Block or TextPosition selector (offsets it does not have).
+    - The PageSelector and the ShapeSelector name the same page: the quads are one page's IR space.
+    """
+    doc = record.get("doc")
+    stream = doc.get("textStreamId") if isinstance(doc, Mapping) else None
+    if not isinstance(stream, str):
+        raise HighlightRejected("validation_failed", f"{where}.doc.textStreamId must be a string")
+    api = API_TEXT_STREAM.fullmatch(stream)
+    if api is not None:
+        if int(api["gen"]) > SQLITE_INTEGER_MAX:
+            raise HighlightRejected(
+                "validation_failed", f"{where}.doc.textStreamId names an impossible generation"
+            )
+        if api["paper"] != paper_id:
+            raise HighlightRejected(
+                "anchor_mismatch", f"{where}.doc.textStreamId names another paper's parse"
+            )
+    elif PAGE_TEXT_STREAM.fullmatch(stream) is not None:
+        carried = sorted({str(s["type"]) for s in selectors} & IR_OFFSET_SELECTORS)
+        if carried:
+            raise HighlightRejected(
+                "validation_failed",
+                f"{where}: a pdf.js page-text capture carries no IR offsets, but has {carried}",
+            )
+    else:
+        raise HighlightRejected(
+            "validation_failed",
+            f"{where}.doc.textStreamId must be 'api/<paper_id>/g<generation>/<parser_version>' "
+            f"or 'pdfjs@<version>/page-text', got {stream!r}",
+        )
+    index = page.get("index") if page is not None else None
+    page_of_shape = shape.get("pageIndex") if shape is not None else None
+    if _is_int(index) and _is_int(page_of_shape) and index != page_of_shape:
+        raise HighlightRejected(
+            "validation_failed",
+            f"{where}: the PageSelector (page {index}) and the ShapeSelector (page "
+            f"{page_of_shape}) must name the same page",
+        )
 
 
 def _check_resolution(item: object, where: str, *, anchor_ids: set[str]) -> ResolutionIn:
