@@ -7,8 +7,8 @@
  *           `tools` allowlist, or `defaultTools: []` — must fail the suite.
  *   G1–G7   the host guards: the idle watchdog, the retry veto, the seen-handle filter, the
  *           pre-prompt history rule, the tool-call cap, the narration rule, the raw-error redaction.
- *   G8–G10  from the review: the idle watchdog's reset on every event, the delivered 413, and no
- *           tool step after the first delta.
+ *   G8–G13  from the review: the idle watchdog's reset on every event, the delivered 413, no tool
+ *           step after the first delta, `expandPromptTemplates: false`, the bounded timer limits.
  *
  * An edit that does not match EXACTLY once is itself a failure (a mutant that silently changed
  * nothing would "pass" and prove nothing).
@@ -112,6 +112,20 @@ export const MUTANTS: readonly Mutant[] = [
     file: 'src/run.ts',
     find: '        if (this.finalText.length > 0) {\n          this.refused.add(event.toolCallId);',
     replace: '        if (false) {\n          this.refused.add(event.toolCallId);',
+  },
+  {
+    id: 'G11',
+    what: '`expandPromptTemplates: false` dropped from prompt() (review R8)',
+    file: 'src/session.ts',
+    find: 'await this.session.prompt(text, PROMPT_OPTIONS);',
+    replace: 'await this.session.prompt(text);',
+  },
+  {
+    id: 'G13',
+    what: 'no bound on the timer limits (a deadline_ms past 2^31 - 1 ends the stream without done)',
+    file: 'src/contract.ts',
+    find: 'if (request.limits[name] > MAX_TIMER_MS) {',
+    replace: 'if (false) {',
   },
 ];
 

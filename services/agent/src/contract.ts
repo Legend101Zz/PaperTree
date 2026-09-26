@@ -130,6 +130,13 @@ export const PROMPT_FOR_KIND: Readonly<Record<Kind, PromptVersion>> = {
   summary: 'summary-v1',
 };
 
+/**
+ * The longest delay Node's timers take (2^31 - 1 ms, about 24.8 days). The schema sets no maximum;
+ * a longer `deadline_ms` makes `AbortSignal.timeout` throw and a longer `idle_ms` fires at once
+ * (TimeoutOverflowWarning), so both are refused before the stream starts (review should-fix).
+ */
+export const MAX_TIMER_MS = 2_147_483_647;
+
 export type Validation =
   | { readonly ok: true; readonly request: RunRequest }
   | { readonly ok: false; readonly detail: string };
@@ -154,6 +161,14 @@ export function validateRunRequest(body: unknown): Validation {
     };
   }
   const request = body as RunRequest;
+  for (const name of ['deadline_ms', 'idle_ms'] as const) {
+    if (request.limits[name] > MAX_TIMER_MS) {
+      return {
+        ok: false,
+        detail: `limits.${name}: must be at most ${String(MAX_TIMER_MS)} (the longest timer Node can set)`,
+      };
+    }
+  }
   if (PROMPT_FOR_KIND[request.kind] !== request.prompt_version) {
     return {
       ok: false,

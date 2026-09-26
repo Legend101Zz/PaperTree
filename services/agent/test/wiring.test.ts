@@ -16,7 +16,7 @@ import { after, before, describe, test } from 'node:test';
 
 import { BootError, createAgentApp } from '../src/app.ts';
 import { ConfigError, environmentProblems, readConfig } from '../src/config.ts';
-import { TOOL_NAMES } from '../src/contract.ts';
+import { MAX_TIMER_MS, TOOL_NAMES } from '../src/contract.ts';
 import { createLogger } from '../src/log.ts';
 import { createPaperSession, type PaperSession } from '../src/session.ts';
 import { createPaperTools } from '../src/tools.ts';
@@ -112,6 +112,24 @@ describe('createPaperSession(): the only createAgentSession caller', () => {
       assert.ok(prompt.startsWith('PaperTree wiring test prompt.'), prompt);
       assert.ok(!prompt.includes(process.cwd()), 'the process cwd never reaches the prompt');
     } finally {
+      s.dispose();
+    }
+  });
+
+  test('prompt() always passes {expandPromptTemplates: false} to Pi (must-fix 7: Pi defaults to true)', async () => {
+    // Inert today (the empty ResourceLoader loads no template, skill or extension), so this is
+    // asserted where the wrapper hands the prompt to Pi: every run prompts through this method.
+    const s = await session();
+    const calls: Array<[string, unknown]> = [];
+    const original = s.session.prompt;
+    s.session.prompt = async (text: string, options?: unknown) => {
+      calls.push([text, options]);
+    };
+    try {
+      await s.prompt('/explain the passage');
+      assert.deepEqual(calls, [['/explain the passage', { expandPromptTemplates: false }]]);
+    } finally {
+      s.session.prompt = original;
       s.dispose();
     }
   });
@@ -388,6 +406,16 @@ describe('HTTP (§3.2)', () => {
         ),
         /tool\.base_url: must end with this run's run_id/,
       ],
+      // Schema-valid (the schema has no maximum) but past what a Node timer can hold: before the
+      // bound, the first ended the stream after `run` with no `done` (AbortSignal.timeout threw).
+      [
+        request(11, (b) => (b['limits']['deadline_ms'] = 5_000_000_000)),
+        /^limits\.deadline_ms: must be at most 2147483647/,
+      ],
+      [
+        request(12, (b) => (b['limits']['idle_ms'] = 3_000_000_000)),
+        /^limits\.idle_ms: must be at most 2147483647/,
+      ],
     ];
     for (const [b, detail] of cases) {
       const r = await postRun(agent.url, b);
@@ -395,6 +423,33 @@ describe('HTTP (§3.2)', () => {
       const json = r.json as Record<string, unknown>;
       assert.equal(json['code'], 'validation_failed');
       assert.match(String(json['detail']), detail);
+    }
+  });
+
+  test('limits at the timer bound are accepted, run to done, and overflow no timer', async () => {
+    const warnings: string[] = [];
+    const onWarning = (w: Error): void => {
+      warnings.push(w.name);
+    };
+    process.on('warning', onWarning);
+    try {
+      const r = await postRun(
+        agent.url,
+        request(13, (b) => {
+          b['limits']['deadline_ms'] = MAX_TIMER_MS;
+          b['limits']['idle_ms'] = MAX_TIMER_MS;
+        }),
+      );
+      assert.equal(r.status, 200);
+      assert.equal(r.events.at(-1)?.event, 'done');
+      assert.equal(r.events.at(-1)?.data['status'], 'complete');
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      assert.deepEqual(
+        warnings.filter((w) => w === 'TimeoutOverflowWarning'),
+        [],
+      );
+    } finally {
+      process.off('warning', onWarning);
     }
   });
 

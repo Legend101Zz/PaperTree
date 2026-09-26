@@ -486,13 +486,16 @@ class Run {
     });
     deps.log.redact(request.tool.token);
     this.sse.event('run', { run_id: request.run_id, model: MODEL_LABEL, sdk: SDK_LABEL });
-    const ping = setInterval(() => this.sse.ping(), deps.pingMs);
-    const deadline = AbortSignal.timeout(limits.deadline_ms);
-    const stop = AbortSignal.any([deadline, this.clientGone]);
     const onStop = (): void => this.hostAbort(this.clientGone.aborted ? 'client' : 'deadline');
-    stop.addEventListener('abort', onStop, { once: true });
+    let ping: NodeJS.Timeout | undefined;
+    let stop: AbortSignal | undefined;
     let promptError: unknown = null;
+    // Everything after `run` is inside the try, so whatever fails, the stream still ends with `done`
+    // and no timer is left behind (the limits are also bounded at validation, contract.ts).
     try {
+      ping = setInterval(() => this.sse.ping(), deps.pingMs);
+      stop = AbortSignal.any([AbortSignal.timeout(limits.deadline_ms), this.clientGone]);
+      stop.addEventListener('abort', onStop, { once: true });
       const tools = createPaperTools({
         baseUrl: request.tool.base_url,
         token: request.tool.token,
@@ -550,7 +553,7 @@ class Run {
       this.settled = true;
       clearTimeout(this.idleTimer);
       clearInterval(ping);
-      stop.removeEventListener('abort', onStop);
+      stop?.removeEventListener('abort', onStop);
     }
     const done = this.done(promptError);
     this.sse.event('done', { ...done });
