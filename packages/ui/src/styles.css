@@ -1364,6 +1364,18 @@ span.pt-paper .pt-paper__cite {
   }
 }
 
+/* Wide screens: the drawer takes its own column and the document narrows beside it, instead of
+   covering the page's left edge (s4-review.md F10). Below 1024 px it floats over the page, and
+   below 640 px it is a bottom sheet. */
+@media (min-width: 1024px) {
+  .pt-drawer {
+    position: relative;
+    inset: auto;
+    z-index: auto;
+    flex: 0 0 auto;
+  }
+}
+
 .pt-drawer .pt-panel {
   block-size: 100%;
   border: 0;

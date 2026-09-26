@@ -183,7 +183,7 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
     }
 
     // ── the Navigator lists them ──
-    await page.getByRole('button', { name: 'Navigator' }).click();
+    await page.getByRole('button', { name: /^Contents/ }).click();
     await page.getByRole('tab', { name: /Highlights/ }).click();
     await expect(page.locator('[data-highlight-row]')).toHaveCount(3);
     await page.screenshot({ path: shot('b04-navigator-highlights-1440.png') });
@@ -239,7 +239,7 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
     expect(worst).toBeLessThanOrEqual(0.5);
     await reveal(page, 'We reframe object');
     await page.screenshot({ path: shot('b06-reloaded-1440.png') });
-    await page.getByRole('button', { name: 'Navigator' }).click();
+    await page.getByRole('button', { name: /^Contents/ }).click();
     await page.getByRole('tab', { name: /Highlights/ }).click();
     await expect(page.locator('[data-highlight-row]')).toHaveCount(3);
     for (const id of [a, b, c])
@@ -247,7 +247,7 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
     await page.keyboard.press('Escape');
 
     // ── focusAnchor: a Navigator row scrolls to the passage and flashes it 1.2 s ──
-    await page.getByRole('button', { name: 'Navigator' }).click();
+    await page.getByRole('button', { name: /^Contents/ }).click();
     await page.getByRole('tab', { name: /Highlights/ }).click();
     await page.locator(`[data-highlight-row="${b}"] .pt-hlrow`).click();
     const flash = page.locator('svg [data-flash="true"] polygon');
@@ -475,7 +475,7 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
     const mHit = await hitTest(mobile, 'Highlight');
     expect(mHit.hit).toBe('button');
     await mobile.screenshot({ path: shot('b14-select-390.png') });
-    await mobile.getByRole('button', { name: 'Navigator' }).click();
+    await mobile.getByRole('button', { name: /^Contents/ }).click();
     await mobile.getByRole('tab', { name: /Highlights/ }).click();
     await mobile.screenshot({ path: shot('b15-navigator-390.png') });
     await mobile.keyboard.press('Escape');

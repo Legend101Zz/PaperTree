@@ -44,6 +44,11 @@ export interface UnanchoredTrayItem {
   readonly anchor: Anchor;
   readonly resolution: Resolution;
   readonly highlightId?: string;
+  /**
+   * How many OTHER passages of the same highlight are still painted. Delete removes the whole
+   * highlight (a highlight's anchors are one record, §2.4), so the button says so when there are.
+   */
+  readonly placedElsewhere?: number;
 }
 
 export interface UnanchoredTrayProps {
@@ -99,6 +104,7 @@ function Row({
 }): JSX.Element {
   const quote = quoteOf(item.anchor);
   const pageIndex = pageOf(item);
+  const placedElsewhere = item.placedElsewhere ?? 0;
   return (
     <li
       className="mx-auto max-w-[44rem] border-b border-[--pt-rule] px-4 py-3 last:border-b-0"
@@ -132,10 +138,17 @@ function Row({
             className="pt-btn pt-btn--danger"
             onClick={() => onForget(item.anchor.id)}
           >
-            Delete highlight
+            {placedElsewhere > 0 ? 'Delete the whole highlight' : 'Delete highlight'}
           </button>
         )}
       </div>
+      {placedElsewhere > 0 && onForget !== undefined ? (
+        <p className="m-0 mt-2 text-[0.8125rem] leading-relaxed text-[--pt-ink-muted]">
+          {placedElsewhere === 1
+            ? 'The rest of this highlight is still on the page; deleting removes it too.'
+            : `The other ${String(placedElsewhere)} passages of this highlight are still on the page; deleting removes them too.`}
+        </p>
+      ) : null}
     </li>
   );
 }
@@ -151,9 +164,10 @@ export function UnanchoredTray({
   const count = items.length;
   const summary = useMemo(
     () =>
+      // Counted in PASSAGES (anchors): one highlight can hold several, and only some may be lost.
       count === 1
-        ? '1 highlight could not be placed on the page'
-        : `${String(count)} highlights could not be placed on the page`,
+        ? '1 highlighted passage could not be placed on the page'
+        : `${String(count)} highlighted passages could not be placed on the page`,
     [count],
   );
   if (count === 0) return null;

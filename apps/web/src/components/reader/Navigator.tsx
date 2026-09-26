@@ -351,9 +351,16 @@ interface RowProps {
   readonly current?: boolean;
   readonly expanded?: boolean;
   readonly label?: string;
+  /**
+   * The row's width class. `w-full` by default; the outline's expand/collapse toggle passes its own
+   * (`w-11`). It is a separate prop because both classes in one list is a tie Tailwind resolves by
+   * stylesheet order, not by position: `w-full` won, the toggle took the whole row and the section
+   * title beside it rendered nowhere (s4-review.md F4).
+   */
+  readonly width?: string;
 }
 
-function Row({ onPress, children, className, style, current, expanded, label }: RowProps): ReactNode {
+function Row({ onPress, children, className, style, current, expanded, label, width = 'w-full' }: RowProps): ReactNode {
   const press = usePressRow(onPress);
   return (
     <button
@@ -364,7 +371,7 @@ function Row({ onPress, children, className, style, current, expanded, label }: 
       {...(label === undefined ? {} : { 'aria-label': label })}
       style={{ ...TAP, ...style }}
       className={[
-        'flex w-full items-center gap-2 rounded-[10px] px-2 text-left text-sm text-[--pt-ink]',
+        `flex ${width} items-center gap-2 rounded-[10px] px-2 text-left text-sm text-[--pt-ink]`,
         'hover:bg-[rgb(120_108_90/0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[--pt-focus]',
         current === true ? 'bg-[--pt-accent-soft] font-medium text-[--pt-accent]' : '',
         className ?? '',
@@ -485,11 +492,11 @@ export function Navigator({
   if (!open) return null;
 
   const panel = (
-    <Panel title="Navigator" onClose={onClose} className="h-full w-full">
+    <Panel title="Contents" onClose={onClose} className="h-full w-full">
       {/* `Tabs` from `@papertree/ui`: roving tabindex, arrow/Home/End, one mounted panel. Written
-          for exactly these six tabs — reimplementing it here is the duplication §18.1 is about. */}
+          for exactly these tabs — reimplementing it here is the duplication §18.1 is about. */}
       <Tabs
-        label="Navigator sections"
+        label="Contents sections"
         tabs={tabs}
         value={activeTab}
         onChange={select}
@@ -695,7 +702,8 @@ function OutlineRow({
             onPress={toggle}
             expanded={expanded}
             label={`${expanded ? 'Collapse' : 'Expand'} ${node.title}`}
-            className="w-11 shrink-0 justify-center text-[--pt-ink-muted]"
+            width="w-11"
+            className="shrink-0 justify-center text-[--pt-ink-muted]"
             style={{ marginLeft: depth * 12 }}
           >
             <span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
@@ -703,7 +711,7 @@ function OutlineRow({
         ) : (
           <span aria-hidden="true" className="w-11 shrink-0" style={{ marginLeft: depth * 12 }} />
         )}
-        <Row onPress={navigate} current={isActive}>
+        <Row onPress={navigate} current={isActive} width="min-w-0 flex-1">
           <span className="min-w-0 flex-1 truncate">{node.title}</span>
           {/* The page is a FOOTNOTE to the section, never the organising fact. §19.2: "not 'page 4'
               but '§3.1 Residual Learning · p.4'". */}

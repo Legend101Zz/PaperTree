@@ -830,7 +830,7 @@ function ReaderWorkspaceView(props: ViewProps) {
 
       <div className="relative flex min-h-0 flex-1">
         {props.navigatorOpen && doc !== null ? (
-          <aside className="pt-drawer" aria-label="Navigator">
+          <aside className="pt-drawer" aria-label="Contents">
             <NavigatorSlot
               doc={doc}
               highlights={navigatorHighlights}
@@ -870,7 +870,12 @@ function ReaderWorkspaceView(props: ViewProps) {
 
       {doc === null || unplaced.length === 0 ? null : (
         <UnanchoredTray
-          items={unplaced}
+          items={unplaced.map((item) => ({
+            ...item,
+            placedElsewhere: new Set(
+              painted.filter((p) => p.highlightId === item.highlightId).map((p) => p.key),
+            ).size,
+          }))}
           sourceHash={doc.sourceHash}
           onJumpToPage={(pageIndex) => props.onJumpToPage(pageIndex)}
           onForget={(anchorId) => {
@@ -918,10 +923,12 @@ function ReaderToolbarShell({
         <span aria-hidden="true">←</span>
         <span className="hidden sm:inline">Library</span>
       </a>
+      {/* The accessible name STARTS WITH the visible label (WCAG 2.5.3, s4-review.md F9): a
+          speech user says "Contents", and the panel it opens is titled the same. */}
       <button
         type="button"
         className="pt-btn"
-        aria-label="Navigator"
+        aria-label={highlightCount > 0 ? `Contents, ${String(highlightCount)} highlights` : 'Contents'}
         aria-expanded={navigatorOpen}
         aria-pressed={navigatorOpen}
         disabled={!navigatorAvailable}
@@ -929,7 +936,11 @@ function ReaderToolbarShell({
         onClick={onNavigatorToggle}
       >
         Contents
-        {highlightCount > 0 ? <span className="pt-num text-[--pt-ink-muted]">{highlightCount}</span> : null}
+        {highlightCount > 0 ? (
+          <span className="pt-num text-[--pt-ink-muted]" aria-hidden="true">
+            {highlightCount}
+          </span>
+        ) : null}
       </button>
       <h1 className="pt-reader__title" title={title}>
         {title}
