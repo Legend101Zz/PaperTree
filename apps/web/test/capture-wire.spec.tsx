@@ -24,18 +24,33 @@
  * BACKGROUND browser tab: `visibilityState: "hidden"` starves rAF and `RenderTask.promise` never
  * resolves. That is an environment property, not a bug, and it cost an hour to establish once.
  *
- * Everything downstream of pdf.js is REAL: the real `PdfPage`, the real `stampTextLayer` doing the
- * real IR arithmetic, the real `useSelectionCapture`, the real `SelectionToolbar`, the real
- * `captureAnchor` and the real `resolveAnchor`. The fake `TextLayer` emits the same `textDivs`
- * array pdf.js emits, so the stamping under test is the stamping that ships.
+ * Everything downstream of pdf.js is REAL: the real `PdfDocumentProvider` (hoisted above the pane
+ * since S4, as `ReaderWorkspace` mounts it), the real `PdfPage`, the real `stampTextLayer`, the real
+ * `useSelectionCapture`, the real `SelectionToolbar`, the real `captureAnchor` /
+ * `capturePageTextAnchor`. The fake `TextLayer` emits the same `textDivs` array pdf.js emits.
+ *
+ * S4 ADDITIONS: Highlight hands the WORKSPACE a capture (it persists it), activated by a CLICK — the
+ * mouse path that the baseline's text layer swallowed; Ask reaches `openExplain`; and a selection in
+ * an item the IR did not stamp is captured from item geometry (`pdfjs@…/page-text`) instead of the
+ * removed `locateByText` guess.
  */
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { indexDocument, type Anchor, type IndexedBlock, type IndexedDocument, type PaperSource } from '@papertree/anchoring';
+import {
+  indexDocument,
+  type Anchor,
+  type IndexedBlock,
+  type IndexedDocument,
+  type PaperSource,
+  type ShapeSelector,
+} from '@papertree/anchoring';
 
+import { ReaderActionsProvider, type ReaderActions } from '@/components/reader/actions';
+import { PdfDocumentProvider } from '@/components/reader/PdfDocumentProvider';
 import { SourcePane } from '@/components/reader/SourcePane';
+import type { SelectionCapture } from '@/components/reader/useSelectionCapture';
 
 /* ─────────────────────────── the pdf.js fake, and only pdf.js ─────────────────────────── */
 
@@ -79,6 +94,7 @@ class FakeTextLayer {
 vi.mock('@/lib/pdf/worker', () => ({
   getPdfjs: () =>
     Promise.resolve({
+      version: '5.7.284',
       TextLayer: FakeTextLayer,
       getDocument: () => ({
         promise: Promise.resolve({
@@ -167,6 +183,52 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+
+function renderPane(
+  doc: IndexedDocument,
+  overrides: {
+    readonly onCreateHighlight?: (capture: SelectionCapture) => void;
+    readonly onViewportResize?: (size: { width: number; height: number }) => void;
+    readonly actions?: Partial<ReaderActions>;
+  } = {},
+) {
+  const actions: ReaderActions = {
+    openExplain: overrides.actions?.openExplain ?? (() => undefined),
+    sendToCanvas: overrides.actions?.sendToCanvas ?? (async () => undefined),
+    focusAnchor: overrides.actions?.focusAnchor ?? (() => undefined),
+  };
+  return render(
+    <PdfDocumentProvider src="fixture://paper.pdf">
+      <ReaderActionsProvider value={actions}>
+        <SourcePane
+          doc={doc}
+          zoom={1}
+          highlights={[]}
+          onCreateHighlight={overrides.onCreateHighlight ?? (() => undefined)}
+          highlightUnavailableReason={null}
+          onActivateHighlight={() => undefined}
+          activeHighlightId={null}
+          flash={null}
+          narrow={false}
+          onViewportResize={overrides.onViewportResize ?? (() => undefined)}
+          onSelectionChange={() => undefined}
+          documentRef={{ current: null }}
+          initialPosition={null}
+          onPositionChange={() => undefined}
+        />
+      </ReaderActionsProvider>
+    </PdfDocumentProvider>,
+  );
+}
+
+async function stampedSpan(block: IndexedBlock): Promise<HTMLElement> {
+  return waitFor(() => {
+    const found = document.querySelector(`[data-block-id="${block.id}"][data-cp-start]`);
+    if (found === null) throw new Error('text layer not stamped yet');
+    return found as HTMLElement;
+  });
+}
+
 describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () => {
   let doc: IndexedDocument;
   let target: IndexedBlock;
@@ -181,96 +243,98 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
     );
     if (found === undefined) throw new Error('fixture has no multi-span paragraph');
     target = found;
-
   });
 
   it('selecting text in the paper surfaces the selection toolbar', async () => {
-    render(
-      <SourcePane
-        doc={doc}
-        pdfSource="fixture://paper.pdf"
-        zoom={1}
-        anchors={[]}
-        onAnchorCaptured={() => undefined}
-        documentRef={{ current: null }}
-        onViewportResize={() => undefined}
-        onSelectionChange={() => undefined}
-      />,
-    );
-
-    const span = await waitFor(() => {
-      const found = document.querySelector(`[data-block-id="${target.id}"]`);
-      if (found === null) throw new Error('text layer not stamped yet');
-      return found as HTMLElement;
-    });
-
-    // The stamp is the precondition, and it is asserted rather than assumed: without it the hook
-    // silently falls back to `locateByText` and this test would still pass while measuring less.
+    renderPane(doc);
+    const span = await stampedSpan(target);
+    // The stamp is the precondition, asserted rather than assumed.
     expect(span.getAttribute('data-cp-start')).not.toBeNull();
+    expect(span.getAttribute('data-item-index')).not.toBeNull();
 
     selectWithin(span);
-
-    expect(await screen.findByRole('toolbar', { name: 'Selection actions' })).toBeTruthy();
+    const toolbar = await screen.findByRole('toolbar', { name: 'Selection actions' });
+    // NOT inside the page's overlay slot (pointer-events: none, overflow clipped): the baseline bug.
+    expect(toolbar.closest('[data-papertree-overlay-slot]')).toBeNull();
+    expect(toolbar.closest('[data-papertree-floating]')).not.toBeNull();
   });
 
   it('reports the scroller box upward, so a fit-zoom mode has something to resolve against', async () => {
-    // The seam that broke: `onViewportResize` was declared on `SourcePaneProps`, forwarded to the
-    // scroller, and never supplied by the shell — so `resolveZoom` saw a container of zero and
-    // "fit width" clamped to MIN_ZOOM, rendering a 25% page with no error anywhere. The prop is now
-    // REQUIRED, which makes the shell side a compile error; this covers the scroller side.
     const sizes: { width: number; height: number }[] = [];
-    render(
-      <SourcePane
-        doc={doc}
-        pdfSource="fixture://paper.pdf"
-        zoom={1}
-        anchors={[]}
-        onAnchorCaptured={() => undefined}
-        documentRef={{ current: null }}
-        onViewportResize={(size) => sizes.push({ ...size })}
-        onSelectionChange={() => undefined}
-      />,
-    );
-
+    renderPane(doc, { onViewportResize: (size) => sizes.push({ ...size }) });
     await waitFor(() => {
       expect(sizes.length, 'the scroller never reported its box').toBeGreaterThan(0);
     });
-    // happy-dom lays nothing out, so the NUMBERS are zero and asserting on them would be theatre.
-    // That the call happens at all is the property that was missing.
     expect(sizes[0]).toHaveProperty('width');
     expect(sizes[0]).toHaveProperty('height');
   });
 
-  it('pressing Highlight stores an anchor that resolves back to the selected block', async () => {
-    const captured: Anchor[] = [];
-    render(
-      <SourcePane
-        doc={doc}
-        pdfSource="fixture://paper.pdf"
-        zoom={1}
-        anchors={[]}
-        onAnchorCaptured={(anchor) => captured.push(anchor)}
-        documentRef={{ current: null }}
-        onViewportResize={() => undefined}
-        onSelectionChange={() => undefined}
-      />,
-    );
-
-    const span = await waitFor(() => {
-      const found = document.querySelector(`[data-block-id="${target.id}"]`);
-      if (found === null) throw new Error('not stamped');
-      return found as HTMLElement;
-    });
+  it('a CLICK on Highlight hands the workspace anchors on the selected block, with item-geometry quads', async () => {
+    const captured: SelectionCapture[] = [];
+    renderPane(doc, { onCreateHighlight: (capture) => captured.push(capture) });
+    const span = await stampedSpan(target);
 
     selectWithin(span);
-    const highlight = await screen.findByRole('button', { name: /highlight/i });
-    fireEvent.pointerUp(highlight);
+    fireEvent.click(await screen.findByRole('button', { name: 'Highlight' }));
 
-    // THE assertion of this file: the callback that was dead now fires, with a real anchor.
     await waitFor(() => {
       expect(captured.length).toBeGreaterThan(0);
     });
-    expect(JSON.stringify(captured[0])).toContain(target.id);
+    const anchor = captured[0]?.anchor as Anchor;
+    expect(JSON.stringify(anchor)).toContain(target.id);
+    expect(anchor.doc.textStreamId).toBe('capture-wire.spec');
+    const types = anchor.selectors.map((s) => s.type);
+    expect(types).toEqual(expect.arrayContaining(['BlockSelector', 'PageSelector', 'TextQuoteSelector', 'ShapeSelector']));
+    // The quads are the SELECTED item's box, not the block polygon (the 17x over-paint).
+    const shape = anchor.selectors.find((s): s is ShapeSelector => s.type === 'ShapeSelector') as ShapeSelector;
+    const [bx0, , bx1] = target.bbox;
+    const area = (q: readonly number[]) => ((q[2] ?? 0) - (q[0] ?? 0)) * ((q[3] ?? 0) - (q[1] ?? 0));
+    const selectedArea = shape.quads.reduce((sum, q) => sum + area(q), 0);
+    expect(selectedArea).toBeLessThan(area(target.bbox));
+    for (const quad of shape.quads) {
+      expect(quad[0]).toBeGreaterThanOrEqual(bx0 - 1);
+      expect(quad[2]).toBeLessThanOrEqual(bx1 + 1);
+    }
+  });
+
+  it('Ask sends the captured anchor and the quote to openExplain', async () => {
+    const asked: { anchor: Anchor; quote: string }[] = [];
+    renderPane(doc, { actions: { openExplain: (input) => asked.push(input) } });
+    const span = await stampedSpan(target);
+    selectWithin(span);
+    fireEvent.click(await screen.findByRole('button', { name: 'Ask about this passage' }));
+    await waitFor(() => expect(asked).toHaveLength(1));
+    expect(asked[0]?.quote).toBe(span.textContent);
+    expect(JSON.stringify(asked[0]?.anchor)).toContain(target.id);
+  });
+
+  it('an item the IR did not stamp is captured from item geometry, not guessed', async () => {
+    // One extra item on the target's page that belongs to no IR block (a figure label, say).
+    const page = target.pageIndex;
+    const height = PAGE_SIZES.get(page)?.height ?? 792;
+    ITEMS_BY_PAGE.get(page)?.push({ str: 'conv 7x7', transform: [9, 0, 0, 9, 20, height - 20], width: 30, height: 9 });
+    const captured: SelectionCapture[] = [];
+    renderPane(doc, { onCreateHighlight: (capture) => captured.push(capture) });
+    const label = await waitFor(() => {
+      const found = Array.from(document.querySelectorAll<HTMLElement>('[data-item-index]')).find(
+        (el) => el.textContent === 'conv 7x7',
+      );
+      if (found === undefined) throw new Error('label not rendered yet');
+      return found;
+    });
+    expect(label.getAttribute('data-block-id')).toBeNull();
+
+    selectWithin(label);
+    fireEvent.click(await screen.findByRole('button', { name: 'Highlight' }));
+    await waitFor(() => expect(captured.length).toBeGreaterThan(0));
+    const anchor = captured[0]?.anchor as Anchor;
+    expect(anchor.doc.textStreamId).toBe('pdfjs@5.7.284/page-text');
+    expect(anchor.selectors.map((s) => s.type)).toEqual(['PageSelector', 'TextQuoteSelector', 'ShapeSelector']);
+    const shape = anchor.selectors.find((s): s is ShapeSelector => s.type === 'ShapeSelector') as ShapeSelector;
+    // Inside the item's own box: x 20..50, baseline at IR y 20, 9 pt high (0.85 up, 0.2 down).
+    expect(shape.quads).toHaveLength(1);
+    const [x0, y0, x1, y1] = shape.quads[0] as readonly number[];
+    expect([x0, y0, x1, y1].map((v) => Math.round((v ?? 0) * 1000) / 1000)).toEqual([20, 12.35, 50, 21.8]);
   });
 });
 
