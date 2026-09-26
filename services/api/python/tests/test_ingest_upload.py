@@ -22,7 +22,9 @@ from test_ingest_helpers import (
     CORPUS,
     FETCH_HINT,
     GARBAGE_PDF,
+    UNCOUNTABLE_PDF,
     drain,
+    encrypted_pdf,
     library,
     row_for,
     sql,
@@ -221,6 +223,56 @@ def test_library_lists_pending_and_failed(tmp_path: Path) -> None:
         (stored,) = sql(h.settings, "SELECT error FROM jobs WHERE job_id = ?", (bad["job_id"],))
         assert stored["error"] == "[pdf_unreadable] FileDataError: Failed to open stream"
         assert "FileDataError" not in json.dumps(library(h.client, token))
+
+
+@pytest.mark.parametrize(
+    ("case", "page_count", "reason"),
+    [
+        ("uncountable", None, "RuntimeError: code=7: Invalid number of pages"),
+        ("encrypted", 1, "the PDF needs a password to open"),
+    ],
+)
+def test_a_pdf_pymupdf_opens_but_cannot_read_is_accepted_and_fails_unreadable_at_once(
+    tmp_path: Path, case: str, page_count: int | None, reason: str
+) -> None:
+    """S1 review MF1 + should-fix 2. Both files OPEN in PyMuPDF; then one cannot count its pages
+    and the other needs a password. §2.2 allows this route 202/400/413/415 only, and a file the
+    parser cannot read is the job's `pdf_unreadable`, final on attempt 1 (the bytes will not
+    change).
+
+    WATCHED FAILING at `4ed8f05`: `uncountable` answered 500 `internal` (the `page_count` read sat
+    outside `_page_count`'s guard; the log's `where` was `extra.py:page_count_fz:135`);
+    `encrypted` was accepted, then its parse failed `ValueError: document closed or encrypted`,
+    coded `internal` and rescheduled with backoff, so the row still read `queued`."""
+    data = UNCOUNTABLE_PDF if case == "uncountable" else encrypted_pdf()
+    with harness(tmp_path) as h:
+        token = register(h.client, "reader@example.com")
+        accepted = upload(h.client, token, data, name=f"{case}.pdf")
+        assert accepted.status_code == 202, accepted.text
+        body = accepted.json()
+        assert (body["created"], body["paper"]["processing"], body["paper"]["page_count"]) == (
+            True,
+            "queued",
+            page_count,
+        )
+        (owned,) = sql(h.settings, "SELECT page_count, byte_size FROM paper_owners")
+        assert (owned["page_count"], owned["byte_size"]) == (page_count, len(data))
+
+        drain(h.settings)
+        row = row_for(h.client, token, body["paper_id"])
+        assert row["processing"] == "failed"
+        assert row["job"] is not None
+        assert (row["job"]["state"], row["job"]["attempt"], row["job"]["error_code"]) == (
+            "dead_letter",
+            1,
+            "pdf_unreadable",
+        )
+        (job,) = sql(h.settings, "SELECT error FROM jobs")
+        assert job["error"].startswith("[pdf_unreadable] ") and reason in job["error"], job["error"]
+        # The original is still the user's to open, and nothing internal reached the wire.
+        served = h.client.get(f"/papers/{body['paper_id']}/file", headers=auth(token))
+        assert (served.status_code, served.content) == (200, data)
+        assert "Error" not in json.dumps(library(h.client, token))
 
 
 def test_dead_letter_upload_can_be_retried(tmp_path: Path) -> None:

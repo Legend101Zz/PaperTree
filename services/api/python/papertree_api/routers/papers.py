@@ -149,14 +149,22 @@ async def _read_upload(request: Request, cap: int) -> tuple[bytes, str | None]:
 
 def _page_count(raw: bytes) -> int | None:
     """contracts.md §2.2: from ONE PyMuPDF open of the bytes already in memory (MEASURED 0.19-0.58
-    ms). None when PyMuPDF cannot open them: the upload is still accepted, and the parse job says
-    why it cannot read them (`pdf_unreadable`), which is where the library shows it."""
+    ms). None when PyMuPDF cannot open them OR cannot count their pages: the upload is still
+    accepted, and the parse job says why it cannot read them (`pdf_unreadable`), which is where
+    the library shows it.
+
+    Opening is not the only read that can fail. A page tree PyMuPDF opens but cannot walk
+    (`/Count 999999999 /Kids[]`) raises a bare `RuntimeError('code=7: Invalid number of pages')`
+    from `page_count` itself, and before the S1 review that read sat outside the guard: a 132-byte
+    upload was a 500 (review MF1). `ValueError` is PyMuPDF's other structural refusal."""
     try:
         document = pymupdf.open(stream=raw, filetype="pdf")
     except (RuntimeError, ValueError):
         return None
     try:
         return int(document.page_count)
+    except (RuntimeError, ValueError):
+        return None
     finally:
         document.close()
 

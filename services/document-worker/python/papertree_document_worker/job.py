@@ -40,9 +40,11 @@ before it.
 
 ERROR CODES (``JobErrorCode``, contracts.md §2.2): a failure the parser cannot get past is raised
 as ``JobFailed(code)`` and dead-letters on THAT attempt; retrying a PDF PyMuPDF cannot open spent
-~11 s of backoff at base to reach the same answer (S1 report §1). ``timeout`` is written by the
-job store itself (a worker that died on every attempt). Anything unclassified is retried and
-reads as ``internal``.
+~11 s of backoff at base to reach the same answer (S1 report §1). A file PyMuPDF opens and then
+cannot read (a page tree it cannot count, a user password) is ``pdf_unreadable`` too, once
+``unreadable_reason`` has confirmed it is the file (S1 review MF1 / should-fix 2). ``timeout`` is
+written by the job store itself (a worker that died on every attempt). Anything unclassified is
+retried and reads as ``internal``.
 """
 
 from __future__ import annotations
@@ -76,6 +78,7 @@ __all__ = [
     "parse_idempotency_key",
     "payload_generation",
     "staging_path",
+    "unreadable_reason",
 ]
 
 #: The job kind. One string, used by the enqueuer and the runner registration alike.
@@ -185,6 +188,41 @@ def _describe(exc: BaseException) -> str:
     return f"{type(exc).__name__}: {text}"[:2000]
 
 
+def unreadable_reason(source_path: str) -> str | None:
+    """Why PyMuPDF cannot READ this file at all, or None when it can (or when that cannot be told).
+
+    Asked only after the parse raised something unclassified, so the happy path never pays for a
+    second open. PyMuPDF refuses some files only AFTER opening them, with a bare built-in error the
+    parser cannot tell from its own bugs (S1 review MF1 and should-fix 2, probe in the report):
+
+        a page tree it cannot walk   page_count -> RuntimeError('code=7: Invalid number of pages')
+        a USER-password PDF          needs_pass 1; any page -> ValueError('document closed or ...')
+
+    Both are the bytes, not the parser: every attempt fails the same way, so they are
+    `pdf_unreadable` on attempt 1. A file that opens, needs no password and counts its pages is
+    readable, and whatever the parser raised on it stays `internal` (retried): a parser bug must
+    never be reported to the user as their file's fault. The file is opened the way
+    `SourceDocument` opens it (the bytes, as a stream).
+    """
+    try:
+        data = Path(source_path).read_bytes()
+    except OSError:
+        return None  # not a statement about the PDF; the parser's own error stands
+    try:
+        document = pymupdf.open(stream=data, filetype="pdf")
+    except (RuntimeError, ValueError) as exc:
+        return _describe(exc)
+    try:
+        if document.needs_pass:
+            return "the PDF needs a password to open"
+        int(document.page_count)
+    except (RuntimeError, ValueError) as exc:
+        return _describe(exc)
+    finally:
+        document.close()
+    return None
+
+
 def _write_atomically(path: Path, text: str) -> None:
     """Staged JSON is written whole or not at all: a worker killed mid-write must not leave a
     truncated document for the resumed persist step to choke on."""
@@ -230,6 +268,17 @@ def make_parse_handler(deps: ParseJobDeps) -> Any:
             except (SemanticValidationError, ValidationError) as exc:
                 # The parser produced a document the IR validator refuses. Also deterministic.
                 raise JobFailed("validation_failed", _describe(exc)) from exc
+            except Exception as exc:
+                # Unclassified. Is it the FILE? (see `unreadable_reason`) Otherwise it is re-raised
+                # as it was: retried with backoff, and `internal` if it never goes away.
+                reason = unreadable_reason(source_path)
+                if reason is None:
+                    raise
+                raised = _describe(exc)
+                raise JobFailed(
+                    "pdf_unreadable",
+                    reason if reason == raised else f"{reason} (the parse raised {raised})",
+                ) from exc
             # The DOCUMENT goes to disk; only a summary becomes the step result. A step result
             # is stored as JSON and handed back on resume, and a 3,000-block document is not a
             # checkpoint value - it is the output.

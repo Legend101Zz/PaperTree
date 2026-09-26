@@ -18,10 +18,14 @@ from pathlib import Path
 
 import pytest
 from api_support import assert_envelope, auth, harness, register
+from papertree_document_worker import job as job_module
+from papertree_document_worker.job import unreadable_reason
 from test_ingest_helpers import (
     GARBAGE_PDF,
+    UNCOUNTABLE_PDF,
     Gate,
     drain,
+    encrypted_pdf,
     library,
     row_for,
     sql,
@@ -77,6 +81,44 @@ def test_polling_shows_queued_then_reading_with_its_step_then_ready(tmp_path: Pa
         )
         assert (row["job"]["step"], row["job"]["done"], row["job"]["total"]) == (None, 3, 3)
         assert h.client.get(f"/papers/{paper_id}/ir", headers=auth(token)).status_code == 200
+
+
+def test_unreadable_reason_blames_the_file_only_when_pymupdf_cannot_read_it(tmp_path: Path) -> None:
+    """The check `job.py` makes before it calls a parse failure the FILE's (`pdf_unreadable`)."""
+    cases = {
+        "readable": (synthetic_pdf(), None),
+        "uncountable": (UNCOUNTABLE_PDF, "RuntimeError: code=7: Invalid number of pages"),
+        "encrypted": (encrypted_pdf(), "the PDF needs a password to open"),
+        "garbage": (GARBAGE_PDF, "FileDataError: Failed to open stream"),
+    }
+    for name, (data, expected) in cases.items():
+        path = tmp_path / f"{name}.pdf"
+        path.write_bytes(data)
+        assert unreadable_reason(str(path)) == expected, name
+    # A missing file says nothing about the PDF: the parser's own error stands.
+    assert unreadable_reason(str(tmp_path / "missing.pdf")) is None
+
+
+def test_a_parser_failure_on_a_readable_pdf_stays_internal_and_is_retried(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The other side of `pdf_unreadable`: the same bare `RuntimeError` PyMuPDF raised for the
+    uncountable page tree, raised by the parser on a file PyMuPDF CAN read, is a parser fault, not
+    the user's file. It stays `internal` and is retried with backoff (never final on attempt 1)."""
+
+    def broken(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("code=7: a parser bug, not the file")
+
+    monkeypatch.setattr(job_module, "parse_document", broken)
+    with harness(tmp_path) as h:
+        token = register(h.client, "reader@example.com")
+        job_id = upload(h.client, token, synthetic_pdf()).json()["job_id"]
+        drain(h.settings)
+        (job,) = sql(h.settings, "SELECT state, attempt, error FROM jobs")
+        assert (job["state"], job["attempt"]) == ("pending", 1), "rescheduled, not dead-lettered"
+        assert job["error"] == "RuntimeError: code=7: a parser bug, not the file"
+        body = h.client.get(f"/jobs/{job_id}", headers=auth(token)).json()
+        assert (body["state"], body["error_code"]) == ("pending", "internal")
 
 
 def test_get_job_carries_the_error_code_and_not_the_error_text(tmp_path: Path) -> None:

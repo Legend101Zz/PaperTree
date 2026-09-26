@@ -28,6 +28,28 @@ from papertree_jobs import Job, JobObserver
 #: Bytes that start like a PDF and are not one: PyMuPDF refuses them ("Failed to open stream").
 GARBAGE_PDF = b"%PDF-1.4 this is not really a pdf\n"
 
+#: A PDF PyMuPDF OPENS but cannot count: its page tree claims 999,999,999 pages and lists none.
+#: `document.page_count` raises a bare `RuntimeError('code=7: Invalid number of pages')`, and so
+#: does the parser (S1 review MF1: this was a 500 at upload).
+UNCOUNTABLE_PDF = (
+    b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+    b"2 0 obj<</Type/Pages/Count 999999999/Kids[]>>endobj\n"
+    b"trailer<</Root 1 0 R>>\n%%EOF"
+)
+
+
+def encrypted_pdf() -> bytes:
+    """One page behind a USER password: PyMuPDF opens it and counts its page (`needs_pass` 1),
+    and loading any page raises `ValueError('document closed or encrypted')`."""
+    doc = pymupdf.open()
+    doc.new_page().insert_text((72, 72), "secret body text", fontsize=12)
+    data = bytes(
+        doc.tobytes(encryption=pymupdf.PDF_ENCRYPT_AES_256, owner_pw="owner", user_pw="user")
+    )
+    doc.close()
+    return data
+
+
 CORPUS = Path(__file__).resolve().parents[4] / "research" / "benchmarks" / "corpus"
 FETCH_HINT = "Run ./research/benchmarks/fetch_corpus.sh to enable it."
 
