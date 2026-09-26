@@ -265,3 +265,67 @@ def test_the_cli_refuses_without_the_pdfs_and_names_the_fetch_script(
 
     assert main(["fresh", "--pdfs", str(tmp_path), "--assets", str(tmp_path / "a")]) == 1
     assert "fetch_fresh.sh" in capsys.readouterr().err
+
+
+FRESH_SET = (
+    "ddpm-2006.11239",
+    "yolo-1506.02640",
+    "flashattention-2205.14135",
+    "sbert-1908.10084",
+    "adam-1412.6980",
+    "maskrcnn-1703.06870",
+)
+#: Merged gold paragraphs on pp1-2 at 7051862 (`s2/parse-robustness`, the first commit at which all
+#: six parse - DDPM and Mask R-CNN dead-lettered at 18f69ec), scored by THIS module on THIS gold:
+#: DDPM 3, YOLO 21, FlashAttention 6, SBERT 13, Adam 5, Mask R-CNN 10.
+MERGED_AT_BRANCH_1 = 58
+#: (gold reading, `alt_kind` reading) per paper, after paragraph splitting.
+MERGED_PINS = {
+    "ddpm-2006.11239": (0, 0),
+    "yolo-1506.02640": (4, 4),
+    "flashattention-2205.14135": (0, 0),
+    "sbert-1908.10084": (2, 2),
+    "adam-1412.6980": (2, 2),
+    "maskrcnn-1703.06870": (2, 2),
+}
+#: Running-text blocks on pp1-2 starting at no gold unit (13/9/8/6/12/8 = 56 at 7051862).
+UNANCHORED_PINS = {
+    "ddpm-2006.11239": 13,
+    "yolo-1506.02640": 8,
+    "flashattention-2205.14135": 8,
+    "sbert-1908.10084": 5,
+    "adam-1412.6980": 12,
+    "maskrcnn-1703.06870": 8,
+}
+
+
+@pytest.mark.skipif(
+    not all((FRESH_PDFS / f"{name}.pdf").is_file() for name in FRESH_SET),
+    reason="the fresh set is gitignored; fetch it with ./research/benchmarks/fresh/fetch_fresh.sh",
+)
+def test_merged_paragraphs_on_the_fresh_set_are_at_most_half_of_branch_1(tmp_path: Path) -> None:
+    """Slice-plan §S2 merge rule: "merged gold paragraphs on fresh pages 1-2 reduced by at least
+    half against the baseline", on a REAL parse of all six papers. Pinned exactly (the parser is
+    deterministic) under BOTH readings of the open `cont`-after-display ruling, with the
+    over-segmentation guard beside it: a parser that cut every line into a block would merge
+    nothing, and `unanchored_prose` is what would say so. Provisional: 2 model annotators +
+    adjudicator, owner review pending."""
+    from papertree_document_worker.pipeline import parse_document
+
+    gold = load_fresh_gold(FRESH_GOLD)
+    merged: dict[str, tuple[int, int]] = {}
+    unanchored: dict[str, int] = {}
+    for name in FRESH_SET:
+        paper = parse_document(
+            FRESH_PDFS / f"{name}.pdf",
+            paper_id="ppr_0123456789ABCDEFGHJKMNP0TV",
+            asset_root=tmp_path / name,
+        ).paper
+        score = score_fresh_paper(
+            name, paper.model_dump(mode="json", by_alias=True, exclude_unset=True), gold
+        )
+        merged[name] = (score.merged_paragraphs["gold"], score.merged_paragraphs["alt_kind"])
+        unanchored[name] = len(score.unanchored_prose)
+    assert sum(gold_reading for gold_reading, _ in merged.values()) <= MERGED_AT_BRANCH_1 // 2
+    assert merged == MERGED_PINS
+    assert unanchored == UNANCHORED_PINS

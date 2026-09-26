@@ -480,3 +480,118 @@ def test_text_level_with_a_table_in_the_other_column_is_kept(
     # ...and the table's own text is still a table's, not prose.
     cell = _containing(paper, "c11")
     assert cell is not None and cell.type == "table_cell"
+
+
+# ── one printed paragraph is one block: first-line indent and paragraph skip ───────────────
+
+INDENT = 12.0  # CVPR's \parindent at 10 pt (YOLO: all 23 indented lines on its pp1-2)
+
+
+def _paragraph(page: Any, x: float, top: float, seed: str, lines: int, indent: float) -> float:
+    """One justified paragraph: an indented first line reaching the measure, full lines, a short
+    last line. Returns the baseline after it."""
+    y = top
+    for index in range(lines):
+        if index == 0:
+            text, at = _line(f"{seed}{index}", MEASURE - indent), x + indent
+        elif index < lines - 1:
+            text, at = _line(f"{seed}{index}", MEASURE), x
+        else:
+            text, at = f"{seed} ends.", x
+        page.insert_text((at, y), text, fontsize=10, fontname="helv")
+        y += 12
+    return y
+
+
+@pytest.fixture(scope="module")
+def printed_paragraphs(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Page 2 of a paper. LEFT column, CVPR style: three paragraphs marked only by a 12 pt
+    first-line indent, at the running 12 pt pitch - no extra space between them. RIGHT column,
+    NeurIPS style: three unindented paragraphs marked only by a 6 pt paragraph skip, then a
+    hanging list whose indented lines are NOT first lines, and a paragraph whose line after a
+    short one continues flush left (no indent, no skip: not a new paragraph) and which holds a
+    short piece set in from the margin."""
+    document = pymupdf.open()
+    _column(document.new_page(width=W, height=H), LEFT, 80, "first", 20)
+    page = document.new_page(width=W, height=H)
+    y = 80.0
+    for seed in ("alpha", "bravo", "charlie"):
+        y = _paragraph(page, LEFT, y, seed, 7, INDENT)
+    y = 80.0
+    for seed in ("delta", "echo", "foxtrot"):
+        y = _paragraph(page, RIGHT, y, seed, 6, 0.0) + 6
+    for item in range(3):
+        page.insert_text((RIGHT, y), _line(f"item{item}", MEASURE), fontsize=10, fontname="helv")
+        y += 12
+        for hang in range(2):  # a hanging indent HOLDS: two continuation lines per item
+            page.insert_text(
+                (RIGHT + INDENT, y),
+                _line(f"hang{item}{hang}", MEASURE - INDENT),
+                fontsize=10,
+                fontname="helv",
+            )
+            y += 12
+    y += 6
+    page.insert_text((RIGHT, y), _line("golf0", MEASURE), fontsize=10, fontname="helv")
+    page.insert_text((RIGHT, y + 12), "golf short line.", fontsize=10, fontname="helv")
+    page.insert_text((RIGHT, y + 24), _line("golfcont", MEASURE), fontsize=10, fontname="helv")
+    # A SHORT piece set in from the margin (what a same-baseline fragment looks like) is no
+    # first line: a paragraph's first line in justified text runs to the right margin.
+    page.insert_text((RIGHT + INDENT, y + 36), "golf piece", fontsize=10, fontname="helv")
+    page.insert_text((RIGHT, y + 48), _line("golfmore", MEASURE), fontsize=10, fontname="helv")
+    page.insert_text((RIGHT, y + 60), "golf ends.", fontsize=10, fontname="helv")
+    return _save(document, tmp_path_factory.mktemp("paragraphs") / "paragraphs.pdf")
+
+
+def test_each_printed_paragraph_is_its_own_block(printed_paragraphs: Path, tmp_path: Path) -> None:
+    paper = _parse(printed_paragraphs, tmp_path)
+    for seed in ("alpha", "bravo", "charlie", "delta", "echo", "foxtrot"):
+        block = _containing(paper, f"{seed}0")
+        assert block is not None, seed
+        text = block.text or ""
+        # The whole paragraph, and nothing of its neighbours.
+        assert f"{seed} ends." in text, (seed, text[-60:])
+        others = {"alpha", "bravo", "charlie", "delta", "echo", "foxtrot"} - {seed}
+        assert not any(f"{o}0" in text for o in others), (seed, text[:80])
+        assert block.type == "paragraph", (seed, block.type)
+
+
+def test_an_indent_that_holds_or_a_flush_continuation_is_not_a_new_paragraph(
+    printed_paragraphs: Path, tmp_path: Path
+) -> None:
+    paper = _parse(printed_paragraphs, tmp_path)
+    listing = _containing(paper, "item0")
+    assert listing is not None and "hang21" in (listing.text or ""), "the hanging list was split"
+    golf = _containing(paper, "golf0")
+    assert golf is not None and "golf ends." in (golf.text or ""), "a flush continuation split"
+
+
+@pytest.fixture(scope="module")
+def split_paragraph_beside_a_table(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """A booktabs table in the left column; in the right column one block of two paragraphs, the
+    second opened only by its first-line indent and lying WHOLLY within the table's height. The
+    table claims every line level with it, and a block whose lines are all claimed is skipped -
+    so splitting the block into its paragraphs made the second one vanish (a3c p2, bert p6,
+    resnet p5 and sbert p4 lost 52 lines of prose that way before runs)."""
+    document = pymupdf.open()
+    _column(document.new_page(width=W, height=H), LEFT, 80, "first", 20)
+    page = document.new_page(width=W, height=H)
+    _column(page, LEFT, 80, "lefttop", 16)
+    bottom = _booktabs(page, LEFT, 296)
+    _column(page, LEFT, bottom + 30, "leftbottom", 20)
+    _column(page, RIGHT, 80, "righttop", 12)
+    y = _paragraph(page, RIGHT, 250, "above", 4, 0.0)
+    _paragraph(page, RIGHT, y, "levelwith", 5, INDENT)
+    _column(page, RIGHT, 440, "rightbottom", 20)
+    return _save(document, tmp_path_factory.mktemp("split-table") / "split-table.pdf")
+
+
+def test_splitting_a_paragraph_off_beside_a_table_keeps_its_text(
+    split_paragraph_beside_a_table: Path, tmp_path: Path
+) -> None:
+    paper = _parse(split_paragraph_beside_a_table, tmp_path)
+    assert [b for b in paper.blocks if b.type == "table"], "the synthetic table was not detected"
+    above, level = _containing(paper, "above0"), _containing(paper, "levelwith0")
+    assert above is not None and level is not None, "a paragraph beside the table left the document"
+    assert "levelwith ends." in (level.text or "")
+    assert level.block_id != above.block_id, "the two paragraphs were not split"

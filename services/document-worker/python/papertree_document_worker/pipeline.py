@@ -678,9 +678,23 @@ def _assemble(
 
         right_margins = _right_text_margins(page_layout)
 
+        # "ALREADY EMITTED AS TABLE CELLS" IS ASKED OF THE WHOLE RUN (S2, #141). A table claims
+        # every line level with it, and a block whose lines are all claimed is skipped. Paragraph
+        # splitting (`layout._paragraph_break`) cuts a block into paragraphs, and a paragraph that
+        # happens to lie wholly within a table's height in the OTHER column would then be skipped
+        # although its block, taken whole, was not: measured before this, 52 MuPDF lines of body
+        # prose left 5 papers (a3c p2 "In contrast to value-based methods, policy-based model-
+        # free methods ...", bert-2col p6, resnet-cvpr-2col p5, sbert p4). A run is the block
+        # `_same_block` alone would have formed, so the text kept is exactly what it was before
+        # the split. (Why the claim itself was not narrowed: `test_parse_quality.py`'s xfail.)
+        run_lines: dict[int, list[int]] = {}
+        for block in page_layout.blocks:
+            if block.run >= 0:
+                run_lines.setdefault(block.run, []).extend(id(line) for line in block.lines)
         for layout_block in _merge_equation_blocks(page_layout.blocks, equation_regions):
-            if layout_block.lines and all(id(line) in table_lines for line in layout_block.lines):
-                continue  # every line already emitted as a table cell
+            tested = run_lines.get(layout_block.run) or [id(line) for line in layout_block.lines]
+            if tested and all(line_id in table_lines for line_id in tested):
+                continue  # every line of its run already emitted as a table cell
             built = build_block_text(list(layout_block.lines))
             if not built.text.strip():
                 continue

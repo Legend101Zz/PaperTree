@@ -88,17 +88,22 @@ def test_references_edges_are_emitted_on_every_paper(parsed: dict[str, Paper]) -
     # mistyped before - resnet's p5 table reference now comes from the recovered bottleneck
     # paragraph. Several sources also re-point to the same paragraph with its run-in lead joined
     # (`Maximum Likelihood Training A useful property ...` instead of `A useful property ...`).
+    # PARAGRAPH SPLITTING (S2) raises seven rows, 116 -> 145: an edge is one per (block, float),
+    # and a block that held several printed paragraphs now is several blocks, each citing the
+    # table or figure its own sentences name (resnet 19 -> 34, whose section 4 paragraphs name a
+    # table apiece). No callout was added or lost; they are attributed to the paragraph that
+    # prints them.
     assert per_paper == {
-        "a3c-algorithmheavy": 13,
-        "attention-is-all-you-need": 11,
-        "bert-2col": 14,
-        "gpt3-longform-singlecol": 31,
-        "neural-odes-mathheavy": 15,
-        "pdf-to-tree-acl2col": 8,
-        "resnet-cvpr-2col": 19,
+        "a3c-algorithmheavy": 17,
+        "attention-is-all-you-need": 13,
+        "bert-2col": 17,
+        "gpt3-longform-singlecol": 33,
+        "neural-odes-mathheavy": 16,
+        "pdf-to-tree-acl2col": 10,
+        "resnet-cvpr-2col": 34,
         "superglue-tableheavy": 5,
     }
-    assert sum(per_paper.values()) == 116
+    assert sum(per_paper.values()) == 145
 
 
 @requires_corpus
@@ -111,7 +116,12 @@ def test_the_pre_existing_relation_types_did_not_move(parsed: dict[str, Paper]) 
     totals: Counter[str] = Counter()
     for paper in parsed.values():
         totals.update(r.type for r in paper.relations)
-    assert totals["caption_of"] == 142
+    # 142 -> 176 with paragraph splitting (S2). Measured: all 34 captions that gain an edge sat
+    # in a `paragraph` block OPENED by a stray table value set just above the caption ("112.6%",
+    # "84.9", "-", "3.2M" - the table's last row, outside its detected cells), so the `Table N`
+    # marker was not at position 0 and nothing linked it. Split apart, 33 table captions and 1
+    # figure caption carry their edge.
+    assert totals["caption_of"] == 176
     # 94 -> 90 and 36 -> 37 in S2 (#141). The lost page continuations pointed INTO section heads
     # that were typed `paragraph` (`8. Experimental Setup`, `5.1. Atari 2600 Games`, `3.5 Positional
     # Encoding`, `3.9.4 News Article Generation`, `5.1 Baselines BERT`) or into a caption's second
@@ -121,7 +131,12 @@ def test_the_pre_existing_relation_types_did_not_move(parsed: dict[str, Paper]) 
     # `11`) were `paragraph`, so each was the SOURCE of a page continuation into the next page's
     # first paragraph. Typed `unknown`, they continue nothing, and six of those edges now start at
     # the paragraph that really runs over the page break; one false one is simply gone.
-    assert totals["continues_on_next_page"] == 89
+    # ...and 89 -> 88 with paragraph splitting, where most of these edges RE-POINT: a column or
+    # page continuation used to land on a blob of table values and the caption below them ("84.9
+    # Table 5: Ablation over the pre-trai...") and now lands on the paragraph that continues
+    # ("ablation studies can be found in Appendix ..."); some still land on a table value outside
+    # its detected table ("73.8 ResNet-101"), the pre-existing table-extent defect.
+    assert totals["continues_on_next_page"] == 88
     # 37 -> 38 in the title-first commit, and the new edge is FALSE: pdf-to-tree p0's left column
     # ends "...dhSegment(Ares Oliveira et al.," (one continuation signal, confidence 0.6) and the
     # right column's first body block is now "Additionally, some applications, like RAG..." - the
@@ -130,8 +145,8 @@ def test_the_pre_existing_relation_types_did_not_move(parsed: dict[str, Paper]) 
     # offset as an indent. The affiliation lines used to be read first in that column, and the
     # pair failed rule 24b's x test, which hid it. The real continuation is "2018). Later
     # research ..."; hard case `pdf-to-tree-p0-caption-tail`.
-    assert totals["continues_in_next_column"] == 38
-    assert totals["cites"] == 532
+    assert totals["continues_in_next_column"] == 37  # 38 -> 37 with paragraph splitting; above
+    assert totals["cites"] == 555  # 532 -> 555: see test_citations.BASELINE
 
 
 @requires_corpus
@@ -168,8 +183,9 @@ def test_caption_block_mirrors_caption_of_in_both_directions(parsed: dict[str, P
     # MEASURED, not assumed: every one of the 142 `caption_of` edges targets a figure or a
     # table, and every one is mirrored. My first guess here was 100 and the test caught it —
     # which is the only reason this comment can state the split with any confidence.
-    assert dict(mirrored) == {"figure": 58, "table": 84}
-    assert sum(mirrored.values()) == 142
+    # 142 -> 176 in S2's paragraph-splitting commit: see test_the_pre_existing_relation_types.
+    assert dict(mirrored) == {"figure": 59, "table": 117}
+    assert sum(mirrored.values()) == 176
 
 
 @requires_corpus
@@ -182,7 +198,8 @@ def test_figure_caption_block_reaches_the_share_111_measured(parsed: dict[str, P
     """
     figures = [b for paper in parsed.values() for b in _blocks(paper, "figure")]
     with_caption = [b for b in figures if (b.payload or {}).get("caption_block")]
-    assert (len(with_caption), len(figures)) == (58, 85)
+    # 59 of 85 since S2's paragraph splitting freed one figure caption from a paragraph block.
+    assert (len(with_caption), len(figures)) == (59, 85)
 
 
 @requires_corpus
@@ -240,7 +257,10 @@ def test_equation_number_is_populated_and_is_what_makes_equation_referencing_pos
     numbered = [b for b in equations if (b.payload or {}).get("equation_number")]
     # 81 -> 80 equations in S2 (#141): superglue p7's `BERT++`, a model name set in the heading
     # face, is no longer an equation block. The 46 numbered ones are unchanged.
-    assert (len(numbered), len(equations)) == (46, 80)
+    # 80 -> 83 equations, 46 -> 48 numbered, with paragraph splitting: a display equation set
+    # within the line pitch of its paragraph was one block with it, and equation detection needs
+    # the block to be the equation's own.
+    assert (len(numbered), len(equations)) == (48, 83)
     assert all(isinstance(b.payload["equation_number"], str) for b in numbered)
 
 
@@ -296,4 +316,5 @@ def test_prev_id_and_next_id_are_still_empty_and_that_is_the_ruling(
     total = sum(len(paper.blocks) for paper in parsed.values())
     # 9,903 at 18f69ec; S2 (#141) joins run-in leads (9,826) and title-first ordering reads
     # pdf-to-tree's three affiliation lines as one block (9,825).
-    assert (populated, total) == (0, 9825)
+    # ...and 10,642 with paragraph splitting (one block per printed paragraph).
+    assert (populated, total) == (0, 10642)
