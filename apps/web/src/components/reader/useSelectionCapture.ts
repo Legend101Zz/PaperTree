@@ -50,6 +50,7 @@ import {
   capturePageTextAnchor,
   itemPieceQuads,
   piecesBetween,
+  type AdvanceMeasure,
   type Anchor,
   type IndexedDocument,
   type ItemPiece,
@@ -400,6 +401,7 @@ export type SelectionTarget =
 function partition(
   doc: IndexedDocument,
   pages: readonly PagePieces[],
+  measure: AdvanceMeasure | undefined,
 ): { targets: SelectionTarget[]; quadsByBlock: Map<string, BBox[]> } {
   type Slot = { kind: 'ir'; blockId: string } | { kind: 'page-text'; range: PageTextRange };
   const slots: Slot[] = [];
@@ -488,7 +490,7 @@ function partition(
     const entry = byBlock.get(slot.blockId);
     if (entry === undefined || entry.end <= entry.start) continue;
     targets.push({ kind: 'ir', range: { blockId: slot.blockId, start: entry.start, end: entry.end } });
-    quadsByBlock.set(slot.blockId, itemPieceQuads(entry.page.source.frame, entry.page.source.items, entry.pieces));
+    quadsByBlock.set(slot.blockId, itemPieceQuads(entry.page.source.frame, entry.page.source.items, entry.pieces, measure));
   }
   return { targets, quadsByBlock };
 }
@@ -542,6 +544,36 @@ function extent(quads: readonly BBox[]): BBox | null {
     Math.max(...quads.map((q) => q[2])),
     Math.max(...quads.map((q) => q[3])),
   ];
+}
+
+// ─── glyph advances in the text layer's own font ────────────────────────────────────────────────
+
+/**
+ * An `AdvanceMeasure` over a 2D canvas, in the family pdf.js set each span in — the same measurement
+ * `TextLayer` makes to scale the span onto the item's advance, so a quad's edge inside an item lands
+ * where the selected glyphs are (s4-review.md F5). It measures TEXT, never the DOM. Undefined where
+ * there is no canvas (tests in happy-dom, SSR): the code-point ratio applies there.
+ */
+function canvasAdvanceMeasure(): AdvanceMeasure | undefined {
+  if (typeof document === 'undefined') return undefined;
+  let context: CanvasRenderingContext2D | null = null;
+  try {
+    context = document.createElement('canvas').getContext('2d');
+  } catch {
+    context = null;
+  }
+  if (context === null || typeof context.measureText !== 'function') return undefined;
+  const ctx = context;
+  let family = '';
+  return (item, text) => {
+    if (item.fontFamily === undefined || item.fontFamily === '') return null;
+    if (family !== item.fontFamily) {
+      ctx.font = `100px ${item.fontFamily}`;
+      family = item.fontFamily;
+    }
+    const width = ctx.measureText(text).width;
+    return Number.isFinite(width) ? width : null;
+  };
 }
 
 // ─── the hook ───────────────────────────────────────────────────────────────────────────────────
@@ -605,6 +637,11 @@ export function useSelectionCapture(options: UseSelectionCaptureOptions): UseSel
   pageTextRef.current = pageText;
   const streamRef = useRef(pageTextStreamId);
   streamRef.current = pageTextStreamId;
+  const measureRef = useRef<AdvanceMeasure | undefined | null>(null);
+  const measureOf = (): AdvanceMeasure | undefined => {
+    if (measureRef.current === null) measureRef.current = canvasAdvanceMeasure();
+    return measureRef.current;
+  };
 
   const read = useCallback((): PendingSelection | null => {
     const indexed = docRef.current;
@@ -629,7 +666,8 @@ export function useSelectionCapture(options: UseSelectionCaptureOptions): UseSel
     const pages = piecesPerPage(container, start, end, lookup);
     if (pages === null) return null;
 
-    const partitioned = partition(indexed, pages);
+    const measure = measureOf();
+    const partitioned = partition(indexed, pages, measure);
     // A run the IR did not stamp needs pdf.js's version for its text stream id; until pdf.js has
     // loaded there is nothing honest to capture it under, so it is left out rather than guessed.
     const targets =
@@ -653,7 +691,12 @@ export function useSelectionCapture(options: UseSelectionCaptureOptions): UseSel
       for (const run of pageTextRuns) {
         if (run.pageIndex !== firstPageIndex) continue;
         onFirstPage.push(
-          ...itemPieceQuads(firstPage.source.frame, firstPage.source.items, piecesBetween(firstPage.source.items, run.start, run.end)),
+          ...itemPieceQuads(
+            firstPage.source.frame,
+            firstPage.source.items,
+            piecesBetween(firstPage.source.items, run.start, run.end),
+            measure,
+          ),
         );
       }
     }
@@ -760,6 +803,7 @@ export function useSelectionCapture(options: UseSelectionCaptureOptions): UseSel
           client,
           mode,
           provenanceClass,
+          ...(measureOf() === undefined ? {} : { measure: measureOf() as AdvanceMeasure }),
         });
         if (anchor !== null) anchors.push(anchor);
       }

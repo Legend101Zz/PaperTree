@@ -12,7 +12,7 @@
 
 import { unionOfLineRects, type BBox, type PageFrame, type Polygon } from '@papertree/document-ir';
 
-import { pdfItemRangeToIrQuad, type PdfTextItemGeometry } from './bridge.js';
+import { pdfItemRangeToIrQuad, type AdvanceMeasure, type PdfTextItemGeometry } from './bridge.js';
 import type { IndexedBlock, IndexedDocument } from './document.js';
 import { quadsForRange } from './lineband.js';
 import { normaliseForMatch, snapToWordBoundary, toCodePoints } from './quotenorm.js';
@@ -353,6 +353,8 @@ export interface PageTextCaptureInput {
   readonly client: string;
   readonly mode?: 'source' | 'guided';
   readonly provenanceClass?: ProvenanceClass;
+  /** The text layer's font advance, for the fraction inside an item (`bridge.ts` `AdvanceMeasure`). */
+  readonly measure?: AdvanceMeasure;
 }
 
 /** Items closer than this many line heights on one line are one run of words: one quad. */
@@ -384,12 +386,13 @@ export function itemPieceQuads(
   frame: PageFrame,
   items: readonly PdfTextItemGeometry[],
   pieces: readonly ItemPiece[],
+  measure?: AdvanceMeasure,
 ): BBox[] {
   const boxes: BBox[] = [];
   for (const piece of pieces) {
     const item = items[piece.item];
     if (item === undefined || item.str.trim() === '') continue;
-    const quad = pdfItemRangeToIrQuad(frame, item, piece.from, piece.to);
+    const quad = pdfItemRangeToIrQuad(frame, item, piece.from, piece.to, measure);
     if (quad !== null && quad[2] > quad[0] && quad[3] > quad[1]) boxes.push(quad);
   }
   const merged: BBox[] = [];
@@ -436,6 +439,7 @@ function pageTextQuads(input: PageTextCaptureInput): BBox[] {
     input.frame,
     input.items,
     piecesBetween(input.items, input.start, input.end),
+    input.measure,
   );
 }
 

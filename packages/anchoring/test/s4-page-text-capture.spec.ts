@@ -67,6 +67,63 @@ describe('pdfItemRangeToIrQuad', () => {
     expect(pdfItemRangeToIrQuad(frame, cell, 1, 4)).toEqual([305, 83.5, 320, 94]);
   });
 
+  it('review F5: narrows by the TEXT LAYER’s font advance when a measure is given, not by code points', () => {
+    // "mil" — a wide 'm' and two narrow letters. pdf.js scales the span so the fallback font's
+    // measured width equals the item's advance, so a selection's glyphs sit at the MEASURED
+    // fraction: "m" is 6 of 8 units, i.e. 15 of the 20 pt, where the code-point ratio says 6.67.
+    const mil = {
+      str: 'mil',
+      transform: [10, 0, 0, 10, 300, 700],
+      width: 20,
+      height: 10,
+      fontFamily: 'serif',
+    };
+    const widths: Record<string, number> = { m: 6, i: 1, l: 1 };
+    const measure = (item: { fontFamily?: string }, text: string) =>
+      item.fontFamily === 'serif'
+        ? Array.from(text).reduce((sum, c) => sum + (widths[c] ?? 0), 0)
+        : null;
+    expect(pdfItemRangeToIrQuad(frame, mil, 0, 1, measure)).toEqual([300, 83.5, 315, 94]);
+    expect(pdfItemRangeToIrQuad(frame, mil, 1, 3, measure)).toEqual([315, 83.5, 320, 94]);
+    // No usable measure (no canvas, no font family): the contract's code-point ratio.
+    expect(pdfItemRangeToIrQuad(frame, mil, 0, 1, () => null)?.[2]).toBeCloseTo(306.667, 3);
+    const { fontFamily: _family, ...unnamed } = mil;
+    expect(pdfItemRangeToIrQuad(frame, unnamed, 0, 1, measure)?.[2]).toBeCloseTo(306.667, 3);
+  });
+
+  it('review F5: itemPieceQuads and capturePageTextAnchor pass the measure through', () => {
+    const mil = {
+      str: 'mil',
+      transform: [10, 0, 0, 10, 300, 700],
+      width: 20,
+      height: 10,
+      fontFamily: 'serif',
+    };
+    const widths: Record<string, number> = { m: 6, i: 1, l: 1 };
+    const measure = (_item: unknown, text: string) =>
+      Array.from(text).reduce((sum, c) => sum + (widths[c] ?? 0), 0);
+    expect(itemPieceQuads(frame, [mil], [{ item: 0, from: 0, to: 1 }], measure)).toEqual([
+      [300, 83.5, 315, 94],
+    ]);
+    const anchor = capturePageTextAnchor({
+      doc,
+      pageIndex: 0,
+      frame,
+      items: [mil],
+      start: { item: 0, offset: 0 },
+      end: { item: 0, offset: 1 },
+      textStreamId: pageTextStreamId('5.7.284'),
+      id: '6f0e4f8e-0000-4000-8000-0000000000f5',
+      at: '2026-09-26T00:00:00.000Z',
+      client: 'test',
+      measure,
+    });
+    const shape = anchor?.selectors.find(
+      (sel): sel is ShapeSelector => sel.type === 'ShapeSelector',
+    );
+    expect(shape?.quads).toEqual([[300, 83.5, 315, 94]]);
+  });
+
   it('uses the font metrics when pdf.js reports them', () => {
     const quad = pdfItemRangeToIrQuad(frame, { ...cell, ascent: 0.9, descent: -0.25 }, 0, 4);
     expect(quad).toEqual([300, 83, 320, 94.5]);

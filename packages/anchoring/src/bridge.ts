@@ -207,6 +207,44 @@ export interface PdfTextItemGeometry {
   readonly height: number;
   readonly ascent?: number;
   readonly descent?: number;
+  /**
+   * The CSS font family pdf.js's text layer sets this item's span in
+   * (`textContent.styles[item.fontName].fontFamily`), for an `AdvanceMeasure`.
+   */
+  readonly fontFamily?: string;
+}
+
+/**
+ * The advance width of `text` set in `item`'s text-layer font, in any unit (only ratios are used),
+ * or null when it cannot be measured (no canvas, no font family).
+ *
+ * WHY. pdf.js's text layer sets each item's string in a fallback font and scales the span so that
+ * `measureText(str)` spans exactly the item's advance (`TextLayer.#layout`, `--scale-x`). A glyph's
+ * place inside the item is therefore the MEASURED fraction of the string, not its code-point
+ * fraction: in "mil" the "m" is ~70 % of the advance, not 33 %. A code-point ratio put the last
+ * line of a selection ~one character past its end (+4.5 px at 125 %, +7.2 px at 200 % on YOLO;
+ * s4-review.md F5). The browser supplies the measure (a canvas); where there is none, the
+ * code-point ratio of contracts.md §6 applies.
+ */
+export type AdvanceMeasure = (item: PdfTextItemGeometry, text: string) => number | null;
+
+/** How far into the item's advance code point `at` falls, 0..1. */
+function advanceFraction(
+  item: PdfTextItemGeometry,
+  at: number,
+  length: number,
+  measure: AdvanceMeasure | undefined,
+): number {
+  if (at <= 0) return 0;
+  if (at >= length) return 1;
+  if (measure !== undefined) {
+    const whole = measure(item, item.str);
+    if (whole !== null && Number.isFinite(whole) && whole > 0) {
+      const part = measure(item, Array.from(item.str).slice(0, at).join(''));
+      if (part !== null && Number.isFinite(part) && part >= 0) return Math.min(1, part / whole);
+    }
+  }
+  return at / length;
 }
 
 /**
@@ -237,8 +275,9 @@ function codePointLength(text: string): number {
  * 0.85, descent 0.2 of the font height), widened to the font's declared ascent and descent when
  * they are larger. A font descriptor's Ascent is often the cap height (Times: 0.678 in YOLO), which
  * would paint a band that clips accents and superscripts and sits visibly inside the reader's own
- * selection highlight. Horizontally it is the advance width, narrowed to the selected fraction BY
- * CODE POINT inside the item.
+ * selection highlight. Horizontally it is the advance width, narrowed to the selected fraction
+ * inside the item — by the text layer's font advance when `measure` is given (`AdvanceMeasure`),
+ * else by code point.
  *
  * Axis-aligned text (the matrix's shear terms are zero) is interpolated exactly as described.
  * Rotated text (an axis label, the arXiv margin stamp) gets the whole item's box: the selected
@@ -249,6 +288,7 @@ export function pdfItemRangeToIrQuad(
   item: PdfTextItemGeometry,
   from: number,
   to: number,
+  measure?: AdvanceMeasure,
 ): BBox | null {
   const [a, b, c, d, e, f] = item.transform as [number, number, number, number, number, number];
   if (![a, b, c, d, e, f].every((v) => typeof v === 'number' && Number.isFinite(v))) return null;
@@ -293,8 +333,8 @@ export function pdfItemRangeToIrQuad(
 
   // `a` is negative for text set right-to-left by a mirrored matrix; the advance runs the other way.
   const sign = a < 0 ? -1 : 1;
-  const x0 = e + sign * item.width * (lo / length);
-  const x1 = e + sign * item.width * (hi / length);
+  const x0 = e + sign * item.width * advanceFraction(item, lo, length, measure);
+  const x1 = e + sign * item.width * advanceFraction(item, hi, length, measure);
   const flip = d < 0 ? -1 : 1;
   return pdfRectToIr(frame, [
     Math.min(x0, x1),

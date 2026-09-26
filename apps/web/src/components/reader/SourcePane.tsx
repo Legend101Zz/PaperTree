@@ -74,6 +74,7 @@ export interface SourcePaneProps {
   readonly flash: FlashPaint | null;
   /** Below 640 px the toolbar is a bottom bar instead of floating over the page. */
   readonly narrow: boolean;
+
   /**
    * Forwarded from the scroller so the shell can re-resolve a fit-zoom mode. REQUIRED: optional,
    * the shell once never supplied it and "fit width" clamped to 25 % with no error anywhere.
@@ -176,6 +177,8 @@ export function SourcePane(props: SourcePaneProps) {
             ...(item.hasEOL === undefined ? {} : { hasEOL: item.hasEOL }),
             ...(style?.ascent === undefined ? {} : { ascent: style.ascent }),
             ...(style?.descent === undefined ? {} : { descent: style.descent }),
+            // The family the text layer sets this span in: the capture measures glyph advances in it.
+            ...(typeof style?.fontFamily === 'string' && style.fontFamily !== '' ? { fontFamily: style.fontFamily } : {}),
           };
         }),
       });

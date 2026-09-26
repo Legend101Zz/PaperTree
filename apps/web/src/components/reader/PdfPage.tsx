@@ -95,7 +95,9 @@ export interface TextLayerInfo {
   /** The items those divs were built from, `str`-defined only — index-aligned with `divs`. */
   readonly items: readonly PdfTextItem[];
   /** `textContent.styles`: the fonts' ascent/descent, for `bridge.ts`'s item boxes. */
-  readonly styles: Readonly<Record<string, { readonly ascent?: number; readonly descent?: number }>>;
+  readonly styles: Readonly<
+    Record<string, { readonly ascent?: number; readonly descent?: number; readonly fontFamily?: string }>
+  >;
   readonly viewport: { convertToPdfPoint(x: number, y: number): number[] };
   /** `PDFPageProxy.view` / `.rotate`. Raw PDF space; `bridge.ts` turns them into an IR frame. */
   readonly page: { readonly view: BBox; readonly rotate: number };
