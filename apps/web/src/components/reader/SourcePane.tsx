@@ -74,7 +74,11 @@ export interface SourcePaneProps {
   readonly flash: FlashPaint | null;
   /** Below 640 px the toolbar is a bottom bar instead of floating over the page. */
   readonly narrow: boolean;
-
+  /**
+   * A bottom sheet (the Contents panel on a phone) is open over the pane: the selection bar waits
+   * under it rather than sitting on top of the sheet's last rows. The selection itself is kept.
+   */
+  readonly sheetOpen?: boolean;
   /**
    * Forwarded from the scroller so the shell can re-resolve a fit-zoom mode. REQUIRED: optional,
    * the shell once never supplied it and "fit width" clamped to 25 % with no error anywhere.
@@ -354,11 +358,17 @@ export function SourcePane(props: SourcePaneProps) {
           />
         )}
         renderFloating={(geometry) => {
-          if (props.narrow || selection === null || selection.irExtent === null) return null;
-          const box = geometry.pageBox(selection.pageIndex);
+          if (props.narrow || selection === null) return null;
+          // Across pages, the bar goes by the selection's END, below it: that is where the pointer
+          // was released (the page auto-scrolled there), while the start is off screen above.
+          const acrossPages = selection.endPageIndex !== selection.pageIndex && selection.endExtent !== null;
+          const pageIndex = acrossPages ? selection.endPageIndex : selection.pageIndex;
+          const at = acrossPages ? selection.endExtent : selection.irExtent;
+          if (at === null) return null;
+          const box = geometry.pageBox(pageIndex);
           if (box === null) return null;
-          const scale = geometry.irScale(selection.pageIndex);
-          const [x0, y0, x1, y1] = selection.irExtent;
+          const scale = geometry.irScale(pageIndex);
+          const [x0, y0, x1, y1] = at;
           return (
             <SelectionToolbar
               placement={{
@@ -370,13 +380,14 @@ export function SourcePane(props: SourcePaneProps) {
                   bottom: box.top + y1 * scale,
                 },
                 boundsWidth: geometry.contentWidth,
+                prefer: acrossPages ? 'below' : 'above',
               }}
               {...toolbarProps}
             />
           );
         }}
       />
-      {props.narrow && selection !== null ? (
+      {props.narrow && selection !== null && props.sheetOpen !== true ? (
         <SelectionToolbar placement={{ kind: 'sheet' }} {...toolbarProps} />
       ) : null}
     </div>

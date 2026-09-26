@@ -1204,18 +1204,22 @@ span.pt-paper .pt-paper__cite {
 }
 
 /* Highlight is unavailable for this selection: the reason is a sentence under the buttons, in the
-   bar itself, never only a tooltip. */
+   bar itself, never only a tooltip. The note takes the buttons' width and never sets it (its own
+   width is 0, its minimum the full line), so the buttons stay on one row. */
 .pt-seltool--noted {
   flex-wrap: wrap;
-  max-inline-size: min(360px, calc(100vw - 32px));
 }
 
-.pt-seltool--sheet.pt-seltool--noted {
-  max-inline-size: none;
+/* Floating, the bar is as wide as its buttons whatever column it is positioned in (a page at 50 %
+   is narrower than the bar), so a note never wraps the buttons onto a second row. */
+.pt-seltool--noted:not(.pt-seltool--sheet) {
+  inline-size: max-content;
 }
 
 .pt-seltool__note {
   flex-basis: 100%;
+  inline-size: 0;
+  min-inline-size: 100%;
   margin: 0;
   padding: 4px 8px 6px;
   font-size: 0.8125rem;

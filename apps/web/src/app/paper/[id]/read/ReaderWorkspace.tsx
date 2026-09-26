@@ -928,7 +928,11 @@ function ReaderToolbarShell({
       <button
         type="button"
         className="pt-btn"
-        aria-label={highlightCount > 0 ? `Contents, ${String(highlightCount)} highlights` : 'Contents'}
+        aria-label={
+          highlightCount > 0
+            ? `Contents, ${String(highlightCount)} ${highlightCount === 1 ? 'highlight' : 'highlights'}`
+            : 'Contents'
+        }
         aria-expanded={navigatorOpen}
         aria-pressed={navigatorOpen}
         disabled={!navigatorAvailable}
@@ -1008,6 +1012,7 @@ function SourceSlot(props: ViewProps) {
       activeHighlightId={props.activeHighlightId}
       flash={props.flash}
       narrow={props.narrow}
+      sheetOpen={props.narrow && props.navigatorOpen}
       onViewportResize={props.onViewportResize}
       onSelectionChange={props.onSelectionChange}
       documentRef={props.documentRef}

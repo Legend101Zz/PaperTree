@@ -43,6 +43,8 @@ export type ToolbarPlacement =
       readonly extent: { readonly left: number; readonly top: number; readonly right: number; readonly bottom: number };
       /** The content box's width, to keep the bar inside it. */
       readonly boundsWidth: number;
+      /** Above the extent (a selection on one page), or below it (the end of one across pages). */
+      readonly prefer?: 'above' | 'below';
     }
   | { readonly kind: 'sheet' };
 
@@ -191,6 +193,7 @@ function floatStyle(
   const maxLeft = Math.max(EDGE, placement.boundsWidth - width - EDGE);
   const left = Math.min(maxLeft, Math.max(EDGE, centre - width / 2));
   const above = placement.extent.top - GAP - height;
-  const top = above >= EDGE ? above : placement.extent.bottom + GAP;
+  const below = placement.extent.bottom + GAP;
+  const top = placement.prefer === 'below' ? below : above >= EDGE ? above : below;
   return { left, top, visibility: size === null ? 'hidden' : 'visible' };
 }

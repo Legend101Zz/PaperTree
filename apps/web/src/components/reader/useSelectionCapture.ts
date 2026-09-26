@@ -118,6 +118,13 @@ export interface PendingSelection {
   readonly pageTextRanges: readonly PageTextRange[];
   /** The selection's geometry on `pageIndex`, IR space. Position the toolbar from THIS. */
   readonly irExtent: BBox | null;
+  /**
+   * The page the selection ENDS on and its geometry there. A selection across pages was dragged
+   * (the page auto-scrolling) to its end, so its start is usually off screen by the time the
+   * pointer is released: the toolbar goes by the end instead.
+   */
+  readonly endPageIndex: number;
+  readonly endExtent: BBox | null;
   readonly irPolygons: readonly Polygon[];
 }
 
@@ -679,27 +686,34 @@ export function useSelectionCapture(options: UseSelectionCaptureOptions): UseSel
     const pageTextRuns = targets.flatMap((target) => (target.kind === 'page-text' ? [target.range] : []));
 
     const { quadsByBlock } = partitioned;
+    /** The selection's quads on one of its pages (IR ranges and page-text runs alike). */
+    const quadsOn = (pageIndex: number): BBox[] => {
+      const out: BBox[] = [];
+      for (const range of ranges) {
+        if (indexed.byId.get(range.blockId)?.pageIndex === pageIndex) {
+          out.push(...(quadsByBlock.get(range.blockId) ?? []));
+        }
+      }
+      const page = pages.find((p) => p.pageIndex === pageIndex);
+      if (page !== undefined) {
+        for (const run of pageTextRuns) {
+          if (run.pageIndex !== pageIndex) continue;
+          out.push(
+            ...itemPieceQuads(
+              page.source.frame,
+              page.source.items,
+              piecesBetween(page.source.items, run.start, run.end),
+              measure,
+            ),
+          );
+        }
+      }
+      return out;
+    };
     const firstPageIndex = pages[0]?.pageIndex ?? start.pageIndex;
-    const firstPage = pages[0];
-    const onFirstPage: BBox[] = [];
-    for (const range of ranges) {
-      if (indexed.byId.get(range.blockId)?.pageIndex === firstPageIndex) {
-        onFirstPage.push(...(quadsByBlock.get(range.blockId) ?? []));
-      }
-    }
-    if (firstPage !== undefined) {
-      for (const run of pageTextRuns) {
-        if (run.pageIndex !== firstPageIndex) continue;
-        onFirstPage.push(
-          ...itemPieceQuads(
-            firstPage.source.frame,
-            firstPage.source.items,
-            piecesBetween(firstPage.source.items, run.start, run.end),
-            measure,
-          ),
-        );
-      }
-    }
+    const lastPageIndex = pages[pages.length - 1]?.pageIndex ?? firstPageIndex;
+    const onFirstPage = quadsOn(firstPageIndex);
+    const onLastPage = lastPageIndex === firstPageIndex ? onFirstPage : quadsOn(lastPageIndex);
     return {
       text,
       pageIndex: firstPageIndex,
@@ -710,6 +724,8 @@ export function useSelectionCapture(options: UseSelectionCaptureOptions): UseSel
       quadsByBlock,
       pageTextRanges: pageTextRuns,
       irExtent: extent(onFirstPage),
+      endPageIndex: lastPageIndex,
+      endExtent: extent(onLastPage),
       irPolygons: unionOfLineRects(onFirstPage),
     };
   }, []);
