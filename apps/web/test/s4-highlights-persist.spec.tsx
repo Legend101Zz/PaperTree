@@ -31,6 +31,7 @@ import {
 } from '@papertree/anchoring';
 
 import { useHighlights, type UseHighlights } from '@/components/reader/useHighlights';
+import { MAX_ANCHORS_PER_HIGHLIGHT } from '@/lib/api/highlights';
 
 const FIXTURE = join(process.cwd(), '../../packages/document-ir/fixtures/resnet-cvpr-2col.paperir.json');
 const source = JSON.parse(readFileSync(FIXTURE, 'utf8')) as PaperSource & { parser: { version: string } };
@@ -95,6 +96,7 @@ let answer: (call: Call) => { status: number; body?: unknown } = () => ({ status
 
 beforeEach(() => {
   calls = [];
+  notices = [];
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -118,8 +120,10 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+let notices: string[] = [];
+
 function Harness({ onReady }: { readonly onReady: (api: UseHighlights) => void }) {
-  const api = useHighlights({ paper: { kind: 'api', paperId: PAPER }, doc, onNotice: () => undefined });
+  const api = useHighlights({ paper: { kind: 'api', paperId: PAPER }, doc, onNotice: (message) => notices.push(message) });
   useEffect(() => {
     onReady(api);
   });
@@ -249,5 +253,148 @@ describe('s4: highlights persist through the API', () => {
     });
     expect(calls.some((c) => c.method === 'DELETE')).toBe(true);
     expect(hook.current().highlights).toHaveLength(1);
+  });
+
+  it('review F3: a reopen with the server’s own row for this parse PUTs nothing (the tier is not overwritten with 0)', async () => {
+    const saved = capture(0, '6f0e4f8e-0000-4000-8000-000000000031');
+    const block = paragraphs[0] as (typeof paragraphs)[number];
+    const row = wire('hl_01K0SAVED0000000000000031', [saved]);
+    const stored = {
+      ...row,
+      anchors: row.anchors.map((a) => ({
+        ...a,
+        resolution: {
+          generation: 1,
+          tier: 1,
+          state: 'anchored',
+          block_ids: [block.id],
+          score: 1,
+          reason: null,
+          resolver_version: RESOLVER_VERSION,
+        },
+      })),
+    };
+    answer = (call) => (call.method === 'GET' ? { status: 200, body: [stored] } : { status: 204 });
+    const hook = mount();
+    await waitFor(() => expect(hook.current().load).toBe('ready'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(calls.filter((c) => c.method === 'PUT')).toEqual([]);
+  });
+
+  it('the reader’s anchor limit IS the contract’s (contracts/api/highlights.schema.json)', () => {
+    const schema = JSON.parse(
+      readFileSync(join(process.cwd(), '../../contracts/api/highlights.schema.json'), 'utf8'),
+    ) as { $defs: { HighlightCreate: { properties: { anchors: { maxItems: number; minItems: number } } } } };
+    expect(MAX_ANCHORS_PER_HIGHLIGHT).toBe(schema.$defs.HighlightCreate.properties.anchors.maxItems);
+  });
+
+  it('review F2: a selection over the 64-anchor limit is refused up front with a designed sentence, and nothing is sent', async () => {
+    answer = (call) => (call.method === 'GET' ? { status: 200, body: [] } : { status: 204 });
+    const hook = mount();
+    await waitFor(() => expect(hook.current().load).toBe('ready'));
+    const many = Array.from({ length: 65 }, (_, i) =>
+      capture(i % 4, `6f0e4f8e-0000-4000-8000-${String(i).padStart(12, '0')}`),
+    );
+    let made: unknown = 'not called';
+    await act(async () => {
+      made = await hook.current().create(many, 'amber');
+    });
+    expect(made).toBeNull();
+    expect(calls.filter((c) => c.method === 'POST')).toEqual([]);
+    expect(hook.current().highlights).toEqual([]);
+    expect(notices.at(-1)).toMatch(/up to 64/);
+    expect(notices.at(-1)).not.toMatch(/List should have|validation/);
+  });
+
+  it('review F2: a refused save says a designed sentence (never the validator’s text) and offers no Retry that cannot succeed', async () => {
+    answer = (call) => {
+      if (call.method === 'GET') return { status: 200, body: [] };
+      if (call.method === 'POST') {
+        return {
+          status: 422,
+          body: {
+            detail: 'anchors: List should have at most 64 items after validation, not 128',
+            code: 'validation_failed',
+            retryable: false,
+          },
+        };
+      }
+      return { status: 204 };
+    };
+    const hook = mount();
+    await waitFor(() => expect(hook.current().load).toBe('ready'));
+    await act(async () => {
+      await hook.current().create([capture(0, '6f0e4f8e-0000-4000-8000-000000000041')], 'amber');
+    });
+    await waitFor(() => expect(hook.current().highlights[0]?.status).toBe('unsaved'));
+    const made = hook.current().highlights[0];
+    expect(made?.error).toMatch(/^Couldn't save this highlight/);
+    expect(made?.error).not.toMatch(/List should have|anchors:|validation/);
+    expect(made?.retryable).toBe(false);
+    expect(notices.join(' ')).not.toMatch(/List should have/);
+    await act(async () => {
+      await hook.current().retry(made?.highlightId ?? '');
+    });
+    expect(calls.filter((c) => c.method === 'POST')).toHaveLength(1);
+  });
+
+  it('review F11: Retry after a colour change resends the ORIGINAL body, then PATCHes the new colour', async () => {
+    let posts = 0;
+    answer = (call) => {
+      if (call.method === 'GET') return { status: 200, body: [] };
+      if (call.method === 'POST') {
+        posts += 1;
+        if (posts === 1) return { status: 503, body: { detail: 'busy', code: 'internal', retryable: true } };
+        const sent = call.body as { highlight_id: string; color: string; anchors: { anchor: Anchor }[] };
+        return { status: 201, body: wire(sent.highlight_id, sent.anchors.map((a) => a.anchor), sent.color) };
+      }
+      if (call.method === 'PATCH') {
+        const sent = calls.filter((c) => c.method === 'POST')[0]?.body as { highlight_id: string; anchors: { anchor: Anchor }[] };
+        return { status: 200, body: wire(sent.highlight_id, sent.anchors.map((a) => a.anchor), 'green') };
+      }
+      return { status: 204 };
+    };
+    const hook = mount();
+    await waitFor(() => expect(hook.current().load).toBe('ready'));
+    await act(async () => {
+      await hook.current().create([capture(0, '6f0e4f8e-0000-4000-8000-000000000051')], 'amber');
+    });
+    await waitFor(() => expect(hook.current().highlights[0]?.status).toBe('unsaved'));
+    const id = hook.current().highlights[0]?.highlightId ?? '';
+    await act(async () => {
+      await hook.current().update(id, { color: 'green' });
+    });
+    await act(async () => {
+      await hook.current().retry(id);
+    });
+    await waitFor(() => expect(hook.current().highlights[0]?.status).toBe('saved'));
+    const [first, second] = calls.filter((c) => c.method === 'POST');
+    // Byte-for-byte the same request: §2.4's idempotent replay only holds for the SAME body.
+    expect(second?.body).toEqual(first?.body);
+    await waitFor(() => expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ color: 'green', note: null }));
+    expect(hook.current().highlights[0]?.color).toBe('green');
+  });
+
+  it('deleting an unsaved highlight still asks the server (the lost-response POST may have landed)', async () => {
+    answer = (call) => {
+      if (call.method === 'GET') return { status: 200, body: [] };
+      if (call.method === 'POST') return { status: 503, body: { detail: 'busy', code: 'internal', retryable: true } };
+      if (call.method === 'DELETE') return { status: 404, body: { detail: 'no such highlight', code: 'not_found', retryable: false } };
+      return { status: 204 };
+    };
+    const hook = mount();
+    await waitFor(() => expect(hook.current().load).toBe('ready'));
+    await act(async () => {
+      await hook.current().create([capture(0, '6f0e4f8e-0000-4000-8000-000000000061')], 'amber');
+    });
+    await waitFor(() => expect(hook.current().highlights[0]?.status).toBe('unsaved'));
+    const id = hook.current().highlights[0]?.highlightId ?? '';
+    await act(async () => {
+      await hook.current().remove(id);
+    });
+    expect(calls.find((c) => c.method === 'DELETE')?.path).toBe(`/papers/${PAPER}/highlights/${id}`);
+    expect(hook.current().highlights).toEqual([]);
   });
 });

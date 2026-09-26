@@ -9,6 +9,13 @@ import type { Anchor, AnchorFailureReason, Highlight, HighlightColor, Resolution
 
 const seg = encodeURIComponent;
 
+/**
+ * The most anchors one highlight may hold — contracts.md §2.4 (`anchors: 1..64`), the same bound the
+ * server's `HighlightIn` and `contracts/api/highlights.schema.json` carry. The reader refuses a
+ * longer selection up front instead of sending a body the API must reject.
+ */
+export const MAX_ANCHORS_PER_HIGHLIGHT = 64;
+
 /** A resolution computed by the reader, sent with a create (`anchor_id` names which anchor). */
 export interface ResolutionIn {
   readonly anchor_id: string;
@@ -26,7 +33,7 @@ export interface CreateHighlightBody {
   readonly highlight_id: string;
   readonly color: HighlightColor;
   readonly note?: string | null;
-  /** 1..64; the ordinal is the index. */
+  /** 1..`MAX_ANCHORS_PER_HIGHLIGHT`; the ordinal is the index. */
   readonly anchors: readonly { readonly anchor: Anchor }[];
   readonly resolutions?: readonly ResolutionIn[];
 }

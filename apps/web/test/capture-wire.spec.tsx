@@ -577,6 +577,42 @@ describe('reader/capture-wire.spec — review F1: each selected glyph is stored 
   });
 });
 
+describe('reader/capture-wire.spec — review F2: a selection longer than one highlight may hold', () => {
+  it('says so in the bar (not a tooltip), disables Highlight, and sends nothing', async () => {
+    const doc = await loadFixtureDoc();
+    ITEMS_BY_PAGE = new Map(doc.pages.map((p) => [p.index, itemsFor(doc, p.index)]));
+    PAGE_SIZES = new Map(doc.pages.map((p) => [p.index, { width: p.width, height: p.height }]));
+    // The fullest page, with a stray label (no block holds it) after every line: every line's
+    // block and every label is its own target, which is well past 64 on one page.
+    const [pageIndex, items] = Array.from(ITEMS_BY_PAGE.entries()).sort((a, b) => b[1].length - a[1].length)[0] as [
+      number,
+      FakeItem[],
+    ];
+    const height = PAGE_SIZES.get(pageIndex)?.height ?? 792;
+    const lines = items.length;
+    for (let i = lines - 1; i >= 0; i -= 1) {
+      items.splice(i + 1, 0, { str: `label ${String(i)}`, transform: [6, 0, 0, 6, 4, height - 6], width: 20, height: 6 });
+    }
+    const captured: SelectionCapture[] = [];
+    renderPane(doc, { onCreateHighlight: (capture) => captured.push(capture) });
+    const first = await itemElement((items[0] as FakeItem).str);
+    const last = await itemElement((items[items.length - 1] as FakeItem).str);
+    selectBetween(first, 0, last, (last.textContent ?? '').length);
+
+    const button = await screen.findByRole('button', { name: 'Highlight' });
+    await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(true));
+    const toolbar = screen.getByRole('toolbar', { name: 'Selection actions' });
+    expect(toolbar.textContent).toMatch(/covers \d+ passages; one highlight holds up to 64/);
+    const noteId = button.getAttribute('aria-describedby');
+    expect(noteId).not.toBeNull();
+    expect(document.getElementById(noteId ?? '')?.textContent).toMatch(/up to 64/);
+    fireEvent.click(button);
+    expect(captured).toEqual([]);
+    // Ask and Copy still work on it.
+    expect((screen.getByRole('button', { name: 'Copy' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+});
+
 /**
  * Select this element's text, then fire what a real pointer fires.
  *

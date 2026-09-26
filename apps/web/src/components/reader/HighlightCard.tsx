@@ -159,7 +159,8 @@ export function HighlightCard(props: HighlightCardProps): JSX.Element {
           Delete
         </button>
         <div className="flex items-center gap-2">
-          {highlight.status === 'unsaved' ? (
+          {/* No Retry for a refusal (a 422): resending the same body cannot succeed (F2). */}
+          {highlight.status === 'unsaved' && highlight.retryable !== false ? (
             <button type="button" className="pt-btn pt-btn--outline" onClick={props.onRetry}>
               Retry saving
             </button>

@@ -26,9 +26,16 @@
  * (ADR-002 §6.3) — so the row gains a quote and glyph quads, once.
  *
  * WRITES ARE OPTIMISTIC AND HONEST. A new highlight paints at once, marked "saving"; if the POST
- * fails it stays on the page marked "not saved" with a Retry (the id is client-minted, so a retry is
- * idempotent), never silently dropped and never shown as saved. A failed colour change or delete is
- * rolled back and says so.
+ * fails it stays on the page marked "not saved", never silently dropped and never shown as saved.
+ * A failure that can clear (the network, a 5xx, "still being read") offers Retry, which resends the
+ * EXACT first body — the id is client-minted and §2.4 answers a repeat of the same body with the
+ * stored row, so a retry after a POST whose answer was lost is safe; a colour or note changed
+ * meanwhile is PATCHed once the create lands. A refusal that cannot clear (a 422) says so and offers
+ * no Retry. Every sentence is designed here: the server's `detail` is never shown. A failed colour
+ * change or delete is rolled back and says so.
+ *
+ * ONE HIGHLIGHT HOLDS AT MOST 64 ANCHORS (§2.4). A longer selection is refused before anything is
+ * painted or sent (`create` returns null and says why); the toolbar says so first (`SourcePane`).
  *
  * A FIXTURE PAPER HAS NO SERVER (`NEXT_PUBLIC_PAPERTREE_FIXTURES=on` only), so its highlights are
  * kept for the session and labelled as such.
@@ -40,6 +47,7 @@ import {
   captureAnchor,
   RESOLVER_VERSION,
   resolveAnchor,
+  Tier,
   type Anchor,
   type BlockSelector,
   type IndexedDocument,
@@ -48,7 +56,12 @@ import {
 } from '@papertree/anchoring';
 
 import { NetworkError } from '@/lib/api/client';
-import { highlightsApi, type ResolutionItem } from '@/lib/api/highlights';
+import {
+  highlightsApi,
+  MAX_ANCHORS_PER_HIGHLIGHT,
+  type CreateHighlightBody,
+  type ResolutionItem,
+} from '@/lib/api/highlights';
 import { ApiError, type Highlight, type HighlightColor, type ResolutionWire } from '@/lib/api/types';
 import { documentGeneration, type PaperRef } from '@/lib/paperSource';
 
@@ -68,6 +81,8 @@ export interface ReaderHighlight {
   readonly status: HighlightStatus;
   /** A designed sentence, set when `status === 'unsaved'`. */
   readonly error?: string;
+  /** With `status === 'unsaved'`: false when resending cannot succeed (a 422), so no Retry is offered. */
+  readonly retryable?: boolean;
 }
 
 export type HighlightsLoad = 'idle' | 'loading' | 'ready' | 'error';
@@ -108,14 +123,46 @@ export function newHighlightId(now: number = Date.now()): string {
   return `hl_${time}${random}`;
 }
 
-function sentenceFor(error: unknown, action: string): string {
-  if (error instanceof NetworkError) return `Couldn't ${action}: PaperTree is not reachable. Check the connection and try again.`;
-  if (error instanceof ApiError) {
-    if (error.code === 'not_parsed') return `Couldn't ${action}: this paper is still being read.`;
-    if (error.status >= 500) return `Couldn't ${action}: the server had a problem. Try again.`;
-    return `Couldn't ${action}: ${error.detail}`;
+/** What went wrong, as the reader is told it, and whether trying again can help. */
+interface WriteFailure {
+  readonly sentence: string;
+  readonly retryable: boolean;
+}
+
+/**
+ * A designed sentence for a failed call — NEVER the server's `detail`, which is a validator's or a
+ * developer's text ("anchors: List should have at most 64 items…", s4-review.md F2). `refused` is
+ * the next action when the server refused the request itself (a 4xx that resending cannot change).
+ */
+function failureFor(error: unknown, action: string, refused: string): WriteFailure {
+  if (error instanceof NetworkError) {
+    return { sentence: `Couldn't ${action}: PaperTree is not reachable. Check the connection and try again.`, retryable: true };
   }
-  return `Couldn't ${action}. Try again.`;
+  if (error instanceof ApiError) {
+    if (error.code === 'not_parsed') {
+      return { sentence: `Couldn't ${action}: this paper is still being read. Try again in a moment.`, retryable: true };
+    }
+    if (error.status >= 500 || error.retryable) {
+      return { sentence: `Couldn't ${action}: the server had a problem. Try again.`, retryable: true };
+    }
+    if (error.status === 404) {
+      return { sentence: `Couldn't ${action}: it is no longer in your library. Reload the paper.`, retryable: false };
+    }
+    return { sentence: `Couldn't ${action}: PaperTree refused it. ${refused}`, retryable: false };
+  }
+  return { sentence: `Couldn't ${action}. Try again.`, retryable: true };
+}
+
+function sentenceFor(error: unknown, action: string): string {
+  return failureFor(error, action, 'Reload the paper and try again.').sentence;
+}
+
+/** Said when a selection needs more anchors than one highlight may hold. */
+export function tooLongSentence(count: number): string {
+  return (
+    `This selection covers ${String(count)} passages; one highlight holds up to ` +
+    `${String(MAX_ANCHORS_PER_HIGHLIGHT)}. Select a shorter stretch, or highlight it in parts.`
+  );
 }
 
 function resolutionWire(resolution: Resolution, generation: number): Omit<ResolutionItem, 'anchor_id'> & { generation: number } {
@@ -130,14 +177,19 @@ function resolutionWire(resolution: Resolution, generation: number): Omit<Resolu
   };
 }
 
-function sameResolution(wire: ResolutionWire | null, resolution: Resolution): boolean {
-  if (wire === null) return false;
-  return (
-    wire.resolver_version === RESOLVER_VERSION &&
-    wire.tier === resolution.tier &&
-    wire.state === resolution.state &&
-    wire.block_ids.join(' ') === resolution.blockIds.join(' ')
-  );
+/**
+ * Whether the server already holds what the ladder concluded, for THIS generation.
+ *
+ * A T0 answer IS the server's row: `withCache` made that row the anchor's cache, so the ladder
+ * answering from it (`Tier.Cache`) is the same resolution, not a new one at tier 0. Comparing tiers
+ * there re-PUT every anchor as tier 0 on the first reload and erased which tier had resolved it
+ * (s4-review.md F3).
+ */
+function sameResolution(wire: ResolutionWire | null, resolution: Resolution, generation: number): boolean {
+  if (wire === null || wire.generation !== generation || wire.resolver_version !== RESOLVER_VERSION) return false;
+  const sameLink = wire.state === resolution.state && wire.block_ids.join(' ') === resolution.blockIds.join(' ');
+  if (resolution.tier === Tier.Cache) return sameLink;
+  return sameLink && wire.tier === resolution.tier;
 }
 
 /** The server's cache entry as the ladder's T0 input, when it is for THIS parse and resolver. */
@@ -222,8 +274,14 @@ export function useHighlights({ paper, doc, onNotice }: UseHighlightsOptions): U
   noticeRef.current = onNotice;
   const stateRef = useRef(highlights);
   stateRef.current = highlights;
-  /** The exact bodies of creates not yet stored, so Retry resends the same id and anchors. */
-  const pendingBodies = useRef(new Map<string, { anchors: readonly Anchor[]; color: HighlightColor }>());
+  /**
+   * The exact FIRST body of each create not yet stored. Retry resends it unchanged — §2.4's replay
+   * rule answers the same body with the stored row, and a different one with a 422 (F11) — and a
+   * colour or note changed meanwhile goes as a PATCH after the create lands.
+   */
+  const pendingBodies = useRef(new Map<string, CreateHighlightBody>());
+  /** Deleted while its create was in flight: delete it again once the create answers. */
+  const abandoned = useRef(new Set<string>());
 
   const paperId = paper.kind === 'api' ? paper.paperId : null;
   const generation = doc === null ? null : documentGeneration(doc);
@@ -272,7 +330,7 @@ export function useHighlights({ paper, doc, onNotice }: UseHighlightsOptions): U
           for (const { anchor, resolution } of reader.anchors) {
             const wire = byId.get(anchor.id);
             const upgraded = upgradeOf(anchor, resolution, doc);
-            if (upgraded === null && sameResolution(wire?.resolution ?? null, resolution)) continue;
+            if (upgraded === null && sameResolution(wire?.resolution ?? null, resolution, generation)) continue;
             const { generation: _g, ...fields } = resolutionWire(resolution, generation);
             items.push({
               anchor_id: anchor.id,
@@ -309,34 +367,37 @@ export function useHighlights({ paper, doc, onNotice }: UseHighlightsOptions): U
   }, []);
 
   const send = useCallback(
-    async (highlightId: string, anchors: readonly Anchor[], color: HighlightColor): Promise<void> => {
-      if (paperId === null || doc === null || generation === null) return;
+    async (highlightId: string): Promise<void> => {
+      const body = pendingBodies.current.get(highlightId);
+      if (paperId === null || doc === null || generation === null || body === undefined) return;
       try {
-        const stored = await highlightsApi.create(paperId, {
-          highlight_id: highlightId,
-          color,
-          anchors: anchors.map((anchor) => ({ anchor: wireAnchor(anchor) })),
-          resolutions: anchors.map((anchor) => ({
-            anchor_id: anchor.id,
-            ...resolutionWire(resolveAnchor(anchor, doc), generation),
-          })),
-        });
+        const stored = await highlightsApi.create(paperId, body);
         pendingBodies.current.delete(highlightId);
+        if (abandoned.current.delete(highlightId)) {
+          // Deleted while the create was in flight: the row exists now, so it goes now.
+          await highlightsApi.remove(paperId, highlightId).catch(() => undefined);
+          return;
+        }
         const current = stateRef.current.find((h) => h.highlightId === highlightId);
         replace(highlightId, {
           ...fromWire(stored, doc, generation),
-          // A colour or note the reader chose while the POST was in flight wins; it is PATCHed below.
+          // A colour or note the reader chose after the first POST wins; it is PATCHed below.
           ...(current === undefined ? {} : { color: current.color, note: current.note }),
         });
         if (current !== undefined && (current.color !== stored.color || current.note !== stored.note)) {
           await highlightsApi.update(paperId, highlightId, { color: current.color, note: current.note });
         }
       } catch (error) {
+        const failure = failureFor(error, 'save this highlight', 'Delete it and select the passage again.');
+        if (abandoned.current.delete(highlightId)) {
+          pendingBodies.current.delete(highlightId);
+          return;
+        }
         const current = stateRef.current.find((h) => h.highlightId === highlightId);
         if (current !== undefined) {
-          replace(highlightId, { ...current, status: 'unsaved', error: sentenceFor(error, 'save this highlight') });
+          replace(highlightId, { ...current, status: 'unsaved', error: failure.sentence, retryable: failure.retryable });
         }
-        noticeRef.current?.(sentenceFor(error, 'save this highlight'));
+        noticeRef.current?.(failure.sentence);
       }
     },
     [paperId, doc, generation, replace],
@@ -345,6 +406,12 @@ export function useHighlights({ paper, doc, onNotice }: UseHighlightsOptions): U
   const create = useCallback(
     async (anchors: readonly Anchor[], color: HighlightColor): Promise<ReaderHighlight | null> => {
       if (doc === null || anchors.length === 0) return null;
+      if (anchors.length > MAX_ANCHORS_PER_HIGHLIGHT) {
+        // Refused before anything is painted or sent: the API would answer 422 (§2.4 `1..64`), and
+        // a highlight shown as "not saved" with a Retry that can never succeed is worse than none.
+        noticeRef.current?.(tooLongSentence(anchors.length));
+        return null;
+      }
       const highlightId = newHighlightId();
       const record: ReaderHighlight = {
         highlightId,
@@ -355,22 +422,31 @@ export function useHighlights({ paper, doc, onNotice }: UseHighlightsOptions): U
         status: paperId === null ? 'session' : 'saving',
       };
       setHighlights((current) => [...current, record]);
-      if (paperId !== null) {
-        pendingBodies.current.set(highlightId, { anchors, color });
-        void send(highlightId, anchors, color);
+      if (paperId !== null && generation !== null) {
+        pendingBodies.current.set(highlightId, {
+          highlight_id: highlightId,
+          color,
+          anchors: anchors.map((anchor) => ({ anchor: wireAnchor(anchor) })),
+          resolutions: record.anchors.map(({ anchor, resolution }) => ({
+            anchor_id: anchor.id,
+            ...resolutionWire(resolution, generation),
+          })),
+        });
+        void send(highlightId);
       }
       return record;
     },
-    [doc, paperId, send],
+    [doc, paperId, generation, send],
   );
 
   const retry = useCallback(
     async (highlightId: string) => {
-      const body = pendingBodies.current.get(highlightId);
       const current = stateRef.current.find((h) => h.highlightId === highlightId);
-      if (body === undefined || current === undefined) return;
+      if (!pendingBodies.current.has(highlightId) || current === undefined) return;
+      // A refusal (a 422) is not cleared by sending the same body again.
+      if (current.status === 'unsaved' && current.retryable === false) return;
       replace(highlightId, { ...current, status: 'saving' });
-      await send(highlightId, body.anchors, body.color);
+      await send(highlightId);
     },
     [replace, send],
   );
@@ -385,11 +461,9 @@ export function useHighlights({ paper, doc, onNotice }: UseHighlightsOptions): U
         ...(patch.note === undefined ? {} : { note: patch.note === '' ? null : patch.note }),
       };
       replace(highlightId, after);
-      const pending = pendingBodies.current.get(highlightId);
-      if (pending !== undefined) {
-        // Not stored yet: the new colour rides on the create (and its retry); a note is PATCHed
-        // once the create lands (see `send`).
-        pendingBodies.current.set(highlightId, { ...pending, color: after.color });
+      if (pendingBodies.current.has(highlightId)) {
+        // Not stored yet: the change is kept on the page and PATCHed once the create lands
+        // (`send`). The pending body itself is never edited — see `pendingBodies`.
         return;
       }
       if (paperId === null || before.status === 'session') return;
@@ -410,17 +484,26 @@ export function useHighlights({ paper, doc, onNotice }: UseHighlightsOptions): U
       if (target === undefined) return;
       replace(highlightId, null);
       if (paperId === null || target.status === 'session') return;
-      if (pendingBodies.current.has(highlightId) && target.status === 'unsaved') {
-        pendingBodies.current.delete(highlightId);
+      if (pendingBodies.current.has(highlightId) && target.status === 'saving') {
+        // Its create is in flight: deleting now could reach the server first. `send` deletes it
+        // when the create answers.
+        abandoned.current.add(highlightId);
         return;
       }
+      // An UNSAVED highlight is still deleted on the server: a POST whose answer was lost may have
+      // been stored, and it would come back on the next reload. A 404 means it never was.
       try {
         await highlightsApi.remove(paperId, highlightId);
       } catch (error) {
-        if (error instanceof ApiError && error.status === 404) return; // already gone
-        setHighlights(before);
-        noticeRef.current?.(sentenceFor(error, 'delete this highlight'));
+        if (!(error instanceof ApiError && error.status === 404)) {
+          // Still on the page, and (if it was never stored) still retryable with its first body.
+          setHighlights(before);
+          noticeRef.current?.(sentenceFor(error, 'delete this highlight'));
+          return;
+        }
+        // 404: already gone, or never stored.
       }
+      pendingBodies.current.delete(highlightId);
     },
     [paperId, replace],
   );

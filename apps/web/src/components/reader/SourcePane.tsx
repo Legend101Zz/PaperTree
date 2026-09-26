@@ -31,6 +31,8 @@ import {
   type Resolution,
 } from '@papertree/anchoring';
 
+import { MAX_ANCHORS_PER_HIGHLIGHT } from '@/lib/api/highlights';
+
 import { useReaderActions } from './actions';
 import { type DocumentHandle, type DocumentRef } from './documentHandle';
 import { HighlightOverlay, hitsItem, type FlashPaint, type PaintItem } from './HighlightOverlay';
@@ -39,7 +41,7 @@ import { displayQuote } from './quote';
 import type { TextLayerInfo } from './PdfPage';
 import { SelectionToolbar } from './SelectionToolbar';
 import { stampTextLayer } from './stampTextLayer';
-import type { ReaderHighlight } from './useHighlights';
+import { tooLongSentence, type ReaderHighlight } from './useHighlights';
 import {
   useSelectionCapture,
   type PageTextSource,
@@ -191,7 +193,12 @@ export function SourcePane(props: SourcePaneProps) {
 
   const { items } = useMemo(() => paintItemsOf(doc, props.highlights), [doc, props.highlights]);
 
-  const unavailable = props.highlightUnavailableReason ?? undefined;
+  // One highlight holds at most 64 anchors (contracts.md §2.4): a longer selection says so in the
+  // bar, before anything is sent — the reviewer's 3-page drag was a raw 422 (s4-review.md F2).
+  const targetCount = selection?.targets.length ?? 0;
+  const unavailable =
+    props.highlightUnavailableReason ??
+    (targetCount > MAX_ANCHORS_PER_HIGHLIGHT ? tooLongSentence(targetCount) : undefined);
 
   const onHighlight = useCallback(() => {
     const captured = capture('text');

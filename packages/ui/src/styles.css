@@ -1203,6 +1203,26 @@ span.pt-paper .pt-paper__cite {
   justify-content: space-between;
 }
 
+/* Highlight is unavailable for this selection: the reason is a sentence under the buttons, in the
+   bar itself, never only a tooltip. */
+.pt-seltool--noted {
+  flex-wrap: wrap;
+  max-inline-size: min(360px, calc(100vw - 32px));
+}
+
+.pt-seltool--sheet.pt-seltool--noted {
+  max-inline-size: none;
+}
+
+.pt-seltool__note {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 4px 8px 6px;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--pt-ink-muted);
+}
+
 .pt-seltool__sep {
   inline-size: 1px;
   block-size: 24px;

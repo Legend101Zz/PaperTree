@@ -52,18 +52,25 @@ export interface SelectionToolbarProps {
   readonly onCopy: () => void;
   readonly onAsk?: () => void;
   readonly onSendToCanvas?: () => void;
-  /** Why Highlight cannot be used right now (the paper is still being read), or undefined. */
+  /**
+   * Why Highlight cannot be used on this selection (the paper is still being read; the selection is
+   * longer than one highlight may hold), or undefined. SHOWN in the bar, not only as a tooltip: a
+   * disabled button with no visible reason is a dead end.
+   */
   readonly highlightDisabledReason?: string;
 }
 
 const GAP = 8;
 const EDGE = 8;
 
+const NOTE_ID = 'pt-seltool-note';
+
 function ToolbarButton({
   label,
   onActivate,
   disabled = false,
   title,
+  describedBy,
   children,
   primary = false,
 }: {
@@ -71,6 +78,7 @@ function ToolbarButton({
   readonly onActivate?: (() => void) | undefined;
   readonly disabled?: boolean;
   readonly title?: string;
+  readonly describedBy?: string;
   readonly children: ReactNode;
   readonly primary?: boolean;
 }): JSX.Element {
@@ -79,6 +87,7 @@ function ToolbarButton({
       type="button"
       className={`pt-btn${primary ? ' pt-btn--seltool-primary' : ''}`}
       aria-label={label}
+      {...(describedBy === undefined ? {} : { 'aria-describedby': describedBy })}
       title={title ?? label}
       disabled={disabled || onActivate === undefined}
       onClick={() => {
@@ -98,7 +107,9 @@ function Buttons(props: SelectionToolbarProps): JSX.Element {
         label="Highlight"
         onActivate={props.onHighlight}
         disabled={highlightDisabled}
-        {...(props.highlightDisabledReason === undefined ? {} : { title: props.highlightDisabledReason })}
+        {...(props.highlightDisabledReason === undefined
+          ? {}
+          : { title: props.highlightDisabledReason, describedBy: NOTE_ID })}
         primary
       >
         <span className="pt-seltool__dot" aria-hidden="true" />
@@ -115,6 +126,11 @@ function Buttons(props: SelectionToolbarProps): JSX.Element {
       <ToolbarButton label="Copy" onActivate={props.onCopy}>
         Copy
       </ToolbarButton>
+      {props.highlightDisabledReason === undefined ? null : (
+        <p id={NOTE_ID} className="pt-seltool__note">
+          {props.highlightDisabledReason}
+        </p>
+      )}
     </>
   );
 }
@@ -132,7 +148,7 @@ export function SelectionToolbar(props: SelectionToolbarProps): JSX.Element | nu
     setSize((current) =>
       current !== null && current.width === next.width && current.height === next.height ? current : next,
     );
-  }, [props.placement.kind]);
+  }, [props.placement.kind, props.highlightDisabledReason]);
 
   const bar = (
     <div
@@ -140,7 +156,13 @@ export function SelectionToolbar(props: SelectionToolbarProps): JSX.Element | nu
       role="toolbar"
       aria-label="Selection actions"
       aria-orientation="horizontal"
-      className={`pt-seltool${props.placement.kind === 'sheet' ? ' pt-seltool--sheet' : ''}`}
+      className={[
+        'pt-seltool',
+        props.placement.kind === 'sheet' ? 'pt-seltool--sheet' : '',
+        props.highlightDisabledReason === undefined ? '' : 'pt-seltool--noted',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       data-placement={props.placement.kind}
       style={props.placement.kind === 'float' ? floatStyle(props.placement, size) : undefined}
       // Preventing pointerdown also suppresses the compatibility mousedown, whose default action
