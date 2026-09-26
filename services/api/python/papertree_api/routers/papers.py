@@ -193,8 +193,8 @@ async def upload(request: Request, call: CallerDep, settings: SettingsDep) -> Up
     page_count = _page_count(raw)
 
     # 202 means "the bytes are safe, the paper is listed, and a job exists", in that order: a
-    # worker is never handed a path that is not there yet, and the job's persist step finds the
-    # paper's row (a paper whose row is gone is a deleted one, and writes nothing).
+    # worker is never handed a path that is not there yet, and the library never lists a job for
+    # a paper it cannot show (between registration and enqueue the row is `queued`, job null).
     target = settings.upload_root / f"{paper_id}.pdf"
     _write_upload(target, raw)
     call.db.register_upload(

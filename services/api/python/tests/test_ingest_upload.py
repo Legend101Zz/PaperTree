@@ -9,11 +9,14 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 from api_support import assert_envelope, auth, harness, register
+from papertree_api.library import title_for
 from papertree_api.settings import Settings
+from papertree_db import LibraryRow
 from papertree_document_worker.pdf import SourceDocument
 from test_ingest_helpers import (
     CORPUS,
@@ -304,3 +307,37 @@ def test_the_uploads_page_count_is_the_parsed_page_count_on_the_corpus(tmp_path:
                 ("partial", page_count),
             }
             print(f"[corpus] {name}: page_count {page_count}, {row['processing']}")
+
+
+def test_the_library_title_is_one_line() -> None:
+    """Live, on YOLO: `metadata.title.value` is `"You Only Look Once:\\nUni\\ufb01ed, Real-Time
+    Object Detection"` — the title block's own line break. A library card shows one line, so the
+    whitespace runs collapse; the characters (the U+FB01 ligature included) are kept as parsed."""
+    row = LibraryRow(
+        paper_id="ppr_" + "A" * 26,
+        source_hash="sha256:" + "a" * 64,
+        original_filename="yolo.pdf",
+        byte_size=1,
+        page_count=10,
+        created_at="2026-09-26T00:00:00Z",
+        generation=1,
+        promoted_at=None,
+        paper_status="complete",
+        parser_version="1.0.0",
+        title="You Only Look Once:\nUniﬁed,  Real-Time\tObject Detection ",
+        authors=(),
+        latest_job_id=None,
+        job_state=None,
+        job_attempt=None,
+        job_max_attempts=None,
+        job_error=None,
+        job_updated_at=None,
+        job_generation=None,
+        job_attempt_seq=None,
+        job_steps_done=0,
+        job_open_step=None,
+        highlight_count=0,
+    )
+    assert title_for(row) == "You Only Look Once: Uniﬁed, Real-Time Object Detection"
+    assert title_for(replace(row, title=None, original_filename="  My\nPaper.PDF")) == "My Paper"
+    assert title_for(replace(row, title=None, original_filename=None)) == row.paper_id

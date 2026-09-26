@@ -10,7 +10,8 @@ and which parse job an upload, a retry or a re-parse gets.
                  end -> `failed`. No job at all yet (the instant between an upload's
                  registration and its enqueue) is `queued`.
     title        `metadata.title.value` of the promoted generation, else the original filename
-                 without `.pdf`, else the paper id (§2.2: `/Title` was empty in 4 of 4 papers).
+                 without `.pdf`, else the paper id (§2.2: `/Title` was empty in 4 of 4 papers);
+                 on one line (YOLO's title block carries its own line break).
     job.step     the step it is in (running) or stopped at (dead-lettered); null otherwise.
     job.done     committed steps (all three once it succeeded); `job.total` is three.
     error_code   the code of `jobs.error` (`[code] message`, `papertree_jobs.JobFailed`); an
@@ -65,10 +66,17 @@ def processing(row: LibraryRow) -> Processing:
     return "failed"
 
 
+def _one_line(text: str | None) -> str:
+    """A title block's own line breaks and runs of spaces, as one line (a card shows one). The
+    characters are kept as parsed, ligatures included."""
+    return " ".join((text or "").split())
+
+
 def title_for(row: LibraryRow) -> str:
-    if row.title:
-        return row.title
-    name = (row.original_filename or "").strip()
+    title = _one_line(row.title)
+    if title:
+        return title
+    name = _one_line(row.original_filename)
     if name.lower().endswith(".pdf"):
         name = name[:-4].rstrip()
     return name or row.paper_id
