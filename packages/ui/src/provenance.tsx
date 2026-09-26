@@ -324,9 +324,16 @@ export interface ReflowedTextProps {
    * given there is no button at all rather than an inert one.
    */
   readonly onShowSource?: (blockIds: readonly string[]) => void;
+  /**
+   * What the source button says, e.g. `"p. 4"`: Guided puts it in the margin as the paragraph's
+   * page. Default `"show in PDF"`. The accessible name always says what the button does.
+   */
+  readonly sourceLabel?: string;
   readonly children: ReactNode;
   readonly as?: 'div' | 'section' | 'article';
   readonly className?: string;
+  /** Extra attributes for the root, e.g. `data-block-id` so Split and the flash can find it. */
+  readonly dataBlockId?: string;
 }
 
 /**
@@ -338,9 +345,11 @@ export interface ReflowedTextProps {
 export function ReflowedText({
   blockIds,
   onShowSource,
+  sourceLabel,
   children,
   as: Element = 'div',
   className,
+  dataBlockId,
 }: ReflowedTextProps): ReactNode {
   const canShow = onShowSource !== undefined && blockIds.length > 0;
   return (
@@ -348,6 +357,7 @@ export function ReflowedText({
       className={classes('pt-paper pt-reflowed', className)}
       data-register="reflowed"
       data-block-ids={blockIds.join(' ')}
+      {...(dataBlockId === undefined ? {} : { 'data-block-id': dataBlockId })}
     >
       <div className="pt-reflowed__marker">
         <span className="pt-reflowed__label">{REFLOWED_LABEL}</span>
@@ -355,6 +365,9 @@ export function ReflowedText({
           <button
             type="button"
             className="pt-reflowed__source"
+            {...(sourceLabel === undefined
+              ? {}
+              : { 'aria-label': `Show in the PDF (${sourceLabel})` })}
             onPointerUp={() => onShowSource(blockIds)}
             // Pointer Events throughout (F2.7); the click handler is the keyboard path, and
             // `detail === 0` keeps a real tap (pointerup + click) from firing twice.
@@ -362,7 +375,7 @@ export function ReflowedText({
               if (event.detail === 0) onShowSource(blockIds);
             }}
           >
-            show in PDF
+            {sourceLabel ?? 'show in PDF'}
           </button>
         ) : null}
       </div>
