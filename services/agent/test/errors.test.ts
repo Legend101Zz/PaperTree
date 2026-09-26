@@ -367,6 +367,45 @@ describe('the real provider path against a mock Anthropic server', () => {
     );
   });
 
+  test('idle watchdog: every event resets it, so a steady answer longer than idle_ms completes', async () => {
+    // The ratio test above cannot tell "idle_ms after the last event" from "idle_ms after the
+    // prompt": its stall starts right after the prompt. Here the answer takes several idle_ms in
+    // total, and no single gap is anywhere near one; a watchdog that is not reset cuts it at idle_ms.
+    const idle = 1_500;
+    const gap = 300;
+    const { agent, mock, tools } = await live([
+      {
+        kind: 'stream',
+        thinking: 'Cite b1.',
+        text: ['A steady answer [b1]', ...Array.from({ length: 11 }, () => ' word')],
+        deltaDelayMs: gap,
+      },
+    ]);
+    const body = request(tools, { idle_ms: idle });
+    const result = await postRun(agent.url, body);
+    const d = done(result);
+    assert.deepEqual(semanticProblems(result.events), []);
+    assert.equal(
+      d['status'],
+      'complete',
+      `ended ${String(d['status'])}: ${JSON.stringify(d['error'])}`,
+    );
+    assert.equal(d['final_text'], `A steady answer [b1]${' word'.repeat(11)}`);
+    assert.ok(
+      Number(d['latency_ms']) >= 2 * idle,
+      `the run lasted ${String(d['latency_ms'])} ms, at least twice idle_ms`,
+    );
+    const texts = result.frames.filter((f) => f.kind === 'event' && f.event === 'text');
+    const widest = Math.max(...texts.slice(1).map((f, i) => f.at - texts[i]!.at));
+    assert.ok(widest < idle, `no gap of idle_ms between deltas (widest ${String(widest)} ms)`);
+    assert.equal(mock.requests.length, 1);
+    assert.equal(
+      agent.logs.some((l) => l.event === 'agent.run.abort' && l['run_id'] === body['run_id']),
+      false,
+      'the watchdog never fired',
+    );
+  });
+
   test('deadline: the run is aborted at deadline_ms -> timeout', async () => {
     const deadline = 1_200;
     const { agent, tools } = await live([

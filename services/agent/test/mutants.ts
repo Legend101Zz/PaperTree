@@ -90,6 +90,13 @@ export const MUTANTS: readonly Mutant[] = [
     find: 'else if (hasMarker(state.text)) this.commit(state);',
     replace: 'else this.commit(state);',
   },
+  {
+    id: 'G8',
+    what: 'the idle watchdog is not reset on session events (review R7)',
+    file: 'src/run.ts',
+    find: '    if (this.settled) return;\n    this.resetIdle();\n',
+    replace: '    if (this.settled) return;\n',
+  },
 ];
 
 const pkg = dirname(dirname(fileURLToPath(import.meta.url)));
