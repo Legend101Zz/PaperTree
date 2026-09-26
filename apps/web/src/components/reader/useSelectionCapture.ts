@@ -102,6 +102,12 @@ export interface PendingSelection {
    * (a paragraph dragged into a figure's labels) — one highlight, anchors of both kinds.
    */
   readonly kind: 'ir' | 'page-text' | 'mixed';
+  /**
+   * Every anchor this selection becomes, in the order the browser selected them. Each selected
+   * glyph is in exactly one (see `partition`). `targets.length` is the anchor count a Highlight
+   * would POST, which contracts.md §2.4 caps at 64.
+   */
+  readonly targets: readonly SelectionTarget[];
   /** IR path: one range per block the browser selected, in the order it selected them. */
   readonly ranges: readonly BlockRange[];
   readonly blockIds: readonly string[];
@@ -117,7 +123,7 @@ export interface PendingSelection {
 export interface SelectionCapture {
   /** The anchor for the first target. The one a single-block selection produces. */
   readonly anchor: Anchor;
-  /** One anchor per block (IR path) or per page (page-text path), in reading order. */
+  /** One anchor per target (an IR block range or a page-text run), in the order selected. */
   readonly anchors: readonly Anchor[];
   readonly selection: PendingSelection;
 }
@@ -273,10 +279,119 @@ function blockOffset(text: string, cpStart: number, offsetInItem: number): numbe
   return cpStart + Math.max(0, offsetInItem - leading);
 }
 
+/** What one text-layer item holds, in code points: its length and its leading/trailing whitespace. */
+function shapeOf(text: string): { length: number; leading: number; trailing: number } {
+  const length = countCodePoints(text);
+  const leading = length - countCodePoints(text.replace(/^\s+/u, ''));
+  const trailing = length - countCodePoints(text.replace(/\s+$/u, ''));
+  return { length, leading, trailing };
+}
+
+function isSpace(codePoint: number | undefined): boolean {
+  return codePoint !== undefined && /\s/u.test(String.fromCodePoint(codePoint));
+}
+
+/** A stamped item of one block: where its text starts and ends in the block (code points). */
+interface StampedItem {
+  readonly item: number;
+  readonly start: number;
+  readonly end: number;
+}
+
+/** Every stamped item on the page, per block, in content order. */
+function stampedItemsByBlock(doc: IndexedDocument, elements: ReadonlyMap<number, HTMLElement>): Map<string, StampedItem[]> {
+  const out = new Map<string, StampedItem[]>();
+  const indices = Array.from(elements.keys()).sort((a, b) => a - b);
+  for (const index of indices) {
+    const element = elements.get(index) as HTMLElement;
+    const stamp = stampOf(element);
+    const block = stamp === null ? undefined : doc.byId.get(stamp.blockId);
+    if (stamp === null || block === undefined) continue;
+    const text = element.textContent ?? '';
+    const { length: itemLength, trailing } = shapeOf(text);
+    const limit = block.textCodePoints.length;
+    const entry = {
+      item: index,
+      start: Math.min(limit, stamp.cpStart),
+      end: Math.min(limit, blockOffset(text, stamp.cpStart, itemLength - trailing)),
+    };
+    const list = out.get(block.id);
+    if (list === undefined) out.set(block.id, [entry]);
+    else list.push(entry);
+  }
+  return out;
+}
+
 /**
- * THE SELECTION IS WHAT THE BROWSER SELECTED. Walk the selected items (content order, which is the
- * order the browser selects in) and give each one to its IR block, or — when the IR did not stamp
- * it — to a page-text run. Whitespace-only items select no glyph and belong to neither.
+ * The IR text an UNSTAMPED item of `block` stands for, when it can be known exactly.
+ *
+ * `stampTextLayer` places an item in a block by geometry (`data-block-id`) and gives it an offset
+ * (`data-cp-start`) only when its characters match — so a line whose ligature the IR spells as one
+ * code point ("ﬁcing") and pdf.js as two ("ficing") is in the paragraph with no offset. Its text is
+ * still pinned by its neighbours: it lies after the previous stamped item of the block (or the
+ * block's start) and before the next one (or the block's end). The GAP is that stretch and every
+ * unstamped item of the block inside it; it is known when the IR holds some text there.
+ */
+interface Gap {
+  readonly key: string;
+  readonly from: number;
+  readonly to: number;
+  /** The gap's unstamped, non-whitespace items of the block, by index. */
+  readonly members: readonly number[];
+}
+
+function gapAround(
+  item: number,
+  block: IndexedDocument['blocks'][number],
+  stamped: readonly StampedItem[],
+  elements: ReadonlyMap<number, HTMLElement>,
+): Gap | null {
+  let prev: StampedItem | undefined;
+  let next: StampedItem | undefined;
+  for (const entry of stamped) {
+    if (entry.item < item) prev = entry;
+    else if (entry.item > item) {
+      next = entry;
+      break;
+    }
+  }
+  const lo = prev?.item ?? -1;
+  const hi = next?.item ?? Number.POSITIVE_INFINITY;
+  const members: number[] = [];
+  elements.forEach((element, index) => {
+    if (index <= lo || index >= hi) return;
+    if (element.getAttribute(BLOCK_ID_ATTR) !== block.id || stampOf(element) !== null) return;
+    if ((element.textContent ?? '').trim() === '') return;
+    members.push(index);
+  });
+  const points = block.textCodePoints;
+  let from = prev?.end ?? 0;
+  let to = next?.start ?? points.length;
+  while (from < to && isSpace(points[from])) from += 1;
+  while (to > from && isSpace(points[to - 1])) to -= 1;
+  if (to <= from) return null;
+  return { key: `${block.id}:${String(lo)}:${String(hi)}`, from, to, members };
+}
+
+/** One thing a selection becomes, in the order the browser selected it — the anchors' order. */
+export type SelectionTarget =
+  | { readonly kind: 'ir'; readonly range: BlockRange }
+  | { readonly kind: 'page-text'; readonly range: PageTextRange };
+
+/**
+ * THE SELECTION IS WHAT THE BROWSER SELECTED, AND EACH GLYPH OF IT GOES TO EXACTLY ONE ANCHOR.
+ *
+ * Walk the selected pieces in content order (the order the browser selects in). A piece of a
+ * STAMPED item belongs to its block. A piece of an UNSTAMPED item belongs to the block that holds it
+ * by geometry when its whole gap (`gapAround`) is selected — the IR text there is then known, and
+ * the block's range simply covers it. Anything else — a figure label, a table cell the IR did not
+ * stamp, a line selected only part-way whose IR offsets are unknown — joins a page-text run, which
+ * becomes its own `pdfjs@…/page-text` anchor. Whitespace-only items hold no glyph and belong to none.
+ *
+ * The quads are measured from the SAME assignment (`quadsByBlock`; a run's from its own items), so
+ * no glyph can be stored, or painted, twice. The reviewer's defect (s4-review.md F1) was two
+ * independent walks: this one sent a ligature line to a page-text run while a second walk also filed
+ * that line's quad under the paragraph, and one drag across one paragraph stored the line twice.
  *
  * It used to take the two endpoints' blocks and every block BETWEEN them in the parse's reading
  * order. On YOLO's live parse the title is read after the introduction, so a drag across the
@@ -285,48 +400,97 @@ function blockOffset(text: string, cpStart: number, offsetInItem: number): numbe
 function partition(
   doc: IndexedDocument,
   pages: readonly PagePieces[],
-): { ranges: BlockRange[]; runs: PageTextRange[] } {
-  const ranges: BlockRange[] = [];
-  const byBlock = new Map<string, { start: number; end: number; order: number }>();
-  const runs: PageTextRange[] = [];
+): { targets: SelectionTarget[]; quadsByBlock: Map<string, BBox[]> } {
+  type Slot = { kind: 'ir'; blockId: string } | { kind: 'page-text'; range: PageTextRange };
+  const slots: Slot[] = [];
+  const byBlock = new Map<string, { start: number; end: number; page: PagePieces; pieces: ItemPiece[] }>();
+
   for (const page of pages) {
     const elements = page.page === null ? new Map<number, HTMLElement>() : itemElements(page.page);
+    const stamped = stampedItemsByBlock(doc, elements);
+    const selectedWhole = new Set<number>();
+    for (const piece of page.pieces) {
+      const text = elements.get(piece.item)?.textContent ?? page.source.items[piece.item]?.str ?? '';
+      const { length, leading, trailing } = shapeOf(text);
+      if (piece.from <= leading && piece.to >= length - trailing) selectedWhole.add(piece.item);
+    }
+    const absorbable = new Map<string, Gap | null>();
+
     let run: { first: ItemPiece; last: ItemPiece } | null = null;
     const closeRun = (): void => {
       if (run === null) return;
-      runs.push({
-        pageIndex: page.pageIndex,
-        start: { item: run.first.item, offset: run.first.from },
-        end: { item: run.last.item, offset: run.last.to },
+      slots.push({
+        kind: 'page-text',
+        range: {
+          pageIndex: page.pageIndex,
+          start: { item: run.first.item, offset: run.first.from },
+          end: { item: run.last.item, offset: run.last.to },
+        },
       });
       run = null;
     };
+    const give = (blockId: string, from: number, to: number, piece: ItemPiece): void => {
+      closeRun();
+      const seen = byBlock.get(blockId);
+      if (seen === undefined) {
+        byBlock.set(blockId, { start: from, end: to, page, pieces: [piece] });
+        slots.push({ kind: 'ir', blockId });
+        return;
+      }
+      seen.start = Math.min(seen.start, from);
+      seen.end = Math.max(seen.end, to);
+      seen.pieces.push(piece);
+    };
+
     for (const piece of page.pieces) {
       const element = elements.get(piece.item);
       const text = element?.textContent ?? page.source.items[piece.item]?.str ?? '';
       if (text.trim() === '') continue;
       const stamp = element === undefined ? null : stampOf(element);
-      const block = stamp === null ? undefined : doc.byId.get(stamp.blockId);
-      if (stamp === null || block === undefined) {
-        run = run === null ? { first: piece, last: piece } : { first: run.first, last: piece };
+      const stampedBlock = stamp === null ? undefined : doc.byId.get(stamp.blockId);
+      if (stamp !== null && stampedBlock !== undefined) {
+        const limit = stampedBlock.textCodePoints.length;
+        give(
+          stampedBlock.id,
+          Math.min(limit, blockOffset(text, stamp.cpStart, piece.from)),
+          Math.min(limit, blockOffset(text, stamp.cpStart, piece.to)),
+          piece,
+        );
         continue;
       }
-      closeRun();
-      const length = block.textCodePoints.length;
-      const from = Math.min(length, blockOffset(text, stamp.cpStart, piece.from));
-      const to = Math.min(length, blockOffset(text, stamp.cpStart, piece.to));
-      const seen = byBlock.get(block.id);
-      if (seen === undefined) byBlock.set(block.id, { start: from, end: to, order: byBlock.size });
-      else byBlock.set(block.id, { start: Math.min(seen.start, from), end: Math.max(seen.end, to), order: seen.order });
+      const placedIn = stamp === null ? element?.getAttribute(BLOCK_ID_ATTR) : null;
+      const block = placedIn === null || placedIn === undefined || placedIn === '' ? undefined : doc.byId.get(placedIn);
+      if (block !== undefined) {
+        const gap = gapAround(piece.item, block, stamped.get(block.id) ?? [], elements);
+        if (gap !== null) {
+          if (!absorbable.has(gap.key)) {
+            absorbable.set(gap.key, gap.members.every((member) => selectedWhole.has(member)) ? gap : null);
+          }
+          const whole = absorbable.get(gap.key);
+          if (whole !== null && whole !== undefined) {
+            give(block.id, whole.from, whole.to, piece);
+            continue;
+          }
+        }
+      }
+      run = run === null ? { first: piece, last: piece } : { first: run.first, last: piece };
     }
     closeRun();
   }
-  Array.from(byBlock.entries())
-    .sort((a, b) => a[1].order - b[1].order)
-    .forEach(([blockId, range]) => {
-      if (range.end > range.start) ranges.push({ blockId, start: range.start, end: range.end });
-    });
-  return { ranges, runs };
+
+  const targets: SelectionTarget[] = [];
+  const quadsByBlock = new Map<string, BBox[]>();
+  for (const slot of slots) {
+    if (slot.kind === 'page-text') {
+      targets.push(slot);
+      continue;
+    }
+    const entry = byBlock.get(slot.blockId);
+    if (entry === undefined || entry.end <= entry.start) continue;
+    targets.push({ kind: 'ir', range: { blockId: slot.blockId, start: entry.start, end: entry.end } });
+    quadsByBlock.set(slot.blockId, itemPieceQuads(entry.page.source.frame, entry.page.source.items, entry.pieces));
+  }
+  return { targets, quadsByBlock };
 }
 
 // ─── pieces per page ────────────────────────────────────────────────────────────────────────────
@@ -370,33 +534,6 @@ function piecesPerPage(
   return out;
 }
 
-/**
- * The IR block each selected piece belongs to: the item's own stamp, or — for an item the IR did
- * not stamp inside a stamped run (an inline symbol, a space) — the nearest stamped item before it.
- */
-function quadsPerBlock(pages: readonly PagePieces[]): Map<string, BBox[]> {
-  const out = new Map<string, BBox[]>();
-  for (const page of pages) {
-    const elements = page.page === null ? new Map<number, HTMLElement>() : itemElements(page.page);
-    const byBlock = new Map<string, ItemPiece[]>();
-    let current: string | null = null;
-    for (const piece of page.pieces) {
-      const element = elements.get(piece.item);
-      const stamp = element === undefined ? null : element.getAttribute(BLOCK_ID_ATTR);
-      if (stamp !== null && stamp !== '') current = stamp;
-      if (current === null) continue;
-      const bucket = byBlock.get(current);
-      if (bucket === undefined) byBlock.set(current, [piece]);
-      else bucket.push(piece);
-    }
-    byBlock.forEach((pieces, blockId) => {
-      const quads = itemPieceQuads(page.source.frame, page.source.items, pieces);
-      out.set(blockId, [...(out.get(blockId) ?? []), ...quads]);
-    });
-  }
-  return out;
-}
-
 function extent(quads: readonly BBox[]): BBox | null {
   if (quads.length === 0) return null;
   return [
@@ -427,12 +564,12 @@ function defaultAnchorId(): string {
 /** A stable signature, so an unchanged selection does not re-render on every `selectionchange`. */
 function signatureOf(selection: PendingSelection | null): string {
   if (selection === null) return '';
-  const ir = selection.ranges.map((r) => `${r.blockId}:${String(r.start)}-${String(r.end)}`).join('|');
-  return `${ir}#` + selection.pageTextRanges
-    .map(
-      (r) =>
-        `p${String(r.pageIndex)}:${String(r.start.item)}.${String(r.start.offset)}-` +
-        `${String(r.end.item)}.${String(r.end.offset)}`,
+  return selection.targets
+    .map((target) =>
+      target.kind === 'ir'
+        ? `${target.range.blockId}:${String(target.range.start)}-${String(target.range.end)}`
+        : `p${String(target.range.pageIndex)}:${String(target.range.start.item)}.${String(target.range.start.offset)}-` +
+          `${String(target.range.end.item)}.${String(target.range.end.offset)}`,
     )
     .join('|');
 }
@@ -492,13 +629,18 @@ export function useSelectionCapture(options: UseSelectionCaptureOptions): UseSel
     const pages = piecesPerPage(container, start, end, lookup);
     if (pages === null) return null;
 
-    const { ranges, runs } = partition(indexed, pages);
+    const partitioned = partition(indexed, pages);
     // A run the IR did not stamp needs pdf.js's version for its text stream id; until pdf.js has
     // loaded there is nothing honest to capture it under, so it is left out rather than guessed.
-    const pageTextRuns = streamRef.current === null ? [] : runs;
-    if (ranges.length === 0 && pageTextRuns.length === 0) return null;
+    const targets =
+      streamRef.current === null
+        ? partitioned.targets.filter((target) => target.kind === 'ir')
+        : partitioned.targets;
+    if (targets.length === 0) return null;
+    const ranges = targets.flatMap((target) => (target.kind === 'ir' ? [target.range] : []));
+    const pageTextRuns = targets.flatMap((target) => (target.kind === 'page-text' ? [target.range] : []));
 
-    const quadsByBlock = quadsPerBlock(pages);
+    const { quadsByBlock } = partitioned;
     const firstPageIndex = pages[0]?.pageIndex ?? start.pageIndex;
     const firstPage = pages[0];
     const onFirstPage: BBox[] = [];
@@ -519,6 +661,7 @@ export function useSelectionCapture(options: UseSelectionCaptureOptions): UseSel
       text,
       pageIndex: firstPageIndex,
       kind: pageTextRuns.length === 0 ? 'ir' : ranges.length === 0 ? 'page-text' : 'mixed',
+      targets,
       ranges,
       blockIds: ranges.map((r) => r.blockId),
       quadsByBlock,
@@ -574,44 +717,51 @@ export function useSelectionCapture(options: UseSelectionCaptureOptions): UseSel
       if (indexed === null || pending === null) return null;
       const at = now();
 
-      const anchors: Anchor[] = pending.ranges.map((range) =>
-        captureAnchor({
+      const stream = streamRef.current;
+      const lookup = pageTextRef.current;
+      const anchors: Anchor[] = [];
+      // In the order the browser selected them: a paragraph, the figure label after it, the next
+      // paragraph — so the Navigator's quote and the card read the way the page does.
+      for (const target of pending.targets) {
+        if (target.kind === 'ir') {
+          const range = target.range;
+          anchors.push(
+            captureAnchor({
+              doc: indexed,
+              blockId: range.blockId,
+              startOffset: range.start,
+              endOffset: range.end,
+              // A table cell is a table-cell target whichever path captured it (contracts.md §6).
+              targetKind: indexed.byId.get(range.blockId)?.type === 'table_cell' ? 'table_cell' : targetKind,
+              provenanceClass,
+              id: newAnchorId(),
+              at,
+              client,
+              mode,
+              quads: pending.quadsByBlock.get(range.blockId) ?? [],
+            }),
+          );
+          continue;
+        }
+        if (stream === null || lookup === undefined) continue;
+        const range = target.range;
+        const source = lookup(range.pageIndex);
+        if (source === null) continue;
+        const anchor = capturePageTextAnchor({
           doc: indexed,
-          blockId: range.blockId,
-          startOffset: range.start,
-          endOffset: range.end,
-          // A table cell is a table-cell target whichever path captured it (contracts.md §6).
-          targetKind: indexed.byId.get(range.blockId)?.type === 'table_cell' ? 'table_cell' : targetKind,
-          provenanceClass,
+          pageIndex: range.pageIndex,
+          frame: source.frame,
+          items: source.items,
+          start: range.start,
+          end: range.end,
+          textStreamId: stream,
           id: newAnchorId(),
           at,
           client,
           mode,
-          quads: pending.quadsByBlock.get(range.blockId) ?? [],
-        }),
-      );
-      const stream = streamRef.current;
-      const lookup = pageTextRef.current;
-      if (pending.pageTextRanges.length > 0 && stream !== null && lookup !== undefined) {
-        for (const range of pending.pageTextRanges) {
-          const source = lookup(range.pageIndex);
-          if (source === null) continue;
-          const anchor = capturePageTextAnchor({
-            doc: indexed,
-            pageIndex: range.pageIndex,
-            frame: source.frame,
-            items: source.items,
-            start: range.start,
-            end: range.end,
-            textStreamId: stream,
-            id: newAnchorId(),
-            at,
-            client,
-            mode,
-            provenanceClass,
-          });
-          if (anchor !== null) anchors.push(anchor);
-        }
+          provenanceClass,
+        });
+        if (anchor !== null) anchors.push(anchor);
       }
 
       const primary = anchors[0];

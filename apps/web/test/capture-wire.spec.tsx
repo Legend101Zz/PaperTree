@@ -59,6 +59,8 @@ interface FakeItem {
   transform: number[];
   width: number;
   height: number;
+  /** Which IR block the fake emitted it for — the TEST's bookkeeping; the code never reads it. */
+  sourceBlock?: string;
 }
 
 /** Filled per-test from the fixture, so the fake page emits items that really are on that page. */
@@ -155,6 +157,7 @@ function itemsFor(doc: IndexedDocument, pageIndex: number): FakeItem[] {
         transform: [1, 0, 0, 1, x0, height - y1],
         width: x1 - x0,
         height: y1 - y0,
+        sourceBlock: block.id,
       });
     }
   }
@@ -362,6 +365,215 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
     expect(shape.quads).toHaveLength(1);
     const [x0, y0, x1, y1] = shape.quads[0] as readonly number[];
     expect([x0, y0, x1, y1].map((v) => Math.round((v ?? 0) * 1000) / 1000)).toEqual([20, 12.35, 50, 21.8]);
+  });
+});
+
+/* ─────────────── review F1: one selection stores each glyph ONCE (s4-review.md §4) ─────────────── */
+
+/** The fake items emitted for `block`, as indices into its page's item list. */
+function itemIndicesOf(block: IndexedBlock): number[] {
+  const items = ITEMS_BY_PAGE.get(block.pageIndex) ?? [];
+  return items.flatMap((item, index) => (item.sourceBlock === block.id ? [index] : []));
+}
+
+/**
+ * Make one item's text disagree with the IR, the way a ligature does on YOLO (the IR says "ﬁcing",
+ * pdf.js says "ficing"): `stampTextLayer` still places it in the block by GEOMETRY
+ * (`data-block-id`) but cannot give it an offset (`data-cp-start`) — an unstamped item inside a
+ * stamped paragraph.
+ */
+function unstamp(block: IndexedBlock, which: number): FakeItem {
+  const items = ITEMS_BY_PAGE.get(block.pageIndex) ?? [];
+  const item = items[itemIndicesOf(block)[which] as number] as FakeItem;
+  item.str = item.str.replace(/[a-z]/u, (c) => `${c}̇`);
+  return item;
+}
+
+async function itemElement(str: string): Promise<HTMLElement> {
+  return waitFor(() => {
+    const found = Array.from(document.querySelectorAll<HTMLElement>('[data-item-index]')).find(
+      (el) => el.textContent === str,
+    );
+    if (found === undefined) throw new Error(`item ${JSON.stringify(str.slice(0, 30))} not rendered yet`);
+    return found;
+  });
+}
+
+function selectBetween(from: HTMLElement, fromOffset: number, to: HTMLElement, toOffset: number): void {
+  const range = document.createRange();
+  range.setStart(from.firstChild as Text, fromOffset);
+  range.setEnd(to.firstChild as Text, toOffset);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  fireEvent(document, new Event('selectionchange'));
+  fireEvent.pointerUp(to);
+}
+
+function quadsOf(anchor: Anchor): readonly (readonly number[])[] {
+  return (anchor.selectors.find((s): s is ShapeSelector => s.type === 'ShapeSelector')?.quads ?? []) as readonly (readonly number[])[];
+}
+
+function kindOf(anchor: Anchor): 'ir' | 'page-text' {
+  return anchor.doc.textStreamId.startsWith('pdfjs@') ? 'page-text' : 'ir';
+}
+
+/**
+ * The worst overlap between two DIFFERENT anchors' quads, as a fraction of the smaller quad. A
+ * glyph stored twice is 1.0 (the reviewer's duplicate was the same box); two adjacent lines' glyph
+ * bands touch by ~5 % of a line (descent 0.2 below one baseline, ascent 0.85 above the next).
+ */
+function worstCrossAnchorOverlap(anchors: readonly Anchor[]): number {
+  const area = (q: readonly number[]) => Math.max(0, (q[2] ?? 0) - (q[0] ?? 0)) * Math.max(0, (q[3] ?? 0) - (q[1] ?? 0));
+  let worst = 0;
+  anchors.forEach((a, i) => {
+    anchors.slice(i + 1).forEach((b) => {
+      for (const p of quadsOf(a)) {
+        for (const q of quadsOf(b)) {
+          const inter = area([
+            Math.max(p[0] ?? 0, q[0] ?? 0),
+            Math.max(p[1] ?? 0, q[1] ?? 0),
+            Math.min(p[2] ?? 0, q[2] ?? 0),
+            Math.min(p[3] ?? 0, q[3] ?? 0),
+          ]);
+          const smaller = Math.min(area(p), area(q));
+          if (smaller > 0) worst = Math.max(worst, inter / smaller);
+        }
+      }
+    });
+  });
+  return worst;
+}
+
+describe('reader/capture-wire.spec — review F1: each selected glyph is stored once', () => {
+  let doc: IndexedDocument;
+  let target: IndexedBlock;
+
+  beforeEach(async () => {
+    doc = await loadFixtureDoc();
+    ITEMS_BY_PAGE = new Map(doc.pages.map((p) => [p.index, itemsFor(doc, p.index)]));
+    PAGE_SIZES = new Map(doc.pages.map((p) => [p.index, { width: p.width, height: p.height }]));
+    const found = doc.blocks.find(
+      (b) => b.type === 'paragraph' && b.spans.length > 2 && b.textCodePoints.length > 200,
+    );
+    if (found === undefined) throw new Error('fixture has no multi-span paragraph');
+    target = found;
+  });
+
+  it('an unstamped line INSIDE a selected paragraph is part of the paragraph’s one anchor, not a second', async () => {
+    const lines = itemIndicesOf(target);
+    expect(lines.length).toBeGreaterThanOrEqual(3);
+    const middle = unstamp(target, 1);
+    const items = ITEMS_BY_PAGE.get(target.pageIndex) ?? [];
+    const firstStr = (items[lines[0] as number] as FakeItem).str;
+    const lastStr = (items[lines[lines.length - 1] as number] as FakeItem).str;
+
+    const captured: SelectionCapture[] = [];
+    renderPane(doc, { onCreateHighlight: (capture) => captured.push(capture) });
+    const unstamped = await itemElement(middle.str);
+    // The precondition, asserted: placed by geometry, no offset — the reviewer's "ﬁcing" line.
+    expect(unstamped.getAttribute('data-block-id')).toBe(target.id);
+    expect(unstamped.getAttribute('data-cp-start')).toBeNull();
+    const first = await itemElement(firstStr);
+    const last = await itemElement(lastStr);
+    selectBetween(first, 0, last, (last.textContent ?? '').length);
+    fireEvent.click(await screen.findByRole('button', { name: 'Highlight' }));
+    await waitFor(() => expect(captured).toHaveLength(1));
+
+    const anchors = captured[0]?.anchors ?? [];
+    expect(anchors.map(kindOf)).toEqual(['ir']);
+    // One quad per selected line, the unstamped one included, and none of them twice.
+    expect(quadsOf(anchors[0] as Anchor)).toHaveLength(lines.length);
+    expect(worstCrossAnchorOverlap(anchors)).toBeLessThan(0.25);
+  });
+
+  it('an unstamped LAST line, selected whole, joins its paragraph’s anchor (the text around it is known)', async () => {
+    const lines = itemIndicesOf(target);
+    const tail = unstamp(target, lines.length - 1);
+    const items = ITEMS_BY_PAGE.get(target.pageIndex) ?? [];
+    const firstStr = (items[lines[0] as number] as FakeItem).str;
+
+    const captured: SelectionCapture[] = [];
+    renderPane(doc, { onCreateHighlight: (capture) => captured.push(capture) });
+    const first = await itemElement(firstStr);
+    const last = await itemElement(tail.str);
+    expect(last.getAttribute('data-cp-start')).toBeNull();
+    selectBetween(first, 0, last, (last.textContent ?? '').length);
+    fireEvent.click(await screen.findByRole('button', { name: 'Highlight' }));
+    await waitFor(() => expect(captured).toHaveLength(1));
+
+    const anchors = captured[0]?.anchors ?? [];
+    expect(anchors.map(kindOf)).toEqual(['ir']);
+    const quote = (anchors[0] as Anchor).selectors.find((s) => s.type === 'TextQuoteSelector') as
+      | { exact: string }
+      | undefined;
+    // The range reaches the block's last glyph: the quote ends where the paragraph does.
+    const squash = (value: string) => value.replace(/\s+/gu, ' ').trim();
+    const text = squash(String.fromCodePoint(...target.textCodePoints));
+    expect(squash(quote?.exact ?? '').endsWith(text.slice(-40))).toBe(true);
+    expect(squash(quote?.exact ?? '').startsWith(text.slice(0, 40))).toBe(true);
+    expect(quadsOf(anchors[0] as Anchor)).toHaveLength(lines.length);
+  });
+
+  it('an unstamped last line selected PART-way is its own page-text anchor, and its glyphs are in no other', async () => {
+    const lines = itemIndicesOf(target);
+    const tail = unstamp(target, lines.length - 1);
+    const items = ITEMS_BY_PAGE.get(target.pageIndex) ?? [];
+    const firstStr = (items[lines[0] as number] as FakeItem).str;
+
+    const captured: SelectionCapture[] = [];
+    renderPane(doc, { onCreateHighlight: (capture) => captured.push(capture) });
+    const first = await itemElement(firstStr);
+    const last = await itemElement(tail.str);
+    const part = Math.floor((last.textContent ?? '').length / 2);
+    selectBetween(first, 0, last, part);
+    fireEvent.click(await screen.findByRole('button', { name: 'Highlight' }));
+    await waitFor(() => expect(captured).toHaveLength(1));
+
+    const anchors = captured[0]?.anchors ?? [];
+    expect(anchors.map(kindOf)).toEqual(['ir', 'page-text']);
+    expect(quadsOf(anchors[0] as Anchor)).toHaveLength(lines.length - 1);
+    expect(quadsOf(anchors[1] as Anchor)).toHaveLength(1);
+    expect(worstCrossAnchorOverlap(anchors)).toBeLessThan(0.25);
+  });
+
+  it('a mixed selection’s anchors come in reading order: paragraph, label, paragraph', async () => {
+    const next = doc.blocks.find(
+      (b) =>
+        b.readingIndex > target.readingIndex &&
+        b.pageIndex === target.pageIndex &&
+        b.type === 'paragraph' &&
+        b.spans.length > 0,
+    );
+    if (next === undefined) throw new Error('fixture has no second paragraph on the page');
+    const items = ITEMS_BY_PAGE.get(target.pageIndex) ?? [];
+    const lines = itemIndicesOf(target);
+    const nextLines = itemIndicesOf(next);
+    // A figure label between the two paragraphs in CONTENT order, in the page's top margin by
+    // geometry, so no block's band holds it.
+    const height = PAGE_SIZES.get(target.pageIndex)?.height ?? 792;
+    const label: FakeItem = { str: 'Figure 9: a label', transform: [9, 0, 0, 9, 20, height - 20], width: 60, height: 9 };
+    items.splice((lines[lines.length - 1] as number) + 1, 0, label);
+    const firstStr = (items[lines[0] as number] as FakeItem).str;
+    const nextStr = (items[(nextLines[0] as number) + 1] as FakeItem).str;
+
+    const captured: SelectionCapture[] = [];
+    renderPane(doc, { onCreateHighlight: (capture) => captured.push(capture) });
+    const from = await itemElement(firstStr);
+    const to = await itemElement(nextStr);
+    selectBetween(from, 0, to, Math.min(10, (to.textContent ?? '').length));
+    fireEvent.click(await screen.findByRole('button', { name: 'Highlight' }));
+    await waitFor(() => expect(captured).toHaveLength(1));
+
+    const anchors = captured[0]?.anchors ?? [];
+    const blockOf = (a: Anchor) =>
+      (a.selectors.find((s) => s.type === 'BlockSelector') as { blockId: string } | undefined)?.blockId ?? 'page-text';
+    const order = anchors.map(blockOf);
+    const labelAt = order.indexOf('page-text');
+    expect(order[0]).toBe(target.id);
+    expect(labelAt).toBeGreaterThan(0);
+    expect(order.indexOf(next.id)).toBeGreaterThan(labelAt);
+    expect(worstCrossAnchorOverlap(anchors)).toBeLessThan(0.25);
   });
 });
 
