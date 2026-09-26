@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import uuid
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -50,7 +51,7 @@ def _cite_every_text_block(settings: Settings, user_id: str, paper_id: str) -> i
         for indexed in doc.blocks:
             if not indexed.text.strip():
                 continue
-            anchor = dict(
+            anchor: dict[str, Any] = dict(
                 capture_citation(
                     doc,
                     indexed.block.block_id,
@@ -96,7 +97,9 @@ def test_the_checkers_refuse_a_broken_citation(tmp_path: Path) -> None:
     db.close()
     assert doc is not None
     block = next(b for b in doc.blocks if b.text.strip())
-    good = dict(capture_citation(doc, block.block.block_id, citation_id="cit_" + "A" * 26, at="x"))
+    good: dict[str, Any] = dict(
+        capture_citation(doc, block.block.block_id, citation_id="cit_" + "A" * 26, at="x")
+    )
     assert anchor_errors(good) == []
     for broken in (
         {**good, "targetKind": "paragraph"},

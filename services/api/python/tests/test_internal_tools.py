@@ -141,7 +141,7 @@ def test_only_loopback_callers_reach_the_tools(
         assert_envelope(t.get("/search?limit=99"), 404, "not_found")
 
         async def from_host(host: str) -> int:
-            transport = httpx.ASGITransport(app=t.client.app, client=(host, 40000))  # type: ignore[arg-type]
+            transport = httpx.ASGITransport(app=t.client.app, client=(host, 40000))
             async with httpx.AsyncClient(transport=transport, base_url="http://api") as client:
                 response = await client.get(
                     f"/internal/agent/runs/{RUN}/outline",

@@ -22,6 +22,7 @@ from fake_agent import FakeAgent, Script
 from fastapi.testclient import TestClient
 from papertree_api import create_app
 from papertree_api.settings import Settings
+from starlette.types import Message
 
 
 def test_a_browser_that_goes_away_cancels_the_run_and_the_partial_answer_is_kept(
@@ -41,7 +42,7 @@ def test_a_browser_that_goes_away_cancels_the_run_and_the_partial_answer_is_kept
         saw_text = anyio.Event()
         request_sent = False
 
-        async def receive() -> dict[str, Any]:
+        async def receive() -> Message:
             nonlocal request_sent
             if not request_sent:
                 request_sent = True
@@ -49,7 +50,7 @@ def test_a_browser_that_goes_away_cancels_the_run_and_the_partial_answer_is_kept
             await saw_text.wait()
             return {"type": "http.disconnect"}
 
-        async def send(message: dict[str, Any]) -> None:
+        async def send(message: Message) -> None:
             if message["type"] == "http.response.body":
                 chunk = message.get("body", b"")
                 sent.append(chunk)

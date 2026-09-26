@@ -613,7 +613,7 @@ def test_the_daily_budget_is_429_budget_exhausted_before_any_row(tmp_path: Path)
         body = assert_envelope(
             explain(h, token, paper_id, paragraph_anchor()), 429, "budget_exhausted"
         )
-        assert "$0.00" in body["detail"]
+        assert "($0.001)" in body["detail"], body["detail"]
         assert (h.count("ai_threads"), h.count("ai_runs"), len(h.fake.requests)) == before
         # Another user has their own budget.
         bob = register(h.client, "bob@example.com")

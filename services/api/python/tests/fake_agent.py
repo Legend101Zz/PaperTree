@@ -145,9 +145,15 @@ class FakeAgent:
         *,
         secret: str,
         tools: httpx.AsyncBaseTransport | None = None,
+        choose: Callable[[dict[str, Any]], Script] | None = None,
     ) -> None:
         self.scripts: list[Script] = [scripts] if isinstance(scripts, Script) else list(scripts)
-        assert self.scripts, "a FakeAgent needs at least one script"
+        assert self.scripts or choose, "a FakeAgent needs a script or a way to choose one"
+        #: Picks the script from the request when no one-shot is queued (the server's default:
+        #: summary -> summary-ok, a follow-up -> followup-ok, else explain-ok).
+        self.choose = choose
+        #: One-shot scripts, used first, in order (the server's `POST /_fake/script`).
+        self.queued: list[Script] = []
         self.secret = secret
         self.tools = tools
         self.requests: list[dict[str, Any]] = []
@@ -160,7 +166,11 @@ class FakeAgent:
 
     # ── what the API calls ───────────────────────────────────────────────────────────────
 
-    def _next_script(self) -> Script:
+    def _next_script(self, body: dict[str, Any]) -> Script:
+        if self.queued:
+            return self.queued.pop(0)
+        if self.choose is not None:
+            return self.choose(body)
         return self.scripts.pop(0) if len(self.scripts) > 1 else self.scripts[0]
 
     def healthz(self) -> dict[str, Any]:
@@ -192,7 +202,7 @@ class FakeAgent:
         self.contract_errors.extend(f"schema: {e}" for e in validate(body, RUN_REQUEST_SCHEMA))
         if not lowered.get("x-request-id", "").startswith("req_"):
             self.contract_errors.append("no X-Request-Id forwarded")
-        script = self._next_script()
+        script = self._next_script(body)
         if script.status != 200:
             return script.status, {"detail": "refused by the fake", "code": "busy"}
         run_id = str(body["run_id"])
