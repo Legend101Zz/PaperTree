@@ -691,6 +691,50 @@ def test_the_daily_budget_is_429_budget_exhausted_before_any_row(tmp_path: Path)
         assert explain(h, bob, bob_paper, anchor).status_code == 200
 
 
+def test_a_spend_of_exactly_the_budget_is_429(tmp_path: Path) -> None:
+    """§3.4 `cost_since(...) ≥ PAPERTREE_DAILY_BUDGET_USD` (review S2): the budget is spent AT
+    equality, and a budget a millionth of a dollar larger is not yet."""
+    cost = EXPLAIN_DONE["usage_totals"]["cost_usd_est"]
+    with ai_harness(tmp_path, Script("explain-ok"), budget_usd=cost) as h:
+        token, paper_id = alice_with_paper(h)
+        read_sse(explain(h, token, paper_id, paragraph_anchor()))
+        (spent,) = h.rows("SELECT SUM(cost_usd_est) AS spent FROM ai_runs")
+        assert spent["spent"] == cost, "the stored spend is exactly the budget"
+        assert_envelope(explain(h, token, paper_id, paragraph_anchor()), 429, "budget_exhausted")
+    with ai_harness(
+        tmp_path / "above", [Script("explain-ok"), Script("explain-ok")], budget_usd=cost + 1e-6
+    ) as h:
+        token, paper_id = alice_with_paper(h)
+        read_sse(explain(h, token, paper_id, paragraph_anchor()))
+        assert explain(h, token, paper_id, paragraph_anchor()).status_code == 200
+
+
+def test_the_retried_attempts_usage_is_counted_too(tmp_path: Path) -> None:
+    """The API's one retry (§3.4): the first attempt's tokens were spent as well, so the run's
+    row (and with it the budget and `/usage`) carries both attempts' totals (review S5)."""
+    first = {"input": 900, "output": 0, "cache_read": 0, "cache_write": 0}
+    failed = Script(
+        "auth-error",
+        done_patch={
+            "error": {"code": "upstream_unavailable", "retryable": True, "message": "503"},
+            "usage_totals": {**first, "reasoning": None, "cost_usd_est": 0.00027},
+        },
+    )
+    with ai_harness(tmp_path, [failed, Script("explain-ok")]) as h:
+        token, paper_id = alice_with_paper(h)
+        frames, _ = read_sse(explain(h, token, paper_id, paragraph_anchor()))
+        assert len(h.fake.requests) == 2
+        second = EXPLAIN_DONE["usage_totals"]
+        (run,) = h.rows("SELECT * FROM ai_runs")
+        assert run["retries"] == 1
+        assert run["input_tokens"] == first["input"] + second["input"]
+        assert run["output_tokens"] == second["output"]
+        assert run["cache_read_tokens"] == second["cache_read"]
+        assert run["reasoning_tokens"] == second["reasoning"]
+        assert run["cost_usd_est"] == pytest.approx(0.00027 + second["cost_usd_est"])
+        assert events(frames, "usage")[0]["input_tokens"] == first["input"] + second["input"]
+
+
 # ── reads, and isolation ─────────────────────────────────────────────────────────────────────
 
 

@@ -37,7 +37,7 @@ import json
 import secrets
 import time
 from collections.abc import AsyncIterator, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any, Final, Literal
 
@@ -350,6 +350,17 @@ class _Usage:
             self.reasoning = (self.reasoning or 0) + usage.reasoning
         self.cost_usd_est += usage.cost_usd_est
 
+    def tokens(self) -> dict[str, Any]:
+        """The ``ai_runs`` token and cost columns."""
+        return {
+            "input_tokens": self.input,
+            "output_tokens": self.output,
+            "cache_read_tokens": self.cache_read,
+            "cache_write_tokens": self.cache_write,
+            "reasoning_tokens": self.reasoning,
+            "cost_usd_est": self.cost_usd_est,
+        }
+
 
 @dataclass
 class RunBroker:
@@ -369,6 +380,8 @@ class RunBroker:
     first_text_ms: int | None = None
     api_retries: int = 0
     usage: _Usage = field(default_factory=_Usage)
+    #: The `done.usage_totals` of an attempt the API retried: those tokens were spent too.
+    retried_usage: _Usage = field(default_factory=_Usage)
     _task: asyncio.Task[None] | None = None
     _cancel_task: asyncio.Task[None] | None = None
     _last_write: float = 0.0
@@ -486,8 +499,9 @@ class RunBroker:
                 and not self.cancelled
                 and self.api_retries < 1
             )
-            if not retry:
+            if not retry or not isinstance(outcome, AgentDone):
                 return outcome
+            self.retried_usage.add(outcome.usage_totals)
             self.api_retries += 1
             self.queue.put_nowait(
                 sse(
@@ -595,15 +609,9 @@ class RunBroker:
             status: str = outcome.status
             error_code: str | None = outcome.error.code if outcome.error else None
             stop_reason = outcome.stop_reason
-            usage = outcome.usage_totals
-            tokens: dict[str, Any] = {
-                "input_tokens": usage.input,
-                "output_tokens": usage.output,
-                "cache_read_tokens": usage.cache_read,
-                "cache_write_tokens": usage.cache_write,
-                "reasoning_tokens": usage.reasoning,
-                "cost_usd_est": usage.cost_usd_est,
-            }
+            spent = replace(self.retried_usage)  # a retried attempt's totals, then this one's
+            spent.add(outcome.usage_totals)
+            tokens: dict[str, Any] = spent.tokens()
             tool_calls, agent_retries = outcome.tool_calls, outcome.retries
             entries: list[dict[str, Any]] | None = outcome.entries
             if status in ("error", "aborted") and not outcome.final_text and not entries:
@@ -615,19 +623,7 @@ class RunBroker:
             error_code = "aborted" if self.cancelled else outcome.code
             status = "aborted" if self.cancelled else ("partial" if final_text else "error")
             stop_reason = None
-            u = self.usage
-            tokens = (
-                {
-                    "input_tokens": u.input,
-                    "output_tokens": u.output,
-                    "cache_read_tokens": u.cache_read,
-                    "cache_write_tokens": u.cache_write,
-                    "reasoning_tokens": u.reasoning,
-                    "cost_usd_est": u.cost_usd_est,
-                }
-                if u.seen
-                else {}
-            )
+            tokens = self.usage.tokens() if self.usage.seen else {}
             tool_calls, agent_retries, entries = 0, 0, None
 
         handles = db.run_handles(owner, spec.run_id)
