@@ -197,16 +197,31 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
     expect((await topLine(page)).page).toBe(2);
     await page.keyboard.press('Escape');
 
-    // ── reload: the same quads, from the server ──
-    await reveal(page, 'We reframe object');
-    const before = await paintedPoints(page);
+    // ── reload: the same quads, from the server — every highlight, each on its own page ──
+    const targets: readonly (readonly [string, boolean])[] = [
+      ['We reframe object', false],
+      ['66.4', true],
+      ['1. Resize image.', true],
+    ];
+    const collect = async (): Promise<Record<string, string[]>> => {
+      const all: Record<string, string[]> = {};
+      for (const [needle, exact] of targets) {
+        await reveal(page, needle, exact);
+        await expect
+          .poll(async () => Object.keys(await paintedPoints(page)).length, { timeout: 30_000 })
+          .toBeGreaterThan(0);
+        Object.assign(all, await paintedPoints(page));
+      }
+      return all;
+    };
+    const before = await collect();
+    expect(
+      Object.keys(before).length,
+      'all three highlights painted before the reload',
+    ).toBeGreaterThanOrEqual(3);
     await page.reload();
     await open();
-    await reveal(page, 'We reframe object');
-    await expect
-      .poll(async () => Object.keys(await paintedPoints(page)).length, { timeout: 30_000 })
-      .toBeGreaterThan(0);
-    const after = await paintedPoints(page);
+    const after = await collect();
     let worst = 0;
     for (const [anchorId, polys] of Object.entries(before)) {
       const again = after[anchorId];
@@ -219,9 +234,10 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
       });
     }
     note(
-      `reload: ${String(Object.keys(before).length)} anchors on screen repainted; worst quad Δ ${worst.toFixed(4)} pt (bar 0.5)`,
+      `reload: all ${String(Object.keys(before).length)} anchors (a, b, c, each revealed on its page) repainted; worst quad Δ ${worst.toFixed(4)} pt (bar 0.5)`,
     );
     expect(worst).toBeLessThanOrEqual(0.5);
+    await reveal(page, 'We reframe object');
     await page.screenshot({ path: shot('b06-reloaded-1440.png') });
     await page.getByRole('button', { name: 'Navigator' }).click();
     await page.getByRole('tab', { name: /Highlights/ }).click();
@@ -357,18 +373,17 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
     expect(stored?.color).toBe('green');
 
     // ── a re-parse: links change, paint does not ──
-    const paintGen1 = await paintedPoints(page);
+    const paintGen1 = await collect();
     const reparse = simulateReparse(stack.dataRoot, user, paperId);
     await page.reload();
     await open();
-    await reveal(page, 'We reframe object');
-    await expect
-      .poll(async () => Object.keys(await paintedPoints(page)).length, { timeout: 30_000 })
-      .toBeGreaterThan(0);
-    const paintGen2 = await paintedPoints(page);
+    const paintGen2 = await collect();
+    // Byte-identical for EVERY highlight: the SVG points strings, not a tolerance.
+    expect(Object.keys(paintGen2).sort()).toEqual(Object.keys(paintGen1).sort());
     for (const [anchorId, polys] of Object.entries(paintGen1)) {
-      if (paintGen2[anchorId] !== undefined) expect(paintGen2[anchorId]).toEqual(polys);
+      expect(paintGen2[anchorId]).toEqual(polys);
     }
+    await reveal(page, 'We reframe object');
     await expect
       .poll(
         () =>
@@ -379,7 +394,7 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
       )
       .toBeGreaterThanOrEqual(3);
     note(
-      `re-parse ${reparse}: paint byte-identical for ${String(Object.keys(paintGen1).length)} on-screen anchors; rows ${JSON.stringify(dbRows(stack.dataRoot, paperId).resolutions)}`,
+      `re-parse ${reparse}: paint byte-identical for all ${String(Object.keys(paintGen1).length)} anchors; rows ${JSON.stringify(dbRows(stack.dataRoot, paperId).resolutions)}`,
     );
 
     // ── an orphan: in the tray with its reason, painted nowhere ──
