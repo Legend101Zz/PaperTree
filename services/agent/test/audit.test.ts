@@ -43,6 +43,8 @@ function child(code: string): { status: number | null; stderr: string } {
       timeout: 20_000,
     },
   );
+  // Removed by a child process: an rm in THIS one would itself read the fake ~/.pi it is removing.
+  spawnSync('rm', ['-rf', home]);
   return { status: result.status, stderr: result.stderr };
 }
 

@@ -7,7 +7,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { request as httpRequest } from 'node:http';
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -164,7 +164,23 @@ describe('createPaperSession(): the only createAgentSession caller', () => {
       s?.dispose();
       process.chdir(cwd);
     }
-    // The audit preload fails this process at exit if anything READ the canary AGENTS.md / .pi files.
+    // The audit preload fails this process at exit if anything READ the canary AGENTS.md / .pi files
+    // (so the directory is removed file by file: unlink and rmdir read nothing).
+    for (const file of [
+      'AGENTS.md',
+      'CLAUDE.md',
+      '.pi/settings.json',
+      '.pi/SYSTEM.md',
+      '.pi/extensions/canary.ts',
+      'extension-ran.marker',
+    ]) {
+      try {
+        unlinkSync(join(canary, file));
+      } catch {
+        // The marker exists only if the extension ran (asserted above that it did not).
+      }
+    }
+    for (const dir of ['.pi/extensions', '.pi', '']) rmdirSync(join(canary, dir));
   });
 });
 

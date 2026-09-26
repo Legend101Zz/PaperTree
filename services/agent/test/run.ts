@@ -13,7 +13,7 @@
  * Usage: node --experimental-strip-types test/run.ts [--no-sandbox] [test files…]
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,7 +37,8 @@ delete env['MINIMAX_API_KEY'];
 delete env['PAPERTREE_MINIMAX_API_KEY'];
 env['PI_OFFLINE'] = '1';
 env['PI_TELEMETRY'] = '0';
-env['PI_CODING_AGENT_DIR'] = mkdtempSync(join(tmpdir(), 'papertree-agent-test-pi-'));
+const piDir = mkdtempSync(join(tmpdir(), 'papertree-agent-test-pi-'));
+env['PI_CODING_AGENT_DIR'] = piDir;
 
 const nodeArgs = [
   '--experimental-strip-types',
@@ -86,4 +87,5 @@ if (sandbox === 'none') {
 }
 console.log(`[agent tests] network: ${sandbox}; audit preload: on; ${String(files.length)} files`);
 const result = spawnSync(command, commandArgs, { cwd: pkg, env, stdio: 'inherit' });
+rmSync(piDir, { recursive: true, force: true });
 process.exitCode = result.status ?? 1;
