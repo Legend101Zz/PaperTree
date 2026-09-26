@@ -183,8 +183,18 @@ describe('the tool-call cap and the turn cap (§3.3)', () => {
     assert.equal(labels.at(-1), 'Tool budget exhausted');
     const results = (d['entries'] as Json[])
       .filter((e) => e['message']['role'] === 'toolResult')
-      .map((e) => e['message']['content'][0]['text']);
+      .map((e) => String(e['message']['content'][0]['text']));
     assert.equal(results.at(-1), BUDGET_TEXT);
+    // The model is told its budget in the results themselves, before it runs out.
+    assert.ok(!results[4]!.includes('Tool budget'), 'call 5 of 8: no note yet');
+    assert.match(
+      results[5]!,
+      /\(Tool budget: 2 calls and \d+ rounds? left\. Write the answer soon\.\)$/,
+    );
+    assert.match(
+      results[7]!,
+      /\(Tool budget used up: write the answer now, from what you have\.\)$/,
+    );
   });
 
   test('10 requested -> 8 served -> the run stops (cap + 2)', async () => {

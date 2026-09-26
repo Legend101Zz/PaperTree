@@ -107,6 +107,8 @@ export interface ToolRunContext {
   onResult(toolCallId: string, handles: readonly string[], text: string): void;
   /** The tool route is unusable: the run ends `tool_failed`. */
   onFatal(): void;
+  /** A note to append to this call's result when the run's tool budget is nearly spent. */
+  budgetNote?(toolCallId: string): string | undefined;
 }
 
 class ToolFailure extends Error {}
@@ -175,9 +177,11 @@ async function call(
       }
       ctx.onResult(toolCallId, body.handles, body.text);
       let text = body.text;
+      const note = ctx.budgetNote?.(toolCallId);
       if (typeof body.next_cursor === 'string' && handle !== undefined) {
         text += `\n\n(This section continues. To read on, call get_section with handle "${handle}" and cursor "${body.next_cursor}".)`;
       }
+      if (note !== undefined) text += `\n\n${note}`;
       return {
         content: [{ type: 'text', text }],
         details: { handles: [...body.handles], next_cursor: body.next_cursor ?? null },

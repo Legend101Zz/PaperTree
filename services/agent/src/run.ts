@@ -190,6 +190,12 @@ class Run {
   private current: MessageState | null = null;
   private finalText = '';
   private firstTextMs: number | null = null;
+  /** Latency breakdown for the done log (not the stream): the model's first delta of any kind, its
+   * first text delta (sent or held), and how much thinking and text it produced. */
+  private firstTokenMs: number | null = null;
+  private firstModelTextMs: number | null = null;
+  private thinkingChars = 0;
+  private modelTextChars = 0;
   private hostReason: HostAbort | null = null;
   private idleTimer: NodeJS.Timeout | undefined;
   private paper: PaperSession | null = null;
@@ -303,6 +309,21 @@ class Run {
     return data;
   }
 
+  /**
+   * When the run's budget is nearly spent, tell the model in the tool result itself (it cannot see
+   * the host's counters): at most 2 calls left, or at most 1 round of tools before the answer turn.
+   */
+  private budgetNote(toolCallId: string): string | undefined {
+    const index = this.callIndex.get(toolCallId);
+    if (index === undefined) return undefined;
+    const calls = Math.max(0, this.request.limits.max_tool_calls - index);
+    const rounds = Math.max(0, this.request.limits.max_turns - this.turnsStarted - 1);
+    if (calls > 2 && rounds > 1) return undefined;
+    if (calls === 0 || rounds === 0)
+      return '(Tool budget used up: write the answer now, from what you have.)';
+    return `(Tool budget: ${String(calls)} call${calls === 1 ? '' : 's'} and ${String(rounds)} round${rounds === 1 ? '' : 's'} left. Write the answer soon.)`;
+  }
+
   private thinkingLabel(): string | undefined {
     if (this.agentStarts !== 1 || this.request.history !== null) return undefined;
     if (this.request.kind === 'explain') return 'Reading the selected passage';
@@ -333,7 +354,18 @@ class Run {
         break;
       case 'message_update': {
         const inner = event.assistantMessageEvent;
+        if (
+          this.firstTokenMs === null &&
+          (inner.type === 'text_delta' ||
+            inner.type === 'thinking_delta' ||
+            inner.type === 'toolcall_delta')
+        ) {
+          this.firstTokenMs = this.now();
+        }
+        if (inner.type === 'thinking_delta') this.thinkingChars += inner.delta.length;
         if (inner.type !== 'text_delta') break;
+        if (this.firstModelTextMs === null) this.firstModelTextMs = this.now();
+        this.modelTextChars += inner.delta.length;
         const state = this.current ?? (this.current = { deltas: [], text: '', committed: false });
         state.deltas.push(inner.delta);
         state.text += inner.delta;
@@ -449,6 +481,7 @@ class Run {
           if (index !== undefined) this.resultHandles.set(index, [...handles]);
         },
         onFatal: () => this.hostAbort('tool_failed'),
+        budgetNote: (id) => this.budgetNote(id),
       });
       if (deps.faux) deps.faux.model.load(this.sessionId, deps.faux.brain(request));
       this.paper = await createPaperSession({
@@ -514,6 +547,10 @@ class Run {
       markers: done.markers,
       unseen_markers: parseMarkers(done.final_text).filter((m) => !done.handles_seen.includes(m)),
       first_text_ms: done.first_text_ms,
+      first_token_ms: this.firstTokenMs,
+      first_model_text_ms: this.firstModelTextMs,
+      thinking_chars: this.thinkingChars,
+      model_text_chars: this.modelTextChars,
       latency_ms: done.latency_ms,
     });
     deps.log.forget(request.tool.token);
