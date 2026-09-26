@@ -171,20 +171,25 @@ function useMediaQuery(query: string): boolean {
 
 // ─── failures, as states a reader can act on ──────────────────────────────────────────────────
 
+/**
+ * Every failure is a state with a designed sentence. The server's `detail` and an exception's
+ * `message` are developer text ("validation_failed", a stack's first line) and are never shown
+ * (s4-review.md F7); `retryable` says whether "Try again" can help.
+ */
 type Failure =
   | { readonly kind: 'not_parsed' }
   | { readonly kind: 'not_found' }
   | { readonly kind: 'unreachable' }
-  | { readonly kind: 'error'; readonly message: string };
+  | { readonly kind: 'error'; readonly retryable: boolean };
 
 function failureOf(error: unknown): Failure {
   if (error instanceof NetworkError) return { kind: 'unreachable' };
   if (error instanceof ApiError) {
     if (error.code === 'not_parsed' || error.status === 409) return { kind: 'not_parsed' };
     if (error.status === 404) return { kind: 'not_found' };
-    return { kind: 'error', message: error.detail };
+    return { kind: 'error', retryable: error.retryable || error.status >= 500 };
   }
-  return { kind: 'error', message: error instanceof Error ? error.message : String(error) };
+  return { kind: 'error', retryable: true };
 }
 
 /** Where a highlight's card opens from: the click, and the passage's top and bottom, client px. */
@@ -498,19 +503,27 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
         body={
           unreachable
             ? 'The reader could not reach the PaperTree service. Check the connection, then try again.'
-            : `The service answered with an error: ${docFailure?.kind === 'error' ? docFailure.message : ''}`
+            : docFailure?.kind === 'error' && !docFailure.retryable
+              ? 'PaperTree could not prepare this paper for reading. Go back to your library and open it again; if it keeps happening, upload the PDF again.'
+              : 'PaperTree had a problem opening this paper. Try again in a moment.'
         }
         action={
-          <button
-            type="button"
-            className="pt-btn pt-btn--primary"
-            onClick={() => {
-              setDocAttempt((n) => n + 1);
-              setPdfAttempt((n) => n + 1);
-            }}
-          >
-            Try again
-          </button>
+          docFailure?.kind === 'error' && !docFailure.retryable ? (
+            <a className="pt-btn pt-btn--primary" href="/dashboard">
+              Back to your library
+            </a>
+          ) : (
+            <button
+              type="button"
+              className="pt-btn pt-btn--primary"
+              onClick={() => {
+                setDocAttempt((n) => n + 1);
+                setPdfAttempt((n) => n + 1);
+              }}
+            >
+              Try again
+            </button>
+          )
         }
       />
     );
@@ -955,7 +968,7 @@ function PdfUnavailable({ failure, onRetry }: { readonly failure: Failure; reado
       ? 'The PDF could not be downloaded: PaperTree is not reachable. Check the connection, then try again.'
       : failure.kind === 'not_parsed'
         ? 'The PDF opens here as soon as PaperTree has finished reading it.'
-        : `The PDF could not be downloaded${failure.kind === 'error' ? `: ${failure.message}` : ''}.`;
+        : 'The PDF could not be downloaded from PaperTree. Try again in a moment.';
   return (
     <div className="pt-state" role={failure.kind === 'not_parsed' ? 'status' : 'alert'}>
       <h2 className="pt-state__title">

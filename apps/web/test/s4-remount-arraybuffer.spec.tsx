@@ -172,6 +172,8 @@ describe('s4: the PDF bytes survive a remount', () => {
     );
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('This PDF could not be opened');
+    // A designed sentence, never pdf.js's own text (s4-review.md F7).
+    expect(alert.textContent).not.toMatch(/Invalid PDF structure|detached/);
     expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
   });
 

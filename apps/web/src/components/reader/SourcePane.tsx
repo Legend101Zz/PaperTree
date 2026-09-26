@@ -302,8 +302,8 @@ export function SourcePane(props: SourcePaneProps) {
       <div className="pt-state" role="alert">
         <h2 className="pt-state__title">This PDF could not be opened</h2>
         <p className="pt-state__body">
-          The file reached the reader but pdf.js could not read it{pdf.error.message ? ` (${pdf.error.message})` : ''}.
-          Trying again usually fixes a connection that dropped part-way.
+          The file reached the reader, but it could not be read as a PDF. Trying again usually fixes a
+          download that dropped part-way; if it keeps happening, the file itself may be damaged.
         </p>
         <button type="button" className="pt-btn pt-btn--outline" onClick={pdf.reload}>
           Try again
