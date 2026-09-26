@@ -83,7 +83,13 @@ export function liveParse(slug: string, paperId: string = LIVE_PAPER_ID): PaperS
       cwd: REPO_ROOT,
       encoding: 'utf8',
       maxBuffer: 256 * 1024 * 1024,
-      env: { PATH: process.env['PATH'] ?? '', HOME: process.env['HOME'] ?? '', TMPDIR: scratch },
+      // Built, not inherited, and cast: `apps/web` compiles this file too, and Next's types make
+      // `NODE_ENV` a required key of `ProcessEnv`, which a child's minimal environment need not carry.
+      env: {
+        PATH: process.env['PATH'] ?? '',
+        HOME: process.env['HOME'] ?? '',
+        TMPDIR: scratch,
+      } as unknown as NodeJS.ProcessEnv,
     });
     if (result.status !== 0) {
       throw new Error(

@@ -38,12 +38,7 @@ import { getPdfjs } from '@/lib/pdf/worker';
 import { alignedItems } from './stampTextLayer';
 
 
-import {
-  irToCssScale,
-  pageCssSize,
-  usePdfDocument,
-  type PdfPageMeta,
-} from './PdfDocumentProvider';
+import { irToCssScale, pageCssSize, usePdfDocument } from './PdfDocumentProvider';
 
 /**
  * ~16 megapixels. Above this Safari on iOS silently hands back a blank canvas rather than throwing,

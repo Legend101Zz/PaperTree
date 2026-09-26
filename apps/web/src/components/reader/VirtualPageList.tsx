@@ -596,9 +596,11 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
       return () => observer.disconnect();
     }, []);
 
+    const winVisible = win.visible;
+    const winCurrent = win.current;
     const visible = useMemo<VisiblePages>(
-      () => ({ pages: win.visible, current: win.current }),
-      [win.visible, win.current],
+      () => ({ pages: winVisible, current: winCurrent }),
+      [winVisible, winCurrent],
     );
 
     useEffect(() => {
