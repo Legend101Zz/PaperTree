@@ -53,3 +53,31 @@ def test_usage_sums_the_callers_runs_by_kind_against_the_budget(tmp_path: Path) 
         # Another user's usage is theirs alone.
         bob = register(h.client, "bob@example.com")
         assert h.client.get("/usage", headers=auth(bob)).json()["runs"] == 0
+
+
+def test_usage_puts_no_float_noise_on_the_wire(tmp_path: Path) -> None:
+    """Review S5: summing floats gave `0.006207000000000001`; the wire carries the dollars to
+    the nano-dollar (9 places, finer than one token's price), per kind and in total."""
+    scripts = [Script("explain-ok"), Script("followup-ok"), Script("summary-ok")]
+    with ai_harness(tmp_path, scripts, budget_usd=2.5) as h:
+        token, paper_id = alice_with_paper(h)
+        frames, _ = read_sse(explain(h, token, paper_id, paragraph_anchor()))
+        thread_id = next(f for f in frames if f.event == "run").data["thread_id"]
+        read_sse(
+            h.client.post(
+                f"/papers/{paper_id}/threads/{thread_id}/messages",
+                json={"question": "Why?"},
+                headers=auth(token),
+            )
+        )
+        read_sse(h.client.post(f"/papers/{paper_id}/summary", json={}, headers=auth(token)))
+        costs = [DONE[n]["usage_totals"]["cost_usd_est"] for n in ("explain-ok", "summary-ok")]
+        followup = next(f for f in load_fixture("followup-ok") if f.event == "done").data or {}
+        costs.append(followup["usage_totals"]["cost_usd_est"])
+        # By kind (explain 0.003158, ask 0, summary 0.003049) the plain sum is 0.006207000000000001.
+        response = h.client.get("/usage", headers=auth(token))
+        usage = response.json()
+        assert usage["runs"] == 3
+        assert usage["cost_usd_est"] == round(sum(costs), 9) == 0.006207
+        assert usage["by_kind"]["explain"]["cost_usd_est"] == 0.003158
+        assert "0000000" not in response.text, response.text
