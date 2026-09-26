@@ -8,7 +8,8 @@
  *   G1–G7   the host guards: the idle watchdog, the retry veto, the seen-handle filter, the
  *           pre-prompt history rule, the tool-call cap, the narration rule, the raw-error redaction.
  *   G8–G13  from the review: the idle watchdog's reset on every event, the delivered 413, no tool
- *           step after the first delta, `expandPromptTemplates: false`, the bounded timer limits.
+ *           step after the first delta, `expandPromptTemplates: false`, the datamarked title, the
+ *           bounded timer limits.
  *
  * An edit that does not match EXACTLY once is itself a failure (a mutant that silently changed
  * nothing would "pass" and prove nothing).
@@ -119,6 +120,13 @@ export const MUTANTS: readonly Mutant[] = [
     file: 'src/session.ts',
     find: 'await this.session.prompt(text, PROMPT_OPTIONS);',
     replace: 'await this.session.prompt(text);',
+  },
+  {
+    id: 'G12',
+    what: "the paper's title goes into the system prompt verbatim (not flattened, not datamarked)",
+    file: 'src/prompts.ts',
+    find: 'const title = markInline(request.paper.title, request.datamark);',
+    replace: 'const title = `"${request.paper.title}"`;',
   },
   {
     id: 'G13',

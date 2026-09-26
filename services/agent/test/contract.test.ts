@@ -178,6 +178,11 @@ describe('pure pieces', () => {
       page: 'p. 1',
       section: 'Abstract',
     });
+    // Seen live: a section title's own line break reached a status label ("3.2\nAttention").
+    assert.deepEqual(parseLabel('p. 4 ·  3.2\nAttention  · paragraph'), {
+      page: 'p. 4',
+      section: '3.2 Attention',
+    });
   });
 
   test('the §3.3 error table', () => {

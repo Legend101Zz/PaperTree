@@ -76,9 +76,10 @@ export function stripDatamark(text: string, datamark: string): string {
   return text.split(`${datamark} `).join('').split(datamark).join('');
 }
 
-/** Parse one header's inner label `p. 2 · 2. Unified Detection · paragraph`. */
+/** Parse one header's inner label `p. 2 · 2. Unified Detection · paragraph`. Whitespace (a
+ * section title's own line breaks) is collapsed: the result becomes a one-line status label. */
 export function parseLabel(label: string): HandleInfo {
-  const parts = label.split(' · ');
+  const parts = label.replace(/\s+/g, ' ').trim().split(' · ');
   if (parts.length >= 3) return { page: parts[0] ?? '', section: parts.slice(1, -1).join(' · ') };
   if (parts.length === 2) return { page: parts[0] ?? '', section: parts[1] ?? '' };
   return { page: parts[0] ?? '', section: '' };
