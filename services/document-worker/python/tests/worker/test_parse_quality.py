@@ -595,3 +595,37 @@ def test_splitting_a_paragraph_off_beside_a_table_keeps_its_text(
     assert above is not None and level is not None, "a paragraph beside the table left the document"
     assert "levelwith ends." in (level.text or "")
     assert level.block_id != above.block_id, "the two paragraphs were not split"
+
+
+# ── a caption is never a figure's interior ──────────────────────────────────────────────────
+
+
+@pytest.fixture(scope="module")
+def raster_over_its_caption(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """DDPM p0's shape: a raster whose PLACEMENT rectangle runs past its visible content, down
+    over its own caption line (arXiv 2006.11239v2 places a 348-661 x 468-782 image whose pixels
+    end near y 704; `Figure 1: Generated samples ...` sits at y 711-721). Everything inside a
+    figure region is claimed as its interior text, so the caption left the document."""
+    document = pymupdf.open()
+    page = document.new_page(width=W, height=H)
+    _column(page, 72, 80, "prose", 12)
+    page.insert_image(pymupdf.Rect(72, 250, 540, 560), stream=_png())
+    page.insert_text(
+        (120, 530), "Figure 1: Samples drawn inside the placement.", fontsize=10, fontname="helv"
+    )
+    _column(page, 72, 600, "after", 10)
+    return _save(document, tmp_path_factory.mktemp("figcap") / "figcap.pdf")
+
+
+def test_a_caption_inside_a_raster_placement_is_kept(
+    raster_over_its_caption: Path, tmp_path: Path
+) -> None:
+    paper = _parse(raster_over_its_caption, tmp_path)
+    caption = _containing(paper, "Figure 1: Samples drawn inside the placement.")
+    assert caption is not None, "the caption left the document"
+    assert caption.type == "caption"
+    figures = {b.block_id for b in paper.blocks if b.type == "figure"}
+    assert any(
+        r.type == "caption_of" and r.from_ == caption.block_id and r.to in figures
+        for r in paper.relations
+    ), "the caption is not linked to its figure"

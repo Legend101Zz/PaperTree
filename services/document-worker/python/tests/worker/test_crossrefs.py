@@ -120,8 +120,9 @@ def test_the_pre_existing_relation_types_did_not_move(parsed: dict[str, Paper]) 
     # in a `paragraph` block OPENED by a stray table value set just above the caption ("112.6%",
     # "84.9", "-", "3.2M" - the table's last row, outside its detected cells), so the `Table N`
     # marker was not at position 0 and nothing linked it. Split apart, 33 table captions and 1
-    # figure caption carry their edge.
-    assert totals["caption_of"] == 176
+    # figure caption carry their edge. 176 -> 178 when a caption line stopped being a figure's
+    # interior text (attention p13's Figure 4 and p14's Figure 5 were inside their rasters' box).
+    assert totals["caption_of"] == 178
     # 94 -> 90 and 36 -> 37 in S2 (#141). The lost page continuations pointed INTO section heads
     # that were typed `paragraph` (`8. Experimental Setup`, `5.1. Atari 2600 Games`, `3.5 Positional
     # Encoding`, `3.9.4 News Article Generation`, `5.1 Baselines BERT`) or into a caption's second
@@ -184,8 +185,8 @@ def test_caption_block_mirrors_caption_of_in_both_directions(parsed: dict[str, P
     # table, and every one is mirrored. My first guess here was 100 and the test caught it —
     # which is the only reason this comment can state the split with any confidence.
     # 142 -> 176 in S2's paragraph-splitting commit: see test_the_pre_existing_relation_types.
-    assert dict(mirrored) == {"figure": 59, "table": 117}
-    assert sum(mirrored.values()) == 176
+    assert dict(mirrored) == {"figure": 61, "table": 117}  # 59 -> 61: captions out of figures
+    assert sum(mirrored.values()) == 178
 
 
 @requires_corpus
@@ -199,7 +200,8 @@ def test_figure_caption_block_reaches_the_share_111_measured(parsed: dict[str, P
     figures = [b for paper in parsed.values() for b in _blocks(paper, "figure")]
     with_caption = [b for b in figures if (b.payload or {}).get("caption_block")]
     # 59 of 85 since S2's paragraph splitting freed one figure caption from a paragraph block.
-    assert (len(with_caption), len(figures)) == (59, 85)
+    # 61 since a caption line is never a figure's interior (attention's Figures 4 and 5).
+    assert (len(with_caption), len(figures)) == (61, 85)
 
 
 @requires_corpus
@@ -317,4 +319,4 @@ def test_prev_id_and_next_id_are_still_empty_and_that_is_the_ruling(
     # 9,903 at 18f69ec; S2 (#141) joins run-in leads (9,826) and title-first ordering reads
     # pdf-to-tree's three affiliation lines as one block (9,825).
     # ...and 10,642 with paragraph splitting (one block per printed paragraph).
-    assert (populated, total) == (0, 10642)
+    assert (populated, total) == (0, 10648)  # 10,648: six captions out of figure interiors

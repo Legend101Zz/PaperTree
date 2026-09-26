@@ -183,3 +183,18 @@ def test_title_first_on_yolo(yolo: Any) -> None:
     first = by_id[body[0]]
     assert first.type == "title", (first.type, first.text)
     assert "You Only Look Once" in (first.text or "")
+
+
+@requires_fresh
+def test_ddpms_figure_1_caption_is_in_the_document(tmp_path: Path) -> None:
+    """DDPM p0's right raster is placed at [348, 468, 661, 782] while its pixels end near y 704;
+    the figure region swallowed `Figure 1: Generated samples on CelebA-HQ ...` (y 711-721) as
+    interior text, so the paper's first caption was in no block (found by `missing_lines.py`)."""
+    paper = parse_document(
+        FRESH_DIR / "ddpm-2006.11239.pdf", paper_id=PAPER_ID, asset_root=tmp_path
+    ).paper
+    caption = next(
+        (b for b in paper.blocks if (b.text or "").startswith("Figure 1: Generated samples")), None
+    )
+    assert caption is not None, "DDPM's Figure 1 caption left the document"
+    assert caption.type == "caption" and caption.page_index == 0

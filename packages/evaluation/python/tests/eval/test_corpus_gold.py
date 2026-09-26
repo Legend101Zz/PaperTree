@@ -203,6 +203,14 @@ requires_corpus = pytest.mark.skipif(
 # The fresh gold, which defines a paragraph as the printed one, measures the opposite: merged
 # paragraphs on pp1-2 fall 58 -> 10. The two golds disagree on this convention; see the report.
 
+# CAPTION-NOT-INTERIOR COMMIT (S2): a line that opens a caption is never a figure's interior text.
+# Only attention moves: its p13/p14 captions (Figures 4, 5) sat inside their rasters' placement
+# boxes. Normalised macro-F1 0.3572 -> 0.375; RAW 0.3639 -> 0.3528 - the raw gold boxes p14's
+# caption as type `figure` (flow `caption`; its figure has flow `footnote`), one of the
+# sticky-dropdown contradictions `normalise.py` exists for, so a correct caption scores as a
+# false positive there. The normalised `caption_false` 0 -> 1 is the same page: the parser links
+# Figure 5's caption to the Figure 5 raster above it, which gold records no link for.
+
 RAW: dict[str, dict[str, Any]] = {
     "a3c-algorithmheavy": {
         "macro_f1": 0.4185,
@@ -223,7 +231,7 @@ RAW: dict[str, dict[str, Any]] = {
         "figure_predicted": 4,
     },
     "attention-is-all-you-need": {
-        "macro_f1": 0.3639,
+        "macro_f1": 0.3528,
         "macro_f1_strict": 0.1598,
         "reading_order": 0.6667,
         "reading_order_pairs": [47, 47],
@@ -334,13 +342,13 @@ NORMALISED: dict[str, dict[str, Any]] = {
         "figure_predicted": 4,
     },
     "attention-is-all-you-need": {
-        "macro_f1": 0.3572,
+        "macro_f1": 0.375,
         "macro_f1_strict": 0.1653,
         "reading_order": 0.6667,
         "reading_order_pairs": [45, 45],
         "zero_pair_pages": 2,
         "caption_correct": 1,
-        "caption_false": 0,
+        "caption_false": 1,
         "caption_gold": 1,
         "vector_matched": 1,
         "vector_gold": 1,
@@ -937,6 +945,7 @@ def test_the_share_of_floats_carrying_a_caption(
             f"over FLOATS (figures+tables) {floats_captioned}/{floats} = "
             f"{floats_captioned / floats:.1%}. The bar is 80%."
         )
-    # S2 (#141): 58 -> 59 figures and 142 -> 176 floats captioned with paragraph splitting.
-    assert (figures_captioned, figures) == (59, 85)
-    assert (floats_captioned, floats) == (176, 226)
+    # S2 (#141): 58 -> 59 figures and 142 -> 176 floats captioned with paragraph splitting; 61 and
+    # 178 once a caption line is never a figure's interior.
+    assert (figures_captioned, figures) == (61, 85)
+    assert (floats_captioned, floats) == (178, 226)

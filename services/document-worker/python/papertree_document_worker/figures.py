@@ -319,10 +319,18 @@ def detect_figure_regions(page: PageContent) -> list[FigureRegion]:
     claimed: set[int] = set()
     resolved: list[FigureRegion] = []
     for region in regions:
+        # A CAPTION IS NEVER A FIGURE'S INTERIOR (S2, #141), exactly as it is never a table cell
+        # (`pipeline.py`). A raster's PLACEMENT rectangle can run well past its visible pixels:
+        # `ddpm-2006.11239` p0 places a 348-661 x 468-782 image whose content ends near y 704, and
+        # the region claimed `Figure 1: Generated samples on CelebA-HQ ...` (y 711-721) as interior
+        # text - the paper's first caption was in no block. A line that OPENS a caption is the
+        # caption's, never the float's. (Its venue line below it, at body size and no marker, is
+        # still swallowed: telling padding from content needs the pixels - an S2 hard case.)
         taken = [
             index
             for index, line in enumerate(page.lines)
             if index not in claimed
+            and is_caption_line(line.text.strip()) is None
             and _claims(
                 line.band,
                 region.bbox,

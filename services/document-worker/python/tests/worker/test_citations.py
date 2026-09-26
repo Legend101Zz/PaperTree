@@ -343,8 +343,9 @@ def test_the_worker_detector_finds_every_label_retrieval_finds(parsed: dict[str,
     # Without this the assertion above is satisfied by an empty set on every block.
     # 9,825 blocks since the title-first commit: pdf-to-tree's three affiliation lines are one
     # block (see test_crossrefs). 10,642 / 313 since paragraph splitting: a label cited in two
-    # paragraphs of one former block is now counted in both blocks.
-    assert (blocks, labels) == (10642, 313)
+    # paragraphs of one former block is now counted in both blocks. 10,648 since a caption line
+    # is never a figure's interior (six captions back in the corpus).
+    assert (blocks, labels) == (10648, 313)
 
 
 # ── the CI smoke ─────────────────────────────────────────────────────────────────────────────
