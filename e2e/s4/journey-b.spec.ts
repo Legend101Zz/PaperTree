@@ -6,13 +6,14 @@
  * click on the toolbar — the path the baseline's text layer swallowed):
  *
  *   (a) a body sentence, (b) the table cell "66.4", (c) a Figure 1 label → each paints within 2 px
- *       of the selection's own line rects, `POST /highlights` answers 201, the rows are in sqlite;
+ *       of the selection's own line rects, LINE BY LINE (and (a) again at 200 %), `POST /highlights`
+ *       answers 201, the rows are in sqlite;
  *   reload → the same quads (±0.5 pt, IR space) and all three in the Navigator's Highlights tab;
  *   150 % and fit width keep the top line (±1 line);
  *   Source → Guided → Source and → Split keep pages rendering, the position and the highlights,
  *       with ONE `getDocument` for the whole session;
- *   a simulated re-parse (generation 2) repaints byte-identically and `anchor_resolutions` gains
- *       gen-2 rows;
+ *   a simulated re-parse (generation 2, every box scaled ×0.97 so ladder paint WOULD move)
+ *       repaints byte-identically and `anchor_resolutions` gains gen-2 rows;
  *   an orphan (a foreign `pdfSha256`, no quote) is in the tray with its reason and painted nowhere;
  *   390 px: no horizontal scroll, the bar and the mode switch fit, the page opens fit-width.
  *
@@ -33,8 +34,11 @@ import {
   lineOffset,
   listHighlights,
   paintedBoxes,
+  paintedLines,
   paintedPoints,
+  perLineEdges,
   pointsFor,
+  rangeRects,
   register,
   reveal,
   selectionRects,
@@ -97,10 +101,17 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
       }
     });
 
+    // Until the scaled generation 2 below, the text layer must STAMP against the parse (the IR
+    // path); after it, most items no longer match the scaled boxes, and a rendered text layer is
+    // what paint needs.
+    let stampedParse = true;
     const open = async () => {
       await page.goto(`/paper/${paperId}/read`);
+      const spans = stampedParse
+        ? '.papertree-text-layer span[data-cp-start]'
+        : '.papertree-text-layer span[data-item-index]';
       await expect
-        .poll(() => page.locator('.papertree-text-layer span[data-cp-start]').count(), {
+        .poll(() => page.locator(spans).count(), {
           timeout: 180_000,
         })
         .toBeGreaterThan(50);
@@ -154,7 +165,18 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
       );
       expect(
         delta,
-        `${label}: the paint must be within 2 px of the selection's line rects`,
+        `${label}: the paint's union must be within 2 px of the selection's`,
+      ).toBeLessThanOrEqual(2);
+      // LINE BY LINE (s4-review.md F5): each selected line against the quads painted on it.
+      const perLine = perLineEdges(selection.rects, await paintedLines(page, created.highlight_id));
+      note(
+        `(${label}) per line at 125 %: worst edge Δ ${perLine.worst.toFixed(2)} px over ${String(perLine.lines.length)} lines ` +
+          `${JSON.stringify(perLine.lines)}${perLine.unmatched > 0 ? `, ${String(perLine.unmatched)} unmatched` : ''}`,
+      );
+      expect(perLine.unmatched, `${label}: a selected line has no paint on it`).toBe(0);
+      expect(
+        perLine.worst,
+        `${label}: every painted line must be within 2 px of its selected line`,
       ).toBeLessThanOrEqual(2);
       await page.screenshot({ path: shot(`b03-highlight-${label}-1440.png`) });
       return created.highlight_id;
@@ -297,6 +319,21 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
     };
     await zoomTo('1.5', '150');
     await zoomTo('fit-width', 'fit-width');
+
+    // ── (a) at 200 %, line by line: an in-item error doubles with the zoom (F5 measured +7.15 px) ──
+    await page.getByLabel('Zoom level').selectOption('2');
+    await page.waitForTimeout(1500);
+    await reveal(page, 'We reframe object');
+    const at200 = perLineEdges(
+      await rangeRects(page, 'We reframe object', 'class probabilities.'),
+      await paintedLines(page, a),
+    );
+    note(
+      `(a) per line at 200 %: worst edge Δ ${at200.worst.toFixed(2)} px ${JSON.stringify(at200.lines)}`,
+    );
+    expect(at200.unmatched).toBe(0);
+    expect(at200.worst).toBeLessThanOrEqual(2);
+    await page.screenshot({ path: shot('b07b-a-at-200-1440.png') });
     await page.getByLabel('Zoom level').selectOption('1.25');
     await page.waitForTimeout(800);
 
@@ -375,7 +412,11 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
     // ── a re-parse: links change, paint does not ──
     const paintGen1 = await collect();
     const reparse = simulateReparse(stack.dataRoot, user, paperId);
-    await page.reload();
+    // The control: the linked blocks really moved, so ladder paint could not repaint identically.
+    expect(reparse.moved_pt, 'the scaled generation 2 must move the linked blocks').toBeGreaterThan(
+      5,
+    );
+    stampedParse = false;
     await open();
     const paintGen2 = await collect();
     // Byte-identical for EVERY highlight: the SVG points strings, not a tolerance.
@@ -394,7 +435,7 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
       )
       .toBeGreaterThanOrEqual(3);
     note(
-      `re-parse ${reparse}: paint byte-identical for all ${String(Object.keys(paintGen1).length)} anchors; rows ${JSON.stringify(dbRows(stack.dataRoot, paperId).resolutions)}`,
+      `re-parse ${JSON.stringify(reparse)} (every box ×0.97; the linked blocks moved up to ${String(reparse.moved_pt)} pt): paint byte-identical for all ${String(Object.keys(paintGen1).length)} anchors; rows ${JSON.stringify(dbRows(stack.dataRoot, paperId).resolutions)}`,
     );
 
     // ── an orphan: in the tray with its reason, painted nowhere ──
@@ -477,6 +518,8 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
     await mobile.screenshot({ path: shot('b14-select-390.png') });
     await mobile.getByRole('button', { name: /^Contents/ }).click();
     await mobile.getByRole('tab', { name: /Highlights/ }).click();
+    // The Contents sheet is where the thumb is now: the selection bar waits under it, not on it.
+    await expect(mobile.getByRole('toolbar', { name: 'Selection actions' })).toHaveCount(0);
     await mobile.screenshot({ path: shot('b15-navigator-390.png') });
     await mobile.keyboard.press('Escape');
     await mobile.getByRole('radio', { name: 'Guided' }).click();

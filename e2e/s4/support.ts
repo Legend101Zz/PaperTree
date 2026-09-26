@@ -189,31 +189,66 @@ conn.commit()
 }
 
 /**
- * A second generation of the SAME bytes, written the way the worker's persist and promote steps
- * write one (`parse_document` → `put_paper` → `promote_generation`). S1's `POST /reparse` lands in
- * parallel with S4; what this walk checks is the reader's side of a re-parse.
+ * A DISCRIMINATING second generation (s4-review.md F12): the worker's own parse of the same bytes
+ * with EVERY block and span box scaled by 0.97 about the page origin — a different parser's boxes,
+ * in effect — written the way the worker's persist and promote steps write one (`put_paper` →
+ * `promote_generation`). Re-running the same parser on the same bytes proves nothing about the
+ * paint rule: ladder paint would repaint identically too. Here ladder-derived geometry moves by up
+ * to ~18 pt, so only paint from the STORED quads stays put. The printed `moved_pt` is that control:
+ * how far the blocks the highlights link to moved. S1's `POST /reparse` lands in parallel with S4.
  */
-export function simulateReparse(dataRoot: string, user: string, paperId: string): string {
-  return python(
+export function simulateReparse(
+  dataRoot: string,
+  user: string,
+  paperId: string,
+): { generation: number; blocks: number; scaled: number; moved_pt: number } {
+  const out = python(
     `
-import json, sys, tempfile
+import json, sqlite3, sys, tempfile
 from pathlib import Path
 from papertree_db import PaperTreeDb, generation
 from papertree_document_worker.pipeline import parse_document
 root, user, pid = sys.argv[1:4]
+K = 0.97
+def sc(v):
+    return round(v * K, 2)
 with tempfile.TemporaryDirectory() as assets:
     result = parse_document(root + "/uploads/" + pid + ".pdf", paper_id=pid, asset_root=Path(assets))
     doc = result.paper.model_dump(mode="json", by_alias=True, exclude_unset=True)
 doc["generation"] = 2
+before = {b["block_id"]: list(b["bbox"]) for b in doc["blocks"]}
+for b in doc["blocks"]:
+    b["bbox"] = [sc(v) for v in b["bbox"]]
+    if b.get("polygon"):
+        b["polygon"] = [[sc(x), sc(y)] for x, y in b["polygon"]]
+    for s in b.get("spans") or []:
+        if s.get("bbox"):
+            s["bbox"] = [sc(v) for v in s["bbox"]]
+linked = set()
+reader = sqlite3.connect(root + "/papertree.sqlite")
+for row in reader.execute("SELECT anchor_json FROM anchors WHERE paper_id = ?", (pid,)):
+    for sel in json.loads(row[0]).get("selectors", []):
+        if sel.get("type") == "BlockSelector":
+            linked.add(sel["blockId"])
+reader.close()
 db = PaperTreeDb(Path(root) / "papertree.sqlite")
 owner = db.owner_for(user)
+moved = max(
+    [max(abs(a - sc(a)) for a in before[i]) for i in linked if i in before] or [0.0]
+)
 db.put_paper(owner, doc)
 db.promote_generation(owner, pid, generation(2))
 db.close()
-print(json.dumps({"generation": 2, "blocks": len(doc["blocks"])}))
+print(json.dumps({"generation": 2, "blocks": len(doc["blocks"]), "scaled": K, "moved_pt": round(moved, 2)}))
 `,
     [dataRoot, user, paperId],
   );
+  return JSON.parse(out.trim().split('\n').pop() ?? '{}') as {
+    generation: number;
+    blocks: number;
+    scaled: number;
+    moved_pt: number;
+  };
 }
 
 // ── the browser, as a reader uses it ──────────────────────────────────────────────────────────
@@ -360,6 +395,82 @@ export function union(boxes: readonly Box[]): Box {
       Number.NEGATIVE_INFINITY,
       Number.NEGATIVE_INFINITY,
     ],
+  );
+}
+
+/** Each painted quad's underline of one highlight, client px: `[x0, x1, y]` (y = the quad's bottom). */
+export async function paintedLines(
+  page: Page,
+  highlightId: string,
+): Promise<[number, number, number][]> {
+  return page.evaluate((id) => {
+    return Array.from(
+      document.querySelectorAll(`svg .pt-hl[data-highlight-id="${id}"] line.pt-hl-line`),
+    ).map((line) => {
+      const r = line.getBoundingClientRect();
+      return [r.left, r.right, (r.top + r.bottom) / 2] as [number, number, number];
+    });
+  }, highlightId);
+}
+
+/**
+ * LINE BY LINE, not the union (s4-review.md F5): the selection's own rects grouped into lines, each
+ * compared with the painted quads on that line. The union box hides a last line that overshoots
+ * its selection, because the lines above it reach the column edge.
+ */
+export function perLineEdges(
+  selection: readonly Box[],
+  painted: readonly [number, number, number][],
+): { worst: number; lines: { dLeft: number; dRight: number }[]; unmatched: number } {
+  const lines: { top: number; bottom: number; left: number; right: number }[] = [];
+  for (const [left, top, right, bottom] of selection) {
+    const cy = (top + bottom) / 2;
+    const line = lines.find((l) => Math.abs((l.top + l.bottom) / 2 - cy) < 4);
+    if (line === undefined) lines.push({ top, bottom, left, right });
+    else {
+      line.top = Math.min(line.top, top);
+      line.bottom = Math.max(line.bottom, bottom);
+      line.left = Math.min(line.left, left);
+      line.right = Math.max(line.right, right);
+    }
+  }
+  let worst = 0;
+  let unmatched = 0;
+  const out: { dLeft: number; dRight: number }[] = [];
+  for (const line of lines) {
+    const on = painted.filter(([, , y]) => y > line.top && y < line.bottom + 6);
+    if (on.length === 0) {
+      unmatched += 1;
+      continue;
+    }
+    const dLeft = Math.abs(Math.min(...on.map((u) => u[0])) - line.left);
+    const dRight = Math.abs(Math.max(...on.map((u) => u[1])) - line.right);
+    out.push({ dLeft: +dLeft.toFixed(2), dRight: +dRight.toFixed(2) });
+    worst = Math.max(worst, dLeft, dRight);
+  }
+  return { worst, lines: out, unmatched };
+}
+
+/** The client rects of the text from the start of `start` to the end of `end` (no selection made). */
+export async function rangeRects(page: Page, start: string, end: string): Promise<Box[]> {
+  return page.evaluate(
+    ([a, b]) => {
+      const spans = Array.from(
+        document.querySelectorAll('.papertree-text-layer span[data-item-index]'),
+      );
+      const first = spans.findIndex((s) => (s.textContent ?? '').includes(a));
+      const last = spans.findIndex((s, i) => i >= first && (s.textContent ?? '').includes(b));
+      if (first < 0 || last < 0) return [];
+      const from = spans[first] as Element;
+      const to = spans[last] as Element;
+      const range = document.createRange();
+      range.setStart(from.firstChild as Text, (from.textContent ?? '').indexOf(a));
+      range.setEnd(to.firstChild as Text, (to.textContent ?? '').indexOf(b) + b.length);
+      return Array.from(range.getClientRects())
+        .filter((r) => r.width > 1 && r.height > 1)
+        .map((r) => [r.left, r.top, r.right, r.bottom] as [number, number, number, number]);
+    },
+    [start, end] as const,
   );
 }
 
