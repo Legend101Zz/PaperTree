@@ -5,11 +5,11 @@
     jobs        §2.2 GET /jobs/{job_id}                S1
     highlights  §2.4                                   S4
     health      §2.8 GET /healthz                      S0
-    threads     §2.5 threads + POST /runs/{id}/cancel  S5  (501 stubs)
-    summary     §2.5 summary                           S5  (501 stubs)
-    usage       §2.5 GET /usage                        S5  (501 stub)
+    threads     §2.5 threads + POST /runs/{id}/cancel  S5
+    summary     §2.5 summary                           S5
+    usage       §2.5 GET /usage                        S5
     boards      §2.7 canvas                            S7  (501 stubs)
-    internal    §4 the agent's paper tools             S5  (501 stubs)
+    internal    §4 the agent's paper tools             S5
 
 A 501 stub already declares its FINAL models: auth, path and query parameters and the body model
 run first, then `errors.not_implemented(slice)` — so a stub refuses exactly what the finished
@@ -19,5 +19,5 @@ route will refuse, and the slice replaces one `raise` without redefining a model
 the one overlap is inside `highlights` (`PUT …/resolutions` vs `…/{highlight_id}`), which that
 module registers in the safe order itself.
 
-`ask.py` (`POST /papers/{id}/ask`, #76) is not a router here: S5 deletes it with the threads.
+`ask.py` (`POST /papers/{id}/ask`, #76) is gone: S5 deleted it with the threads (slice-plan §R R9).
 """

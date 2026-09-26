@@ -75,7 +75,7 @@ somebody forgets.
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from typing import Annotated
 
@@ -84,8 +84,11 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from papertree_db import OwnerId, PaperId, PaperTreeDb
 from papertree_jobs import JobStore
+from papertree_retrieval import PaperIndexCache
 
+from .agent_client import AgentClient, RunBroker
 from .errors import ApiError
+from .evidence import DocumentCache
 from .logging import user_ref
 from .security import user_for_token
 from .settings import Settings
@@ -195,6 +198,38 @@ def agent_transport_of(request: Request) -> httpx.AsyncBaseTransport | None:
     return transport if isinstance(transport, httpx.AsyncBaseTransport) else None
 
 
+def _app_singleton[T](request: Request, name: str, make: Callable[[], T]) -> T:
+    """One per APP (not per process, not per request), created on first use. On `app.state` so a
+    test's app and its cache die together; created lazily so `create_app` stays untouched."""
+    value = getattr(request.app.state, name, None)
+    if value is None:
+        value = make()
+        setattr(request.app.state, name, value)
+    return value
+
+
+def index_cache_of(request: Request) -> PaperIndexCache:
+    """contracts.md §4: the LRU of 8 `PaperIndex`es the tools and the seed read through."""
+    return _app_singleton(request, "paper_index_cache", PaperIndexCache)
+
+
+def documents_of(request: Request) -> DocumentCache:
+    """The anchoring documents citation Anchors are minted against (`evidence.DocumentCache`)."""
+    return _app_singleton(request, "anchoring_documents", DocumentCache)
+
+
+def live_runs_of(request: Request) -> dict[str, RunBroker]:
+    """`run_id -> RunBroker` for the runs this process is streaming (the cancel route's lookup)."""
+    return _app_singleton(request, "live_runs", dict)
+
+
+def agent_client_of(request: Request) -> AgentClient:
+    settings: Settings = request.app.state.settings
+    return AgentClient(
+        settings.agent_url, settings.agent_secret, transport=agent_transport_of(request)
+    )
+
+
 def promoted_or_404(call: Caller, paper_id: str, requested: int | None) -> int:
     """The generation to read, or 404.
 
@@ -218,3 +253,7 @@ CallerDep = Annotated[Caller, Depends(caller)]
 SettingsDep = Annotated[Settings, Depends(settings_of)]
 AuthConnDep = Annotated[sqlite3.Connection, Depends(open_auth)]
 AgentTransportDep = Annotated[httpx.AsyncBaseTransport | None, Depends(agent_transport_of)]
+IndexCacheDep = Annotated[PaperIndexCache, Depends(index_cache_of)]
+DocumentsDep = Annotated[DocumentCache, Depends(documents_of)]
+LiveRunsDep = Annotated[dict[str, RunBroker], Depends(live_runs_of)]
+AgentClientDep = Annotated[AgentClient, Depends(agent_client_of)]

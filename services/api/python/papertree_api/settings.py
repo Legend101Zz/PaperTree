@@ -57,6 +57,7 @@ SCRYPT_P = 1
 #: contracts.md §7 defaults for the reader release's API variables.
 DEFAULT_MAX_UPLOAD_MB = 100
 DEFAULT_AGENT_URL = "http://127.0.0.1:8200"
+DEFAULT_PORT = 8000
 DEFAULT_DAILY_BUDGET_USD = 1.00
 
 
@@ -97,6 +98,11 @@ class Settings:
     daily_budget_usd: float = DEFAULT_DAILY_BUDGET_USD
     #: `PAPERTREE_CORS_ORIGINS`: extra allowed origins beyond the localhost regex (§2).
     cors_origins: tuple[str, ...] = ()
+    #: Where the agent reaches THIS process's internal paper tools: the run request's
+    #: `tool.base_url` is `{api_internal_url}/internal/agent/runs/{run_id}` (contracts.md §3.2).
+    #: Always loopback (`127.0.0.1` and `PAPERTREE_PORT`): the tools answer loopback callers only
+    #: (§4), whatever interface the public API binds.
+    api_internal_url: str = f"http://127.0.0.1:{DEFAULT_PORT}"
 
     @property
     def max_upload_bytes(self) -> int:
@@ -137,6 +143,7 @@ class Settings:
             agent_secret=os.environ.get("PAPERTREE_AGENT_SECRET", ""),
             daily_budget_usd=_budget("PAPERTREE_DAILY_BUDGET_USD", DEFAULT_DAILY_BUDGET_USD),
             cors_origins=_origins("PAPERTREE_CORS_ORIGINS"),
+            api_internal_url=f"http://127.0.0.1:{_port('PAPERTREE_PORT', DEFAULT_PORT)}",
         )
 
 
@@ -154,6 +161,13 @@ def _positive_int(name: str, default: int) -> int:
         raise ValueError(f"{name}={raw!r} is not a whole number") from None
     if value < 1:
         raise ValueError(f"{name}={raw!r} must be at least 1")
+    return value
+
+
+def _port(name: str, default: int) -> int:
+    value = _positive_int(name, default)
+    if value > 65535:
+        raise ValueError(f"{name}={value} is not a TCP port")
     return value
 
 

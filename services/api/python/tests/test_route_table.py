@@ -123,8 +123,7 @@ def test_every_route_is_either_pre_split_or_a_listed_addition(tmp_path: Path) ->
     served = _served(tmp_path)
     expected = (BEFORE - REMOVED) | ADDED
     assert served == expected, (
-        f"unlisted: {sorted(served - expected)}; listed but not served: "
-        f"{sorted(expected - served)}"
+        f"unlisted: {sorted(served - expected)}; listed but not served: {sorted(expected - served)}"
     )
     assert not BEFORE & ADDED, "a pre-split route is also listed as an addition"
 

@@ -144,6 +144,18 @@ def test_route_refusals_are_envelopes(tmp_path: Path) -> None:
             415,
             "unsupported_media_type",
         )
+        # An AI route with no PAPERTREE_AGENT_SECRET: not configured, which is §2.9's own code.
+        # (This was `/ask` without a model key until S5 deleted `/ask`; the threads route is its
+        # replacement and refuses the same way, before any row is written.)
+        assert_envelope(
+            h.client.post(
+                f"/papers/{paper_id}/threads",
+                headers=auth(alice),
+                json={"kind": "ask", "question": "q"},
+            ),
+            503,
+            "not_configured",
+        )
 
 
 def test_a_body_that_cannot_be_parsed_is_422_like_every_other_bad_body(tmp_path: Path) -> None:

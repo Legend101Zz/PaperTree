@@ -41,33 +41,8 @@ class Stub:
 
 STUBS = [
     # §2.2 (S1): built; their contract tests are `test_ingest_*.py`.
-    # §2.5 (S5)
-    Stub(
-        "POST",
-        f"/papers/{PAPER}/threads",
-        "S5",
-        {"kind": "ask", "question": "What does YOLO predict?"},
-        ({"kind": "explain"}, "anchor"),
-    ),
-    Stub(
-        "POST",
-        f"/papers/{PAPER}/threads/{THREAD}/messages",
-        "S5",
-        {"question": "And what does that mean?"},
-        ({"question": ""}, "question"),
-    ),
-    Stub("GET", f"/papers/{PAPER}/threads", "S5"),
-    Stub("GET", f"/papers/{PAPER}/threads/{THREAD}", "S5"),
-    Stub("POST", f"/runs/{RUN}/cancel", "S5"),
-    Stub("GET", f"/papers/{PAPER}/summary", "S5"),
-    Stub(
-        "POST",
-        f"/papers/{PAPER}/summary",
-        "S5",
-        {"regenerate": True},
-        ({"regenerate": "yes"}, "regenerate"),
-    ),
-    Stub("GET", "/usage", "S5"),
+    # §2.5 and §4 (S5) are built: `test_threads_api.py`, `test_summary_api.py`,
+    # `test_internal_tools.py` and `test_usage_api.py` pin them.
     # §2.7 (S7)
     Stub("GET", f"/papers/{PAPER}/board", "S7"),
     Stub(
@@ -107,11 +82,6 @@ STUBS = [
     ),
     Stub("DELETE", f"/boards/{BOARD}/edges/{EDGE}", "S7"),
     Stub("PATCH", f"/boards/{BOARD}", "S7", {"title": "My board"}, ({"title": ""}, "title")),
-    # §4 (S5): the agent's paper tools. Their auth is a run token, which S5 checks.
-    Stub("GET", f"/internal/agent/runs/{RUN}/outline", "S5", user=False),
-    Stub("GET", f"/internal/agent/runs/{RUN}/sections/b3?cursor=c1", "S5", user=False),
-    Stub("GET", f"/internal/agent/runs/{RUN}/passages/b12", "S5", user=False),
-    Stub("GET", f"/internal/agent/runs/{RUN}/search?q=anchor%20boxes&limit=8", "S5", user=False),
 ]
 
 #: The tables a stub must not touch.
@@ -161,14 +131,8 @@ def test_a_stub_enforces_its_contract_then_answers_501(stub: Stub, tmp_path: Pat
 #: (stub, a body whose one fault is an explicit null in an omittable field, the field)
 NULLS = [
     # `/papers/{id}/reparse`'s `reason: null`: built by S1, pinned in
-    # `test_ingest_jobs.py::test_reparse_creates_generation_2`.
-    (f"/papers/{PAPER}/threads", "POST", {"kind": "ask", "anchor": None}, "anchor"),
-    (
-        f"/papers/{PAPER}/threads/{THREAD}/messages",
-        "POST",
-        {"question": "q", "retry_of": None},
-        "retry_of",
-    ),
+    # `test_ingest_jobs.py::test_reparse_creates_generation_2`. The S5 routes are built and
+    # pin their own omittable nulls in their test files.
     (f"/boards/{BOARD}/nodes/{NODE}", "PATCH", {"version": 1, "body": None}, "body"),
     (f"/boards/{BOARD}/nodes/{NODE}", "PATCH", {"version": 1, "w": None}, "w"),
     (f"/boards/{BOARD}/edges/{EDGE}", "PATCH", {"kind": None}, "kind"),
@@ -199,7 +163,8 @@ def test_usage_since_is_an_iso_time_already(tmp_path: Path) -> None:
     """contracts.md §2.5 `GET /usage?since=ISO`. S0 review S2, WATCHED FAILING: the stub took any
     1 to 64 characters, so `?since=yesterday` was the 501 (and S5 would have inherited a `str`).
     It is now an ISO-8601 date-time WITH its zone; a bare date, a naive time and a Unix number
-    (each of which pydantic's lax `datetime` would take) are refused, as is a date that is none."""
+    (each of which pydantic's lax `datetime` would take) are refused, as is a date that is none.
+    (S5 built the route: a good `since` is now its 200.)"""
     with harness(tmp_path) as h:
         token = register(h.client, "alice@example.com")
         for good in (
@@ -208,7 +173,7 @@ def test_usage_since_is_an_iso_time_already(tmp_path: Path) -> None:
             "2026-09-25T20:39:25.5+05:30",
         ):
             answer = h.client.get("/usage", params={"since": good}, headers=auth(token))
-            assert answer.status_code == 501, (good, answer.text)
+            assert answer.status_code == 200, (good, answer.text)
         for bad in (
             "yesterday",
             "1695000000",
@@ -227,7 +192,12 @@ def test_usage_since_is_an_iso_time_already(tmp_path: Path) -> None:
             assert refused["detail"].startswith("since: "), (bad, refused)
 
 
-def test_the_internal_tools_validate_their_parameters_already(tmp_path: Path) -> None:
+def test_the_internal_tools_validate_their_parameters_already(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Parameters are checked before the run token (S5's gate order, `routers/internal.py`); the
+    routes answer loopback callers only, and Starlette's TestClient is admitted by the variable."""
+    monkeypatch.setenv("PAPERTREE_INTERNAL_ALLOW_TESTCLIENT", "1")
     base = f"/internal/agent/runs/{RUN}"
     with harness(tmp_path) as h:
         for path in (
