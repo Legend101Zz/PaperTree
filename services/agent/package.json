@@ -3,13 +3,16 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "The Pi agent service (ADR-002 §3.4): Node 22, Pi pinned exactly, MiniMax-M3, four read-only paper tools. S0 adds the manifest and the pins only; S5 writes the source.",
+  "description": "The Pi agent service (ADR-002 §3.4, contracts.md §3): Node 22, Pi pinned exactly, MiniMax-M3, four read-only paper tools, SSE to services/api.",
   "engines": {
     "node": ">=22.19"
   },
   "scripts": {
-    "start": "node -e \"console.log('@papertree/agent: no server yet. S5 implements this (contracts.md §3); nothing was started.')\"",
-    "test": "node -e \"console.log('@papertree/agent: no tests yet. S5 implements this (contracts.md §9, node --test); 0 tests ran.')\""
+    "start": "node --experimental-strip-types --disable-warning=ExperimentalWarning src/server.ts",
+    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning test/run.ts && node --experimental-strip-types --disable-warning=ExperimentalWarning test/mutants.ts M5 M6",
+    "test:mutants": "node --experimental-strip-types --disable-warning=ExperimentalWarning test/mutants.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "oxlint src test"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "0.87.1",
