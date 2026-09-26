@@ -128,6 +128,8 @@ export function dbRows(
   highlights: number;
   anchors: number;
   resolutions: { generation: number; count: number }[];
+  /** `anchor_resolutions.tier` per generation, e.g. `{ generation: 1, tiers: [1, 1, 4] }`. */
+  tiers: { generation: number; tiers: number[] }[];
   streams: string[];
   kinds: string[];
 } {
@@ -140,7 +142,10 @@ h = conn.execute("SELECT COUNT(*) FROM highlights WHERE paper_id = ?", (pid,)).f
 a = conn.execute("SELECT COUNT(*) FROM anchors WHERE paper_id = ?", (pid,)).fetchone()[0]
 r = conn.execute("SELECT generation, COUNT(*) FROM anchor_resolutions WHERE paper_id = ? GROUP BY generation ORDER BY generation", (pid,)).fetchall()
 rows = conn.execute("SELECT json_extract(anchor_json, '$.doc.textStreamId'), target_kind FROM anchors WHERE paper_id = ? ORDER BY created_at", (pid,)).fetchall()
-print(json.dumps({"highlights": h, "anchors": a, "resolutions": [{"generation": g, "count": c} for g, c in r], "streams": [x[0] for x in rows], "kinds": [x[1] for x in rows]}))
+t = {}
+for g, tier in conn.execute("SELECT generation, tier FROM anchor_resolutions WHERE paper_id = ? ORDER BY generation, tier", (pid,)):
+    t.setdefault(g, []).append(tier)
+print(json.dumps({"highlights": h, "anchors": a, "resolutions": [{"generation": g, "count": c} for g, c in r], "tiers": [{"generation": g, "tiers": v} for g, v in sorted(t.items())], "streams": [x[0] for x in rows], "kinds": [x[1] for x in rows]}))
 `,
     [dataRoot, paperId],
   );

@@ -92,6 +92,15 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
     }, token);
     const page = await desktop.newPage();
     const posts: number[] = [];
+    const puts: string[] = [];
+    page.on('request', (request) => {
+      if (
+        request.method() === 'PUT' &&
+        request.url().endsWith(`/papers/${paperId}/highlights/resolutions`)
+      ) {
+        puts.push(request.url());
+      }
+    });
     page.on('response', (response) => {
       if (
         response.url().endsWith(`/papers/${paperId}/highlights`) &&
@@ -241,9 +250,20 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
       Object.keys(before).length,
       'all three highlights painted before the reload',
     ).toBeGreaterThanOrEqual(3);
+    const tiersAtCreate = dbRows(stack.dataRoot, paperId).tiers;
+    const putsBefore = puts.length;
     await page.reload();
     await open();
     const after = await collect();
+    // F3: a reopen of an unchanged parse re-PUTs nothing, and the stored tiers keep saying which
+    // tier resolved each anchor (they all became 0 on the first reload).
+    const tiersAfterReload = dbRows(stack.dataRoot, paperId).tiers;
+    note(
+      `reload: resolution PUTs ${String(puts.length - putsBefore)}; tiers at create ${JSON.stringify(tiersAtCreate)}, after reload ${JSON.stringify(tiersAfterReload)}`,
+    );
+    expect(puts.length - putsBefore).toBe(0);
+    expect(tiersAfterReload).toEqual(tiersAtCreate);
+    expect(tiersAfterReload.flatMap((g) => g.tiers)).not.toContain(0);
     let worst = 0;
     for (const [anchorId, polys] of Object.entries(before)) {
       const again = after[anchorId];
