@@ -1,81 +1,152 @@
 'use client';
 
 /**
- * reader/GuidedView — F2.5. The reflowed reading, and the place DESIGN.md §11.4 is either kept or
- * broken.
+ * reader/GuidedView — F2.5. The paper's own words, re-laid out in one column.
  *
- * GUIDED IS NOT "THE BOOK". It never replaces the paper (§18.3), and every line of prose it shows
- * is an interpretation: a two-column PDF reflowed to one column, line breaks removed, hyphens
- * repaired by a rule that is knowingly wrong about `high-level`. All of that is *fine* — as long as
- * the reader can tell. So:
+ * GUIDED IS THE PAPER'S REGISTER (ADR-002 §3.6, owner default §10.1). Every paragraph here is the
+ * paper's verbatim text — a two-column PDF reflowed, line breaks removed, typesetter hyphens
+ * repaired — so it renders in `ReflowedText`: the paper's serif, a persistent "Reflowed from the
+ * PDF" marker, and NO ⊙. The baseline rendered all of it under ⊙ with the labels "OUR READING" and
+ * "OUR SUMMARY" (four verbatim abstract paragraphs labelled a summary): the paper dressed up as AI.
+ * The ⊙ is reserved for model output, which Guided contains none of.
  *
- *   - every text block goes through `DerivedBlock`, which is the only component in the product that
- *     can render derived content, and which cannot be constructed without `derived_from` ids and a
- *     working `onShowSource`;
- *   - a persistent header states the register, so a reader who scrolls into the middle still knows
- *     what they are looking at;
- *   - equations, figures and tables DO NOT go through `DerivedBlock`, and that is not an exemption:
- *     see EQUATIONS below.
+ * EQUATIONS, FIGURES, TABLES — THE CROP IS THE PAPER. A crop renders only from a URL a browser can
+ * load (`assetSrc`: `fixture://` resolved, `http(s)://` as signed by `/ir`). An `asset://` storage
+ * key is not one, and gets a designed placeholder instead of a broken image.
  *
- * EQUATIONS, FIGURES, TABLES — THE CROP IS THE PAPER.
- * `EquationView` renders the rendered crop first, unmarked, because the crop IS the equation; the
- * `latex`/`mathml` string is a decoder's guess and it renders below, inside `DerivedBlock`, as "our
- * transcription". Wrapping the whole `EquationView` in another `DerivedBlock` would mark the crop
- * as derived — the same register error as rendering LaTeX as the paper, just pointing the other
- * way. The rule is "the reader can always tell which is which", not "everything wears a badge".
+ * HIGHLIGHTS APPEAR HERE TOO (slice-plan §S4 work item 5), through `resolveCrossMode`: a highlight
+ * whose text is in a paragraph is marked on that text; one on a table cell or a figure marks the
+ * element that renders it; one the reading leaves out (page furniture) is listed at the top with the
+ * resolver's own "not available in this view" sentence. Nothing is dropped in silence.
  *
- * WHY THIS ITERATES `doc.blocks` AND NOT `doc.sections`.
- * Front matter belongs to no section in ALL THREE fixtures — 24 blocks in `attention`, 43 in
- * `neural-odes`, 13 in `resnet`. Rebuilding the document by concatenating `sections[].block_ids`
- * silently drops the title, the authors, and (in `neural-odes`) the entire abstract. `doc.blocks` is
- * already in reading order and contains everything, which is why `indexDocument` computes that
- * order instead of trusting `doc_order` — 64 of the set's 199 blocks do not carry `doc_order` at
- * all.
- *
- * NO MERMAID, EVER. A derived section that wants to show the paper's structure shows the paper's
- * own figure crop. A diagram a model drew of what it thinks the architecture is, rendered in the
- * same register as the paper, is the single most expensive thing this file could do.
+ * WHY THIS ITERATES THE PROJECTION AND NOT `doc.sections`. Front matter belongs to no section in all
+ * three fixtures; `projectGuided` walks `doc.blocks`, which contains everything, in reading order.
  */
 
-import { useMemo } from 'react';
-import type { ReactNode } from 'react';
-import { DerivedBlock, EquationView, FigureView, TableView } from '@papertree/ui';
-import type { IndexedBlock, IndexedDocument } from '@papertree/anchoring';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
+
+import { EquationView, FigureView, REFLOWED_LABEL, ReflowedText, TableView } from '@papertree/ui';
+import {
+  guidedProjectionFor,
+  resolveCrossMode,
+  type GuidedProjection,
+  type IndexedBlock,
+  type IndexedDocument,
+} from '@papertree/anchoring';
+
+import type { HighlightColor } from '@/lib/api/types';
 
 import { assetSrc } from './assetSrc';
-import { guidedProjectionFor } from '@papertree/anchoring';
+import { displayQuote } from './quote';
 import { joinContinuedBlocks, reflow, reflowPreservingLines } from './reflow';
+import type { ReaderHighlight } from './useHighlights';
 
 export { joinContinuedBlocks, reflow, reflowPreservingLines };
 
 export interface GuidedViewProps {
   readonly doc: IndexedDocument;
-  /**
-   * Navigate Source to these blocks. REQUIRED, and required to actually work — `DerivedBlock`
-   * refuses to render without it, and §18.6's rule is that no view is a dead end.
-   */
+  /** Navigate Source to these blocks. Every paragraph's page link calls it. */
   readonly onShowSource: (blockIds: readonly string[]) => void;
-  /**
-   * Resolve a PaperIR `image.uri` to something an `<img>` can load. Defaults to `assetSrc`, which
-   * handles the `fixture://` scheme and passes real URLs through untouched. Override it to point at
-   * a CDN.
-   */
-  readonly resolveAssetSrc?: (uri: string) => string;
-  /** Scroll-link target, set by `SplitView`. Highlighted, never scrolled to from inside here. */
-  readonly activeBlockId?: string;
+  /** Resolve a PaperIR `image.uri` to a loadable URL, or null. Defaults to `assetSrc`. */
+  readonly resolveAssetSrc?: (uri: string) => string | null;
+  readonly highlights?: readonly ReaderHighlight[];
+  /** Scroll here once, on mount — where the reader was in Source (contracts.md §5 `blockId`). */
+  readonly initialBlockId?: string | null;
+  /** Split: keep this block at the top as Source moves. */
+  readonly followBlockId?: string | null;
+  /** The topmost paragraph, reported when the READER scrolls (not when this view is driven). */
+  readonly onTopBlockChange?: (blockId: string) => void;
+  /** `focusAnchor` in Guided: outline this block for 1.2 s. */
+  readonly flashBlockId?: string | null;
   readonly className?: string;
 }
 
-/**
- * Page furniture (`page_number`, `footer`, `header`, `margin_note`, `annotation`, `unknown`) and
- * the nested/claimed-caption rules that used to be duplicated here now live in
- * `@papertree/anchoring`'s `projectGuided`, as `GUIDED_FURNITURE_TYPES`. They are COUNTED and
- * reported at the foot of the reading rather than dropped in silence — "we left something out" is
- * a claim the reader is entitled to check — and `cross-mode.spec` asserts that a highlight on one
- * of them reports "not available in this view" instead of vanishing.
- */
+interface Mark {
+  readonly start: number;
+  readonly end: number;
+  readonly color: HighlightColor;
+  readonly highlightId: string;
+}
 
-const LINEWISE_TYPES: ReadonlySet<string> = new Set(['algorithm']);
+interface GuidedMarks {
+  readonly text: ReadonlyMap<string, readonly Mark[]>;
+  /** Blocks marked as a whole (a cell, a figure, a claimed caption): element id → colour. */
+  readonly elements: ReadonlyMap<string, HighlightColor>;
+  readonly unavailable: readonly { readonly highlightId: string; readonly quote: string; readonly message: string }[];
+}
+
+function quoteOf(highlight: ReaderHighlight): string {
+  return displayQuote(highlight.anchors.map((a) => a.anchor));
+}
+
+/** Where every highlight lands in the reading — or why it does not. */
+export function guidedMarks(
+  doc: IndexedDocument,
+  projection: GuidedProjection,
+  highlights: readonly ReaderHighlight[],
+): GuidedMarks {
+  const text = new Map<string, Mark[]>();
+  const elements = new Map<string, HighlightColor>();
+  const unavailable: { highlightId: string; quote: string; message: string }[] = [];
+  for (const highlight of highlights) {
+    let shown = false;
+    let message: string | null = null;
+    for (const { anchor } of highlight.anchors) {
+      const cross = resolveCrossMode(anchor, doc, 'guided', projection);
+      if (cross.state !== 'resolved') {
+        message ??= cross.message;
+        continue;
+      }
+      shown = true;
+      if (
+        cross.paragraphId !== undefined &&
+        cross.startOffset !== undefined &&
+        cross.endOffset !== undefined &&
+        cross.endOffset > cross.startOffset
+      ) {
+        const bucket = text.get(cross.paragraphId) ?? [];
+        bucket.push({
+          start: cross.startOffset,
+          end: cross.endOffset,
+          color: highlight.color,
+          highlightId: highlight.highlightId,
+        });
+        text.set(cross.paragraphId, bucket);
+      } else {
+        const target = cross.blockIds[0] ?? cross.ownerBlockId ?? cross.paragraphId;
+        if (target !== undefined) elements.set(target, highlight.color);
+      }
+    }
+    if (!shown && message !== null) {
+      unavailable.push({ highlightId: highlight.highlightId, quote: quoteOf(highlight), message });
+    }
+  }
+  return { text, elements, unavailable };
+}
+
+/** The paragraph text, with each mark wrapped — offsets are code points, as the resolver counts. */
+function withMarks(text: string, marks: readonly Mark[] | undefined): ReactNode {
+  if (marks === undefined || marks.length === 0) return text;
+  const points = Array.from(text);
+  const sorted = [...marks].sort((a, b) => a.start - b.start || b.end - a.end);
+  const out: ReactNode[] = [];
+  let cursor = 0;
+  sorted.forEach((mark, index) => {
+    const start = Math.max(cursor, Math.min(points.length, mark.start));
+    const end = Math.max(start, Math.min(points.length, mark.end));
+    if (start > cursor) out.push(points.slice(cursor, start).join(''));
+    if (end > start) {
+      out.push(
+        <mark key={`m${String(index)}`} data-color={mark.color} data-highlight-id={mark.highlightId}>
+          {points.slice(start, end).join('')}
+        </mark>,
+      );
+    }
+    cursor = Math.max(cursor, end);
+  });
+  if (cursor < points.length) out.push(points.slice(cursor).join(''));
+  return out;
+}
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -87,42 +158,16 @@ function asNonEmptyString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-/** `payload.image.uri` — the rendered crop. Rule 36 requires it for equations and figures. */
 function payloadImageUri(block: IndexedBlock): string | undefined {
   const image = asRecord(block.payload?.['image']);
   return image === undefined ? undefined : asNonEmptyString(image['uri']);
 }
 
-interface RenderPlan {
+/** Exported so a spec can assert the front matter survives: the reading's blocks, in order. */
+export function planGuidedReading(doc: IndexedDocument): {
   readonly rendered: readonly IndexedBlock[];
   readonly furnitureCount: number;
-}
-
-/**
- * The compatibility shim that used to live here is GONE, and that is the point.
- *
- * It existed because `doc.continuedBy` was a one-entry map keyed `undefined`: `document.ts` read
- * `relation.from_block_id` while the schema and all three fixtures spell the field `from`. This
- * file worked around it by re-deriving the map from `doc.relations` under both spellings, and noted
- * the defect as "another group's file" — which was the wrong call twice over. `packages/anchoring`
- * is the SAME epic's package, and a view that quietly re-implements its index is a second source of
- * truth that will drift from the first.
- *
- * `document.ts` now reads both spellings and validates both endpoints, so `doc.continuedBy` is
- * correct (resnet: 4 entries, was 1 keyed `undefined`) and `cross-mode.spec` can rely on the view
- * and the resolver agreeing about what a paragraph IS.
- */
-
-/**
- * Decide, once, what the reading contains. Exported so a spec can assert the front matter survives.
- *
- * DELEGATES to `guidedProjectionFor(doc)`. This function used to own the logic, and
- * `resolveCrossMode` had to re-derive it to answer "which paragraph does this Source highlight land
- * in?". Two implementations of "what counts as a paragraph" drift, and the symptom when they do is a
- * highlight drawn in the wrong place — the one bug this epic exists to make impossible. So the
- * projection is computed once, in the package, and the view and the resolver read the same answer.
- */
-export function planGuidedReading(doc: IndexedDocument): RenderPlan {
+} {
   const view = guidedProjectionFor(doc);
   const rendered: IndexedBlock[] = [];
   for (const paragraph of view.paragraphs) {
@@ -132,56 +177,36 @@ export function planGuidedReading(doc: IndexedDocument): RenderPlan {
   return { rendered, furnitureCount: view.furnitureCount };
 }
 
-/**
- * The full text of a block, following any `continues_in_next_column` / `continues_on_next_page`
- * chain, plus every block id that contributed.
- *
- * The ids matter as much as the text: "show source" on a merged paragraph must be able to reach
- * BOTH columns, so `sourceIds` carries the whole chain rather than only the head.
- *
- * Also delegates, for the reason above. A block that is not a paragraph head in the projection (a
- * continuation tail, or furniture) has no reading of its own, and falls back to reflowing itself so
- * that a caller outside the plan still gets sensible text rather than an empty string.
- */
+/** The full text of a block, following any continuation chain, plus every contributing id. */
 export function continuedText(
   block: IndexedBlock,
   doc: IndexedDocument,
 ): { readonly text: string; readonly sourceIds: readonly string[] } {
   const paragraph = guidedProjectionFor(doc).byParagraphId.get(block.id);
-  if (paragraph !== undefined) {
-    return { text: paragraph.text, sourceIds: paragraph.sourceIds };
-  }
+  if (paragraph !== undefined) return { text: paragraph.text, sourceIds: paragraph.sourceIds };
   return { text: reflow(block.text), sourceIds: [block.id] };
 }
 
-/** Heading level for a block, so the reading has a real document outline for a screen reader. */
-function headingTag(block: IndexedBlock): 'h1' | 'h2' | 'h3' | null {
-  if (block.type === 'title') return 'h1';
-  if (block.type === 'heading') return 'h2';
-  return null;
+function pageLabel(doc: IndexedDocument, block: IndexedBlock): string {
+  const page = doc.pages.find((p) => p.index === block.pageIndex);
+  return `p. ${page?.label ?? String(block.pageIndex + 1)}`;
 }
 
 function GuidedText({
   block,
   doc,
   onShowSource,
-  active,
+  marks,
 }: {
   readonly block: IndexedBlock;
   readonly doc: IndexedDocument;
   readonly onShowSource: (blockIds: readonly string[]) => void;
-  readonly active: boolean;
+  readonly marks: readonly Mark[] | undefined;
 }): ReactNode {
-  const tag = headingTag(block);
-  // Follows the continuation chain, so a paragraph split across two columns reads as one — and its
-  // hyphen at the seam is repaired.
-  const { text: fullText } = continuedText(block, doc);
-  const lines = LINEWISE_TYPES.has(block.type) ? reflowPreservingLines(fullText) : null;
-
+  const { text, sourceIds } = continuedText(block, doc);
+  const lines = block.type === 'algorithm' ? reflowPreservingLines(text) : null;
   const body: ReactNode =
     lines !== null ? (
-      // Pseudocode. Monospaced and line-per-line, because the layout is the meaning. Still inside
-      // `DerivedBlock`: the LINES are the paper's, the decision to typeset them this way is ours.
       <div className="font-mono text-[13px] leading-relaxed">
         {lines.map((line, index) => (
           // eslint-disable-next-line react/no-array-index-key -- lines have no ids; order is the id
@@ -190,92 +215,76 @@ function GuidedText({
           </div>
         ))}
       </div>
-    ) : tag === 'h1' ? (
-      <h1 className="text-2xl font-semibold leading-snug">{fullText}</h1>
-    ) : tag === 'h2' ? (
-      <h2 className="text-lg font-semibold leading-snug">{fullText}</h2>
+    ) : block.type === 'title' ? (
+      <h1 className="text-[1.75rem] font-semibold leading-tight">{withMarks(text, marks)}</h1>
+    ) : block.type === 'heading' ? (
+      <h2 className="mt-4 text-[1.25rem] font-semibold leading-snug">{withMarks(text, marks)}</h2>
     ) : (
       <p
         className={
-          block.type === 'abstract'
-            ? 'text-[15px] leading-7 text-gray-700 dark:text-gray-300'
-            : block.type === 'footnote' || block.type === 'caption'
-              ? 'text-[13px] leading-6 text-gray-600 dark:text-gray-400'
-              : 'text-[16px] leading-8'
+          block.type === 'footnote' || block.type === 'caption' || block.type === 'reference_entry'
+            ? 'text-[0.9375rem] leading-relaxed opacity-80'
+            : undefined
         }
       >
-        {fullText}
+        {withMarks(text, marks)}
       </p>
     );
-
   return (
-    <div
-      // SplitView links panes by THIS attribute. It is the block id and nothing else — never a page,
-      // never a scroll ratio.
-      data-block-id={block.id}
-      data-block-type={block.type}
-      className={active ? 'rounded-sm ring-2 ring-amber-400/70' : undefined}
+    <ReflowedText
+      blockIds={sourceIds}
+      onShowSource={onShowSource}
+      sourceLabel={pageLabel(doc, block)}
+      dataBlockId={block.id}
+      className="pt-guided__para"
     >
-      <DerivedBlock
-        derivedFrom={[block.id]}
-        onShowSource={onShowSource}
-        kind={block.type === 'abstract' ? 'summary' : 'prose'}
-      >
-        {body}
-      </DerivedBlock>
+      {body}
+    </ReflowedText>
+  );
+}
+
+function CropMissing({ what }: { readonly what: string }): JSX.Element {
+  return (
+    <div className="pt-crop-missing" role="img" aria-label={`${what}: the image is not available yet`}>
+      {what} — the image from the PDF is not available yet. It is on its page in Source.
     </div>
   );
 }
 
 function GuidedEquation({
   block,
-  doc,
   onShowSource,
   resolveAssetSrc,
 }: {
   readonly block: IndexedBlock;
-  readonly doc: IndexedDocument;
   readonly onShowSource: (blockIds: readonly string[]) => void;
-  readonly resolveAssetSrc: (uri: string) => string;
+  readonly resolveAssetSrc: (uri: string) => string | null;
 }): ReactNode {
-  // ALWAYS from the payload, NEVER parsed out of the text. `attention` and `resnet` put "(1)" in
-  // `Block.text`; `neural-odes` does not put it there at all, so a regex over the text produces
-  // unnumbered equations on one of three fixtures and nobody notices until a citation says "eq 2".
   const equationNumber = asNonEmptyString(block.payload?.['equation_number']);
   const latex = asNonEmptyString(block.payload?.['latex']);
   const mathml = asNonEmptyString(block.payload?.['mathml']);
   const uri = payloadImageUri(block);
+  const src = uri === undefined ? null : resolveAssetSrc(uri);
+  const label = equationNumber === undefined ? 'Equation' : `Equation (${equationNumber})`;
 
-  if (uri === undefined) {
-    // No crop. `Block.text` here came off the PDF's own text layer, so it is still the paper — it
-    // renders as source, unmarked, with the absence stated rather than papered over with LaTeX.
+  if (src === null) {
     return (
-      <figure data-block-id={block.id} data-block-type="equation" className="my-6 text-center">
-        <pre className="inline-block whitespace-pre-wrap text-left font-mono text-sm">{block.text}</pre>
-        {equationNumber === undefined ? null : (
-          <span className="ml-3 align-middle text-sm text-gray-500">({equationNumber})</span>
+      <figure data-block-id={block.id} data-block-type="equation" className="my-6">
+        {block.text.trim().length > 0 ? (
+          <pre className="whitespace-pre-wrap text-center font-mono text-sm">{block.text}</pre>
+        ) : (
+          <CropMissing what={label} />
         )}
-        <figcaption className="mt-1 text-xs text-gray-500">
-          No rendered crop for this equation; showing the extracted text layer.
-        </figcaption>
       </figure>
     );
   }
-
-  const page = doc.pages.find((candidate) => candidate.index === block.pageIndex);
-  const alt =
-    equationNumber === undefined
-      ? `Equation on page ${String((page?.index ?? block.pageIndex) + 1)}`
-      : `Equation (${equationNumber})`;
-
   return (
     <div className="my-6">
       <EquationView
         blockId={block.id}
-        imageSrc={resolveAssetSrc(uri)}
-        imageAlt={alt}
+        imageSrc={src}
+        imageAlt={label}
         onShowSource={onShowSource}
-        // `exactOptionalPropertyTypes`: the key is OMITTED when absent, never set to undefined.
         {...(equationNumber === undefined ? {} : { equationNumber })}
         {...(latex === undefined ? {} : { latex })}
         {...(mathml === undefined ? {} : { mathml })}
@@ -291,37 +300,34 @@ function GuidedFigure({
 }: {
   readonly block: IndexedBlock;
   readonly doc: IndexedDocument;
-  readonly resolveAssetSrc: (uri: string) => string;
+  readonly resolveAssetSrc: (uri: string) => string | null;
 }): ReactNode {
   const uri = payloadImageUri(block);
+  const src = uri === undefined ? null : resolveAssetSrc(uri);
   const captionId = asNonEmptyString(block.payload?.['caption_block']);
   const caption = captionId === undefined ? undefined : doc.byId.get(captionId)?.text;
   const figureNumber = asNonEmptyString(block.payload?.['figure_number']);
   const captionText = caption === undefined ? undefined : reflow(caption);
+  const name = figureNumber === undefined ? 'Figure' : `Figure ${figureNumber}`;
 
-  if (uri === undefined) {
+  if (src === null) {
     return (
-      <figure data-block-id={block.id} data-block-type="figure" className="my-6">
-        <div className="flex min-h-[120px] items-center justify-center rounded border border-dashed border-gray-300 text-sm text-gray-500 dark:border-gray-700">
-          {figureNumber === undefined ? 'Figure' : `Figure ${figureNumber}`} — no crop available
-        </div>
+      <figure data-block-id={block.id} data-block-type="figure" className="pt-figure my-6">
+        <CropMissing what={name} />
         {captionText === undefined ? null : (
-          <figcaption className="mt-2 text-[13px] leading-6 text-gray-600 dark:text-gray-400">
+          <figcaption className="pt-figure__caption" data-block-id={captionId}>
             {captionText}
           </figcaption>
         )}
       </figure>
     );
   }
-
   return (
     <div className="my-6">
       <FigureView
         blockId={block.id}
-        imageSrc={resolveAssetSrc(uri)}
-        imageAlt={
-          captionText ?? (figureNumber === undefined ? 'Figure from the paper' : `Figure ${figureNumber}`)
-        }
+        imageSrc={src}
+        imageAlt={captionText ?? name}
         {...(captionText === undefined ? {} : { caption: captionText })}
       />
     </div>
@@ -345,12 +351,11 @@ function GuidedTable({
 }): ReactNode {
   const captionId = asNonEmptyString(block.payload?.['caption_block']);
   const caption = captionId === undefined ? undefined : doc.byId.get(captionId)?.text;
-
-  // Cells come from the IR's OWN `table_row` / `table_cell` blocks, whose text was read off the PDF
-  // text layer. `payload.grid` supplies only the (r, c) placement. `payload.html`, when a parser
-  // produces one, is never injected — `TableView` shows it as escaped text inside `DerivedBlock`.
   const grid = asRecord(block.payload?.['grid']);
-  const rawCells = Array.isArray(grid?.['cells']) ? (grid['cells'] as readonly unknown[]) : [];
+  const rawCells = useMemo(
+    () => (Array.isArray(grid?.['cells']) ? (grid['cells'] as readonly unknown[]) : []),
+    [grid],
+  );
 
   const rows = useMemo(() => {
     const byRow = new Map<number, { id: string; cells: (TableCellSpec & { col: number })[] }>();
@@ -360,7 +365,6 @@ function GuidedTable({
       const cellId = asNonEmptyString(cell['cell_id']);
       const rowIndex = typeof cell['r'] === 'number' ? cell['r'] : null;
       if (cellId === undefined || rowIndex === null) continue;
-
       const indexed = doc.byId.get(cellId);
       const rowId = indexed?.parentId ?? `${block.id}#row-${String(rowIndex)}`;
       const bucket = byRow.get(rowIndex) ?? { id: rowId, cells: [] };
@@ -372,9 +376,6 @@ function GuidedTable({
       });
       byRow.set(rowIndex, bucket);
     }
-    // Placement is the parser's; keep it and do not pad. `neural-odes`' header row starts at c=1
-    // (the corner cell simply does not exist), so the rows are RAGGED — filling the gap with an
-    // empty cell would invent a cell the paper does not have.
     return Array.from(byRow.entries())
       .sort((a, b) => a[0] - b[0])
       .map(([, row]) => ({
@@ -401,79 +402,191 @@ function GuidedTable({
   );
 }
 
+/** The element that renders `blockId` in the reading: itself, its paragraph head, or its owner. */
+function elementFor(root: HTMLElement, projection: GuidedProjection, blockId: string): HTMLElement | null {
+  const seen = new Set<string>();
+  let cursor: string | undefined = blockId;
+  while (cursor !== undefined && !seen.has(cursor)) {
+    seen.add(cursor);
+    const escaped = typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(cursor) : cursor;
+    const direct = root.querySelector<HTMLElement>(`[data-block-id="${escaped}"]`);
+    if (direct !== null) return direct;
+    const placement = projection.placement.get(cursor);
+    if (placement === undefined || placement.kind === 'absent') return null;
+    cursor = placement.kind === 'paragraph' ? placement.paragraphId : placement.ownerId;
+    if (cursor === blockId) return null;
+  }
+  return null;
+}
+
+/** How long after a programmatic scroll its scroll events are still ours, not the reader's. */
+const DRIVEN_MS = 400;
+
 export function GuidedView({
   doc,
   onShowSource,
   resolveAssetSrc = assetSrc,
-  activeBlockId,
+  highlights = [],
+  initialBlockId = null,
+  followBlockId = null,
+  onTopBlockChange,
+  flashBlockId = null,
   className,
 }: GuidedViewProps) {
+  const projection = useMemo(() => guidedProjectionFor(doc), [doc]);
   const plan = useMemo(() => planGuidedReading(doc), [doc]);
+  const marks = useMemo(() => guidedMarks(doc, projection, highlights), [doc, projection, highlights]);
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const drivenUntil = useRef(0);
+  const lastTop = useRef<string | null>(null);
+  const onTopRef = useRef(onTopBlockChange);
+  onTopRef.current = onTopBlockChange;
+
+  const scrollToBlock = useCallback(
+    (blockId: string) => {
+      const root = scrollerRef.current;
+      if (root === null) return;
+      const target = elementFor(root, projection, blockId);
+      if (target === null) return;
+      drivenUntil.current = Date.now() + DRIVEN_MS;
+      const offset =
+        target.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop;
+      root.scrollTop = Math.max(0, offset - 16);
+    },
+    [projection],
+  );
+
+  useLayoutEffect(() => {
+    if (initialBlockId !== null) scrollToBlock(initialBlockId);
+    // Once, on mount: the position the reader arrived with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (followBlockId === null || followBlockId === lastTop.current) return;
+    scrollToBlock(followBlockId);
+  }, [followBlockId, scrollToBlock]);
+
+  // Whole-element marks (a table cell, a figure) are attributes on what the view already rendered.
+  useEffect(() => {
+    const root = scrollerRef.current;
+    if (root === null) return undefined;
+    const marked: HTMLElement[] = [];
+    marks.elements.forEach((color, blockId) => {
+      const element = elementFor(root, projection, blockId);
+      if (element === null) return;
+      element.setAttribute('data-guided-mark', color);
+      marked.push(element);
+    });
+    return () => marked.forEach((element) => element.removeAttribute('data-guided-mark'));
+  }, [marks, projection]);
+
+  useEffect(() => {
+    const root = scrollerRef.current;
+    if (root === null || flashBlockId === null) return undefined;
+    const element = elementFor(root, projection, flashBlockId);
+    if (element === null) return undefined;
+    scrollToBlock(flashBlockId);
+    element.setAttribute('data-guided-flash', 'true');
+    const timer = setTimeout(() => element.removeAttribute('data-guided-flash'), 1200);
+    return () => {
+      clearTimeout(timer);
+      element.removeAttribute('data-guided-flash');
+    };
+  }, [flashBlockId, projection, scrollToBlock]);
+
+  const frame = useRef<number | null>(null);
+  const onScroll = useCallback(() => {
+    if (frame.current !== null) return;
+    frame.current = window.requestAnimationFrame(() => {
+      frame.current = null;
+      const root = scrollerRef.current;
+      if (root === null) return;
+      const top = root.getBoundingClientRect().top + 24;
+      const paragraphs = root.querySelectorAll<HTMLElement>('[data-guided-para]');
+      for (let i = 0; i < paragraphs.length; i += 1) {
+        const element = paragraphs[i] as HTMLElement;
+        if (element.getBoundingClientRect().bottom <= top) continue;
+        const id = element.getAttribute('data-guided-para');
+        if (id === null || id === lastTop.current) return;
+        lastTop.current = id;
+        if (Date.now() >= drivenUntil.current) onTopRef.current?.(id);
+        return;
+      }
+    });
+  }, []);
 
   return (
     <section
       aria-label="Guided reading"
-      className={`flex h-full min-h-0 flex-col ${className ?? ''}`}
+      className={`pt-guided flex h-full min-h-0 flex-col ${className ?? ''}`}
       data-guided-root="true"
     >
-      {/*
-        PERSISTENT, not a one-time banner. A reader who scrolls three screens in and looks up must
-        still be told this is not the paper. It carries no DERIVED_MARKER: that mark is reserved to
-        `DerivedBlock` and appears NOWHERE else in the product, which is exactly what makes it
-        readable as a mark rather than as decoration.
-      */}
-      <header className="sticky top-0 z-10 flex items-baseline gap-2 border-b border-gray-200 bg-white/95 px-4 py-2 backdrop-blur dark:border-gray-800 dark:bg-gray-950/95">
-        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Guided</span>
-        <span className="text-xs text-gray-500">
-          a derived reading of this paper — the paper itself is in Source
-        </span>
+      <header className="pt-guided__head">
+        <span className="font-medium text-[--pt-ink]">{REFLOWED_LABEL}</span>
+        <span>The paper&apos;s own words in one column. Each paragraph links to its page.</span>
       </header>
 
       <div
-        className="min-h-0 flex-1 overflow-y-auto px-4 py-6"
-        // Vertical panning only; horizontal gestures belong to the pane, not the browser.
+        ref={scrollerRef}
+        className="min-h-0 flex-1 overflow-y-auto"
         style={{ touchAction: 'pan-y' }}
+        onScroll={onScroll}
+        data-guided-scroller=""
       >
-        <div className="mx-auto flex max-w-[68ch] flex-col gap-4">
+        <article className="pt-guided__sheet">
+          {marks.unavailable.length === 0 ? null : (
+            <aside className="pt-banner mb-6 mt-0 flex-col items-start" aria-label="Highlights not shown here">
+              {marks.unavailable.map((item) => (
+                <p key={item.highlightId} className="m-0 text-[0.8125rem]">
+                  {item.quote === '' ? (
+                    'A highlight without a quote: '
+                  ) : (
+                    <span className="font-serif">
+                      “{item.quote.slice(0, 80)}
+                      {item.quote.length > 80 ? '…' : ''}”{' '}
+                    </span>
+                  )}
+                  {item.message}
+                </p>
+              ))}
+            </aside>
+          )}
           {plan.rendered.map((block) => {
+            let body: ReactNode;
             if (block.type === 'equation') {
-              return (
-                <GuidedEquation
-                  key={block.id}
+              body = (
+                <GuidedEquation block={block} onShowSource={onShowSource} resolveAssetSrc={resolveAssetSrc} />
+              );
+            } else if (block.type === 'figure') {
+              body = <GuidedFigure block={block} doc={doc} resolveAssetSrc={resolveAssetSrc} />;
+            } else if (block.type === 'table') {
+              body = <GuidedTable block={block} doc={doc} onShowSource={onShowSource} />;
+            } else {
+              body = (
+                <GuidedText
                   block={block}
                   doc={doc}
                   onShowSource={onShowSource}
-                  resolveAssetSrc={resolveAssetSrc}
+                  marks={marks.text.get(block.id)}
                 />
               );
             }
-            if (block.type === 'figure') {
-              return (
-                <GuidedFigure key={block.id} block={block} doc={doc} resolveAssetSrc={resolveAssetSrc} />
-              );
-            }
-            if (block.type === 'table') {
-              return <GuidedTable key={block.id} block={block} doc={doc} onShowSource={onShowSource} />;
-            }
             return (
-              <GuidedText
-                key={block.id}
-                block={block}
-                doc={doc}
-                onShowSource={onShowSource}
-                active={block.id === activeBlockId}
-              />
+              <div key={block.id} data-guided-para={block.id}>
+                {body}
+              </div>
             );
           })}
 
           {plan.furnitureCount === 0 ? null : (
-            <p className="mt-6 border-t border-gray-200 pt-3 text-xs text-gray-500 dark:border-gray-800">
-              {plan.furnitureCount} page-furniture block
-              {plan.furnitureCount === 1 ? '' : 's'} (page numbers, running footers, the arXiv stamp,
-              hairline rules) are not part of this reading. They are still in Source.
+            <p className="mt-8 border-t border-[--pt-rule] pt-3 text-[0.8125rem] text-[--pt-ink-muted]">
+              {plan.furnitureCount} page-furniture block{plan.furnitureCount === 1 ? '' : 's'} (page
+              numbers, running footers, the arXiv stamp, hairline rules) {plan.furnitureCount === 1 ? 'is' : 'are'}{' '}
+              left out of this reading. {plan.furnitureCount === 1 ? 'It is' : 'They are'} still in Source.
             </p>
           )}
-        </div>
+        </article>
       </div>
     </section>
   );
