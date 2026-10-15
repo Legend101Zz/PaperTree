@@ -98,7 +98,10 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
     const box = await ask.boundingBox();
     expect(box).not.toBeNull();
     await page.screenshot({ path: shot('c01-selection-1440.png') });
-    await page.mouse.click((box?.x ?? 0) + (box?.width ?? 0) / 2, (box?.y ?? 0) + (box?.height ?? 0) / 2);
+    await page.mouse.click(
+      (box?.x ?? 0) + (box?.width ?? 0) / 2,
+      (box?.y ?? 0) + (box?.height ?? 0) / 2,
+    );
 
     // ── the drawer opens on the passage; the answer streams; no raw ids or handles ──
     const panel = page.getByRole('complementary', { name: 'Explain' });
@@ -111,13 +114,17 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
     expect(text).not.toMatch(/\[b\d+\]|\bmsg_|\bthr_|\brun_|\bblk_|\{"|"citation_id"/);
     const chips = panel.locator('[data-citation-id]');
     const chipCount = await chips.count();
-    note(`first answer complete; ${String(chipCount)} chips; usage "${await panel.locator('[data-usage-line]').first().innerText()}"`);
+    note(
+      `first answer complete; ${String(chipCount)} chips; usage "${await panel.locator('[data-usage-line]').first().innerText()}"`,
+    );
     expect(chipCount).toBeGreaterThan(0);
     await expect(panel.locator('[data-usage-line]').first()).toContainText('(estimate)');
     await page.screenshot({ path: shot('c02-answer-1440.png') });
 
     // ── a follow-up that says "that": the SAME thread ──
-    await panel.getByLabel('Ask a question about this paper').fill('What does that mean for speed?');
+    await panel
+      .getByLabel('Ask a question about this paper')
+      .fill('What does that mean for speed?');
     await panel.getByRole('button', { name: 'Ask', exact: true }).click();
     await expect(panel.locator('[data-message-status="complete"]')).toHaveCount(2, {
       timeout: 120_000,
@@ -142,11 +149,16 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
           inPanel: el?.closest('[data-explain-panel]') !== null,
         };
       },
-      [(probe?.x ?? 0) + (probe?.width ?? 0) / 2, (probe?.y ?? 0) + (probe?.height ?? 0) / 2] as const,
+      [
+        (probe?.x ?? 0) + (probe?.width ?? 0) / 2,
+        (probe?.y ?? 0) + (probe?.height ?? 0) / 2,
+      ] as const,
     );
     note(`chip flash centre -> ${JSON.stringify(under)}`);
     expect(under.inPanel, 'the flash must not sit under the drawer').toBe(false);
-    expect(under.inSpan, 'elementFromPoint at the flash centre must be a text-layer span').toBe(true);
+    expect(under.inSpan, 'elementFromPoint at the flash centre must be a text-layer span').toBe(
+      true,
+    );
     await page.screenshot({ path: shot('c04-chip-flash-1440.png') });
 
     // ── the summary: progress, bullets with chips ──
@@ -155,9 +167,13 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
     const bullets = panel.locator('[data-summary-bullet]');
     await expect(bullets.first()).toBeVisible({ timeout: 120_000 });
     const bulletCount = await bullets.count();
-    note(`summary: ${String(bulletCount)} bullets, ${String(await panel.locator('[data-summary-bullet] [data-citation-id]').count())} chips`);
+    note(
+      `summary: ${String(bulletCount)} bullets, ${String(await panel.locator('[data-summary-bullet] [data-citation-id]').count())} chips`,
+    );
     expect(bulletCount).toBeGreaterThan(0);
-    expect(await panel.locator('[data-summary-bullet] [data-citation-id]').count()).toBeGreaterThan(0);
+    expect(await panel.locator('[data-summary-bullet] [data-citation-id]').count()).toBeGreaterThan(
+      0,
+    );
     await page.screenshot({ path: shot('c05-summary-1440.png') });
     const runsAfterSummary = aiRuns(stack.dataRoot, paperId);
     expect(runsAfterSummary).toBe(runsBefore + 1);
@@ -169,9 +185,13 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
       .getByRole('complementary', { name: 'Explain' })
       .getByRole('button', { name: 'Summarize paper' })
       .click();
-    await expect(page.locator('[data-summary-bullet]')).toHaveCount(bulletCount, { timeout: 30_000 });
+    await expect(page.locator('[data-summary-bullet]')).toHaveCount(bulletCount, {
+      timeout: 30_000,
+    });
     expect(aiRuns(stack.dataRoot, paperId)).toBe(runsAfterSummary);
-    note(`reload: cached summary shown (${String(bulletCount)} bullets); ai_runs ${String(runsAfterSummary)} unchanged`);
+    note(
+      `reload: cached summary shown (${String(bulletCount)} bullets); ai_runs ${String(runsAfterSummary)} unchanged`,
+    );
     await page.screenshot({ path: shot('c06-summary-cached-1440.png') });
   });
 });

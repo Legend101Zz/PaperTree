@@ -165,6 +165,10 @@ function Body({
   const last = state.messages[state.messages.length - 1];
   const growth = `${String(state.messages.length)}:${String(last?.text.length ?? 0)}:${last?.status ?? ''}:${String(last?.stopped ?? false)}:${String(last?.citations.length ?? 0)}`;
   useEffect(() => {
+    // A different view is a different scroll container: start at the end of it.
+    stick.current = true;
+  }, [state.view]);
+  useEffect(() => {
     const el = scroller.current;
     if (el !== null && stick.current) el.scrollTop = el.scrollHeight;
   }, [growth, state.view]);

@@ -2023,8 +2023,10 @@ span.pt-paper .pt-paper__cite {
 }
 
 .pt-chip[data-supported='false'] {
-  color: var(--pt-danger);
-  border-color: var(--pt-danger);
+  /* Muted, not red: "not verified" is a caution in words, and a whole answer of red pills reads as
+     an alarm the reader cannot act on. The word is the signal; the dashed border is the echo. */
+  color: var(--pt-ink-muted);
+  border-color: var(--pt-ink-muted);
   border-style: dashed;
 }
 
