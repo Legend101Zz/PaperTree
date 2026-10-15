@@ -88,6 +88,30 @@
             "$ref": "#/$defs/JobStepStatus"
           },
           "type": "array"
+        },
+        "generation": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "parser_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -103,7 +127,9 @@
         "is_terminal",
         "created_at",
         "updated_at",
-        "steps"
+        "steps",
+        "generation",
+        "parser_version"
       ],
       "title": "JobStatus",
       "type": "object"

@@ -507,6 +507,7 @@ def message_wire(
 @router.get("/papers/{paper_id}/threads", response_model=list[Thread], responses=ERRORS)
 async def list_threads(call: CallerDep, paper_id: str) -> Response:
     owned_paper(call, paper_id)
+    runs.sweep_orphans(call.db)
     rows = call.db.list_threads(call.db_owner, PaperId(paper_id))
     return JSONResponse([thread_wire(row) for row in rows])
 
@@ -515,6 +516,7 @@ async def list_threads(call: CallerDep, paper_id: str) -> Response:
 async def get_thread(call: CallerDep, paper_id: str, thread_id: str) -> Response:
     owned_paper(call, paper_id)
     db, owner = call.db, call.db_owner
+    runs.sweep_orphans(db)
     thread = db.get_thread(owner, PaperId(paper_id), thread_id)
     if thread is None:
         raise ApiError("not_found", "no such thread")
