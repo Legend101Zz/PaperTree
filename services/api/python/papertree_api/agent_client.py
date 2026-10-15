@@ -612,6 +612,14 @@ class RunBroker:
             spent = replace(self.retried_usage)  # a retried attempt's totals, then this one's
             spent.add(outcome.usage_totals)
             tokens: dict[str, Any] = spent.tokens()
+            if status in ("aborted", "error") and spent.input == 0 and spent.output == 0:
+                # Pi reports no usage for a message that was aborted or failed mid-stream (text
+                # may well have streamed): the totals are zero because nothing was REPORTED, not
+                # because nothing was spent. Unknown is null, never 0 (S5F). The cost and the
+                # cache reads the agent did report stay.
+                tokens["input_tokens"] = None
+                tokens["output_tokens"] = None
+                tokens["reasoning_tokens"] = None
             tool_calls, agent_retries = outcome.tool_calls, outcome.retries
             entries: list[dict[str, Any]] | None = outcome.entries
             if status in ("error", "aborted") and not outcome.final_text and not entries:
@@ -643,14 +651,23 @@ class RunBroker:
             run_id=spec.run_id, handles=handles, document=document, texts=texts, new_id=new_id
         )
         summary: dict[str, Any] | None = None
+        derived_from: list[str] = []
         if spec.kind == "summary":
             bullets = evidence.cite_summary(final_text, minter) if final_text else []
             citations = [c for bullet in bullets for c in bullet.citations]
-            # contracts.md §3.4: partial when a bullet has no valid marker. The verifier's verdict
-            # is each bullet's `supported`; it does not make the summary partial.
+            # contracts.md §3.4 / S5F: a summary with text is NEVER `failed`. It is `complete`
+            # when every bullet carries a valid marker, `partial` when some or all do not (the
+            # bullets are kept, `supported: false`), and only a run with no text at all fails.
             complete = bool(bullets) and all(b.citations for b in bullets)
             if status == "complete" and not complete:
                 status = "partial"
+            # A derivation names the blocks it comes from (0001's CHECK): the cited ones, else
+            # the digest and whatever else the run was shown.
+            derived_from = [c.block_id for c in citations] or list(dict.fromkeys(handles.values()))
+            if status in ("complete", "partial") and not (bullets and derived_from):
+                # No bullet, or not a single block the text could be derived from: nothing to
+                # store, so it is not served as a summary, and the live `done` says so too.
+                status, error_code = "error", error_code or "internal"
             summary = {
                 "generation": spec.generation,
                 "model": MODEL,
@@ -707,7 +724,7 @@ class RunBroker:
                 )
                 if entries is not None:
                     db.set_agent_state(owner, spec.thread_id, entries)
-            if summary is not None and citations and status in ("complete", "partial"):
+            if summary is not None and summary["bullets"] and status in ("complete", "partial"):
                 db.put_summary(
                     owner,
                     PaperId(spec.paper_id),
@@ -715,7 +732,7 @@ class RunBroker:
                     prompt_hash=PROMPT_VERSIONS["summary"],
                     model_id=MODEL,
                     content=summary,
-                    derived_from=[c.block_id for c in citations],
+                    derived_from=derived_from,
                 )
             db.finish_run(
                 owner,

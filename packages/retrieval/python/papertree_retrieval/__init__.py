@@ -112,6 +112,7 @@ from papertree_retrieval.budget import (
     assemble_evidence,
 )
 from papertree_retrieval.cache import DEFAULT_CACHE_ENTRIES, CachedPaper, PaperIndexCache
+from papertree_retrieval.digest import DIGEST_BUDGET_TOKENS, Digest, DigestPassage, build_digest
 from papertree_retrieval.expansion import (
     CITATION_RELATION_TYPES,
     DEFAULT_EXPANSION_POLICY,
@@ -182,6 +183,10 @@ __all__ = [
     "TruncationReason",
     "TruncationRecord",
     "assemble_evidence",
+    "DIGEST_BUDGET_TOKENS",
+    "Digest",
+    "DigestPassage",
+    "build_digest",
     "build_seed",
     "expand",
     "tokenize",

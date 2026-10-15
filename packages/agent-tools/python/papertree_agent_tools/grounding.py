@@ -93,15 +93,22 @@ rather than folded into it.
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Mapping
-from typing import Final
+from dataclasses import dataclass
+from typing import Final, Literal
 
 from papertree_agent_tools.answer import GroundedAnswer, VerifiedClaim
 
 __all__ = [
+    "CONTRADICTION_FLOOR",
     "DEFAULT_COVERAGE_THRESHOLD",
+    "MIN_ASSESSABLE_TOKENS",
     "STOPWORDS",
+    "ClaimAssessment",
     "ClaimEvidence",
+    "Verdict",
+    "assess_claim",
     "claim_coverage",
     "content_tokens",
     "verify_grounding",
@@ -110,6 +117,18 @@ __all__ = [
 #: Fraction of a claim's content tokens that must appear in the cited blocks. See the module
 #: docstring's threshold section for the three measured coverages it sits between.
 DEFAULT_COVERAGE_THRESHOLD: Final = 0.6
+
+#: Below this share of a claim's content words in the cited blocks, the claim is not merely
+#: unverified but UNSUPPORTED: it is built from words the passage does not contain (invented
+#: entities, invented findings). Between this floor and the threshold the claim is NEUTRAL:
+#: commentary and interpretation reuse some of the passage's words and add their own, and that is
+#: not evidence against the citation. See :func:`assess_claim` and the measurements in the section
+#: "THREE VERDICTS" of the module docstring.
+CONTRADICTION_FLOOR: Final = 0.15
+
+#: A claim with fewer content words than this has too little to check ("Why that matters."): it is
+#: NEUTRAL, never unsupported, unless it carries a number the cited blocks lack.
+MIN_ASSESSABLE_TOKENS: Final = 3
 
 #: Words carrying no evidential content. Small and explicit rather than an imported list: a
 #: dependency for 60 English words would be a lockfile change (see ``schema.py``), and a list
@@ -149,12 +168,45 @@ _TOKEN = re.compile(r"[0-9A-Za-z][0-9A-Za-z._\-]*")
 _NUMERIC = re.compile(r"^-?[0-9]+(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?$")
 
 
+#: Dashes a PDF text layer or a model may use for a hyphen: hyphen, non-breaking hyphen, figure
+#: dash, en dash, minus sign, soft hyphen.
+_DASHES = dict.fromkeys(map(ord, "\u2010\u2011\u2012\u2013\u2212\u00ad"), "-")
+#: A word broken across lines by the typesetter: ``prob- lem``.
+_LINE_BREAK_HYPHEN = re.compile(r"(?<=[A-Za-z])-\s+(?=[a-z])")
+_SUFFIXES: Final = (("ies", "y"), ("sses", "ss"), ("ing", ""), ("ed", ""), ("es", ""), ("s", ""))
+
+
+def _fold(text: str) -> str:
+    """The comparison form of paper or model text: NFKC (``ﬁ`` is ``fi``, a no-break hyphen is a
+    hyphen) and typesetter line-break hyphens joined. A claim says ``classifier`` and the PDF's
+    text layer says ``classiﬁer``; ``prob- lem`` and ``problem`` are one word."""
+    folded = unicodedata.normalize("NFKC", text).translate(_DASHES)
+    return _LINE_BREAK_HYPHEN.sub("", folded)
+
+
+def _stem(token: str) -> str:
+    """A deliberately crude suffix strip (``classifiers`` -> ``classifier``, ``boxes`` -> ``box``,
+    ``predicts`` -> ``predict``). Numbers and short words are untouched. Both sides of every
+    comparison are stemmed alike, so an imperfect stem costs nothing as long as it is the same
+    function; it only has to make a plural, a tense and a base form meet."""
+    if len(token) <= 3 or _NUMERIC.fullmatch(token) or token.endswith("ss"):
+        return token
+    for suffix, replacement in _SUFFIXES:
+        if token.endswith(suffix) and len(token) - len(suffix) >= 3:
+            return token[: -len(suffix)] + replacement
+    return token
+
+
 def content_tokens(text: str) -> tuple[str, ...]:
     """Lower-cased content tokens, in order, with stopwords and bare punctuation removed.
 
     Returns a TUPLE and not a set: order is preserved so a reason string can name the missing
     tokens in the order the reader will meet them in the claim, and so nothing in this module
     ever iterates a set (determinism — ``expansion.py``'s rule 1).
+
+    The text is folded first (:func:`_fold`) and each token stemmed (:func:`_stem`): without that
+    a faithful claim ("classifiers", "problem") reads as missing words against the PDF's own
+    ("classiﬁers", "prob- lem"), which is what made well-grounded answers read "not verified".
 
     Case folding is ``str.lower`` rather than ``papertree_document_ir.normalise_text``. That is a
     deliberate narrowing and worth stating: ``normalise_text`` is the identity normalisation —
@@ -164,8 +216,16 @@ def content_tokens(text: str) -> tuple[str, ...]:
     steps buy nothing on that side and cost a strict-mode dependency edge for a comparison that
     is approximate by design. The block side is already ``resolved_text``'s output.
     """
-    tokens = [match.group(0).lower().strip("._-") for match in _TOKEN.finditer(text)]
-    return tuple(token for token in tokens if token and token not in STOPWORDS)
+    tokens = [match.group(0).lower().strip("._-") for match in _TOKEN.finditer(_fold(text))]
+    return tuple(_stem(token) for token in tokens if token and token not in STOPWORDS)
+
+
+def _parts(token: str) -> tuple[str, ...]:
+    """The words of a hyphenated compound (``bounding-box`` -> ``bounding``, ``box``); empty for
+    anything else, and for a number."""
+    if "-" not in token or _NUMERIC.fullmatch(token):
+        return ()
+    return tuple(_stem(part) for part in token.split("-") if part and part not in STOPWORDS)
 
 
 class ClaimEvidence:
@@ -179,7 +239,10 @@ class ClaimEvidence:
     __slots__ = ("_by_block", "_missing")
 
     def __init__(self, by_block: Mapping[str, frozenset[str]], missing: tuple[str, ...]) -> None:
-        self._by_block = dict(by_block)
+        # A block that says ``bounding-box`` also says ``bounding`` and ``box``.
+        self._by_block = {
+            block: bag.union(*(_parts(token) for token in bag)) for block, bag in by_block.items()
+        }
         self._missing = missing
 
     @property
@@ -195,7 +258,12 @@ class ClaimEvidence:
         return tuple(block for block, bag in self._by_block.items() if token in bag)
 
     def contains(self, token: str) -> bool:
-        return any(token in bag for bag in self._by_block.values())
+        """Whether the cited blocks have this token, or — for a hyphenated compound the blocks
+        write as two words — every word of it (``bounding-box`` is covered by ``bounding box``)."""
+        if any(token in bag for bag in self._by_block.values()):
+            return True
+        parts = _parts(token)
+        return bool(parts) and all(self.contains(part) for part in parts)
 
 
 def claim_coverage(claim_text: str, evidence: ClaimEvidence) -> tuple[float, tuple[str, ...]]:
@@ -214,6 +282,50 @@ def claim_coverage(claim_text: str, evidence: ClaimEvidence) -> tuple[float, tup
     return (len(tokens) - len(missing)) / len(tokens), missing
 
 
+#: What one claim's check says about the citations it carries.
+#:
+#: ``supported``    enough of its words are in the cited blocks, and none of its numbers is missing;
+#: ``neutral``      it reuses some of the passage's words and adds its own (commentary,
+#:                  interpretation, a restatement in new vocabulary), or it is too short to check:
+#:                  this check cannot call it grounded and has no evidence against the citation;
+#: ``unsupported``  a number it states is in none of the cited blocks, or it is built almost
+#:                  entirely from words the cited blocks do not contain.
+Verdict = Literal["supported", "neutral", "unsupported"]
+
+
+@dataclass(frozen=True, slots=True)
+class ClaimAssessment:
+    verdict: Verdict
+    coverage: float
+    #: The claim's content words the cited blocks lack, in claim order. Never shown to the reader.
+    missing: tuple[str, ...]
+    #: The claim's numbers the cited blocks lack.
+    missing_numbers: tuple[str, ...]
+    content_words: int
+
+
+def assess_claim(
+    claim_text: str,
+    evidence: ClaimEvidence,
+    *,
+    threshold: float = DEFAULT_COVERAGE_THRESHOLD,
+    floor: float = CONTRADICTION_FLOOR,
+) -> ClaimAssessment:
+    """One claim against its cited blocks, as one of three verdicts (see :data:`Verdict`)."""
+    coverage, missing = claim_coverage(claim_text, evidence)
+    words = len(content_tokens(claim_text))
+    numbers = tuple(token for token in missing if _NUMERIC.fullmatch(token) is not None)
+    if numbers:
+        verdict: Verdict = "unsupported"
+    elif coverage >= threshold:
+        verdict = "supported"
+    elif words >= MIN_ASSESSABLE_TOKENS and coverage < floor:
+        verdict = "unsupported"
+    else:
+        verdict = "neutral"
+    return ClaimAssessment(verdict, coverage, missing, numbers, words)
+
+
 def verify_grounding(
     answer: GroundedAnswer,
     resolved_text: Mapping[str, str],
@@ -229,7 +341,9 @@ def verify_grounding(
     which is the correct reading: a claim citing a block this paper generation does not contain
     is ungrounded whether the id is a typo or a survivor from a stale generation.
 
-    The output ``claims`` tuple has the same length and the same order as the input's. That is
+    A claim is ``supported`` here only on the ``supported`` verdict of :func:`assess_claim`; a
+    ``neutral`` one is not (this is the boolean the answer contract carries). The output
+    ``claims`` tuple has the same length and the same order as the input's. That is
     asserted here rather than left to inspection, because "the verifier filtered my claims" is a
     silent data loss and the assertion costs one comparison.
     """
@@ -277,21 +391,21 @@ def _verify_claim(
             ),
         )
 
-    coverage, missing = claim_coverage(claim.text, evidence)
-    fabricated = tuple(token for token in missing if _NUMERIC.fullmatch(token) is not None)
-    if fabricated:
+    assessment = assess_claim(claim.text, evidence, threshold=threshold)
+    coverage, missing = assessment.coverage, assessment.missing
+    if assessment.missing_numbers:
         return VerifiedClaim(
             text=claim.text,
             supported_by=(),
             supported=False,
             reason=(
-                f"the number(s) {list(fabricated)} appear in the claim and in none of the cited "
-                f"blocks {list(evidence.resolved_blocks)}. A number that is not in the source is "
-                "the failure mode this check exists for; verify it against the paper."
+                f"the number(s) {list(assessment.missing_numbers)} appear in the claim and in none "
+                f"of the cited blocks {list(evidence.resolved_blocks)}. A number that is not in "
+                "the source is the failure mode this check exists for; verify it against the paper."
             ),
         )
 
-    if coverage < threshold:
+    if assessment.verdict != "supported":
         return VerifiedClaim(
             text=claim.text,
             supported_by=(),

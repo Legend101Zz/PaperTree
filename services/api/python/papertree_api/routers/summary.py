@@ -29,6 +29,7 @@ from papertree_db.ai import normalise_time
 from papertree_prompts import mint_datamark
 
 from .. import agent_client as runs
+from .. import evidence
 from ..agent_client import RunBroker, RunSpec
 from ..deps import (
     AgentClientDep,
@@ -137,21 +138,27 @@ async def create_summary(
     datamark = mint_datamark()
     token, token_sha256 = runs.mint_run_token()
     request_id = getattr(request.state, "request_id", None)
-    db.create_run(
-        owner,
-        run_id=run_id,
-        paper_id=PaperId(paper_id),
-        generation=generation,
-        kind="summary",
-        thread_id=None,
-        message_id=message_id,
-        token_sha256=token_sha256,
-        datamark=datamark,
-        expires_at=runs.token_expiry("summary"),
-        code_path=runs.CODE_PATHS["summary"],
-        request_id=request_id,
-        prompt_version=runs.PROMPT_VERSIONS["summary"],
-    )
+    # The seed of a summary is a bounded digest of the paper (contracts.md §3.2): the abstract,
+    # each top-level section's first paragraph(s) and the conclusion, each with its own handle.
+    index = evidence.load_index(index_cache, db, owner, call.user_id, paper_id, generation)
+    plan = evidence.plan_digest(index, datamark=datamark)
+    with db.transaction():
+        db.create_run(
+            owner,
+            run_id=run_id,
+            paper_id=PaperId(paper_id),
+            generation=generation,
+            kind="summary",
+            thread_id=None,
+            message_id=message_id,
+            token_sha256=token_sha256,
+            datamark=datamark,
+            expires_at=runs.token_expiry("summary"),
+            code_path=runs.CODE_PATHS["summary"],
+            request_id=request_id,
+            prompt_version=runs.PROMPT_VERSIONS["summary"],
+        )
+        handles = db.assign_run_handles(owner, run_id, generation, plan.block_ids)
     run_body = AgentRunRequest(
         run_id=run_id,
         request_id=request_id or new_id("req"),
@@ -164,7 +171,7 @@ async def create_summary(
             page_count=paper.get("page_count"),
             generation=generation,
         ),
-        seed=None,
+        seed=plan.to_wire(handles),
         question=SUMMARY_QUESTION,
         history=None,
         limits=runs.LIMITS["summary"],

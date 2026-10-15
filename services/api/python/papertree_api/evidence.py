@@ -48,10 +48,10 @@ from dataclasses import dataclass, field
 from typing import Any, Final
 
 from papertree_agent_tools import (
-    UNVERIFIED_REASON,
-    GroundedAnswer,
-    VerifiedClaim,
-    verify_grounding,
+    ClaimEvidence,
+    Verdict,
+    assess_claim,
+    content_tokens,
 )
 from papertree_anchoring import (
     IndexedDocument,
@@ -73,6 +73,7 @@ from papertree_retrieval import (
     DEFAULT_TOKEN_ESTIMATOR,
     PaperIndex,
     PaperIndexCache,
+    build_digest,
     build_seed,
 )
 from pydantic import ValidationError
@@ -320,6 +321,26 @@ def plan_seed(index: PaperIndex, anchor: Mapping[str, Any], *, datamark: str) ->
     )
 
 
+def plan_digest(index: PaperIndex, *, datamark: str) -> SeedPlan:
+    """The seed of a SUMMARY run (contracts.md §3.2): a digest of the whole paper — the abstract,
+    each top-level section's first paragraph(s), the conclusion — under about 6,000 estimated
+    tokens OF WHAT IS SENT (the datamarked text, as for ``plan_seed``). There is no selection:
+    ``quote`` and ``page_label`` are empty and ``section`` is null."""
+    digest = build_digest(index, cost=marked_cost(datamark))
+    passages = tuple(
+        (p.block_id, passage_label(index, p.block_id), datamark_text(p.text, datamark=datamark))
+        for p in digest.passages
+    )
+    return SeedPlan(
+        block_ids=tuple(block for block, _label, _text in passages),
+        quote="",
+        page_label="",
+        section=None,
+        passages=passages,
+        total_tokens=digest.total_tokens,
+    )
+
+
 # ── the index and the anchoring document, cached per process ─────────────────────────────────
 
 
@@ -447,25 +468,35 @@ def split_bullets(text: str) -> list[str]:
     return bullets if bullets else lines
 
 
-def claim_supported(claim: str, cited_blocks: Sequence[str], texts: Mapping[str, str]) -> bool:
-    """``verify_grounding`` on one claim over its cited blocks. Markers are stripped first: the
-    handle ``b3`` is not a word of the paper and would count against the claim's coverage."""
+def claim_verdict(claim: str, cited_blocks: Sequence[str], texts: Mapping[str, str]) -> Verdict:
+    """``assess_claim`` on one claim over its cited blocks. Markers are stripped first: the
+    handle ``b3`` is not a word of the paper and would count against the claim's coverage. A claim
+    whose cited blocks are not in ``texts`` (a block the generation lacks) has no evidence, and no
+    evidence is ``neutral`` only when the claim is empty: a claim citing nothing real is not
+    supported."""
     clean = strip_markers(claim)
-    if not clean or not cited_blocks:
-        return False
-    answer = GroundedAnswer(
-        states=clean,
-        interpretation=None,
-        supporting_block_ids=tuple(cited_blocks),
-        source_pages=(),
-        source_regions=(),
-        confidence=1.0,
-        unresolved_ambiguities=(),
-        claims=(
-            VerifiedClaim(text=clean, supported_by=tuple(cited_blocks), reason=UNVERIFIED_REASON),
-        ),
-    )
-    return verify_grounding(answer, texts).claims[0].supported
+    bags = {
+        block: frozenset(content_tokens(texts[block])) for block in cited_blocks if block in texts
+    }
+    if not clean or not bags:
+        return "unsupported" if clean else "neutral"
+    return assess_claim(clean, ClaimEvidence(bags, ())).verdict
+
+
+def claim_supported(claim: str, cited_blocks: Sequence[str], texts: Mapping[str, str]) -> bool:
+    return claim_verdict(claim, cited_blocks, texts) == "supported"
+
+
+def citation_supported(verdicts: Sequence[Verdict]) -> bool:
+    """A citation is ``supported`` when at least one claim that carries it is supported and no
+    claim that carries it is unsupported.
+
+    Not "every claim": an answer that explains a passage cites it from its interpretive sentences
+    too, and those reuse part of the passage's words and add their own (``neutral``). Counting
+    them against the citation made a well-grounded citation read "not verified". And not "any
+    claim" alone: a fabricated number or an invented finding carrying the same marker as an honest
+    sentence (``unsupported``) must still take the citation down."""
+    return "supported" in verdicts and "unsupported" not in verdicts
 
 
 @dataclass(frozen=True, slots=True)
@@ -558,18 +589,19 @@ class CitationMinter:
 def cite_answer(final_text: str, minter: CitationMinter) -> list[MintedCitation]:
     """An answer's citations, one per distinct known marker, in order of first appearance, each
     ``supported`` iff every claim citing it passes the verifier."""
-    verdicts: dict[str, bool] = {}
+    verdicts: dict[str, list[Verdict]] = {}
     for claim in split_claims(final_text):
         cited = [m for m in markers_in(claim) if m in minter.handles]
         if not cited:
             continue
         blocks = [minter.handles[m] for m in cited]
-        ok = claim_supported(claim, blocks, minter.texts)
+        verdict = claim_verdict(claim, blocks, minter.texts)
         for marker in cited:
-            verdicts[marker] = verdicts.get(marker, True) and ok
+            verdicts.setdefault(marker, []).append(verdict)
     citations: list[MintedCitation] = []
     for marker in markers_in(final_text):
-        citation = minter.mint(marker, verdicts.get(marker))
+        seen = verdicts.get(marker)
+        citation = minter.mint(marker, None if seen is None else citation_supported(seen))
         if citation is not None:
             citations.append(citation)
     return citations

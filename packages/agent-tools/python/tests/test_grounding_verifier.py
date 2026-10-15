@@ -335,3 +335,63 @@ def test_a_claim_citing_a_block_this_generation_lacks_is_flagged_not_refused(
     )
     assert verified.claims[0].supported is False
     assert verified.claims[0].reason is not None and "blk_gone" in verified.claims[0].reason
+
+
+# ── S5F: normalisation and the three verdicts ────────────────────────────────────────────
+
+
+def test_the_pdfs_typesetting_is_folded_before_words_are_compared() -> None:
+    """A text layer says ``classiﬁer`` and ``prob- lem``; a claim says ``classifier`` and
+    ``problem``. They are the same words (NFKC, line-break hyphens joined, plurals stemmed)."""
+    from papertree_agent_tools import content_tokens
+
+    block = "Systems repurpose classiﬁers. This is a regression prob-\nlem for bounding-box boxes."
+    assert content_tokens("A classifier") == content_tokens("classiﬁers") == ("classifier",)
+    evidence = ClaimEvidence({"b": frozenset(content_tokens(block))}, ())
+    covered, missing = claim_coverage("classifier problem bounding box", evidence)
+    assert (covered, missing) == (1.0, ())
+
+
+def test_a_hyphenated_compound_is_covered_by_its_words_and_numbers_are_never_stemmed() -> None:
+    from papertree_agent_tools import content_tokens
+
+    assert content_tokens("self-attention layers 152") == ("self-attention", "layer", "152")
+    evidence = ClaimEvidence({"b": frozenset(content_tokens("attention for self supervision"))}, ())
+    assert evidence.contains("self-attention")
+    assert not evidence.contains("self-regression")
+
+
+def test_the_three_verdicts() -> None:
+    from papertree_agent_tools import CONTRADICTION_FLOOR, assess_claim
+
+    evidence = ClaimEvidence({"blk_a": frozenset(content_tokens(BLOCK))}, ())
+    supported = assess_claim(
+        "We present a residual learning framework that eases training", evidence
+    )
+    # Reuses some of the passage's words and adds its own: commentary, neither grounded nor refuted.
+    neutral = assess_claim(
+        "This residual framework is, in my reading, a notable shift in how people build networks",
+        evidence,
+    )
+    invented = assess_claim(
+        "Transformers replace recurrence entirely with self-attention over token sequences",
+        evidence,
+    )
+    wrong_number = assess_claim(
+        "They evaluate residual nets with a depth of up to 999 layers", evidence
+    )
+    too_short = assess_claim("Why that matters", evidence)
+    assert supported.verdict == "supported"
+    assert neutral.verdict == "neutral" and CONTRADICTION_FLOOR <= neutral.coverage < 0.6
+    assert invented.verdict == "unsupported" and invented.coverage < CONTRADICTION_FLOOR
+    assert wrong_number.verdict == "unsupported" and wrong_number.missing_numbers == ("999",)
+    assert too_short.verdict == "neutral" and too_short.content_words < 3
+
+
+def test_a_neutral_claim_is_not_reported_supported_by_verify_grounding() -> None:
+    """The boolean the answer contract carries is True only for the `supported` verdict."""
+    claim = (
+        "This residual framework is, in my reading, a notable shift in how people build networks"
+    )
+    verified = verify_grounding(_answer((_draft(claim),)), TEXTS)
+    assert verified.claims[0].supported is False

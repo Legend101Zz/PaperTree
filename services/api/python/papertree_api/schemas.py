@@ -983,10 +983,8 @@ class AgentRunRequest(Wire):
     @classmethod
     def _seed_matches_kind(cls, value: AgentSeed | None, info: ValidationInfo) -> Any:
         kind = info.data.get("kind")
-        if kind == "summary" and value is not None:
-            raise PydanticCustomError("value_error", "A summary run has no seed")
-        if kind == "explain" and value is None:
-            raise PydanticCustomError("missing", "Field required for an explain run")
+        if kind in ("summary", "explain") and value is None:
+            raise PydanticCustomError("missing", f"Field required for a {kind} run")
         return value
 
 
