@@ -4,7 +4,7 @@ The decision and its reasoning are in `research/architecture-decisions/ADR-003-m
 
 ## Method
 
-- **Script:** `services/agent/bench/ab.py` (re-run with `uv run python services/agent/bench/ab.py --out <dir>`). `summarize.py` aggregates it and pairs answers for blind judging; `api_shim.py` is a measurement-only launcher (see ADR-003 section 5).
+- **Script:** `services/agent/bench/ab.py` (re-run with `uv run python services/agent/bench/ab.py --out <dir>`). `summarize.py` aggregates it and pairs answers for blind judging; the A/B measured in `t0-impl/ab1` ran through a since-deleted launcher that patched the API's pinned model in memory; the API now stores the agent-reported model, so the script starts the API directly.
 - **Stack:** the real worker, API and agent on one machine, a fresh data root, one registered user, two papers uploaded over HTTP and parsed to `ready` (YOLO, DDPM from `research/benchmarks/fresh/pdfs/`). The MiniMax key is in the agent process's environment only.
 - **Arms:** `m3` (MiniMax-M3), `flash-low` (Flash, effort low) for all three kinds; `flash-medium` (Flash, effort medium) for the summary only. The arms ran one after another (M3 first) on the same machine; the agent and API restarted between arms.
 - **Workload per arm:**
@@ -28,6 +28,10 @@ The decision and its reasoning are in `research/architecture-decisions/ADR-003-m
 | summary | Flash medium | 2   | 1 (one partial)  | 11,368 / 13,767           | 17,770         | 1,343 / 0                     | $0.0155                                            | n/a                | 12 of 19 (18 of 19 cited)         | 3.6             |
 
 Judged usefulness, mean of the four criteria (1 to 5), 4 pairs per kind (2 for each summary comparison): explain M3 4.19 / Flash 4.25; ask M3 4.56 / Flash 3.94; summary M3 4.62 / Flash low 4.25 / Flash medium 4.12. Per-pair scores and reasons are in `judgments.json` under the evidence label below.
+
+Reasoning-token denominators: the reasoning column is the mean over the rows that reported a reasoning count (null rows excluded). Over ALL rows of the arm it is: explain M3 689 (10 of 12 reported) and Flash low 31 (11 of 12); ask M3 167 (3 of 4) and Flash low 4 (1 of 4); summary M3 314 (2 of 2), Flash 0 (0 of 2, none reported). Re-computed from `runs.jsonl` on 2026-10-15 (load average 4.6 at that moment).
+
+Confounds, stated plainly: the ask rows (n=4 per arm) and summary rows (n=2 per arm) are too thin to decide anything; one judge scored all pairs and the answer style gives the arm away; the arms ran one after the other under different machine load (M3 8.7 to 9.7, Flash 3.6 to 7.6), which favours Flash on every latency number; and `model_reported` in the `t0-impl/ab1` raw rows is the shim's arm label, not an agent report (rows from a re-run with this branch carry the agent's own). The Flash default for ask (judged 3.94 against 4.56) and for summary (partial status, fewer cited bullets) is PROVISIONAL; only explain (12 runs per arm, judged level) has a measured basis.
 
 Machine load was uncontrolled (the `uptime` 1-minute load was 7.1 after the run; per-row means above), the arms were not interleaved, and the sample sizes are small; read the explain rows as the only latency distribution.
 

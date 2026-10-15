@@ -8,7 +8,7 @@ What it does, in order:
      the PDFs upload over HTTP and are waited to `ready`; fixed passages are minted as real Anchors
      from the parsed IR (papertree_anchoring, as the reader's capture does);
   2. per arm: the agent starts (the MiniMax key is in ITS environment only, read from the macOS
-     Keychain item `minimax_api_key`, never printed or written), the API restarts under api_shim.py,
+     Keychain item `minimax_api_key`, never printed or written), the API restarts,
      then explain x passages x repeats, ask (+ a follow-up that says "that"), and summary (regenerate)
      run and are measured; the agent and API stop;
   3. every run is one JSON line in runs.jsonl; every answer text is in answers/.
@@ -146,13 +146,12 @@ class Stack:
             "PAPERTREE_HOST": "127.0.0.1",
             "PAPERTREE_PORT": str(self.api_port),
             "PAPERTREE_DAILY_BUDGET_USD": "5",
-            "PAPERTREE_BENCH_MODEL": model,
             "PYTHONUNBUFFERED": "1",
         }
         if with_agent:
             env["PAPERTREE_AGENT_URL"] = self.agent
             env["PAPERTREE_AGENT_SECRET"] = SECRET
-        self._start(f"api-{tag}", [sys.executable, str(HERE / "api_shim.py")], REPO, env)
+        self._start(f"api-{tag}", [sys.executable, "-m", "papertree_api"], REPO, env)
         self.procs["api"] = self.procs[f"api-{tag}"]
         self._wait("api", f"{self.api}/healthz", lambda b: b.get("ok") is True)
 
@@ -375,7 +374,7 @@ class Bench:
             "http_status": res["http_status"],
             "status": done.get("status"),
             "error": done.get("error") or (res.get("json") if res["http_status"] != 200 else None),
-            "model_reported": usage.get("model"),
+            "model_reported": usage.get("model"),  # the API's RunSummary.model: the agent-reported model
             "first_text_ms": usage.get("first_text_ms"),
             "latency_ms": usage.get("latency_ms"),
             "client_first_text_ms": res.get("client_first_text_ms"),

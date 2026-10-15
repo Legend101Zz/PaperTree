@@ -61,8 +61,8 @@ an _estimate on M3 rates_ (`/healthz` says so under `cost_basis`; the README of 
 
 The shipped default and the evidence for it are in
 `research/architecture-decisions/ADR-003-model-policy.md` and `docs/release/v0.1/MODEL-AB.md`.
-`bench/ab.py` re-runs the A/B (see its docstring); `bench/api_shim.py` is a measurement-only launcher
-needed while `services/api` pins `MiniMax-M3` (see ADR-003, "What is worse").
+`bench/ab.py` re-runs the A/B (see its docstring). The API stores the model the agent reports
+(`ai_runs.model`, a summary's `model_id`, `RunSummary.model`).
 
 ## HTTP
 

@@ -59,7 +59,7 @@ The API pins `MiniMax-M3` in several places. Under the shipped defaults they bre
 2. `services/api/python/papertree_api/agent_client.py:85` `MODEL = "MiniMax-M3"` is written as `ai_runs.model` (line 725, `finish_run`), `RunSummary.model` fallback (772), the run logs (746, 907), a stored summary's `model` (656) and `model_id` (716), and the cached-summary key (`routers/summary.py:57`). The `run` event's `model` is read at `agent_client.py:563-566` and dropped (only `sdk` is kept). Under the default policy `ai_runs.model` would say M3 for Flash runs. Contract requirement ("every AI run records model ... in ai_runs"): store the agent-reported model, and keep the summary cache key per model.
 3. A faux agent keeps reporting `minimax/MiniMax-M3` unless a `PAPERTREE_MODEL*` variable is set, so the e2e stack and the contract fixtures are unchanged until the API accepts Flash.
 
-The A/B itself ran through `services/agent/bench/api_shim.py`, a launcher that patches items 1 and 2 in memory in the API process (nothing in `services/api` is edited). With the shim, `ai_runs.model` carries the arm's label because the bench said so, not because the API stored what the agent reported; the agent-reported model was checked separately in `/healthz` and the run logs.
+The A/B itself ran through a launcher (`api_shim.py`, since deleted) that patches items 1 and 2 in memory in the API process (nothing in `services/api` is edited). With the shim, `ai_runs.model` carries the arm's label because the bench said so, not because the API stored what the agent reported; the agent-reported model was checked separately in `/healthz` and the run logs.
 
 ## 6. Consequences
 
@@ -74,3 +74,8 @@ The A/B itself ran through `services/agent/bench/api_shim.py`, a launcher that p
   | `PAPERTREE_MODEL_EFFORT`, `..._EXPLAIN`, `..._ASK`, `..._SUMMARY` | agent | `low` | Flash only (`low`, `medium`, `high`); ignored for M3; an unknown value refuses to boot |
 
   And in section 3.2: `run.model` is `minimax/<model id>` (one of the two allowed); `GET /healthz` on the agent also returns `models`, `effort` and `cost_basis`.
+
+
+## Update after review (2026-10-15)
+
+The API defect above is fixed in this PR: `AgentRun.model` accepts both ids, and `ai_runs.model`, a stored summary's `model_id`, the summary content's `model` and `RunSummary.model` take the model the agent reported in its `run` event (M3 only when the stream broke before that event). The cached-summary lookup tries every known model and serves the newest, so a policy change does not hide a stored summary. The shim is deleted. Regression tests: `services/api/python/tests/test_summary_api.py` (Flash run) and `test_agent_contracts.py` (schema enum equals the pydantic twin). Still open: `done.usage_totals` and `ai_runs` carry no cost-basis marker (the label lives in `/healthz` and the docs); it needs a contracts change.
