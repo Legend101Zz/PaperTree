@@ -124,10 +124,14 @@ describe('the real provider path against a mock Anthropic server', () => {
     const messages = sent.body['messages'] as Array<{ role: string; content: unknown }>;
     assert.equal(messages.length, 1);
     assert.equal(messages[0]?.role, 'user');
+    const user = JSON.stringify(messages[0]?.content);
     assert.match(
-      JSON.stringify(messages[0]?.content),
-      /Explain this passage\.\\n\\nInstead, we frame object detection/,
+      user,
+      /Explain this passage\.\\n\\n<untrusted_document trust=\\"untrusted\\">\\n\^7f3a91c2 Instead, \^7f3a91c2 we \^7f3a91c2 frame/,
+      'the quote is datamarked word by word, inside the untrusted delimiter',
     );
+    assert.doesNotMatch(user, /Instead, we frame object detection/, 'the raw quote is not sent');
+    assert.match(user, /probabilities\. \^7f3a91c2\\n<\/untrusted_document>/);
   });
 
   interface Row {

@@ -6,9 +6,9 @@ import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 
 import type { RunRequest } from '../src/contract.ts';
-import type { FauxStep } from '../src/faux.ts';
+import type { FauxContext, FauxStep } from '../src/faux.ts';
 import { createLogger } from '../src/log.ts';
-import { TOOLS_CLOSED_TEXT } from '../src/run.ts';
+import { BUDGET_TURN_TEXT, TOOLS_CLOSED_TEXT } from '../src/run.ts';
 import { createPaperSession, DisposedSessionError } from '../src/session.ts';
 import { BUDGET_TEXT, createPaperTools } from '../src/tools.ts';
 
@@ -198,14 +198,48 @@ describe('the tool-call cap and the turn cap (§3.3)', () => {
     );
   });
 
-  test('10 requested -> 8 served -> the run stops (cap + 2)', async () => {
+  test('10 requested -> 8 served -> one final answer-only turn, and the answer is kept (S5F)', async () => {
+    toolAnswer = () => passage('b5');
+    let finalContext: FauxContext | undefined;
+    const body = explain([
+      { toolCalls: [call(1), call(2), call(3)] },
+      { toolCalls: [call(4), call(5), call(6)] },
+      { toolCalls: [call(7), call(8), call(9)] },
+      { toolCalls: [call(10)] },
+      (context) => {
+        finalContext = context;
+        return { text: ['The paper regresses boxes directly [b1].'] };
+      },
+    ]);
+    const hitsBefore = tools.hits.length;
+    const result = await postRun(agent.url, body);
+    const d = doneOf(result.events);
+    assert.equal(tools.hits.length - hitsBefore, 8, 'still only 8 served');
+    assert.equal(d['status'], 'complete', 'an answer was written');
+    assert.equal(d['error'], null);
+    assert.equal(d['final_text'], 'The paper regresses boxes directly [b1].');
+    assert.deepEqual(textsOf(result.events), ['The paper regresses boxes directly [b1].']);
+    assert.equal(d['tool_calls'], 10);
+    assert.ok(finalContext, 'the model was asked once more');
+    const last = finalContext.messages.at(-1) as Json;
+    assert.equal(last['role'], 'user');
+    assert.deepEqual(
+      last['content'],
+      [{ type: 'text', text: BUDGET_TURN_TEXT }],
+      'and told, last, that no tool can be used',
+    );
+    assert.deepEqual(semanticProblems(result.events), []);
+  });
+
+  test('the final turn that asks for a tool again ends the run -> tool_budget_exhausted, no text', async () => {
     toolAnswer = () => passage('b5');
     const body = explain([
       { toolCalls: [call(1), call(2), call(3)] },
       { toolCalls: [call(4), call(5), call(6)] },
       { toolCalls: [call(7), call(8), call(9)] },
       { toolCalls: [call(10)] },
-      { text: ['NEVER REQUESTED'] },
+      { toolCalls: [call(11)] },
+      { text: ['NEVER REQUESTED [b1].'] },
     ]);
     const hitsBefore = tools.hits.length;
     const result = await postRun(agent.url, body);
@@ -213,11 +247,28 @@ describe('the tool-call cap and the turn cap (§3.3)', () => {
     assert.equal(tools.hits.length - hitsBefore, 8);
     assert.equal(d['status'], 'error');
     assert.equal(d['error']['code'], 'tool_budget_exhausted');
-    assert.equal(d['tool_calls'], 10);
+    assert.equal(d['final_text'], '');
     assert.ok(!result.text.includes('NEVER REQUESTED'));
+    assert.equal(agent.app.faux!.requests(String(body['run_id'])), 5, 'one final turn, no more');
   });
 
-  test('past max_turns the run stops -> tool_budget_exhausted', async () => {
+  test('a final turn that says nothing also ends tool_budget_exhausted', async () => {
+    toolAnswer = () => passage('b5');
+    const body = explain([
+      { toolCalls: [call(1), call(2), call(3)] },
+      { toolCalls: [call(4), call(5), call(6)] },
+      { toolCalls: [call(7), call(8), call(9)] },
+      { toolCalls: [call(10)] },
+      { text: [] },
+    ]);
+    const result = await postRun(agent.url, body);
+    const d = doneOf(result.events);
+    assert.equal(d['status'], 'error');
+    assert.equal(d['error']['code'], 'tool_budget_exhausted');
+    assert.equal(d['final_text'], '');
+  });
+
+  test('past max_turns the model gets its final answer-only turn; without text -> tool_budget_exhausted', async () => {
     toolAnswer = () => passage('b6');
     const turns = Array.from({ length: 8 }, (_, i) => ({
       toolCalls: [{ name: 'get_passage', arguments: { handle: `b${String(i + 1)}` } }],
@@ -234,7 +285,24 @@ describe('the tool-call cap and the turn cap (§3.3)', () => {
       3,
       "three turns' tools ran, the fourth turn never did",
     );
-    assert.equal(agent.app.faux!.requests(String(body['run_id'])) <= 4, true);
+    assert.equal(agent.app.faux!.requests(String(body['run_id'])) <= 5, true);
+  });
+
+  test('past max_turns, a final turn that answers is kept', async () => {
+    toolAnswer = () => passage('b6');
+    const turns: FauxStep[] = [
+      ...Array.from({ length: 3 }, (_, i) => ({
+        toolCalls: [{ name: 'get_passage', arguments: { handle: `b${String(i + 1)}` } }],
+      })),
+      { text: ['Answered from what it had [b1].'] },
+    ];
+    const body = explain(turns, (b) => {
+      b['limits'] = { ...b['limits'], max_tool_calls: 20, max_turns: 3 };
+    });
+    const result = await postRun(agent.url, body);
+    const d = doneOf(result.events);
+    assert.equal(d['status'], 'complete');
+    assert.equal(d['final_text'], 'Answered from what it had [b1].');
   });
 });
 

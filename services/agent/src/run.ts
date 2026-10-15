@@ -5,7 +5,10 @@
  *
  *   tool-call cap   counted at `tool_execution_start`; past `max_tool_calls` a tool answers
  *                   "Tool budget exhausted; answer from what you have." without calling the API; at
- *                   cap + 2, or past `max_turns`, the run is aborted -> tool_budget_exhausted
+ *                   cap + 2, or past `max_turns`, the model gets ONE final turn in which every tool
+ *                   is refused (S5F): the session is aborted and prompted again to write the answer
+ *                   from what it has. Only if that turn still makes no text (it asks for a tool
+ *                   again, or says nothing) does the run end -> tool_budget_exhausted
  *   idle watchdog   reset on every session event; `idle_ms` of silence -> abort -> timeout
  *   deadline        AbortSignal.any([AbortSignal.timeout(deadline_ms), client gone]) -> abort ->
  *                   timeout, or aborted when the client went away / DELETE
@@ -106,6 +109,15 @@ const RETRY_LABEL = 'The model service is busy; trying again';
 export const TOOLS_CLOSED_TEXT =
   'The answer is already being shown to the reader, so no tool can be used now. Finish the answer from what you have.';
 const BUDGET_LABEL = 'Tool budget exhausted';
+/** What the model is told when the tool budget is spent and it is given its one final turn. */
+export const BUDGET_TURN_TEXT =
+  'The tool budget for this task is used up, so no tool can be used any more. Write the final ' +
+  'answer now, in the format you were asked for, from the passages you already have. Cite only ' +
+  'handles you have seen, and leave out anything you did not get to read.';
+/** The tool result of a call made in that final turn (the run ends at the call). */
+export const BUDGET_CLOSED_TEXT = 'Tool budget exhausted; answer from what you have.';
+/** `max_turns` leaves this many more turns for the answer turn itself (a tool-free reply is 1). */
+const BUDGET_TURN_EXTRA_TURNS = 3;
 /** After the host aborts, the session must settle within this long, or the run is closed anyway. */
 const SETTLE_AFTER_ABORT_MS = 5_000;
 
@@ -184,6 +196,10 @@ class Run {
   /** Tool calls made after the first text was sent: refused, not run, not counted. */
   private readonly refused = new Set<string>();
   private toolCalls = 0;
+  /** The cap was hit: the session is being stopped so the final, answer-only turn can follow. */
+  private budgetTurnPending = false;
+  /** The final turn has been (or is being) given: tools are refused, and a tool call ends the run. */
+  private budgetTurnGiven = false;
   private turnsStarted = 0;
   private agentStarts = 0;
   private retries = 0;
@@ -244,6 +260,28 @@ class Run {
         if (!out.includes(handle)) out.push(handle);
     }
     return out;
+  }
+
+  /**
+   * The tool cap (or the turn cap) is reached. The first time, and only while there is no answer
+   * text yet, the model is not cut off: the session is stopped (the tool calls it just made are
+   * refused, so none runs) and `execute()` prompts it once more for the answer (S5F). Every other
+   * time — the final turn also over budget, or text already sent — the run ends.
+   */
+  private onBudget(): void {
+    if (this.budgetTurnGiven || this.budgetTurnPending || this.finalText.length > 0) {
+      if (!this.budgetTurnPending) this.hostAbort('tool_budget');
+      return;
+    }
+    this.budgetTurnPending = true;
+    this.deps.log.info('agent.run.budget_turn', {
+      run_id: this.request.run_id,
+      request_id: this.request.request_id,
+      tool_calls: this.toolCalls,
+      turns: this.turnsStarted,
+      ms: this.now(),
+    });
+    this.paper?.abort();
   }
 
   hostAbort(reason: HostAbort): void {
@@ -343,7 +381,7 @@ class Run {
   private thinkingLabel(): string | undefined {
     if (this.agentStarts !== 1 || this.request.history !== null) return undefined;
     if (this.request.kind === 'explain') return 'Reading the selected passage';
-    if (this.request.kind === 'summary') return "Reading the paper's outline";
+    if (this.request.kind === 'summary') return "Reading the paper's key passages";
     return undefined;
   }
 
@@ -362,7 +400,11 @@ class Run {
       }
       case 'turn_start':
         this.turnsStarted++;
-        if (this.turnsStarted > this.request.limits.max_turns) this.hostAbort('tool_budget');
+        if (
+          this.turnsStarted >
+          this.request.limits.max_turns + (this.budgetTurnGiven ? BUDGET_TURN_EXTRA_TURNS : 0)
+        )
+          this.onBudget();
         break;
       case 'message_start':
         if (event.message.role === 'assistant')
@@ -396,13 +438,11 @@ class Run {
         this.current = null;
         if (state && !state.committed && state.text.length > 0 && message.stopReason !== 'toolUse')
           this.commit(state);
-        const stop =
-          this.hostReason !== null && message.stopReason === 'error'
-            ? 'aborted'
-            : message.stopReason;
+        const stopping = this.hostReason !== null || this.budgetTurnPending;
+        const stop = stopping && message.stopReason === 'error' ? 'aborted' : message.stopReason;
         this.stopOf.set(message, stop);
         this.assistant.push({ message, stop, retried: false });
-        if (message.stopReason === 'error' && this.hostReason === null) {
+        if (message.stopReason === 'error' && !stopping) {
           const { code } = classifyProviderError(message.errorMessage);
           this.deps.log.debug('agent.provider.error', {
             run_id: this.request.run_id,
@@ -427,6 +467,19 @@ class Run {
         break;
       }
       case 'tool_execution_start': {
+        if (this.budgetTurnGiven && this.finalText.length === 0) {
+          // The final turn asked for a tool again instead of answering: it is out of turns.
+          this.refused.add(event.toolCallId);
+          this.deps.log.info('agent.tool', {
+            run_id: this.request.run_id,
+            request_id: this.request.request_id,
+            name: event.toolName,
+            status: 'refused_final_turn',
+            ms: 0,
+          });
+          this.hostAbort('tool_budget');
+          break;
+        }
         if (this.finalText.length > 0) {
           this.refused.add(event.toolCallId);
           this.deps.log.info('agent.tool', {
@@ -442,7 +495,7 @@ class Run {
         const index = this.toolCalls;
         this.callIndex.set(event.toolCallId, index);
         this.sse.event('status', this.toolStatus(event.toolName, event.args, index));
-        if (index >= this.request.limits.max_tool_calls + 2) this.hostAbort('tool_budget');
+        if (index >= this.request.limits.max_tool_calls + 2) this.onBudget();
         break;
       }
       case 'auto_retry_start': {
@@ -512,7 +565,12 @@ class Run {
         },
         onFatal: () => this.hostAbort('tool_failed'),
         budgetNote: (id) => this.budgetNote(id),
-        closed: (id) => (this.refused.has(id) ? TOOLS_CLOSED_TEXT : undefined),
+        closed: (id) =>
+          this.refused.has(id)
+            ? this.budgetTurnGiven && this.finalText.length === 0
+              ? BUDGET_CLOSED_TEXT
+              : TOOLS_CLOSED_TEXT
+            : undefined,
       });
       if (deps.faux) deps.faux.model.load(this.sessionId, deps.faux.brain(request));
       this.paper = await createPaperSession({
@@ -537,6 +595,15 @@ class Run {
         // late rejection (if any) must not become an unhandled one.
         prompted.catch(() => undefined);
         await Promise.race([prompted, this.settleAfterAbort()]);
+        // The tool budget was spent: the model gets one final turn, tools refused, to answer.
+        if (this.budgetTurnPending && this.hostReason === null) {
+          this.budgetTurnPending = false;
+          this.budgetTurnGiven = true;
+          this.resetIdle();
+          const final = this.paper.prompt(BUDGET_TURN_TEXT);
+          final.catch(() => undefined);
+          await Promise.race([final, this.settleAfterAbort()]);
+        }
       }
     } catch (error) {
       promptError = error;
@@ -624,6 +691,11 @@ class Run {
         partial: text.length > 0,
         idle: this.hostReason === 'idle',
       });
+    } else if (this.budgetTurnGiven && text.length === 0 && lastStop !== 'error') {
+      // The final, answer-only turn made no text either.
+      const { code, retryable } = classifyHostAbort('tool_budget');
+      status = 'error';
+      error = runError(code, retryable);
     } else if (promptError !== null) {
       status = text ? 'partial' : 'error';
       error = runError('internal', false);
