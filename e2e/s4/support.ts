@@ -263,6 +263,9 @@ export const SCROLLER = '[data-papertree-scroller]';
 
 /** Scroll until a text-layer span containing `needle` is rendered and on screen; its client box. */
 export async function reveal(page: Page, needle: string, exact = false): Promise<void> {
+  // This helper scrolls the page itself, standing in for the reader's wheel: let go of any
+  // "toolbar action must not move the page" hold, as a real wheel would.
+  await page.evaluate(() => window.dispatchEvent(new Event('wheel')));
   for (let step = 0; step < 80; step += 1) {
     const found = await page.evaluate(
       ([text, whole, selector, first]) => {

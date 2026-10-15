@@ -93,7 +93,7 @@ export function HighlightCard(props: HighlightCardProps): JSX.Element {
   }, [props.at]);
 
   useEffect(() => {
-    ref.current?.querySelector<HTMLElement>('[aria-pressed="true"]')?.focus();
+    ref.current?.querySelector<HTMLElement>('[aria-pressed="true"]')?.focus({ preventScroll: true });
   }, []);
 
   useEffect(() => {

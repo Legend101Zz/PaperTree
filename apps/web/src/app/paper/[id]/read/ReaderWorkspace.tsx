@@ -33,6 +33,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   extentOf,
+  guidedProjectionFor,
   resolveAnchor,
   sourcePaint,
   type Anchor,
@@ -141,12 +142,52 @@ function defaultZoomMode(): ZoomMode {
   return window.innerWidth < 768 ? FIT_WIDTH : { kind: 'scale', scale: 1.25 };
 }
 
-/** The first block in reading order still visible at the top of `position` — the Guided link. */
+/**
+ * The first block in reading order still visible at the top of `position` - the Guided link.
+ *
+ * Only a block Guided has a card for counts (RFIX2 R8): page furniture (a page number, the arXiv
+ * stamp) and a figure's panels are on the page but not in the reading, and a position that named one
+ * of them could not be found again in Guided.
+ */
 export function topBlockAt(doc: IndexedDocument, position: ReadingPosition): string | undefined {
-  const blocks = (doc.byPage.get(position.page) ?? [])
-    .filter((block) => block.text.trim().length > 0 && block.bbox[3] > position.yPt + 2)
-    .sort((a, b) => a.readingIndex - b.readingIndex);
-  return blocks[0]?.id;
+  const placement = guidedProjectionFor(doc).placement;
+  const cards = (pageIndex: number) =>
+    (doc.byPage.get(pageIndex) ?? [])
+      .filter((block) => block.text.trim().length > 0 && placement.get(block.id)?.kind !== 'absent')
+      .sort((a, b) => a.readingIndex - b.readingIndex);
+
+  const here = cards(position.page).filter((block) => block.bbox[3] > position.yPt + 2);
+  if (here[0] !== undefined) return here[0].id;
+
+  // Nothing on this page ends below the top of the view: the reader is in the page's bottom margin
+  // or in the gap between two pages (RFIX2 must-fix: "no block" opened Guided at the paper's title).
+  // The reader is about to read whatever comes next, so the first card of the next page that has
+  // one; failing that (the last page) the last card at or before this position.
+  const indices = doc.pages.map((page) => page.index).sort((a, b) => a - b);
+  for (const index of indices) {
+    if (index <= position.page) continue;
+    const next = cards(index)[0];
+    if (next !== undefined) return next.id;
+  }
+  for (const index of [...indices].reverse()) {
+    if (index > position.page) continue;
+    const before = cards(index);
+    const last = before[before.length - 1];
+    if (last !== undefined) return last.id;
+  }
+  return undefined;
+}
+
+/**
+ * The block Guided opens at for the position the reader is at. The saved block when there is one;
+ * otherwise the one the page and offset name. A position can lack its block - it was saved before
+ * the parse had loaded, or the reader scrolled before it did - and "no block" must not mean "the top
+ * of the paper" (RFIX2 R8).
+ */
+export function initialBlockFor(doc: IndexedDocument | null, at: SavedReaderState | null): string | null {
+  if (at === null) return null;
+  if (at.blockId !== undefined) return at.blockId;
+  return doc === null ? null : (topBlockAt(doc, { page: at.page, yPt: at.yPt }) ?? null);
 }
 
 function useMediaQuery(query: string): boolean {
@@ -557,7 +598,7 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
           selection={selection}
           onSelectionChange={setSelection}
           initialPosition={positionRef.current === null ? null : { page: positionRef.current.page, yPt: positionRef.current.yPt }}
-          initialBlockId={positionRef.current?.blockId ?? null}
+          initialBlockId={initialBlockFor(doc, positionRef.current)}
           onSourcePosition={onSourcePosition}
           onGuidedTop={onGuidedTop}
           onFocusHighlight={focusHighlight}

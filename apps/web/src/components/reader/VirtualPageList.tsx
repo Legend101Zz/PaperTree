@@ -43,6 +43,7 @@ import type { BBox } from '@papertree/document-ir';
 
 import { PdfPage, type TextLayerInfo } from './PdfPage';
 import { pageUnitSize, usePdfDocument, type PdfPageMeta } from './PdfDocumentProvider';
+import { releaseScrollHold } from './scrollHold';
 
 /* ────────────────────────────── the pure windowing math ────────────────────────────── */
 
@@ -532,6 +533,7 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
         yPt: Math.max(0, target.yPt),
       };
       const top = CONTENT_PAD_TOP + offsetOfPosition(layout, clamped, irScaleOfRef.current);
+      releaseScrollHold(el);
       el.scrollTop = top;
       if (previous !== null && xRatioRef.current !== null && layout.maxWidth > el.clientWidth) {
         el.scrollLeft = Math.max(0, xRatioRef.current * layout.maxWidth - el.clientWidth / 2);
@@ -622,6 +624,7 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
         scrollToPage(pageIndex, opts) {
           const el = scrollRef.current;
           if (el === null) return;
+          releaseScrollHold(el);
           el.scrollTo({
             top: CONTENT_PAD_TOP + offsetForPage(layout, pageIndex),
             behavior: opts?.behavior ?? 'auto',
@@ -637,11 +640,13 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
           // Horizontally only when the page is wider than the viewport: otherwise a column on the
           // right would drag a centred page sideways for nothing.
           const left = layout.maxWidth > el.clientWidth ? target.left : el.scrollLeft;
+          releaseScrollHold(el);
           el.scrollTo({ top: CONTENT_PAD_TOP + target.top, left, behavior: opts?.behavior ?? 'auto' });
         },
         scrollToPosition(position) {
           const el = scrollRef.current;
           if (el === null || layout.offsets.length === 0) return;
+          releaseScrollHold(el);
           el.scrollTop = CONTENT_PAD_TOP + offsetOfPosition(layout, position, irScaleFor);
           positionRef.current = position;
         },
@@ -663,6 +668,10 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
       // both pointers reach `usePinchZoom`. The gesture surface overrides this to `none` for the
       // duration of a pinch.
       touchAction: 'pan-y',
+      // This list owns its scroll position (exact spacers, a reading position kept in paper terms).
+      // Chrome's scroll anchoring would second-guess it whenever the mounted pages change, and a
+      // browser that shifts `scrollTop` on its own is a reader whose page jumps (RFIX R2).
+      overflowAnchor: 'none',
       ...surfaceProps?.style,
     };
 

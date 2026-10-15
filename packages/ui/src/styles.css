@@ -2886,6 +2886,57 @@ span.pt-paper .pt-paper__cite {
   }
 }
 
+/* ── RFIX2 (additive) ──────────────────────────────────────────────────────────────────────────
+   H390: the reader header at phone width. Row one is Back, Contents, the title on ONE line with an
+   ellipsis, and Canvas; row two is the reading-mode switch and ONE compact zoom control (the select:
+   the platform picker on touch). The step buttons and the "Fit width" shortcut are wide-screen
+   shortcuts; pinch zooms on a phone. Every control keeps its 40 px target. */
+
+@media (max-width: 639px) {
+  .pt-reader__bar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  /* The controls group dissolves into the bar so Canvas can join row one and the rest row two. */
+  .pt-reader__bar > .pt-reader__controls {
+    display: contents;
+  }
+  .pt-reader__bar > .pt-reader__title {
+    flex: 1 1 0;
+    min-inline-size: 0;
+    order: 1;
+  }
+  .pt-reader__controls > a.pt-btn {
+    flex: 0 0 auto;
+    order: 2;
+  }
+  /* The line break between the two rows. */
+  .pt-reader__bar::after {
+    content: '';
+    flex: 1 0 100%;
+    block-size: 0;
+    order: 3;
+  }
+  .pt-reader__controls > :not(a) {
+    order: 4;
+  }
+  .pt-reader__controls > div:first-child {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+  }
+  .pt-reader__controls .pt-zoom {
+    flex: 0 0 auto;
+  }
+  .pt-reader__controls .pt-zoom__step,
+  .pt-reader__controls .pt-zoom__fit {
+    display: none;
+  }
+  .pt-reader__controls .pt-zoom__select {
+    inline-size: 6.25rem;
+    max-inline-size: 6.25rem;
+  }
+}
+
 /* ── w3ui round 2 (additive) ───────────────────────────────────────────────────────────────── */
 
 /* A citation chip and the punctuation that directly follows it never part: "...sensors [p. 1]."

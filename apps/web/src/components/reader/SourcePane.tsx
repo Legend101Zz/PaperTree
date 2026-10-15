@@ -40,6 +40,7 @@ import { usePdfDocument } from './PdfDocumentProvider';
 import { displayQuote } from './quote';
 import type { TextLayerInfo } from './PdfPage';
 import { SelectionToolbar } from './SelectionToolbar';
+import { holdScroll } from './scrollHold';
 import { stampTextLayer } from './stampTextLayer';
 import { tooLongSentence, type ReaderHighlight } from './useHighlights';
 import {
@@ -207,16 +208,31 @@ export function SourcePane(props: SourcePaneProps) {
     props.highlightUnavailableReason ??
     (targetCount > MAX_ANCHORS_PER_HIGHLIGHT ? tooLongSentence(targetCount) : undefined);
 
+  // Escape drops the selection and, with it, the toolbar (RFIX).
+  const hasSelection = selection !== null;
+  useEffect(() => {
+    if (!hasSelection) return undefined;
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape' && !event.defaultPrevented) clear();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [hasSelection, clear]);
+
+  // A toolbar action must not move the page (RFIX2 R2): the hold puts back any scroll the reader
+  // did not ask for in the moments after it.
   const onHighlight = useCallback(() => {
     const captured = capture('text');
     if (captured === null) return;
+    holdScroll(root);
     onCreateHighlight(captured);
     clear();
-  }, [capture, clear, onCreateHighlight]);
+  }, [capture, clear, onCreateHighlight, root]);
 
   const onAsk = useCallback(() => {
     const captured = capture('text');
     if (captured === null) return;
+    // No hold here: the explain panel opens beside the paper and the page list repositions it.
     actions.openExplain({ anchor: captured.anchor, quote: captured.selection.text });
     clear();
   }, [actions, capture, clear]);
@@ -225,18 +241,20 @@ export function SourcePane(props: SourcePaneProps) {
   const onSendToCanvas = useCallback(() => {
     const captured = capture('text');
     if (captured === null) return;
+    holdScroll(root);
     clear();
     actions.sendToCanvas({ kind: 'excerpt', anchor: captured.anchor }).catch(() => {
       onNotice?.("Couldn't send this passage to the canvas. Try again.");
     });
-  }, [actions, capture, clear, onNotice]);
+  }, [actions, capture, clear, onNotice, root]);
 
   const onCopy = useCallback(() => {
     const text = selection?.text ?? '';
     if (text === '') return;
+    holdScroll(root);
     void navigator.clipboard?.writeText(text).catch(() => undefined);
     clear();
-  }, [selection, clear]);
+  }, [selection, clear, root]);
 
   const documentHandle = useMemo<DocumentHandle>(
     () => ({
@@ -307,12 +325,30 @@ export function SourcePane(props: SourcePaneProps) {
   if (pdf.error !== null && pdf.error !== undefined) {
     return (
       <div className="pt-state" role="alert">
-        <h2 className="pt-state__title">This PDF could not be opened</h2>
-        <p className="pt-state__body">
-          The file reached the reader, but it could not be read as a PDF. Trying again usually fixes a
-          download that dropped part-way; if it keeps happening, the file itself may be damaged.
-        </p>
-        <button type="button" className="pt-btn pt-btn--outline" onClick={pdf.reload}>
+        {pdf.errorKind === 'engine' ? (
+          <>
+            <h2 className="pt-state__title">The reader could not start its PDF engine</h2>
+            <p className="pt-state__body">
+              Reload the page; if it keeps happening, the server is missing a file.
+            </p>
+          </>
+        ) : (
+          <>
+            <h2 className="pt-state__title">This PDF could not be opened</h2>
+            <p className="pt-state__body">
+              The file reached the reader, but it could not be read as a PDF. Trying again usually
+              fixes a download that dropped part-way; if it keeps happening, the file itself may be
+              damaged.
+            </p>
+          </>
+        )}
+        <button
+          type="button"
+          className="pt-btn pt-btn--outline"
+          // pdf.js remembers a worker that failed to start for the life of the page, so re-running
+          // the load in place would fail the same way; an engine failure needs a fresh page.
+          onClick={pdf.errorKind === 'engine' ? () => window.location.reload() : pdf.reload}
+        >
           Try again
         </button>
       </div>
