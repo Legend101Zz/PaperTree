@@ -13,7 +13,12 @@ export function authFailure(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
     if (error.status >= 500) return 'The server had a problem. Try again in a moment.';
     const detail = error.detail.trim();
-    if (detail.length > 0 && !/^\s*[{[]/.test(detail)) return detail;
+    if (detail.length > 0 && !/^\s*[{[]/.test(detail)) {
+      // A sentence with a next action: capitalised, ended, and (for a wrong password) a hint.
+      const sentence = detail.charAt(0).toUpperCase() + detail.slice(1);
+      const ended = /[.!?]$/.test(sentence) ? sentence : `${sentence}.`;
+      return error.status === 401 ? `${ended} Check them and try again.` : ended;
+    }
   }
   return fallback;
 }

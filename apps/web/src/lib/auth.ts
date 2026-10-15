@@ -66,6 +66,9 @@ export function safeNext(raw: string | null | undefined): string {
     const base = 'http://papertree.invalid';
     const url = new URL(raw, base);
     if (url.origin !== base) return DEFAULT_AFTER_LOGIN;
+    // Dot segments normalise `/..//evil.example` to `//evil.example`, which a browser reads as
+    // protocol-relative. Re-check the NORMALISED path, not just the raw input.
+    if (url.pathname.startsWith('//') || url.pathname.includes('\\')) return DEFAULT_AFTER_LOGIN;
     if (url.pathname.startsWith('/login') || url.pathname.startsWith('/register')) {
       return DEFAULT_AFTER_LOGIN;
     }

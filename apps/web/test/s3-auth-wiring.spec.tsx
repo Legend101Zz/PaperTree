@@ -56,7 +56,9 @@ describe('the server detail is shown', () => {
     );
     render(<LoginPage />);
     fillLogin();
-    expect((await screen.findByRole('alert')).textContent).toBe('invalid email or password');
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Invalid email or password. Check them and try again.',
+    );
     expect(push).not.toHaveBeenCalled();
   });
 
@@ -83,10 +85,16 @@ describe('the server detail is shown', () => {
     );
     render(<RegisterPage />);
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a@b.test' } });
-    fireEvent.change(screen.getByLabelText('Password', { exact: true }), { target: { value: 'long-enough-1' } });
-    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'long-enough-1' } });
+    fireEvent.change(screen.getByLabelText('Password', { exact: true }), {
+      target: { value: 'long-enough-1' },
+    });
+    fireEvent.change(screen.getByLabelText('Confirm password'), {
+      target: { value: 'long-enough-1' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
-    expect((await screen.findByRole('alert')).textContent).toBe('that email is already registered');
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'That email is already registered.',
+    );
   });
 
   it('login: a network error is a sentence about the connection', async () => {
@@ -100,7 +108,9 @@ describe('the server detail is shown', () => {
     const register = vi.spyOn(authApi, 'register');
     render(<RegisterPage />);
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a@b.test' } });
-    fireEvent.change(screen.getByLabelText('Password', { exact: true }), { target: { value: '1234567' } });
+    fireEvent.change(screen.getByLabelText('Password', { exact: true }), {
+      target: { value: '1234567' },
+    });
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: '1234567' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
     expect((await screen.findByRole('alert')).textContent).toMatch(/at least 8/);
@@ -135,6 +145,9 @@ describe('?next=', () => {
 
   it.each([
     ['//evil.example/x'],
+    ['/..//evil.example'],
+    ['/a/..//evil.example'],
+    ['/.//evil.example'],
     ['https://evil.example'],
     ['/\\evil.example'],
     ['javascript:alert(1)'],
@@ -182,7 +195,11 @@ describe('checkAuth: only a 401 signs out', () => {
 describe('sign out', () => {
   it('calls POST /auth/logout, then clears the local session', async () => {
     setToken('tok_1');
-    useAuthStore.setState({ isAuthenticated: true, isLoading: false, user: { id: 'u', email: 'a@b.test' } });
+    useAuthStore.setState({
+      isAuthenticated: true,
+      isLoading: false,
+      user: { id: 'u', email: 'a@b.test' },
+    });
     let tokenAtCall: string | null = null;
     const logout = vi.spyOn(authApi, 'logout').mockImplementation(async () => {
       tokenAtCall = getToken();
@@ -213,7 +230,9 @@ describe('AuthGuard', () => {
         <p>secret</p>
       </AuthGuard>,
     );
-    await waitFor(() => expect(replace).toHaveBeenCalledWith('/login?next=%2Fpaper%2Fppr_X%2Fread'));
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith('/login?next=%2Fpaper%2Fppr_X%2Fread'),
+    );
     expect(screen.queryByText('secret')).toBeNull();
   });
 
