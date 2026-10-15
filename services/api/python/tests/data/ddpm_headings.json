@@ -1,0 +1,98 @@
+[
+  {
+    "id": "blk_3q6nkgze3xikfa4a",
+    "text": "Abstract"
+  },
+  {
+    "id": "blk_453yikkjxmntx2xn",
+    "text": "Introduction"
+  },
+  {
+    "id": "blk_prxs25qd3imstjpr",
+    "text": "Background"
+  },
+  {
+    "id": "blk_pb7f6aod4xeb4r5e",
+    "text": "Diffusion models and denoising autoencoders"
+  },
+  {
+    "id": "blk_7dh5ynr662oybxa2",
+    "text": "Forward process and LT\n3.1"
+  },
+  {
+    "id": "blk_bjxsxo73k6g4ghw7",
+    "text": "Data scaling, reverse process decoder, and L0\n3.3"
+  },
+  {
+    "id": "blk_qaqfyqreeg4hoafz",
+    "text": "3.4\nSimpliﬁed training objective"
+  },
+  {
+    "id": "blk_b5y6yzg7y6hiiizi",
+    "text": "Experiments"
+  },
+  {
+    "id": "blk_ftfwqn63rwiwgf7z",
+    "text": "4.1\nSample quality"
+  },
+  {
+    "id": "blk_pks4yejc6nwp6233",
+    "text": "4.2\nReverse process parameterization and training objective ablation"
+  },
+  {
+    "id": "blk_xopfvlwtxhvsgeoh",
+    "text": "4.3\nProgressive coding"
+  },
+  {
+    "id": "blk_r32oxwsmdtvhanea",
+    "text": "4.4\nInterpolation"
+  },
+  {
+    "id": "blk_5x7xwihogmzelssb",
+    "text": "xt, x′"
+  },
+  {
+    "id": "blk_iuba64hsvbasnfoy",
+    "text": "Related Work"
+  },
+  {
+    "id": "blk_ykatco4sf6e4vlob",
+    "text": "Conclusion"
+  },
+  {
+    "id": "blk_ctovd7nas5beakp5",
+    "text": "Acknowledgments and Disclosure of Funding"
+  },
+  {
+    "id": "blk_4haxbbicrgj6ael4",
+    "text": "References"
+  },
+  {
+    "id": "blk_25t2ulia6f4uk6pp",
+    "text": "Extra information"
+  },
+  {
+    "id": "blk_4wxkmp5vzxgivy5d",
+    "text": "LSUN"
+  },
+  {
+    "id": "blk_zuhib2drlge45xdv",
+    "text": "A\nExtended derivations"
+  },
+  {
+    "id": "blk_hq4mb3od7cpqadqe",
+    "text": "B\nExperimental details"
+  },
+  {
+    "id": "blk_k3rwouib6lkun6ot",
+    "text": "C\nDiscussion on related work"
+  },
+  {
+    "id": "blk_4qqwq2yilvhbaxw7",
+    "text": "D\nSamples"
+  },
+  {
+    "id": "blk_yzw5kuaedzljvx3r",
+    "text": "Latent structure and reverse process stochasticity"
+  }
+]

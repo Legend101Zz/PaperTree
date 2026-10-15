@@ -122,9 +122,12 @@ LIMITS: Final[dict[RunKind, AgentLimits]] = {
         max_output_tokens=4096,
         max_retries=1,
     ),
+    # idle_ms 45 s (W2API item 6, 2026-10-15): 1 of the panel's 8 live summaries ended `timeout`
+    # at 20.15 s with no token, MiniMax-M3 thinking over a 6,000-token digest before its first
+    # text. The deadline (90 s) is unchanged and still bounds the whole run.
     "summary": AgentLimits(
         deadline_ms=90_000,
-        idle_ms=20_000,
+        idle_ms=45_000,
         max_tool_calls=12,
         max_turns=6,
         max_output_tokens=6144,
@@ -611,6 +614,7 @@ class RunBroker:
 
     async def _finalize(self, db: PaperTreeDb, owner: Any, outcome: AgentDone | _Broken) -> None:
         spec = self.spec
+        lost = False  # the agent went away mid-run (an `aborted` done nobody asked for)
         if isinstance(outcome, AgentDone):
             final_text = outcome.final_text or self.buffer
             status: str = outcome.status
@@ -631,6 +635,16 @@ class RunBroker:
                     tokens["cost_usd_est"] = None  # a zero cost beside unknown tokens is unknown
             tool_calls, agent_retries = outcome.tool_calls, outcome.retries
             entries: list[dict[str, Any]] | None = outcome.entries
+            if error_code == "agent_unavailable" or (
+                status == "aborted" and not self.cancelled and self._cancel_task is None
+            ):
+                # W2API item 4: the agent is going away. Either it says so (`agent_unavailable`:
+                # its shutdown reason) or it ended the run `aborted` and nobody here asked it to
+                # (an older agent: it aborts every live run when it closes). That is the agent
+                # going away, not the reader stopping (contracts.md §2.9): `agent_unavailable`,
+                # retryable, the streamed text kept, the thread's stored state left as it was.
+                status = "partial" if final_text else "error"
+                error_code, lost, entries = "agent_unavailable", True, None
             if status in ("error", "aborted") and not outcome.final_text and not entries:
                 entries = None  # keep the thread's stored state: nothing to resume from here
             if outcome.markers and set(outcome.markers) != set(evidence.markers_in(final_text)):
@@ -654,10 +668,16 @@ class RunBroker:
                 for block_id in handles.values()
                 if (block := index.block(block_id)) is not None
             }
+            vocabulary = evidence.vocabulary_of(index)
         except KeyError:
-            texts = {}
+            texts, vocabulary = {}, None
         minter = evidence.CitationMinter(
-            run_id=spec.run_id, handles=handles, document=document, texts=texts, new_id=new_id
+            run_id=spec.run_id,
+            handles=handles,
+            document=document,
+            texts=texts,
+            new_id=new_id,
+            paper=vocabulary,
         )
         summary: dict[str, Any] | None = None
         derived_from: list[str] = []
@@ -701,7 +721,7 @@ class RunBroker:
             "error": "error",
             "aborted": "aborted",
         }[status]
-        if isinstance(outcome, _Broken) and run_status == "done":
+        if (lost or isinstance(outcome, _Broken)) and run_status == "done":
             run_status = "error"  # the stream broke: the partial text is kept, the run failed
         latency_ms = self._elapsed_ms()
         with db.transaction():
@@ -960,7 +980,8 @@ async def launch(
         kind=spec.kind,
         code_path=CODE_PATHS[spec.kind],
         provider=PROVIDER,
-        model=MODEL,
+        # No model here: the agent picks it per kind and reports it in the run event; `run.done`
+        # logs that one.
     )
     broker.start()
     return RunStreamResponse(broker)

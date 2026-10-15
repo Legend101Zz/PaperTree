@@ -5,7 +5,7 @@
  *   - the same passage sent twice makes ONE card and says "Already on your canvas";
  *   - on a phone the first view is the WHOLE board, "Fit all" is visible, in-card controls keep a
  *     40 px hit area and the group name is 40 px tall;
- *   - a stale-version refusal names the card and clears itself.
+ *   - a stale-version refusal names the card (by its server text) and clears itself.
  *
  * Screenshots go to PAPERTREE_E2E_SHOTS and are looked at by the author.
  */
@@ -100,7 +100,7 @@ test('the same passage twice is one card and a toast says so', async ({
   await expect
     .poll(async () => (await getBoard(stack.apiUrl, token, paperId)).nodes.length)
     .toBe(1);
-  // The first toast stays up for 6 s; wait it out so the second message is the one asserted.
+  // The first toast stays up for 8 s; wait it out so the second message is the one asserted.
   await expect(toast).toBeHidden({ timeout: 15_000 });
   await send();
   await expect(toast).toContainText('Already on your canvas');
@@ -270,7 +270,9 @@ test('a stale-version refusal names the card and clears itself', async ({
   await area.press('Enter');
   const notice = page.locator('.pt-cv__notice');
   await expect(notice).toBeVisible();
-  await expect(notice).toContainText('“My edit” was changed somewhere else');
+  // The notice names the card by what the SERVER has, not by the unsaved text just typed.
+  await expect(notice).toContainText('“Changed on another device” was changed somewhere else');
+  expect(await notice.innerText()).not.toContain('My edit');
   expect(await notice.innerText()).not.toMatch(/cn_|brd_|\{/);
   await page.screenshot({ path: shot('w2-10-stale-notice-1440.png') });
   // It clears itself (8 s), without the reader pressing Dismiss.

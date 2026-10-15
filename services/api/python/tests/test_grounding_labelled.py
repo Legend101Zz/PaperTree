@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from papertree_agent_tools import PaperVocabulary, paper_vocabulary
 from papertree_api.evidence import citation_supported, claim_verdict
 
 ROWS: list[dict[str, Any]] = json.loads(
@@ -32,10 +33,43 @@ ROWS: list[dict[str, Any]] = json.loads(
 )
 FIRST = [r for r in ROWS if r["set"] == "first"]
 HOLDOUT = [r for r in ROWS if r["set"] == "holdout"]
+DDPM = [r for r in ROWS if r["set"] == "ddpm"]
+#: DDPM's real heading blocks as the index delivers them (``Forward process and LT\n3.1``,
+#: ``Introduction``, ``3.4\nSimplified ...``), in reading order.
+DDPM_HEADINGS: list[dict[str, str]] = json.loads(
+    (Path(__file__).parent / "data" / "ddpm_headings.json").read_text(encoding="utf-8")
+)
+#: The other DDPM blocks the live runs had in their handle tables (a slice of the paper's body).
+DDPM_BLOCKS: dict[str, str] = json.loads(
+    (Path(__file__).parent / "data" / "ddpm_blocks.json").read_text(encoding="utf-8")
+)
+
+
+def _proxy_paper(rows: list[dict[str, Any]], with_ddpm_headings: bool = False) -> PaperVocabulary:
+    """What the API passes in production is the WHOLE paper's vocabulary (``evidence.
+    vocabulary_of``). The labelled sets keep only the cited blocks, so the proxy for a paper is the
+    union of every block the set cites, plus the structure references of the real papers' headings
+    that no cited block carries (``Section 4.2`` is DDPM's heading, not a sentence): when asked,
+    DDPM's real heading blocks, run through the same ``paper_vocabulary`` as production (the
+    hand-added references this used to carry hid how DDPM's headings really arrive)."""
+    texts = {f"{r['set']}:{k}": t for r in rows for k, t in r["blocks"].items()}
+    heading_ids: frozenset[str] = frozenset()
+    if with_ddpm_headings:
+        headings = {h["id"]: h["text"] for h in DDPM_HEADINGS}
+        heading_ids = frozenset(headings)
+        texts = {**headings, **DDPM_BLOCKS, **texts}
+    return paper_vocabulary(texts, heading_ids=heading_ids)
+
+
+PAPERS = {
+    "first": _proxy_paper(FIRST),
+    "holdout": _proxy_paper(HOLDOUT, with_ddpm_headings=True),
+    "ddpm": _proxy_paper(DDPM, with_ddpm_headings=True),
+}
 
 
 def _verdict(row: dict[str, Any]) -> str:
-    return claim_verdict(row["claim"], list(row["blocks"]), row["blocks"])
+    return claim_verdict(row["claim"], list(row["blocks"]), row["blocks"], PAPERS[row["set"]])
 
 
 def _citations(rows: list[dict[str, Any]]) -> tuple[int, int, int, int, int]:
@@ -50,7 +84,7 @@ def _citations(rows: list[dict[str, Any]]) -> tuple[int, int, int, int, int]:
     tp = fp = fn = tn = 0
     for members in groups.values():
         truth = all(r["label"] != "N" for r in members) and any(r["label"] == "S" for r in members)
-        pred = citation_supported([verdicts[r["id"]] for r in members])  # type: ignore[misc]
+        pred = citation_supported([verdicts[r["id"]] for r in members]) is True  # type: ignore[misc]
         tp += pred and truth
         fp += pred and not truth
         fn += (not pred) and truth
@@ -106,3 +140,15 @@ def test_the_holdout_set_genuine_claims_and_citations() -> None:
 @pytest.mark.parametrize("row", [r for r in FIRST if r.get("fab") in ("number", "entity", "quote")])
 def test_a_fabricated_claim_alone_never_reads_supported(row: dict[str, Any]) -> None:
     assert citation_supported([_verdict(row)]) is False  # type: ignore[list-item]
+
+
+def test_genuine_ddpm_claims_with_section_references_and_hyphen_compounds_are_not_flagged() -> None:
+    """Three claims from the live DDPM answers (W2API review, 2026-10-15) that an earlier version
+    of the rules called unsupported: ``Section 2`` and ``Section 3.1`` name headings that reach the
+    index without a number of their own or with it on a trailing line, and ``Gaussian-vs-Gaussian``
+    is a compound of a word the paper is full of. Each cites the right block."""
+    assert len(DDPM) == 3 and all(r["label"] == "S" for r in DDPM)
+    verdicts = {r["id"]: _verdict(r) for r in DDPM}
+    assert verdicts["ddpm0.0"] == "supported"
+    assert verdicts["ddpm0.1"] != "unsupported"
+    assert verdicts["ddpm1.0"] != "unsupported"

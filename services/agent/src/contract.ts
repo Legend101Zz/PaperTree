@@ -230,6 +230,29 @@ export function parseMarkers(text: string): string[] {
   return seen;
 }
 
+/**
+ * The handles an earlier turn of this thread was ISSUED by a tool: the `[bN] (p. …)` headers in the
+ * `toolResult` entries of the history (W2API item 2, 2026-10-15). The API re-issues the thread's
+ * earlier handles into every follow-up run (`ai_run_handles`, same handle -> same block), so a
+ * follow-up may cite them without fetching the passage again. Only tool results count: a handle
+ * the model merely wrote in an earlier answer was not issued by anyone.
+ */
+export function historyHandles(entries: readonly unknown[]): string[] {
+  const out: string[] = [];
+  for (const entry of entries) {
+    const message = (entry as { message?: { role?: unknown; content?: unknown } } | null)?.message;
+    if (message?.role !== 'toolResult' || !Array.isArray(message.content)) continue;
+    for (const part of message.content as Array<{ type?: unknown; text?: unknown }>) {
+      if (part?.type !== 'text' || typeof part.text !== 'string') continue;
+      for (const match of part.text.matchAll(/^\[(b\d+)\] \(/gm)) {
+        const handle = match[1];
+        if (handle !== undefined && !out.includes(handle)) out.push(handle);
+      }
+    }
+  }
+  return out;
+}
+
 /** Whether `text` holds at least one §3.2 marker (used to decide a message is an answer). */
 export function hasMarker(text: string): boolean {
   return new RegExp(MARKER_PATTERN.source).test(text);

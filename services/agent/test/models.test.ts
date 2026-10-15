@@ -37,17 +37,17 @@ after(async () => {
 });
 
 describe('readPolicy(): env -> which model answers which kind', () => {
-  test('the shipped default: Flash (low) for explain and ask, M3 for summary (ADR-003)', () => {
+  test('the shipped default: Flash (low) for explain, M3 for ask and summary (ADR-003, revised 2026-10-15)', () => {
     const p = readPolicy({});
     assert.deepEqual(
       [p.explain.id, p.ask.id, p.summary.id],
-      [FLASH_MODEL_ID, FLASH_MODEL_ID, M3_MODEL_ID],
+      [FLASH_MODEL_ID, M3_MODEL_ID, M3_MODEL_ID],
     );
-    assert.deepEqual([p.explain.effort, p.ask.effort, p.summary.effort], ['low', 'low', null]);
+    assert.deepEqual([p.explain.effort, p.ask.effort, p.summary.effort], ['low', null, null]);
     assert.equal(p.explain.label, `minimax/${FLASH_MODEL_ID}`);
     assert.deepEqual(DEFAULT_MODELS, {
       explain: FLASH_MODEL_ID,
-      ask: FLASH_MODEL_ID,
+      ask: M3_MODEL_ID,
       summary: M3_MODEL_ID,
     });
   });

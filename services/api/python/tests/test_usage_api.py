@@ -243,7 +243,9 @@ def test_an_aborted_run_with_no_reported_usage_stores_null_tokens_not_zero(tmp_p
         assert usage["input_tokens"] is None and usage["output_tokens"] is None
         assert usage["cache_read_tokens"] == 4388 and usage["cost_usd_est"] == 0.00026328
         (row,) = h.rows("SELECT * FROM ai_runs")
-        assert row["status"] == "aborted"
+        # An `aborted` done nobody asked for is the agent going away (W2API item 4): the run is
+        # an `agent_unavailable` error, and its unknown tokens stay unknown.
+        assert (row["status"], row["error_code"]) == ("error", "agent_unavailable")
         assert row["input_tokens"] is None and row["output_tokens"] is None
         assert row["reasoning_tokens"] is None and row["cache_read_tokens"] == 4388
     zero_cost = {

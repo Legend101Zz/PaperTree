@@ -2935,4 +2935,70 @@ span.pt-paper .pt-paper__cite {
     inline-size: 6.25rem;
     max-inline-size: 6.25rem;
   }
+
+/* ── w3ui round 2 (additive) ───────────────────────────────────────────────────────────────── */
+
+/* A citation chip and the punctuation that directly follows it never part: "...sensors [p. 1]."
+   keeps its full stop on the chip's line. */
+.pt-cite-run {
+  white-space: nowrap;
+}
+
+/* The chip's quiet twin on a canvas card: it says where, and there is nothing to press. */
+.pt-cite-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--pt-ink-muted);
+  background: var(--pt-accent-soft);
+  border-radius: 999px;
+}
+
+.pt-md-heading {
+  margin-block: 0 4px;
+}
+
+.pt-explain__prose em {
+  font-style: italic;
+}
+
+.pt-explain__prose li + li {
+  margin-block-start: 4px;
+}
+
+/* The reset leaves lists without markers; an answer's bullets and numbers must show. */
+.pt-explain__prose ul {
+  list-style: disc;
+}
+
+.pt-explain__prose ol {
+  list-style: decimal;
+}
+
+/* ── w3ui round 2 fixes (additive) ─────────────────────────────────────────────────────────── */
+
+/* The toolbar owns the panel ground and a hairline, so scrolled text ends cleanly under it
+   instead of showing behind the button. */
+.pt-explain__toolbar {
+  padding-block: 8px;
+  background: var(--pt-panel-ground);
+  border-block-end: 1px solid var(--pt-rule);
+}
+
+/* "Show all" sits right under the cut quote, not a whole button-height below it. */
+.pt-explain__quote blockquote.pt-paper {
+  margin-block-end: 0;
+}
+
+.pt-explain__quote .pt-explain__fold {
+  margin-block-start: -4px;
+  margin-inline-start: -8px;
+}
+
+/* A toast keeps one line for its action and stays clear of the composer on a phone. */
+.pt-toast__body > button,
+.pt-toast__body > .pt-btn {
+  white-space: nowrap;
 }

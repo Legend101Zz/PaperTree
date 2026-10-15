@@ -4,135 +4,133 @@
  * explain/RichText — the small subset of Markdown a model answer uses, rendered as React nodes
  * (never as HTML), with its `[bN]` handles turned into citation chips.
  *
- * WHAT IT HANDLES: paragraphs, `-`/`*`/`1.` lists, `**bold**`, `` `code` ``, and the handles.
- * Anything else is text. There is no raw-HTML path.
+ * The parsing lives in `lib/markdown` (pure, tested with hostile input); this file only turns the
+ * tree into elements. Every string is a React text child, so `<` is text and nothing is injected.
  *
  * HANDLES. The model writes `[b3]` or `[b3, b4]`; the `citations` event (or the stored message)
  * says what each one points at. A handle with no citation is DROPPED, not shown: a reader cannot
  * act on "b9". While an answer is still streaming the citations have not arrived, so its handles
  * are hidden, and a half-typed `[b` at the end of the text never flashes on screen. A citation
  * whose handle the text never mentions is appended after the text, so no verified source is lost.
+ *
+ * `citeAs`: `chip` (the explain panel: a button that scrolls to the passage) or `label` (a canvas
+ * card: a small "p. 4" that says where, with nothing to press). Either way a handle is never
+ * shown as "[b3]".
+ *
+ * PUNCTUATION. A chip and the punctuation that directly follows it travel as one unbreakable run
+ * (`.pt-cite-run`), so a sentence-final "." never wraps onto a line of its own.
  */
 import { Fragment, type MouseEvent, type ReactNode } from 'react';
 
+import {
+  dehyphenate,
+  handlesInBlocks,
+  parseMarkdown,
+  type Block,
+  type Inline,
+} from '@/lib/markdown';
 import type { Citation } from '@/lib/api/types';
 
-import { CitationChip } from './CitationChip';
+import { CitationChip, citationPageLabel } from './CitationChip';
 import { nearestChip } from './chipHit';
 
 export interface RichTextProps {
   readonly text: string;
   readonly citations: readonly Citation[];
   readonly streaming?: boolean;
-  readonly onCite: (citation: Citation) => void;
+  readonly citeAs?: 'chip' | 'label';
+  readonly onCite?: (citation: Citation) => void;
 }
 
-const HANDLE = String.raw`\s*\[b\d+(?:\s*,\s*b\d+)*\]`;
-const INLINE = new RegExp(String.raw`(\*\*[^*\n]+\*\*|` + '`[^`\\n]+`' + `|${HANDLE})`);
-const HANDLE_ONLY = new RegExp(`^${HANDLE}$`);
-const BULLET = /^\s*(?:[-*•])\s+(.*)$/;
-const NUMBERED = /^\s*\d+[.)]\s+(.*)$/;
 /** A handle cut off by the end of a streaming chunk: `[`, `[b`, `[b12`, `[b1, b`. */
 const PARTIAL_TAIL = /\s*\[(?:b\d*(?:\s*,\s*b?\d*)*)?$/;
 
-type Block =
-  | { readonly kind: 'p'; readonly text: string }
-  | { readonly kind: 'ul' | 'ol'; readonly items: readonly string[] };
-
-export function parseBlocks(text: string): Block[] {
-  const blocks: Block[] = [];
-  let paragraph: string[] = [];
-  let list: { kind: 'ul' | 'ol'; items: string[] } | null = null;
-  const flushParagraph = (): void => {
-    if (paragraph.length > 0) blocks.push({ kind: 'p', text: paragraph.join(' ') });
-    paragraph = [];
-  };
-  const flushList = (): void => {
-    if (list !== null) blocks.push(list);
-    list = null;
-  };
-  for (const line of text.split('\n')) {
-    const bullet = BULLET.exec(line);
-    const numbered = bullet === null ? NUMBERED.exec(line) : null;
-    const item = bullet ?? numbered;
-    if (item !== null) {
-      flushParagraph();
-      const kind = bullet !== null ? 'ul' : 'ol';
-      if (list === null || list.kind !== kind) {
-        flushList();
-        list = { kind, items: [] };
-      }
-      list.items.push(item[1] ?? '');
-    } else if (line.trim().length === 0) {
-      flushParagraph();
-      flushList();
-    } else if (list !== null && /^\s+\S/.test(line)) {
-      // A wrapped list item continues the previous one.
-      list.items[list.items.length - 1] += ` ${line.trim()}`;
-    } else {
-      flushList();
-      paragraph.push(line.trim());
-    }
-  }
-  flushParagraph();
-  flushList();
-  return blocks;
-}
-
-/** The handles a text mentions, in order (`b3`, `b4`). */
-export function handlesIn(text: string): string[] {
-  const out: string[] = [];
-  for (const match of text.matchAll(/\[(b\d+(?:\s*,\s*b\d+)*)\]/g)) {
-    for (const part of (match[1] ?? '').split(',')) out.push(part.trim());
-  }
-  return out;
-}
-
-function Inline({
-  text,
-  byMarker,
-  streaming,
-  onCite,
-}: {
-  readonly text: string;
+interface Ctx {
   readonly byMarker: ReadonlyMap<string, Citation>;
   readonly streaming: boolean;
+  readonly citeAs: 'chip' | 'label';
   readonly onCite: (citation: Citation) => void;
-}): ReactNode {
-  const parts = text.split(INLINE);
-  return (
-    <>
-      {parts.map((part, index) => {
-        if (part === '') return null;
-        const key = `${String(index)}`;
-        if (HANDLE_ONLY.test(part)) {
-          if (streaming) return null;
-          const markers = (/\[(.*)\]/.exec(part)?.[1] ?? '').split(',').map((m) => m.trim());
-          const chips = markers.flatMap((marker) => {
-            const citation = byMarker.get(marker);
-            if (citation === undefined) return [];
-            return [citation];
-          });
-          if (chips.length === 0) return null;
-          return (
-            <span className="pt-chips" key={key}>
-              {chips.map((citation) => (
-                <CitationChip key={citation.citation_id} citation={citation} onFocus={onCite} />
-              ))}
-            </span>
-          );
-        }
-        if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
-          return <strong key={key}>{part.slice(2, -2)}</strong>;
-        }
-        if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
-          return <code key={key}>{part.slice(1, -1)}</code>;
-        }
-        return <Fragment key={key}>{part}</Fragment>;
-      })}
-    </>
-  );
 }
+
+function renderInline(nodes: readonly Inline[], ctx: Ctx): ReactNode {
+  return nodes.map((node, index) => {
+    const key = String(index);
+    switch (node.t) {
+      case 'text':
+        return <Fragment key={key}>{node.v}</Fragment>;
+      case 'em':
+        return <em key={key}>{renderInline(node.c, ctx)}</em>;
+      case 'strong':
+        return <strong key={key}>{renderInline(node.c, ctx)}</strong>;
+      case 'code':
+        return <code key={key}>{node.v}</code>;
+      case 'cite': {
+        if (ctx.streaming) return node.after === '' ? null : <Fragment key={key}>{node.after}</Fragment>;
+        const found = node.markers.flatMap((marker) => {
+          const citation = ctx.byMarker.get(marker);
+          return citation === undefined ? [] : [citation];
+        });
+        if (found.length === 0) return node.after === '' ? null : <Fragment key={key}>{node.after}</Fragment>;
+        return (
+          <span className="pt-cite-run" key={key}>
+            <span className="pt-chips">
+              {found.map((citation) =>
+                ctx.citeAs === 'chip' ? (
+                  <CitationChip key={citation.citation_id} citation={citation} onFocus={ctx.onCite} />
+                ) : (
+                  <span key={citation.citation_id} className="pt-cite-label" data-cite-label>
+                    {citationPageLabel(citation)}
+                  </span>
+                ),
+              )}
+            </span>
+            {node.after}
+          </span>
+        );
+      }
+    }
+  });
+}
+
+function renderBlock(block: Block, index: number, ctx: Ctx): ReactNode {
+  switch (block.k) {
+    case 'p':
+      return (
+        <p key={index}>
+          {block.lines.map((line, i) => (
+            <Fragment key={i}>
+              {i > 0 ? <br /> : null}
+              {renderInline(line, ctx)}
+            </Fragment>
+          ))}
+        </p>
+      );
+    case 'h':
+      return (
+        <p key={index} className="pt-md-heading">
+          <strong>{renderInline(block.c, ctx)}</strong>
+        </p>
+      );
+    case 'ul':
+      return (
+        <ul key={index}>
+          {block.items.map((item, i) => (
+            <li key={i}>{renderInline(item, ctx)}</li>
+          ))}
+        </ul>
+      );
+    case 'ol':
+      return (
+        <ol key={index} start={block.start}>
+          {block.items.map((item, i) => (
+            <li key={i}>{renderInline(item, ctx)}</li>
+          ))}
+        </ol>
+      );
+  }
+}
+
+const NO_CITE = (): void => undefined;
 
 let redirecting = false;
 
@@ -164,35 +162,26 @@ function redirectToNearestChip(event: MouseEvent<HTMLDivElement>): void {
   }
 }
 
-export function RichText({ text, citations, streaming = false, onCite }: RichTextProps): ReactNode {
-  const byMarker = new Map(citations.map((c) => [c.marker, c] as const));
+export function RichText({
+  text,
+  citations,
+  streaming = false,
+  citeAs = 'chip',
+  onCite = NO_CITE,
+}: RichTextProps): ReactNode {
+  const ctx: Ctx = {
+    byMarker: new Map(citations.map((c) => [c.marker, c] as const)),
+    streaming,
+    citeAs,
+    onCite,
+  };
   const cleaned = streaming ? text.replace(PARTIAL_TAIL, '') : text;
-  const blocks = parseBlocks(cleaned);
-  const inline = (value: string): ReactNode => (
-    <Inline text={value} byMarker={byMarker} streaming={streaming} onCite={onCite} />
-  );
-  const body = blocks.map((block, index) =>
-    block.kind === 'p' ? (
-      <p key={index}>{inline(block.text)}</p>
-    ) : block.kind === 'ul' ? (
-      <ul key={index}>
-        {block.items.map((item, i) => (
-          <li key={i}>{inline(item)}</li>
-        ))}
-      </ul>
-    ) : (
-      <ol key={index}>
-        {block.items.map((item, i) => (
-          <li key={i}>{inline(item)}</li>
-        ))}
-      </ol>
-    ),
-  );
-  const mentioned = new Set(handlesIn(cleaned));
-  const loose = streaming ? [] : citations.filter((c) => !mentioned.has(c.marker));
+  const blocks = parseMarkdown(dehyphenate(cleaned), { streaming });
+  const mentioned = new Set(handlesInBlocks(blocks));
+  const loose = streaming || citeAs === 'label' ? [] : citations.filter((c) => !mentioned.has(c.marker));
   return (
     <div className="pt-explain__prose" onClickCapture={redirectToNearestChip}>
-      {body}
+      {blocks.map((block, index) => renderBlock(block, index, ctx))}
       {loose.length > 0 ? (
         <p className="pt-explain__loose">
           <span className="pt-chips">

@@ -22,6 +22,13 @@ export const BUDGET_TEXT = 'Tool budget exhausted; answer from what you have.';
 /** A tool request that does not answer within this long is a failed tool route. */
 export const TOOL_TIMEOUT_MS = 10_000;
 
+/** What the model reads when get_section refuses its cursor (the panel's neural-odes run passed
+ * the last HANDLE it had seen, "b29", as a cursor). */
+export const CURSOR_INVALID =
+  'That cursor is not valid. A cursor looks like "c3" and only a get_section result gives one ' +
+  '(a handle such as b29 is not a cursor). Pass it exactly as given, or leave it out to read ' +
+  'the section from its start.';
+
 const HANDLE = Type.String({
   pattern: '^b[0-9]+$',
   description: 'A handle exactly as given, such as b3.',
@@ -36,7 +43,8 @@ export const TOOL_PARAMETERS = {
         Type.String({
           minLength: 1,
           maxLength: 64,
-          description: 'The cursor a previous get_section result gave, to read the next part.',
+          description:
+            'The cursor a previous get_section result gave, such as c3, to read the next part. Never a handle.',
         }),
       ),
     },
@@ -147,6 +155,7 @@ async function call(
   name: ToolName,
   path: string,
   notFound: string,
+  invalid: string,
   signal: AbortSignal | undefined,
   handle?: string,
 ): Promise<{ content: Array<{ type: 'text'; text: string }>; details: Record<string, unknown> }> {
@@ -192,6 +201,9 @@ async function call(
     }
     await response.body?.cancel().catch(() => undefined);
     if (response.status === 404) throw new ToolFailure(notFound);
+    // A parameter the API refused (a cursor that is a handle, say) is the model's slip, not a
+    // dead route: tell it what was wrong in short words and let it try again (W2API item 1).
+    if (response.status === 422) throw new ToolFailure(invalid);
     if (response.status === 429) {
       return { content: [{ type: 'text', text: BUDGET_TEXT }], details: { budget: true } };
     }
@@ -251,6 +263,7 @@ export function createPaperTools(ctx: ToolRunContext): ToolDefinition[] {
         'get_outline',
         '/outline',
         'The outline is not available.',
+        'That request was not valid.',
         signal,
       );
     },
@@ -275,6 +288,7 @@ export function createPaperTools(ctx: ToolRunContext): ToolDefinition[] {
         'get_section',
         `/sections/${encodeURIComponent(params.handle)}${query}`,
         `Passage ${params.handle} is not available.`,
+        CURSOR_INVALID,
         signal,
         params.handle,
       );
@@ -297,6 +311,7 @@ export function createPaperTools(ctx: ToolRunContext): ToolDefinition[] {
         'get_passage',
         `/passages/${encodeURIComponent(params.handle)}`,
         `Passage ${params.handle} is not available.`,
+        'That request was not valid.',
         signal,
         params.handle,
       );
@@ -321,6 +336,7 @@ export function createPaperTools(ctx: ToolRunContext): ToolDefinition[] {
         'search_passages',
         `/search?q=${encodeURIComponent(params.query)}&limit=${String(limit)}`,
         'The search is not available.',
+        'That search was not valid.',
         signal,
       );
     },

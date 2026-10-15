@@ -59,7 +59,7 @@
   "history": null,
   "limits": {
     "deadline_ms": 90000,
-    "idle_ms": 20000,
+    "idle_ms": 45000,
     "max_tool_calls": 12,
     "max_turns": 6,
     "max_output_tokens": 6144,
