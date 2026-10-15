@@ -3,6 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "description": "PaperTree v2 monorepo root. See research/build/README.md for the build plan.",
+  "license": "MIT",
+  "author": "Mrigesh Thakur (https://github.com/Legend101Zz)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Legend101Zz/PaperTree.git"
+  },
   "packageManager": "pnpm@10.15.1",
   "engines": {
     "node": ">=22"
