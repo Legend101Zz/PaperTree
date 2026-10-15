@@ -134,6 +134,38 @@ describe('the real provider path against a mock Anthropic server', () => {
     assert.match(user, /probabilities\. \^7f3a91c2\\n<\/untrusted_document>/);
   });
 
+  test('a follow-up sends the earlier turns before the new question, so "that" resolves (S5F)', async () => {
+    const { agent, mock, tools } = await live([
+      { kind: 'stream', text: ['It skips the proposal stage [b1].'] },
+    ]);
+    const body = readExample('followup');
+    counter++;
+    body['run_id'] = runId(counter);
+    body['request_id'] = requestId(counter);
+    body['tool']['base_url'] = tools.baseUrl(body['run_id']);
+    const result = await postRun(agent.url, body);
+    assert.deepEqual(semanticProblems(result.events), []);
+    assert.equal(done(result)['status'], 'complete');
+    const sent = mock.requests[0]!.body['messages'] as Array<{ role: string; content: unknown }>;
+    const earlier = (body['history']['entries'] as Array<Record<string, any>>).filter(
+      (e) => e['message']['role'] !== 'toolResult',
+    );
+    assert.ok(sent.length >= earlier.length + 1, 'the history is in the request');
+    assert.equal(sent[0]?.role, 'user');
+    assert.match(
+      JSON.stringify(sent[0]?.content),
+      /Explain this passage\.\\n\\n<untrusted_document/,
+      'the first turn, quote and all',
+    );
+    const last = sent.at(-1)!;
+    assert.equal(last.role, 'user');
+    assert.match(JSON.stringify(last.content), /Why does that make it faster than R-CNN\?/);
+    assert.ok(
+      sent.slice(0, -1).some((m) => m.role === 'assistant'),
+      'and the assistant turn the question points back to',
+    );
+  });
+
   interface Row {
     readonly name: string;
     readonly steps: readonly MockStep[];

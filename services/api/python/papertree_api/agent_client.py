@@ -840,17 +840,47 @@ def require_configured(settings: Settings) -> None:
         )
 
 
+#: What one run in flight is assumed to cost until it finishes (S5F), by kind. A run still streaming
+#: has no cost in ``cost_since`` yet, so without a reservation N runs started together can each pass
+#: the check and overshoot the budget N-fold. These are deliberately above the live-measured costs
+#: (2026-10-15, MiniMax-M3: an explain about $0.002-0.003, an ask about $0.002-0.005, a summary
+#: about $0.015 when it read the whole paper by tools), so the cap errs on the side of waiting.
+RUN_RESERVE_USD: Final[dict[str, float]] = {"explain": 0.01, "ask": 0.02, "summary": 0.05}
+
+
+def sweep_orphans(db: PaperTreeDb) -> int:
+    """Ends every run still ``running`` past its expiry as an ``internal`` error (S5F), so a UI
+    never shows a run spinning forever after the API process that was writing it went away. Called
+    at API start and lazily wherever runs are read or started; cheap and idempotent."""
+    ended = db.sweep_orphaned_runs()
+    for run_id in ended:
+        log_event("run.orphan_ended", level="warning", run_id=run_id, error_code="internal")
+    return len(ended)
+
+
 def require_budget(db: PaperTreeDb, owner: Any, settings: Settings) -> None:
     """429 ``budget_exhausted`` once the rolling-24 h estimated spend reaches the daily budget
-    (contracts.md §3.4). A run still streaming has no cost yet, so this is a cap on FINISHED
-    spend: concurrent runs started together can overshoot it by one run each."""
+    (contracts.md §3.4), counting the runs still in flight too: each reserves
+    ``RUN_RESERVE_USD[kind]`` until it finishes, so concurrent runs cannot overshoot the budget by
+    one run each. With nothing in flight this is exactly "finished spend >= budget"."""
+    sweep_orphans(db)
     since = (datetime.now(UTC) - timedelta(hours=24)).isoformat()
     spent = db.cost_since(owner, since)
-    if spent >= settings.daily_budget_usd:
+    budget = settings.daily_budget_usd
+    if spent >= budget:
         raise ApiError(
             "budget_exhausted",
-            f"Today's AI budget (${usd(settings.daily_budget_usd)}) is used up. "
-            "It frees up as the last 24 hours roll over.",
+            f"The AI budget for the last 24 hours (${usd(budget)}) is used up. "
+            "It frees up as older answers roll off.",
+        )
+    reserved = sum(
+        RUN_RESERVE_USD[kind] * count for kind, count in db.in_flight_runs(owner).items()
+    )
+    if reserved > 0 and spent + reserved >= budget:
+        raise ApiError(
+            "budget_exhausted",
+            f"Answers that are still being written could use up the AI budget (${usd(budget)}) "
+            "for the last 24 hours, so this one has to wait. Try again in a moment.",
         )
 
 

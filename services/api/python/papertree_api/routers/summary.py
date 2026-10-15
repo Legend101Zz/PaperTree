@@ -94,6 +94,7 @@ def summary_status(call: Any, paper_id: str, generation: int | None) -> dict[str
 )
 async def get_summary(call: CallerDep, paper_id: str) -> Response:
     owned_paper(call, paper_id)
+    runs.sweep_orphans(call.db)
     generation = call.db.promoted_generation(call.db_owner, PaperId(paper_id))
     return JSONResponse(summary_status(call, paper_id, generation))
 

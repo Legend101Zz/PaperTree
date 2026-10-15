@@ -461,6 +461,10 @@ class JobStatus(Wire):
     created_at: WireTime
     updated_at: WireTime
     steps: list[JobStepStatus]
+    #: The generation this job parses (its payload's), and the parser version that produced it once
+    #: it is stored; null until then (contracts.md §8, S5F).
+    generation: Generation | None = None
+    parser_version: str | None = None
 
 
 # ── §2.4 highlights ──────────────────────────────────────────────────────────────────────────

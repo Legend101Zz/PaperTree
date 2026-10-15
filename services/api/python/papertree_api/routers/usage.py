@@ -16,6 +16,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse, Response
 
+from ..agent_client import sweep_orphans
 from ..deps import CallerDep, SettingsDep
 from ..schemas import IsoTime, UsageTotals
 from ..wiretime import format_moment
@@ -33,6 +34,7 @@ async def get_usage(
     #: An aware UTC `datetime`, or a 422 naming `since` (`schemas.IsoTime`).
     since: Annotated[IsoTime | None, Query()] = None,
 ) -> Response:
+    sweep_orphans(call.db)
     cut = since if since is not None else datetime.now(UTC) - timedelta(hours=24)
     totals = call.db.usage_since(call.db_owner, cut.isoformat())
     return JSONResponse(

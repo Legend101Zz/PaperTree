@@ -25,10 +25,13 @@ ON DONE (§3.4). The final text's ``[bN]`` markers are mapped to blocks through 
 (an unknown marker is dropped and logged); each citation gets a whole-block Anchor minted by
 ``papertree_anchoring.capture_citation`` (``capture_anchor(..., target_kind="citation")``)
 against the generation the answer was grounded in; the text is split into claims (sentences, or
-bullets for a summary) and ``verify_grounding`` runs per claim over the cited blocks' resolved
-text — only the blocks THAT claim cites, never every block the run was shown. A citation is
-``supported`` when every claim that cites it is; the verifier's REASONS (which list the words it
-could not find) never leave this module.
+bullets for a summary) and ``assess_claim`` runs per claim over the cited blocks' resolved
+text — only the blocks THAT claim cites, never every block the run was shown. Each claim is
+``supported``, ``neutral`` (commentary that reuses some of the passage's words) or ``unsupported``
+(a wrong number, invented wording); a citation is ``supported`` when at least one claim that cites
+it is ``supported`` and none is ``unsupported`` (S5F: "every claim" made interpretive sentences
+take well-grounded citations down; ``papertree_agent_tools.grounding`` carries the measurements).
+The verifier's REASONS (which list the words it could not find) never leave this module.
 
 WHICH CLAIM A MARKER BELONGS TO. The contract fixes a marker's shape (§3.2), not where a model puts
 it: ``Claim. [b1] Next.`` and ``Claim [b1]. Next.`` both give ``b1`` to ``Claim``. Markers written

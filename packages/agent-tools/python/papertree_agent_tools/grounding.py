@@ -88,6 +88,48 @@ reuses the paper's vocabulary" from "this claim does not". It does not distingui
 false. Second, the fabricated-number case scores 0.83 — comfortably ABOVE any threshold that
 does not also flag every honest claim — which is why the number rule is separate from coverage
 rather than folded into it.
+
+
+═══ THREE VERDICTS, AND WHAT A CITATION'S FLAG IS MADE OF (S5F, 2026-10-15) ═══════════════════
+
+The first live journey (YOLO, MiniMax-M3) marked 6 of 6 citations of a well-grounded explanation
+"not verified". Two causes, both measured on 88 hand-labelled (claim, cited block) pairs: 53
+genuine (S), 17 interpretive (I), 18 not supported (N: 2 live misattributions and 16 fabrications
+written to cite real blocks), from 11 live answers. One labeller, a small set, tuned on that same
+set: read the rates as indicative.
+
+  1. TYPESETTING. The PDF says ``classiﬁer`` and ``prob- lem``; the model says ``classifier`` and
+     ``problem``. Folding (NFKC, line-break hyphens joined, plurals stemmed, a hyphenated compound
+     covered by its words) moved 12 of the 53 genuine claims over the 0.6 line (13 -> 25).
+  2. AGGREGATION. A citation was supported only if EVERY claim citing it passed, so one interpretive
+     sentence ("This framing is a deliberate departure from …"), which reuses some of the passage's
+     words and adds its own, took the citation down. The verdict is now one of THREE
+     (:func:`assess_claim`): ``supported`` (coverage >= 0.6 and no missing number), ``unsupported``
+     (a stated number is in no cited block, or coverage < 0.15 over 3+ content words) and
+     ``neutral`` (everything between, and claims too short to check). A citation is supported when
+     at least one claim carrying it is ``supported`` and none is ``unsupported``.
+
+Measured with the OLD code (4a29bc7) and this one on the same 88 pairs and 55 citations:
+
+                                        old                     new
+    genuine claims judged supported     13 / 53                 25 / 53
+    N claims judged supported (leaks)   2 / 18  (F09, F10)      3 / 18  (F09, F10, F15)
+    interpretive claims judged unsupp.  17 / 17                 3 / 17   (the other 14 are neutral)
+    citations truly supported marked    6 / 46  (recall 0.13)   26 / 46  (recall 0.57)
+    unsupported citations marked        0 / 9   (precision 1.0) 0 / 9    (precision 1.0)
+
+The three leaks are the kind this module has always said it cannot see: a comparator swap ("the
+slowest" for "the fastest"), a half-true claim with a wrong tail, and a role swap that reuses the
+passage's words. The new leak (F15, a role swap, coverage 0.56 -> 0.78) came from the stemming,
+which also lifted faithful claims; the threshold stays 0.6 so that no claim is easier to support
+than before except by being closer to the passage's own words. A fabricated number, an invented
+entity or an invented finding is ``unsupported`` in 9 of the 10 such fabrications in the set (all 4
+fabricated numbers; the one miss, F12, an invented finding that reuses some of the passage's words,
+is ``neutral``), and so are the 2 live misattributions. Lowering the
+threshold to 0.5 would lift the recall to about 0.72 and let one more role swap through; it was not
+shipped. A fabricated claim that merely shares a marker with an honest one reads ``neutral`` (and so
+keeps the citation supported) when it is a negation, a role swap or a comparator swap: 4 of 12
+such mixed cases in the set. Those are the limits of a lexical check, not a tuning gap.
 """
 
 from __future__ import annotations
