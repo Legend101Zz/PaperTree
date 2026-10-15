@@ -6,115 +6,95 @@ import Link from 'next/link';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { BookOpen } from 'lucide-react';
+import { AuthShell } from '@/components/auth/AuthShell';
+import { authFailure } from '@/components/auth/messages';
+import { safeNext } from '@/lib/auth';
+
+/** Matches the server (contracts.md §2.1): 8 to 1024 characters. */
+const MIN_PASSWORD_LENGTH = 8;
 
 export default function RegisterPage() {
-    const router = useRouter();
-    const { register } = useAuthStore();
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [error, setError] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
+  const { register } = useAuthStore();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
 
-        if (password !== confirmPassword) {
-            setError('Passwords do not match');
-            return;
-        }
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(`Choose a password of at least ${String(MIN_PASSWORD_LENGTH)} characters.`);
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('The two passwords do not match. Type the same password in both fields.');
+      return;
+    }
 
-        if (password.length < 6) {
-            setError('Password must be at least 6 characters');
-            return;
-        }
+    setIsLoading(true);
+    try {
+      await register(email, password);
+      router.push(safeNext(new URLSearchParams(window.location.search).get('next')));
+    } catch (err) {
+      setError(authFailure(err, 'Could not create the account. Check the details and try again.'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-        setIsLoading(true);
+  return (
+    <AuthShell title="Create your account" subtitle="Read papers with the paper itself in front of you.">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {error && (
+          <p role="alert" className="pt-s3-alert pt-s3-alert--error">
+            {error}
+          </p>
+        )}
 
-        try {
-            await register(email, password);
-            router.push('/dashboard');
-        } catch (err: any) {
-            setError(err.response?.data?.detail || 'Registration failed');
-        } finally {
-            setIsLoading(false);
-        }
-    };
+        <Input
+          type="email"
+          label="Email"
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          required
+        />
 
-    return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
-            <div className="w-full max-w-md">
-                <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full mb-4">
-                        <BookOpen className="w-8 h-8 text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                        Create Account
-                    </h1>
-                    <p className="text-gray-600 dark:text-gray-400 mt-2">
-                        Start reading smarter with AI
-                    </p>
-                </div>
+        <Input
+          type="password"
+          label="Password"
+          autoComplete="new-password"
+          hint={`At least ${String(MIN_PASSWORD_LENGTH)} characters.`}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
 
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        {error && (
-                            <div className="p-3 bg-red-50 dark:bg-red-900/50 text-red-600 dark:text-red-400 text-sm rounded-lg">
-                                {error}
-                            </div>
-                        )}
+        <Input
+          type="password"
+          label="Confirm password"
+          autoComplete="new-password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          required
+        />
 
-                        <Input
-                            type="email"
-                            label="Email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            placeholder="you@example.com"
-                            required
-                        />
+        <Button type="submit" className="pt-s3-btn--block" isLoading={isLoading}>
+          Create account
+        </Button>
+      </form>
 
-                        <Input
-                            type="password"
-                            label="Password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            placeholder="••••••••"
-                            required
-                        />
-
-                        <Input
-                            type="password"
-                            label="Confirm Password"
-                            value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
-                            placeholder="••••••••"
-                            required
-                        />
-
-                        <Button
-                            type="submit"
-                            className="w-full"
-                            isLoading={isLoading}
-                        >
-                            Create Account
-                        </Button>
-                    </form>
-
-                    <div className="mt-6 text-center text-sm">
-                        <span className="text-gray-600 dark:text-gray-400">
-                            Already have an account?{' '}
-                        </span>
-                        <Link
-                            href="/login"
-                            className="text-blue-600 hover:text-blue-700 font-medium"
-                        >
-                            Sign in
-                        </Link>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
+      <p className="pt-s3-muted mt-6 text-center text-sm">
+        Already have an account?{' '}
+        <Link href="/login" className="pt-s3-link">
+          Sign in
+        </Link>
+      </p>
+    </AuthShell>
+  );
 }

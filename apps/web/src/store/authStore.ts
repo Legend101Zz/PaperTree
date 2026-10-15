@@ -28,6 +28,7 @@
 
 import { create } from "zustand";
 import { authApi } from "@/lib/api/papers";
+import { ApiError } from "@/lib/api/types";
 import { setToken, removeToken, getToken } from "@/lib/auth";
 
 /**
@@ -66,45 +67,77 @@ interface AuthState {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  /** Revokes the server session (POST /auth/logout), then clears the local one. */
+  logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
+  /**
+   * True when the last `checkAuth` could not reach the server (network error or 5xx). The session
+   * is KEPT in that case: only a 401 means it is invalid (frontend-map §1.3).
+   */
+  sessionUnverified: boolean;
+  /** True after the user chose Sign out, so the guard sends them to a plain `/login`. */
+  signedOutByUser: boolean;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isLoading: true,
   isAuthenticated: false,
+  sessionUnverified: false,
+  signedOutByUser: false,
 
   login: async (email: string, password: string) => {
     const session = await authApi.login(email, password);
     setToken(session.token);
-    set({ user: toUser(session), isAuthenticated: true, isLoading: false });
+    set({ user: toUser(session), isAuthenticated: true, isLoading: false, signedOutByUser: false });
   },
 
   register: async (email: string, password: string) => {
     const session = await authApi.register(email, password);
     setToken(session.token);
-    set({ user: toUser(session), isAuthenticated: true, isLoading: false });
+    set({ user: toUser(session), isAuthenticated: true, isLoading: false, signedOutByUser: false });
   },
 
-  logout: () => {
-    removeToken();
-    set({ user: null, isAuthenticated: false });
+  logout: async () => {
+    // The server session is revoked FIRST, while the token can still authenticate the call. A
+    // failure here (offline, 5xx) must not trap the user signed in, so the local session is cleared
+    // either way; the call is attempted, not assumed.
+    try {
+      await authApi.logout();
+    } catch {
+      // Nothing useful to tell a person who asked to leave.
+    } finally {
+      removeToken();
+      set({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        sessionUnverified: false,
+        signedOutByUser: true,
+      });
+    }
   },
 
   checkAuth: async () => {
     const token = getToken();
     if (!token) {
-      set({ isLoading: false, isAuthenticated: false });
+      set({ isLoading: false, isAuthenticated: false, sessionUnverified: false });
       return;
     }
 
     try {
       const me = await authApi.me();
-      set({ user: toUser(me), isAuthenticated: true, isLoading: false });
-    } catch {
-      removeToken();
-      set({ user: null, isAuthenticated: false, isLoading: false });
+      set({ user: toUser(me), isAuthenticated: true, isLoading: false, sessionUnverified: false });
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        // The only answer that means "this session is not valid".
+        removeToken();
+        set({ user: null, isAuthenticated: false, isLoading: false, sessionUnverified: false });
+        return;
+      }
+      // A network error or a 5xx says nothing about the session. Keep it; the page's own requests
+      // will show their own errors, and a 401 on any of them signs out through the client policy.
+      set({ isAuthenticated: true, isLoading: false, sessionUnverified: true });
     }
   },
 }));

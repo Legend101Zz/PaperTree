@@ -9,9 +9,9 @@ this package fail for three different reasons and a caller has to be able to tel
     "one alert, and it should page someone" is written against exactly this class.
   * :class:`ProposalRejected` — the POLICY layer refused (§13.6(b)'s validator). This is an
     ordinary, expected outcome and it is NOT how ``create_proposal`` reports a rejection —
-    that returns a :class:`~papertree_memory.records.ProposalOutcome`, because a rejected
-    proposal must still be a row. It is raised only where a rejection cannot be represented
-    as a return value (``confirm_proposal`` on an already-auto-rejected proposal).
+    that returns a ``ProposalOutcome`` record (the deleted writer's return type), because
+    a rejected proposal must still be a row. It is raised only where a rejection cannot be
+    represented as a return value (``confirm_proposal`` on an already-auto-rejected proposal).
   * :class:`ConfirmationMismatch` — gate 3 of §13.6(b) refused. The confirmation handed to
     ``confirm_proposal`` did not carry the exact evidence quote stored on the proposal, so we
     cannot claim the human was shown what they were asked to approve.
