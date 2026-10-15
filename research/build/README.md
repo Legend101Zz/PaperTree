@@ -4,8 +4,11 @@ Six epics. Each is a GitHub tracking issue **and** a self-contained prompt for o
 dynamic-workflow session. Run them in wave order; within a wave they are parallel-safe
 because their file ownership is disjoint.
 
-> **Current work: issue [#78](https://github.com/Legend101Zz/PaperTree/issues/78)** — a
-> three-session phase that finishes Epics 1–3. Epics 4 and 5 do not start until it closes.
+> **Current work: issue [#141](https://github.com/Legend101Zz/PaperTree/issues/141)** — the v0.1
+> reader release (upload, read, highlight, grounded AI, canvas; slices S0–S9 in
+> `reader-release/slice-plan.md`). It supersedes [#78](https://github.com/Legend101Zz/PaperTree/issues/78),
+> the three-session phase that finished Epics 1–3. The **canvas (Epic 5) is in** v0.1; **audio
+> (Epic 4) is out**.
 
 ### Deleted docs, and why a stale reference is not a broken link
 
@@ -118,8 +121,9 @@ gh auth login
 ```
 
 > The tracking issues exist; `create-issues.sh` was a one-shot and is deleted.
-> **For the current phase the work contract is issue #78, not an epic file** — it carries
-> the backlog, the three session prompts, the design prompt and the handoff protocol.
+> **For the current phase the work contract is issue #141 and `reader-release/`, not an epic
+> file** (#78 carried that role for the previous phase: its backlog, session prompts and
+> handoff protocol are history).
 
 Within an epic the agent is expected to spawn parallel sub-agents per feature, using
 worktrees where features touch disjoint files. The epic prompt states which features are
@@ -135,9 +139,9 @@ parallel-safe.
 | 1 | [Ingest & document intelligence](EPIC-01-ingest.md) | 1 | 9 | **merged**, INCOMPLETE — 5/10 MET, 4 PARTIAL, 1 NOT MET | `services/document-worker`, `packages/evaluation` |
 | 2 | [Reader & anchoring](EPIC-02-reader.md) | 1 | 8 | **merged, closed** — 9/9 MET | `apps/web` reader, `packages/anchoring`, `packages/ui` |
 | 3 | [Grounded AI](EPIC-03-grounded-ai.md) | 2 | 8 | **merged**, INCOMPLETE — 6/8 features, 4/7 MET | `packages/retrieval`, `packages/agent-tools`, `packages/prompts`, `packages/memory` |
-| — | **[Epic 1–3 completion](https://github.com/Legend101Zz/PaperTree/issues/78)** | **2.5** | 3 sessions | **← the current target** | the gaps between the epics above |
-| 4 | [Audiobook & Replay](EPIC-04-audiobook.md) | 3 | 7 | **blocked on #78** | `services/audio-worker`, `apps/web` audio |
-| 5 | [Canvas](EPIC-05-canvas.md) | 3 | 8 | **blocked on #78** | `apps/web` canvas, `packages/canvas` |
+| — | **[Epic 1–3 completion](https://github.com/Legend101Zz/PaperTree/issues/78)** | **2.5** | 3 sessions | superseded by #141 | the gaps between the epics above |
+| 4 | [Audiobook & Replay](EPIC-04-audiobook.md) | 3 | 7 | **deferred, out of v0.1** | `services/audio-worker`, `apps/web` audio |
+| 5 | [Canvas](EPIC-05-canvas.md) | 3 | 8 | **in v0.1** (slice S7) | `apps/web` canvas, `packages/canvas` |
 
 **47 features total.** That is the honest size of "everything". Waves 1 and 3 are where
 parallelism pays; waves 0 and 2 are throughput-limited by dependency, not by agents.
