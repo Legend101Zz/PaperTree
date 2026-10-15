@@ -76,10 +76,11 @@ test.describe('S3 upload row', () => {
     const uploaded = ((await accepted.json()) as { paper: { paper_id: string } }).paper.paper_id;
     log.push(`+${String(Date.now() - t0)} ms POST 202`);
 
-    // THE REGRESSION: the row must move on from "Waiting to upload".
-    const row = page.locator('[data-testid=upload-queue] li').first();
-    await expect(row).not.toContainText('Waiting to upload');
-    await expect(row).toHaveAttribute('data-upload-state', /uploading|done/);
+    // THE REGRESSION: the row must move on from "Waiting to upload". It may also already be gone
+    // (W2UI: the row is dropped the moment the server row is in the list), so the assertion is on
+    // what must never be on screen, not on the row's presence.
+    await expect(page.getByText('Waiting to upload')).toHaveCount(0);
+    await expect(page.locator('[data-testid=upload-queue] li')).toHaveCount(0);
 
     // The card exists at once (from the 202's `paper`) and finishes on its own. It is found by the
     // UPLOADED paper's id: with fixtures on, the first `[data-paper-id]` is a sample card that is

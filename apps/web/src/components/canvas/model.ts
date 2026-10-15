@@ -78,3 +78,16 @@ export function toFlowEdge(edge: CanvasEdge): PtEdge {
     data: { edge },
   };
 }
+
+/** A card by name for a sentence: `“first words”` (its title or text), or the kind when it is empty. */
+export function cardName(node: CanvasNode): string {
+  const text = (node.title ?? node.body).replace(/\s+/g, ' ').trim();
+  if (text !== '') return `\u201c${text.length > 40 ? `${text.slice(0, 40)}\u2026` : text}\u201d`;
+  return node.kind === 'excerpt'
+    ? 'a passage'
+    : node.kind === 'explanation'
+      ? 'an AI explanation'
+      : node.kind === 'group'
+        ? 'a group'
+        : 'an empty note';
+}

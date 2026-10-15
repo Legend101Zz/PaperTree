@@ -21,11 +21,12 @@
  * (#137). There is no audio anywhere: Epic 4 is out of this release.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LayoutGrid, List } from 'lucide-react';
 
+import { SessionBanner } from '@/components/auth/SessionBanner';
 import { describeError } from '@/components/ui/errors';
 import { papersApi } from '@/lib/api/papers';
 import type { LibraryPaper as ApiLibraryPaper } from '@/lib/api/types';
@@ -40,7 +41,7 @@ import {
   visibleSamples,
   type LibraryPaper,
 } from './types';
-import { UploadDropzone, type UploadContext } from './UploadDropzone';
+import { UploadDropzone, type CancelOutcome, type UploadContext } from './UploadDropzone';
 
 type LibraryLayout = 'grid' | 'list';
 
@@ -50,6 +51,9 @@ const LAYOUT_KEY = 'papertree/library/layout';
 export const POLL_INTERVAL_MS = 2000;
 
 const PAPERS_KEY = ['papers'] as const;
+
+/** How long a cancelled upload waits before the library is re-read. */
+const CANCEL_SETTLE_MS = 700;
 
 function useOnline(): boolean {
   const [online, setOnline] = useState(true);
@@ -87,10 +91,11 @@ export function pollInterval(rows: readonly ApiLibraryPaper[] | undefined): numb
 export function LibraryView() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { user, logout, sessionUnverified } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const online = useOnline();
   const [layout, setLayout] = useState<LibraryLayout>('grid');
   const [signingOut, setSigningOut] = useState(false);
+  const knownIdsRef = useRef<ReadonlySet<string>>(new Set());
 
   useEffect(() => {
     const saved = readLayout();
@@ -145,6 +150,13 @@ export function LibraryView() {
 
   const upload = useCallback(
     async (file: File, context: UploadContext) => {
+      // Remembered so a Cancel can tell a paper that arrived during the upload from one that was
+      // already here.
+      knownIdsRef.current = new Set(
+        (queryClient.getQueryData<readonly ApiLibraryPaper[]>(PAPERS_KEY) ?? []).map(
+          (row) => row.paper_id,
+        ),
+      );
       const response = await papersApi.uploadWithProgress(file, {
         signal: context.signal,
         onProgress: ({ loaded, total }) => {
@@ -156,6 +168,30 @@ export function LibraryView() {
       void queryClient.invalidateQueries({ queryKey: PAPERS_KEY });
     },
     [queryClient, upsert],
+  );
+
+  const afterCancel = useCallback(
+    async (file: File): Promise<CancelOutcome> => {
+      const before = knownIdsRef.current;
+      // The abort can land after the server had the whole body; give it a beat to finish, then
+      // read the library again instead of assuming.
+      await new Promise((resolve) => setTimeout(resolve, CANCEL_SETTLE_MS));
+      try {
+        const fresh = await queryClient.fetchQuery({
+          queryKey: PAPERS_KEY,
+          queryFn: (): Promise<readonly ApiLibraryPaper[]> => papersApi.list(),
+          staleTime: 0,
+        });
+        return fresh.some(
+          (row) => !before.has(row.paper_id) && row.original_filename === file.name,
+        )
+          ? 'in-library'
+          : 'not-added';
+      } catch {
+        return 'unknown';
+      }
+    },
+    [queryClient],
   );
 
   const retry = useCallback(
@@ -252,15 +288,10 @@ export function LibraryView() {
           <OfflineState availableSummary="Papers already open on this device still work. Uploading and questions need the network." />
         ) : null}
 
-        {sessionUnverified && online ? (
-          <p role="status" className="pt-s3-alert pt-s3-alert--warn">
-            PaperTree could not confirm your session just now. You are still signed in; this page
-            will retry.
-          </p>
-        ) : null}
+        {online ? <SessionBanner /> : null}
 
         <div data-upload-dropzone="">
-          <UploadDropzone onUpload={upload} compact={hasPapers} />
+          <UploadDropzone onUpload={upload} onCancelled={afterCancel} compact={hasPapers} />
         </div>
 
         {isLoading ? (
