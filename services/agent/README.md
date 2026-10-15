@@ -1,7 +1,7 @@
 # @papertree/agent
 
 The small Node service that runs PaperTree's AI through the **Pi SDK** (ADR-002 §3.4; contracts.md
-§3–§4): Node 22, Pi pinned exactly, MiniMax-M3, and four read-only paper tools served back by
+§3–§4): Node 22, Pi pinned exactly, MiniMax (M3 or M3.1-Flash-Preview, chosen per run kind; ADR-003), and four read-only paper tools served back by
 `services/api` under a per-run token. `services/api` is the only public edge; this service binds
 `127.0.0.1` and is called only by the API (`POST /v1/runs`, SSE).
 
@@ -13,14 +13,17 @@ pnpm --filter @papertree/agent test:mutants   # every mutant (M5, M6, G1–G13),
 
 ## Configuration (contracts.md §7, the agent's rows)
 
-| Variable                     | Default                 | Notes                                                                                   |
-| ---------------------------- | ----------------------- | --------------------------------------------------------------------------------------- |
-| `PAPERTREE_AGENT_SECRET`     | **required**            | shared with the API (`X-PaperTree-Agent-Secret`); boot refuses without it              |
-| `PAPERTREE_MINIMAX_API_KEY`  | **required**            | unless faux mode; read once, then removed from `process.env`; never `MINIMAX_API_KEY`  |
-| `PAPERTREE_AGENT_PORT`       | `8200`                  | binds `127.0.0.1` only                                                                  |
-| `PAPERTREE_API_INTERNAL_URL` | `http://127.0.0.1:8000` | a run's `tool.base_url` must be on this origin, so a run token is never sent elsewhere |
-| `PAPERTREE_AGENT_FAUX`       | unset                   | `1` = the scripted test model (below); the key is not read                              |
-| `PAPERTREE_AGENT_LOG_LEVEL`  | `info`                  | `debug` adds raw provider error text (§3.3); keys and tokens are never logged          |
+| Variable                                                      | Default                 | Notes                                                                                  |
+| ------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------- |
+| `PAPERTREE_AGENT_SECRET`                                      | **required**            | shared with the API (`X-PaperTree-Agent-Secret`); boot refuses without it              |
+| `PAPERTREE_MINIMAX_API_KEY`                                   | **required**            | unless faux mode; read once, then removed from `process.env`; never `MINIMAX_API_KEY`  |
+| `PAPERTREE_AGENT_PORT`                                        | `8200`                  | binds `127.0.0.1` only                                                                 |
+| `PAPERTREE_API_INTERNAL_URL`                                  | `http://127.0.0.1:8000` | a run's `tool.base_url` must be on this origin, so a run token is never sent elsewhere |
+| `PAPERTREE_MODEL`                                             | see Model policy        | the model for every kind: `MiniMax-M3` or `MiniMax-M3.1-Flash-Preview`                 |
+| `PAPERTREE_MODEL_EXPLAIN` / `_ASK` / `_SUMMARY`               | `PAPERTREE_MODEL`       | the model for one kind                                                                 |
+| `PAPERTREE_MODEL_EFFORT` (+ `_EXPLAIN` / `_ASK` / `_SUMMARY`) | `low`                   | Flash only: `low`, `medium` or `high`; ignored for M3                                  |
+| `PAPERTREE_AGENT_FAUX`                                        | unset                   | `1` = the scripted test model (below); the key is not read                             |
+| `PAPERTREE_AGENT_LOG_LEVEL`                                   | `info`                  | `debug` adds raw provider error text (§3.3); keys and tokens are never logged          |
 
 Set by the service itself before any Pi code runs: `PI_OFFLINE=1`, `PI_TELEMETRY=0`,
 `PI_CODING_AGENT_DIR` = a new empty directory it owns (mode 0700, removed at exit), and
@@ -34,13 +37,40 @@ installed pi-coding-agent and pi-ai are both 0.87.1; and a probe session built b
 `get_outline, get_section, get_passage, search_passages` (registered AND active), `defaultTools: []`,
 compaction off, cache warming off, telemetry off and the §3.1 retry settings.
 
+## Model policy (ADR-003)
+
+`src/models.ts` decides which model answers which kind of run. `PAPERTREE_MODEL` sets one model for
+all three kinds (`explain`, `ask`, `summary`); `PAPERTREE_MODEL_<KIND>` overrides one kind; an
+unknown model id or effort refuses to boot, naming the variable. **Shipped defaults:** `explain` and `ask` on Flash at effort `low`, `summary` on M3. (A faux agent reports M3 until a `PAPERTREE_MODEL*` variable is set.) `MiniMax-M3` stays selectable as
+the fallback: `PAPERTREE_MODEL=MiniMax-M3`.
+
+**MiniMax-M3.1-Flash-Preview** is not in Pi's catalog; the agent registers it as a custom model
+through the SDK's own `registerProvider` (no network, no `models.json`), with `forceAdaptiveThinking`.
+Its thinking cannot be switched off (the API answers 400 "requires adaptive thinking" to
+`thinking: {type: "disabled"}` and to effort `none`), so a Flash request is always
+`thinking: {type: "adaptive"}` + `output_config: {effort: low | medium | high}`, never `disabled`
+(`PAPERTREE_MODEL_EFFORT[_<KIND>]`, default `low`). M3 keeps its budget-based low thinking and is sent
+no effort. Flash narrates before a tool call; the agent already drops the text of a message that ends
+in tool use, and a Flash-shaped stream is tested (`test/models.test.ts`).
+
+The model id flows out in the run event (`run.model` = `minimax/<id>`), `GET /healthz`
+(`model`, `models` per kind, `effort` per kind, `cost_basis`), and so to whatever the API stores.
+
+**Cost.** MiniMax publishes no price for Flash. `cost_usd_est` for a Flash run uses M3's rates and is
+an _estimate on M3 rates_ (`/healthz` says so under `cost_basis`; the README of the release says so).
+
+The shipped default and the evidence for it are in
+`research/architecture-decisions/ADR-003-model-policy.md` and `docs/release/v0.1/MODEL-AB.md`.
+`bench/ab.py` re-runs the A/B (see its docstring); `bench/api_shim.py` is a measurement-only launcher
+needed while `services/api` pins `MiniMax-M3` (see ADR-003, "What is worse").
+
 ## HTTP
 
-| Route                     | What                                                                                                   |
-| ------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `POST /v1/runs`           | secret required; body = `contracts/agent/run-request.schema.json`, validated against that FILE at runtime; `200 text/event-stream` |
-| `DELETE /v1/runs/{id}`    | abort; `204`, idempotent (a finished run is `204` too); `404` for a run id never seen                   |
-| `GET /healthz`            | `{ok, sdk, pi_ai, model, key_present, wiring_ok, active_runs, faux}`; no auth, no secrets              |
+| Route                  | What                                                                                                                               |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /v1/runs`        | secret required; body = `contracts/agent/run-request.schema.json`, validated against that FILE at runtime; `200 text/event-stream` |
+| `DELETE /v1/runs/{id}` | abort; `204`, idempotent (a finished run is `204` too); `404` for a run id never seen                                              |
+| `GET /healthz`         | `{ok, sdk, pi_ai, model, models, effort, cost_basis, key_present, wiring_ok, active_runs, faux}`; no auth, no secrets              |
 
 Errors before the stream starts are the §0 envelope `{detail, code, retryable}`: 401 `auth_required`,
 413 `payload_too_large` (a body over 8 MB; the answer is delivered — the rest of the body is read
@@ -112,15 +142,15 @@ localhost (`unshare -rn` on Linux; without either it says so loudly). `test/muta
 exact edit per mutant to a copy of the package (`.mutants/`, git-ignored) and runs the suite against
 it; every mutant must make it fail.
 
-| File                 | What it pins                                                                                   |
-| -------------------- | ---------------------------------------------------------------------------------------------- |
-| `fixtures.test.ts`   | the 8 recorded streams, emitted by the agent, event by event                                  |
-| `errors.test.ts`     | every §3.3 error row on a mock Anthropic server (the real provider path), watchdog (fires after idle_ms of silence; reset by every event), deadline |
-| `guards.test.ts`     | tool loop, caps, narration, tools closed after text, citations, system-prompt text, history restore / pre-prompt rule, busy, DELETE, tools |
-| `wiring.test.ts`     | the four tools, both isolation layers, settings, prompt options, canary cwd, boot refusals, HTTP envelope, limit bounds, the 413 |
-| `contract.test.ts`   | the runtime request check and the tool parameters agree with ajv on the committed schemas     |
-| `audit.test.ts`      | the audit is loaded; positive and negative controls; the kernel deny                          |
-| `heartbeat.test.ts`  | one `: ping` per interval, and at the real 5 s                                                |
+| File                | What it pins                                                                                                                                        |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fixtures.test.ts`  | the 8 recorded streams, emitted by the agent, event by event                                                                                        |
+| `errors.test.ts`    | every §3.3 error row on a mock Anthropic server (the real provider path), watchdog (fires after idle_ms of silence; reset by every event), deadline |
+| `guards.test.ts`    | tool loop, caps, narration, tools closed after text, citations, system-prompt text, history restore / pre-prompt rule, busy, DELETE, tools          |
+| `wiring.test.ts`    | the four tools, both isolation layers, settings, prompt options, canary cwd, boot refusals, HTTP envelope, limit bounds, the 413                    |
+| `contract.test.ts`  | the runtime request check and the tool parameters agree with ajv on the committed schemas                                                           |
+| `audit.test.ts`     | the audit is loaded; positive and negative controls; the kernel deny                                                                                |
+| `heartbeat.test.ts` | one `: ping` per interval, and at the real 5 s                                                                                                      |
 
 ## Pins and the install decision
 

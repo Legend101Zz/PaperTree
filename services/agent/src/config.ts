@@ -10,6 +10,7 @@
  *   PAPERTREE_API_INTERNAL_URL  default http://127.0.0.1:8000; a run's `tool.base_url` must be on
  *                               this origin, so a run token is never sent anywhere else
  *   PAPERTREE_AGENT_LOG_LEVEL   default info; `debug` adds raw provider error text (§3.3)
+ *   PAPERTREE_MODEL[_EXPLAIN|_ASK|_SUMMARY], PAPERTREE_MODEL_EFFORT[_...]   the model policy (models.ts)
  *
  * Set here, before any Pi code runs: PI_OFFLINE=1, PI_TELEMETRY=0, and PI_CODING_AGENT_DIR = a new
  * empty directory this process owns (mode 0700, removed at exit). `MINIMAX_API_KEY` — Pi's ambient
@@ -20,6 +21,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { type Level, parseLevel } from './log.ts';
+import {
+  M3_MODEL_ID,
+  type ModelPolicy,
+  namesPolicy,
+  PolicyError,
+  readPolicy,
+  uniformPolicy,
+} from './models.ts';
 
 export interface AgentConfig {
   readonly secret: string;
@@ -29,6 +38,8 @@ export interface AgentConfig {
   readonly port: number;
   readonly apiInternalOrigin: string;
   readonly logLevel: Level;
+  /** Which model answers which kind of run, and the Flash effort (models.ts, ADR-003). */
+  readonly policy: ModelPolicy;
 }
 
 export class ConfigError extends Error {}
@@ -67,6 +78,16 @@ export function readConfig(env: NodeJS.ProcessEnv): AgentConfig {
       'PAPERTREE_MINIMAX_API_KEY is not set (or set PAPERTREE_AGENT_FAUX=1 for the scripted test model)',
     );
   }
+  let policy: ModelPolicy;
+  try {
+    // The faux model stands in for no real model. Until it is told otherwise it reports M3, the
+    // label the contract fixtures carry, so a stack running it is the same stack whichever policy
+    // ships; set PAPERTREE_MODEL* to make it report (and test) any other.
+    policy = faux && !namesPolicy(env) ? uniformPolicy(M3_MODEL_ID) : readPolicy(env);
+  } catch (error) {
+    if (error instanceof PolicyError) throw new ConfigError(error.message);
+    throw error;
+  }
   return {
     secret,
     minimaxKey: faux ? undefined : key,
@@ -74,6 +95,7 @@ export function readConfig(env: NodeJS.ProcessEnv): AgentConfig {
     port: port(env['PAPERTREE_AGENT_PORT']),
     apiInternalOrigin: origin(env['PAPERTREE_API_INTERNAL_URL']),
     logLevel: parseLevel(env['PAPERTREE_AGENT_LOG_LEVEL']),
+    policy,
   };
 }
 
