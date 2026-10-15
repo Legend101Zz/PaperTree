@@ -361,3 +361,50 @@ def test_a_document_no_stage_can_salvage_re_raises_the_original_failure() -> Non
 
     with pytest.raises(ValueError, match="the original failure"):
         build_or_salvage(Builder(), build)  # type: ignore[arg-type]
+
+
+# ── a PDF with no pages is unreadable, not an empty `partial` paper (S2R, #141) ────────────────
+
+
+def _pdf_with_pages(count: int) -> bytes:
+    """A minimal valid PDF whose page tree holds `count` empty pages (0 is not saveable by
+    PyMuPDF, so the bytes are written by hand)."""
+    kids = " ".join(f"{3 + i} 0 R" for i in range(count))
+    objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        f"<< /Type /Pages /Kids [{kids}] /Count {count} >>",
+        *["<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>"] * count,
+    ]
+    out = b"%PDF-1.4\n"
+    offsets = []
+    for number, body in enumerate(objects, 1):
+        offsets.append(len(out))
+        out += f"{number} 0 obj\n{body}\nendobj\n".encode()
+    xref = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode()
+    out += "".join(f"{offset:010d} 00000 n \n" for offset in offsets).encode()
+    out += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n".encode()
+    out += f"startxref\n{xref}\n%%EOF\n".encode()
+    return out
+
+
+def test_a_pdf_with_no_pages_raises_file_data_error_which_the_job_calls_pdf_unreadable(
+    tmp_path: Path,
+) -> None:
+    """`job.py` maps `pymupdf.FileDataError` to `pdf_unreadable` (deterministic, no retry). Before
+    this, a zero-page PDF came back `partial` ("no blocks were extracted") with 0 pages, and the
+    library listed an empty paper as readable."""
+    path = tmp_path / "zero.pdf"
+    path.write_bytes(_pdf_with_pages(0))
+    with pytest.raises(pymupdf.FileDataError, match="no pages"):
+        parse_document(path, paper_id=PAPER_ID, asset_root=tmp_path / "assets")
+
+
+def test_a_blank_page_is_still_a_partial_paper_not_an_error(tmp_path: Path) -> None:
+    """The guard is for NO pages only: a one-page scan with no text layer parses, as `partial`."""
+    path = tmp_path / "blank.pdf"
+    path.write_bytes(_pdf_with_pages(1))
+    paper = parse_document(path, paper_id=PAPER_ID, asset_root=tmp_path / "assets").paper
+    assert paper.status == "partial"
+    assert paper.partial_reason == "no blocks were extracted from this document"
+    assert len(paper.pages) == 1
