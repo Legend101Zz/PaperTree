@@ -374,7 +374,9 @@ class Bench:
             "http_status": res["http_status"],
             "status": done.get("status"),
             "error": done.get("error") or (res.get("json") if res["http_status"] != 200 else None),
-            "model_reported": usage.get("model"),  # the API's RunSummary.model: the agent-reported model
+            "model_reported": usage.get(
+                "model"
+            ),  # the API's RunSummary.model: the agent-reported model
             "first_text_ms": usage.get("first_text_ms"),
             "latency_ms": usage.get("latency_ms"),
             "client_first_text_ms": res.get("client_first_text_ms"),
