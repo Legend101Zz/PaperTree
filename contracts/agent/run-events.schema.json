@@ -97,7 +97,10 @@
       "additionalProperties": false,
       "properties": {
         "run_id": { "type": "string", "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$" },
-        "model": { "const": "minimax/MiniMax-M3" },
+        "model": {
+          "description": "minimax/<model id>: MiniMax-M3 or MiniMax-M3.1-Flash-Preview (ADR-003). The API stores it as ai_runs.model.",
+          "enum": ["minimax/MiniMax-M3", "minimax/MiniMax-M3.1-Flash-Preview"]
+        },
         "sdk": { "type": "string", "pattern": "^pi-coding-agent@[0-9]+\\.[0-9]+\\.[0-9]+$" }
       }
     },

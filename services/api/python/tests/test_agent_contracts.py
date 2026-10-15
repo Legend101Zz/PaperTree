@@ -26,7 +26,13 @@ from typing import Any
 import pytest
 from jsonschema_lite import validate
 from papertree_api import contracts
-from papertree_api.schemas import AgentDone, AgentRunRequest, ToolResult, parse_agent_event
+from papertree_api.schemas import (
+    AgentDone,
+    AgentRun,
+    AgentRunRequest,
+    ToolResult,
+    parse_agent_event,
+)
 from pydantic import ValidationError
 
 AGENT = Path(__file__).resolve().parents[4] / "contracts" / "agent"
@@ -312,3 +318,21 @@ def test_the_internal_tool_result_is_one_shape_on_both_sides() -> None:
     ):
         assert (not validate(params, TOOLS_SCHEMA, "#/$defs/GetSectionParams")) is ok, params
     assert validate({"query": "x", "limit": 9}, TOOLS_SCHEMA, "#/$defs/SearchPassagesParams")
+
+
+def test_the_run_event_model_enum_is_the_same_in_the_schema_and_the_model() -> None:
+    """The agent's JSON schema and the API's pydantic twin accept the same `run.model` values
+    (the Flash policy widened one and left the other: a live stack ended in `internal`)."""
+    schema = json.loads(
+        (Path(__file__).resolve().parents[4] / "contracts/agent/run-events.schema.json").read_text()
+    )
+    text = json.dumps(schema)
+    for model in ("minimax/MiniMax-M3", "minimax/MiniMax-M3.1-Flash-Preview"):
+        assert model in text
+        AgentRun.model_validate(
+            {"run_id": _RUN["run_id"], "model": model, "sdk": "pi-coding-agent@0.87.1"}
+        )
+    with pytest.raises(ValidationError):
+        AgentRun.model_validate(
+            {"run_id": _RUN["run_id"], "model": "minimax/other", "sdk": "pi-coding-agent@0.87.1"}
+        )

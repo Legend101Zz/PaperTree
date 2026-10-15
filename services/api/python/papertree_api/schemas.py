@@ -994,7 +994,7 @@ class AgentRunRequest(Wire):
 
 class AgentRun(Wire):
     run_id: str = Field(pattern=server_id("run"))
-    model: Literal["minimax/MiniMax-M3"]
+    model: Literal["minimax/MiniMax-M3", "minimax/MiniMax-M3.1-Flash-Preview"]
     sdk: str = Field(pattern=r"^pi-coding-agent@[0-9]+\.[0-9]+\.[0-9]+$")
 
 

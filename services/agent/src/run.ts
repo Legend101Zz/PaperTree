@@ -46,15 +46,9 @@ import {
   type RunError,
   runError,
 } from './classify.ts';
-import {
-  hasMarker,
-  MODEL_LABEL,
-  parseMarkers,
-  type RunRequest,
-  SDK_LABEL,
-  TOOL_NAMES,
-} from './contract.ts';
+import { hasMarker, parseMarkers, type RunRequest, SDK_LABEL, TOOL_NAMES } from './contract.ts';
 import type { FauxBrain, FauxModel } from './faux.ts';
+import type { ModelChoice } from './models.ts';
 import type { Logger } from './log.ts';
 import { systemPrompt, userText } from './prompts.ts';
 import { createPaperSession, type PaperSession } from './session.ts';
@@ -70,6 +64,8 @@ import {
 export interface RunDeps {
   readonly modelRuntime: ModelRuntime;
   readonly model: Model<any>;
+  /** Which model and effort the policy chose for this run's kind (models.ts). */
+  readonly choice: ModelChoice;
   readonly log: Logger;
   readonly pingMs: number;
   readonly faux?: { readonly model: FauxModel; readonly brain: FauxBrain };
@@ -538,7 +534,7 @@ class Run {
       limits,
     });
     deps.log.redact(request.tool.token);
-    this.sse.event('run', { run_id: request.run_id, model: MODEL_LABEL, sdk: SDK_LABEL });
+    this.sse.event('run', { run_id: request.run_id, model: deps.choice.label, sdk: SDK_LABEL });
     const onStop = (): void => this.hostAbort(this.clientGone.aborted ? 'client' : 'deadline');
     let ping: NodeJS.Timeout | undefined;
     let stop: AbortSignal | undefined;
@@ -576,6 +572,7 @@ class Run {
       this.paper = await createPaperSession({
         modelRuntime: deps.modelRuntime,
         model: deps.model,
+        thinkingLevel: deps.choice.effort ?? 'low',
         maxOutputTokens: limits.max_output_tokens,
         maxRetries: limits.max_retries,
         systemPrompt: systemPrompt(request),
