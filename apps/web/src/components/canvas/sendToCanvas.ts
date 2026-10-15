@@ -15,11 +15,15 @@ import { ApiError } from '@/lib/api/types';
 import { boardsApi } from '@/lib/api/boards';
 import { threadsApi } from '@/lib/api/threads';
 
+import { findExcerptFor } from './duplicate';
 import { newNodeId } from './ids';
 import { DEFAULT_SIZE, freeSpot } from './placement';
 import { showCanvasToast } from './toast';
 
 const MAX_THREADS_SEARCHED = 6;
+/** The API's card limits (schemas.py), so a long answer is clipped instead of refused. */
+const CANVAS_BODY_MAX = 20_000;
+const CANVAS_TITLE_MAX = 200;
 
 /** The text of an assistant message: the newest threads first, which is where the open panel is. */
 async function messageText(
@@ -55,12 +59,21 @@ export async function sendToCanvas(paperId: string | null, input: SendToCanvasIn
     const size = DEFAULT_SIZE[input.kind];
     const spot = freeSpot(view.nodes, size);
     if (input.kind === 'excerpt') {
+      // The same passage twice would be two identical cards: say so and point at the canvas.
+      if (findExcerptFor(view.nodes, input.anchor) !== null) {
+        showCanvasToast({
+          message: 'Already on your canvas',
+          href: `/paper/${encodeURIComponent(paperId)}/canvas`,
+          linkLabel: 'Open canvas',
+        });
+        return;
+      }
       await boardsApi.createNode(paperId, {
         node_id: newNodeId(),
         kind: 'excerpt',
         ...spot,
         ...size,
-        body: displayQuote([input.anchor]),
+        body: displayQuote([input.anchor]).slice(0, CANVAS_BODY_MAX),
         source_anchor: input.anchor,
       });
     } else {
@@ -73,8 +86,8 @@ export async function sendToCanvas(paperId: string | null, input: SendToCanvasIn
         kind: 'explanation',
         ...spot,
         ...size,
-        title: found.threadTitle,
-        body: found.text,
+        title: found.threadTitle.slice(0, CANVAS_TITLE_MAX),
+        body: found.text.slice(0, CANVAS_BODY_MAX),
         source_message_id: input.messageId,
       });
     }

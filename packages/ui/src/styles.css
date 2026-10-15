@@ -2848,3 +2848,30 @@ span.pt-paper .pt-paper__cite {
     animation: none !important;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+ * W2UI fix wave (additive block: owned by track W2UI, #141; nothing above this line is touched)
+ * ───────────────────────────────────────────────────────────────────────────────────────────── */
+
+/* The Undo offer after a canvas delete sits above the canvas controls (bottom-left) so it never
+   covers them. */
+.pt-toast--lift {
+  inset-block-end: calc(72px + env(safe-area-inset-bottom, 0px));
+}
+
+/* In-card controls keep a 40 px tap target ON SCREEN at phone widths. xyflow scales a card by the
+   canvas zoom, so a 40 px button at 60 % is 24 px; the canvas publishes its zoom as `--pt-cv-zoom`
+   and the controls grow by its inverse, between 100 % and 50 % (below 50 % a card is a thumbnail:
+   zoom in, or use Fit all, to work on it). Desktop cards are untouched. */
+@media (max-width: 639px) {
+  .pt-cv-node__head {
+    min-block-size: calc(48px / clamp(0.5, var(--pt-cv-zoom, 1), 1));
+  }
+  .pt-cv-node__head .pt-btn,
+  .pt-cv-group__title {
+    min-block-size: calc(40px / clamp(0.5, var(--pt-cv-zoom, 1), 1));
+  }
+  .pt-cv-node__head .pt-btn {
+    min-inline-size: calc(40px / clamp(0.5, var(--pt-cv-zoom, 1), 1));
+  }
+}

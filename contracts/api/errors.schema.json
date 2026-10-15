@@ -204,10 +204,12 @@
         },
         "w": {
           "exclusiveMinimum": 0,
+          "maximum": 100000.0,
           "type": "number"
         },
         "h": {
           "exclusiveMinimum": 0,
+          "maximum": 100000.0,
           "type": "number"
         },
         "z": {

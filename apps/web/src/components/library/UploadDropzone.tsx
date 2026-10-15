@@ -42,6 +42,17 @@ export interface UploadItem {
   readonly error?: string;
 }
 
+/** What a re-read of the library found after a cancelled upload. */
+export type CancelOutcome = 'not-added' | 'in-library' | 'unknown';
+
+export const CANCEL_COPY: Record<CancelOutcome, string> = {
+  'not-added': 'Nothing was added to your library.',
+  'in-library':
+    'It had already uploaded; it is in your library. Delete it if you did not mean to add it.',
+  unknown:
+    'Cancelled. We could not check your library just now, so reload to see whether it was added.',
+};
+
 export interface UploadContext {
   /** Call with 0..1 as bytes go out. */
   readonly onProgress: (fraction: number) => void;
@@ -51,6 +62,11 @@ export interface UploadContext {
 
 export interface UploadDropzoneProps {
   readonly onUpload: (file: File, context: UploadContext) => Promise<void>;
+  /**
+   * After a Cancel, asks the library whether the server nonetheless kept the file (the abort can
+   * land after the whole body arrived). Omit and the row says only that it was cancelled.
+   */
+  readonly onCancelled?: (file: File) => Promise<CancelOutcome>;
   /** Fired once per file that reached the server. The library refetches on this. */
   readonly onUploaded?: (file: File) => void;
   readonly multiple?: boolean;
@@ -67,9 +83,6 @@ interface Rejection {
 }
 
 const MEGABYTE = 1024 * 1024;
-
-/** How long a finished upload row stays before it clears itself. */
-const DONE_VISIBLE_MS = 4000;
 
 function formatBytes(bytes: number): string {
   if (bytes < MEGABYTE) return `${String(Math.max(1, Math.round(bytes / 1024)))} KB`;
@@ -92,6 +105,7 @@ const STATE_LABEL: Record<UploadItemState, string> = {
 export function UploadDropzone({
   onUpload,
   onUploaded,
+  onCancelled,
   multiple = true,
   maxBytes,
   compact = false,
@@ -151,14 +165,11 @@ export function UploadDropzone({
             },
             signal: controller.signal,
           });
-          patch(next.id, { state: 'done', progress: 1 });
-          // The paper's own card now says what is happening; the upload row has done its job.
+          // The server row is already in the library list (`onUpload` upserts it before it
+          // resolves), so the paper's own card now says what is happening and this transient
+          // row goes at once instead of sitting above the card it became (#141).
           const doneId = next.id;
-          const timer = setTimeout(() => {
-            timersRef.current.delete(timer);
-            if (mountedRef.current) setItems((prev) => prev.filter((item) => item.id !== doneId));
-          }, DONE_VISIBLE_MS);
-          timersRef.current.add(timer);
+          if (mountedRef.current) setItems((prev) => prev.filter((item) => item.id !== doneId));
           if (mountedRef.current) {
             setAnnouncement(`${next.file.name} uploaded. Queued for reading.`);
           }
@@ -167,8 +178,20 @@ export function UploadDropzone({
           const aborted = controller.signal.aborted;
           patch(next.id, {
             state: aborted ? 'cancelled' : 'failed',
-            error: aborted ? 'Nothing was added to your library.' : describeUploadError(error),
+            error: aborted ? 'Checking your library...' : describeUploadError(error),
           });
+          if (aborted) {
+            // The abort may have landed after the server had the whole body: re-read, then say so.
+            let outcome: CancelOutcome = 'not-added';
+            if (onCancelled !== undefined) {
+              try {
+                outcome = await onCancelled(next.file);
+              } catch {
+                outcome = 'unknown';
+              }
+            }
+            patch(next.id, { error: CANCEL_COPY[outcome] });
+          }
           if (mountedRef.current) {
             setAnnouncement(
               aborted ? `${next.file.name} cancelled.` : `${next.file.name} failed to upload.`,
@@ -181,7 +204,7 @@ export function UploadDropzone({
     } finally {
       drainingRef.current = false;
     }
-  }, [onUpload, onUploaded, patch]);
+  }, [onUpload, onUploaded, onCancelled, patch]);
 
   const enqueue = useCallback(
     (files: readonly File[]) => {
@@ -243,7 +266,7 @@ export function UploadDropzone({
     setItems((prev) =>
       prev.map((item) =>
         item.id === id
-          ? { ...item, state: 'cancelled', error: 'Nothing was added to your library.' }
+          ? { ...item, state: 'cancelled', error: CANCEL_COPY['not-added'] }
           : item,
       ),
     );
