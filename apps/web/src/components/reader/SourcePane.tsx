@@ -207,6 +207,17 @@ export function SourcePane(props: SourcePaneProps) {
     props.highlightUnavailableReason ??
     (targetCount > MAX_ANCHORS_PER_HIGHLIGHT ? tooLongSentence(targetCount) : undefined);
 
+  // Escape drops the selection and, with it, the toolbar (RFIX).
+  const hasSelection = selection !== null;
+  useEffect(() => {
+    if (!hasSelection) return undefined;
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape' && !event.defaultPrevented) clear();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [hasSelection, clear]);
+
   const onHighlight = useCallback(() => {
     const captured = capture('text');
     if (captured === null) return;
@@ -307,12 +318,30 @@ export function SourcePane(props: SourcePaneProps) {
   if (pdf.error !== null && pdf.error !== undefined) {
     return (
       <div className="pt-state" role="alert">
-        <h2 className="pt-state__title">This PDF could not be opened</h2>
-        <p className="pt-state__body">
-          The file reached the reader, but it could not be read as a PDF. Trying again usually fixes a
-          download that dropped part-way; if it keeps happening, the file itself may be damaged.
-        </p>
-        <button type="button" className="pt-btn pt-btn--outline" onClick={pdf.reload}>
+        {pdf.errorKind === 'engine' ? (
+          <>
+            <h2 className="pt-state__title">The reader could not start its PDF engine</h2>
+            <p className="pt-state__body">
+              Reload the page; if it keeps happening, the server is missing a file.
+            </p>
+          </>
+        ) : (
+          <>
+            <h2 className="pt-state__title">This PDF could not be opened</h2>
+            <p className="pt-state__body">
+              The file reached the reader, but it could not be read as a PDF. Trying again usually
+              fixes a download that dropped part-way; if it keeps happening, the file itself may be
+              damaged.
+            </p>
+          </>
+        )}
+        <button
+          type="button"
+          className="pt-btn pt-btn--outline"
+          // pdf.js remembers a worker that failed to start for the life of the page, so re-running
+          // the load in place would fail the same way; an engine failure needs a fresh page.
+          onClick={pdf.errorKind === 'engine' ? () => window.location.reload() : pdf.reload}
+        >
           Try again
         </button>
       </div>

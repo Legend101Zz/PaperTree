@@ -663,6 +663,10 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
       // both pointers reach `usePinchZoom`. The gesture surface overrides this to `none` for the
       // duration of a pinch.
       touchAction: 'pan-y',
+      // This list owns its scroll position (exact spacers, a reading position kept in paper terms).
+      // Chrome's scroll anchoring would second-guess it whenever the mounted pages change, and a
+      // browser that shifts `scrollTop` on its own is a reader whose page jumps (RFIX R2).
+      overflowAnchor: 'none',
       ...surfaceProps?.style,
     };
 
