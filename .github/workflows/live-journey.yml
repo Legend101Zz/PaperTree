@@ -1,0 +1,328 @@
+# The LIVE journey (#141, #118): the real api + worker + agent + web, the real MiniMax model, one
+# paper (YOLO), and the whole path a user takes: register -> upload -> ready -> explain ->
+# follow-up -> summary -> cancel. It costs real money and takes real minutes, so unlike ci.yml it
+# does not run on every push: it runs when a maintainer ADDS THE `run-live` LABEL to a PR (and on
+# every later push to that labelled PR), or by hand from the Actions tab.
+#
+# WHY IT IS ITS OWN WORKFLOW, AND SHAPED AS IT IS:
+#
+#   * `concurrency: {group: live-journey, cancel-in-progress: false}`: one live run at a time and
+#     never cancelled half way - a cancelled run has already spent tokens and leaves a half-written
+#     ai_runs ledger nobody can read. A second trigger QUEUES.
+#
+#   * THE KEY REACHES THE AGENT AND NOTHING ELSE (contracts.md section 7). The secret is named
+#     in exactly one place, the `env:` of the "Start the agent" step. Every other process is started
+#     with `env -i` plus an explicit list, so even a variable that leaked into the runner's
+#     environment cannot ride along. GitHub masks the value in logs; no step writes it to a file.
+#     The assertions that PROVE it run after the journey and do not take this comment on faith:
+#       - /proc/<pid>/environ of the api, the worker and the web server (and every descendant of
+#         them) holds neither PAPERTREE_MINIMAX_API_KEY nor MINIMAX_API_KEY, while the agent's DOES
+#         (a positive control, so the check is known able to see the variable; only a count is
+#         printed, never a value);
+#       - no log, transcript or output file contains the text `PAPERTREE_MINIMAX_API_KEY=` or
+#         anything shaped like an `sk-...` key. Service logs are uploaded ONLY if that scan passed.
+#
+#   * FORKS: `pull_request` from a fork gets no secrets and must not be able to label its way to
+#     one, so the job also requires the PR head to live in this repository. Only someone with
+#     triage rights can add the label; treat adding it as "spend money, run this branch's code
+#     with the key" and read the diff first.
+#
+#   * Pinned versions are the same as ci.yml's (node 22.23.0, python 3.12, uv 0.11.15): a live run
+#     must be reproducible against the CI run of the same commit.
+#
+#   * The ports are a fixed block on the runner (API 18150, agent 18250, web 18350), bound to
+#     127.0.0.1 only. `next dev` serves the web, as the e2e harness does.
+#
+#   * The journey is `e2e/live/journey-live.spec.ts` with its own config; `pnpm e2e` (the faux
+#     suite in ci.yml) ignores that folder.
+
+name: Live journey
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled, synchronize, opened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-journey
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22.23.0'
+  PYTHON_VERSION: '3.12'
+  UV_VERSION: '0.11.15'
+  TURBO_TELEMETRY_DISABLED: '1'
+  DO_NOT_TRACK: '1'
+  API_PORT: '18150'
+  AGENT_PORT: '18250'
+  WEB_PORT: '18350'
+
+jobs:
+  live:
+    name: Live journey (real model)
+    # Manual runs, or a same-repo PR carrying the label. `contains(<array>, 'x')` is the label test.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (contains(github.event.pull_request.labels.*.name, 'run-live') &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      LIVE_ROOT: ${{ github.workspace }}/.live
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Sync the Python workspace
+        run: uv sync --locked --all-packages
+
+      # Only the fresh set is needed (YOLO), but it is the same cache key ci.yml uses.
+      - name: Cache the benchmark PDFs (corpus + fresh set)
+        uses: actions/cache@v6
+        with:
+          path: |
+            research/benchmarks/corpus
+            research/benchmarks/fresh/pdfs
+          key: bench-pdfs-v1-${{ hashFiles('research/benchmarks/corpus.sha256', 'research/benchmarks/fresh/fresh.sha256') }}
+
+      - name: Fetch the fresh set (YOLO) and verify its checksums
+        run: |
+          ./research/benchmarks/fresh/fetch_fresh.sh
+          (cd research/benchmarks/fresh/pdfs && shasum -a 256 -c ../fresh.sha256)
+
+      - name: Install Chromium for Playwright
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Prepare the run directory and the agent/API shared secret
+        run: |
+          mkdir -p "$LIVE_ROOT/data" "$LIVE_ROOT/logs" "$LIVE_ROOT/out"
+          : > "$LIVE_ROOT/pids.txt"
+          # A per-run secret between the API and the agent. Not the model key.
+          secret="$(openssl rand -hex 24)"
+          echo "::add-mask::$secret"
+          echo "PAPERTREE_AGENT_SECRET=$secret" >> "$GITHUB_ENV"
+          node apps/web/scripts/copy-pdf-worker.mjs
+          node apps/web/scripts/copy-fixtures.mjs
+
+      # THE ONLY STEP THAT NAMES THE KEY. `env -i` below hands it to the agent process and to
+      # nothing else; this step's own shell is gone when the step ends.
+      - name: Start the agent (the only process that gets the model key)
+        env:
+          PAPERTREE_MINIMAX_API_KEY: ${{ secrets.PAPERTREE_MINIMAX_API_KEY }}
+        working-directory: services/agent
+        run: |
+          if [ -z "${PAPERTREE_MINIMAX_API_KEY:-}" ]; then
+            echo "::error title=No model key::the PAPERTREE_MINIMAX_API_KEY repository secret is empty or not available to this run (fork PRs get no secrets)."
+            exit 1
+          fi
+          setsid nohup env -i PATH="$PATH" HOME="$HOME" TMPDIR="$RUNNER_TEMP" \
+            PAPERTREE_AGENT_SECRET="$PAPERTREE_AGENT_SECRET" \
+            PAPERTREE_AGENT_PORT="$AGENT_PORT" \
+            PAPERTREE_API_INTERNAL_URL="http://127.0.0.1:$API_PORT" \
+            PAPERTREE_MINIMAX_API_KEY="$PAPERTREE_MINIMAX_API_KEY" \
+            node --experimental-strip-types --disable-warning=ExperimentalWarning src/server.ts \
+            > "$LIVE_ROOT/logs/agent.log" 2>&1 &
+          echo "agent $!" >> "$LIVE_ROOT/pids.txt"
+          for _ in $(seq 1 60); do
+            if body="$(curl -fsS "http://127.0.0.1:$AGENT_PORT/healthz" 2>/dev/null)"; then
+              echo "agent healthz: $body"
+              case "$body" in
+                *'"faux":false'*) exit 0 ;;
+                *) echo "::error title=Agent is not live::the agent reports faux mode or no faux field: $body"; exit 1 ;;
+              esac
+            fi
+            sleep 1
+          done
+          echo "::error title=Agent did not start::see the agent log artifact"; tail -n 40 "$LIVE_ROOT/logs/agent.log" | sed -E 's/(PAPERTREE_MINIMAX_API_KEY=)[^ ]*/\1<redacted>/'; exit 1
+
+      - name: Start the API
+        run: |
+          setsid nohup env -i PATH="$PATH" HOME="$HOME" TMPDIR="$RUNNER_TEMP" \
+            PYTHONUNBUFFERED=1 \
+            PAPERTREE_DATA_ROOT="$LIVE_ROOT/data" \
+            PAPERTREE_HOST=127.0.0.1 PAPERTREE_PORT="$API_PORT" \
+            PAPERTREE_AGENT_URL="http://127.0.0.1:$AGENT_PORT" \
+            PAPERTREE_AGENT_SECRET="$PAPERTREE_AGENT_SECRET" \
+            .venv/bin/python -m papertree_api \
+            > "$LIVE_ROOT/logs/api.log" 2>&1 &
+          echo "api $!" >> "$LIVE_ROOT/pids.txt"
+          for _ in $(seq 1 60); do
+            if body="$(curl -fsS "http://127.0.0.1:$API_PORT/healthz" 2>/dev/null)"; then
+              echo "api healthz: $body"
+              case "$body" in
+                *'"ok":true'*'"reachable":true'*'"key_present":true'*) exit 0 ;;
+                *) echo "::error title=API cannot see a live agent::$body"; exit 1 ;;
+              esac
+            fi
+            sleep 1
+          done
+          echo "::error title=API did not start::"; tail -n 40 "$LIVE_ROOT/logs/api.log"; exit 1
+
+      - name: Start the worker
+        run: |
+          setsid nohup env -i PATH="$PATH" HOME="$HOME" TMPDIR="$RUNNER_TEMP" \
+            PYTHONUNBUFFERED=1 \
+            PAPERTREE_DATA_ROOT="$LIVE_ROOT/data" \
+            .venv/bin/python -m papertree_api.worker \
+            > "$LIVE_ROOT/logs/worker.log" 2>&1 &
+          echo "worker $!" >> "$LIVE_ROOT/pids.txt"
+          sleep 3
+          pid="$(tail -n 1 "$LIVE_ROOT/pids.txt" | cut -d' ' -f2)"
+          kill -0 "$pid" || { echo "::error title=Worker exited at startup::"; cat "$LIVE_ROOT/logs/worker.log"; exit 1; }
+
+      - name: Start the web
+        working-directory: apps/web
+        run: |
+          setsid nohup env -i PATH="$PATH" HOME="$HOME" TMPDIR="$RUNNER_TEMP" \
+            NEXT_PUBLIC_PAPERTREE_API_URL="http://127.0.0.1:$API_PORT" \
+            NEXT_PUBLIC_PAPERTREE_FIXTURES=off \
+            NEXT_TELEMETRY_DISABLED=1 \
+            node_modules/.bin/next dev --port "$WEB_PORT" --hostname 127.0.0.1 \
+            > "$LIVE_ROOT/logs/web.log" 2>&1 &
+          echo "web $!" >> "$LIVE_ROOT/pids.txt"
+          for _ in $(seq 1 240); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$WEB_PORT/login")" = "200" ]; then
+              echo "web ready"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error title=Web did not start::"; tail -n 40 "$LIVE_ROOT/logs/web.log"; exit 1
+
+      # No secret in this step's env: the journey talks to the stack over HTTP and the browser.
+      - name: Run the live journey
+        env:
+          LIVE_API_URL: http://127.0.0.1:${{ env.API_PORT }}
+          LIVE_WEB_URL: http://127.0.0.1:${{ env.WEB_PORT }}
+          LIVE_DATA_ROOT: ${{ github.workspace }}/.live/data
+          LIVE_YOLO_PDF: ${{ github.workspace }}/research/benchmarks/fresh/pdfs/yolo-1506.02640.pdf
+          LIVE_OUT: ${{ github.workspace }}/.live/out
+        run: |
+          set -o pipefail
+          pnpm exec playwright test -c e2e/live/playwright.live.config.ts 2>&1 | tee "$LIVE_ROOT/out/journey.log"
+
+      # From here on `if: always()`: a failed journey is exactly when the evidence matters.
+      - name: Dump the ai_runs ledger (sqlite3 -> JSON)
+        if: always()
+        run: |
+          db="$LIVE_ROOT/data/papertree.sqlite"
+          if [ -f "$db" ]; then
+            # Explicit columns: never the run-token hash or the per-run datamark.
+            sqlite3 -readonly -json "$db" "SELECT run_id, paper_id, generation, kind, thread_id, message_id, status, code_path, provider, model, agent_sdk, prompt_version, stop_reason, error_code, retries, tool_calls, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens, cost_usd_est, first_text_ms, latency_ms, started_at, finished_at FROM ai_runs ORDER BY started_at" > "$LIVE_ROOT/out/ai_runs.json"
+            cat "$LIVE_ROOT/out/ai_runs.json" | head -c 6000
+          else
+            echo "no database at $db"
+          fi
+
+      - name: Assert the key lives in the agent process only
+        id: keyscope
+        if: always()
+        run: |
+          set -u
+          fail=0
+          descendants() {  # $1 = pid; prints it and every descendant (processes this job started)
+            echo "$1"
+            for child in $(ps -o pid= --ppid "$1" 2>/dev/null); do descendants "$child"; done
+          }
+          holds() {  # prints how many of the process's environment entries name a model key
+            tr '\0' '\n' < "/proc/$1/environ" 2>/dev/null | /usr/bin/grep -a -c -E '^(PAPERTREE_)?MINIMAX_API_KEY=' || true
+          }
+          while read -r name pid; do
+            [ -d "/proc/$pid" ] || { echo "::error title=$name is not running::pid $pid is gone, so its environment cannot be read"; fail=1; continue; }
+            for p in $(descendants "$pid"); do
+              n="$(holds "$p")"
+              if [ "$name" = "agent" ] && [ "$p" = "$pid" ]; then
+                echo "agent pid $p: model-key entries in its environment: $n (positive control, must be 1)"
+                [ "$n" = "1" ] || { echo "::error title=Positive control failed::the agent's environment should hold the key once"; fail=1; }
+              else
+                echo "$name pid $p: model-key entries in its environment: $n"
+                [ "$n" = "0" ] || { echo "::error title=Key leaked into $name::PAPERTREE_MINIMAX_API_KEY / MINIMAX_API_KEY is in the environment of $name (pid $p)"; fail=1; }
+              fi
+            done
+          done < "$LIVE_ROOT/pids.txt"
+          exit $fail
+
+      - name: Assert no log or output holds the key text
+        id: logscan
+        if: always()
+        run: |
+          # Names and shapes only; the value itself is never read here. A word boundary before
+          # `sk-` keeps hyphenated paper prose ("multi-task-learning-...") from matching.
+          hits="$(/usr/bin/grep -a -r -n -o -E 'PAPERTREE_MINIMAX_API_KEY=|MINIMAX_API_KEY=|(^|[^A-Za-z0-9_])sk-[A-Za-z0-9_-]{24,}' "$LIVE_ROOT/logs" "$LIVE_ROOT/out" | cut -c1-120 | sed -E 's/(sk-[A-Za-z0-9]{3})[A-Za-z0-9_-]*/\1<redacted>/' || true)"
+          if [ -n "$hits" ]; then
+            echo "$hits"
+            echo "::error title=Key text found in a log or output::see the redacted lines above; service logs will NOT be uploaded"
+            exit 1
+          fi
+          echo "no 'PAPERTREE_MINIMAX_API_KEY=' and no sk-... text in $(find "$LIVE_ROOT/logs" "$LIVE_ROOT/out" -type f | wc -l) files"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Live journey"
+            echo
+            if [ -f "$LIVE_ROOT/out/live-journey-report.json" ]; then
+              echo '```json'; cat "$LIVE_ROOT/out/live-journey-report.json"; echo '```'
+            else
+              echo "The journey did not finish; see journey.log in the artifacts."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Stop only what this job started and recorded. Descendants of those pids are ours too.
+      - name: Stop the stack
+        if: always()
+        run: |
+          descendants() { echo "$1"; for c in $(ps -o pid= --ppid "$1" 2>/dev/null); do descendants "$c"; done; }
+          [ -f "$LIVE_ROOT/pids.txt" ] || exit 0
+          while read -r name pid; do
+            for p in $(descendants "$pid" | tac); do kill "$p" 2>/dev/null || true; done
+            echo "stopped $name ($pid)"
+          done < "$LIVE_ROOT/pids.txt"
+
+      - name: Upload screenshots, SSE transcripts and the ledger
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: live-journey-evidence
+          path: |
+            ${{ github.workspace }}/.live/out/shots
+            ${{ github.workspace }}/.live/out/sse
+            ${{ github.workspace }}/.live/out/ai_runs.json
+            ${{ github.workspace }}/.live/out/ai_runs.spec.json
+            ${{ github.workspace }}/.live/out/live-journey-report.json
+            ${{ github.workspace }}/.live/out/journey.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      # Only when the scan above found no key text.
+      - name: Upload the service logs
+        if: always() && steps.logscan.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: live-journey-service-logs
+          path: ${{ github.workspace }}/.live/logs
+          if-no-files-found: warn
+          retention-days: 14
