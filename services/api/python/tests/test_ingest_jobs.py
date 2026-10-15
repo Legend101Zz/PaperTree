@@ -526,3 +526,25 @@ def test_promote_is_a_durable_step(tmp_path: Path) -> None:
         assert (
             h.client.get(f"/papers/{body['paper_id']}/ir", headers=auth(token)).status_code == 200
         )
+
+
+def test_get_job_exposes_the_generation_and_the_parser_version(tmp_path: Path) -> None:
+    """contracts.md §8 (S5F): `GET /jobs/{id}` says which generation the job parses and, once it
+    is stored, the parser version that produced it; `GET /papers/{id}` says both for the paper."""
+    with harness(tmp_path) as h:
+        token = register(h.client, "reader@example.com")
+        uploaded = upload(h.client, token, synthetic_pdf()).json()
+        paper_id, job_id = uploaded["paper_id"], uploaded["job_id"]
+        queued = h.client.get(f"/jobs/{job_id}", headers=auth(token)).json()
+        assert (queued["generation"], queued["parser_version"]) == (1, None), "not stored yet"
+        drain(h.settings)
+        done = h.client.get(f"/jobs/{job_id}", headers=auth(token)).json()
+        paper = h.client.get(f"/papers/{paper_id}", headers=auth(token)).json()
+        assert done["state"] == "succeeded" and done["generation"] == 1
+        assert isinstance(done["parser_version"], str) and done["parser_version"]
+        assert (paper["generation"], paper["parser_version"]) == (1, done["parser_version"])
+        # A re-parse's job names ITS generation (2) while the paper still reads generation 1.
+        again = h.client.post(f"/papers/{paper_id}/reparse", headers=auth(token), json={}).json()
+        job = h.client.get(f"/jobs/{again['job_id']}", headers=auth(token)).json()
+        assert (job["generation"], job["parser_version"]) == (2, None)
+        assert h.client.get(f"/papers/{paper_id}", headers=auth(token)).json()["generation"] == 1

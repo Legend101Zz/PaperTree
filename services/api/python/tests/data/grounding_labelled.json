@@ -1,0 +1,1358 @@
+[
+  {
+    "set": "first",
+    "id": "orch0.0",
+    "label": "S",
+    "claim": "The passage states the paper's core contribution: the authors cast object detection as a single regression problem that maps directly from image pixels to bounding box coordinates and class probabilities, and they name their system \"YOLO\" (you only look once) because one pass over an image suffices to predict what is in it and where .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "orch0.2",
+    "label": "S",
+    "claim": "Existing detection systems, the paper explains, repurpose classifiers and scan them across the image at many locations and scales, with DPM using a sliding-window approach .",
+    "blocks": {
+      "b6": "Current detection systems repurpose classiﬁers to per-\nform detection. To detect an object, these systems take a\nclassiﬁer for that object and evaluate it at various locations\nand scales in a test image. Systems like deformable parts\nmodels (DPM) use a sliding window approach where the\nclassiﬁer is run at evenly spaced locations over the entire\nimage [10]."
+    }
+  },
+  {
+    "set": "first",
+    "id": "orch0.3",
+    "label": "S",
+    "claim": "More recent pipelines like R-CNN first generate candidate bounding boxes, then run a classifier on each, then do post-processing to refine boxes, drop duplicates, and rescore based on context; the paper describes these as slow multi-stage pipelines where each component is trained separately .",
+    "blocks": {
+      "b5": "More recent approaches like R-CNN use region proposal",
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    }
+  },
+  {
+    "set": "first",
+    "id": "orch0.4",
+    "label": "I",
+    "claim": "Against that backdrop, the \"single regression\" framing in is the authors' way of saying: instead of breaking detection into propose-then-classify-then-refine, predict everything in one shot.",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "orch0.6",
+    "label": "S",
+    "claim": "The Introduction opens by noting that humans recognize objects, locations, and interactions in a glance, and that fast, accurate detection would matter for things like driverless cars and assistive devices .",
+    "blocks": {
+      "b8": "Humans glance at an image and instantly know what ob-\njects are in the image, where they are, and how they inter-\nact. The human visual system is fast and accurate, allow-\ning us to perform complex tasks like driving with little con-\nscious thought. Fast, accurate algorithms for object detec-\ntion would allow computers to drive cars without special-\nized sensors, enable assistive devices to convey real-time\nscene information to human users, and unlock the potential\nfor general purpose, responsive robotic systems."
+    }
+  },
+  {
+    "set": "first",
+    "id": "orch0.7",
+    "label": "I",
+    "claim": "The \"you only look once\" line and the claim that \"YOLO is refreshingly simple\" are written for that motivation: a human-style, single-glance detector is fast because it avoids the multi-stage overhead the paper just described in .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1.",
+      "b5": "More recent approaches like R-CNN use region proposal",
+      "b6": "Current detection systems repurpose classiﬁers to per-\nform detection. To detect an object, these systems take a\nclassiﬁer for that object and evaluate it at various locations\nand scales in a test image. Systems like deformable parts\nmodels (DPM) use a sliding window approach where the\nclassiﬁer is run at evenly spaced locations over the entire\nimage [10].",
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    }
+  },
+  {
+    "set": "first",
+    "id": "orch0.8",
+    "label": "S",
+    "claim": "The same paragraph also begins the claim, continued in , that YOLO \"reasons globally about the image\" rather than over local regions, which is part of why the single-pass formulation is presented as a different kind of detector, not just a faster one.",
+    "blocks": {
+      "b3": "Second, YOLO reasons globally about the image when"
+    }
+  },
+  {
+    "set": "first",
+    "id": "orch0.9",
+    "label": "I",
+    "claim": "In short, is the one-sentence statement of what YOLO is, and it is positioned as a deliberate departure from the classifier-repurposing and region-proposal pipelines the Introduction spends the surrounding paragraphs describing.",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "orch1.2",
+    "label": "S",
+    "claim": "What the prior pipelines actually do, according to the Introduction: a sliding-window detector like DPM runs the classifier at evenly spaced locations over the whole image , and a region-proposal pipeline like R-CNN first generates potential bounding boxes, then runs a classifier on each proposed box, then does post-processing to refine the boxes, eliminate duplicate detections, and rescore them based on other objects in the scene .",
+    "blocks": {
+      "b6": "Current detection systems repurpose classiﬁers to per-\nform detection. To detect an object, these systems take a\nclassiﬁer for that object and evaluate it at various locations\nand scales in a test image. Systems like deformable parts\nmodels (DPM) use a sliding window approach where the\nclassiﬁer is run at evenly spaced locations over the entire\nimage [10].",
+      "b5": "More recent approaches like R-CNN use region proposal",
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    }
+  },
+  {
+    "set": "first",
+    "id": "orch1.3",
+    "label": "S",
+    "claim": "The paper calls these \"complex pipelines\" that are \"slow and hard to optimize because each individual component must be trained separately\" .",
+    "blocks": {
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    }
+  },
+  {
+    "set": "first",
+    "id": "orch1.5",
+    "label": "I",
+    "claim": "YOLO's framing in is meant to cut that accumulation out.",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "orch1.6",
+    "label": "S",
+    "claim": "By treating detection as \"a single regression problem, straight from image pixels to bounding box coordinates and class probabilities\" , the system produces all of its predictions in one pass through the network rather than looping over regions, proposals, and post-processing steps.",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "orch1.7",
+    "label": "I",
+    "claim": "The \"you only look once\" name and the \"refreshingly simple\" description are the paper's way of saying that, because the architecture is a single mapping rather than a chain of stages, it avoids the per-stage overhead that the surrounding paragraphs identify as the source of slowness in prior work .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1.",
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    }
+  },
+  {
+    "set": "first",
+    "id": "orch1.8",
+    "label": "S",
+    "claim": "The motivation paragraph reinforces the framing by tying speed to applications that need it: the paper notes that \"fast, accurate algorithms for object detection would allow computers to drive cars without specialized sensors, enable assistive devices to convey real-time scene information to human users, and unlock the potential for general purpose, responsive robotic systems\" .",
+    "blocks": {
+      "b8": "Humans glance at an image and instantly know what ob-\njects are in the image, where they are, and how they inter-\nact. The human visual system is fast and accurate, allow-\ning us to perform complex tasks like driving with little con-\nscious thought. Fast, accurate algorithms for object detec-\ntion would allow computers to drive cars without special-\nized sensors, enable assistive devices to convey real-time\nscene information to human users, and unlock the potential\nfor general purpose, responsive robotic systems."
+    }
+  },
+  {
+    "set": "first",
+    "id": "orch1.9",
+    "label": "I",
+    "claim": "In other words, the speed claim is not just a benchmark; it is what makes the use cases in tractable.",
+    "blocks": {
+      "b8": "Humans glance at an image and instantly know what ob-\njects are in the image, where they are, and how they inter-\nact. The human visual system is fast and accurate, allow-\ning us to perform complex tasks like driving with little con-\nscious thought. Fast, accurate algorithms for object detec-\ntion would allow computers to drive cars without special-\nized sensors, enable assistive devices to convey real-time\nscene information to human users, and unlock the potential\nfor general purpose, responsive robotic systems."
+    }
+  },
+  {
+    "set": "first",
+    "id": "orch1.10",
+    "label": "S",
+    "claim": "The paper also previews that YOLO \"reasons globally about the image when making predictions\" , which is a separate point from raw speed but is part of the same \"one unified pass\" argument: a single forward pass is what enables both the latency and the global reasoning the paper is selling.",
+    "blocks": {
+      "b3": "Second, YOLO reasons globally about the image when",
+      "b7": "making predictions."
+    }
+  },
+  {
+    "set": "first",
+    "id": "orch1.11",
+    "label": "I",
+    "claim": "This is my reading of how the passages connect, not an additional claim by the paper: the speed benefit, as argued here, is the natural consequence of collapsing the propose/classify/refine pipeline of and the many-window scanning of into the single regression of .",
+    "blocks": {
+      "b5": "More recent approaches like R-CNN use region proposal",
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately.",
+      "b6": "Current detection systems repurpose classiﬁers to per-\nform detection. To detect an object, these systems take a\nclassiﬁer for that object and evaluate it at various locations\nand scales in a test image. Systems like deformable parts\nmodels (DPM) use a sliding window approach where the\nclassiﬁer is run at evenly spaced locations over the entire\nimage [10].",
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "orch2.2",
+    "label": "S",
+    "claim": "Strong spatial constraints on each grid cell.** Because each grid cell only predicts two boxes and can only have one class, the model is limited in how many nearby objects it can predict, and it struggles with small objects that appear in groups, such as flocks of birds .",
+    "blocks": {
+      "b19": "YOLO imposes strong spatial constraints on bounding\nbox predictions since each grid cell only predicts two boxes\nand can only have one class. This spatial constraint lim-\nits the number of nearby objects that our model can pre-\ndict. Our model struggles with small objects that appear in\ngroups, such as ﬂocks of birds."
+    }
+  },
+  {
+    "set": "first",
+    "id": "orch2.5",
+    "label": "S",
+    "claim": "It also uses relatively coarse features for bounding-box prediction, because the network downsamples the input image multiple times .",
+    "blocks": {
+      "b20": "Since our model learns to predict bounding boxes from\ndata, it struggles to generalize to objects in new or unusual\naspect ratios or conﬁgurations. Our model also uses rela-\ntively coarse features for predicting bounding boxes since\nour architecture has multiple downsampling layers from the\ninput image."
+    }
+  },
+  {
+    "set": "first",
+    "id": "orch2.8",
+    "label": "S",
+    "claim": "The authors identify incorrect localizations as YOLO's main source of error .",
+    "blocks": {
+      "b21": "Finally, while we train on a loss function that approxi-\nmates detection performance, our loss function treats errors\nthe same in small bounding boxes versus large bounding\nboxes. A small error in a large box is generally benign but a\nsmall error in a small box has a much greater effect on IOU.\nOur main source of error is incorrect localizations."
+    }
+  },
+  {
+    "set": "first",
+    "id": "orch2.10",
+    "label": "I",
+    "claim": "The Conclusion section does not add further limitations.",
+    "blocks": {
+      "b22": "We introduce YOLO, a uniﬁed model for object detec-\ntion. Our model is simple to construct and can be trained",
+      "b23": "directly on full images. Unlike classiﬁer-based approaches,\nYOLO is trained on a loss function that directly corresponds\nto detection performance and the entire model is trained\njointly.",
+      "b24": "Fast YOLO is the fastest general-purpose object detec-\ntor in the literature and YOLO pushes the state-of-the-art in\nreal-time object detection. YOLO also generalizes well to\nnew domains making it ideal for applications that rely on\nfast, robust object detection.\nAcknowledgements: This work is partially supported by\nONR N00014-13-1-0720, NSF IIS-1338054, and The Allen\nDistinguished Investigator Award."
+    }
+  },
+  {
+    "set": "first",
+    "id": "orch3.0",
+    "label": "S",
+    "claim": "The passage is the opening thesis of the paper: it announces that the authors cast object detection as one single regression problem that goes directly from image pixels to bounding‑box coordinates and class probabilities, and they name the resulting system YOLO because it needs only a single \"look\" at the image to predict both what is in the image and where .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base0.0",
+    "label": "S",
+    "claim": "The passage announces the paper's central proposal: the authors reframe object detection as a single regression problem that maps directly from image pixels to bounding box coordinates and class probabilities, and they name the resulting system YOLO (\"You Only Look Once\") .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base0.3",
+    "label": "I",
+    "claim": "Introduction\" heading , so it functions as the thesis sentence that the rest of the introduction motivates and supports.",
+    "blocks": {
+      "b2": "1. Introduction"
+    }
+  },
+  {
+    "set": "first",
+    "id": "base0.5",
+    "label": "S",
+    "claim": "Other detection systems, the paper explains, repurpose classifiers and slide them over the image at various locations and scales — Deformable Parts Models (DPM) being one example .",
+    "blocks": {
+      "b6": "Current detection systems repurpose classiﬁers to per-\nform detection. To detect an object, these systems take a\nclassiﬁer for that object and evaluate it at various locations\nand scales in a test image. Systems like deformable parts\nmodels (DPM) use a sliding window approach where the\nclassiﬁer is run at evenly spaced locations over the entire\nimage [10]."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base0.6",
+    "label": "S",
+    "claim": "More recent systems like R-CNN use multi-stage pipelines: first generate potential bounding boxes, then run a classifier on those boxes, then apply post-processing to refine boxes, remove duplicates, and rescore based on context .",
+    "blocks": {
+      "b5": "More recent approaches like R-CNN use region proposal",
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base0.7",
+    "label": "S",
+    "claim": "The paper characterizes those pipelines as slow and hard to optimize because each component is trained separately .",
+    "blocks": {
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base0.8",
+    "label": "I",
+    "claim": "Why the claim in matters.",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base0.10",
+    "label": "I",
+    "claim": "The phrase \"refreshingly simple\" is doing rhetorical work: it signals that the contribution is not just accuracy but architectural simplicity, which the paper ties to real-time use (the word \"real-time\" appears in the title, and the introduction motivates fast detection by analogy with the human visual system, which \"is fast and accurate\" and enables tasks like driving ).",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1.",
+      "b8": "Humans glance at an image and instantly know what ob-\njects are in the image, where they are, and how they inter-\nact. The human visual system is fast and accurate, allow-\ning us to perform complex tasks like driving with little con-\nscious thought. Fast, accurate algorithms for object detec-\ntion would allow computers to drive cars without special-\nized sensors, enable assistive devices to convey real-time\nscene information to human users, and unlock the potential\nfor general purpose, responsive robotic systems."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base0.11",
+    "label": "S",
+    "claim": "The introduction also goes on to argue that this unified formulation lets YOLO \"reason globally about the image\" when making predictions, rather than reasoning about regions in isolation the way classifier-based pipelines do.",
+    "blocks": {
+      "b3": "Second, YOLO reasons globally about the image when"
+    }
+  },
+  {
+    "set": "first",
+    "id": "base0.13",
+    "label": "S",
+    "claim": "This is my reading of how functions in the paper's argument; the paper itself states only that object detection is reframed as one regression problem and that YOLO is simple , and that prior multi-stage pipelines are slow and hard to optimize .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1.",
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base1.0",
+    "label": "S",
+    "claim": "The paper's opening sentence declares that the authors recast object detection as a single regression problem that maps image pixels directly to bounding-box coordinates and class probabilities, and it names the resulting system YOLO (\"You Only Look Once\"), with a promise that it is \"refreshingly simple,\" illustrated in Figure 1 .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base1.2",
+    "label": "S",
+    "claim": "Before YOLO, detection systems were built as pipelines: a separate stage would propose regions where objects might be, a classifier would label each region, and a post-processing step would refine the boxes, remove duplicates, and rescore them based on context .",
+    "blocks": {
+      "b5": "More recent approaches like R-CNN use region proposal",
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base1.3",
+    "label": "S",
+    "claim": "Older systems like DPM took this even further with a sliding-window classifier run at many locations and scales across the image .",
+    "blocks": {
+      "b6": "Current detection systems repurpose classiﬁers to per-\nform detection. To detect an object, these systems take a\nclassiﬁer for that object and evaluate it at various locations\nand scales in a test image. Systems like deformable parts\nmodels (DPM) use a sliding window approach where the\nclassiﬁer is run at evenly spaced locations over the entire\nimage [10]."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base1.4",
+    "label": "S",
+    "claim": "By contrast, YOLO treats detection as one regression: take the raw pixels in, predict all the boxes and their classes out, in a single forward pass .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base1.6",
+    "label": "I",
+    "claim": "The \"only look once\" name is a deliberate pun on that single-pass property .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base1.8",
+    "label": "I",
+    "claim": "The authors are positioning YOLO against the prior two-stage paradigm by collapsing proposal, classification, and refinement into one model .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1.",
+      "b5": "More recent approaches like R-CNN use region proposal",
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base1.9",
+    "label": "S",
+    "claim": "The framing also sets up a second key claim made just after this passage: because the whole image is processed at once, YOLO \"reasons globally\" when making predictions, rather than making decisions about each proposed region in isolation .",
+    "blocks": {
+      "b3": "Second, YOLO reasons globally about the image when"
+    }
+  },
+  {
+    "set": "first",
+    "id": "base1.10",
+    "label": "N",
+    "claim": "The rest of the introduction and the rest of the paper develop and evaluate this single-pass, globally-aware design—most importantly whether it remains accurate while being much faster and simpler to train end-to-end than the multi-component pipelines it replaces .",
+    "blocks": {
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base1.12",
+    "label": "S",
+    "claim": "The passage itself does not give accuracy or speed numbers; it only stakes out the reframing, names the method, and defers architectural details to Figure 1 .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base2.0",
+    "label": "S",
+    "claim": "The opening paragraph of the Introduction states that the authors \"reframe object detection as a single regression problem, straight from image pixels to bounding box coordinates and class probabilities,\" and names this system YOLO because it predicts in a single pass \"what objects are present and where they are\" .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base2.1",
+    "label": "S",
+    "claim": "The phrase \"YOLO is refreshingly simple\" is the paper's own framing for what follows .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base2.4",
+    "label": "S",
+    "claim": "Existing systems \"repurpose classifiers to perform detection,\" running a classifier at many locations and scales across the image (the approach used by deformable parts models with evenly spaced locations over the entire image) .",
+    "blocks": {
+      "b6": "Current detection systems repurpose classiﬁers to per-\nform detection. To detect an object, these systems take a\nclassiﬁer for that object and evaluate it at various locations\nand scales in a test image. Systems like deformable parts\nmodels (DPM) use a sliding window approach where the\nclassiﬁer is run at evenly spaced locations over the entire\nimage [10]."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base2.5",
+    "label": "S",
+    "claim": "Newer pipelines, exemplified by R-CNN, instead \"first generate potential bounding boxes in an image and then run a classifier on these proposed boxes,\" followed by post-processing to refine boxes, remove duplicates, and rescore based on context .",
+    "blocks": {
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base2.6",
+    "label": "S",
+    "claim": "These pipelines \"are slow and hard to optimize because each individual component must be trained separately\" .",
+    "blocks": {
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base2.7",
+    "label": "S",
+    "claim": "The Introduction motivates faster detection by analogy to human vision, which is \"fast and accurate,\" and argues that fast algorithms would enable applications such as autonomous driving without specialized sensors, assistive devices for scene understanding, and responsive robotics .",
+    "blocks": {
+      "b8": "Humans glance at an image and instantly know what ob-\njects are in the image, where they are, and how they inter-\nact. The human visual system is fast and accurate, allow-\ning us to perform complex tasks like driving with little con-\nscious thought. Fast, accurate algorithms for object detec-\ntion would allow computers to drive cars without special-\nized sensors, enable assistive devices to convey real-time\nscene information to human users, and unlock the potential\nfor general purpose, responsive robotic systems."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base2.9",
+    "label": "S",
+    "claim": "Instead of a pipeline of separate components, YOLO collapses detection into one model that directly maps pixels to the two outputs detection needs: where each object is (bounding box coordinates) and what it is (class probabilities) .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base2.10",
+    "label": "S",
+    "claim": "The Introduction then highlights two consequences: because YOLO reasons about the whole image at once, \"YOLO reasons globally about the image when making predictions\" , and the unified single-model formulation is what the authors mean by \"refreshingly simple\" compared with the complex, multi-component pipelines it replaces .",
+    "blocks": {
+      "b3": "Second, YOLO reasons globally about the image when",
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1.",
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base3.0",
+    "label": "S",
+    "claim": "The paper states that the authors reframe object detection as a single regression problem, mapping directly from image pixels to bounding box coordinates and class probabilities, and names the resulting system YOLO (\"you only look once\") because one pass over the image is used to predict both what objects are present and where they are located .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base3.3",
+    "label": "S",
+    "claim": "Existing detection systems repurpose classifiers and run them at many locations and scales (e.g., DPM's sliding-window approach) , and more recent pipelines like R-CNN first propose candidate boxes, then classify them, then refine the boxes and rescores with post-processing .",
+    "blocks": {
+      "b6": "Current detection systems repurpose classiﬁers to per-\nform detection. To detect an object, these systems take a\nclassiﬁer for that object and evaluate it at various locations\nand scales in a test image. Systems like deformable parts\nmodels (DPM) use a sliding window approach where the\nclassiﬁer is run at evenly spaced locations over the entire\nimage [10].",
+      "b5": "More recent approaches like R-CNN use region proposal",
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base3.4",
+    "label": "S",
+    "claim": "YOLO replaces the multi-stage pipeline with a single regression .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base3.5",
+    "label": "S",
+    "claim": "The framing also sets up two consequences the introduction goes on to claim: because YOLO reasons about the whole image in one forward pass, it can make predictions that reflect global context (the next paragraph begins \"YOLO reasons globally about the image when making predictions\") , and because the system is a single unified model rather than a chain of separately trained components, it is simple to design and optimize — that is the meaning of \"refreshingly simple,\" illustrated by Figure 1 .",
+    "blocks": {
+      "b3": "Second, YOLO reasons globally about the image when",
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1.",
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base3.6",
+    "label": "S",
+    "claim": "(The paper does not, in this passage, spell out the architecture or the loss; it only announces the reframing and points the reader to Figure 1 for the full picture .)",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base4.0",
+    "label": "S",
+    "claim": "The passage is the thesis statement of the paper, presenting the YOLO approach in one sentence: object detection is cast as a single regression problem that maps straight from image pixels to bounding-box coordinates and class probabilities .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base4.1",
+    "label": "S",
+    "claim": "The name \"You Only Look Once\" captures the idea that one pass over the image yields both what objects are present and where they are located .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base4.3",
+    "label": "S",
+    "claim": "Existing detectors repurpose them as classifiers run at many locations and scales, as in DPM's sliding-window approach , or use multi-stage methods like R-CNN that first propose regions, then classify, then refine boxes .",
+    "blocks": {
+      "b6": "Current detection systems repurpose classiﬁers to per-\nform detection. To detect an object, these systems take a\nclassiﬁer for that object and evaluate it at various locations\nand scales in a test image. Systems like deformable parts\nmodels (DPM) use a sliding window approach where the\nclassiﬁer is run at evenly spaced locations over the entire\nimage [10].",
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base4.4",
+    "label": "S",
+    "claim": "By collapsing those stages into a single regression, YOLO trades that pipeline for a unified model whose architecture the passage directs the reader to in Figure 1 .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base4.5",
+    "label": "I",
+    "claim": "The paper does not summarize Figure 1 in these passages, so I cannot say what that figure shows beyond what indicates — that the system is \"refreshingly simple\" enough to fit in one diagram.",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base4.7",
+    "label": "N",
+    "claim": "In short, the selected sentence is where the paper announces its main contribution — detection-as-one-regression — which the surrounding passage around it frames as a deliberate break from the multi-stage detectors that came before it .",
+    "blocks": {
+      "b6": "Current detection systems repurpose classiﬁers to per-\nform detection. To detect an object, these systems take a\nclassiﬁer for that object and evaluate it at various locations\nand scales in a test image. Systems like deformable parts\nmodels (DPM) use a sliding window approach where the\nclassiﬁer is run at evenly spaced locations over the entire\nimage [10].",
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base5.0",
+    "label": "S",
+    "claim": "The passage introduces the core contribution of the paper: the authors cast object detection as one unified regression problem that maps directly from raw image pixels to two outputs at once — the coordinates of bounding boxes (where objects are) and class probabilities (what objects are) .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base5.1",
+    "label": "S",
+    "claim": "The name \"YOLO\" (\"You Only Look Once\") is a direct reference to this single-pass design .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base5.3",
+    "label": "S",
+    "claim": "Earlier systems like DPM used a sliding-window approach, sweeping a classifier across evenly spaced locations and scales of the image .",
+    "blocks": {
+      "b6": "Current detection systems repurpose classiﬁers to per-\nform detection. To detect an object, these systems take a\nclassiﬁer for that object and evaluate it at various locations\nand scales in a test image. Systems like deformable parts\nmodels (DPM) use a sliding window approach where the\nclassiﬁer is run at evenly spaced locations over the entire\nimage [10]."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base5.4",
+    "label": "S",
+    "claim": "More recent systems like R-CNN followed a multi-stage pipeline: first generate candidate bounding boxes, then run a classifier on each proposed box, then do post-processing to refine, deduplicate, and rescore the boxes .",
+    "blocks": {
+      "b5": "More recent approaches like R-CNN use region proposal",
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base5.5",
+    "label": "S",
+    "claim": "Those pipelines are described in the paper as slow and hard to optimize, because each stage (proposal, classification, post-processing) is trained separately .",
+    "blocks": {
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base5.6",
+    "label": "I",
+    "claim": "By collapsing all of those steps into one regression model, YOLO makes three claims the rest of the introduction works to support: the architecture is \"refreshingly simple\" (the full pipeline fits in Figure 1) ; it makes predictions from a single forward pass; and, as the very next sentence begins to argue, it \"reasons globally about the image when making predictions\" — meaning it considers the whole image at once rather than scoring isolated regions as sliding-window and region-proposal methods do .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1.",
+      "b3": "Second, YOLO reasons globally about the image when",
+      "b6": "Current detection systems repurpose classiﬁers to per-\nform detection. To detect an object, these systems take a\nclassiﬁer for that object and evaluate it at various locations\nand scales in a test image. Systems like deformable parts\nmodels (DPM) use a sliding window approach where the\nclassiﬁer is run at evenly spaced locations over the entire\nimage [10].",
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base5.8",
+    "label": "S",
+    "claim": "The introduction frames fast, accurate detection as a prerequisite for things like autonomous driving, assistive devices, and responsive robotics, arguing that the human visual system performs the task effortlessly in a glance .",
+    "blocks": {
+      "b8": "Humans glance at an image and instantly know what ob-\njects are in the image, where they are, and how they inter-\nact. The human visual system is fast and accurate, allow-\ning us to perform complex tasks like driving with little con-\nscious thought. Fast, accurate algorithms for object detec-\ntion would allow computers to drive cars without special-\nized sensors, enable assistive devices to convey real-time\nscene information to human users, and unlock the potential\nfor general purpose, responsive robotic systems."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base5.9",
+    "label": "I",
+    "claim": "The single-regression formulation in is presented as the technical lever for moving toward that speed and simplicity.",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base5.10",
+    "label": "I",
+    "claim": "Note: the remark that Figure 1 makes this simplicity self-evident is the paper's claim, not mine — the figure caption is not in the provided passages, so I cannot confirm what it depicts beyond what states.",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base6.5",
+    "label": "S",
+    "claim": "As a consequence, YOLO \"struggles with small objects that appear in groups, such as flocks of birds\" .",
+    "blocks": {
+      "b22": "YOLO imposes strong spatial constraints on bounding\nbox predictions since each grid cell only predicts two boxes\nand can only have one class. This spatial constraint lim-\nits the number of nearby objects that our model can pre-\ndict. Our model struggles with small objects that appear in\ngroups, such as ﬂocks of birds."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base6.8",
+    "label": "S",
+    "claim": "The authors also note that the architecture uses \"relatively coarse features for predicting bounding boxes\" due to multiple downsampling layers in the network .",
+    "blocks": {
+      "b23": "Since our model learns to predict bounding boxes from\ndata, it struggles to generalize to objects in new or unusual\naspect ratios or conﬁgurations. Our model also uses rela-\ntively coarse features for predicting bounding boxes since\nour architecture has multiple downsampling layers from the\ninput image."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base6.11",
+    "label": "S",
+    "claim": "The authors identify \"incorrect localizations\" as YOLO's \"main source of error\" .",
+    "blocks": {
+      "b24": "Finally, while we train on a loss function that approxi-\nmates detection performance, our loss function treats errors\nthe same in small bounding boxes versus large bounding\nboxes. A small error in a large box is generally benign but a\nsmall error in a small box has a much greater effect on IOU.\nOur main source of error is incorrect localizations."
+    }
+  },
+  {
+    "set": "first",
+    "id": "base6.12",
+    "label": "S",
+    "claim": "The paper does not discuss further limitations beyond this subsection; the Conclusion does not add new admitted drawbacks beyond noting that YOLO pushes the state of the art in real-time detection and generalizes well to new domains .",
+    "blocks": {
+      "b21": "Fast YOLO is the fastest general-purpose object detec-\ntor in the literature and YOLO pushes the state-of-the-art in\nreal-time object detection. YOLO also generalizes well to\nnew domains making it ideal for applications that rely on\nfast, robust object detection.\nAcknowledgements: This work is partially supported by\nONR N00014-13-1-0720, NSF IIS-1338054, and The Allen\nDistinguished Investigator Award."
+    }
+  },
+  {
+    "set": "first",
+    "id": "F01",
+    "label": "N",
+    "claim": "YOLO reaches 94.2% mean average precision on PASCAL VOC 2007 using this single regression formulation.",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    },
+    "fab": "number"
+  },
+  {
+    "set": "first",
+    "id": "F02",
+    "label": "N",
+    "claim": "The authors train the network on ImageNet with a ResNet-101 backbone and batch normalization.",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    },
+    "fab": "entity"
+  },
+  {
+    "set": "first",
+    "id": "F03",
+    "label": "N",
+    "claim": "YOLO does not frame detection as a regression problem and instead relies on region proposals.",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    },
+    "fab": "negation"
+  },
+  {
+    "set": "first",
+    "id": "F04",
+    "label": "N",
+    "claim": "YOLO runs a classifier over a sliding window at evenly spaced locations, while DPM predicts every box in a single pass.",
+    "blocks": {
+      "b6": "Current detection systems repurpose classiﬁers to per-\nform detection. To detect an object, these systems take a\nclassiﬁer for that object and evaluate it at various locations\nand scales in a test image. Systems like deformable parts\nmodels (DPM) use a sliding window approach where the\nclassiﬁer is run at evenly spaced locations over the entire\nimage [10]."
+    },
+    "fab": "role-swap"
+  },
+  {
+    "set": "first",
+    "id": "F05",
+    "label": "N",
+    "claim": "R-CNN pipelines take about 40 seconds per image because every proposal is scored by a separate SVM.",
+    "blocks": {
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    },
+    "fab": "number"
+  },
+  {
+    "set": "first",
+    "id": "F06",
+    "label": "N",
+    "claim": "The authors acknowledge that YOLO cannot be trained on GPUs and needs a custom FPGA implementation.",
+    "blocks": {
+      "b19": "YOLO imposes strong spatial constraints on bounding\nbox predictions since each grid cell only predicts two boxes\nand can only have one class. This spatial constraint lim-\nits the number of nearby objects that our model can pre-\ndict. Our model struggles with small objects that appear in\ngroups, such as ﬂocks of birds."
+    },
+    "fab": "invented"
+  },
+  {
+    "set": "first",
+    "id": "F07",
+    "label": "N",
+    "claim": "The paper says YOLO was inspired by primate visual cortex and retinal ganglion cells.",
+    "blocks": {
+      "b8": "Humans glance at an image and instantly know what ob-\njects are in the image, where they are, and how they inter-\nact. The human visual system is fast and accurate, allow-\ning us to perform complex tasks like driving with little con-\nscious thought. Fast, accurate algorithms for object detec-\ntion would allow computers to drive cars without special-\nized sensors, enable assistive devices to convey real-time\nscene information to human users, and unlock the potential\nfor general purpose, responsive robotic systems."
+    },
+    "fab": "invented"
+  },
+  {
+    "set": "first",
+    "id": "F08",
+    "label": "N",
+    "claim": "Each grid cell predicts two boxes and one class, which the paper reports causes a 12% recall drop on small objects.",
+    "blocks": {
+      "b19": "YOLO imposes strong spatial constraints on bounding\nbox predictions since each grid cell only predicts two boxes\nand can only have one class. This spatial constraint lim-\nits the number of nearby objects that our model can pre-\ndict. Our model struggles with small objects that appear in\ngroups, such as ﬂocks of birds."
+    },
+    "fab": "number"
+  },
+  {
+    "set": "first",
+    "id": "F09",
+    "label": "N",
+    "claim": "The loss treats errors in small boxes more severely than errors in large boxes, so the main source of error is misclassification.",
+    "blocks": {
+      "b21": "Finally, while we train on a loss function that approxi-\nmates detection performance, our loss function treats errors\nthe same in small bounding boxes versus large bounding\nboxes. A small error in a large box is generally benign but a\nsmall error in a small box has a much greater effect on IOU.\nOur main source of error is incorrect localizations."
+    },
+    "fab": "mixed"
+  },
+  {
+    "set": "first",
+    "id": "F10",
+    "label": "N",
+    "claim": "Fast YOLO is the slowest general-purpose object detector in the literature.",
+    "blocks": {
+      "b24": "Fast YOLO is the fastest general-purpose object detec-\ntor in the literature and YOLO pushes the state-of-the-art in\nreal-time object detection. YOLO also generalizes well to\nnew domains making it ideal for applications that rely on\nfast, robust object detection.\nAcknowledgements: This work is partially supported by\nONR N00014-13-1-0720, NSF IIS-1338054, and The Allen\nDistinguished Investigator Award."
+    },
+    "fab": "comparator"
+  },
+  {
+    "set": "first",
+    "id": "F11",
+    "label": "N",
+    "claim": "The authors recommend discarding the grid and predicting anchors with a feature pyramid.",
+    "blocks": {
+      "b20": "Since our model learns to predict bounding boxes from\ndata, it struggles to generalize to objects in new or unusual\naspect ratios or conﬁgurations. Our model also uses rela-\ntively coarse features for predicting bounding boxes since\nour architecture has multiple downsampling layers from the\ninput image."
+    },
+    "fab": "invented"
+  },
+  {
+    "set": "first",
+    "id": "F12",
+    "label": "N",
+    "claim": "The conclusion says YOLO was trained jointly with a language model to caption the detected objects.",
+    "blocks": {
+      "b23": "directly on full images. Unlike classiﬁer-based approaches,\nYOLO is trained on a loss function that directly corresponds\nto detection performance and the entire model is trained\njointly."
+    },
+    "fab": "invented"
+  },
+  {
+    "set": "first",
+    "id": "F13",
+    "label": "N",
+    "claim": "YOLO was funded by a European Research Council grant 7421 and a Google faculty award.",
+    "blocks": {
+      "b24": "Fast YOLO is the fastest general-purpose object detec-\ntor in the literature and YOLO pushes the state-of-the-art in\nreal-time object detection. YOLO also generalizes well to\nnew domains making it ideal for applications that rely on\nfast, robust object detection.\nAcknowledgements: This work is partially supported by\nONR N00014-13-1-0720, NSF IIS-1338054, and The Allen\nDistinguished Investigator Award."
+    },
+    "fab": "number"
+  },
+  {
+    "set": "first",
+    "id": "F14",
+    "label": "N",
+    "claim": "The authors say the human visual system is slow and inaccurate, which motivates faster algorithms.",
+    "blocks": {
+      "b8": "Humans glance at an image and instantly know what ob-\njects are in the image, where they are, and how they inter-\nact. The human visual system is fast and accurate, allow-\ning us to perform complex tasks like driving with little con-\nscious thought. Fast, accurate algorithms for object detec-\ntion would allow computers to drive cars without special-\nized sensors, enable assistive devices to convey real-time\nscene information to human users, and unlock the potential\nfor general purpose, responsive robotic systems."
+    },
+    "fab": "comparator"
+  },
+  {
+    "set": "first",
+    "id": "F15",
+    "label": "N",
+    "claim": "Deformable parts models evaluate the classifier at a single location in the centre of the image.",
+    "blocks": {
+      "b6": "Current detection systems repurpose classiﬁers to per-\nform detection. To detect an object, these systems take a\nclassiﬁer for that object and evaluate it at various locations\nand scales in a test image. Systems like deformable parts\nmodels (DPM) use a sliding window approach where the\nclassiﬁer is run at evenly spaced locations over the entire\nimage [10]."
+    },
+    "fab": "role-swap"
+  },
+  {
+    "set": "first",
+    "id": "F16",
+    "label": "N",
+    "claim": "The paper states that \"YOLO is a slow but extremely precise detector\" at the start of the introduction.",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    },
+    "fab": "quote"
+  },
+  {
+    "set": "holdout",
+    "id": "hold0.0",
+    "label": "S",
+    "claim": "The passage is the thesis sentence of the paper: YOLO treats object detection as a single regression that goes straight from an input image to bounding‑box coordinates and class probabilities, all in one look at the image, and the authors describe this as \"refreshingly simple\" .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    },
+    "src": "explain"
+  },
+  {
+    "set": "holdout",
+    "id": "hold0.1",
+    "label": "S",
+    "claim": "The phrase \"you only look once\" is both a description of how the system works and the source of the name YOLO .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    },
+    "src": "explain"
+  },
+  {
+    "set": "holdout",
+    "id": "hold0.5",
+    "label": "S",
+    "claim": "- Classic systems repurpose classifiers, for example DPM's sliding window that runs a classifier at evenly spaced locations over the entire image .",
+    "blocks": {
+      "b6": "Current detection systems repurpose classiﬁers to per-\nform detection. To detect an object, these systems take a\nclassiﬁer for that object and evaluate it at various locations\nand scales in a test image. Systems like deformable parts\nmodels (DPM) use a sliding window approach where the\nclassiﬁer is run at evenly spaced locations over the entire\nimage [10]."
+    },
+    "src": "explain"
+  },
+  {
+    "set": "holdout",
+    "id": "hold0.6",
+    "label": "S",
+    "claim": "- More recent systems like R‑CNN first propose potential bounding boxes, then run a classifier on those proposals, then do post‑processing to refine boxes, eliminate duplicates, and rescore them based on context .",
+    "blocks": {
+      "b5": "More recent approaches like R-CNN use region proposal",
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    },
+    "src": "explain"
+  },
+  {
+    "set": "holdout",
+    "id": "hold0.7",
+    "label": "S",
+    "claim": "These pipelines are described as slow and hard to optimize because every stage has to be trained separately .",
+    "blocks": {
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    },
+    "src": "explain"
+  },
+  {
+    "set": "holdout",
+    "id": "hold0.8",
+    "label": "S",
+    "claim": "Against that backdrop, reframes detection as one end‑to‑end regression: pixels in, boxes and class probabilities out.",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    },
+    "src": "explain"
+  },
+  {
+    "set": "holdout",
+    "id": "hold0.9",
+    "label": "I",
+    "claim": "That unification is what makes the system, in the paper's words, \"refreshingly simple\" and what enables the real‑time speed the title advertises — speed that the paper motivates by pointing to applications like driving cars, assistive devices, and responsive robotic systems .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1.",
+      "b8": "Humans glance at an image and instantly know what ob-\njects are in the image, where they are, and how they inter-\nact. The human visual system is fast and accurate, allow-\ning us to perform complex tasks like driving with little con-\nscious thought. Fast, accurate algorithms for object detec-\ntion would allow computers to drive cars without special-\nized sensors, enable assistive devices to convey real-time\nscene information to human users, and unlock the potential\nfor general purpose, responsive robotic systems."
+    },
+    "src": "explain"
+  },
+  {
+    "set": "holdout",
+    "id": "hold0.10",
+    "label": "S",
+    "claim": "The same contrast continues onto the next page, where the paper emphasizes that YOLO \"reasons globally about the image when making predictions\" , again in opposition to local, region‑by‑region pipelines.",
+    "blocks": {
+      "b3": "Second, YOLO reasons globally about the image when",
+      "b7": "making predictions."
+    },
+    "src": "explain"
+  },
+  {
+    "set": "holdout",
+    "id": "hold1.1",
+    "label": "S",
+    "claim": "Prior detection systems do their work in a sequence of separate stages: first generate potential bounding boxes, then run a classifier on those boxes, then post‑process to refine them, eliminate duplicates, and rescore them based on context .",
+    "blocks": {
+      "b5": "More recent approaches like R-CNN use region proposal",
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    },
+    "src": "explain"
+  },
+  {
+    "set": "holdout",
+    "id": "hold1.2",
+    "label": "S",
+    "claim": "The paper characterizes these pipelines as \"slow and hard to optimize because each individual component must be trained separately\" .",
+    "blocks": {
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    },
+    "src": "explain"
+  },
+  {
+    "set": "holdout",
+    "id": "hold1.3",
+    "label": "S",
+    "claim": "YOLO replaces that multi‑stage, hand‑engineered pipeline with a single regression that goes from pixels to bounding boxes and class probabilities in one pass .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    },
+    "src": "explain"
+  },
+  {
+    "set": "holdout",
+    "id": "hold1.4",
+    "label": "I",
+    "claim": "The implied reasoning — this is my reading, not a sentence in the supplied passages — is that collapsing propose / classify / refine / deduplicate / rescore into one forward pass is what removes the sources of slowness that complains about.",
+    "blocks": {
+      "b9": "methods to ﬁrst generate potential bounding boxes in an im-\nage and then run a classiﬁer on these proposed boxes. After\nclassiﬁcation, post-processing is used to reﬁne the bound-\ning boxes, eliminate duplicate detections, and rescore the\nboxes based on other objects in the scene [13]. These com-\nplex pipelines are slow and hard to optimize because each\nindividual component must be trained separately."
+    },
+    "src": "explain"
+  },
+  {
+    "set": "holdout",
+    "id": "hold1.5",
+    "label": "S",
+    "claim": "YOLO is therefore positioned as fast enough to be called \"real‑time\" in the title, and the paper motivates why that speed is worth wanting: it is what would let computers drive cars without specialized sensors, give assistive devices real‑time scene information to human users, and power responsive robotic systems .",
+    "blocks": {
+      "b8": "Humans glance at an image and instantly know what ob-\njects are in the image, where they are, and how they inter-\nact. The human visual system is fast and accurate, allow-\ning us to perform complex tasks like driving with little con-\nscious thought. Fast, accurate algorithms for object detec-\ntion would allow computers to drive cars without special-\nized sensors, enable assistive devices to convey real-time\nscene information to human users, and unlock the potential\nfor general purpose, responsive robotic systems."
+    },
+    "src": "explain"
+  },
+  {
+    "set": "holdout",
+    "id": "hold1.9",
+    "label": "I",
+    "claim": "And while YOLO's claim to \"reason globally about the image\" is presented as an advantage, the supplied text frames it as a contextual/coherence benefit rather than a speed argument, so I am not citing it for the speed point.",
+    "blocks": {
+      "b3": "Second, YOLO reasons globally about the image when",
+      "b7": "making predictions."
+    },
+    "src": "explain"
+  },
+  {
+    "set": "holdout",
+    "id": "hold2.4",
+    "label": "S",
+    "claim": "Our model struggles with small objects that appear in groups, such as flocks of birds\" .",
+    "blocks": {
+      "b19": "YOLO imposes strong spatial constraints on bounding\nbox predictions since each grid cell only predicts two boxes\nand can only have one class. This spatial constraint lim-\nits the number of nearby objects that our model can pre-\ndict. Our model struggles with small objects that appear in\ngroups, such as ﬂocks of birds."
+    },
+    "src": "ask"
+  },
+  {
+    "set": "holdout",
+    "id": "hold2.6",
+    "label": "S",
+    "claim": "Our model also uses relatively coarse features for predicting bounding boxes since our architecture has multiple downsampling layers from the input image\" .",
+    "blocks": {
+      "b20": "Since our model learns to predict bounding boxes from\ndata, it struggles to generalize to objects in new or unusual\naspect ratios or conﬁgurations. Our model also uses rela-\ntively coarse features for predicting bounding boxes since\nour architecture has multiple downsampling layers from the\ninput image."
+    },
+    "src": "ask"
+  },
+  {
+    "set": "holdout",
+    "id": "hold2.9",
+    "label": "S",
+    "claim": "Our main source of error is incorrect localizations\" .",
+    "blocks": {
+      "b21": "Finally, while we train on a loss function that approxi-\nmates detection performance, our loss function treats errors\nthe same in small bounding boxes versus large bounding\nboxes. A small error in a large box is generally benign but a\nsmall error in a small box has a much greater effect on IOU.\nOur main source of error is incorrect localizations."
+    },
+    "src": "ask"
+  },
+  {
+    "set": "holdout",
+    "id": "hold3.0",
+    "label": "S",
+    "claim": "The passage states that the authors recast object detection as a single regression problem that maps directly from image pixels to bounding box coordinates and class probabilities, and introduces their system as YOLO (\"you only look once\"), which makes all predictions about what is in an image and where in a single pass; the architecture is summarized in Figure 1 .",
+    "blocks": {
+      "b1": "We reframe object detection as a single regression prob-\nlem, straight from image pixels to bounding box coordi-\nnates and class probabilities. Using our system, you only\nlook once (YOLO) at an image to predict what objects are\npresent and where they are.\nYOLO is refreshingly simple: see Figure 1."
+    },
+    "src": "explain"
+  },
+  {
+    "set": "holdout",
+    "id": "hold4.0",
+    "label": "S",
+    "claim": "The paper states that, even though their diffusion models produce high-quality samples, they do not achieve competitive log-likelihoods relative to other likelihood-based models .",
+    "blocks": {
+      "b1": "Despite their sample quality, our models do not have competitive log likelihoods compared to other\nlikelihood-based models (our models do, however, have log likelihoods better than the large estimates\nannealed importance sampling has been reported to produce for energy based models and score\nmatching [11, 55]). We ﬁnd that the majority of our models’ lossless codelengths are consumed\nto describe imperceptible image details (Section 4.3). We present a more reﬁned analysis of this\nphenomenon in the language of lossy compression, and we show that the sampling procedure of\ndiffusion models is a type of progressive decoding that resembles autoregressive decoding along a bit\nordering that vastly generalizes what is normally possible with autoregressive models."
+    },
+    "src": "explain"
+  },
+  {
+    "set": "holdout",
+    "id": "hold4.1",
+    "label": "S",
+    "claim": "It qualifies this, however, by noting that the models' log-likelihoods are still better than the large estimates that annealed importance sampling has been reported to produce for energy-based models and score matching .",
+    "blocks": {
+      "b1": "Despite their sample quality, our models do not have competitive log likelihoods compared to other\nlikelihood-based models (our models do, however, have log likelihoods better than the large estimates\nannealed importance sampling has been reported to produce for energy based models and score\nmatching [11, 55]). We ﬁnd that the majority of our models’ lossless codelengths are consumed\nto describe imperceptible image details (Section 4.3). We present a more reﬁned analysis of this\nphenomenon in the language of lossy compression, and we show that the sampling procedure of\ndiffusion models is a type of progressive decoding that resembles autoregressive decoding along a bit\nordering that vastly generalizes what is normally possible with autoregressive models.",
+      "b9": "[11] Yilun Du and Igor Mordatch. Implicit generation and modeling with energy based models. In Advances in",
+      "b8": "[55] Yang Song and Stefano Ermon. Generative modeling by estimating gradients of the data distribution. In"
+    },
+    "src": "explain"
+  },
+  {
+    "set": "holdout",
+    "id": "hold4.2",
+    "label": "S",
+    "claim": "The paper observes that the bulk of the lossless codelength (which corresponds to log-likelihood) is spent encoding imperceptible image details, a point it returns to in Section 4.3 .",
+    "blocks": {
+      "b1": "Despite their sample quality, our models do not have competitive log likelihoods compared to other\nlikelihood-based models (our models do, however, have log likelihoods better than the large estimates\nannealed importance sampling has been reported to produce for energy based models and score\nmatching [11, 55]). We ﬁnd that the majority of our models’ lossless codelengths are consumed\nto describe imperceptible image details (Section 4.3). We present a more reﬁned analysis of this\nphenomenon in the language of lossy compression, and we show that the sampling procedure of\ndiffusion models is a type of progressive decoding that resembles autoregressive decoding along a bit\nordering that vastly generalizes what is normally possible with autoregressive models."
+    },
+    "src": "explain"
+  },
+  {
+    "set": "holdout",
+    "id": "hold4.3",
+    "label": "S",
+    "claim": "It then re-frames this finding using lossy-compression language, and argues that the diffusion sampling procedure is a form of progressive decoding akin to autoregressive decoding, but along a bit ordering that vastly generalizes standard autoregressive decoding .",
+    "blocks": {
+      "b1": "Despite their sample quality, our models do not have competitive log likelihoods compared to other\nlikelihood-based models (our models do, however, have log likelihoods better than the large estimates\nannealed importance sampling has been reported to produce for energy based models and score\nmatching [11, 55]). We ﬁnd that the majority of our models’ lossless codelengths are consumed\nto describe imperceptible image details (Section 4.3). We present a more reﬁned analysis of this\nphenomenon in the language of lossy compression, and we show that the sampling procedure of\ndiffusion models is a type of progressive decoding that resembles autoregressive decoding along a bit\nordering that vastly generalizes what is normally possible with autoregressive models."
+    },
+    "src": "explain"
+  },
+  {
+    "set": "holdout",
+    "id": "hold5.0",
+    "label": "I",
+    "claim": "The paper does not discuss detection speed, and this passage does not address it .",
+    "blocks": {
+      "b1": "Despite their sample quality, our models do not have competitive log likelihoods compared to other\nlikelihood-based models (our models do, however, have log likelihoods better than the large estimates\nannealed importance sampling has been reported to produce for energy based models and score\nmatching [11, 55]). We ﬁnd that the majority of our models’ lossless codelengths are consumed\nto describe imperceptible image details (Section 4.3). We present a more reﬁned analysis of this\nphenomenon in the language of lossy compression, and we show that the sampling procedure of\ndiffusion models is a type of progressive decoding that resembles autoregressive decoding along a bit\nordering that vastly generalizes what is normally possible with autoregressive models."
+    },
+    "src": "explain"
+  },
+  {
+    "set": "holdout",
+    "id": "hold5.2",
+    "label": "S",
+    "claim": "The trade-off described in the selection is between sample quality and log-likelihood, where most of the lossless codelength is used on imperceptible image details .",
+    "blocks": {
+      "b1": "Despite their sample quality, our models do not have competitive log likelihoods compared to other\nlikelihood-based models (our models do, however, have log likelihoods better than the large estimates\nannealed importance sampling has been reported to produce for energy based models and score\nmatching [11, 55]). We ﬁnd that the majority of our models’ lossless codelengths are consumed\nto describe imperceptible image details (Section 4.3). We present a more reﬁned analysis of this\nphenomenon in the language of lossy compression, and we show that the sampling procedure of\ndiffusion models is a type of progressive decoding that resembles autoregressive decoding along a bit\nordering that vastly generalizes what is normally possible with autoregressive models."
+    },
+    "src": "explain"
+  },
+  {
+    "set": "holdout",
+    "id": "hold6.0",
+    "label": "S",
+    "claim": "The paper trains a neural network to reverse a fixed Markov chain that gradually adds Gaussian noise to the data according to a variance schedule β₁, …, β_T .",
+    "blocks": {
+      "b85": "What distinguishes diffusion models from other types of latent variable models is that the approximate\nposterior q(x1:T |x0), called the forward process or diffusion process, is ﬁxed to a Markov chain that\ngradually adds Gaussian noise to the data according to a variance schedule β1, . . . , βT :"
+    },
+    "src": "ask"
+  },
+  {
+    "set": "holdout",
+    "id": "hold6.1",
+    "label": "S",
+    "claim": "Image data is linearly scaled from {0, …, 255} to [−1, 1] so the network operates on consistently scaled inputs starting from a standard normal prior p(x_T), and a discrete decoder derived from 𝒩(x₀; µ_θ(x₁, 1), σ²₁ I) is used at the last step to obtain discrete log-likelihoods .",
+    "blocks": {
+      "b81": "We assume that image data consists of integers in {0, 1, . . . , 255} scaled linearly to [−1, 1]. This\nensures that the neural network reverse process operates on consistently scaled inputs starting from\nthe standard normal prior p(xT ). To obtain discrete log likelihoods, we set the last term of the reverse\nprocess to an independent discrete decoder derived from the Gaussian N(x0; µθ(x1, 1), σ2",
+      "b83": "Z δ+(xi\nD\n0)\nY\nN(x; µi\nθ(x1, 1), σ2\npθ(x0|x1) =\n1) dx\nδ−(xi\n0)\ni=1\n(13)\n\u001a−∞\n\u001a∞\nif x = −1\nif x = 1\nδ−(x) =\nδ+(x) =\nif x > −1\nx +\nx −"
+    },
+    "src": "ask"
+  },
+  {
+    "set": "holdout",
+    "id": "hold6.2",
+    "label": "S",
+    "claim": "In principle, training optimizes the variational bound made up of terms derived from Eqs. (12) and (13), which is differentiable with respect to θ .",
+    "blocks": {
+      "b25": "With the reverse process and decoder deﬁned above, the variational bound, consisting of terms derived\nfrom Eqs. (12) and (13), is clearly differentiable with respect to θ and is ready to be employed for"
+    },
+    "src": "ask"
+  },
+  {
+    "set": "holdout",
+    "id": "hold6.3",
+    "label": "I",
+    "claim": "The reverse process is parameterized by predicting the noise ε rather than the mean µ, using the parameterization in Eq. (11) .",
+    "blocks": {
+      "b79": "procedure, Algorithm 2, resembles Langevin dynamics with ϵθ as a learned gradient of the data\ndensity. Furthermore, with the parameterization (11), Eq. (10) simpliﬁes to:"
+    },
+    "src": "ask"
+  },
+  {
+    "set": "holdout",
+    "id": "hold6.4",
+    "label": "S",
+    "claim": "The authors also ablate several choices in Section 4.2 :",
+    "blocks": {
+      "b76": "In Table 2, we show the sample quality effects of reverse process parameterizations and training\nobjectives (Section 3.2). We ﬁnd that the baseline option of predicting ˜µ works well only when\ntrained on the true variational bound instead of unweighted mean squared error, a simpliﬁed objective\nakin to Eq. (14). We also see that learning reverse process variances (by incorporating a parameterized\ndiagonal Σθ(xt) into the variational bound) leads to unstable training and poorer sample quality\ncompared to ﬁxed variances. Predicting ϵ, as we proposed, performs approximately as well as\npredicting ˜µ when trained on the variational bound with ﬁxed variances, but much better when trained\nwith our simpliﬁed objective."
+    },
+    "src": "ask"
+  },
+  {
+    "set": "holdout",
+    "id": "hold6.8",
+    "label": "S",
+    "claim": "Because of these findings, the authors end up using a **simplified objective** that discards the per-timestep weighting of the variational bound :",
+    "blocks": {
+      "b70": "training. However, we found it beneﬁcial to sample quality (and simpler to implement) to train on the\nfollowing variant of the variational bound:",
+      "b75": "Since our simpliﬁed objective (14) discards the weighting in Eq. (12), it is a weighted variational\nbound that emphasizes different aspects of reconstruction compared to the standard variational\nbound [18, 22]. In particular, our diffusion process setup in Section 4 causes the simpliﬁed objective\nto down-weight loss terms corresponding to small t. These terms train the network to denoise data\nwith very small amounts of noise, so it is beneﬁcial to down-weight them so that the network can\nfocus on more difﬁcult denoising tasks at larger t terms. We will see in our experiments that this\nreweighting leads to better sample quality."
+    },
+    "src": "ask"
+  },
+  {
+    "set": "holdout",
+    "id": "hold6.9",
+    "label": "S",
+    "claim": "L_simple(θ) := 𝔼_{t, x₀, ε} [ ‖ε − ε_θ(√α̅_t x₀ + √(1−α̅_t) ε, t)‖² ] (Eq. 14)",
+    "blocks": {
+      "b71": "√\nh\r\rϵ −ϵθ(√¯αtx0 +\n\r\r2i\n1 −¯αtϵ, t)\nLsimple(θ) := Et,x0,ϵ\n(14)"
+    },
+    "src": "ask"
+  },
+  {
+    "set": "holdout",
+    "id": "hold6.10",
+    "label": "S",
+    "claim": "where t is uniform between 1 and T .",
+    "blocks": {
+      "b72": "where t is uniform between 1 and T. The t = 1 case corresponds to L0 with the integral in the\ndiscrete decoder deﬁnition (13) approximated by the Gaussian probability density function times the\nbin width, ignoring σ2"
+    },
+    "src": "ask"
+  },
+  {
+    "set": "holdout",
+    "id": "hold6.11",
+    "label": "S",
+    "claim": "The t = 1 term approximates L₀ using the Gaussian probability density function times the bin width, ignoring σ²₁ and edge effects, and the remaining t cases give an unweighted analogue of Eq. (12), similar to the loss weighting used by NCSN; L_T does not appear because the forward process variances β_t are fixed .",
+    "blocks": {
+      "b72": "where t is uniform between 1 and T. The t = 1 case corresponds to L0 with the integral in the\ndiscrete decoder deﬁnition (13) approximated by the Gaussian probability density function times the\nbin width, ignoring σ2",
+      "b74": "Eq. (12), analogous to the loss weighting used by the NCSN denoising score matching model [55].\n(LT does not appear because the forward process variances βt are ﬁxed.) Algorithm 1 displays the\ncomplete training procedure with this simpliﬁed objective."
+    },
+    "src": "ask"
+  },
+  {
+    "set": "holdout",
+    "id": "hold6.12",
+    "label": "S",
+    "claim": "The paper notes this reweighting down-weights loss terms for small t, where the denoising task is easy, letting the network focus on harder denoising at larger t — empirically leading to better sample quality .",
+    "blocks": {
+      "b75": "Since our simpliﬁed objective (14) discards the weighting in Eq. (12), it is a weighted variational\nbound that emphasizes different aspects of reconstruction compared to the standard variational\nbound [18, 22]. In particular, our diffusion process setup in Section 4 causes the simpliﬁed objective\nto down-weight loss terms corresponding to small t. These terms train the network to denoise data\nwith very small amounts of noise, so it is beneﬁcial to down-weight them so that the network can\nfocus on more difﬁcult denoising tasks at larger t terms. We will see in our experiments that this\nreweighting leads to better sample quality."
+    },
+    "src": "ask"
+  },
+  {
+    "set": "holdout",
+    "id": "hold6.13",
+    "label": "S",
+    "claim": "Algorithm 1 gives the full training procedure with this objective .",
+    "blocks": {
+      "b74": "Eq. (12), analogous to the loss weighting used by the NCSN denoising score matching model [55].\n(LT does not appear because the forward process variances βt are ﬁxed.) Algorithm 1 displays the\ncomplete training procedure with this simpliﬁed objective.",
+      "b77": "Algorithm 1 Training"
+    },
+    "src": "ask"
+  },
+  {
+    "set": "holdout",
+    "id": "hold7.0",
+    "label": "S",
+    "claim": "The passage acknowledges that although the diffusion models it introduces produce excellent samples, they fall short on a standard density‑modeling benchmark, and it then offers an explanation in coding terms .",
+    "blocks": {
+      "b1": "Despite their sample quality, our models do not have competitive log likelihoods compared to other\nlikelihood-based models (our models do, however, have log likelihoods better than the large estimates\nannealed importance sampling has been reported to produce for energy based models and score\nmatching [11, 55]). We ﬁnd that the majority of our models’ lossless codelengths are consumed\nto describe imperceptible image details (Section 4.3). We present a more reﬁned analysis of this\nphenomenon in the language of lossy compression, and we show that the sampling procedure of\ndiffusion models is a type of progressive decoding that resembles autoregressive decoding along a bit\nordering that vastly generalizes what is normally possible with autoregressive models."
+    },
+    "src": "explain"
+  },
+  {
+    "set": "holdout",
+    "id": "holdS0.0",
+    "label": "S",
+    "claim": "The paper introduces YOLO, framing object detection as a single regression to bounding boxes and class probabilities instead of repurposing classifiers, enabling end-to-end optimization directly on detection performance .",
+    "blocks": {
+      "b1": "We present YOLO, a new approach to object detection.\nPrior work on object detection repurposes classiﬁers to per-\nform detection. Instead, we frame object detection as a re-\ngression problem to spatially separated bounding boxes and\nassociated class probabilities. A single neural network pre-\ndicts bounding boxes and class probabilities directly from\nfull images in one evaluation. Since the whole detection\npipeline is a single network, it can be optimized end-to-end\ndirectly on detection performance.\nOur uniﬁed architecture is extremely fast."
+    },
+    "src": "summary"
+  },
+  {
+    "set": "holdout",
+    "id": "holdS0.1",
+    "label": "S",
+    "claim": "A single neural network predicts all bounding boxes and class probabilities for every class in one evaluation, reasoning globally about the full image and all its objects rather than over local regions .",
+    "blocks": {
+      "b1": "We present YOLO, a new approach to object detection.\nPrior work on object detection repurposes classiﬁers to per-\nform detection. Instead, we frame object detection as a re-\ngression problem to spatially separated bounding boxes and\nassociated class probabilities. A single neural network pre-\ndicts bounding boxes and class probabilities directly from\nfull images in one evaluation. Since the whole detection\npipeline is a single network, it can be optimized end-to-end\ndirectly on detection performance.\nOur uniﬁed architecture is extremely fast.",
+      "b3": "We unify the separate components of object detection\ninto a single neural network. Our network uses features\nfrom the entire image to predict each bounding box. It also\npredicts all bounding boxes across all classes for an im-\nage simultaneously. This means our network reasons glob-\nally about the full image and all the objects in the image.\nThe YOLO design enables end-to-end training and real-\ntime speeds while maintaining high average precision."
+    },
+    "src": "summary"
+  },
+  {
+    "set": "holdout",
+    "id": "holdS0.2",
+    "label": "S",
+    "claim": "The paper situates YOLO against traditional pipelines that extract features (e.g., Haar, SIFT, HOG, convolutional features) and then run classifiers or localizers, often in sliding-window or region-proposal fashion .",
+    "blocks": {
+      "b4": "Object detection is a core problem in computer vision.\nDetection pipelines generally start by extracting a set of\nrobust features from input images (Haar [25], SIFT [23],\nHOG [4], convolutional features [6]).",
+      "b5": "Then, classiﬁers\n[36, 21, 13, 10] or localizers [1, 32] are used to identify\nobjects in the feature space. These classiﬁers or localizers\nare run either in sliding window fashion over the whole im-\nage or on some subset of regions in the image [35, 15, 39].\nWe compare the YOLO detection system to several top de-\ntection frameworks, highlighting key similarities and differ-\nences."
+    },
+    "src": "summary"
+  },
+  {
+    "set": "holdout",
+    "id": "holdS0.3",
+    "label": "S",
+    "claim": "Experiments compare YOLO to other real-time detectors on PASCAL VOC 2007 and contrast its error profile with Fast R-CNN, and the paper also shows YOLO can be used to rescore Fast R-CNN detections .",
+    "blocks": {
+      "b6": "First we compare YOLO with other real-time detection\nsystems on PASCAL VOC 2007. To understand the differ-\nences between YOLO and R-CNN variants we explore the\nerrors on VOC 2007 made by YOLO and Fast R-CNN, one\nof the highest performing versions of R-CNN [14]. Based\non the different error proﬁles we show that YOLO can be\nused to rescore Fast R-CNN detections and reduce the er-\nrors from background false positives, giving a signiﬁcant\nperformance boost. We also present VOC 2012 results and\ncompare mAP to current state-of-the-art methods. Finally,\nwe show that YOLO generalizes to new domains better than\nother detectors on two artwork datasets."
+    },
+    "src": "summary"
+  },
+  {
+    "set": "holdout",
+    "id": "holdS0.4",
+    "label": "S",
+    "claim": "The paper's stated limitation is localization: YOLO struggles to localize objects correctly, with localization errors accounting for more of its errors than all other sources combined, while Fast R-CNN makes fewer localization errors but many more background errors .",
+    "blocks": {
+      "b9": "YOLO struggles to localize objects correctly. Localiza-\ntion errors account for more of YOLO’s errors than all other\nsources combined. Fast R-CNN makes much fewer local-\nization errors but far more background errors. 13.6% of\nit’s top detections are false positives that don’t contain any\nobjects. Fast R-CNN is almost 3x more likely to predict\nbackground detections than YOLO."
+    },
+    "src": "summary"
+  },
+  {
+    "set": "holdout",
+    "id": "holdS0.5",
+    "label": "S",
+    "claim": "YOLO is wired to a webcam and verified to maintain real-time performance including image fetch and display time, and is evaluated quantitatively on VOC 2007, Picasso, and People-Art datasets .",
+    "blocks": {
+      "b10": "YOLO is a fast, accurate object detector, making it ideal\nfor computer vision applications. We connect YOLO to a\nwebcam and verify that it maintains real-time performance,",
+      "b11": "(b) Quantitative results on the VOC 2007, Picasso, and People-Art Datasets.\nThe Picasso Dataset evaluates on both AP and best F1 score.",
+      "b12": "including the time to fetch images from the camera and dis-\nplay the detections."
+    },
+    "src": "summary"
+  },
+  {
+    "set": "holdout",
+    "id": "holdS0.6",
+    "label": "S",
+    "claim": "The conclusion states that Fast YOLO is the fastest general-purpose object detector in the literature, YOLO pushes the state-of-the-art in real-time detection, and it generalizes well to new domains .",
+    "blocks": {
+      "b15": "Fast YOLO is the fastest general-purpose object detec-\ntor in the literature and YOLO pushes the state-of-the-art in\nreal-time object detection. YOLO also generalizes well to\nnew domains making it ideal for applications that rely on\nfast, robust object detection.\nAcknowledgements: This work is partially supported by\nONR N00014-13-1-0720, NSF IIS-1338054, and The Allen\nDistinguished Investigator Award."
+    },
+    "src": "summary"
+  },
+  {
+    "set": "holdout",
+    "id": "holdS1.0",
+    "label": "S",
+    "claim": "The paper introduces diffusion probabilistic models for high quality image synthesis, a class of latent variable models inspired by nonequilibrium thermodynamics .",
+    "blocks": {
+      "b1": "We present high quality image synthesis results using diffusion probabilistic models,\na class of latent variable models inspired by considerations from nonequilibrium\nthermodynamics. Our best results are obtained by training on a weighted variational\nbound designed according to a novel connection between diffusion probabilistic\nmodels and denoising score matching with Langevin dynamics, and our models nat-\nurally admit a progressive lossy decompression scheme that can be interpreted as a\ngeneralization of autoregressive decoding. On the unconditional CIFAR10 dataset,\nwe obtain an Inception score of 9.46 and a state-of-the-art FID score of 3.17. On\n256x256 LSUN, we obtain sample quality similar to ProgressiveGAN. Our imple-\nmentation is available at https://github.com/hojonathanho/diffusion."
+    },
+    "src": "summary"
+  },
+  {
+    "set": "holdout",
+    "id": "holdS1.1",
+    "label": "S",
+    "claim": "The best results are obtained by training on a weighted variational bound derived from a novel connection between diffusion models and denoising score matching with Langevin dynamics, and the models naturally admit a progressive lossy decompression scheme .",
+    "blocks": {
+      "b1": "We present high quality image synthesis results using diffusion probabilistic models,\na class of latent variable models inspired by considerations from nonequilibrium\nthermodynamics. Our best results are obtained by training on a weighted variational\nbound designed according to a novel connection between diffusion probabilistic\nmodels and denoising score matching with Langevin dynamics, and our models nat-\nurally admit a progressive lossy decompression scheme that can be interpreted as a\ngeneralization of autoregressive decoding. On the unconditional CIFAR10 dataset,\nwe obtain an Inception score of 9.46 and a state-of-the-art FID score of 3.17. On\n256x256 LSUN, we obtain sample quality similar to ProgressiveGAN. Our imple-\nmentation is available at https://github.com/hojonathanho/diffusion."
+    },
+    "src": "summary"
+  },
+  {
+    "set": "holdout",
+    "id": "holdS1.2",
+    "label": "S",
+    "claim": "A diffusion model defines pθ(x0) by marginalising over latents x1,…,xT of the same dimensionality as the data, with a learned reverse process matched to a fixed forward process that gradually adds noise .",
+    "blocks": {
+      "b3": "R\nDiffusion models [53] are latent variable models of the form pθ(x0) :=",
+      "b4": "pθ(x0:T ) dx1:T , where\nx1, . . . , xT are latents of the same dimensionality as the data x0 ∼q(x0). The joint distribution\npθ(x0:T ) is called the reverse process, and it is deﬁned as a Markov chain with learned Gaussian\ntransitions starting at p(xT ) = N(xT ; 0, I):"
+    },
+    "src": "summary"
+  },
+  {
+    "set": "holdout",
+    "id": "holdS1.3",
+    "label": "S",
+    "claim": "In the proposed implementation the forward process variances βt are fixed to constants (rather than learned), the approximate posterior q has no learnable parameters, and image data in {0,…,255} is linearly scaled to [−1, 1] so the network operates on consistently scaled inputs starting from a standard normal prior p(xT) .",
+    "blocks": {
+      "b6": "We ignore the fact that the forward process variances βt are learnable by reparameterization and\ninstead ﬁx them to constants (see Section 4 for details). Thus, in our implementation, the approximate\nposterior q has no learnable parameters, so LT is a constant during training and can be ignored.",
+      "b7": "We assume that image data consists of integers in {0, 1, . . . , 255} scaled linearly to [−1, 1]. This\nensures that the neural network reverse process operates on consistently scaled inputs starting from\nthe standard normal prior p(xT ). To obtain discrete log likelihoods, we set the last term of the reverse\nprocess to an independent discrete decoder derived from the Gaussian N(x0; µθ(x1, 1), σ2"
+    },
+    "src": "summary"
+  },
+  {
+    "set": "holdout",
+    "id": "holdS1.4",
+    "label": "S",
+    "claim": "Experiments use T = 1000 diffusion steps with βt increasing linearly from β1 = 10^−4 to βT = 0.02, matching the number of network evaluations used in prior work .",
+    "blocks": {
+      "b8": "We set T = 1000 for all experiments so that the number of neural network evaluations needed\nduring sampling matches previous work [53, 55]. We set the forward process variances to constants\nincreasing linearly from β1 = 10−4 to βT = 0.02. These constants were chosen to be small\nrelative to data scaled to [−1, 1], ensuring that reverse and forward processes have approximately\nthe same functional form while keeping the signal-to-noise ratio at xT as small as possible (LT =\nDKL(q(xT |x0) ∥N(0, I)) ≈10−5 bits per dimension in our experiments).\nTo represent the reverse process, we use a U-Net backbone similar to an unmasked PixelCNN++ [52,\n48] with group normalization throughout [66]. Parameters are shared across time, which is speciﬁed\nto the network using the Transformer sinusoidal position embedding [60]. We use self-attention at\nthe 16 × 16 feature map resolution [63, 60]. Details are in Appendix B."
+    },
+    "src": "summary"
+  },
+  {
+    "set": "holdout",
+    "id": "holdS1.5",
+    "label": "S",
+    "claim": "The authors connect their ε-prediction approach to flows, VAEs, autoregressive models, and progressive lossy compression, noting that unlike flows/VAEs, q has no parameters and the top-level latent xT has nearly zero mutual information with the data x0 .",
+    "blocks": {
+      "b11": "While diffusion models might resemble ﬂows [9, 46, 10, 32, 5, 16, 23] and VAEs [33, 47, 37],\ndiffusion models are designed so that q has no parameters and the top-level latent xT has nearly zero\nmutual information with the data x0. Our ϵ-prediction reverse process parameterization establishes a\nconnection between diffusion models and denoising score matching over multiple noise levels with\nannealed Langevin dynamics for sampling [55, 56]. Diffusion models, however, admit straightforward\nlog likelihood evaluation, and the training procedure explicitly trains the Langevin dynamics sampler\nusing variational inference (see Appendix C for details). The connection also has the reverse\nimplication that a certain weighted form of denoising score matching is the same as variational\ninference to train a Langevin-like sampler. Other methods for learning transition operators of Markov\nchains include infusion training [2], variational walkback [15], generative stochastic networks [1],\nand others [50, 54, 36, 42, 35, 65]."
+    },
+    "src": "summary"
+  },
+  {
+    "set": "holdout",
+    "id": "holdS1.6",
+    "label": "S",
+    "claim": "The conclusion reports high quality image samples and highlights connections to variational inference for training Markov chains, denoising score matching, annealed Langevin dynamics (and energy-based models), autoregressive models, and progressive lossy compression, and the paper says it looks forward to investigating diffusion models in other data modalities and as components in other generative models and ML systems .",
+    "blocks": {
+      "b12": "We have presented high quality image samples using diffusion models, and we have found connections\namong diffusion models and variational inference for training Markov chains, denoising score\nmatching and annealed Langevin dynamics (and energy-based models by extension), autoregressive\nmodels, and progressive lossy compression. Since diffusion models seem to have excellent inductive\nbiases for image data, we look forward to investigating their utility in other data modalities and as\ncomponents in other types of generative models and machine learning systems."
+    },
+    "src": "summary"
+  }
+]

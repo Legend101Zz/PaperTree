@@ -34,7 +34,8 @@ function mutations(): Array<[string, unknown]> {
     ['explain example', explain],
     ['follow-up example', followup],
     ['summary example', summary],
-    ['summary with a seed', set(summary, (b) => (b['seed'] = explain['seed']))],
+    ['summary without a seed', set(summary, (b) => (b['seed'] = null))],
+    ['summary with an explain-style seed', set(summary, (b) => (b['seed'] = explain['seed']))],
     ['explain without a seed', set(explain, (b) => (b['seed'] = null))],
     [
       'ask without a seed',

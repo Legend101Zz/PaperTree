@@ -619,6 +619,16 @@ class RunBroker:
             spent = replace(self.retried_usage)  # a retried attempt's totals, then this one's
             spent.add(outcome.usage_totals)
             tokens: dict[str, Any] = spent.tokens()
+            if status in ("aborted", "error") and spent.input == 0 and spent.output == 0:
+                # Pi reports no usage for a message that was aborted or failed mid-stream (text
+                # may well have streamed): the totals are zero because nothing was REPORTED, not
+                # because nothing was spent. Unknown is null, never 0 (S5F). The cost and the
+                # cache reads the agent did report stay.
+                tokens["input_tokens"] = None
+                tokens["output_tokens"] = None
+                tokens["reasoning_tokens"] = None
+                if not spent.cost_usd_est:
+                    tokens["cost_usd_est"] = None  # a zero cost beside unknown tokens is unknown
             tool_calls, agent_retries = outcome.tool_calls, outcome.retries
             entries: list[dict[str, Any]] | None = outcome.entries
             if status in ("error", "aborted") and not outcome.final_text and not entries:
@@ -650,14 +660,23 @@ class RunBroker:
             run_id=spec.run_id, handles=handles, document=document, texts=texts, new_id=new_id
         )
         summary: dict[str, Any] | None = None
+        derived_from: list[str] = []
         if spec.kind == "summary":
             bullets = evidence.cite_summary(final_text, minter) if final_text else []
             citations = [c for bullet in bullets for c in bullet.citations]
-            # contracts.md §3.4: partial when a bullet has no valid marker. The verifier's verdict
-            # is each bullet's `supported`; it does not make the summary partial.
+            # contracts.md §3.4 / S5F: a summary with text is NEVER `failed`. It is `complete`
+            # when every bullet carries a valid marker, `partial` when some or all do not (the
+            # bullets are kept, `supported: false`), and only a run with no text at all fails.
             complete = bool(bullets) and all(b.citations for b in bullets)
             if status == "complete" and not complete:
                 status = "partial"
+            # A derivation names the blocks it comes from (0001's CHECK): the cited ones, else
+            # the digest and whatever else the run was shown.
+            derived_from = [c.block_id for c in citations] or list(dict.fromkeys(handles.values()))
+            if status in ("complete", "partial") and not (bullets and derived_from):
+                # No bullet, or not a single block the text could be derived from: nothing to
+                # store, so it is not served as a summary, and the live `done` says so too.
+                status, error_code = "error", error_code or "internal"
             summary = {
                 "generation": spec.generation,
                 "model": self.model or MODEL,
@@ -714,7 +733,7 @@ class RunBroker:
                 )
                 if entries is not None:
                     db.set_agent_state(owner, spec.thread_id, entries)
-            if summary is not None and citations and status in ("complete", "partial"):
+            if summary is not None and summary["bullets"] and status in ("complete", "partial"):
                 db.put_summary(
                     owner,
                     PaperId(spec.paper_id),
@@ -722,7 +741,7 @@ class RunBroker:
                     prompt_hash=PROMPT_VERSIONS["summary"],
                     model_id=self.model or MODEL,
                     content=summary,
-                    derived_from=[c.block_id for c in citations],
+                    derived_from=derived_from,
                 )
             db.finish_run(
                 owner,
@@ -830,17 +849,47 @@ def require_configured(settings: Settings) -> None:
         )
 
 
+#: What one run in flight is assumed to cost until it finishes (S5F), by kind. A run still streaming
+#: has no cost in ``cost_since`` yet, so without a reservation N runs started together can each pass
+#: the check and overshoot the budget N-fold. These are deliberately above the live-measured costs
+#: (2026-10-15, MiniMax-M3: an explain about $0.002-0.003, an ask about $0.002-0.005, a summary
+#: about $0.015 when it read the whole paper by tools), so the cap errs on the side of waiting.
+RUN_RESERVE_USD: Final[dict[str, float]] = {"explain": 0.01, "ask": 0.02, "summary": 0.05}
+
+
+def sweep_orphans(db: PaperTreeDb) -> int:
+    """Ends every run still ``running`` past its expiry as an ``internal`` error (S5F), so a UI
+    never shows a run spinning forever after the API process that was writing it went away. Called
+    at API start and lazily wherever runs are read or started; cheap and idempotent."""
+    ended = db.sweep_orphaned_runs()
+    for run_id in ended:
+        log_event("run.orphan_ended", level="warning", run_id=run_id, error_code="internal")
+    return len(ended)
+
+
 def require_budget(db: PaperTreeDb, owner: Any, settings: Settings) -> None:
     """429 ``budget_exhausted`` once the rolling-24 h estimated spend reaches the daily budget
-    (contracts.md §3.4). A run still streaming has no cost yet, so this is a cap on FINISHED
-    spend: concurrent runs started together can overshoot it by one run each."""
+    (contracts.md §3.4), counting the runs still in flight too: each reserves
+    ``RUN_RESERVE_USD[kind]`` until it finishes, so concurrent runs cannot overshoot the budget by
+    one run each. With nothing in flight this is exactly "finished spend >= budget"."""
+    sweep_orphans(db)
     since = (datetime.now(UTC) - timedelta(hours=24)).isoformat()
     spent = db.cost_since(owner, since)
-    if spent >= settings.daily_budget_usd:
+    budget = settings.daily_budget_usd
+    if spent >= budget:
         raise ApiError(
             "budget_exhausted",
-            f"Today's AI budget (${usd(settings.daily_budget_usd)}) is used up. "
-            "It frees up as the last 24 hours roll over.",
+            f"The AI budget for the last 24 hours (${usd(budget)}) is used up. "
+            "It frees up as older answers roll off.",
+        )
+    reserved = sum(
+        RUN_RESERVE_USD[kind] * count for kind, count in db.in_flight_runs(owner).items()
+    )
+    if reserved > 0 and spent + reserved >= budget:
+        raise ApiError(
+            "budget_exhausted",
+            f"Answers that are still being written could use up the AI budget (${usd(budget)}) "
+            "for the last 24 hours, so this one has to wait. Try again in a moment.",
         )
 
 

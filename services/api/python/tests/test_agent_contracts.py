@@ -281,7 +281,7 @@ def test_the_request_rules_are_in_both_checkers() -> None:
     summary = json.loads((AGENT / "examples" / "run-request-summary.json").read_text("utf-8"))
     explain = json.loads((AGENT / "examples" / "run-request-explain.json").read_text("utf-8"))
     for bad in (
-        {**summary, "seed": explain["seed"]},  # a summary run has no seed
+        {**summary, "seed": None},  # a summary run needs its digest (S5F)
         {**explain, "seed": None},  # an explain run needs one
         {**explain, "datamark": "^XYZ"},
         {**explain, "question": ""},

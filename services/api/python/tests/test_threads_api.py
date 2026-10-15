@@ -858,8 +858,9 @@ def _count(settings: Settings, table: str) -> int:
 
 def test_an_answer_whose_run_can_no_longer_finish_reads_back_as_ended(tmp_path: Path) -> None:
     """The API process died mid-answer: the row says `streaming`, its run token has expired, and
-    no `done` will ever come. It reads back as `partial` (it has text) with `agent_unavailable`,
-    so a reader is not left waiting; a LIVE run's message still reads `streaming`."""
+    no `done` will ever come. It reads back as `partial` (it has text) with `internal`,
+    so a reader is not left waiting; a LIVE run's message still reads `streaming`. Since S5F the
+    run and its message are also ENDED in the store (`internal`), by the sweep any read runs."""
     with ai_harness(tmp_path, Script("explain-ok")) as h:
         token, paper_id = alice_with_paper(h)
         run = events(read_sse(explain(h, token, paper_id, paragraph_anchor()))[0], "run")[0]
@@ -906,6 +907,67 @@ def test_an_answer_whose_run_can_no_longer_finish_reads_back_as_ended(tmp_path: 
         db.close()
         detail = h.client.get(f"/papers/{paper_id}/threads/{run['thread_id']}", headers=auth(token))
         stale, live = detail.json()["messages"][-2:]
-        assert (stale["status"], stale["error"]["code"]) == ("partial", "agent_unavailable")
+        # S5F: reading the thread first ENDS the orphaned run on the record (error / internal),
+        # and its message with it; the live run is untouched.
+        assert (stale["status"], stale["error"]["code"]) == ("partial", "internal")
+        (orphan,) = h.rows(
+            "SELECT status, error_code FROM ai_runs WHERE run_id = ?",
+            "run_01K63AE8M4Q2T7V9X3B5N6R0X1",
+        )
+        assert (orphan["status"], orphan["error_code"]) == ("error", "internal")
+        (alive,) = h.rows(
+            "SELECT status FROM ai_runs WHERE run_id = ?", "run_01K63AE8M4Q2T7V9X3B5N6R0X2"
+        )
+        assert alive["status"] == "running"
         assert (live["status"], live["error"]) == ("streaming", None)
         assert contract_errors(stale, "api/threads.schema.json", "Message", Message) == []
+
+
+def test_a_follow_up_runs_with_its_threads_kind_and_prompt(tmp_path: Path) -> None:
+    """contracts.md §2.5 (S5F): a follow-up is a run of the THREAD's kind, with that kind's prompt,
+    limits and code path and the earlier turns as history; it is not an `explain` because it is a
+    follow-up. An ask thread's follow-up is an `ask`; an explain thread's is an `explain`."""
+    with ai_harness(
+        tmp_path,
+        [Script("explain-ok"), Script("followup-ok"), Script("explain-ok"), Script("followup-ok")],
+    ) as h:
+        token, paper_id = alice_with_paper(h)
+        ask = events(
+            read_sse(
+                h.client.post(
+                    f"/papers/{paper_id}/threads",
+                    json={"kind": "ask", "question": "What is a residual block?"},
+                    headers=auth(token),
+                )
+            )[0],
+            "run",
+        )[0]
+        read_sse(
+            h.client.post(
+                f"/papers/{paper_id}/threads/{ask['thread_id']}/messages",
+                json={"question": "And why does that help?"},
+                headers=auth(token),
+            )
+        )
+        explained = events(read_sse(explain(h, token, paper_id, paragraph_anchor()))[0], "run")[0]
+        read_sse(
+            h.client.post(
+                f"/papers/{paper_id}/threads/{explained['thread_id']}/messages",
+                json={"question": "Why does that matter?"},
+                headers=auth(token),
+            )
+        )
+        kinds = [
+            (r["kind"], r["prompt_version"], r["history"] is not None) for r in h.fake.requests
+        ]
+        assert kinds == [
+            ("ask", "ask-v1", False),
+            ("ask", "ask-v1", True),
+            ("explain", "explain-v1", False),
+            ("explain", "explain-v1", True),
+        ]
+        assert h.fake.requests[1]["limits"]["deadline_ms"] == 60000, "the ask limits"
+        assert h.fake.requests[3]["limits"]["deadline_ms"] == 45000, "the explain limits"
+        rows = h.rows("SELECT kind, code_path FROM ai_runs ORDER BY started_at")
+        assert [r["kind"] for r in rows] == ["ask", "ask", "explain", "explain"]
+        assert all(r["code_path"].startswith(f"api.threads.{r['kind']}>") for r in rows)

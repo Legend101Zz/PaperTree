@@ -435,6 +435,94 @@ def test_a_live_run_makes_the_thread_busy_until_it_finishes(env: Env) -> None:
     )
 
 
+# ── orphaned and in-flight runs (S5F) ────────────────────────────────────────────────────────
+
+
+def _streaming_turn(env: Env, t: Tenant, run_id: str, message_id: str, *, expires_at: str) -> str:
+    """A thread with a streaming assistant message and the running run behind it."""
+    thread_id = _thread(env, t, "thr_" + run_id[4:])
+    env.db.append_message(
+        t.owner,
+        thread_id,
+        message_id=message_id,
+        role="assistant",
+        generation=GEN,
+        content="",
+        status="streaming",
+        run_id=run_id,
+    )
+    env.db.create_run(
+        t.owner,
+        run_id=run_id,
+        paper_id=t.paper_id,
+        generation=GEN,
+        kind="explain",
+        thread_id=thread_id,
+        message_id=message_id,
+        token_sha256=hashlib.sha256(run_id.encode()).hexdigest(),
+        datamark="^7f3a91c2",
+        expires_at=expires_at,
+        code_path="api.threads.explain>test",
+        request_id=None,
+        prompt_version="explain-v1",
+    )
+    return thread_id
+
+
+def test_a_run_left_running_past_its_expiry_is_ended_as_an_internal_error(env: Env) -> None:
+    a = env.alice
+    dead = "run_01K63AE8M4Q2T7V9X3B5N6RDEAD"[:30]
+    live = "run_01K63AE8M4Q2T7V9X3B5N6RLIVE"[:30]
+    t_dead = _streaming_turn(
+        env, a, dead, "msg_01K63AE8M4Q2T7V9X3B5N6RDE1", expires_at="2026-01-01T00:00:00Z"
+    )
+    t_live = _streaming_turn(
+        env, a, live, "msg_01K63AE8M4Q2T7V9X3B5N6RLV1", expires_at=_in_an_hour()
+    )
+    env.db.update_message(a.owner, "msg_01K63AE8M4Q2T7V9X3B5N6RDE1", content="Half an answ")
+    assert env.db.sweep_orphaned_runs() == [dead]
+    run = env.db.get_run(a.owner, dead)
+    assert run is not None and run["status"] == "error" and run["error_code"] == "internal"
+    assert run["finished_at"] is not None
+    assert run["input_tokens"] is None and run["output_tokens"] is None, "unknown, not zero"
+    (message,) = [m for m in env.db.list_messages(a.owner, t_dead)]
+    assert (message["status"], message["error_code"]) == ("partial", "internal"), "text kept"
+    assert message["completed_at"] is not None
+    still = env.db.get_run(a.owner, live)
+    assert still is not None and still["status"] == "running", "a live run is never touched"
+    assert env.db.list_messages(a.owner, t_live)[0]["status"] == "streaming"
+    assert env.db.sweep_orphaned_runs() == [], "idempotent"
+
+
+def test_an_orphan_with_no_text_ends_its_message_as_an_error(env: Env) -> None:
+    a = env.alice
+    run = "run_01K63AE8M4Q2T7V9X3B5N6RORPH"[:30]
+    thread = _streaming_turn(
+        env, a, run, "msg_01K63AE8M4Q2T7V9X3B5N6RORP", expires_at="2026-01-01T00:00:00Z"
+    )
+    assert env.db.sweep_orphaned_runs() == [run]
+    (message,) = env.db.list_messages(a.owner, thread)
+    assert (message["status"], message["error_code"]) == ("error", "internal")
+
+
+def test_in_flight_runs_counts_only_running_unexpired_runs_of_this_owner(env: Env) -> None:
+    a, b = env.alice, env.bob
+    _run(env, a, "run_01K63AE8M4Q2T7V9X3B5N6RIF01")
+    _run(env, a, "run_01K63AE8M4Q2T7V9X3B5N6RIF02", kind="summary", token_sha256=OTHER_HASH)
+    done = _run(env, a, "run_01K63AE8M4Q2T7V9X3B5N6RIF03", token_sha256="1" * 64)
+    env.db.finish_run(a.owner, done, status="done")
+    _run(
+        env,
+        a,
+        "run_01K63AE8M4Q2T7V9X3B5N6RIF04",
+        token_sha256="2" * 64,
+        expires_at="2026-01-01T00:00:00Z",
+    )
+    _run(env, b, "run_01K63AE8M4Q2T7V9X3B5N6RIF05", token_sha256="3" * 64)
+    assert env.db.in_flight_runs(a.owner) == {"ask": 0, "explain": 1, "summary": 1}
+    assert env.db.in_flight_runs(b.owner) == {"ask": 0, "explain": 1, "summary": 0}
+
+
 # ── spend and usage ──────────────────────────────────────────────────────────────────────────
 
 

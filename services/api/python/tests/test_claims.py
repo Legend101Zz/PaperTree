@@ -127,3 +127,77 @@ def test_a_claim_is_checked_only_against_the_blocks_it_cites(resnet: IndexedDocu
     assert _verdicts(resnet, f"{true} [b2].") == {"b2": False}
     assert _verdicts(resnet, f"{true} [b1]. {true} [b2].") == {"b1": True, "b2": False}
     assert _verdicts(resnet, f"{true} [b2, b1].") == {"b2": True, "b1": True}
+
+
+# ── S5F: what a citation's flag is made of (honest grounding) ────────────────────────────────
+#
+# The old rule, "supported iff EVERY claim citing it passes", made a well-grounded citation read
+# "not verified" the moment the answer also commented on the passage. The shipped rule: supported
+# iff at least one claim citing it is `supported` and none is `unsupported`; commentary that reuses
+# some of the passage's words and adds its own is `neutral`. These tests pin both directions.
+
+PASSAGE = (
+    "We reframe object detection as a single regression prob-\n"
+    "lem, straight from image pixels to bounding box coordi-\n"
+    "nates and class probabilities. Using our system, you only look once (YOLO) at an image to "
+    "predict what objects are present and where they are. We use ﬁxed classiﬁers."
+)
+TEXTS = {"blk_a": PASSAGE}
+HONEST = (
+    "The authors cast object detection as one regression problem from pixels to "
+    "bounding-box coordinates and class probabilities"
+)
+COMMENTARY = (
+    "That single regression framing is a deliberate departure from the multi-stage pipelines "
+    "the introduction describes next"
+)
+FAKE_NUMBER = "YOLO reaches 94.2 percent precision on this single regression problem"
+INVENTED = "The authors recommend an anchor pyramid with a recurrent language decoder"
+
+
+def test_the_pdfs_typesetting_does_not_count_against_a_faithful_claim() -> None:
+    """`prob- lem`, `coordi- nates` and the `ﬁ` ligature are the PDF's, not the model's."""
+    from papertree_api.evidence import claim_verdict
+
+    assert claim_verdict(HONEST, ["blk_a"], TEXTS) == "supported"
+    assert claim_verdict("The system uses fixed classifiers", ["blk_a"], TEXTS) == "supported"
+
+
+def test_commentary_beside_an_honest_claim_does_not_take_the_citation_down() -> None:
+    from papertree_api.evidence import citation_supported, claim_verdict
+
+    verdicts = [claim_verdict(c, ["blk_a"], TEXTS) for c in (HONEST, COMMENTARY)]
+    assert verdicts == ["supported", "neutral"]
+    assert citation_supported(verdicts) is True
+
+
+def test_commentary_alone_is_not_verified() -> None:
+    from papertree_api.evidence import citation_supported, claim_verdict
+
+    assert citation_supported([claim_verdict(COMMENTARY, ["blk_a"], TEXTS)]) is False
+
+
+@pytest.mark.parametrize("fabricated", [FAKE_NUMBER, INVENTED])
+def test_a_fabricated_claim_beside_an_honest_one_takes_the_citation_down(fabricated: str) -> None:
+    from papertree_api.evidence import citation_supported, claim_verdict
+
+    verdicts = [claim_verdict(c, ["blk_a"], TEXTS) for c in (HONEST, fabricated)]
+    assert verdicts == ["supported", "unsupported"]
+    assert citation_supported(verdicts) is False
+
+
+def test_a_claim_citing_a_block_with_no_text_is_unsupported_not_neutral() -> None:
+    from papertree_api.evidence import claim_verdict
+
+    assert claim_verdict(HONEST, ["blk_gone"], TEXTS) == "unsupported"
+
+
+def test_end_to_end_a_fabricated_second_sentence_flips_the_marker(resnet: IndexedDocument) -> None:
+    _, _, true = _two_paragraphs(resnet)
+    words = true.split()
+    commentary = (
+        " ".join(words[: len(words) // 3])
+        + " is, in my reading, a notable shift in how researchers think about the broader field"
+    )
+    assert _verdicts(resnet, f"{true} [b1]. {commentary} [b1].") == {"b1": True}
+    assert _verdicts(resnet, f"{true} [b1]. {FABRICATED} [b1].") == {"b1": False}
