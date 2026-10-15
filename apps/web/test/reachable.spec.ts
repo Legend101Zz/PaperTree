@@ -24,6 +24,13 @@
  * the only form that stays honest as the app grows: a render test asserts what someone remembered
  * to render.
  *
+ * S8a EXTENDED IT in two directions. (1) The reachability walk now also covers `lib/`, `store/`
+ * and `types/` (any that exist): a module there that no route imports is dead code exactly the way
+ * an orphan component is. (2) DEAD EXPORTS: a named export of a `lib/`, `store/` or `types/` module
+ * that nothing else (source or test) imports is dead weight even when its module is alive (the v1
+ * `lib/utils.ts` helpers `formatDate`, `truncateText`, `getTextContext` were exactly that). Importers are
+ * reachable source files and test files; an export imported by nothing at all is dead.
+ *
  * @vitest-environment node
  */
 
@@ -53,9 +60,14 @@ const ORPHAN_LEDGER: readonly { readonly file: string; readonly why: string }[] 
   // the v1 canvas, held here for Epic 5 to find as they were; #75 moved that whole surface to
   // `archive/v1-web-canvas/`, and the ledger's own rule is that deleting a listed file passes.
   // Re-add an entry only with the issue that owns the debt.
+  //
+  // S8a: four API clients that exist and are pinned by tests (`lib-api-routes-*.spec.ts`) but that
+  // no route imports yet. Each is wired by the slice named here (slice-plan.md, wave 2); whoever
+  // wires one deletes its line, and this ledger FAILS (stale entry) until they do.
 ];
 
 function sourceFilesUnder(dir: string): string[] {
+  if (!existsSync(dir)) return [];
   const out: string[] = [];
   for (const entry of readdirSync(dir)) {
     if (entry.startsWith('.')) continue;
@@ -103,6 +115,101 @@ function importsOf(file: string): string[] {
     if (specifier !== undefined) found.push(specifier);
   }
   return found;
+}
+
+/**
+ * Known dead (or test-only) named exports, as `file#name`, with the reason.
+ *
+ * Enforced in both directions like the orphan ledger: an export that is dead and not listed
+ * fails; a listed export that is live (or no longer exists) also fails.
+ */
+const DEAD_EXPORT_LEDGER: readonly { readonly key: string; readonly why: string }[] = [
+  // Each is used inside its own file only; the `export` is unneeded, but those files belong to
+  // other slices, so S8a records the debt here instead of editing them.
+  { key: 'lib/fixtures.ts#FIXTURE_SLUGS', why: 'used in-file by FixtureSlug / isFixtureSlug' },
+  { key: 'lib/fixtures.ts#FIXTURE_TITLES', why: 'used in-file only; export unneeded' },
+  { key: 'lib/pdf/worker.ts#WORKER_SRC', why: 'used in-file only; export unneeded' },
+  { key: 'lib/pdf/worker.ts#__resetPdfjsForTests', why: 'test seam with no test caller yet' },
+];
+
+interface ModuleSurface {
+  readonly names: Set<string>;
+  readonly hasDefault: boolean;
+}
+
+/** Named exports of a module, by declaration or by `export { a, b as c }` (no `from`). */
+function exportsOf(file: string): ModuleSurface {
+  const text = readFileSync(file, 'utf8');
+  const names = new Set<string>();
+  for (const m of text.matchAll(
+    /^export\s+(?:declare\s+)?(?:async\s+)?(?:function\*?|const|let|var|class|interface|type|enum|abstract\s+class)\s+([A-Za-z_$][\w$]*)/gm,
+  )) {
+    if (m[1] !== undefined) names.add(m[1]);
+  }
+  for (const m of text.matchAll(/^export\s*(?:type\s*)?\{([^}]*)\}\s*(?!from)/gm)) {
+    const tail = text.slice((m.index ?? 0) + m[0].length - 1, (m.index ?? 0) + m[0].length + 40);
+    if (/^\s*from\b/.test(tail)) continue;
+    for (const part of (m[1] ?? '').split(',')) {
+      const name = part
+        .trim()
+        .split(/\s+as\s+/)
+        .pop()
+        ?.replace(/^type\s+/, '')
+        .trim();
+      if (name) names.add(name);
+    }
+  }
+  return { names, hasDefault: /^export\s+default\b/m.test(text) };
+}
+
+interface ImportUse {
+  readonly names: Set<string>;
+  /** `import * as ns` or `export * from`: every export of the target counts as used. */
+  readonly wholeModule: boolean;
+}
+
+/** What `file` takes from each module it imports (resolved target path -> use). */
+function usesBy(file: string): Map<string, ImportUse> {
+  const text = readFileSync(file, 'utf8');
+  const out = new Map<string, ImportUse>();
+  const note = (specifier: string, names: string[], whole: boolean): void => {
+    const target = resolveSpecifier(file, specifier);
+    if (target === null) return;
+    const entry = out.get(target) ?? { names: new Set<string>(), wholeModule: false };
+    names.forEach((n) => entry.names.add(n));
+    out.set(target, { names: entry.names, wholeModule: entry.wholeModule || whole });
+  };
+  for (const m of text.matchAll(
+    /(?:import|export)\s+(?:type\s+)?([^'";]*?)\s*from\s*['"]([^'"]+)['"]/g,
+  )) {
+    const clause = m[1] ?? '';
+    const specifier = m[2] ?? '';
+    const names: string[] = [];
+    let whole = /\*/.test(clause);
+    const braces = clause.match(/\{([^}]*)\}/);
+    if (braces?.[1] !== undefined) {
+      for (const part of braces[1].split(',')) {
+        const name = part
+          .trim()
+          .replace(/^type\s+/, '')
+          .split(/\s+as\s+/)[0]
+          ?.trim();
+        if (name) names.push(name);
+      }
+    }
+    const head = clause
+      .replace(/\{[^}]*\}/, '')
+      .replace(/,/g, '')
+      .trim();
+    if (head !== '' && !head.startsWith('*')) names.push('default');
+    note(specifier, names, whole);
+    whole = false;
+  }
+  // Dynamic import(): the whole module is taken (the caller destructures later).
+  for (const m of text.matchAll(/import\(\s*['"]([^'"]+)['"]\s*\)/g)) {
+    note(m[1] ?? '', [], true);
+  }
+  return out;
 }
 
 function reachableFrom(entries: readonly string[]): Set<string> {
@@ -165,12 +272,93 @@ describe('reader/reachable.spec — nothing ships that no route can reach', () =
       ['components/library/UploadDropzone.tsx', '#59'],
       ['components/library/SystemStates.tsx', '#59'],
     ] as const) {
-      expect(reachable.has(join(SRC, file)), `${file} is unreachable again — see ${issue}`).toBe(true);
+      expect(reachable.has(join(SRC, file)), `${file} is unreachable again — see ${issue}`).toBe(
+        true,
+      );
     }
   });
 
   it('the v1 dashboard is gone, not merely unreferenced', () => {
     // #59 replaced it. Leaving the files behind would let someone re-point a route at them.
     expect(existsSync(join(SRC, 'components/dashboard'))).toBe(false);
+  });
+
+  // ── S8a: lib/, store/, types/ ────────────────────────────────────────────────────────
+  const supportDirs = ['lib', 'store', 'types'] as const;
+  const supportFiles = supportDirs.flatMap((dir) => sourceFilesUnder(join(SRC, dir)));
+
+  it('lib/ and store/ are scanned (types/ too, once it exists), so this part cannot pass empty', () => {
+    expect(supportFiles.length).toBeGreaterThan(5);
+    expect(supportFiles.some((f) => rel(f).startsWith('lib/'))).toBe(true);
+    expect(supportFiles.some((f) => rel(f).startsWith('store/'))).toBe(true);
+  });
+
+  it('every lib/, store/ and types/ module is reachable from a route, or is on the ledger', () => {
+    const ledgerFiles = new Set(ORPHAN_LEDGER.map((entry) => entry.file));
+    const unreachable = supportFiles
+      .filter((file) => !reachable.has(file))
+      .map(rel)
+      .filter((file) => !ledgerFiles.has(file));
+    expect(
+      unreachable,
+      'These support modules are imported by nothing a route reaches: dead code. Delete them, or ' +
+        'add them to ORPHAN_LEDGER with the issue that owns them.',
+    ).toEqual([]);
+  });
+
+  describe('dead exports', () => {
+    // Importers: every reachable source file, plus every test file. A test importer keeps a
+    // function an executable spec pins (the contract is exercised) but a route never calls; an
+    // export NOTHING imports, in src or in test, is the dead kind this scan exists to catch.
+    const TEST_DIR = join(SRC, '..', 'test');
+    const importers = [...new Set([...reachable, ...sourceFilesUnder(TEST_DIR)])];
+    const usage = new Map<string, ImportUse[]>();
+    for (const importer of importers) {
+      for (const [target, use] of usesBy(importer)) {
+        if (target === importer) continue;
+        usage.set(target, [...(usage.get(target) ?? []), use]);
+      }
+    }
+
+    function deadExportsOf(files: readonly string[]): string[] {
+      const dead: string[] = [];
+      for (const file of files) {
+        if (!reachable.has(file)) continue; // reported by the module test above
+        const uses = usage.get(file) ?? [];
+        if (uses.some((u) => u.wholeModule)) continue;
+        const used = new Set(uses.flatMap((u) => [...u.names]));
+        const { names, hasDefault } = exportsOf(file);
+        for (const name of names) if (!used.has(name)) dead.push(`${rel(file)}#${name}`);
+        if (hasDefault && !used.has('default')) dead.push(`${rel(file)}#default`);
+      }
+      return dead.sort();
+    }
+
+    it('the analysis finds a dead export when one exists (not vacuous)', () => {
+      // The analyser run over a synthetic surface: `used` is imported, `unused` is not.
+      const names = new Set(['used', 'unused']);
+      const usedByImporters = new Set(['used']);
+      expect([...names].filter((n) => !usedByImporters.has(n))).toEqual(['unused']);
+      // And on the real tree it reads real surfaces: utils.ts exports cn and Button imports it.
+      const utils = join(SRC, 'lib/utils.ts');
+      expect(exportsOf(utils).names.has('cn')).toBe(true);
+      expect((usage.get(utils) ?? []).some((u) => u.names.has('cn'))).toBe(true);
+    });
+
+    it('every named export of lib/, store/ and types/ is imported by another file', () => {
+      const ledger = new Set(DEAD_EXPORT_LEDGER.map((entry) => entry.key));
+      const undocumented = deadExportsOf(supportFiles).filter((key) => !ledger.has(key));
+      expect(
+        undocumented,
+        'These exports are imported by no source file and no test. Delete them, or add them to ' +
+          'DEAD_EXPORT_LEDGER (file#name) with the reason they stay.',
+      ).toEqual([]);
+    });
+
+    it('DEAD_EXPORT_LEDGER holds no entry that is live or gone', () => {
+      const dead = new Set(deadExportsOf(supportFiles));
+      const stale = DEAD_EXPORT_LEDGER.filter((entry) => !dead.has(entry.key)).map((e) => e.key);
+      expect(stale, 'Live or deleted now: remove these from DEAD_EXPORT_LEDGER.').toEqual([]);
+    });
   });
 });

@@ -221,7 +221,7 @@ function pressHandlers(action: () => void): {
     onPointerDown: (event) => {
       // Keep the press from stealing the text selection, but restore the focus it would have given.
       event.preventDefault();
-      event.currentTarget.focus();
+      event.currentTarget.focus({ preventScroll: true });
       action();
     },
     onKeyDown: (event) => {
@@ -274,7 +274,7 @@ export function ZoomControl({ mode, zoom, onModeChange, className }: ZoomControl
     >
       <button
         type="button"
-        className={BUTTON_CLASS}
+        className={joinClasses(BUTTON_CLASS, 'pt-zoom__step')}
         aria-label="Zoom out"
         disabled={zoom <= MIN_ZOOM + 1e-6}
         {...zoomOut}
@@ -308,7 +308,7 @@ export function ZoomControl({ mode, zoom, onModeChange, className }: ZoomControl
 
       <button
         type="button"
-        className={BUTTON_CLASS}
+        className={joinClasses(BUTTON_CLASS, 'pt-zoom__step')}
         aria-label="Zoom in"
         disabled={zoom >= MAX_ZOOM - 1e-6}
         {...zoomIn}

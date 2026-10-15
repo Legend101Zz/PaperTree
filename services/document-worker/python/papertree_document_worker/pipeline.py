@@ -50,7 +50,7 @@ from papertree_document_worker.frontmatter import classify_front_matter
 from papertree_document_worker.hierarchy import build_sections, detect_headings, reparent_orphans
 from papertree_document_worker.joining import find_continuations
 from papertree_document_worker.layout import LayoutBlock, layout_document
-from papertree_document_worker.pdf import SourceDocument
+from papertree_document_worker.pdf import SourceDocument, pymupdf
 from papertree_document_worker.references import (
     classify_reference_entries,
 )
@@ -503,6 +503,11 @@ def parse_document(
 
     document = SourceDocument(path)
     try:
+        if document.page_count == 0:
+            # A PDF with no pages has nothing to read. Promoting it as a `partial` paper with zero
+            # blocks showed the reader an empty paper; it is the FILE's fault, deterministic on
+            # every attempt, and the parse job maps this error to `pdf_unreadable` (job.py).
+            raise pymupdf.FileDataError("the PDF has no pages")
         pages = document.pages()
         profile = classify_document(document, pages)
         layout = layout_document(pages)

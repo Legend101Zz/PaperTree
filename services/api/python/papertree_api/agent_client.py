@@ -83,6 +83,10 @@ MAX_STATUS_LABEL: Final = 120
 
 PROVIDER: Final = "minimax"
 MODEL: Final = "MiniMax-M3"
+#: Every model the agent may report in its run event (`minimax/<id>`, ADR-003). `MODEL` is only the
+#: fallback for a stream that broke before the run event; the stored model is what the agent said.
+KNOWN_MODELS: Final = ("MiniMax-M3", "MiniMax-M3.1-Flash-Preview")
+MODEL_PREFIX: Final = "minimax/"
 UNKNOWN_SDK: Final = "unknown"
 
 RunKind = Literal["explain", "ask", "summary"]
@@ -118,9 +122,12 @@ LIMITS: Final[dict[RunKind, AgentLimits]] = {
         max_output_tokens=4096,
         max_retries=1,
     ),
+    # idle_ms 45 s (W2API item 6, 2026-10-15): 1 of the panel's 8 live summaries ended `timeout`
+    # at 20.15 s with no token, MiniMax-M3 thinking over a 6,000-token digest before its first
+    # text. The deadline (90 s) is unchanged and still bounds the whole run.
     "summary": AgentLimits(
         deadline_ms=90_000,
-        idle_ms=20_000,
+        idle_ms=45_000,
         max_tool_calls=12,
         max_turns=6,
         max_output_tokens=6144,
@@ -377,6 +384,8 @@ class RunBroker:
     cancelled: bool = False
     finished: bool = False
     sdk: str = UNKNOWN_SDK
+    #: The model the agent's run event reported (None until it arrives).
+    model: str | None = None
     first_text_ms: int | None = None
     api_retries: int = 0
     usage: _Usage = field(default_factory=_Usage)
@@ -566,6 +575,7 @@ class RunBroker:
                     self._stop_agent()
                     return _Broken("internal")
                 self.sdk = data.sdk
+                self.model = data.model.removeprefix(MODEL_PREFIX)
             elif isinstance(data, AgentStatus):
                 status: dict[str, Any] = {"phase": data.phase}
                 if data.label:
@@ -604,6 +614,7 @@ class RunBroker:
 
     async def _finalize(self, db: PaperTreeDb, owner: Any, outcome: AgentDone | _Broken) -> None:
         spec = self.spec
+        lost = False  # the agent went away mid-run (an `aborted` done nobody asked for)
         if isinstance(outcome, AgentDone):
             final_text = outcome.final_text or self.buffer
             status: str = outcome.status
@@ -612,8 +623,28 @@ class RunBroker:
             spent = replace(self.retried_usage)  # a retried attempt's totals, then this one's
             spent.add(outcome.usage_totals)
             tokens: dict[str, Any] = spent.tokens()
+            if status in ("aborted", "error") and spent.input == 0 and spent.output == 0:
+                # Pi reports no usage for a message that was aborted or failed mid-stream (text
+                # may well have streamed): the totals are zero because nothing was REPORTED, not
+                # because nothing was spent. Unknown is null, never 0 (S5F). The cost and the
+                # cache reads the agent did report stay.
+                tokens["input_tokens"] = None
+                tokens["output_tokens"] = None
+                tokens["reasoning_tokens"] = None
+                if not spent.cost_usd_est:
+                    tokens["cost_usd_est"] = None  # a zero cost beside unknown tokens is unknown
             tool_calls, agent_retries = outcome.tool_calls, outcome.retries
             entries: list[dict[str, Any]] | None = outcome.entries
+            if error_code == "agent_unavailable" or (
+                status == "aborted" and not self.cancelled and self._cancel_task is None
+            ):
+                # W2API item 4: the agent is going away. Either it says so (`agent_unavailable`:
+                # its shutdown reason) or it ended the run `aborted` and nobody here asked it to
+                # (an older agent: it aborts every live run when it closes). That is the agent
+                # going away, not the reader stopping (contracts.md §2.9): `agent_unavailable`,
+                # retryable, the streamed text kept, the thread's stored state left as it was.
+                status = "partial" if final_text else "error"
+                error_code, lost, entries = "agent_unavailable", True, None
             if status in ("error", "aborted") and not outcome.final_text and not entries:
                 entries = None  # keep the thread's stored state: nothing to resume from here
             if outcome.markers and set(outcome.markers) != set(evidence.markers_in(final_text)):
@@ -637,23 +668,38 @@ class RunBroker:
                 for block_id in handles.values()
                 if (block := index.block(block_id)) is not None
             }
+            vocabulary = evidence.vocabulary_of(index)
         except KeyError:
-            texts = {}
+            texts, vocabulary = {}, None
         minter = evidence.CitationMinter(
-            run_id=spec.run_id, handles=handles, document=document, texts=texts, new_id=new_id
+            run_id=spec.run_id,
+            handles=handles,
+            document=document,
+            texts=texts,
+            new_id=new_id,
+            paper=vocabulary,
         )
         summary: dict[str, Any] | None = None
+        derived_from: list[str] = []
         if spec.kind == "summary":
             bullets = evidence.cite_summary(final_text, minter) if final_text else []
             citations = [c for bullet in bullets for c in bullet.citations]
-            # contracts.md §3.4: partial when a bullet has no valid marker. The verifier's verdict
-            # is each bullet's `supported`; it does not make the summary partial.
+            # contracts.md §3.4 / S5F: a summary with text is NEVER `failed`. It is `complete`
+            # when every bullet carries a valid marker, `partial` when some or all do not (the
+            # bullets are kept, `supported: false`), and only a run with no text at all fails.
             complete = bool(bullets) and all(b.citations for b in bullets)
             if status == "complete" and not complete:
                 status = "partial"
+            # A derivation names the blocks it comes from (0001's CHECK): the cited ones, else
+            # the digest and whatever else the run was shown.
+            derived_from = [c.block_id for c in citations] or list(dict.fromkeys(handles.values()))
+            if status in ("complete", "partial") and not (bullets and derived_from):
+                # No bullet, or not a single block the text could be derived from: nothing to
+                # store, so it is not served as a summary, and the live `done` says so too.
+                status, error_code = "error", error_code or "internal"
             summary = {
                 "generation": spec.generation,
-                "model": MODEL,
+                "model": self.model or MODEL,
                 "prompt_version": PROMPT_VERSIONS["summary"],
                 "created_at": now_wire(),
                 "status": "complete" if status == "complete" else "partial",
@@ -675,7 +721,7 @@ class RunBroker:
             "error": "error",
             "aborted": "aborted",
         }[status]
-        if isinstance(outcome, _Broken) and run_status == "done":
+        if (lost or isinstance(outcome, _Broken)) and run_status == "done":
             run_status = "error"  # the stream broke: the partial text is kept, the run failed
         latency_ms = self._elapsed_ms()
         with db.transaction():
@@ -707,22 +753,22 @@ class RunBroker:
                 )
                 if entries is not None:
                     db.set_agent_state(owner, spec.thread_id, entries)
-            if summary is not None and citations and status in ("complete", "partial"):
+            if summary is not None and summary["bullets"] and status in ("complete", "partial"):
                 db.put_summary(
                     owner,
                     PaperId(spec.paper_id),
                     spec.generation,
                     prompt_hash=PROMPT_VERSIONS["summary"],
-                    model_id=MODEL,
+                    model_id=self.model or MODEL,
                     content=summary,
-                    derived_from=[c.block_id for c in citations],
+                    derived_from=derived_from,
                 )
             db.finish_run(
                 owner,
                 spec.run_id,
                 status=run_status,
                 provider=PROVIDER,
-                model=MODEL,
+                model=self.model,
                 agent_sdk=self.sdk,
                 stop_reason=stop_reason,
                 error_code=error_code,
@@ -743,7 +789,7 @@ class RunBroker:
             error_code=error_code,
             code_path=CODE_PATHS[spec.kind],
             provider=PROVIDER,
-            model=MODEL,
+            model=self.model,
             stop_reason=stop_reason,
             input_tokens=tokens.get("input_tokens"),
             output_tokens=tokens.get("output_tokens"),
@@ -823,17 +869,47 @@ def require_configured(settings: Settings) -> None:
         )
 
 
+#: What one run in flight is assumed to cost until it finishes (S5F), by kind. A run still streaming
+#: has no cost in ``cost_since`` yet, so without a reservation N runs started together can each pass
+#: the check and overshoot the budget N-fold. These are deliberately above the live-measured costs
+#: (2026-10-15, MiniMax-M3: an explain about $0.002-0.003, an ask about $0.002-0.005, a summary
+#: about $0.015 when it read the whole paper by tools), so the cap errs on the side of waiting.
+RUN_RESERVE_USD: Final[dict[str, float]] = {"explain": 0.01, "ask": 0.02, "summary": 0.05}
+
+
+def sweep_orphans(db: PaperTreeDb) -> int:
+    """Ends every run still ``running`` past its expiry as an ``internal`` error (S5F), so a UI
+    never shows a run spinning forever after the API process that was writing it went away. Called
+    at API start and lazily wherever runs are read or started; cheap and idempotent."""
+    ended = db.sweep_orphaned_runs()
+    for run_id in ended:
+        log_event("run.orphan_ended", level="warning", run_id=run_id, error_code="internal")
+    return len(ended)
+
+
 def require_budget(db: PaperTreeDb, owner: Any, settings: Settings) -> None:
     """429 ``budget_exhausted`` once the rolling-24 h estimated spend reaches the daily budget
-    (contracts.md §3.4). A run still streaming has no cost yet, so this is a cap on FINISHED
-    spend: concurrent runs started together can overshoot it by one run each."""
+    (contracts.md §3.4), counting the runs still in flight too: each reserves
+    ``RUN_RESERVE_USD[kind]`` until it finishes, so concurrent runs cannot overshoot the budget by
+    one run each. With nothing in flight this is exactly "finished spend >= budget"."""
+    sweep_orphans(db)
     since = (datetime.now(UTC) - timedelta(hours=24)).isoformat()
     spent = db.cost_since(owner, since)
-    if spent >= settings.daily_budget_usd:
+    budget = settings.daily_budget_usd
+    if spent >= budget:
         raise ApiError(
             "budget_exhausted",
-            f"Today's AI budget (${usd(settings.daily_budget_usd)}) is used up. "
-            "It frees up as the last 24 hours roll over.",
+            f"The AI budget for the last 24 hours (${usd(budget)}) is used up. "
+            "It frees up as older answers roll off.",
+        )
+    reserved = sum(
+        RUN_RESERVE_USD[kind] * count for kind, count in db.in_flight_runs(owner).items()
+    )
+    if reserved > 0 and spent + reserved >= budget:
+        raise ApiError(
+            "budget_exhausted",
+            f"Answers that are still being written could use up the AI budget (${usd(budget)}) "
+            "for the last 24 hours, so this one has to wait. Try again in a moment.",
         )
 
 
@@ -904,7 +980,8 @@ async def launch(
         kind=spec.kind,
         code_path=CODE_PATHS[spec.kind],
         provider=PROVIDER,
-        model=MODEL,
+        # No model here: the agent picks it per kind and reports it in the run event; `run.done`
+        # logs that one.
     )
     broker.start()
     return RunStreamResponse(broker)

@@ -39,49 +39,11 @@ class Stub:
     user: bool = True
 
 
-STUBS = [
+STUBS: list[Stub] = [
     # §2.2 (S1): built; their contract tests are `test_ingest_*.py`.
     # §2.5 and §4 (S5) are built: `test_threads_api.py`, `test_summary_api.py`,
     # `test_internal_tools.py` and `test_usage_api.py` pin them.
-    # §2.7 (S7)
-    Stub("GET", f"/papers/{PAPER}/board", "S7"),
-    Stub(
-        "POST",
-        f"/papers/{PAPER}/board/nodes",
-        "S7",
-        {"node_id": NODE, "kind": "note", "x": 0, "y": 0, "w": 240, "h": 120, "body": "n"},
-        (
-            {"node_id": NODE, "kind": "excerpt", "x": 0, "y": 0, "w": 240, "h": 120},
-            "source_anchor",
-        ),
-    ),
-    Stub(
-        "PATCH",
-        f"/boards/{BOARD}/nodes/{NODE}",
-        "S7",
-        {"version": 1, "x": 10.5},
-        ({"x": 10.5}, "version"),
-    ),
-    Stub("DELETE", f"/boards/{BOARD}/nodes/{NODE}", "S7"),
-    Stub(
-        "POST",
-        f"/boards/{BOARD}/edges",
-        "S7",
-        {"edge_id": EDGE, "from_node_id": NODE, "to_node_id": "cn_other", "kind": "supports"},
-        (
-            {"edge_id": EDGE, "from_node_id": NODE, "to_node_id": NODE, "kind": "supports"},
-            "to_node_id",
-        ),
-    ),
-    Stub(
-        "PATCH",
-        f"/boards/{BOARD}/edges/{EDGE}",
-        "S7",
-        {"label": "because"},
-        ({"kind": "x"}, "kind"),
-    ),
-    Stub("DELETE", f"/boards/{BOARD}/edges/{EDGE}", "S7"),
-    Stub("PATCH", f"/boards/{BOARD}", "S7", {"title": "My board"}, ({"title": ""}, "title")),
+    # §2.7 (S7): built; its contract tests are `test_s7_canvas_api.py`.
 ]
 
 #: The tables a stub must not touch.
@@ -129,14 +91,10 @@ def test_a_stub_enforces_its_contract_then_answers_501(stub: Stub, tmp_path: Pat
 
 
 #: (stub, a body whose one fault is an explicit null in an omittable field, the field)
-NULLS = [
+NULLS: list[tuple[str, str, dict[str, Any], str]] = [
     # `/papers/{id}/reparse`'s `reason: null`: built by S1, pinned in
     # `test_ingest_jobs.py::test_reparse_creates_generation_2`. The S5 routes are built and
     # pin their own omittable nulls in their test files.
-    (f"/boards/{BOARD}/nodes/{NODE}", "PATCH", {"version": 1, "body": None}, "body"),
-    (f"/boards/{BOARD}/nodes/{NODE}", "PATCH", {"version": 1, "w": None}, "w"),
-    (f"/boards/{BOARD}/edges/{EDGE}", "PATCH", {"kind": None}, "kind"),
-    (f"/boards/{BOARD}", "PATCH", {"title": None}, "title"),
 ]
 
 

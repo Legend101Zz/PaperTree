@@ -33,6 +33,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   extentOf,
+  guidedProjectionFor,
   resolveAnchor,
   sourcePaint,
   type Anchor,
@@ -40,13 +41,8 @@ import {
 } from '@papertree/anchoring';
 import type { BBox } from '@papertree/document-ir';
 
-import {
-  createFixtureAnswerSource,
-  createLiveAnswerSource,
-  Inspector,
-} from '@/components/inspector';
-import type { InspectorContext } from '@/components/inspector/types';
 import { sendToCanvas } from '@/components/canvas/sendToCanvas';
+import { useFocusFromCanvas } from '@/components/canvas/useFocusFromCanvas';
 import { ExplainPanel } from '@/components/explain';
 import { useExplainActions } from '@/components/explain/useExplainActions';
 import { ReaderActionsProvider, type ReaderActions } from '@/components/reader/actions';
@@ -146,12 +142,52 @@ function defaultZoomMode(): ZoomMode {
   return window.innerWidth < 768 ? FIT_WIDTH : { kind: 'scale', scale: 1.25 };
 }
 
-/** The first block in reading order still visible at the top of `position` — the Guided link. */
+/**
+ * The first block in reading order still visible at the top of `position` - the Guided link.
+ *
+ * Only a block Guided has a card for counts (RFIX2 R8): page furniture (a page number, the arXiv
+ * stamp) and a figure's panels are on the page but not in the reading, and a position that named one
+ * of them could not be found again in Guided.
+ */
 export function topBlockAt(doc: IndexedDocument, position: ReadingPosition): string | undefined {
-  const blocks = (doc.byPage.get(position.page) ?? [])
-    .filter((block) => block.text.trim().length > 0 && block.bbox[3] > position.yPt + 2)
-    .sort((a, b) => a.readingIndex - b.readingIndex);
-  return blocks[0]?.id;
+  const placement = guidedProjectionFor(doc).placement;
+  const cards = (pageIndex: number) =>
+    (doc.byPage.get(pageIndex) ?? [])
+      .filter((block) => block.text.trim().length > 0 && placement.get(block.id)?.kind !== 'absent')
+      .sort((a, b) => a.readingIndex - b.readingIndex);
+
+  const here = cards(position.page).filter((block) => block.bbox[3] > position.yPt + 2);
+  if (here[0] !== undefined) return here[0].id;
+
+  // Nothing on this page ends below the top of the view: the reader is in the page's bottom margin
+  // or in the gap between two pages (RFIX2 must-fix: "no block" opened Guided at the paper's title).
+  // The reader is about to read whatever comes next, so the first card of the next page that has
+  // one; failing that (the last page) the last card at or before this position.
+  const indices = doc.pages.map((page) => page.index).sort((a, b) => a - b);
+  for (const index of indices) {
+    if (index <= position.page) continue;
+    const next = cards(index)[0];
+    if (next !== undefined) return next.id;
+  }
+  for (const index of [...indices].reverse()) {
+    if (index > position.page) continue;
+    const before = cards(index);
+    const last = before[before.length - 1];
+    if (last !== undefined) return last.id;
+  }
+  return undefined;
+}
+
+/**
+ * The block Guided opens at for the position the reader is at. The saved block when there is one;
+ * otherwise the one the page and offset name. A position can lack its block - it was saved before
+ * the parse had loaded, or the reader scrolled before it did - and "no block" must not mean "the top
+ * of the paper" (RFIX2 R8).
+ */
+export function initialBlockFor(doc: IndexedDocument | null, at: SavedReaderState | null): string | null {
+  if (at === null) return null;
+  if (at.blockId !== undefined) return at.blockId;
+  return doc === null ? null : (topBlockAt(doc, { page: at.page, yPt: at.yPt }) ?? null);
 }
 
 function useMediaQuery(query: string): boolean {
@@ -441,6 +477,9 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
     [highlights.highlights, focusAnchor, narrow],
   );
 
+  // S7: the canvas's "Open source" lands here as `?focus=<node_id>`.
+  useFocusFromCanvas(paper.kind === 'api' ? paper.paperId : null, doc !== null, focusAnchor);
+
   /** The colour a new highlight gets: the last one the reader picked, amber at first. */
   const lastColor = useRef<HighlightColor>('amber');
   const onCreateHighlight = useCallback(
@@ -559,7 +598,7 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
           selection={selection}
           onSelectionChange={setSelection}
           initialPosition={positionRef.current === null ? null : { page: positionRef.current.page, yPt: positionRef.current.yPt }}
-          initialBlockId={positionRef.current?.blockId ?? null}
+          initialBlockId={initialBlockFor(doc, positionRef.current)}
           onSourcePosition={onSourcePosition}
           onGuidedTop={onGuidedTop}
           onFocusHighlight={focusHighlight}
@@ -725,41 +764,9 @@ function ReaderWorkspaceView(props: ViewProps) {
   const { doc, mode } = props;
   const paper = props.paper;
 
-  /**
-   * The Inspector's answer source (Epic 3; S6 replaces the Inspector with the explain panel).
-   * An `api` paper can be asked about; a `fixture` paper exists on no server, so the fixture source
-   * stays as the offline path.
-   */
-  const inspectorAnswerSource = useMemo(
-    () =>
-      doc === null
-        ? null
-        : paper.kind === 'api'
-          ? createLiveAnswerSource({ doc })
-          : createFixtureAnswerSource({
-              doc,
-              at: '1970-01-01T00:00:00.000Z',
-              client: 'papertree-web/inspector',
-            }),
-    [doc, paper],
-  );
-
   const title =
     doc?.blocks.find((block) => block.type === 'title')?.text.replace(/\n/g, ' ') ??
     (paper.kind === 'api' ? 'Opening the paper…' : paper.slug);
-
-  /**
-   * What the Inspector is asked ABOUT — #77's D6: the live selection, or the title when nothing is
-   * selected. `blockIds` is filtered against `doc.byId`.
-   */
-  const inspectorContext = useMemo<InspectorContext | null>(() => {
-    if (doc === null) return null;
-    const selected = (props.selection?.blockIds ?? []).filter((id) => doc.byId.has(id));
-    if (selected.length > 0) {
-      return { kind: 'selection', blockIds: selected, quote: props.selection?.text ?? '' };
-    }
-    return { kind: 'selection', blockIds: [doc.blocks[0]?.id ?? ''], quote: title };
-  }, [props.selection, doc, title]);
 
   const { items: painted, unplaced } = useMemo(
     () => paintItemsOf(doc, props.highlights.highlights),
@@ -811,6 +818,7 @@ function ReaderWorkspaceView(props: ViewProps) {
         navigatorOpen={props.navigatorOpen}
         navigatorAvailable={doc !== null}
         highlightCount={props.highlights.highlights.length}
+        canvasHref={props.paper.kind === 'api' ? `/paper/${encodeURIComponent(props.paper.paperId)}/canvas` : null}
       />
 
       {props.stillReading ? (
@@ -846,26 +854,6 @@ function ReaderWorkspaceView(props: ViewProps) {
         <main className="min-w-0 flex-1 overflow-hidden" aria-label="Document">
           <DocumentSlot {...props} />
         </main>
-
-        {/* The Inspector slot, filled by EPIC 3 (F3.6); S6 replaces it with the explain panel.
-            `paperId` is the real `paper_id` for an API paper — `paperRefKey` is a cache key. */}
-        {doc === null || inspectorAnswerSource === null || inspectorContext === null ? null : (
-          <aside
-            className="hidden w-[380px] shrink-0 border-l border-[--pt-rule] bg-[--pt-panel-ground] xl:block"
-            aria-label="Inspector"
-            data-epic="3"
-          >
-            <Inspector
-              context={inspectorContext}
-              answerSource={inspectorAnswerSource}
-              paperId={paper.kind === 'api' ? paper.paperId : paperRefKey(paper)}
-              onNavigate={(citation) => {
-                props.onShowSource(citation.resolution.blockIds);
-              }}
-              onShowSource={props.onShowSource}
-            />
-          </aside>
-        )}
       </div>
 
       {doc === null || unplaced.length === 0 ? null : (
@@ -904,6 +892,7 @@ function ReaderToolbarShell({
   navigatorOpen,
   navigatorAvailable,
   highlightCount,
+  canvasHref,
 }: {
   title: string;
   mode: ReadingMode;
@@ -916,6 +905,7 @@ function ReaderToolbarShell({
   navigatorOpen: boolean;
   navigatorAvailable: boolean;
   highlightCount: number;
+  canvasHref: string | null;
 }) {
   return (
     <header className="pt-reader__bar">
@@ -957,6 +947,11 @@ function ReaderToolbarShell({
           unavailableReason="Guided and Split open when the paper has been read."
         />
         {mode === 'guided' ? null : <ZoomControl mode={zoomMode} zoom={zoom} onModeChange={onZoomChange} />}
+        {canvasHref === null ? null : (
+          <a className="pt-btn" href={canvasHref}>
+            Canvas
+          </a>
+        )}
       </div>
     </header>
   );

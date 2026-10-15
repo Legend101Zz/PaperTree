@@ -17,17 +17,11 @@
   "dependencies": {
     "@tanstack/react-query": "^5.17.19",
     "clsx": "^2.1.0",
-    "katex": "^0.16.9",
     "lucide-react": "^0.314.0",
     "next": "14.1.0",
     "pdfjs-dist": "^5.7.284",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-katex": "^3.1.0",
-    "react-markdown": "^9.0.1",
-    "rehype-katex": "^7.0.0",
-    "remark-gfm": "^4.0.0",
-    "remark-math": "^6.0.0",
     "tailwind-merge": "^2.2.1",
     "zustand": "^4.5.0",
     "@papertree/document-ir": "workspace:*",
@@ -36,7 +30,6 @@
     "@xyflow/react": "^12.12.0"
   },
   "devDependencies": {
-    "@types/katex": "^0.16.7",
     "@types/node": "^20.11.16",
     "@types/react": "^18.2.52",
     "@types/react-dom": "^18.2.18",

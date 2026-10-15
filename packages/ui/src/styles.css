@@ -1697,3 +1697,1309 @@ span.pt-paper .pt-paper__cite {
     opacity: 0;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+ * S3 (library, upload and auth) — additive block
+ *
+ * One small kit of shared classes for the library, upload and sign-in screens, built only from the
+ * tokens above so the v0.2 revamp can restyle it without touching behaviour. Nothing earlier in
+ * this file is changed. Status colours are tokens of their own because a badge must stay legible in
+ * both themes.
+ * ───────────────────────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --pt-s3-ok: #2c6e49;
+  --pt-s3-ok-soft: rgb(44 110 73 / 12%);
+  --pt-s3-warn: #8a5a00;
+  --pt-s3-warn-soft: rgb(168 101 10 / 14%);
+  --pt-s3-bad: #9b2c2c;
+  --pt-s3-bad-soft: rgb(155 44 44 / 10%);
+  --pt-s3-motion: 160ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-pt-theme='light']) {
+    --pt-s3-ok: #7fcf9d;
+    --pt-s3-ok-soft: rgb(127 207 157 / 14%);
+    --pt-s3-warn: #f0c070;
+    --pt-s3-warn-soft: rgb(240 192 112 / 14%);
+    --pt-s3-bad: #f08a8a;
+    --pt-s3-bad-soft: rgb(240 138 138 / 14%);
+  }
+}
+
+:root.dark,
+:root[data-pt-theme='dark'] {
+  --pt-s3-ok: #7fcf9d;
+  --pt-s3-ok-soft: rgb(127 207 157 / 14%);
+  --pt-s3-warn: #f0c070;
+  --pt-s3-warn-soft: rgb(240 192 112 / 14%);
+  --pt-s3-bad: #f08a8a;
+  --pt-s3-bad-soft: rgb(240 138 138 / 14%);
+}
+
+.pt-s3-page {
+  min-height: 100vh;
+  background: var(--pt-page-ground);
+  color: var(--pt-ink);
+  font-family: var(--pt-font-ui);
+}
+
+.pt-s3-topbar {
+  background: var(--pt-ground-raised);
+  border-bottom: 1px solid var(--pt-rule);
+}
+
+.pt-s3-container {
+  max-width: 72rem;
+  margin-inline: auto;
+  padding-inline: 16px;
+}
+
+.pt-s3-brand {
+  font-family: var(--pt-font-body);
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--pt-ink);
+}
+
+.pt-s3-h1 {
+  font-family: var(--pt-font-body);
+  font-size: 1.75rem;
+  line-height: 1.2;
+  font-weight: 600;
+  color: var(--pt-ink);
+}
+
+.pt-s3-muted {
+  color: var(--pt-ink-muted);
+}
+
+.pt-s3-small {
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+/* buttons */
+.pt-s3-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid var(--pt-rule);
+  background: var(--pt-ground-raised);
+  color: var(--pt-ink);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color var(--pt-s3-motion) ease,
+    border-color var(--pt-s3-motion) ease;
+}
+.pt-s3-btn:hover {
+  border-color: var(--pt-ink-muted);
+}
+.pt-s3-btn:focus-visible,
+.pt-s3-field__input:focus-visible,
+.pt-s3-link:focus-visible,
+.pt-s3-cardlink:focus-visible,
+.pt-s3-drop:focus-within {
+  outline: 2px solid var(--pt-focus);
+  outline-offset: 2px;
+}
+.pt-s3-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.pt-s3-btn--primary {
+  background: var(--pt-accent);
+  border-color: var(--pt-accent);
+  color: var(--pt-accent-ink);
+}
+.pt-s3-btn--primary:hover {
+  border-color: var(--pt-accent);
+  filter: brightness(1.08);
+}
+.pt-s3-btn--quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--pt-ink-muted);
+}
+.pt-s3-btn--quiet:hover {
+  color: var(--pt-ink);
+  border-color: var(--pt-rule);
+}
+.pt-s3-btn--danger {
+  color: var(--pt-s3-bad);
+  border-color: var(--pt-s3-bad);
+  background: transparent;
+}
+.pt-s3-btn--block {
+  width: 100%;
+}
+.pt-s3-btn--small {
+  font-size: 0.8125rem;
+  padding: 0 12px;
+}
+
+.pt-s3-link {
+  color: var(--pt-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* form fields */
+.pt-s3-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pt-s3-field__label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--pt-ink);
+}
+.pt-s3-field__input {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--pt-rule);
+  background: var(--pt-ground-raised);
+  color: var(--pt-ink);
+  font: inherit;
+  font-size: 1rem;
+  width: 100%;
+}
+.pt-s3-field__input::placeholder {
+  color: var(--pt-ink-muted);
+}
+.pt-s3-field__input[aria-invalid='true'] {
+  border-color: var(--pt-s3-bad);
+}
+.pt-s3-field__hint {
+  font-size: 0.8125rem;
+  color: var(--pt-ink-muted);
+}
+
+/* surfaces */
+.pt-s3-panel {
+  background: var(--pt-ground-raised);
+  border: 1px solid var(--pt-rule);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.pt-s3-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  background: var(--pt-ground-raised);
+  border: 1px solid var(--pt-rule);
+  border-radius: 12px;
+  padding: 16px;
+}
+.pt-s3-card__title {
+  font-family: var(--pt-font-body);
+  font-size: 1.0625rem;
+  line-height: 1.3;
+  font-weight: 600;
+  color: var(--pt-ink);
+}
+.pt-s3-cardlink {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.pt-s3-cardlink.pt-s3-card__title {
+  font-family: var(--pt-font-body);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.pt-s3-cardlink:hover .pt-s3-card__title,
+.pt-s3-cardlink.pt-s3-card__title:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* alerts and notes */
+.pt-s3-alert {
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  border: 1px solid transparent;
+}
+.pt-s3-alert--error {
+  background: var(--pt-s3-bad-soft);
+  color: var(--pt-s3-bad);
+  border-color: var(--pt-s3-bad);
+}
+.pt-s3-alert--warn {
+  background: var(--pt-s3-warn-soft);
+  color: var(--pt-s3-warn);
+}
+.pt-s3-alert--info {
+  background: var(--pt-accent-soft);
+  color: var(--pt-ink);
+}
+
+/* status badge */
+.pt-s3-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  background: var(--pt-rule);
+  color: var(--pt-ink);
+}
+.pt-s3-badge--reading {
+  background: var(--pt-accent-soft);
+  color: var(--pt-accent);
+}
+.pt-s3-badge--ready {
+  background: var(--pt-s3-ok-soft);
+  color: var(--pt-s3-ok);
+}
+.pt-s3-badge--partial {
+  background: var(--pt-s3-warn-soft);
+  color: var(--pt-s3-warn);
+}
+.pt-s3-badge--failed {
+  background: var(--pt-s3-bad-soft);
+  color: var(--pt-s3-bad);
+}
+
+/* progress bar */
+.pt-s3-bar {
+  height: 6px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--pt-rule);
+}
+.pt-s3-bar__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--pt-accent);
+  transition: width var(--pt-s3-motion) linear;
+}
+
+/* upload zone */
+.pt-s3-drop {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 144px;
+  padding: 24px 16px;
+  text-align: center;
+  cursor: pointer;
+  border: 2px dashed var(--pt-rule);
+  border-radius: 12px;
+  background: var(--pt-ground-raised);
+  transition:
+    border-color var(--pt-s3-motion) ease,
+    background-color var(--pt-s3-motion) ease;
+}
+.pt-s3-drop:hover,
+.pt-s3-drop[data-drag='true'] {
+  border-color: var(--pt-accent);
+  background: var(--pt-accent-soft);
+}
+
+/* skeleton */
+.pt-s3-skeleton {
+  border-radius: 12px;
+  min-height: 168px;
+  background: linear-gradient(90deg, var(--pt-rule), var(--pt-ground-raised), var(--pt-rule));
+  background-size: 200% 100%;
+  animation: pt-s3-shimmer 1.4s linear infinite;
+}
+@keyframes pt-s3-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes pt-s3-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.pt-s3-spin {
+  animation: pt-s3-spin 900ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-s3-btn,
+  .pt-s3-drop,
+  .pt-s3-bar__fill {
+    transition: none;
+  }
+  .pt-s3-skeleton,
+  .pt-s3-spin {
+    animation: none;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+ * S6 — the explain panel. ADDITIVE: nothing above this line is touched by this block.
+ * Every colour is an existing token; the panel re-skins when the tokens do.
+ * ───────────────────────────────────────────────────────────────────────────────────────────── */
+
+.pt-explain {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-end: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  inline-size: min(420px, 100vw);
+  color: var(--pt-ink);
+  background: var(--pt-panel-ground);
+  border-inline-start: 1px solid var(--pt-rule);
+  box-shadow: var(--pt-float-shadow);
+  font-family: var(--pt-font-ui);
+  animation: pt-explain-in 180ms ease-out;
+}
+
+@media (min-width: 768px) {
+  html[data-pt-explain='open'] body {
+    padding-inline-end: min(420px, 100vw);
+  }
+}
+
+.pt-explain:focus {
+  outline: none;
+}
+
+@keyframes pt-explain-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+
+.pt-explain__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 8px 8px 16px;
+  border-block-end: 1px solid var(--pt-rule);
+}
+
+.pt-explain__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/*
+ * `Sheet` is `position: absolute` against the reader shell; this panel is mounted above the shell,
+ * so it is fixed to the viewport instead, and above the page's text layer (z-index 1-2).
+ */
+.pt-explain-sheet {
+  position: fixed;
+  z-index: 35;
+}
+
+.pt-sheet__scrim:has(+ .pt-explain-sheet) {
+  position: fixed;
+  z-index: 34;
+}
+
+.pt-explain-sheet .pt-sheet__body {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.pt-explain__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-block-size: 0;
+  font-family: var(--pt-font-ui);
+}
+
+.pt-explain__toolbar {
+  display: flex;
+  padding: 8px 16px 0;
+}
+
+.pt-explain__scroll {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 16px 16px;
+  overscroll-behavior: contain;
+}
+
+.pt-explain__scroll > * + * {
+  margin-block-start: 12px;
+}
+
+.pt-explain__quote .pt-paper {
+  max-inline-size: none;
+  font-size: 0.9375rem;
+  overflow-wrap: anywhere;
+}
+
+.pt-explain__fold {
+  margin-block-start: 4px;
+  color: var(--pt-accent);
+}
+
+.pt-explain__question {
+  margin: 16px 0 0;
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--pt-ink);
+  background: var(--pt-accent-soft);
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+
+.pt-explain__ai {
+  max-inline-size: none;
+  margin-block: 0;
+  overflow-wrap: anywhere;
+}
+
+.pt-explain__prose p,
+.pt-explain__prose ul,
+.pt-explain__prose ol {
+  margin: 0 0 8px;
+}
+
+.pt-explain__prose ul,
+.pt-explain__prose ol,
+.pt-explain__bullets {
+  padding-inline-start: 1.25rem;
+}
+
+.pt-explain__bullets {
+  margin: 0;
+  list-style: disc;
+}
+
+.pt-explain__bullets > li + li {
+  margin-block-start: 8px;
+}
+
+.pt-explain__prose code {
+  font-family: var(--pt-font-mono);
+  font-size: 0.85em;
+}
+
+.pt-explain__answer > * + * {
+  margin-block-start: 8px;
+}
+
+.pt-explain__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 0;
+  font-size: 0.8125rem;
+  color: var(--pt-derived-ink-muted);
+}
+
+.pt-explain__pulse {
+  flex: none;
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 50%;
+  background: var(--pt-derived-rule);
+  animation: pt-explain-pulse 1200ms ease-in-out infinite;
+}
+
+@keyframes pt-explain-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.pt-explain__skeleton {
+  display: grid;
+  gap: 8px;
+}
+
+.pt-explain__skeleton > span {
+  block-size: 10px;
+  border-radius: 6px;
+  background: var(--pt-derived-rule);
+  opacity: 0.18;
+}
+
+.pt-explain__skeleton > span:nth-child(odd) {
+  inline-size: 92%;
+}
+
+.pt-explain__skeleton > span:nth-child(even) {
+  inline-size: 68%;
+}
+
+.pt-explain__none,
+.pt-explain__empty,
+.pt-explain__note,
+.pt-explain__usage {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--pt-ink-muted);
+}
+
+.pt-explain__usage {
+  font-variant-numeric: tabular-nums;
+}
+
+.pt-explain__warn {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  color: var(--pt-ink);
+  border: 1px solid var(--pt-highlight-approx-stroke);
+  background: var(--pt-highlight-approx-fill);
+  border-radius: 12px;
+}
+
+.pt-explain__error {
+  padding: 12px;
+  font-size: 0.875rem;
+  border: 1px solid var(--pt-danger);
+  border-radius: 12px;
+}
+
+.pt-explain__error p {
+  margin: 0 0 8px;
+}
+
+.pt-explain__error p:last-child {
+  margin-block-end: 0;
+}
+
+.pt-explain__error-title {
+  font-weight: 600;
+  color: var(--pt-danger);
+}
+
+.pt-explain__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.pt-explain__composer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-block-start: 1px solid var(--pt-rule);
+  background: var(--pt-panel-ground);
+}
+
+.pt-explain__input {
+  min-block-size: 56px;
+  resize: none;
+}
+
+/* A phone sheet at the half detent is short. It opens a little taller than half, and the composer
+   gives its height back to the answer. The sheet sets its height inline, hence !important. */
+@media (max-width: 767px) {
+  .pt-explain-sheet[data-detent='half'] {
+    height: 64% !important;
+  }
+
+  .pt-explain__input {
+    min-block-size: 40px;
+  }
+
+  .pt-explain__composer {
+    padding: 8px 16px;
+  }
+}
+
+.pt-explain__sr {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.pt-explain__launch {
+  position: fixed;
+  inset-block-end: 16px;
+  inset-inline-end: 16px;
+  z-index: 25;
+  box-shadow: var(--pt-float-shadow);
+}
+
+/* Chips stay inline, after the words they support, so a sentence is never broken in two. The pill
+   is 28 px tall and its hit area is padded to 40 px (below). Two chips on CONSECUTIVE lines can
+   overlap by a few px of padding; the 8 px gap between neighbours on one line does not. */
+.pt-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-inline-start: 6px;
+  vertical-align: middle;
+}
+
+.pt-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-block-size: 28px;
+  padding: 1px 10px;
+  font: inherit;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--pt-accent);
+  background: var(--pt-ground-raised);
+  border: 1px solid var(--pt-accent);
+  border-radius: 999px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* The pill is small to sit in a line of text; its tap target is not. */
+.pt-chip::after {
+  content: '';
+  position: absolute;
+  inset: -6px -4px;
+}
+
+.pt-chip:hover {
+  background: var(--pt-accent-soft);
+}
+
+.pt-chip:focus-visible {
+  outline: 2px solid var(--pt-focus);
+  outline-offset: 2px;
+}
+
+.pt-chip[data-supported='false'] {
+  /* Muted, not red: "not verified" is a caution in words, and a whole answer of red pills reads as
+     an alarm the reader cannot act on. The word is the signal; the dashed border is the echo. */
+  color: var(--pt-ink-muted);
+  border-color: var(--pt-ink-muted);
+  border-style: dashed;
+}
+
+.pt-chip__flag {
+  font-style: italic;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-explain {
+    animation: none;
+  }
+  .pt-explain__pulse {
+    animation: none;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+ * S7 canvas (additive block: owned by track S7; nothing above this line is touched)
+ *
+ * Every canvas surface draws from the tokens above. The v0.2 revamp restyles this block and the
+ * `--xy-*` bridge below without touching `components/canvas/**`.
+ * ───────────────────────────────────────────────────────────────────────────────────────────── */
+
+.pt-cv {
+  display: flex;
+  flex-direction: column;
+  block-size: 100dvh;
+  color: var(--pt-ink);
+  background: var(--pt-page-ground);
+  font-family: var(--pt-font-ui);
+}
+
+.pt-cv__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pt-cv__edgebar {
+  position: absolute;
+  inset-block-start: 8px;
+  inset-inline: 8px;
+  z-index: 7;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  background: var(--pt-ground-raised);
+  border-radius: var(--pt-radius-panel);
+  box-shadow: var(--pt-float-shadow);
+}
+
+.pt-cv__notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 8px 16px;
+  font-size: 0.875rem;
+  background: var(--pt-panel-ground);
+  border-block-end: 1px solid var(--pt-rule);
+}
+
+.pt-cv__notice {
+  justify-content: space-between;
+  color: var(--pt-danger);
+}
+
+.pt-cv__stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-block-size: 0;
+}
+
+.pt-cv__skeleton {
+  display: flex;
+  justify-content: center;
+  padding: 32px 16px;
+}
+
+.pt-cv__empty {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  pointer-events: none;
+}
+
+.pt-cv__empty-card {
+  max-inline-size: 28rem;
+  padding: 24px;
+  text-align: center;
+  background: var(--pt-ground-raised);
+  border-radius: var(--pt-radius-panel);
+  box-shadow: var(--pt-float-shadow);
+  pointer-events: auto;
+}
+
+/* xyflow bridge: its own variables, pointed at our tokens (light and dark follow the tokens). */
+.pt-cv .react-flow {
+  --xy-background-color: var(--pt-page-ground);
+  --xy-background-pattern-dots-color: var(--pt-rule);
+  --xy-edge-stroke: var(--pt-ink-muted);
+  --xy-edge-stroke-selected: var(--pt-accent);
+  --xy-edge-stroke-width: 1.5;
+  --xy-node-border-radius: var(--pt-radius-panel);
+  --xy-handle-background-color: var(--pt-accent);
+  --xy-handle-border-color: var(--pt-ground-raised);
+  --xy-controls-button-background-color: var(--pt-ground-raised);
+  --xy-controls-button-background-color-hover: var(--pt-accent-soft);
+  --xy-controls-button-color: var(--pt-ink);
+  --xy-controls-button-color-hover: var(--pt-ink);
+  --xy-controls-button-border-color: var(--pt-rule);
+  --xy-attribution-background-color: transparent;
+  font-family: var(--pt-font-ui);
+}
+
+.pt-cv .react-flow__attribution {
+  font-size: 10px;
+  color: var(--pt-ink-muted);
+}
+
+.pt-cv .react-flow__controls-button {
+  inline-size: 40px;
+  block-size: 40px;
+}
+
+.pt-cv .react-flow__controls-button svg {
+  max-inline-size: 16px;
+  max-block-size: 16px;
+}
+
+.pt-cv .react-flow__marker path,
+.pt-cv .react-flow__arrowhead polyline {
+  fill: var(--pt-ink-muted);
+  stroke: var(--pt-ink-muted);
+}
+
+.pt-cv .react-flow .react-flow__node:focus-visible,
+.pt-cv .react-flow .react-flow__node.selectable:focus-visible {
+  outline: 2px solid var(--pt-focus);
+  outline-offset: 2px;
+  border-radius: var(--pt-radius-panel);
+}
+
+.pt-cv .react-flow .react-flow__edge:focus-visible .pt-cv-edge {
+  stroke: var(--pt-focus);
+  stroke-width: 3;
+}
+
+.pt-cv .react-flow__edge.selected .pt-cv-edge,
+.pt-cv .react-flow__edge:focus .pt-cv-edge {
+  stroke: var(--pt-accent);
+  stroke-width: 2.5;
+}
+
+.pt-cv-node {
+  display: flex;
+  flex-direction: column;
+  inline-size: 100%;
+  block-size: 100%;
+  overflow: hidden;
+  color: var(--pt-ink);
+  background: var(--pt-ground-raised);
+  border: 1px solid var(--pt-rule);
+  border-radius: var(--pt-radius-panel);
+  box-shadow: var(--pt-sheet-shadow);
+}
+
+.pt-cv-node[data-selected='true'] {
+  border-color: var(--pt-accent);
+  box-shadow: 0 0 0 2px var(--pt-accent-soft);
+}
+
+.pt-cv-node__head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-block-size: 48px;
+  padding: 4px 8px 4px 12px;
+  border-block-end: 1px solid var(--pt-rule);
+}
+
+.pt-cv-node__label {
+  min-inline-size: 0;
+  overflow: hidden;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--pt-ink-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pt-cv-node__body {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  padding: 12px;
+  overflow: auto;
+}
+
+.pt-cv-node--excerpt .pt-cv-node__body blockquote {
+  margin: 0;
+}
+
+.pt-cv-node--explanation {
+  background: var(--pt-derived-ground);
+}
+
+.pt-cv-pre {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pt-cv-note[data-empty='true'] {
+  color: var(--pt-ink-muted);
+}
+
+.pt-cv-textarea {
+  inline-size: 100%;
+  min-block-size: 80px;
+  padding: 8px;
+  font: inherit;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--pt-ink);
+  background: var(--pt-ground);
+  border: 1px solid var(--pt-rule);
+  border-radius: 8px;
+  resize: none;
+}
+
+.pt-cv-textarea:focus-visible {
+  outline: 2px solid var(--pt-focus);
+  outline-offset: 1px;
+}
+
+.pt-cv-node--group {
+  background: var(--pt-accent-soft);
+  border: 1.5px dashed var(--pt-accent);
+  box-shadow: none;
+}
+
+.pt-cv-group__title {
+  align-self: flex-start;
+  inline-size: min(70%, 16rem);
+  min-block-size: 40px;
+  margin: 4px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--pt-ink);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+
+.pt-cv-group__title:hover,
+.pt-cv-group__title:focus-visible {
+  background: var(--pt-ground-raised);
+  border-color: var(--pt-rule);
+}
+
+.pt-cv-group__title:focus-visible {
+  outline: 2px solid var(--pt-focus);
+}
+
+/* Handles: a small visible dot with a 28 px hit area, so a finger can start a link. */
+.pt-cv .pt-cv-handle {
+  inline-size: 12px;
+  block-size: 12px;
+  border: 2px solid var(--pt-ground-raised);
+  background: var(--pt-accent);
+}
+
+.pt-cv .pt-cv-handle::after {
+  content: '';
+  position: absolute;
+  inset: -10px;
+}
+
+.pt-cv .pt-cv-resize {
+  inline-size: 14px;
+  block-size: 14px;
+  background: var(--pt-accent);
+  border: 2px solid var(--pt-ground-raised);
+  border-radius: 4px;
+}
+
+.pt-cv .pt-cv-resize-line {
+  border-color: var(--pt-accent);
+}
+
+.pt-cv .react-flow__edgelabel-renderer {
+  z-index: 100;
+}
+
+.pt-cv-edge-label {
+  position: absolute;
+  max-inline-size: 14rem;
+  padding: 2px 8px;
+  overflow: hidden;
+  font-family: var(--pt-font-ui);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--pt-ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--pt-ground-raised);
+  border: 1px solid var(--pt-rule);
+  border-radius: 999px;
+  /* The label never covers a card's own buttons; the edge is selected on its line. */
+  pointer-events: none;
+}
+
+.pt-cv-edge-label[data-selected='true'] {
+  color: var(--pt-accent);
+  border-color: var(--pt-accent);
+}
+
+.pt-cv-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgb(20 18 14 / 45%);
+}
+
+.pt-cv-dialog {
+  inline-size: min(100%, 26rem);
+  max-block-size: 100%;
+  padding: 20px;
+  overflow: auto;
+  color: var(--pt-ink);
+  background: var(--pt-ground-raised);
+  border-radius: var(--pt-radius-panel);
+  box-shadow: var(--pt-float-shadow);
+}
+
+.pt-cv-dialog__title {
+  margin: 0 0 4px;
+  font-family: var(--pt-font-body);
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.pt-cv-dialog__sub {
+  margin: 0 0 16px;
+  font-size: 0.875rem;
+  color: var(--pt-ink-muted);
+  overflow-wrap: anywhere;
+}
+
+.pt-cv-kinds {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-block-end: 16px;
+}
+
+.pt-cv-kind {
+  justify-content: flex-start;
+  min-block-size: 44px;
+}
+
+.pt-cv-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8125rem;
+  color: var(--pt-ink-muted);
+}
+
+.pt-cv-field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.pt-cv-field .pt-field,
+.pt-cv-field--inline .pt-field {
+  min-block-size: 40px;
+  padding-inline: 8px;
+  font: inherit;
+  color: var(--pt-ink);
+  background: var(--pt-ground);
+  border: 1px solid var(--pt-rule);
+  border-radius: 8px;
+}
+
+.pt-cv-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-block-start: 16px;
+}
+
+.pt-toast__body[data-tone='error'] {
+  color: var(--pt-danger);
+}
+
+@media (max-width: 639px) {
+  .pt-cv__tools {
+    inline-size: 100%;
+  }
+  .pt-cv__tools .pt-btn {
+    flex: 1 1 auto;
+  }
+  .pt-cv-kinds {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-cv * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+ * W2UI fix wave (additive block: owned by track W2UI, #141; nothing above this line is touched)
+ * ───────────────────────────────────────────────────────────────────────────────────────────── */
+
+/* The Undo offer after a canvas delete sits to the right of the canvas controls (bottom-left), so
+   it never covers the zoom buttons. */
+.pt-toast--lift {
+  inset-block-end: calc(16px + env(safe-area-inset-bottom, 0px));
+  inset-inline: 72px 16px;
+  justify-content: flex-start;
+}
+
+.pt-toast--lift .pt-toast__body {
+  max-inline-size: 100%;
+}
+
+/* In-card controls keep a 40 px tap target ON SCREEN at phone widths. xyflow scales a card by the
+   canvas zoom, so a 40 px button at 60 % is 24 px. The canvas publishes its zoom as `--pt-cv-zoom`;
+   each button grows an invisible hit area (its ::after) by the inverse, down to the canvas's 20 % minimum zoom, so
+   the pill stays the same size on the card and a finger still lands on it. The area is clipped to
+   the card, which is where a tap on a card should land anyway. The group name is an input (no
+   pseudo-elements), so its box grows instead, down to a 30 % zoom (below that a group frame is a
+   thumbnail: zoom in). Desktop cards are untouched. */
+@media (max-width: 639px) {
+  .pt-cv-node__head .pt-btn {
+    position: relative;
+  }
+  .pt-cv-node__head .pt-btn::after {
+    content: '';
+    position: absolute;
+    inset: min(0px, calc((40px - 40px / clamp(0.2, var(--pt-cv-zoom, 1), 1)) / 2));
+  }
+  .pt-cv-group__title {
+    min-block-size: calc(40px / clamp(0.3, var(--pt-cv-zoom, 1), 1));
+  }
+}
+
+/* ── RFIX2 (additive) ──────────────────────────────────────────────────────────────────────────
+   H390: the reader header at phone width. Row one is Back, Contents, the title on ONE line with an
+   ellipsis, and Canvas; row two is the reading-mode switch and ONE compact zoom control (the select:
+   the platform picker on touch). The step buttons and the "Fit width" shortcut are wide-screen
+   shortcuts; pinch zooms on a phone. Every control keeps its 40 px target. */
+
+@media (max-width: 639px) {
+  .pt-reader__bar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  /* The controls group dissolves into the bar so Canvas can join row one and the rest row two. */
+  .pt-reader__bar > .pt-reader__controls {
+    display: contents;
+  }
+  .pt-reader__bar > .pt-reader__title {
+    flex: 1 1 0;
+    min-inline-size: 0;
+    order: 1;
+  }
+  .pt-reader__controls > a.pt-btn {
+    flex: 0 0 auto;
+    order: 2;
+  }
+  /* The line break between the two rows. */
+  .pt-reader__bar::after {
+    content: '';
+    flex: 1 0 100%;
+    block-size: 0;
+    order: 3;
+  }
+  .pt-reader__controls > :not(a) {
+    order: 4;
+  }
+  .pt-reader__controls > div:first-child {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+  }
+  .pt-reader__controls .pt-zoom {
+    flex: 0 0 auto;
+  }
+  .pt-reader__controls .pt-zoom__step,
+  .pt-reader__controls .pt-zoom__fit {
+    display: none;
+  }
+  .pt-reader__controls .pt-zoom__select {
+    inline-size: 6.25rem;
+    max-inline-size: 6.25rem;
+  }
+}
+
+/* ── w3ui round 2 (additive) ───────────────────────────────────────────────────────────────── */
+
+/* A citation chip and the punctuation that directly follows it never part: "...sensors [p. 1]."
+   keeps its full stop on the chip's line. */
+.pt-cite-run {
+  white-space: nowrap;
+}
+
+/* The chip's quiet twin on a canvas card: it says where, and there is nothing to press. */
+.pt-cite-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--pt-ink-muted);
+  background: var(--pt-accent-soft);
+  border-radius: 999px;
+}
+
+.pt-md-heading {
+  margin-block: 0 4px;
+}
+
+.pt-explain__prose em {
+  font-style: italic;
+}
+
+.pt-explain__prose li + li {
+  margin-block-start: 4px;
+}
+
+/* The reset leaves lists without markers; an answer's bullets and numbers must show. */
+.pt-explain__prose ul {
+  list-style: disc;
+}
+
+.pt-explain__prose ol {
+  list-style: decimal;
+}
+
+/* ── w3ui round 2 fixes (additive) ─────────────────────────────────────────────────────────── */
+
+/* The toolbar owns the panel ground and a hairline, so scrolled text ends cleanly under it
+   instead of showing behind the button. */
+.pt-explain__toolbar {
+  padding-block: 8px;
+  background: var(--pt-panel-ground);
+  border-block-end: 1px solid var(--pt-rule);
+}
+
+/* "Show all" sits right under the cut quote, not a whole button-height below it. */
+.pt-explain__quote blockquote.pt-paper {
+  margin-block-end: 0;
+}
+
+.pt-explain__quote .pt-explain__fold {
+  margin-block-start: -4px;
+  margin-inline-start: -8px;
+}
+
+/* A toast keeps one line for its action and stays clear of the composer on a phone. */
+.pt-toast__body > button,
+.pt-toast__body > .pt-btn {
+  white-space: nowrap;
+}

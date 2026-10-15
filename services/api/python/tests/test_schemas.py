@@ -4,7 +4,8 @@ The Anchor half: `AnchorV1` is the §6 record, and it now sits in front of the d
 highlight write, so a body the data layer ALONE would have stored — a target kind outside the ten,
 an unknown key, a selector field of the wrong type — is a 422 naming the field. The rest: the
 cross-field rules §2.5/§2.7/§3.2 state (explain needs an anchor, an excerpt needs a source, a
-summary run has no seed, a complete run carries no error), `omittable` fields, and `WireTime`.
+summary run needs its digest seed, a complete run carries no error), `omittable` fields, and
+`WireTime`.
 """
 
 from __future__ import annotations
@@ -190,11 +191,12 @@ def test_agent_contract_rules() -> None:
             "max_retries": 1,
         },
     }
-    AgentRunRequest.model_validate_json(json.dumps(request))
     seed: dict[str, Any] = {"quote": "q", "page_label": "p. 1", "section": None, "passages": []}
-    with pytest.raises(ValidationError):  # a summary run has no seed
-        AgentRunRequest.model_validate_json(json.dumps({**request, "seed": seed}))
-    explain = {**request, "kind": "explain", "prompt_version": "explain-v1"}
+    with pytest.raises(ValidationError):  # a summary run needs its digest (S5F)
+        AgentRunRequest.model_validate_json(json.dumps(request))
+    AgentRunRequest.model_validate_json(json.dumps({**request, "seed": seed}))
+    request = {**request, "seed": seed}
+    explain = {**request, "kind": "explain", "prompt_version": "explain-v1", "seed": None}
     with pytest.raises(ValidationError):  # an explain run needs one
         AgentRunRequest.model_validate_json(json.dumps(explain))
     AgentRunRequest.model_validate_json(json.dumps({**explain, "seed": seed}))

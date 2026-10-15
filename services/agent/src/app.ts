@@ -21,16 +21,24 @@ import { ModelRuntime } from '@earendil-works/pi-coding-agent';
 
 import { type AgentConfig, environmentProblems } from './config.ts';
 import {
-  MODEL_ID,
-  MODEL_LABEL,
   PI_AI_VERSION,
   PINNED_SDK_VERSION,
-  PROVIDER_ID,
   SDK_LABEL,
   SDK_VERSION,
   TOOL_NAMES,
   validateRunRequest,
 } from './contract.ts';
+import {
+  costBasis,
+  FLASH_MODEL_ID,
+  type ModelChoice,
+  type ModelId,
+  modelsUsed,
+  PROVIDER_ID,
+  registerFlash,
+  RUN_KINDS,
+  type RunKind,
+} from './models.ts';
 import { createFauxModel, defaultBrain, type FauxBrain, type FauxModel } from './faux.ts';
 import type { Logger } from './log.ts';
 import { type ActiveRun, startRun } from './run.ts';
@@ -63,7 +71,13 @@ export interface Health {
   ok: boolean;
   sdk: string;
   pi_ai: string;
+  /** The `explain` model's label (kept for older readers); all three are in `models`. */
   model: string;
+  /** `run.model` per kind, and the Flash effort per kind (null for M3). */
+  models: Record<RunKind, string>;
+  effort: Record<RunKind, string | null>;
+  /** How a reported cost was priced, per model in use ("estimate on M3 rates" for Flash). */
+  cost_basis: Record<string, string>;
   key_present: boolean;
   wiring_ok: boolean;
   active_runs: number;
@@ -188,8 +202,22 @@ function declaredLength(request: IncomingMessage): number | undefined {
 /** The §3.1 wiring, checked on a probe session built exactly as every run's is. */
 const noop = (): undefined => undefined;
 
-async function wiringProblems(runtime: ModelRuntime, model: Model<any>): Promise<string[]> {
+async function wiringProblems(
+  runtime: ModelRuntime,
+  model: Model<any>,
+  flash: Model<any> | undefined,
+): Promise<string[]> {
   const problems: string[] = [];
+  if (flash !== undefined) {
+    if (flash.reasoning !== true) problems.push('the Flash model is not a reasoning model');
+    if (
+      (flash.compat as { forceAdaptiveThinking?: boolean } | undefined)?.forceAdaptiveThinking !==
+      true
+    )
+      problems.push(
+        'Flash is not registered with forceAdaptiveThinking (it cannot run with thinking off)',
+      );
+  }
   const tools = createPaperTools({
     baseUrl: 'http://127.0.0.1:9/internal/agent/runs/run_probe',
     token: 'probe',
@@ -209,6 +237,7 @@ async function wiringProblems(runtime: ModelRuntime, model: Model<any>): Promise
     systemPrompt: 'PaperTree wiring probe.',
     tools,
     sessionId: 'wiring-probe',
+    thinkingLevel: 'low',
     entries: [],
   });
   try {
@@ -258,23 +287,36 @@ export async function createAgentApp(options: AppOptions): Promise<AgentApp> {
     modelsPath: null,
     allowModelNetwork: false,
   });
+  const { policy } = config;
   let faux: FauxModel | undefined;
-  let model: Model<any>;
+  /** The model object each allowed model id resolves to (faux: the one scripted model). */
+  const resolved = new Map<ModelId, Model<any>>();
   if (config.faux) {
     faux = createFauxModel();
     modelRuntime.registerNativeProvider(faux.provider);
-    model = faux.model;
+    for (const id of modelsUsed(policy)) resolved.set(id, faux.model);
   } else {
     if (config.minimaxKey === undefined) throw new BootError(['no MiniMax key']);
     log.redact(config.minimaxKey);
+    registerFlash(modelRuntime);
     await modelRuntime.setRuntimeApiKey(PROVIDER_ID, config.minimaxKey);
-    const m3 = modelRuntime.getModel(PROVIDER_ID, MODEL_ID);
-    if (!m3) throw new BootError([`${MODEL_LABEL} is missing from Pi's built-in catalog`]);
-    model = options.modelOverride ? options.modelOverride(m3) : m3;
+    for (const id of modelsUsed(policy)) {
+      const found = modelRuntime.getModel(PROVIDER_ID, id);
+      if (!found) throw new BootError([`${PROVIDER_ID}/${id} is missing from the model runtime`]);
+      resolved.set(id, options.modelOverride ? options.modelOverride(found) : found);
+    }
   }
   log.redact(config.secret);
+  const modelFor = (kind: RunKind): { model: Model<any>; choice: ModelChoice } => {
+    const choice = policy[kind];
+    const model = resolved.get(choice.id);
+    if (model === undefined) throw new Error('unreachable: the policy model was resolved at boot');
+    return { model, choice };
+  };
+  const model = modelFor('explain').model;
 
-  const wiring = await wiringProblems(modelRuntime, model);
+  const flashModel = resolved.get(FLASH_MODEL_ID);
+  const wiring = await wiringProblems(modelRuntime, model, config.faux ? undefined : flashModel);
   if (wiring.length > 0) throw new BootError(wiring);
 
   const active = new Map<string, ActiveRun>();
@@ -296,7 +338,16 @@ export async function createAgentApp(options: AppOptions): Promise<AgentApp> {
     ok: true,
     sdk: SDK_LABEL,
     pi_ai: PI_AI_VERSION,
-    model: MODEL_LABEL,
+    model: policy.explain.label,
+    models: Object.fromEntries(RUN_KINDS.map((k) => [k, policy[k].label])) as Record<
+      RunKind,
+      string
+    >,
+    effort: Object.fromEntries(RUN_KINDS.map((k) => [k, policy[k].effort])) as Record<
+      RunKind,
+      string | null
+    >,
+    cost_basis: Object.fromEntries(modelsUsed(policy).map((id) => [id, costBasis(id)])),
     key_present: config.minimaxKey !== undefined,
     wiring_ok: true,
     active_runs: active.size,
@@ -415,7 +466,7 @@ export async function createAgentApp(options: AppOptions): Promise<AgentApp> {
       sse,
       {
         modelRuntime,
-        model,
+        ...modelFor(run.kind),
         log,
         pingMs,
         ...(faux ? { faux: { model: faux, brain } } : {}),
@@ -510,7 +561,7 @@ export async function createAgentApp(options: AppOptions): Promise<AgentApp> {
         });
       }),
     close: async () => {
-      for (const run of active.values()) run.abort('client');
+      for (const run of active.values()) run.abort('shutdown');
       await Promise.allSettled([...active.values()].map((run) => run.finished));
       const closed = new Promise<void>((resolve) => server.close(() => resolve()));
       server.closeAllConnections();

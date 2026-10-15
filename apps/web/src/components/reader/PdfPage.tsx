@@ -36,6 +36,7 @@ import type { BBox } from '@papertree/document-ir';
 import { getPdfjs } from '@/lib/pdf/worker';
 
 import { alignedItems } from './stampTextLayer';
+import { attachSelectionEnd } from './textLayerSelection';
 
 
 import { irToCssScale, pageCssSize, usePdfDocument } from './PdfDocumentProvider';
@@ -210,6 +211,7 @@ export function PdfPage({
     let cancelled = false;
     let renderTask: RenderTask | null = null;
     let text: TextLayerHandle | LegacyTextLayerTask | null = null;
+    let detachSelectionEnd: (() => void) | null = null;
 
     void (async () => {
       try {
@@ -264,6 +266,8 @@ export function PdfPage({
           text = layer;
           await layer.render();
           if (cancelled) return;
+          // After the spans exist: a drag that ends in blank space must extend to the nearest text.
+          detachSelectionEnd = attachSelectionEnd(container);
 
           const divs = layer.textDivs;
           if (divs !== undefined) {
@@ -287,6 +291,8 @@ export function PdfPage({
           });
           text = task;
           await task.promise;
+          if (cancelled) return;
+          detachSelectionEnd = attachSelectionEnd(container);
         }
       } catch (cause) {
         // A cancelled render and a cancelled text layer both reject. Neither is a failure.
@@ -300,6 +306,7 @@ export function PdfPage({
       cancelled = true;
       renderTask?.cancel();
       text?.cancel();
+      detachSelectionEnd?.();
     };
     // `css.width`/`css.height` rather than `zoom` alone: they are what the canvas is sized from, and
     // they change on zoom, on userUnit and on a page swap, which is exactly when a re-render is due.

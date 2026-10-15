@@ -26,15 +26,9 @@
  */
 
 import type { CSSProperties, PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react';
-import { AlertTriangle, CheckCircle2, Clock, Headphones, Highlighter, Loader2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, Highlighter, Loader2 } from 'lucide-react';
 import { TOUCH_TARGET_MIN_PX, TOUCH_TARGET_STYLE } from '@papertree/ui';
-import {
-  AUDIO_LABEL,
-  PROCESSING_DETAIL,
-  PROCESSING_LABEL,
-  type AudioState,
-  type ProcessingState,
-} from './types';
+import { PROCESSING_DETAIL, PROCESSING_LABEL, type ProcessingState } from './types';
 
 /**
  * The 44px floor comes from `@papertree/ui`, not from a second copy of the number.
@@ -112,72 +106,51 @@ export function pointerActivate<E extends HTMLElement>(
   };
 }
 
-const PROCESSING_TONE: Record<ProcessingState, string> = {
-  pending: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
-  parsing: 'bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-200',
-  partial: 'bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-100',
-  complete: 'bg-green-50 text-green-900 dark:bg-green-950 dark:text-green-100',
-  failed: 'bg-red-50 text-red-900 dark:bg-red-950 dark:text-red-100',
+const BADGE_CLASS: Record<ProcessingState, string> = {
+  pending: 'pt-s3-badge',
+  parsing: 'pt-s3-badge pt-s3-badge--reading',
+  partial: 'pt-s3-badge pt-s3-badge--partial',
+  complete: 'pt-s3-badge pt-s3-badge--ready',
+  failed: 'pt-s3-badge pt-s3-badge--failed',
 };
 
 export interface ProcessingBadgeProps {
   readonly state: ProcessingState;
-  readonly pagesParsed?: number;
-  readonly pageCount?: number;
+  /** Replaces the default label, e.g. "Reading the PDF - step 1 of 3". */
+  readonly label?: string;
+  /**
+   * True when the card already shows the reason in words (a failed or partial paper), so the
+   * badge does not read a second, near-identical sentence to a screen reader.
+   */
+  readonly reasonShown?: boolean;
 }
 
 /**
- * The processing badge.
- *
- * Non-interactive on purpose — it is a status, not a control, and giving it a tap target would
- * invent a destination that does not exist. The one-line explanation from `PROCESSING_DETAIL` is
- * carried in an `sr-only` span rather than a `title`, because `title` is a hover affordance and
- * there is no such thing as hovering on a phone.
+ * The processing badge: a status, not a control. The one-line explanation from `PROCESSING_DETAIL`
+ * rides in an `sr-only` span rather than a `title` (there is no hover on a phone).
  */
-export function ProcessingBadge({ state, pagesParsed, pageCount }: ProcessingBadgeProps) {
-  const showCount =
-    state === 'parsing' && pagesParsed !== undefined && pageCount !== undefined && pageCount > 0;
-
+export function ProcessingBadge({ state, label, reasonShown = false }: ProcessingBadgeProps) {
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${PROCESSING_TONE[state]}`}
-      data-processing-state={state}
-    >
+    <span className={BADGE_CLASS[state]} data-processing-state={state}>
       {state === 'parsing' ? (
-        <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+        <Loader2 className="pt-s3-spin h-3.5 w-3.5" aria-hidden="true" />
       ) : state === 'pending' ? (
-        <Clock className="w-3.5 h-3.5" aria-hidden="true" />
+        <Clock className="h-3.5 w-3.5" aria-hidden="true" />
       ) : state === 'complete' ? (
-        <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
+        <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
       ) : (
-        <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
+        <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
       )}
-      <span>
-        {PROCESSING_LABEL[state]}
-        {showCount ? ` ${String(pagesParsed)}/${String(pageCount)}` : ''}
-      </span>
-      <span className="sr-only">{`. ${PROCESSING_DETAIL[state]}`}</span>
-    </span>
-  );
-}
-
-export function AudioBadge({ state }: { readonly state: AudioState }) {
-  if (state === 'none') return null;
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400"
-      data-audio-state={state}
-    >
-      <Headphones className="w-3.5 h-3.5" aria-hidden="true" />
-      <span>{AUDIO_LABEL[state]}</span>
+      <span>{label ?? PROCESSING_LABEL[state]}</span>
+      {reasonShown ? null : <span className="sr-only">{` ${PROCESSING_DETAIL[state]}`}</span>}
     </span>
   );
 }
 
 export function HighlightCountBadge({ count }: { readonly count: number }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
-      <Highlighter className="w-3.5 h-3.5" aria-hidden="true" />
+    <span className="pt-s3-muted pt-s3-small inline-flex items-center gap-1.5">
+      <Highlighter className="h-3.5 w-3.5" aria-hidden="true" />
       <span>{count === 1 ? '1 highlight' : `${String(count)} highlights`}</span>
     </span>
   );
@@ -191,10 +164,8 @@ export interface ProgressMeterProps {
 }
 
 /**
- * A determinate or indeterminate meter.
- *
- * `aria-valuenow` is OMITTED, not set to 0, when progress is unknown — that is the ARIA-sanctioned
- * way to say indeterminate, and a hard 0 tells a screen-reader user that nothing has happened.
+ * A determinate or indeterminate meter. `aria-valuenow` is OMITTED when progress is unknown, the
+ * ARIA-sanctioned way to say indeterminate.
  */
 export function ProgressMeter({ value, label, className }: ProgressMeterProps) {
   const clamped = value === undefined ? undefined : Math.max(0, Math.min(1, value));
@@ -207,11 +178,12 @@ export function ProgressMeter({ value, label, className }: ProgressMeterProps) {
       aria-valuemin={0}
       aria-valuemax={100}
       {...(pct === undefined ? {} : { 'aria-valuenow': pct, 'aria-valuetext': `${String(pct)}%` })}
-      className={`h-1.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700 ${className ?? ''}`}
+      className={`pt-s3-bar ${className ?? ''}`}
     >
       <div
-        className={`h-full rounded-full bg-blue-600 ${pct === undefined ? 'animate-pulse w-1/3' : ''}`}
-        style={pct === undefined ? undefined : { width: `${String(pct)}%` }}
+        className="pt-s3-bar__fill"
+        data-fill={pct ?? 'indeterminate'}
+        style={{ width: pct === undefined ? '33%' : `${String(pct)}%` }}
       />
     </div>
   );

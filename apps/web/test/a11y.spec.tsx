@@ -224,7 +224,7 @@ describe('keyboard operation', () => {
     const onAddPaper = vi.fn();
     const { container } = render(<EmptyLibrary onAddPaper={onAddPaper} onOpenSample={() => {}} />);
     const add = Array.from(container.querySelectorAll('button')).find((button) =>
-      (button.textContent ?? '').includes('Add your first paper'),
+      (button.textContent ?? '').includes('Upload a PDF'),
     );
     expect(add).toBeDefined();
     fireEvent.click(add as HTMLButtonElement, { detail: 0 });

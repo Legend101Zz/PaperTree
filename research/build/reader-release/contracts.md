@@ -500,7 +500,7 @@ S0 splits the layer into modules, each owned by one later slice (`slice-plan.md`
 | DELETE `/papers/{id}` | – | 204. Deletes the DB rows (the `delete_paper` cascade) plus `uploads/<id>.pdf`, `assets/<id>/` and staging. | 404 |
 | POST `/papers/{id}/retry` | – | 202 `{job_id, generation}`: the same generation, a new `attempt_seq` | 409 `not_failed` if the latest job is not `dead_letter` |
 | POST `/papers/{id}/reparse` | `{reason?: string}` | 202 `{job_id, generation}`, with generation = `next_generation` | 409 `busy` if a parse job is pending or running |
-| GET `/jobs/{job_id}` | – | 200: the existing shape plus `error_code` (the raw `error` text stays in logs and the DB) | 404 |
+| GET `/jobs/{job_id}` | – | 200: the existing shape plus `error_code` (the raw `error` text stays in logs and the DB), plus `generation` (the generation the job parses, from its payload) and `parser_version` (the version stored with that generation once it exists, else `null`) — S5F, 2026-10-15, §8 | 404 |
 | GET `/papers/{id}/file` | – | 200 `application/pdf`, `ETag: "<source_hash>"`, `Cache-Control: private, max-age=31536000, immutable`. **Gated on ownership, not on promotion.** | 404 |
 | GET `/papers/{id}/ir` | `?gen=` optional | 200 PaperIR 1.0.0 (gzip). Every `asset://<paper>/<gen>/<kind>/<block>@3x.png` in payloads is rewritten to a signed absolute URL (§2.3). | 409 `not_parsed` (no promoted generation). The reader shows its "Still reading…" state and keeps Source mode working. 404. |
 | GET `/papers/{id}/assets/{kind}/{block_id}` | `?gen=&exp=&sig=` **or** Bearer | 200 `image/png` | 401 `auth_required` if neither is valid |
@@ -549,6 +549,8 @@ S0 splits the layer into modules, each owned by one later slice (`slice-plan.md`
 
 `Thread` = `{thread_id, kind: "explain|ask", title, origin_anchor: Anchor|null, created_at, updated_at, message_count}`
 
+**A follow-up has no kind of its own (S5F, 2026-10-15).** `POST /papers/{id}/threads/{tid}/messages` starts a run of the THREAD's kind: an `explain` thread's follow-up runs as `kind: explain` with `explain-v1`, the explain limits and the `api.threads.explain>…` code path; an `ask` thread's runs as `ask`. The run request carries `history = {session_id: tid, entries}` (Pi's `exportEntries()` after the thread's last completed turn), so the model sees the earlier user and assistant turns before the new question and "that" resolves; the seed is rebuilt from the thread's origin anchor (explain), and the thread's earlier handles are inherited. A first-turn quote is not sent again. `RunSummary.input_tokens`, `output_tokens` and `reasoning_tokens` are `null`, not `0`, for an aborted or failed run whose agent reported no usage (S5F): the tokens are unknown, and the cost and cache reads the agent did report are kept.
+
 | Method, path | Request | Response | Pre-stream errors (JSON, before any SSE byte) |
 |---|---|---|---|
 | POST `/papers/{id}/threads` | `{kind: "explain"\|"ask", anchor?: Anchor (required for explain), question?: string (1..2000; default "Explain this passage.")}` + `Accept: text/event-stream` | 200 SSE (§2.6) | 409 `not_parsed`, 429 `budget_exhausted`, 503 `agent_unavailable`, 503 `not_configured`, 422 |
@@ -560,7 +562,7 @@ S0 splits the layer into modules, each owned by one later slice (`slice-plan.md`
 | POST `/papers/{id}/summary` | `{regenerate?: boolean}` | 200 SSE, the same events. If a cached summary exists and `regenerate` is not set, the answer is 200 JSON `{state:"ready", summary}`. | the same as threads |
 | GET `/usage` | `?since=ISO (default now-24h)` | 200 `{since, runs, input_tokens, output_tokens, cost_usd_est, budget_usd, by_kind: {explain, ask, summary}}` | – |
 
-`Summary` = `{generation, model, prompt_version, created_at, bullets: [{text, citations: Citation[], supported: boolean}], status: "complete|partial"}`. It is stored as `derivations(kind='paper_summary', content=Summary JSON, derived_from=[cited block_ids], prompt_hash=prompt_version, model_id='MiniMax-M3')`.
+`Summary` = `{generation, model, prompt_version, created_at, bullets: [{text, citations: Citation[], supported: boolean}], status: "complete|partial"}`. **A summary with any text is never `failed` (S5F):** it is `complete` when every bullet carries a valid `[bN]` marker, `partial` when some or all bullets do not (the bullets are kept, an uncited bullet has `citations: []` and `supported: false`), and the same status is on the live `done` event (`complete` or `partial`) and in `GET /papers/{id}/summary` (`state: ready` or `partial`). Only a run with no text at all is `failed`, and a run that streamed bullets before it broke is stored `partial`. A summary that cites nothing is stored against the digest blocks the run was shown (`derived_from`). It is stored as `derivations(kind='paper_summary', content=Summary JSON, derived_from=[cited block_ids], prompt_hash=prompt_version, model_id='MiniMax-M3')`.
 
 ### 2.6 Browser-facing SSE events (from the threads and summary routes)
 
@@ -658,14 +660,17 @@ Headers: `X-PaperTree-Agent-Secret`, `X-Request-Id`, `Content-Type: application/
 }
 ```
 
-- `seed` is `null` for summary runs. `history` is `null` on a thread's first turn.
+- **`seed` is required for `explain` and for `summary` runs (S5F, 2026-10-15; it was `null` for summary), and `null` or an object for `ask`.** For a summary it is a DIGEST of the paper: `quote: ""`, `page_label: ""`, `section: null` and `passages` = the abstract, then for each top-level section its first paragraph(s) (the heading is in the passage `label`), then the conclusion; references, acknowledgements and appendices are skipped. Each passage is datamarked with its own handle (`bN`, in reading order), at most 3 blocks per section, a block cut at a word boundary and ending `[…truncated]` when it does not fit, within about **6,000 estimated tokens of the datamarked text** (`packages/retrieval`'s `build_digest`; the per-section allowance shrinks 900 → 250 characters before any section is dropped, and the abstract, the first section and the conclusion are never dropped). `history` is `null` on a thread's first turn.
+- **The quote reaches the model datamarked (S5F, owner decision 2026-10-15).** `seed.quote` stays the exact selected text on the wire. The agent puts it in the first user turn as `<question>\n\n<untrusted_document trust="untrusted">\n<datamark word datamark word … datamark>\n</untrusted_document>` (angle brackets in the quote become `‹ ›`, datamark look-alikes are removed); a follow-up turn is the question only.
 - Limits by kind (the API fills them in):
 
   | kind | deadline | idle | tool calls | max output tokens |
   |---|---|---|---|---|
   | explain | 45 s | 20 s | 8 | 4096 |
   | ask | 60 s | 20 s | 8 | 4096 |
-  | summary | 90 s | 20 s | 12 | 6144 |
+  | summary | 90 s | 45 s | 12 (the prompt asks for at most 3, only when a section is missing from the digest) | 6144 |
+
+  *Dated note, 2026-10-15 (W2API item 6):* the summary's `idle_ms` was 20 s. One of the v0.1 panel's eight live summaries (two running at once) ended `timeout` at 20.15 s with no token: MiniMax-M3 was thinking over the digest before its first text. It is now 45 s; the 90 s deadline is unchanged and still bounds the run, so a model that never speaks still ends `timeout`. The API's read timeout follows (`idle_ms + 5 s`). Explain and ask keep 20 s: their first-text latencies in the panel were 5-15 s.
 
 - The seed passages are the selected blocks, expanded by `packages/retrieval`'s structure-aware expansion under a budget of **≤ 3,000 estimated tokens**. The exact selected text goes first. This fixes the baseline answer that opened with the title and authors.
 
@@ -695,11 +700,11 @@ Rules:
 
 | Guard | Rule |
 |---|---|
-| Tool-call cap | Count `tool_execution_start`. Past `max_tool_calls` a tool returns "Tool budget exhausted; answer from what you have." At cap + 2, or past `max_turns`, the wrapper calls `session.abort()` → `error.code = tool_budget_exhausted`, and the status is `partial` if there is any final text. |
+| Tool-call cap | Count `tool_execution_start`. Past `max_tool_calls` a tool returns "Tool budget exhausted; answer from what you have." At cap + 2, or past `max_turns`, the model gets **one final turn with every tool refused** (S5F, 2026-10-15): the wrapper stops the session, then prompts it again with "The tool budget … is used up … Write the final answer now …"; a tool call in that turn is refused and ends the run. If that turn produces text the run is `complete` with that text (no error). Only if it produces none (it asks for a tool again, or says nothing) does the run end `error` with `tool_budget_exhausted` and no text (`partial` if answer text had already been sent). |
 | Idle watchdog | Reset on every session event. After `idle_ms` of silence it calls `session.abort()` → `timeout` (spike b4 hung with no body-idle timeout). |
 | Deadline | `AbortSignal.any([AbortSignal.timeout(deadline_ms), requestClosed])` → `session.abort()` → `timeout` or `aborted`. |
 | Error classification | This is the agent's own classification, never Pi's regex. It uses the last assistant message's `stopReason` plus a leading `^(\d{3}) ` in `errorMessage`. |
-| Citations | `markers` ⊆ handles the API issued **in this run** (the seed plus tool responses). The API re-checks this. |
+| Citations | `markers` ⊆ handles the API issued **in this run** (the seed plus tool responses) **plus, for a follow-up, the handles the thread's earlier turns' tool results issued, which the API re-issues into this run at its start** (dated note below). The API re-checks this. |
 | Tool errors | Tools throw short, user-safe text only, for example "Passage b9 is not available." They never include URLs, ids or stacks. |
 | Raw messages | A raw `errorMessage` (provider JSON, request ids, install paths) is logged at debug level only. It is never sent in SSE. |
 
@@ -718,20 +723,26 @@ Error mapping:
 | tool HTTP failure | `tool_failed` | true |
 | anything else | `internal` | false |
 
+*Dated note, 2026-10-15 (W2API item 2): follow-up handles.* A follow-up run is started with the thread's earlier handles already in its `ai_run_handles` (`thread_handles`, written by the threads route before the request is sent; the same handle always names the same block, new handles continue the numbering). The agent therefore treats the `[bN] (p. …)` headers in the `toolResult` entries of `history.entries` as handles issued to this run: they count in `handles_seen` and `markers`, and `unseen_markers` is only what nobody issued. (Before this the agent called them unseen, `done.markers` was `[]` on every follow-up, and the prompt told the model earlier handles were not valid; the model cited them anyway, and the API, which maps through its own table, minted every one.) The API's `markers_in(final_text)` over the run's table stays the authority. A handle the model merely wrote in an earlier answer, with no tool result behind it, is still unseen.
+
+*Dated note, 2026-10-15 (W2API item 4): the agent going away.* Whenever the agent ends a run `aborted` and the API did not ask (no user cancel, no timeout stop), the agent itself is shutting down (its `close()` aborts every live run), and the API treats it as the agent being unavailable: the message ends `partial` (text kept) or `error` with `agent_unavailable` (retryable), the run is `error`/`agent_unavailable`, and no `agent_state_json` is stored. The agent's own shutdown reason is `shutdown` (`done.error.code` `agent_unavailable`). A user cancel, or the browser going away, stays `aborted`/`aborted`.
+
+*Dated note, 2026-10-15 (W2API item 1): tool parameters.* `get_section`'s `cursor` is only a `cN` this tool issued. A handle passed as a cursor (the panel's neural-odes ask passed `b29`) is 422 `validation_failed` with detail `cursor: …`; the agent's tool turns a 422 into a short tool result (`That cursor is not valid. …`) so the model can retry without it, and does not end the run `tool_failed`. 500, 401 and a malformed 200 still do.
+
 ### 3.4 API side of the broker (`services/api/.../agent_client.py`)
 
 - It uses `httpx.AsyncClient` streaming. `httpx` is promoted from the dev group to a runtime dependency; the lock is unchanged.
 - Timeouts: connect 2 s → `agent_unavailable`. Read `idle_ms + 5 s`. Total `deadline_ms + 10 s`.
 - **Retries.** Exactly one retry, only when the agent reports `upstream_unavailable` **before** any `text`. There is no retry after any text has reached the browser.
-- **Spend cap.** Before a run, `cost_since(owner, now-24h) ≥ PAPERTREE_DAILY_BUDGET_USD` → 429 `budget_exhausted`.
+- **Spend cap.** Before a run, `cost_since(owner, now-24h) ≥ PAPERTREE_DAILY_BUDGET_USD` → 429 `budget_exhausted`; and (S5F) runs still in flight reserve an estimate each (`RUN_RESERVE_USD`: explain $0.01, ask $0.02, summary $0.05) until they finish, so `spent + reserved ≥ budget` also refuses (a second sentence: "Answers that are still being written could use up the AI budget …"). The `detail` is a sentence either way. **Orphans (S5F):** an `ai_runs` row still `running` past `expires_at` is ended as `status=error, error_code=internal` (its `streaming` message ends `partial` with text, else `error`, code `internal`) at API start and on every run start, usage read and thread/summary read; its tokens stay `null`.
 - **Run token.** `secrets.token_urlsafe(32)`. The API stores `sha256`, `expires_at = now + deadline + 30 s` and `status='running'`. On `done` the status is set to `done`, `error` or `aborted`, and the token dies.
 - **Datamark.** Minted with `papertree_prompts.mint_datamark()`, stored on `ai_runs` and sent in the request, so that the agent's system prompt can name it.
 - **On `done`:**
   - map `markers` to block ids through `ai_run_handles`, dropping unknown markers and logging them;
   - mint each citation Anchor with `papertree_anchoring.capture_anchor(doc, block_id, anchor_id=cit_…, at, client="papertree-api/citations", target_kind="citation")`;
-  - split `final_text` into sentences or bullets, and run `papertree_agent_tools.grounding.verify_grounding` per claim over the cited blocks' `resolvedText`, which sets `supported`. The verifier's word lists are **not** shown to the reader;
+  - split `final_text` into sentences or bullets, and check each claim with `papertree_agent_tools.grounding.assess_claim` over the cited blocks' `resolvedText` (ligatures and line-break hyphens folded, plurals stemmed). A claim is **`supported`** when ≥ 60 % of its content words are in the cited blocks and every number it states is, **`unsupported`** when a number it states is in none of them or < 15 % of its words are (3+ content words), else **`neutral`** (commentary, interpretation, too short to check). **A citation is `supported` when at least one claim carrying it is `supported` and none is `unsupported`** (S5F; it was "every claim", which made interpretive sentences take well-grounded citations down). **W2API (2026-10-15): the stored flag is `true` / `false` / `null`. `false` only when a claim carrying the citation is `unsupported`; `null` ("not checked", the UI's "unknown") when every claim carrying it is `neutral`, because the check has no evidence against interpretive or experiment-design sentences, it cannot call them grounded either (re-run on the panel's 33 follow-up citations: before 1 `true` and 32 `false`, now 1 `true`, 5 `false`, 27 `null`; the `true` count did not move on the panel's ask, explain or follow-up citations).** A claim is also **`unsupported`** when it names a table, figure, section, equation, algorithm, appendix or page (`Table 9`, `Fig. 3`, `Section 4.2`, `Eq. (14)`, `page 14`) that is in neither the cited blocks nor anywhere in the paper (captions, numbered headings, mentions; `page n` for n up to the page count), or a proper noun or name (`Google Brain`, `Geoffrey Hinton`: a run of capitalised words inside a sentence, or a single name such as `ImageNet`; never the capital that opens a sentence or bullet, and not a two-letter acronym) none of whose words is in the cited blocks or the paper. A reference or name that the paper has but the cited blocks do not stays `neutral`/unchanged (it is uncited, not invented). *Dated note, 2026-10-15 (W2API fix round):* a section number comes from the heading block's leading number, its own trailing number line (DDPM's `Forward process and LT\n3.1`) or, for a heading with no number at all (`Introduction`, `Background`), from its place between the numbered headings around it (a number between the neighbours' numbers is accepted; a paper whose every heading is numbered stays strict); a hyphen compound (`Gaussian-vs-Gaussian`) is absent only when none of its non-numeric parts is in the cited blocks or the paper; a roman-numeral `TABLE II` is table 2. A name that appears only in the paper's reference list still counts as in the paper (known gap), and a paper whose text layer has no equation tags allows every equation number. Without a paper vocabulary the cited blocks are all there is (unit use). **`supported` is a lexical check: it means the claim's words, numbers, places and names are in the cited text, never that the claim is true. Negation, comparator swaps, role swaps and half-true claims pass it.** On the S5F labelled sets (88 + 50 pairs) the rule change left citation recall at 0.652 (FIRST) and 0.767 (HOLDOUT) and precision at 1.00 (`test_grounding_labelled.py` re-derives them with the paper vocabulary the API uses; `test_grounding_loopholes.py` pins the new cases). A summary bullet is one claim. The verifier's word lists are **not** shown to the reader;
   - persist the message, citations, `ai_runs` usage and `ai_threads.agent_state_json = entries`, then emit `citations`, `usage` and `done`.
-- **Summary** content is parsed from bullets `- … [bN]`. A bullet without a valid marker gets `supported: false`, and the summary status is `partial` if any bullet lacks one.
+- **Summary** content is parsed from bullets `- … [bN]`. A bullet without a valid marker gets `supported: false`, and the summary status is `partial` if any bullet lacks one — including when none has one. A summary with text is stored and served (`partial` or `complete`), never `failed`; only a run with no text is (see §2.5).
 
 ## 4. Internal paper tools (agent → API)
 
@@ -861,6 +872,16 @@ The following is fixed in S0 so that no two slices edit the same file:
 | `PI_OFFLINE=1`, `PI_TELEMETRY=0`, `PI_CODING_AGENT_DIR` | agent | set by the start script | defence in depth |
 | `NEXT_PUBLIC_PAPERTREE_API_URL` | web | `http://localhost:8000` | the only base-URL variable (`NEXT_PUBLIC_API_URL` is deleted) |
 | `NEXT_PUBLIC_PAPERTREE_FIXTURES` | web | **`off`** | `on` only in tests and demos; it gates `SAMPLE_PAPERS` too (#137) |
+
+*Added 2026-10-15 (S8b), after T0 (ADR-003) and S5F. These agent variables exist in `services/agent/src` and are listed in both `.env.example` files and the README, not in the table above:*
+
+| Variable | Process | Default | Notes |
+|---|---|---|---|
+| `PAPERTREE_MODEL` | agent | per kind (explain: `MiniMax-M3.1-Flash-Preview`; ask, summary: `MiniMax-M3`; ask moved to M3 on 2026-10-15, ADR-003 Revision) | one model for every kind; `MiniMax-M3` or `MiniMax-M3.1-Flash-Preview`; an unknown id refuses to boot |
+| `PAPERTREE_MODEL_EXPLAIN` / `_ASK` / `_SUMMARY` | agent | `PAPERTREE_MODEL` | the model for one kind |
+| `PAPERTREE_MODEL_EFFORT` (+ `_EXPLAIN` / `_ASK` / `_SUMMARY`) | agent | `low` | Flash only: `low`, `medium`, `high` |
+| `PAPERTREE_AGENT_LOG_LEVEL` | agent | `info` | `debug` adds raw provider error text; never keys or tokens |
+| `PAPERTREE_AGENT_FAUX` | agent | unset | `1` = the scripted test model (tests only; the key is not read) |
 
 Removed: `PAPERTREE_LLM_API_KEY`, `PAPERTREE_LLM_MODEL`, `PAPERTREE_LLM_BASE_URL`, `PAPERTREE_LLM_TIMEOUT_SECONDS`, `PAPERTREE_VLM_API_KEY` and `LLM_API_KEY`.
 

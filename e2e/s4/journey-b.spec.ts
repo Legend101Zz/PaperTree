@@ -330,9 +330,16 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
       await page.waitForTimeout(1200);
       const now = await lineOffset(page, line);
       expect(now, `${label}: the top line is no longer rendered`).not.toBeNull();
-      const drift = Math.abs((now?.dy ?? 1e9) - line.dy);
+      // The reader keeps the paper position at the TOP EDGE of the viewport (VirtualPageList's
+      // ReadingPosition), so a line that sat `dy` px below that edge sits `dy x (new / old scale)`
+      // px below it afterwards. The scale ratio is read from the line's own height. Comparing
+      // against the unscaled `dy` made the bound depend on how wide the viewport is (a wider
+      // fit-width page is a bigger ratio), not on whether the position was kept.
+      const ratio = (now?.height ?? line.height) / line.height;
+      const expected = line.dy * ratio;
+      const drift = Math.abs((now?.dy ?? 1e9) - expected);
       note(
-        `zoom ${label}: top line "${line.text.slice(0, 40)}" moved ${drift.toFixed(1)} px (one line = ${(now?.height ?? 0).toFixed(1)} px)`,
+        `zoom ${label}: top line "${line.text.slice(0, 40)}" was ${line.dy.toFixed(1)} px below the top edge, scale x${ratio.toFixed(3)}, expected ${expected.toFixed(1)} px, got ${(now?.dy ?? NaN).toFixed(1)} px: off by ${drift.toFixed(1)} px (one line = ${(now?.height ?? 0).toFixed(1)} px)`,
       );
       expect(drift).toBeLessThanOrEqual(Math.max(now?.height ?? 0, 16));
       await page.screenshot({ path: shot(`b07-zoom-${label}-1440.png`) });

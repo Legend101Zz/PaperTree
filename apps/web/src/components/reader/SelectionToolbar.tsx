@@ -152,6 +152,26 @@ export function SelectionToolbar(props: SelectionToolbarProps): JSX.Element | nu
     );
   }, [props.placement.kind, props.highlightDisabledReason]);
 
+  // A selection near the top edge of the window puts the bar above the visible area, where it is
+  // out of sight and out of reach. The bar is measured against its scroller (the bar's own box, not
+  // the selection's) and, if it would sit above the visible top, goes below the selection instead.
+  // `flipKey` ties the decision to this extent, so the next selection starts from "above" again.
+  const extentKey =
+    props.placement.kind === 'float'
+      ? `${String(props.placement.extent.top)}:${String(props.placement.extent.bottom)}:${String(props.placement.prefer)}`
+      : '';
+  const [flipKey, setFlipKey] = useState<string | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el === null || props.placement.kind !== 'float' || flipKey === extentKey) return;
+    if (props.placement.prefer === 'below') return;
+    const scroller = el.closest('[data-papertree-scroller]');
+    if (scroller === null) return;
+    const visibleTop = scroller.getBoundingClientRect().top;
+    if (el.getBoundingClientRect().top < visibleTop + EDGE) setFlipKey(extentKey);
+  }, [props.placement, extentKey, flipKey, size]);
+  const flipped = props.placement.kind === 'float' && flipKey === extentKey;
+
   const bar = (
     <div
       ref={ref}
@@ -166,7 +186,7 @@ export function SelectionToolbar(props: SelectionToolbarProps): JSX.Element | nu
         .filter(Boolean)
         .join(' ')}
       data-placement={props.placement.kind}
-      style={props.placement.kind === 'float' ? floatStyle(props.placement, size) : undefined}
+      style={props.placement.kind === 'float' ? floatStyle(props.placement, size, flipped) : undefined}
       // Preventing pointerdown also suppresses the compatibility mousedown, whose default action
       // is what would collapse the selection.
       onPointerDown={(event) => event.preventDefault()}
@@ -186,6 +206,7 @@ export function SelectionToolbar(props: SelectionToolbarProps): JSX.Element | nu
 function floatStyle(
   placement: Extract<ToolbarPlacement, { kind: 'float' }>,
   size: { width: number; height: number } | null,
+  flipped = false,
 ): React.CSSProperties {
   const width = size?.width ?? 320;
   const height = size?.height ?? 48;
@@ -194,6 +215,6 @@ function floatStyle(
   const left = Math.min(maxLeft, Math.max(EDGE, centre - width / 2));
   const above = placement.extent.top - GAP - height;
   const below = placement.extent.bottom + GAP;
-  const top = placement.prefer === 'below' ? below : above >= EDGE ? above : below;
+  const top = placement.prefer === 'below' || flipped ? below : above >= EDGE ? above : below;
   return { left, top, visibility: size === null ? 'hidden' : 'visible' };
 }

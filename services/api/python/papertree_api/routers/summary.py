@@ -29,6 +29,7 @@ from papertree_db.ai import normalise_time
 from papertree_prompts import mint_datamark
 
 from .. import agent_client as runs
+from .. import evidence
 from ..agent_client import RunBroker, RunSpec
 from ..deps import (
     AgentClientDep,
@@ -49,14 +50,25 @@ SUMMARY_QUESTION: Final = "Summarise this paper."
 
 
 def _cached(call: Any, paper_id: str, generation: int) -> dict[str, Any] | None:
-    row = call.db.get_summary(
-        call.db_owner,
-        PaperId(paper_id),
-        generation,
-        runs.PROMPT_VERSIONS["summary"],
-        runs.MODEL,
-    )
-    return None if row is None else dict(row["content"])
+    """The newest cached summary over every model the agent may use (the cache key holds the
+    model that wrote it, so a policy change does not hide an existing summary)."""
+    rows = [
+        row
+        for model in runs.KNOWN_MODELS
+        if (
+            row := call.db.get_summary(
+                call.db_owner,
+                PaperId(paper_id),
+                generation,
+                runs.PROMPT_VERSIONS["summary"],
+                model,
+            )
+        )
+        is not None
+    ]
+    if not rows:
+        return None
+    return dict(max(rows, key=lambda r: str(r["created_at"]))["content"])
 
 
 def _live(run: dict[str, Any] | None) -> bool:
@@ -93,6 +105,7 @@ def summary_status(call: Any, paper_id: str, generation: int | None) -> dict[str
 )
 async def get_summary(call: CallerDep, paper_id: str) -> Response:
     owned_paper(call, paper_id)
+    runs.sweep_orphans(call.db)
     generation = call.db.promoted_generation(call.db_owner, PaperId(paper_id))
     return JSONResponse(summary_status(call, paper_id, generation))
 
@@ -137,21 +150,27 @@ async def create_summary(
     datamark = mint_datamark()
     token, token_sha256 = runs.mint_run_token()
     request_id = getattr(request.state, "request_id", None)
-    db.create_run(
-        owner,
-        run_id=run_id,
-        paper_id=PaperId(paper_id),
-        generation=generation,
-        kind="summary",
-        thread_id=None,
-        message_id=message_id,
-        token_sha256=token_sha256,
-        datamark=datamark,
-        expires_at=runs.token_expiry("summary"),
-        code_path=runs.CODE_PATHS["summary"],
-        request_id=request_id,
-        prompt_version=runs.PROMPT_VERSIONS["summary"],
-    )
+    # The seed of a summary is a bounded digest of the paper (contracts.md §3.2): the abstract,
+    # each top-level section's first paragraph(s) and the conclusion, each with its own handle.
+    index = evidence.load_index(index_cache, db, owner, call.user_id, paper_id, generation)
+    plan = evidence.plan_digest(index, datamark=datamark)
+    with db.transaction():
+        db.create_run(
+            owner,
+            run_id=run_id,
+            paper_id=PaperId(paper_id),
+            generation=generation,
+            kind="summary",
+            thread_id=None,
+            message_id=message_id,
+            token_sha256=token_sha256,
+            datamark=datamark,
+            expires_at=runs.token_expiry("summary"),
+            code_path=runs.CODE_PATHS["summary"],
+            request_id=request_id,
+            prompt_version=runs.PROMPT_VERSIONS["summary"],
+        )
+        handles = db.assign_run_handles(owner, run_id, generation, plan.block_ids)
     run_body = AgentRunRequest(
         run_id=run_id,
         request_id=request_id or new_id("req"),
@@ -164,7 +183,7 @@ async def create_summary(
             page_count=paper.get("page_count"),
             generation=generation,
         ),
-        seed=None,
+        seed=plan.to_wire(handles),
         question=SUMMARY_QUESTION,
         history=None,
         limits=runs.LIMITS["summary"],

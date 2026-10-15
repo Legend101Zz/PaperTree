@@ -12,6 +12,7 @@ import { type AgentApp, createAgentApp } from '../../src/app.ts';
 import { type AgentConfig, preparePiEnvironment } from '../../src/config.ts';
 import type { FauxBrain } from '../../src/faux.ts';
 import { createLogger, type Level } from '../../src/log.ts';
+import { M3_MODEL_ID, type ModelPolicy, uniformPolicy } from '../../src/models.ts';
 
 preparePiEnvironment(process.env);
 
@@ -40,6 +41,7 @@ export async function startAgent(options: {
   readonly pingMs?: number;
   readonly logLevel?: Level;
   readonly key?: string;
+  readonly policy?: ModelPolicy;
   readonly providerTimeoutMs?: number;
 }): Promise<Agent> {
   const faux = options.faux ?? true;
@@ -50,6 +52,7 @@ export async function startAgent(options: {
     port: 0,
     apiInternalOrigin: options.apiOrigin,
     logLevel: options.logLevel ?? 'debug',
+    policy: options.policy ?? uniformPolicy(M3_MODEL_ID),
   };
   const logs: LogLine[] = [];
   const rawLogs: string[] = [];

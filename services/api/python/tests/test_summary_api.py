@@ -38,11 +38,22 @@ def test_a_summary_streams_then_is_served_from_the_cache_without_a_new_run(
         assert run["thread_id"] is None and run["user_message_id"] is None
         assert run["message_id"].startswith("msg_")
         request = h.fake.requests[0]
-        assert request["kind"] == "summary" and request["seed"] is None
+        assert request["kind"] == "summary"
+        # S5F: the seed of a summary is a bounded digest of the paper, not null.
+        seed = request["seed"]
+        assert seed["quote"] == "" and seed["page_label"] == "" and seed["section"] is None
+        labels = [p["label"] for p in seed["passages"]]
+        assert len(labels) >= 4, "the abstract and each section's first paragraph, not one block"
+        assert labels[0].startswith("p. 1 · Abstract"), labels
+        assert len({label.split(" · ")[1] for label in labels}) >= 4, "several sections"
+        assert [p["handle"] for p in seed["passages"]] == [
+            f"b{n}" for n in range(1, len(seed["passages"]) + 1)
+        ]
+        assert all(p["text"].startswith(request["datamark"]) for p in seed["passages"])
         assert request["prompt_version"] == "summary-v1"
         assert request["limits"] == {
             "deadline_ms": 90000,
-            "idle_ms": 20000,
+            "idle_ms": 45000,
             "max_tool_calls": 12,
             "max_turns": 6,
             "max_output_tokens": 6144,
@@ -192,3 +203,88 @@ def test_bob_cannot_read_or_start_alices_summary(tmp_path: Path) -> None:
             "ready",
             "partial",
         )
+
+
+def _run_row_and_status(h: Any, token: str, paper_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    (row,) = h.rows("SELECT * FROM ai_runs")
+    return dict(row), h.client.get(f"/papers/{paper_id}/summary", headers=auth(token)).json()
+
+
+def test_a_summary_with_no_citation_markers_is_partial_not_failed(tmp_path: Path) -> None:
+    """S5F: text without a single valid [bN] reads `partial` (the bullets kept, flagged), in the
+    live `done` and in the GET alike. It is stored against the digest the run was shown."""
+
+    def plain(context: RunContext) -> str:
+        return "- The paper proposes a method.\n- It reports results.\n- It lists limitations."
+
+    with ai_harness(tmp_path, Script("summary-ok", final_text=plain)) as h:
+        token, paper_id = alice_with_paper(h)
+        frames, _ = read_sse(_post(h, token, paper_id))
+        done = events(frames, "done")[0]
+        assert done["status"] == "partial"
+        row, status = _run_row_and_status(h, token, paper_id)
+        assert status["state"] == "partial", "the GET and the done event agree"
+        summary = status["summary"]
+        assert summary["status"] == "partial" and len(summary["bullets"]) == 3
+        assert all(b["citations"] == [] and b["supported"] is False for b in summary["bullets"])
+        assert (
+            contract_errors(status, "api/summary.schema.json", "SummaryStatus", SummaryStatus) == []
+        )
+        (stored,) = h.rows("SELECT * FROM derivations WHERE kind = 'paper_summary'")
+        shown = {r["block_id"] for r in h.rows("SELECT * FROM ai_run_handles")}
+        assert set(json.loads(stored["derived_from"])) == shown, "derived from what it was shown"
+        # A reload serves the partial summary without a new run.
+        before = h.count("ai_runs")
+        cached = _post(h, token, paper_id)
+        assert cached.json()["state"] == "partial" and h.count("ai_runs") == before
+
+
+def test_a_summary_with_no_text_at_all_is_failed(tmp_path: Path) -> None:
+    def nothing(context: RunContext) -> str:
+        return "   "
+
+    with ai_harness(tmp_path, Script("summary-ok", final_text=nothing)) as h:
+        token, paper_id = alice_with_paper(h)
+        frames, _ = read_sse(_post(h, token, paper_id))
+        assert events(frames, "done")[0]["status"] == "error"
+        status = h.client.get(f"/papers/{paper_id}/summary", headers=auth(token)).json()
+        assert status == {"state": "failed", "summary": None}
+        assert h.count("derivations") == 0
+
+
+def test_partial_text_from_a_broken_run_is_kept_as_a_partial_summary(tmp_path: Path) -> None:
+    """A run that streamed bullets and then ended in an error is `partial` with its text."""
+    with ai_harness(tmp_path, Script("summary-ok", drop_after_text=3)) as h:
+        token, paper_id = alice_with_paper(h)
+        frames, _ = read_sse(_post(h, token, paper_id))
+        assert events(frames, "done")[0]["status"] == "partial"
+        status = h.client.get(f"/papers/{paper_id}/summary", headers=auth(token)).json()
+        assert status["state"] == "partial" and status["summary"]["bullets"]
+
+
+FLASH = "MiniMax-M3.1-Flash-Preview"
+
+
+def test_a_flash_run_is_stored_and_served_under_the_model_the_agent_reported(
+    tmp_path: Path,
+) -> None:
+    """The agent's `run.model` is the model of record: `ai_runs.model`, the derivation's
+    `model_id`, the summary's `model`, and the usage event all carry Flash, and a reload finds
+    the Flash summary though the API's own fallback model is M3."""
+    with ai_harness(tmp_path, Script("summary-ok")) as h:
+        h.fake.model = f"minimax/{FLASH}"
+        token, paper_id = alice_with_paper(h)
+        frames, _ = read_sse(_post(h, token, paper_id))
+        assert events(frames, "usage")[0]["model"] == FLASH
+        assert events(frames, "done")[0]["status"] == "complete"
+        (row,) = h.rows("SELECT * FROM ai_runs")
+        assert row["model"] == FLASH
+        (stored,) = h.rows("SELECT * FROM derivations WHERE kind = 'paper_summary'")
+        assert stored["model_id"] == FLASH
+        assert json.loads(stored["content"])["model"] == FLASH
+        runs_before = h.count("ai_runs")
+        status = h.client.get(f"/papers/{paper_id}/summary", headers=auth(token)).json()
+        assert status["state"] == "ready" and status["summary"]["model"] == FLASH
+        again = _post(h, token, paper_id)
+        assert again.status_code == 200 and again.headers["content-type"] == "application/json"
+        assert h.count("ai_runs") == runs_before, "served from the cache, no new run"

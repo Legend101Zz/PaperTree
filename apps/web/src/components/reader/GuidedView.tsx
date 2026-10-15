@@ -37,6 +37,7 @@ import {
 import type { HighlightColor } from '@/lib/api/types';
 
 import { assetSrc } from './assetSrc';
+import { planFigures } from './guidedFigures';
 import { displayQuote } from './quote';
 import { joinContinuedBlocks, reflow, reflowPreservingLines } from './reflow';
 import type { ReaderHighlight } from './useHighlights';
@@ -167,14 +168,20 @@ function payloadImageUri(block: IndexedBlock): string | undefined {
 export function planGuidedReading(doc: IndexedDocument): {
   readonly rendered: readonly IndexedBlock[];
   readonly furnitureCount: number;
+  /** A panel of a figure that Guided shows as one crop: dropped id -> the card that carries it. */
+  readonly redirect: ReadonlyMap<string, string>;
+  /** The caption block each figure card shows (RFIX2 R9: one crop, one caption). */
+  readonly captionOf: ReadonlyMap<string, string>;
 } {
   const view = guidedProjectionFor(doc);
-  const rendered: IndexedBlock[] = [];
+  const all: IndexedBlock[] = [];
   for (const paragraph of view.paragraphs) {
     const block = doc.byId.get(paragraph.id);
-    if (block !== undefined) rendered.push(block);
+    if (block !== undefined) all.push(block);
   }
-  return { rendered, furnitureCount: view.furnitureCount };
+  const figures = planFigures(all);
+  const rendered = all.filter((block) => !figures.redirect.has(block.id));
+  return { rendered, furnitureCount: view.furnitureCount, redirect: figures.redirect, captionOf: figures.caption };
 }
 
 /** The full text of a block, following any continuation chain, plus every contributing id. */
@@ -297,14 +304,16 @@ function GuidedFigure({
   block,
   doc,
   resolveAssetSrc,
+  captionId,
 }: {
   readonly block: IndexedBlock;
   readonly doc: IndexedDocument;
   readonly resolveAssetSrc: (uri: string) => string | null;
+  /** The one caption this card shows (`planGuidedReading`): its own, or a panel's, or none. */
+  readonly captionId: string | undefined;
 }): ReactNode {
   const uri = payloadImageUri(block);
   const src = uri === undefined ? null : resolveAssetSrc(uri);
-  const captionId = asNonEmptyString(block.payload?.['caption_block']);
   const caption = captionId === undefined ? undefined : doc.byId.get(captionId)?.text;
   const figureNumber = asNonEmptyString(block.payload?.['figure_number']);
   const captionText = caption === undefined ? undefined : reflow(caption);
@@ -403,7 +412,12 @@ function GuidedTable({
 }
 
 /** The element that renders `blockId` in the reading: itself, its paragraph head, or its owner. */
-function elementFor(root: HTMLElement, projection: GuidedProjection, blockId: string): HTMLElement | null {
+function elementFor(
+  root: HTMLElement,
+  projection: GuidedProjection,
+  blockId: string,
+  redirect?: ReadonlyMap<string, string>,
+): HTMLElement | null {
   const seen = new Set<string>();
   let cursor: string | undefined = blockId;
   while (cursor !== undefined && !seen.has(cursor)) {
@@ -411,6 +425,12 @@ function elementFor(root: HTMLElement, projection: GuidedProjection, blockId: st
     const escaped = typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(cursor) : cursor;
     const direct = root.querySelector<HTMLElement>(`[data-block-id="${escaped}"]`);
     if (direct !== null) return direct;
+    // A panel of a figure is carried by the whole crop's card (RFIX2 R9).
+    const carrier: string | undefined = redirect?.get(cursor);
+    if (carrier !== undefined && !seen.has(carrier)) {
+      cursor = carrier;
+      continue;
+    }
     const placement = projection.placement.get(cursor);
     if (placement === undefined || placement.kind === 'absent') return null;
     cursor = placement.kind === 'paragraph' ? placement.paragraphId : placement.ownerId;
@@ -419,8 +439,44 @@ function elementFor(root: HTMLElement, projection: GuidedProjection, blockId: st
   return null;
 }
 
+/**
+ * The element to scroll to for `blockId`: the card that renders it, or - when the block is not in
+ * the reading at all (page furniture, a block the reading leaves out) - the nearest card before it
+ * in reading order, then the nearest after (RFIX2 R8: Source -> Guided must never fall back to the
+ * top of the paper because the block Source was on has no card).
+ */
+function landingFor(
+  root: HTMLElement,
+  doc: IndexedDocument,
+  projection: GuidedProjection,
+  redirect: ReadonlyMap<string, string>,
+  blockId: string,
+): HTMLElement | null {
+  const direct = elementFor(root, projection, blockId, redirect);
+  if (direct !== null) return direct;
+  const start = doc.byId.get(blockId)?.readingIndex;
+  if (start === undefined) return null;
+  const blocks = doc.blocks;
+  for (let i = Math.min(start, blocks.length) - 1; i >= 0; i -= 1) {
+    const candidate = blocks[i];
+    if (candidate === undefined) continue;
+    const found = elementFor(root, projection, candidate.id, redirect);
+    if (found !== null) return found;
+  }
+  for (let i = start + 1; i < blocks.length; i += 1) {
+    const candidate = blocks[i];
+    if (candidate === undefined) continue;
+    const found = elementFor(root, projection, candidate.id, redirect);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
 /** How long after a programmatic scroll its scroll events are still ours, not the reader's. */
 const DRIVEN_MS = 400;
+
+/** How long the arrival position is re-asserted while figure crops load. */
+const SETTLE_MS = 2500;
 
 export function GuidedView({
   doc,
@@ -446,19 +502,48 @@ export function GuidedView({
     (blockId: string) => {
       const root = scrollerRef.current;
       if (root === null) return;
-      const target = elementFor(root, projection, blockId);
+      const target = landingFor(root, doc, projection, plan.redirect, blockId);
       if (target === null) return;
       drivenUntil.current = Date.now() + DRIVEN_MS;
       const offset =
         target.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop;
       root.scrollTop = Math.max(0, offset - 16);
     },
-    [projection],
+    [doc, projection, plan],
   );
 
   useLayoutEffect(() => {
     if (initialBlockId !== null) scrollToBlock(initialBlockId);
     // Once, on mount: the position the reader arrived with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // A figure crop loads after the first paint and pushes everything below it down; the position the
+  // reader arrived with is kept until they take over (RFIX2 R8). Ends at the first wheel, touch,
+  // key or press, or after SETTLE_MS.
+  useEffect(() => {
+    const root = scrollerRef.current;
+    if (root === null || initialBlockId === null) return undefined;
+    let settled = false;
+    const stop = (): void => {
+      settled = true;
+    };
+    const reassert = (): void => {
+      if (!settled) scrollToBlock(initialBlockId);
+    };
+    const timer = setTimeout(stop, SETTLE_MS);
+    root.addEventListener('load', reassert, true);
+    for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const) {
+      root.addEventListener(type, stop, { capture: true, passive: true });
+    }
+    return () => {
+      clearTimeout(timer);
+      root.removeEventListener('load', reassert, true);
+      for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const) {
+        root.removeEventListener(type, stop, true);
+      }
+    };
+    // Once, on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -473,18 +558,18 @@ export function GuidedView({
     if (root === null) return undefined;
     const marked: HTMLElement[] = [];
     marks.elements.forEach((color, blockId) => {
-      const element = elementFor(root, projection, blockId);
+      const element = elementFor(root, projection, blockId, plan.redirect);
       if (element === null) return;
       element.setAttribute('data-guided-mark', color);
       marked.push(element);
     });
     return () => marked.forEach((element) => element.removeAttribute('data-guided-mark'));
-  }, [marks, projection]);
+  }, [marks, projection, plan]);
 
   useEffect(() => {
     const root = scrollerRef.current;
     if (root === null || flashBlockId === null) return undefined;
-    const element = elementFor(root, projection, flashBlockId);
+    const element = elementFor(root, projection, flashBlockId, plan.redirect);
     if (element === null) return undefined;
     scrollToBlock(flashBlockId);
     element.setAttribute('data-guided-flash', 'true');
@@ -493,7 +578,7 @@ export function GuidedView({
       clearTimeout(timer);
       element.removeAttribute('data-guided-flash');
     };
-  }, [flashBlockId, projection, scrollToBlock]);
+  }, [flashBlockId, projection, plan, scrollToBlock]);
 
   const frame = useRef<number | null>(null);
   const onScroll = useCallback(() => {
@@ -559,7 +644,14 @@ export function GuidedView({
                 <GuidedEquation block={block} onShowSource={onShowSource} resolveAssetSrc={resolveAssetSrc} />
               );
             } else if (block.type === 'figure') {
-              body = <GuidedFigure block={block} doc={doc} resolveAssetSrc={resolveAssetSrc} />;
+              body = (
+                <GuidedFigure
+                  block={block}
+                  doc={doc}
+                  resolveAssetSrc={resolveAssetSrc}
+                  captionId={plan.captionOf.get(block.id)}
+                />
+              );
             } else if (block.type === 'table') {
               body = <GuidedTable block={block} doc={doc} onShowSource={onShowSource} />;
             } else {

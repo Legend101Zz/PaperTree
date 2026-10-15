@@ -25,7 +25,8 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-import { libraryPaperFromPaperRow, type PaperRow } from '@/components/library/types';
+import { libraryPaperFromWire } from '@/components/library/types';
+import type { LibraryPaper as WirePaper } from '@/lib/api/types';
 
 /** The real body of `POST /auth/login`, copied from a live response during the walk. */
 const REAL_SESSION = {
@@ -34,22 +35,21 @@ const REAL_SESSION = {
   email: 'uxwalk@papertree.test',
 } as const;
 
-/** One real row of `GET /papers`, keys and all, captured from the live service during the walk. */
-const REAL_ROW: PaperRow = {
+/** One `GET /papers` row in the S1 shape (contracts.md §2.2). */
+const REAL_ROW: WirePaper = {
   paper_id: 'ppr_7R9RKPFP4FSVAV1TV622F4Z575',
+  title: 'Deep Residual Learning for Image Recognition',
+  authors: ['Kaiming He', 'Xiangyu Zhang'],
+  original_filename: 'resnet.pdf',
+  source_hash: 'sha256:00',
+  page_count: 9,
+  processing: 'ready',
+  job: null,
+  generation: 1,
+  parser_version: '1.0.0',
+  highlight_count: 0,
   created_at: '2026-08-04T10:40:57.083752+00:00',
-  status: 'complete',
-  metadata: JSON.stringify({
-    title: {
-      value: 'Deep Residual Learning for Image Recognition',
-      source_block_id: 'blk_3vrksodt7ivaylly',
-      confidence: 0.9,
-    },
-    authors: [
-      { value: 'Kaiming He', source_block_id: 'blk_hxgun7k2irstdlea', confidence: 0.9 },
-      { value: 'Xiangyu Zhang', source_block_id: 'blk_6isf6gxscvhvvdz7', confidence: 0.9 },
-    ],
-  }),
+  updated_at: '2026-08-04T10:41:57.083752+00:00',
 };
 
 describe('D1/D2 — the session survives sign-in', () => {
@@ -105,7 +105,7 @@ describe('D3 — the library page talks to the service that is actually running'
     // `lib/api.ts` (v1) and the v2 client both exported a symbol called `papersApi`, so which one a
     // file got was invisible at every call site — and the v1 one posts `/papers/upload`, which the
     // v2 service answers **405 Method Not Allowed** (measured in the browser).
-    const source = readFileSync(resolve(process.cwd(), 'src/app/dashboard/page.tsx'), 'utf8');
+    const source = readFileSync(resolve(process.cwd(), 'src/components/library/LibraryView.tsx'), 'utf8');
 
     expect(source).toContain("import { papersApi } from '@/lib/api/papers'");
     // The v1 client is not merely unimported, it is GONE (S0, slice-plan §R R1), so no file can
@@ -119,56 +119,43 @@ describe('D3 — the library page talks to the service that is actually running'
 });
 
 describe('D4 — a parsed paper reads as parsed', () => {
-  it('parses the double-encoded metadata and finds the title', () => {
-    // WATCHED FAILING with the old `libraryPaperFromApi(row)`: `row.title` was `undefined`, so the
-    // card rendered untitled and axe reported `button-name` at CRITICAL on `#paper-title-undefined`.
-    const paper = libraryPaperFromPaperRow(REAL_ROW);
+  it('takes the title, authors, page count and id from the S1 row', () => {
+    const paper = libraryPaperFromWire(REAL_ROW);
 
     expect(paper.title).toBe('Deep Residual Learning for Image Recognition');
     expect(paper.authors).toEqual(['Kaiming He', 'Xiangyu Zhang']);
     expect(paper.id).toBe(REAL_ROW.paper_id);
+    expect(paper.pageCount).toBe(9);
   });
 
-  it('reads `processing` from the row status instead of defaulting it to pending', () => {
-    // The worker logged `promoted … generation 1` and the card still said "Queued", because the
-    // bridge defaulted `processing` to 'pending' — correct when nothing could parse, wrong once
-    // something could.
-    expect(libraryPaperFromPaperRow(REAL_ROW).processing).toBe('complete');
-    expect(libraryPaperFromPaperRow({ ...REAL_ROW, status: 'partial' }).processing).toBe('partial');
-    // A row with no status has genuinely not been parsed, and must NOT claim to be complete.
-    expect(libraryPaperFromPaperRow({ ...REAL_ROW, status: null }).processing).toBe('pending');
+  it('maps every `processing` value, and ready is not queued', () => {
+    // The pre-S1 bridge defaulted to pending, so a promoted paper still said "Queued" (#141).
+    expect(libraryPaperFromWire(REAL_ROW).processing).toBe('complete');
+    expect(libraryPaperFromWire({ ...REAL_ROW, processing: 'partial' }).processing).toBe('partial');
+    expect(libraryPaperFromWire({ ...REAL_ROW, processing: 'queued' }).processing).toBe('pending');
+    expect(libraryPaperFromWire({ ...REAL_ROW, processing: 'reading' }).processing).toBe('parsing');
+    expect(libraryPaperFromWire({ ...REAL_ROW, processing: 'failed' }).processing).toBe('failed');
   });
 
   it('never renders an untitled card, because an untitled card has no accessible name', () => {
-    // The fallback is the paper id: something a screen reader can announce and a human can tell
-    // apart from the next card. Empty string was the accessibility defect.
-    const untitled = libraryPaperFromPaperRow({ ...REAL_ROW, metadata: null });
+    const untitled = libraryPaperFromWire({ ...REAL_ROW, title: '  ', original_filename: null });
 
-    expect(untitled.title).toBe(REAL_ROW.paper_id);
     expect(untitled.title.length).toBeGreaterThan(0);
-  });
-
-  it('survives metadata that is not valid JSON rather than taking the library down', () => {
-    const broken = libraryPaperFromPaperRow({ ...REAL_ROW, metadata: '{not json' });
-
-    expect(broken.title).toBe(REAL_ROW.paper_id);
-    expect(broken.authors).toEqual([]);
+    expect(untitled.title).not.toBe(REAL_ROW.paper_id);
   });
 });
 
-describe('D6 — the Inspector is asked about the selection', () => {
-  it('the reader shell reads the selection instead of hardcoding the first block', async () => {
-    // THE DEFECT WAS ONE LINE and no behavioural test could reach it:
-    //     context={{ kind: 'selection', blockIds: [doc.blocks[0]?.id ?? ''], quote: title }}
-    // `ask-wiring.spec.tsx` builds its own context and asserts what the Inspector does with it, so
-    // it is blind to what the mount site passes. This asserts the mount site itself.
+describe('D6 — the explain panel is asked about the selection', () => {
+  it('the reader shell holds the live selection, and the Inspector is gone', async () => {
+    // THE DEFECT WAS ONE LINE and no behavioural test could reach it: the old Inspector was handed
+    // `blocks[0]` whatever was selected. S6 replaced it with the explain panel, which is asked
+    // about the Anchor the selection toolbar captured (`openExplain({anchor, quote})`), so the
+    // mount site no longer computes a context at all. What stays pinned: the shell receives the
+    // selection from the pane, and nothing of the old Inspector is mounted.
     const source = readFileSync(resolve(process.cwd(), 'src/app/paper/[id]/read/ReaderWorkspace.tsx'), 'utf8');
 
-    // The Inspector takes a computed context...
-    expect(source).toContain('context={inspectorContext}');
-    // ...which is derived from the live selection...
-    expect(source).toContain('props.selection?.blockIds');
-    // ...and the shell both holds that state and receives it from the pane.
+    expect(source).not.toContain('components/inspector');
+    expect(source).not.toContain('inspectorContext');
     expect(source).toContain('onSelectionChange={setSelection}');
   });
 

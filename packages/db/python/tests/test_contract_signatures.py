@@ -123,19 +123,7 @@ PROPOSED: dict[str, list[str]] = {
 }
 
 #: THE LEDGER. Delete a line in the PR that implements the method.
-STILL_STUBS: frozenset[str] = frozenset(
-    {
-        # S7
-        "get_board",
-        "create_node",
-        "patch_node",
-        "delete_node",
-        "create_edge",
-        "patch_edge",
-        "delete_edge",
-        "patch_board",
-    }
-)
+STILL_STUBS: frozenset[str] = frozenset()  # S7 built the last eight (canvas.py)
 
 
 def _shape(method: Callable[..., Any]) -> list[str]:

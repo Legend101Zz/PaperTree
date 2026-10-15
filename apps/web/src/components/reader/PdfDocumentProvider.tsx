@@ -44,6 +44,8 @@ import type { BBox, PageFrame } from '@papertree/document-ir';
 
 import { getPdfjs } from '@/lib/pdf/worker';
 
+import { classifyPdfFailure, PdfEngineError, type PdfFailureKind } from './pdfError';
+
 /**
  * What the reader opens. Bytes are COPIED before each `getDocument` (pdf.js transfers what it is
  * given to its worker, which detaches it), so the caller's buffer is never consumed.
@@ -104,6 +106,8 @@ export interface PdfDocumentValue {
   readonly pageMeta: ReadonlyMap<number, PdfPageMeta>;
   /** A designed state, not a thrown exception: the reader renders a retry affordance from it. */
   readonly error: Error | null;
+  /** Whose fault `error` is: the file (`document`) or the PDF engine failing to start (`engine`). */
+  readonly errorKind: PdfFailureKind | null;
   readonly loading: boolean;
   /** Re-runs the load. Safe to call while loading; the in-flight task is destroyed first. */
   readonly reload: () => void;
@@ -206,6 +210,7 @@ interface LoadState {
   readonly numPages: number;
   readonly pageMeta: ReadonlyMap<number, PdfPageMeta>;
   readonly error: Error | null;
+  readonly errorKind: PdfFailureKind | null;
   readonly loading: boolean;
 }
 
@@ -215,6 +220,7 @@ const IDLE: LoadState = {
   numPages: 0,
   pageMeta: EMPTY_META,
   error: null,
+  errorKind: null,
   loading: false,
 };
 
@@ -248,6 +254,7 @@ export function PdfDocumentProvider({ src, children }: PdfDocumentProviderProps)
       numPages: 0,
       pageMeta: EMPTY_META,
       error: null,
+      errorKind: null,
       loading: true,
     });
 
@@ -256,7 +263,9 @@ export function PdfDocumentProvider({ src, children }: PdfDocumentProviderProps)
     // calls `getDocument`, and the one-open-per-session count means what it says.
     started = setTimeout(() => void (async () => {
       try {
-        const pdfjs = await getPdfjs();
+        const pdfjs = await getPdfjs().catch((cause: unknown) => {
+          throw new PdfEngineError('The PDF engine could not be loaded.', { cause });
+        });
         if (cancelled) return;
 
         const debug = debugState();
@@ -274,6 +283,7 @@ export function PdfDocumentProvider({ src, children }: PdfDocumentProviderProps)
           numPages: doc.numPages,
           pageMeta,
           error: null,
+          errorKind: null,
           loading: false,
         });
       } catch (cause) {
@@ -286,6 +296,7 @@ export function PdfDocumentProvider({ src, children }: PdfDocumentProviderProps)
           numPages: 0,
           pageMeta: EMPTY_META,
           error: toError(cause),
+          errorKind: classifyPdfFailure(cause),
           loading: false,
         });
       }
@@ -306,6 +317,7 @@ export function PdfDocumentProvider({ src, children }: PdfDocumentProviderProps)
       numPages: state.numPages,
       pageMeta: state.pageMeta,
       error: state.error,
+      errorKind: state.errorKind,
       loading: state.loading,
       reload,
     }),
@@ -388,5 +400,15 @@ const TEXT_LAYER_CSS = `
 .papertree-text-layer[data-main-rotation="90"] { transform: rotate(90deg) translateY(-100%); }
 .papertree-text-layer[data-main-rotation="180"] { transform: rotate(180deg) translate(-100%, -100%); }
 .papertree-text-layer[data-main-rotation="270"] { transform: rotate(270deg) translateX(-100%); }
+.papertree-text-layer > .endOfContent {
+  display: block;
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: 0;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.papertree-text-layer.selecting > .endOfContent { top: 0; }
 .papertree-text-layer ::selection { background: rgb(59 130 246 / 0.35); }
 `;

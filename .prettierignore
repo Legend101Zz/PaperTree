@@ -1,6 +1,5 @@
 apps/
 archive/
-docker-compose.yml
 node_modules/
 dist/
 .turbo/
@@ -28,4 +27,11 @@ infrastructure/
 findings.md
 progress.md
 task_plan.md
-README.md
+contracts/README.md
+
+# Tool caches. git ignores them through their own nested .gitignore files, which prettier does not
+# read, so `prettier --check .` after a local pytest run flagged .pytest_cache/README.md. The other two
+# use the same nested-.gitignore pattern and are listed as a precaution.
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

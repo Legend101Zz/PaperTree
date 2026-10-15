@@ -346,11 +346,8 @@ function repoPath(absolute: string): string {
  * unquarantined. The canvas is not in this epic's charter, so its six files stay listed rather than
  * turning the suite red for work nobody here is allowed to do.
  *
- * (#75 moved the whole canvas surface to `archive/v1-web-canvas/`, so the six entries below now
- * name files that are not in `src/` at all. They are kept rather than deleted because this ledger's
- * "a listed file that no longer offends fails" rule is guarded on the file EXISTING — an entry for
- * a moved file is inert, not stale. Delete them when Epic 5 (#43) rebuilds the canvas and this list
- * stops being the record of what was quarantined.)
+ * (The six v1 canvas entries that used to be listed were removed in S8a: the files live in
+ * `archive/v1-web-canvas/`, not `src/`, so the entries were inert.)
  *
  * The list is a DEBT LEDGER and it is enforced in both directions:
  *
@@ -360,14 +357,7 @@ function repoPath(absolute: string): string {
  *   - a file on this list that has been DELETED is reported and passes. Deleting the v1 component
  *     is the desired outcome and must never turn the build red.
  */
-const V1_QUARANTINE: readonly string[] = [
-  'canvas/MermaidRenderer.tsx',
-  'canvas/RichCanvasNode.tsx',
-  'canvas/nodes/AIResponseNode.tsx',
-  'canvas/nodes/ExplorationNode.tsx',
-  'canvas/nodes/NoteNode.tsx',
-  'canvas/nodes/PageSuperNode.tsx',
-];
+const V1_QUARANTINE: readonly string[] = [];
 
 /** Mouse-only interaction. `onMouseMove` drag is the v1 minimap; a finger never sends it. */
 const MOUSE_INTERACTION = /\bon(?:MouseDown|MouseUp|MouseMove)\s*=/;

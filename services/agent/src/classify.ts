@@ -28,7 +28,7 @@ export interface RunError {
 }
 
 /** Why the host called `session.abort()`, when it did. */
-export type HostAbort = 'tool_budget' | 'idle' | 'deadline' | 'client' | 'tool_failed';
+export type HostAbort = 'tool_budget' | 'idle' | 'deadline' | 'client' | 'tool_failed' | 'shutdown';
 
 const QUOTA = /insufficient_quota|quota|billing|balance/i;
 /**
@@ -83,7 +83,7 @@ const MESSAGES: Record<RunErrorCode, string> = {
   tool_budget_exhausted:
     'The question needed more of the paper than one answer may read. Try a narrower question.',
   output_truncated: 'The answer reached its length limit, so it is incomplete.',
-  agent_unavailable: 'The AI service is not available.',
+  agent_unavailable: 'The AI service stopped responding. Try again.',
   internal: 'Something went wrong while answering.',
 };
 
@@ -119,5 +119,9 @@ export function classifyHostAbort(reason: HostAbort): {
       return { code: 'aborted', retryable: true };
     case 'tool_failed':
       return { code: 'tool_failed', retryable: true };
+    case 'shutdown':
+      // The agent itself is going away (SIGTERM): nobody asked the reader's answer to stop, so it
+      // is not `aborted` (W2API item 4, contracts.md §2.9).
+      return { code: 'agent_unavailable', retryable: true };
   }
 }
