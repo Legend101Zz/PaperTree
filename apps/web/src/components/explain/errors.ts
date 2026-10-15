@@ -116,8 +116,8 @@ const COPY: Readonly<Partial<Record<FailureCode, FailureCopy>>> = {
     canRetry: false,
   },
   aborted: {
-    sentence: 'Stopped.',
-    next: 'Ask again whenever you want.',
+    sentence: 'The answer stopped before it finished.',
+    next: 'What arrived is kept above. Retry to get the full answer.',
     canRetry: true,
   },
   network: {
