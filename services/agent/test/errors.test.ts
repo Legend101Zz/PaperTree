@@ -166,6 +166,48 @@ describe('the real provider path against a mock Anthropic server', () => {
     );
   });
 
+  test('a spent tool budget over the real provider path: the final request is well formed and the answer is kept (S5F)', async () => {
+    const use = (id: string, handle: string) => ({
+      id,
+      name: 'get_passage',
+      input: { handle },
+    });
+    const { agent, mock, tools } = await live([
+      { kind: 'stream', toolUses: [use('tu_1', 'b3'), use('tu_2', 'b4'), use('tu_3', 'b5')] },
+      { kind: 'stream', toolUses: [use('tu_4', 'b6')] },
+      { kind: 'stream', text: ['It regresses boxes directly [b1].'] },
+    ]);
+    const body = request(tools, { max_tool_calls: 2 });
+    const result = await postRun(agent.url, body);
+    assert.deepEqual(semanticProblems(result.events), []);
+    const d = done(result);
+    assert.equal(d['status'], 'complete');
+    assert.equal(d['final_text'], 'It regresses boxes directly [b1].');
+    assert.equal(mock.requests.length, 3, 'two tool turns and the one final turn');
+    const finalRequest = mock.requests.at(-1)!.body['messages'] as Array<{
+      role: string;
+      content: Array<Record<string, any>>;
+    }>;
+    // Every tool_use the provider is shown has its tool_result in the next user message, or the
+    // provider would refuse the request (Pi fills in the ones the stopped turn never answered).
+    const toolUses = finalRequest.flatMap((m) =>
+      m.role === 'assistant' ? m.content.filter((c) => c['type'] === 'tool_use') : [],
+    );
+    const toolResults = new Set(
+      finalRequest
+        .flatMap((m) =>
+          m.role === 'user' ? m.content.filter((c) => c['type'] === 'tool_result') : [],
+        )
+        .map((c) => c['tool_use_id']),
+    );
+    assert.ok(toolUses.length >= 4);
+    for (const use of toolUses)
+      assert.ok(toolResults.has(use['id']), `${String(use['id'])} answered`);
+    const last = finalRequest.at(-1)!;
+    assert.equal(last.role, 'user');
+    assert.match(JSON.stringify(last.content), /tool budget for this task is used up/);
+  });
+
   interface Row {
     readonly name: string;
     readonly steps: readonly MockStep[];
