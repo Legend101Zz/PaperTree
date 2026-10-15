@@ -19,7 +19,7 @@ fetch() {  # $1=name  $2=url
     echo "have  $1"
     return
   fi
-  if curl -sSL --max-time 90 -A "$UA" -o "$1.pdf" "$2"; then
+  if curl -sSL --retry 3 --retry-delay 5 --max-time 90 -A "$UA" -o "$1.pdf" "$2"; then
     echo "ok    $1  ($(du -h "$1.pdf" | cut -f1))"
   else
     echo "FAIL  $1" >&2

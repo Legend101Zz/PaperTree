@@ -28,6 +28,26 @@
 #   * Versions are pinned, not floated. pnpm comes from the root package.json `packageManager`
 #     field so there is one source of truth; Python is pinned to 3.12 because pyproject only says
 #     ">=3.12" and there is no .python-version, so an unpinned uv would happily resolve 3.14.
+#
+#   * EVERY GATE RUNS, UNCACHED, AND A SKIP IS A FAILURE (#141, #118). Until the reader release CI
+#     ran typecheck, lint, the unit tests and the codegen check, and nothing else: no prettier, no
+#     `next build`, no browser, and ~220 corpus/fresh Python tests plus 10 stamp.spec tests that
+#     SKIP when their PDFs are absent - and CI had none of them, so they skipped, green, forever.
+#     The PDFs are gitignored (they are arXiv/ACL papers: fetched, not redistributed), so the jobs
+#     below fetch them with the same scripts a developer runs, cache them with actions/cache keyed
+#     on the committed sha256 files (a bumped checksum is a new key), and verify the checksums
+#     whether the bytes came from the cache or the network. The jobs that depend on them then read
+#     their own logs and FAIL if a "SKIPPED" notice or a corpus skip reason is in them: the
+#     assertion is on the log because the green/red of a test runner cannot tell "ran" from
+#     "skipped" (the vacuous-green AGENTS.md section 2 records three times).
+#
+#     Turbo's cache is never used in CI (no `turbo` remote cache and no `.turbo` restore), so a
+#     task that "passed" passed here, on this commit.
+#
+#     Jobs are separate and parallel so the wall clock is the slowest job, not the sum:
+#     typescript, python, prettier, web-build, e2e (plus the small fixtures and PR-base jobs).
+#     `live-journey.yml` is a different workflow on purpose: it spends real money, so it runs only
+#     on the `run-live` label or by hand.
 
 name: CI
 
@@ -189,8 +209,70 @@ jobs:
       - name: Lint
         run: pnpm run lint
 
+      # The live-parse specs (packages/anchoring s4-*, apps/web s4-table-cell-capture) run the
+      # real worker through the workspace Python, so this job needs the venv as well as the PDFs.
+      # stamp.spec stages the corpus PDFs through apps/web's `pretest`.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Sync the Python workspace (the live-parse specs call it)
+        run: uv sync --locked --all-packages
+
+      # Fetched, not committed (arXiv/ACL licences). Cached on the committed checksum files, so the
+      # network is touched only when a checksum changes or the cache is evicted.
+      - name: Cache the benchmark PDFs (corpus + fresh set)
+        uses: actions/cache@v6
+        with:
+          path: |
+            research/benchmarks/corpus
+            research/benchmarks/fresh/pdfs
+          key: bench-pdfs-v1-${{ hashFiles('research/benchmarks/corpus.sha256', 'research/benchmarks/fresh/fresh.sha256') }}
+
+      - name: Fetch the corpus and the fresh set, then verify their checksums
+        run: |
+          ./research/benchmarks/fetch_corpus.sh
+          ./research/benchmarks/fresh/fetch_fresh.sh
+          # fetch_corpus.sh prints FAIL and exits 0, so the checksum check is the real gate.
+          (cd research/benchmarks/corpus && shasum -a 256 -c ../corpus.sha256)
+          (cd research/benchmarks/fresh/pdfs && shasum -a 256 -c ../fresh.sha256)
+
+      # `turbo run test` runs every workspace package's `test` script, @papertree/agent's included
+      # (its isolation audit and mutants M5/M6); the next step asserts that from the log rather
+      # than from this comment. NO_COLOR keeps the log greppable.
       - name: Unit tests
-        run: pnpm run test
+        env:
+          NO_COLOR: '1'
+          FORCE_COLOR: '0'
+        run: |
+          set -o pipefail
+          pnpm run test 2>&1 | tee "$RUNNER_TEMP/ts-test.log"
+
+      - name: Assert the corpus-gated specs RAN and the agent tests ran (a skip is a failure)
+        run: |
+          log="$RUNNER_TEMP/ts-test.log"
+          fail=0
+          if /usr/bin/grep -a -n 'SKIPPED' "$log"; then
+            echo "::error title=A spec skipped::a corpus- or venv-gated spec printed SKIPPED (above)."
+            fail=1
+          fi
+          if /usr/bin/grep -a -n -E 'Tests .*[0-9]+ skipped|^.*[[:space:]]↓ ' "$log"; then
+            echo "::error title=vitest skipped tests::vitest reported skipped tests (above)."
+            fail=1
+          fi
+          for want in 'test/stamp\.spec\.ts \(10 tests\)' 's4-table-cell-capture\.spec\.ts \(1 test\)' \
+                      '@papertree/agent:test: .*the isolation audit'; do
+            if ! /usr/bin/grep -a -q -E "$want" "$log"; then
+              echo "::error title=Expected test output missing::no line matches: $want"
+              fail=1
+            fi
+          done
+          /usr/bin/grep -a -E 'stamp\.spec\.ts|s4-[a-z-]+\.spec\.ts|@papertree/agent:test: .*(tests|pass|fail)' "$log" || true
+          exit $fail
 
   # ── Python: pytest · ruff · mypy ────────────────────────────────────────────────────────────
   python:
@@ -229,8 +311,42 @@ jobs:
                 '| sqlite', sqlite, '| sqlite-vec', vec, '| vec0 table: ok')
           "
 
+      # Fetched, not committed (arXiv/ACL licences). Cached on the committed checksum files, so the
+      # network is touched only when a checksum changes or the cache is evicted.
+      - name: Cache the benchmark PDFs (corpus + fresh set)
+        uses: actions/cache@v6
+        with:
+          path: |
+            research/benchmarks/corpus
+            research/benchmarks/fresh/pdfs
+          key: bench-pdfs-v1-${{ hashFiles('research/benchmarks/corpus.sha256', 'research/benchmarks/fresh/fresh.sha256') }}
+
+      - name: Fetch the corpus and the fresh set, then verify their checksums
+        run: |
+          ./research/benchmarks/fetch_corpus.sh
+          ./research/benchmarks/fresh/fetch_fresh.sh
+          # fetch_corpus.sh prints FAIL and exits 0, so the checksum check is the real gate.
+          (cd research/benchmarks/corpus && shasum -a 256 -c ../corpus.sha256)
+          (cd research/benchmarks/fresh/pdfs && shasum -a 256 -c ../fresh.sha256)
+
+      # -rs lists every skip with its reason, and the step reads that list. The corpus- and
+      # fresh-gated tests (~220) skip with a reason naming their fetch script; seeing that here
+      # means the fetch above did not produce what the tests look for.
       - name: Tests
-        run: uv run pytest
+        run: |
+          set -o pipefail
+          uv run pytest -rs 2>&1 | tee "$RUNNER_TEMP/pytest.log"
+
+      - name: Assert the corpus- and fresh-gated tests RAN (a skip is a failure)
+        run: |
+          log="$RUNNER_TEMP/pytest.log"
+          tail -n 3 "$log"
+          if /usr/bin/grep -a -n -E 'fetch_corpus\.sh|fetch_fresh\.sh|gitignored|corpus PDFs' "$log"; then
+            echo "::error title=Corpus/fresh tests skipped::pytest skipped tests that need the fetched PDFs (lines above)."
+            exit 1
+          fi
+          echo "skips that remain (none may be about the corpus or the fresh set):"
+          /usr/bin/grep -a -E '^SKIPPED' "$log" || echo "  none"
 
       # `packages services` since Epic 1, which is the first epic to own code outside packages/.
       # A directory that is not named here is not linted, and unlinted code reports green — the
@@ -246,6 +362,173 @@ jobs:
       # services/<name>/python is type-checked the day it lands instead of being silently skipped.
       - name: Typecheck
         run: uv run mypy packages/*/python services/*/python
+
+  # ── Prettier (#141) ─────────────────────────────────────────────────────────────────────────
+  # Its own job: it needs only node + the lockfile, so it finishes in a fraction of the
+  # TypeScript job and a formatting slip is red in seconds, not after the whole suite.
+  prettier:
+    name: Prettier (format check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prettier check
+        run: pnpm exec prettier --check .
+
+  # ── apps/web production build (#141) ────────────────────────────────────────────────────────
+  # `tsc --noEmit` and `next lint` do not catch everything `next build` does (route/segment
+  # config, server/client boundary errors, static generation failures). `prebuild` runs
+  # copy-fixtures.mjs with --strict, which FAILS when the corpus PDFs are absent - so this job
+  # needs them, and passing means the strict staging really found them.
+  web-build:
+    name: Web build (next build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Fetched, not committed (arXiv/ACL licences). Cached on the committed checksum files, so the
+      # network is touched only when a checksum changes or the cache is evicted.
+      - name: Cache the benchmark PDFs (corpus + fresh set)
+        uses: actions/cache@v6
+        with:
+          path: |
+            research/benchmarks/corpus
+            research/benchmarks/fresh/pdfs
+          key: bench-pdfs-v1-${{ hashFiles('research/benchmarks/corpus.sha256', 'research/benchmarks/fresh/fresh.sha256') }}
+
+      - name: Fetch the corpus and the fresh set, then verify their checksums
+        run: |
+          ./research/benchmarks/fetch_corpus.sh
+          ./research/benchmarks/fresh/fetch_fresh.sh
+          # fetch_corpus.sh prints FAIL and exits 0, so the checksum check is the real gate.
+          (cd research/benchmarks/corpus && shasum -a 256 -c ../corpus.sha256)
+          (cd research/benchmarks/fresh/pdfs && shasum -a 256 -c ../fresh.sha256)
+
+      - name: Build papertree-web
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: pnpm --filter papertree-web build
+
+  # ── Browser journeys A-D against the faux agent (#141) ──────────────────────────────────────
+  # `pnpm e2e` starts the REAL api, worker and `next dev` on free ports against a fresh data
+  # root, with the agent in FAUX mode (a scripted model: no key, no network). It runs whatever
+  # specs exist under e2e/, so slices that add e2e/<slice>/ are picked up without editing this
+  # file. PAPERTREE_E2E_YOLO_PDF is set so Journey B (and the S4 regression specs) RUN instead of
+  # skipping; the step after the run reads the report and fails if any spec skipped.
+  e2e:
+    name: E2E (Playwright, faux agent)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      PAPERTREE_E2E_SCRATCH: ${{ runner.temp }}/e2e-scratch
+      PAPERTREE_E2E_OUTPUT: ${{ runner.temp }}/e2e-results
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      # The harness spawns `.venv/bin/python -m papertree_api` and `-m papertree_api.worker`.
+      - name: Sync the Python workspace
+        run: uv sync --locked --all-packages
+
+      # Fetched, not committed (arXiv/ACL licences). Cached on the committed checksum files, so the
+      # network is touched only when a checksum changes or the cache is evicted.
+      - name: Cache the benchmark PDFs (corpus + fresh set)
+        uses: actions/cache@v6
+        with:
+          path: |
+            research/benchmarks/corpus
+            research/benchmarks/fresh/pdfs
+          key: bench-pdfs-v1-${{ hashFiles('research/benchmarks/corpus.sha256', 'research/benchmarks/fresh/fresh.sha256') }}
+
+      - name: Fetch the corpus and the fresh set, then verify their checksums
+        run: |
+          ./research/benchmarks/fetch_corpus.sh
+          ./research/benchmarks/fresh/fetch_fresh.sh
+          # fetch_corpus.sh prints FAIL and exits 0, so the checksum check is the real gate.
+          (cd research/benchmarks/corpus && shasum -a 256 -c ../corpus.sha256)
+          (cd research/benchmarks/fresh/pdfs && shasum -a 256 -c ../fresh.sha256)
+
+      - name: Install Chromium for Playwright
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run the e2e suite
+        env:
+          PAPERTREE_E2E_YOLO_PDF: ${{ github.workspace }}/research/benchmarks/fresh/pdfs/yolo-1506.02640.pdf
+        run: |
+          set -o pipefail
+          pnpm e2e 2>&1 | tee "$RUNNER_TEMP/e2e.log"
+
+      - name: Assert no e2e spec skipped (Journey B needs the YOLO PDF)
+        run: |
+          cat "$RUNNER_TEMP/e2e.log" | tail -n 25
+          if /usr/bin/grep -a -n -E '^[[:space:]]*[0-9]+ skipped' "$RUNNER_TEMP/e2e.log"; then
+            echo "::error title=e2e specs skipped::a spec skipped (line above); the YOLO PDF or the faux agent is missing."
+            exit 1
+          fi
+
+      # On failure only: Playwright's traces and screenshots (PAPERTREE_E2E_OUTPUT) and the
+      # stack's data root with the api/worker/agent/web logs (PAPERTREE_E2E_SCRATCH). The data
+      # root holds a throwaway SQLite file and the uploaded test PDF, never a key (the harness
+      # passes none).
+      - name: Upload e2e logs, traces and screenshots
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-failure-artifacts
+          path: |
+            ${{ runner.temp }}/e2e-results
+            ${{ runner.temp }}/e2e-scratch
+            ${{ runner.temp }}/e2e.log
+          if-no-files-found: warn
+          retention-days: 7
 
   # ── Fixture validation (F0.7's gate) ────────────────────────────────────────────────────────
   # Its own job so its state is readable at a glance in the PR checks list. F0.7 landed the

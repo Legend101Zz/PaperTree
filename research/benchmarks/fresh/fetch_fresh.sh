@@ -38,7 +38,7 @@ fetch() {  # $1=name  $2=versioned url
   fi
   # Download to a temp name, so an interrupted fetch never leaves a truncated $1.pdf
   # that the next run would skip as "have".
-  if curl -fsSL --max-time 120 -A "$UA" -o "$1.pdf.part" "$2"; then
+  if curl -fsSL --retry 3 --retry-delay 5 --max-time 120 -A "$UA" -o "$1.pdf.part" "$2"; then
     mv "$1.pdf.part" "$1.pdf"
     echo "ok    $1  ($(du -h "$1.pdf" | cut -f1))"
   else
