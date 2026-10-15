@@ -9,8 +9,9 @@
  * usage line, Send to canvas — sits OUTSIDE the AI block, in the interface's own voice.
  */
 import { AiText } from '@papertree/ui';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
+import { usageApi } from '@/lib/api/usage';
 import type { Citation, RunSummary } from '@/lib/api/types';
 
 import { describeFailure } from './errors';
@@ -49,6 +50,28 @@ export function StatusLine({ label }: { readonly label: string }): ReactNode {
   );
 }
 
+/** "≈ $0.97 of $1.00 used in the last 24 hours (estimate)": the numbers behind a budget refusal. */
+function BudgetDetail(): ReactNode {
+  const [line, setLine] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    usageApi.get().then(
+      (usage) => {
+        if (live) {
+          setLine(
+            `≈ $${usage.cost_usd_est.toFixed(2)} of $${usage.budget_usd.toFixed(2)} used in the last 24 hours (estimate).`,
+          );
+        }
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+  return line === null ? null : <p data-budget-detail>{line}</p>;
+}
+
 export function FailureNote({
   failure,
   onRetry,
@@ -61,6 +84,7 @@ export function FailureNote({
     <div className="pt-explain__error" role="alert" data-error-code={failure.code}>
       <p className="pt-explain__error-title">{copy.sentence}</p>
       <p>{copy.next}</p>
+      {failure.code === 'budget_exhausted' ? <BudgetDetail /> : null}
       {copy.canRetry && onRetry !== undefined ? (
         <button type="button" className="pt-btn pt-btn--outline" onClick={onRetry}>
           Retry

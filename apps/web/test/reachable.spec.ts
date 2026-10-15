@@ -64,9 +64,6 @@ const ORPHAN_LEDGER: readonly { readonly file: string; readonly why: string }[] 
   // S8a: four API clients that exist and are pinned by tests (`lib-api-routes-*.spec.ts`) but that
   // no route imports yet. Each is wired by the slice named here (slice-plan.md, wave 2); whoever
   // wires one deletes its line, and this ledger FAILS (stale entry) until they do.
-  { file: 'lib/api/threads.ts', why: 'S6 (explain panel) wires it; #141' },
-  { file: 'lib/api/summary.ts', why: 'S6 (summary) wires it; #141' },
-  { file: 'lib/api/usage.ts', why: 'S6 (usage line) wires it; #141' },
   { file: 'lib/api/boards.ts', why: 'S7 (canvas) wires it; #141' },
 ];
 

@@ -111,7 +111,9 @@ describe('Ask: a streamed answer with chips, a usage line and nothing raw', () =
     });
     render(<Harness />);
     await ask();
-    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Reading p. 4 · §2.1'));
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toContain('Reading p. 4 · §2.1'),
+    );
     handle?.push(text('Now writing'));
     await waitFor(() => expect(screen.getByText(/Now writing/)).toBeTruthy());
     // Once text flows the label goes away.
@@ -125,7 +127,11 @@ describe('Ask: a streamed answer with chips, a usage line and nothing raw', () =
       [THREADS]: (_c, signal) => sseResponse(answerFrames(), { signal }),
       [MESSAGES]: (_c, signal) =>
         sseResponse(
-          [run({ message_id: 'msg_a2' }), text('That means one network pass.'), done('complete', null, 'msg_a2')],
+          [
+            run({ message_id: 'msg_a2' }),
+            text('That means one network pass.'),
+            done('complete', null, 'msg_a2'),
+          ],
           { signal },
         ),
     });
@@ -149,7 +155,9 @@ describe('Ask: a streamed answer with chips, a usage line and nothing raw', () =
     await ask();
     const button = await screen.findByRole('button', { name: 'Send to canvas' });
     fireEvent.click(button);
-    await waitFor(() => expect(sendToCanvas).toHaveBeenCalledWith({ kind: 'explanation', messageId: 'msg_a1' }));
+    await waitFor(() =>
+      expect(sendToCanvas).toHaveBeenCalledWith({ kind: 'explanation', messageId: 'msg_a1' }),
+    );
     await screen.findByRole('button', { name: 'Sent to canvas' });
   });
 
@@ -160,7 +168,9 @@ describe('Ask: a streamed answer with chips, a usage line and nothing raw', () =
     await ask();
     fireEvent.click(await screen.findByRole('button', { name: 'Send to canvas' }));
     await screen.findByText("Couldn't send this to the canvas. Try again.");
-    expect((screen.getByRole('button', { name: 'Send to canvas' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(
+      (screen.getByRole('button', { name: 'Send to canvas' }) as HTMLButtonElement).disabled,
+    ).toBe(false);
   });
 });
 
@@ -186,11 +196,26 @@ describe('Designed errors: a sentence, a next action, the partial text kept', ()
   });
 
   it('budget_exhausted explains the daily budget and offers no Retry that must fail', async () => {
-    installFetch({ [THREADS]: () => jsonResponse(429, errorBody('budget_exhausted')) });
+    installFetch({
+      [THREADS]: () => jsonResponse(429, errorBody('budget_exhausted')),
+      'GET /usage': () =>
+        jsonResponse(200, {
+          runs: 9,
+          input_tokens: 1,
+          output_tokens: 1,
+          cost_usd_est: 0.9712,
+          budget_usd: 1,
+          since: 'x',
+          by_kind: {},
+        }),
+    });
     render(<Harness />);
     await ask();
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain("today's AI budget");
+    await waitFor(() =>
+      expect(alert.textContent).toContain('≈ $0.97 of $1.00 used in the last 24 hours (estimate).'),
+    );
     expect(within(alert).queryByRole('button', { name: 'Retry' })).toBeNull();
   });
 
@@ -198,7 +223,9 @@ describe('Designed errors: a sentence, a next action, the partial text kept', ()
     installFetch({ [THREADS]: () => jsonResponse(503, errorBody('not_configured')) });
     render(<Harness />);
     await ask();
-    expect((await screen.findByRole('alert')).textContent).toContain('AI is not available on this server.');
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'AI is not available on this server.',
+    );
   });
 
   it('a mid-answer failure keeps the partial text, and Retry re-runs it with retry_of', async () => {
@@ -209,7 +236,11 @@ describe('Designed errors: a sentence, a next action, the partial text kept', ()
           [
             run(),
             text('The first half of the answer'),
-            done('error', { code: 'upstream_unavailable', retryable: true, message: 'raw 503 upstream' }),
+            done('error', {
+              code: 'upstream_unavailable',
+              retryable: true,
+              message: 'raw 503 upstream',
+            }),
           ],
           { signal },
         ),
@@ -239,7 +270,11 @@ describe('Stop: cancel the run, abort the stream, keep what arrived', () => {
     let handle: { push(c: string): void; close(): void } | undefined;
     const { calls } = installFetch({
       [THREADS]: (_c, signal) =>
-        sseResponse([run(), text('Half an answer')], { hold: true, signal, onHandle: (h) => (handle = h) }),
+        sseResponse([run(), text('Half an answer')], {
+          hold: true,
+          signal,
+          onHandle: (h) => (handle = h),
+        }),
       'POST /runs/run_1/cancel': () => jsonResponse(202, {}),
     });
     render(<Harness />);
