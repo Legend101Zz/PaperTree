@@ -634,6 +634,11 @@ describe('tool failures (§3.3): short, user-safe, and a dead tool route ends th
       false,
     ],
     [
+      '422 (a handle passed as a cursor) -> the model is told, and carries on',
+      { status: 422, body: { detail: 'cursor: x', code: 'validation_failed', retryable: false } },
+      false,
+    ],
+    [
       '500 -> tool_failed',
       { status: 500, body: { detail: 'boom', code: 'internal', retryable: true } },
       true,
@@ -648,7 +653,9 @@ describe('tool failures (§3.3): short, user-safe, and a dead tool route ends th
     test(label, async () => {
       toolAnswer = () => answer;
       const body = explain([
-        { toolCalls: [{ name: 'get_passage', arguments: { handle: 'b9' } }] },
+        label.startsWith('422')
+          ? { toolCalls: [{ name: 'get_section', arguments: { handle: 'b9', cursor: 'b29' } }] }
+          : { toolCalls: [{ name: 'get_passage', arguments: { handle: 'b9' } }] },
         { text: ['The paper does not say [b1].'] },
       ]);
       const result = await postRun(agent.url, body);
@@ -661,7 +668,9 @@ describe('tool failures (§3.3): short, user-safe, and a dead tool route ends th
         assert.equal(d['error']?.['retryable'], true);
       } else {
         assert.equal(d['status'], 'complete');
-        assert.equal(toolResult?.['message']['content'][0]['text'], 'Passage b9 is not available.');
+        const said = toolResult?.['message']['content'][0]['text'];
+        if (label.startsWith('422')) assert.match(said, /^That cursor is not valid\./);
+        else assert.equal(said, 'Passage b9 is not available.');
       }
       const shown = JSON.stringify(d['entries']);
       assert.doesNotMatch(
@@ -671,6 +680,41 @@ describe('tool failures (§3.3): short, user-safe, and a dead tool route ends th
       );
     });
   }
+});
+
+describe('the agent going away (W2API item 4)', () => {
+  test("closing the app mid-answer aborts the live run as `shutdown`, not as the reader's cancel", async () => {
+    const own = await startAgent({
+      apiOrigin: tools.origin,
+      brain: () => [
+        { text: ['Going [b1]', ...Array.from({ length: 60 }, () => ' on')], deltaDelayMs: 80 },
+      ],
+    });
+    let closing: Promise<void> | undefined;
+    const body = explain([]);
+    const events: Array<{ event: string; data: Json }> = [];
+    try {
+      await postRun(own.url, body, {
+        onFrame: (frame) => {
+          if (frame.kind === 'event') events.push({ event: frame.event, data: frame.data as Json });
+          if (closing === undefined && frame.kind === 'event' && frame.event === 'text')
+            closing = own.app.close();
+        },
+      }).catch(() => undefined);
+      await closing;
+      const aborted = own.logs.find(
+        (l) => l.event === 'agent.run.abort' && l['run_id'] === body['run_id'],
+      );
+      assert.equal(aborted?.['reason'], 'shutdown');
+      const doneLog = own.logs.find(
+        (l) => l.event === 'agent.run.done' && l['run_id'] === body['run_id'],
+      );
+      assert.equal(doneLog?.['error_code'], 'agent_unavailable');
+      assert.equal(doneLog?.['status'], 'partial');
+    } finally {
+      await own.close().catch(() => undefined);
+    }
+  });
 });
 
 describe('deadline and output length (faux)', () => {

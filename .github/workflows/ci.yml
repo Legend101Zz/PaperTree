@@ -261,9 +261,11 @@ jobs:
           # skips: the child sees ENETUNREACH from the empty network namespace and the test
           # asserts /ERR EPERM/, which only macOS's sandbox-exec produces (measured in this job's
           # second run, #141). Enabling the namespace (AppArmor sysctl) therefore turns a loud skip
-          # into a red; the one-line fix is in the test (accept ENETUNREACH), which this track does
-          # not own. Until then the audit's other six controls run and this line is the only skip
-          # tolerated; anything else printing SKIPPED fails the job.
+          # into a red; the test now accepts EPERM, ENETUNREACH or EACCES (W2API, #141). The runner
+          # cannot apply `unshare -rn` today (job log: "network: none"), so the skip is still
+          # printed and still the only one tolerated; once the namespace works the test runs, and
+          # this allowance can go (a SKIPPED line then means the deny did not run).
+          # anything else printing SKIPPED fails the job.
           # The allowed line is matched WHOLE (anchored at both ends): a line that merely contains
           # the phrase, such as "... no kernel network deny AND corpus missing", still fails.
           if /usr/bin/grep -a -n 'SKIPPED' "$log" \

@@ -41,7 +41,7 @@ compaction off, cache warming off, telemetry off and the §3.1 retry settings.
 
 `src/models.ts` decides which model answers which kind of run. `PAPERTREE_MODEL` sets one model for
 all three kinds (`explain`, `ask`, `summary`); `PAPERTREE_MODEL_<KIND>` overrides one kind; an
-unknown model id or effort refuses to boot, naming the variable. **Shipped defaults:** `explain` and `ask` on Flash at effort `low`, `summary` on M3. (A faux agent reports M3 until a `PAPERTREE_MODEL*` variable is set.) `MiniMax-M3` stays selectable as
+unknown model id or effort refuses to boot, naming the variable. **Shipped defaults:** `explain` on Flash at effort `low`; `ask` and `summary` on M3 (`ask` moved off Flash on 2026-10-15, ADR-003 "Revision 2026-10-15"). (A faux agent reports M3 until a `PAPERTREE_MODEL*` variable is set.) `MiniMax-M3` stays selectable as
 the fallback: `PAPERTREE_MODEL=MiniMax-M3`.
 
 **MiniMax-M3.1-Flash-Preview** is not in Pi's catalog; the agent registers it as a custom model

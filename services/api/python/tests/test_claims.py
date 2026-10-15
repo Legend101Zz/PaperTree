@@ -171,10 +171,14 @@ def test_commentary_beside_an_honest_claim_does_not_take_the_citation_down() -> 
     assert citation_supported(verdicts) is True
 
 
-def test_commentary_alone_is_not_verified() -> None:
+def test_commentary_alone_is_not_checked_not_unsupported() -> None:
+    """W2API item 2: a citation only interpretive sentences carry is ``None`` (not checked), the
+    UI's "unknown"; ``False`` is kept for a claim the check found unsupported."""
     from papertree_api.evidence import citation_supported, claim_verdict
 
-    assert citation_supported([claim_verdict(COMMENTARY, ["blk_a"], TEXTS)]) is False
+    assert citation_supported([claim_verdict(COMMENTARY, ["blk_a"], TEXTS)]) is None
+    assert citation_supported(["neutral", "neutral"]) is None
+    assert citation_supported(["neutral", "unsupported"]) is False
 
 
 @pytest.mark.parametrize("fabricated", [FAKE_NUMBER, INVENTED])

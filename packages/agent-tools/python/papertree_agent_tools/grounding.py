@@ -162,10 +162,14 @@ __all__ = [
     "STOPWORDS",
     "ClaimAssessment",
     "ClaimEvidence",
+    "PaperVocabulary",
     "Verdict",
     "assess_claim",
     "claim_coverage",
     "content_tokens",
+    "named_entities",
+    "paper_vocabulary",
+    "structure_refs",
     "verify_grounding",
 ]
 
@@ -276,6 +280,156 @@ def _fold(text: str) -> str:
     return _STRUCTURE_REF.sub(" ", _LINE_BREAK_HYPHEN.sub("", folded))
 
 
+#: The kind a structure-reference word names: ``Fig.`` and ``Figures`` are one kind.
+_REF_KINDS: Final = {
+    "section": "section",
+    "sections": "section",
+    "sec": "section",
+    "eq": "equation",
+    "eqs": "equation",
+    "equation": "equation",
+    "equations": "equation",
+    "fig": "figure",
+    "figs": "figure",
+    "figure": "figure",
+    "figures": "figure",
+    "table": "table",
+    "tables": "table",
+    "algorithm": "algorithm",
+    "algorithms": "algorithm",
+    "appendix": "appendix",
+    "appendices": "appendix",
+    "chapter": "chapter",
+    "chapters": "chapter",
+    "page": "page",
+    "pages": "page",
+    "p": "page",
+    "pp": "page",
+}
+_REF_PARTS = re.compile(r"([A-Za-z]+)\.?\s*\(?([0-9]+(?:\.[0-9]+)*[a-z]?)\)?")
+#: A numbered heading: ``4.2 Training`` is section 4.2; ``A. Details`` / ``B.1 Proofs`` an appendix.
+#: A heading whose number sits on its own line: ``3.4\nSimplified training objective`` (leading) or
+#: ``Forward process and LT\n3.1`` (trailing, as the PDF text layer of DDPM delivers it). A trailing
+#: bare letter is not taken (it could be a symbol); a trailing ``B.2`` is.
+_HEADING_LEAD_LINE = re.compile(
+    r"^\s*(?:appendix\s+)?([0-9]+(?:\.[0-9]+)*|[A-Z](?:\.[0-9]+)*)[.:]?\s"
+)
+_HEADING_TRAIL_LINE = re.compile(
+    r"\n\s*([0-9]+(?:\.[0-9]+)+|[0-9]+|[A-Z]\.[0-9]+(?:\.[0-9]+)*)[.:]?\s*$"
+)
+#: Headings that are not numbered sections of the argument.
+_UNNUMBERED_TITLES: Final = re.compile(
+    r"^\s*(abstract|references|bibliography|acknowledg\w*|appendix|contents)\b", re.IGNORECASE
+)
+#: An equation's tag in running text: ``(14)``.
+_EQUATION_TAG = re.compile(r"\(([0-9]{1,3})\)")
+
+
+def heading_number(text: str) -> str | None:
+    """The section number a heading block states, lower-cased: ``4.2 Training`` and
+    ``3.4\nSimplified ...`` (leading) and ``Forward process and LT\n3.1`` (trailing); ``None`` for
+    a heading that carries none (``Introduction``)."""
+    lead = _HEADING_LEAD_LINE.match(text)
+    if lead is not None:
+        return lead.group(1).lower()
+    trail = _HEADING_TRAIL_LINE.search(text)
+    if trail is not None:
+        return trail.group(1).lower()
+    return None
+
+
+def _number_tuple(number: str) -> tuple[int, ...] | None:
+    parts = number.split(".")
+    return tuple(int(p) for p in parts) if all(p.isdigit() for p in parts) else None
+
+
+_ROMAN_REF = re.compile(
+    r"\b(?i:(table|fig(?:ure)?|section|appendix))s?\.?\s+\(?([IVX]{1,6})\)?\b(?![a-z])"
+)
+_ROMAN: Final = {"I": 1, "V": 5, "X": 10}
+
+
+def _roman_value(numeral: str) -> int | None:
+    total = 0
+    for i, ch in enumerate(numeral):
+        value = _ROMAN[ch]
+        total += -value if i + 1 < len(numeral) and _ROMAN[numeral[i + 1]] > value else value
+    return total if total > 0 else None
+
+
+def structure_refs(text: str) -> frozenset[str]:
+    """The references to the paper's own structure in ``text``, normalised: ``Table 9`` is
+    ``table 9``, ``Fig. 3`` is ``figure 3``, ``pp. 4`` is ``page 4``, ``Section 4.2`` is
+    ``section 4.2`` (W2API item 3, 2026-10-15). Coverage still ignores them (:func:`_fold`); this
+    is what lets a reference to a table the paper does not have be called out."""
+    out: set[str] = set()
+    for match in _STRUCTURE_REF.finditer(text.translate(_DASHES)):
+        parts = _REF_PARTS.match(match.group(0))
+        if parts is None:
+            continue
+        kind = _REF_KINDS.get(parts.group(1).lower())
+        if kind is not None:
+            out.add(f"{kind} {parts.group(2).lower()}")
+    for roman in _ROMAN_REF.finditer(text.translate(_DASHES)):  # ``TABLE II`` is table 2
+        value = _roman_value(roman.group(2))
+        kind = _REF_KINDS.get(roman.group(1).lower().rstrip("s"))
+        if value is not None and kind is not None:
+            out.add(f"{kind} {value}")
+    return frozenset(out)
+
+
+#: A capitalised word run that opens a sentence, a bullet, a quote or a bold span is just
+#: capitalised for grammar; one inside a sentence names something.
+_CAPITAL = re.compile(r"[A-Z][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*")
+#: ``K-fold``, ``T-step``: a math variable bolted to a word, not a name.
+_VARIABLE_COMPOUND = re.compile(r"^[A-Z]-")
+_AFTER_BOUNDARY = re.compile(r"(?:^|[.!?:;\u2014\u2013(\"\u201c\u2018*\-\n]\s*|\*\*)\s*$")
+
+
+def named_entities(text: str) -> tuple[str, ...]:
+    """Proper nouns and names in a claim: runs of capitalised words inside a sentence
+    (``Google Brain``, ``Geoffrey Hinton``) and single names such as ``ImageNet`` or ``BERT``;
+    never the capital that merely opens a sentence, a bullet or a bold span. Structure words
+    (``Section``, ``Table``) are not names."""
+    folded = text.translate(_DASHES)
+    entities: list[str] = []
+    run: list[str] = []
+    cursor = 0
+    for match in _CAPITAL.finditer(folded):
+        word = match.group(0)
+        between = folded[cursor : match.start()]
+        starts_sentence = _AFTER_BOUNDARY.search(folded[: match.start()]) is not None
+        continues = bool(run) and between.strip() == "" and "\n" not in between
+        if continues:
+            run.append(word)
+        else:
+            if run:
+                entities.append(" ".join(run))
+            run = [] if starts_sentence else [word]
+        cursor = match.end()
+    if run:
+        entities.append(" ".join(run))
+    kept = []
+    for entity in entities:
+        # A two-letter acronym ("ML", "AI") is a way of saying a longer phrase, not a name.
+        words = [
+            w
+            for w in entity.split()
+            if w.lower() not in _STRUCTURE_WORDS
+            and len(w) > 2
+            and _VARIABLE_COMPOUND.match(w) is None
+        ]
+        if words:
+            kept.append(" ".join(words))
+    return tuple(dict.fromkeys(kept))
+
+
+#: Capitalised words that name a part of the paper or are just "I"/"A", never an outside name.
+_STRUCTURE_WORDS: Final = frozenset(_REF_KINDS) | frozenset(
+    {"i", "a", "abstract", "introduction", "conclusion", "conclusions", "references", "related"}
+)
+
+
 def _stem(token: str) -> str:
     """A deliberately crude suffix strip (``classifiers`` -> ``classifier``, ``boxes`` -> ``box``,
     ``predicts`` -> ``predict``). Numbers and short words are untouched. Both sides of every
@@ -320,6 +474,108 @@ def _parts(token: str) -> tuple[str, ...]:
     return tuple(_stem(part) for part in token.split("-") if part and part not in STOPWORDS)
 
 
+@dataclass(frozen=True, slots=True)
+class PaperVocabulary:
+    """What the WHOLE paper contains, so that a claim is judged against more than its cited blocks
+    where the question is "does this exist at all" (W2API item 3): ``refs`` are the structure
+    references the paper has (captions, headings, mentions; ``page n`` for every printed page),
+    ``words`` its content tokens. ``None`` fields mean unknown, and unknown never accuses."""
+
+    refs: frozenset[str]
+    words: frozenset[str]
+    page_count: int | None = None
+    #: ``words`` with ``-`` and ``_`` removed (``CIFAR-10`` is the paper's ``CIFAR10``,
+    #: ``BERT_BASE`` its flattened ``BERTBASE``); filled in from ``words`` when left empty.
+    squashed: frozenset[str] = frozenset()
+    #: Where a section number could be that no heading states: ``(low, high, room)`` for each run of
+    #: headings with no number of their own (``Introduction``, ``Background``) between two numbered
+    #: ones (``high`` is ``None`` after the last): a number from ``low`` to ``high`` whose top level
+    #: is at most ``low``'s plus ``room`` may be one of them. A paper whose every heading is
+    #: numbered has none, so its section references stay strict.
+    section_gaps: tuple[tuple[tuple[int, ...], tuple[int, ...] | None, int], ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.squashed:
+            object.__setattr__(self, "squashed", frozenset(_squash(w) for w in self.words))
+
+    def _in_a_gap(self, number: str) -> bool:
+        wanted = _number_tuple(number)
+        return wanted is not None and _in_gap_check(wanted, self.section_gaps)
+
+    def has_word(self, token: str) -> bool:
+        return token in self.words or _squash(token) in self.squashed
+
+    def has_ref(self, ref: str) -> bool:
+        if ref in self.refs:
+            return True
+        kind, _, number = ref.partition(" ")
+        if kind == "section" and self._in_a_gap(number):
+            return True
+        if kind == "page" and self.page_count is not None:
+            return number.isdigit() and 1 <= int(number) <= self.page_count
+        return False
+
+
+def _in_gap_check(
+    wanted: tuple[int, ...],
+    gaps: tuple[tuple[tuple[int, ...], tuple[int, ...] | None, int], ...],
+) -> bool:
+    for low, high, room in gaps:
+        if wanted[0] <= low[0] + room and wanted >= low and (high is None or wanted <= high):
+            return True
+    return False
+
+
+def _squash(token: str) -> str:
+    return token.replace("-", "").replace("_", "")
+
+
+def paper_vocabulary(
+    block_texts: Mapping[str, str],
+    *,
+    heading_ids: frozenset[str] = frozenset(),
+    page_count: int | None = None,
+) -> PaperVocabulary:
+    """The vocabulary of one paper from ``block_id -> text`` (and which of those are headings)."""
+    refs: set[str] = set()
+    words: set[str] = set()
+    tags = 0
+    #: Numbered headings in reading order as version tuples, with the count of unnumbered ones
+    #: seen since the previous numbered one.
+    gaps: list[tuple[tuple[int, ...], tuple[int, ...] | None, int]] = []
+    previous: tuple[int, ...] = (0,)
+    unnumbered = 0
+
+    def close_gap(high: tuple[int, ...] | None) -> None:
+        nonlocal unnumbered
+        if unnumbered:
+            gaps.append((previous, high, unnumbered))
+        unnumbered = 0
+
+    for block_id, text in block_texts.items():
+        refs.update(structure_refs(text))
+        words.update(content_tokens(text))
+        for tag in _EQUATION_TAG.finditer(text):
+            refs.add(f"equation {tag.group(1)}")
+            tags += 1
+        if block_id in heading_ids:
+            number = heading_number(text)
+            if number is not None:
+                refs.add(f"section {number}")
+                refs.add(f"appendix {number}")
+                refs.add(f"chapter {number}")
+                as_tuple = _number_tuple(number)
+                if as_tuple is not None:
+                    close_gap(as_tuple)
+                    previous = as_tuple
+            elif _UNNUMBERED_TITLES.match(text) is None:
+                unnumbered += 1
+    close_gap(None)
+    if tags == 0:  # the text layer carried no equation tags: equations cannot be judged
+        refs.update(f"equation {n}" for n in range(1, 1000))
+    return PaperVocabulary(frozenset(refs), frozenset(words), page_count, section_gaps=tuple(gaps))
+
+
 class ClaimEvidence:
     """The token bag of everything one claim cites, and which blocks contributed it.
 
@@ -328,14 +584,25 @@ class ClaimEvidence:
     :attr:`supported_by` — a claim supported by one of three cited blocks should say WHICH one.
     """
 
-    __slots__ = ("_by_block", "_missing")
+    __slots__ = ("_by_block", "_missing", "_refs")
 
-    def __init__(self, by_block: Mapping[str, frozenset[str]], missing: tuple[str, ...]) -> None:
+    def __init__(
+        self,
+        by_block: Mapping[str, frozenset[str]],
+        missing: tuple[str, ...],
+        refs: frozenset[str] = frozenset(),
+    ) -> None:
         # A block that says ``bounding-box`` also says ``bounding`` and ``box``.
         self._by_block = {
             block: bag.union(*(_parts(token) for token in bag)) for block, bag in by_block.items()
         }
         self._missing = missing
+        self._refs = refs
+
+    @property
+    def refs(self) -> frozenset[str]:
+        """The structure references (``table 2``) the cited blocks themselves carry."""
+        return self._refs
 
     @property
     def missing_blocks(self) -> tuple[str, ...]:
@@ -348,6 +615,11 @@ class ClaimEvidence:
 
     def blocks_containing(self, token: str) -> tuple[str, ...]:
         return tuple(block for block, bag in self._by_block.items() if token in bag)
+
+    def contains_squashed(self, token: str) -> bool:
+        """``contains`` ignoring ``-`` and ``_`` (``CIFAR-10`` against the text's ``CIFAR10``)."""
+        flat = _squash(token)
+        return any(_squash(word) == flat for bag in self._by_block.values() for word in bag)
 
     def contains(self, token: str) -> bool:
         """Whether the cited blocks have this token, or — for a hyphenated compound the blocks
@@ -394,6 +666,10 @@ class ClaimAssessment:
     #: The claim's numbers the cited blocks lack.
     missing_numbers: tuple[str, ...]
     content_words: int
+    #: ``table 9``-style references the claim makes that neither the cited blocks nor the paper has.
+    missing_refs: tuple[str, ...] = ()
+    #: Names (``Google Brain``) the claim uses that neither the cited blocks nor the paper has.
+    missing_entities: tuple[str, ...] = ()
 
 
 def assess_claim(
@@ -402,12 +678,26 @@ def assess_claim(
     *,
     threshold: float = DEFAULT_COVERAGE_THRESHOLD,
     floor: float = CONTRADICTION_FLOOR,
+    paper: PaperVocabulary | None = None,
 ) -> ClaimAssessment:
-    """One claim against its cited blocks, as one of three verdicts (see :data:`Verdict`)."""
+    """One claim against its cited blocks, as one of three verdicts (see :data:`Verdict`).
+
+    ``paper``, when given, is what the whole paper contains: a reference the cited blocks lack is
+    forgiven when the paper has it (``Section 4.2`` is a heading, not a sentence), a name the
+    cited blocks lack is only a (neutral) uncited name when the paper has it. With no ``paper`` the
+    cited blocks are all there is, so a table number or a name that is not in them is missing."""
     coverage, missing = claim_coverage(claim_text, evidence)
     words = len(content_tokens(claim_text))
     numbers = tuple(token for token in missing if _NUMERIC.fullmatch(token) is not None)
-    if numbers:
+    refs = tuple(
+        ref
+        for ref in sorted(structure_refs(claim_text))
+        if ref not in evidence.refs and not (paper is not None and paper.has_ref(ref))
+    )
+    entities = tuple(
+        entity for entity in named_entities(claim_text) if _entity_absent(entity, evidence, paper)
+    )
+    if numbers or refs or entities:
         verdict: Verdict = "unsupported"
     elif coverage >= threshold:
         verdict = "supported"
@@ -415,7 +705,30 @@ def assess_claim(
         verdict = "unsupported"
     else:
         verdict = "neutral"
-    return ClaimAssessment(verdict, coverage, missing, numbers, words)
+    return ClaimAssessment(verdict, coverage, missing, numbers, words, refs, entities)
+
+
+def _entity_absent(entity: str, evidence: ClaimEvidence, paper: PaperVocabulary | None) -> bool:
+    """A name is absent when NONE of its words is in the cited blocks (or the paper): ``Google
+    Brain`` is, ``Faster R-CNN`` beside a block that says ``Faster`` is not."""
+    tokens = content_tokens(entity)
+    if not tokens:
+        return False
+
+    def present(word: str) -> bool:
+        return (
+            evidence.contains(word)
+            or evidence.contains_squashed(word)
+            or (paper is not None and paper.has_word(word))
+        )
+
+    # A hyphen compound (``Gaussian-vs-Gaussian``, ``Rao-Blackwellized``) is its parts: it is
+    # present when any non-numeric part is.
+    return all(
+        not present(token)
+        and not any(present(part) for part in _parts(token) if not _NUMERIC.fullmatch(part))
+        for token in tokens
+    )
 
 
 def verify_grounding(
@@ -497,6 +810,19 @@ def _verify_claim(
             ),
         )
 
+    if assessment.missing_refs or assessment.missing_entities:
+        return VerifiedClaim(
+            text=claim.text,
+            supported_by=(),
+            supported=False,
+            reason=(
+                f"the claim names {list(assessment.missing_refs + assessment.missing_entities)}, "
+                f"which appears in none of the cited blocks {list(evidence.resolved_blocks)}. A "
+                "table, page or name the source does not carry is where invented detail hides; "
+                "verify it against the paper."
+            ),
+        )
+
     if assessment.verdict != "supported":
         return VerifiedClaim(
             text=claim.text,
@@ -528,13 +854,15 @@ def _verify_claim(
 def _gather(cited: tuple[str, ...], resolved_text: Mapping[str, str]) -> ClaimEvidence:
     by_block: dict[str, frozenset[str]] = {}
     missing: list[str] = []
+    refs: set[str] = set()
     for block_id in cited:
         text = resolved_text.get(block_id)
         if text is None:
             missing.append(block_id)
             continue
         by_block[block_id] = _bag(text)
-    return ClaimEvidence(by_block, tuple(missing))
+        refs.update(structure_refs(text))
+    return ClaimEvidence(by_block, tuple(missing), frozenset(refs))
 
 
 def _bag(text: str) -> frozenset[str]:

@@ -131,9 +131,11 @@ If you move the API, change `PAPERTREE_PORT`, `PAPERTREE_API_INTERNAL_URL` and
 ## Model policy
 
 The agent decides which MiniMax model answers which kind of request (ADR-003). Shipped defaults:
-**explain** and **ask** run on `MiniMax-M3.1-Flash-Preview` at effort `low` (first text in about 2 s and 4 s
-at the median in our A/B), **summary** runs on `MiniMax-M3` (Flash's summaries came out with uncited
-bullets). `PAPERTREE_MODEL=MiniMax-M3` puts every kind back on M3. MiniMax publishes no price for Flash, so
+**explain** runs on `MiniMax-M3.1-Flash-Preview` at effort `low` (first text in about 2 s at the median in
+our A/B); **ask** (and its follow-ups) and **summary** run on `MiniMax-M3` (in the v0.1 quality panel
+Flash's ask follow-ups cited a wrong passage nine times against none for M3, and Flash's summaries came
+out with uncited bullets). `PAPERTREE_MODEL=MiniMax-M3` puts every kind on M3, and
+`PAPERTREE_MODEL_ASK=MiniMax-M3.1-Flash-Preview` puts ask back on Flash. MiniMax publishes no price for Flash, so
 the cost figures recorded in `ai_runs` for Flash runs are an estimate on M3's rates, and the agent's
 `/healthz` says so (`cost_basis`). Every AI run records its model, tokens, estimated cost, latency and code
 path in the `ai_runs` table. The evidence, including what is worse about Flash, is in

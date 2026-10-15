@@ -454,6 +454,74 @@ def test_an_agent_killed_mid_answer_keeps_the_partial_text(tmp_path: Path) -> No
         assert [c["marker"] for c in events(frames, "citations")[0]["items"]] == ["b2"]
 
 
+@pytest.mark.parametrize(
+    "gone",
+    [
+        {  # an older agent: its close() aborted the run
+            "status": "aborted",
+            "stop_reason": "aborted",
+            "error": {"code": "aborted", "retryable": True, "message": "The answer was stopped."},
+        },
+        {  # the agent now says why (reason `shutdown`)
+            "status": "partial",
+            "stop_reason": "aborted",
+            "error": {
+                "code": "agent_unavailable",
+                "retryable": True,
+                "message": "The AI service stopped responding. Try again.",
+            },
+        },
+    ],
+    ids=["aborted", "agent_unavailable"],
+)
+def test_an_agent_that_aborts_a_run_nobody_cancelled_is_agent_unavailable(
+    tmp_path: Path, gone: dict[str, Any]
+) -> None:
+    """W2API item 4: the real agent aborts every live run when it shuts down, and its `done` says
+    `aborted`/`aborted`. Nobody asked it to (no cancel, no timeout), so the reader sees the agent
+    go away: `agent_unavailable`, retryable, the partial text kept, the thread state untouched."""
+    with ai_harness(tmp_path, Script("explain-ok", done_patch=gone)) as h:
+        token, paper_id = alice_with_paper(h)
+        frames, _ = read_sse(explain(h, token, paper_id, paragraph_anchor()))
+        done = events(frames, "done")[0]
+        assert done["status"] == "partial", done
+        assert done["error"]["code"] == "agent_unavailable" and done["error"]["retryable"] is True
+        streamed = "".join(t["delta"] for t in events(frames, "text"))
+        (assistant,) = h.rows("SELECT * FROM ai_messages WHERE role = 'assistant'")
+        assert (assistant["status"], assistant["error_code"]) == ("partial", "agent_unavailable")
+        assert assistant["content"] == streamed and streamed
+        (run,) = h.rows("SELECT status, error_code FROM ai_runs")
+        assert (run["status"], run["error_code"]) == ("error", "agent_unavailable")
+        (thread,) = h.rows("SELECT agent_state_json FROM ai_threads")
+        assert thread["agent_state_json"] in (None, "[]"), "a lost run stores no resumable state"
+
+
+def test_a_user_cancel_is_still_aborted_after_the_agent_aborted_mapping(tmp_path: Path) -> None:
+    """The mapping above must not swallow a real cancel (test_cancel_propagates_... holds the
+    full path; this pins the other half: an `aborted` done AFTER our DELETE stays `aborted`)."""
+    with ai_harness(tmp_path, Script("explain-ok", hold_after_text=3)) as h:
+        token, paper_id = alice_with_paper(h)
+        box: dict[str, Any] = {}
+        streamer = threading.Thread(
+            target=lambda: box.update(r=explain(h, token, paper_id, paragraph_anchor()))
+        )
+        streamer.start()
+        deadline = time.monotonic() + 20
+        while not h.fake.requests and time.monotonic() < deadline:
+            time.sleep(0.02)
+        time.sleep(0.3)
+        assert (
+            h.client.post(
+                f"/runs/{h.fake.requests[0]['run_id']}/cancel", headers=auth(token)
+            ).status_code
+            == 202
+        )
+        streamer.join(20)
+        frames, _ = read_sse(box["r"])
+        done = events(frames, "done")[0]
+        assert (done["status"], done["error"]["code"]) == ("aborted", "aborted")
+
+
 def test_a_stalled_agent_times_out_and_is_cancelled(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

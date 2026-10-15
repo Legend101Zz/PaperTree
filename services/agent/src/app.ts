@@ -561,7 +561,7 @@ export async function createAgentApp(options: AppOptions): Promise<AgentApp> {
         });
       }),
     close: async () => {
-      for (const run of active.values()) run.abort('client');
+      for (const run of active.values()) run.abort('shutdown');
       await Promise.allSettled([...active.values()].map((run) => run.finished));
       const closed = new Promise<void>((resolve) => server.close(() => resolve()));
       server.closeAllConnections();

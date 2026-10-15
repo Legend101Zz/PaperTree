@@ -87,9 +87,9 @@ function rules(request: RunRequest): string {
     '- Cite every claim about the paper with the handle of the passage it comes from, in SQUARE ' +
       'brackets, exactly as given: [b3]. Several passages: [b1, b4]. Never (b3), never b3 without ' +
       'brackets, never a page or section name instead. Put the citation in the sentence it supports. ' +
-      "Use only handles that appear in this prompt or in a tool result after the reader's latest " +
-      'message; never invent, guess or alter one. Handles in earlier turns of the conversation are ' +
-      'not valid now: to cite such a passage again, find it again with a tool.',
+      'Use only handles that appear in this prompt or in a tool result, including the tool results ' +
+      'of earlier turns of this conversation (a handle always names the same passage); never ' +
+      'invent, guess or alter one.',
     '- When the paper does not say something, say plainly that the paper does not say it. Never fill ' +
       'the gap.',
     '- Keep what the paper states apart from your interpretation. When you explain, infer or add ' +

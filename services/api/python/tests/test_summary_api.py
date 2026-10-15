@@ -53,7 +53,7 @@ def test_a_summary_streams_then_is_served_from_the_cache_without_a_new_run(
         assert request["prompt_version"] == "summary-v1"
         assert request["limits"] == {
             "deadline_ms": 90000,
-            "idle_ms": 20000,
+            "idle_ms": 45000,
             "max_tool_calls": 12,
             "max_turns": 6,
             "max_output_tokens": 6144,

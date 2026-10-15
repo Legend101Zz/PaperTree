@@ -8,7 +8,7 @@
 | Run kind | Model | Thinking | Why |
 |---|---|---|---|
 | `explain` | `MiniMax-M3.1-Flash-Preview` | adaptive, effort `low` | first text p50 1.8 s against 9.3 s, inside the 5 s bar; judged at least as useful; cheaper |
-| `ask` (and follow-ups) | `MiniMax-M3.1-Flash-Preview` | adaptive, effort `low` | first text p50 4.0 s against 8.1 s (the only arm inside the 5 s bar at p50); supported share higher; **judged usefulness lower on a sample of 4** (see section 4), so this row is provisional |
+| `ask` (and follow-ups) | ~~`MiniMax-M3.1-Flash-Preview`~~ **`MiniMax-M3`** since the Revision of 2026-10-15 (last section) | ~~adaptive, effort `low`~~ budget-based low | first text p50 4.0 s against 8.1 s (the only arm inside the 5 s bar at p50); supported share higher; **judged usefulness lower on a sample of 4** (see section 4), so this row is provisional |
 | `summary` | `MiniMax-M3` | budget-based low (Pi's default for M3) | Flash's summaries read `partial` in 3 of 4 runs and M3's in 0 of 2 (an uncited heading bullet, `[b28-b29]` ranges that do not parse); no latency bar applies to a summary |
 
 `MiniMax-M3` stays the configurable fallback for every kind: `PAPERTREE_MODEL=MiniMax-M3` puts the whole service back on M3 with no code change; `PAPERTREE_MODEL_<KIND>` and `PAPERTREE_MODEL_EFFORT[_<KIND>]` change one kind. The defaults live in `services/agent/src/models.ts` (`DEFAULT_MODELS`).
@@ -53,7 +53,7 @@ Machine load was not controlled: the load average (1 min, mean over the runs of 
 
 ## 5. Out-of-scope defects found (for the orchestrator; `services/api` is not edited by T0)
 
-The API pins `MiniMax-M3` in several places. Under the shipped defaults they break explain and ask, which now run on Flash:
+The API pins `MiniMax-M3` in several places. Under the shipped defaults they break explain and ask, which now run on Flash (superseded for ask by the Revision 2026-10-15 below: ask runs on M3):
 
 1. `services/api/python/papertree_api/schemas.py:995` `AgentRun.model: Literal["minimax/MiniMax-M3"]`: a Flash `run` event fails to parse, so the run ends in `internal`. **Merge blocker for this PR on a live stack.** (The JSON schema in `contracts/agent/run-events.schema.json` is widened here to the two allowed labels; the pydantic twin is the API's to change.)
 2. `services/api/python/papertree_api/agent_client.py:85` `MODEL = "MiniMax-M3"` is written as `ai_runs.model` (line 725, `finish_run`), `RunSummary.model` fallback (772), the run logs (746, 907), a stored summary's `model` (656) and `model_id` (716), and the cached-summary key (`routers/summary.py:57`). The `run` event's `model` is read at `agent_client.py:563-566` and dropped (only `sdk` is kept). Under the default policy `ai_runs.model` would say M3 for Flash runs. Contract requirement ("every AI run records model ... in ai_runs"): store the agent-reported model, and keep the summary cache key per model.
@@ -63,7 +63,7 @@ The A/B itself ran through a launcher (`api_shim.py`, since deleted) that patche
 
 ## 6. Consequences
 
-- Every later live run uses Flash for explain and ask and M3 for summaries unless the environment says otherwise; the release notes and README must call Flash costs "estimate on M3 rates".
+- (Superseded for ask by Revision 2026-10-15: ask is M3.) Every later live run uses Flash for explain and ask and M3 for summaries unless the environment says otherwise; the release notes and README must call Flash costs "estimate on M3 rates".
 - `bench/ab.py` re-runs the whole comparison (`uv run python services/agent/bench/ab.py --out <dir>`), so the decision can be re-taken after a Flash price, a prompt change or a new Flash build.
 - Contracts section 7 rows to add (T0 proposes; the orchestrator owns `contracts.md`):
 
@@ -79,3 +79,26 @@ The A/B itself ran through a launcher (`api_shim.py`, since deleted) that patche
 ## Update after review (2026-10-15)
 
 The API defect above is fixed in this PR: `AgentRun.model` accepts both ids, and `ai_runs.model`, a stored summary's `model_id`, the summary content's `model` and `RunSummary.model` take the model the agent reported in its `run` event (M3 only when the stream broke before that event). The cached-summary lookup tries every known model and serves the newest, so a policy change does not hide a stored summary. The shim is deleted. Regression tests: `services/api/python/tests/test_summary_api.py` (Flash run) and `test_agent_contracts.py` (schema enum equals the pydantic twin). Still open: `done.usage_totals` and `ai_runs` carry no cost-basis marker (the label lives in `/healthz` and the docs); it needs a contracts change.
+
+## Revision 2026-10-15: ask -> M3
+
+Status: **Accepted** by the orchestrator for v0.1 (W2API item 7), from the v0.1 quality panel (`docs/release/v0.1/QUALITY.md`, PR #165; three blinded model judges, 1 to 5; JUDGED, small n: 3 ask items and 3 follow-ups per arm) and T0's own A/B above. The section 1 row for `ask` said "provisional"; the panel did not support it.
+
+| evidence (QUALITY.md unless noted) | ask on Flash (the old default) | ask on M3 |
+|---|---|---|
+| follow-ups, grounded (mean of 3 judges) | 3.22 | **3.78** |
+| follow-ups, citations land | 3.22 | 4.22 |
+| follow-ups, wrong citations counted by the judges (3 items, 3 judges summed) | **9** | **0** |
+| follow-ups, mean of the four criteria | 3.50 | 4.03 |
+| ask first turns, mean of the four criteria | 4.14 | 4.36 (useful 4.00 against 4.67) |
+| ask pairs (3 pairs x 3 judges, M3 against Flash) | 3 votes for Flash | 4 for M3, 2 ties |
+| T0's judged usefulness (section 3) | 3.94 | 4.56 |
+| median latency, ask (s) | 16.9 | 20.3 |
+| median latency, follow-up (s) | 10.2 | 16.3 |
+| mean cost per ask, API estimate | $0.0048 | $0.0064 |
+
+Reasons: Flash's follow-ups cited wrong passages nine times against none for M3, and its grounding score fell by 0.56 on a follow-up; the latency price is small on an ask (median 16.9 s against 20.3 s, but the arms ran at different machine loads, 4.8-5.5 against 2.5-4.0, so even that gap is confounded) and the cost is about a third higher in cents. Explain stays on Flash at effort `low` (panel: explain 4.43, median first text 2.9 s) and summary stays on M3 (panel: M3 summaries grounded 4.67 against 3.44, 3 against 14 unsupported claims; Flash medium scored higher on "useful", 4.33 against 3.00, which is the open v0.2 prompt experiment).
+
+Changes: `DEFAULT_MODELS.ask` is `MiniMax-M3` in `services/agent/src/models.ts` (so `ask` has no effort: `null` in `/healthz`); the default test in `test/models.test.ts` pins it. `PAPERTREE_MODEL_ASK=MiniMax-M3.1-Flash-Preview` puts ask back on Flash with no code change. Follow-ups of an `explain` thread run as `kind: explain` (contracts 2.5) and so stay on Flash; the panel's follow-ups were asks, and no explain follow-up was measured.
+
+What this does not settle: three items per cell, one machine, loads that differ by arm. The next re-take is the T0 bench (`services/agent/bench/ab.py`) with more asks.

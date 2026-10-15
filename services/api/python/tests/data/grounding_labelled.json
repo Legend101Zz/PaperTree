@@ -1354,5 +1354,37 @@
       "b12": "We have presented high quality image samples using diffusion models, and we have found connections\namong diffusion models and variational inference for training Markov chains, denoising score\nmatching and annealed Langevin dynamics (and energy-based models by extension), autoregressive\nmodels, and progressive lossy compression. Since diffusion models seem to have excellent inductive\nbiases for image data, we look forward to investigating their utility in other data modalities and as\ncomponents in other types of generative models and machine learning systems."
     },
     "src": "summary"
+  },
+  {
+    "set": "ddpm",
+    "id": "ddpm0.0",
+    "label": "S",
+    "claim": "Section 2 then rewrites the variational bound as a sum of KL terms: a constant LT = DKL(q(xT|x0)‖p(xT)), per-timestep comparison terms Lt−1 = DKL(q(xt−1|xt,x0)‖pθ(xt−1|xt)), and a reconstruction term L0 = − log pθ(x0|x1), and points out that the forward process posteriors q(xt−1|xt,x0) are tractable Gaussians with a known mean and variance [b80, b81, b82].",
+    "blocks": {
+      "b1": "−log pθ(x0|x1)\n+\nDKL(q(xt−1|xt, x0) ∥pθ(xt−1|xt))\n(5)\nEq\n|\n{z\n}\n}\n|\n{z\n}\n{z\n|\nt>1\nLT\nLt−1\nL0",
+      "b2": "(See Appendix A for details. The labels on the terms are used in Section 3.) Equation (5) uses KL\ndivergence to directly compare pθ(xt−1|xt) against forward process posteriors, which are tractable\nwhen conditioned on x0:",
+      "b3": "q(xt−1|xt, x0) = N(xt−1; ˜µt(xt, x0), ˜βtI),\n(6)\n√¯αt−1βt\n√αt(1 −¯αt−1)\n˜βt := 1 −¯αt−1\n˜µt(xt, x0) :=\nβt\nwhere\nx0 +\nxt\n(7)\n1 −¯αt\nand\n1 −¯αt"
+    },
+    "src": "ask"
+  },
+  {
+    "set": "ddpm",
+    "id": "ddpm0.1",
+    "label": "S",
+    "claim": "Consequently, all KL divergences in this decomposition are Gaussian-vs-Gaussian and can be evaluated in a Rao-Blackwellized way rather than with high-variance Monte Carlo estimates [b83].",
+    "blocks": {
+      "b1": "1 −¯αt\nConsequently, all KL divergences in Eq. (5) are comparisons between Gaussians, so they can be\ncalculated in a Rao-Blackwellized fashion with closed form expressions instead of high variance\nMonte Carlo estimates."
+    },
+    "src": "ask"
+  },
+  {
+    "set": "ddpm",
+    "id": "ddpm1.0",
+    "label": "S",
+    "claim": "The riskiest choice in Section 3.1 is the very first one: fixing the forward process variances β_t to constants rather than letting them be learned by reparameterization [b25].",
+    "blocks": {
+      "b1": "We ignore the fact that the forward process variances βt are learnable by reparameterization and\ninstead ﬁx them to constants (see Section 4 for details). Thus, in our implementation, the approximate\nposterior q has no learnable parameters, so LT is a constant during training and can be ignored."
+    },
+    "src": "ask"
   }
 ]
