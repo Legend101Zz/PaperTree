@@ -1,16 +1,90 @@
 /**
- * canvas/sendToCanvas — the `sendToCanvas` half of `ReaderActions` (contracts.md §5).
+ * canvas/sendToCanvas — the `sendToCanvas` half of `ReaderActions` (contracts.md §5), S7.
  *
- * S0 STUB, owned by S7. It resolves, says so on the console, and makes NO request: a board is
- * created only by an explicit send that actually persists (ADR-002 §3.7), and a stub that half-
- * sent would create exactly the phantom board that rule exists to prevent. S7 replaces the body
- * with `boardsApi.createNode` behind the same signature.
+ *   { kind: 'excerpt', anchor }       -> an excerpt node holding the Anchor (never a bare block id)
+ *   { kind: 'explanation', messageId } -> an explanation node holding the answer's text
+ *
+ * A board is created ONLY here, by an explicit send: the first `createNode` creates it in the
+ * same transaction (ADR-002 §3.7). The new node is placed where it overlaps no existing node, and
+ * a toast says so with an "Open canvas" link. A failure throws (the reader shows its notice); an
+ * explanation send also shows its own error toast, because the explain panel is another slice's.
  */
 import type { SendToCanvasInput } from '@/components/reader/actions';
+import { displayQuote } from '@/components/reader/quote';
+import { ApiError } from '@/lib/api/types';
+import { boardsApi } from '@/lib/api/boards';
+import { threadsApi } from '@/lib/api/threads';
+
+import { newNodeId } from './ids';
+import { DEFAULT_SIZE, freeSpot } from './placement';
+import { showCanvasToast } from './toast';
+
+const MAX_THREADS_SEARCHED = 6;
+
+/** The text of an assistant message: the newest threads first, which is where the open panel is. */
+async function messageText(
+  paperId: string,
+  messageId: string,
+): Promise<{ text: string; threadTitle: string } | null> {
+  const threads = await threadsApi.list(paperId);
+  const newest = [...threads]
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    .slice(0, MAX_THREADS_SEARCHED);
+  for (const thread of newest) {
+    const { messages } = await threadsApi.get(paperId, thread.thread_id);
+    const found = messages.find((m) => m.message_id === messageId);
+    if (found !== undefined) return { text: found.content, threadTitle: thread.title };
+  }
+  return null;
+}
+
+function sentence(error: unknown): string {
+  if (error instanceof ApiError && error.detail.length > 0) return error.detail;
+  return "Couldn't add this to the canvas. Check your connection and try again.";
+}
 
 export async function sendToCanvas(paperId: string | null, input: SendToCanvasInput): Promise<void> {
-  console.info(
-    `[papertree] Send to canvas (${input.kind}) is not connected yet; nothing was sent` +
-      (paperId === null ? '.' : ` for ${paperId}.`),
-  );
+  if (paperId === null) {
+    // A fixture paper has no account, so there is nowhere to keep a board.
+    const message = 'This sample paper is not in your library, so it has no canvas.';
+    if (input.kind === 'explanation') showCanvasToast({ message, tone: 'error' });
+    throw new Error(message);
+  }
+  try {
+    const view = await boardsApi.get(paperId);
+    const size = DEFAULT_SIZE[input.kind];
+    const spot = freeSpot(view.nodes, size);
+    if (input.kind === 'excerpt') {
+      await boardsApi.createNode(paperId, {
+        node_id: newNodeId(),
+        kind: 'excerpt',
+        ...spot,
+        ...size,
+        body: displayQuote([input.anchor]),
+        source_anchor: input.anchor,
+      });
+    } else {
+      const found = await messageText(paperId, input.messageId);
+      if (found === null) {
+        throw new ApiError(404, 'not_found', "This answer isn't saved yet, so it can't be added.", false);
+      }
+      await boardsApi.createNode(paperId, {
+        node_id: newNodeId(),
+        kind: 'explanation',
+        ...spot,
+        ...size,
+        title: found.threadTitle,
+        body: found.text,
+        source_message_id: input.messageId,
+      });
+    }
+    showCanvasToast({
+      message: input.kind === 'excerpt' ? 'Passage added to your canvas.' : 'Answer added to your canvas.',
+      href: `/paper/${encodeURIComponent(paperId)}/canvas`,
+      linkLabel: 'Open canvas',
+    });
+  } catch (error) {
+    if (input.kind === 'explanation') showCanvasToast({ message: sentence(error), tone: 'error' });
+    throw error;
+  }
 }
