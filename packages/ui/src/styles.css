@@ -2367,15 +2367,15 @@ span.pt-paper .pt-paper__cite {
   box-shadow: var(--pt-float-shadow);
 }
 
-/* Chips sit on their own row under the sentence they support. Inline pills 32 px tall would
-   stretch every text line they sit in, and 22 px pills have hit areas that overlap on the next
-   line. Each pill is 32 px tall with a 4 px hit-area margin, and the 8 px gap keeps the 40 px
-   targets from overlapping. */
+/* Chips stay inline, after the words they support, so a sentence is never broken in two. The pill
+   is 28 px tall and its hit area is padded to 40 px (below). Two chips on CONSECUTIVE lines can
+   overlap by a few px of padding; the 8 px gap between neighbours on one line does not. */
 .pt-chips {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-block-start: 6px;
+  margin-inline-start: 6px;
+  vertical-align: middle;
 }
 
 .pt-chip {
@@ -2383,8 +2383,8 @@ span.pt-paper .pt-paper__cite {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  min-block-size: 32px;
-  padding: 1px 12px;
+  min-block-size: 28px;
+  padding: 1px 10px;
   font: inherit;
   font-size: 0.75rem;
   line-height: 1.5;
@@ -2400,7 +2400,7 @@ span.pt-paper .pt-paper__cite {
 .pt-chip::after {
   content: '';
   position: absolute;
-  inset: -4px;
+  inset: -6px -4px;
 }
 
 .pt-chip:hover {
