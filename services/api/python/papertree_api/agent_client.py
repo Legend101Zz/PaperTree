@@ -83,6 +83,10 @@ MAX_STATUS_LABEL: Final = 120
 
 PROVIDER: Final = "minimax"
 MODEL: Final = "MiniMax-M3"
+#: Every model the agent may report in its run event (`minimax/<id>`, ADR-003). `MODEL` is only the
+#: fallback for a stream that broke before the run event; the stored model is what the agent said.
+KNOWN_MODELS: Final = ("MiniMax-M3", "MiniMax-M3.1-Flash-Preview")
+MODEL_PREFIX: Final = "minimax/"
 UNKNOWN_SDK: Final = "unknown"
 
 RunKind = Literal["explain", "ask", "summary"]
@@ -377,6 +381,8 @@ class RunBroker:
     cancelled: bool = False
     finished: bool = False
     sdk: str = UNKNOWN_SDK
+    #: The model the agent's run event reported (None until it arrives).
+    model: str | None = None
     first_text_ms: int | None = None
     api_retries: int = 0
     usage: _Usage = field(default_factory=_Usage)
@@ -566,6 +572,7 @@ class RunBroker:
                     self._stop_agent()
                     return _Broken("internal")
                 self.sdk = data.sdk
+                self.model = data.model.removeprefix(MODEL_PREFIX)
             elif isinstance(data, AgentStatus):
                 status: dict[str, Any] = {"phase": data.phase}
                 if data.label:
@@ -653,7 +660,7 @@ class RunBroker:
                 status = "partial"
             summary = {
                 "generation": spec.generation,
-                "model": MODEL,
+                "model": self.model or MODEL,
                 "prompt_version": PROMPT_VERSIONS["summary"],
                 "created_at": now_wire(),
                 "status": "complete" if status == "complete" else "partial",
@@ -713,7 +720,7 @@ class RunBroker:
                     PaperId(spec.paper_id),
                     spec.generation,
                     prompt_hash=PROMPT_VERSIONS["summary"],
-                    model_id=MODEL,
+                    model_id=self.model or MODEL,
                     content=summary,
                     derived_from=[c.block_id for c in citations],
                 )
@@ -722,7 +729,7 @@ class RunBroker:
                 spec.run_id,
                 status=run_status,
                 provider=PROVIDER,
-                model=MODEL,
+                model=self.model,
                 agent_sdk=self.sdk,
                 stop_reason=stop_reason,
                 error_code=error_code,
@@ -743,7 +750,7 @@ class RunBroker:
             error_code=error_code,
             code_path=CODE_PATHS[spec.kind],
             provider=PROVIDER,
-            model=MODEL,
+            model=self.model,
             stop_reason=stop_reason,
             input_tokens=tokens.get("input_tokens"),
             output_tokens=tokens.get("output_tokens"),

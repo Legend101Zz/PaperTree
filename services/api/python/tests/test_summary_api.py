@@ -192,3 +192,31 @@ def test_bob_cannot_read_or_start_alices_summary(tmp_path: Path) -> None:
             "ready",
             "partial",
         )
+
+
+FLASH = "MiniMax-M3.1-Flash-Preview"
+
+
+def test_a_flash_run_is_stored_and_served_under_the_model_the_agent_reported(
+    tmp_path: Path,
+) -> None:
+    """The agent's `run.model` is the model of record: `ai_runs.model`, the derivation's
+    `model_id`, the summary's `model`, and the usage event all carry Flash, and a reload finds
+    the Flash summary though the API's own fallback model is M3."""
+    with ai_harness(tmp_path, Script("summary-ok")) as h:
+        h.fake.model = f"minimax/{FLASH}"
+        token, paper_id = alice_with_paper(h)
+        frames, _ = read_sse(_post(h, token, paper_id))
+        assert events(frames, "usage")[0]["model"] == FLASH
+        assert events(frames, "done")[0]["status"] == "complete"
+        (row,) = h.rows("SELECT * FROM ai_runs")
+        assert row["model"] == FLASH
+        (stored,) = h.rows("SELECT * FROM derivations WHERE kind = 'paper_summary'")
+        assert stored["model_id"] == FLASH
+        assert json.loads(stored["content"])["model"] == FLASH
+        runs_before = h.count("ai_runs")
+        status = h.client.get(f"/papers/{paper_id}/summary", headers=auth(token)).json()
+        assert status["state"] == "ready" and status["summary"]["model"] == FLASH
+        again = _post(h, token, paper_id)
+        assert again.status_code == 200 and again.headers["content-type"] == "application/json"
+        assert h.count("ai_runs") == runs_before, "served from the cache, no new run"

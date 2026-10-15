@@ -15,10 +15,7 @@ import { Compile } from 'typebox/schema';
 export const TOOL_NAMES = ['get_outline', 'get_section', 'get_passage', 'search_passages'] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 
-/** `run.model` is a schema const (run-events.schema.json). */
-export const MODEL_LABEL = 'minimax/MiniMax-M3';
-export const PROVIDER_ID = 'minimax';
-export const MODEL_ID = 'MiniMax-M3';
+/** `run.model` is `minimax/<model id>` (run-events.schema.json); the model comes from models.ts. */
 
 /** The pins in package.json. Boot refuses to start if the installed copies disagree. */
 export const PINNED_SDK_VERSION = '0.87.1';
