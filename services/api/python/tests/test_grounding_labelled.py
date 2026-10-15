@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from papertree_agent_tools import PaperVocabulary, paper_vocabulary
 from papertree_api.evidence import citation_supported, claim_verdict
 
 ROWS: list[dict[str, Any]] = json.loads(
@@ -34,8 +35,24 @@ FIRST = [r for r in ROWS if r["set"] == "first"]
 HOLDOUT = [r for r in ROWS if r["set"] == "holdout"]
 
 
+def _proxy_paper(rows: list[dict[str, Any]], extra_refs: frozenset[str]) -> PaperVocabulary:
+    """What the API passes in production is the WHOLE paper's vocabulary (``evidence.
+    vocabulary_of``). The labelled sets keep only the cited blocks, so the proxy for a paper is the
+    union of every block the set cites, plus the structure references of the real papers' headings
+    that no cited block carries (``Section 4.2`` is DDPM's heading, not a sentence)."""
+    texts = {f"{r['set']}:{k}": t for r in rows for k, t in r["blocks"].items()}
+    vocabulary = paper_vocabulary(texts)
+    return PaperVocabulary(vocabulary.refs | extra_refs, vocabulary.words)
+
+
+PAPERS = {
+    "first": _proxy_paper(FIRST, frozenset()),
+    "holdout": _proxy_paper(HOLDOUT, frozenset({"section 4.2"})),
+}
+
+
 def _verdict(row: dict[str, Any]) -> str:
-    return claim_verdict(row["claim"], list(row["blocks"]), row["blocks"])
+    return claim_verdict(row["claim"], list(row["blocks"]), row["blocks"], PAPERS[row["set"]])
 
 
 def _citations(rows: list[dict[str, Any]]) -> tuple[int, int, int, int, int]:
@@ -50,7 +67,7 @@ def _citations(rows: list[dict[str, Any]]) -> tuple[int, int, int, int, int]:
     tp = fp = fn = tn = 0
     for members in groups.values():
         truth = all(r["label"] != "N" for r in members) and any(r["label"] == "S" for r in members)
-        pred = citation_supported([verdicts[r["id"]] for r in members])  # type: ignore[misc]
+        pred = citation_supported([verdicts[r["id"]] for r in members]) is True  # type: ignore[misc]
         tp += pred and truth
         fp += pred and not truth
         fn += (not pred) and truth

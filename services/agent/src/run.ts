@@ -46,7 +46,14 @@ import {
   type RunError,
   runError,
 } from './classify.ts';
-import { hasMarker, parseMarkers, type RunRequest, SDK_LABEL, TOOL_NAMES } from './contract.ts';
+import {
+  hasMarker,
+  historyHandles,
+  parseMarkers,
+  type RunRequest,
+  SDK_LABEL,
+  TOOL_NAMES,
+} from './contract.ts';
 import type { FauxBrain, FauxModel } from './faux.ts';
 import type { ModelChoice } from './models.ts';
 import type { Logger } from './log.ts';
@@ -187,6 +194,8 @@ class Run {
   private readonly seedHandles: string[] = [];
   /** Each tool call's new handles, by call position (not completion order: calls run in parallel). */
   private readonly resultHandles = new Map<number, readonly string[]>();
+  /** Handles an earlier turn's tool results issued; the API re-issues them into this run. */
+  private readonly earlierHandles: readonly string[];
   private readonly info = new Map<string, HandleInfo>();
   private readonly callIndex = new Map<string, number>();
   /** Tool calls made after the first text was sent: refused, not run, not counted. */
@@ -238,6 +247,7 @@ class Run {
     this.deps = deps;
     this.clientGone = clientGone;
     this.sessionId = request.history?.session_id ?? request.run_id;
+    this.earlierHandles = historyHandles(request.history?.entries ?? []);
     for (const passage of request.seed?.passages ?? []) {
       if (!this.seedHandles.includes(passage.handle)) this.seedHandles.push(passage.handle);
       this.info.set(passage.handle, parseLabel(passage.label));
@@ -248,13 +258,18 @@ class Run {
     return Math.round(performance.now() - this.t0);
   }
 
-  /** Handles issued in THIS run: the seed, then each tool response in call order, first-seen. */
+  /**
+   * Handles this run may cite: the seed, then each tool response in call order, first-seen, then
+   * (a follow-up) the handles the thread's earlier tool results issued, which the API re-issues
+   * into this run (contracts.md §3.3).
+   */
   private seen(): string[] {
     const out = [...this.seedHandles];
     for (const index of [...this.resultHandles.keys()].toSorted((a, b) => a - b)) {
       for (const handle of this.resultHandles.get(index) ?? [])
         if (!out.includes(handle)) out.push(handle);
     }
+    for (const handle of this.earlierHandles) if (!out.includes(handle)) out.push(handle);
     return out;
   }
 

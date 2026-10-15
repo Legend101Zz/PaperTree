@@ -172,6 +172,26 @@ describe('the real provider path against a mock Anthropic server', () => {
     );
   });
 
+  test("a follow-up may cite a handle an earlier turn's tool result issued (W2API item 2): it is a marker, not unseen", async () => {
+    const { agent, tools } = await live([
+      { kind: 'stream', text: ['The grid divides the image [b3], and the invented one [b77].'] },
+    ]);
+    const body = readExample('followup');
+    counter++;
+    body['run_id'] = runId(counter);
+    body['request_id'] = requestId(counter);
+    body['tool']['base_url'] = tools.baseUrl(body['run_id']);
+    const result = await postRun(agent.url, body);
+    const d = done(result);
+    assert.equal(d['status'], 'complete');
+    assert.ok(d['handles_seen'].includes('b3'), "b3 was issued by the earlier turn's search");
+    assert.deepEqual(d['markers'], ['b3'], 'the invented b77 is still not a marker');
+    const logged = agent.logs.find(
+      (l) => l.event === 'agent.run.done' && l['run_id'] === body['run_id'],
+    );
+    assert.deepEqual(logged?.['unseen_markers'], ['b77']);
+  });
+
   test('a spent tool budget over the real provider path: the final request is well formed and the answer is kept (S5F)', async () => {
     const { agent, mock, tools } = await live([
       {

@@ -52,9 +52,12 @@ from typing import Any, Final
 
 from papertree_agent_tools import (
     ClaimEvidence,
+    PaperVocabulary,
     Verdict,
     assess_claim,
     content_tokens,
+    paper_vocabulary,
+    structure_refs,
 )
 from papertree_anchoring import (
     IndexedDocument,
@@ -368,6 +371,38 @@ def load_index(
     ).index
 
 
+_VOCABULARIES: OrderedDict[int, tuple[PaperIndex, PaperVocabulary]] = OrderedDict()
+_VOCABULARY_LOCK = threading.Lock()
+
+
+def vocabulary_of(index: PaperIndex) -> PaperVocabulary:
+    """What the whole paper contains (W2API item 3), kept beside its cached index (the index object
+    is held with it, so a recycled ``id`` can never name another paper's vocabulary)."""
+    key = id(index)
+    with _VOCABULARY_LOCK:
+        held = _VOCABULARIES.get(key)
+        if held is not None and held[0] is index:
+            _VOCABULARIES.move_to_end(key)
+            return held[1]
+    texts: dict[str, str] = {}
+    last_page = -1
+    for block_id in index.reading_order:
+        block = index.block(block_id)
+        if block is not None:
+            last_page = max(last_page, block.page_index)
+            if block.text:
+                texts[block_id] = block.text
+    headings = frozenset(s.heading_block_id for s in index.sections)
+    vocabulary = paper_vocabulary(
+        texts, heading_ids=headings, page_count=last_page + 1 if last_page >= 0 else None
+    )
+    with _VOCABULARY_LOCK:
+        _VOCABULARIES[key] = (index, vocabulary)
+        while len(_VOCABULARIES) > 8:
+            _VOCABULARIES.popitem(last=False)
+    return vocabulary
+
+
 class DocumentCache:
     """The ``papertree_anchoring`` document a citation Anchor is minted against, per generation.
 
@@ -471,7 +506,12 @@ def split_bullets(text: str) -> list[str]:
     return bullets if bullets else lines
 
 
-def claim_verdict(claim: str, cited_blocks: Sequence[str], texts: Mapping[str, str]) -> Verdict:
+def claim_verdict(
+    claim: str,
+    cited_blocks: Sequence[str],
+    texts: Mapping[str, str],
+    paper: PaperVocabulary | None = None,
+) -> Verdict:
     """``assess_claim`` on one claim over its cited blocks. Markers are stripped first: the
     handle ``b3`` is not a word of the paper and would count against the claim's coverage. A claim
     whose cited blocks are not in ``texts`` (a block the generation lacks) has no evidence, and no
@@ -483,23 +523,41 @@ def claim_verdict(claim: str, cited_blocks: Sequence[str], texts: Mapping[str, s
     }
     if not clean or not bags:
         return "unsupported" if clean else "neutral"
-    return assess_claim(clean, ClaimEvidence(bags, ())).verdict
+    refs = frozenset().union(*(structure_refs(texts[block]) for block in bags))
+    return assess_claim(clean, ClaimEvidence(bags, (), refs), paper=paper).verdict
 
 
-def claim_supported(claim: str, cited_blocks: Sequence[str], texts: Mapping[str, str]) -> bool:
-    return claim_verdict(claim, cited_blocks, texts) == "supported"
+def claim_supported(
+    claim: str,
+    cited_blocks: Sequence[str],
+    texts: Mapping[str, str],
+    paper: PaperVocabulary | None = None,
+) -> bool:
+    return claim_verdict(claim, cited_blocks, texts, paper) == "supported"
 
 
-def citation_supported(verdicts: Sequence[Verdict]) -> bool:
-    """A citation is ``supported`` when at least one claim that carries it is supported and no
-    claim that carries it is unsupported.
+def citation_supported(verdicts: Sequence[Verdict]) -> bool | None:
+    """The stored flag of a citation: ``True`` when at least one claim that carries it is
+    ``supported`` and none is ``unsupported``; ``False`` when a claim that carries it is
+    ``unsupported``; ``None`` (not checked) when every claim that carries it is ``neutral``.
 
     Not "every claim": an answer that explains a passage cites it from its interpretive sentences
     too, and those reuse part of the passage's words and add their own (``neutral``). Counting
     them against the citation made a well-grounded citation read "not verified". And not "any
     claim" alone: a fabricated number or an invented finding carrying the same marker as an honest
-    sentence (``unsupported``) must still take the citation down."""
-    return "supported" in verdicts and "unsupported" not in verdicts
+    sentence (``unsupported``) must still take the citation down.
+
+    ``None`` and not ``False`` for all-neutral (W2API item 2, 2026-10-15): the live panel's
+    follow-ups ("which is most serious, and how would you test it?") cite the right passages from
+    judgement and experiment-design sentences; the lexical check cannot call those grounded, but
+    it has no evidence against them either, so the reader is told "not checked", not "not
+    supported". Re-run on those 33 follow-up citations: before, 1 true and 32 false; now 1 true, 5
+    false (an unsupported claim carries them) and 27 null."""
+    if "unsupported" in verdicts:
+        return False
+    if "supported" in verdicts:
+        return True
+    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -532,6 +590,7 @@ class CitationMinter:
     document: IndexedDocument | None
     texts: Mapping[str, str]
     new_id: Callable[[str], str]
+    paper: PaperVocabulary | None = None
     dropped: list[str] = field(default_factory=list)
     _next: int = 0
 
@@ -598,7 +657,7 @@ def cite_answer(final_text: str, minter: CitationMinter) -> list[MintedCitation]
         if not cited:
             continue
         blocks = [minter.handles[m] for m in cited]
-        verdict = claim_verdict(claim, blocks, minter.texts)
+        verdict = claim_verdict(claim, blocks, minter.texts, minter.paper)
         for marker in cited:
             verdicts.setdefault(marker, []).append(verdict)
     citations: list[MintedCitation] = []
@@ -624,7 +683,7 @@ def cite_summary(final_text: str, minter: CitationMinter) -> list[SummaryBulletO
     for bullet in split_bullets(final_text):
         known = [m for m in markers_in(bullet) if m in minter.handles]
         supported = bool(known) and claim_supported(
-            bullet, [minter.handles[m] for m in known], minter.texts
+            bullet, [minter.handles[m] for m in known], minter.texts, minter.paper
         )
         citations = []
         for marker in markers_in(bullet):
