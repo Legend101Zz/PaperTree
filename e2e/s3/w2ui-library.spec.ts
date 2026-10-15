@@ -60,6 +60,8 @@ test('a garbage upload leaves ONE failed card, one sentence, no lingering upload
       await expect(card.locator('[data-failure-reason]')).toHaveCount(1);
       await expect(card.getByRole('button', { name: /Retry/ })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(vp.width);
+      // Sample papers (the e2e stack turns them on) sit above the reader's own: bring the card up.
+      await card.scrollIntoViewIfNeeded();
       await page.screenshot({ path: shot(`w2-02-03-failed-card-${vp.name}-${theme}.png`) });
       await context.close();
     }

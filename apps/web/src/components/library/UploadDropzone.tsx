@@ -9,10 +9,13 @@
  *      `XMLHttpRequest.upload.onprogress` (`papersApi.uploadWithProgress`). This component refuses
  *      to fake a bar on a timer.
  *   2. **Every upload is cancellable.** `onUpload` receives an `AbortSignal`; Cancel aborts the
- *      request, the item reads "Cancelled", and no paper row exists because the server never got
- *      the whole body. Unmounting aborts everything in flight.
- *   3. **"Uploaded" is not "ready".** The terminal state of an upload is `done`; the parse is a
- *      separate job shown on the paper's card.
+ *      request and the item reads "Cancelled". The abort can land after the server already had the
+ *      whole body, so the item then asks `onCancelled` (the library re-reads `GET /papers`) and says
+ *      which is true: nothing was added, it is already in the library, or it could not be checked.
+ *      Unmounting aborts everything in flight.
+ *   3. **"Uploaded" is not "ready".** A finished upload's row is dropped at once (the server row is
+ *      already in the library list, so the paper's own card says what is happening); the parse is a
+ *      separate job shown on that card.
  *
  * THE StrictMode FREEZE (#141). `mountedRef` used to be set to `false` in the effect cleanup and
  * never set back. React StrictMode runs mount -> cleanup -> mount in development, so the ref stayed

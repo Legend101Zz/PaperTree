@@ -7,8 +7,6 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  STALE_NOTICE_MS,
-  UNDO_VISIBLE_MS,
   staleSubject,
   useBoardController,
 } from '@/components/canvas/useBoardController';
@@ -131,7 +129,7 @@ describe('Undo after a delete', () => {
     act(() => result.current.deleteSelection(['cn_a'], []));
     expect(result.current.undo).not.toBeNull();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(UNDO_VISIBLE_MS - 100);
+      await vi.advanceTimersByTimeAsync(8000 - 100);
     });
     expect(result.current.undo).not.toBeNull();
     await act(async () => {
@@ -179,7 +177,7 @@ describe('the stale-version notice', () => {
     act(() => result.current.commitBody('cn_a', 'mine'));
     await waitFor(() => expect(result.current.notice).toMatch(/changed somewhere else/));
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(STALE_NOTICE_MS + 100);
+      await vi.advanceTimersByTimeAsync(8000 + 100);
     });
     expect(result.current.notice).toBeNull();
   });

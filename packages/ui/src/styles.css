@@ -2853,10 +2853,16 @@ span.pt-paper .pt-paper__cite {
  * W2UI fix wave (additive block: owned by track W2UI, #141; nothing above this line is touched)
  * ───────────────────────────────────────────────────────────────────────────────────────────── */
 
-/* The Undo offer after a canvas delete sits above the canvas controls (bottom-left) so it never
-   covers them. */
+/* The Undo offer after a canvas delete sits to the right of the canvas controls (bottom-left), so
+   it never covers the zoom buttons. */
 .pt-toast--lift {
-  inset-block-end: calc(72px + env(safe-area-inset-bottom, 0px));
+  inset-block-end: calc(16px + env(safe-area-inset-bottom, 0px));
+  inset-inline: 72px 16px;
+  justify-content: flex-start;
+}
+
+.pt-toast--lift .pt-toast__body {
+  max-inline-size: 100%;
 }
 
 /* In-card controls keep a 40 px tap target ON SCREEN at phone widths. xyflow scales a card by the
