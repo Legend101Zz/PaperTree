@@ -1091,7 +1091,7 @@ describe('contracts.spec — the agent contract (hand-written) and its recorded 
     expect(frames).toBeGreaterThan(100);
   });
 
-  it('the run-request examples validate, and a summary with a seed does not', () => {
+  it('the run-request examples validate, and a summary without its digest seed does not', () => {
     const request = validator('run-request');
     for (const name of ['explain', 'followup', 'summary']) {
       const body = load(`contracts/agent/examples/run-request-${name}.json`);
@@ -1105,7 +1105,10 @@ describe('contracts.spec — the agent contract (hand-written) and its recorded 
       string,
       unknown
     >;
-    expect(request({ ...summary, seed: explain['seed'] })).toBe(false);
+    // S5F: a summary run's seed is its digest of the paper (required); an explain-style seed is
+    // the same shape, so it validates too, but no seed at all does not.
+    expect(request({ ...summary, seed: null })).toBe(false);
+    expect(request({ ...summary, seed: explain['seed'] })).toBe(true);
   });
 
   it('a ToolResult is one shape in the hand-written and the exported schema', () => {
