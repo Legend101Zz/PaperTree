@@ -43,7 +43,12 @@ export interface RichTextProps {
 }
 
 /** A handle cut off by the end of a streaming chunk: `[`, `[b`, `[b12`, `[b1, b`. */
-const PARTIAL_TAIL = /\s*\[(?:b\d*(?:\s*,\s*b?\d*)*)?$/;
+const PARTIAL_TAIL = /\s*\[(?:b\d*(?:\s*,\s*b?\d*)*)?\s*$/;
+
+/** Exported for tests: what a streaming OR stopped (cancelled, partial) answer shows as text. */
+export function stripPartialTail(text: string): string {
+  return text.replace(PARTIAL_TAIL, '');
+}
 
 interface Ctx {
   readonly byMarker: ReadonlyMap<string, Citation>;
@@ -175,7 +180,9 @@ export function RichText({
     citeAs,
     onCite,
   };
-  const cleaned = streaming ? text.replace(PARTIAL_TAIL, '') : text;
+  // A stopped answer's stored text can end in an unterminated `[b42, b43` run exactly like a
+  // streaming one (S9-4), so the tail is hidden in both cases.
+  const cleaned = stripPartialTail(text);
   const blocks = parseMarkdown(dehyphenate(cleaned), { streaming });
   const mentioned = new Set(handlesInBlocks(blocks));
   const loose = streaming || citeAs === 'label' ? [] : citations.filter((c) => !mentioned.has(c.marker));

@@ -52,6 +52,7 @@ from __future__ import annotations
 
 import sqlite3
 import struct
+import time
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -106,6 +107,27 @@ def to_vector_blob(values: Sequence[float]) -> bytes:
     return struct.pack(f"<{len(values)}f", *values)
 
 
+BUSY_TIMEOUT_S = 10.0
+_WAL_RETRY_BUDGET_S = 15.0
+
+
+def _enable_wal(conn: sqlite3.Connection) -> None:
+    """``PRAGMA journal_mode = WAL`` with a bounded retry on ``database is locked``."""
+    deadline = time.monotonic() + _WAL_RETRY_BUDGET_S
+    delay = 0.01
+    while True:
+        try:
+            conn.execute("PRAGMA journal_mode = WAL")
+            return
+        except sqlite3.OperationalError as error:
+            if "locked" not in str(error) and "busy" not in str(error):
+                raise
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(delay)
+            delay = min(delay * 2, 0.25)
+
+
 @dataclass(frozen=True, slots=True)
 class CreatedUser:
     """What ``create_user`` returns: ``(user_id, owner)``.
@@ -129,7 +151,7 @@ class DatabaseCore:
     __slots__ = ("_conn", "_handles", "_migrations_dir")
 
     def __init__(self, filename: str | Path = ":memory:", migrations_dir: Path | None = None):
-        conn = sqlite3.connect(str(filename), isolation_level=None)
+        conn = sqlite3.connect(str(filename), isolation_level=None, timeout=BUSY_TIMEOUT_S)
         conn.row_factory = row_to_dict
         conn.enable_load_extension(True)
         sqlite_vec.load(conn)
@@ -137,7 +159,13 @@ class DatabaseCore:
         # foreign_keys is PER-CONNECTION, never persisted, and Python's sqlite3 defaults it
         # OFF. Gate 4 of the ownership mechanism is inert without this line.
         conn.execute("PRAGMA foreign_keys = ON")
-        conn.execute("PRAGMA journal_mode = WAL")
+        # S9-1: the API and the worker start at the same instant on a fresh data root. Waiting
+        # for a lock is set BEFORE any write, and the WAL switch (which can answer "locked"
+        # without consulting the busy handler while another process is converting the same new
+        # file) is retried with a bounded backoff. Nothing here touches the migration's
+        # BEGIN IMMEDIATE single-writer guarantee.
+        conn.execute(f"PRAGMA busy_timeout = {int(BUSY_TIMEOUT_S * 1000)}")
+        _enable_wal(conn)
         conn.execute("PRAGMA synchronous = NORMAL")
         self._conn = conn
         self._migrations_dir = migrations_dir

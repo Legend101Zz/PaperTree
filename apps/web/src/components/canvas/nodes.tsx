@@ -12,8 +12,8 @@
  * `@papertree/ui` tokens, so a redesign changes the stylesheet and not this file.
  */
 import { AiText, PaperText } from '@papertree/ui';
-import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Handle, NodeResizer, Position, useStoreApi, type NodeProps } from '@xyflow/react';
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 
 import { RichText } from '@/components/explain/RichText';
 
@@ -40,8 +40,19 @@ function Frame({
   readonly children: ReactNode;
 }) {
   const ctx = useCanvasActions();
+  const store = useStoreApi();
+  // S9: a click ANYWHERE on a card selects it, not only on its header. React Flow selects on
+  // pointer-down; this is the safety net for a click that reaches the card without it (the
+  // card body, text inside it). Editors, links and buttons keep their own behaviour, a modifier
+  // click is React Flow's own multi-select, and an already-selected card is left alone.
+  const selectOnClick = (event: MouseEvent<HTMLDivElement>): void => {
+    if (selected || event.shiftKey || event.metaKey || event.ctrlKey) return;
+    if ((event.target as HTMLElement).closest('a, button, input, textarea, select, [contenteditable="true"]') !== null) return;
+    store.getState().addSelectedNodes([id]);
+  };
   return (
-    <div className={`pt-cv-node pt-cv-node--${kind}`} data-kind={kind} data-selected={selected}>
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+    <div className={`pt-cv-node pt-cv-node--${kind}`} data-kind={kind} data-selected={selected} onClick={selectOnClick}>
       <NodeResizer
         isVisible={selected}
         minWidth={200}

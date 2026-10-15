@@ -142,7 +142,7 @@ export function ProcessingBadge({ state, label, reasonShown = false }: Processin
         <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
       )}
       <span>{label ?? PROCESSING_LABEL[state]}</span>
-      {reasonShown ? null : <span className="sr-only">{`. ${PROCESSING_DETAIL[state]}`}</span>}
+      {reasonShown ? null : <span className="sr-only">{` ${PROCESSING_DETAIL[state]}`}</span>}
     </span>
   );
 }
