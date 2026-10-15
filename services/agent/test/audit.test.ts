@@ -48,6 +48,11 @@ function child(code: string): { status: number | null; stderr: string } {
   return { status: result.status, stderr: result.stderr };
 }
 
+/** The child's stdout says the connect failed because the kernel (not the audit, not the peer) refused. */
+function kernelDenied(stdout: string): boolean {
+  return /^ERR (?:EPERM|ENETUNREACH|EACCES)$/m.test(stdout);
+}
+
 describe('the isolation audit', () => {
   test('the preload is loaded in this process (a run without it is red)', () => {
     const audit = (globalThis as { paperTreeAudit?: Audit }).paperTreeAudit;
@@ -109,7 +114,17 @@ describe('the isolation audit', () => {
       ],
       { encoding: 'utf8', timeout: 10_000 },
     );
-    assert.match(result.stdout, /ERR EPERM/, result.stdout);
+    assert.ok(kernelDenied(result.stdout), result.stdout);
+  });
+
+  test('what counts as the kernel denying a connection (W2API item 8)', () => {
+    // macOS sandbox-exec answers EPERM; `unshare -rn` on Linux (a namespace with only loopback up)
+    // answers ENETUNREACH; a policy that refuses the connect answers EACCES. A connection that is
+    // made, or a silence until the timeout, is not a denial.
+    for (const code of ['EPERM', 'ENETUNREACH', 'EACCES'])
+      assert.equal(kernelDenied(`ERR ${code}\n`), true, code);
+    for (const out of ['CONNECTED\n', 'TIMEOUT\n', 'ERR ECONNREFUSED\n', 'ERR ETIMEDOUT\n', ''])
+      assert.equal(kernelDenied(out), false, JSON.stringify(out));
   });
 
   test('a full faux run in this process makes no DNS name lookup and connects only to loopback', async () => {
