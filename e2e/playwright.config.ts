@@ -21,6 +21,8 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: '.',
   testMatch: '**/*.spec.ts',
+  // The live journey spends real money and has its own config and workflow (e2e/live/).
+  testIgnore: ['live/**'],
   fullyParallel: false,
   workers: 1,
   retries: 0,
