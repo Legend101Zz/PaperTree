@@ -505,3 +505,251 @@ In that pass gpt3 read 516.3 (base), 511.3 (branch 1) and 523.5 MB (branch 2, lo
   (§5). The load-aware skip belongs to S8 (#129).
 - **Zero-pair pages:** 11 of 36 repo-gold pages still score no reading-order pair. Nothing here
   moved that count.
+
+## Independent review (v0.1)
+
+Track S2R, issue #141. S2 (PR #152) merged without review; this section is the adversarial pass. Nothing
+below is taken from the S2 report: every number was re-measured at `release/v0.1` (head, which holds the
+S2 merge `45fb2db`) and at its first parent `45fb2db^1` (base, the `18f69ec` lineage), parsed back to
+back in fresh subprocesses under `/usr/bin/time -l` from `git archive` copies placed first on
+`PYTHONPATH`, and scored with the repo's own `score_paper` and `score_fresh_paper`. Load average is on
+every timing row. The scripts and raw outputs live in the S2R evidence folder, outside the repo.
+
+### R.1 Verdict
+
+| # | question | verdict |
+|---|---|---|
+| 1 | Does every S2 number reproduce? | **YES for every quality number.** 83 of 83 per-type F1 cells in table B2, every repo-gold row of table B, the fresh-gold columns I re-scored (merged, mistyped, headings, false and numeric headings, title first, pairwise, captions), all 26 block counts, the parse outcomes and the 20-run determinism result reproduce exactly. **NOT reproduced:** the peak-RSS figures (gpt3 reads 507-511 MB here, not 511.7-523.5 MB; see R.4) and the s/page and RSS cells of table A beyond rounding (the machine was quieter: load 4-7 against the report's 9-25). The report's 520 MB "ratchet on gpt3 passes by 0.3 MB" is therefore an artefact of that box's load: at load 8-10 head sits 8-12 MB under it. |
+| 2 | ResNet pooled reading order 0.932 to 0.906 | **ACCEPTED, with a reason that is stronger than S2's.** All 8 discordant pairs left at head are against gold defects; the parser's own real discordant pairs went from 2 to 0 (R.2). |
+| 3 | GPT-3 macro-F1 -0.0013 | **ACCEPTED.** It is two extra predicted paragraph blocks against a gold that holds 3 paragraph regions on those pages (R.2). S2's stated cause (gold page 30's seven-paragraph box) is wrong: that box is unmatched at base too. |
+| 4 | Was any rule tuned to the gold? | **No evidence of it** (R.3): no paper, string or gold-keyed constant in any rule; the paragraph cues sit on a plateau (indent 0.3-0.8 em identical, skip 0.25-0.4 em identical). Residual risk: all thresholds were chosen by looking at these same 14 papers; there is no held-out set. |
+| 5 | Do the tests for G7 clip, salvage to partial, paragraph split and numeric headings fail on a mutant? | **Yes: 15 of 16 mutants killed** (R.5). The survivor is the R8 duplicate-id salvage lane, which only the real-PDF test pins, and that test skips on CI. |
+| 6 | DDPM and Mask R-CNN through the real worker | **PASS**: both `ready`, IR `complete` (R.6). |
+| 7 | Cheap items | One fixed and tested (zero-page PDF). `_CAPTION_START` case fix **measured and rejected** (it costs macro-F1 on all six repo-gold papers). Text beside a table stays a strict xfail (re-measured, R.7). |
+
+### R.2 The two known regressions, decided
+
+**Method.** The S2 branch commits were replayed one by one (archive copy each) on the six repo-gold
+papers, and the discordant pairs were listed region by region against the gold.
+
+| commit | resnet pooled (agree/pairs) | gpt3 macro-F1 | gpt3 paragraph F1 |
+|---|---|---|---|
+| base | 96/103 = 0.932 | 0.3429 | 0.190 |
+| `7d976b8` (branch 1) | 96/103 | 0.3429 | 0.190 |
+| `d6fe91d` headings | 108/116 = 0.931 | 0.3436 | |
+| `4fbbcff` rule 5 | 108/116 | 0.3474 | |
+| `1dd3468` rule 6 | 108/116 | 0.3474 | |
+| `8a6b849` floats | 107/116 = 0.922 | 0.3474 | |
+| `b76cb76` rule 8 | 107/116 | 0.3474 | 0.250 |
+| **`b96ed98` rule 7 (paragraph split)** | **72/80 = 0.900** | **0.3416** | **0.174** |
+| `fcbae26` captions | 72/80 | 0.3416 | |
+| `2f6b5e4` figure-sentence | 77/85 = 0.906 (head) | 0.3416 | |
+
+**ResNet.** The score fell for two reasons, neither of them a worse order:
+
+- *The denominator shrank.* Rule 7 (`b96ed98`) splits runs of printed paragraphs that the gold boxes as
+  one region, so those regions stop matching and their pairs leave the pool (116 to 80 pairs). Pooled
+  agreement is `agree/pairs`, so a smaller pool with the same few errors reads lower.
+- *What is left is the gold's.* Listing every discordant pair at head, region by region:
+
+| gold region | against | why it is a gold defect |
+|---|---|---|
+| p0 footnote r172 (given body order 3) | figure r443 (order 9) | ANNOTATION_GUIDE rule 1: footnotes are out of the body order |
+| p2 footnote r190 (body order 11) | equation r192, heading r195, paragraph r196 | same |
+| p7 paragraphs r222, r223, r225, r227 | figure r447 (order 14) | r447 is a second, wide box around Figure 6, drawn after the text, over the three panels r211-r213 that are already in the gold |
+
+  Base had 7 discordant pairs: 5 involving footnotes and **2 real parser errors** (p11 paragraphs r242
+  and r244 read after the table r245). Head fixes those two: **real discordant pairs 2 to 0**, gold-defect
+  pairs 5 to 8.
+
+**Decision: ACCEPT.** The only way to "fix" the 0.906 is to tune the parser to two annotation defects
+or to give up rule 7, which the fresh gold and the printed page both want. The gold files are not
+this track's to edit; the two defects are recorded here for whoever reviews the gold (#54).
+
+**GPT-3.** Per-type F1 moves in `paragraph` only (0.190 to 0.250 through branch 1 and rules 5-8, then
+0.250 to 0.174 at rule 7). The gold holds **3** paragraph regions on its six pages and the parser
+matches 2 of them at base and at head (recall unchanged). Predicted paragraph blocks go 18 to 20: page 30
+rises 1 to 7 (the page prints seven paragraphs; S2 is right that this is correct), page 15 falls 15 to
+11. Two extra predictions against n=3 is -0.016 paragraph F1 and -0.0013 macro-F1: noise at this n, and
+the gold box on page 30 is unmatched at base too, so it contributes nothing to the loss.
+**Decision: ACCEPT.** Recorded reason: precision effect of a correct split on a three-region gold.
+
+**Other drops over 0.05 in per-type F1 (nothing else exceeds it):** a3c paragraph 0.417 to 0.357, bert
+paragraph 0.545 to 0.342, resnet paragraph 0.575 to 0.404 (all the same cause, rule 7 against
+multi-paragraph gold boxes), attention caption 0.667 to 0.500 (the raw gold types page 14's caption box
+`figure`; S2 shows the normalised score rising).
+
+**A note on the headline.** The pooled repo-gold reading order rises 0.900 to 0.962, but part of that is
+the denominator: scored pairs fall 261 to 239 while discordant pairs fall 26 to 9. Quote the discordant
+count beside the rate.
+
+### R.3 Was a rule tuned to the gold?
+
+- *Code.* Every added rule was read (`layout.py`, `pipeline.py`, `hierarchy.py`, `frontmatter.py`,
+  `figures.py`, `references.py`, `assemble.py`, `salvage.py`, `pdf.py`). No paper id, title, string or
+  page number appears in a rule; the paper names that appear in the diff are all in comments. The
+  constants are font-relative (`PARAGRAPH_INDENT_EM = 0.5`, `PARAGRAPH_SKIP_EM = 0.4`,
+  `TEXT_LINE_SIZE_SHARE = 0.85`, `MIN_GAP_SAMPLES = 6`) or structural.
+- *Sensitivity of the two paragraph thresholds, all 14 papers re-parsed per setting* (merged = gold
+  paragraphs sharing a block on the fresh pages 1-2):
+
+| setting | merged fresh paragraphs | mistyped | repo-gold pooled RO | mean macro-F1 |
+|---|---|---|---|---|
+| indent 0.5 / skip 0.4 (shipped) | 10 of 71 | 0 | 230/239 | 0.3456 |
+| indent 0.3 | 10 of 71 | 0 | 230/239 | 0.3456 |
+| indent 0.8 | 10 of 71 | 0 | 230/239 | 0.3456 |
+| skip 0.25 | 10 of 71 | 0 | 230/239 | 0.3442 |
+| skip 0.6 | 19 of 71 | 0 | 227/235 | 0.3443 |
+
+  The indent cue is flat over 0.3-0.8 em and the skip cue over 0.25-0.4 em, so the shipped values are
+  inside a plateau, not on an edge a gold happened to reward. The shipped skip (0.4) is 0.2 below the
+  point where merges return, which is the nearest edge.
+- *Remaining risk, stated.* The thresholds were chosen on the same 14 papers they are scored on. The
+  repo gold is one annotator with no IAA and the fresh gold is two model annotators awaiting owner review
+  (#54). There is no held-out paper, so the claim is "not keyed to gold content", not "validated out of
+  sample". A 15th paper from a different publisher is the real test.
+- *Not a tuning problem but a smell:* `_NUMERIC_ONLY` is defined twice (`hierarchy.py`,
+  `pipeline.py`) and includes the letter `x`, so a heading that is only `x`/`xx` is also numeric-only. Harmless
+  here; left.
+
+### R.4 Base against head, 14 papers
+
+Parse outcome, size, speed and peak RSS (fresh subprocess each; the load average is that of each run's
+start):
+
+| paper | base outcome | head outcome | base blocks | head blocks | base s/page | head s/page | base RSS MB | head RSS MB | 1-min load (base / head run) |
+|---|---|---|---|---|---|---|---|---|---|
+| a3c-algorithmheavy | complete | complete | 1232 | 1287 | 0.106 | 0.108 | 322.2 (*) | 222.8 | 6.69 / 5.19 |
+| attention-is-all-you-need | complete | complete | 480 | 546 | 0.062 | 0.062 | 148.1 | 149.0 | 6.34 / 5.19 |
+| bert-2col | complete | complete | 681 | 770 | 0.067 | 0.074 | 171.5 | 170.7 | 6.34 / 4.93 |
+| gpt3-longform-singlecol | complete | complete | 4597 | 4860 | 0.081 | 0.072 | 500.8 | 507.5 | 6.15 / 4.93 |
+| neural-odes-mathheavy | complete | complete | 626 | 679 | 0.158 | 0.144 | 161.2 | 161.0 | 6.14 / 4.70 |
+| pdf-to-tree-acl2col | complete | complete | 486 | 538 | 0.08 | 0.079 | 169.2 | 169.5 | 5.73 / 4.40 |
+| resnet-cvpr-2col | complete | complete | 955 | 1013 | 0.089 | 0.074 | 141.5 | 141.7 | 5.73 / 4.40 |
+| superglue-tableheavy | complete | complete | 846 | 955 | 0.042 | 0.034 | 145.2 | 143.2 | 5.73 / 4.40 |
+| ddpm-2006.11239 | FAILED (SemanticValidationError) | complete | - | 540 | - | 0.137 | 315.5 | 316.4 | 5.67 / 4.40 |
+| yolo-1506.02640 | complete | complete | 770 | 825 | 0.106 | 0.101 | 182.3 | 182.7 | 5.19 / 4.11 |
+| flashattention-2205.14135 | complete | complete | 3261 | 3438 | 0.075 | 0.074 | 294.6 | 295.5 | 5.67 / 4.21 |
+| sbert-1908.10084 | complete | complete | 628 | 704 | 0.056 | 0.056 | 121.8 | 122.0 | 5.38 / 4.11 |
+| adam-1412.6980 | complete | complete | 321 | 359 | 0.06 | 0.056 | 134.2 | 133.9 | 5.73 / 4.40 |
+| maskrcnn-1703.06870 | FAILED (ValueError) | complete | - | 899 | - | 0.186 | 194.2 | 207.3 | 5.38 / 4.11 |
+
+(*) The base a3c RSS of 322.2 MB was the first cold run of the pass; three repeats read 220.9, 215.9 and
+220.1 MB (head 222.6, 220.4, 221.0 at 1-min load 8.1-8.6), so the real difference is about +2 MB, and
+the report's 225.2 / 228.0 is what reproduces. gpt3 peak RSS, five interleaved trials (base MB / load,
+head MB / load): 501.1 / 9.28, 508.9 / 9.18; 501.7 / 10.25, 507.5 / 10.63; 508.8 / 10.34, 507.4 / 9.74;
+498.8 / 9.20, 507.8 / 8.62; 499.4 / 9.37, 511.2 / 8.86. Head is 507.4-511.2 MB, about +8 MB over base and
+8.8 MB under the 520 MB ratchet at load 9-10, against the report's 511.7-519.7 MB (and 523.5 MB
+single pass). The S2 numbers do not reproduce; the direction (head above base by a few MB, ratchet
+close) does. Speed is unchanged within noise.
+
+Repo gold (36 pages, 1 annotator, no IAA; gold as drawn; `score_paper`):
+
+| paper | base: RO per-page / pooled / zero-pair / macro-F1 | head: RO per-page / pooled / zero-pair / macro-F1 |
+|---|---|---|
+| a3c-algorithmheavy | 0.667 / 1.000 (4/4) / 2 / 0.3932 | 0.667 / 1.000 (9/9) / 2 / 0.4185 |
+| attention-is-all-you-need | 0.389 / 0.921 (35/38) / 2 / 0.2899 | 0.667 / 1.000 (47/47) / 2 / 0.3528 |
+| bert-2col | 0.699 / 0.806 (54/67) / 1 / 0.3523 | 0.833 / 1.000 (49/49) / 1 / 0.3752 |
+| gpt3-longform-singlecol | 0.222 / 0.778 (7/9) / 4 / 0.3429 | 0.333 / 1.000 (9/9) / 4 / 0.3416 |
+| neural-odes-mathheavy | 0.611 / 0.975 (39/40) / 2 / 0.2175 | 0.611 / 0.975 (39/40) / 2 / 0.2280 |
+| resnet-cvpr-2col | 0.929 / 0.932 (96/103) / 0 / 0.3257 | 0.894 / 0.906 (77/85) / 0 / 0.3575 |
+| **all six** | pooled 0.900 (235/261) / 11 of 36 | pooled 0.962 (230/239) / 11 of 36 |
+
+Fresh gold pages 1-2 (125 anchor units, two model annotators plus an adjudicator, owner review pending;
+`score_fresh_paper`):
+
+| paper | run | merged gold paragraphs | mistyped body | headings typed/gold | false headings | numeric headings | title first | pairwise within page | captions |
+|---|---|---|---|---|---|---|---|---|---|
+| ddpm-2006.11239 | base | (did not parse) | | | | | | | |
+| ddpm-2006.11239 | head | 0/7 | 0/9 | 1/3 | 0 | 0 | yes | 42/42 | 2/2 |
+| yolo-1506.02640 | base | 21/22 | 6/26 | 2/4 | 0 | 1 | no | 245/273 | 2/2 |
+| yolo-1506.02640 | head | 4/22 | 0/26 | 4/4 | 0 | 0 | yes | 273/273 | 2/2 |
+| flashattention-2205.14135 | base | 6/7 | 3/8 | 1/2 | 0 | 9 | yes | 51/51 | 1/1 |
+| flashattention-2205.14135 | head | 0/7 | 0/8 | 1/2 | 0 | 0 | yes | 51/51 | 1/1 |
+| sbert-1908.10084 | base | 13/15 | 4/18 | 2/3 | 0 | 0 | yes | 140/146 | 0/0 |
+| sbert-1908.10084 | head | 2/15 | 0/18 | 3/3 | 0 | 0 | yes | 146/146 | 0/0 |
+| adam-1412.6980 | base | 5/8 | 0/8 | 3/4 | 0 | 1 | yes | 49/49 | 1/1 |
+| adam-1412.6980 | head | 2/8 | 0/8 | 3/4 | 0 | 0 | yes | 49/49 | 1/1 |
+| maskrcnn-1703.06870 | base | (did not parse) | | | | | | | |
+| maskrcnn-1703.06870 | head | 2/12 | 0/14 | 3/3 | 0 | 0 | yes | 91/91 | 2/2 |
+
+Determinism (fresh subprocess each, a fresh asset directory each, `canonical_json_for_determinism` and
+block-id sequence): **YOLO 20 runs: 1 distinct output, 1 id sequence. DDPM 20 runs: 1 / 1. Mask R-CNN
+20 runs: 1 / 1.** Text conservation (independent check, whitespace-stripped characters over all non-table
+blocks): equal or higher at head on every paper that parses at base, none lower (the gains are the
+recovered captions).
+
+### R.5 Mutation checks (private archive copy of head per mutant)
+
+Each mutant was applied to a `git archive` copy, the named test files were run, and the module under test
+was confirmed to come from the copy. The unmutated control passes (25 passed, 1 strict xfail).
+
+| # | mutant | tests run | result | first failing assertion |
+|---|---|---|---|---|
+| m1a | G7: `_clip_to_crop_box` returns the box unclipped | `test_parse_robustness.py` | KILLED | `test_image_overhang_is_clipped`: boxes `[..., 661.5, ...]` not `612.0` |
+| m1b | G7: a wholly off-page placement is kept as a zero-area rect | same | KILLED | same test |
+| m1c | G7: `_images` ignores the clipped result | same | KILLED | same test |
+| m2a | salvage: a salvaged document reports `complete` | same | KILLED | `test_invalid_ir_salvages_to_partial`: `'complete' == 'partial'` |
+| m2b | salvage: no targeted rounds and no fallback stages | same | KILLED | same test: `SemanticValidationError` G7 re-raised |
+| m2c | salvage: `_drop_duplicates` is a no-op | same | **SURVIVED** | no synthetic test reaches the R8 lane |
+| m2c2 | the same mutant, plus the real-PDF `test_fresh_papers.py` | both | KILLED | `test_colliding_cells_salvage_to_partial_on_maskrcnn` (skips on CI: no PDFs) |
+| m2d | salvage: `partial_reason` no longer names the rules | `test_parse_robustness.py` | KILLED | `partial_reason` assertion |
+| m3a | paragraph split: indent cue never fires | `test_parse_quality.py` | KILLED | `test_each_printed_paragraph_is_its_own_block` |
+| m3b | paragraph split: skip cue never fires | same | KILLED | same test |
+| m3c | paragraph split: `_paragraph_break` always False | same | KILLED | same test |
+| m3d | any indented line splits (drops the margin and line-after guards) | same | KILLED | `test_an_indent_that_holds_or_a_flush_continuation_is_not_a_new_paragraph`: "the hanging list was split" |
+| m3e | drops the full-width-line requirement | same | KILLED | same test: "a flush continuation split" |
+| m3f | table skip tests the block's own lines, not its run | same | KILLED | `test_splitting_a_paragraph_off_beside_a_table_keeps_its_text` |
+| m4a | numeric headings: the `hierarchy` pattern disabled | same | KILLED | `test_a_number_is_never_a_heading`: `66.4` typed heading |
+| m4b | numeric headings: the `pipeline` pattern disabled | same | KILLED | same test: `'paragraph' == 'unknown'` |
+| m4c | both patterns disabled | same plus `test_fresh_papers.py` | KILLED | same test |
+| m5 | zero-page guard (added by this review) removed | `test_parse_robustness.py` | KILLED | `DID NOT RAISE FileDataError` |
+
+**Gap found:** the R8 duplicate-id salvage lane has no CI-runnable test (m2c). It is pinned only by a
+test that needs the Mask R-CNN PDF, which is gitignored, so CI skips it. Not fixed here: a faithful
+synthetic reproduction needs two colliding table regions and is larger than a trivial change. Noted
+for S8.
+
+### R.6 DDPM and Mask R-CNN through the real worker path
+
+A fresh data root, the API (`python -m papertree_api`) and the worker (`python -m papertree_api.worker`)
+as separate processes on loopback, no agent and no model key. Register, `POST /papers` (multipart), poll
+`GET /papers/{id}` until terminal, then `GET /papers/{id}/ir`.
+
+| paper | upload | processing | job | IR status | blocks | pages |
+|---|---|---|---|---|---|---|
+| ddpm-2006.11239 | 202 | `ready` | `succeeded` | `complete` | 540 | 25 |
+| maskrcnn-1703.06870 | 202 | `ready` | `succeeded` | `complete` | 899 | 12 |
+| yolo-1506.02640 (control) | 202 | `ready` | `succeeded` | `complete` | 825 | 10 |
+
+Both block counts equal the in-process parse (540, 899, 825). Neither needed salvage (no `partial_reason`).
+
+### R.7 The cheap items
+
+- **Zero-page PDF promoted as `partial`: fixed.** `parse_document` returned `status: partial`,
+  "no blocks were extracted", 0 pages, so the library listed an empty paper as readable. It now raises
+  `pymupdf.FileDataError("the PDF has no pages")`, which `job.py` already maps to `pdf_unreadable`.
+  Verified through the real worker: upload 202, then `processing: failed`, job `dead_letter` on attempt 1,
+  `error_code: pdf_unreadable`. A one-page PDF with no text layer is unchanged (still `partial`). Two new
+  tests, mutant m5 killed.
+- **`layout._CAPTION_START` is case-sensitive: measured, not fixed.** Two variants on all 14 papers
+  against head: (A) `re.IGNORECASE`; (B) `re.IGNORECASE` plus the lower-case-after-whitespace guard
+  that `figures._CAPTION_START` uses. Both lower macro-F1 on all six repo-gold papers (A: a3c 0.4185 to
+  0.3634, attention 0.3528 to 0.3184, bert 0.3752 to 0.3223, gpt3 0.3416 to 0.3170, neural-odes 0.2280
+  to 0.2140, resnet 0.3575 to 0.2877; B is within 0.01 of A) and YOLO's fresh caption pairing falls 2/2
+  to 0/2. Block counts rise 4-35 per paper. Not trivial and not a win; the S2 note ("needs its own
+  measured commit") stands, and this is that measurement: do not make the change until the caption flow
+  downstream is made to expect the separated blocks.
+- **Text lost beside a table: stays a strict xfail.** Re-measured one variant (only lines whose centre is
+  inside the table box horizontally): macro-F1 bert 0.3752 to 0.3742, resnet 0.3575 to 0.3564, and it
+  releases table columns as body fragments (Mask R-CNN +18 blocks, pdf-to-tree +5, resnet +6).
+  Agrees with S2 §3.1.
+
+### R.8 Not verified here
+
+- The text-layer stamping tables (S2 D and D2), the Guided card shares and the MuPDF-line conservation
+  count need the pdf.js bridge and `projectGuided`; not re-run. The character-count conservation check
+  above is a weaker substitute.
+- Hard-case crops were not regenerated.
+- The 20-run determinism was run on three papers in fresh subprocesses, not on all 14 as S2 did
+  in-process.
