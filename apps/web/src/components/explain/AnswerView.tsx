@@ -30,7 +30,9 @@ export function formatUsage(usage: RunSummary | null): string | null {
 
 export function UsageLine({ usage }: { readonly usage: RunSummary | null }): ReactNode {
   const text = formatUsage(usage);
-  if (text === null) return null;
+  // A run that used nothing (it failed before the model answered) has no usage worth a line.
+  const spent = (usage?.input_tokens ?? 0) + (usage?.output_tokens ?? 0);
+  if (text === null || spent === 0) return null;
   return (
     <p className="pt-explain__usage" data-usage-line>
       {text}
@@ -99,25 +101,25 @@ export function AnswerView({
 
   return (
     <article className="pt-explain__answer" data-message-status={message.status}>
-      <AiText className="pt-explain__ai">
-        {hasText ? (
-          <RichText
-            text={message.text}
-            citations={message.citations}
-            streaming={streaming}
-            onCite={onCite}
-          />
-        ) : streaming ? (
-          <div className="pt-explain__skeleton" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </div>
-        ) : (
-          <p className="pt-explain__none">No answer was written.</p>
-        )}
-        {streaming && message.label !== null ? <StatusLine label={message.label} /> : null}
-      </AiText>
+      {!hasText && !streaming ? null : (
+        <AiText className="pt-explain__ai">
+          {hasText ? (
+            <RichText
+              text={message.text}
+              citations={message.citations}
+              streaming={streaming}
+              onCite={onCite}
+            />
+          ) : (
+            <div className="pt-explain__skeleton" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+          )}
+          {streaming && message.label !== null ? <StatusLine label={message.label} /> : null}
+        </AiText>
+      )}
 
       {message.stopped ? (
         <p className="pt-explain__note" data-stopped>
@@ -133,7 +135,11 @@ export function AnswerView({
       ) : null}
       {message.stopped ? (
         <div className="pt-explain__actions">
-          <button type="button" className="pt-btn pt-btn--outline" onClick={() => onRetry(message.key)}>
+          <button
+            type="button"
+            className="pt-btn pt-btn--outline"
+            onClick={() => onRetry(message.key)}
+          >
             Retry
           </button>
         </div>
@@ -149,7 +155,11 @@ export function AnswerView({
             disabled={send === 'sending' || send === 'sent'}
             onClick={sendToCanvas}
           >
-            {send === 'sending' ? 'Sending…' : send === 'sent' ? 'Sent to canvas' : 'Send to canvas'}
+            {send === 'sending'
+              ? 'Sending…'
+              : send === 'sent'
+                ? 'Sent to canvas'
+                : 'Send to canvas'}
           </button>
           {send === 'failed' ? (
             <span className="pt-explain__note" role="alert">

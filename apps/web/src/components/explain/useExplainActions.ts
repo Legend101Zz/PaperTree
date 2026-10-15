@@ -360,7 +360,12 @@ export function useExplainActions(options: { readonly paperId: string | null }):
   );
 
   const sendCreate = useCallback(
-    (epoch: number, request: ExplainRequest | null, question: string | undefined, show: boolean) => {
+    (
+      epoch: number,
+      request: ExplainRequest | null,
+      question: string | undefined,
+      show: boolean,
+    ) => {
       if (paperId === null) return;
       const body: CreateThreadBody =
         request === null
@@ -541,7 +546,8 @@ export function useExplainActions(options: { readonly paperId: string | null }):
         const start = await summaryApi.generate(paperId, {}, controller.signal);
         if (start.kind === 'cached') {
           const s = start.status;
-          if (s.summary !== null) set({ phase: s.state === 'partial' ? 'partial' : 'ready', summary: s.summary });
+          if (s.summary !== null)
+            set({ phase: s.state === 'partial' ? 'partial' : 'ready', summary: s.summary });
           return;
         }
         set({ phase: 'streaming', label: 'Starting' });
@@ -613,7 +619,19 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       summarize,
       stopSummary,
     }),
-    [paperId, state, openExplain, openPanel, closeExplain, setView, ask, stop, retry, summarize, stopSummary],
+    [
+      paperId,
+      state,
+      openExplain,
+      openPanel,
+      closeExplain,
+      setView,
+      ask,
+      stop,
+      retry,
+      summarize,
+      stopSummary,
+    ],
   );
 }
 

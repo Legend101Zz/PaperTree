@@ -140,6 +140,7 @@ export function describeFailure(failure: Failure): FailureCopy {
 /** A thrown value (an `ApiError` before the stream, a `TypeError` from fetch) as a `Failure`. */
 export function failureOf(error: unknown): Failure {
   if (error instanceof ApiError) return { code: error.code, retryable: error.retryable };
-  if (error instanceof NetworkError || error instanceof TypeError) return { code: 'network', retryable: true };
+  if (error instanceof NetworkError || error instanceof TypeError)
+    return { code: 'network', retryable: true };
   return { code: 'internal', retryable: true };
 }

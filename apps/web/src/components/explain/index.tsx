@@ -162,11 +162,12 @@ function Body({
   const busy = state.messages.some((m) => m.status === 'streaming');
 
   // Follow the answer as it grows, unless the reader has scrolled up to read.
-  const lastText = state.messages[state.messages.length - 1]?.text.length ?? 0;
+  const last = state.messages[state.messages.length - 1];
+  const growth = `${String(state.messages.length)}:${String(last?.text.length ?? 0)}:${last?.status ?? ''}:${String(last?.stopped ?? false)}:${String(last?.citations.length ?? 0)}`;
   useEffect(() => {
     const el = scroller.current;
     if (el !== null && stick.current) el.scrollTop = el.scrollHeight;
-  }, [lastText, state.messages.length, state.view]);
+  }, [growth, state.view]);
 
   const sendToCanvas = useCallback(
     (messageId: string) => actions.sendToCanvas({ kind: 'explanation', messageId }),
@@ -270,6 +271,16 @@ export function ExplainPanel({ controller }: ExplainPanelProps) {
     if (state.open && desktop) asideRef.current?.focus({ preventScroll: true });
   }, [state.open, state.epoch, desktop]);
 
+  // The drawer must not sit on the paper it is explaining: while it is open on a wide screen the
+  // page makes room (a rule in `@papertree/ui` keyed on this attribute), so a flashed passage is
+  // never under the drawer.
+  useEffect(() => {
+    if (!state.open || !desktop) return undefined;
+    const root = document.documentElement;
+    root.setAttribute('data-pt-explain', 'open');
+    return () => root.removeAttribute('data-pt-explain');
+  }, [state.open, desktop]);
+
   const onCite = useCallback(
     (citation: Citation) => {
       // On a phone the sheet covers the page: lower it so the flashed passage is in view.
@@ -321,7 +332,12 @@ export function ExplainPanel({ controller }: ExplainPanelProps) {
     >
       <header className="pt-explain__header">
         <h2 className="pt-explain__title">Explain</h2>
-        <button type="button" className="pt-btn" aria-label="Close explain panel" onClick={closeExplain}>
+        <button
+          type="button"
+          className="pt-btn"
+          aria-label="Close explain panel"
+          onClick={closeExplain}
+        >
           Close
         </button>
       </header>

@@ -1719,6 +1719,12 @@ span.pt-paper .pt-paper__cite {
   animation: pt-explain-in 180ms ease-out;
 }
 
+@media (min-width: 768px) {
+  html[data-pt-explain='open'] body {
+    padding-inline-end: min(420px, 100vw);
+  }
+}
+
 .pt-explain:focus {
   outline: none;
 }
@@ -1743,6 +1749,20 @@ span.pt-paper .pt-paper__cite {
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
+}
+
+/*
+ * `Sheet` is `position: absolute` against the reader shell; this panel is mounted above the shell,
+ * so it is fixed to the viewport instead, and above the page's text layer (z-index 1-2).
+ */
+.pt-explain-sheet {
+  position: fixed;
+  z-index: 35;
+}
+
+.pt-sheet__scrim:has(+ .pt-explain-sheet) {
+  position: fixed;
+  z-index: 34;
 }
 
 .pt-explain-sheet .pt-sheet__body {
