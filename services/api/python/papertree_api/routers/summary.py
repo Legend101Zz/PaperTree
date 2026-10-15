@@ -49,14 +49,25 @@ SUMMARY_QUESTION: Final = "Summarise this paper."
 
 
 def _cached(call: Any, paper_id: str, generation: int) -> dict[str, Any] | None:
-    row = call.db.get_summary(
-        call.db_owner,
-        PaperId(paper_id),
-        generation,
-        runs.PROMPT_VERSIONS["summary"],
-        runs.MODEL,
-    )
-    return None if row is None else dict(row["content"])
+    """The newest cached summary over every model the agent may use (the cache key holds the
+    model that wrote it, so a policy change does not hide an existing summary)."""
+    rows = [
+        row
+        for model in runs.KNOWN_MODELS
+        if (
+            row := call.db.get_summary(
+                call.db_owner,
+                PaperId(paper_id),
+                generation,
+                runs.PROMPT_VERSIONS["summary"],
+                model,
+            )
+        )
+        is not None
+    ]
+    if not rows:
+        return None
+    return dict(max(rows, key=lambda r: str(r["created_at"]))["content"])
 
 
 def _live(run: dict[str, Any] | None) -> bool:

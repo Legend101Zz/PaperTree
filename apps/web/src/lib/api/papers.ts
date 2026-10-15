@@ -3,13 +3,8 @@
  * over the shared transport in `client.ts`.
  *
  * `lib/papertree.ts` was deleted in S0 (contracts.md §5) and every importer points here or at
- * `client.ts`. What did NOT change is deliberate: `list()` still types the rows `GET /papers`
- * returns TODAY (`PaperListRow`), because the server keeps that shape until S1 moves it to
- * `LibraryPaper[]` — typing it as `LibraryPaper` now would be the cast-over-the-gap that hid #77 D4
- * for an epic. S1 changes the route and S3 (which owns this file after S0) retypes the call.
- *
- * The routes S1 adds (`DELETE /papers/{id}`, `/retry`, `/reparse`) have typed wrappers here already;
- * until S1 lands they answer 404/405/501 and the wrappers throw an `ApiError` saying so.
+ * `client.ts`. Since S1, `list()` returns `LibraryPaper[]` (S3 retyped it; the pre-S1 row type is
+ * gone) and `DELETE /papers/{id}`, `/retry` and `/reparse` are live.
  */
 import type { PaperSource } from '@papertree/anchoring';
 
@@ -58,8 +53,8 @@ export interface UploadResponse {
   readonly job_id: string;
   /** False when these bytes were already uploaded — the service returns the ORIGINAL job. */
   readonly created: boolean;
-  /** Contracts §2.2 adds the library row to the 202. Absent until S1 lands it. */
-  readonly paper?: LibraryPaper;
+  /** The library row for this upload, in the 202 (contracts §2.2). */
+  readonly paper: LibraryPaper;
 }
 
 /** `GET /jobs/{id}` — the existing shape; contracts §2.2 adds `error_code` (S1). */
@@ -132,20 +127,6 @@ export interface AskBody {
   readonly block_ids: readonly string[];
 }
 
-/**
- * One row of `GET /papers`, as the service sends it BEFORE S1 (#77 D4).
- *
- * The id key is `paper_id`, there is no title or page count, and `metadata` arrives as a JSON
- * STRING that `libraryPaperFromPaperRow` parses. S1 replaces the whole row with `LibraryPaper`.
- */
-export interface PaperListRow {
-  readonly paper_id: string;
-  readonly created_at: string;
-  readonly status?: string | null;
-  readonly partial_reason?: string | null;
-  readonly metadata?: string | null;
-}
-
 export const papersApi = {
   /** A plain multipart POST. `uploadWithProgress` is the same request with progress and cancel. */
   upload: (file: File) => {
@@ -156,8 +137,8 @@ export const papersApi = {
   uploadWithProgress: (file: File, options: UploadOptions = {}) =>
     uploadWithProgressTransport(file, options),
 
-  /** Every paper this caller owns — in the pre-S1 row shape; see the module header. */
-  list: () => request<readonly PaperListRow[]>('/papers'),
+  /** Every paper this caller owns, newest first (contracts §2.2). */
+  list: () => request<readonly LibraryPaper[]>('/papers'),
 
   /** PaperIR 1.0.0 for the promoted generation, or `gen` when given (§2.2). */
   ir: (paperId: string, gen?: number) =>

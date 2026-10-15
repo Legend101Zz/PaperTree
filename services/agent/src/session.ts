@@ -82,6 +82,8 @@ export interface PaperSessionInput {
   readonly model: Model<any>;
   readonly maxOutputTokens: number;
   readonly maxRetries: number;
+  /** Pi's thinking level: 'low' for M3 (budget-based); the policy's effort for Flash (adaptive). */
+  readonly thinkingLevel: 'low' | 'medium' | 'high';
   readonly systemPrompt: string;
   readonly tools: readonly ToolDefinition[];
   /** `history.session_id` (the thread), or the run id on a thread's first turn. */
@@ -191,7 +193,7 @@ export async function createPaperSession(input: PaperSessionInput): Promise<Pape
   const { session } = await createAgentSession({
     cwd: '/',
     model: { ...input.model, maxTokens: input.maxOutputTokens },
-    thinkingLevel: 'low',
+    thinkingLevel: input.thinkingLevel,
     modelRuntime: input.modelRuntime,
     resourceLoader: emptyResourceLoader(input.systemPrompt),
     settingsManager: paperSettings(input.maxRetries, input.providerTimeoutMs),

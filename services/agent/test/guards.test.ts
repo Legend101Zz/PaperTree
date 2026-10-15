@@ -643,6 +643,7 @@ describe('the disposed-session guard (spike-verify must-fix 4)', () => {
       model: faux.model,
       maxOutputTokens: 256,
       maxRetries: 0,
+      thinkingLevel: 'low',
       systemPrompt: 'probe',
       tools: createPaperTools({
         baseUrl: 'http://127.0.0.1:9/internal/agent/runs/run_x',

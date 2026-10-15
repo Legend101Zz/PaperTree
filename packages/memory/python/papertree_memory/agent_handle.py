@@ -280,7 +280,7 @@ class AgentDataHandle:
         """SESSION memory for one conversation. Trust label ``tainted``, and sticky.
 
         Expired rows are NOT filtered here. `expires_at` is enforced by
-        :meth:`~papertree_memory.store.MemoryStore.purge_expired_session_memory`, which is a
+        ``MemoryStore.purge_expired_session_memory`` (deleted in S8a), which is a
         write and therefore not something this handle can do; filtering here as well would
         make an unpurged database look purged and hide the fact that the purge never ran.
         """
@@ -333,7 +333,7 @@ class AgentDataHandle:
         Exposed on the handle because the object that has to prove it is harmless is the
         object that was handed out. The report is data — the caller decides whether to log it,
         assert on it or feed it to
-        :meth:`~papertree_memory.store.MemoryStore.record_denied_routes`.
+        ``MemoryStore.record_denied_routes`` (deleted in S8a).
         """
         return probe_escape_routes(self._reader, scratch_dir=scratch_dir)
 

@@ -1,4 +1,10 @@
-"""papertree_memory — the four agent memory stores (F3.7) and the trust boundary (F3.8).
+"""papertree_memory — the read-only agent handle and the trust boundary (F3.8).
+
+The write side (``MemoryStore``, ``ProposalValidator`` and the record types) was deleted in S8a
+(ADR-002 section 8, R13): it had no product caller and the six 0003 tables hold no rows. What
+remains is the half that is a security guard: ``AgentDataHandle``, ``guard`` and ``errors``.
+Sections of this docstring that describe the deleted writer are history, kept so the guard's
+reasoning stays readable.
 
 This package exists to make one sentence true in SQLite:
 
@@ -80,27 +86,9 @@ KNOWN GAPS, NAMED
 USAGE
 ────────────────────────────────────────────────────────────────────────────────────────────
 
-    store = MemoryStore(path, validator=ProposalValidator(tool_names=TOOL_REGISTRY.names()))
-    store.migrate()
-    owner = store.owner_for(user_id)
-
-    # what a tool gets. Note what is NOT passed: the store.
+    # what a tool gets: read-only, owner-bound, no write method anywhere
     handle = AgentDataHandle(path, user_id)
     blocks = handle.list_blocks_in_doc_order(paper_id, generation)
-
-    # the only route towards the trusted store
-    outcome = store.create_proposal(
-        owner, paper_id, generation,
-        session_id=session_id, kind="preferred_depth",
-        content={"level": "grad"},
-        evidence=EvidenceSpan(block_id, quote, start, end),
-        model_id="anthropic/claude-haiku-4.5", prompt_hash="sha256:…",
-    )
-    if outcome.state == "pending":                      # a human clicked, in the UI, on a
-        store.confirm_proposal(                         # screen showing `quote` verbatim
-            owner,
-            UserConfirmation(outcome.proposal_id, quote, confirmed_at=now_iso()),
-        )
 """
 
 from __future__ import annotations
@@ -125,69 +113,22 @@ from .guard import (
     open_guarded_read_only,
     probe_escape_routes,
 )
-from .records import (
-    MAX_CONTENT_KEY_LENGTH,
-    MAX_PROPOSAL_CONTENT_BYTES,
-    SESSION_MEMORY_RETENTION_DAYS,
-    TRUST_LABELS,
-    USER_LEARNING_MAX_BYTES,
-    USER_LEARNING_MAX_RECORDS,
-    USER_LEARNING_RECONFIRM_DAYS,
-    Actor,
-    AuditAction,
-    EvidenceSpan,
-    ProposalOutcome,
-    ProposalState,
-    StoreName,
-    TrustLabel,
-    UserConfirmation,
-    WriteProvenance,
-    canonical_json,
-    now_iso,
-    shift_iso,
-)
-from .store import MemoryStore, UserLearningUsage
-from .validation import ProposalValidator, RejectionRule, ValidationOutcome
 
 __all__ = [
     "DENIAL_MARKERS",
     "DENIED_ACTIONS",
     "DENIED_FUNCTIONS",
-    "MAX_CONTENT_KEY_LENGTH",
-    "MAX_PROPOSAL_CONTENT_BYTES",
-    "SESSION_MEMORY_RETENTION_DAYS",
-    "TRUST_LABELS",
-    "USER_LEARNING_MAX_BYTES",
-    "USER_LEARNING_MAX_RECORDS",
-    "USER_LEARNING_RECONFIRM_DAYS",
-    "Actor",
     "AgentDataHandle",
-    "AuditAction",
     "ConfirmationMismatch",
     "EscapeRoute",
-    "EvidenceSpan",
     "MemoryCapExceeded",
-    "MemoryStore",
     "PaperTreeMemoryError",
-    "ProposalOutcome",
     "ProposalRejected",
-    "ProposalState",
-    "ProposalValidator",
-    "RejectionRule",
     "RouteProbe",
     "Row",
-    "StoreName",
     "TrustBoundaryViolation",
-    "TrustLabel",
-    "UserConfirmation",
-    "UserLearningUsage",
-    "ValidationOutcome",
-    "WriteProvenance",
     "assert_no_escape",
-    "canonical_json",
     "escape_routes",
-    "now_iso",
     "open_guarded_read_only",
     "probe_escape_routes",
-    "shift_iso",
 ]

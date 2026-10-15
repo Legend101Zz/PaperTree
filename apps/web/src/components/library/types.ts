@@ -1,250 +1,155 @@
 /**
  * library/types — the library's view model.
  *
- * WHY A THIRD PAPER-SHAPED TYPE IS NOT SLOP.
+ * `LibraryPaper` here is the VIEW MODEL the cards render; it is never posted and never persisted.
+ * The wire shape is `ApiLibraryPaper` (`lib/api/types.ts::LibraryPaper`, contracts.md §2.2) and
+ * `libraryPaperFromWire` is the one bridge. The pre-S1 bridges (`libraryPaperFromApi`,
+ * `libraryPaperFromPaperRow`) are gone: they read a row shape the server no longer sends, which is
+ * why every card used to say "Queued", carry a `ppr_` id for a title and count "0 pages" (#141).
  *
- * `apps/web/src/types/index.ts` already declares `Paper`. It has seven fields — id, user_id, title,
- * filename, created_at, page_count, has_book_content — and NOT ONE of them can say whether the
- * parse finished, is running, half-succeeded, or blew up. That is not an omission in the type; it
- * is a faithful record of a product where upload blocks the HTTP request and the user learns the
- * outcome by whether the page eventually renders (`dashboard/PaperList.tsx:32-46`). §18.4 makes
- * processing state FIRST-CLASS, so the library needs a type that can hold it.
+ * The five states keep their names from §18.4 and map one to one onto the server's `processing`:
  *
- * The rule the repo actually cares about (README anti-slop rule 3) is that two types must not
- * silently compete for the same job. So: `LibraryPaper` is the LIBRARY VIEW MODEL and nothing else
- * — it is never persisted, never posted, never returned by the API. `libraryPaperFromApi` is the
- * one bridge, and it takes a STRUCTURAL row rather than importing `@/types` so that deleting the
- * v1 type file (which Epic 2 is chartered to do) cannot break this module.
+ *     queued -> pending     reading -> parsing     ready -> complete     partial     failed
  *
- * PROCESSING STATE VS `Paper.status`. PaperIR's `status` is `"complete" | "partial"` — two values,
- * because an IR document only exists once the parser has produced one. `pending`, `parsing` and
- * `failed` are states of the JOB, which has no IR yet. Mapping is therefore one-directional and
- * lossy on purpose: IR `status` fills in the last two states, the job queue owns the first three.
+ * Source mode is readable in every state, so no state ever hides the Open action (§19.8).
  */
+import { fixturesEnabled } from '@/lib/paperSource';
+import type { LibraryPaper as ApiLibraryPaper, Processing } from '@/lib/api/types';
 
-/**
- * §18.4: `pending | parsing | partial | complete | failed`.
- *
- * Ordered by progress, not alphabetically, because the UI reads it as a pipeline.
- */
 export type ProcessingState = 'pending' | 'parsing' | 'partial' | 'complete' | 'failed';
-
-/** Audio is a separate long job with its own failure mode; it is NOT a facet of parsing. */
-export type AudioState = 'none' | 'queued' | 'generating' | 'ready' | 'failed';
 
 export interface LibraryPaper {
   readonly id: string;
   readonly title: string;
-  /** Ordered as printed. Empty is legal — front matter is not always parsed (see the fixtures). */
+  /** Ordered as printed. Empty is legal. */
   readonly authors: readonly string[];
-  /** Pages in the SOURCE PDF, which is not the same as pages in the IR while parsing or partial. */
+  /** Pages in the source PDF; 0 when the server could not count them. */
   readonly pageCount: number;
-  /** Pages whose IR exists. `<= pageCount`; equals it only when `processing === 'complete'`. */
+  /** Pages whose IR exists. Only meaningful for the fixture samples. */
   readonly pagesParsed: number;
-  /** 0..1. Reading position, not parse progress — the two are routinely different. */
+  /** 0..1. Reading position, not parse progress. */
   readonly readingProgress: number;
   readonly processing: ProcessingState;
-  /**
-   * `Paper.partial_reason`. OPERATOR-FACING FREE TEXT, rendered verbatim and never parsed —
-   * `neural-odes` sets it to a 90-word paragraph citing a README. Anything that tried to pull page
-   * numbers out of it would be reading prose written for a human debugging the parser.
-   */
+  /** Operator-facing free text for `partial`, rendered verbatim. */
   readonly partialReason?: string;
-  /** The pipeline step that failed, when `processing === 'failed'`. Retry resumes FROM here. */
+  /** The pipeline step that failed, when `processing === 'failed'`. */
   readonly failedStep?: string;
-  readonly audio: AudioState;
+  /** A sentence saying why a parse failed. Never a raw error code. */
+  readonly failureReason?: string;
+  /** While `parsing`: which of the three steps is running, and how many there are. */
+  readonly step?: { readonly n: number; readonly of: number; readonly name: string };
   readonly highlightCount: number;
   /** ISO-8601. */
   readonly addedAt: string;
-  /** Sample papers are read-only and cannot be deleted; §19.8 requires three in an empty library. */
+  /** Sample papers are read-only and cannot be deleted. Shown only when fixtures are on. */
   readonly isSample?: boolean;
 }
 
 export const PROCESSING_LABEL: Record<ProcessingState, string> = {
   pending: 'Queued',
-  parsing: 'Reading the paper',
+  parsing: 'Reading',
   partial: 'Partly read',
   complete: 'Ready',
   failed: 'Could not read',
 };
 
-/**
- * The one sentence each state owes the reader. Not decoration: `parsing` and `partial` both mean
- * "you can read this NOW", and a badge that only says "Parsing" implies the opposite.
- */
+/** The one sentence each state owes the reader. */
 export const PROCESSING_DETAIL: Record<ProcessingState, string> = {
-  pending: 'Waiting for a parser slot. The PDF is already readable in Source mode.',
-  parsing: 'Pages are filling in. The PDF is readable in Source mode right now.',
-  partial: 'Some pages need a closer look. Reading continues everywhere else.',
-  complete: 'Guided mode, audio and questions are available.',
-  failed: 'Parsing stopped. The original PDF is still readable in Source mode.',
+  pending: 'Waiting for its turn. The PDF is already readable in Source mode.',
+  parsing: 'We are reading the paper. The PDF is readable in Source mode right now.',
+  partial: 'Some parts of this paper could not be read. Everything else works.',
+  complete: 'Guided mode and questions are available.',
+  failed: 'We could not read this paper. Retry, or open the original PDF.',
 };
 
-export const AUDIO_LABEL: Record<AudioState, string> = {
-  none: 'No audio',
-  queued: 'Audio queued',
-  generating: 'Making audio',
-  ready: 'Audio ready',
-  failed: 'Audio failed',
-};
-
-/**
- * Guided mode, audio and questions are gated on the IR; SOURCE MODE NEVER IS.
- *
- * §19.8: "The paper is readable in Source mode immediately — parsing only gates Guided/audio/
- * questions." Every gate in this group calls THIS function, so there is exactly one place where the
- * rule can be got wrong, and it cannot accidentally start returning true for source reading.
- */
+/** Guided mode and questions are gated on the IR; SOURCE MODE NEVER IS. */
 export function derivedFeaturesReady(state: ProcessingState): boolean {
   return state === 'complete' || state === 'partial';
 }
 
-/** The v1 API row, structurally. Not imported from `@/types` — see the header. */
-export interface ApiPaperRow {
-  readonly id: string;
-  readonly title: string;
-  readonly created_at: string;
-  readonly page_count?: number | null;
+/** True while the server is still working on the row: the only time the library polls. */
+export function isNonTerminal(processing: Processing): boolean {
+  return processing === 'queued' || processing === 'reading';
 }
 
-/**
- * Bridge a v1 API row into the library view model.
- *
- * Everything the row cannot express is supplied by the caller. The default is `pending`, not
- * `complete`: a row that has never been told about a job is a paper nobody has parsed yet, and
- * defaulting to `complete` would light up Guided mode over an IR that does not exist.
- */
-export function libraryPaperFromApi(
-  row: ApiPaperRow,
-  extra: Partial<Omit<LibraryPaper, 'id' | 'title' | 'addedAt'>> = {},
-): LibraryPaper {
-  const pageCount = extra.pageCount ?? row.page_count ?? 0;
-  const base: LibraryPaper = {
-    id: row.id,
-    title: row.title,
-    authors: extra.authors ?? [],
-    pageCount,
-    pagesParsed: extra.pagesParsed ?? 0,
-    readingProgress: extra.readingProgress ?? 0,
-    processing: extra.processing ?? 'pending',
-    audio: extra.audio ?? 'none',
-    highlightCount: extra.highlightCount ?? 0,
-    addedAt: row.created_at,
-  };
-  // Built by spreading rather than by assigning `undefined`, because `exactOptionalPropertyTypes`
-  // draws a distinction between an absent key and a present `undefined` one and the schema means
-  // the former.
-  return {
-    ...base,
-    ...(extra.partialReason === undefined ? {} : { partialReason: extra.partialReason }),
-    ...(extra.failedStep === undefined ? {} : { failedStep: extra.failedStep }),
-    ...(extra.isSample === undefined ? {} : { isSample: extra.isSample }),
-  };
-}
+const STATE_FROM_WIRE: Record<Processing, ProcessingState> = {
+  queued: 'pending',
+  reading: 'parsing',
+  ready: 'complete',
+  partial: 'partial',
+  failed: 'failed',
+};
 
-/**
- * The row `services/api`'s `GET /papers` actually returns — #77's D4.
- *
- * IT IS NOT `ApiPaperRow`, and the difference is why a fully parsed paper rendered as an untitled
- * card reading "Authors not identified · 0 pages · Queued". Measured against the live service:
- *
- *   * there is **no** `title`, `authors`, `page_count` or `processing` field;
- *   * `metadata` is a **JSON STRING**, not an object — `typeof row.metadata === 'string'`;
- *   * the id key is `paper_id`, not `id`;
- *   * the real title is inside that string, at `metadata.title.value`.
- *
- * The consequence was not only cosmetic. With no title, the card's button had no accessible name,
- * and axe reported `button-name` at **critical** on `#paper-title-undefined`.
- */
-export interface PaperRow {
-  readonly paper_id: string;
-  readonly created_at: string;
-  /** `"complete" | "partial"`. A row exists only once the parser produced an IR. */
-  readonly status?: string | null;
-  readonly partial_reason?: string | null;
-  /** JSON, as a string. See `parseMetadata`. */
-  readonly metadata?: string | null;
-}
+const STEP_WORDS: Record<string, string> = {
+  parse: 'Reading the PDF',
+  persist: 'Saving what was read',
+  promote: 'Getting it ready',
+};
 
-/** One `MetadataField` — `{value, source_block_id, confidence}`. Only `value` is rendered. */
-interface MetadataField {
-  readonly value?: unknown;
-}
-
-interface PaperMetadata {
-  readonly title?: MetadataField | null;
-  readonly authors?: readonly MetadataField[] | null;
-}
-
-/**
- * `row.metadata` as an object, or `null` when it is absent or not parseable.
- *
- * Returns `null` rather than throwing: one malformed row must not take down the whole library, and
- * a card that falls back to its untitled state is a smaller failure than a blank page. Accepts an
- * already-parsed object too, so this keeps working the day the endpoint stops double-encoding.
- */
-function parseMetadata(raw: unknown): PaperMetadata | null {
-  if (raw === null || raw === undefined) return null;
-  if (typeof raw === 'object') return raw as PaperMetadata;
-  if (typeof raw !== 'string') return null;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return typeof parsed === 'object' && parsed !== null ? (parsed as PaperMetadata) : null;
-  } catch {
-    return null;
+/** `error_code` -> a sentence with a next action. Unknown codes get the general sentence. */
+export function failureSentence(code: string | null | undefined): string {
+  switch (code) {
+    case 'pdf_unreadable':
+      return 'This file could not be read as a PDF. It may be damaged, scanned without text or password protected. Retry, or upload a different copy.';
+    case 'validation_failed':
+      return 'We read the file but could not make sense of its structure. Retry, or upload a different copy.';
+    case 'timeout':
+      return 'Reading took too long and was stopped. Retry; very long papers can need a second try.';
+    default:
+      return 'Something went wrong while reading this paper. Retry, or upload it again.';
   }
 }
 
-function fieldText(field: MetadataField | null | undefined): string | null {
-  const value = field?.value;
-  return typeof value === 'string' && value.trim().length > 0 ? value : null;
+function titleOf(paper: ApiLibraryPaper): string {
+  const title = paper.title.trim();
+  return title.length > 0 ? title : (paper.original_filename ?? 'Untitled paper');
 }
 
 /**
- * Bridge a `services/api` row into the library view model.
- *
- * `pageCount` stays **0**: the list endpoint returns no page count in any form, and deriving one
- * from `sections` would be a guess rendered as a fact. Filed rather than invented — see
- * `UX-WALK-77.md` §D4.
- *
- * The title falls back to the paper id rather than to an empty string. An untitled card is the
- * accessibility defect this function exists to close, so the fallback has to be something a screen
- * reader can announce and a human can tell apart from the next card.
+ * Bridge a `GET /papers` row into the view model. Total: every `processing` value maps, and a row
+ * missing optional pieces still renders.
  */
-export function libraryPaperFromPaperRow(row: PaperRow): LibraryPaper {
-  const metadata = parseMetadata(row.metadata);
-  const authors = (metadata?.authors ?? [])
-    .map(fieldText)
-    .filter((name): name is string => name !== null);
-
-  const processing: ProcessingState =
-    row.status === 'complete' ? 'complete' : row.status === 'partial' ? 'partial' : 'pending';
+export function libraryPaperFromWire(paper: ApiLibraryPaper): LibraryPaper {
+  const processing = STATE_FROM_WIRE[paper.processing];
+  const job = paper.job;
+  const stepNumber =
+    processing === 'parsing' && job !== null
+      ? Math.min(Math.max(job.done + 1, 1), Math.max(job.total, 1))
+      : null;
+  const stepName =
+    job?.step !== null && job?.step !== undefined ? (STEP_WORDS[job.step] ?? 'Reading') : 'Reading the PDF';
 
   const base: LibraryPaper = {
-    id: row.paper_id,
-    title: fieldText(metadata?.title) ?? row.paper_id,
-    authors,
-    pageCount: 0,
+    id: paper.paper_id,
+    title: titleOf(paper),
+    authors: paper.authors,
+    pageCount: paper.page_count ?? 0,
     pagesParsed: 0,
     readingProgress: 0,
     processing,
-    audio: 'none',
-    highlightCount: 0,
-    addedAt: row.created_at,
+    highlightCount: paper.highlight_count,
+    addedAt: paper.created_at,
   };
   return {
     ...base,
-    ...(row.partial_reason ? { partialReason: row.partial_reason } : {}),
+    ...(stepNumber !== null && job !== null
+      ? { step: { n: stepNumber, of: Math.max(job.total, 1), name: stepName } }
+      : {}),
+    ...(processing === 'failed' ? { failureReason: failureSentence(job?.error_code) } : {}),
+    ...(processing === 'partial'
+      ? {
+          partialReason:
+            'Some parts of this paper could not be read. You can still read it in Source mode and use everything that was read.',
+        }
+      : {}),
   };
 }
 
 /**
- * The three sample papers §19.8 requires, so the product can be evaluated before committing a PDF.
+ * The three sample papers, the repository's own golden fixtures.
  *
- * These are the repository's own golden fixtures, which is the point: they are the three documents
- * every anchoring test runs against, so a sample paper cannot drift away from something we parse
- * correctly. `neural-odes` is deliberately the PARTIAL one — an evaluator should meet the partial
- * banner on a sample rather than discover it for the first time on their own paper.
+ * They are NOT part of the product: `visibleSamples()` returns them only when
+ * `NEXT_PUBLIC_PAPERTREE_FIXTURES=on` (contracts.md §7, #137).
  */
 export const SAMPLE_PAPERS: readonly LibraryPaper[] = [
   {
@@ -255,7 +160,6 @@ export const SAMPLE_PAPERS: readonly LibraryPaper[] = [
     pagesParsed: 4,
     readingProgress: 0,
     processing: 'complete',
-    audio: 'ready',
     highlightCount: 0,
     addedAt: '2017-06-12T00:00:00.000Z',
     isSample: true,
@@ -268,7 +172,6 @@ export const SAMPLE_PAPERS: readonly LibraryPaper[] = [
     pagesParsed: 3,
     readingProgress: 0,
     processing: 'complete',
-    audio: 'none',
     highlightCount: 0,
     addedAt: '2015-12-10T00:00:00.000Z',
     isSample: true,
@@ -284,9 +187,13 @@ export const SAMPLE_PAPERS: readonly LibraryPaper[] = [
     partialReason:
       'Golden fixture: only pages 0-2 of the 18-page source PDF are parsed. Reading continues on ' +
       'the pages that were read.',
-    audio: 'none',
     highlightCount: 0,
     addedAt: '2018-06-19T00:00:00.000Z',
     isSample: true,
   },
 ];
+
+/** The samples to show: none unless fixtures are on. */
+export function visibleSamples(): readonly LibraryPaper[] {
+  return fixturesEnabled() ? SAMPLE_PAPERS : [];
+}
