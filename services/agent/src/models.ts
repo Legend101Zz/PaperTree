@@ -27,13 +27,15 @@ export const EFFORTS = ['low', 'medium', 'high'] as const;
 export type Effort = (typeof EFFORTS)[number];
 
 /**
- * The shipped default (ADR-003), decided by the A/B in docs/release/v0.1/MODEL-AB.md: Flash (effort
- * low) answers `explain` and `ask`, M3 writes the `summary` (Flash's summaries read `partial` far
- * more often: an uncited heading bullet, citation ranges that do not parse).
+ * The shipped default (ADR-003), decided by the A/B in docs/release/v0.1/MODEL-AB.md and revised by
+ * the v0.1 quality panel (ADR-003 "Revision 2026-10-15"): Flash (effort low) answers `explain`,
+ * M3 answers `ask` (the panel's ask follow-ups: Flash grounded 3.22, 9 wrong citations; M3 3.78,
+ * 0) and writes the `summary` (Flash's summaries read `partial` far more often: an uncited heading
+ * bullet, citation ranges that do not parse).
  */
 export const DEFAULT_MODELS: Readonly<Record<RunKind, ModelId>> = {
   explain: FLASH_MODEL_ID,
-  ask: FLASH_MODEL_ID,
+  ask: M3_MODEL_ID,
   summary: M3_MODEL_ID,
 };
 export const DEFAULT_EFFORT: Effort = 'low';
