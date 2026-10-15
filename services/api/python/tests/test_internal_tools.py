@@ -303,6 +303,62 @@ def test_a_section_pages_at_6000_characters_and_the_cursor_walks_it_once(
         assert_envelope(t.get(f"/sections/{handle}?cursor=zz"), 422, "validation_failed")
 
 
+def _assign(t: Tools, block_ids: list[str]) -> list[str]:
+    db = PaperTreeDb(t.database)
+    try:
+        return db.assign_run_handles(db.owner_for(t.user_id), RUN, 1, block_ids)
+    finally:
+        db.close()
+
+
+def test_get_section_works_for_every_handle_a_run_was_issued_whatever_issued_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """W2API item 1 (contracts.md §4: "the body blocks of the section that the heading OR BLOCK
+    belongs to"): a handle from the outline (a heading), from a search (a body block), from a
+    passage (a caption's figure) and from the seed (assigned at run start, before any tool call)
+    all open their section, and the section contains the block the handle names."""
+    document = load_fixture("resnet-cvpr-2col")
+    by_id = {b["block_id"]: b for b in document["blocks"]}
+    with tools(tmp_path, monkeypatch) as t:
+        sources: dict[str, list[str]] = {}
+        sources["outline"] = t.ok("/outline")["handles"]
+        sources["search"] = t.ok("/search?q=residual%20learning%20framework&limit=4")["handles"]
+        caption = t.ok("/search?q=Figure%201%20Training%20error&limit=8")
+        caption_handle = next(h for h, kind in _blocks_in(caption["text"]) if kind == "caption")
+        sources["passage"] = t.ok(f"/passages/{caption_handle}")["handles"]
+        body_blocks = [
+            b["block_id"] for b in document["blocks"] if b.get("flow") == "body" and b.get("text")
+        ]
+        sources["seed"] = _assign(t, [body_blocks[0], body_blocks[len(body_blocks) // 2]])
+        for source, handles in sources.items():
+            assert handles, source
+            for handle in handles[:3]:  # a run has 16 tool requests; 15 are used here
+                body = t.ok(f"/sections/{handle}")
+                assert body["handles"], (source, handle)
+                block_id = t.handles()[handle]
+                named = {t.handles()[h] for h in body["handles"]}
+                block = by_id[block_id]
+                if block.get("text") and block.get("flow") == "body":
+                    assert block_id in named, (source, handle, "the section holds its own block")
+
+
+def test_a_handle_passed_as_a_cursor_is_a_422_that_says_what_a_cursor_is(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The panel's neural-odes ask passed the last handle it had seen ("b29") as the cursor of a
+    valid handle; the API refuses it with a message the agent turns into a recoverable tool
+    result (services/agent guards.test.ts)."""
+    with tools(tmp_path, monkeypatch) as t:
+        handle = t.ok("/outline")["handles"][0]
+        for bad in ("b29", "c-1", "c", "c99999"):
+            refused = assert_envelope(
+                t.get(f"/sections/{handle}?cursor={bad}"), 422, "validation_failed"
+            )
+            assert refused["detail"].startswith("cursor:"), refused
+        assert t.ok(f"/sections/{handle}?cursor=c0")["handles"], "c0 is the start"
+
+
 def test_a_section_title_cannot_forge_the_delimiter(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
