@@ -10,8 +10,6 @@ look grounded.
 
 from __future__ import annotations
 
-import re
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -29,9 +27,6 @@ from papertree_agent_tools import (
     target_type_for_block_type,
     validate_arguments,
 )
-
-REPO = Path(__file__).resolve().parents[4]
-TWIN = REPO / "apps" / "web" / "src" / "components" / "inspector" / "types.ts"
 
 
 def _answer(**overrides: Any) -> GroundedAnswer:
@@ -51,52 +46,13 @@ def _answer(**overrides: Any) -> GroundedAnswer:
     return GroundedAnswer(**fields)
 
 
-# ── the twin ─────────────────────────────────────────────────────────────────────────────
-
-
 def _camel(name: str) -> str:
     head, *rest = name.split("_")
     return head + "".join(part.title() for part in rest)
 
 
-def test_every_python_field_has_the_camel_case_field_the_inspector_declares() -> None:
-    """Mechanical, not by eye. Two implementations of one schema drift silently otherwise.
-
-    There is no code path between the two — nothing serves PaperIR over HTTP yet (#62) — so this
-    assertion is the only thing keeping them aligned until an endpoint exists, at which point it
-    is the thing that has to keep passing.
-
-    It FAILS rather than skips when ``types.ts`` is missing: the twin's absence is exactly the
-    drift being watched for, and a skip would report it as a pass.
-    """
-    assert TWIN.exists(), (
-        f"{TWIN} is gone. The Python answer contract has no counterpart to align with, which "
-        "means one of the two implementations was deleted or moved without the other."
-    )
-    source = TWIN.read_text(encoding="utf-8")
-    for field in (
-        "states",
-        "interpretation",
-        "supporting_block_ids",
-        "source_pages",
-        "source_regions",
-        "confidence",
-        "unresolved_ambiguities",
-        "claims",
-    ):
-        assert re.search(rf"\breadonly {_camel(field)}\b", source), field
-    for field in ("text", "supported_by", "supported", "reason"):
-        assert re.search(rf"\breadonly {_camel(field)}\b", source), field
-
-
-def test_the_six_citation_target_types_match_the_twins_union() -> None:
-    source = TWIN.read_text(encoding="utf-8")
-    match = re.search(r"export type CitationTargetType =([^;]+);", source)
-    assert match is not None
-    declared = {value.strip().strip("'") for value in match.group(1).split("|")}
-    assert declared == set(CITATION_TARGET_TYPES)
-
-
+# The TypeScript twin (components/inspector/types.ts) was deleted with the old Inspector (R12);
+# the wire shape is now pinned by contracts/api, so the twin-alignment tests went with it.
 # ── the serialiser that is now the code path between them (#76) ──────────────────────────
 
 
@@ -134,34 +90,6 @@ def test_the_wire_object_is_as_dict_with_every_key_camel_cased() -> None:
     }
     assert wire["supportingBlockIds"] == ["blk_a"]
     assert wire["sourceRegions"][0]["pageIndex"] == 2
-
-
-def test_every_wire_key_is_a_field_the_inspector_actually_declares() -> None:
-    """The serialiser's output checked against the TWIN, not against this file's expectations.
-
-    ``test_every_python_field_has_the_camel_case_field_the_inspector_declares`` reads the field
-    list from a literal here; this reads it from what the function EMITS. A field added to
-    ``GroundedAnswer`` and forgotten in ``types.ts`` fails here without anyone editing a list.
-    """
-    source = TWIN.read_text(encoding="utf-8")
-    for key in answer_to_wire(_answer()):
-        assert re.search(rf"\breadonly {key}\b", source), f"types.ts declares no `{key}`"
-
-
-def test_the_wire_source_regions_are_addresses_and_the_twin_says_they_are_citations() -> None:
-    """The one field that is NOT a clean twin, asserted so nobody assigns the wire object across.
-
-    ``types.ts``'s ``sourceRegions`` is ``Citation[]`` — anchor plus resolution — and
-    ``@papertree/anchoring`` is TypeScript-only, so Python emits the ADDRESS an anchor is minted
-    from. ``apps/web/src/components/inspector/liveAnswerSource.ts`` is the conversion. If this
-    ever stops being true, the two sides have silently agreed on different things.
-    """
-    source = TWIN.read_text(encoding="utf-8")
-    assert re.search(r"readonly sourceRegions: readonly Citation\[\]", source)
-    region = answer_to_wire(
-        _answer(source_regions=(SourceRegion(block_id="blk_a", page_index=0, bbox=(0, 0, 1, 1)),))
-    )["sourceRegions"][0]
-    assert "anchor" not in region and "resolution" not in region
 
 
 # ── what the contract refuses to represent ───────────────────────────────────────────────
