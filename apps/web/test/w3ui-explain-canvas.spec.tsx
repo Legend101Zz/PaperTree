@@ -80,10 +80,10 @@ describe('the canvas toast clock', () => {
 
     act(() => showCanvasToast({ message: 'Again', href: '/paper/x/canvas' }));
     const toast = screen.getByTestId('canvas-toast');
-    fireEvent.mouseEnter(toast);
+    fireEvent.pointerEnter(toast);
     await tick(60_000);
     expect(screen.getByTestId('canvas-toast')).toBeTruthy();
-    fireEvent.mouseLeave(toast);
+    fireEvent.pointerLeave(toast);
     await tick(1000);
     expect(screen.getByTestId('canvas-toast')).toBeTruthy();
     // Focus pauses as well, and "Open canvas" is a real link in the tab order.
@@ -94,6 +94,39 @@ describe('the canvas toast clock', () => {
     expect(screen.getByTestId('canvas-toast')).toBeTruthy();
     fireEvent.keyDown(link, { key: 'Escape' });
     expect(screen.queryByTestId('canvas-toast')).toBeNull();
+  });
+});
+
+describe('the canvas toast and the keyboard', () => {
+  afterEach(() => {
+    act(() => dismissCanvasToast());
+  });
+
+  it('moves a keyboard user to Open canvas and Escape puts them back', async () => {
+    const button = document.createElement('button');
+    button.textContent = 'Send to canvas';
+    document.body.appendChild(button);
+    button.focus();
+    button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    // The button disables itself while it works and drops focus, as the real one does.
+    button.blur();
+    act(() => showCanvasToast({ message: 'Answer added to your canvas.', href: '/paper/x/canvas' }));
+    const link = screen.getByRole('link', { name: 'Open canvas' });
+    expect(document.activeElement).toBe(link);
+    fireEvent.keyDown(link, { key: 'Escape' });
+    expect(screen.queryByTestId('canvas-toast')).toBeNull();
+    expect(document.activeElement).toBe(button);
+    button.remove();
+  });
+
+  it('leaves focus alone after a mouse press', () => {
+    const button = document.createElement('button');
+    document.body.appendChild(button);
+    button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    window.dispatchEvent(new Event('pointerdown'));
+    act(() => showCanvasToast({ message: 'Passage added to your canvas.', href: '/paper/x/canvas' }));
+    expect(document.activeElement).not.toBe(screen.getByRole('link', { name: 'Open canvas' }));
+    button.remove();
   });
 });
 

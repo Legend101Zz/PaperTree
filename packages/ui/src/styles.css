@@ -2917,3 +2917,12 @@ span.pt-paper .pt-paper__cite {
 .pt-explain__prose li + li {
   margin-block-start: 4px;
 }
+
+/* The reset leaves lists without markers; an answer's bullets and numbers must show. */
+.pt-explain__prose ul {
+  list-style: disc;
+}
+
+.pt-explain__prose ol {
+  list-style: decimal;
+}

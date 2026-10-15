@@ -24,7 +24,7 @@ export type Block =
   | { readonly k: 'ul'; readonly items: readonly (readonly Inline[])[] }
   | { readonly k: 'ol'; readonly start: number; readonly items: readonly (readonly Inline[])[] };
 
-export interface ParseOptions {
+interface ParseOptions {
   /** The text is still arriving: an unclosed marker at the end is dropped instead of shown. */
   readonly streaming?: boolean;
 }
@@ -79,7 +79,7 @@ function glueTrailing(nodes: Inline[]): Inline[] {
   return out;
 }
 
-export function parseInline(source: string, options: ParseOptions = {}, depth = 0): Inline[] {
+function parseInline(source: string, options: ParseOptions = {}, depth = 0): Inline[] {
   const streaming = options.streaming === true;
   const out: Inline[] = [];
   let buffer = '';

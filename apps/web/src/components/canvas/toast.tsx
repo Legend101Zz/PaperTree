@@ -21,6 +21,24 @@ const HOST_ID = 'pt-canvas-toast-host';
 let root: Root | null = null;
 let seq = 0;
 
+/**
+ * How the last gesture was made, and on what. A keyboard "Send to canvas" disables its own button
+ * while it works, which drops focus to the page, so the toast cannot ask `document.activeElement`
+ * afterwards; it remembers the last keyboard target instead, until a pointer press replaces it.
+ */
+let keyboardOrigin: HTMLElement | null = null;
+if (typeof window !== 'undefined') {
+  window.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.key === 'Tab' || event.key === 'Shift' || event.key === 'Escape') return;
+      keyboardOrigin = event.target instanceof HTMLElement ? event.target : null;
+    },
+    true,
+  );
+  window.addEventListener('pointerdown', () => (keyboardOrigin = null), true);
+}
+
 /** How long a toast stays when nobody is pointing at it or focused in it. */
 export const TOAST_MS = 8000;
 
@@ -51,25 +69,18 @@ function Toast({ content, onDismiss }: { content: CanvasToastContent; onDismiss:
     };
   }, [paused, onDismiss]);
   const link = useRef<HTMLAnchorElement>(null);
-  const previous = useRef<Element | null>(null);
+  const previous = useRef<HTMLElement | null>(null);
   // A keyboard user who pressed "Send to canvas" lands on "Open canvas" (it is otherwise at the end
   // of the page); Escape or Dismiss puts them back where they were. A mouse click moves nothing.
   useEffect(() => {
-    previous.current = document.activeElement;
-    let byKeyboard = false;
-    try {
-      byKeyboard =
-        previous.current !== document.body && previous.current?.matches(':focus-visible') === true;
-    } catch {
-      byKeyboard = false;
-    }
-    if (byKeyboard) link.current?.focus();
+    previous.current = keyboardOrigin;
+    if (keyboardOrigin !== null) link.current?.focus();
   }, []);
   const close = (): void => {
     const back = previous.current;
     const hadFocus = document.activeElement !== null && link.current?.parentElement?.contains(document.activeElement) === true;
     onDismiss();
-    if (hadFocus && back instanceof HTMLElement && back.isConnected) back.focus();
+    if (hadFocus && back !== null && back.isConnected) back.focus();
   };
   const leaving = (event: FocusEvent<HTMLDivElement>): void => {
     if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false);
@@ -80,8 +91,8 @@ function Toast({ content, onDismiss }: { content: CanvasToastContent; onDismiss:
       role="status"
       aria-live="polite"
       data-testid="canvas-toast"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
       onFocus={() => setFocused(true)}
       onBlur={leaving}
       onKeyDown={(event) => {
