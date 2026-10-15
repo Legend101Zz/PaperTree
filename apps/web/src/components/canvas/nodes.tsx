@@ -15,6 +15,8 @@ import { AiText, PaperText } from '@papertree/ui';
 import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
+import { RichText } from '@/components/explain/RichText';
+
 import { useCanvasActions } from './CanvasContext';
 import type { PtNode } from './model';
 
@@ -82,11 +84,13 @@ export function ExcerptNode({ id, data, selected }: NodeProps<PtNode>) {
 }
 
 export function ExplanationNode({ id, data, selected }: NodeProps<PtNode>) {
+  const ctx = useCanvasActions();
   const node = data.node;
+  const citations = (node.source_message_id === null ? undefined : ctx.citations?.get(node.source_message_id)) ?? [];
   return (
     <Frame id={id} selected={selected} kind="explanation" label={node.title ?? 'Explanation'}>
       <AiText>
-        <p className="pt-cv-pre">{node.body}</p>
+        <RichText text={node.body} citations={citations} citeAs="label" />
       </AiText>
     </Frame>
   );

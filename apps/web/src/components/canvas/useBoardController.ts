@@ -177,21 +177,29 @@ export function useBoardController(paperId: string): BoardController {
     setNotice(null);
   }, []);
 
-  /** `card` names the card a stale-version refusal was about, so the notice can say which. */
+  /**
+   * `cardId` is the card a stale-version refusal was about. The notice names it by what the SERVER
+   * has after the reload, never by the reader's unsaved text still on the card when the save failed.
+   */
   const failed = useCallback(
-    (error: unknown, fallback: string, card?: string) => {
+    (error: unknown, fallback: string, cardId?: string) => {
       if (!aliveRef.current) return;
       if (error instanceof ApiError && error.code === 'stale_version') {
         staleShown.current = true;
-        setNotice(
-          `${staleSubject(card)} was changed somewhere else. The latest version is shown.`,
-        );
         if (staleTimer.current !== null) clearTimeout(staleTimer.current);
         staleTimer.current = setTimeout(clearStale, STALE_NOTICE_MS);
-      } else {
-        staleShown.current = false;
-        setNotice(sentence(error, fallback));
+        void reload().then(() => {
+          if (!aliveRef.current || !staleShown.current) return;
+          const fresh =
+            cardId === undefined ? undefined : nodesRef.current.find((n) => n.id === cardId);
+          setNotice(
+            `${staleSubject(fresh === undefined ? undefined : cardName(fresh.data.node))} was changed somewhere else. The latest version is shown.`,
+          );
+        });
+        return;
       }
+      staleShown.current = false;
+      setNotice(sentence(error, fallback));
       void reload();
     },
     [clearStale, reload],
@@ -223,11 +231,10 @@ export function useBoardController(paperId: string): BoardController {
             clearStale();
           }
         } catch (error) {
-          const here = nodesRef.current.find((n) => n.id === id);
           failed(
             error,
             "Couldn't save that change. The canvas was reloaded from your last saved version.",
-            here === undefined ? undefined : cardName(here.data.node),
+            id,
           );
         }
       };
