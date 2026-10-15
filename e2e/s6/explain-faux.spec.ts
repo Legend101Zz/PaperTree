@@ -137,28 +137,40 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
     await panel.locator('[data-citation-id]').first().click();
     const flash = page.locator('svg [data-flash="true"] polygon');
     await expect(flash.first()).toBeVisible({ timeout: 10_000 });
-    const probe = await flash.first().boundingBox();
-    expect(probe).not.toBeNull();
-    const under = await page.evaluate(
-      ([x, y]) => {
-        const el = document.elementFromPoint(x, y);
-        return {
-          inSpan: el?.closest('.papertree-text-layer span') !== null && el !== null,
-          tag: el?.tagName ?? 'none',
-          cls: el?.className?.toString() ?? '',
-          inPanel: el?.closest('[data-explain-panel]') !== null,
-        };
-      },
-      [
-        (probe?.x ?? 0) + (probe?.width ?? 0) / 2,
-        (probe?.y ?? 0) + (probe?.height ?? 0) / 2,
-      ] as const,
+    // Every polygon of the flash, sampled on a grid INSIDE its box. A passage of two lines is one
+    // polygon whose box centre is the gap between the lines, so a single centre point proves
+    // nothing; the grid hits the text lines, and what is under them must be the page's text layer.
+    const boxes = await flash.evaluateAll((nodes) =>
+      nodes.map((n) => {
+        const r = n.getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+      }),
     );
-    note(`chip flash centre -> ${JSON.stringify(under)}`);
-    expect(under.inPanel, 'the flash must not sit under the drawer').toBe(false);
-    expect(under.inSpan, 'elementFromPoint at the flash centre must be a text-layer span').toBe(
-      true,
-    );
+    expect(boxes.length).toBeGreaterThan(0);
+    const under = await page.evaluate((all) => {
+      const hits: string[] = [];
+      let samples = 0;
+      let inPanel = 0;
+      for (const box of all) {
+        for (const fy of [0.2, 0.35, 0.5, 0.65, 0.8]) {
+          for (const fx of [0.1, 0.3, 0.5, 0.7, 0.9]) {
+            samples += 1;
+            const el = document.elementFromPoint(box.x + box.width * fx, box.y + box.height * fy);
+            if (el === null) continue;
+            if (el.closest('[data-explain-panel]') !== null) inPanel += 1;
+            const span = el.closest('.papertree-text-layer span');
+            if (span !== null) hits.push((span.textContent ?? '').trim().slice(0, 40));
+          }
+        }
+      }
+      return { samples, inPanel, spanHits: hits.length, spans: Array.from(new Set(hits)) };
+    }, boxes);
+    note(`chip flash: ${String(boxes.length)} polygon(s), ${JSON.stringify(under)}`);
+    expect(under.inPanel, 'the flash must not sit under the drawer').toBe(0);
+    expect(
+      under.spanHits,
+      'the points inside the flash must land on the page text layer (the cited passage)',
+    ).toBeGreaterThan(0);
     await page.screenshot({ path: shot('c04-chip-flash-1440.png') });
 
     // ── the summary: progress, bullets with chips ──
@@ -193,5 +205,15 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
       `reload: cached summary shown (${String(bulletCount)} bullets); ai_runs ${String(runsAfterSummary)} unchanged`,
     );
     await page.screenshot({ path: shot('c06-summary-cached-1440.png') });
+
+    // ── Esc closes the drawer and focus goes back to the launcher, not <body> ──
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('complementary', { name: 'Explain' })).toHaveCount(0);
+    const focused = await page.evaluate(() => ({
+      tag: document.activeElement?.tagName ?? 'none',
+      text: (document.activeElement?.textContent ?? '').trim(),
+    }));
+    note(`after Esc, focus is on ${JSON.stringify(focused)}`);
+    expect(focused).toEqual({ tag: 'BUTTON', text: 'Ask AI' });
   });
 });

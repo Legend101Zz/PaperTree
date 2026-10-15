@@ -2334,6 +2334,22 @@ span.pt-paper .pt-paper__cite {
   resize: none;
 }
 
+/* A phone sheet at the half detent is short. It opens a little taller than half, and the composer
+   gives its height back to the answer. The sheet sets its height inline, hence !important. */
+@media (max-width: 767px) {
+  .pt-explain-sheet[data-detent='half'] {
+    height: 64% !important;
+  }
+
+  .pt-explain__input {
+    min-block-size: 40px;
+  }
+
+  .pt-explain__composer {
+    padding: 8px 16px;
+  }
+}
+
 .pt-explain__sr {
   position: absolute;
   inline-size: 1px;
@@ -2351,12 +2367,15 @@ span.pt-paper .pt-paper__cite {
   box-shadow: var(--pt-float-shadow);
 }
 
+/* Chips sit on their own row under the sentence they support. Inline pills 32 px tall would
+   stretch every text line they sit in, and 22 px pills have hit areas that overlap on the next
+   line. Each pill is 32 px tall with a 4 px hit-area margin, and the 8 px gap keeps the 40 px
+   targets from overlapping. */
 .pt-chips {
-  display: inline-flex;
+  display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-inline-start: 6px;
-  vertical-align: baseline;
+  gap: 8px;
+  margin-block-start: 6px;
 }
 
 .pt-chip {
@@ -2364,7 +2383,8 @@ span.pt-paper .pt-paper__cite {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 1px 8px;
+  min-block-size: 32px;
+  padding: 1px 12px;
   font: inherit;
   font-size: 0.75rem;
   line-height: 1.5;
@@ -2380,7 +2400,7 @@ span.pt-paper .pt-paper__cite {
 .pt-chip::after {
   content: '';
   position: absolute;
-  inset: -10px -4px;
+  inset: -4px;
 }
 
 .pt-chip:hover {
@@ -2413,7 +2433,7 @@ span.pt-paper .pt-paper__cite {
   }
 }
 
- * S7 canvas (additive block: owned by track S7; nothing above this line is touched)
+* S7 canvas (additive block: owned by track S7; nothing above this line is touched)
  *
  * Every canvas surface draws from the tokens above. The v0.2 revamp restyles this block and the
  * `--xy-*` bridge below without touching `components/canvas/**`.

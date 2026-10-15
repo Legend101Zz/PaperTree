@@ -18,10 +18,11 @@ export interface SummaryViewProps {
   readonly state: SummaryState;
   readonly onCite: (citation: Citation) => void;
   readonly onRetry: () => void;
+  readonly onRegenerate: () => void;
   readonly onStop: () => void;
 }
 
-export function SummaryView({ state, onCite, onRetry, onStop }: SummaryViewProps): ReactNode {
+export function SummaryView({ state, onCite, onRetry, onRegenerate, onStop }: SummaryViewProps): ReactNode {
   const { phase, summary } = state;
 
   if (phase === 'idle' || phase === 'loading' || phase === 'streaming') {
@@ -78,6 +79,18 @@ export function SummaryView({ state, onCite, onRetry, onStop }: SummaryViewProps
         </ul>
       </AiText>
       <UsageLine usage={state.usage} />
+      {phase === 'partial' || summary.status === 'partial' ? (
+        <div className="pt-explain__actions">
+          <button
+            type="button"
+            className="pt-btn pt-btn--outline"
+            data-summary-regenerate
+            onClick={onRegenerate}
+          >
+            Regenerate summary
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

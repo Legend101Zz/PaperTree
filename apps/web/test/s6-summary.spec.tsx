@@ -97,4 +97,37 @@ describe('the paper summary', () => {
     await open();
     expect((await screen.findByRole('alert')).textContent).toContain("today's AI budget");
   });
+
+  it('a cached PARTIAL summary can be regenerated: Regenerate POSTs {regenerate: true} and shows the new one', async () => {
+    let gets = 0;
+    const { calls } = installFetch({
+      [`GET /papers/${PAPER}/summary`]: () => {
+        gets += 1;
+        return jsonResponse(200, gets <= 1 ? { state: 'partial', summary: SUMMARY('partial') } : { state: 'ready', summary: SUMMARY('complete', 7) });
+      },
+      [`POST /papers/${PAPER}/summary`]: (_c, signal) =>
+        sseResponse([run({ thread_id: null }), usage(), done()], { signal }),
+    });
+    render(<Harness />);
+    await open();
+    const button = await screen.findByRole('button', { name: 'Regenerate summary' });
+    expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+    fireEvent.click(button);
+    await waitFor(() => expect(document.querySelectorAll('[data-summary-bullet]')).toHaveLength(7));
+    const posts = calls.filter((c) => c.method === 'POST');
+    expect(posts).toHaveLength(1);
+    expect(posts[0]?.body).toEqual({ regenerate: true });
+    expect(document.querySelector('[data-summary-warning]')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Regenerate summary' })).toBeNull();
+  });
+
+  it('a complete summary has no Regenerate button', async () => {
+    installFetch({
+      [`GET /papers/${PAPER}/summary`]: () => jsonResponse(200, { state: 'ready', summary: SUMMARY('complete') }),
+    });
+    render(<Harness />);
+    await open();
+    await waitFor(() => expect(document.querySelectorAll('[data-summary-bullet]')).toHaveLength(5));
+    expect(screen.queryByRole('button', { name: 'Regenerate summary' })).toBeNull();
+  });
 });

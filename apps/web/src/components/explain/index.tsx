@@ -123,7 +123,7 @@ function Composer({
       <textarea
         id="pt-explain-question"
         className="pt-field pt-explain__input"
-        rows={2}
+        rows={1}
         maxLength={2000}
         value={value}
         placeholder="Ask a follow-up, or any question about the paper"
@@ -164,10 +164,18 @@ function Body({
   // Follow the answer as it grows, unless the reader has scrolled up to read.
   const last = state.messages[state.messages.length - 1];
   const growth = `${String(state.messages.length)}:${String(last?.text.length ?? 0)}:${last?.status ?? ''}:${String(last?.stopped ?? false)}:${String(last?.citations.length ?? 0)}`;
+  const epoch = state.epoch;
   useEffect(() => {
-    // A different view is a different scroll container: start at the end of it.
-    stick.current = true;
-  }, [state.view]);
+    // A new ask or a different view starts at the TOP: the passage and the "AI interpretation"
+    // label first, not the end of whatever was there. The view follows the answer only once the
+    // reader has sent a question of their own (below), so a short sheet does not open past the quote.
+    stick.current = false;
+    if (scroller.current !== null) scroller.current.scrollTop = 0;
+  }, [state.view, epoch]);
+  const questions = state.messages.filter((m) => m.role === 'user').length;
+  useEffect(() => {
+    if (questions > 0) stick.current = true;
+  }, [questions]);
   useEffect(() => {
     const el = scroller.current;
     if (el !== null && stick.current) el.scrollTop = el.scrollHeight;
@@ -193,7 +201,7 @@ function Body({
             type="button"
             className="pt-btn pt-btn--outline"
             disabled={offline}
-            onClick={controller.summarize}
+            onClick={() => controller.summarize()}
           >
             Summarize paper
           </button>
@@ -214,6 +222,9 @@ function Body({
             onCite={onCite}
             onRetry={() => {
               controller.summarize();
+            }}
+            onRegenerate={() => {
+              controller.summarize({ regenerate: true });
             }}
             onStop={controller.stopSummary}
           />
@@ -264,7 +275,17 @@ export function ExplainPanel({ controller }: ExplainPanelProps) {
   const desktop = useMediaQuery(DESKTOP);
   const [detent, setDetent] = useState<SheetDetent>('half');
   const asideRef = useRef<HTMLElement | null>(null);
+  const launcherRef = useRef<HTMLButtonElement | null>(null);
+  const wasOpen = useRef(false);
   const { state, closeExplain } = controller;
+
+  // Closing (Esc, the Close button, a dismissed sheet) hands focus back to the "Ask AI" launcher.
+  // Without this the panel's own element unmounts and focus falls to <body>, so a keyboard reader
+  // starts again from the top of the page.
+  useEffect(() => {
+    if (wasOpen.current && !state.open) launcherRef.current?.focus({ preventScroll: true });
+    wasOpen.current = state.open;
+  }, [state.open]);
 
   // A new ask opens at the readable height, not wherever the last one was left.
   useEffect(() => {
@@ -298,6 +319,7 @@ export function ExplainPanel({ controller }: ExplainPanelProps) {
     if (controller.paperId === null) return null;
     return (
       <button
+        ref={launcherRef}
         type="button"
         className="pt-explain__launch pt-btn pt-btn--primary"
         data-explain-launch

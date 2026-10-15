@@ -176,8 +176,11 @@ export interface ExplainController {
   readonly stop: () => void;
   /** Re-run a failed, stopped or partial answer. */
   readonly retry: (key: string) => void;
-  /** Show the paper summary: the cached one, or a new run when there is none. */
-  readonly summarize: () => void;
+  /**
+   * Show the paper summary: the cached one, or a new run when there is none. `regenerate` skips
+   * the cache and asks for a new run (the "Regenerate" action on a partial summary).
+   */
+  readonly summarize: (options?: { readonly regenerate?: boolean }) => void;
   readonly stopSummary: () => void;
 }
 
@@ -508,12 +511,14 @@ export function useExplainActions(options: { readonly paperId: string | null }):
 
   const summaryRun = useRef(0);
 
-  const summarize = useCallback((): void => {
+  const summarize = useCallback(
+    (options?: { readonly regenerate?: boolean }): void => {
+    const regenerate = options?.regenerate === true;
     dispatch({ type: 'view', view: 'summary' });
     const phase = stateRef.current.summary.phase;
-    if (paperId === null || phase === 'loading' || phase === 'streaming' || phase === 'ready') {
-      return;
-    }
+    if (paperId === null || phase === 'loading' || phase === 'streaming') return;
+    // A shown summary is kept, unless the reader asked for a new one.
+    if (phase === 'ready' && !regenerate) return;
     const run = (summaryRun.current += 1);
     const set = (patch: Partial<SummaryView>): void => {
       if (summaryRun.current === run) dispatch({ type: 'summary', patch });
@@ -537,13 +542,19 @@ export function useExplainActions(options: { readonly paperId: string | null }):
 
     void (async () => {
       try {
-        // The cached summary first: a reload costs no run.
-        const cached = await summaryApi.get(paperId);
-        if (cached.summary !== null && (cached.state === 'ready' || cached.state === 'partial')) {
-          set({ phase: cached.state, summary: cached.summary });
-          return;
+        // The cached summary first: a reload costs no run. Not when a new one was asked for.
+        if (!regenerate) {
+          const cached = await summaryApi.get(paperId);
+          if (cached.summary !== null && (cached.state === 'ready' || cached.state === 'partial')) {
+            set({ phase: cached.state, summary: cached.summary });
+            return;
+          }
         }
-        const start = await summaryApi.generate(paperId, {}, controller.signal);
+        const start = await summaryApi.generate(
+          paperId,
+          regenerate ? { regenerate: true } : {},
+          controller.signal,
+        );
         if (start.kind === 'cached') {
           const s = start.status;
           if (s.summary !== null)
@@ -579,7 +590,9 @@ export function useExplainActions(options: { readonly paperId: string | null }):
         set({ phase: 'failed', label: null, failure: failureOf(error) });
       }
     })();
-  }, [paperId]);
+    },
+    [paperId],
+  );
 
   const stopSummary = useCallback((): void => {
     const { runId, phase } = stateRef.current.summary;
