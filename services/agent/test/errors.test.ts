@@ -75,6 +75,12 @@ function done(result: {
   return last.data;
 }
 
+const toolUse = (id: string, handle: string) => ({
+  id,
+  name: 'get_passage',
+  input: { handle },
+});
+
 const err = (status: number, type: string, message: string): MockStep => ({
   kind: 'status',
   status,
@@ -167,14 +173,12 @@ describe('the real provider path against a mock Anthropic server', () => {
   });
 
   test('a spent tool budget over the real provider path: the final request is well formed and the answer is kept (S5F)', async () => {
-    const use = (id: string, handle: string) => ({
-      id,
-      name: 'get_passage',
-      input: { handle },
-    });
     const { agent, mock, tools } = await live([
-      { kind: 'stream', toolUses: [use('tu_1', 'b3'), use('tu_2', 'b4'), use('tu_3', 'b5')] },
-      { kind: 'stream', toolUses: [use('tu_4', 'b6')] },
+      {
+        kind: 'stream',
+        toolUses: [toolUse('tu_1', 'b3'), toolUse('tu_2', 'b4'), toolUse('tu_3', 'b5')],
+      },
+      { kind: 'stream', toolUses: [toolUse('tu_4', 'b6')] },
       { kind: 'stream', text: ['It regresses boxes directly [b1].'] },
     ]);
     const body = request(tools, { max_tool_calls: 2 });
@@ -201,8 +205,8 @@ describe('the real provider path against a mock Anthropic server', () => {
         .map((c) => c['tool_use_id']),
     );
     assert.ok(toolUses.length >= 4);
-    for (const use of toolUses)
-      assert.ok(toolResults.has(use['id']), `${String(use['id'])} answered`);
+    for (const call of toolUses)
+      assert.ok(toolResults.has(call['id']), `${String(call['id'])} answered`);
     const last = finalRequest.at(-1)!;
     assert.equal(last.role, 'user');
     assert.match(JSON.stringify(last.content), /tool budget for this task is used up/);
