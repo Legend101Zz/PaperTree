@@ -54,7 +54,10 @@ test.describe('S3 upload row', () => {
     await expect(page.locator('[data-testid=upload-queue] li')).toHaveCount(0);
 
     // The card exists at once (from the 202's `paper`) and finishes on its own.
-    const card = page.locator('[data-paper-id]').first();
+    // The reader's OWN card (`ppr_...`): the e2e stack turns the sample papers on, they sit first in
+    // the list and are Ready from the start, so `.first()` waited for nothing and the poll check
+    // below raced the real parse.
+    const card = page.locator('[data-paper-id^="ppr_"]').first();
     await expect(card).toBeVisible();
     await expect(card).toHaveAttribute('data-processing-state', /complete|partial/, {
       timeout: 120_000,
