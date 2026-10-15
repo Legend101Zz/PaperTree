@@ -1697,3 +1697,326 @@ span.pt-paper .pt-paper__cite {
     opacity: 0;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+ * S6 — the explain panel. ADDITIVE: nothing above this line is touched by this block.
+ * Every colour is an existing token; the panel re-skins when the tokens do.
+ * ───────────────────────────────────────────────────────────────────────────────────────────── */
+
+.pt-explain {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-end: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  inline-size: min(420px, 100vw);
+  color: var(--pt-ink);
+  background: var(--pt-panel-ground);
+  border-inline-start: 1px solid var(--pt-rule);
+  box-shadow: var(--pt-float-shadow);
+  font-family: var(--pt-font-ui);
+  animation: pt-explain-in 180ms ease-out;
+}
+
+.pt-explain:focus {
+  outline: none;
+}
+
+@keyframes pt-explain-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+
+.pt-explain__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 8px 8px 16px;
+  border-block-end: 1px solid var(--pt-rule);
+}
+
+.pt-explain__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.pt-explain-sheet .pt-sheet__body {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.pt-explain__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-block-size: 0;
+  font-family: var(--pt-font-ui);
+}
+
+.pt-explain__toolbar {
+  display: flex;
+  padding: 8px 16px 0;
+}
+
+.pt-explain__scroll {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 16px 16px;
+  overscroll-behavior: contain;
+}
+
+.pt-explain__scroll > * + * {
+  margin-block-start: 12px;
+}
+
+.pt-explain__quote .pt-paper {
+  max-inline-size: none;
+  font-size: 0.9375rem;
+  overflow-wrap: anywhere;
+}
+
+.pt-explain__fold {
+  margin-block-start: 4px;
+  color: var(--pt-accent);
+}
+
+.pt-explain__question {
+  margin: 16px 0 0;
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--pt-ink);
+  background: var(--pt-accent-soft);
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+
+.pt-explain__ai {
+  max-inline-size: none;
+  margin-block: 0;
+  overflow-wrap: anywhere;
+}
+
+.pt-explain__prose p,
+.pt-explain__prose ul,
+.pt-explain__prose ol {
+  margin: 0 0 8px;
+}
+
+.pt-explain__prose ul,
+.pt-explain__prose ol,
+.pt-explain__bullets {
+  padding-inline-start: 1.25rem;
+}
+
+.pt-explain__bullets {
+  margin: 0;
+  list-style: disc;
+}
+
+.pt-explain__bullets > li + li {
+  margin-block-start: 8px;
+}
+
+.pt-explain__prose code {
+  font-family: var(--pt-font-mono);
+  font-size: 0.85em;
+}
+
+.pt-explain__answer > * + * {
+  margin-block-start: 8px;
+}
+
+.pt-explain__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 0;
+  font-size: 0.8125rem;
+  color: var(--pt-derived-ink-muted);
+}
+
+.pt-explain__pulse {
+  flex: none;
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 50%;
+  background: var(--pt-derived-rule);
+  animation: pt-explain-pulse 1200ms ease-in-out infinite;
+}
+
+@keyframes pt-explain-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.pt-explain__skeleton {
+  display: grid;
+  gap: 8px;
+}
+
+.pt-explain__skeleton > span {
+  block-size: 10px;
+  border-radius: 6px;
+  background: var(--pt-derived-rule);
+  opacity: 0.18;
+}
+
+.pt-explain__skeleton > span:nth-child(odd) {
+  inline-size: 92%;
+}
+
+.pt-explain__skeleton > span:nth-child(even) {
+  inline-size: 68%;
+}
+
+.pt-explain__none,
+.pt-explain__empty,
+.pt-explain__note,
+.pt-explain__usage {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--pt-ink-muted);
+}
+
+.pt-explain__usage {
+  font-variant-numeric: tabular-nums;
+}
+
+.pt-explain__warn {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  color: var(--pt-ink);
+  border: 1px solid var(--pt-highlight-approx-stroke);
+  background: var(--pt-highlight-approx-fill);
+  border-radius: 12px;
+}
+
+.pt-explain__error {
+  padding: 12px;
+  font-size: 0.875rem;
+  border: 1px solid var(--pt-danger);
+  border-radius: 12px;
+}
+
+.pt-explain__error p {
+  margin: 0 0 8px;
+}
+
+.pt-explain__error p:last-child {
+  margin-block-end: 0;
+}
+
+.pt-explain__error-title {
+  font-weight: 600;
+  color: var(--pt-danger);
+}
+
+.pt-explain__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.pt-explain__composer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-block-start: 1px solid var(--pt-rule);
+  background: var(--pt-panel-ground);
+}
+
+.pt-explain__input {
+  min-block-size: 56px;
+  resize: none;
+}
+
+.pt-explain__sr {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.pt-explain__launch {
+  position: fixed;
+  inset-block-end: 16px;
+  inset-inline-end: 16px;
+  z-index: 25;
+  box-shadow: var(--pt-float-shadow);
+}
+
+.pt-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-inline-start: 6px;
+  vertical-align: baseline;
+}
+
+.pt-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  font: inherit;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--pt-accent);
+  background: var(--pt-ground-raised);
+  border: 1px solid var(--pt-accent);
+  border-radius: 999px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* The pill is small to sit in a line of text; its tap target is not. */
+.pt-chip::after {
+  content: '';
+  position: absolute;
+  inset: -10px -4px;
+}
+
+.pt-chip:hover {
+  background: var(--pt-accent-soft);
+}
+
+.pt-chip:focus-visible {
+  outline: 2px solid var(--pt-focus);
+  outline-offset: 2px;
+}
+
+.pt-chip[data-supported='false'] {
+  color: var(--pt-danger);
+  border-color: var(--pt-danger);
+  border-style: dashed;
+}
+
+.pt-chip__flag {
+  font-style: italic;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-explain {
+    animation: none;
+  }
+  .pt-explain__pulse {
+    animation: none;
+  }
+}

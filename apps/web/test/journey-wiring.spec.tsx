@@ -156,19 +156,17 @@ describe('D4 — a parsed paper reads as parsed', () => {
   });
 });
 
-describe('D6 — the Inspector is asked about the selection', () => {
-  it('the reader shell reads the selection instead of hardcoding the first block', async () => {
-    // THE DEFECT WAS ONE LINE and no behavioural test could reach it:
-    //     context={{ kind: 'selection', blockIds: [doc.blocks[0]?.id ?? ''], quote: title }}
-    // `ask-wiring.spec.tsx` builds its own context and asserts what the Inspector does with it, so
-    // it is blind to what the mount site passes. This asserts the mount site itself.
+describe('D6 — the explain panel is asked about the selection', () => {
+  it('the reader shell holds the live selection, and the Inspector is gone', async () => {
+    // THE DEFECT WAS ONE LINE and no behavioural test could reach it: the old Inspector was handed
+    // `blocks[0]` whatever was selected. S6 replaced it with the explain panel, which is asked
+    // about the Anchor the selection toolbar captured (`openExplain({anchor, quote})`), so the
+    // mount site no longer computes a context at all. What stays pinned: the shell receives the
+    // selection from the pane, and nothing of the old Inspector is mounted.
     const source = readFileSync(resolve(process.cwd(), 'src/app/paper/[id]/read/ReaderWorkspace.tsx'), 'utf8');
 
-    // The Inspector takes a computed context...
-    expect(source).toContain('context={inspectorContext}');
-    // ...which is derived from the live selection...
-    expect(source).toContain('props.selection?.blockIds');
-    // ...and the shell both holds that state and receives it from the pane.
+    expect(source).not.toContain('components/inspector');
+    expect(source).not.toContain('inspectorContext');
     expect(source).toContain('onSelectionChange={setSelection}');
   });
 

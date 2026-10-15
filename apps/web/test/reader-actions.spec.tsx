@@ -116,6 +116,13 @@ beforeEach(() => {
   fetchMock.mockReset();
   xhrConstructed.mockReset();
   vi.stubGlobal('fetch', fetchMock);
+  // The explain panel is a drawer from 768 px up and a sheet below it; this file asserts the drawer.
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query.includes('min-width'),
+    media: query,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  }));
   vi.stubGlobal(
     'XMLHttpRequest',
     class {
@@ -190,7 +197,7 @@ describe('ReaderActions — mounted by ReaderWorkspace, reached from inside the 
     expect(target).toBeDefined();
   });
 
-  it('openExplain opens the placeholder panel on the quote, in the paper register, sending nothing', async () => {
+  it('openExplain on a sample paper opens the panel on the quote, in the paper register, sending nothing', async () => {
     await mountReader();
     expect(screen.queryByRole('complementary', { name: 'Explain' })).toBeNull();
 
@@ -202,10 +209,10 @@ describe('ReaderActions — mounted by ReaderWorkspace, reached from inside the 
     expect(quote?.querySelector('cite')?.textContent).toBe(`p. ${String(target!.pageIndex + 1)}`);
     // The panel holds the paper's words and no model output, so it must not wear the AI mark.
     expect(panel.textContent).not.toContain(DERIVED_MARKER);
-    expect(panel.textContent).toContain('Nothing was sent.');
+    expect(panel.textContent).toContain('sample has no server to ask');
     expect(fetchMock).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close explain panel' }));
     expect(screen.queryByRole('complementary', { name: 'Explain' })).toBeNull();
   });
 
@@ -234,7 +241,7 @@ describe('ReaderActions — mounted by ReaderWorkspace, reached from inside the 
 });
 
 describe('the mount site itself', () => {
-  it('ReaderWorkspace mounts the provider and the explain panel, with the stub implementations', () => {
+  it('ReaderWorkspace mounts the provider and the explain panel, with the sendToCanvas stub', () => {
     // A source assertion, like journey-wiring's D6: the behaviour above proves the wiring works,
     // this pins WHERE it is, so a refactor that drops the mount fails with a named reason.
     const source = readFileSync(
