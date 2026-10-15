@@ -120,7 +120,7 @@ def test_the_answers_own_fields_are_carried_through_untouched() -> None:
 
 
 def test_the_three_coverages_the_docstring_quotes_are_the_ones_this_code_produces() -> None:
-    """``grounding.py`` quotes 1.00 / 0.125 / 0.00. Recomputed here rather than trusted.
+    """``grounding.py`` quotes 1.00 / 0.167 / 0.00. Recomputed here rather than trusted.
 
     AGENTS.md §2: *"Numbers get re-derived, not quoted."* If the tokeniser or the stopword list
     changes, this fails and the docstring has to be corrected — which is the only way a number
@@ -140,7 +140,7 @@ def test_the_three_coverages_the_docstring_quotes_are_the_ones_this_code_produce
         evidence,
     )
     assert verbatim == 1.0
-    assert round(paraphrase, 3) == 0.125
+    assert round(paraphrase, 3) == 0.167
     assert fabricated == 0.0
     assert fabricated < paraphrase < DEFAULT_COVERAGE_THRESHOLD < verbatim
 
@@ -395,3 +395,50 @@ def test_a_neutral_claim_is_not_reported_supported_by_verify_grounding() -> None
     )
     verified = verify_grounding(_answer((_draft(claim),)), TEXTS)
     assert verified.claims[0].supported is False
+
+
+def test_subscripts_and_superscripts_do_not_invent_a_number() -> None:
+    """NFKC would fold ``σ²₁`` to ``σ21`` and the claim would "state" the number 21 (found on the
+    held-out DDPM answers: a faithful sentence about the discrete decoder was called unsupported).
+    Only ligatures are expanded."""
+    from papertree_agent_tools import assess_claim
+
+    block = "the discrete decoder N(x0; µθ(x1, 1), σ2 1 I) at the last step of the reverse process"
+    claim = (
+        "The last step of the reverse process uses the discrete decoder N(x₀; µ_θ(x₁, 1), σ²₁ I)"
+    )
+    evidence = ClaimEvidence({"b": frozenset(content_tokens(block))}, ())
+    assert "21" not in content_tokens(claim)
+    assert assess_claim(claim, evidence).missing_numbers == ()
+
+
+def test_a_reference_to_the_papers_own_structure_is_not_a_number_to_find() -> None:
+    """ "Section 4.2", "Eq. (14)", "Table 2": the number names a place and the cited block rarely
+    carries it. A real statistic next to it is still checked."""
+    from papertree_agent_tools import assess_claim
+
+    block = "We compare the sample quality effects of reverse process parameterizations."
+    evidence = ClaimEvidence({"b": frozenset(content_tokens(block))}, ())
+    assert (
+        assess_claim(
+            "Section 4.2 compares the sample quality effects (Eq. 14)", evidence
+        ).missing_numbers
+        == ()
+    )
+    assert content_tokens("see Table 2 and Figure 3a") == ("see",)
+    wrong = assess_claim("Table 2 shows a sample quality of 94.2 percent", evidence)
+    assert wrong.missing_numbers == ("94.2",) and wrong.verdict == "unsupported"
+
+
+def test_words_that_talk_about_the_paper_do_not_count_as_missing_content() -> None:
+    """ "The authors also note several choices" is framing: counting `authors`, `note` and
+    `several` made every framing sentence look invented. Invented content is still invented."""
+    from papertree_agent_tools import assess_claim
+
+    block = "We ablate the choices of reverse process parameterization and training objective."
+    evidence = ClaimEvidence({"b": frozenset(content_tokens(block))}, ())
+    assert assess_claim("The authors also ablate several choices", evidence).verdict == "supported"
+    invented = assess_claim(
+        "The authors also recommend anchor pyramids and language decoders", evidence
+    )
+    assert invented.verdict == "unsupported"

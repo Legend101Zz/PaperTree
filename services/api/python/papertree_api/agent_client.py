@@ -620,6 +620,8 @@ class RunBroker:
                 tokens["input_tokens"] = None
                 tokens["output_tokens"] = None
                 tokens["reasoning_tokens"] = None
+                if not spent.cost_usd_est:
+                    tokens["cost_usd_est"] = None  # a zero cost beside unknown tokens is unknown
             tool_calls, agent_retries = outcome.tool_calls, outcome.retries
             entries: list[dict[str, Any]] | None = outcome.entries
             if status in ("error", "aborted") and not outcome.final_text and not entries:

@@ -77,7 +77,7 @@ does not exist is the defect AGENTS.md §2 names. What IS measured, in
 ``tests/test_grounding_verifier.py`` against a real parsed document:
 
     a claim quoted verbatim from a cited block            coverage 1.00
-    a claim paraphrasing a cited block in its own words   coverage 0.125 (flagged — FALSE POSITIVE)
+    a claim paraphrasing a cited block in its own words   coverage 0.167 (flagged — FALSE POSITIVE)
     a fabricated claim about a different subject          coverage 0.00
     the same claim with one digit changed (152 → 999)     coverage 0.83  (flagged by the NUMBER
                                                                           rule, not by coverage)
@@ -93,15 +93,26 @@ rather than folded into it.
 ═══ THREE VERDICTS, AND WHAT A CITATION'S FLAG IS MADE OF (S5F, 2026-10-15) ═══════════════════
 
 The first live journey (YOLO, MiniMax-M3) marked 6 of 6 citations of a well-grounded explanation
-"not verified". Two causes, both measured on 88 hand-labelled (claim, cited block) pairs: 53
-genuine (S), 17 interpretive (I), 18 not supported (N: 2 live misattributions and 16 fabrications
-written to cite real blocks), from 11 live answers. One labeller, a small set, tuned on that same
-set: read the rates as indicative.
+"not verified". Causes, found and measured on two hand-labelled sets (one labeller, small; the rule
+was chosen on the first, the second found three defects in it, listed below, so after the fixes
+neither is held out; ``services/api``'s ``test_grounding_labelled.py`` re-derives every number
+here):
+
+  FIRST  88 (claim, cited blocks) pairs: 53 genuine (S), 17 interpretive (I), 18 not supported (N:
+         2 live misattributions and 16 fabrications written to cite real blocks), from 11 live
+         answers on one YOLO paragraph.
+  HOLDOUT  50 pairs read off the post-change live journey (YOLO and DDPM, 45 S, 5 I) BEFORE any
+         verdict was computed.
 
   1. TYPESETTING. The PDF says ``classiﬁer`` and ``prob- lem``; the model says ``classifier`` and
-     ``problem``. Folding (NFKC, line-break hyphens joined, plurals stemmed, a hyphenated compound
-     covered by its words) moved 12 of the 53 genuine claims over the 0.6 line (13 -> 25).
-  2. AGGREGATION. A citation was supported only if EVERY claim citing it passed, so one interpretive
+     ``problem``. Folding (ligatures expanded, line-break hyphens joined, plurals stemmed, a
+     hyphenated compound covered by its words) fixes that. NFKC would be wrong: it folds the
+     ``σ²₁`` of a formula to ``σ21`` and invents the number 21 (a HOLDOUT defect).
+  2. THINGS THAT ARE NOT CONTENT. ``Section 4.2``, ``Eq. (14)``, ``Table 2`` name a place, and the
+     cited block rarely carries the number; "the authors also note several choices" talks about the
+     paper instead of saying what is in it. Neither counts as missing (two HOLDOUT defects). A real
+     statistic is still checked.
+  3. AGGREGATION. A citation was supported only if EVERY claim citing it passed, so one interpretive
      sentence ("This framing is a deliberate departure from …"), which reuses some of the passage's
      words and adds its own, took the citation down. The verdict is now one of THREE
      (:func:`assess_claim`): ``supported`` (coverage >= 0.6 and no missing number), ``unsupported``
@@ -109,14 +120,17 @@ set: read the rates as indicative.
      ``neutral`` (everything between, and claims too short to check). A citation is supported when
      at least one claim carrying it is ``supported`` and none is ``unsupported``.
 
-Measured with the OLD code (4a29bc7) and this one on the same 88 pairs and 55 citations:
+Measured with the OLD code (4a29bc7) and this one:
 
-                                        old                     new
-    genuine claims judged supported     13 / 53                 25 / 53
-    N claims judged supported (leaks)   2 / 18  (F09, F10)      3 / 18  (F09, F10, F15)
-    interpretive claims judged unsupp.  17 / 17                 3 / 17   (the other 14 are neutral)
-    citations truly supported marked    6 / 46  (recall 0.13)   26 / 46  (recall 0.57)
-    unsupported citations marked        0 / 9   (precision 1.0) 0 / 9    (precision 1.0)
+                                              old                  new
+    FIRST   genuine claims judged supported   13 / 53              31 / 53
+            N claims judged supported (leaks) 2 / 18 (F09, F10)    3 / 18 (F09, F10, F15)
+            I claims judged unsupported       17 / 17              5 / 17  (12 are neutral)
+            truly supported citations marked  6 / 46  (0.13)       30 / 46 (0.65)
+            unsupported citations marked      0 / 9                0 / 9   (precision 1.00 both)
+    HOLDOUT genuine claims judged supported   27 / 45              38 / 45   (bullets 11->14 of 14)
+            truly supported citations marked  14 / 30 (0.47)       23 / 30 (0.77)
+            unsupported citations marked      0 / 4                0 / 4   (precision 1.00 both)
 
 The three leaks are the kind this module has always said it cannot see: a comparator swap ("the
 slowest" for "the fastest"), a half-true claim with a wrong tail, and a role swap that reuses the
@@ -125,17 +139,16 @@ which also lifted faithful claims; the threshold stays 0.6 so that no claim is e
 than before except by being closer to the passage's own words. A fabricated number, an invented
 entity or an invented finding is ``unsupported`` in 9 of the 10 such fabrications in the set (all 4
 fabricated numbers; the one miss, F12, an invented finding that reuses some of the passage's words,
-is ``neutral``), and so are the 2 live misattributions. Lowering the
-threshold to 0.5 would lift the recall to about 0.72 and let one more role swap through; it was not
-shipped. A fabricated claim that merely shares a marker with an honest one reads ``neutral`` (and so
-keeps the citation supported) when it is a negation, a role swap or a comparator swap: 4 of 12
-such mixed cases in the set. Those are the limits of a lexical check, not a tuning gap.
+is ``neutral``), and so are the 2 live misattributions. Lowering the threshold to 0.5 would lift
+the FIRST recall further and let one more role swap through; it was not shipped. A fabricated
+claim that merely shares a marker with an honest one reads ``neutral`` (and so keeps the citation
+supported) when it is a negation, a role swap, a comparator swap or a half-true claim: 5 of 13 such
+mixed cases in the set. Those are the limits of a lexical check, not a tuning gap.
 """
 
 from __future__ import annotations
 
 import re
-import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Final, Literal
@@ -198,7 +211,22 @@ _STOPWORD_TEXT: Final = (
     "with would you your"
 )
 
-STOPWORDS: Final[frozenset[str]] = frozenset(_STOPWORD_TEXT.split())
+#: Words that talk ABOUT a paper instead of saying what is in it: "the authors also note several
+#: choices". They are in the claim's sentence and not in the cited passage, so counting them made
+#: every framing sentence ("The authors ablate several choices in Section 4.2") look invented.
+#: Reporting verbs and meta nouns only; no word with a technical sense is here.
+_DISCOURSE_TEXT: Final = (
+    "author authors paper papers passage passages excerpt text reader study section sections "
+    "also several various following however therefore thus hence moreover furthermore overall "
+    "state states stated note notes noted argue argues argued describe describes described "
+    "present presents presented propose proposes proposed introduce introduces introduced report "
+    "reports reported discuss discusses discussed mention mentions mentioned say says said claim "
+    "claims claimed explain explains explained show shows shown call calls called"
+)
+
+STOPWORDS: Final[frozenset[str]] = frozenset(_STOPWORD_TEXT.split()) | frozenset(
+    _DISCOURSE_TEXT.split()
+)
 
 #: A token is a maximal run of letters, digits, ``.``, ``-`` or ``_``. Keeping ``.`` and ``-``
 #: inside a token is what makes ``94.2``, ``ResNet-50`` and ``self-attention`` single tokens
@@ -213,17 +241,39 @@ _NUMERIC = re.compile(r"^-?[0-9]+(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?$")
 #: Dashes a PDF text layer or a model may use for a hyphen: hyphen, non-breaking hyphen, figure
 #: dash, en dash, minus sign, soft hyphen.
 _DASHES = dict.fromkeys(map(ord, "\u2010\u2011\u2012\u2013\u2212\u00ad"), "-")
+#: Typographic ligatures of a PDF text layer. NOT NFKC: it also folds the superscript and subscript
+#: digits of a formula (``σ²₁`` -> ``σ21``), which invents a number the paper never wrote.
+_LIGATURES = {
+    ord(ch): letters
+    for ch, letters in (
+        ("\ufb00", "ff"),
+        ("\ufb01", "fi"),
+        ("\ufb02", "fl"),
+        ("\ufb03", "ffi"),
+        ("\ufb04", "ffl"),
+        ("\ufb05", "st"),
+        ("\ufb06", "st"),
+    )
+}
+#: A reference to the paper's own structure: ``Section 4.2``, ``Eq. (14)``, ``Table 2``. The number
+#: names a place, not a finding, and the cited block usually does not carry it (the heading does).
+_STRUCTURE_REF = re.compile(
+    r"\b(?:sections?|sec\.|eqs?\.?|equations?|fig(?:ure)?s?\.?|tables?|algorithms?|"
+    r"appendix|appendices|chapters?|pages?|pp?\.)\s*\(?[0-9]+(?:\.[0-9]+)*[a-z]?\)?",
+    re.IGNORECASE,
+)
 #: A word broken across lines by the typesetter: ``prob- lem``.
 _LINE_BREAK_HYPHEN = re.compile(r"(?<=[A-Za-z])-\s+(?=[a-z])")
 _SUFFIXES: Final = (("ies", "y"), ("sses", "ss"), ("ing", ""), ("ed", ""), ("es", ""), ("s", ""))
 
 
 def _fold(text: str) -> str:
-    """The comparison form of paper or model text: NFKC (``ﬁ`` is ``fi``, a no-break hyphen is a
-    hyphen) and typesetter line-break hyphens joined. A claim says ``classifier`` and the PDF's
-    text layer says ``classiﬁer``; ``prob- lem`` and ``problem`` are one word."""
-    folded = unicodedata.normalize("NFKC", text).translate(_DASHES)
-    return _LINE_BREAK_HYPHEN.sub("", folded)
+    """The comparison form of paper or model text: ligatures expanded (``ﬁ`` is ``fi``), every dash
+    a hyphen, typesetter line-break hyphens joined, and references to the paper's own structure
+    (``Section 4.2``) removed. A claim says ``classifier`` and the PDF's text layer says
+    ``classiﬁer``; ``prob- lem`` and ``problem`` are one word."""
+    folded = text.translate(_LIGATURES).translate(_DASHES)
+    return _STRUCTURE_REF.sub(" ", _LINE_BREAK_HYPHEN.sub("", folded))
 
 
 def _stem(token: str) -> str:

@@ -97,7 +97,7 @@ def _running(
     db.create_run(
         db.owner_for(user_id),
         run_id=run_id,
-        paper_id=paper_id,
+        paper_id=paper_id,  # type: ignore[arg-type]
         generation=1,
         kind=kind,
         thread_id=None,
@@ -246,6 +246,18 @@ def test_an_aborted_run_with_no_reported_usage_stores_null_tokens_not_zero(tmp_p
         assert row["status"] == "aborted"
         assert row["input_tokens"] is None and row["output_tokens"] is None
         assert row["reasoning_tokens"] is None and row["cache_read_tokens"] == 4388
+    zero_cost = {
+        **patch,
+        "usage_totals": {**patch["usage_totals"], "cache_read": 0, "cost_usd_est": 0},
+    }
+    with ai_harness(tmp_path / "zero", Script("explain-ok", done_patch=zero_cost)) as h:
+        token, paper_id = alice_with_paper(h)
+        frames, _ = read_sse(explain(h, token, paper_id, paragraph_anchor()))
+        assert events(frames, "usage")[0]["cost_usd_est"] is None, (
+            "0 beside unknown tokens is unknown"
+        )
+        (row,) = h.rows("SELECT input_tokens, cost_usd_est FROM ai_runs")
+        assert row["input_tokens"] is None and row["cost_usd_est"] is None
     with ai_harness(tmp_path / "real", Script("explain-ok")) as h:
         token, paper_id = alice_with_paper(h)
         read_sse(explain(h, token, paper_id, paragraph_anchor()))
