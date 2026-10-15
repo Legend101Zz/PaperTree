@@ -131,7 +131,6 @@ const DEAD_EXPORT_LEDGER: readonly { readonly key: string; readonly why: string 
   // Each is used inside its own file only; the `export` is unneeded, but those files belong to
   // other slices, so S8a records the debt here instead of editing them.
   { key: 'lib/api/types.ts#EdgeKind', why: 'used in-file; S7 owns the canvas types' },
-  { key: 'lib/api/types.ts#Processing', why: 'used in-file by Paper; export unneeded' },
   { key: 'lib/fixtures.ts#FIXTURE_SLUGS', why: 'used in-file by FixtureSlug / isFixtureSlug' },
   { key: 'lib/fixtures.ts#FIXTURE_TITLES', why: 'used in-file only; export unneeded' },
   { key: 'lib/pdf/worker.ts#WORKER_SRC', why: 'used in-file only; export unneeded' },
