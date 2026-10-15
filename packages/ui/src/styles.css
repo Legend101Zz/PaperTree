@@ -2433,7 +2433,8 @@ span.pt-paper .pt-paper__cite {
   }
 }
 
-* S7 canvas (additive block: owned by track S7; nothing above this line is touched)
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+ * S7 canvas (additive block: owned by track S7; nothing above this line is touched)
  *
  * Every canvas surface draws from the tokens above. The v0.2 revamp restyles this block and the
  * `--xy-*` bridge below without touching `components/canvas/**`.
