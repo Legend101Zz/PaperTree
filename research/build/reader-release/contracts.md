@@ -873,6 +873,16 @@ The following is fixed in S0 so that no two slices edit the same file:
 | `NEXT_PUBLIC_PAPERTREE_API_URL` | web | `http://localhost:8000` | the only base-URL variable (`NEXT_PUBLIC_API_URL` is deleted) |
 | `NEXT_PUBLIC_PAPERTREE_FIXTURES` | web | **`off`** | `on` only in tests and demos; it gates `SAMPLE_PAPERS` too (#137) |
 
+*Added 2026-10-15 (S8b), after T0 (ADR-003) and S5F. These agent variables exist in `services/agent/src` and are listed in both `.env.example` files and the README, not in the table above:*
+
+| Variable | Process | Default | Notes |
+|---|---|---|---|
+| `PAPERTREE_MODEL` | agent | per kind (explain, ask: `MiniMax-M3.1-Flash-Preview`; summary: `MiniMax-M3`) | one model for every kind; `MiniMax-M3` or `MiniMax-M3.1-Flash-Preview`; an unknown id refuses to boot |
+| `PAPERTREE_MODEL_EXPLAIN` / `_ASK` / `_SUMMARY` | agent | `PAPERTREE_MODEL` | the model for one kind |
+| `PAPERTREE_MODEL_EFFORT` (+ `_EXPLAIN` / `_ASK` / `_SUMMARY`) | agent | `low` | Flash only: `low`, `medium`, `high` |
+| `PAPERTREE_AGENT_LOG_LEVEL` | agent | `info` | `debug` adds raw provider error text; never keys or tokens |
+| `PAPERTREE_AGENT_FAUX` | agent | unset | `1` = the scripted test model (tests only; the key is not read) |
+
 Removed: `PAPERTREE_LLM_API_KEY`, `PAPERTREE_LLM_MODEL`, `PAPERTREE_LLM_BASE_URL`, `PAPERTREE_LLM_TIMEOUT_SECONDS`, `PAPERTREE_VLM_API_KEY` and `LLM_API_KEY`.
 
 ## 8. Observability (journey E)
