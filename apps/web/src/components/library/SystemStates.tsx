@@ -12,7 +12,7 @@
  *
  *     THE PAPER IS READABLE IN SOURCE MODE THE MOMENT IT IS UPLOADED.
  *
- * Parsing gates GUIDED MODE, AUDIO and QUESTIONS — our readings of the paper. It does not gate the
+ * Parsing gates GUIDED MODE and QUESTIONS — our readings of the paper. It does not gate the
  * paper. Every state below therefore keeps a live path into Source mode, including `FailureState`:
  * the PDF arrived, the bytes are on disk, and the only thing that broke was our interpretation of
  * them. A "Processing…" screen that blocks reading would be the product telling a user their own
@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 import { PaperGrid } from './PaperGrid';
 import { ProgressMeter, TOUCH_TARGET, pointerActivate } from './primitives';
-import { SAMPLE_PAPERS, type LibraryPaper } from './types';
+import type { LibraryPaper } from './types';
 
 /** A subtle 45° hatch. Inline because it is geometry, not a theme token. */
 const HATCH: CSSProperties = {
@@ -51,7 +51,6 @@ export interface GatedAction {
 
 const DEFAULT_GATED_ACTIONS: readonly GatedAction[] = [
   { id: 'guided', label: 'Guided mode' },
-  { id: 'audio', label: 'Audio' },
   { id: 'questions', label: 'Questions' },
 ];
 
@@ -475,7 +474,7 @@ export interface OfflineStateProps {
   /** Why the AI actions are off. Shown, not swallowed. */
   readonly reason?: string;
   readonly disabledActions?: readonly GatedAction[];
-  /** What still works offline: downloaded papers, generated audio, existing highlights. */
+  /** What still works offline: what is already on this device. */
   readonly availableSummary?: string;
   readonly onRetryConnection?: () => void;
 }
@@ -492,7 +491,7 @@ export interface OfflineStateProps {
 export function OfflineState({
   reason = 'You are offline. Answers need the network.',
   disabledActions = DEFAULT_GATED_ACTIONS,
-  availableSummary = 'Downloaded papers, generated audio and your highlights all still work.',
+  availableSummary = 'Papers already open on this device still work. Uploading and questions need the network.',
   onRetryConnection,
 }: OfflineStateProps) {
   const reasonId = useId();
@@ -503,9 +502,9 @@ export function OfflineState({
       role="status"
       aria-labelledby={headingId}
       data-state="offline"
-      className="flex flex-col gap-3 rounded-lg border border-gray-300 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900"
+      className="pt-s3-alert pt-s3-alert--warn flex flex-col gap-3"
     >
-      <p id={headingId} className="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-white">
+      <p id={headingId} className="flex items-center gap-2 text-sm font-medium">
         <WifiOff className="h-4 w-4 shrink-0" aria-hidden="true" />
         Offline
       </p>
@@ -539,48 +538,46 @@ export function OfflineState({
 
 export interface EmptyLibraryProps {
   readonly onAddPaper: () => void;
-  /** Three, per §19.8. Defaults to the repository's golden fixtures. */
+  /** Sample papers to offer. Empty (the default) unless the fixtures flag is on (#137). */
   readonly samples?: readonly LibraryPaper[];
-  readonly onOpenSample: (paperId: string) => void;
+  readonly onOpenSample?: (paperId: string) => void;
 }
 
 /**
- * The empty library: ONE action, and three papers to try it on.
- *
- * "Plus three sample papers, so the product can be evaluated before committing a PDF." That clause
- * is the whole design. A first-run screen with a single upload button asks a stranger to hand over
- * a document before they have seen anything work. The samples are rendered through the real
- * `PaperGrid`, so what an evaluator meets on their first screen is the actual library card — badge,
- * progress meter and all — rather than a marketing illustration of one.
+ * The empty library: one sentence about what to do and ONE action. Sample papers are offered only
+ * when the caller passes some, which the library does only with `NEXT_PUBLIC_PAPERTREE_FIXTURES=on`
+ * (#137): a real user never meets a card that is not theirs.
  */
-export function EmptyLibrary({ onAddPaper, samples = SAMPLE_PAPERS, onOpenSample }: EmptyLibraryProps) {
+export function EmptyLibrary({ onAddPaper, samples = [], onOpenSample }: EmptyLibraryProps) {
   const headingId = useId();
 
   return (
     <section aria-labelledby={headingId} data-state="empty-library" className="flex flex-col gap-6 py-8">
       <div className="flex flex-col items-center gap-3 text-center">
-        <h2 id={headingId} className="text-lg font-medium text-gray-900 dark:text-white">
-          Your library is empty
+        <h2 id={headingId} className="pt-s3-h1" style={{ fontSize: '1.375rem' }}>
+          Add your first paper
         </h2>
-        <p className="max-w-md text-sm text-gray-600 dark:text-gray-400">
-          Add a PDF and start reading straight away — we read it in the background while you do.
+        <p className="pt-s3-muted max-w-md text-sm">
+          Upload a PDF and start reading straight away. We read it in the background while you do.
         </p>
         <button
           type="button"
-          className={`${TOUCH_TARGET} inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600`}
+          className="pt-s3-btn pt-s3-btn--primary"
           {...pointerActivate<HTMLButtonElement>(() => {
             onAddPaper();
           })}
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
-          Add your first paper
+          Upload a PDF
         </button>
       </div>
 
-      <div className="flex flex-col gap-3">
-        <h3 className="text-sm font-medium text-gray-900 dark:text-white">Or try one of these</h3>
-        <PaperGrid papers={samples} onOpen={onOpenSample} />
-      </div>
+      {samples.length > 0 && onOpenSample !== undefined ? (
+        <div className="flex flex-col gap-3">
+          <h3 className="text-sm font-medium">Or try one of these</h3>
+          <PaperGrid papers={samples} onOpen={onOpenSample} />
+        </div>
+      ) : null}
     </section>
   );
 }

@@ -5,19 +5,15 @@ import { useRouter } from 'next/navigation';
 import { isAuthenticated } from '@/lib/auth';
 
 export default function Home() {
-    const router = useRouter();
+  const router = useRouter();
 
-    useEffect(() => {
-        if (isAuthenticated()) {
-            router.push('/dashboard');
-        } else {
-            router.push('/login');
-        }
-    }, [router]);
+  useEffect(() => {
+    router.replace(isAuthenticated() ? '/dashboard' : '/login');
+  }, [router]);
 
-    return (
-        <div className="min-h-screen flex items-center justify-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
-        </div>
-    );
+  return (
+    <div className="pt-s3-page flex items-center justify-center" role="status" aria-label="Loading PaperTree">
+      <div className="pt-s3-skeleton" style={{ width: 160, minHeight: 8, height: 8 }} />
+    </div>
+  );
 }
