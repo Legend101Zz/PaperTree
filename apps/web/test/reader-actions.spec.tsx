@@ -209,16 +209,13 @@ describe('ReaderActions — mounted by ReaderWorkspace, reached from inside the 
     expect(screen.queryByRole('complementary', { name: 'Explain' })).toBeNull();
   });
 
-  it('sendToCanvas resolves, says so, and makes no request of any kind', async () => {
-    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+  it('sendToCanvas is the real one (S7): a fixture paper has no account, so it says so and sends nothing', async () => {
     await mountReader();
 
     fireEvent.click(screen.getByRole('button', { name: 'probe canvas' }));
 
     expect(probe.sent).toHaveLength(1);
-    await expect(probe.sent[0]).resolves.toBeUndefined();
-    expect(info).toHaveBeenCalledTimes(1);
-    expect(String(info.mock.calls[0]?.[0])).toMatch(/Send to canvas \(excerpt\) is not connected yet/);
+    await expect(probe.sent[0]).rejects.toThrow(/not in your library/);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(xhrConstructed).not.toHaveBeenCalled();
   });

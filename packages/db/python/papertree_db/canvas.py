@@ -310,7 +310,10 @@ class CanvasMixin(_Base):
                     ),
                 )  # fmt: skip
             except sqlite3.IntegrityError as exc:
-                raise _bad(f"the node could not be stored ({exc})") from exc
+                if "node_id" in str(exc):
+                    # Ids are global primary keys and client-minted: another owner holds this one.
+                    raise _bad("node_id: already in use") from exc
+                raise _bad("the node could not be stored") from exc
             row = self._one(
                 f"SELECT {_NODE_COLUMNS} FROM canvas_nodes WHERE owner_id = ? AND node_id = ?",
                 (owner_id, node_id),
@@ -401,7 +404,7 @@ class CanvasMixin(_Base):
                     (*params, owner_id, board_id, node_id, version),
                 ).rowcount
             except sqlite3.IntegrityError as exc:
-                raise _bad(f"the node could not be changed ({exc})") from exc
+                raise _bad("the node could not be changed") from exc
             row = self._one(
                 f"SELECT {_NODE_COLUMNS} FROM canvas_nodes "
                 "WHERE owner_id = ? AND board_id = ? AND node_id = ?",
@@ -457,11 +460,14 @@ class CanvasMixin(_Base):
             if found is None or found["n"] != 2:
                 raise _bad("from_node_id: both nodes must be on this board")
             now = now_iso()
-            self._conn.execute(
-                "INSERT INTO canvas_edges (edge_id, owner_id, board_id, from_node_id, "
-                "to_node_id, kind, label, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
-                (edge_id, owner_id, board_id, a, b, kind, label, now, now),
-            )
+            try:
+                self._conn.execute(
+                    "INSERT INTO canvas_edges (edge_id, owner_id, board_id, from_node_id, "
+                    "to_node_id, kind, label, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                    (edge_id, owner_id, board_id, a, b, kind, label, now, now),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise _bad("edge_id: already in use") from exc
             row = self._one(
                 f"SELECT {_EDGE_COLUMNS} FROM canvas_edges WHERE owner_id = ? AND edge_id = ?",
                 (owner_id, edge_id),

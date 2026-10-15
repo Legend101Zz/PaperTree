@@ -47,6 +47,7 @@ import {
 } from '@/components/inspector';
 import type { InspectorContext } from '@/components/inspector/types';
 import { sendToCanvas } from '@/components/canvas/sendToCanvas';
+import { useFocusFromCanvas } from '@/components/canvas/useFocusFromCanvas';
 import { ExplainPanel } from '@/components/explain';
 import { useExplainActions } from '@/components/explain/useExplainActions';
 import { ReaderActionsProvider, type ReaderActions } from '@/components/reader/actions';
@@ -441,6 +442,9 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
     [highlights.highlights, focusAnchor, narrow],
   );
 
+  // S7: the canvas's "Open source" lands here as `?focus=<node_id>`.
+  useFocusFromCanvas(paper.kind === 'api' ? paper.paperId : null, doc !== null, focusAnchor);
+
   /** The colour a new highlight gets: the last one the reader picked, amber at first. */
   const lastColor = useRef<HighlightColor>('amber');
   const onCreateHighlight = useCallback(
@@ -811,6 +815,7 @@ function ReaderWorkspaceView(props: ViewProps) {
         navigatorOpen={props.navigatorOpen}
         navigatorAvailable={doc !== null}
         highlightCount={props.highlights.highlights.length}
+        canvasHref={props.paper.kind === 'api' ? `/paper/${encodeURIComponent(props.paper.paperId)}/canvas` : null}
       />
 
       {props.stillReading ? (
@@ -904,6 +909,7 @@ function ReaderToolbarShell({
   navigatorOpen,
   navigatorAvailable,
   highlightCount,
+  canvasHref,
 }: {
   title: string;
   mode: ReadingMode;
@@ -916,6 +922,7 @@ function ReaderToolbarShell({
   navigatorOpen: boolean;
   navigatorAvailable: boolean;
   highlightCount: number;
+  canvasHref: string | null;
 }) {
   return (
     <header className="pt-reader__bar">
@@ -957,6 +964,11 @@ function ReaderToolbarShell({
           unavailableReason="Guided and Split open when the paper has been read."
         />
         {mode === 'guided' ? null : <ZoomControl mode={zoomMode} zoom={zoom} onModeChange={onZoomChange} />}
+        {canvasHref === null ? null : (
+          <a className="pt-btn" href={canvasHref}>
+            Canvas
+          </a>
+        )}
       </div>
     </header>
   );

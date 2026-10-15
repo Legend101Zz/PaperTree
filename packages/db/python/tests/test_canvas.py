@@ -290,3 +290,15 @@ def test_everything_is_owner_scoped(env: Env) -> None:
         )
     assert raised.value.code == "not_found"
     assert _node(env, "cn_a").x == 10
+
+
+def test_an_id_another_owner_holds_is_refused_with_a_sentence_not_sql(env: Env) -> None:
+    other = env.db.create_user("other@papertree.test").owner
+    document = load_fixture_paper()
+    document = {**document, "paper_id": "ppr_other_owner_paper"}
+    env.db.put_paper(other, document)
+    env.db.create_node(other, PaperId("ppr_other_owner_paper"), _note("cn_shared"))
+    with pytest.raises(CanvasRejected) as raised:
+        env.db.create_node(env.owner, env.paper_id, _note("cn_shared"))
+    assert raised.value.detail == "node_id: already in use"
+    assert _count(env.file, "canvas_boards") == 1  # only the other owner's board
