@@ -8,7 +8,7 @@
  * Every case is a REAL mouse gesture (`page.mouse`); the assertions read `getSelection()`.
  */
 import { expect, test } from '../harness/test';
-import { clearSelection, drag, openReader, revealText, spanBox, yolo } from './support';
+import { clearSelection, drag, gutterX, openReader, revealText, spanBox, yolo } from './support';
 
 const YOLO = yolo();
 
@@ -147,13 +147,14 @@ test.describe('RFIX2 R1b — blank-space starts', () => {
     {
       const first = await spanBox(page, 'We reframe object detection');
       const line = await spanBox(page, 'look once (YOLO) at an image');
+      const gutter = await gutterX(page);
       await page.mouse.move(first.left + 0.5, (first.top + first.bottom) / 2);
       await page.mouse.down();
       const steps = 8;
       for (let i = 1; i <= steps; i += 1) {
         const t = i / steps;
         await page.mouse.move(
-          first.left + 0.5 + (709 - first.left - 0.5) * t,
+          first.left + 0.5 + (gutter - first.left - 0.5) * t,
           (first.top + first.bottom) / 2 +
             ((line.top + line.bottom) / 2 - (first.top + first.bottom) / 2) * t,
         );

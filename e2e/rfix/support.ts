@@ -93,3 +93,36 @@ export async function spanBoxAny(
   if (box === null) throw new Error(`no rendered span contains ${JSON.stringify(needle)}`);
   return box;
 }
+
+/**
+ * The x of the middle of the gutter between the two columns on YOLO page 1, MEASURED: halfway
+ * between the right edge of the left column's text and the left edge of "We reframe ...". A fixed
+ * pixel (709) was the gutter on a macOS run and not on the Linux runner, whose page sits a scrollbar
+ * to the left.
+ */
+export async function gutterX(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const boxes = Array.from(
+      document.querySelectorAll(
+        '.papertree-page[data-page-index="0"] .papertree-text-layer span[data-item-index]',
+      ),
+    ).map((s) => {
+      const r = s.getBoundingClientRect();
+      return {
+        text: s.textContent ?? '',
+        left: r.left,
+        right: r.right,
+        top: r.top,
+        width: r.width,
+      };
+    });
+    const start = boxes.find((b) => b.text.includes('We reframe object detection'));
+    if (start === undefined) throw new Error('no "We reframe" span');
+    const leftEdge = Math.max(
+      ...boxes
+        .filter((b) => b.width > 0 && b.text.trim().length > 20 && b.right < start.left - 5)
+        .map((b) => b.right),
+    );
+    return (leftEdge + start.left) / 2;
+  });
+}

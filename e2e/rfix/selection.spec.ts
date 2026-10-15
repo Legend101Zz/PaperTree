@@ -15,7 +15,15 @@ import { join } from 'node:path';
 
 import { expect, test } from '../harness/test';
 import { REPO } from '../s4/support';
-import { clearSelection, drag, openReader, revealText, spanBox, yolo } from './support';
+import {
+  clearSelection,
+  drag,
+  gutterX as measureGutter,
+  openReader,
+  revealText,
+  spanBox,
+  yolo,
+} from './support';
 
 const YOLO = yolo();
 
@@ -119,7 +127,7 @@ test.describe('RFIX R1 — drags that end in blank space', () => {
     {
       const start = await spanBox(page, 'Humans glance at an image');
       const line = await spanBox(page, 'ing us to perform complex tasks like driving with');
-      const gutterX = 709;
+      const gutterX = await measureGutter(page);
       expect(gutterX).toBeGreaterThan(line.right);
       await drag(
         page,
@@ -149,7 +157,7 @@ test.describe('RFIX R1 — drags that end in blank space', () => {
       await drag(
         page,
         { x: first.left + 0.5, y: (first.top + first.bottom) / 2 },
-        { x: 709, y: (line.top + line.bottom) / 2 },
+        { x: await measureGutter(page), y: (line.top + line.bottom) / 2 },
       );
       const text = await selectedText();
       note(
