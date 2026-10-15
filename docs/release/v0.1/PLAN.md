@@ -76,19 +76,22 @@ against the ≤ 5 s bar (thinking dominates; T0 measures Flash).
 
 ## Spend and token ledger (MiniMax; cap $15 for the release)
 
-| When        | Who                                                                                          | Runs | Input tok | Output tok | Cost est.                 |
-| ----------- | -------------------------------------------------------------------------------------------- | ---- | --------- | ---------- | ------------------------- |
-| 12:10       | orchestrator live journey                                                                    | 5    | 50,299    | 3,108      | $0.0221                   |
-| 12:10–19:10 | every local live run: tracks, review agents, orchestrator walks, S9 (includes the row above) | 222  | 1,447,765 | 138,750    | ≈ $0.64                   |
-| 12:50–18:40 | CI live journey (9 runs that ran; about 4 `ai_runs` each)                                    | 9    | –         | –          | ≈ $0.12–0.24              |
-| **total**   |                                                                                              |      |           |            | **≈ $0.8 of the $15 cap** |
+| When        | Who                                                                                                                 | Runs | Input tok | Output tok | Cost est.                  |
+| ----------- | ------------------------------------------------------------------------------------------------------------------- | ---- | --------- | ---------- | -------------------------- |
+| 12:10       | orchestrator live journey                                                                                           | 5    | 50,299    | 3,108      | $0.0221                    |
+| 12:04–19:06 | every local live run with real token counts: tracks, review agents, orchestrator walks, S9 (includes the row above) | 161  | 1,311,074 | 129,731    | ≈ $0.59                    |
+| 13:27–18:39 | CI live journey (the 9 runs that ran; 25 were skipped)                                                              | 9    | –         | –          | ≈ $0.157                   |
+| **total**   |                                                                                                                     |      |           |            | **≈ $0.75 of the $15 cap** |
 
-How the local figure was counted: `ai_runs` rows with `provider = minimax`, summed across every data root in
-the evidence store and the worktrees, de-duplicated by `run_id`.
+How the local figure was counted:
 
-- **Faux runs are excluded:** the e2e scratch roots, and runs with first text under 500 ms. The faux agent
-  writes rows that look real (see the v0.2 issue on faux labelling).
+- **Source:** `ai_runs` rows with `provider = minimax`, summed across every data root in the evidence store
+  and the worktrees, and de-duplicated by `run_id`.
+- **What is excluded:** rows from e2e scratch roots and pytest temporary directories (test fixtures); rows
+  with first text under 500 ms; and rows with 0 or no tokens (faux-agent runs). Faux-agent rows otherwise
+  look real; see the v0.2 issue on faux labelling.
+- **Who counted:** the release's number-check review re-ran the count and corrected the first figure
+  (222 rows, $0.64), which still held about 29 pytest-fixture and 32 faux rows.
 - **Flash costs** are estimates on M3 rates.
-- **CI live runs:** two were measured, at $0.0263 and $0.0133; the range above assumes the other seven fall
-  between those.
+- **CI live runs:** the cost is summed from each run's `ai_runs` dump in its log.
 - **Not counted:** the judge-panel calls behind `QUALITY.md`, which did not go through PaperTree's agent.

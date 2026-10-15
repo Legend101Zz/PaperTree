@@ -13,7 +13,8 @@ Claude Design.
   The rest are from the earlier pre-S9 walk on release heads `7220396` and `d03f520`, so details fixed
   after those heads may differ.
 
-- **Papers shown:** YOLO (1506.02640), DDPM (2006.11239) and ViT (2010.11929). The test account uses an
+- **Sizes:** the files named `1414` are 1414 × 858 CSS px, the window size those shots were taken at. The rest are 1440 × 900 or 390 × 844.
+- **Papers shown:** YOLO (1506.02640), DDPM (2006.11239), ViT (2010.11929) and Mask R-CNN (1703.06870). The test account uses an
   `example.test` address.
 
 | File                                        | Screen                                                       |
@@ -29,10 +30,10 @@ Claude Design.
 | `reader-source-1440-light.png`              | Reader, Source mode                                          |
 | `reader-390-light.png`                      | Reader at 390 px, light (two-row header)                     |
 | `reader-390-dark.png`                       | Reader at 390 px, dark                                       |
-| `reader-guided-1440-light.png`              | Guided mode (DDPM p.2, opened from Source at the same place) |
-| `reader-split-1440-light.png`               | Split mode                                                   |
-| `reader-contents-highlights-1440-light.png` | Contents panel, Highlights tab                               |
-| `reader-unanchored-tray-1440-light.png`     | A highlight that could not be placed, shown in the tray      |
+| `reader-guided-1414-light.png`              | Guided mode (DDPM p.2, opened from Source at the same place) |
+| `reader-split-1414-light.png`               | Split mode                                                   |
+| `reader-contents-highlights-1414-light.png` | Contents panel, Highlights tab                               |
+| `reader-unanchored-tray-1414-light.png`     | A highlight that could not be placed, shown in the tray      |
 | `reader-still-reading-1440-light.png`       | A paper opened while it is still being read                  |
 | `explain-chip-flash-1440-light.png`         | An explanation; a citation chip has flashed its passage      |
 | `explain-summary-1440-light.png`            | Paper summary with cited bullets                             |
