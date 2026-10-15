@@ -3,6 +3,8 @@ name = "papertree"
 version = "0.0.0"
 description = "PaperTree v2 Python workspace root (virtual - not itself a distributable package)."
 requires-python = ">=3.12"
+license = "MIT"
+authors = [{ name = "Mrigesh Thakur" }]
 dependencies = [
     "papertree-document-ir",
     "papertree-db",
