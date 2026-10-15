@@ -1,187 +1,130 @@
 /**
- * qa/interpretation.spec — "A claim not supported by cited blocks is flagged, not silently
- * emitted." (EPIC-03-grounded-ai.md, acceptance criteria.)
+ * interpretation.spec — the model's words are marked as the model's, and an unsupported claim is
+ * flagged, not deleted (EPIC-03: "a claim not supported by cited blocks is flagged, not silently
+ * emitted"). Rewritten in S6 for the explain panel's `AnswerView` and `RichText`.
  *
- * THE THREE OUTCOMES, AND WHY THE TEST HAS TO DISTINGUISH ALL THREE
- *
- * The epic's rule has two halves that pull in opposite directions: *"unsupported claims are
- * FLAGGED, not deleted"* and *"not silently emitted"*. An implementation can satisfy either one
- * alone trivially, and both of the trivial satisfactions are wrong:
- *
- *   * emit the claim unchanged  -> satisfies "not deleted", violates "not silently emitted"
- *   * filter the claim out      -> satisfies "not silently emitted", violates "not deleted"
- *
- * So the assertions below always come in pairs: the claim's text IS in the document, AND it is
- * marked. Testing only the mark would pass against an implementation that renders the flag next to
- * a dropped claim; testing only the text would pass against one that emits it bare. This is the
- * same shape as AGENTS.md §2's "a green test may assert less than it appears to", and it is the
- * reason this file is longer than it looks like it needs to be.
- *
- * SEPARATION OF REGISTERS is the second criterion here. The epic's hard rule is that
- * "interpretation is separated from what the paper states — in the schema *and* in the UI". The
- * schema half is `types.ts` (two fields, not one). This file is the UI half.
+ * THE ASSERTIONS COME IN PAIRS, because either half alone is satisfied by a wrong implementation:
+ * a chip that is rendered AND says "not verified" (an emit-unchanged build has no word, a
+ * filter-it-out build has no chip), a quote that is in the paper's register AND an answer that is in
+ * the AI register AND the ⊙ appears on only one of them.
  */
-
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { AnswerView } from '../src/components/inspector/AnswerView';
-import type { Citation, GroundedAnswer } from '../src/components/inspector/types';
+import { DERIVED_MARKER, PaperText } from '@papertree/ui';
 
-afterEach(() => {
-  cleanup();
-});
+import { AnswerView } from '@/components/explain/AnswerView';
+import { RichText } from '@/components/explain/RichText';
+import type { ViewMessage } from '@/components/explain/useExplainActions';
+import type { Citation } from '@/lib/api/types';
 
+import { citation } from './s6-support';
+
+afterEach(cleanup);
 const noop = (): void => {};
 
-/** A citation that resolved, so the chip renders enabled and the test is not about orphans. */
-function citation(label: string, blockId: string): Citation {
+function message(over: Partial<ViewMessage> = {}): ViewMessage {
   return {
-    label,
-    targetType: 'text',
-    anchor: {
-      anchorVersion: 1,
-      offsetUnit: 'unicode',
-      id: `anchor-${label}`,
-      doc: { paperId: 'ppr_x', pdfSha256: '', parserVersion: 'v1', textStreamId: 't' },
-      targetKind: 'citation',
-      provenanceClass: 'ai_generated',
-      selectors: [],
-      created: { mode: 'source', at: '1970-01-01T00:00:00.000Z', client: 'test' },
-    },
-    resolution: {
-      tier: 1,
-      score: 1,
-      state: 'anchored',
-      blockIds: [blockId],
-      polygons: [
-        [
-          [0, 0],
-          [10, 0],
-          [10, 10],
-        ],
-      ],
-      quads: [[0, 0, 10, 10]],
-      pageIndex: 3,
-      approximate: false,
-    },
-  } as Citation;
-}
-
-const SUPPORTED = 'The model uses eight parallel attention heads.';
-const UNSUPPORTED = 'The model therefore outperforms every subsequent architecture.';
-
-function answerWithOneUnsupportedClaim(): GroundedAnswer {
-  return {
-    states: SUPPORTED,
-    interpretation: 'Read practically, the head count is a width knob rather than a depth knob.',
-    supportingBlockIds: ['blk_aaaaaaaaaaaaaaaa'],
-    sourcePages: [3],
-    sourceRegions: [citation('1', 'blk_aaaaaaaaaaaaaaaa')],
-    confidence: 0.62,
-    unresolvedAmbiguities: ['Whether "heads" refers to encoder or decoder attention here.'],
-    claims: [
-      { text: SUPPORTED, supportedBy: ['blk_aaaaaaaaaaaaaaaa'], supported: true, reason: null },
-      {
-        text: UNSUPPORTED,
-        supportedBy: [],
-        supported: false,
-        reason: 'No cited block mentions a comparison with later architectures.',
-      },
-    ],
+    key: 'm1',
+    role: 'assistant',
+    text: 'The model uses eight heads [b1]. It therefore beats every later model [b2].',
+    messageId: 'msg_1',
+    runId: 'run_1',
+    status: 'complete',
+    stopped: false,
+    label: null,
+    failure: null,
+    citations: [citation('b1') as Citation, citation('b2', { supported: false }) as Citation],
+    usage: null,
+    question: 'q',
+    ...over,
   };
 }
 
-describe('qa/interpretation.spec — an unsupported claim is flagged, not deleted', () => {
-  it('renders the unsupported claim AND marks it — both halves, because either alone is wrong', () => {
+const view = (m: ViewMessage) =>
+  render(<AnswerView message={m} onCite={noop} onRetry={noop} onSendToCanvas={async () => undefined} />);
+
+describe('an unsupported claim is flagged, not deleted', () => {
+  it('keeps the claim on screen AND marks its chip "not verified" in words', () => {
+    view(message());
+    expect(screen.getByText(/It therefore beats every later model/)).toBeTruthy();
+    const chips = document.querySelectorAll<HTMLElement>('[data-citation-id]');
+    expect(chips).toHaveLength(2);
+    expect(chips[0]?.getAttribute('data-supported')).toBe('true');
+    expect(chips[1]?.getAttribute('data-supported')).toBe('false');
+    expect(chips[1]?.textContent).toContain('not verified');
+    expect(chips[1]?.getAttribute('aria-label')).toContain('not verified');
+    expect(chips[0]?.textContent).not.toContain('not verified');
+  });
+
+  it('an unchecked citation (supported: null) is neither verified nor flagged', () => {
+    view(message({ citations: [citation('b1', { supported: null }) as Citation], text: 'Claim [b1].' }));
+    const chip = document.querySelector<HTMLElement>('[data-citation-id]');
+    expect(chip?.getAttribute('data-supported')).toBe('unknown');
+    expect(chip?.textContent).not.toContain('not verified');
+  });
+});
+
+describe('the registers stay apart', () => {
+  it('the paper is PaperText with no marker; the model is AiText with the marker and the label', () => {
     render(
-      <AnswerView answer={answerWithOneUnsupportedClaim()} onNavigate={noop} onShowSource={noop} />,
+      <>
+        <PaperText as="blockquote">We reframe detection.</PaperText>
+        <AnswerView message={message()} onCite={noop} onRetry={noop} onSendToCanvas={async () => undefined} />
+      </>,
     );
+    const paper = document.querySelector('[data-register="paper"]');
+    const ai = document.querySelector('[data-register="ai"]');
+    expect(paper?.textContent).not.toContain(DERIVED_MARKER);
+    expect(ai?.textContent).toContain(DERIVED_MARKER);
+    expect(within(ai as HTMLElement).getByText('AI interpretation')).toBeTruthy();
+    expect(ai?.getAttribute('aria-label')).toMatch(/AI-generated/);
+    // The status, error, usage and actions are the interface's own voice, outside the AI block.
+    expect(ai?.contains(screen.getByRole('button', { name: 'Send to canvas' }))).toBe(false);
+  });
+});
 
-    // Half one: NOT DELETED. The text is on screen.
-    const claim = screen.getByText(UNSUPPORTED);
-    expect(claim, 'the unsupported claim must still be rendered — flagged, not deleted').not.toBeNull();
+describe('handles never reach the screen as text', () => {
+  const cites = [citation('b1') as Citation];
 
-    // Half two: NOT SILENTLY EMITTED. It carries the machine-readable mark...
-    const marked = claim.closest('[data-grounded="false"]');
-    expect(marked, 'the unsupported claim must be marked as ungrounded').not.toBeNull();
-
-    // ...and the reason is shown to the reader rather than swallowed into a log.
-    expect(
-      screen.getByText('No cited block mentions a comparison with later architectures.'),
-    ).not.toBeNull();
+  it('resolved handles become chips; an unknown handle is dropped', () => {
+    render(<RichText text="One [b1] two [b9]." citations={cites} onCite={noop} />);
+    expect(document.body.textContent).not.toMatch(/\[b\d+\]/);
+    expect(document.querySelectorAll('[data-citation-id]')).toHaveLength(1);
+    expect(document.body.textContent).toContain('One');
+    expect(document.body.textContent).toContain('two');
   });
 
-  it('announces the flag to a screen reader, not only to a stylesheet', () => {
+  it('while streaming, handles and a half-typed "[b" are hidden', () => {
+    render(<RichText text="Streaming now [b1] and then [b" citations={[]} streaming onCite={noop} />);
+    expect(document.body.textContent).toContain('and then');
+    expect(document.body.textContent).not.toMatch(/\[b/);
+  });
+
+  it('a citation the text never mentions is appended, not lost', () => {
+    render(<RichText text="No handles here." citations={cites} onCite={noop} />);
+    expect(document.querySelectorAll('[data-citation-id]')).toHaveLength(1);
+  });
+
+  it('a grouped handle [b1, b2] makes two chips; lists and bold render without raw markup', () => {
     render(
-      <AnswerView answer={answerWithOneUnsupportedClaim()} onNavigate={noop} onShowSource={noop} />,
+      <RichText
+        text={'- **Grid** cells [b1, b2]\n- plain `code`'}
+        citations={[citation('b1') as Citation, citation('b2') as Citation]}
+        onCite={noop}
+      />,
     );
-
-    // A colour is not an announcement. `reader/a11y.spec` treats visual-only state as a real
-    // failure, and "this sentence is not supported by its sources" is the least decorative piece
-    // of state in the product.
-    const region = screen.getByRole('note', {
-      name: /1 claim not supported by the cited sources/i,
-    });
-    expect(region).not.toBeNull();
+    expect(document.querySelectorAll('li')).toHaveLength(2);
+    expect(document.querySelector('strong')?.textContent).toBe('Grid');
+    expect(document.querySelector('code')?.textContent).toBe('code');
+    expect(document.querySelectorAll('[data-citation-id]')).toHaveLength(2);
+    expect(document.body.textContent).not.toContain('**');
   });
 
-  it('a fully supported answer renders no flag region at all — the non-vacuity control', () => {
-    // Without this, every assertion above would also pass against a component that renders the
-    // flag unconditionally.
-    const answer = answerWithOneUnsupportedClaim();
-    const allSupported: GroundedAnswer = {
-      ...answer,
-      claims: answer.claims.map((claim) => ({ ...claim, supported: true, reason: null })),
-    };
-
-    render(<AnswerView answer={allSupported} onNavigate={noop} onShowSource={noop} />);
-
-    expect(screen.queryByRole('note', { name: /not supported by the cited sources/i })).toBeNull();
-    expect(document.querySelector('[data-grounded="false"]')).toBeNull();
-  });
-
-  it('keeps interpretation in a different region from what the paper states', () => {
-    render(
-      <AnswerView answer={answerWithOneUnsupportedClaim()} onNavigate={noop} onShowSource={noop} />,
-    );
-
-    const states = document.querySelector('[data-answer-states]');
-    const interpretation = document.querySelector('[data-answer-interpretation]');
-    expect(states).not.toBeNull();
-    expect(interpretation).not.toBeNull();
-
-    // The load-bearing assertion: they are not the same node, and neither contains the other. A
-    // single field rendered as two paragraphs would pass a "both strings are present" check and
-    // fail this one.
-    expect(states).not.toBe(interpretation);
-    expect(states?.contains(interpretation ?? null)).toBe(false);
-    expect(interpretation?.contains(states ?? null)).toBe(false);
-  });
-
-  it('omits the interpretation region entirely when there is no interpretation', () => {
-    // An extractive answer has none, and inventing a paragraph to fill the slot is exactly the
-    // failure the separation exists to prevent.
-    const answer = { ...answerWithOneUnsupportedClaim(), interpretation: null };
-    render(<AnswerView answer={answer} onNavigate={noop} onShowSource={noop} />);
-
-    expect(document.querySelector('[data-answer-states]')).not.toBeNull();
-    expect(document.querySelector('[data-answer-interpretation]')).toBeNull();
-  });
-
-  it('refuses to render an answer that cannot name a source block', () => {
-    // `DerivedBlock` throws on an empty `derivedFrom`. Relied upon rather than guarded around:
-    // ungrounded derived content must not reach the screen at all (DESIGN.md §11.4).
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const ungrounded: GroundedAnswer = {
-      ...answerWithOneUnsupportedClaim(),
-      supportingBlockIds: [],
-    };
-
-    expect(() =>
-      render(<AnswerView answer={ungrounded} onNavigate={noop} onShowSource={noop} />),
-    ).toThrow(/derived_from/i);
-
-    spy.mockRestore();
+  it('a chip click reports its citation', () => {
+    const onCite = vi.fn();
+    render(<RichText text="X [b1]" citations={cites} onCite={onCite} />);
+    fireEvent.click(document.querySelector('[data-citation-id]') as Element);
+    expect(onCite).toHaveBeenCalledWith(cites[0]);
   });
 });

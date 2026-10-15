@@ -64,10 +64,6 @@ const ORPHAN_LEDGER: readonly { readonly file: string; readonly why: string }[] 
   // S8a: four API clients that exist and are pinned by tests (`lib-api-routes-*.spec.ts`) but that
   // no route imports yet. Each is wired by the slice named here (slice-plan.md, wave 2); whoever
   // wires one deletes its line, and this ledger FAILS (stale entry) until they do.
-  { file: 'lib/api/threads.ts', why: 'S6 (explain panel) wires it; #141' },
-  { file: 'lib/api/summary.ts', why: 'S6 (summary) wires it; #141' },
-  { file: 'lib/api/usage.ts', why: 'S6 (usage line) wires it; #141' },
-  { file: 'lib/api/boards.ts', why: 'S7 (canvas) wires it; #141' },
 ];
 
 function sourceFilesUnder(dir: string): string[] {
@@ -130,7 +126,6 @@ function importsOf(file: string): string[] {
 const DEAD_EXPORT_LEDGER: readonly { readonly key: string; readonly why: string }[] = [
   // Each is used inside its own file only; the `export` is unneeded, but those files belong to
   // other slices, so S8a records the debt here instead of editing them.
-  { key: 'lib/api/types.ts#EdgeKind', why: 'used in-file; S7 owns the canvas types' },
   { key: 'lib/fixtures.ts#FIXTURE_SLUGS', why: 'used in-file by FixtureSlug / isFixtureSlug' },
   { key: 'lib/fixtures.ts#FIXTURE_TITLES', why: 'used in-file only; export unneeded' },
   { key: 'lib/pdf/worker.ts#WORKER_SRC', why: 'used in-file only; export unneeded' },

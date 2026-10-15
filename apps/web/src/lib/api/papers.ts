@@ -69,64 +69,6 @@ export interface JobStatus {
   readonly error_code?: string | null;
 }
 
-/**
- * The `/ask` answer as it comes off the wire — `GroundedAnswer`'s field names, and NOT its types.
- *
- * ONE FIELD DIFFERS AND IT IS THE IMPORTANT ONE. `GroundedAnswer.sourceRegions` is `Citation[]`: a
- * resolved `Anchor` plus its `Resolution`. The server cannot produce one today, so it sends the
- * ADDRESS an anchor is minted from and `liveAnswerSource` mints it on this side. S5 replaces `/ask`
- * with threads, whose citations are server-minted Anchors (#124); S6 deletes this path.
- */
-export interface WireSourceRegion {
-  readonly blockId: string;
-  readonly pageIndex: number;
-  readonly bbox: readonly number[];
-  /** The server's bucket. Re-derived on this side from the parse the READER is looking at. */
-  readonly targetType: string;
-  /** e.g. `"p3 · equation"`. Built by the server from the parser's own page and block type. */
-  readonly label: string;
-}
-
-export interface WireClaim {
-  readonly text: string;
-  readonly supportedBy: readonly string[];
-  readonly supported: boolean;
-  readonly reason: string | null;
-}
-
-export interface WireAnswer {
-  readonly states: string;
-  readonly interpretation: string | null;
-  readonly supportingBlockIds: readonly string[];
-  readonly sourcePages: readonly number[];
-  readonly sourceRegions: readonly WireSourceRegion[];
-  readonly confidence: number;
-  readonly unresolvedAmbiguities: readonly string[];
-  readonly claims: readonly WireClaim[];
-}
-
-/** What the turn did, for the panel and for a log. Never the prompt, never the datamark. */
-export interface AskMeta {
-  readonly model: string;
-  readonly steps: number;
-  readonly inputTokens: number;
-  readonly outputTokens: number;
-  readonly toolCalls: readonly { readonly tool: string; readonly status: string }[];
-  readonly evidenceBlockIds: readonly string[];
-  readonly systemPromptHash: string;
-}
-
-export interface AskResponse {
-  readonly answer: WireAnswer;
-  readonly meta: AskMeta;
-}
-
-export interface AskBody {
-  readonly question: string;
-  /** snake_case: this is the server's field name, not ours. See `ask.py`'s `Ask` model. */
-  readonly block_ids: readonly string[];
-}
-
 export const papersApi = {
   /** A plain multipart POST. `uploadWithProgress` is the same request with progress and cancel. */
   upload: (file: File) => {
@@ -159,20 +101,6 @@ export const papersApi = {
     request<{ job_id: string; generation: number }>(`/papers/${seg(paperId)}/reparse`, {
       method: 'POST',
       body: json(reason === undefined ? {} : { reason }),
-    }),
-
-  /**
-   * One grounded agent turn over the pre-release `/ask` route. NOT streaming; S5 removes the route
-   * and S6 removes this call with the Inspector.
-   *
-   * `signal` is threaded through to `fetch` so the Inspector's abort actually cancels the request
-   * rather than only ignoring its result — an ask can cost several model round trips.
-   */
-  ask: (paperId: string, body: AskBody, signal?: AbortSignal) =>
-    request<AskResponse>(`/papers/${seg(paperId)}/ask`, {
-      method: 'POST',
-      body: json(body),
-      ...(signal === undefined ? {} : { signal }),
     }),
 
   /**
