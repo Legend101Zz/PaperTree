@@ -1927,7 +1927,14 @@ span.pt-paper .pt-paper__cite {
   border-radius: 8px;
   overflow-wrap: anywhere;
 }
-.pt-s3-cardlink:hover .pt-s3-card__title {
+.pt-s3-cardlink.pt-s3-card__title {
+  font-family: var(--pt-font-body);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.pt-s3-cardlink:hover .pt-s3-card__title,
+.pt-s3-cardlink.pt-s3-card__title:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
