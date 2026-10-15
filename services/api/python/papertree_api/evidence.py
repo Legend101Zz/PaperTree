@@ -97,6 +97,9 @@ QUOTE_MATCH_CHARS: Final = 80
 PAPER_CHANNEL: Final = "text_layer"
 
 _WHITESPACE: Final = re.compile(r"\s+")
+#: The ``2.`` that numbers a list item is layout, not a number the answer states (the live
+#: follow-up "2. **Amplify the mismatch** …" read as an unsupported claim about the number 2).
+_LIST_ORDINAL: Final = re.compile(r"^\s*(?:[-*\u2022]\s+)?\(?[0-9]{1,2}[.)]\s+")
 _MARKER_GROUPS: Final = rf"(?:\s*{MARKER.pattern})*"
 #: A claim ends at `.`/`!`/`?` (and any closing quote or paren), TOGETHER WITH the marker groups
 #: written right after it: `Claim. [b1] Next.` gives `b1` to `Claim.`, exactly as `Claim [b1].`
@@ -517,7 +520,7 @@ def claim_verdict(
     whose cited blocks are not in ``texts`` (a block the generation lacks) has no evidence, and no
     evidence is ``neutral`` only when the claim is empty: a claim citing nothing real is not
     supported."""
-    clean = strip_markers(claim)
+    clean = _LIST_ORDINAL.sub("", strip_markers(claim), count=1)
     bags = {
         block: frozenset(content_tokens(texts[block])) for block in cited_blocks if block in texts
     }

@@ -635,12 +635,14 @@ class RunBroker:
                     tokens["cost_usd_est"] = None  # a zero cost beside unknown tokens is unknown
             tool_calls, agent_retries = outcome.tool_calls, outcome.retries
             entries: list[dict[str, Any]] | None = outcome.entries
-            if status == "aborted" and not self.cancelled and self._cancel_task is None:
-                # W2API item 4: the agent ended the run `aborted` and nobody here asked it to: its
-                # process is shutting down (it aborts every live run when it closes). That is the
-                # agent going away, not the reader stopping (contracts.md §2.9):
-                # `agent_unavailable`, retryable, the streamed text kept, the thread's stored
-                # state left as it was.
+            if error_code == "agent_unavailable" or (
+                status == "aborted" and not self.cancelled and self._cancel_task is None
+            ):
+                # W2API item 4: the agent is going away. Either it says so (`agent_unavailable`:
+                # its shutdown reason) or it ended the run `aborted` and nobody here asked it to
+                # (an older agent: it aborts every live run when it closes). That is the agent
+                # going away, not the reader stopping (contracts.md §2.9): `agent_unavailable`,
+                # retryable, the streamed text kept, the thread's stored state left as it was.
                 status = "partial" if final_text else "error"
                 error_code, lost, entries = "agent_unavailable", True, None
             if status in ("error", "aborted") and not outcome.final_text and not entries:

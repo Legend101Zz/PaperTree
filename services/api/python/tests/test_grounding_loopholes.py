@@ -128,3 +128,12 @@ def test_the_vocabulary_forgives_equations_when_the_text_layer_carries_no_tags()
     assert plain.has_ref("equation 14")
     tagged = paper_vocabulary({"b": "the update rule (3) is applied"})
     assert tagged.has_ref("equation 3") and not tagged.has_ref("equation 14")
+
+
+def test_a_list_items_own_number_is_not_a_number_the_claim_states() -> None:
+    """Found live (W2API): "2. **Amplify** …" in a follow-up read as the number 2 missing from
+    the cited block. A list item's own ordinal is dropped; a number inside the claim is not."""
+    assert verdict(f"2. {CORE}.", "blk_abs") == "supported"
+    assert verdict(f"1) {CORE}.", "blk_abs") == "supported"
+    assert verdict(f"{CORE} in 2 passes.", "blk_abs") == "unsupported"
+    assert verdict(f"2. {CORE} in 7 passes.", "blk_abs") == "unsupported"

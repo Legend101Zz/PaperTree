@@ -454,15 +454,32 @@ def test_an_agent_killed_mid_answer_keeps_the_partial_text(tmp_path: Path) -> No
         assert [c["marker"] for c in events(frames, "citations")[0]["items"]] == ["b2"]
 
 
-def test_an_agent_that_aborts_a_run_nobody_cancelled_is_agent_unavailable(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "gone",
+    [
+        {  # an older agent: its close() aborted the run
+            "status": "aborted",
+            "stop_reason": "aborted",
+            "error": {"code": "aborted", "retryable": True, "message": "The answer was stopped."},
+        },
+        {  # the agent now says why (reason `shutdown`)
+            "status": "partial",
+            "stop_reason": "aborted",
+            "error": {
+                "code": "agent_unavailable",
+                "retryable": True,
+                "message": "The AI service stopped responding. Try again.",
+            },
+        },
+    ],
+    ids=["aborted", "agent_unavailable"],
+)
+def test_an_agent_that_aborts_a_run_nobody_cancelled_is_agent_unavailable(
+    tmp_path: Path, gone: dict[str, Any]
+) -> None:
     """W2API item 4: the real agent aborts every live run when it shuts down, and its `done` says
     `aborted`/`aborted`. Nobody asked it to (no cancel, no timeout), so the reader sees the agent
     go away: `agent_unavailable`, retryable, the partial text kept, the thread state untouched."""
-    gone = {
-        "status": "aborted",
-        "stop_reason": "aborted",
-        "error": {"code": "aborted", "retryable": True, "message": "The answer was stopped."},
-    }
     with ai_harness(tmp_path, Script("explain-ok", done_patch=gone)) as h:
         token, paper_id = alice_with_paper(h)
         frames, _ = read_sse(explain(h, token, paper_id, paragraph_anchor()))
