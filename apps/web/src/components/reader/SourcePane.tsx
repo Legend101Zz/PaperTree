@@ -40,6 +40,7 @@ import { usePdfDocument } from './PdfDocumentProvider';
 import { displayQuote } from './quote';
 import type { TextLayerInfo } from './PdfPage';
 import { SelectionToolbar } from './SelectionToolbar';
+import { holdScroll } from './scrollHold';
 import { stampTextLayer } from './stampTextLayer';
 import { tooLongSentence, type ReaderHighlight } from './useHighlights';
 import {
@@ -218,36 +219,42 @@ export function SourcePane(props: SourcePaneProps) {
     return () => document.removeEventListener('keydown', onKey);
   }, [hasSelection, clear]);
 
+  // A toolbar action must not move the page (RFIX2 R2): the hold puts back any scroll the reader
+  // did not ask for in the moments after it.
   const onHighlight = useCallback(() => {
     const captured = capture('text');
     if (captured === null) return;
+    holdScroll(root);
     onCreateHighlight(captured);
     clear();
-  }, [capture, clear, onCreateHighlight]);
+  }, [capture, clear, onCreateHighlight, root]);
 
   const onAsk = useCallback(() => {
     const captured = capture('text');
     if (captured === null) return;
+    holdScroll(root);
     actions.openExplain({ anchor: captured.anchor, quote: captured.selection.text });
     clear();
-  }, [actions, capture, clear]);
+  }, [actions, capture, clear, root]);
 
   const onNotice = props.onNotice;
   const onSendToCanvas = useCallback(() => {
     const captured = capture('text');
     if (captured === null) return;
+    holdScroll(root);
     clear();
     actions.sendToCanvas({ kind: 'excerpt', anchor: captured.anchor }).catch(() => {
       onNotice?.("Couldn't send this passage to the canvas. Try again.");
     });
-  }, [actions, capture, clear, onNotice]);
+  }, [actions, capture, clear, onNotice, root]);
 
   const onCopy = useCallback(() => {
     const text = selection?.text ?? '';
     if (text === '') return;
+    holdScroll(root);
     void navigator.clipboard?.writeText(text).catch(() => undefined);
     clear();
-  }, [selection, clear]);
+  }, [selection, clear, root]);
 
   const documentHandle = useMemo<DocumentHandle>(
     () => ({

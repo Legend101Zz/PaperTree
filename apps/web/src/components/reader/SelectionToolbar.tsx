@@ -186,6 +186,10 @@ export function SelectionToolbar(props: SelectionToolbarProps): JSX.Element | nu
         .filter(Boolean)
         .join(' ')}
       data-placement={props.placement.kind}
+      // A press on the bar is a press inside the paper's focusable scroller; with no focusable
+      // element of its own, the bar hands the focus to that scroller (RFIX2 R2). The bar takes it
+      // instead, so the scroller is never the thing that moves.
+      tabIndex={-1}
       style={props.placement.kind === 'float' ? floatStyle(props.placement, size, flipped) : undefined}
       // Preventing pointerdown also suppresses the compatibility mousedown, whose default action
       // is what would collapse the selection.

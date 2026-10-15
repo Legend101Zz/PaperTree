@@ -1,0 +1,44 @@
+/**
+ * reader/scrollHold — an action in the selection toolbar must not move the page.
+ *
+ * RFIX2 R2. In a real Chrome, pressing Highlight scrolled the reader by 100-300 px (DDPM, 25 pages,
+ * scale 1.25, devicePixelRatio 2: scrollTop 3908 -> 4108, then 4108 -> 4443) while the scroller
+ * element, its saved position and the reading state were all unchanged. Nothing in the reader
+ * scrolls programmatically at that moment (`e2e/rfix/no-scroll-on-highlight.spec.ts` proves it by
+ * wrapping every scroll and focus API), so the move comes from the browser: the press lands inside a
+ * focusable scroller, and the scroller takes focus. This is the belt to `SelectionToolbar`'s braces
+ * (the bar takes the focus itself, so the scroller does not): for a short window after the action,
+ * a scroll the READER did not ask for is put straight back, before the next paint.
+ *
+ * "The reader asked for it" is any wheel, touch, key or press after the action; the first of those
+ * ends the hold, and so does the clock. Scroll events are delivered before the frame is painted, so
+ * the correction is never seen.
+ */
+
+/** Long enough for the create to land and the page to re-render; short enough never to be felt. */
+export const HOLD_SCROLL_MS = 1500;
+
+const USER_INPUT = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
+
+/** Keep `scroller` where it is now until the reader moves it or `ms` pass. Returns a release. */
+export function holdScroll(scroller: HTMLElement | null, ms: number = HOLD_SCROLL_MS): () => void {
+  if (scroller === null) return () => undefined;
+  const top = scroller.scrollTop;
+  const left = scroller.scrollLeft;
+  let released = false;
+  const onScroll = (): void => {
+    if (scroller.scrollTop !== top) scroller.scrollTop = top;
+    if (scroller.scrollLeft !== left) scroller.scrollLeft = left;
+  };
+  const release = (): void => {
+    if (released) return;
+    released = true;
+    clearTimeout(timer);
+    scroller.removeEventListener('scroll', onScroll);
+    for (const type of USER_INPUT) window.removeEventListener(type, release, true);
+  };
+  const timer = setTimeout(release, ms);
+  scroller.addEventListener('scroll', onScroll);
+  for (const type of USER_INPUT) window.addEventListener(type, release, { capture: true, passive: true });
+  return release;
+}
