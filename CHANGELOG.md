@@ -19,7 +19,8 @@ The first usable release. Upload a research paper, read it as the real PDF or as
 highlight passages, ask an AI to explain a passage or the whole paper (every claim is cited back to the
 page), and lay out what you found on a canvas. It runs locally, with MiniMax as the model backend. The
 full notes are on the [GitHub release](https://github.com/Legend101Zz/PaperTree/releases/tag/v0.1.0);
-every feature below was checked by hand in a real browser on the release code
+every feature below was checked in a real browser (Chrome, driven through Playwright) on the release
+code, or carried over from an earlier walk where the feature table says so
 ([`research/build/READER-RELEASE-RESULT.md`](research/build/READER-RELEASE-RESULT.md)).
 
 ### Added

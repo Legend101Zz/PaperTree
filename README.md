@@ -20,7 +20,7 @@ with citations that jump back to the exact passage, and lay out what you found o
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![SQLite](https://img.shields.io/badge/SQLite-WAL-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org)
 [![pnpm](https://img.shields.io/badge/pnpm-10-F69220?logo=pnpm&logoColor=white)](https://pnpm.io)
-[![uv](https://img.shields.io/badge/uv-workspace-DE5FE9?logo=uv&logoColor=white)](https://docs.astral.sh/uv/)
+[![uv](https://img.shields.io/badge/uv-workspace-DE5FE9)](https://docs.astral.sh/uv/)
 [![Model: MiniMax](https://img.shields.io/badge/model-MiniMax%20M3%20%2B%20M3.1%20Flash-E5484D)](#model-policy)
 
 [![TS tests](https://img.shields.io/badge/TS%20tests-1%2C858%20passing-brightgreen)](#tests-and-quality-gates)
@@ -36,8 +36,8 @@ with citations that jump back to the exact passage, and lay out what you found o
 <img src="docs/assets/readme/demo.gif" alt="PaperTree demo: upload a paper, select a passage, ask, follow up, open a citation, summarize, highlight and send to the canvas" width="100%"/>
 
 <sub>A real session on v0.1.0 with the live model: upload, explain a passage, a follow-up, a citation, the
-summary, a highlight and the canvas. It plays at about 1.35× speed, and the waits for the model are sped up
-further.</sub>
+summary, a highlight and the canvas. It plays at about 1.35× speed; the waits for the model and a few pauses
+are sped up further.</sub>
 
 </div>
 
@@ -82,21 +82,23 @@ check. PaperTree keeps the paper as the paper:
 
 ## Features
 
-What v0.1.0 does. Each item was checked by hand in a real browser on the release code, with the real
-model. The full feature table is
-[`research/build/READER-RELEASE-RESULT.md`](research/build/READER-RELEASE-RESULT.md).
+What v0.1.0 does. Each item was checked in a real browser (Chrome, driven through Playwright) against
+the real stack and model on the release code. A few items, such as drag and drop, Cancel and the
+budget message, were carried over from an earlier walk of nearly the same code; the full feature table
+marks them "carried"
+([`research/build/READER-RELEASE-RESULT.md`](research/build/READER-RELEASE-RESULT.md)).
 
-| Area                  | What you can do                                                                                                                                                                                                                                                   |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Library**           | Register and sign in. Upload PDFs with the file picker or by drag and drop, with progress and Cancel. Cards go Queued → Reading → Ready without a reload and show the real title and page count.                                                                  |
-| **Reader**            | Source (the PDF), Guided (the paper's words in one column) and Split. Zoom, mode switches and reloads keep your place. Contents has Outline, Pages and Highlights tabs. A paper still being read opens at once.                                                   |
-| **Highlights**        | Highlight a sentence, a table cell, a figure label or a passage across paragraphs. Change the colour, add a note, delete. A highlight that can't be placed goes to a tray with the reason.                                                                        |
-| **Explain and ask**   | Select a passage and press Ask: the answer streams, with status labels. Ask follow-ups or free questions about the paper. Stop keeps the partial answer; Retry after an error.                                                                                    |
-| **Citations**         | Answers carry page chips. A chip scrolls to the cited passage and flashes it.                                                                                                                                                                                     |
-| **Summary**           | A paper summary with cited bullets. It is cached, so a reload does not pay for it again.                                                                                                                                                                          |
-| **Canvas**            | Send passages and answers to a per-paper canvas. Drag, connect cards with labelled links (supports, contradicts, derives from, answers, compares with, references, or a plain link), add notes, group, delete with Undo. "Open source" jumps back to the passage. |
-| **Cost and evidence** | A usage line under each answer (tokens and estimated cost). Each run is recorded in `ai_runs` with model, provider, tokens, cost, first-text time, latency, request id and code path. A daily budget cap.                                                         |
-| **Everywhere**        | Desktop (1440 px) and phone (390 px), light and dark, keyboard navigation. axe reported 0 serious or critical issues in all 12 page × width × theme combinations tested.                                                                                          |
+| Area                  | What you can do                                                                                                                                                                                                                                                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Library**           | Register and sign in. Upload PDFs with the file picker or by drag and drop, with progress and Cancel. Cards go Queued → Reading → Ready without a reload and show the real title and page count.                                                                                                  |
+| **Reader**            | Source (the PDF), Guided (the paper's words in one column) and Split. Zoom, mode switches and reloads keep your place. Contents has Outline, Pages and Highlights tabs. A paper still being read opens at once.                                                                                   |
+| **Highlights**        | Highlight a sentence, a table cell, a figure label or a passage across paragraphs. Change the colour, add a note, delete. A highlight that can't be placed goes to a tray with the reason.                                                                                                        |
+| **Explain and ask**   | Select a passage and press Ask: the answer streams, with status labels. Ask follow-ups or free questions about the paper. Stop keeps the partial answer; Retry after an error.                                                                                                                    |
+| **Citations**         | Answers carry page chips. A chip scrolls to the cited passage and flashes it.                                                                                                                                                                                                                     |
+| **Summary**           | A paper summary with cited bullets. It is cached, so a reload does not pay for it again.                                                                                                                                                                                                          |
+| **Canvas**            | Send passages and answers to a per-paper canvas. Drag, connect cards with labelled links (supports, contradicts, derives from, answers, compares with, references, or a plain link), add notes, group, delete with Undo. "Open source" jumps back to the passage.                                 |
+| **Cost and evidence** | A usage line under each answer (tokens and estimated cost). Each run is recorded in `ai_runs` with model, provider, tokens, cost, first-text time, latency, request id and code path. A daily budget cap.                                                                                         |
+| **Everywhere**        | Desktop (1440 px) and phone (390 px), light and dark, keyboard navigation. axe reported 0 serious or critical issues in all 12 combinations tested (the library, reader Source and reader Guided, each at 1440 and 390 px, light and dark); the canvas and the explain panel were not axe-tested. |
 
 ## Screenshots
 
@@ -137,13 +139,13 @@ The full set from the v0.1 hands-on test (every screen at 1440 and 390 px, light
 ## How it works
 
 ```mermaid
-flowchart LR
+flowchart TB
   B["Browser<br/>Next.js 14 web app"] -- "REST + SSE" --> A["API<br/>FastAPI"]
   A -- "parse jobs" --> W["Worker<br/>PyMuPDF → document IR"]
-  A --- D[("Data root<br/>SQLite (WAL), PDFs, figures")]
-  W --- D
   A -- "AI runs<br/>(shared secret)" --> G["Agent<br/>Node, Pi harness SDK"]
   G -- "paper tools<br/>(internal routes)" --> A
+  A --- D[("Data root<br/>SQLite (WAL), PDFs, figures")]
+  W --- D
   G -- "the only process<br/>with the key" --> M["MiniMax API"]
 ```
 
@@ -167,7 +169,7 @@ flowchart LR
 - Python 3.12 and [uv](https://docs.astral.sh/uv/)
 - A MiniMax API key for the AI features. Without one you can still upload, read, highlight and use the
   canvas; every AI request fails visibly.
-- A current Chromium-based browser or Firefox
+- A current Chrome. The release was tested in Chrome 155; other Chromium browsers and Firefox are untested.
 
 ### Run it
 
@@ -284,15 +286,15 @@ The agent decides which MiniMax model answers which kind of request
 test and a 3-judge quality panel ([`MODEL-AB.md`](docs/release/v0.1/MODEL-AB.md),
 [`QUALITY.md`](docs/release/v0.1/QUALITY.md)):
 
-| Request                                                    | Model                                    | Why                                                                                        |
-| ---------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Explain a selection (and follow-ups in that thread)        | `MiniMax-M3.1-Flash-Preview`, effort low | First text p50 1.8 s in the A/B, against 9.3 s on M3                                       |
-| Ask: a question about the whole paper (and its follow-ups) | `MiniMax-M3`                             | In the panel, Flash's ask follow-ups cited a wrong passage nine times, against none for M3 |
-| Summary                                                    | `MiniMax-M3`                             | Flash summaries had 14 unsupported claims, against 3 for M3                                |
+| Request                                                    | Model                                    | Why                                                                                                        |
+| ---------------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Explain a selection (and follow-ups in that thread)        | `MiniMax-M3.1-Flash-Preview`, effort low | First text p50 1.8 s in the A/B, against 9.3 s on M3                                                       |
+| Ask: a question about the whole paper (and its follow-ups) | `MiniMax-M3`                             | Flash's ask follow-ups drew 9 wrong-citation marks against 0 for M3 (3 follow-ups, 3 judges, summed)       |
+| Summary                                                    | `MiniMax-M3`                             | Flash summaries (effort medium) had 14 unsupported claims against 3 for M3 (3 summaries, 3 judges, summed) |
 
-A follow-up stays on its thread's model: follow-ups to an explanation run on Flash, and follow-ups to an
-ask run on M3. `PAPERTREE_MODEL=MiniMax-M3` puts every kind on M3, and
-`PAPERTREE_MODEL_ASK=MiniMax-M3.1-Flash-Preview` puts ask back on Flash. MiniMax publishes no price for Flash, so the cost recorded in `ai_runs` for Flash
+A follow-up stays on its thread's model. Follow-ups to an explanation therefore run on Flash; the quality
+panel's follow-ups were all asks, so that case has not been measured. `PAPERTREE_MODEL=MiniMax-M3` puts every
+kind on M3, and `PAPERTREE_MODEL_ASK=MiniMax-M3.1-Flash-Preview` puts ask back on Flash. MiniMax publishes no price for Flash, so the cost recorded in `ai_runs` for Flash
 runs is an estimate on M3's rates, and the agent's `/healthz` says so (`cost_basis`).
 
 ## Tests and quality gates
@@ -327,9 +329,9 @@ wall-clock bounds and can flake on a loaded machine: re-run them alone before di
 
 ### What changed since the pre-release baseline
 
-Baselines: the discovery walk `6ff15ad` (2026-09-25) and the handoff gate `45fb2db` (2026-09-26).
+The baseline column is the discovery walk at `6ff15ad` (2026-09-25). `docs/METRICS.md` also has the handoff gate `45fb2db` (2026-09-26) as a second baseline.
 
-| Metric                                 | Baseline                                                       | v0.1 (`60ae507`)                                                                |
+| Metric                                 | Baseline (`6ff15ad`)                                           | v0.1 (`60ae507`)                                                                |
 | -------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | Journey A: upload, parse, read         | PARTIAL (DDPM dead-letters; card only after a reload, 0 pages) | PASS                                                                            |
 | Journey B: highlights                  | FAIL (mouse cannot create one; gone on reload)                 | PASS; two items PARTIAL (see Known limits)                                      |
@@ -339,16 +341,25 @@ Baselines: the discovery walk `6ff15ad` (2026-09-25) and the handoff gate `45fb2
 | Papers that parse (of 14)              | 12                                                             | 14                                                                              |
 | Repo-gold pooled reading order         | 0.900 (26 discordant pairs)                                    | 0.962 (9)                                                                       |
 | Explain first text                     | not streamed; 10–40 s silence                                  | Flash p50 2.13 s (n=9); 2.4 s in the hands-on test                              |
-| Failed AI answers                      | 2 of 5 asks returned 504                                       | 0 of 38 A/B runs failed                                                         |
+| Failed AI answers                      | 2 of 5 asks returned 504                                       | 0 of 38 A/B runs failed (3 summaries ended partial)                             |
 | TS tests                               | 1,389                                                          | 1,858                                                                           |
 | pytest                                 | 1,733 passed                                                   | 2,236 passed, 0 failed                                                          |
 | e2e (Playwright)                       | 0                                                              | 60 specs in CI                                                                  |
 | CI checks                              | 5 jobs; no prettier, build, corpus, browser or live call       | + prettier, `next build`, corpus tests, Playwright A–D, live journey; all green |
 | 390 px reader                          | FAIL (scrollWidth 622)                                         | PASS                                                                            |
 
-**Got worse:** ResNet pooled reading order 0.932 → 0.906 (accepted: the scored pool shrank, and real
-discordant pairs went 2 → 0); GPT-3 macro-F1 −0.0013; the Python CI job takes about 16 min because the
-corpus tests now run; datamarked quotes add about 12 % input tokens.
+**Got worse** (the main items; the full list, with causes, is in [`docs/METRICS.md`](docs/METRICS.md) →
+"WORSE, with cause"):
+
+- ResNet pooled reading order 0.932 → 0.906. This was accepted: the scored pool shrank, and real discordant
+  pairs went 2 → 0. Some per-type F1 scores dropped with the same parser rule. GPT-3 macro-F1 fell by
+  0.0013.
+- Explain on M3 got slower in one sample: first text p50 8.45 → 20.62 s (n=6, cause not attributed). This
+  is why explain moved to Flash.
+- The grounding check lets more fabricated claims through in mixed cases: 3 of 18 judged supported,
+  against 2 of 18 before.
+- The Python CI job takes about 16 min, because the corpus tests now run.
+- Datamarked quotes add about 12 % input tokens.
 
 ### Known limits
 
@@ -381,15 +392,15 @@ v0.2 is tracked in [#182](https://github.com/Legend101Zz/PaperTree/issues/182).
       headings in the Contents outline.
 - [ ] [#178](https://github.com/Legend101Zz/PaperTree/issues/178) **Canvas:** the full node family, a
       minimap, frames, multi-step undo, 500-node performance, and phone polish.
-- [ ] [#179](https://github.com/Legend101Zz/PaperTree/issues/179) **AI:** a stronger grounding check,
-      Flash re-tests for ask and summary, latency for the M3 kinds and under concurrent users.
+- [ ] [#179](https://github.com/Legend101Zz/PaperTree/issues/179) **AI:** work on the grounding check's
+      known limits, Flash re-tests for ask and summary, latency for the M3 kinds and under concurrent users.
 - [ ] [#180](https://github.com/Legend101Zz/PaperTree/issues/180) **Parser:** a held-out evaluation set,
       pinned corpus URLs, text beside tables.
 - [ ] [#181](https://github.com/Legend101Zz/PaperTree/issues/181) **CI and tests:** label test-model runs
       in `ai_runs`, shard the Python job, fix flaky timing tests.
 
 **Carried over:** audio and paper replay ([#5](https://github.com/Legend101Zz/PaperTree/issues/5)),
-float detection that ignores the float's type ([#103](https://github.com/Legend101Zz/PaperTree/issues/103)),
+float detection that misses most floats on ResNet and Neural ODEs ([#103](https://github.com/Legend101Zz/PaperTree/issues/103)),
 the inline-equation span role ([#101](https://github.com/Legend101Zz/PaperTree/issues/101)), sub-block
 citation anchors ([#123](https://github.com/Legend101Zz/PaperTree/issues/123)) and a peak-memory test that
 fails falsely when suites run at the same time ([#129](https://github.com/Legend101Zz/PaperTree/issues/129)).
