@@ -154,7 +154,7 @@ const MAX_DETAIL = 400;
  *
  * The §0 envelope wins field by field; anything missing or malformed falls back to what the status
  * alone can say. Plain text is kept (truncated) rather than replaced, because it is often the only
- * useful sentence — `ask-wiring.spec` pins that a 503's "set PAPERTREE_LLM_API_KEY" survives.
+ * useful sentence — `lib-api-client.spec` pins that a 503's plain-text body survives.
  */
 export function apiErrorFrom(status: number, statusText: string, bodyText: string): ApiError {
   let parsed: unknown;
