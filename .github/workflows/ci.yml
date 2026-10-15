@@ -264,7 +264,10 @@ jobs:
           # into a red; the one-line fix is in the test (accept ENETUNREACH), which this track does
           # not own. Until then the audit's other six controls run and this line is the only skip
           # tolerated; anything else printing SKIPPED fails the job.
-          if /usr/bin/grep -a -n 'SKIPPED' "$log" | /usr/bin/grep -a -v 'SKIPPED LOUDLY: no kernel network deny'; then
+          # The allowed line is matched WHOLE (anchored at both ends): a line that merely contains
+          # the phrase, such as "... no kernel network deny AND corpus missing", still fails.
+          if /usr/bin/grep -a -n 'SKIPPED' "$log" \
+              | /usr/bin/grep -a -v -E '(^|[[:space:]:])\[audit\] SKIPPED LOUDLY: no kernel network deny on this run \(test/run\.ts prints why\)$'; then
             echo "::error title=A spec skipped::a corpus- or venv-gated spec printed SKIPPED (above)."
             fail=1
           fi
@@ -367,8 +370,17 @@ jobs:
         run: |
           log="$RUNNER_TEMP/pytest.log"
           tail -n 3 "$log"
-          if /usr/bin/grep -a -n -E 'fetch_corpus\.sh|fetch_fresh\.sh|gitignored|corpus PDFs' "$log"; then
-            echo "::error title=Corpus/fresh tests skipped::pytest skipped tests that need the fetched PDFs (lines above)."
+          # An ALLOW-LIST, not a search for words: every skip must be one of the known, harmless
+          # ones below, so a new skip with ANY reason text fails (a grep for "corpus PDFs" missed
+          # a skip worded "the fresh PDFs are absent"). The first is pytest's own marker for a
+          # parametrize over an empty list (3 tests today, vacuous but pre-existing, #141).
+          allowed='got empty parameter set for|negative-mediabox\.pdf paints outside the crop box on purpose'
+          if /usr/bin/grep -a -E '^SKIPPED' "$log" | /usr/bin/grep -a -v -E "$allowed"; then
+            echo "::error title=Unexpected skip::pytest skipped a test that is not on the allow-list (lines above)."
+            exit 1
+          fi
+          if ! /usr/bin/grep -a -E '^[0-9]+ passed, [0-9]+ skipped' "$log" | /usr/bin/grep -a -q -E ', [0-4] skipped'; then
+            echo "::error title=Skip count::more than the 4 known skips (3 empty parametrize sets, 1 negative-mediabox)."
             exit 1
           fi
           echo "skips that remain (none may be about the corpus or the fresh set):"
@@ -537,6 +549,18 @@ jobs:
           cat "$RUNNER_TEMP/e2e.log" | tail -n 25
           if /usr/bin/grep -a -n -E '^[[:space:]]*[0-9]+ skipped' "$RUNNER_TEMP/e2e.log"; then
             echo "::error title=e2e specs skipped::a spec skipped (line above); the YOLO PDF or the faux agent is missing."
+            exit 1
+          fi
+          # Journey B must have RUN and PASSED (a tick on its line), and nothing may have failed.
+          if ! /usr/bin/grep -a -q -E '✓[[:space:]]+[0-9]+ e2e/s4/journey-b\.spec\.ts' "$RUNNER_TEMP/e2e.log"; then
+            echo "::error title=Journey B did not pass::no passing line for e2e/s4/journey-b.spec.ts."
+            exit 1
+          fi
+          # At least the 11 specs that exist today (s0 x2, s3, s4 x3, s6, s7 x4); more may land.
+          passed="$(/usr/bin/grep -a -E '^[[:space:]]*[0-9]+ passed' "$RUNNER_TEMP/e2e.log" | /usr/bin/grep -a -o -E '[0-9]+' | head -n 1)"
+          echo "e2e passed: ${passed:-none}"
+          if [ "${passed:-0}" -lt 11 ] || /usr/bin/grep -a -q -E '^[[:space:]]*[0-9]+ failed' "$RUNNER_TEMP/e2e.log"; then
+            echo "::error title=e2e count::fewer than 11 specs passed, or one failed."
             exit 1
           fi
 

@@ -46,8 +46,11 @@ on:
 permissions:
   contents: read
 
+# A run whose job will be SKIPPED (a pull_request event on a PR without the label) gets a group of
+# its own, so it can never replace a PENDING labelled run waiting in the shared `live-journey`
+# group (GitHub keeps only one pending run per group).
 concurrency:
-  group: live-journey
+  group: ${{ (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'run-live')) && format('live-journey-skipped-{0}', github.run_id) || 'live-journey' }}
   cancel-in-progress: false
 
 env:
