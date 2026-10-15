@@ -23,6 +23,7 @@
 import { Fragment, type MouseEvent, type ReactNode } from 'react';
 
 import {
+  dehyphenate,
   handlesInBlocks,
   parseMarkdown,
   type Block,
@@ -175,7 +176,7 @@ export function RichText({
     onCite,
   };
   const cleaned = streaming ? text.replace(PARTIAL_TAIL, '') : text;
-  const blocks = parseMarkdown(cleaned, { streaming });
+  const blocks = parseMarkdown(dehyphenate(cleaned), { streaming });
   const mentioned = new Set(handlesInBlocks(blocks));
   const loose = streaming || citeAs === 'label' ? [] : citations.filter((c) => !mentioned.has(c.marker));
   return (

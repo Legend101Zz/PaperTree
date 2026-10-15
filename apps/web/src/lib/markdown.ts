@@ -141,7 +141,9 @@ function parseInline(source: string, options: ParseOptions = {}, depth = 0): Inl
       }
     }
     if ((ch === '*' || ch === '_') && depth < MAX_DEPTH && source[i + 1] !== ch) {
-      const opens = !isSpace(source[i + 1]) && (ch === '*' || !WORD.test(source[i - 1] ?? ' '));
+      const opens =
+        !isSpace(source[i + 1]) &&
+        (ch === '*' || (!WORD.test(source[i - 1] ?? ' ') && source[i - 1] !== '_'));
       if (opens) {
         const end = ch === '*' ? closingStar(source, i + 1) : closingUnderscore(source, i + 1);
         if (end > i + 1) {
@@ -249,6 +251,19 @@ export function plainText(blocks: readonly Block[]): string {
 const COORDINATORS = new Set(['and', 'or', 'nor', 'to', 'vs', 'versus', 'but']);
 
 /**
+ * Word starts that are almost always the first half of a real compound ("data- driven",
+ * "non- linear"): a break after one of them keeps its hyphen.
+ */
+const COMPOUND_HEADS = new Set([
+  'data', 'non', 'well', 'self', 'end', 'cross', 'semi', 'anti', 'state', 'fine', 'ill',
+]);
+
+function keepsHyphen(head: string): boolean {
+  const last = head.split('-').pop() ?? head;
+  return COMPOUND_HEADS.has(last.toLowerCase());
+}
+
+/**
  * A passage as a reader should see it: a typesetter's line-end hyphen is removed ("sin- gle" and
  * "sin-\ngle" both read "single"). Only a hyphen that sits at a line break is touched: the PDF
  * selection turns the line break into a space or keeps it as a newline, and a real compound in
@@ -258,12 +273,12 @@ const COORDINATORS = new Set(['and', 'or', 'nor', 'to', 'vs', 'versus', 'but']);
 export function dehyphenate(text: string): string {
   return text
     .replace(/([\p{L}\p{N}-]*[\p{Ll}\p{N}])-[ \t]*\r?\n[ \t]*(\p{Ll})/gu, (_m, head: string, next: string) =>
-      head.includes('-') ? `${head}-${next}` : `${head}${next}`,
+      head.includes('-') || keepsHyphen(head) ? `${head}-${next}` : `${head}${next}`,
     )
     .replace(
       /([\p{L}\p{N}-]*[\p{Ll}])- ([\p{Ll}][\p{L}]*)/gu,
       (m, head: string, word: string) =>
-        COORDINATORS.has(word) ? m : head.includes('-') ? `${head}-${word}` : `${head}${word}`,
+        COORDINATORS.has(word) ? m : head.includes('-') || keepsHyphen(head) ? `${head}-${word}` : `${head}${word}`,
     );
 }
 

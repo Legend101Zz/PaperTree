@@ -2926,3 +2926,29 @@ span.pt-paper .pt-paper__cite {
 .pt-explain__prose ol {
   list-style: decimal;
 }
+
+/* ── w3ui round 2 fixes (additive) ─────────────────────────────────────────────────────────── */
+
+/* The toolbar owns the panel ground and a hairline, so scrolled text ends cleanly under it
+   instead of showing behind the button. */
+.pt-explain__toolbar {
+  padding-block: 8px;
+  background: var(--pt-panel-ground);
+  border-block-end: 1px solid var(--pt-rule);
+}
+
+/* "Show all" sits right under the cut quote, not a whole button-height below it. */
+.pt-explain__quote blockquote.pt-paper {
+  margin-block-end: 0;
+}
+
+.pt-explain__quote .pt-explain__fold {
+  margin-block-start: -4px;
+  margin-inline-start: -8px;
+}
+
+/* A toast keeps one line for its action and stays clear of the composer on a phone. */
+.pt-toast__body > button,
+.pt-toast__body > .pt-btn {
+  white-space: nowrap;
+}

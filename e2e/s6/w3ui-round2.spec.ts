@@ -187,6 +187,29 @@ test.describe('W3UI round 2 (YOLO)', () => {
         const cut = shown.replace(/\s*p\. \d+\s*$/, '');
         expect(cut.endsWith('\u2026')).toBe(true);
         const kept = cut.slice(0, -1);
+        // Must-fix: the toolbar has its own ground and a hairline, and the scroll area starts
+        // below it, so scrolled quote text never sits behind "Summarize paper".
+        const bar = await panel.locator('.pt-explain__toolbar').evaluate((el) => {
+          const css = getComputedStyle(el);
+          const scroll = el.parentElement?.querySelector('.pt-explain__scroll');
+          return {
+            bg: css.backgroundColor,
+            border: css.borderBottomWidth,
+            barBottom: el.getBoundingClientRect().bottom,
+            scrollTop: scroll?.getBoundingClientRect().top ?? -1,
+          };
+        });
+        expect(bar.bg).not.toMatch(/rgba\(0, 0, 0, 0\)|transparent/);
+        expect(bar.border).toBe('1px');
+        expect(bar.scrollTop).toBeGreaterThanOrEqual(bar.barBottom - 0.5);
+        // Should-fix: "Show all" sits close under the cut quote.
+        const gap = await quote.evaluate((el) => {
+          const q = el.querySelector('blockquote')?.getBoundingClientRect();
+          const f = el.querySelector('.pt-explain__fold')?.getBoundingClientRect();
+          return q && f ? f.top - q.bottom : -1;
+        });
+        expect(gap).toBeGreaterThanOrEqual(-8);
+        expect(gap).toBeLessThan(16);
         await fold.click();
         const full = (await quote.locator('blockquote').innerText()).replace(/\s+/g, ' ');
         expect(full.startsWith(kept)).toBe(true);

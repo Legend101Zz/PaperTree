@@ -132,6 +132,35 @@ describe('dehyphenate', () => {
   });
 });
 
+describe('underscore identifiers and answer hyphens', () => {
+  it('keeps window.__pwn=1 and __init__ literal, with no italics after them', () => {
+    for (const src of ['window.__pwn=1 and more', 'call __init__ then run_this_now']) {
+      const blocks = parseMarkdown(src);
+      expect(plainText(blocks)).toBe(src);
+      expect(JSON.stringify(blocks)).not.toContain('"em"');
+    }
+  });
+
+  it('still renders _emphasis_', () => {
+    expect(JSON.stringify(parseMarkdown('a _word_ here'))).toContain('"em"');
+  });
+
+  it('joins PDF hyphen breaks inside an answer body', () => {
+    const { container } = render(<RichText citations={[]} text="Models per- form well and re- gression works." />);
+    expect(container.textContent).toBe('Models perform well and regression works.');
+  });
+});
+
+describe('compounds broken at a line end keep their hyphen', () => {
+  it.each([
+    ['data- driven methods', 'data-driven methods'],
+    ['a non- linear map', 'a non-linear map'],
+    ['a well- known result', 'a well-known result'],
+  ])('%j', (input, expected) => {
+    expect(dehyphenate(input)).toBe(expected);
+  });
+});
+
 describe('truncateAtWord', () => {
   it('cuts at a word boundary with an ellipsis', () => {
     const text = 'This unified model has several benefits over traditional methods of object detection';
