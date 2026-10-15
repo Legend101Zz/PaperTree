@@ -35,6 +35,7 @@ Run these from the repository root. You need four terminals, one per process; us
 ```sh
 git clone https://github.com/Legend101Zz/PaperTree.git
 cd PaperTree
+git checkout v0.1.0   # the release this README describes
 corepack enable
 uv sync --locked --all-packages
 pnpm install --frozen-lockfile
@@ -74,8 +75,10 @@ PAPERTREE_MINIMAX_API_KEY="$MINIMAX_KEY" pnpm --filter @papertree/agent start
 
 ```sh
 # terminal 4: web (http://127.0.0.1:3000)
-pnpm --filter papertree-web dev
+pnpm --filter papertree-web dev -H 127.0.0.1
 ```
+
+(`-H 127.0.0.1` keeps the dev server off your network; without it Next.js listens on every interface.)
 
 **4. Open the app** at **http://127.0.0.1:3000** (not `localhost`; see Troubleshooting). Register an
 account, then "Choose PDFs" to upload one. When its card shows "Ready", open it, select a sentence and use
@@ -151,8 +154,9 @@ The commands CI runs (from the repository root; `.github/workflows/ci.yml` is au
 | Web build     | `pnpm --filter papertree-web build`                                                                                                                       |
 | End to end    | `pnpm e2e` (Playwright; starts its own API, worker, web and a faux agent on free ports)                                                                   |
 
-Some tests need the benchmark PDFs, which are fetched rather than committed:
-`./research/benchmarks/fetch_corpus.sh` and `./research/benchmarks/fresh/fetch_fresh.sh`. `pnpm e2e` also
+Some gates need the benchmark PDFs, which are fetched rather than committed:
+`./research/benchmarks/fetch_corpus.sh` and `./research/benchmarks/fresh/fetch_fresh.sh`. That includes the
+web build: its `prebuild` step copies fixtures made from the corpus and fails without them. `pnpm e2e` also
 needs a Chromium: `pnpm exec playwright install chromium`. The live journey (real MiniMax) is a separate CI
 job gated on the `run-live` label; it is not part of a normal run. A few timing tests (`test_30k_*`) are
 wall-clock bounds and can flake on a loaded machine: re-run them alone before diagnosing.
@@ -169,8 +173,9 @@ wall-clock bounds and can flake on a loaded machine: re-run them alone before di
   `PAPERTREE_DATA_ROOT` than the API. Both load `.env`; do not override one of them.
 - **Explain answers "AI explanations are not configured" (503).** `PAPERTREE_AGENT_SECRET` is missing in the
   API's environment. Re-run the `echo ... >> .env` line, then restart the API and the agent.
-- **The agent exits at boot** with one `agent.boot.refused` line naming the problem: the secret or the key
-  is unset, or `MINIMAX_API_KEY` is set in that shell (unset it; use `PAPERTREE_MINIMAX_API_KEY`).
+- **The agent exits at boot** with one `agent.boot.refused` line naming the problem: usually
+  `PAPERTREE_AGENT_SECRET` or `PAPERTREE_MINIMAX_API_KEY` is unset. An ambient `MINIMAX_API_KEY` is not
+  used: the agent deletes it at boot and reads only `PAPERTREE_MINIMAX_API_KEY`.
 - **Where the key goes.** To the agent process only, inline on its start command. If you put it in `.env` it
   is also loaded into the API and the worker, which must not hold it.
 - **Daily budget reached.** AI requests are refused once your estimated spend in the last 24 h passes

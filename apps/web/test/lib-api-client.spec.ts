@@ -172,8 +172,8 @@ describe('apiErrorFrom — the §0 envelope, and the bodies that are not one', (
   });
 
   it('keeps a plain-text body as the detail, truncated, instead of replacing it', () => {
-    const error = apiErrorFrom(503, 'Service Unavailable', 'set PAPERTREE_LLM_API_KEY');
-    expect(error.detail).toBe('set PAPERTREE_LLM_API_KEY');
+    const error = apiErrorFrom(503, 'Service Unavailable', 'set PAPERTREE_AGENT_SECRET');
+    expect(error.detail).toBe('set PAPERTREE_AGENT_SECRET');
     expect(error.code).toBe('agent_unavailable');
     expect(error.retryable).toBe(true);
 

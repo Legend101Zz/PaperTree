@@ -13,11 +13,12 @@
  * are hidden, and a half-typed `[b` at the end of the text never flashes on screen. A citation
  * whose handle the text never mentions is appended after the text, so no verified source is lost.
  */
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, type MouseEvent, type ReactNode } from 'react';
 
 import type { Citation } from '@/lib/api/types';
 
 import { CitationChip } from './CitationChip';
+import { nearestChip } from './chipHit';
 
 export interface RichTextProps {
   readonly text: string;
@@ -133,6 +134,36 @@ function Inline({
   );
 }
 
+let redirecting = false;
+
+/**
+ * Two chips on neighbouring lines can have overlapping 40 px hit areas, and the browser gives the
+ * overlap to the later chip. A click that landed on a chip is handed to the chip whose pill is
+ * nearest the pointer instead (`nearestChip`). Keyboard activation has no pointer position
+ * (`detail === 0`) and is left alone.
+ */
+function redirectToNearestChip(event: MouseEvent<HTMLDivElement>): void {
+  if (redirecting || event.detail === 0) return;
+  const landed = (event.target as HTMLElement).closest<HTMLElement>('.pt-chip');
+  if (landed === null) return;
+  const chips = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('.pt-chip'));
+  const index = nearestChip(
+    chips.map((chip) => chip.getBoundingClientRect()),
+    event.clientX,
+    event.clientY,
+  );
+  const meant = chips[index];
+  if (meant === undefined || meant === landed) return;
+  event.preventDefault();
+  event.stopPropagation();
+  redirecting = true;
+  try {
+    meant.click();
+  } finally {
+    redirecting = false;
+  }
+}
+
 export function RichText({ text, citations, streaming = false, onCite }: RichTextProps): ReactNode {
   const byMarker = new Map(citations.map((c) => [c.marker, c] as const));
   const cleaned = streaming ? text.replace(PARTIAL_TAIL, '') : text;
@@ -160,7 +191,7 @@ export function RichText({ text, citations, streaming = false, onCite }: RichTex
   const mentioned = new Set(handlesIn(cleaned));
   const loose = streaming ? [] : citations.filter((c) => !mentioned.has(c.marker));
   return (
-    <div className="pt-explain__prose">
+    <div className="pt-explain__prose" onClickCapture={redirectToNearestChip}>
       {body}
       {loose.length > 0 ? (
         <p className="pt-explain__loose">

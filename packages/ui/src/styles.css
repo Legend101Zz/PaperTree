@@ -2848,3 +2848,40 @@ span.pt-paper .pt-paper__cite {
     animation: none !important;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+ * W2UI fix wave (additive block: owned by track W2UI, #141; nothing above this line is touched)
+ * ───────────────────────────────────────────────────────────────────────────────────────────── */
+
+/* The Undo offer after a canvas delete sits to the right of the canvas controls (bottom-left), so
+   it never covers the zoom buttons. */
+.pt-toast--lift {
+  inset-block-end: calc(16px + env(safe-area-inset-bottom, 0px));
+  inset-inline: 72px 16px;
+  justify-content: flex-start;
+}
+
+.pt-toast--lift .pt-toast__body {
+  max-inline-size: 100%;
+}
+
+/* In-card controls keep a 40 px tap target ON SCREEN at phone widths. xyflow scales a card by the
+   canvas zoom, so a 40 px button at 60 % is 24 px. The canvas publishes its zoom as `--pt-cv-zoom`;
+   each button grows an invisible hit area (its ::after) by the inverse, down to the canvas's 20 % minimum zoom, so
+   the pill stays the same size on the card and a finger still lands on it. The area is clipped to
+   the card, which is where a tap on a card should land anyway. The group name is an input (no
+   pseudo-elements), so its box grows instead, down to a 30 % zoom (below that a group frame is a
+   thumbnail: zoom in). Desktop cards are untouched. */
+@media (max-width: 639px) {
+  .pt-cv-node__head .pt-btn {
+    position: relative;
+  }
+  .pt-cv-node__head .pt-btn::after {
+    content: '';
+    position: absolute;
+    inset: min(0px, calc((40px - 40px / clamp(0.2, var(--pt-cv-zoom, 1), 1)) / 2));
+  }
+  .pt-cv-group__title {
+    min-block-size: calc(40px / clamp(0.3, var(--pt-cv-zoom, 1), 1));
+  }
+}

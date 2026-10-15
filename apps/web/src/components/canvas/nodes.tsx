@@ -18,6 +18,10 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useCanvasActions } from './CanvasContext';
 import type { PtNode } from './model';
 
+/** The API's limits on a card (schemas.py), so the box stops before the server has to refuse. */
+const NOTE_BODY_MAX = 20_000;
+const GROUP_NAME_MAX = 200;
+
 function Frame({
   id,
   selected,
@@ -129,6 +133,7 @@ export function NoteNode({ id, data, selected }: NodeProps<PtNode>) {
           className="pt-cv-textarea nodrag nowheel"
           aria-label="Note text"
           value={draft}
+          maxLength={NOTE_BODY_MAX}
           rows={4}
           placeholder="Write a note. Press Enter to save, Shift+Enter for a new line."
           onChange={(e) => setDraft(e.target.value)}
@@ -175,6 +180,7 @@ export function GroupNode({ id, data, selected }: NodeProps<PtNode>) {
         key={node.title ?? ''}
         className="pt-cv-group__title nodrag"
         aria-label="Group name"
+        maxLength={GROUP_NAME_MAX}
         defaultValue={node.title ?? 'Group'}
         onKeyDown={(e) => {
           e.stopPropagation();
