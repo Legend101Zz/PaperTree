@@ -53,7 +53,7 @@ Machine load was not controlled: the load average (1 min, mean over the runs of 
 
 ## 5. Out-of-scope defects found (for the orchestrator; `services/api` is not edited by T0)
 
-The API pins `MiniMax-M3` in several places. Under the shipped defaults they break explain and ask, which now run on Flash:
+The API pins `MiniMax-M3` in several places. Under the shipped defaults they break explain and ask, which now run on Flash (superseded for ask by the Revision 2026-10-15 below: ask runs on M3):
 
 1. `services/api/python/papertree_api/schemas.py:995` `AgentRun.model: Literal["minimax/MiniMax-M3"]`: a Flash `run` event fails to parse, so the run ends in `internal`. **Merge blocker for this PR on a live stack.** (The JSON schema in `contracts/agent/run-events.schema.json` is widened here to the two allowed labels; the pydantic twin is the API's to change.)
 2. `services/api/python/papertree_api/agent_client.py:85` `MODEL = "MiniMax-M3"` is written as `ai_runs.model` (line 725, `finish_run`), `RunSummary.model` fallback (772), the run logs (746, 907), a stored summary's `model` (656) and `model_id` (716), and the cached-summary key (`routers/summary.py:57`). The `run` event's `model` is read at `agent_client.py:563-566` and dropped (only `sdk` is kept). Under the default policy `ai_runs.model` would say M3 for Flash runs. Contract requirement ("every AI run records model ... in ai_runs"): store the agent-reported model, and keep the summary cache key per model.
@@ -63,7 +63,7 @@ The A/B itself ran through a launcher (`api_shim.py`, since deleted) that patche
 
 ## 6. Consequences
 
-- Every later live run uses Flash for explain and ask and M3 for summaries unless the environment says otherwise; the release notes and README must call Flash costs "estimate on M3 rates".
+- (Superseded for ask by Revision 2026-10-15: ask is M3.) Every later live run uses Flash for explain and ask and M3 for summaries unless the environment says otherwise; the release notes and README must call Flash costs "estimate on M3 rates".
 - `bench/ab.py` re-runs the whole comparison (`uv run python services/agent/bench/ab.py --out <dir>`), so the decision can be re-taken after a Flash price, a prompt change or a new Flash build.
 - Contracts section 7 rows to add (T0 proposes; the orchestrator owns `contracts.md`):
 

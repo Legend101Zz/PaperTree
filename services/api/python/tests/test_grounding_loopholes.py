@@ -137,3 +137,107 @@ def test_a_list_items_own_number_is_not_a_number_the_claim_states() -> None:
     assert verdict(f"1) {CORE}.", "blk_abs") == "supported"
     assert verdict(f"{CORE} in 2 passes.", "blk_abs") == "unsupported"
     assert verdict(f"2. {CORE} in 7 passes.", "blk_abs") == "unsupported"
+
+
+# ---- W2API fix round (review must_fix A, B, C): the real layouts that regressed -----------------
+
+#: DDPM's headings as the index delivers them: the number trails (``...LT\n3.1``), leads on its
+#: own line (``3.4\nSimplified ...``), or is missing (``Introduction``, ``Background``).
+DDPM_TEXTS = {
+    "h_abs": "Abstract",
+    "h_intro": "Introduction",
+    "h_bg": "Background",
+    "h_models": "Diffusion models and denoising autoencoders",
+    "h_31": "Forward process and LT\n3.1",
+    "h_33": "Data scaling, reverse process decoder, and L0\n3.3",
+    "h_34": "3.4\nSimpliﬁed training objective",
+    "h_exp": "Experiments",
+    "h_41": "4.1\nSample quality",
+    "h_44": "4.4\nInterpolation",
+    "h_rel": "Related Work",
+    "h_con": "Conclusion",
+    "h_ref": "References",
+    "h_a": "A\nExtended derivations",
+    "b_fwd": (
+        "The forward process variances are held constant and the KL divergence compares two "
+        "Gaussian distributions in closed form, so no Monte Carlo estimate is needed."
+    ),
+}
+DDPM_HEADS = frozenset(k for k in DDPM_TEXTS if k.startswith("h_"))
+DDPM = paper_vocabulary(DDPM_TEXTS, heading_ids=DDPM_HEADS, page_count=14)
+
+
+@pytest.mark.parametrize("ref", ["1", "2", "3", "3.1", "3.3", "3.4", "4", "4.1", "5", "6"])
+def test_a_ddpm_section_that_exists_is_in_the_vocabulary(ref: str) -> None:
+    assert DDPM.has_ref(f"section {ref}")
+
+
+@pytest.mark.parametrize("ref", ["12", "9.9", "30"])
+def test_a_ddpm_section_that_cannot_exist_is_not(ref: str) -> None:
+    assert not DDPM.has_ref(f"section {ref}")
+
+
+def test_a_fully_numbered_paper_stays_strict() -> None:
+    clean = paper_vocabulary(
+        {"a": "1. Introduction", "b": "2. Method", "c": "2.1. Network", "d": "3. Results"},
+        heading_ids=frozenset("abcd"),
+    )
+    assert clean.has_ref("section 2.1") and clean.has_ref("section 3")
+    assert not clean.has_ref("section 4") and not clean.has_ref("section 2.2")
+
+
+@pytest.mark.parametrize(
+    "claim",
+    [
+        "Section 2 rewrites the variational bound as a sum of KL terms.",
+        "The riskiest choice in Section 3.1 is fixing the forward process variances.",
+        "Section 5 compares the approach with related work.",
+    ],
+)
+def test_a_real_ddpm_section_reference_does_not_make_a_claim_unsupported(claim: str) -> None:
+    got = claim_verdict(claim, ["b_fwd"], DDPM_TEXTS, DDPM)
+    assert got != "unsupported"
+
+
+def test_an_invented_ddpm_section_still_does() -> None:
+    claim = "Section 30 rewrites the variational bound as a sum of KL terms."
+    assert claim_verdict(claim, ["b_fwd"], DDPM_TEXTS, DDPM) == "unsupported"
+
+
+@pytest.mark.parametrize(
+    "claim",
+    [
+        "Every KL divergence here is Gaussian-vs-Gaussian, so it can be computed in closed form.",
+        "The forward process uses a Rao-Blackwellized Gaussian-based estimate in closed form.",
+    ],
+)
+def test_a_capitalised_hyphen_compound_of_a_present_word_is_not_an_absent_name(
+    claim: str,
+) -> None:
+    assert claim_verdict(claim, ["b_fwd"], DDPM_TEXTS, DDPM) != "unsupported"
+
+
+def test_a_hyphen_compound_of_absent_words_is_still_an_absent_name() -> None:
+    claim = "The forward process uses Hinton-Bengio style pretraining with closed form updates."
+    assert claim_verdict(claim, ["b_fwd"], DDPM_TEXTS, DDPM) == "unsupported"
+
+
+def test_a_numeric_part_of_a_compound_does_not_vouch_for_the_name() -> None:
+    claim = "Evaluation on Zork-10 shows closed form updates."
+    texts = {"b": "Closed form updates on 10 datasets."}
+    assert claim_verdict(claim, ["b"], texts, paper_vocabulary(texts)) == "unsupported"
+
+
+def test_roman_numeral_tables_are_tables() -> None:
+    assert structure_refs("TABLE II lists the results and Fig. IV the curves") >= {
+        "table 2",
+        "figure 4",
+    }
+    texts = {"b": "TABLE II lists the results of the models, with scores."}
+    paper = paper_vocabulary(texts)
+    claim = "Table 2 lists the results of the models, with scores."
+    assert claim_verdict(claim, ["b"], texts, paper) == "supported"
+    assert (
+        claim_verdict("Table 3 lists the results of the models, with scores.", ["b"], texts, paper)
+        == "unsupported"
+    )

@@ -980,7 +980,8 @@ async def launch(
         kind=spec.kind,
         code_path=CODE_PATHS[spec.kind],
         provider=PROVIDER,
-        model=MODEL,
+        # No model here: the agent picks it per kind and reports it in the run event; `run.done`
+        # logs that one.
     )
     broker.start()
     return RunStreamResponse(broker)

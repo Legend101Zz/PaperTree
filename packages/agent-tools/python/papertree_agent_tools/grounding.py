@@ -308,9 +308,53 @@ _REF_KINDS: Final = {
 }
 _REF_PARTS = re.compile(r"([A-Za-z]+)\.?\s*\(?([0-9]+(?:\.[0-9]+)*[a-z]?)\)?")
 #: A numbered heading: ``4.2 Training`` is section 4.2; ``A. Details`` / ``B.1 Proofs`` an appendix.
-_HEADING_NUMBER = re.compile(r"^\s*(?:appendix\s+)?([0-9]+(?:\.[0-9]+)*|[A-Z](?:\.[0-9]+)*)[.:]?\s")
+#: A heading whose number sits on its own line: ``3.4\nSimplified training objective`` (leading) or
+#: ``Forward process and LT\n3.1`` (trailing, as the PDF text layer of DDPM delivers it). A trailing
+#: bare letter is not taken (it could be a symbol); a trailing ``B.2`` is.
+_HEADING_LEAD_LINE = re.compile(
+    r"^\s*(?:appendix\s+)?([0-9]+(?:\.[0-9]+)*|[A-Z](?:\.[0-9]+)*)[.:]?\s"
+)
+_HEADING_TRAIL_LINE = re.compile(
+    r"\n\s*([0-9]+(?:\.[0-9]+)+|[0-9]+|[A-Z]\.[0-9]+(?:\.[0-9]+)*)[.:]?\s*$"
+)
+#: Headings that are not numbered sections of the argument.
+_UNNUMBERED_TITLES: Final = re.compile(
+    r"^\s*(abstract|references|bibliography|acknowledg\w*|appendix|contents)\b", re.IGNORECASE
+)
 #: An equation's tag in running text: ``(14)``.
 _EQUATION_TAG = re.compile(r"\(([0-9]{1,3})\)")
+
+
+def heading_number(text: str) -> str | None:
+    """The section number a heading block states, lower-cased: ``4.2 Training`` and
+    ``3.4\nSimplified ...`` (leading) and ``Forward process and LT\n3.1`` (trailing); ``None`` for
+    a heading that carries none (``Introduction``)."""
+    lead = _HEADING_LEAD_LINE.match(text)
+    if lead is not None:
+        return lead.group(1).lower()
+    trail = _HEADING_TRAIL_LINE.search(text)
+    if trail is not None:
+        return trail.group(1).lower()
+    return None
+
+
+def _number_tuple(number: str) -> tuple[int, ...] | None:
+    parts = number.split(".")
+    return tuple(int(p) for p in parts) if all(p.isdigit() for p in parts) else None
+
+
+_ROMAN_REF = re.compile(
+    r"\b(?i:(table|fig(?:ure)?|section|appendix))s?\.?\s+\(?([IVX]{1,6})\)?\b(?![a-z])"
+)
+_ROMAN: Final = {"I": 1, "V": 5, "X": 10}
+
+
+def _roman_value(numeral: str) -> int | None:
+    total = 0
+    for i, ch in enumerate(numeral):
+        value = _ROMAN[ch]
+        total += -value if i + 1 < len(numeral) and _ROMAN[numeral[i + 1]] > value else value
+    return total if total > 0 else None
 
 
 def structure_refs(text: str) -> frozenset[str]:
@@ -326,6 +370,11 @@ def structure_refs(text: str) -> frozenset[str]:
         kind = _REF_KINDS.get(parts.group(1).lower())
         if kind is not None:
             out.add(f"{kind} {parts.group(2).lower()}")
+    for roman in _ROMAN_REF.finditer(text.translate(_DASHES)):  # ``TABLE II`` is table 2
+        value = _roman_value(roman.group(2))
+        kind = _REF_KINDS.get(roman.group(1).lower().rstrip("s"))
+        if value is not None and kind is not None:
+            out.add(f"{kind} {value}")
     return frozenset(out)
 
 
@@ -438,10 +487,20 @@ class PaperVocabulary:
     #: ``words`` with ``-`` and ``_`` removed (``CIFAR-10`` is the paper's ``CIFAR10``,
     #: ``BERT_BASE`` its flattened ``BERTBASE``); filled in from ``words`` when left empty.
     squashed: frozenset[str] = frozenset()
+    #: Where a section number could be that no heading states: ``(low, high, room)`` for each run of
+    #: headings with no number of their own (``Introduction``, ``Background``) between two numbered
+    #: ones (``high`` is ``None`` after the last): a number from ``low`` to ``high`` whose top level
+    #: is at most ``low``'s plus ``room`` may be one of them. A paper whose every heading is
+    #: numbered has none, so its section references stay strict.
+    section_gaps: tuple[tuple[tuple[int, ...], tuple[int, ...] | None, int], ...] = ()
 
     def __post_init__(self) -> None:
         if not self.squashed:
             object.__setattr__(self, "squashed", frozenset(_squash(w) for w in self.words))
+
+    def _in_a_gap(self, number: str) -> bool:
+        wanted = _number_tuple(number)
+        return wanted is not None and _in_gap_check(wanted, self.section_gaps)
 
     def has_word(self, token: str) -> bool:
         return token in self.words or _squash(token) in self.squashed
@@ -450,9 +509,21 @@ class PaperVocabulary:
         if ref in self.refs:
             return True
         kind, _, number = ref.partition(" ")
+        if kind == "section" and self._in_a_gap(number):
+            return True
         if kind == "page" and self.page_count is not None:
             return number.isdigit() and 1 <= int(number) <= self.page_count
         return False
+
+
+def _in_gap_check(
+    wanted: tuple[int, ...],
+    gaps: tuple[tuple[tuple[int, ...], tuple[int, ...] | None, int], ...],
+) -> bool:
+    for low, high, room in gaps:
+        if wanted[0] <= low[0] + room and wanted >= low and (high is None or wanted <= high):
+            return True
+    return False
 
 
 def _squash(token: str) -> str:
@@ -469,6 +540,18 @@ def paper_vocabulary(
     refs: set[str] = set()
     words: set[str] = set()
     tags = 0
+    #: Numbered headings in reading order as version tuples, with the count of unnumbered ones
+    #: seen since the previous numbered one.
+    gaps: list[tuple[tuple[int, ...], tuple[int, ...] | None, int]] = []
+    previous: tuple[int, ...] = (0,)
+    unnumbered = 0
+
+    def close_gap(high: tuple[int, ...] | None) -> None:
+        nonlocal unnumbered
+        if unnumbered:
+            gaps.append((previous, high, unnumbered))
+        unnumbered = 0
+
     for block_id, text in block_texts.items():
         refs.update(structure_refs(text))
         words.update(content_tokens(text))
@@ -476,15 +559,21 @@ def paper_vocabulary(
             refs.add(f"equation {tag.group(1)}")
             tags += 1
         if block_id in heading_ids:
-            heading = _HEADING_NUMBER.match(text)
-            if heading is not None:
-                number = heading.group(1).lower()
+            number = heading_number(text)
+            if number is not None:
                 refs.add(f"section {number}")
                 refs.add(f"appendix {number}")
                 refs.add(f"chapter {number}")
+                as_tuple = _number_tuple(number)
+                if as_tuple is not None:
+                    close_gap(as_tuple)
+                    previous = as_tuple
+            elif _UNNUMBERED_TITLES.match(text) is None:
+                unnumbered += 1
+    close_gap(None)
     if tags == 0:  # the text layer carried no equation tags: equations cannot be judged
         refs.update(f"equation {n}" for n in range(1, 1000))
-    return PaperVocabulary(frozenset(refs), frozenset(words), page_count)
+    return PaperVocabulary(frozenset(refs), frozenset(words), page_count, section_gaps=tuple(gaps))
 
 
 class ClaimEvidence:
@@ -625,10 +714,19 @@ def _entity_absent(entity: str, evidence: ClaimEvidence, paper: PaperVocabulary 
     tokens = content_tokens(entity)
     if not tokens:
         return False
+
+    def present(word: str) -> bool:
+        return (
+            evidence.contains(word)
+            or evidence.contains_squashed(word)
+            or (paper is not None and paper.has_word(word))
+        )
+
+    # A hyphen compound (``Gaussian-vs-Gaussian``, ``Rao-Blackwellized``) is its parts: it is
+    # present when any non-numeric part is.
     return all(
-        not evidence.contains(token)
-        and not evidence.contains_squashed(token)
-        and not (paper is not None and paper.has_word(token))
+        not present(token)
+        and not any(present(part) for part in _parts(token) if not _NUMERIC.fullmatch(part))
         for token in tokens
     )
 
