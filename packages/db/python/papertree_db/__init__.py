@@ -20,7 +20,7 @@ is a forbidden token and ``test_ownership.py`` greps for it.
 """
 
 from .ai import RunGrant, UsageTotals
-from .canvas import BoardRow, BoardSnapshot, EdgeRow, NodeRow, StaleVersion
+from .canvas import BoardRow, BoardSnapshot, CanvasRejected, EdgeRow, NodeRow, StaleVersion
 from .database import (
     MAX_DERIVATION_DEPTH,
     VECTOR_DIMENSIONS,
@@ -113,6 +113,7 @@ __all__ = [
     "ResolutionRow",
     "Row",
     "RunGrant",
+    "CanvasRejected",
     "StaleVersion",
     "UsageTotals",
     "applied_migrations",
