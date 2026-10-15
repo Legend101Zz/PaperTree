@@ -76,6 +76,19 @@ against the ≤ 5 s bar (thinking dominates; T0 measures Flash).
 
 ## Spend and token ledger (MiniMax; cap $15 for the release)
 
-| When  | Who                       | Runs | Input tok | Output tok | Cost est. |
-| ----- | ------------------------- | ---- | --------- | ---------- | --------- |
-| 12:10 | orchestrator live journey | 5    | 50,299    | 3,108      | $0.0221   |
+| When        | Who                                                                                          | Runs | Input tok | Output tok | Cost est.                 |
+| ----------- | -------------------------------------------------------------------------------------------- | ---- | --------- | ---------- | ------------------------- |
+| 12:10       | orchestrator live journey                                                                    | 5    | 50,299    | 3,108      | $0.0221                   |
+| 12:10–19:10 | every local live run: tracks, review agents, orchestrator walks, S9 (includes the row above) | 222  | 1,447,765 | 138,750    | ≈ $0.64                   |
+| 12:50–18:40 | CI live journey (9 runs that ran; about 4 `ai_runs` each)                                    | 9    | –         | –          | ≈ $0.12–0.24              |
+| **total**   |                                                                                              |      |           |            | **≈ $0.8 of the $15 cap** |
+
+How the local figure was counted: `ai_runs` rows with `provider = minimax`, summed across every data root in
+the evidence store and the worktrees, de-duplicated by `run_id`.
+
+- **Faux runs are excluded:** the e2e scratch roots, and runs with first text under 500 ms. The faux agent
+  writes rows that look real (see the v0.2 issue on faux labelling).
+- **Flash costs** are estimates on M3 rates.
+- **CI live runs:** two were measured, at $0.0263 and $0.0133; the range above assumes the other seven fall
+  between those.
+- **Not counted:** the judge-panel calls behind `QUALITY.md`, which did not go through PaperTree's agent.
