@@ -447,9 +447,6 @@ jobs:
     name: E2E (Playwright, faux agent)
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    env:
-      PAPERTREE_E2E_SCRATCH: ${{ runner.temp }}/e2e-scratch
-      PAPERTREE_E2E_OUTPUT: ${{ runner.temp }}/e2e-results
     steps:
       - uses: actions/checkout@v7
 
@@ -501,6 +498,9 @@ jobs:
 
       - name: Run the e2e suite
         env:
+          # The `runner` context is not available in job-level `env`, so these live on the step.
+          PAPERTREE_E2E_SCRATCH: ${{ runner.temp }}/e2e-scratch
+          PAPERTREE_E2E_OUTPUT: ${{ runner.temp }}/e2e-results
           PAPERTREE_E2E_YOLO_PDF: ${{ github.workspace }}/research/benchmarks/fresh/pdfs/yolo-1506.02640.pdf
         run: |
           set -o pipefail
