@@ -223,7 +223,7 @@ def test_an_aborted_run_with_no_reported_usage_stores_null_tokens_not_zero(tmp_p
     """Pi reported cache reads but no input/output for the aborted message although text had
     streamed: the tokens are UNKNOWN. The row, the `usage` event and `/usage` say null/0-sum, and
     the cost the agent did report stays."""
-    patch = {
+    patch: dict[str, Any] = {
         "status": "aborted",
         "stop_reason": "aborted",
         "error": {"code": "aborted", "retryable": True, "message": "The answer was stopped."},
