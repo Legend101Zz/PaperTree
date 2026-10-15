@@ -232,10 +232,10 @@ export function SourcePane(props: SourcePaneProps) {
   const onAsk = useCallback(() => {
     const captured = capture('text');
     if (captured === null) return;
-    holdScroll(root);
+    // No hold here: the explain panel opens beside the paper and the page list repositions it.
     actions.openExplain({ anchor: captured.anchor, quote: captured.selection.text });
     clear();
-  }, [actions, capture, clear, root]);
+  }, [actions, capture, clear]);
 
   const onNotice = props.onNotice;
   const onSendToCanvas = useCallback(() => {

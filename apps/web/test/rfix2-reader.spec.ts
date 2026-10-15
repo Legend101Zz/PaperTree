@@ -12,7 +12,7 @@ import { guidedProjectionFor, indexDocument, type IndexedBlock, type PaperSource
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { planFigures } from '../src/components/reader/guidedFigures';
-import { HOLD_SCROLL_MS, holdScroll } from '../src/components/reader/scrollHold';
+import { HOLD_SCROLL_MS, holdScroll, releaseScrollHold } from '../src/components/reader/scrollHold';
 import { topBlockAt } from '../src/app/paper/[id]/read/ReaderWorkspace';
 
 function root(): string {
@@ -163,6 +163,25 @@ describe('R2 holdScroll - a toolbar action must not move the page', () => {
     el.dispatchEvent(new Event('scroll'));
     expect(el.scrollTop).toBe(4400);
     release();
+  });
+
+  it('lets go when the page list moves the page itself', () => {
+    const el = scroller(900);
+    holdScroll(el);
+    releaseScrollHold(el); // VirtualPageList: a zoom, a resize, a jump to a block
+    el.scrollTop = 2500;
+    el.dispatchEvent(new Event('scroll'));
+    expect(el.scrollTop).toBe(2500);
+  });
+
+  it('a second hold replaces the first', () => {
+    const el = scroller(100);
+    holdScroll(el);
+    el.scrollTop = 150;
+    holdScroll(el); // holds 150 now
+    el.scrollTop = 400;
+    el.dispatchEvent(new Event('scroll'));
+    expect(el.scrollTop).toBe(150);
   });
 
   it('lets go after its time', () => {
