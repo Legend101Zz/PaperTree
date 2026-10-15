@@ -102,6 +102,10 @@ def create_app(
         db = open_database(resolved.database_file)
         try:
             db.migrate()
+            # A run left `running` by a previous process can never finish (S5F).
+            from .agent_client import sweep_orphans
+
+            sweep_orphans(db)
         finally:
             db.close()
 

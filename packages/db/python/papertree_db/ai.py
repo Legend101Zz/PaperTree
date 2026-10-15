@@ -748,6 +748,49 @@ class AiMixin(_Base):
         )
         return 0.0 if row is None else float(row["cost"])
 
+    def in_flight_runs(self, owner: OwnerId) -> dict[str, int]:
+        """How many runs of each kind are ``running`` and unexpired for this owner right now: the
+        spend cap reserves an estimate for each, because a run that is still streaming has no cost
+        in ``cost_since`` yet (S5F)."""
+        owner_id = self._resolve(owner)
+        out = {kind: 0 for kind in sorted(RUN_KINDS)}
+        for row in self._all(
+            "SELECT kind, COUNT(*) AS runs FROM ai_runs "
+            "WHERE owner_id = ? AND status = 'running' AND expires_at > ? GROUP BY kind",
+            (owner_id, _now()),
+        ):
+            out[str(row["kind"])] = int(row["runs"])
+        return out
+
+    def sweep_orphaned_runs(self, *, now: str | datetime | None = None) -> list[str]:
+        """Ends every run still ``running`` past its ``expires_at`` as an ``error`` with the code
+        ``internal`` (S5F), for all owners: the API process that was writing it stopped (or lost it)
+        before the agent's ``done``, so nothing will ever finish it, and the UI must not show it
+        spinning forever. Its assistant message, if still ``streaming``, ends too (``partial``
+        when text had arrived, else ``error``). Tokens are left unknown (null), not zero. Returns
+        the ids of the runs it ended. Idempotent; a live run (unexpired) is never touched."""
+        moment = _now() if now is None else normalise_time(now)
+        with self.transaction():
+            rows = self._all(
+                "SELECT owner_id, run_id, message_id FROM ai_runs "
+                "WHERE status = 'running' AND expires_at <= ?",
+                (moment,),
+            )
+            for row in rows:
+                self._conn.execute(
+                    "UPDATE ai_runs SET status = 'error', error_code = 'internal', "
+                    "finished_at = ? WHERE owner_id = ? AND run_id = ? AND status = 'running'",
+                    (moment, row["owner_id"], row["run_id"]),
+                )
+                if row["message_id"] is not None:
+                    self._conn.execute(
+                        "UPDATE ai_messages SET status = CASE WHEN content <> '' THEN 'partial' "
+                        "ELSE 'error' END, error_code = 'internal', completed_at = ? "
+                        "WHERE owner_id = ? AND message_id = ? AND status = 'streaming'",
+                        (moment, row["owner_id"], row["message_id"]),
+                    )
+        return [str(row["run_id"]) for row in rows]
+
     def usage_since(self, owner: OwnerId, since: str) -> UsageTotals:
         owner_id = self._resolve(owner)
         rows = self._all(

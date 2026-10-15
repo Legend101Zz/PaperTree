@@ -2,7 +2,7 @@ event: run
 data: {"run_id":"run_01K63AGC3E5H7K9N1Q3S5V7X9Z","model":"minimax/MiniMax-M3","sdk":"pi-coding-agent@0.87.1"}
 
 event: status
-data: {"phase":"thinking","label":"Reading the paper's outline"}
+data: {"phase":"thinking","label":"Reading the paper's key passages"}
 
 event: status
 data: {"phase":"tool","tool":"get_outline","label":"Reading the outline"}

@@ -77,7 +77,7 @@ does not exist is the defect AGENTS.md §2 names. What IS measured, in
 ``tests/test_grounding_verifier.py`` against a real parsed document:
 
     a claim quoted verbatim from a cited block            coverage 1.00
-    a claim paraphrasing a cited block in its own words   coverage 0.125 (flagged — FALSE POSITIVE)
+    a claim paraphrasing a cited block in its own words   coverage 0.167 (flagged — FALSE POSITIVE)
     a fabricated claim about a different subject          coverage 0.00
     the same claim with one digit changed (152 → 999)     coverage 0.83  (flagged by the NUMBER
                                                                           rule, not by coverage)
@@ -88,20 +88,82 @@ reuses the paper's vocabulary" from "this claim does not". It does not distingui
 false. Second, the fabricated-number case scores 0.83 — comfortably ABOVE any threshold that
 does not also flag every honest claim — which is why the number rule is separate from coverage
 rather than folded into it.
+
+
+═══ THREE VERDICTS, AND WHAT A CITATION'S FLAG IS MADE OF (S5F, 2026-10-15) ═══════════════════
+
+The first live journey (YOLO, MiniMax-M3) marked 6 of 6 citations of a well-grounded explanation
+"not verified". Causes, found and measured on two hand-labelled sets (one labeller, small; the rule
+was chosen on the first, the second found three defects in it, listed below, so after the fixes
+neither is held out; ``services/api``'s ``test_grounding_labelled.py`` re-derives every number
+here):
+
+  FIRST  88 (claim, cited blocks) pairs: 53 genuine (S), 17 interpretive (I), 18 not supported (N:
+         2 live misattributions and 16 fabrications written to cite real blocks), from 11 live
+         answers on one YOLO paragraph.
+  HOLDOUT  50 pairs read off the post-change live journey (YOLO and DDPM, 45 S, 5 I) BEFORE any
+         verdict was computed.
+
+  1. TYPESETTING. The PDF says ``classiﬁer`` and ``prob- lem``; the model says ``classifier`` and
+     ``problem``. Folding (ligatures expanded, line-break hyphens joined, plurals stemmed, a
+     hyphenated compound covered by its words) fixes that. NFKC would be wrong: it folds the
+     ``σ²₁`` of a formula to ``σ21`` and invents the number 21 (a HOLDOUT defect).
+  2. THINGS THAT ARE NOT CONTENT. ``Section 4.2``, ``Eq. (14)``, ``Table 2`` name a place, and the
+     cited block rarely carries the number; "the authors also note several choices" talks about the
+     paper instead of saying what is in it. Neither counts as missing (two HOLDOUT defects). A real
+     statistic is still checked.
+  3. AGGREGATION. A citation was supported only if EVERY claim citing it passed, so one interpretive
+     sentence ("This framing is a deliberate departure from …"), which reuses some of the passage's
+     words and adds its own, took the citation down. The verdict is now one of THREE
+     (:func:`assess_claim`): ``supported`` (coverage >= 0.6 and no missing number), ``unsupported``
+     (a stated number is in no cited block, or coverage < 0.15 over 3+ content words) and
+     ``neutral`` (everything between, and claims too short to check). A citation is supported when
+     at least one claim carrying it is ``supported`` and none is ``unsupported``.
+
+Measured with the OLD code (4a29bc7) and this one:
+
+                                              old                  new
+    FIRST   genuine claims judged supported   13 / 53              31 / 53
+            N claims judged supported (leaks) 2 / 18 (F09, F10)    3 / 18 (F09, F10, F15)
+            I claims judged unsupported       17 / 17              5 / 17  (12 are neutral)
+            truly supported citations marked  6 / 46  (0.13)       30 / 46 (0.65)
+            unsupported citations marked      0 / 9                0 / 9   (precision 1.00 both)
+    HOLDOUT genuine claims judged supported   27 / 45              38 / 45   (bullets 11->14 of 14)
+            truly supported citations marked  14 / 30 (0.47)       23 / 30 (0.77)
+            unsupported citations marked      0 / 4                0 / 4   (precision 1.00 both)
+
+The three leaks are the kind this module has always said it cannot see: a comparator swap ("the
+slowest" for "the fastest"), a half-true claim with a wrong tail, and a role swap that reuses the
+passage's words. The new leak (F15, a role swap, coverage 0.56 -> 0.78) came from the stemming,
+which also lifted faithful claims; the threshold stays 0.6 so that no claim is easier to support
+than before except by being closer to the passage's own words. A fabricated number, an invented
+entity or an invented finding is ``unsupported`` in 9 of the 10 such fabrications in the set (all 4
+fabricated numbers; the one miss, F12, an invented finding that reuses some of the passage's words,
+is ``neutral``), and so are the 2 live misattributions. Lowering the threshold to 0.5 would lift
+the FIRST recall further and let one more role swap through; it was not shipped. A fabricated
+claim that merely shares a marker with an honest one reads ``neutral`` (and so keeps the citation
+supported) when it is a negation, a role swap, a comparator swap or a half-true claim: 5 of 13 such
+mixed cases in the set. Those are the limits of a lexical check, not a tuning gap.
 """
 
 from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from typing import Final
+from dataclasses import dataclass
+from typing import Final, Literal
 
 from papertree_agent_tools.answer import GroundedAnswer, VerifiedClaim
 
 __all__ = [
+    "CONTRADICTION_FLOOR",
     "DEFAULT_COVERAGE_THRESHOLD",
+    "MIN_ASSESSABLE_TOKENS",
     "STOPWORDS",
+    "ClaimAssessment",
     "ClaimEvidence",
+    "Verdict",
+    "assess_claim",
     "claim_coverage",
     "content_tokens",
     "verify_grounding",
@@ -110,6 +172,18 @@ __all__ = [
 #: Fraction of a claim's content tokens that must appear in the cited blocks. See the module
 #: docstring's threshold section for the three measured coverages it sits between.
 DEFAULT_COVERAGE_THRESHOLD: Final = 0.6
+
+#: Below this share of a claim's content words in the cited blocks, the claim is not merely
+#: unverified but UNSUPPORTED: it is built from words the passage does not contain (invented
+#: entities, invented findings). Between this floor and the threshold the claim is NEUTRAL:
+#: commentary and interpretation reuse some of the passage's words and add their own, and that is
+#: not evidence against the citation. See :func:`assess_claim` and the measurements in the section
+#: "THREE VERDICTS" of the module docstring.
+CONTRADICTION_FLOOR: Final = 0.15
+
+#: A claim with fewer content words than this has too little to check ("Why that matters."): it is
+#: NEUTRAL, never unsupported, unless it carries a number the cited blocks lack.
+MIN_ASSESSABLE_TOKENS: Final = 3
 
 #: Words carrying no evidential content. Small and explicit rather than an imported list: a
 #: dependency for 60 English words would be a lockfile change (see ``schema.py``), and a list
@@ -137,7 +211,22 @@ _STOPWORD_TEXT: Final = (
     "with would you your"
 )
 
-STOPWORDS: Final[frozenset[str]] = frozenset(_STOPWORD_TEXT.split())
+#: Words that talk ABOUT a paper instead of saying what is in it: "the authors also note several
+#: choices". They are in the claim's sentence and not in the cited passage, so counting them made
+#: every framing sentence ("The authors ablate several choices in Section 4.2") look invented.
+#: Reporting verbs and meta nouns only; no word with a technical sense is here.
+_DISCOURSE_TEXT: Final = (
+    "author authors paper papers passage passages excerpt text reader study section sections "
+    "also several various following however therefore thus hence moreover furthermore overall "
+    "state states stated note notes noted argue argues argued describe describes described "
+    "present presents presented propose proposes proposed introduce introduces introduced report "
+    "reports reported discuss discusses discussed mention mentions mentioned say says said claim "
+    "claims claimed explain explains explained show shows shown call calls called"
+)
+
+STOPWORDS: Final[frozenset[str]] = frozenset(_STOPWORD_TEXT.split()) | frozenset(
+    _DISCOURSE_TEXT.split()
+)
 
 #: A token is a maximal run of letters, digits, ``.``, ``-`` or ``_``. Keeping ``.`` and ``-``
 #: inside a token is what makes ``94.2``, ``ResNet-50`` and ``self-attention`` single tokens
@@ -149,12 +238,67 @@ _TOKEN = re.compile(r"[0-9A-Za-z][0-9A-Za-z._\-]*")
 _NUMERIC = re.compile(r"^-?[0-9]+(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?$")
 
 
+#: Dashes a PDF text layer or a model may use for a hyphen: hyphen, non-breaking hyphen, figure
+#: dash, en dash, minus sign, soft hyphen.
+_DASHES = dict.fromkeys(map(ord, "\u2010\u2011\u2012\u2013\u2212\u00ad"), "-")
+#: Typographic ligatures of a PDF text layer. NOT NFKC: it also folds the superscript and subscript
+#: digits of a formula (``σ²₁`` -> ``σ21``), which invents a number the paper never wrote.
+_LIGATURES = {
+    ord(ch): letters
+    for ch, letters in (
+        ("\ufb00", "ff"),
+        ("\ufb01", "fi"),
+        ("\ufb02", "fl"),
+        ("\ufb03", "ffi"),
+        ("\ufb04", "ffl"),
+        ("\ufb05", "st"),
+        ("\ufb06", "st"),
+    )
+}
+#: A reference to the paper's own structure: ``Section 4.2``, ``Eq. (14)``, ``Table 2``. The number
+#: names a place, not a finding, and the cited block usually does not carry it (the heading does).
+_STRUCTURE_REF = re.compile(
+    r"\b(?:sections?|sec\.|eqs?\.?|equations?|fig(?:ure)?s?\.?|tables?|algorithms?|"
+    r"appendix|appendices|chapters?|pages?|pp?\.)\s*\(?[0-9]+(?:\.[0-9]+)*[a-z]?\)?",
+    re.IGNORECASE,
+)
+#: A word broken across lines by the typesetter: ``prob- lem``.
+_LINE_BREAK_HYPHEN = re.compile(r"(?<=[A-Za-z])-\s+(?=[a-z])")
+_SUFFIXES: Final = (("ies", "y"), ("sses", "ss"), ("ing", ""), ("ed", ""), ("es", ""), ("s", ""))
+
+
+def _fold(text: str) -> str:
+    """The comparison form of paper or model text: ligatures expanded (``ﬁ`` is ``fi``), every dash
+    a hyphen, typesetter line-break hyphens joined, and references to the paper's own structure
+    (``Section 4.2``) removed. A claim says ``classifier`` and the PDF's text layer says
+    ``classiﬁer``; ``prob- lem`` and ``problem`` are one word."""
+    folded = text.translate(_LIGATURES).translate(_DASHES)
+    return _STRUCTURE_REF.sub(" ", _LINE_BREAK_HYPHEN.sub("", folded))
+
+
+def _stem(token: str) -> str:
+    """A deliberately crude suffix strip (``classifiers`` -> ``classifier``, ``boxes`` -> ``box``,
+    ``predicts`` -> ``predict``). Numbers and short words are untouched. Both sides of every
+    comparison are stemmed alike, so an imperfect stem costs nothing as long as it is the same
+    function; it only has to make a plural, a tense and a base form meet."""
+    if len(token) <= 3 or _NUMERIC.fullmatch(token) or token.endswith("ss"):
+        return token
+    for suffix, replacement in _SUFFIXES:
+        if token.endswith(suffix) and len(token) - len(suffix) >= 3:
+            return token[: -len(suffix)] + replacement
+    return token
+
+
 def content_tokens(text: str) -> tuple[str, ...]:
     """Lower-cased content tokens, in order, with stopwords and bare punctuation removed.
 
     Returns a TUPLE and not a set: order is preserved so a reason string can name the missing
     tokens in the order the reader will meet them in the claim, and so nothing in this module
     ever iterates a set (determinism — ``expansion.py``'s rule 1).
+
+    The text is folded first (:func:`_fold`) and each token stemmed (:func:`_stem`): without that
+    a faithful claim ("classifiers", "problem") reads as missing words against the PDF's own
+    ("classiﬁers", "prob- lem"), which is what made well-grounded answers read "not verified".
 
     Case folding is ``str.lower`` rather than ``papertree_document_ir.normalise_text``. That is a
     deliberate narrowing and worth stating: ``normalise_text`` is the identity normalisation —
@@ -164,8 +308,16 @@ def content_tokens(text: str) -> tuple[str, ...]:
     steps buy nothing on that side and cost a strict-mode dependency edge for a comparison that
     is approximate by design. The block side is already ``resolved_text``'s output.
     """
-    tokens = [match.group(0).lower().strip("._-") for match in _TOKEN.finditer(text)]
-    return tuple(token for token in tokens if token and token not in STOPWORDS)
+    tokens = [match.group(0).lower().strip("._-") for match in _TOKEN.finditer(_fold(text))]
+    return tuple(_stem(token) for token in tokens if token and token not in STOPWORDS)
+
+
+def _parts(token: str) -> tuple[str, ...]:
+    """The words of a hyphenated compound (``bounding-box`` -> ``bounding``, ``box``); empty for
+    anything else, and for a number."""
+    if "-" not in token or _NUMERIC.fullmatch(token):
+        return ()
+    return tuple(_stem(part) for part in token.split("-") if part and part not in STOPWORDS)
 
 
 class ClaimEvidence:
@@ -179,7 +331,10 @@ class ClaimEvidence:
     __slots__ = ("_by_block", "_missing")
 
     def __init__(self, by_block: Mapping[str, frozenset[str]], missing: tuple[str, ...]) -> None:
-        self._by_block = dict(by_block)
+        # A block that says ``bounding-box`` also says ``bounding`` and ``box``.
+        self._by_block = {
+            block: bag.union(*(_parts(token) for token in bag)) for block, bag in by_block.items()
+        }
         self._missing = missing
 
     @property
@@ -195,7 +350,12 @@ class ClaimEvidence:
         return tuple(block for block, bag in self._by_block.items() if token in bag)
 
     def contains(self, token: str) -> bool:
-        return any(token in bag for bag in self._by_block.values())
+        """Whether the cited blocks have this token, or — for a hyphenated compound the blocks
+        write as two words — every word of it (``bounding-box`` is covered by ``bounding box``)."""
+        if any(token in bag for bag in self._by_block.values()):
+            return True
+        parts = _parts(token)
+        return bool(parts) and all(self.contains(part) for part in parts)
 
 
 def claim_coverage(claim_text: str, evidence: ClaimEvidence) -> tuple[float, tuple[str, ...]]:
@@ -214,6 +374,50 @@ def claim_coverage(claim_text: str, evidence: ClaimEvidence) -> tuple[float, tup
     return (len(tokens) - len(missing)) / len(tokens), missing
 
 
+#: What one claim's check says about the citations it carries.
+#:
+#: ``supported``    enough of its words are in the cited blocks, and none of its numbers is missing;
+#: ``neutral``      it reuses some of the passage's words and adds its own (commentary,
+#:                  interpretation, a restatement in new vocabulary), or it is too short to check:
+#:                  this check cannot call it grounded and has no evidence against the citation;
+#: ``unsupported``  a number it states is in none of the cited blocks, or it is built almost
+#:                  entirely from words the cited blocks do not contain.
+Verdict = Literal["supported", "neutral", "unsupported"]
+
+
+@dataclass(frozen=True, slots=True)
+class ClaimAssessment:
+    verdict: Verdict
+    coverage: float
+    #: The claim's content words the cited blocks lack, in claim order. Never shown to the reader.
+    missing: tuple[str, ...]
+    #: The claim's numbers the cited blocks lack.
+    missing_numbers: tuple[str, ...]
+    content_words: int
+
+
+def assess_claim(
+    claim_text: str,
+    evidence: ClaimEvidence,
+    *,
+    threshold: float = DEFAULT_COVERAGE_THRESHOLD,
+    floor: float = CONTRADICTION_FLOOR,
+) -> ClaimAssessment:
+    """One claim against its cited blocks, as one of three verdicts (see :data:`Verdict`)."""
+    coverage, missing = claim_coverage(claim_text, evidence)
+    words = len(content_tokens(claim_text))
+    numbers = tuple(token for token in missing if _NUMERIC.fullmatch(token) is not None)
+    if numbers:
+        verdict: Verdict = "unsupported"
+    elif coverage >= threshold:
+        verdict = "supported"
+    elif words >= MIN_ASSESSABLE_TOKENS and coverage < floor:
+        verdict = "unsupported"
+    else:
+        verdict = "neutral"
+    return ClaimAssessment(verdict, coverage, missing, numbers, words)
+
+
 def verify_grounding(
     answer: GroundedAnswer,
     resolved_text: Mapping[str, str],
@@ -229,7 +433,9 @@ def verify_grounding(
     which is the correct reading: a claim citing a block this paper generation does not contain
     is ungrounded whether the id is a typo or a survivor from a stale generation.
 
-    The output ``claims`` tuple has the same length and the same order as the input's. That is
+    A claim is ``supported`` here only on the ``supported`` verdict of :func:`assess_claim`; a
+    ``neutral`` one is not (this is the boolean the answer contract carries). The output
+    ``claims`` tuple has the same length and the same order as the input's. That is
     asserted here rather than left to inspection, because "the verifier filtered my claims" is a
     silent data loss and the assertion costs one comparison.
     """
@@ -277,21 +483,21 @@ def _verify_claim(
             ),
         )
 
-    coverage, missing = claim_coverage(claim.text, evidence)
-    fabricated = tuple(token for token in missing if _NUMERIC.fullmatch(token) is not None)
-    if fabricated:
+    assessment = assess_claim(claim.text, evidence, threshold=threshold)
+    coverage, missing = assessment.coverage, assessment.missing
+    if assessment.missing_numbers:
         return VerifiedClaim(
             text=claim.text,
             supported_by=(),
             supported=False,
             reason=(
-                f"the number(s) {list(fabricated)} appear in the claim and in none of the cited "
-                f"blocks {list(evidence.resolved_blocks)}. A number that is not in the source is "
-                "the failure mode this check exists for; verify it against the paper."
+                f"the number(s) {list(assessment.missing_numbers)} appear in the claim and in none "
+                f"of the cited blocks {list(evidence.resolved_blocks)}. A number that is not in "
+                "the source is the failure mode this check exists for; verify it against the paper."
             ),
         )
 
-    if coverage < threshold:
+    if assessment.verdict != "supported":
         return VerifiedClaim(
             text=claim.text,
             supported_by=(),

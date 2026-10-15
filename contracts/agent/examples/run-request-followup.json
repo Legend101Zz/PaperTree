@@ -44,7 +44,7 @@
           "content": [
             {
               "type": "text",
-              "text": "Explain this passage.\n\nInstead, we frame object detection as a regression problem to spatially separated bounding boxes and associated class probabilities."
+              "text": "Explain this passage.\n\n<untrusted_document trust=\"untrusted\">\n^7f3a91c2 Instead, ^7f3a91c2 we ^7f3a91c2 frame ^7f3a91c2 object ^7f3a91c2 detection ^7f3a91c2 as ^7f3a91c2 a ^7f3a91c2 regression ^7f3a91c2 problem ^7f3a91c2 to ^7f3a91c2 spatially ^7f3a91c2 separated ^7f3a91c2 bounding ^7f3a91c2 boxes ^7f3a91c2 and ^7f3a91c2 associated ^7f3a91c2 class ^7f3a91c2 probabilities. ^7f3a91c2\n</untrusted_document>"
             }
           ],
           "timestamp": 1790350165123
