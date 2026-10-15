@@ -4,11 +4,13 @@
  * RFIX2 R2. In a real Chrome, pressing Highlight scrolled the reader by 100-300 px (DDPM, 25 pages,
  * scale 1.25, devicePixelRatio 2: scrollTop 3908 -> 4108, then 4108 -> 4443) while the scroller
  * element, its saved position and the reading state were all unchanged. Nothing in the reader
- * scrolls programmatically at that moment (`e2e/rfix/no-scroll-on-highlight.spec.ts` proves it by
- * wrapping every scroll and focus API), so the move comes from the browser: the press lands inside a
- * focusable scroller, and the scroller takes focus. This is the belt to `SelectionToolbar`'s braces
- * (the bar takes the focus itself, so the scroller does not): for a short window after the action,
- * a scroll the READER did not ask for is put straight back, before the next paint.
+ * scrolls programmatically at that moment (`e2e/rfix/no-scroll-on-highlight.spec.ts` wraps every
+ * scroll and focus API and sees none, in a headless Chrome 153 at the same size, scale and device
+ * pixel ratio), so the cause lives in the browser's own handling of a press inside a focusable
+ * scroller (which the drag that made the selection has already focused) and it could not be reproduced
+ * under Playwright (headless and headed Chrome 153). This is the guard that does not depend on knowing it: for a short
+ * window after the action, a scroll the READER did not ask for is put straight back, before the
+ * next paint.
  *
  * "The reader asked for it" is any wheel, touch, key or press after the action; the first of those
  * ends the hold, and so does the clock. Scroll events are delivered before the frame is painted, so

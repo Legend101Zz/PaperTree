@@ -28,11 +28,18 @@ async function figureCards(page: Page, ids: readonly string[], captionStart: str
   return page.evaluate(
     ([figureIds, caption]) => {
       const cards = Array.from(document.querySelectorAll('[data-guided-para]')) as HTMLElement[];
-      const mine = cards.filter((c) => (figureIds as string[]).includes(c.getAttribute('data-guided-para') ?? ''));
+      const mine = cards.filter((c) =>
+        (figureIds as string[]).includes(c.getAttribute('data-guided-para') ?? ''),
+      );
       const scroller = document.querySelector('[data-guided-scroller]') as HTMLElement;
       const text = scroller.textContent ?? '';
       let captions = 0;
-      for (let at = text.indexOf(caption as string); at !== -1; at = text.indexOf(caption as string, at + 1)) captions += 1;
+      for (
+        let at = text.indexOf(caption as string);
+        at !== -1;
+        at = text.indexOf(caption as string, at + 1)
+      )
+        captions += 1;
       return {
         cards: mine.length,
         images: mine.reduce((n, c) => n + c.querySelectorAll('img').length, 0),
@@ -45,8 +52,18 @@ async function figureCards(page: Page, ids: readonly string[], captionStart: str
 }
 
 const CASES = [
-  { name: 'DDPM page 2, Figure 2', pdf: () => DDPM, pageIndex: 1, caption: 'Figure 2: The directed graphical model' },
-  { name: 'YOLO page 1, Figure 1', pdf: () => YOLO, pageIndex: 0, caption: 'Figure 1: The YOLO Detection System' },
+  {
+    name: 'DDPM page 2, Figure 2',
+    pdf: () => DDPM,
+    pageIndex: 1,
+    caption: 'Figure 2: The directed graphical model',
+  },
+  {
+    name: 'YOLO page 1, Figure 1',
+    pdf: () => YOLO,
+    pageIndex: 0,
+    caption: 'Figure 1: The YOLO Detection System',
+  },
   { name: 'YOLO page 2, Figure 2', pdf: () => YOLO, pageIndex: 1, caption: 'Figure 2: The Model' },
 ] as const;
 
@@ -69,10 +86,17 @@ for (const size of [
           size.width < 600 ? 'fit-width' : '1.25',
         );
         const ir = (await (
-          await fetch(`${stack.apiUrl}/papers/${paperId}/ir`, { headers: { Authorization: `Bearer ${token}` } })
+          await fetch(`${stack.apiUrl}/papers/${paperId}/ir`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
         ).json()) as { blocks: IrBlock[] };
-        const figureIds = ir.blocks.filter((b) => b.page_index === c.pageIndex && b.type === 'figure').map((b) => b.block_id);
-        expect(figureIds.length, 'the IR reports the figure and its panels as separate blocks').toBeGreaterThan(1);
+        const figureIds = ir.blocks
+          .filter((b) => b.page_index === c.pageIndex && b.type === 'figure')
+          .map((b) => b.block_id);
+        expect(
+          figureIds.length,
+          'the IR reports the figure and its panels as separate blocks',
+        ).toBeGreaterThan(1);
 
         await page.getByRole('radio', { name: 'Guided' }).click();
         await page.waitForSelector('[data-guided-scroller]');
@@ -95,7 +119,10 @@ for (const size of [
         }, figureIds);
         await page.waitForTimeout(600);
         await page.screenshot({
-          path: shotPath(`r9-${c.name.replace(/[^a-z0-9]+/giu, '-')}-${String(size.width)}.png`, testInfo.outputPath('shots')),
+          path: shotPath(
+            `r9-${c.name.replace(/[^a-z0-9]+/giu, '-')}-${String(size.width)}.png`,
+            testInfo.outputPath('shots'),
+          ),
         });
       });
     }

@@ -19,12 +19,48 @@ const DDPM = join(REPO, 'research', 'benchmarks', 'fresh', 'pdfs', 'ddpm-2006.11
 const YOLO = yolo();
 
 /** `needle` is what Source's text layer says; `guided` is what the Guided card says (the IR keeps ligatures). */
-const CASES: readonly { name: string; pdf: () => string | null; needle: string; guided: string; top: number }[] = [
-  { name: 'DDPM page 2', pdf: () => DDPM, needle: 'This paper presents progress in diffusion', guided: 'This paper presents progress in diffusion', top: 100 },
-  { name: 'DDPM page 2 (equation paragraph)', pdf: () => DDPM, needle: 'Training is performed by optimizing', guided: 'Training is performed by optimizing', top: 120 },
-  { name: 'DDPM page 5', pdf: () => DDPM, needle: 'Since our simplified objective', guided: 'discards the weighting', top: 90 },
-  { name: 'YOLO page 1 (left column)', pdf: () => YOLO, needle: 'Humans glance at an image', guided: 'Humans glance at an image', top: 100 },
-  { name: 'YOLO page 4 (left column)', pdf: () => YOLO, needle: 'Our learning rate schedule is as follows', guided: 'Our learning rate schedule is as follows', top: 110 },
+const CASES: readonly {
+  name: string;
+  pdf: () => string | null;
+  needle: string;
+  guided: string;
+  top: number;
+}[] = [
+  {
+    name: 'DDPM page 2',
+    pdf: () => DDPM,
+    needle: 'This paper presents progress in diffusion',
+    guided: 'This paper presents progress in diffusion',
+    top: 100,
+  },
+  {
+    name: 'DDPM page 2 (equation paragraph)',
+    pdf: () => DDPM,
+    needle: 'Training is performed by optimizing',
+    guided: 'Training is performed by optimizing',
+    top: 120,
+  },
+  {
+    name: 'DDPM page 5',
+    pdf: () => DDPM,
+    needle: 'Since our simplified objective',
+    guided: 'discards the weighting',
+    top: 90,
+  },
+  {
+    name: 'YOLO page 1 (left column)',
+    pdf: () => YOLO,
+    needle: 'Humans glance at an image',
+    guided: 'Humans glance at an image',
+    top: 100,
+  },
+  {
+    name: 'YOLO page 4 (left column)',
+    pdf: () => YOLO,
+    needle: 'Our learning rate schedule is as follows',
+    guided: 'Our learning rate schedule is as follows',
+    top: 110,
+  },
 ];
 
 async function nudgeToTop(page: Page, needle: string, top: number, x: number): Promise<number> {
@@ -39,7 +75,10 @@ async function nudgeToTop(page: Page, needle: string, top: number, x: number): P
 }
 
 /** Where `needle`'s paragraph is in the Guided scroller: its top, relative to the scroller's. */
-async function guidedOffset(page: Page, needle: string): Promise<{ top: number; height: number; scrollTop: number } | null> {
+async function guidedOffset(
+  page: Page,
+  needle: string,
+): Promise<{ top: number; height: number; scrollTop: number } | null> {
   return page.evaluate((text) => {
     const scroller = document.querySelector('[data-guided-scroller]') as HTMLElement | null;
     if (scroller === null) return null;
@@ -98,10 +137,67 @@ for (const size of [
         await page.getByRole('radio', { name: 'Source' }).click();
         await page.waitForTimeout(1500);
         const back = await spanBoxAny(page, c.needle);
-        note(`${c.name}: Guided -> Source: paragraph top ${back.top.toFixed(0)} px (was ${placed.toFixed(0)}), viewport ${String(sourceHeight)}`);
+        note(
+          `${c.name}: Guided -> Source: paragraph top ${back.top.toFixed(0)} px (was ${placed.toFixed(0)}), viewport ${String(sourceHeight)}`,
+        );
         expect(back.top).toBeGreaterThan(-20);
         expect(back.top).toBeLessThan(sourceHeight * 0.6);
       });
     }
   });
 }
+
+test.describe('RFIX2 R8 - a saved position that names no block still opens Guided in the right place', () => {
+  for (const size of [
+    { width: 1440, height: 900 },
+    { width: 390, height: 844 },
+  ]) {
+    test(`DDPM, reload at page 5 with a position saved before the parse had loaded, ${String(size.width)}px`, async ({
+      browser,
+      stack,
+    }) => {
+      test.setTimeout(600_000);
+      const { page, paperId } = await openReader(
+        browser,
+        stack.apiUrl,
+        DDPM,
+        size,
+        `r8-noblock-${String(size.width)}`,
+        1,
+        size.width < 600 ? 'fit-width' : '1.25',
+      );
+      // What a reader who scrolled before the parse arrived leaves behind: page and offset, no block.
+      await page.evaluate(
+        ([key, zoom]) =>
+          localStorage.setItem(
+            key as string,
+            JSON.stringify({ v: 1, mode: 'source', zoomMode: zoom, page: 4, yPt: 330 }),
+          ),
+        [
+          `papertree/reader/${paperId}`,
+          size.width < 600 ? { kind: 'fit-width' } : { kind: 'scale', scale: 1.25 },
+        ] as const,
+      );
+      await page.reload();
+      await expect
+        .poll(() => page.locator('.papertree-text-layer span[data-cp-start]').count(), {
+          timeout: 180_000,
+        })
+        .toBeGreaterThan(20);
+      await page.getByRole('radio', { name: 'Guided' }).click();
+      await page.waitForTimeout(1500);
+      const where = await page.evaluate(() => {
+        const sc = document.querySelector('[data-guided-scroller]') as HTMLElement;
+        const top = sc.getBoundingClientRect().top;
+        const first = Array.from(sc.querySelectorAll('[data-guided-para]')).find(
+          (p) => p.getBoundingClientRect().bottom > top + 5,
+        );
+        return { scrollTop: sc.scrollTop, first: (first?.textContent ?? '').slice(0, 60) };
+      });
+      console.log(
+        `[e2e rfix2 R8] no saved block, ${String(size.width)}px: ${JSON.stringify(where)}`,
+      );
+      expect(where.scrollTop, 'Guided is not at the top of the paper').toBeGreaterThan(2000);
+    });
+  }
+});

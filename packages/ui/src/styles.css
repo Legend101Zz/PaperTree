@@ -2886,18 +2886,11 @@ span.pt-paper .pt-paper__cite {
   }
 }
 
-
 /* ── RFIX2 (additive) ──────────────────────────────────────────────────────────────────────────
    H390: the reader header at phone width. Row one is Back, Contents, the title on ONE line with an
    ellipsis, and Canvas; row two is the reading-mode switch and ONE compact zoom control (the select:
    the platform picker on touch). The step buttons and the "Fit width" shortcut are wide-screen
    shortcuts; pinch zooms on a phone. Every control keeps its 40 px target. */
-
-/* The selection bar takes the focus a press inside the scroller would otherwise hand to the
-   scroller itself; it is not a tab stop and shows no ring. */
-.pt-seltool:focus {
-  outline: none;
-}
 
 @media (max-width: 639px) {
   .pt-reader__bar {

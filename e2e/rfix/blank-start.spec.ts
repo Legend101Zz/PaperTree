@@ -23,7 +23,10 @@ const ABOVE_PARAGRAPH = ['methods to first generate', 'individual component must
 const norm = (value: string): string => value.replace(/\s+/gu, ' ').trim();
 
 test.describe('RFIX2 R1b — blank-space starts', () => {
-  test.skip(YOLO === null, 'SKIPPED: the YOLO PDF is not present (research/benchmarks/fresh/pdfs).');
+  test.skip(
+    YOLO === null,
+    'SKIPPED: the YOLO PDF is not present (research/benchmarks/fresh/pdfs).',
+  );
 
   test('press right of the short last line then drag up-left; Shift+click into blank space; left margin; slow drag', async ({
     browser,
@@ -54,10 +57,13 @@ test.describe('RFIX2 R1b — blank-space starts', () => {
         { x: first.left + 0.5, y: (first.top + first.bottom) / 2 },
       );
       const text = await selectedText();
-      note(`A (press in blank space): ${JSON.stringify(text.slice(0, 40))} … ${JSON.stringify(text.slice(-40))}`);
+      note(
+        `A (press in blank space): ${JSON.stringify(text.slice(0, 40))} … ${JSON.stringify(text.slice(-40))}`,
+      );
       expect.soft(text.startsWith('We reframe object detection')).toBe(true);
       expect.soft(text.endsWith('where they are.')).toBe(true);
-      for (const stranger of strangers) expect.soft(text, `A must not contain ${stranger}`).not.toContain(stranger);
+      for (const stranger of strangers)
+        expect.soft(text, `A must not contain ${stranger}`).not.toContain(stranger);
       expect.soft(text.length).toBeLessThan(600);
       await clearSelection(page);
     }
@@ -72,24 +78,41 @@ test.describe('RFIX2 R1b — blank-space starts', () => {
       await page.keyboard.up('Shift');
       await page.waitForTimeout(300);
       const text = await selectedText();
-      note(`B (Shift+click into blank space): ${JSON.stringify(text.slice(0, 40))} … ${JSON.stringify(text.slice(-40))}`);
+      note(
+        `B (Shift+click into blank space): ${JSON.stringify(text.slice(0, 40))} … ${JSON.stringify(text.slice(-40))}`,
+      );
       expect.soft(text.startsWith('We reframe object detection')).toBe(true);
       expect.soft(text.endsWith('where they are.')).toBe(true);
-      for (const stranger of strangers) expect.soft(text, `B must not contain ${stranger}`).not.toContain(stranger);
+      for (const stranger of strangers)
+        expect.soft(text, `B must not contain ${stranger}`).not.toContain(stranger);
       await clearSelection(page);
     }
 
     // ── C: a leftward drag into the left page margin ends near the pointer's line ──────────
     {
       const lines = await page.evaluate(() => {
-        const layer = document.querySelector('.papertree-page[data-page-index="0"] .papertree-text-layer') as HTMLElement;
+        const layer = document.querySelector(
+          '.papertree-page[data-page-index="0"] .papertree-text-layer',
+        ) as HTMLElement;
         const page = layer.getBoundingClientRect();
         return Array.from(layer.querySelectorAll('span[data-item-index]'))
           .map((s) => {
             const r = s.getBoundingClientRect();
-            return { text: (s.textContent ?? '').trim(), left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+            return {
+              text: (s.textContent ?? '').trim(),
+              left: r.left,
+              top: r.top,
+              right: r.right,
+              bottom: r.bottom,
+            };
           })
-          .filter((s) => s.text.length > 25 && s.left < page.left + page.width * 0.45 && s.top > 300 && s.bottom < 880)
+          .filter(
+            (s) =>
+              s.text.length > 25 &&
+              s.left < page.left + page.width * 0.45 &&
+              s.top > 300 &&
+              s.bottom < 880,
+          )
           .sort((a, b) => a.top - b.top);
       });
       expect(lines.length).toBeGreaterThan(8);
@@ -97,7 +120,9 @@ test.describe('RFIX2 R1b — blank-space starts', () => {
       const l4 = lines[4] as (typeof lines)[number];
       const l8 = lines[8] as (typeof lines)[number];
       const margin = await page.evaluate(() => {
-        const layer = document.querySelector('.papertree-page[data-page-index="0"] .papertree-text-layer') as HTMLElement;
+        const layer = document.querySelector(
+          '.papertree-page[data-page-index="0"] .papertree-text-layer',
+        ) as HTMLElement;
         return layer.getBoundingClientRect().left + 10;
       });
       expect(margin).toBeLessThan(l4.left - 5);
@@ -107,8 +132,12 @@ test.describe('RFIX2 R1b — blank-space starts', () => {
         { x: margin, y: (l4.top + l4.bottom) / 2 },
       );
       const text = await selectedText();
-      note(`C (left margin, line 4): ${JSON.stringify(text.slice(0, 40))} … ${JSON.stringify(text.slice(-40))}`);
-      expect.soft(text, 'C reaches the line before the pointer').toContain(lines[3]?.text.slice(-12) ?? '?');
+      note(
+        `C (left margin, line 4): ${JSON.stringify(text.slice(0, 40))} … ${JSON.stringify(text.slice(-40))}`,
+      );
+      expect
+        .soft(text, 'C reaches the line before the pointer')
+        .toContain(lines[3]?.text.slice(-12) ?? '?');
       expect.soft(text, 'C must not include the pointer line').not.toContain(l4.text.slice(0, 20));
       expect.soft(text, 'C must not run to a far line').not.toContain(l8.text.slice(0, 20));
       await clearSelection(page);
@@ -125,18 +154,22 @@ test.describe('RFIX2 R1b — blank-space starts', () => {
         const t = i / steps;
         await page.mouse.move(
           first.left + 0.5 + (709 - first.left - 0.5) * t,
-          (first.top + first.bottom) / 2 + ((line.top + line.bottom) / 2 - (first.top + first.bottom) / 2) * t,
+          (first.top + first.bottom) / 2 +
+            ((line.top + line.bottom) / 2 - (first.top + first.bottom) / 2) * t,
         );
         await page.waitForTimeout(260);
       }
       await page.mouse.up();
       await page.waitForTimeout(300);
       const text = await selectedText();
-      note(`D (slow drag): ${JSON.stringify(text.slice(0, 40))} … ${JSON.stringify(text.slice(-50))}`);
+      note(
+        `D (slow drag): ${JSON.stringify(text.slice(0, 40))} … ${JSON.stringify(text.slice(-50))}`,
+      );
       expect.soft(text.startsWith('We reframe object detection')).toBe(true);
       expect.soft(text).not.toContain('where they are.');
       expect.soft(text).not.toContain('Highlight');
-      for (const stranger of strangers) expect.soft(text, `D must not contain ${stranger}`).not.toContain(stranger);
+      for (const stranger of strangers)
+        expect.soft(text, `D must not contain ${stranger}`).not.toContain(stranger);
       await clearSelection(page);
     }
   });

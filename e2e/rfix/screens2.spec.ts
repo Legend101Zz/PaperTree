@@ -24,7 +24,10 @@ test('RFIX2 screens - the header, a selection, a highlight, Guided with one crop
   test.setTimeout(900_000);
   const note = (line: string): void => console.log(`[e2e rfix2 screens] ${line}`);
   const shot = (name: string): string => shotPath(name, testInfo.outputPath('shots'));
-  const token = await register(stack.apiUrl, `e2e-rfix2-screens-${String(Date.now())}@papertree.test`);
+  const token = await register(
+    stack.apiUrl,
+    `e2e-rfix2-screens-${String(Date.now())}@papertree.test`,
+  );
   const paperId = await upload(stack.apiUrl, token, DDPM);
   await waitParsed(stack.apiUrl, token, paperId);
 
@@ -46,7 +49,9 @@ test('RFIX2 screens - the header, a selection, a highlight, Guided with one crop
       const page = await context.newPage();
       await page.goto(`/paper/${paperId}/read`);
       await expect
-        .poll(() => page.locator('.papertree-text-layer span[data-cp-start]').count(), { timeout: 180_000 })
+        .poll(() => page.locator('.papertree-text-layer span[data-cp-start]').count(), {
+          timeout: 180_000,
+        })
         .toBeGreaterThan(50);
       expect(await page.evaluate(() => document.visibilityState)).toBe('visible');
       if (size.width > 600) {
@@ -64,7 +69,12 @@ test('RFIX2 screens - the header, a selection, a highlight, Guided with one crop
           .filter((el) => {
             const r = el.getBoundingClientRect();
             const style = getComputedStyle(el);
-            return r.width > 0 && r.height > 0 && style.visibility !== 'hidden' && !el.classList.contains('sr-only');
+            return (
+              r.width > 0 &&
+              r.height > 0 &&
+              style.visibility !== 'hidden' &&
+              !el.classList.contains('sr-only')
+            );
           })
           .map((el) => {
             const r = el.getBoundingClientRect();
@@ -87,7 +97,9 @@ test('RFIX2 screens - the header, a selection, a highlight, Guided with one crop
         };
       });
       note(`${tag}: header ${JSON.stringify({ ...bar, controls: undefined })}`);
-      note(`${tag}: controls ${bar.controls.map((c) => `${c.what} ${String(c.w)}x${String(c.h)}`).join('; ')}`);
+      note(
+        `${tag}: controls ${bar.controls.map((c) => `${c.what} ${String(c.w)}x${String(c.h)}`).join('; ')}`,
+      );
       expect(bar.docWidth, 'no horizontal scroll').toBe(size.width);
       expect(bar.titleHeight, 'the title is one line').toBeLessThan(32);
       for (const c of bar.controls) {
@@ -113,7 +125,9 @@ test('RFIX2 screens - the header, a selection, a highlight, Guided with one crop
       await expect(button).toBeVisible();
       await page.screenshot({ path: shot(`selection-bar-${tag}.png`) });
       const scrollerTop = () =>
-        page.evaluate(() => (document.querySelector('[data-papertree-scroller]') as HTMLElement).scrollTop);
+        page.evaluate(
+          () => (document.querySelector('[data-papertree-scroller]') as HTMLElement).scrollTop,
+        );
       const before = await scrollerTop();
       await button.click();
       await page.waitForTimeout(1200);

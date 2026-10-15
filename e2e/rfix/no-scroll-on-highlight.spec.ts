@@ -1,20 +1,21 @@
 /**
- * RFIX2 R2 — pressing Highlight must not scroll the reader.
+ * RFIX2 R2 - pressing Highlight must not scroll the reader.
  *
  * Reproduced by the orchestrator in a real Chrome (DDPM, 25 pages, Source, scale 1.25, window
  * 1414x858 at devicePixelRatio 2, explain panel closed): the first Highlight moved scrollTop
  * 3908 -> 4108, the second 4108 -> 4443, while the scroller element, the saved position and the
  * reading state were unchanged, and `document.activeElement` afterwards was the scroll region.
  *
- * What a headless Chrome shows (and the base shows it too): NOTHING in the page scrolls
- * programmatically during the press, but the focus lands on the scroll region (`focusin` on
- * `[data-papertree-scroller]`). That is the one observable difference, so it is pinned; the
- * reader also holds the scroll position for a moment after a toolbar action (`holdScroll`), and the
- * second test proves that by making something else scroll the page and watching it come back.
- *
- * `e2e/rfix/no-jump.spec.ts` passes on the base too, so neither case here is a repeat of it: the
- * first fails on the base (focus moves to the scroller), the second fails on the base (nothing puts a
- * stray scroll back).
+ * WHAT WAS AND WAS NOT FOUND. Under Playwright (headless Chromium, headless and headed Chrome 153,
+ * the same size, scale and device pixel ratio, a hand-paced press) NOTHING moves the page and
+ * nothing calls a scroll or focus API: the first test records that, and it passes on the base too -
+ * it is the regression guard for "no code in the reader scrolls when a highlight is made". The
+ * scroll region is the active element in that run as well, but only because the drag that made the
+ * selection focused it (mousedown inside a focusable scroller), so it is not the cause. The browser
+ * move the orchestrator saw could not be made to happen here, so the second test simulates it (a
+ * stray +200 px, 80 ms after the press) and pins what the reader now does about it (`holdScroll`):
+ * put it back before the paint, and stop holding at the reader's first wheel. That test fails on
+ * the base. `e2e/rfix/no-jump.spec.ts` passes on the base too and is not a repeat of either.
  */
 import { join } from 'node:path';
 
@@ -42,41 +43,47 @@ async function openOnPage5(
 /** Wrap every API that can move the page or the focus; each call is recorded with its caller. */
 async function instrument(page: Page): Promise<void> {
   await page.evaluate((selector) => {
-    const w = window as unknown as { __calls: string[]; __focusin: string[] };
+    const w = window as unknown as { __calls: string[]; __scrolls: string[] };
     w.__calls = [];
-    w.__focusin = [];
+    w.__scrolls = [];
     const where = (): string => (new Error().stack ?? '').split('\n').slice(2, 5).join(' | ');
     const focus = HTMLElement.prototype.focus;
     HTMLElement.prototype.focus = function (this: HTMLElement, options?: FocusOptions) {
-      if (options?.preventScroll !== true) w.__calls.push(`focus() without preventScroll on ${this.tagName} :: ${where()}`);
+      if (options?.preventScroll !== true)
+        w.__calls.push(`focus() without preventScroll on ${this.tagName} :: ${where()}`);
       return focus.call(this, options);
     };
     for (const name of ['scrollIntoView', 'scrollTo', 'scrollBy', 'scroll'] as const) {
-      const original = (Element.prototype as unknown as Record<string, (...a: unknown[]) => unknown>)[name] as (...a: unknown[]) => unknown;
-      (Element.prototype as unknown as Record<string, unknown>)[name] = function (this: Element, ...args: unknown[]) {
+      const original = (
+        Element.prototype as unknown as Record<string, (...a: unknown[]) => unknown>
+      )[name] as (...a: unknown[]) => unknown;
+      (Element.prototype as unknown as Record<string, unknown>)[name] = function (
+        this: Element,
+        ...args: unknown[]
+      ) {
         w.__calls.push(`${name} on ${this.tagName} :: ${where()}`);
         return original.apply(this, args);
       };
     }
-    const descriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollTop') as PropertyDescriptor;
+    const descriptor = Object.getOwnPropertyDescriptor(
+      Element.prototype,
+      'scrollTop',
+    ) as PropertyDescriptor;
     Object.defineProperty(Element.prototype, 'scrollTop', {
       configurable: true,
       get() {
         return (descriptor.get as () => number).call(this);
       },
       set(value: number) {
-        w.__calls.push(`scrollTop = ${String(value)} on ${(this as Element).tagName} :: ${where()}`);
+        w.__calls.push(
+          `scrollTop = ${String(value)} on ${(this as Element).tagName} :: ${where()}`,
+        );
         (descriptor.set as (v: number) => void).call(this, value);
       },
     });
-    document.addEventListener(
-      'focusin',
-      (event) => {
-        const target = event.target as Element;
-        w.__focusin.push(target.matches(selector as string) ? 'SCROLLER' : target.tagName);
-      },
-      true,
-    );
+    (document.querySelector(selector as string) as HTMLElement).addEventListener('scroll', () => {
+      w.__scrolls.push('scroll event');
+    });
   }, SCROLLER);
 }
 
@@ -94,7 +101,10 @@ async function selectParagraph(page: Page) {
 }
 
 /** Press like a hand: approach, hover, press, hold, release. */
-async function press(page: Page, box: { x: number; y: number; width: number; height: number }): Promise<void> {
+async function press(
+  page: Page,
+  box: { x: number; y: number; width: number; height: number },
+): Promise<void> {
   const x = box.x + box.width / 2;
   const y = box.y + box.height / 2;
   await page.mouse.move(x - 80, y + 60, { steps: 10 });
@@ -110,7 +120,7 @@ const scrollTopOf = (page: Page): Promise<number> =>
   page.evaluate((s) => (document.querySelector(s) as HTMLElement).scrollTop, SCROLLER);
 
 test.describe('RFIX2 R2 — Highlight does not scroll the reader', () => {
-  test('no scroll or focus call, the focus does not go to the scroller, two highlights in a row', async ({
+  test('no scroll or focus call and no scroll event, two highlights in a row', async ({
     browser,
     stack,
   }) => {
@@ -125,7 +135,7 @@ test.describe('RFIX2 R2 — Highlight does not scroll the reader', () => {
         await page.waitForTimeout(800);
         await page.evaluate(() => {
           (window as unknown as { __calls: string[] }).__calls.length = 0;
-          (window as unknown as { __focusin: string[] }).__focusin.length = 0;
+          (window as unknown as { __scrolls: string[] }).__scrolls.length = 0;
         });
       }
       const before = await scrollTopOf(page);
@@ -137,16 +147,18 @@ test.describe('RFIX2 R2 — Highlight does not scroll the reader', () => {
       await page.waitForTimeout(1500);
       const after = await scrollTopOf(page);
       const calls = await page.evaluate(() => (window as unknown as { __calls: string[] }).__calls);
-      const focusin = await page.evaluate(() => (window as unknown as { __focusin: string[] }).__focusin);
-      const active = await page.evaluate((s) => document.activeElement?.matches(s) ?? false, SCROLLER);
+      const scrolls = await page.evaluate(
+        () => (window as unknown as { __scrolls: string[] }).__scrolls,
+      );
       console.log(
         `[e2e rfix2 R2] round ${String(round)}: scrollTop ${String(before)} -> ${String(beforePress)} (before press) -> ${String(after)}; ` +
-          `programmatic calls: ${JSON.stringify(calls)}; focusin: ${JSON.stringify(focusin)}; scroller is active: ${String(active)}`,
+          `programmatic calls: ${JSON.stringify(calls)}; scroll events: ${JSON.stringify(scrolls)}`,
       );
       expect(after, 'the press must not move the page').toBe(beforePress);
-      expect(calls, 'nothing may scroll or focus-without-preventScroll during the press').toEqual([]);
-      expect(focusin, 'the focus must not go to the scroll region').not.toContain('SCROLLER');
-      expect(active).toBe(false);
+      expect(calls, 'nothing may scroll or focus-without-preventScroll during the press').toEqual(
+        [],
+      );
+      expect(scrolls, 'no scroll event at all after the press').toEqual([]);
     }
   });
 
