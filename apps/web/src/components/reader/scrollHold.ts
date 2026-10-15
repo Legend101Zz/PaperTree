@@ -24,7 +24,9 @@
 /** Long enough for the create to land and the page to re-render; short enough never to be felt. */
 export const HOLD_SCROLL_MS = 1500;
 
-const USER_INPUT = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
+// `mousedown` as well as `pointerdown`: a drag of the scrollbar's thumb raises a mousedown in Chrome
+// but not always a pointerdown, and the hold must not put that drag back.
+const USER_INPUT = ['wheel', 'touchstart', 'keydown', 'pointerdown', 'mousedown'] as const;
 
 const active = new WeakMap<HTMLElement, () => void>();
 

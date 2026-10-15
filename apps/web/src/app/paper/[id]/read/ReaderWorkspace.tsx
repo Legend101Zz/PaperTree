@@ -151,15 +151,31 @@ function defaultZoomMode(): ZoomMode {
  */
 export function topBlockAt(doc: IndexedDocument, position: ReadingPosition): string | undefined {
   const placement = guidedProjectionFor(doc).placement;
-  const blocks = (doc.byPage.get(position.page) ?? [])
-    .filter(
-      (block) =>
-        block.text.trim().length > 0 &&
-        block.bbox[3] > position.yPt + 2 &&
-        placement.get(block.id)?.kind !== 'absent',
-    )
-    .sort((a, b) => a.readingIndex - b.readingIndex);
-  return blocks[0]?.id;
+  const cards = (pageIndex: number) =>
+    (doc.byPage.get(pageIndex) ?? [])
+      .filter((block) => block.text.trim().length > 0 && placement.get(block.id)?.kind !== 'absent')
+      .sort((a, b) => a.readingIndex - b.readingIndex);
+
+  const here = cards(position.page).filter((block) => block.bbox[3] > position.yPt + 2);
+  if (here[0] !== undefined) return here[0].id;
+
+  // Nothing on this page ends below the top of the view: the reader is in the page's bottom margin
+  // or in the gap between two pages (RFIX2 must-fix: "no block" opened Guided at the paper's title).
+  // The reader is about to read whatever comes next, so the first card of the next page that has
+  // one; failing that (the last page) the last card at or before this position.
+  const indices = doc.pages.map((page) => page.index).sort((a, b) => a - b);
+  for (const index of indices) {
+    if (index <= position.page) continue;
+    const next = cards(index)[0];
+    if (next !== undefined) return next.id;
+  }
+  for (const index of [...indices].reverse()) {
+    if (index > position.page) continue;
+    const before = cards(index);
+    const last = before[before.length - 1];
+    if (last !== undefined) return last.id;
+  }
+  return undefined;
 }
 
 /**

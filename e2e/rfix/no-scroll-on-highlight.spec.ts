@@ -199,3 +199,32 @@ test.describe('RFIX2 R2 — Highlight does not scroll the reader', () => {
     expect(Math.abs((await scrollTopOf(page)) - beforePress)).toBeGreaterThan(100);
   });
 });
+
+test.describe('RFIX2 R2 - the browser may not move the page on its own either', () => {
+  test('the scroller opts out of Chrome scroll anchoring, so a height change above the view does not scroll it', async ({
+    browser,
+    stack,
+  }) => {
+    test.setTimeout(600_000);
+    const page = await openOnPage5(browser, stack.apiUrl, 'r2c');
+    const anchor = await page.evaluate(
+      (s) => getComputedStyle(document.querySelector(s) as HTMLElement).overflowAnchor,
+      SCROLLER,
+    );
+    expect(anchor, 'overflow-anchor on the scroller').toBe('none');
+    // What a browser-initiated scroll looks like: something ABOVE the view changes height (a page
+    // above re-rendering at its true size, the highlight layer mounting). With anchoring on, Chrome
+    // moves scrollTop to keep its anchor still; with it off, scrollTop stays where the reader left it.
+    const before = await scrollTopOf(page);
+    await page.evaluate((s) => {
+      const first = (document.querySelector(s) as HTMLElement).firstElementChild as HTMLElement;
+      first.style.height = `${String(first.getBoundingClientRect().height + 300)}px`;
+    }, SCROLLER);
+    await page.waitForTimeout(500);
+    const after = await scrollTopOf(page);
+    console.log(
+      `[e2e rfix2 R2] +300 px above the view: scrollTop ${String(before)} -> ${String(after)}`,
+    );
+    expect(after, 'no browser-made scroll adjustment').toBe(before);
+  });
+});

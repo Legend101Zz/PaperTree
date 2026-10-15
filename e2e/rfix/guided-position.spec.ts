@@ -201,3 +201,85 @@ test.describe('RFIX2 R8 - a saved position that names no block still opens Guide
     });
   }
 });
+
+/**
+ * RFIX2 R8 (reviewer must-fix): "no block" at the page's bottom margin or in the gap between two
+ * pages used to open Guided at the paper's title (FlashAttention 7 of 14 positions, Mask R-CNN 7 of
+ * 14). A sweep of real wheel steps through pages 2-4 puts the top of the window in EVERY part of a
+ * page, margins and gaps included, and each position must open Guided past the title.
+ */
+const FLASH = join(
+  REPO,
+  'research',
+  'benchmarks',
+  'fresh',
+  'pdfs',
+  'flashattention-2205.14135.pdf',
+);
+
+for (const size of [
+  { width: 1440, height: 900 },
+  { width: 390, height: 844 },
+]) {
+  test(`FlashAttention: every position in a wheel sweep through pages 2-4 opens Guided past the title, ${String(size.width)}px`, async ({
+    browser,
+    stack,
+  }) => {
+    test.setTimeout(900_000);
+    const { page } = await openReader(
+      browser,
+      stack.apiUrl,
+      FLASH,
+      size,
+      `r8-sweep-${String(size.width)}`,
+      1,
+      size.width < 600 ? 'fit-width' : '1.25',
+    );
+    const scroller = '[data-papertree-scroller]';
+    // Small steps at 1440 (a page is ~1000 px there) so the top of the window lands in the bottom
+    // margin and the page gap as well.
+    const stepPx = size.width < 600 ? 260 : 110;
+    // Start on page 2 (index 1): past the title, whatever the zoom.
+    const pageHeight = await page.evaluate(
+      (s) => ((document.querySelector(s) as HTMLElement).scrollHeight - 400) / 20,
+      scroller,
+    );
+    await page.mouse.move(size.width / 2, 450);
+    await page.mouse.wheel(0, Math.round(pageHeight * 1.2));
+    await page.waitForTimeout(800);
+    const bad: string[] = [];
+    let marginHits = 0;
+    for (let step = 0; step < 18; step += 1) {
+      const saved = await page.evaluate(() => {
+        const key = Object.keys(localStorage).find((k) => k.startsWith('papertree/reader/'));
+        return key === undefined
+          ? null
+          : (JSON.parse(localStorage.getItem(key) as string) as {
+              page: number;
+              yPt: number;
+              blockId?: string;
+            });
+      });
+      if (saved !== null && saved.blockId === undefined) marginHits += 1;
+      await page.getByRole('radio', { name: 'Guided' }).click();
+      await page.waitForTimeout(900);
+      const guidedTop = await page.evaluate(
+        () => (document.querySelector('[data-guided-scroller]') as HTMLElement).scrollTop,
+      );
+      console.log(
+        `[e2e rfix2 R8 sweep ${String(size.width)}] step ${String(step)}: saved ${JSON.stringify(saved)} -> Guided scrollTop ${guidedTop.toFixed(0)}`,
+      );
+      if (guidedTop < 200)
+        bad.push(`step ${String(step)} ${JSON.stringify(saved)} -> ${guidedTop.toFixed(0)}`);
+      await page.getByRole('radio', { name: 'Source' }).click();
+      await page.waitForTimeout(900);
+      await page.mouse.move(size.width / 2, 450);
+      await page.mouse.wheel(0, stepPx);
+      await page.waitForTimeout(500);
+    }
+    console.log(
+      `[e2e rfix2 R8 sweep ${String(size.width)}] positions with no saved block: ${String(marginHits)}`,
+    );
+    expect(bad, 'Guided opened at the title for these positions').toEqual([]);
+  });
+}

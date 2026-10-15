@@ -125,19 +125,36 @@ describe('R8 topBlockAt - a position names a block Guided can find', () => {
     expect(checked).toBeGreaterThan(50);
   });
 
-  it('skips a furniture block that would come first (a synthetic page number ahead of the text)', () => {
-    const page = doc.pages.find((p) => (doc.byPage.get(p.index) ?? []).some((b) => b.type === 'paragraph'));
-    if (page === undefined) throw new Error('no page with a paragraph');
-    const body = (doc.byPage.get(page.index) ?? []).filter((b) => b.type === 'paragraph' && b.text.trim() !== '');
-    const first = body.toSorted((a, b) => a.readingIndex - b.readingIndex)[0] as IndexedBlock;
-    // A page number that reading order puts BEFORE every body block of the page.
-    const furniture = { ...first, id: 'blk_pagenum', type: 'page_number', text: '3', readingIndex: first.readingIndex - 0.5 } as IndexedBlock;
-    const withFurniture = {
-      ...doc,
-      byPage: new Map(doc.byPage).set(page.index, [furniture, ...(doc.byPage.get(page.index) ?? [])]),
-    } as unknown as typeof doc;
-    const named = topBlockAt(withFurniture, { page: page.index, yPt: 0 });
-    expect(named).not.toBe('blk_pagenum');
+  it('skips a furniture block that would come first (a REAL absent block ahead of the text)', () => {
+    // The arXiv stamp is a real margin_note the projection leaves out (placement 'absent'). Put it
+    // first in reading order on its page: only the placement filter keeps topBlockAt off it.
+    const stamp = (doc.byPage.get(0) ?? []).find((b) => placement.get(b.id)?.kind === 'absent' && b.text.trim() !== '');
+    if (stamp === undefined) throw new Error('no absent block on page 0');
+    const first = { ...stamp, readingIndex: -1 } as IndexedBlock;
+    const rest = (doc.byPage.get(0) ?? []).filter((b) => b.id !== stamp.id);
+    const withFurniture = { ...doc, byPage: new Map(doc.byPage).set(0, [first, ...rest]) } as unknown as typeof doc;
+    const named = topBlockAt(withFurniture, { page: 0, yPt: 0 });
+    expect(named).toBeDefined();
+    expect(named).not.toBe(stamp.id);
+    expect(placement.get(named as string)?.kind).not.toBe('absent');
+  });
+
+  it('a position in a page bottom margin names the first card of the NEXT page, never nothing', () => {
+    const page = doc.pages[1];
+    if (page === undefined) throw new Error('fixture has fewer than 2 pages');
+    // Below every block of the page: 777 pt on a 792 pt page (FlashAttention, Mask R-CNN, Adam did this).
+    const id = topBlockAt(doc, { page: page.index, yPt: page.height - 5 });
+    expect(id).toBeDefined();
+    expect(doc.byId.get(id as string)?.pageIndex).toBe(page.index + 1);
+  });
+
+  it('a position past the last block of the last page names the last card, never nothing', () => {
+    const last = doc.pages[doc.pages.length - 1];
+    if (last === undefined) throw new Error('no pages');
+    const id = topBlockAt(doc, { page: last.index, yPt: last.height + 100 });
+    expect(id).toBeDefined();
+    expect(doc.byId.get(id as string)?.pageIndex).toBeLessThanOrEqual(last.index);
+    expect(placement.get(id as string)?.kind).not.toBe('absent');
   });
 });
 
@@ -184,6 +201,15 @@ describe('R2 holdScroll - a toolbar action must not move the page', () => {
     el.dispatchEvent(new Event('scroll'));
     expect(el.scrollTop).toBe(4400);
     release();
+  });
+
+  it('a scrollbar drag (mousedown without a pointerdown) ends the hold and is not put back', () => {
+    const el = scroller(900);
+    holdScroll(el);
+    window.dispatchEvent(new Event('mousedown'));
+    el.scrollTop = 1500;
+    el.dispatchEvent(new Event('scroll'));
+    expect(el.scrollTop).toBe(1500);
   });
 
   it('lets go when the page list moves the page itself', () => {
