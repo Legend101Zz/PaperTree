@@ -34,6 +34,9 @@ interface Selection {
 }
 const NONE: Selection = { nodes: [], edges: [] };
 
+/** Shift as well as Ctrl/Cmd adds to the selection (S9). */
+const MULTI_SELECT_KEYS = ['Shift', 'Meta', 'Control'];
+
 export function CanvasView({ paperId }: { readonly paperId: string }) {
   return (
     <ReactFlowProvider>
@@ -160,7 +163,7 @@ function Canvas({ paperId }: { readonly paperId: string }) {
               type="button"
               className="pt-btn pt-btn--outline"
               aria-pressed={areaMode}
-              title="Drag across the canvas to select several cards"
+              title="Drag across the canvas to select several cards. Shift, Ctrl or Cmd plus click adds a card to the selection."
               onClick={() => setAreaMode((v) => !v)}
             >
               Select area
@@ -169,6 +172,7 @@ function Canvas({ paperId }: { readonly paperId: string }) {
               type="button"
               className="pt-btn pt-btn--outline"
               disabled={cards.length < 2}
+              title="Group the selected cards. Select two or more with Shift, Ctrl or Cmd plus click."
               onClick={() => void ctl.groupNodes(cards.map((n) => n.id))}
             >
               Group
@@ -295,6 +299,9 @@ function Canvas({ paperId }: { readonly paperId: string }) {
                 zoomOnDoubleClick={false}
                 // Delete only: Backspace is a typing key and one stray press must not remove a card.
                 deleteKeyCode={['Delete']}
+                // S9: Shift, Ctrl and Cmd all ADD to the selection (React Flow's own default is
+                // Meta/Ctrl only). Shift-drag on the empty canvas still draws a selection box.
+                multiSelectionKeyCode={MULTI_SELECT_KEYS}
                 selectionOnDrag={areaMode}
                 panOnDrag={!areaMode}
                 elevateNodesOnSelect={false}
