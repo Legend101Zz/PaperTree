@@ -33,6 +33,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   extentOf,
+  guidedProjectionFor,
   resolveAnchor,
   sourcePaint,
   type Anchor,
@@ -141,12 +142,36 @@ function defaultZoomMode(): ZoomMode {
   return window.innerWidth < 768 ? FIT_WIDTH : { kind: 'scale', scale: 1.25 };
 }
 
-/** The first block in reading order still visible at the top of `position` — the Guided link. */
+/**
+ * The first block in reading order still visible at the top of `position` - the Guided link.
+ *
+ * Only a block Guided has a card for counts (RFIX2 R8): page furniture (a page number, the arXiv
+ * stamp) and a figure's panels are on the page but not in the reading, and a position that named one
+ * of them could not be found again in Guided.
+ */
 export function topBlockAt(doc: IndexedDocument, position: ReadingPosition): string | undefined {
+  const placement = guidedProjectionFor(doc).placement;
   const blocks = (doc.byPage.get(position.page) ?? [])
-    .filter((block) => block.text.trim().length > 0 && block.bbox[3] > position.yPt + 2)
+    .filter(
+      (block) =>
+        block.text.trim().length > 0 &&
+        block.bbox[3] > position.yPt + 2 &&
+        placement.get(block.id)?.kind !== 'absent',
+    )
     .sort((a, b) => a.readingIndex - b.readingIndex);
   return blocks[0]?.id;
+}
+
+/**
+ * The block Guided opens at for the position the reader is at. The saved block when there is one;
+ * otherwise the one the page and offset name. A position can lack its block - it was saved before
+ * the parse had loaded, or the reader scrolled before it did - and "no block" must not mean "the top
+ * of the paper" (RFIX2 R8).
+ */
+export function initialBlockFor(doc: IndexedDocument | null, at: SavedReaderState | null): string | null {
+  if (at === null) return null;
+  if (at.blockId !== undefined) return at.blockId;
+  return doc === null ? null : (topBlockAt(doc, { page: at.page, yPt: at.yPt }) ?? null);
 }
 
 function useMediaQuery(query: string): boolean {
@@ -557,7 +582,7 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
           selection={selection}
           onSelectionChange={setSelection}
           initialPosition={positionRef.current === null ? null : { page: positionRef.current.page, yPt: positionRef.current.yPt }}
-          initialBlockId={positionRef.current?.blockId ?? null}
+          initialBlockId={initialBlockFor(doc, positionRef.current)}
           onSourcePosition={onSourcePosition}
           onGuidedTop={onGuidedTop}
           onFocusHighlight={focusHighlight}
