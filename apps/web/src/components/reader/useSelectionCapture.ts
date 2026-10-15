@@ -750,20 +750,40 @@ export function useSelectionCapture(options: UseSelectionCaptureOptions): UseSel
       }, delay);
     };
 
+    // A mouse or pen button is down: the reader is mid-drag. The selection is not final, and a
+    // toolbar that appears now would sit under the pointer (it opens below the first line near the
+    // top of a page) and swallow the end of the drag. `pointerup` reconciles at once.
+    let held = false;
     // iOS: the handles fire this continuously through the drag, so it is debounced.
-    const onSelectionChangeEvent = (): void => schedule(debounceMs);
+    const onSelectionChangeEvent = (): void => {
+      if (held) return;
+      schedule(debounceMs);
+    };
+    const onPointerDown = (event: PointerEvent): void => {
+      held = event.pointerType !== 'touch' && event.button === 0;
+    };
     // Every pointer device that HAS an up event: reconcile at once. Registered on the document
     // because a drag frequently ends outside the page element.
-    const onPointerUp = (): void => schedule(0);
+    const onPointerUp = (): void => {
+      held = false;
+      schedule(0);
+    };
+    const onBlur = (): void => {
+      held = false;
+    };
 
     document.addEventListener('selectionchange', onSelectionChangeEvent);
+    document.addEventListener('pointerdown', onPointerDown, true);
     document.addEventListener('pointerup', onPointerUp);
     document.addEventListener('pointercancel', onPointerUp);
+    window.addEventListener('blur', onBlur);
 
     return () => {
       document.removeEventListener('selectionchange', onSelectionChangeEvent);
+      document.removeEventListener('pointerdown', onPointerDown, true);
       document.removeEventListener('pointerup', onPointerUp);
       document.removeEventListener('pointercancel', onPointerUp);
+      window.removeEventListener('blur', onBlur);
       if (timerRef.current !== null) clearTimeout(timerRef.current);
       timerRef.current = null;
     };

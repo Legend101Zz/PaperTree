@@ -157,53 +157,58 @@ function offsetAtPoint(node: Text, box: Candidate, x: number, y: number): number
   return Math.round(((x - box.left) / Math.max(1, box.right - box.left)) * length);
 }
 
+interface Caret {
+  readonly node: Text;
+  readonly offset: number;
+}
+
 /**
- * Move the selection's focus to the text nearest a pointer that is over BLANK text-layer space.
- * Does nothing when the pointer is over text, outside any text layer, or there is no selection.
+ * The text layer a pointer position belongs to, and whether the pointer is over a text item.
+ * `null` when the position is not on a page (a toolbar, a dialog, outside the reader). Past the edge
+ * of a page, on the desk beside it, the layer is the one whose page the pointer is level with: a
+ * drag that overshoots still means "to the end of the line I am level with".
  */
-export function snapFocusToText(clientX: number, clientY: number): void {
-  const selection = document.getSelection();
-  if (selection === null || selection.rangeCount === 0 || selection.anchorNode === null) return;
+function layerUnder(
+  clientX: number,
+  clientY: number,
+): { readonly layer: HTMLElement; readonly overText: boolean; readonly onPage: boolean } | null {
   const hit = document.elementFromPoint(clientX, clientY);
-  if (hit === null) return;
-  let layer = hit.closest<HTMLElement>('.papertree-text-layer');
+  if (hit === null) return null;
+  const layer = hit.closest<HTMLElement>('.papertree-text-layer');
   if (layer !== null) {
-    if (!layers.has(layer)) return;
-    if (hit.closest('[data-item-index]') !== null) return;
-  } else {
-    // Past the edge of the page, on the desk beside it: a drag that overshoots still means "to the
-    // end of the line I am level with". Only inside the reader's scroller, and only level with a page.
-    if (hit.closest('[data-papertree-scroller]') === null || hit.closest('[role="toolbar"], [role="dialog"], button') !== null) return;
-    for (const candidate of layers.keys()) {
-      const box = candidate.getBoundingClientRect();
-      if (clientY >= box.top && clientY <= box.bottom) {
-        layer = candidate;
-        break;
-      }
-    }
-    if (layer === null) return;
+    if (!layers.has(layer)) return null;
+    return { layer, overText: hit.closest('[data-item-index]') !== null, onPage: true };
   }
+  // Only inside the reader's scroller, and only level with a page.
+  if (hit.closest('[data-papertree-scroller]') === null || hit.closest('[role="toolbar"], [role="dialog"], button') !== null) return null;
+  for (const candidate of layers.keys()) {
+    const box = candidate.getBoundingClientRect();
+    if (clientY >= box.top && clientY <= box.bottom) return { layer: candidate, overText: false, onPage: false };
+  }
+  return null;
+}
 
-  const anchor = anchorPoint(selection);
-  const forward = anchor === null ? true : clientY > anchor.y + 2 || (Math.abs(clientY - anchor.y) <= 2 && clientX >= anchor.x);
-
+/** Every non-empty item of one layer, with its box. */
+function candidatesOf(layer: HTMLElement): Candidate[] {
   const all: Candidate[] = [];
   layer.querySelectorAll<HTMLElement>('[data-item-index]').forEach((element) => {
     const node = element.firstChild;
     if (!(node instanceof Text) || node.data.trim().length === 0) return;
     const r = element.getBoundingClientRect();
     if (r.width <= 0 || r.height <= 0) return;
+    // Text set along a margin (the arXiv stamp) is a tall, thin box that spans every line beside
+    // it: a pointer in the margin is "level with" it for the whole page. It is never a line.
+    if (r.height > 60 && r.height > r.width * 1.5) return;
     all.push({ element, left: r.left, top: r.top, right: r.right, bottom: r.bottom });
   });
-  // A drag stays in its column: only text that overlaps the horizontal span between where the drag
-  // started and where the pointer is can be a target. Text wholly outside that span is another
-  // column (or the other side of the gutter), however close it is vertically.
-  const lo = anchor === null ? clientX : Math.min(anchor.x, clientX) - 4;
-  const hi = anchor === null ? clientX : Math.max(anchor.x, clientX) + 4;
-  const eligible = anchor === null ? all : all.filter((c) => c.right >= lo && c.left <= hi);
-  const pool = eligible.length > 0 ? eligible : all;
-  if (pool.length === 0) return;
+  return all;
+}
 
+/**
+ * The item a pointer over BLANK space means. Level with a line: the nearest item on it. In a gap or
+ * past the text: the line before the pointer (dragging down) or after it (dragging up).
+ */
+function nearestItem(pool: readonly Candidate[], clientX: number, clientY: number, forward: boolean): Candidate | null {
   let best: Candidate | null = null;
   let bestScore = Number.POSITIVE_INFINITY;
   // 1. level with a line: the nearest item on it.
@@ -215,34 +220,116 @@ export function snapFocusToText(clientX: number, clientY: number): void {
       bestScore = dx;
     }
   }
-  // 2. in a gap or past the text: the line before the pointer (dragging down) or after it (up).
-  if (best === null) {
-    for (const c of pool) {
-      const before = c.bottom <= clientY;
-      const after = c.top >= clientY;
-      if (!before && !after) continue;
-      const dy = before ? clientY - c.bottom : c.top - clientY;
-      const dx = clientX < c.left ? c.left - clientX : clientX > c.right ? clientX - c.right : 0;
-      const wrongSide = forward ? after : before;
-      const score = dy * 4 + dx + (wrongSide ? 100000 : 0);
-      if (score < bestScore) {
-        best = c;
-        bestScore = score;
-      }
+  if (best !== null) return best;
+  // 2. in a gap or past the text.
+  for (const c of pool) {
+    const before = c.bottom <= clientY;
+    const after = c.top >= clientY;
+    if (!before && !after) continue;
+    const dy = before ? clientY - c.bottom : c.top - clientY;
+    const dx = clientX < c.left ? c.left - clientX : clientX > c.right ? clientX - c.right : 0;
+    const wrongSide = forward ? after : before;
+    const score = dy * 4 + dx + (wrongSide ? 100000 : 0);
+    if (score < bestScore) {
+      best = c;
+      bestScore = score;
     }
   }
-  if (best === null) return;
+  return best;
+}
+
+/** The offset in `best` for a pointer that is over blank space near it. */
+function caretIn(best: Candidate, clientX: number, clientY: number, forward: boolean): Caret | null {
   const node = best.element.firstChild;
-  if (!(node instanceof Text)) return;
+  if (!(node instanceof Text)) return null;
   let offset = offsetAtPoint(node, best, clientX, clientY);
   // Below/above the line and beyond it: take the whole line, not a half-letter.
   if (clientY > best.bottom && forward) offset = clientX >= best.left && clientX < best.right ? offset : clientX >= best.right ? node.data.length : 0;
-  if (selection.focusNode === node && selection.focusOffset === offset) return;
-  try {
-    selection.extend(node, offset);
-  } catch {
-    /* a selection that cannot be extended is left as the browser made it */
+  return { node, offset };
+}
+
+/** The caret under a pointer that is over a text item (what the browser itself would choose). */
+function caretUnder(clientX: number, clientY: number): Caret | null {
+  const doc = document as Document & {
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+  };
+  const position = doc.caretPositionFromPoint?.(clientX, clientY);
+  if (position && position.offsetNode instanceof Text) return { node: position.offsetNode, offset: position.offset };
+  const range = doc.caretRangeFromPoint?.(clientX, clientY);
+  if (range && range.startContainer instanceof Text) return { node: range.startContainer, offset: range.startOffset };
+  return null;
+}
+
+/**
+ * Where a drag or Shift+click that STARTS or EXTENDS over blank space should put its anchor: the
+ * nearest text, with no column to respect yet (the drag has not started). `null` when the pointer
+ * is over text (the browser's own choice is right) or not on a page.
+ */
+export function caretNearBlank(clientX: number, clientY: number): Caret | null {
+  const under = layerUnder(clientX, clientY);
+  if (under === null || under.overText) return null;
+  const pool = candidatesOf(under.layer);
+  const best = nearestItem(pool, clientX, clientY, true);
+  return best === null ? null : caretIn(best, clientX, clientY, true);
+}
+
+/**
+ * Move the selection's focus to the text nearest a pointer that is over BLANK text-layer space.
+ * Does nothing when the pointer is over text (unless `force`: the drag's anchor was set here, so the
+ * browser's own extension cannot be trusted), outside any text layer, or there is no selection.
+ * Returns whether the selection was extended.
+ */
+export function snapFocusToText(clientX: number, clientY: number, force = false): boolean {
+  const selection = document.getSelection();
+  if (selection === null || selection.rangeCount === 0 || selection.anchorNode === null) return false;
+  const under = layerUnder(clientX, clientY);
+  if (under === null) return false;
+  if (under.overText && !force) return false;
+  const layer = under.layer;
+
+  const extendTo = (caret: Caret): boolean => {
+    if (selection.focusNode === caret.node && selection.focusOffset === caret.offset) return true;
+    try {
+      selection.extend(caret.node, caret.offset);
+      return true;
+    } catch {
+      /* a selection that cannot be extended is left as the browser made it */
+      return false;
+    }
+  };
+  if (under.overText) {
+    const caret = caretUnder(clientX, clientY);
+    return caret === null ? false : extendTo(caret);
   }
+
+  const anchor = anchorPoint(selection);
+  const forward = anchor === null ? true : clientY > anchor.y + 2 || (Math.abs(clientY - anchor.y) <= 2 && clientX >= anchor.x);
+
+  const all = candidatesOf(layer);
+  // A drag stays in its column: only text that overlaps the horizontal span between where the drag
+  // started and where the pointer is can be a target. Text wholly outside that span is another
+  // column (or the other side of the gutter), however close it is vertically.
+  const lo = anchor === null ? clientX : Math.min(anchor.x, clientX) - 4;
+  const hi = anchor === null ? clientX : Math.max(anchor.x, clientX) + 4;
+  const eligible = anchor === null ? all : all.filter((c) => c.right >= lo && c.left <= hi);
+  const pool = eligible.length > 0 ? eligible : all;
+  if (pool.length === 0) return false;
+
+  const best = nearestItem(pool, clientX, clientY, forward);
+  if (best === null) return false;
+  const caret = caretIn(best, clientX, clientY, forward);
+  return caret === null ? false : extendTo(caret);
+}
+
+/**
+ * A drag that BEGAN in blank space, or a Shift+click: the browser guesses the anchor (or the
+ * extension) from the text layer's DOM order, and the guess is wrong for blank space just as it is
+ * for the end of a drag. These carry the anchor we choose instead.
+ */
+interface OwnedStart {
+  /** Where the selection's anchor must be: snapped from the press (drag), or the one it had (Shift). */
+  readonly anchor: Caret;
 }
 
 function enableGlobalListeners(): void {
@@ -256,16 +343,63 @@ function enableGlobalListeners(): void {
   // click, or a press on a toolbar, must never grow a selection out of a stale caret.
   let dragging = false;
   let downAt: { x: number; y: number } | null = null;
+  let owned: OwnedStart | null = null;
+
+  /** Put the selection where we mean it to be for a pointer at (x, y), then snap its focus there. */
+  const apply = (x: number, y: number): void => {
+    const selection = document.getSelection();
+    if (selection === null) return;
+    if (owned === null) {
+      snapFocusToText(x, y);
+      return;
+    }
+    const before = selection.focusNode !== null ? { node: selection.focusNode, offset: selection.focusOffset } : null;
+    try {
+      selection.setBaseAndExtent(owned.anchor.node, owned.anchor.offset, owned.anchor.node, owned.anchor.offset);
+    } catch {
+      owned = null;
+      return;
+    }
+    if (!snapFocusToText(x, y, true) && before !== null) {
+      // Not on a page (a toolbar, past the reader): keep what the browser had extended to.
+      try {
+        selection.extend(before.node, before.offset);
+      } catch {
+        /* leave the collapsed selection */
+      }
+    }
+  };
+
   document.addEventListener(
     'pointerdown',
     (event) => {
       pointerDown = true;
       dragging = false;
+      owned = null;
       const target = event.target instanceof Element ? event.target : null;
       const inLayer = target?.closest('.papertree-text-layer') ?? null;
+      const primary = inLayer !== null && event.button === 0 && event.pointerType !== 'touch';
       downAt = inLayer !== null && event.button === 0 && !event.shiftKey ? { x: event.clientX, y: event.clientY } : null;
+      if (!primary || event.detail > 1) return;
+      const selection = document.getSelection();
+      if (event.shiftKey) {
+        // Shift+click extends the selection the reader already has. Into blank space the browser
+        // chooses the extension from DOM order; the anchor is kept and the focus snapped.
+        if (selection === null || selection.rangeCount === 0 || !(selection.anchorNode instanceof Text)) return;
+        const host = selection.anchorNode.parentElement?.closest('.papertree-text-layer');
+        if (host === null || host === undefined) return;
+        if (caretNearBlank(event.clientX, event.clientY) === null) return;
+        owned = { anchor: { node: selection.anchorNode, offset: selection.anchorOffset } };
+        const { clientX, clientY } = event;
+        // After the browser's own handling of this press, before the next paint.
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(() => apply(clientX, clientY));
+        return;
+      }
+      const anchor = caretNearBlank(event.clientX, event.clientY);
+      if (anchor !== null) owned = { anchor };
     },
-    { signal },
+    { signal, capture: true },
   );
   // Live feedback while dragging: after the browser has applied its own selection for this move.
   document.addEventListener(
@@ -273,11 +407,11 @@ function enableGlobalListeners(): void {
     (event) => {
       if (event.pointerType === 'touch' || (event.buttons & 1) === 0 || !pointerDown) return;
       const { clientX, clientY } = event;
-      if (downAt === null) return;
-      if (Math.hypot(clientX - downAt.x, clientY - downAt.y) > 4) dragging = true;
-      if (!dragging) return;
+      if (downAt === null && owned === null) return;
+      if (downAt !== null && Math.hypot(clientX - downAt.x, clientY - downAt.y) > 4) dragging = true;
+      if (!dragging && owned === null) return;
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => snapFocusToText(clientX, clientY));
+      frame = requestAnimationFrame(() => apply(clientX, clientY));
     },
     { signal },
   );
@@ -286,10 +420,11 @@ function enableGlobalListeners(): void {
     (event) => {
       cancelAnimationFrame(frame);
       // The final word: before the reader's own pointerup handler reads the selection.
-      if (pointerDown && dragging && event.pointerType !== 'touch') snapFocusToText(event.clientX, event.clientY);
+      if (pointerDown && (dragging || owned !== null) && event.pointerType !== 'touch') apply(event.clientX, event.clientY);
       pointerDown = false;
       dragging = false;
       downAt = null;
+      owned = null;
       resetAll();
     },
     { signal, capture: true },
@@ -298,6 +433,7 @@ function enableGlobalListeners(): void {
     'blur',
     () => {
       pointerDown = false;
+      owned = null;
       resetAll();
     },
     { signal },

@@ -76,3 +76,20 @@ export async function clearSelection(page: Page): Promise<void> {
   await page.evaluate(() => window.getSelection()?.removeAllRanges());
   await page.waitForTimeout(150);
 }
+
+/** Client box of the first rendered text-layer span, on ANY page, whose text contains `needle`. */
+export async function spanBoxAny(
+  page: Page,
+  needle: string,
+): Promise<{ left: number; top: number; right: number; bottom: number }> {
+  const box = await page.evaluate((text) => {
+    const span = Array.from(
+      document.querySelectorAll('.papertree-text-layer span[data-item-index]'),
+    ).find((s) => (s.textContent ?? '').includes(text));
+    if (span === undefined) return null;
+    const r = span.getBoundingClientRect();
+    return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+  }, needle);
+  if (box === null) throw new Error(`no rendered span contains ${JSON.stringify(needle)}`);
+  return box;
+}
