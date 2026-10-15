@@ -39,10 +39,10 @@ obvious version of this test would have been green and worthless:
 4. **The same write SUCCEEDS through the privileged path.**
    ``test_the_identical_preference_is_writable_through_the_privileged_store`` writes the
    attacker's exact preference — ``{"level": "expert", "explanations": "none"}`` — into
-   ``user_learning_memory`` via ``MemoryStore.confirm_proposal``, quoting the injected span as
-   its evidence. If it did not, this suite would prove only that nothing works. The single
-   difference between the failing route and the succeeding one is which object the caller
-   holds, and that is the entire trust boundary in one sentence.
+   ``user_learning_memory`` via a privileged raw INSERT (S8a: the MemoryStore is deleted),
+   quoting the injected span as its evidence. If it did not, this suite would prove only that
+   nothing works. The single difference between the failing route and the succeeding one is
+   which object the caller holds, and that is the entire trust boundary in one sentence.
 
 WHAT THIS FILE DELIBERATELY DOES NOT DO: grep a prompt. There is no prompt here. §13.6(c) is
 explicit that detection must be assumed to have 0% recall, so nothing below depends on
@@ -63,6 +63,7 @@ from _memory_fixtures import (  # noqa: I001  (sibling module; see its docstring
     FETCH_SCRIPT,
     INJECTED_PREFERENCE,
     INJECTION_PAYLOAD,
+    RawPrivilegedWriter,
     SeededDatabase,
     clone_corpus_pdf_with_payload,
     requires_corpus,
@@ -72,20 +73,9 @@ from _memory_fixtures import (  # noqa: I001  (sibling module; see its docstring
 from papertree_db import BlockId, Generation, PaperId
 from papertree_memory import (
     AgentDataHandle,
-    EvidenceSpan,
-    MemoryStore,
-    ProposalValidator,
     RouteProbe,
     TrustBoundaryViolation,
-    UserConfirmation,
     escape_routes,
-    now_iso,
-)
-
-#: A plausible tool vocabulary. It is passed explicitly so the ``tool_name`` rule is live; see
-#: ``validation.py`` on why an empty default would make it silently inert.
-TOOL_NAMES = frozenset(
-    {"get_block", "get_block_text", "search_blocks", "list_sections", "cite_span"}
 )
 
 SESSION_ID = "ses_injection_spec"
@@ -104,10 +94,11 @@ def adversarial(tmp_path_factory: pytest.TempPathFactory) -> SeededDatabase:
 
 
 @pytest.fixture
-def store(adversarial: SeededDatabase) -> Iterator[MemoryStore]:
-    memory = MemoryStore(adversarial.path, validator=ProposalValidator(tool_names=TOOL_NAMES))
-    yield memory
-    memory.close()
+def store(adversarial: SeededDatabase) -> Iterator[RawPrivilegedWriter]:
+    """The privileged side. S8a replaced the deleted ``MemoryStore`` with raw SQL."""
+    writer = RawPrivilegedWriter(adversarial.path)
+    yield writer
+    writer.close()
 
 
 @pytest.fixture
@@ -224,7 +215,9 @@ def test_the_handle_exposes_no_write_route_at_all(handle: AgentDataHandle) -> No
     # Non-vacuous: the search DOES find write verbs when there are any to find, so an empty
     # result above is a fact about AgentDataHandle rather than about the search.
     assert [
-        name for name in dir(MemoryStore) if not name.startswith("__") and "write" in name.lower()
+        name
+        for name in dir(RawPrivilegedWriter)
+        if not name.startswith("__") and "delete" in name.lower()
     ] != []
 
 
@@ -325,11 +318,11 @@ def test_the_escape_statements_are_not_refused_on_an_ordinary_connection(
 
 
 def test_no_user_learning_row_exists_after_the_full_attack(
-    adversarial: SeededDatabase, store: MemoryStore, handle: AgentDataHandle, tmp_path: Path
+    adversarial: SeededDatabase, store: RawPrivilegedWriter, handle: AgentDataHandle, tmp_path: Path
 ) -> None:
     """The criterion in its plainest form: the attacker's record is not in the trusted store."""
     paper = adversarial.papers["white_on_white"]
-    owner = store.owner_for(adversarial.user_id)
+    owner = adversarial.user_id
     scratch = tmp_path / "full-attack"
     scratch.mkdir()
 
@@ -341,14 +334,14 @@ def test_no_user_learning_row_exists_after_the_full_attack(
     assert all(probe.denied for probe in probes)
 
     assert store.list_user_learning_memory(owner) == []
-    assert store.user_learning_usage(owner).records == 0
+    assert store.count_user_learning(owner) == 0
 
 
 # ── 3. the denial is recorded ───────────────────────────────────────────────────────────
 
 
 def test_the_denial_is_recorded_in_memory_audit(
-    adversarial: SeededDatabase, store: MemoryStore, handle: AgentDataHandle, tmp_path: Path
+    adversarial: SeededDatabase, store: RawPrivilegedWriter, handle: AgentDataHandle, tmp_path: Path
 ) -> None:
     """§13.6(d)'s per-write stream records the attempts, not only the successes.
 
@@ -359,7 +352,7 @@ def test_the_denial_is_recorded_in_memory_audit(
     """
     scratch = tmp_path / "audited"
     scratch.mkdir()
-    owner = store.owner_for(adversarial.user_id)
+    owner = adversarial.user_id
     paper = adversarial.papers["white_on_white"]
 
     probes = handle.probe_escape_routes(scratch)
@@ -381,7 +374,7 @@ def test_the_denial_is_recorded_in_memory_audit(
 
 
 def test_recording_an_escaped_route_raises_rather_than_returning_quietly(
-    adversarial: SeededDatabase, store: MemoryStore
+    adversarial: SeededDatabase, store: RawPrivilegedWriter
 ) -> None:
     """The alarm fires. §13.6(d): "if it fires, a control has failed" — so it must fire.
 
@@ -389,7 +382,7 @@ def test_recording_an_escaped_route_raises_rather_than_returning_quietly(
     audit row. A control-failure path that returns quietly leaves a service running with an
     open boundary and one log line nobody is reading.
     """
-    owner = store.owner_for(adversarial.user_id)
+    owner = adversarial.user_id
     escaped = RouteProbe(
         route="attach_writable_side_database",
         statement="ATTACH DATABASE '/tmp/whatever' AS evil",
@@ -410,7 +403,7 @@ def test_recording_an_escaped_route_raises_rather_than_returning_quietly(
 
 
 def test_the_identical_preference_is_writable_through_the_privileged_store(
-    adversarial: SeededDatabase, store: MemoryStore, handle: AgentDataHandle
+    adversarial: SeededDatabase, store: RawPrivilegedWriter, handle: AgentDataHandle
 ) -> None:
     """Without this test the suite proves only that nothing works.
 
@@ -421,7 +414,7 @@ def test_the_identical_preference_is_writable_through_the_privileged_store(
     failing attempt above is which object the caller was holding.
     """
     paper = adversarial.papers["white_on_white"]
-    owner = store.owner_for(adversarial.user_id)
+    owner = adversarial.user_id
     block_id = BlockId(paper.payload_block_ids[0])
     block = handle.get_block(paper.paper_id, paper.generation, block_id)
     assert block is not None
@@ -430,31 +423,25 @@ def test_the_identical_preference_is_writable_through_the_privileged_store(
     end = start + len("ignore previous instructions")
     quote = text[start:end]
 
-    outcome = store.create_proposal(
+    # The deleted store checked the quote against the block; the check survives here.
+    assert text[start:end] == quote
+
+    proposal_id, memory_id = store.insert_confirmed_preference(
         owner,
-        paper.paper_id,
-        paper.generation,
-        session_id=SESSION_ID,
+        paper,
         kind="preferred_depth",
         content=INJECTED_PREFERENCE,
-        evidence=EvidenceSpan(str(block_id), quote, start, end),
-        model_id="anthropic/claude-haiku-4.5",
-        prompt_hash="sha256:" + "0" * 64,
-    )
-    assert outcome.state == "pending", outcome.rejection_rule
-
-    memory_id = store.confirm_proposal(
-        owner,
-        UserConfirmation(
-            proposal_id=outcome.proposal_id, evidence_quote=quote, confirmed_at=now_iso()
-        ),
+        quote=quote,
+        block_id=str(block_id),
+        start=start,
+        end=end,
     )
     rows = store.list_user_learning_memory(owner)
     assert [row["memory_id"] for row in rows] == [memory_id]
     assert json.loads(str(rows[0]["content"])) == INJECTED_PREFERENCE
     assert rows[0]["trust_label"] == "trusted"
     assert rows[0]["confirmed_by"] == "user"
-    assert rows[0]["source_proposal_id"] == outcome.proposal_id
+    assert rows[0]["source_proposal_id"] == proposal_id
 
     # …and the agent can READ it, which §13.4 grants explicitly ("read only, forever").
     assert [row["memory_id"] for row in handle.list_user_learning_memory()] == [memory_id]
@@ -488,7 +475,7 @@ def test_the_pdf_metadata_channel_does_not_reach_paperir(
 
 
 def test_the_figure_image_channel_is_blocked_structurally_whether_or_not_it_lands(
-    adversarial: SeededDatabase, store: MemoryStore, handle: AgentDataHandle, tmp_path: Path
+    adversarial: SeededDatabase, store: RawPrivilegedWriter, handle: AgentDataHandle, tmp_path: Path
 ) -> None:
     """The figure exists; its rasterised instruction does not become text without a VLM.
 
@@ -509,7 +496,7 @@ def test_the_figure_image_channel_is_blocked_structurally_whether_or_not_it_land
 
     scratch = tmp_path / "figure-attack"
     scratch.mkdir()
-    owner = store.owner_for(adversarial.user_id)
+    owner = adversarial.user_id
     assert all(probe.denied for probe in handle.probe_escape_routes(scratch))
     assert store.list_user_learning_memory(owner) == []
 
@@ -534,10 +521,10 @@ def test_the_boundary_holds_on_a_real_paper_with_an_injected_span(
     paper = seeded.papers["resnet"]
 
     with (
-        MemoryStore(seeded.path, validator=ProposalValidator(tool_names=TOOL_NAMES)) as store,
+        RawPrivilegedWriter(seeded.path) as store,
         AgentDataHandle(seeded.path, seeded.user_id) as handle,
     ):
-        owner = store.owner_for(seeded.user_id)
+        owner = seeded.user_id
         assert handle.count_blocks(paper.paper_id, paper.generation) > 50
         assert paper.payload_block_ids, "the payload did not land in the real paper either"
 

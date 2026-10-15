@@ -155,6 +155,8 @@ class FakeAgent:
         #: One-shot scripts, used first, in order (the server's `POST /_fake/script`).
         self.queued: list[Script] = []
         self.secret = secret
+        #: The `run.model` to report instead of the fixture's (a Flash-shaped agent).
+        self.model: str | None = None
         self.tools = tools
         self.requests: list[dict[str, Any]] = []
         self.headers: list[dict[str, str]] = []
@@ -264,6 +266,8 @@ class FakeAgent:
                 event = frame.event
                 if event == "run":
                     data["run_id"] = run_id
+                    if self.model is not None:
+                        data["model"] = self.model
                 elif event == "status" and data.get("phase") == "tool" and script.call_tools:
                     await self._fixture_tool(context, data)
                 elif event == "text":

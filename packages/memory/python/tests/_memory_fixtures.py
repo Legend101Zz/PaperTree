@@ -47,13 +47,18 @@ believes all three landed would be asserting against text that is not in the dat
 from __future__ import annotations
 
 import glob
+import json
+import sqlite3
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pytest
 from papertree_db import Generation, PaperId, PaperTreeDb, generation, new_id
 from papertree_document_worker.pdf import pymupdf
 from papertree_document_worker.pipeline import ParserConfig, parse_document
+from papertree_memory import RouteProbe, TrustBoundaryViolation
 
 # ── corpus manifest (a local copy; see the note below) ──────────────────────────────────
 
@@ -367,3 +372,164 @@ def seed_two_tenants(root: Path) -> TwoTenants:
         bob_user_id=seeded[1][0],
         bob_paper=seeded[1][1],
     )
+
+
+# ── the privileged side, as raw SQL ─────────────────────────────────────────────────────
+
+
+class RawPrivilegedWriter:
+    """A plain read-write ``sqlite3`` connection standing in for the deleted ``MemoryStore``.
+
+    S8a deleted the memory write side (``store.py``, ``validation.py``, ``records.py``): it had
+    no product caller. The security tests still need "the privileged side" to exist, because
+    every "the agent could not write" assertion is only meaningful next to "a connection that
+    is allowed to write, can" (non-vacuity). This class is that side, and it is raw INSERTs
+    against the 0003 tables on purpose: no policy lives in it, so a test that passes through it
+    is passing on the SCHEMA's constraints and the agent-side guard, not on a second copy of
+    the deleted store's logic.
+    """
+
+    def __init__(self, database_path: str | Path) -> None:
+        self._conn = sqlite3.connect(str(database_path), isolation_level=None)
+        self._conn.row_factory = sqlite3.Row
+        self._conn.execute("PRAGMA foreign_keys = ON")
+
+    def close(self) -> None:
+        self._conn.close()
+
+    def __enter__(self) -> RawPrivilegedWriter:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
+
+    def _next_id(self, prefix: str) -> str:
+        return new_id(prefix)
+
+    def count_user_learning(self, user_id: str) -> int:
+        row = self._conn.execute(
+            "SELECT COUNT(*) AS n FROM user_learning_memory WHERE owner_id = ?", (user_id,)
+        ).fetchone()
+        return int(row["n"])
+
+    def list_user_learning_memory(self, user_id: str) -> list[dict[str, Any]]:
+        rows = self._conn.execute(
+            "SELECT * FROM user_learning_memory WHERE owner_id = ? ORDER BY kind, created_at",
+            (user_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def insert_confirmed_preference(
+        self,
+        user_id: str,
+        paper: SeededPaper,
+        *,
+        kind: str,
+        content: dict[str, Any],
+        quote: str,
+        block_id: str,
+        start: int,
+        end: int,
+    ) -> tuple[str, str]:
+        """An accepted proposal plus the trusted row citing it. Returns (proposal_id, memory_id)."""
+        proposal_id = self._next_id("prp")
+        memory_id = self._next_id("mem")
+        stamp = "2026-01-01T00:00:00Z"
+        self._conn.execute(
+            "INSERT INTO memory_proposals (proposal_id, owner_id, paper_id, generation, "
+            "session_id, kind, content, evidence_block_id, evidence_quote, evidence_char_start, "
+            "evidence_char_end, state, rejection_rule, model_id, prompt_hash, created_at, "
+            "decided_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,'accepted',NULL,?,?,?,?)",
+            (
+                proposal_id,
+                user_id,
+                str(paper.paper_id),
+                int(paper.generation),
+                "ses_raw",
+                kind,
+                json.dumps(content),
+                block_id,
+                quote,
+                start,
+                end,
+                "test/model",
+                "sha256:" + "0" * 64,
+                stamp,
+                stamp,
+            ),
+        )
+        self._conn.execute(
+            "INSERT INTO user_learning_memory (memory_id, owner_id, kind, content, trust_label, "
+            "provenance, confidence, version, source_proposal_id, confirmed_at, confirmed_by, "
+            "created_at, updated_at, reconfirm_due) VALUES "
+            "(?,?,?,?,'trusted','{}',1.0,1,?,?,'user',?,?,?)",
+            (
+                memory_id,
+                user_id,
+                kind,
+                json.dumps(content),
+                proposal_id,
+                stamp,
+                stamp,
+                stamp,
+                "2026-04-01T00:00:00Z",
+            ),
+        )
+        return proposal_id, memory_id
+
+    def delete_user_learning_memory(self, user_id: str, memory_id: str) -> int:
+        cursor = self._conn.execute(
+            "DELETE FROM user_learning_memory WHERE owner_id = ? AND memory_id = ?",
+            (user_id, memory_id),
+        )
+        return int(cursor.rowcount)
+
+    def list_audit(self, user_id: str) -> list[dict[str, Any]]:
+        rows = self._conn.execute(
+            "SELECT * FROM memory_audit WHERE owner_id = ? ORDER BY created_at, audit_id",
+            (user_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def record_denied_routes(
+        self,
+        user_id: str,
+        probes: Sequence[RouteProbe],
+        *,
+        source_paper: str | None,
+        source_session: str | None,
+    ) -> int:
+        """One audit row per probe, written BEFORE any raise; raises if a route escaped."""
+        escaped: list[str] = []
+        for probe in probes:
+            if probe.escaped:
+                escaped.append(probe.route)
+            decision = ("ESCAPED:" if probe.escaped else "denied:") + probe.route
+            self._conn.execute(
+                "INSERT INTO memory_audit (audit_id, owner_id, store, memory_id, actor, action, "
+                "trust_label, source_paper, source_session, gate_decision, detail, created_at) "
+                "VALUES (?,?,'user_learning',NULL,'agent','denied','n/a',?,?,?,?,?)",
+                (
+                    self._next_id("aud"),
+                    user_id,
+                    source_paper,
+                    source_session,
+                    decision,
+                    json.dumps(
+                        {
+                            "route": probe.route,
+                            "statement": probe.statement,
+                            "error": probe.error,
+                            "artefact_created": probe.artefact_created,
+                        }
+                    ),
+                    "2026-01-01T00:00:00Z",
+                ),
+            )
+        if escaped:
+            raise TrustBoundaryViolation(
+                ", ".join(escaped),
+                "a read-only agent connection reached a write route; the audit rows are "
+                "written and this is a control failure, not a caller error",
+            )
+        return len(probes)
