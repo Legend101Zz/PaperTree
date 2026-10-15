@@ -39,13 +39,67 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { indexDocument, resolveAnchor } from '@papertree/anchoring';
-import type { IndexedDocument, PaperSource, Resolution } from '@papertree/anchoring';
+import { captureAnchor, indexDocument, resolveAnchor } from '@papertree/anchoring';
+import type { Anchor, IndexedDocument, PaperSource, Resolution } from '@papertree/anchoring';
 import { perturb } from '@papertree/anchoring/perturb';
 import { describe, expect, it } from 'vitest';
 
-import { captureCitation, classifyTarget } from '../src/components/inspector/citations';
-import type { CitationTargetType } from '../src/components/inspector/types';
+/**
+ * The per-target-type buckets this measurement reports in. They lived in the old Inspector
+ * (`inspector/citations.ts`, deleted with it in S6); the measurement is about the anchoring
+ * package, not about any panel, so the two helpers it needs are local now. The bucket map is
+ * deliberately coarse: the IR's block-type vocabulary is OPEN, and `other` is a real bucket.
+ */
+type CitationTargetType = 'text' | 'heading' | 'equation' | 'figure' | 'table' | 'other';
+
+const TARGET_TYPE_BY_BLOCK_TYPE: Readonly<Record<string, CitationTargetType>> = {
+  paragraph: 'text',
+  abstract: 'text',
+  list: 'text',
+  list_item: 'text',
+  caption: 'text',
+  footnote: 'text',
+  citation: 'text',
+  reference_entry: 'text',
+  code: 'text',
+  algorithm: 'text',
+  title: 'heading',
+  heading: 'heading',
+  equation: 'equation',
+  inline_equation: 'equation',
+  figure: 'figure',
+  diagram: 'figure',
+  plot: 'figure',
+  table: 'table',
+  table_row: 'table',
+  table_cell: 'table',
+};
+
+function classifyTarget(blockType: string): CitationTargetType {
+  return TARGET_TYPE_BY_BLOCK_TYPE[blockType] ?? 'other';
+}
+
+/** Capture an AI-authored citation anchor on a block and resolve it against its own parse. */
+function captureCitation(input: {
+  readonly doc: IndexedDocument;
+  readonly blockId: string;
+  readonly label: string;
+  readonly id: string;
+  readonly at: string;
+  readonly client: string;
+}): { readonly label: string; readonly anchor: Anchor; readonly resolution: Resolution } {
+  const anchor: Anchor = captureAnchor({
+    doc: input.doc,
+    blockId: input.blockId,
+    targetKind: 'citation',
+    provenanceClass: 'ai_generated',
+    id: input.id,
+    at: input.at,
+    client: input.client,
+    mode: 'source',
+  });
+  return { label: input.label, anchor, resolution: resolveAnchor(anchor, input.doc) };
+}
 
 const FIXTURE_SLUGS = [
   'attention-is-all-you-need',
