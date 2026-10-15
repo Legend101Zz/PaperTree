@@ -59,6 +59,13 @@ test('canvas by keyboard', async ({ browser, stack }) => {
   expect(after.x).toBeGreaterThan(before.x);
   expect(after.y).toBe(before.y);
 
+  // W2UI #141: Backspace is a typing key, not a delete key: a stray press must not remove a card.
+  calls.length = 0;
+  await page.keyboard.press('Backspace');
+  await page.waitForTimeout(800);
+  await expect(page.locator('.react-flow__node')).toHaveCount(2);
+  expect(calls.filter((c) => c.startsWith('DELETE /boards/'))).toHaveLength(0);
+
   calls.length = 0;
   await page.keyboard.press('Delete');
   await expect(page.locator('.react-flow__node')).toHaveCount(1);
@@ -66,6 +73,18 @@ test('canvas by keyboard', async ({ browser, stack }) => {
   expect((await getBoard(stack.apiUrl, token, paperId)).nodes.map((n) => n.node_id)).toEqual([
     ids[1],
   ]);
+
+  // W2UI #141: Delete offers Undo for 8 s, and Undo brings the card back with the SAME id.
+  const undo = page.getByTestId('undo-toast');
+  await expect(undo).toBeVisible();
+  await expect(undo).toContainText('Deleted');
+  await undo.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.locator('.react-flow__node')).toHaveCount(2);
+  await expect(undo).toBeHidden();
+  const restored = (await getBoard(stack.apiUrl, token, paperId)).nodes
+    .map((n) => n.node_id)
+    .sort();
+  expect(restored).toEqual([...ids].sort());
 
   // The way out.
   await page.getByRole('link', { name: 'Back to paper' }).focus();

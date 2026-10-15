@@ -340,6 +340,58 @@ test.describe('Journey D: the canvas', () => {
     const view = page.viewportSize()!;
     expect(box!.y).toBeGreaterThanOrEqual(0);
     expect(box!.y + box!.height).toBeLessThanOrEqual(view.height);
+
+    // W2UI #141: it is the SENT passage that flashes, not just something on screen. The excerpt's
+    // stored ShapeSelector quads (IR points on `pageIndex`) are mapped onto that page's overlay in
+    // the DOM; the flash must sit on the same page, touch a quad, and stay near the quads' union.
+    const shape = (
+      excerpt.source_anchor as unknown as {
+        selectors: { type: string; pageIndex?: number; quads?: number[][] }[];
+      }
+    ).selectors.find((sel) => sel.type === 'ShapeSelector');
+    expect(shape?.quads?.length ?? 0, 'the stored anchor has quads').toBeGreaterThan(0);
+    const mapped = await page.evaluate(
+      ({ quads }) => {
+        const poly = document.querySelector('polygon.pt-flash');
+        const svg = poly?.closest('svg');
+        if (poly === null || poly === undefined || svg === null || svg === undefined) return null;
+        const r = svg.getBoundingClientRect();
+        const pageWidth = Number(svg.getAttribute('width'));
+        const scale = r.width / pageWidth;
+        const f = poly.getBoundingClientRect();
+        return {
+          pageIndex: Number(svg.getAttribute('data-page-index')),
+          flash: { left: f.left, top: f.top, right: f.right, bottom: f.bottom },
+          quads: quads.map((q) => ({
+            left: r.left + q[0]! * scale,
+            top: r.top + q[1]! * scale,
+            right: r.left + q[2]! * scale,
+            bottom: r.top + q[3]! * scale,
+          })),
+        };
+      },
+      { quads: shape!.quads! },
+    );
+    expect(mapped, 'the flash polygon sits in a page overlay').not.toBeNull();
+    expect(mapped!.pageIndex).toBe(shape!.pageIndex);
+    const touches = mapped!.quads.some(
+      (q) =>
+        mapped!.flash.left < q.right &&
+        mapped!.flash.right > q.left &&
+        mapped!.flash.top < q.bottom &&
+        mapped!.flash.bottom > q.top,
+    );
+    expect(touches, "the flash overlaps the sent passage's own quads").toBe(true);
+    const union = {
+      left: Math.min(...mapped!.quads.map((q) => q.left)) - 24,
+      top: Math.min(...mapped!.quads.map((q) => q.top)) - 24,
+      right: Math.max(...mapped!.quads.map((q) => q.right)) + 24,
+      bottom: Math.max(...mapped!.quads.map((q) => q.bottom)) + 24,
+    };
+    expect(mapped!.flash.left).toBeGreaterThanOrEqual(union.left);
+    expect(mapped!.flash.top).toBeGreaterThanOrEqual(union.top);
+    expect(mapped!.flash.right).toBeLessThanOrEqual(union.right);
+    expect(mapped!.flash.bottom).toBeLessThanOrEqual(union.bottom);
     await page.screenshot({ path: shot('d06-open-source-flash-1440.png') });
     await context.close();
   });
