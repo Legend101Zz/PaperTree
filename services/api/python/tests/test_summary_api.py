@@ -42,7 +42,10 @@ def test_a_summary_streams_then_is_served_from_the_cache_without_a_new_run(
         # S5F: the seed of a summary is a bounded digest of the paper, not null.
         seed = request["seed"]
         assert seed["quote"] == "" and seed["page_label"] == "" and seed["section"] is None
-        assert seed["passages"], "the abstract and each section's first paragraph"
+        labels = [p["label"] for p in seed["passages"]]
+        assert len(labels) >= 4, "the abstract and each section's first paragraph, not one block"
+        assert labels[0].startswith("p. 1 · Abstract"), labels
+        assert len({label.split(" · ")[1] for label in labels}) >= 4, "several sections"
         assert [p["handle"] for p in seed["passages"]] == [
             f"b{n}" for n in range(1, len(seed["passages"]) + 1)
         ]
