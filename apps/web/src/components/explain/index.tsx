@@ -26,6 +26,7 @@ import {
 
 import { useReaderActions } from '@/components/reader/actions';
 import type { Citation } from '@/lib/api/types';
+import { dehyphenate, truncateAtWord } from '@/lib/markdown';
 
 import { AnswerView } from './AnswerView';
 import { SummaryView } from './SummaryView';
@@ -61,10 +62,13 @@ function quotePage(anchor: unknown): string | undefined {
 
 const QUOTE_FOLD = 320;
 
-function Quote({ quote, anchor }: { readonly quote: string; readonly anchor: unknown }): ReactNode {
+function Quote({ quote: raw, anchor }: { readonly quote: string; readonly anchor: unknown }): ReactNode {
   const [expanded, setExpanded] = useState(false);
+  // Display only: the selection keeps the PDF's line-end hyphens ("sin- gle"); the stored
+  // Anchor's TextQuote is untouched.
+  const quote = dehyphenate(raw).replace(/\s+/g, ' ').trim();
   const long = quote.length > QUOTE_FOLD;
-  const shown = long && !expanded ? `${quote.slice(0, QUOTE_FOLD).trimEnd()}…` : quote;
+  const shown = long && !expanded ? truncateAtWord(quote, QUOTE_FOLD) : quote;
   const page = quotePage(anchor);
   return (
     <section className="pt-explain__quote" aria-label="Selected passage" data-explain-quote>

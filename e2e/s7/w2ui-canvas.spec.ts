@@ -100,7 +100,7 @@ test('the same passage twice is one card and a toast says so', async ({
   await expect
     .poll(async () => (await getBoard(stack.apiUrl, token, paperId)).nodes.length)
     .toBe(1);
-  // The first toast stays up for 6 s; wait it out so the second message is the one asserted.
+  // The first toast stays up for 8 s; wait it out so the second message is the one asserted.
   await expect(toast).toBeHidden({ timeout: 15_000 });
   await send();
   await expect(toast).toContainText('Already on your canvas');

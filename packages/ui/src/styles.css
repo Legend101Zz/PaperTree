@@ -2885,3 +2885,35 @@ span.pt-paper .pt-paper__cite {
     min-block-size: calc(40px / clamp(0.3, var(--pt-cv-zoom, 1), 1));
   }
 }
+
+/* ── w3ui round 2 (additive) ───────────────────────────────────────────────────────────────── */
+
+/* A citation chip and the punctuation that directly follows it never part: "...sensors [p. 1]."
+   keeps its full stop on the chip's line. */
+.pt-cite-run {
+  white-space: nowrap;
+}
+
+/* The chip's quiet twin on a canvas card: it says where, and there is nothing to press. */
+.pt-cite-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--pt-ink-muted);
+  background: var(--pt-accent-soft);
+  border-radius: 999px;
+}
+
+.pt-md-heading {
+  margin-block: 0 4px;
+}
+
+.pt-explain__prose em {
+  font-style: italic;
+}
+
+.pt-explain__prose li + li {
+  margin-block-start: 4px;
+}

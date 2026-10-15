@@ -26,6 +26,7 @@ import { edgeTypes } from './LabeledEdge';
 import { EDGE_KINDS, nodeLabel, type PtEdge, type PtNode } from './model';
 import { nodeTypes } from './nodes';
 import { useBoardController } from './useBoardController';
+import { useExplanationCitations } from './useExplanationCitations';
 
 interface Selection {
   readonly nodes: readonly string[];
@@ -127,6 +128,7 @@ function Canvas({ paperId }: { readonly paperId: string }) {
     ctl.deleteSelection(selection.nodes, selection.edges);
   };
 
+  const citations = useExplanationCitations(paperId, ctl.nodes);
   const actions = useMemo(
     () => ({
       editingId: ctl.editingId,
@@ -134,8 +136,9 @@ function Canvas({ paperId }: { readonly paperId: string }) {
       commitBody: ctl.commitBody,
       commitTitle: ctl.commitTitle,
       commitSize: ctl.commitSize,
+      citations,
     }),
-    [ctl.editingId, ctl.setEditingId, ctl.commitBody, ctl.commitTitle, ctl.commitSize],
+    [ctl.editingId, ctl.setEditingId, ctl.commitBody, ctl.commitTitle, ctl.commitSize, citations],
   );
 
   const empty = ctl.status === 'ready' && ctl.nodes.length === 0;
