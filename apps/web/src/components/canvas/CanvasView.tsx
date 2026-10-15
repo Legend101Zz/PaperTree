@@ -12,10 +12,11 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
+  useStore,
   type Connection,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { EdgeKind } from '@/lib/api/types';
 
@@ -40,6 +41,20 @@ export function CanvasView({ paperId }: { readonly paperId: string }) {
   );
 }
 
+/**
+ * Publishes the canvas zoom as `--pt-cv-zoom` on the stage, so the stylesheet can keep in-card
+ * controls tappable (>= 40 px on screen) at phone widths. It writes the variable straight onto the
+ * element: a pan or zoom must not re-render the whole canvas.
+ */
+function ZoomVar() {
+  const zoom = useStore((state) => state.transform[2]);
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    ref.current?.closest<HTMLElement>('.pt-cv__stage')?.style.setProperty('--pt-cv-zoom', String(zoom));
+  }, [zoom]);
+  return <span ref={ref} hidden />;
+}
+
 function Canvas({ paperId }: { readonly paperId: string }) {
   const ctl = useBoardController(paperId);
   const flow = useReactFlow<PtNode, PtEdge>();
@@ -47,11 +62,33 @@ function Canvas({ paperId }: { readonly paperId: string }) {
   const order = useRef<string[]>([]);
   const [picking, setPicking] = useState<{ from: string; to: string } | null>(null);
   const [areaMode, setAreaMode] = useState(false);
-  // On a phone the first view favours reading over overview: never fit smaller than 60 %, and the
-  // Fit control (same options) is there to see the whole board.
-  const fitOptions = useMemo(
-    () => ({ padding: 0.15, maxZoom: 1, minZoom: typeof window !== 'undefined' && window.innerWidth < 640 ? 0.6 : 0.2 }),
-    [],
+  // The first view on any width is the WHOLE board (never zoomed in past 100 %, never out past 20 %).
+  // A phone used to be capped at 60 %, which cropped a board wider than the screen; "Fit all" in
+  // the toolbar brings the whole board back after the reader has panned or zoomed.
+  const fitOptions = useMemo(() => ({ padding: 0.15, maxZoom: 1, minZoom: 0.2 }), []);
+
+  // xyflow reports the cards and the links of one Delete press in two separate callbacks; they are
+  // joined here so one key press is one delete and one Undo.
+  const queued = useRef<{ nodes: Set<string>; edges: Set<string>; timer: ReturnType<typeof setTimeout> | null }>({
+    nodes: new Set(),
+    edges: new Set(),
+    timer: null,
+  });
+  const queueDelete = useCallback(
+    (nodes: readonly string[], edges: readonly string[]) => {
+      const q = queued.current;
+      nodes.forEach((id) => q.nodes.add(id));
+      edges.forEach((id) => q.edges.add(id));
+      if (q.timer !== null) return;
+      q.timer = setTimeout(() => {
+        const batch = { nodes: [...q.nodes], edges: [...q.edges] };
+        q.nodes.clear();
+        q.edges.clear();
+        q.timer = null;
+        ctl.deleteSelection(batch.nodes, batch.edges);
+      }, 0);
+    },
+    [ctl],
   );
 
   const onSelectionChange = useCallback(({ nodes, edges }: { nodes: { id: string }[]; edges: { id: string }[] }) => {
@@ -87,8 +124,7 @@ function Canvas({ paperId }: { readonly paperId: string }) {
   const anySelected = selection.nodes.length + selection.edges.length > 0;
 
   const doDelete = (): void => {
-    ctl.deleteNodes(selection.nodes);
-    ctl.deleteEdges(selection.edges);
+    ctl.deleteSelection(selection.nodes, selection.edges);
   };
 
   const actions = useMemo(
@@ -155,6 +191,16 @@ function Canvas({ paperId }: { readonly paperId: string }) {
             </button>
             <button type="button" className="pt-btn pt-btn--outline pt-btn--danger" disabled={!anySelected} onClick={doDelete}>
               Delete
+            </button>
+            <button
+              type="button"
+              className="pt-btn pt-btn--outline"
+              disabled={ctl.status !== 'ready' || ctl.nodes.length === 0}
+              onClick={() => {
+                void flow.fitView(fitOptions);
+              }}
+            >
+              Fit all
             </button>
           </div>
         </header>
@@ -226,8 +272,8 @@ function Canvas({ paperId }: { readonly paperId: string }) {
                 onEdgesChange={ctl.onEdgesChange}
                 onNodeDragStop={ctl.onNodeDragStop}
                 onConnect={onConnect}
-                onNodesDelete={(ns) => ctl.deleteNodes(ns.map((n) => n.id))}
-                onEdgesDelete={(es) => ctl.deleteEdges(es.map((e) => e.id))}
+                onNodesDelete={(ns) => queueDelete(ns.map((n) => n.id), [])}
+                onEdgesDelete={(es) => queueDelete([], es.map((e) => e.id))}
                 onSelectionChange={onSelectionChange}
                 onMoveEnd={(event, viewport) => {
                   // Programmatic moves (the first fit) have no event; only the reader's pan/zoom END is saved.
@@ -244,7 +290,8 @@ function Canvas({ paperId }: { readonly paperId: string }) {
                 minZoom={0.2}
                 maxZoom={2}
                 zoomOnDoubleClick={false}
-                deleteKeyCode={['Delete', 'Backspace']}
+                // Delete only: Backspace is a typing key and one stray press must not remove a card.
+                deleteKeyCode={['Delete']}
                 selectionOnDrag={areaMode}
                 panOnDrag={!areaMode}
                 elevateNodesOnSelect={false}
@@ -252,6 +299,7 @@ function Canvas({ paperId }: { readonly paperId: string }) {
                 edgesFocusable
                 aria-label="Canvas of passages, explanations and notes"
               >
+                <ZoomVar />
                 <Background gap={24} size={1} />
                 <Controls showInteractive={false} position="bottom-left" fitViewOptions={fitOptions} />
               </ReactFlow>
@@ -259,6 +307,20 @@ function Canvas({ paperId }: { readonly paperId: string }) {
             </>
           )}
         </div>
+
+        {ctl.undo === null ? null : (
+          <div className="pt-toast pt-toast--lift" role="status" aria-live="polite" data-testid="undo-toast">
+            <div className="pt-toast__body">
+              <span>{ctl.undo.message}</span>
+              <button type="button" className="pt-btn pt-btn--outline" onClick={() => void ctl.runUndo()}>
+                Undo
+              </button>
+              <button type="button" className="pt-btn" aria-label="Dismiss" onClick={ctl.dismissUndo}>
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
 
         {picking === null ? null : (
           <KindPicker

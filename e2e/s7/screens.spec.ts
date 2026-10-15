@@ -225,7 +225,7 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
             return { w: r.width, h: r.height, right: r.right, left: r.left };
           }),
         );
-      expect(tools).toHaveLength(6);
+      expect(tools).toHaveLength(7); // Add note, Select area, Group, Ungroup, Link, Delete, Fit all
       for (const t of tools) {
         expect(t.h).toBeGreaterThanOrEqual(40);
         expect(t.w).toBeGreaterThanOrEqual(40);
@@ -239,8 +239,7 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
 
       // the kind picker: pick two notes with the area tool, then Link
       if (vp.mobile) {
-        // The first view on a phone is readable (>= 60 %), so the whole board is wider than the
-        // screen: zoom out with the visible control (a 40 px button) to reach both notes.
+        // Zoom out with the visible control (a 40 px button) so both notes are in reach.
         for (let i = 0; i < 2; i += 1) {
           await fullPage.locator('.react-flow__controls-zoomout').tap();
           await fullPage.waitForTimeout(300);

@@ -13,7 +13,48 @@
     "page_count": 10,
     "generation": 1
   },
-  "seed": null,
+  "seed": {
+    "quote": "",
+    "page_label": "",
+    "section": null,
+    "passages": [
+      {
+        "handle": "b1",
+        "label": "p. 1 · Abstract · abstract",
+        "text": "^7f3a91c2 We ^7f3a91c2 present ^7f3a91c2 YOLO, ^7f3a91c2 a ^7f3a91c2 new ^7f3a91c2 approach ^7f3a91c2 to ^7f3a91c2 object ^7f3a91c2 detection. ^7f3a91c2 Prior ^7f3a91c2 work ^7f3a91c2 on ^7f3a91c2 object ^7f3a91c2 detection ^7f3a91c2 repurposes ^7f3a91c2 classifiers ^7f3a91c2 to ^7f3a91c2 per- ^7f3a91c2 form ^7f3a91c2 detection. ^7f3a91c2 Instead, ^7f3a91c2 we ^7f3a91c2 frame ^7f3a91c2 object ^7f3a91c2 detection ^7f3a91c2 as ^7f3a91c2 a ^7f3a91c2 re- ^7f3a91c2 gression ^7f3a91c2 problem ^7f3a91c2 to ^7f3a91c2 spatially ^7f3a91c2 separated ^7f3a91c2 bounding ^7f3a91c2 boxes ^7f3a91c2 and ^7f3a91c2 associated ^7f3a91c2 class ^7f3a91c2 […truncated] ^7f3a91c2"
+      },
+      {
+        "handle": "b2",
+        "label": "p. 1 · 1. Introduction · paragraph",
+        "text": "^7f3a91c2 Humans ^7f3a91c2 glance ^7f3a91c2 at ^7f3a91c2 an ^7f3a91c2 image ^7f3a91c2 and ^7f3a91c2 instantly ^7f3a91c2 know ^7f3a91c2 what ^7f3a91c2 ob- ^7f3a91c2 jects ^7f3a91c2 are ^7f3a91c2 in ^7f3a91c2 the ^7f3a91c2 image, ^7f3a91c2 where ^7f3a91c2 they ^7f3a91c2 are, ^7f3a91c2 and ^7f3a91c2 how ^7f3a91c2 they ^7f3a91c2 inter- ^7f3a91c2 act. ^7f3a91c2 The ^7f3a91c2 human ^7f3a91c2 visual ^7f3a91c2 system ^7f3a91c2 is ^7f3a91c2 fast ^7f3a91c2 and ^7f3a91c2 accurate, ^7f3a91c2 allow- ^7f3a91c2 ing ^7f3a91c2 us ^7f3a91c2 to ^7f3a91c2 perform ^7f3a91c2 complex ^7f3a91c2 tasks ^7f3a91c2 like ^7f3a91c2 driving ^7f3a91c2 with ^7f3a91c2 little ^7f3a91c2 con- ^7f3a91c2 scious ^7f3a91c2 thought. ^7f3a91c2 Fast, ^7f3a91c2 […truncated] ^7f3a91c2"
+      },
+      {
+        "handle": "b3",
+        "label": "p. 2 · 2. Unified Detection · paragraph",
+        "text": "^7f3a91c2 We ^7f3a91c2 unify ^7f3a91c2 the ^7f3a91c2 separate ^7f3a91c2 components ^7f3a91c2 of ^7f3a91c2 object ^7f3a91c2 detection ^7f3a91c2 into ^7f3a91c2 a ^7f3a91c2 single ^7f3a91c2 neural ^7f3a91c2 network. ^7f3a91c2 Our ^7f3a91c2 network ^7f3a91c2 uses ^7f3a91c2 features ^7f3a91c2 from ^7f3a91c2 the ^7f3a91c2 entire ^7f3a91c2 image ^7f3a91c2 to ^7f3a91c2 predict ^7f3a91c2 each ^7f3a91c2 bounding ^7f3a91c2 box. ^7f3a91c2 It ^7f3a91c2 also ^7f3a91c2 predicts ^7f3a91c2 all ^7f3a91c2 bounding ^7f3a91c2 boxes ^7f3a91c2 across ^7f3a91c2 all ^7f3a91c2 classes ^7f3a91c2 for ^7f3a91c2 an ^7f3a91c2 im- ^7f3a91c2 age ^7f3a91c2 simultaneously. ^7f3a91c2 This ^7f3a91c2 means ^7f3a91c2 […truncated] ^7f3a91c2"
+      },
+      {
+        "handle": "b4",
+        "label": "p. 4 · 3. Comparison to Other Detection Systems · paragraph",
+        "text": "^7f3a91c2 Object ^7f3a91c2 detection ^7f3a91c2 is ^7f3a91c2 a ^7f3a91c2 core ^7f3a91c2 problem ^7f3a91c2 in ^7f3a91c2 computer ^7f3a91c2 vision. ^7f3a91c2 Detection ^7f3a91c2 pipelines ^7f3a91c2 generally ^7f3a91c2 start ^7f3a91c2 by ^7f3a91c2 extracting ^7f3a91c2 a ^7f3a91c2 set ^7f3a91c2 of ^7f3a91c2 robust ^7f3a91c2 features ^7f3a91c2 from ^7f3a91c2 input ^7f3a91c2 images ^7f3a91c2 (Haar ^7f3a91c2 [25], ^7f3a91c2 SIFT ^7f3a91c2 [23], ^7f3a91c2 HOG ^7f3a91c2 [4], ^7f3a91c2 convolutional ^7f3a91c2 features ^7f3a91c2 [6]). ^7f3a91c2"
+      },
+      {
+        "handle": "b5",
+        "label": "p. 5 · 4. Experiments · paragraph",
+        "text": "^7f3a91c2 First ^7f3a91c2 we ^7f3a91c2 compare ^7f3a91c2 YOLO ^7f3a91c2 with ^7f3a91c2 other ^7f3a91c2 real-time ^7f3a91c2 detection ^7f3a91c2 systems ^7f3a91c2 on ^7f3a91c2 PASCAL ^7f3a91c2 VOC ^7f3a91c2 2007. ^7f3a91c2 To ^7f3a91c2 understand ^7f3a91c2 the ^7f3a91c2 differ- ^7f3a91c2 ences ^7f3a91c2 between ^7f3a91c2 YOLO ^7f3a91c2 and ^7f3a91c2 R-CNN ^7f3a91c2 variants ^7f3a91c2 we ^7f3a91c2 explore ^7f3a91c2 the ^7f3a91c2 errors ^7f3a91c2 on ^7f3a91c2 VOC ^7f3a91c2 2007 ^7f3a91c2 made ^7f3a91c2 by ^7f3a91c2 YOLO ^7f3a91c2 and ^7f3a91c2 Fast ^7f3a91c2 R-CNN, ^7f3a91c2 one ^7f3a91c2 of ^7f3a91c2 the ^7f3a91c2 highest ^7f3a91c2 performing ^7f3a91c2 versions ^7f3a91c2 of ^7f3a91c2 R-CNN ^7f3a91c2 […truncated] ^7f3a91c2"
+      },
+      {
+        "handle": "b6",
+        "label": "p. 7 · 5. Real-Time Detection In The Wild · paragraph",
+        "text": "^7f3a91c2 YOLO ^7f3a91c2 is ^7f3a91c2 a ^7f3a91c2 fast, ^7f3a91c2 accurate ^7f3a91c2 object ^7f3a91c2 detector, ^7f3a91c2 making ^7f3a91c2 it ^7f3a91c2 ideal ^7f3a91c2 for ^7f3a91c2 computer ^7f3a91c2 vision ^7f3a91c2 applications. ^7f3a91c2 We ^7f3a91c2 connect ^7f3a91c2 YOLO ^7f3a91c2 to ^7f3a91c2 a ^7f3a91c2 webcam ^7f3a91c2 and ^7f3a91c2 verify ^7f3a91c2 that ^7f3a91c2 it ^7f3a91c2 maintains ^7f3a91c2 real-time ^7f3a91c2 performance, ^7f3a91c2"
+      },
+      {
+        "handle": "b7",
+        "label": "p. 8 · 6. Conclusion · paragraph",
+        "text": "^7f3a91c2 We ^7f3a91c2 introduce ^7f3a91c2 YOLO, ^7f3a91c2 a ^7f3a91c2 unified ^7f3a91c2 model ^7f3a91c2 for ^7f3a91c2 object ^7f3a91c2 detec- ^7f3a91c2 tion. ^7f3a91c2 Our ^7f3a91c2 model ^7f3a91c2 is ^7f3a91c2 simple ^7f3a91c2 to ^7f3a91c2 construct ^7f3a91c2 and ^7f3a91c2 can ^7f3a91c2 be ^7f3a91c2 trained ^7f3a91c2"
+      }
+    ]
+  },
   "question": "Summarise this paper.",
   "history": null,
   "limits": {

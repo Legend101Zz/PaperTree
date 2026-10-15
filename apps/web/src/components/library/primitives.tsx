@@ -118,13 +118,18 @@ export interface ProcessingBadgeProps {
   readonly state: ProcessingState;
   /** Replaces the default label, e.g. "Reading the PDF - step 1 of 3". */
   readonly label?: string;
+  /**
+   * True when the card already shows the reason in words (a failed or partial paper), so the
+   * badge does not read a second, near-identical sentence to a screen reader.
+   */
+  readonly reasonShown?: boolean;
 }
 
 /**
  * The processing badge: a status, not a control. The one-line explanation from `PROCESSING_DETAIL`
  * rides in an `sr-only` span rather than a `title` (there is no hover on a phone).
  */
-export function ProcessingBadge({ state, label }: ProcessingBadgeProps) {
+export function ProcessingBadge({ state, label, reasonShown = false }: ProcessingBadgeProps) {
   return (
     <span className={BADGE_CLASS[state]} data-processing-state={state}>
       {state === 'parsing' ? (
@@ -137,7 +142,7 @@ export function ProcessingBadge({ state, label }: ProcessingBadgeProps) {
         <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
       )}
       <span>{label ?? PROCESSING_LABEL[state]}</span>
-      <span className="sr-only">{`. ${PROCESSING_DETAIL[state]}`}</span>
+      {reasonShown ? null : <span className="sr-only">{`. ${PROCESSING_DETAIL[state]}`}</span>}
     </span>
   );
 }

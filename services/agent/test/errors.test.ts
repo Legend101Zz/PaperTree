@@ -75,6 +75,12 @@ function done(result: {
   return last.data;
 }
 
+const toolUse = (id: string, handle: string) => ({
+  id,
+  name: 'get_passage',
+  input: { handle },
+});
+
 const err = (status: number, type: string, message: string): MockStep => ({
   kind: 'status',
   status,
@@ -124,10 +130,86 @@ describe('the real provider path against a mock Anthropic server', () => {
     const messages = sent.body['messages'] as Array<{ role: string; content: unknown }>;
     assert.equal(messages.length, 1);
     assert.equal(messages[0]?.role, 'user');
+    const user = JSON.stringify(messages[0]?.content);
     assert.match(
-      JSON.stringify(messages[0]?.content),
-      /Explain this passage\.\\n\\nInstead, we frame object detection/,
+      user,
+      /Explain this passage\.\\n\\n<untrusted_document trust=\\"untrusted\\">\\n\^7f3a91c2 Instead, \^7f3a91c2 we \^7f3a91c2 frame/,
+      'the quote is datamarked word by word, inside the untrusted delimiter',
     );
+    assert.doesNotMatch(user, /Instead, we frame object detection/, 'the raw quote is not sent');
+    assert.match(user, /probabilities\. \^7f3a91c2\\n<\/untrusted_document>/);
+  });
+
+  test('a follow-up sends the earlier turns before the new question, so "that" resolves (S5F)', async () => {
+    const { agent, mock, tools } = await live([
+      { kind: 'stream', text: ['It skips the proposal stage [b1].'] },
+    ]);
+    const body = readExample('followup');
+    counter++;
+    body['run_id'] = runId(counter);
+    body['request_id'] = requestId(counter);
+    body['tool']['base_url'] = tools.baseUrl(body['run_id']);
+    const result = await postRun(agent.url, body);
+    assert.deepEqual(semanticProblems(result.events), []);
+    assert.equal(done(result)['status'], 'complete');
+    const sent = mock.requests[0]!.body['messages'] as Array<{ role: string; content: unknown }>;
+    const earlier = (body['history']['entries'] as Array<Record<string, any>>).filter(
+      (e) => e['message']['role'] !== 'toolResult',
+    );
+    assert.ok(sent.length >= earlier.length + 1, 'the history is in the request');
+    assert.equal(sent[0]?.role, 'user');
+    assert.match(
+      JSON.stringify(sent[0]?.content),
+      /Explain this passage\.\\n\\n<untrusted_document/,
+      'the first turn, quote and all',
+    );
+    const last = sent.at(-1)!;
+    assert.equal(last.role, 'user');
+    assert.match(JSON.stringify(last.content), /Why does that make it faster than R-CNN\?/);
+    assert.ok(
+      sent.slice(0, -1).some((m) => m.role === 'assistant'),
+      'and the assistant turn the question points back to',
+    );
+  });
+
+  test('a spent tool budget over the real provider path: the final request is well formed and the answer is kept (S5F)', async () => {
+    const { agent, mock, tools } = await live([
+      {
+        kind: 'stream',
+        toolUses: [toolUse('tu_1', 'b3'), toolUse('tu_2', 'b4'), toolUse('tu_3', 'b5')],
+      },
+      { kind: 'stream', toolUses: [toolUse('tu_4', 'b6')] },
+      { kind: 'stream', text: ['It regresses boxes directly [b1].'] },
+    ]);
+    const body = request(tools, { max_tool_calls: 2 });
+    const result = await postRun(agent.url, body);
+    assert.deepEqual(semanticProblems(result.events), []);
+    const d = done(result);
+    assert.equal(d['status'], 'complete');
+    assert.equal(d['final_text'], 'It regresses boxes directly [b1].');
+    assert.equal(mock.requests.length, 3, 'two tool turns and the one final turn');
+    const finalRequest = mock.requests.at(-1)!.body['messages'] as Array<{
+      role: string;
+      content: Array<Record<string, any>>;
+    }>;
+    // Every tool_use the provider is shown has its tool_result in the next user message, or the
+    // provider would refuse the request (Pi fills in the ones the stopped turn never answered).
+    const toolUses = finalRequest.flatMap((m) =>
+      m.role === 'assistant' ? m.content.filter((c) => c['type'] === 'tool_use') : [],
+    );
+    const toolResults = new Set(
+      finalRequest
+        .flatMap((m) =>
+          m.role === 'user' ? m.content.filter((c) => c['type'] === 'tool_result') : [],
+        )
+        .map((c) => c['tool_use_id']),
+    );
+    assert.ok(toolUses.length >= 4);
+    for (const call of toolUses)
+      assert.ok(toolResults.has(call['id']), `${String(call['id'])} answered`);
+    const last = finalRequest.at(-1)!;
+    assert.equal(last.role, 'user');
+    assert.match(JSON.stringify(last.content), /tool budget for this task is used up/);
   });
 
   interface Row {

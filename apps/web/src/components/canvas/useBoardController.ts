@@ -25,10 +25,20 @@ import { boardsApi } from '@/lib/api/boards';
 import { ApiError, type Board, type CanvasEdge, type CanvasNode, type EdgeKind } from '@/lib/api/types';
 
 import { newEdgeId, newNodeId } from './ids';
-import { toFlowEdge, toFlowNode, type PtEdge, type PtNode } from './model';
+import { cardName, toFlowEdge, toFlowNode, type PtEdge, type PtNode } from './model';
 import { DEFAULT_SIZE, boundsOf, freeSpot } from './placement';
 
 export const NUDGE_DEBOUNCE_MS = 400;
+/** How long the Undo offer after a delete stays on screen. */
+export const UNDO_VISIBLE_MS = 8000;
+/** How long the "changed somewhere else" notice stays when nothing else clears it first. */
+export const STALE_NOTICE_MS = 8000;
+
+/** What a delete just removed, enough to put it back with the same ids. */
+export interface UndoOffer {
+  readonly token: number;
+  readonly message: string;
+}
 
 export type Status = 'loading' | 'ready' | 'error';
 
@@ -41,6 +51,12 @@ export interface BoardController {
   readonly editingId: string | null;
   readonly setEditingId: (id: string | null) => void;
   readonly dismissNotice: () => void;
+  /** The Undo offer after a delete (8 s), or null. */
+  readonly undo: UndoOffer | null;
+  readonly runUndo: () => Promise<void>;
+  readonly dismissUndo: () => void;
+  /** Several deletes that arrive in one gesture (cards AND their links) become one Undo. */
+  readonly deleteSelection: (nodeIds: readonly string[], edgeIds: readonly string[]) => void;
   readonly reload: () => Promise<void>;
   readonly onNodesChange: (changes: NodeChange<PtNode>[]) => void;
   readonly onEdgesChange: (changes: EdgeChange<PtEdge>[]) => void;
@@ -58,6 +74,12 @@ export interface BoardController {
   readonly initialViewport: Viewport | null;
 }
 
+/** "The card “first words”", "A passage" ... the start of the stale-version sentence. */
+export function staleSubject(card: string | undefined): string {
+  if (card === undefined) return 'A card';
+  return card.startsWith('\u201c') ? `The card ${card}` : `${card.charAt(0).toUpperCase()}${card.slice(1)}`;
+}
+
 function sentence(error: unknown, fallback: string): string {
   if (error instanceof ApiError && error.status !== 0 && error.detail.trim() !== '') {
     return error.code === 'internal' ? fallback : error.detail;
@@ -72,6 +94,7 @@ export function useBoardController(paperId: string): BoardController {
   const [edges, setEdgesState] = useState<PtEdge[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [undo, setUndo] = useState<UndoOffer | null>(null);
   const [initialViewport, setInitialViewport] = useState<Viewport | null>(null);
 
   const nodesRef = useRef<PtNode[]>([]);
@@ -85,6 +108,12 @@ export function useBoardController(paperId: string): BoardController {
   const nudgeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastViewport = useRef<Viewport | null>(null);
   const aliveRef = useRef(true);
+  const undoRestore = useRef<(() => Promise<void>) | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const undoSeq = useRef(0);
+  /** True while the notice on screen is the stale-version one, which clears itself. */
+  const staleShown = useRef(false);
+  const staleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const setNodes = useCallback((next: PtNode[]) => {
     nodesRef.current = next;
@@ -133,22 +162,39 @@ export function useBoardController(paperId: string): BoardController {
     return () => {
       aliveRef.current = false;
       if (nudgeTimer.current !== null) clearTimeout(nudgeTimer.current);
+      if (undoTimer.current !== null) clearTimeout(undoTimer.current);
+      if (staleTimer.current !== null) clearTimeout(staleTimer.current);
     };
   }, [reload]);
 
   // ── writes ────────────────────────────────────────────────────────────────────────────────
 
+  const clearStale = useCallback(() => {
+    if (!staleShown.current) return;
+    staleShown.current = false;
+    if (staleTimer.current !== null) clearTimeout(staleTimer.current);
+    staleTimer.current = null;
+    setNotice(null);
+  }, []);
+
+  /** `card` names the card a stale-version refusal was about, so the notice can say which. */
   const failed = useCallback(
-    (error: unknown, fallback: string) => {
+    (error: unknown, fallback: string, card?: string) => {
       if (!aliveRef.current) return;
       if (error instanceof ApiError && error.code === 'stale_version') {
-        setNotice('This card was changed somewhere else. The latest version is shown.');
+        staleShown.current = true;
+        setNotice(
+          `${staleSubject(card)} was changed somewhere else. The latest version is shown.`,
+        );
+        if (staleTimer.current !== null) clearTimeout(staleTimer.current);
+        staleTimer.current = setTimeout(clearStale, STALE_NOTICE_MS);
       } else {
+        staleShown.current = false;
         setNotice(sentence(error, fallback));
       }
       void reload();
     },
-    [reload],
+    [clearStale, reload],
   );
 
   const mergeData = useCallback(
@@ -174,14 +220,20 @@ export function useBoardController(paperId: string): BoardController {
           versionRef.current.set(id, saved.version);
           if (aliveRef.current) {
             mergeData(id, { version: saved.version, updated_at: saved.updated_at });
+            clearStale();
           }
         } catch (error) {
-          failed(error, "Couldn't save that change. The canvas was reloaded from your last saved version.");
+          const here = nodesRef.current.find((n) => n.id === id);
+          failed(
+            error,
+            "Couldn't save that change. The canvas was reloaded from your last saved version.",
+            here === undefined ? undefined : cardName(here.data.node),
+          );
         }
       };
       chainRef.current.set(id, (chainRef.current.get(id) ?? Promise.resolve()).then(run));
     },
-    [failed, mergeData],
+    [clearStale, failed, mergeData],
   );
 
   const flushPositions = useCallback(
@@ -311,9 +363,10 @@ export function useBoardController(paperId: string): BoardController {
       sentRef.current.set(node_id, { x: created.node.x, y: created.node.y });
       versionRef.current.set(node_id, created.node.version);
       setNodes([...nodesRef.current, toFlowNode(created.node, paperId)]);
+      clearStale();
       return created.node;
     },
-    [paperId, setBoardBoth, setNodes],
+    [clearStale, paperId, setBoardBoth, setNodes],
   );
 
   const addNote = useCallback(
@@ -334,56 +387,186 @@ export function useBoardController(paperId: string): BoardController {
     [addNode],
   );
 
-  const deleteNodes = useCallback(
-    (ids: readonly string[]) => {
+  const offerUndo = useCallback((message: string, restore: () => Promise<void>) => {
+    undoSeq.current += 1;
+    undoRestore.current = restore;
+    setUndo({ token: undoSeq.current, message });
+    if (undoTimer.current !== null) clearTimeout(undoTimer.current);
+    undoTimer.current = setTimeout(() => {
+      undoTimer.current = null;
+      undoRestore.current = null;
+      setUndo(null);
+    }, UNDO_VISIBLE_MS);
+  }, []);
+
+  const dismissUndo = useCallback(() => {
+    if (undoTimer.current !== null) clearTimeout(undoTimer.current);
+    undoTimer.current = null;
+    undoRestore.current = null;
+    setUndo(null);
+  }, []);
+
+  /**
+   * Deletes cards and links, and offers to take it back. Nothing is asked first (no confirm
+   * dialog): the delete happens, and for 8 s an Undo puts the same rows back with the same ids.
+   */
+  const deleteSelection = useCallback(
+    (nodeIds: readonly string[], edgeIds: readonly string[]) => {
       const boardId = boardRef.current?.board_id;
-      const doomed = new Set(ids.filter((id) => nodesRef.current.some((n) => n.id === id)));
-      if (boardId === undefined || doomed.size === 0) return;
-      setNodes(
-        nodesRef.current
-          .filter((n) => !doomed.has(n.id))
-          .map((n) =>
-            n.data.node.group_id !== null && doomed.has(n.data.node.group_id)
-              ? { ...n, data: { ...n.data, node: { ...n.data.node, group_id: null } } }
-              : n,
-          ),
+      const doomed = new Set(nodeIds.filter((id) => nodesRef.current.some((n) => n.id === id)));
+      const edgeSet = new Set(edgeIds);
+      // Links that go with a card are removed by the server's cascade; links picked on their own
+      // are deleted one by one. Both are remembered for Undo.
+      const lostEdges = edgesRef.current.filter(
+        (e) => edgeSet.has(e.id) || doomed.has(e.source) || doomed.has(e.target),
       );
-      setEdges(edgesRef.current.filter((e) => !doomed.has(e.source) && !doomed.has(e.target)));
+      const ownEdges = lostEdges.filter((e) => !doomed.has(e.source) && !doomed.has(e.target));
+      if (boardId === undefined || (doomed.size === 0 && ownEdges.length === 0)) return;
+
+      const removedNodes: CanvasNode[] = nodesRef.current
+        .filter((n) => doomed.has(n.id))
+        .map((n) => ({
+          ...n.data.node,
+          x: n.position.x,
+          y: n.position.y,
+          w: n.width ?? n.data.node.w,
+          h: n.height ?? n.data.node.h,
+        }));
+      const removedEdges: CanvasEdge[] = lostEdges.flatMap((e) => (e.data === undefined ? [] : [e.data.edge]));
+      const released = nodesRef.current
+        .filter((n) => !doomed.has(n.id) && n.data.node.group_id !== null && doomed.has(n.data.node.group_id))
+        .map((n) => ({ id: n.id, groupId: n.data.node.group_id as string }));
+
+      const pending: Promise<void>[] = [];
+      if (doomed.size > 0) {
+        setNodes(
+          nodesRef.current
+            .filter((n) => !doomed.has(n.id))
+            .map((n) =>
+              n.data.node.group_id !== null && doomed.has(n.data.node.group_id)
+                ? { ...n, data: { ...n.data, node: { ...n.data.node, group_id: null } } }
+                : n,
+            ),
+        );
+      }
+      setEdges(edgesRef.current.filter((e) => !lostEdges.includes(e)));
+
       for (const id of doomed) {
         const previous = chainRef.current.get(id) ?? Promise.resolve();
-        chainRef.current.set(
-          id,
-          previous.then(async () => {
-            try {
-              await boardsApi.deleteNode(boardId, id);
-            } catch (error) {
-              if (error instanceof ApiError && error.status === 404) return;
-              failed(error, "Couldn't delete that. The canvas was reloaded from your last saved version.");
-            }
-          }),
-        );
+        const done = previous.then(async () => {
+          try {
+            await boardsApi.deleteNode(boardId, id);
+          } catch (error) {
+            if (error instanceof ApiError && error.status === 404) return;
+            failed(error, "Couldn't delete that. The canvas was reloaded from your last saved version.");
+          }
+        });
+        chainRef.current.set(id, done);
+        pending.push(done);
         sentRef.current.delete(id);
         versionRef.current.delete(id);
       }
+      for (const edge of ownEdges) {
+        pending.push(
+          boardsApi.deleteEdge(boardId, edge.id).catch((error: unknown) => {
+            if (error instanceof ApiError && error.status === 404) return;
+            failed(error, "Couldn't delete that link. The canvas was reloaded from your last saved version.");
+          }),
+        );
+      }
+
+      const first = removedNodes[0];
+      const message =
+        removedNodes.length === 1 && first !== undefined
+          ? `Deleted ${cardName(first)}.`
+          : removedNodes.length > 1
+            ? `Deleted ${String(removedNodes.length)} cards.`
+            : ownEdges.length === 1
+              ? 'Deleted a link.'
+              : `Deleted ${String(ownEdges.length)} links.`;
+
+      offerUndo(message, async () => {
+        await Promise.all(pending);
+        if (!aliveRef.current) return;
+        try {
+          const restored = new Set<string>();
+          const live = new Set(nodesRef.current.map((n) => n.id));
+          // Groups first, so a member can point at its group again.
+          const ordered = [...removedNodes].sort((a, b) => Number(b.kind === 'group') - Number(a.kind === 'group'));
+          for (const snap of ordered) {
+            const groupId =
+              snap.group_id !== null && (live.has(snap.group_id) || restored.has(snap.group_id))
+                ? snap.group_id
+                : null;
+            const created = await boardsApi.createNode(paperId, {
+              node_id: snap.node_id,
+              kind: snap.kind,
+              x: snap.x,
+              y: snap.y,
+              w: snap.w,
+              h: snap.h,
+              title: snap.title,
+              body: snap.body,
+              ...(snap.source_anchor === null ? {} : { source_anchor: snap.source_anchor as never }),
+              ...(snap.source_message_id === null ? {} : { source_message_id: snap.source_message_id }),
+              group_id: groupId,
+            });
+            restored.add(snap.node_id);
+            sentRef.current.set(snap.node_id, { x: created.node.x, y: created.node.y });
+            versionRef.current.set(snap.node_id, created.node.version);
+            setNodes([...nodesRef.current, toFlowNode(created.node, paperId)]);
+          }
+          const reattach = released.filter((m) => restored.has(m.groupId) && nodesRef.current.some((n) => n.id === m.id));
+          if (reattach.length > 0) {
+            // The server ungrouped them itself, so the versions held here may be behind.
+            const fresh = await boardsApi.get(paperId);
+            for (const row of fresh.nodes) versionRef.current.set(row.node_id, row.version);
+            for (const member of reattach) {
+              mergeData(member.id, { group_id: member.groupId });
+              patchNode(member.id, { group_id: member.groupId });
+            }
+          }
+          const present = new Set(nodesRef.current.map((n) => n.id));
+          for (const edge of removedEdges) {
+            if (!present.has(edge.from_node_id) || !present.has(edge.to_node_id)) continue;
+            if (edgesRef.current.some((e) => e.id === edge.edge_id)) continue;
+            const saved = await boardsApi.createEdge(boardId, {
+              edge_id: edge.edge_id,
+              from_node_id: edge.from_node_id,
+              to_node_id: edge.to_node_id,
+              kind: edge.kind,
+              label: edge.label,
+            });
+            setEdges([...edgesRef.current, toFlowEdge(saved)]);
+          }
+        } catch (error) {
+          setNotice(sentence(error, "Couldn't bring that back. The canvas was reloaded from your last saved version."));
+          void reload();
+        }
+      });
     },
-    [failed, setEdges, setNodes],
+    [failed, mergeData, offerUndo, paperId, patchNode, reload, setEdges, setNodes],
+  );
+
+  const deleteNodes = useCallback(
+    (ids: readonly string[]) => {
+      deleteSelection(ids, []);
+    },
+    [deleteSelection],
   );
 
   const deleteEdges = useCallback(
     (ids: readonly string[]) => {
-      const boardId = boardRef.current?.board_id;
-      const present = ids.filter((id) => edgesRef.current.some((e) => e.id === id));
-      if (boardId === undefined || present.length === 0) return;
-      setEdges(edgesRef.current.filter((e) => !present.includes(e.id)));
-      for (const id of present) {
-        boardsApi.deleteEdge(boardId, id).catch((error: unknown) => {
-          if (error instanceof ApiError && error.status === 404) return;
-          failed(error, "Couldn't delete that link. The canvas was reloaded from your last saved version.");
-        });
-      }
+      deleteSelection([], ids);
     },
-    [failed, setEdges],
+    [deleteSelection],
   );
+
+  const runUndo = useCallback(async () => {
+    const restore = undoRestore.current;
+    dismissUndo();
+    if (restore !== null) await restore();
+  }, [dismissUndo]);
 
   const connect = useCallback(
     async (from: string, to: string, kind: EdgeKind, label: string | null) => {
@@ -398,11 +581,12 @@ export function useBoardController(paperId: string): BoardController {
           label,
         });
         setEdges([...edgesRef.current, toFlowEdge(edge)]);
+        clearStale();
       } catch (error) {
         setNotice(sentence(error, "Couldn't connect those two cards. Try again."));
       }
     },
-    [setEdges],
+    [clearStale, setEdges],
   );
 
   const patchEdge = useCallback(
@@ -458,10 +642,14 @@ export function useBoardController(paperId: string): BoardController {
   return useMemo(
     () => ({
       status, board, nodes, edges, notice, editingId, setEditingId,
-      dismissNotice: () => setNotice(null),
+      dismissNotice: () => {
+        staleShown.current = false;
+        setNotice(null);
+      },
+      undo, runUndo, dismissUndo, deleteSelection,
       reload, onNodesChange, onEdgesChange, onNodeDragStop, addNote, commitBody, commitTitle, commitSize,
       deleteNodes, deleteEdges, connect, patchEdge, groupNodes, saveViewport, initialViewport,
     }),
-    [status, board, nodes, edges, notice, editingId, reload, onNodesChange, onEdgesChange, onNodeDragStop, addNote, commitBody, commitTitle, commitSize, deleteNodes, deleteEdges, connect, patchEdge, groupNodes, saveViewport, initialViewport],
+    [status, board, nodes, edges, notice, editingId, undo, runUndo, dismissUndo, deleteSelection, reload, onNodesChange, onEdgesChange, onNodeDragStop, addNote, commitBody, commitTitle, commitSize, deleteNodes, deleteEdges, connect, patchEdge, groupNodes, saveViewport, initialViewport],
   );
 }

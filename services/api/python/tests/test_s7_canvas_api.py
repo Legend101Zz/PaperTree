@@ -462,3 +462,96 @@ def test_another_user_cannot_touch_my_board(route: str, tmp_path: Path) -> None:
         assert_envelope(response, 404, "not_found")
         view = h.client.get(f"/papers/{paper_id}/board", headers=auth(token)).json()
         assert view["nodes"][0]["x"] == 10 and view["board"]["title"] == "Canvas"
+
+
+def test_canvas_size_limits_422_and_name_the_field(tmp_path: Path) -> None:
+    """W2UI (#141): a card is not a document store. Oversized text, absurd coordinates and a
+    runaway zoom are refused with a 422 that names the field, and nothing is written."""
+    with harness(tmp_path) as h:
+        token, paper_id = _setup(h)
+        url = f"/papers/{paper_id}/board/nodes"
+        board_id, _ = _first_node(h, token, paper_id)
+
+        def refused(response: Any, field: str) -> None:
+            envelope = assert_envelope(response, 422, "validation_failed")
+            assert envelope["detail"].startswith(f"{field}: "), envelope["detail"]
+
+        refused(
+            h.client.post(url, headers=auth(token), json=_note("cn_bigbody01", body="x" * 20_001)),
+            "body",
+        )
+        refused(
+            h.client.post(url, headers=auth(token), json=_note("cn_bigtitle1", title="t" * 201)),
+            "title",
+        )
+        refused(
+            h.client.post(url, headers=auth(token), json=_note("cn_bigcoord1", x=1_000_001)), "x"
+        )
+        refused(h.client.post(url, headers=auth(token), json=_note("cn_bigcoord2", y=-1e7)), "y")
+        refused(h.client.post(url, headers=auth(token), json=_note("cn_bigwidth1", w=100_001)), "w")
+        huge = h.client.post(
+            url,
+            headers={**auth(token), "content-type": "application/json"},
+            content='{"node_id":"cn_hugecoord","kind":"note","x":1e308,"y":0,"w":240,"h":120}',
+        )
+        refused(huge, "x")
+        # The limits themselves are allowed.
+        at_limit = h.client.post(
+            url,
+            headers=auth(token),
+            json=_note(
+                "cn_atlimit001",
+                x=1_000_000,
+                y=-1_000_000,
+                w=100_000,
+                h=1,
+                body="x" * 20_000,
+                title="t" * 200,
+            ),
+        )
+        assert at_limit.status_code == 201, at_limit.text
+
+        node_url = f"/boards/{board_id}/nodes/cn_firstnode"
+        refused(
+            h.client.patch(
+                node_url, headers=auth(token), json={"version": 1, "body": "x" * 20_001}
+            ),
+            "body",
+        )
+        refused(h.client.patch(node_url, headers=auth(token), json={"version": 1, "x": 1e300}), "x")
+
+        other = h.client.post(url, headers=auth(token), json=_note("cn_othernode1", x=300)).json()[
+            "node"
+        ]["node_id"]
+        edges = f"/boards/{board_id}/edges"
+        refused(
+            h.client.post(
+                edges,
+                headers=auth(token),
+                json={
+                    "edge_id": "ce_biglabel01",
+                    "from_node_id": "cn_firstnode",
+                    "to_node_id": other,
+                    "kind": "relates",
+                    "label": "l" * 100_000,
+                },
+            ),
+            "label",
+        )
+        for bad in (
+            {"x": 1e300, "y": 0, "zoom": 1},
+            {"x": 0, "y": 0, "zoom": 0.01},
+            {"x": 0, "y": 0, "zoom": 9},
+        ):
+            response = h.client.patch(
+                f"/boards/{board_id}", headers=auth(token), json={"viewport": bad}
+            )
+            refused(response, "viewport.x" if bad["x"] > 1e6 else "viewport.zoom")
+        ok = h.client.patch(
+            f"/boards/{board_id}",
+            headers=auth(token),
+            json={"viewport": {"x": 1_000_000, "y": -1_000_000, "zoom": 8}},
+        )
+        assert ok.status_code == 200, ok.text
+        counts = _counts(h.settings.database_file)
+        assert counts["canvas_nodes"] == 3 and counts["canvas_edges"] == 0

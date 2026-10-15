@@ -111,4 +111,55 @@ describe('sendToCanvas', () => {
     expect(get).not.toHaveBeenCalled();
     expect(createNode).not.toHaveBeenCalled();
   });
+
+  // W2UI #141: the same passage twice must not make two identical cards.
+  describe('a passage already on the board', () => {
+    const withPage = (page: number, exact: string): Anchor =>
+      ({
+        id: `a-${exact}`,
+        doc: { paperId: PAPER },
+        selectors: [
+          { type: 'PageSelector', index: page },
+          { type: 'TextQuoteSelector', exact, prefix: '', suffix: '' },
+        ],
+      }) as unknown as Anchor;
+    const onBoard = (anchor: Anchor): CanvasNode => ({
+      ...existing(0, 0),
+      node_id: 'cn_passage0001',
+      kind: 'excerpt',
+      source_anchor: anchor as never,
+    });
+
+    it('creates nothing and says "Already on your canvas" with an Open canvas link', async () => {
+      get.mockResolvedValue({ board: {} as never, nodes: [onBoard(withPage(2, 'Residual learning\nframework'))], edges: [] });
+      // Same page, same words (a different line break and case: the same passage to a reader).
+      await sendToCanvas(PAPER, { kind: 'excerpt', anchor: withPage(2, 'residual   learning framework') });
+      expect(createNode).not.toHaveBeenCalled();
+      await vi.waitFor(() => expect(document.querySelector('[data-testid="canvas-toast"]')).not.toBeNull());
+      const toast = document.querySelector('[data-testid="canvas-toast"]')!;
+      expect(toast.textContent).toContain('Already on your canvas');
+      expect(toast.querySelector('a')?.getAttribute('href')).toBe(`/paper/${PAPER}/canvas`);
+      expect(toast.querySelector('a')?.textContent).toBe('Open canvas');
+    });
+
+    it('still adds the same words on another page, and other words on the same page', async () => {
+      get.mockResolvedValue({ board: {} as never, nodes: [onBoard(withPage(2, 'Residual learning framework'))], edges: [] });
+      await sendToCanvas(PAPER, { kind: 'excerpt', anchor: withPage(3, 'Residual learning framework') });
+      await sendToCanvas(PAPER, { kind: 'excerpt', anchor: withPage(2, 'A different sentence') });
+      expect(createNode).toHaveBeenCalledTimes(2);
+    });
+
+    it('an anchor with no quote is never treated as a duplicate', async () => {
+      const bare = { id: 'b', doc: { paperId: PAPER }, selectors: [{ type: 'PageSelector', index: 0 }] } as unknown as Anchor;
+      get.mockResolvedValue({ board: {} as never, nodes: [onBoard(bare)], edges: [] });
+      await sendToCanvas(PAPER, { kind: 'excerpt', anchor: bare });
+      expect(createNode).toHaveBeenCalledTimes(1);
+    });
+
+    it('clips a body longer than the API limit instead of being refused', async () => {
+      const long = withPage(1, 'w '.repeat(15_000));
+      await sendToCanvas(PAPER, { kind: 'excerpt', anchor: long });
+      expect(createNode.mock.calls[0]![1].body!.length).toBe(20_000);
+    });
+  });
 });

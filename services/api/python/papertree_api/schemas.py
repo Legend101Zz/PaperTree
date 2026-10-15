@@ -461,6 +461,10 @@ class JobStatus(Wire):
     created_at: WireTime
     updated_at: WireTime
     steps: list[JobStepStatus]
+    #: The generation this job parses (its payload's), and the parser version that produced it once
+    #: it is stored; null until then (contracts.md §8, S5F).
+    generation: Generation | None = None
+    parser_version: str | None = None
 
 
 # ── §2.4 highlights ──────────────────────────────────────────────────────────────────────────
@@ -744,13 +748,27 @@ EdgeKind = Literal[
 #: `canvas_nodes.z` and `version` are INTEGER columns.
 SqlInt = Annotated[int, Field(ge=-SQLITE_INTEGER_MAX, le=SQLITE_INTEGER_MAX)]
 Version = Annotated[int, Field(ge=1, le=SQLITE_INTEGER_MAX)]
-Extent = Annotated[float, Field(gt=0)]
+#: W2UI size limits (#141): a canvas row is a card, not a document store. Coordinates are finite
+#: and within +/- 1e6, a card is at most 1e5 wide or tall, text is capped, zoom stays usable.
+CANVAS_COORD_LIMIT = 1_000_000.0
+CANVAS_EXTENT_LIMIT = 100_000.0
+CANVAS_TITLE_MAX = 200
+CANVAS_BODY_MAX = 20_000
+CANVAS_LABEL_MAX = 200
+CANVAS_ZOOM_MIN = 0.05
+CANVAS_ZOOM_MAX = 8.0
+
+Coord = Annotated[float, Field(ge=-CANVAS_COORD_LIMIT, le=CANVAS_COORD_LIMIT, allow_inf_nan=False)]
+Extent = Annotated[float, Field(gt=0, le=CANVAS_EXTENT_LIMIT, allow_inf_nan=False)]
+CanvasTitle = Annotated[str, Field(max_length=CANVAS_TITLE_MAX)]
+CanvasBody = Annotated[str, Field(max_length=CANVAS_BODY_MAX)]
+CanvasLabel = Annotated[str, Field(max_length=CANVAS_LABEL_MAX)]
 
 
 class Viewport(Wire):
-    x: float
-    y: float
-    zoom: Annotated[float, Field(gt=0)]
+    x: Coord
+    y: Coord
+    zoom: Annotated[float, Field(ge=CANVAS_ZOOM_MIN, le=CANVAS_ZOOM_MAX, allow_inf_nan=False)]
 
 
 class Board(Wire):
@@ -804,12 +822,12 @@ class NodeCreate(Wire):
 
     node_id: ClientId
     kind: NodeKind
-    x: float
-    y: float
+    x: Coord
+    y: Coord
     w: Extent
     h: Extent
-    title: str | None = None
-    body: str = ""
+    title: CanvasTitle | None = None
+    body: CanvasBody = ""
     source_anchor: AnchorV1In | None = omittable(validate_default=True)
     source_message_id: str | None = omittable(validate_default=True)
     group_id: str | None = None
@@ -838,13 +856,13 @@ class NodePatch(Wire):
     """`PATCH /boards/{bid}/nodes/{nid}`: `version` is the one the client last saw."""
 
     version: Version
-    x: float | None = omittable()
-    y: float | None = omittable()
+    x: Coord | None = omittable()
+    y: Coord | None = omittable()
     w: Extent | None = omittable()
     h: Extent | None = omittable()
     z: SqlInt | None = omittable()
-    title: str | None = None
-    body: str | None = omittable()
+    title: CanvasTitle | None = None
+    body: CanvasBody | None = omittable()
     group_id: str | None = None
 
 
@@ -862,7 +880,7 @@ class EdgeCreate(Wire):
     from_node_id: str
     to_node_id: str
     kind: EdgeKind
-    label: str | None = None
+    label: CanvasLabel | None = None
 
     @field_validator("to_node_id", mode="after")
     @classmethod
@@ -874,7 +892,7 @@ class EdgeCreate(Wire):
 
 class EdgePatch(Wire):
     kind: EdgeKind | None = omittable()
-    label: str | None = None
+    label: CanvasLabel | None = None
 
 
 class BoardPatch(Wire):
@@ -983,10 +1001,8 @@ class AgentRunRequest(Wire):
     @classmethod
     def _seed_matches_kind(cls, value: AgentSeed | None, info: ValidationInfo) -> Any:
         kind = info.data.get("kind")
-        if kind == "summary" and value is not None:
-            raise PydanticCustomError("value_error", "A summary run has no seed")
-        if kind == "explain" and value is None:
-            raise PydanticCustomError("missing", "Field required for an explain run")
+        if kind in ("summary", "explain") and value is None:
+            raise PydanticCustomError("missing", f"Field required for a {kind} run")
         return value
 
 

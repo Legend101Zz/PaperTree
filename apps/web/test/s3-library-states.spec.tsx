@@ -248,21 +248,32 @@ describe('UploadDropzone', () => {
     fireEvent.change(input, { target: { files: [file] } });
   }
 
-  it('under StrictMode the row leaves "Waiting to upload" and reaches Uploaded (the mountedRef freeze)', async () => {
-    const onUpload = vi.fn(async (_file: File, ctx: { onProgress: (n: number) => void }) => {
-      ctx.onProgress(0.5);
-    });
+  it('under StrictMode the row leaves "Waiting to upload" and goes once the upload resolves (the mountedRef freeze)', async () => {
+    let finish: () => void = () => undefined;
+    const onUpload = vi.fn(
+      (_file: File, ctx: { onProgress: (n: number) => void }) =>
+        new Promise<void>((resolve) => {
+          ctx.onProgress(0.5);
+          finish = resolve;
+        }),
+    );
     render(
       <StrictMode>
         <UploadDropzone onUpload={onUpload} />
       </StrictMode>,
     );
     pick(pdf());
+    // THE REGRESSION: with the frozen ref the row never left "Waiting to upload".
     await waitFor(() => {
       const li = document.querySelector('[data-upload-state]');
-      expect(li?.getAttribute('data-upload-state')).toBe('done');
+      expect(li?.getAttribute('data-upload-state')).toBe('uploading');
     });
     expect(document.body.textContent).not.toMatch(/Waiting to upload/);
+    // The upload resolved: the server row is in the library, so the transient row is dropped (W2UI).
+    await act(async () => {
+      finish();
+    });
+    await waitFor(() => expect(document.querySelector('[data-upload-state]')).toBeNull());
   });
 
   it('shows progress and Cancel aborts: the row reads Cancelled', async () => {

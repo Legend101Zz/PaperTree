@@ -197,6 +197,18 @@ export function scenario(name: FixtureName): Scenario {
             toolCalls: [call('search_passages', { query: 'one more search' })],
             usage: usage(fx.usages[3]),
           },
+          // The final, answer-only turn (S5F): the model asks for a tool again, so the run ends.
+          {
+            toolCalls: [call('search_passages', { query: 'yet another search' })],
+            usage: {
+              input: 8721,
+              output: 44,
+              cacheRead: 6912,
+              cacheWrite: 0,
+              reasoning: 18,
+              cost: 0.001058,
+            },
+          },
           { text: ['THIS TURN MUST NEVER BE REQUESTED'] },
         ],
         tools: (hit) => {
@@ -267,6 +279,18 @@ export function scenario(name: FixtureName): Scenario {
             stopReason: 'error',
             errorMessage:
               '401 {"type":"error","error":{"type":"authentication_error","message":"login fail: Please carry the API secret key in the \'X-Api-Key\' field of the request header"},"request_id":"0705c5d1"}',
+          },
+          // The final, answer-only turn (S5F): the model asks for a tool again, so the run ends.
+          {
+            toolCalls: [call('search_passages', { query: 'yet another search' })],
+            usage: {
+              input: 8721,
+              output: 44,
+              cacheRead: 6912,
+              cacheWrite: 0,
+              reasoning: 18,
+              cost: 0.001058,
+            },
           },
           { text: ['THIS TURN MUST NEVER BE REQUESTED'] },
         ],

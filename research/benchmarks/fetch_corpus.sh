@@ -19,7 +19,7 @@ fetch() {  # $1=name  $2=url
     echo "have  $1"
     return
   fi
-  if curl -sSL --max-time 90 -A "$UA" -o "$1.pdf" "$2"; then
+  if curl -sSL --retry 3 --retry-delay 5 --max-time 90 -A "$UA" -o "$1.pdf" "$2"; then
     echo "ok    $1  ($(du -h "$1.pdf" | cut -f1))"
   else
     echo "FAIL  $1" >&2
@@ -30,7 +30,7 @@ fetch() {  # $1=name  $2=url
 fetch attention-is-all-you-need https://arxiv.org/pdf/1706.03762   # single-col NeurIPS, vector figs
 fetch resnet-cvpr-2col          https://arxiv.org/pdf/1512.03385   # 2-col CVPR, ALL-vector figures
 fetch bert-2col                 https://arxiv.org/pdf/1810.04805   # 2-col ACL, tiled raster figures
-fetch neural-odes-mathheavy     https://arxiv.org/pdf/1806.07366   # dense derivations, appendices
+fetch neural-odes-mathheavy     https://arxiv.org/pdf/1806.07366v5  # dense derivations, appendices
 fetch pdf-to-tree-acl2col       https://aclanthology.org/2024.findings-emnlp.628.pdf
 
 # Tier A extension (Epic 0, block-ID stability): the three shapes the seed lacked.

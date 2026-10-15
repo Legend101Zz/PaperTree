@@ -1,6 +1,5 @@
 apps/
 archive/
-docker-compose.yml
 node_modules/
 dist/
 .turbo/
@@ -28,4 +27,4 @@ infrastructure/
 findings.md
 progress.md
 task_plan.md
-README.md
+contracts/README.md

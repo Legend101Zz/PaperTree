@@ -88,7 +88,14 @@ export function PaperCard({ paper, onOpen, onRetry, onDelete }: PaperCardProps) 
 
       <div className="mt-auto flex flex-col gap-3">
         <div>
-          <ProcessingBadge state={paper.processing} {...(label === undefined ? {} : { label })} />
+          <ProcessingBadge
+            state={paper.processing}
+            reasonShown={
+              (paper.processing === 'failed' && paper.failureReason !== undefined) ||
+              (paper.processing === 'partial' && paper.partialReason !== undefined)
+            }
+            {...(label === undefined ? {} : { label })}
+          />
         </div>
 
         {paper.processing === 'parsing' && paper.step !== undefined ? (
