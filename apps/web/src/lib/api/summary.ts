@@ -10,14 +10,14 @@ import { ApiError, type SseEvent, type Summary } from './types';
 
 const seg = encodeURIComponent;
 
-export type SummaryState = 'none' | 'running' | 'ready' | 'partial' | 'failed';
+type SummaryState = 'none' | 'running' | 'ready' | 'partial' | 'failed';
 
 export interface SummaryStatus {
   readonly state: SummaryState;
   readonly summary: Summary | null;
 }
 
-export type SummaryStart =
+type SummaryStart =
   | { readonly kind: 'cached'; readonly status: SummaryStatus }
   | { readonly kind: 'stream'; readonly events: AsyncGenerator<SseEvent> };
 

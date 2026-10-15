@@ -40,12 +40,6 @@ import {
 } from '@papertree/anchoring';
 import type { BBox } from '@papertree/document-ir';
 
-import {
-  createFixtureAnswerSource,
-  createLiveAnswerSource,
-  Inspector,
-} from '@/components/inspector';
-import type { InspectorContext } from '@/components/inspector/types';
 import { sendToCanvas } from '@/components/canvas/sendToCanvas';
 import { useFocusFromCanvas } from '@/components/canvas/useFocusFromCanvas';
 import { ExplainPanel } from '@/components/explain';
@@ -729,41 +723,9 @@ function ReaderWorkspaceView(props: ViewProps) {
   const { doc, mode } = props;
   const paper = props.paper;
 
-  /**
-   * The Inspector's answer source (Epic 3; S6 replaces the Inspector with the explain panel).
-   * An `api` paper can be asked about; a `fixture` paper exists on no server, so the fixture source
-   * stays as the offline path.
-   */
-  const inspectorAnswerSource = useMemo(
-    () =>
-      doc === null
-        ? null
-        : paper.kind === 'api'
-          ? createLiveAnswerSource({ doc })
-          : createFixtureAnswerSource({
-              doc,
-              at: '1970-01-01T00:00:00.000Z',
-              client: 'papertree-web/inspector',
-            }),
-    [doc, paper],
-  );
-
   const title =
     doc?.blocks.find((block) => block.type === 'title')?.text.replace(/\n/g, ' ') ??
     (paper.kind === 'api' ? 'Opening the paper…' : paper.slug);
-
-  /**
-   * What the Inspector is asked ABOUT — #77's D6: the live selection, or the title when nothing is
-   * selected. `blockIds` is filtered against `doc.byId`.
-   */
-  const inspectorContext = useMemo<InspectorContext | null>(() => {
-    if (doc === null) return null;
-    const selected = (props.selection?.blockIds ?? []).filter((id) => doc.byId.has(id));
-    if (selected.length > 0) {
-      return { kind: 'selection', blockIds: selected, quote: props.selection?.text ?? '' };
-    }
-    return { kind: 'selection', blockIds: [doc.blocks[0]?.id ?? ''], quote: title };
-  }, [props.selection, doc, title]);
 
   const { items: painted, unplaced } = useMemo(
     () => paintItemsOf(doc, props.highlights.highlights),
@@ -851,26 +813,6 @@ function ReaderWorkspaceView(props: ViewProps) {
         <main className="min-w-0 flex-1 overflow-hidden" aria-label="Document">
           <DocumentSlot {...props} />
         </main>
-
-        {/* The Inspector slot, filled by EPIC 3 (F3.6); S6 replaces it with the explain panel.
-            `paperId` is the real `paper_id` for an API paper — `paperRefKey` is a cache key. */}
-        {doc === null || inspectorAnswerSource === null || inspectorContext === null ? null : (
-          <aside
-            className="hidden w-[380px] shrink-0 border-l border-[--pt-rule] bg-[--pt-panel-ground] xl:block"
-            aria-label="Inspector"
-            data-epic="3"
-          >
-            <Inspector
-              context={inspectorContext}
-              answerSource={inspectorAnswerSource}
-              paperId={paper.kind === 'api' ? paper.paperId : paperRefKey(paper)}
-              onNavigate={(citation) => {
-                props.onShowSource(citation.resolution.blockIds);
-              }}
-              onShowSource={props.onShowSource}
-            />
-          </aside>
-        )}
       </div>
 
       {doc === null || unplaced.length === 0 ? null : (
