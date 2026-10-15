@@ -256,13 +256,21 @@ jobs:
         run: |
           log="$RUNNER_TEMP/ts-test.log"
           fail=0
-          # NO skip is allowed. The agent's kernel-network-deny test used to be the one named
-          # exception on Linux: under `unshare -rn` the child gets ENETUNREACH, not the EPERM that
-          # macOS's sandbox-exec gives, and the test asserted /ERR EPERM/. It now accepts EPERM,
-          # ENETUNREACH or EACCES (W2API, #141), so a line printing SKIPPED means the namespace was
-          # not applied and the kernel deny did not run: that fails the job like any other skip.
-          if /usr/bin/grep -a -n 'SKIPPED' "$log"; then
-            echo "::error title=A spec skipped::a corpus-, venv- or sandbox-gated spec printed SKIPPED (above)."
+          # ONE known, named skip is allowed: the agent's kernel-network-deny test on Linux. With
+          # `unshare -rn` (the only Linux path in services/agent/test/run.ts) it FAILS rather than
+          # skips: the child sees ENETUNREACH from the empty network namespace and the test
+          # asserts /ERR EPERM/, which only macOS's sandbox-exec produces (measured in this job's
+          # second run, #141). Enabling the namespace (AppArmor sysctl) therefore turns a loud skip
+          # into a red; the test now accepts EPERM, ENETUNREACH or EACCES (W2API, #141). The runner
+          # cannot apply `unshare -rn` today (job log: "network: none"), so the skip is still
+          # printed and still the only one tolerated; once the namespace works the test runs, and
+          # this allowance can go (a SKIPPED line then means the deny did not run).
+          # anything else printing SKIPPED fails the job.
+          # The allowed line is matched WHOLE (anchored at both ends): a line that merely contains
+          # the phrase, such as "... no kernel network deny AND corpus missing", still fails.
+          if /usr/bin/grep -a -n 'SKIPPED' "$log" \
+              | /usr/bin/grep -a -v -E '(^|[[:space:]:])\[audit\] SKIPPED LOUDLY: no kernel network deny on this run \(test/run\.ts prints why\)$'; then
+            echo "::error title=A spec skipped::a corpus- or venv-gated spec printed SKIPPED (above)."
             fail=1
           fi
           if /usr/bin/grep -a -n -E 'Tests .*[0-9]+ skipped|^.*[[:space:]]↓ ' "$log"; then
