@@ -97,8 +97,8 @@ export function recordApi(page: Page, apiUrl: string): string[] {
   return seen;
 }
 
-export function tokenInit(page: Page, token: string): Promise<void> {
-  return page.addInitScript((t) => {
+export async function tokenInit(page: Page, token: string): Promise<void> {
+  await page.addInitScript((t) => {
     try {
       window.localStorage.setItem('papertree.session', t);
     } catch {

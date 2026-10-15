@@ -34,7 +34,10 @@ async function newContext(
 
 async function touch(page: Page, context: BrowserContext, kind: 'swipe' | 'pinch') {
   const cdp = await context.newCDPSession(page);
-  const send = (type: string, points: { x: number; y: number; id: number }[]) =>
+  const send = (
+    type: 'touchStart' | 'touchMove' | 'touchEnd',
+    points: { x: number; y: number; id: number }[],
+  ) =>
     cdp.send('Input.dispatchTouchEvent', {
       type,
       touchPoints: points.map((p) => ({ x: p.x, y: p.y, id: p.id })),
