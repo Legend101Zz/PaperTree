@@ -67,8 +67,6 @@ from papertree_db import BlockId, OwnershipError, PaperTreeDb
 from papertree_memory import (
     DENIED_ACTIONS,
     AgentDataHandle,
-    MemoryStore,
-    ProposalValidator,
     escape_routes,
 )
 from papertree_memory.guard import _authorizer
@@ -76,9 +74,9 @@ from papertree_memory.guard import _authorizer
 PACKAGE = Path(__file__).resolve().parents[1] / "papertree_memory"
 
 #: The modules a tool can reach by holding an ``AgentDataHandle``: the handle itself and every
-#: module it imports from this package, transitively. ``store.py`` is deliberately absent, and
-#: C5 asserts that absence rather than trusting this list.
-AGENT_SIDE_MODULES = ("agent_handle.py", "guard.py", "records.py", "errors.py")
+#: module it imports from this package, transitively. The write side (``store.py``) was deleted
+#: in S8a, and C5 asserts that no writer module exists rather than trusting this list.
+AGENT_SIDE_MODULES = ("agent_handle.py", "guard.py", "errors.py")
 
 #: Anything that reaches a process, a shell, a socket or an HTTP client.
 FORBIDDEN_IMPORTS = frozenset(
@@ -139,8 +137,6 @@ PATH_WRITE_VERBS = frozenset(
         "hardlink_to",
     }
 )
-
-TOOL_NAMES = frozenset({"get_block", "search_blocks"})
 
 
 @pytest.fixture(scope="module")
@@ -215,7 +211,7 @@ def test_c1_nothing_reachable_from_the_handle_grants_a_capability(
     modules = [obj for obj in graph if isinstance(obj, ModuleType)]
     assert modules == [], f"a module object is reachable from the handle: {modules}"
 
-    writers = [obj for obj in graph if isinstance(obj, MemoryStore | PaperTreeDb)]
+    writers = [obj for obj in graph if isinstance(obj, PaperTreeDb)]
     assert writers == [], "a privileged writer is reachable from the agent's handle"
 
     paths = [obj for obj in graph if isinstance(obj, Path)]
@@ -248,16 +244,19 @@ def test_c1_is_not_vacuous_because_the_same_walk_finds_a_writer_when_one_is_ther
     class LeakyHandle:
         """What the handle would look like if it wrapped a writer — the design F3.8 forbids."""
 
-        def __init__(self, agent: AgentDataHandle, store: MemoryStore) -> None:
+        def __init__(self, agent: AgentDataHandle, store: PaperTreeDb) -> None:
             self.agent = agent
             self.store = store
             self.root = Path(benign.path)
 
-    with MemoryStore(benign.path, validator=ProposalValidator(tool_names=TOOL_NAMES)) as store:
+    store = PaperTreeDb(benign.path)
+    try:
         graph = _reachable(LeakyHandle(handle, store))
-        assert [obj for obj in graph if isinstance(obj, MemoryStore)] != []
+        assert [obj for obj in graph if isinstance(obj, PaperTreeDb)] != []
         assert [obj for obj in graph if isinstance(obj, Path)] != []
         assert [obj for obj in graph if isinstance(obj, ModuleType)] == []
+    finally:
+        store.close()
 
 
 def test_c1_the_walk_follows_closure_cells(handle: AgentDataHandle) -> None:
@@ -268,18 +267,21 @@ def test_c1_the_walk_follows_closure_cells(handle: AgentDataHandle) -> None:
     nothing about what a caller can reach.
     """
 
-    def make_leak(secret: MemoryStore) -> Any:
-        def leak() -> MemoryStore:
+    def make_leak(secret: PaperTreeDb) -> Any:
+        def leak() -> PaperTreeDb:
             return secret
 
         return leak
 
-    with MemoryStore(handle.database_path, validator=ProposalValidator(tool_names=())) as store:
+    store = PaperTreeDb(handle.database_path)
+    try:
         graph = _reachable(make_leak(store))
-        assert [obj for obj in graph if isinstance(obj, MemoryStore)] != [], (
+        assert [obj for obj in graph if isinstance(obj, PaperTreeDb)] != [], (
             "the walk did not follow __closure__, so C1 would pass on an implementation that "
             "merely hid the writer instead of not holding one"
         )
+    finally:
+        store.close()
 
 
 # ── the connection is worth nothing to reach ────────────────────────────────────────────
@@ -361,9 +363,9 @@ def test_c4_no_agent_side_module_imports_a_process_shell_or_network_module() -> 
             offenders[name] = forbidden
     assert offenders == {}, f"agent-side modules import capability modules: {offenders}"
 
-    # Non-vacuous: the audit finds a forbidden import when there is one to find. `store.py` is
-    # not on the agent side and this is not a complaint about it — it is proof the check works.
-    assert _imported_top_level_names(PACKAGE / "validation.py") & {"re"} == {"re"}
+    # Non-vacuous: the audit finds an import when there is one to find. `sqlite3` is allowed on
+    # the agent side; this is proof the import walk sees imports at all.
+    assert _imported_top_level_names(PACKAGE / "guard.py") & {"sqlite3"} == {"sqlite3"}
 
 
 def test_c4b_pathlib_is_used_for_reads_only_on_the_agent_side() -> None:
@@ -407,15 +409,10 @@ def test_c5_the_agent_side_never_imports_the_privileged_writer() -> None:
         }
         assert "store" not in relative, f"{name} imports the privileged writer"
 
-    # And the reverse direction is fine and is what the boundary expects: store.py may not
-    # import agent_handle either, or the two halves could be handed out together.
-    store_tree = ast.parse((PACKAGE / "store.py").read_text(encoding="utf-8"))
-    store_relative = {
-        node.module
-        for node in ast.walk(store_tree)
-        if isinstance(node, ast.ImportFrom) and node.level > 0 and node.module
-    }
-    assert "agent_handle" not in store_relative
+    # S8a: the write side is gone, so the reverse direction ("store.py may not import
+    # agent_handle") became a stronger statement: the package holds no writer module at all.
+    modules = {path.name for path in PACKAGE.glob("*.py")}
+    assert modules == {"__init__.py", "agent_handle.py", "errors.py", "guard.py"}, modules
 
 
 # ── tenancy ─────────────────────────────────────────────────────────────────────────────

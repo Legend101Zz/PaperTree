@@ -3,11 +3,12 @@
 Read this before doing anything else. It is the process contract; the epic file in
 `research/build/EPIC-0N-*.md` is the work contract.
 
-> **CURRENT PHASE — read #78 before anything else.** Epics 0–3 are merged and Epics 4
-> and 5 have **not started**. #78 is a three-session phase that finishes Epics 1–3 and
-> turns three epics of libraries into a product a person can use. It carries the backlog,
-> the session prompts, the design prompt, the review prompt and the handoff protocol.
-> If you are starting a session, #78 is your work contract — not an epic file.
+> **CURRENT PHASE: the v0.1 release. Read #141 before anything else.** The reader-release
+> tracker (#141) supersedes #78 as the work contract. Epics 0–3 are merged. The **canvas is in**
+> (Epic 5 ships in v0.1, slice S7) and **audio is out** (Epic 4 is deferred). The work contract
+> is `research/build/reader-release/` (`contracts.md` is normative; `slice-plan.md` says who owns
+> which path) and `research/architecture-decisions/ADR-002-reader-release.md`, not an epic file.
+> Everything below that still names #78 describes how that phase ran and is kept as history.
 
 ---
 
@@ -24,11 +25,12 @@ session cannot see it.
 ├── #2 EPIC 1 — Ingest                  ← closes when every child closes
 ├── #3 EPIC 2 — Reader & Anchoring      (closed)
 ├── #4 EPIC 3 — Grounded AI             ← ditto
-├── #78 Epic 1–3 completion             ← THE CURRENT TARGET. Closes #2 and #4.
+├── #78 Epic 1–3 completion             ← superseded by #141; its sessions are history.
 │    ├── Session A  #75 #71 #33 #74 #64
 │    ├── Session B  #50 #51 #57 #55 #53
 │    └── Session C  #66 #72 #76 #77 #62 #54
-└── #5 EPIC 4 · #6 EPIC 5               ← blocked on #78
+├── #141 v0.1 release (reader-release)  ← THE CURRENT TARGET. Slices S0–S9 in slice-plan.md.
+└── #5 EPIC 4 (audio, deferred) · #6 EPIC 5 (canvas, in v0.1 as slice S7)
 ```
 
 **Every PR names the issue it closes** (`Closes #NN`). An issue that a merged PR did not
@@ -209,6 +211,29 @@ wrong**, and the corrected one changes who has to defend against it.
   branches that no longer exist. They are allowlisted in that script, by name and with the
   commit that remediated them; the entry only suppresses on a history that actually contains
   that remediation, so it cannot become a mute button.
+- **Stacked-PR trap (corrects the paragraph above): `gh pr merge --delete-branch` on the base of
+  a stack CLOSES the dependent PR instead of retargeting it.** Observed on this repo in the v0.1
+  work (the v0.1 release prompt, 2026-10-15): the paragraph above describes retargeting that happens when a
+  base branch is deleted _by the repo setting_ after the merge; passing `--delete-branch` to the
+  CLI on the base of a stack closed the dependent PR. Merge stacked PRs **without** `--delete-branch`, bottom-up, check
+  each dependent PR's base afterwards, and delete the branches last. Verify with
+  `git merge-base --is-ancestor <head> origin/<target>`, not by reading PR state. For v0.1 every
+  PR targets `release/v0.1`, never `main`.
+- **`grep` is a wrapper in the agent shells here, and two tracked files hold NUL bytes.** The
+  wrapper does not behave like GNU or BSD `grep`, and the NUL-carrying files make plain `grep`
+  report "binary file matches" or skip them. Use `/usr/bin/grep -a` for any search whose answer
+  you will act on ("no references to X" is only true if the files with NULs were read).
+- **Timing- and memory-sensitive tests are load-aware, and this machine is rarely quiet.**
+  The #80 wall-clock tests (`test_30k_*`, `migrations.spec`'s 30k insert) flake upward under load
+  and the peak-RSS test (`test_peak_rss_on_the_largest_paper_is_inside_the_budget`, ratchet
+  520 MB) goes wrong in _both_ directions (#104, #129): load depresses the high-water mark, and
+  **two pytest suites running concurrently pushed it to 527.2 MB**, clearing a ratchet set 20 MB
+  above the highest quiesced reading (496.5–500.4 MB). Before you diagnose a red there, check
+  `uptime` and for any other pytest, `next build` or e2e run on the box; re-run it **alone**.
+  Report the load average beside any timing or RSS number. Never raise or loosen the bound: a
+  low reading on a busy box is no news, and a high one is no news either. (No automatic skip is
+  wired: whether another suite is running cannot be detected reliably from inside the test, since
+  the pressure comes from any process, not just pytest.)
 - **`@papertree/document-ir`'s barrel is browser-safe, and two of its modules are not.** #33 is
   closed and the `node:crypto` stub in `apps/web` is gone. `blockId`/`contentHash` live behind
   `@papertree/document-ir/identity` and `validatePaper` behind `.../validate` — both import
@@ -270,21 +295,35 @@ wrong**, and the corrected one changes who has to defend against it.
   `document.visibilityState === 'hidden'` starves `requestAnimationFrame`, so pdf.js's
   `RenderTask.promise` never settles and the text layer is never built — 0 spans, no error, canvas
   apparently painted. Confirmed on pristine `main`, so it is not anyone's regression. Any automated
-  browser check of the reader must foreground the tab, or it is measuring the tab and not the code.
-- **Half the relation types in the schema are never emitted.** Live on `main`: resnet has
-  974 blocks and **25** relations; `cites`, `references`, `defines`, `explains`,
-  `result_of`, `visually_associated_with` and `parent_of` appear **zero** times, and
-  `prev_id`/`next_id` are **0/974**. A consumer written against `prev_id` returns nothing
-  on every real paper _while passing against a fixture that sets it_ — that is #66, and it
-  is the defect class `findings.md` §A records. **Any test for a producer-side field must
-  run against a real parse of a corpus paper, not only against a fixture you authored.**
+  browser check of the reader must foreground the tab, or it is measuring the tab and not the code:
+  assert `document.visibilityState === 'visible'` wherever you count text-layer spans.
+- **Check what the parser emits before you write a consumer, and never copy a corpus count from
+  a doc.** The numbers below were true when written and the parser has moved under them. #66
+  recorded resnet at 974 blocks and **25** relations (`cites`, `references`, `defines`,
+  `explains`, `result_of`, `visually_associated_with` and `parent_of` all **zero**, and
+  `prev_id`/`next_id` **0/974**). The v0.1 triage (#120, ADR-002 §8) restated it as **955 blocks /
+  176 relations**. A parse of `research/benchmarks/corpus/resnet-cvpr-2col.pdf` with
+  `parse_document(..., ParserConfig())` at `fecd9c5` measured **1013 blocks / 208 relations**
+  (`cites` 142, `references` 36, `caption_of` 13, `continues_*` 17; `defines`, `explains`,
+  `result_of`, `visually_associated_with`, `parent_of` still zero) and `prev_id`/`next_id`
+  **0/1013**. (955 is the superglue paper's block count in that same measurement, so check which
+  paper a quoted figure belongs to.) What does not change: a consumer written against `prev_id`
+  returns nothing on every real paper _while passing against a fixture that sets it_ (#66, the
+  defect class `findings.md` §A records). **Any test for a producer-side field must run against a
+  real parse of a corpus paper, not only against a fixture you authored, and a figure in a doc
+  is a dated measurement: re-measure it.**
 - **A citation stored as a bare `block_id` does not survive a re-parse.** Measured on
   resnet under `worst_case` with ids re-minted by the real `blockId` function: bare
   `block_id` **3.3%**, `Anchor` **100.0%**. Block ids are content-derived, so any edit to a
-  block retires its id and the link breaks _silently_. `@papertree/anchoring` is
-  TypeScript-only, so Python can currently only return a `SourceRegion` (#72). Store an
-  `Anchor`, never a `block_id` — this applies to canvas nodes, saved answers, audit trails
-  and replay sync alike.
+  block retires its id and the link breaks _silently_. `@papertree/anchoring` has a
+  Python twin, `papertree_anchoring`, which exists and is wired for citations (the old "TS-only,
+  Python returns a `SourceRegion`" note, #72, is retired). Store an `Anchor`, never a
+  `block_id` — this applies to canvas nodes, saved answers, audit trails and replay sync alike.
+- **Paint a user's highlight from its stored quads, never from re-derived geometry** (ADR-002).
+  The quads are PDF-space rectangles saved at capture time; they survive reload, zoom, mode change
+  and a re-parse. Painting from `block_id` → current bbox ties the highlight to whichever parse
+  is live and moves or loses it when the parser changes. The anchor decides _what_ a highlight
+  points at; the stored quads decide _where it is drawn_.
 - **`OwnerId` is an opaque per-connection handle and must never cross a wire or a
   boundary.** Resolve a token to a `user_id`, call `owner_for(user_id)`, pass the handle
   inward. Isolation that has never been observed _failing_ has not been tested.
