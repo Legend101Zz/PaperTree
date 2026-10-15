@@ -78,8 +78,9 @@ pnpm --filter papertree-web dev
 ```
 
 **4. Open the app** at **http://127.0.0.1:3000** (not `localhost`; see Troubleshooting). Register an
-account, upload a PDF, wait for it to read "ready", open it, select some text to highlight it, and use the
-Explain panel. "Send to canvas" puts the passage on your canvas for that paper.
+account, then "Choose PDFs" to upload one. When its card shows "Ready", open it, select a sentence and use
+the toolbar: Highlight, Ask (opens the Explain panel; its citation chips jump back to the passage) or
+Send to canvas (puts the passage on that paper's canvas, reachable from the "Canvas" link in the reader).
 
 Check that everything is up: `curl http://127.0.0.1:8000/healthz` and `curl http://127.0.0.1:8200/healthz`
 (the agent's reply names the model per kind and says `key_present: true`).
