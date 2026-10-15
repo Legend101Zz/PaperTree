@@ -106,6 +106,9 @@ test('RFIX2 screens - the header, a selection, a highlight, Guided with one crop
         if (c.what.startsWith('label')) continue;
         expect(c.h, `${c.what} is at least 40 px tall`).toBeGreaterThanOrEqual(40);
         expect(c.right, `${c.what} is inside the window`).toBeLessThanOrEqual(size.width);
+        // The base squeezed the zoom select to 32 px at 390: a control you cannot read.
+        if (c.what.startsWith('select'))
+          expect(c.w, 'the zoom select is readable').toBeGreaterThanOrEqual(80);
       }
       for (const name of ['Source', 'Guided', 'Split']) {
         await expect(page.getByRole('radio', { name })).toBeVisible();

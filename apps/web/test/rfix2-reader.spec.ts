@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { planFigures } from '../src/components/reader/guidedFigures';
 import { HOLD_SCROLL_MS, holdScroll, releaseScrollHold } from '../src/components/reader/scrollHold';
-import { topBlockAt } from '../src/app/paper/[id]/read/ReaderWorkspace';
+import { initialBlockFor, topBlockAt } from '../src/app/paper/[id]/read/ReaderWorkspace';
 
 function root(): string {
   let dir = resolve(process.cwd());
@@ -138,6 +138,27 @@ describe('R8 topBlockAt - a position names a block Guided can find', () => {
     } as unknown as typeof doc;
     const named = topBlockAt(withFurniture, { page: page.index, yPt: 0 });
     expect(named).not.toBe('blk_pagenum');
+  });
+});
+
+describe('R8 initialBlockFor - no saved block does not mean the top of the paper', () => {
+  const path = join(root(), 'packages/document-ir/fixtures', 'resnet-cvpr-2col.paperir.json');
+  const doc = indexDocument(JSON.parse(readFileSync(path, 'utf8')) as PaperSource, 'rfix2-initial');
+  const base = { v: 1 as const, mode: 'source' as const, zoomMode: { kind: 'scale' as const, scale: 1.25 } };
+
+  it('uses the saved block when there is one', () => {
+    expect(initialBlockFor(doc, { ...base, page: 2, yPt: 100, blockId: 'blk_saved' })).toBe('blk_saved');
+  });
+
+  it('derives the block from the page and offset when none was saved', () => {
+    const id = initialBlockFor(doc, { ...base, page: 2, yPt: 100 });
+    expect(id).not.toBeNull();
+    expect(doc.byId.get(id as string)?.pageIndex).toBe(2);
+  });
+
+  it('says nothing without a position or a parse', () => {
+    expect(initialBlockFor(doc, null)).toBeNull();
+    expect(initialBlockFor(null, { ...base, page: 2, yPt: 100 })).toBeNull();
   });
 });
 
