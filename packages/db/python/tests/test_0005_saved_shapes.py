@@ -40,7 +40,6 @@ from papertree_db import (
     ResolutionIn,
     backup_path_for,
     generation,
-    load_migrations,
     migrate,
     open_database,
 )
@@ -65,10 +64,6 @@ from .saved_shapes import (
 )
 
 SHAPES = sorted(BUILDERS)
-#: Every version on disk, and the ones 0005's saved shapes still have to apply. DERIVED from the
-#: migrations directory, never a literal: each release adds one (0007, 0008 and 0009 are separate).
-HEAD = tuple(m.version for m in load_migrations(MIGRATIONS_DIR))
-FROM_0005 = tuple(v for v in HEAD if v >= 5)
 #: The runner MODULE: ``papertree_db.migrate`` the attribute is the function, which shadows it.
 migrate_module = importlib.import_module("papertree_db.migrate")
 #: The versions that get a pre-migration copy (0005, 0008, ...), in the order they are written.

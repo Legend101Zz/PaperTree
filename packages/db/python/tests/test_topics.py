@@ -27,14 +27,15 @@ from papertree_db import (
     TopicExists,
     TopicNotFound,
     TopicSuggestion,
+    backup_path_for,
     find_migrations_dir,
-    load_migrations,
     migrate,
     open_database,
     suggest_by_category,
 )
+from papertree_db.migrate import BACKUP_BEFORE_VERSIONS
 
-from .saved_shapes import migrations_through, raw_connect
+from .saved_shapes import HEAD_VERSIONS, migrations_through, raw_connect
 
 HASH = "sha256:" + "a" * 64
 
@@ -95,9 +96,16 @@ def test_0009_keeps_the_rows_of_a_saved_0006_database(tmp_path: Path) -> None:
             "INSERT INTO reading_state VALUES ('usr_1', 'ppr_x', 2, 3, NULL, "
             "'2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', NULL)"
         )
-        wanted = tuple(m.version for m in load_migrations(find_migrations_dir()) if m.version > 6)
+        wanted = tuple(v for v in HEAD_VERSIONS if v > 6)
         result = migrate(conn, find_migrations_dir())
-        assert result.applied == wanted and 9 in wanted and result.backups == ()
+        assert result.applied == wanted and 9 in wanted
+        # Only rebuilding migrations (0008) are backed up; 0009 is additive and is not one.
+        assert 9 not in BACKUP_BEFORE_VERSIONS
+        assert result.backups == tuple(
+            backup_path_for(tmp_path / "saved.sqlite", v)
+            for v in sorted(BACKUP_BEFORE_VERSIONS)
+            if v in wanted
+        )
         assert conn.execute("SELECT COUNT(*) FROM paper_owners").fetchone()[0] == 1
         assert conn.execute("SELECT furthest_page FROM reading_state").fetchone()[0] == 3
         assert conn.execute("SELECT COUNT(*) FROM topics").fetchone()[0] == 0
