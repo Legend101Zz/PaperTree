@@ -1533,38 +1533,112 @@ span.pt-paper .pt-paper__cite {
   position: absolute;
   z-index: 40;
   display: flex;
-  align-items: center;
   gap: 2px;
-  padding: 4px;
+  padding: 6px;
   font-family: var(--pt-font-ui);
+  line-height: 1;
   color: var(--pt-ink);
-  background: var(--pt-ground-raised);
-  border-radius: var(--pt-radius-panel);
-  box-shadow: var(--pt-float-shadow);
+  background: var(--pt-e2-fill);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-menu);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
   pointer-events: auto;
   animation: pt-rise 140ms ease-out;
+}
+
+/* In the page margin (frame 04): a column of buttons beside the selection, never over it (#203). */
+.pt-seltool--margin {
+  flex-direction: column;
+  inline-size: 126px;
+  padding: 4px;
+}
+
+/* (scoped: it must win over the shared `.pt-toolbtn`, which centres its content) */
+.pt-seltool .pt-seltool__item {
+  justify-content: flex-start;
+  min-block-size: 36px;
+  padding-inline: 8px;
+  white-space: nowrap;
+}
+
+.pt-seltool__item--primary {
+  font-weight: 700;
+}
+
+.pt-seltool__item[disabled] {
+  color: var(--pt-ink-muted);
+  cursor: not-allowed;
+}
+
+/* Docked across the column (frame 07a) when no margin is wide enough; outside the scroller. */
+.pt-seltool-dock {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+
+.pt-seltool--docked {
+  inset-inline: 24px;
+  flex-wrap: wrap;
+  align-items: center;
+  min-block-size: 52px;
+  padding-block: 4px;
+}
+
+.pt-seltool--top {
+  inset-block-start: 8px;
+}
+
+.pt-seltool--bottom {
+  inset-block-end: 8px;
 }
 
 .pt-seltool--sheet {
   position: fixed;
   inset-inline: 16px;
   inset-block-end: calc(16px + env(safe-area-inset-bottom, 0px));
-  justify-content: space-between;
-}
-
-/* Highlight is unavailable for this selection: the reason is a sentence under the buttons, in the
-   bar itself, never only a tooltip. The note takes the buttons' width and never sets it (its own
-   width is 0, its minimum the full line), so the buttons stay on one row. */
-.pt-seltool--noted {
   flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
 }
 
-/* Floating, the bar is as wide as its buttons whatever column it is positioned in (a page at 50 %
-   is narrower than the bar), so a note never wraps the buttons onto a second row. */
-.pt-seltool--noted:not(.pt-seltool--sheet) {
-  inline-size: max-content;
+/* The five washes: chips like the highlight card's. 20 px with 4 px between keeps each one's 24 px
+   target circle clear of the next (WCAG 2.5.8's spacing rule) inside the 126 px margin bar. */
+.pt-seltool__washes {
+  display: flex;
+  gap: 4px;
+  padding: 2px 0 6px;
 }
 
+.pt-seltool--docked .pt-seltool__washes,
+.pt-seltool--sheet .pt-seltool__washes {
+  padding: 0 8px;
+}
+
+.pt-seltool__wash {
+  inline-size: 20px;
+  block-size: 20px;
+  padding: 0;
+  cursor: pointer;
+  background: var(--wash-fill);
+  border: 0;
+  border-radius: var(--pt-radius-round);
+  box-shadow: inset 0 0 0 2px var(--wash-ink);
+}
+
+.pt-seltool__wash:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+.pt-seltool__wash[disabled] {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* Highlight is unavailable for this selection: the reason is a sentence in the bar itself, never only
+   a tooltip, taking the bar's width and never setting it. */
 .pt-seltool__note {
   flex-basis: 100%;
   inline-size: 0;
@@ -1574,20 +1648,6 @@ span.pt-paper .pt-paper__cite {
   font-size: 0.8125rem;
   line-height: 1.4;
   color: var(--pt-ink-muted);
-}
-
-.pt-seltool__sep {
-  inline-size: 1px;
-  block-size: 24px;
-  margin-inline: 2px;
-  background: var(--pt-rule);
-}
-
-.pt-seltool__dot {
-  inline-size: 12px;
-  block-size: 12px;
-  border-radius: 50%;
-  background: var(--pt-hl-amber-ink);
 }
 
 @keyframes pt-rise {

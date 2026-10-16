@@ -107,7 +107,8 @@ async function selectAndAsk(page: Page, from: string, to: string): Promise<void>
   await drag(page, points.from, points.to);
   const toolbar = page.getByRole('toolbar', { name: 'Selection actions' });
   await expect(toolbar).toBeVisible();
-  await toolbar.getByRole('button', { name: /Ask/ }).click();
+  // #203: the toolbar's Explain runs the answer now (v0.1's Ask); its Ask waits for a question.
+  await toolbar.getByRole('button', { name: 'Explain this passage' }).click();
 }
 
 async function noSideScroll(page: Page, width: number): Promise<void> {

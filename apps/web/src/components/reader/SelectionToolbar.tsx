@@ -1,229 +1,213 @@
 'use client';
 
 /**
- * reader/SelectionToolbar — what a reader can do with a selection: Highlight, Ask, Send to canvas,
- * Copy.
+ * reader/SelectionToolbar — what a reader can do with a selection (DESIGN.md §3 item 12, #203):
+ * Explain · Ask · Highlight with the five washes · Send to board · Copy, and "Explain with a
+ * diagram" once the diagram slice provides it.
  *
- * THE BASELINE DEFECT: IT WAS UNDER THE TEXT LAYER. The toolbar used to render inside the page's
- * overlay slot, a `pointer-events: none` box, so the toolbar inherited `pointer-events: none` and a
- * real mouse click on Highlight fell through to the text-layer span underneath — which collapsed
- * the selection and captured nothing (journey-baseline §B: `elementFromPoint` at the button's
- * centre was a `<span>`; only the keyboard path worked). It also sat inside `.papertree-page`,
- * whose `overflow: hidden` clipped it at the page edge.
+ * WHERE IT GOES is `features/reader/model/toolbarPlacement` (never over the lines being read):
  *
- * NOW IT IS ABOVE EVERYTHING, in one of two places:
+ *   `margin` — a column of buttons in the page margin beside the selection, inside the scroller's
+ *     floating layer (`VirtualPageList.renderFloating`), so it scrolls with the page and is never
+ *     clipped by `.papertree-page`'s `overflow: hidden`.
+ *   `docked` — a row across the top (or bottom) of the reader column, outside the scroller, when no
+ *     margin is wide enough (frame 07a).
+ *   `sheet` — below 640 px, a bottom bar PORTALLED to `document.body`, where the thumb is.
  *
- *   `float` — in the scroller's FLOATING LAYER (`VirtualPageList.renderFloating`), a sibling of the
- *     pages stacked above all of them, at a position computed from the selection's IR extent and
- *     the page's arithmetic offset. It scrolls with the page for free and is never clipped.
- *   `sheet` — below 640 px, a bottom action bar PORTALLED to `document.body`: a phone's selection
- *     sits under the thumb, so the actions go where the thumb is, and never cover the text.
- *
- * `e2e/s4/toolbar-hit-test.spec.ts` asserts the fix the way the baseline found the bug: the element
- * at the Highlight button's centre IS the button.
- *
- * `onPointerDown` prevents the default on the whole bar: a pointerdown collapses the very
- * selection the toolbar acts on in WebKit and Blink. Buttons activate on `click` (mouse, touch and
- * keyboard alike), which fires after that prevented pointerdown with the selection still alive.
- *
- * THE ASK BUTTON CARRIES THE RESERVED AI MARKER — the same `DERIVED_MARKER` from `@papertree/ui`,
- * never typed as a literal: what Ask produces is model output, and the mark says so before the
- * reader presses it.
+ * THE BASELINE DEFECT stays fixed: the bar is above the text layer, so the element at a button's
+ * centre is that button (`e2e/s4/toolbar-hit-test.spec.ts`). `onPointerDown` prevents the default
+ * on the whole bar, because a pointerdown collapses the very selection the bar acts on; buttons act
+ * on `click`, which comes after with the selection still alive.
  */
 
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { Copy, Highlighter, MessageSquare, Network, Pin, Type } from 'lucide-react';
 import { createPortal } from 'react-dom';
 
-import { DERIVED_MARKER } from '@papertree/ui';
+import { HIGHLIGHT_COLORS } from './useHighlights';
 
+import type { HighlightColor } from '@/lib/api/types';
+import type { CSSProperties, ReactNode } from 'react';
+
+/** Where the caller put the toolbar: beside the selection in a margin, docked, or the phone's bar. */
 export type ToolbarPlacement =
-  | {
-      readonly kind: 'float';
-      /** Content coordinates (CSS px inside the scroller's content box) of the selection's extent. */
-      readonly extent: {
-        readonly left: number;
-        readonly top: number;
-        readonly right: number;
-        readonly bottom: number;
-      };
-      /** The content box's width, to keep the bar inside it. */
-      readonly boundsWidth: number;
-      /** Above the extent (a selection on one page), or below it (the end of one across pages). */
-      readonly prefer?: 'above' | 'below';
-    }
+  | { readonly kind: 'margin'; readonly left: number; readonly top: number }
+  | { readonly kind: 'docked'; readonly edge: 'top' | 'bottom' }
   | { readonly kind: 'sheet' };
 
+/** Props for `SelectionToolbar`: its placement and the actions it offers. */
 export interface SelectionToolbarProps {
   readonly placement: ToolbarPlacement;
-  readonly onHighlight: () => void;
+  /** Highlight in the last colour used, or in the wash pressed. */
+  readonly onHighlight: (color?: HighlightColor) => void;
   readonly onCopy: () => void;
+  /** Explain this passage now (the default question). */
+  readonly onExplain?: () => void;
+  /** Open the panel on this passage with the question box ready for the reader's own words. */
   readonly onAsk?: () => void;
-  readonly onSendToCanvas?: () => void;
+  readonly onSendToBoard?: () => void;
+  /** Drawn only when given: the diagram slice wires it (#217). No placeholder button before then. */
+  readonly onExplainWithDiagram?: () => void;
   /**
-   * Why Highlight cannot be used on this selection (the paper is still being read; the selection is
-   * longer than one highlight may hold), or undefined. SHOWN in the bar, not only as a tooltip: a
-   * disabled button with no visible reason is a dead end.
+   * Why Highlight cannot be used on this selection, or undefined. SHOWN in the bar, not only as a
+   * tooltip: a disabled button with no visible reason is a dead end.
    */
   readonly highlightDisabledReason?: string;
 }
 
-const GAP = 8;
-const EDGE = 8;
-
 const NOTE_ID = 'pt-seltool-note';
+const ICON = 18;
 
-function ToolbarButton({
-  label,
-  onActivate,
-  disabled = false,
-  title,
-  describedBy,
-  children,
-  primary = false,
-}: {
+const COLOR_NAME: Readonly<Record<HighlightColor, string>> = {
+  amber: 'amber',
+  green: 'green',
+  blue: 'blue',
+  pink: 'pink',
+  purple: 'purple',
+};
+
+function Item(props: {
   readonly label: string;
+  readonly name?: string;
+  readonly icon: ReactNode;
   readonly onActivate?: (() => void) | undefined;
   readonly disabled?: boolean;
-  readonly title?: string;
   readonly describedBy?: string;
-  readonly children: ReactNode;
   readonly primary?: boolean;
-}): JSX.Element {
+}): ReactNode {
+  const off = props.disabled === true || props.onActivate === undefined;
   return (
     <button
       type="button"
-      className={`pt-btn${primary ? ' pt-btn--seltool-primary' : ''}`}
-      aria-label={label}
-      {...(describedBy === undefined ? {} : { 'aria-describedby': describedBy })}
-      title={title ?? label}
-      disabled={disabled || onActivate === undefined}
+      className={`pt-toolbtn pt-seltool__item${props.primary === true ? ' pt-seltool__item--primary' : ''}`}
+      aria-label={props.name ?? props.label}
+      {...(props.describedBy === undefined ? {} : { 'aria-describedby': props.describedBy })}
+      // Native `disabled` (v0.1's contract, `e2e/s4/selection-regressions`): the reason is in the
+      // bar beside it, so nobody has to focus the button to learn it.
+      disabled={off}
       onClick={() => {
-        if (!disabled) onActivate?.();
+        if (!off) props.onActivate?.();
       }}
     >
-      {children}
+      <span className="pt-toolbtn__icon" aria-hidden="true">
+        {props.icon}
+      </span>
+      <span className="pt-toolbtn__label">{props.label}</span>
     </button>
   );
 }
 
-function Buttons(props: SelectionToolbarProps): JSX.Element {
-  const highlightDisabled = props.highlightDisabledReason !== undefined;
+function Washes(props: SelectionToolbarProps): ReactNode {
+  const off = props.highlightDisabledReason !== undefined;
+  return (
+    <span className="pt-seltool__washes" role="group" aria-label="Highlight colour">
+      {HIGHLIGHT_COLORS.map((color) => (
+        <button
+          key={color}
+          type="button"
+          className="pt-seltool__wash"
+          aria-label={`Highlight in ${COLOR_NAME[color]}`}
+          disabled={off}
+          style={
+            {
+              '--wash-fill': `var(--pt-hl-${color})`,
+              '--wash-ink': `var(--pt-hl-${color}-ink)`,
+            } as CSSProperties
+          }
+          onClick={() => {
+            if (!off) props.onHighlight(color);
+          }}
+        />
+      ))}
+    </span>
+  );
+}
+
+function Items(props: SelectionToolbarProps): ReactNode {
+  const reason = props.highlightDisabledReason;
   return (
     <>
-      <ToolbarButton
+      {props.onExplain === undefined ? null : (
+        <Item
+          label="Explain"
+          name="Explain this passage"
+          icon={<MessageSquare size={ICON} strokeWidth={1.5} />}
+          onActivate={props.onExplain}
+          primary
+        />
+      )}
+      {props.onAsk === undefined ? null : (
+        <Item
+          label="Ask"
+          name="Ask about this passage"
+          icon={<Type size={ICON} strokeWidth={1.5} />}
+          onActivate={props.onAsk}
+        />
+      )}
+      {props.onExplainWithDiagram === undefined ? null : (
+        <Item
+          label="Explain with a diagram"
+          icon={<Network size={ICON} strokeWidth={1.5} />}
+          onActivate={props.onExplainWithDiagram}
+        />
+      )}
+      <Item
         label="Highlight"
-        onActivate={props.onHighlight}
-        disabled={highlightDisabled}
-        {...(props.highlightDisabledReason === undefined
-          ? {}
-          : { title: props.highlightDisabledReason, describedBy: NOTE_ID })}
-        primary
-      >
-        <span className="pt-seltool__dot" aria-hidden="true" />
-        Highlight
-      </ToolbarButton>
-      <span className="pt-seltool__sep" aria-hidden="true" />
-      <ToolbarButton label="Ask about this passage" onActivate={props.onAsk}>
-        <span aria-hidden="true">{DERIVED_MARKER}</span>
-        Ask
-      </ToolbarButton>
-      <ToolbarButton label="Send to canvas" onActivate={props.onSendToCanvas}>
-        Canvas
-      </ToolbarButton>
-      <ToolbarButton label="Copy" onActivate={props.onCopy}>
-        Copy
-      </ToolbarButton>
-      {props.highlightDisabledReason === undefined ? null : (
+        icon={<Highlighter size={ICON} strokeWidth={1.5} />}
+        onActivate={() => props.onHighlight()}
+        disabled={reason !== undefined}
+        {...(reason === undefined ? {} : { describedBy: NOTE_ID })}
+      />
+      <Washes {...props} />
+      {props.onSendToBoard === undefined ? null : (
+        <Item
+          label="Send to board"
+          icon={<Pin size={ICON} strokeWidth={1.5} />}
+          onActivate={props.onSendToBoard}
+        />
+      )}
+      <Item label="Copy" icon={<Copy size={ICON} strokeWidth={1.5} />} onActivate={props.onCopy} />
+      {reason === undefined ? null : (
         <p id={NOTE_ID} className="pt-seltool__note">
-          {props.highlightDisabledReason}
+          {reason}
         </p>
       )}
     </>
   );
 }
 
-export function SelectionToolbar(props: SelectionToolbarProps): JSX.Element | null {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
-
-  // The bar's OWN box, so it can be kept inside the page column. This measures the toolbar, never
-  // the selection: where the selection is comes from the IR.
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (el === null) return;
-    const next = { width: el.offsetWidth, height: el.offsetHeight };
-    setSize((current) =>
-      current !== null && current.width === next.width && current.height === next.height
-        ? current
-        : next,
-    );
-  }, [props.placement.kind, props.highlightDisabledReason]);
-
-  // A selection near the top edge of the window puts the bar above the visible area, where it is
-  // out of sight and out of reach. The bar is measured against its scroller (the bar's own box, not
-  // the selection's) and, if it would sit above the visible top, goes below the selection instead.
-  // `flipKey` ties the decision to this extent, so the next selection starts from "above" again.
-  const extentKey =
-    props.placement.kind === 'float'
-      ? `${String(props.placement.extent.top)}:${String(props.placement.extent.bottom)}:${String(props.placement.prefer)}`
-      : '';
-  const [flipKey, setFlipKey] = useState<string | null>(null);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (el === null || props.placement.kind !== 'float' || flipKey === extentKey) return;
-    if (props.placement.prefer === 'below') return;
-    const scroller = el.closest('[data-papertree-scroller]');
-    if (scroller === null) return;
-    const visibleTop = scroller.getBoundingClientRect().top;
-    if (el.getBoundingClientRect().top < visibleTop + EDGE) setFlipKey(extentKey);
-  }, [props.placement, extentKey, flipKey, size]);
-  const flipped = props.placement.kind === 'float' && flipKey === extentKey;
-
+/**
+ * The selection toolbar in its three forms. It positions nothing itself: the caller placed it.
+ *
+ * @param props - The placement, the actions, and why Highlight is unavailable (if it is).
+ * @returns The toolbar, or a portal of it (the phone's bottom bar).
+ */
+export function SelectionToolbar(props: SelectionToolbarProps): ReactNode {
+  const { placement } = props;
   const bar = (
     <div
-      ref={ref}
       role="toolbar"
       aria-label="Selection actions"
-      aria-orientation="horizontal"
+      aria-orientation={placement.kind === 'margin' ? 'vertical' : 'horizontal'}
       className={[
         'pt-seltool',
-        props.placement.kind === 'sheet' ? 'pt-seltool--sheet' : '',
-        props.highlightDisabledReason === undefined ? '' : 'pt-seltool--noted',
+        `pt-seltool--${placement.kind}`,
+        placement.kind === 'docked' ? `pt-seltool--${placement.edge}` : '',
       ]
         .filter(Boolean)
         .join(' ')}
-      data-placement={props.placement.kind}
-      style={
-        props.placement.kind === 'float' ? floatStyle(props.placement, size, flipped) : undefined
-      }
+      data-placement={placement.kind}
+      style={placement.kind === 'margin' ? { left: placement.left, top: placement.top } : undefined}
       // Preventing pointerdown also suppresses the compatibility mousedown, whose default action
       // is what would collapse the selection.
       onPointerDown={(event) => event.preventDefault()}
     >
-      <Buttons {...props} />
+      <Items {...props} />
     </div>
   );
 
-  if (props.placement.kind === 'sheet') {
+  if (placement.kind === 'sheet') {
     if (typeof document === 'undefined') return null;
     return createPortal(bar, document.body);
   }
   return bar;
-}
-
-/** Above the selection, centred on it, kept inside the content column; below it if no room. */
-function floatStyle(
-  placement: Extract<ToolbarPlacement, { kind: 'float' }>,
-  size: { width: number; height: number } | null,
-  flipped = false,
-): React.CSSProperties {
-  const width = size?.width ?? 320;
-  const height = size?.height ?? 48;
-  const centre = (placement.extent.left + placement.extent.right) / 2;
-  const maxLeft = Math.max(EDGE, placement.boundsWidth - width - EDGE);
-  const left = Math.min(maxLeft, Math.max(EDGE, centre - width / 2));
-  const above = placement.extent.top - GAP - height;
-  const below = placement.extent.bottom + GAP;
-  const top = placement.prefer === 'below' || flipped ? below : above >= EDGE ? above : below;
-  return { left, top, visibility: size === null ? 'hidden' : 'visible' };
 }

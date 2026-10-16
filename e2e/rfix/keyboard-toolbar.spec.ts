@@ -89,9 +89,10 @@ test.describe('RFIX — Escape and the toolbar at the top edge', () => {
     expect(boxes.bar[1]).toBeGreaterThanOrEqual((boxes.scroller[1] as number) - 0.5);
     expect(boxes.bar[3]).toBeLessThanOrEqual(boxes.scroller[3] as number);
     // …and it is still the one that works: Highlight is under the pointer, not under the header.
+    // (#203: Highlight is no longer the bar's first button, so it is named.)
     const hit = await page.evaluate(() => {
       const bar = document.querySelector(
-        '[role="toolbar"][aria-label="Selection actions"] button',
+        '[role="toolbar"][aria-label="Selection actions"] button[aria-label="Highlight"]',
       ) as HTMLElement;
       const r = bar.getBoundingClientRect();
       const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);

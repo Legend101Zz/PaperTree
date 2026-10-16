@@ -92,7 +92,7 @@ test('the same passage twice is one card and a toast says so', async ({
     const points = await pointsFor(page, 'Deeper neural networks', 'substantially deeper');
     await drag(page, points.from, points.to);
     expect((await selectionRects(page)).text).toContain('Deeper neural networks');
-    await page.getByRole('button', { name: 'Send to canvas' }).click();
+    await page.getByRole('button', { name: 'Send to board' }).click(); // #203's wording
   };
   await send();
   const toast = page.getByTestId('canvas-toast');

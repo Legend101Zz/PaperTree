@@ -187,6 +187,11 @@ export interface ExplainController {
   /** What the panel is open on; `null` when it was opened without a selection (or is closed). */
   readonly request: ExplainRequest | null;
   readonly openExplain: (input: ExplainRequest) => void;
+  /**
+   * The selection toolbar's Ask (#203): open the panel on this passage with nothing sent, so the
+   * reader's own question (`ask`) starts the thread about it.
+   */
+  readonly askAbout: (input: ExplainRequest) => void;
   /** Open the panel with no passage: the free-question and summary entry. */
   readonly openPanel: () => void;
   readonly closeExplain: () => void;
@@ -443,6 +448,16 @@ export function useExplainActions(options: { readonly paperId: string | null }):
     [halt, sendCreate],
   );
 
+  const askAbout = useCallback(
+    (input: ExplainRequest): void => {
+      halt(false);
+      const epoch = (epochRef.current += 1);
+      dispatch({ type: 'open', epoch, request: input, view: 'thread' });
+      stateRef.current = { ...stateRef.current, epoch, messages: [], threadId: null };
+    },
+    [halt],
+  );
+
   const openPanel = useCallback((): void => {
     const current = stateRef.current;
     if (
@@ -692,6 +707,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       state,
       request: state.open ? state.request : null,
       openExplain,
+      askAbout,
       openPanel,
       closeExplain,
       setView,
@@ -708,6 +724,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       paperId,
       state,
       openExplain,
+      askAbout,
       openPanel,
       closeExplain,
       setView,

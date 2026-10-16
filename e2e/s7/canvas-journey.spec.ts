@@ -80,7 +80,7 @@ test.describe('Journey D: the canvas', () => {
     await drag(page, points.from, points.to);
     const selected = await selectionRects(page);
     expect(selected.text).toContain('Deeper neural networks');
-    await page.getByRole('button', { name: 'Send to canvas' }).click();
+    await page.getByRole('button', { name: 'Send to board' }).click(); // #203's wording
     const toast = page.getByTestId('canvas-toast');
     await expect(toast).toContainText('Passage added to your canvas');
     await page.screenshot({ path: shot('d01-reader-toast-1440.png') });
