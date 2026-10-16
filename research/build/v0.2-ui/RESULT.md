@@ -50,6 +50,20 @@ head, the local uncached gate, and a code review whose findings were fixed befor
 | S1b-2 sprout, label holder, reading-now row | #226 | #229 | f315851 | the design's own sprout paths |
 | S1c voices, markers, page tabs, coverage | #190 | #230 | 64f15c6 | banned-words scan over source strings with probes |
 | S1c-2 call slip, AI slip, trace list | #224 | #231 | 942ed7e | AiParagraph rows for per-paragraph margins; Show in paper on the shared Button |
+| S1d token board (frame 10) | #191 | #238 | 2c7e00c | guard answers 404 in production (next build + start); ratios floored, never rounded up |
+| S1d-2 component states | #237 | #239 | ebf43d2 | ThreadSwatch (7 kinds, colour + drawn second cue) added to packages/ui; demo copies inert |
+| S2a reading state, library facts | #192 | #236 | 825379d | migration 0006; full gate on c0ba54f (pytest green after one #80 flake re-run) |
+| S5a notebook backend part 1 | #206 | #243 | e676ee3 | migration 0007; Dive in keyed by S4a's passage_key; review fixes a4bb324 |
+| S5a-2 strokes and search | #240 | #244 | 64db2df | stroke cap = encoder worst case (180,005 B); whole-blob validation; full gate on d4c8442 (pytest 2,338) |
+| S6a board backend | #211 | #241 | c432eb9 | migration 0008 (rebuild, row-count guard); pin table from frame 06; full gate on baf9001 (pytest 2,369) |
+| S4b-1 exchange model, stored threads | #202 | #247 | e715a98 | golden numbering on the real Attention thread (b1,b6,b7,b8 → 1–4) |
+| S4b-2 the exchange on screen, the flash | #202 | #248 | 9db4411 | full gate on 4ec0518 (pytest 2,338); full e2e 60/60 |
+| S4b follow-up: markers stay through settling | #252 | #253 | ce37eda | found by CI on another PR; stored "not verified" overlays the kept markers |
+| S2d-1 the shelf | #195 | #249 | 65d0084 | spine width 26 + 0.85 × pages fits all 24 spines of frame 01; gilt ≥ 4.7:1 on every cloth |
+| S2d-2 header, search, catalogue card | #195 | #250 | 6f56765 | full gate on 400ce3c (pytest 2,338); full e2e 60 + 1 baseline flake (passes 4/4 alone) |
+| S2c library links (backend) | #194 | #254 | 83e65c7 | 3 real links on the corpus, all by title, 0 by arXiv id; full gate on 8d8c0e4 (pytest 2,386) |
+| S2b topics (backend, part 1) | #193 | #251 | da20ded | migration 0009; full gate on ccda80a (pytest 2,404); part 2 (Flash run) is #242 |
+| lasso benchmark bound | (#182) | #259 | 516897f | 50 ms target logged, 250 ms asserted: it failed two gates at load 25–50 |
 
 ## Live AI spend (estimates)
 
