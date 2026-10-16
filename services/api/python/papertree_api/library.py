@@ -21,6 +21,7 @@ and which parse job an upload, a retry or a re-parse gets.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Final, cast, get_args
@@ -29,6 +30,7 @@ from papertree_db import LibraryRow, OwnerId, PaperId, PaperTreeDb
 from papertree_document_worker.job import PARSE_KIND, PARSE_STEPS, enqueue_parse, payload_generation
 from papertree_jobs import Job, JobStore, StepRecord, error_code
 
+from .figures import library_plate
 from .schemas import (
     Cloth,
     JobErrorCode,
@@ -165,7 +167,8 @@ def library_topic(row: LibraryRow) -> LibraryTopic | None:
     )
 
 
-def library_paper(row: LibraryRow) -> LibraryPaper:
+def library_paper(row: LibraryRow, sign: Callable[[str, str | None], str | None]) -> LibraryPaper:
+    """The wire row. ``sign`` (``figures.asset_signer``) signs the plate's crop URL (#200)."""
     return LibraryPaper(
         paper_id=row.paper_id,
         title=title_for(row),
@@ -187,6 +190,8 @@ def library_paper(row: LibraryRow) -> LibraryPaper:
         thread_count=row.thread_count,
         has_summary=row.has_summary,
         topic=library_topic(row),
+        notebook_count=row.notebook_count,
+        plate=library_plate(row, sign),
     )
 
 

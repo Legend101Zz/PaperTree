@@ -10,6 +10,7 @@
     usage       §2.5 GET /usage                        S5
     boards      §2.7 canvas                            S7  (501 stubs)
     topics      /topics, /papers/{id}/topic            #193 (v0.2 library)
+    book        /papers/{id}/figures · plate · abstract   #200 (v0.2, the opened book)
     internal    §4 the agent's paper tools             S5
 
 A 501 stub already declares its FINAL models: auth, path and query parameters and the body model

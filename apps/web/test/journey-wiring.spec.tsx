@@ -57,6 +57,8 @@ const REAL_ROW: WirePaper = {
   thread_count: 0,
   has_summary: false,
   topic: null,
+  notebook_count: 0,
+  plate: null,
 };
 
 describe('D1/D2 — the session survives sign-in', () => {

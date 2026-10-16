@@ -57,6 +57,8 @@ function row(overrides: Partial<LibraryPaper> = {}): LibraryPaper {
     thread_count: 0,
     has_summary: false,
     topic: null,
+    notebook_count: 0,
+    plate: null,
     ...overrides,
   };
 }

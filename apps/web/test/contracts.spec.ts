@@ -77,6 +77,7 @@ import type {
   JobSummary,
   LibraryLink,
   LibraryPaper,
+  LibraryPlate,
   LibraryReference,
   ReadingProgress,
   Message,
@@ -199,6 +200,8 @@ const PAPER: LibraryPaper = {
   thread_count: 2,
   has_summary: false,
   topic: null,
+  notebook_count: 0,
+  plate: null,
 };
 
 const HIGHLIGHT: Highlight = {
@@ -581,6 +584,7 @@ type NodeCreated = Awaited<ReturnType<(typeof boardsApi)['createNode']>>;
 const OPTIONAL = {
   'papers.JobSummary': [],
   'papers.LibraryPaper': [],
+  'papers.LibraryPlate': [],
   'papers.ReadingProgress': [],
   'papers.LibraryLink': [],
   'papers.LibraryReference': [],
@@ -692,6 +696,8 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<OptionalKeys<JobSummary>, Opt<'papers.JobSummary'>>,
   true satisfies Equal<keyof LibraryPaper, SchemaKeys<'papers', 'LibraryPaper'>>,
   true satisfies Equal<OptionalKeys<LibraryPaper>, Opt<'papers.LibraryPaper'>>,
+  true satisfies Equal<keyof LibraryPlate, SchemaKeys<'papers', 'LibraryPlate'>>,
+  true satisfies Equal<OptionalKeys<LibraryPlate>, Opt<'papers.LibraryPlate'>>,
   true satisfies Equal<keyof LibraryLink, SchemaKeys<'papers', 'LibraryLink'>>,
   true satisfies Equal<OptionalKeys<LibraryLink>, Opt<'papers.LibraryLink'>>,
   true satisfies Equal<keyof LibraryReference, SchemaKeys<'papers', 'LibraryReference'>>,
@@ -1088,6 +1094,23 @@ describe('contracts.spec — lib/api/types.ts against contracts/api (exported fr
       page_count: null,
       original_filename: null,
     } satisfies LibraryPaper);
+    const plate: LibraryPlate = {
+      block_id: 'blk_dsibp5ju4rblkcpa',
+      page_index: 2,
+      label: 'Figure 1',
+      caption_text: 'Figure 1: The Transformer - model architecture.',
+      asset_url: 'http://127.0.0.1:8000/papers/ppr_C425DTWW1KYMYDSWR205HB2069/assets/figures/x',
+    };
+    expectValid('papers', 'LibraryPaper', {
+      ...PAPER,
+      notebook_count: 1,
+      plate,
+    } satisfies LibraryPaper);
+    expectValid('papers', 'LibraryPlate', {
+      ...plate,
+      label: null,
+      caption_text: null,
+    } satisfies LibraryPlate);
     expectValid('highlights', 'Highlight', HIGHLIGHT);
     expectValid('threads', 'RunSummary', RUN);
     expectValid('threads', 'Citation', CITATION);

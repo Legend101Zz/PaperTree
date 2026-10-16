@@ -1,8 +1,264 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "PaperTree API contract: papers",
-  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: LibraryPaper, JobSummary, UploadAccepted, JobAccepted, JobStatus, ReparseRequest, ReadingStateUpdate, LibraryLinks, LibraryLink, LibraryReference.",
+  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: LibraryPaper, JobSummary, UploadAccepted, JobAccepted, JobStatus, ReparseRequest, ReadingStateUpdate, LibraryLinks, LibraryLink, LibraryReference, LibraryPlate, PaperFigure, PaperAbstract, PlatePut.",
   "$defs": {
+    "AnchorCreated": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": ["source", "guided"],
+          "type": "string"
+        },
+        "at": {
+          "type": "string"
+        },
+        "client": {
+          "type": "string"
+        }
+      },
+      "required": ["mode", "at", "client"],
+      "title": "AnchorCreated",
+      "type": "object"
+    },
+    "AnchorDoc": {
+      "additionalProperties": false,
+      "properties": {
+        "paperId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "pdfSha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "parserVersion": {
+          "type": "string"
+        },
+        "textStreamId": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["paperId", "pdfSha256", "parserVersion", "textStreamId"],
+      "title": "AnchorDoc",
+      "type": "object"
+    },
+    "AnchorV1": {
+      "additionalProperties": false,
+      "description": "The persisted Anchor, verbatim (contracts.md §6): `@papertree/anchoring`'s `Anchor` v1\nwithout `resolution`. `contracts/anchor/anchor-v1.schema.json` is the same record, written by\nhand; `tests/test_anchor_examples.py` holds this model to every committed example.",
+      "properties": {
+        "anchorVersion": {
+          "const": 1,
+          "type": "integer"
+        },
+        "offsetUnit": {
+          "const": "unicode",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^(?:[a-z]{2,4}_[0-9A-Za-z-]{8,64}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+          "type": "string"
+        },
+        "doc": {
+          "$ref": "#/$defs/AnchorDoc"
+        },
+        "targetKind": {
+          "enum": [
+            "text",
+            "guided_para",
+            "equation",
+            "equation_part",
+            "figure",
+            "figure_region",
+            "table_row",
+            "table_cell",
+            "algorithm",
+            "citation"
+          ],
+          "type": "string"
+        },
+        "provenanceClass": {
+          "enum": ["source", "ai_generated"],
+          "type": "string"
+        },
+        "subTarget": {
+          "$ref": "#/$defs/SubTarget"
+        },
+        "selectors": {
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/BlockSelector"
+              },
+              {
+                "$ref": "#/$defs/PageSelector"
+              },
+              {
+                "$ref": "#/$defs/TextPositionSelector"
+              },
+              {
+                "$ref": "#/$defs/TextQuoteSelector"
+              },
+              {
+                "$ref": "#/$defs/ShapeSelector"
+              },
+              {
+                "$ref": "#/$defs/SectionPathSelector"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "created": {
+          "$ref": "#/$defs/AnchorCreated"
+        }
+      },
+      "required": [
+        "anchorVersion",
+        "offsetUnit",
+        "id",
+        "doc",
+        "targetKind",
+        "provenanceClass",
+        "selectors",
+        "created"
+      ],
+      "title": "AnchorV1",
+      "type": "object"
+    },
+    "AnchorV1In": {
+      "additionalProperties": false,
+      "description": "An Anchor as a client sends it: it may still carry the client's T0 cache (`resolution`),\nwhich the server strips before storing (§2.4). Anything else extra is still refused.",
+      "properties": {
+        "anchorVersion": {
+          "const": 1,
+          "type": "integer"
+        },
+        "offsetUnit": {
+          "const": "unicode",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^(?:[a-z]{2,4}_[0-9A-Za-z-]{8,64}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+          "type": "string"
+        },
+        "doc": {
+          "$ref": "#/$defs/AnchorDoc"
+        },
+        "targetKind": {
+          "enum": [
+            "text",
+            "guided_para",
+            "equation",
+            "equation_part",
+            "figure",
+            "figure_region",
+            "table_row",
+            "table_cell",
+            "algorithm",
+            "citation"
+          ],
+          "type": "string"
+        },
+        "provenanceClass": {
+          "enum": ["source", "ai_generated"],
+          "type": "string"
+        },
+        "subTarget": {
+          "$ref": "#/$defs/SubTarget"
+        },
+        "selectors": {
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/BlockSelector"
+              },
+              {
+                "$ref": "#/$defs/PageSelector"
+              },
+              {
+                "$ref": "#/$defs/TextPositionSelector"
+              },
+              {
+                "$ref": "#/$defs/TextQuoteSelector"
+              },
+              {
+                "$ref": "#/$defs/ShapeSelector"
+              },
+              {
+                "$ref": "#/$defs/SectionPathSelector"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "created": {
+          "$ref": "#/$defs/AnchorCreated"
+        },
+        "resolution": {
+          "default": null
+        }
+      },
+      "required": [
+        "anchorVersion",
+        "offsetUnit",
+        "id",
+        "doc",
+        "targetKind",
+        "provenanceClass",
+        "selectors",
+        "created"
+      ],
+      "title": "AnchorV1In",
+      "type": "object"
+    },
+    "BlockSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "BlockSelector",
+          "type": "string"
+        },
+        "blockId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "blockTextHash": {
+          "type": "string"
+        },
+        "startOffset": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "endOffset": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cellRef": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "rowIndex": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["type", "blockId", "blockTextHash"],
+      "title": "BlockSelector",
+      "type": "object"
+    },
     "JobAccepted": {
       "additionalProperties": false,
       "description": "`202` from `POST /papers/{id}/retry` and `…/reparse`.",
@@ -409,6 +665,20 @@
               "type": "null"
             }
           ]
+        },
+        "notebook_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "plate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LibraryPlate"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -431,9 +701,51 @@
         "arxiv_category",
         "thread_count",
         "has_summary",
-        "topic"
+        "topic",
+        "notebook_count",
+        "plate"
       ],
       "title": "LibraryPaper",
+      "type": "object"
+    },
+    "LibraryPlate": {
+      "additionalProperties": false,
+      "description": "`LibraryPaper.plate` (#200): the figure the caller chose as the cover, as it is in the\npromoted generation. Null on the paper means the typographic cover.",
+      "properties": {
+        "block_id": {
+          "type": "string"
+        },
+        "page_index": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "caption_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "asset_url": {
+          "type": "string"
+        }
+      },
+      "required": ["block_id", "page_index", "label", "caption_text", "asset_url"],
+      "title": "LibraryPlate",
       "type": "object"
     },
     "LibraryReference": {
@@ -492,6 +804,174 @@
       },
       "required": ["topic_id", "name", "cloth", "source", "source_detail"],
       "title": "LibraryTopic",
+      "type": "object"
+    },
+    "PageSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "PageSelector",
+          "type": "string"
+        },
+        "index": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": ["type", "index"],
+      "title": "PageSelector",
+      "type": "object"
+    },
+    "PaperAbstract": {
+      "additionalProperties": false,
+      "description": "`GET /papers/{id}/abstract` (#200): the abstract the parser found, for the opened book.\nEvery field is null when it found none.",
+      "properties": {
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "page_index": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "anchor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AnchorV1"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["text", "page_index", "anchor"],
+      "title": "PaperAbstract",
+      "type": "object"
+    },
+    "PaperFigure": {
+      "additionalProperties": false,
+      "description": "One figure the parser FOUND (`GET /papers/{id}/figures`, #200). Detection misses some\n(#103), so a list is never \"every figure\".",
+      "properties": {
+        "block_id": {
+          "type": "string"
+        },
+        "page_index": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "bbox": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        "caption_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "caption_block_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "asset_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "anchor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AnchorV1"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "block_id",
+        "page_index",
+        "bbox",
+        "caption_text",
+        "caption_block_id",
+        "label",
+        "asset_url",
+        "anchor"
+      ],
+      "title": "PaperFigure",
+      "type": "object"
+    },
+    "PlatePut": {
+      "additionalProperties": false,
+      "description": "`PUT /papers/{id}/plate`: the Anchor of one of the paper's figures (from `…/figures`).",
+      "properties": {
+        "anchor": {
+          "$ref": "#/$defs/AnchorV1In"
+        }
+      },
+      "required": ["anchor"],
+      "title": "PlatePut",
       "type": "object"
     },
     "ReadingProgress": {
@@ -568,6 +1048,244 @@
         }
       },
       "title": "ReparseRequest",
+      "type": "object"
+    },
+    "SectionPathSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "SectionPathSelector",
+          "type": "string"
+        },
+        "path": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "headingText": {
+          "type": "string"
+        },
+        "paraIndexInSection": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "charOffsetInPara": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["type", "path", "headingText", "paraIndexInSection", "charOffsetInPara"],
+      "title": "SectionPathSelector",
+      "type": "object"
+    },
+    "ShapeSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "ShapeSelector",
+          "type": "string"
+        },
+        "pageIndex": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "quads": {
+          "items": {
+            "maxItems": 4,
+            "minItems": 4,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "polygons": {
+          "items": {
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "pageWidth": {
+          "type": "number"
+        },
+        "pageHeight": {
+          "type": "number"
+        },
+        "rotation": {
+          "enum": [0, 90, 180, 270],
+          "type": "integer"
+        },
+        "userUnit": {
+          "type": "number"
+        },
+        "cropBox": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "pageIndex",
+        "quads",
+        "polygons",
+        "pageWidth",
+        "pageHeight",
+        "rotation",
+        "userUnit",
+        "cropBox"
+      ],
+      "title": "ShapeSelector",
+      "type": "object"
+    },
+    "SubTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": ["equation_part", "figure_region", "table_cell", "table_row", "algorithm_line"],
+          "type": "string"
+        },
+        "normalisedRect": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        "latexStart": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "latexEnd": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "lineIndex": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["kind"],
+      "title": "SubTarget",
+      "type": "object"
+    },
+    "TextPositionSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "TextPositionSelector",
+          "type": "string"
+        },
+        "start": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "end": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["type", "start", "end"],
+      "title": "TextPositionSelector",
+      "type": "object"
+    },
+    "TextQuoteSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "TextQuoteSelector",
+          "type": "string"
+        },
+        "exact": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "suffix": {
+          "type": "string"
+        },
+        "exactNormalised": {
+          "type": "string"
+        },
+        "prefixNormalised": {
+          "type": "string"
+        },
+        "suffixNormalised": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "exact",
+        "prefix",
+        "suffix",
+        "exactNormalised",
+        "prefixNormalised",
+        "suffixNormalised"
+      ],
+      "title": "TextQuoteSelector",
       "type": "object"
     },
     "UploadAccepted": {

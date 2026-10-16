@@ -84,6 +84,11 @@ ADDED: frozenset[tuple[str, str]] = frozenset(
         ("PUT", "/papers/{paper_id}/topic"),
         ("DELETE", "/papers/{paper_id}/topic"),
         ("POST", "/papers/{paper_id}/topic/reject"),
+        # v0.2 S3 (#200): the opened book
+        ("GET", "/papers/{paper_id}/figures"),
+        ("PUT", "/papers/{paper_id}/plate"),
+        ("DELETE", "/papers/{paper_id}/plate"),
+        ("GET", "/papers/{paper_id}/abstract"),
         # §2.7 (S7)
         ("GET", "/papers/{paper_id}/board"),
         ("POST", "/papers/{paper_id}/board/nodes"),
