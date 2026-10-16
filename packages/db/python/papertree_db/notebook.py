@@ -452,9 +452,27 @@ class NotebookMixin(_Base):
                                       sets, params, None)  # fmt: skip
 
     def delete_notebook_page(self, owner: OwnerId, page_id: str) -> int:
-        """Deletes a page; its items and strokes cascade. Returns rows deleted (0: not found)."""
+        """Deletes a page; its items and strokes cascade. Returns rows deleted (0: not found).
+
+        REFUSED while a board card shows the page (S6a, #211): a notebook card's pointer is
+        required (``canvas_nodes`` CHECK), so deleting under it would leave a card that points
+        at nothing. The person removes the card first, then the page.
+
+        Raises:
+            NotebookRejected: ``validation_failed`` when a notebook card on a board points here.
+        """
         owner_id = self._resolve(owner)
         with self.transaction():
+            on_board = self._one(
+                "SELECT 1 AS ok FROM canvas_nodes WHERE owner_id = ? AND kind = 'notebook' "
+                "AND source_page_id = ?",
+                (owner_id, page_id),
+            )
+            if on_board is not None:
+                raise NotebookRejected(
+                    "validation_failed",
+                    "This page is on the board. Remove its card from the board first.",
+                )
             return self._conn.execute(
                 "DELETE FROM notebook_pages WHERE owner_id = ? AND page_id = ?", (owner_id, page_id)
             ).rowcount

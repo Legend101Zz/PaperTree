@@ -329,39 +329,30 @@ class CanvasMixin(_Base):
         needs; ``get_board`` already includes them for the whole board)."""
         return self._notebook_counts(self._resolve(owner), nodes)
 
-    def _table_exists(self, name: str) -> bool:
-        return (
-            self._one(
-                "SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)
-            )
-            is not None
-        )
-
     def _notebook_counts(
         self, owner_id: str, nodes: tuple[NodeRow, ...]
     ) -> dict[str, NotebookCounts]:
         """Counts for every notebook card in ONE grouped query (no query per card).
 
-        Migration 0007 (the notebook) may not be applied yet, and a page may have been deleted
-        under its card: both read as zero counts, never an error.
+        Items and strokes are counted from the real notebook tables (0007), owner-scoped. A page
+        with nothing on it (or, through a direct SQL delete, none at all) reads as zeros.
         """
         cards = [n for n in nodes if n.kind == "notebook" and n.source_page_id is not None]
         if not cards:
             return {}
         found: dict[str, dict[str, int]] = {}
-        if self._table_exists("notebook_items") and self._table_exists("notebook_strokes"):
-            pages = sorted({str(c.source_page_id) for c in cards})
-            marks = ", ".join("?" for _ in pages)
-            rows = self._all(
-                f"SELECT page_id, kind, COUNT(*) AS n FROM notebook_items "  # noqa: S608
-                f"WHERE owner_id = ? AND page_id IN ({marks}) GROUP BY page_id, kind "
-                "UNION ALL "
-                f"SELECT page_id, 'stroke', COUNT(*) FROM notebook_strokes "
-                f"WHERE owner_id = ? AND page_id IN ({marks}) GROUP BY page_id",
-                (owner_id, *pages, owner_id, *pages),
-            )
-            for r in rows:
-                found.setdefault(r["page_id"], {})[r["kind"]] = r["n"]
+        pages = sorted({str(c.source_page_id) for c in cards})
+        marks = ", ".join("?" for _ in pages)
+        rows = self._all(
+            "SELECT page_id, kind, COUNT(*) AS n FROM notebook_items "  # noqa: S608 - only "?"
+            f"WHERE owner_id = ? AND page_id IN ({marks}) GROUP BY page_id, kind "
+            "UNION ALL "
+            "SELECT page_id, 'stroke', COUNT(*) FROM notebook_strokes "
+            f"WHERE owner_id = ? AND page_id IN ({marks}) GROUP BY page_id",
+            (owner_id, *pages, owner_id, *pages),
+        )
+        for r in rows:
+            found.setdefault(r["page_id"], {})[r["kind"]] = r["n"]
         out: dict[str, NotebookCounts] = {}
         for card in cards:
             by_kind = found.get(str(card.source_page_id), {})
@@ -376,10 +367,7 @@ class CanvasMixin(_Base):
 
     def _check_source_page(self, owner_id: str, paper_id: str, page_id: str) -> None:
         """404 unless the page is this owner's AND on this paper (one answer for both, so a
-        stranger's page id is indistinguishable from a missing one). Skipped while 0007 is
-        absent."""
-        if not self._table_exists("notebook_pages"):
-            return
+        stranger's page id is indistinguishable from a missing one)."""
         found = self._one(
             "SELECT 1 AS ok FROM notebook_pages WHERE owner_id = ? AND paper_id = ? "
             "AND page_id = ?",

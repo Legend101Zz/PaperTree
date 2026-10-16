@@ -17,6 +17,8 @@ import pytest
 from papertree_db import (
     PIN_TABLE,
     CanvasRejected,
+    NotebookCounts,
+    NotebookRejected,
     OwnerId,
     PaperId,
     PaperTreeDb,
@@ -44,6 +46,7 @@ NOT_DRAWN = {("explanation", "question_in"), ("question", "evidence_in"), ("note
 KINDS = ("excerpt", "explanation", "note", "group", "question", "notebook", "diagram")
 NODES_SQL = "SELECT * FROM canvas_nodes ORDER BY node_id"
 EDGES_SQL = "SELECT * FROM canvas_edges ORDER BY edge_id"
+PAGE = "pg_real0000001"
 REFUSED = "that pin does not take that thread"
 
 
@@ -65,6 +68,7 @@ def env(tmp_path: Path) -> Iterator[Env]:
     db.put_paper(owner, document)
     paper_id = PaperId(document["paper_id"])
     db.promote_generation(owner, paper_id, generation(1))
+    db.create_notebook_page(owner, paper_id, page_id=PAGE)  # a real 0007 page for notebook cards
     yield Env(db, owner, paper_id, file)
     db.close()
 
@@ -83,11 +87,76 @@ def test_the_pin_table_is_the_frames(env: Env) -> None:
     check_ports("explanation", "question", "answer_out", "question_in")
 
 
+def test_a_notebook_card_needs_a_page_this_owner_holds_on_this_paper(env: Env) -> None:
+    """Real 0007 tables: a missing page and another owner's page are the same 404."""
+    other = env.db.create_user("other@papertree.test").owner
+    other_paper = load_fixture_paper()
+    other_paper["paper_id"] = "ppr_" + "0" * 22 + "OTHR"
+    env.db.put_paper(other, other_paper)
+    theirs = "pg_theirs00001"
+    env.db.create_notebook_page(other, PaperId(other_paper["paper_id"]), page_id=theirs)
+    for page_id in ("pg_missing0001", theirs):
+        with pytest.raises(CanvasRejected) as raised:
+            env.db.create_node(
+                env.owner, env.paper_id, _node("cn_x", "notebook", source_page_id=page_id)
+            )
+        assert raised.value.code == "not_found"
+    assert env.db.get_board(env.owner, env.paper_id).board is None  # nothing half-made
+
+
+def test_counts_come_from_the_real_tables(env: Env) -> None:
+    anchor = load_capture_anchor()
+    anchor["doc"]["paperId"] = env.paper_id
+    for item_id, kind, extra in (
+        ("ni_q1", "quote", {"anchor": anchor}), ("ni_q2", "quote", {"anchor": anchor}),
+        ("ni_s1", "sticky", {}), ("ni_t1", "text", {}), ("ni_h1", "shape", {"body": "{}"}),
+    ):  # fmt: skip
+        env.db.create_notebook_item(
+            env.owner,
+            PAGE,
+            {"item_id": item_id, "kind": kind, "x": 0, "y": 0, "w": 50, "h": 50, **extra},
+        )
+    env.db.add_notebook_strokes(
+        env.owner, PAGE, [{"stroke_id": "sk_1", "tool": "pen", "nib": "F", "colour": "pen",
+                           "points": bytes([1, 0, 2, 0, 0, 32, 32])}]
+    )  # fmt: skip
+    for n in range(3):  # three cards on one page, one more notebook page empty
+        env.db.create_node(
+            env.owner, env.paper_id, _node(f"cn_nb{n}", "notebook", source_page_id=PAGE)
+        )
+    env.db.create_notebook_page(env.owner, env.paper_id, page_id="pg_empty000001")
+    env.db.create_node(
+        env.owner, env.paper_id, _node("cn_nbe", "notebook", source_page_id="pg_empty000001")
+    )
+    counts = env.db.get_board(env.owner, env.paper_id).notebook_counts
+    full = (2, 1, 1, 1, 1)
+    for n in range(3):
+        c = counts[f"cn_nb{n}"]
+        assert (c.quotes, c.stickies, c.text, c.shapes, c.strokes) == full
+    assert counts["cn_nbe"] == NotebookCounts()
+
+
+def test_a_page_on_the_board_cannot_be_deleted_until_its_card_is_removed(env: Env) -> None:
+    """The choice (#211): REFUSE, not null the pointer. A notebook card's pointer is required by
+    the table's CHECK, so deleting under it would leave a card that shows nothing."""
+    node = env.db.create_node(
+        env.owner, env.paper_id, _node("cn_nb", "notebook", source_page_id=PAGE)
+    )
+    with pytest.raises(NotebookRejected, match="on the board") as raised:
+        env.db.delete_notebook_page(env.owner, PAGE)
+    assert raised.value.code == "validation_failed"
+    assert env.db.get_notebook_page(env.owner, PAGE) is not None  # untouched
+    assert env.db.delete_node(env.owner, node.board_id, "cn_nb") == 1
+    assert env.db.delete_notebook_page(env.owner, PAGE) == 1
+
+
 def test_every_new_kind_round_trips(env: Env) -> None:
     made = [
         env.db.create_node(env.owner, env.paper_id, _node("cn_q", "question", body="why?")),
         env.db.create_node(
-            env.owner, env.paper_id, _node("cn_nb", "notebook", source_page_id="pg_1")
+            env.owner,
+            env.paper_id,
+            _node("cn_nb", "notebook", source_page_id=PAGE),
         ),
         env.db.create_node(
             env.owner, env.paper_id, _node("cn_dg", "diagram", source_diagram_id="dg_1")
@@ -95,7 +164,7 @@ def test_every_new_kind_round_trips(env: Env) -> None:
     ]
     stored = {n.node_id: n for n in env.db.get_board(env.owner, env.paper_id).nodes}
     assert [stored[n.node_id].kind for n in made] == ["question", "notebook", "diagram"]
-    assert stored["cn_nb"].source_page_id == "pg_1" and stored["cn_dg"].source_diagram_id == "dg_1"
+    assert stored["cn_nb"].source_page_id == PAGE and stored["cn_dg"].source_diagram_id == "dg_1"
 
 
 @pytest.mark.parametrize(
@@ -112,51 +181,6 @@ def test_source_pointers_are_required_and_exclusive(env: Env, fields: dict[str, 
     with pytest.raises(CanvasRejected) as raised:
         env.db.create_node(env.owner, env.paper_id, fields)
     assert raised.value.code == "validation_failed"
-
-
-def test_a_notebook_page_that_is_not_yours_is_not_found(env: Env) -> None:
-    """Checked against notebook_pages only when 0007 has created it (it is a plain TEXT column)."""
-    conn = sqlite3.connect(env.file)
-    try:
-        conn.executescript(
-            "CREATE TABLE notebook_pages (page_id TEXT, owner_id TEXT, paper_id TEXT);"
-            "CREATE TABLE notebook_items (item_id TEXT, owner_id TEXT, page_id TEXT, kind TEXT);"
-            "CREATE TABLE notebook_strokes (stroke_id TEXT, owner_id TEXT, page_id TEXT);"
-        )
-        owner = env.db.create_user("other@papertree.test").owner
-        owner_id = env.db._resolve(env.owner)
-        other_id = env.db._resolve(owner)
-        conn.execute(
-            "INSERT INTO notebook_pages VALUES ('pg_mine', ?, ?)", (owner_id, env.paper_id)
-        )
-        conn.execute(
-            "INSERT INTO notebook_pages VALUES ('pg_theirs', ?, ?)", (other_id, env.paper_id)
-        )
-        for kind in ("quote", "quote", "sticky", "text", "shape", "exchange"):
-            conn.execute(
-                "INSERT INTO notebook_items VALUES (?, ?, 'pg_mine', ?)",
-                (kind + "x", owner_id, kind),
-            )
-        conn.execute("INSERT INTO notebook_strokes VALUES ('s1', ?, 'pg_mine')", (owner_id,))
-        conn.commit()
-    finally:
-        conn.close()
-    with pytest.raises(CanvasRejected) as raised:
-        env.db.create_node(
-            env.owner, env.paper_id, _node("cn_x", "notebook", source_page_id="pg_theirs")
-        )
-    assert raised.value.code == "not_found"
-    env.db.create_node(
-        env.owner, env.paper_id, _node("cn_ok", "notebook", source_page_id="pg_mine")
-    )
-    counts = env.db.get_board(env.owner, env.paper_id).notebook_counts["cn_ok"]
-    assert (counts.quotes, counts.stickies, counts.text, counts.shapes, counts.strokes) == (
-        2,
-        1,
-        1,
-        1,
-        1,
-    )
 
 
 def _edge(edge_id: str, a: str, b: str, **ports: Any) -> dict[str, Any]:
@@ -182,7 +206,7 @@ def _make(env: Env, kind: str) -> str:
         )  # fmt: skip
         extra["source_message_id"] = "msg_pins_0001"
     elif kind == "notebook":
-        extra["source_page_id"] = "pg_x"
+        extra["source_page_id"] = PAGE
     elif kind == "diagram":
         extra["source_diagram_id"] = "dg_x"
     env.db.create_node(env.owner, env.paper_id, _node(node_id, kind, **extra))
