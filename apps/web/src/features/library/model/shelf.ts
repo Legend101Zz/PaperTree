@@ -267,11 +267,11 @@ const byAdded = (a: ShelfPaper, b: ShelfPaper): number =>
 const byTitle = (a: ShelfPaper, b: ShelfPaper): number =>
   compareText(spineTitle(a.title), spineTitle(b.title)) || a.id.localeCompare(b.id);
 
-// Rows by a key; `last` keys sort after the rest, the others by `order`.
+// Rows by a key; `last` keys sort after the rest, the others by `order` (given keys and labels).
 function groupBy<P extends ShelfPaper>(
   papers: readonly P[],
   keyOf: (p: P) => { key: string; label: string; last?: boolean },
-  order: (a: string, b: string) => number,
+  order: (a: string, b: string, labelA: string, labelB: string) => number,
   within: (a: P, b: P) => number,
 ): ShelfGroup<P>[] {
   const rows = new Map<string, { label: string; last: boolean; papers: P[] }>();
@@ -282,7 +282,9 @@ function groupBy<P extends ShelfPaper>(
     rows.set(key, row);
   }
   return [...rows.entries()]
-    .sort(([a, ra], [b, rb]) => Number(ra.last) - Number(rb.last) || order(a, b))
+    .sort(
+      ([a, ra], [b, rb]) => Number(ra.last) - Number(rb.last) || order(a, b, ra.label, rb.label),
+    )
     .map(([key, row]) => ({ key, label: row.label, papers: [...row.papers].sort(within) }));
 }
 
@@ -333,7 +335,8 @@ export function arrangeShelf<P extends ShelfPaper>(
           p.topic === null || p.topic === undefined
             ? { key: 'unshelved', label: 'Unshelved', last: true }
             : { key: `topic:${p.topic.id}`, label: p.topic.name },
-        (a, b) => compareText(a, b),
+        // By the topic's name (keyed by id, which says nothing to a person), as documented above.
+        (a, b, labelA, labelB) => compareText(labelA, labelB) || compareText(a, b),
         byAdded,
       );
   }

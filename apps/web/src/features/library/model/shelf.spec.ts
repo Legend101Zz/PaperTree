@@ -233,6 +233,21 @@ describe('arrangements', () => {
     ]);
   });
 
+  it("topic: the rows go by the topic's name, not its id (#196, with S2b topics)", () => {
+    const named = [
+      paper({ id: 'v', topic: { id: 'top_a', name: 'Vision & detection', cloth: 'vision' } }),
+      paper({ id: 't', topic: { id: 'top_z', name: 'Transformers', cloth: 'transformers' } }),
+      paper({ id: 'g', topic: { id: 'top_m', name: 'Generative models', cloth: 'generative' } }),
+      paper({ id: 'u' }),
+    ];
+    expect(shape(arrangeShelf(named, 'topic')).map(([label]) => label)).toEqual([
+      'Generative models',
+      'Transformers',
+      'Vision & detection',
+      'Unshelved',
+    ]);
+  });
+
   it('topic with no topics at all: a single Unshelved row', () => {
     const plain = papers.map((p) => ({ ...p, topic: null }));
     expect(shape(arrangeShelf(plain, 'topic'))).toEqual([['Unshelved', ['a', 'b', 'c']]]);
