@@ -38,6 +38,23 @@ phone layouts are S5e (#210).
   chunks under the budget, one request per item, a write queued behind one in flight included
   (sent with the version it will have); a write too big for any keepalive request makes the page
   warn before it closes ("A long note has not been saved yet"), and only then.
+- Shapes (rectangle, ellipse, arrow) from the Shapes tool: move by drag or arrow keys, resize from
+  the two corner handles or Alt+arrows (history's `resize` command), delete.
+- The side panel: **Paper** (the five templates; a choice saves `template` with the page's
+  `version`), the notebook search (S5a's search; matches on this page are lit with the wash and a
+  focus ring), **On this page** (the server's counts; ink is "yours", never a number), and **On the
+  board** (the page's `notebook` card with a miniature and "4 quotes · 1 sticky", or the offer to
+  send it). The header's Send page to board creates that card (S6a) and offers Open board. One
+  page, one card: the card's id is derived from the page id (`cardIdFor`), so a second tab sends
+  the same id and the idempotent create returns the card already there; the button waits while a
+  send is in flight or the board is unknown, and a page already on the board opens it instead.
+  The panel's counts are re-read after every burst of saves, and the board too while it holds the
+  page's card. A failed template save is in the same "Not saved" notice, and its Try again sends
+  the template too; choosing the saved template back clears it; a 404 is the page-gone bar.
+  Search matches are lit and named ("matches your search"), the exchange included; the title's
+  words after "Dive in: " carry the paper's voice.
+- Performance: items are memoised and their callbacks stable, stroke outlines are cached per stroke
+  object, and a drag restyles one element; a 200-item, 500-stroke page drags at the frame rate.
 
 ## Data flow
 
@@ -64,10 +81,13 @@ the stored thread (`hooks/useExchange.ts`, `GET /papers/{id}/threads/{tid}`).
   `api/pushItem.ts`: one save, with the 409 reported as a conflict and never retried.
 - `hooks/useNotebookPage.ts`: load once, edit locally. `useItemSaver`: the background saves and
   their honest status. `usePageEditing`: the editing session, focus and shortcuts.
+  `usePageTemplate`: the template, saved with `version`. `useBoardCard`: the page's board card and
+  Send page to board. `usePointerDrag`: drags in page units without a render per move.
 - `components/NotebookView.tsx` (the screen), `NotebookPage.tsx` (the bound page),
   `ExchangeBlock.tsx` + `AnswerProse.tsx`, `QuoteCard.tsx`, `NoteItem.tsx` + `NoteEditor.tsx`,
-  `ShapeView.tsx`, `InkLayer.tsx`, `NotebookToolbar.tsx`, `SaveNotice.tsx`,
-  `NotebookPageList.tsx`, `notebook.css`.
+  `ShapeItem.tsx`, `InkLayer.tsx`, `NotebookToolbar.tsx`, `SaveNotice.tsx`, `NotebookPanel.tsx`
+  (+ `TemplatePicker.tsx`, `NotebookSearch.tsx`), `NotebookPageList.tsx`, `notebook.css` (the
+  page) and `panel.css` (the side panel).
 
 Colours are token names (`pen`, `hl-amber`) mapped to `--pt-*`, never hex, so the lamp-lit scheme
 re-maps them; the page's own template inks are `--pt-nb-*` in `notebook.css`, for both schemes.

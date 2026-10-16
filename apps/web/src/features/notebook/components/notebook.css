@@ -44,6 +44,7 @@
 .pt-nb {
   display: grid;
   grid-template-rows: 56px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 292px;
   block-size: 100dvh;
   background: var(--pt-desk);
   color: var(--pt-ink);
@@ -51,6 +52,7 @@
 }
 
 .pt-nb__bar {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: var(--pt-space-2);
@@ -77,6 +79,17 @@
 
 .pt-nb__paper {
   font: italic var(--pt-t-paper) var(--pt-font-paper);
+}
+
+.pt-nb__actions {
+  display: flex;
+  gap: var(--pt-space-2);
+  margin-inline-start: auto;
+}
+
+.pt-nb__actions .pt-button {
+  gap: var(--pt-space-2);
+  text-decoration: none;
 }
 
 .pt-nb__where {
@@ -168,6 +181,8 @@
 .pt-nb-page__title a,
 .pt-nb-list a {
   color: var(--pt-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .pt-nb-page__items {
@@ -435,13 +450,81 @@
   opacity: 1;
 }
 
-.pt-nb-shape {
+.pt-nb-shape svg {
+  display: block;
   overflow: visible;
   fill: none;
   stroke: var(--pt-pen);
   stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.pt-nb-shape__face {
+  inline-size: 100%;
+  block-size: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.pt-nb-shape__face:focus-visible {
+  outline: var(--pt-focus-width) dashed var(--pt-focus);
+  outline-offset: 4px;
+}
+
+.pt-nb-shape__handle {
+  position: absolute;
+  inline-size: 12px;
+  block-size: 12px;
+  border: 1.5px solid var(--pt-focus);
+  background: var(--pt-page);
+  opacity: 0;
+  touch-action: none;
+}
+
+.pt-nb-shape__handle--nw {
+  inset-block-start: -6px;
+  inset-inline-start: -6px;
+  cursor: nwse-resize;
+}
+
+.pt-nb-shape__handle--se {
+  inset-block-end: -6px;
+  inset-inline-end: -6px;
+  cursor: nwse-resize;
+}
+
+.pt-nb-shape:hover .pt-nb-shape__handle,
+.pt-nb-shape:focus-within .pt-nb-shape__handle,
+.pt-nb-shape:hover .pt-nb-note__delete,
+.pt-nb-shape:focus-within .pt-nb-note__delete {
+  opacity: 1;
+}
+
+/* A search match: the lit wash and the focus ring, so it is never colour alone. */
+.pt-nb [data-match='true'] {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: 3px;
+  background-color: var(--pt-lit-wash);
+}
+
+.pt-nb-tools__shapes {
+  position: relative;
+  display: inline-flex;
+}
+
+.pt-nb-tools__pop {
+  position: absolute;
+  inset-block-start: calc(100% + 8px);
+  inset-inline-start: 0;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  background: var(--pt-e2-fill);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-menu);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
 }
 
 .pt-nb-list {
@@ -467,4 +550,29 @@
   display: flex;
   justify-content: space-between;
   gap: var(--pt-space-4);
+}
+
+/* Narrow windows: the panel goes under the page. The tablet and phone layouts proper are S5e's
+   (#210); this only keeps every control reachable until then. */
+@media (max-width: 900px) {
+  .pt-nb {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    block-size: auto;
+    min-block-size: 100dvh;
+  }
+
+  .pt-nb__bar {
+    flex-wrap: wrap;
+    padding-block: 8px;
+  }
+
+  .pt-nb-tools {
+    margin-inline-start: 0;
+  }
+
+  .pt-nb-panel {
+    border-inline-start: 0;
+    border-block-start: 1px solid var(--pt-rule);
+  }
 }

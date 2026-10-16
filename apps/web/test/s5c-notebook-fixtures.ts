@@ -228,14 +228,21 @@ export interface Call {
 /**
  * Stubs `fetch` with the routes the notebook page calls. Item writes echo back with the version
  * bumped; `onWrite` may answer instead (a 409, say), or hold the request (a promise) to keep it in
- * flight.
+ * flight; `boardFails` makes the board unreadable.
  */
 export function stubApi(
   view: NotebookPageView,
   onWrite?: (call: Call) => Response | null | Promise<Response | null>,
+  options: { readonly boardFails?: boolean } = {},
 ): Call[] {
   const calls: Call[] = [];
   const server = new Map(view.items.map((i) => [i.item_id, i]));
+  let page = view.page;
+  let board: { board: unknown; nodes: Record<string, unknown>[]; edges: unknown[] } = {
+    board: null,
+    nodes: [],
+    edges: [],
+  };
   const json = (status: number, body: unknown): Response =>
     new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
   vi.stubGlobal(
@@ -254,9 +261,60 @@ export function stubApi(
       if (method === 'GET' && path === '/papers') {
         return json(200, [{ paper_id: PAPER, title: 'Attention Is All You Need' }]);
       }
+      const on = (kind: string) => [...server.values()].filter((i) => i.kind === kind).length;
+      const counts = {
+        quotes: on('quote'),
+        stickies: on('sticky'),
+        text: on('text'),
+        shapes: on('shape'),
+        strokes: view.strokes.length,
+      };
+      if (method === 'GET' && path === `/papers/${PAPER}/notebook/pages`) {
+        return json(200, [
+          {
+            page_id: PAGE,
+            title: view.page.title,
+            template: page.template,
+            counts,
+            version: page.version,
+            updated_at: T,
+          },
+        ]);
+      }
+      if (method === 'GET' && path === `/papers/${PAPER}/board`) {
+        if (options.boardFails === true) return json(500, { detail: 'down', code: 'internal' });
+        // A notebook card's counts are computed on read, from the page as it is now (S6a).
+        return json(200, { ...board, nodes: board.nodes.map((n) => ({ ...n, counts })) });
+      }
+      if (method === 'GET' && path.startsWith(`/papers/${PAPER}/notebook/search?`)) {
+        const q = new URLSearchParams(path.split('?')[1]).get('q') ?? '';
+        const hits = [...server.values()].filter((i) => i.body.includes(q));
+        return json(
+          200,
+          hits.map((i) => ({
+            page_id: PAGE,
+            page_title: view.page.title,
+            item_id: i.item_id,
+            kind: i.kind,
+            snippet: i.body,
+          })),
+        );
+      }
       if (method === 'GET') return json(200, {});
       const answered = (await onWrite?.(call)) ?? null;
       if (answered !== null) return answered;
+      if (method === 'PATCH' && path === `/notebook/pages/${PAGE}`) {
+        page = { ...page, ...(body as object), version: page.version + 1 };
+        return json(200, page);
+      }
+      if (method === 'POST' && path === `/papers/${PAPER}/board/nodes`) {
+        // Idempotent on node_id, as the server is: a retried or second send gets the stored card.
+        const stored = board.nodes.find((n) => n['node_id'] === body?.['node_id']);
+        if (stored !== undefined) return json(201, { board: { board_id: 'brd_1' }, node: stored });
+        const node = { ...body, board_id: 'brd_1', counts, version: 1 };
+        board = { ...board, nodes: [...board.nodes, node] };
+        return json(201, { board: { board_id: 'brd_1' }, node });
+      }
       const id = String(body?.['item_id'] ?? path.split('?')[0]?.split('/').at(-1));
       if (method === 'DELETE') {
         server.delete(id);

@@ -3,7 +3,7 @@
 /**
  * usePageEditing — the editing session on a notebook page (S5c, #208): which note is being typed
  * in, the draft of a new one (it joins the page, as ONE history command, only when it has words),
- * moves and deletes, and the Ctrl/Cmd+Z, Shift+Ctrl/Cmd+Z and Ctrl+Y shortcuts. Every finished
+ * shapes, moves, resizes and deletes, and the Ctrl/Cmd+Z, Shift+Ctrl/Cmd+Z and Ctrl+Y shortcuts. Every finished
  * gesture is one S5b command run through `useNotebookPage`, which saves what it touched. The
  * keyboard never falls to `<body>`: whatever takes an item away (a delete, undoing an add, redoing
  * a delete) moves it to the next item, else the previous, else the page title; whatever brings
@@ -17,8 +17,8 @@ import { neighbourOf, placeNewItem } from '../model/layout';
 import { STICKY_COLOUR } from '../model/wire';
 
 import type { NotebookPageModel } from './useNotebookPage';
-import type { Command } from '../model/history';
-import type { Item, StickyItem, TextItem } from '../model/page';
+import type { Box, Command } from '../model/history';
+import type { Item, ShapeItem, StickyItem, TextItem } from '../model/page';
 
 /** What `usePageEditing` returns: the session state, and actions whose identity never changes. */
 export interface PageEditing extends Actions {
@@ -30,14 +30,22 @@ export interface PageEditing extends Actions {
 interface Actions {
   readonly edit: (id: string) => void;
   readonly startDraft: (kind: 'text' | 'sticky') => void;
+  readonly addShape: (shape: ShapeItem['shape']) => void;
   readonly commit: (id: string, text: string) => void;
   readonly move: (id: string, dx: number, dy: number) => void;
+  readonly resize: (id: string, box: Box) => void;
   readonly remove: (id: string) => void;
   readonly undo: () => void;
   readonly redo: () => void;
 }
 
-const NEW_SIZE = { text: { w: 288, h: 72 }, sticky: { w: 168, h: 144 } } as const;
+const NEW_SIZE = {
+  text: { w: 288, h: 72 },
+  sticky: { w: 168, h: 144 },
+  rect: { w: 168, h: 96 },
+  ellipse: { w: 168, h: 96 },
+  arrow: { w: 168, h: 32 },
+} as const;
 
 /**
  * True when a key event belongs to a field's own text editing (its own undo, its own arrows).
@@ -86,14 +94,22 @@ export function usePageEditing(model: NotebookPageModel): PageEditing {
   const history = model.step?.history;
   const { run } = model;
 
+  const fresh = (kind: keyof typeof NEW_SIZE) => {
+    const { w, h } = NEW_SIZE[kind];
+    const z = items.reduce((m, i) => Math.max(m, i.z), 0) + 1;
+    return { id: newClientId('ni'), ...placeNewItem(items, w, h), w, h, z };
+  };
   const actions: Actions = {
     edit: setEditingId,
     startDraft: (kind) => {
-      const { w, h } = NEW_SIZE[kind];
-      const z = items.reduce((m, i) => Math.max(m, i.z), 0) + 1;
-      const base = { id: newClientId('ni'), ...placeNewItem(items, w, h), w, h, z, text: '' };
+      const base = { ...fresh(kind), text: '' };
       setDraft(kind === 'text' ? { ...base, kind } : { ...base, kind, color: STICKY_COLOUR });
       setEditingId(base.id);
+    },
+    addShape: (shape) => {
+      const item: ShapeItem = { ...fresh(shape), kind: 'shape', shape };
+      run({ type: 'add-items', items: [item] });
+      focusItem(item.id);
     },
     commit: (id, text) => {
       setEditingId(null);
@@ -109,6 +125,12 @@ export function usePageEditing(model: NotebookPageModel): PageEditing {
       focusItem(id);
     },
     move: (id, dx, dy) => run({ type: 'move', strokeIds: [], itemIds: [id], dx, dy }),
+    resize: (id, after) => {
+      const item = items.find((i) => i.id === id);
+      if (item === undefined) return;
+      const before = { x: item.x, y: item.y, w: item.w, h: item.h };
+      run({ type: 'resize', itemId: id, before, after });
+    },
     remove: (id) => {
       const index = items.findIndex((i) => i.id === id);
       const value = items[index];
@@ -135,8 +157,10 @@ export function usePageEditing(model: NotebookPageModel): PageEditing {
     () => ({
       edit: (id) => latest.current.edit(id),
       startDraft: (kind) => latest.current.startDraft(kind),
+      addShape: (shape) => latest.current.addShape(shape),
       commit: (id, text) => latest.current.commit(id, text),
       move: (id, dx, dy) => latest.current.move(id, dx, dy),
+      resize: (id, box) => latest.current.resize(id, box),
       remove: (id) => latest.current.remove(id),
       undo: () => latest.current.undo(),
       redo: () => latest.current.redo(),

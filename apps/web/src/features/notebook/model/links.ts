@@ -58,3 +58,13 @@ export function itemForAnchor(
   for (const [id, body] of exchanges) if (body?.call.originAnchor?.id === anchor.id) return id;
   return null;
 }
+
+/**
+ * The paper's board.
+ *
+ * @param paperId - The paper.
+ * @returns `/paper/<id>/canvas` (the board's route keeps its v0.1 name).
+ */
+export function boardHref(paperId: string): string {
+  return `/paper/${encodeURIComponent(paperId)}/canvas`;
+}

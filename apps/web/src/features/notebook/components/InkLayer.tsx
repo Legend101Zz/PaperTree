@@ -6,7 +6,7 @@
  * list and cached; drawing new ink is S5d's (#209). Colours are token names mapped to `--pt-*`,
  * set as a style because an SVG presentation attribute does not resolve `var()`.
  */
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 
 import { strokeToPath } from '../model/outline';
 
@@ -39,10 +39,29 @@ export function inkColour(token: string): string {
   return TOKEN.test(token) ? `var(--pt-${token}, var(--pt-pen))` : 'var(--pt-pen)';
 }
 
+/**
+ * Outline `d` strings by stroke object. Strokes are immutable and history keeps the same object
+ * for a stroke that did not change, so moving one note never re-outlines 500 strokes.
+ */
+const OUTLINES = new WeakMap<Stroke, string>();
+
+function outlineOf(stroke: Stroke): string {
+  const known = OUTLINES.get(stroke);
+  if (known !== undefined) return known;
+  const d = strokeToPath(stroke);
+  OUTLINES.set(stroke, d);
+  return d;
+}
+
 /** All strokes of a page as filled outlines. */
-export function InkLayer({ strokes, height, width, labelled = true }: InkLayerProps): ReactNode {
+export const InkLayer = memo(function InkLayer({
+  strokes,
+  height,
+  width,
+  labelled = true,
+}: InkLayerProps): ReactNode {
   const paths = useMemo(
-    () => strokes.map((s) => ({ id: s.id, d: strokeToPath(s), fill: inkColour(s.color) })),
+    () => strokes.map((s) => ({ id: s.id, d: outlineOf(s), fill: inkColour(s.color) })),
     [strokes],
   );
   if (paths.length === 0) return null;
@@ -61,4 +80,4 @@ export function InkLayer({ strokes, height, width, labelled = true }: InkLayerPr
       ))}
     </svg>
   );
-}
+});

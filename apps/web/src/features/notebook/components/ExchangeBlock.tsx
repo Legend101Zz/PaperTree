@@ -8,7 +8,7 @@
  */
 import { AiParagraph, AiSlip, CallSlip, CoverageReadout, PageTab } from '@papertree/ui';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 
 import { AnswerProse, paragraphNumbers } from './AnswerProse';
 import { anchorQuote, dayAndTime, modelLabel, originPlace, usageLine } from '../model/exchange';
@@ -26,6 +26,8 @@ export interface ExchangeBlockProps {
   readonly exchange: Exchange;
   /** Scroll the paper to an Anchor and flash it. */
   readonly onFocusAnchor: (anchor: Anchor) => void;
+  /** True when the notebook search matched it: lit on screen, and said. */
+  readonly matched?: boolean;
 }
 
 function Margin({ numbers, exchange }: { numbers: number[]; exchange: Exchange }): ReactNode {
@@ -46,7 +48,12 @@ function Margin({ numbers, exchange }: { numbers: number[]; exchange: Exchange }
 }
 
 /** The call slip, the AI slip and the coverage line of a dived page. */
-export function ExchangeBlock({ body, exchange, onFocusAnchor }: ExchangeBlockProps): ReactNode {
+export const ExchangeBlock = memo(function ExchangeBlock({
+  body,
+  exchange,
+  onFocusAnchor,
+  matched = false,
+}: ExchangeBlockProps): ReactNode {
   const [open, setOpen] = useState(false);
   const { answer, question, layout } = exchange;
   const citations = useMemo(
@@ -79,7 +86,10 @@ export function ExchangeBlock({ body, exchange, onFocusAnchor }: ExchangeBlockPr
       ? 'Its citations could not be read; the passages it stood on are the cards below.'
       : usageLine(answer?.run ?? null);
   return (
-    <section className="pt-nb-exchange" aria-label="The exchange this page started from">
+    <section
+      className="pt-nb-exchange"
+      aria-label={`The exchange this page started from${matched ? ' (matches your search)' : ''}`}
+    >
       <CallSlip
         ask={body.call.text}
         time={asked === null ? '' : `${asked.day} · ${asked.time}`}
@@ -134,4 +144,4 @@ export function ExchangeBlock({ body, exchange, onFocusAnchor }: ExchangeBlockPr
       )}
     </section>
   );
-}
+});

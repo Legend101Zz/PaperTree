@@ -136,3 +136,41 @@ describe('history', () => {
     expect(s.state.items[0]).toMatchObject({ x: 0.1, y: 0.7 });
   });
 });
+
+describe('resize (S5c)', () => {
+  const box = {
+    kind: 'shape',
+    id: 's1',
+    x: 10,
+    y: 20,
+    w: 100,
+    h: 60,
+    z: 0,
+    shape: 'rect',
+  } as const;
+  const start = { state: { strokes: [], items: [box] }, history: createHistory() };
+
+  it('changes the box, and undo and redo restore each side exactly', () => {
+    const cmd = {
+      type: 'resize',
+      itemId: 's1',
+      before: { x: 10, y: 20, w: 100, h: 60 },
+      after: { x: 2, y: 20, w: 140, h: 72 },
+    } as const;
+    const done = execute(start, cmd);
+    expect(done.state.items[0]).toMatchObject({ x: 2, w: 140, h: 72 });
+    expect(undo(done).state.items[0]).toEqual(box);
+    expect(redo(undo(done)).state.items[0]).toMatchObject({ x: 2, w: 140, h: 72 });
+  });
+
+  it('records nothing for a no-op, a zero size or an unknown item', () => {
+    const same = { x: 10, y: 20, w: 100, h: 60 };
+    expect(execute(start, { type: 'resize', itemId: 's1', before: same, after: same })).toBe(start);
+    const flat = { ...same, h: 0 };
+    expect(execute(start, { type: 'resize', itemId: 's1', before: same, after: flat })).toBe(start);
+    const moved = { ...same, w: 120 };
+    expect(execute(start, { type: 'resize', itemId: 'nope', before: same, after: moved })).toBe(
+      start,
+    );
+  });
+});

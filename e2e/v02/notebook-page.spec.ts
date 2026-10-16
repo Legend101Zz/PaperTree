@@ -6,14 +6,18 @@
  *   against this parse and stored by `update_message` / `put_citations`: `support.ts`) → the reader
  *   opens → Dive in (through the API: the button is S5e's, #210) → the page shows the exchange with
  *   4 quote cards numbered 1–4 → "Show all" opens the answer and the cards move below it → Open
- *   source flashes passage 2 in the reader → a typed note → reload → it is still there.
+ *   source flashes passage 2 in the reader → a typed note → reload → it is still there → axe at
+ *   1440 and 390 in both schemes → Send page to board → the board holds one notebook card pointing
+ *   at the page, and the board shows it.
  *
  * The faux agent cites at most two passages, hence the stored answer; everything the page then does
  * goes through the real routes. The corpus PDF is fetched, not committed: the spec SKIPS, loudly,
  * without it.
  */
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+
+import type { Page } from '@playwright/test';
 
 import { expect, test } from '../harness/test';
 import { register, REPO, shotPath, upload, userId, waitParsed } from '../s4/support';
@@ -21,6 +25,7 @@ import { api, tokenInit } from '../s7/support';
 import { storeAnswer } from './support';
 
 const ATTENTION = join(REPO, 'research', 'benchmarks', 'corpus', 'attention-is-all-you-need.pdf');
+const AXE = join(REPO, 'apps', 'web', 'node_modules', 'axe-core', 'axe.min.js');
 
 test.describe('S5c — the notebook page (faux agent)', () => {
   test.skip(
@@ -167,6 +172,59 @@ test.describe('S5c — the notebook page (faux agent)', () => {
     await expect(long.getByRole('button', { name: /^Typed note: x{100}/ })).toBeVisible();
     await long.waitForTimeout(1000);
     await long.close();
+
+    // ── 5. axe: no serious or critical violation at 1440 and 390, daylight and lamp-lit ──
+    for (const [width, height] of [
+      [1440, 900],
+      [390, 844],
+    ] as const) {
+      for (const colorScheme of ['light', 'dark'] as const) {
+        await page.setViewportSize({ width, height });
+        await page.emulateMedia({ colorScheme });
+        await expect(page.locator('.pt-nb-quote')).toHaveCount(4);
+        expect(await axeSerious(page), `${String(width)} ${colorScheme}`).toEqual([]);
+      }
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.emulateMedia({ colorScheme: 'light' });
+
+    // ── 6. Send page to board: the board holds one notebook card that points at this page ──
+    await page.locator('.pt-nb__bar').getByRole('button', { name: 'Send page to board' }).click();
+    await expect(page.getByText('The page is on the board now, as one card.')).toBeVisible();
+    const board = (await api(stack.apiUrl, token, 'GET', `/papers/${paperId}/board`)).json as {
+      nodes: { kind: string; source_page_id: string | null; counts: { quotes: number } | null }[];
+    };
+    const cards = board.nodes.filter((n) => n.kind === 'notebook');
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({ source_page_id: pageId, counts: { quotes: 4 } });
+    await expect(page.getByRole('complementary', { name: 'Page' })).toContainText('4 quotes');
+    expect(await axeSerious(page), 'with the board card in the panel').toEqual([]);
+    await page.getByRole('button', { name: 'Open board' }).click();
+    await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/canvas$`));
+    await expect(page.locator('.react-flow__node')).toHaveCount(1);
+    await page.screenshot({ path: shot('s5c-board-with-notebook-card-1440.png') });
     await context.close();
   });
 });
+
+/** axe-core's serious and critical violations on the page (axe from apps/web's devDependencies). */
+async function axeSerious(page: Page): Promise<string[]> {
+  await page.addScriptTag({ content: readFileSync(AXE, 'utf8') });
+  return page.evaluate(async () => {
+    const run = (
+      window as unknown as { axe: { run: (c: Document, o: object) => Promise<AxeResults> } }
+    ).axe.run;
+    const results = await run(document, { resultTypes: ['violations'] });
+    return results.violations
+      .filter((v) => v.impact === 'serious' || v.impact === 'critical')
+      .map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`);
+  });
+}
+
+interface AxeResults {
+  readonly violations: readonly {
+    readonly id: string;
+    readonly impact: string | null;
+    readonly nodes: readonly { readonly target: readonly string[] }[];
+  }[];
+}

@@ -243,7 +243,9 @@ describe('typing is never lost', () => {
     const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
     fireEvent(window, new Event('pagehide'));
     await settle();
-    const [url, init] = fetchMock.mock.calls.at(-1) as [string, RequestInit];
+    const [url, init] = (fetchMock.mock.calls as [string, RequestInit][]).find(([u]) =>
+      u.includes('/items/ni_note0000a'),
+    ) ?? ['', {}];
     expect(url).toContain('/items/ni_note0000a');
     expect(init.method).toBe('PATCH');
     expect(init.keepalive).toBe(true);

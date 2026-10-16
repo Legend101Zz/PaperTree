@@ -8,6 +8,7 @@
  */
 import { Button, NumberedMarker, PageTab, PaperText, formatPageLabel } from '@papertree/ui';
 import { FileText } from 'lucide-react';
+import { memo } from 'react';
 
 import { dehyphenate } from '@/lib/markdown';
 
@@ -22,6 +23,8 @@ export interface QuoteCardProps {
   readonly passage: Passage | null;
   /** A slight tilt in degrees, so a row of cards reads as paper, not a grid. */
   readonly tilt?: number;
+  /** True when the notebook search matched this card; it is lit. */
+  readonly matched?: boolean;
   /** Scroll the paper to the card's Anchor and flash it. */
   readonly onFocusAnchor: (anchor: QuoteItem['anchor']) => void;
 }
@@ -46,16 +49,18 @@ function PaperClip(): ReactNode {
 }
 
 /** One passage as an index card with its number, tab, citation count and words. */
-export function QuoteCard({ item, passage, tilt = 0, onFocusAnchor }: QuoteCardProps): ReactNode {
+export const QuoteCard = memo(function QuoteCard(props: QuoteCardProps): ReactNode {
+  const { item, passage, tilt = 0, matched = false, onFocusAnchor } = props;
   const focus = (): void => onFocusAnchor(item.anchor);
   const where = passage === null ? null : formatPageLabel(passage.page, passage.para);
-  const name = passage === null ? 'Quoted passage' : `Passage ${String(passage.n)}, ${where ?? ''}`;
+  const name = `${passage === null ? 'Quoted passage' : `Passage ${String(passage.n)}, ${where ?? ''}`}${matched ? ' (matches your search)' : ''}`;
   return (
     <article
       className="pt-nb-quote"
       aria-label={name}
       data-item-id={item.id}
       data-passage={passage?.n}
+      data-match={matched ? 'true' : undefined}
       style={{
         left: item.x,
         top: item.y,
@@ -106,4 +111,4 @@ export function QuoteCard({ item, passage, tilt = 0, onFocusAnchor }: QuoteCardP
       </Button>
     </article>
   );
-}
+});
