@@ -1199,7 +1199,8 @@ span.pt-paper .pt-paper__cite {
 }
 
 .pt-reader .pt-segmented__option[aria-checked='true'] {
-  color: var(--pt-accent);
+  /* the current segment is ink-filled (v0.2); accent text on it was ~1.5:1 */
+  color: var(--pt-page);
 }
 
 .pt-zoom {
@@ -3228,4 +3229,283 @@ span.pt-paper .pt-paper__cite {
 .pt-toast__body > button,
 .pt-toast__body > .pt-btn {
   white-space: nowrap;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+ * v0.2 interface components (#189)
+ * Buttons, toolbar buttons, text fields, the toast, the sprout, the shelf label holder and the
+ * Reading now row, plus the Ex Libris restyle of SegmentedControl and Sheet. Tokens only.
+ * ───────────────────────────────────────────────────────────────────────────────────────────── */
+
+.pt-button,
+.pt-toolbtn {
+  display: inline-flex;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding-inline: 14px;
+  font-family: var(--pt-font-ai);
+  font-size: 15px;
+  line-height: 1.2;
+  color: var(--pt-ink);
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--pt-radius-control);
+  transition:
+    background-color var(--pt-dur-quick) var(--pt-ease-out),
+    box-shadow var(--pt-dur-quick) var(--pt-ease-out),
+    transform var(--pt-dur-quick) var(--pt-ease-out);
+}
+
+.pt-button__icon,
+.pt-toolbtn__icon {
+  display: inline-flex;
+  flex: none;
+}
+
+.pt-button--primary {
+  color: var(--pt-on-primary);
+  background: var(--pt-primary-fill);
+  /* the gilt fillet is the edge in lamp-lit, where the fill is only 2.5:1 against the page */
+  box-shadow:
+    inset 0 0 0 1px var(--pt-gilt-solid),
+    var(--pt-e1);
+}
+
+.pt-button--primary:hover {
+  background: var(--pt-primary-hover);
+}
+
+.pt-button--secondary {
+  background: var(--pt-page);
+  border-color: var(--pt-control-border);
+}
+
+.pt-button--secondary:hover,
+.pt-button--ghost:hover,
+.pt-toolbtn:hover {
+  background: color-mix(in srgb, var(--pt-ink) 7%, var(--pt-page));
+}
+
+.pt-button--outline {
+  color: var(--pt-primary);
+  border-color: var(--pt-primary);
+}
+
+.pt-button--outline:hover {
+  background: color-mix(in srgb, var(--pt-primary) 9%, var(--pt-page));
+}
+
+.pt-button--danger {
+  color: var(--pt-danger);
+  background: var(--pt-page);
+  border-color: var(--pt-danger);
+}
+
+.pt-button--danger:hover {
+  background: color-mix(in srgb, var(--pt-danger) 9%, var(--pt-page));
+}
+
+.pt-button:active,
+.pt-toolbtn:active {
+  box-shadow: none;
+  transform: translateY(1px);
+}
+
+.pt-button--primary:active {
+  box-shadow: inset 0 0 0 1px var(--pt-gilt-solid);
+}
+
+.pt-button:focus-visible,
+.pt-toolbtn:focus-visible,
+.pt-textfield__control:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+.pt-button[aria-disabled='true'],
+.pt-toolbtn[aria-disabled='true'] {
+  color: var(--pt-ink-muted);
+  cursor: not-allowed;
+  box-shadow: none;
+  opacity: 0.6;
+  transform: none;
+}
+
+.pt-button--primary[aria-disabled='true'] {
+  color: var(--pt-ink-muted);
+  background: var(--pt-ground);
+  border-color: var(--pt-control-border);
+}
+
+.pt-toolbtn {
+  padding-inline: 10px;
+  color: var(--pt-ink-2);
+}
+
+.pt-toolbtn--icon {
+  padding-inline: 0;
+}
+
+.pt-toolbtn[aria-pressed='true'] {
+  color: var(--pt-ink);
+  background: var(--pt-ground);
+  border-color: var(--pt-control-border);
+}
+
+.pt-textfield {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--pt-font-ai);
+}
+
+.pt-textfield__label {
+  font-size: 14px;
+  color: var(--pt-ink-2);
+}
+
+.pt-textfield__control {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-block-size: 36px;
+  padding: 8px 10px;
+  font-family: var(--pt-font-ai);
+  font-size: 15px;
+  color: var(--pt-ink);
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+}
+
+/* The person's own words are typewritten, so the box reads as theirs before they type. */
+.pt-textfield__control--you {
+  font-family: var(--pt-font-you);
+}
+
+.pt-textfield--error .pt-textfield__control {
+  border-color: var(--pt-danger);
+}
+
+.pt-textfield__hint,
+.pt-textfield__error {
+  margin: 0;
+  font-size: 13px;
+}
+
+.pt-textfield__hint {
+  color: var(--pt-ink-muted);
+}
+
+.pt-textfield__error {
+  color: var(--pt-danger);
+}
+
+.pt-notice {
+  position: fixed;
+  inset-inline: 16px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-inline-size: 420px;
+  margin-inline: auto;
+  padding: 6px 6px 6px 16px;
+  font-family: var(--pt-font-ai);
+  font-size: 15px;
+  color: var(--pt-ink);
+  background: var(--pt-e2-fill);
+  border-radius: var(--pt-radius-menu);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+}
+
+.pt-notice__message {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.pt-notice .pt-button {
+  white-space: nowrap;
+}
+
+/* SegmentedControl restyle (no prop changes): the Source · Guided · Split switch, ink current. */
+.pt-segmented {
+  padding: 0;
+  background: var(--pt-page);
+  border-color: var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-segmented__option {
+  font-size: 15px;
+  color: var(--pt-ink);
+  border-radius: 0;
+}
+
+/* no overflow clip on the container (it would cut the focus ring), so round the end segments */
+.pt-segmented__option:first-child {
+  border-start-start-radius: calc(var(--pt-radius-control) - 1px);
+  border-end-start-radius: calc(var(--pt-radius-control) - 1px);
+}
+
+.pt-segmented__option:last-child {
+  border-start-end-radius: calc(var(--pt-radius-control) - 1px);
+  border-end-end-radius: calc(var(--pt-radius-control) - 1px);
+}
+
+.pt-segmented__option + .pt-segmented__option {
+  border-inline-start: 1px solid var(--pt-control-border);
+}
+
+.pt-segmented__option[aria-checked='true'] {
+  color: var(--pt-page);
+  background: var(--pt-ink);
+  box-shadow: none;
+}
+
+/* Sheet restyle: the phone bottom sheet, 14 px top radius, e3 shadow, a visible grabber. */
+.pt-sheet {
+  background: var(--pt-e3-fill);
+  border-start-start-radius: var(--pt-radius-sheet);
+  border-start-end-radius: var(--pt-radius-sheet);
+  box-shadow: var(--pt-e3), var(--pt-e3-edge);
+  transition-duration: var(--pt-dur-sheet);
+  transition-timing-function: var(--pt-ease-settle);
+}
+
+.pt-sheet__grip-bar {
+  background: var(--pt-control-border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-button,
+  .pt-toolbtn,
+  .pt-sheet {
+    transition: none;
+  }
+}
+
+/* iOS Safari zooms the page when a field under 16 px takes focus (the composer case, #178). */
+@media (pointer: coarse) {
+  .pt-textfield__control {
+    min-block-size: 44px;
+    font-size: 16px;
+  }
+}
+
+/* A disabled button does not answer hover. */
+.pt-button[aria-disabled='true']:hover,
+.pt-toolbtn[aria-disabled='true']:hover {
+  background: transparent;
+}
+
+.pt-button--secondary[aria-disabled='true']:hover,
+.pt-button--danger[aria-disabled='true']:hover {
+  background: var(--pt-page);
+}
+
+.pt-button--primary[aria-disabled='true']:hover {
+  background: var(--pt-ground);
 }

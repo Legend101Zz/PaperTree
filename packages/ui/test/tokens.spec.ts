@@ -97,6 +97,12 @@ const PAIRS: readonly (readonly [string, string, number])[] = [
   ['--pt-wire-references', '--pt-linen', 3],
   ['--pt-wire-plain', '--pt-linen', 3],
   ['--pt-frame-outline', '--pt-linen', 3],
+  // v0.2 interface components (#189)
+  ['--pt-ink-2', '--pt-ground', 4.5],
+  ['--pt-ink', '--pt-e2-fill', 4.5],
+  ['--pt-ink', '--pt-e3-fill', 4.5],
+  ['--pt-gilt-solid', '--pt-primary-fill', 3],
+  ['--pt-danger', '--pt-e2-fill', 4.5],
 ];
 
 describe('Ex Libris tokens', () => {
@@ -150,5 +156,27 @@ describe('Ex Libris tokens', () => {
     ]) {
       expect(LIGHT.has(legacy), `${legacy} was removed`).toBe(true);
     }
+  });
+});
+
+describe('SegmentedControl current segment', () => {
+  it('no rule paints the checked option with accent or primary text (it sits on --pt-ink)', () => {
+    const clean = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+    const offenders: string[] = [];
+    for (const m of clean.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      const selector = m[1]!.trim();
+      if (!selector.includes("pt-segmented__option[aria-checked='true']")) continue;
+      const colour = /(?:^|[;\s])color\s*:\s*([^;]+)/.exec(m[2]!)?.[1]?.trim() ?? '';
+      if (/--pt-(accent|primary)\b/.test(colour))
+        offenders.push(`${selector} { color: ${colour} }`);
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('TextField on touch', () => {
+  it('uses 16px type under a coarse pointer so iOS does not zoom on focus', () => {
+    const block = /@media \(pointer: coarse\) \{\s*\.pt-textfield__control \{([^}]*)\}/.exec(CSS);
+    expect(block?.[1]).toMatch(/font-size:\s*16px/);
   });
 });
