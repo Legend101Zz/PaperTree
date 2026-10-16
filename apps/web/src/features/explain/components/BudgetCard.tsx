@@ -15,8 +15,8 @@ import { budgetFigures, usageRows } from '../model/states';
 
 /** Props for `BudgetCard`. */
 export interface BudgetCardProps {
-  /** The question was typed in the composer, which keeps the text (else nothing was typed). */
-  readonly kept: boolean;
+  /** What was not sent and what was kept, true now (`refusalSentence`). */
+  readonly lead: string;
 }
 
 function useUsage(): UsageTotals | null {
@@ -37,7 +37,7 @@ function useUsage(): UsageTotals | null {
 }
 
 /** The refusal: what happened, the figures, what still works, and today's usage on request. */
-export function BudgetCard({ kept }: BudgetCardProps): ReactNode {
+export function BudgetCard({ lead }: BudgetCardProps): ReactNode {
   const usage = useUsage();
   const [open, setOpen] = useState(false);
   const listId = useId();
@@ -61,12 +61,7 @@ export function BudgetCard({ kept }: BudgetCardProps): ReactNode {
           {budgetFigures(usage)}
         </p>
       )}
-      <p>
-        {kept
-          ? 'Your question was not sent; your text is kept in the box below.'
-          : 'Nothing was sent to the AI.'}{' '}
-        Reading, highlights, the board and cached summaries still work.
-      </p>
+      <p>{lead} Reading, highlights, the board and cached summaries still work.</p>
       <p className="pt-budget-card__note">
         The cap is set by whoever runs this server and counts the last 24 hours, so questions work
         again as older ones age out.

@@ -3127,6 +3127,19 @@ span.pt-paper .pt-paper__cite {
    Stop on the slip's footer, the "not sent" stamp, the daily-cap card and a folded earlier answer.
    Under reduced motion the dots and the caret hold still. */
 
+/* Stop's row takes no space and sticks to the top of the panel's scroll while its answer is in
+   view, so a long answer never scrolls Stop away; at rest the button sits on the tab row. */
+.pt-exchange__stop-row {
+  position: sticky;
+  inset-block-start: 48px;
+  z-index: 2;
+  block-size: 0;
+}
+
+.pt-exchange__answer > .pt-exchange__stop-row + * {
+  margin-block-start: 0;
+}
+
 .pt-exchange__stop {
   position: absolute;
   inset-block-start: -40px;
@@ -3135,6 +3148,8 @@ span.pt-paper .pt-paper__cite {
   min-block-size: 32px;
   padding: 0 var(--pt-space-3);
   font-size: 14px;
+  background: var(--pt-page);
+  box-shadow: var(--pt-e1);
 }
 
 .pt-working {

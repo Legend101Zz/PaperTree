@@ -3,16 +3,25 @@
 /**
  * One AI answer of an exchange (#202, #204): the `AiSlip` with its paragraphs, inline markers and
  * margin cells and the trailing uncited paragraphs under "no citation · the AI's own reading".
- * Around it, in the interface's voice and OUTSIDE the AI's `data-voice` (it is not the AI's text):
- * the working label and Stop on the tab row while it streams (frame 04b), the typed caret, the
- * usage line and Send to canvas on a footer that continues the slip, the note after Stop with Retry
- * (04c), a designed failure (the daily-cap card among them), and, for an answer that opened
+ * The interface's own words sit around the AI's: in the slip's source line on the tab row (the
+ * model, the working label while it streams, "Stopped · M3" after Stop, as `AiSlip`'s model line
+ * always has) and outside the slip: Stop (frame 04b), the typed caret, the usage line and Send to
+ * canvas on a footer that continues the slip, the note after Stop with Retry (04c), a designed
+ * failure (the daily-cap card among them), a refused Retry's note, and, for an answer that opened
  * folded, its two-line preview with Show.
  */
 import { AiSlip } from '@papertree/ui';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 
-import { foldedCounts, foldedPreview, stoppedNote, wasStopped } from '../model/states';
+import { foldedPreview, wasStopped, type RefusalKind } from '../model/states';
+import {
+  FoldRow,
+  SendToCanvas,
+  Skeleton,
+  StopButton,
+  StoppedNote,
+  type FocusHandoff,
+} from './AnswerParts';
 import { FailureNote, UsageLine, WorkingLabel } from './AnswerStates';
 import { AnswerText, type MarkerHandlers } from './AnswerText';
 
@@ -34,8 +43,8 @@ export interface AnswerSlipProps extends Pick<MarkerHandlers, 'lit' | 'onLight' 
   /** Stop the answer while it streams. */
   readonly onStop: () => void;
   readonly onSendToCanvas: (messageId: string) => Promise<void>;
-  /** The ask was typed in the composer, which keeps the text when the server refuses it. */
-  readonly typed: boolean;
+  /** What a refusal of this ask before the stream says was kept, true now (`refusalSentence`). */
+  readonly notSent: RefusalKind;
   /** Present when the answer opened folded (an earlier exchange of a reopened thread). */
   readonly fold?: AnswerFold | undefined;
 }
@@ -49,84 +58,14 @@ function modelLabel(model: string | undefined): string {
     .replace(/-/g, ' ');
 }
 
-function Skeleton(): ReactNode {
-  return (
-    <div className="pt-explain__skeleton" aria-hidden="true">
-      <span />
-      <span />
-      <span />
-    </div>
-  );
-}
-
 const UNCITED = "no citation · the AI's own reading";
 
-type SendState = 'idle' | 'sending' | 'sent' | 'failed';
-
-function SendToCanvas({ onSend }: { onSend: () => Promise<void> }): ReactNode {
-  const [send, setSend] = useState<SendState>('idle');
-  const label =
-    send === 'sending' ? 'Sending…' : send === 'sent' ? 'Sent to canvas' : 'Send to canvas';
-  return (
-    <div className="pt-explain__actions">
-      <button
-        type="button"
-        className="pt-btn pt-btn--outline"
-        disabled={send === 'sending' || send === 'sent'}
-        onClick={() => {
-          setSend('sending');
-          onSend().then(
-            () => setSend('sent'),
-            () => setSend('failed'),
-          );
-        }}
-      >
-        {label}
-      </button>
-      {send === 'failed' ? (
-        <span className="pt-explain__note" role="alert">
-          Couldn&apos;t send this to the canvas. Try again.
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-/** The note after Stop, Retry beside it (focus moves there when Stop had it), and the usage. */
-function Stopped({
-  answer,
-  onRetry,
-  focus,
-}: {
-  answer: ViewMessage;
-  onRetry: () => void;
-  focus: boolean;
-}) {
-  const retry = useRef<HTMLButtonElement | null>(null);
-  useEffect(() => {
-    if (focus) retry.current?.focus({ preventScroll: true });
-  }, [focus]);
-  return (
-    <>
-      <div className="pt-exchange__stopped">
-        <p className="pt-exchange__stopped-note" data-stopped>
-          {stoppedNote(answer.text)}
-        </p>
-        <button ref={retry} type="button" className="pt-btn pt-btn--outline" onClick={onRetry}>
-          <svg width="16" height="16" viewBox="0 0 20 20" aria-hidden="true" className="pt-icon">
-            <path
-              d="M15.5 10a5.5 5.5 0 1 1-1.6-3.9M14 3.5v3h-3"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            />
-          </svg>
-          Retry
-        </button>
-      </div>
-      <UsageLine usage={answer.usage} />
-    </>
-  );
+/** The tab row's words: the working label (never "Writing" before a word arrived), or Stopped. */
+function metaOf(answer: ViewMessage, streaming: boolean, stopped: boolean, name: string) {
+  if (streaming) {
+    return <WorkingLabel label={answer.label ?? (answer.text === '' ? 'Starting' : 'Writing')} />;
+  }
+  return stopped ? `Stopped · ${name}` : undefined;
 }
 
 /** The answer on AI-slip stock, and the interface's lines around it. */
@@ -136,14 +75,20 @@ export function AnswerSlip({
   onRetry,
   onStop,
   onSendToCanvas,
-  typed,
+  notSent,
   fold,
   ...lights
 }: AnswerSlipProps): ReactNode {
   const streaming = answer.status === 'streaming';
   const stopped = wasStopped(answer);
-  const stopHadFocus = useRef(false);
-  const folded = fold?.folded === true && model !== null;
+  const handoff: FocusHandoff = useRef(null);
+  const article = useRef<HTMLElement | null>(null);
+  // The fold never hides an answer that is being written or waits for its stored copy.
+  const folded = fold?.folded === true && model !== null && model.live === false;
+  const retry = (): void => {
+    if (article.current?.contains(document.activeElement) === true) handoff.current = 'stop';
+    onRetry(answer.key);
+  };
   const ctx: MarkerHandlers = {
     ...lights,
     handleNumbers: model?.handleNumbers ?? new Map(),
@@ -173,7 +118,7 @@ export function AnswerSlip({
   const messageId = answer.messageId;
   const canSend = answer.status === 'complete' && messageId !== null && !folded;
   const footer = stopped ? (
-    <Stopped answer={answer} onRetry={() => onRetry(answer.key)} focus={stopHadFocus.current} />
+    <StoppedNote answer={answer} handoff={handoff} onRetry={retry} />
   ) : streaming || folded || (answer.usage === null && !canSend) ? undefined : (
     <>
       <UsageLine usage={answer.usage} />
@@ -182,11 +127,6 @@ export function AnswerSlip({
   );
   const name = modelLabel(answer.usage?.model);
   const uncited = folded ? [] : (model?.uncited ?? []);
-  const meta = streaming ? (
-    <WorkingLabel label={answer.label ?? 'Writing'} />
-  ) : stopped ? (
-    `Stopped · ${name}`
-  ) : undefined;
   const body =
     model === null ? (
       <Skeleton />
@@ -195,54 +135,37 @@ export function AnswerSlip({
     ) : (
       model.body.map(bodyParagraph)
     );
+  // A refused Retry's note replaces the answer's own (its text stays as it was).
+  const refused = answer.refusal ?? null;
+  const failure = refused ?? answer.failure;
   return (
-    <article className="pt-explain__answer pt-exchange__answer" data-message-status={answer.status}>
-      {streaming ? (
-        <button
-          type="button"
-          className="pt-btn pt-btn--outline pt-exchange__stop"
-          onClick={(event) => {
-            stopHadFocus.current = document.activeElement === event.currentTarget;
-            onStop();
-          }}
-        >
-          <svg width="16" height="16" viewBox="0 0 20 20" aria-hidden="true" className="pt-icon">
-            <rect x="5.5" y="5.5" width="9" height="9" rx="1" fill="currentColor" />
-          </svg>
-          Stop
-        </button>
-      ) : null}
+    <article
+      ref={article}
+      className="pt-explain__answer pt-exchange__answer"
+      data-message-status={answer.status}
+    >
+      {streaming ? <StopButton handoff={handoff} onStop={onStop} /> : null}
       {model === null && !streaming ? null : (
         <AiSlip
           model={name}
           source="from the paper"
           headingLevel={3}
-          meta={meta}
+          meta={metaOf(answer, streaming, stopped, name)}
           {...(uncited.length > 0 ? { uncited: uncited.map((p) => paragraph(p, false)) } : {})}
         >
           {body}
         </AiSlip>
       )}
       {footer === undefined ? null : <div className="pt-exchange__footer">{footer}</div>}
-      {answer.failure !== null && !stopped && !streaming ? (
+      {failure !== null && (refused !== null || (!stopped && !streaming)) ? (
         <FailureNote
-          failure={answer.failure}
-          kept={typed}
-          onRetry={answer.status === 'complete' ? undefined : () => onRetry(answer.key)}
+          failure={failure}
+          refusal={refused !== null ? 'retry' : notSent}
+          onRetry={answer.status === 'complete' ? undefined : retry}
         />
       ) : null}
       {fold === undefined || model === null ? null : (
-        <div className="pt-exchange__fold">
-          {fold.folded ? <span>{foldedCounts(model.coverage)}</span> : null}
-          <button
-            type="button"
-            className="pt-exchange__fold-toggle"
-            aria-expanded={!fold.folded}
-            onClick={fold.toggle}
-          >
-            {fold.folded ? 'Show' : 'Fold'}
-          </button>
-        </div>
+        <FoldRow folded={folded} coverage={model.coverage} onToggle={fold.toggle} />
       )}
     </article>
   );

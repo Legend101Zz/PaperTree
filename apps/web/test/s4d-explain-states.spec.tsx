@@ -112,9 +112,17 @@ describe('streaming and Stop (04b, 04c state 1)', () => {
           thread: { ...GOLD, thread_id: 'thr_1' },
           messages: storedStopped('Half an answer', 2914),
         }),
+      [`POST /papers/${PAPER}/threads/thr_1/messages`]: (_c, signal) =>
+        sseResponse([run({ run_id: 'run_2' }), text('Again')], { hold: true, signal }),
     });
     render(<Harness />);
     fireEvent.click(screen.getByRole('button', { name: 'ask one' }));
+    // Before a word arrives the tab row says Starting, never "Writing".
+    await waitFor(() =>
+      expect(document.querySelector('.pt-ai-slip__source [role="status"]')?.textContent).toMatch(
+        /^(Starting|Reading the paper)…$/,
+      ),
+    );
     await waitFor(() => expect(screen.getByText(/Half an answer/)).toBeTruthy());
 
     const live = answer() as HTMLElement;
@@ -150,6 +158,13 @@ describe('streaming and Stop (04b, 04c state 1)', () => {
     expect(live.querySelector('.pt-ai-slip__source')?.textContent).toBe('Stopped · M3');
     expect(screen.getByText('Stopped. The part that arrived is kept.')).toBeTruthy();
     expect(await axeClean()).toEqual([]);
+
+    // Retry from the keyboard hands focus to the new Stop, never to <body> (review 1.6).
+    const again = screen.getByRole('button', { name: 'Retry' });
+    again.focus();
+    fireEvent.click(again);
+    await waitFor(() => expect(screen.getByText(/Again/)).toBeTruthy());
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Stop' }));
   });
 
   it('Stop before any text says so, and never "kept"', async () => {
@@ -188,7 +203,7 @@ describe('a follow-up in a stored thread', () => {
       'GET /usage': () => jsonResponse(200, USAGE),
     });
     render(<Harness />);
-    fireEvent.click(screen.getByRole('button', { name: 'Ask AI' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Explain' }));
   }
 
   async function typeAndAsk(question: string): Promise<HTMLTextAreaElement> {
@@ -302,5 +317,41 @@ describe('a follow-up in a stored thread', () => {
     expect(again).toBe(fold);
     expect(document.activeElement).toBe(fold);
     expect(await axeClean()).toEqual([]);
+  });
+
+  it('Retry on a folded earlier answer streams in the open, never inside the fold (review 1.3)', async () => {
+    const stopped: Message = {
+      ...(GOLDEN.messages[1] as Message),
+      status: 'aborted',
+      error: { code: 'aborted', retryable: true, message: 'stopped' },
+      coverage: undefined,
+    };
+    const third: Message[] = [
+      { ...(GOLDEN.messages[2] as Message), message_id: 'msg_u9', ordinal: 4, content: 'And?' },
+      { ...(GOLDEN.messages[3] as Message), message_id: 'msg_a9', ordinal: 5, content: 'So [b1].' },
+    ];
+    installFetch({
+      [LIST]: () => jsonResponse(200, [GOLD]),
+      [GOLD_READ]: () =>
+        jsonResponse(200, {
+          thread: GOLD,
+          messages: [GOLDEN.messages[0], stopped, ...GOLDEN.messages.slice(2), ...third],
+        }),
+      [FOLLOW]: (_c, signal) =>
+        sseResponse([run({ thread_id: 'thr_gold' }), text('A brand new streamed answer')], {
+          hold: true,
+          signal,
+        }),
+    });
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Explain' }));
+    await waitFor(() => expect(document.querySelectorAll('[data-exchange]')).toHaveLength(3));
+    const first = document.querySelector<HTMLElement>('[data-exchange]') as HTMLElement;
+    expect(first.querySelector('.pt-exchange__preview')).not.toBeNull();
+    fireEvent.click(within(first).getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(first.textContent).toContain('A brand new streamed answer'));
+    expect(first.querySelector('.pt-exchange__preview')).toBeNull();
+    expect(first.querySelector('.pt-exchange__caret')).not.toBeNull();
+    expect(within(first).getByRole('button', { name: 'Stop' })).toBeTruthy();
   });
 });

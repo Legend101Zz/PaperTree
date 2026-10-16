@@ -45,17 +45,32 @@ derived on read from the parse, never stored).
   newest thread, so the next free question starts a new thread. Explain on a selection always starts one.
 - **A read that fails** (404, network) shows a designed failure with Try again and New thread
   (`ThreadReadFailure`), never a blank panel; a 404 is not retried and re-reads the list.
-- **Streaming, Stop and refusals (#204, frames 04b/04c).** While it streams, the AI tab row shows the working
-  label ("Reading the paper…", dotted pulse) and **Stop**; a typed caret ends the text (both still under reduced
-  motion). After Stop, the slip's footer says "Stopped. The part that arrived is kept." (or "Stopped before any
-  text arrived."), with Retry (focus moves there from Stop) and the run's usage when it reported any; a stored
-  `aborted` answer reads the same (`wasStopped`). A question the server refused before the stream
-  (`Failure.notSent`: a JSON error, which writes no row) is stamped "not sent" and goes back into the composer
-  (`ask` resolves `not-sent`). The daily cap is `BudgetCard`: "Daily spend cap reached", the figures and today's
+- **Streaming and Stop (#204, frames 04b/04c).** While it streams, the AI tab row shows the working label
+  ("Starting…" before a word arrives, "Reading the paper…" or "Writing…", dotted pulse) and **Stop**, whose row
+  is sticky in the panel's scroll so a long answer never scrolls it away; a typed caret ends the text (dots and
+  caret hold still under reduced motion). After Stop, the slip's footer says "Stopped. The part that arrived is
+  kept." (or "Stopped before any text arrived."), with Retry and the run's usage when it reported any; a stored
+  `aborted` answer reads the same (`wasStopped`). Focus hands over Stop → Retry → Stop (`AnswerParts`), never
+  to `<body>`. **Until the stopped answer's stored copy lands** (`awaitingStored`, about a second) it is drawn
+  as while streaming: a paragraph citing a handle the thread has not seen yet is held as cited, and the trace
+  and readout wait, so nothing is shown "uncited" and then moved. If that read never lands, the answer stays
+  in this state (no trace) rather than guess.
+- **Refusals before the stream (#204).** Only a documented pre-stream code on an error status counts
+  (`refusedBeforeStream`; a 200 with an empty stream does not). A refused new ask is stamped "not sent" and its
+  words go back into the composer, never over words typed since. **The composer's text is the controller's**
+  (`state.draft`), so it survives the summary view and a closed panel, and the card says "your text is kept in
+  the box below" only while the box still holds that question (`refusalSentence`). A refused **Retry** leaves
+  the answer it would have replaced as it was, says "Your retry was not sent", never stamps the question that
+  was sent, and keeps the note through the stored re-read until the reader's next ask or retry
+  (`ThreadMessage.refusal`). The daily cap is `BudgetCard`: "Daily spend cap reached", the figures and today's
   usage by kind from `GET /usage`; "Change the daily cap" is left out until the app has a place for it (#256).
 - **Folded answers (#204, owner may change).** A long thread (three exchanges or more) opens with its last two
-  whole and earlier answers folded: two lines, "4 passages · 11 citations …" and Show (`opensFolded`, decided at
-  mount, so nothing folds under the reader).
+  whole and earlier answers folded: two lines, "4 passages · 11 citations …" and Show (`opensFolded`, read once
+  at mount, so nothing folds or gains a toggle under the reader). Retry on a folded answer unfolds it first.
+- **Live markers after a re-parse.** Handles are stable within a thread's runs on one generation. After a
+  re-parse the server keeps only handles whose block still exists and numbers new ones after them, so a handle
+  can name a different block in the new run; until that run's citations land, a live marker could show the
+  old passage's number. Rare (a re-parse during a thread), and corrected at `done`.
 - `buildExchanges` pairs asks and answers and builds each answer's paragraphs (the server's
   `answer_paragraphs` rule), markers, trace rows ("where · cited n×", the paper's words, "not verified" when
   `supported === false`) and coverage.

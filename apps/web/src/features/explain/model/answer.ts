@@ -37,8 +37,11 @@ export interface ExchangeMessage {
   readonly coverage?: MessageCoverage | null;
   /** The parse generation of the run, when known (the passage key needs it). */
   readonly generation?: number | null;
-  /** The reader pressed Stop in this session (the stored copy, with its citations, follows). */
-  readonly stopped?: boolean;
+  /**
+   * Stopped, and its stored copy (with the citations minted for it) has not landed yet: drawn as
+   * while streaming (#204).
+   */
+  readonly awaitingStored?: boolean;
 }
 
 /** One numbered marker: a passage of this answer, where it is, and the citation it flashes. */
@@ -122,7 +125,7 @@ function markerOf(n: number, citations: readonly Citation[], locator: PassageLoc
 }
 
 // Every passage of an answer: its marker, cited count, and handle → number. While it streams (and
-// after Stop, until the stored copy brings its own), a handle the thread already resolved draws its
+// after Stop, until the stored copy lands with its own), a handle the thread already resolved draws its
 // marker at once (#204); its verdict is this claim's, not the earlier one's, so none is borrowed
 // (`supported: null` until this answer's own citations arrive).
 function answerPassages(answer: ExchangeMessage, numbers: PassageNumbers, live: boolean) {
@@ -193,13 +196,14 @@ function traceOf(
  * @returns The paragraphs, markers, trace and coverage.
  */
 export function buildAnswer(answer: ExchangeMessage, numbers: PassageNumbers): AnswerModel {
-  const streaming = answer.status === 'streaming';
+  // Stopped and waiting for the stored copy counts as live: a paragraph whose handle the thread has
+  // not seen yet is held as cited, not shown "uncited" and then moved when the copy lands (#204).
+  const streaming = answer.status === 'streaming' || answer.awaitingStored === true;
   // A cut-off answer (streaming, stopped, failed) can end inside a handle run (S9-4): drop it.
   const text = answer.status === 'complete' ? answer.text : answer.text.replace(PARTIAL_TAIL, '');
-  const borrow = streaming || (answer.stopped === true && answer.citations.length === 0);
-  const passages = answerPassages(answer, numbers, borrow);
+  const passages = answerPassages(answer, numbers, streaming);
   const paragraphs = answerParagraphs(text).map((paragraph, index) => {
-    const ns = borrow
+    const ns = streaming
       ? handleRuns(paragraph)
           .flat()
           .flatMap((h) => passages.handleNumbers.get(h) ?? [])

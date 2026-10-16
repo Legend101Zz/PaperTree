@@ -11,7 +11,10 @@ import {
   budgetFigures,
   foldedCounts,
   foldedPreview,
+  formatUsd,
   opensFolded,
+  refusalSentence,
+  refusedBeforeStream,
   stoppedNote,
   usageRows,
   wasNotSent,
@@ -87,24 +90,43 @@ describe('live markers while an answer streams (#204)', () => {
 });
 
 describe('after Stop, before the stored copy lands (#204)', () => {
-  it('the markers shown live stay, and the trace stands on what arrived', () => {
-    const messages = liveFollowUp(
-      'Recurrence is sequential [b6].\n\nSo training is slow [b6, b1]. And [b',
-      {
-        status: 'aborted',
-        stopped: true,
-      },
-    );
+  const text =
+    'Recurrence is sequential [b6].\n\nSo training is slow [b6, b1].\n\nA new claim [b9]. And [b';
+
+  it('the markers shown live stay; a claim citing an unseen handle is held, not shown uncited', () => {
+    const messages = liveFollowUp(text, { status: 'aborted', stopped: true, awaitingStored: true });
+    const model = buildExchanges(messages, originOf(GOLDEN.thread))[2]?.model;
+    // Held as while streaming: nothing classed uncited, no trace or readout to move later.
+    expect(model?.live).toBe(true);
+    expect(model?.body.map((p) => [p.markers.map((m) => m.n), p.cited])).toEqual([
+      [[2], true],
+      [[2, 1], true],
+      [[], true],
+    ]);
+    expect(model?.uncited).toEqual([]);
+    expect(model?.trace).toEqual([]);
+    // The cut-off run at the end never reaches the screen as text.
+    expect(model?.body.at(-1)?.text).toBe('A new claim [b9]. And');
+  });
+
+  it('once the stored copy lands with its citations, the trace stands on what arrived', () => {
+    const golden = GOLDEN.messages[3]?.citations ?? [];
+    const own = ['b6', 'b1'].map((h) => golden.find((c) => c.marker === h)).flatMap((c) => c ?? []);
+    const messages = liveFollowUp(text, {
+      status: 'aborted',
+      stopped: true,
+      awaitingStored: false,
+      citations: own,
+      generation: 1,
+    });
     const model = buildExchanges(messages, originOf(GOLDEN.thread))[2]?.model;
     expect(model?.live).toBe(false);
     expect(model?.body.map((p) => p.markers.map((m) => m.n))).toEqual([[2], [2, 1]]);
-    expect(model?.coverage).toEqual({ passages: 2, citations: 3, uncitedParagraphs: 0 });
-    expect(model?.trace.map((r) => [r.n, r.citedCount, r.status])).toEqual([
-      [1, 1, 'cited'],
-      [2, 2, 'cited'],
+    expect(model?.uncited.map((p) => p.text)).toEqual(['A new claim [b9]. And']);
+    expect(model?.trace.map((r) => [r.n, r.citedCount])).toEqual([
+      [1, 1],
+      [2, 2],
     ]);
-    // The cut-off run at the end never reaches the screen as text.
-    expect(model?.body.at(-1)?.text).toBe('So training is slow [b6, b1]. And');
   });
 });
 
@@ -138,7 +160,38 @@ describe('after Stop (#204, #179)', () => {
   });
 });
 
+describe('what a refusal before the stream may claim (#204 review 1.1)', () => {
+  it('only a documented pre-stream refusal (an error status) counts as not sent', () => {
+    expect(refusedBeforeStream(429, 'budget_exhausted')).toBe(true);
+    expect(refusedBeforeStream(503, 'agent_unavailable')).toBe(true);
+    expect(refusedBeforeStream(409, 'busy')).toBe(true);
+    // A 200 whose stream was empty, and a proxy's own 502 page: the rows may exist.
+    expect(refusedBeforeStream(200, 'internal')).toBe(false);
+    expect(refusedBeforeStream(502, 'internal')).toBe(false);
+  });
+
+  it('says "kept" only while the box holds the question, and never "not sent" of a sent one', () => {
+    expect(refusalSentence('kept')).toBe(
+      'Your question was not sent; your text is kept in the box below.',
+    );
+    expect(refusalSentence('question')).toBe('Your question was not sent.');
+    expect(refusalSentence('retry')).toBe(
+      'Your retry was not sent; the answer above is as it was.',
+    );
+    expect(refusalSentence('nothing')).toBe('Nothing was sent to the AI.');
+  });
+});
+
 describe('the daily cap (#204, frame 04c)', () => {
+  it('writes cents, and four decimals below a cent so real spend never reads $0.00', () => {
+    expect(formatUsd(0.9712)).toBe('$0.97');
+    expect(formatUsd(0.0027)).toBe('$0.0027');
+    expect(formatUsd(0)).toBe('$0.00');
+    expect(budgetFigures({ cost_usd_est: 0.0036, budget_usd: 0.001 })).toBe(
+      '≈ $0.0036 of $0.0010 used in the last 24 hours (estimate).',
+    );
+  });
+
   it('states the figures as an estimate', () => {
     expect(budgetFigures({ cost_usd_est: 0.9712, budget_usd: 1 })).toBe(
       '≈ $0.97 of $1.00 used in the last 24 hours (estimate).',
@@ -177,6 +230,9 @@ describe('a folded earlier answer (#204, frame 04c)', () => {
     ).toBe("4 passages · 11 citations · 1 paragraph uncited (the AI's own reading)");
     expect(foldedPreview([{ text: 'The **Transformer** drops recurrence [b1, b8].' }])).toBe(
       'The Transformer drops recurrence.',
+    );
+    expect(foldedPreview([{ text: 'Each layer has width d_model = 512 [b3].' }])).toBe(
+      'Each layer has width d_model = 512.',
     );
   });
 });

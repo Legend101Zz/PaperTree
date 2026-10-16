@@ -12,7 +12,7 @@ import { CallSlip, CoverageReadout, TraceList } from '@papertree/ui';
 import { useCallback, useState, type ReactNode } from 'react';
 
 import { formatAskTime } from '../model/exchange';
-import { wasNotSent } from '../model/states';
+import { wasNotSent, type RefusalKind } from '../model/states';
 import { AnswerSlip } from './AnswerSlip';
 
 import type { ViewMessage } from '@/components/explain/useExplainActions';
@@ -38,6 +38,8 @@ export interface ExchangeProps {
   readonly onSendToCanvas: (messageId: string) => Promise<void>;
   /** Open folded: two lines and the counts, with Show (an earlier exchange of a reopened thread). */
   readonly startsFolded?: boolean;
+  /** The composer holds this exchange's ask now, so a refusal may say "your text is kept". */
+  readonly askInBox?: boolean;
 }
 
 /**
@@ -54,13 +56,25 @@ export function Exchange({
   onStop,
   onSendToCanvas,
   startsFolded = false,
+  askInBox = false,
 }: ExchangeProps): ReactNode {
   const [lit, setLit] = useState<number | null>(null);
+  // Read once, at mount: an exchange never gains or loses its fold as the thread grows.
+  const [foldable] = useState(startsFolded);
   const [folded, setFolded] = useState(startsFolded);
   const model = exchange.model;
   const answer = exchange.answer;
   const settled = answer !== null && answer.status !== 'streaming';
   const notSent = wasNotSent(answer);
+  const kept: RefusalKind = exchange.typed ? (askInBox ? 'kept' : 'question') : 'nothing';
+  // A Retry streams in the open, never inside the folded two-line preview.
+  const retry = useCallback(
+    (key: string) => {
+      setFolded(false);
+      onRetry(key);
+    },
+    [onRetry],
+  );
   const showRow = useCallback(
     (n: number) => {
       const marker = model?.markers.get(n);
@@ -100,11 +114,11 @@ export function Exchange({
           lit={lit}
           onLight={setLit}
           onShow={onShow}
-          onRetry={onRetry}
+          onRetry={retry}
           onStop={onStop}
           onSendToCanvas={onSendToCanvas}
-          typed={exchange.typed}
-          fold={startsFolded ? { folded, toggle: () => setFolded((was) => !was) } : undefined}
+          notSent={kept}
+          fold={foldable ? { folded, toggle: () => setFolded((was) => !was) } : undefined}
         />
       )}
       {settled && model !== null && !model.live && !folded ? (
