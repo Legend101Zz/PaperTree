@@ -57,6 +57,8 @@ vi.mock('@/components/reader/VirtualPageList', () => ({
       return <div data-testid="scroller" />;
     },
   ),
+  // The header's page counter reads the pages on screen (#203); a stub scroller shows none.
+  useVisiblePages: () => ({ pages: [], current: -1 }),
 }));
 
 vi.mock('@/components/reader/PdfDocumentProvider', () => ({

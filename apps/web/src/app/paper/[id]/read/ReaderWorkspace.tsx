@@ -83,7 +83,7 @@ import {
 } from '@/components/reader/useHighlights';
 import type { PendingSelection, SelectionCapture } from '@/components/reader/useSelectionCapture';
 import { displayQuote } from '@/components/reader/quote';
-import type { ReadingPosition } from '@/components/reader/VirtualPageList';
+import { useVisiblePages, type ReadingPosition } from '@/components/reader/VirtualPageList';
 import { FIT_WIDTH, resolveZoom, type ZoomMode } from '@/components/reader/ZoomControl';
 import {
   applyScroll,
@@ -302,8 +302,9 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   const [flash, setFlash] = useState<FlashPaint | null>(null);
   const [guidedFlash, setGuidedFlash] = useState<string | null>(null);
   const [followBlockId, setFollowBlockId] = useState<string | null>(null);
-  // The page at the top of the view, for the header's "p. 2 of 15" (#203). The reader opens at the
-  // saved place, or at the top: nothing reports a position until the reader scrolls.
+  // Guided's page for the header's "p. 2 of 15" (#203): the page of its top paragraph, kept in step
+  // by Source. Source and Split show the page filling most of the view (`useVisiblePages`); before
+  // either reports, the saved place, or the first page.
   const [topPage, setTopPage] = useState<number>(saved?.page ?? 0);
   const narrow = useMediaQuery('(max-width: 639px)');
 
@@ -432,7 +433,10 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
     (position: ReadingPosition) => {
       const blockId = doc === null ? undefined : topBlockAt(doc, position);
       shownRef.current = true;
-      setTopPage(position.page);
+      // The page Guided would open at: its top block's (#203's counter, while Guided is shown).
+      setTopPage(
+        (blockId === undefined ? undefined : doc?.byId.get(blockId)?.pageIndex) ?? position.page,
+      );
       positionRef.current = {
         v: 1,
         mode: modeRef.current,
@@ -860,7 +864,7 @@ function ReaderActionsMount({
 interface ViewProps {
   readonly doc: IndexedDocument | null;
   readonly paper: PaperRef;
-  /** 0-based page at the top of the view (the header's counter). */
+  /** 0-based page Guided is on, or the saved one (the header's counter). */
   readonly page: number | null;
   readonly mode: ReadingMode;
   readonly onModeChange: (mode: ReadingMode) => void;
@@ -908,6 +912,8 @@ function ReaderWorkspaceView(props: ViewProps) {
     (paper.kind === 'api' ? 'Opening the paper…' : paper.slug);
 
   const explain = useContext(ExplainToggleContext);
+  const visible = useVisiblePages();
+  const page = mode !== 'guided' && visible.current >= 0 ? visible.current : props.page;
   const { numPages } = usePdfDocument();
   const pageCount = (numPages ?? 0) > 0 ? numPages : (doc?.pages.length ?? null);
 
@@ -955,7 +961,7 @@ function ReaderWorkspaceView(props: ViewProps) {
     <div className="pt-reader" data-reader-mode={mode}>
       <ReaderHeader
         title={title}
-        page={props.page}
+        page={page}
         pageCount={pageCount}
         mode={mode}
         onModeChange={props.onModeChange}
