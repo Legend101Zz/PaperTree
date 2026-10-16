@@ -559,6 +559,23 @@ class MessageError(Wire):
     message: str
 
 
+class PassageLocator(Wire):
+    """Where a cited passage sits, DERIVED on read from the parse (never stored; #201).
+
+    The UI shows `p. 2 ¶3 · Introduction`; `passage_key` is only a display key that numbers
+    "the same passage" within one answer, so it is never kept on a user row.
+    """
+
+    #: `g{generation}:{block_id}`: equal keys are the same passage within one generation.
+    passage_key: str
+    page_index: PageIndex
+    #: 1-based among that page's body paragraphs in reading order; null for a caption, a table
+    #: cell, a heading or anything else the UI should show by page only.
+    para_index: Positive | None
+    #: The display title of the section the block belongs to; null for none.
+    section_heading: str | None
+
+
 class Citation(Wire):
     citation_id: str
     ordinal: NonNegative
@@ -567,6 +584,28 @@ class Citation(Wire):
     page_index: PageIndex
     anchor: AnchorV1
     supported: bool | None
+    #: Present on a stored answer read back (`GET /papers/{id}/threads/{tid}`), when its
+    #: generation's parse can still be loaded; the live SSE `citations` event omits it.
+    locator: PassageLocator | None = omittable()
+
+
+class MessageCoverage(Wire):
+    """How much of an assistant answer is cited (#201); counted by `exchanges.message_coverage`."""
+
+    #: Distinct cited passages among the message's citations.
+    passages: NonNegative
+    #: Marker handle occurrences in the text that have a stored citation (`[b1, b8]` counts 2).
+    citations: NonNegative
+    #: Occurrences whose handle has no stored citation (a handle the run dropped): never counted
+    #: in `citations`.
+    unresolved_markers: NonNegative
+    paragraphs: NonNegative
+    #: 0-based indexes, into exactly the list `exchanges.answer_paragraphs` returns (split on
+    #: blank lines, bare Markdown heading lines dropped), of the paragraphs with no marker.
+    uncited_paragraphs: list[NonNegative]
+    #: Stored citations whose `supported` is false ("not verified", never "wrong"); an
+    #: unchecked one (`supported: null`) is not counted.
+    not_verified: NonNegative
 
 
 class RunSummary(Wire):
@@ -596,6 +635,8 @@ class Message(Wire):
     generation: Generation
     run: RunSummary | None
     citations: list[Citation]
+    #: Only on an assistant message that is `complete` or `partial`.
+    coverage: MessageCoverage | None = omittable()
     created_at: WireTime
     completed_at: WireTime | None
 
@@ -608,6 +649,12 @@ class Thread(Wire):
     created_at: WireTime
     updated_at: WireTime
     message_count: NonNegative
+    #: The first user message, cut to 160 characters on a word boundary ("" if none yet).
+    ask: str
+    #: Stored status of the thread's last assistant message; null when there is none. A run that
+    #: died but has not expired still reads `streaming` here, where the thread detail already says
+    #: `partial` or `error`.
+    last_status: MessageStatus | None
 
 
 class ThreadDetail(Wire):

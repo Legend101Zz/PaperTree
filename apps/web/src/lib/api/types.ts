@@ -128,6 +128,16 @@ export interface Highlight {
   anchors: AnchorWire[];
 }
 
+/** Where a cited passage sits, derived on read from the parse (never stored; #201). */
+export interface PassageLocator {
+  /** `g{generation}:{block_id}`: equal keys are the same passage within one answer. */
+  passage_key: string;
+  page_index: number;
+  /** 1-based among the page's body paragraphs; null shows the page only. */
+  para_index: number | null;
+  section_heading: string | null;
+}
+
 export interface Citation {
   citation_id: string;
   ordinal: number;
@@ -135,6 +145,23 @@ export interface Citation {
   page_index: number;
   anchor: Anchor;
   supported: boolean | null;
+  /** On a stored answer read back; absent on the live SSE `citations` event. */
+  locator?: PassageLocator;
+}
+
+/** How much of an assistant answer is cited (#201). */
+export interface MessageCoverage {
+  passages: number;
+  /** Marker handle occurrences that have a stored citation (`[b1, b8]` counts 2). */
+  citations: number;
+  /** Occurrences whose handle has no stored citation; never counted in `citations`. */
+  unresolved_markers: number;
+  paragraphs: number;
+  /** 0-based indexes into the list `exchanges.answer_paragraphs` builds (blank-line split, bare
+   * Markdown heading lines dropped) of the paragraphs with no marker. */
+  uncited_paragraphs: number[];
+  /** Stored citations with `supported === false`; an unchecked one (null) is not counted. */
+  not_verified: number;
 }
 
 export interface RunSummary {
@@ -164,6 +191,8 @@ export interface Message {
   generation: number;
   run: RunSummary | null;
   citations: Citation[];
+  /** Only on an assistant message that is `complete` or `partial`. */
+  coverage?: MessageCoverage;
   created_at: string;
   completed_at: string | null;
 }
@@ -176,6 +205,10 @@ export interface Thread {
   created_at: string;
   updated_at: string;
   message_count: number;
+  /** The first user message, cut to 160 characters on a word boundary. */
+  ask: string;
+  /** Status of the thread's last assistant message, null when there is none. */
+  last_status: Message['status'] | null;
 }
 
 export type SseEvent =

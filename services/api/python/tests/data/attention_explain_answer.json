@@ -1,0 +1,41 @@
+{
+  "_source": "Read-only copy of the demo database (PaperTree-scratch/v02-data/papertree.sqlite): the first assistant message (ordinal 1) of the real explain thread thr_01M508X9PC9K9HKHSVB2J9W1A1 (owner demo@example.test, paper: Attention Is All You Need) and its ai_citations rows. Copied verbatim; only the columns coverage reads are kept.",
+  "thread_id": "thr_01M508X9PC9K9HKHSVB2J9W1A1",
+  "generation": 1,
+  "status": "complete",
+  "content": "The passage states the paper's central proposal: a new, simple network architecture called the Transformer, built only from attention mechanisms, with recurrence and convolutions removed entirely [b1].\n\nThe motivation is that the dominant sequence transduction models are complex recurrent or convolutional networks with an encoder and a decoder, and the best of them additionally connect encoder to decoder through attention [b1] — so attention was already there, but as a supplement. Recurrent models compute step by step along sequence positions, generating each hidden state from the previous one, and this inherently sequential nature prevents parallelization within a training example, a problem that grows with sequence length as memory limits batch sizes [b6]. And attention, which models dependencies regardless of their distance in the sequence [b7], was in all but a few cases used together with a recurrent network [b7].\n\nSo the move is to take attention — already known to be effective — and make it the whole model rather than an add-on [b8]. The Introduction makes the same point: the Transformer eschews recurrence and relies entirely on attention to draw global dependencies between input and output [b8].\n\nWhy it matters: the paper claims this buys both quality and efficiency. Models are \"superior in quality while being more parallelizable and requiring significantly less time to train\" [b1], reaching 28.4 BLEU on WMT 2014 English-to-German (over 2 BLEU above prior best, including ensembles), and 41.8 BLEU on English-to-French as a new single-model state of the art, trained for 3.5 days on eight GPUs [b1]; the Introduction notes the English-to-French training took as little as twelve hours on eight P100 GPUs [b8]. It also generalizes beyond translation, applied to English constituency parsing with both large and limited training data [b1].\n\nThis is my reading, not the paper's claim: \"dispensing entirely\" is best understood as the architectural principle, since the paper's Transformer still uses position-wise information to represent sequence order — but the passages given here do not describe how position is handled, so I can't cite the paper on that point.",
+  "citations": [
+    {
+      "ordinal": 0,
+      "marker": "b1",
+      "block_id": "blk_tutvxcaxihp3krt6",
+      "generation": 1,
+      "page_index": 0,
+      "supported": true
+    },
+    {
+      "ordinal": 1,
+      "marker": "b6",
+      "block_id": "blk_p5c47m5apz2jj3x4",
+      "generation": 1,
+      "page_index": 1,
+      "supported": true
+    },
+    {
+      "ordinal": 2,
+      "marker": "b7",
+      "block_id": "blk_poxmdnipnwgirpwh",
+      "generation": 1,
+      "page_index": 1,
+      "supported": true
+    },
+    {
+      "ordinal": 3,
+      "marker": "b8",
+      "block_id": "blk_jyinmieamvqrzmap",
+      "generation": 1,
+      "page_index": 1,
+      "supported": true
+    }
+  ]
+}

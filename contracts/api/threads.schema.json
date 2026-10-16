@@ -290,6 +290,9 @@
               "type": "null"
             }
           ]
+        },
+        "locator": {
+          "$ref": "#/$defs/PassageLocator"
         }
       },
       "required": ["citation_id", "ordinal", "marker", "page_index", "anchor", "supported"],
@@ -369,6 +372,9 @@
           },
           "type": "array"
         },
+        "coverage": {
+          "$ref": "#/$defs/MessageCoverage"
+        },
         "created_at": {
           "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
           "type": "string"
@@ -400,6 +406,49 @@
         "completed_at"
       ],
       "title": "Message",
+      "type": "object"
+    },
+    "MessageCoverage": {
+      "additionalProperties": false,
+      "description": "How much of an assistant answer is cited (#201); counted by `exchanges.message_coverage`.",
+      "properties": {
+        "passages": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "citations": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "unresolved_markers": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "paragraphs": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "uncited_paragraphs": {
+          "items": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "not_verified": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "passages",
+        "citations",
+        "unresolved_markers",
+        "paragraphs",
+        "uncited_paragraphs",
+        "not_verified"
+      ],
+      "title": "MessageCoverage",
       "type": "object"
     },
     "MessageError": {
@@ -480,6 +529,44 @@
       },
       "required": ["type", "index"],
       "title": "PageSelector",
+      "type": "object"
+    },
+    "PassageLocator": {
+      "additionalProperties": false,
+      "description": "Where a cited passage sits, DERIVED on read from the parse (never stored; #201).\n\nThe UI shows `p. 2 ¶3 · Introduction`; `passage_key` is only a display key that numbers\n\"the same passage\" within one answer, so it is never kept on a user row.",
+      "properties": {
+        "passage_key": {
+          "type": "string"
+        },
+        "page_index": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "para_index": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "section_heading": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["passage_key", "page_index", "para_index", "section_heading"],
+      "title": "PassageLocator",
       "type": "object"
     },
     "RunSummary": {
@@ -873,6 +960,20 @@
         "message_count": {
           "minimum": 0,
           "type": "integer"
+        },
+        "ask": {
+          "type": "string"
+        },
+        "last_status": {
+          "anyOf": [
+            {
+              "enum": ["streaming", "complete", "partial", "error", "aborted"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -882,7 +983,9 @@
         "origin_anchor",
         "created_at",
         "updated_at",
-        "message_count"
+        "message_count",
+        "ask",
+        "last_status"
       ],
       "title": "Thread",
       "type": "object"

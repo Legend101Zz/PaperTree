@@ -66,6 +66,8 @@ import type {
   JobSummary,
   LibraryPaper,
   Message,
+  MessageCoverage,
+  PassageLocator,
   ResolutionWire,
   RunErrorCode,
   RunSummary,
@@ -223,6 +225,22 @@ const RUN: RunSummary = {
   tool_calls: 1,
 };
 
+const LOCATOR: PassageLocator = {
+  passage_key: 'g1:blk_qbvf5imegh7s3l5q',
+  page_index: 1,
+  para_index: 2,
+  section_heading: 'Introduction',
+};
+
+const COVERAGE: MessageCoverage = {
+  passages: 1,
+  citations: 1,
+  unresolved_markers: 0,
+  paragraphs: 1,
+  uncited_paragraphs: [],
+  not_verified: 0,
+};
+
 const CITATION: Citation = {
   citation_id: 'cit_01K63A9W4XJ7Q2N8R5T0V3Y6ZE',
   ordinal: 0,
@@ -230,6 +248,7 @@ const CITATION: Citation = {
   page_index: 1,
   anchor: CITATION_ANCHOR,
   supported: true,
+  locator: LOCATOR,
 };
 
 const ANSWER: Message = {
@@ -243,6 +262,7 @@ const ANSWER: Message = {
   generation: 1,
   run: RUN,
   citations: [CITATION],
+  coverage: COVERAGE,
   created_at: T,
   completed_at: T,
 };
@@ -274,6 +294,8 @@ const THREAD: Thread = {
   created_at: T,
   updated_at: T,
   message_count: 2,
+  ask: 'Explain this passage.',
+  last_status: 'complete',
 };
 
 const EVENTS: SseEvent[] = [
@@ -464,10 +486,10 @@ const OPTIONAL = {
   'highlights.ResolutionWire': [],
   'highlights.AnchorWire': [],
   'highlights.Highlight': [],
-  'threads.Citation': [],
+  'threads.Citation': ['locator'],
   'threads.RunSummary': [],
   'threads.MessageError': [],
-  'threads.Message': [],
+  'threads.Message': ['coverage'],
   'threads.Thread': [],
   'threads.ThreadDetail': [],
   'sse.SseRun': [],
@@ -662,6 +684,7 @@ const ENUMS = {
   'Message.role': ['user', 'assistant'],
   'Message.status': ['streaming', 'complete', 'partial', 'error', 'aborted'],
   'Thread.kind': ['explain', 'ask'],
+  'Thread.last_status': ['streaming', 'complete', 'partial', 'error', 'aborted', null],
   'SseStatus.phase': ['thinking', 'tool', 'retrying', 'writing'],
   'SseDone.status': ['complete', 'partial', 'error', 'aborted'],
   'Summary.status': ['complete', 'partial'],
@@ -727,6 +750,7 @@ const ENUM_TYPES_ARE_EXACT: true[] = [
     keyof typeof CODES | keyof typeof RUN_CODES
   >,
   true satisfies Equal<Thread['kind'], Values<'Thread.kind'>>,
+  true satisfies Equal<Thread['last_status'], Values<'Thread.last_status'>>,
   true satisfies Equal<SseData<'status'>['phase'], Values<'SseStatus.phase'>>,
   true satisfies Equal<SseData<'done'>['status'], Values<'SseDone.status'>>,
   true satisfies Equal<Summary['status'], Values<'Summary.status'>>,
