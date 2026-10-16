@@ -212,6 +212,17 @@ describe('notebook and diagram cards', () => {
     expect(container.querySelector('[data-verdict="inferred"]')).not.toBeNull();
     expect(screen.getByText('6 parts · 5 cited')).not.toBeNull();
   });
+
+  it('a plate that did not finish says so on its card (review N8)', () => {
+    const plate = storedPlate.messages[1]?.diagram as MessageDiagram;
+    const stopped: MessageDiagram = { ...plate, status: 'stopped', parts: plate.parts.slice(0, 3) };
+    mount(
+      DiagramCard,
+      cardRow('diagram', { title: 'Scaled dot-product attention', source_diagram_id: 'msg_a' }),
+      actions({ sources: sources(new Map(), new Map(), new Map([['msg_a', stopped]])) }),
+    );
+    expect(screen.getByText('3 parts · 3 cited · stopped')).not.toBeNull();
+  });
 });
 
 describe('a long body clips with a fade and "more"', () => {

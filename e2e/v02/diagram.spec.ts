@@ -98,13 +98,31 @@ test.describe('v0.2 S7b: Explain with a diagram → the plate → tap a part →
     await page.screenshot({ path: shot('v02-plate-01-done-1440.png') });
 
     // ── tap part B: its passage flashes, the margin tab names the part ──
-    await panel.getByRole('button', { name: /^Part B, / }).click();
+    await panel.getByRole('button', { name: /^Part B:/ }).click();
     const flash = page.locator('svg [data-flash="true"] polygon.pt-flash');
     await expect(flash.first()).toBeVisible({ timeout: 10_000 });
     await expect(page.locator('[data-flash-tab]')).toContainText('from part B');
     await page.waitForTimeout(500);
     const box = await flash.first().boundingBox();
     expect((box?.y ?? -1) >= 0 && (box?.y ?? 1e9) < 900).toBe(true);
+    // WHERE it flashed: the text-layer lines under the polygon are §3.2.1 ¶1, which holds B's quote.
+    const flashed = await page.evaluate(() => {
+      const poly = document.querySelector('svg [data-flash] polygon');
+      if (poly === null) return '';
+      const b = poly.getBoundingClientRect();
+      return Array.from(document.querySelectorAll('.papertree-text-layer span[data-item-index]'))
+        .filter((s) => {
+          const r = s.getBoundingClientRect();
+          return (
+            r.bottom > b.top + 1 && r.top < b.bottom - 1 && r.right > b.left && r.left < b.right
+          );
+        })
+        .map((s) => s.textContent ?? '')
+        .join(' ')
+        .replace(/\s+/g, ' ');
+    });
+    expect(flashed).toContain('We call our particular attention');
+    expect(flashed).toContain('We compute the dot products of the');
     await page.screenshot({ path: shot('v02-plate-02-flash-B-1440.png') });
 
     // ── Send to board → the board shows the diagram card ──

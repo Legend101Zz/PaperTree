@@ -54,7 +54,8 @@ plate once it settles (`features/explain/model/messages.mergeStored`), keyed by 
 - Plates are numbered among those drawn or drawing: one that ended with no part never takes "Plate 1".
 - A diagram thread has no composer: its only next turn is a Redraw (the API answers 422 to a typed follow-up).
 - **Send to board** (`ReaderActions.sendToCanvas({kind: 'diagram', messageId, title})`) creates a `diagram` card whose
-  `source_diagram_id` is the plate's assistant message id; one plate, one card. The board's card
+  `source_diagram_id` is the plate's assistant **message id** (S7a has no separate diagram id: a plate's parts are
+  keyed by its message); one plate, one card. The board's card
   (`features/board/components/cards/NotebookCard.tsx` `DiagramCard`) reads the stored plate through
   `useCardSources` (the paper's diagram threads, newest first, once per id) and draws it with `PlateMiniature`, the same
   slot grid, small; before the read lands it claims nothing. The API does not yet check that the id names a plate
@@ -62,8 +63,13 @@ plate once it settles (`features/explain/model/messages.mergeStored`), keyed by 
 - **Redraw** asks for a new plate in the same thread (`redraw_of` the plate): "Redraw the diagram." becomes the new
   exchange's ask and the new plate is Plate 2, with the thread's passage numbers. **Add to notebook** is left out: a
   notebook page holds no diagram item (#276).
-- **07d** is information only: "A crafted figure, later", not available yet, with Not now (no job is queued in v0.2),
-  under the first finished plate of a thread.
+- **07d** is information only: a crafted figure "may come later" and is not available yet, with Not now (no job is
+  queued in v0.2), under the first finished plate of a thread; Not now is remembered for that plate in this browser.
+- A board card says when its plate did not finish ("3 parts · 3 cited · stopped", "· cut short"). Its plate is read
+  from the paper's diagram threads four at a time, newest first, once per id.
+- While another plate of the thread draws, Redraw is disabled and says "Redraw waits for the plate being drawn.";
+  a failed or stopped-empty plate's Retry is held back the same way. A Redraw refused before the stream keeps its
+  ask (stamped "not sent") and its Retry sends that same Redraw again, never a new thread.
 
 ## On screen
 

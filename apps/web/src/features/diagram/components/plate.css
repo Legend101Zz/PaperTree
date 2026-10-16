@@ -397,7 +397,8 @@
 }
 
 .pt-exchange--diagram .pt-explain__usage,
-.pt-exchange--diagram .pt-explain__note {
+.pt-exchange--diagram .pt-explain__note,
+.pt-exchange--diagram .pt-exchange__stopped {
   margin-block-start: 10px;
 }
 

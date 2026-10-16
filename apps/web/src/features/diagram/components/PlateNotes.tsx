@@ -141,7 +141,7 @@ export function PlateNotes({
         <FailureNote failure={{ code: 'internal', retryable: true }} onRetry={retry} />
       ) : null}
       {phase === 'complete' && plateNo === 1 ? (
-        <CraftedOffer title={plate.title ?? 'this diagram'} />
+        <CraftedOffer title={plate.title ?? 'this diagram'} plateId={messageId} />
       ) : null}
     </>
   );

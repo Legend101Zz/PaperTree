@@ -100,12 +100,13 @@ export function stoppedAtThree(): StoredRead {
 }
 
 /** The faux bad run's thread: its frames are re-addressed to `THREAD` when used as a Redraw. */
-const BAD_THREAD = 'thr_01M536XJMQX7900YB9C2S1R819';
+export const BAD_THREAD = 'thr_01M536XJMQX7900YB9C2S1R819';
 
 /** The panel's routes: the diagram stream (held, or whole), the cancel, the reads, the board. */
 export function routes(
   stream: (signal: AbortSignal | null) => Response,
   stored: StoredRead = storedThread,
+  extra: Parameters<typeof installFetch>[0] = {},
 ) {
   return installFetch({
     [`POST /papers/${PAPER}/threads`]: (_call, signal) => stream(signal),
@@ -121,6 +122,7 @@ export function routes(
     [`GET /papers/${PAPER}/board`]: () => jsonResponse(200, { board: null, nodes: [], edges: [] }),
     [`POST /papers/${PAPER}/board/nodes`]: (call) =>
       jsonResponse(201, { board: { board_id: 'brd_1' }, node: call.body }),
+    ...extra,
   });
 }
 

@@ -21,6 +21,8 @@ import type { PtNode } from '../model/flow';
 import type { MessageDiagram } from '@/lib/api/types';
 
 const MAX_THREADS = 20;
+/** Diagram threads read at once when a board's plates are looked up. */
+const DIAGRAM_BATCH = 4;
 
 /** The extras the board's cards have read, by message id and by page id. */
 export interface CardSources {
@@ -93,12 +95,18 @@ async function readDiagrams(
     .filter((t) => t.kind === 'diagram')
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
     .slice(0, MAX_THREADS);
-  for (const thread of threads) {
-    if (found.size === wanted.length) break;
-    const { messages } = await threadsApi.get(paperId, thread.thread_id);
-    for (const m of messages) {
-      if (m.diagram !== undefined && wanted.includes(m.message_id))
-        found.set(m.message_id, m.diagram);
+  // A few reads at a time, not twenty in a row (#217 review N9): each read is a whole thread.
+  for (let i = 0; i < threads.length && found.size < wanted.length; i += DIAGRAM_BATCH) {
+    const reads = await Promise.allSettled(
+      threads.slice(i, i + DIAGRAM_BATCH).map((t) => threadsApi.get(paperId, t.thread_id)),
+    );
+    for (const read of reads) {
+      if (read.status !== 'fulfilled') continue;
+      for (const m of read.value.messages) {
+        if (m.diagram !== undefined && wanted.includes(m.message_id)) {
+          found.set(m.message_id, m.diagram);
+        }
+      }
     }
   }
   return found;
