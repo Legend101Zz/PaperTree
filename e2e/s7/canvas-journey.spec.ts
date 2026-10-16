@@ -176,10 +176,11 @@ test.describe('Journey D: the canvas', () => {
       { x: src!.x + src!.width / 2, y: src!.y + src!.height / 2 },
       { x: dst!.x + dst!.width / 2, y: dst!.y + dst!.height / 2 },
     );
-    const dialog = page.getByRole('dialog', { name: 'How are these connected?' });
+    // #213: the "Link as" picker replaces v0.1's dialog; the same click chooses the kind.
+    const dialog = page.getByRole('group', { name: /link as/i });
     await expect(dialog).toBeVisible();
     await page.screenshot({ path: shot('d03-kind-picker-1440.png') });
-    await dialog.getByRole('button', { name: 'supports', exact: true }).click();
+    await dialog.getByRole('option', { name: 'supports', exact: true }).click();
     await expect(page.getByTestId('edge-label')).toHaveText('supports');
     expect(calls.filter((c) => c.startsWith('POST /boards/') && c.endsWith('/edges'))).toHaveLength(
       1,
@@ -199,7 +200,10 @@ test.describe('Journey D: the canvas', () => {
     await clickEdge(page);
     const edgeBar = page.getByRole('group', { name: 'Selected link' });
     await expect(edgeBar).toBeVisible();
-    await edgeBar.getByLabel('Kind').selectOption('derives_from');
+    // #213: the kind changes through the same "Link as" picker (key 3 = derives from).
+    await edgeBar.getByRole('button', { name: 'Kind: supports' }).click();
+    await expect(page.getByRole('group', { name: /link as/i })).toBeVisible();
+    await page.keyboard.press('3');
     await expect(page.getByTestId('edge-label')).toHaveText('derives from');
     const labelInput = edgeBar.getByLabel('Label');
     await labelInput.fill('needs the passage');

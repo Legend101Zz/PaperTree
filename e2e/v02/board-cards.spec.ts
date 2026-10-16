@@ -4,7 +4,7 @@
  * A board with a passage (a committed real captureAnchor record, re-pointed at the seeded paper)
  * and a note. The passage card shows its page tab; a thread is dragged from the note's brass
  * claim-out pin to the passage's open evidence-in pin; while it is drawn the evidence-in pin is
- * lit; the v0.1 kind picker (S6c replaces it) gives it a kind; the thread draws with its cue; and
+ * lit; the "Link as" picker (S6c, #213) gives it a kind; the thread draws with its cue; and
  * after a reload it is still there, saved with both pins. A drop on a pin that cannot take the
  * thread is refused with the server's sentence and saves nothing.
  */
@@ -103,9 +103,9 @@ test('cards, pins and a thread that persists with its ports', async ({ browser, 
   await expect(page.locator(evidenceIn)).toHaveAttribute('data-lit', 'true');
   await page.screenshot({ path: shot('b01-drawing-a-thread-1440.png') });
   await page.mouse.up();
-  const picker = page.getByRole('dialog', { name: 'How are these connected?' });
+  const picker = page.getByRole('group', { name: /link as/i }); // #213's picker
   await expect(picker).toBeVisible();
-  await picker.getByRole('button', { name: 'contradicts', exact: true }).click();
+  await picker.getByRole('option', { name: 'contradicts', exact: true }).click();
 
   // It draws with its cue (dashes and crosses) and its paper tag, and it is saved with its pins.
   const thread = page.locator('.react-flow__edge g.pt-thread');

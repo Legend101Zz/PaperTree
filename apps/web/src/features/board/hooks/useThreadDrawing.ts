@@ -10,6 +10,8 @@
  * xyflow's click-to-connect (press a brass pin, then an open pin), which the pins' Enter and
  * Space reach; Escape or a click on the empty board cancels it. The toolbar's Link takes its pins
  * from the table, and refuses a pair no pin can hold rather than save a thread nothing can draw.
+ * Keyboard linking (`useKeyboardLink`, #213) starts and ends through this same state, never a
+ * second link mode: `startLink` is a click-to-connect begun from a card's first brass pin.
  */
 import { useStoreApi } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
@@ -27,6 +29,8 @@ export interface PendingThread {
   readonly to: string;
   readonly fromPort: FromPort | null;
   readonly toPort: ToPort | null;
+  /** Where focus goes once the kind is chosen; the source pin when absent (a mouse drag). */
+  readonly returnTo?: HTMLElement | null;
 }
 
 /** The dashed navy thread that follows the pointer (DESIGN.md §3.10, "dragging"). */
@@ -43,6 +47,12 @@ export interface ThreadDrawing {
   /** The refusal sentence after a drop the server would refuse, or null. */
   readonly refusal: string | null;
   readonly dismissRefusal: () => void;
+  /** Show a refusal sentence of the board's own (keyboard linking that has nowhere to go). */
+  readonly refuse: (sentence: string) => void;
+  /** Start a click-to-connect from a card's pin, as pressing the pin by keyboard would. */
+  readonly startLink: (nodeId: string, port: FromPort) => void;
+  /** Put a thread being drawn away, saving nothing. */
+  readonly cancel: () => void;
   /** A good drop waiting for its kind. */
   readonly pending: PendingThread | null;
   readonly setPending: (next: PendingThread | null) => void;
@@ -128,14 +138,35 @@ export function useThreadDrawing(nodes: readonly PtNode[]): ThreadDrawing {
     return () => document.removeEventListener('keydown', onKey);
   }, [linking, cancel]);
 
-  const onConnectStart = useCallback(
-    (_: unknown, start: OnConnectStartParams) => {
+  const startFrom = useCallback(
+    (start: OnConnectStartParams, keyboard: boolean) => {
       const kind = kindOf(start.nodeId);
       setRefusal(null);
       if (start.nodeId === null || start.handleId === null || kind === undefined) return;
-      begin({ nodeId: start.nodeId, kind, port: start.handleId });
+      begin({ nodeId: start.nodeId, kind, port: start.handleId, keyboard });
     },
     [begin, kindOf],
+  );
+  const onConnectStart = useCallback(
+    (_: unknown, start: OnConnectStartParams) => startFrom(start, false),
+    [startFrom],
+  );
+  // A pin pressed with Enter or Space (`CardPins`' synthetic click) carries no click count.
+  const onClickConnectStart = useCallback(
+    (event: unknown, start: OnConnectStartParams) =>
+      startFrom(start, (event as { detail?: unknown } | null)?.detail === 0),
+    [startFrom],
+  );
+
+  const startLink = useCallback(
+    (nodeId: string, port: FromPort) => {
+      const kind = kindOf(nodeId);
+      if (kind === undefined) return;
+      setRefusal(null);
+      store.setState({ connectionClickStartHandle: { nodeId, type: 'source', id: port } });
+      begin({ nodeId, kind, port, keyboard: true });
+    },
+    [begin, kindOf, store],
   );
 
   const onConnectEnd = useCallback(
@@ -182,7 +213,9 @@ export function useThreadDrawing(nodes: readonly PtNode[]): ThreadDrawing {
         return;
       }
       setRefusal(null);
-      setPending({ from, to, fromPort: ports.from_port, toPort: ports.to_port });
+      const returnTo =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setPending({ from, to, fromPort: ports.from_port, toPort: ports.to_port, returnTo });
     },
     [kindOf],
   );
@@ -193,18 +226,29 @@ export function useThreadDrawing(nodes: readonly PtNode[]): ThreadDrawing {
       onConnect,
       onConnectStart,
       onConnectEnd,
-      onClickConnectStart: onConnectStart,
+      onClickConnectStart,
       onClickConnectEnd,
       onPaneClick: cancel,
       connectionLineStyle: DRAWING_LINE,
     }),
-    [isValidConnection, onConnect, onConnectStart, onConnectEnd, onClickConnectEnd, cancel],
+    [
+      isValidConnection,
+      onConnect,
+      onConnectStart,
+      onConnectEnd,
+      onClickConnectStart,
+      onClickConnectEnd,
+      cancel,
+    ],
   );
 
   return {
     linking,
     refusal,
     dismissRefusal: () => setRefusal(null),
+    refuse: setRefusal,
+    startLink,
+    cancel,
     pending,
     setPending,
     link,

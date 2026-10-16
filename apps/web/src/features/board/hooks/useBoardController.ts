@@ -89,14 +89,14 @@ export interface BoardController {
   readonly commitSize: (id: string, rect: { x: number; y: number; w: number; h: number }) => void;
   readonly deleteNodes: (ids: readonly string[]) => void;
   readonly deleteEdges: (ids: readonly string[]) => void;
-  /** A thread between two cards; `ports` are the pins it was drawn between (none from the keyboard). */
+  /** A thread between two cards, drawn between `ports`; resolves true once the server saved it. */
   readonly connect: (
     from: string,
     to: string,
     kind: EdgeKind,
     label: string | null,
     ports?: ThreadPorts,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   readonly patchEdge: (id: string, fields: { kind?: EdgeKind; label?: string | null }) => void;
   readonly groupNodes: (ids: readonly string[]) => Promise<void>;
   readonly saveViewport: (viewport: Viewport) => void;
@@ -673,7 +673,7 @@ export function useBoardController(paperId: string): BoardController {
   const connect = useCallback(
     async (from: string, to: string, kind: EdgeKind, label: string | null, ports?: ThreadPorts) => {
       const boardId = boardRef.current?.board_id;
-      if (boardId === undefined || from === to) return;
+      if (boardId === undefined || from === to) return false;
       try {
         const edge = await boardsApi.createEdge(boardId, {
           edge_id: newEdgeId(),
@@ -685,8 +685,10 @@ export function useBoardController(paperId: string): BoardController {
         });
         setEdges([...edgesRef.current, threadOf(edge)]);
         clearStale();
+        return true;
       } catch (error) {
         setNotice(sentence(error, "Couldn't connect those two cards. Try again."));
+        return false;
       }
     },
     [clearStale, setEdges, threadOf],

@@ -277,17 +277,30 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
       await fullPage.mouse.up();
       await expect(fullPage.getByRole('button', { name: 'Link' })).toBeEnabled();
       await fullPage.getByRole('button', { name: 'Link' }).click();
-      const dialog = fullPage.getByRole('dialog', { name: 'How are these connected?' });
+      // #213: the "Link as" picker (no longer a modal dialog).
+      const dialog = fullPage.getByRole('group', { name: /link as/i });
       await expect(dialog).toBeVisible();
       expect(await fullPage.evaluate(() => document.documentElement.scrollWidth)).toBe(vp.width);
       await fullPage.screenshot({ path: shot(`s05-picker-${tag}.png`) });
       const kinds = await dialog
-        .locator('.pt-cv-kind')
+        .getByRole('option')
         .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
       expect(kinds).toHaveLength(7);
       for (const h of kinds) expect(h).toBeGreaterThanOrEqual(40);
+      // #213 changes v0.1's "Escape cancels" on purpose: Escape keeps a PLAIN LINK. It is removed
+      // again through the API so the next pass starts from the same one-thread board.
       await fullPage.keyboard.press('Escape');
       await expect(dialog).toBeHidden();
+      const plainLink = async () =>
+        (await getBoard(stack.apiUrl, full.token, full.paperId)).edges.find(
+          (e) => e.from_node_id === explanationId && e.to_node_id === ids[2],
+        );
+      await expect.poll(async () => (await plainLink())?.kind).toBe('relates');
+      const kept = await plainLink();
+      expect(
+        (await api(stack.apiUrl, full.token, 'DELETE', `/boards/${board}/edges/${kept!.edge_id}`))
+          .status,
+      ).toBe(204);
       await fullPage.getByRole('button', { name: 'Select area' }).click();
 
       // a selected edge shows its editor

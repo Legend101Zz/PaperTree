@@ -19,18 +19,19 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 
 import { useBoardController } from '../hooks/useBoardController';
 import { useCardSources } from '../hooks/useCardSources';
+import { useLinkAs } from '../hooks/useLinkAs';
 import { useThreadDrawing } from '../hooks/useThreadDrawing';
-import { EDGE_KINDS, withPageTitles, type PtEdge, type PtNode } from '../model/flow';
+import { withPageTitles, type PtEdge, type PtNode } from '../model/flow';
 import { CanvasActionsProvider, LinkingProvider } from './BoardContext';
 import { nodeTypes } from './cards';
-import { KindPicker } from './KindPicker';
+import { LinkAsLayer } from './LinkAsLayer';
+import { ThreadBar } from './ThreadBar';
 import { edgeTypes } from './ThreadEdge';
 import { ThreadLegend } from './ThreadLegend';
+import { ThreadPreview } from './ThreadPreview';
 import './cards.css';
 import './threads.css';
 import './legend.css';
-
-import type { EdgeKind } from '@/lib/api/types';
 
 /**
  * The reader URL that opens a card's cited passage and flashes it (`useFocusFromCanvas`).
@@ -60,6 +61,16 @@ const NONE: Selection = { nodes: [], edges: [] };
 
 /** Shift as well as Ctrl/Cmd adds to the selection (S9). */
 const MULTI_SELECT_KEYS = ['Shift', 'Meta', 'Control'];
+
+/** What a focused card tells a screen reader it can do, L (keyboard linking, #213) included. */
+const CARD_KEYS =
+  'Press Enter or Space to select a card, the arrow keys to move it, L to start a thread from it, and Delete to remove it.';
+// xyflow 12.12 reads `keyboardDisabled` when the keyboard is ENABLED (its names are swapped), so
+// both carry the sentence.
+const ARIA_LABELS = {
+  'node.a11yDescription.default': CARD_KEYS,
+  'node.a11yDescription.keyboardDisabled': CARD_KEYS,
+};
 
 /**
  * The board page for one paper.
@@ -97,8 +108,7 @@ function Canvas({ paperId }: { readonly paperId: string }) {
   const [selection, setSelection] = useState<Selection>(NONE);
   const order = useRef<string[]>([]);
   const drawing = useThreadDrawing(ctl.nodes);
-  const picking = drawing.pending;
-  const setPicking = drawing.setPending;
+  const stage = useRef<HTMLDivElement>(null);
   const [areaMode, setAreaMode] = useState(false);
   // The first view on any width is the WHOLE board (never zoomed in past 100 %, never out past 20 %).
   // A phone used to be capped at 60 %, which cropped a board wider than the screen; "Fit all" in
@@ -156,10 +166,7 @@ function Canvas({ paperId }: { readonly paperId: string }) {
     () => withPageTitles(ctl.nodes, (pageId) => sources.pages.get(pageId)?.page.title),
     [ctl.nodes, sources.pages],
   );
-  const labelOf = useCallback(
-    (id: string) => nodes.find((x) => x.id === id)?.ariaLabel ?? 'Card',
-    [nodes],
-  );
+  const link = useLinkAs(ctl, drawing, nodes);
 
   const selectedNodes = useMemo(
     () => ctl.nodes.filter((n) => selection.nodes.includes(n.id)),
@@ -297,42 +304,18 @@ function Canvas({ paperId }: { readonly paperId: string }) {
           </div>
         )}
 
-        <div className="pt-cv__stage" data-testid="canvas-stage" data-status={ctl.status}>
+        <div
+          ref={stage}
+          className="pt-cv__stage"
+          data-testid="canvas-stage"
+          data-status={ctl.status}
+        >
           {selectedEdge?.data === undefined ? null : (
-            <div className="pt-cv__edgebar" role="group" aria-label="Selected link">
-              <label className="pt-cv-field pt-cv-field--inline">
-                <span>Kind</span>
-                <select
-                  className="pt-field"
-                  value={selectedEdge.data.edge.kind}
-                  onChange={(e) =>
-                    ctl.patchEdge(selectedEdge.id, { kind: e.target.value as EdgeKind })
-                  }
-                >
-                  {EDGE_KINDS.map((k) => (
-                    <option key={k.kind} value={k.kind}>
-                      {k.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="pt-cv-field pt-cv-field--inline">
-                <span>Label</span>
-                <input
-                  key={`${selectedEdge.id}:${selectedEdge.data.edge.label ?? ''}`}
-                  className="pt-field"
-                  defaultValue={selectedEdge.data.edge.label ?? ''}
-                  maxLength={80}
-                  placeholder={selectedEdge.data.edge.kind.replace('_', ' ')}
-                  onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-                  onBlur={(e) => {
-                    const next = e.target.value.trim() === '' ? null : e.target.value.trim();
-                    if (next !== selectedEdge.data?.edge.label)
-                      ctl.patchEdge(selectedEdge.id, { label: next });
-                  }}
-                />
-              </label>
-            </div>
+            <ThreadBar
+              edge={selectedEdge.data.edge}
+              onKind={(opener) => link.changeKind(selectedEdge.id, opener)}
+              onLabel={(label) => ctl.patchEdge(selectedEdge.id, { label })}
+            />
           )}
 
           {ctl.status === 'loading' ? (
@@ -405,9 +388,12 @@ function Canvas({ paperId }: { readonly paperId: string }) {
                   elevateNodesOnSelect={false}
                   nodesFocusable
                   edgesFocusable
+                  ariaLabelConfig={ARIA_LABELS}
+                  onKeyDown={link.keyboard.onKeyDown}
                   aria-label="Canvas of passages, explanations and notes"
                 >
                   <ZoomVar />
+                  {link.preview === null ? null : <ThreadPreview {...link.preview} />}
                   <Background gap={24} size={1} />
                   <Controls
                     showInteractive={false}
@@ -417,9 +403,21 @@ function Canvas({ paperId }: { readonly paperId: string }) {
                 </ReactFlow>
               </LinkingProvider>
               {empty ? <EmptyState paperId={paperId} /> : <ThreadLegend />}
+              {link.request === null ? null : (
+                <LinkAsLayer
+                  request={link.request}
+                  nodes={nodes}
+                  stage={stage}
+                  onChoose={link.choose}
+                  onCancel={link.cancel}
+                />
+              )}
             </>
           )}
         </div>
+        <p className="pt-sr-only" role="status" aria-live="polite">
+          {link.said}
+        </p>
 
         {ctl.undo === null ? null : (
           <div
@@ -447,19 +445,6 @@ function Canvas({ paperId }: { readonly paperId: string }) {
               </button>
             </div>
           </div>
-        )}
-
-        {picking === null ? null : (
-          <KindPicker
-            fromLabel={labelOf(picking.from)}
-            toLabel={labelOf(picking.to)}
-            onCancel={() => setPicking(null)}
-            onPick={(kind, label) => {
-              const { from, to, fromPort, toPort } = picking;
-              setPicking(null);
-              void ctl.connect(from, to, kind, label, { from_port: fromPort, to_port: toPort });
-            }}
-          />
         )}
       </div>
     </CanvasActionsProvider>

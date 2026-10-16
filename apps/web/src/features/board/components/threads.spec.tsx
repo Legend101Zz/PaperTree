@@ -222,7 +222,12 @@ describe('drawing a thread', () => {
         handleType: 'source',
       });
     });
-    expect(result.current.linking).toEqual({ nodeId: 'cn_p', kind: 'excerpt', port: 'claim_out' });
+    expect(result.current.linking).toEqual({
+      nodeId: 'cn_p',
+      kind: 'excerpt',
+      port: 'claim_out',
+      keyboard: false, // a drag, not a pin pressed from the keyboard (#213)
+    });
     act(() => {
       result.current.flowProps.onConnectEnd(null, { toHandle: {}, isValid: false } as never);
     });
@@ -289,6 +294,15 @@ describe('click-to-connect and the toolbar Link', () => {
     expect(result.current.store.getState().connectionClickStartHandle).toBeNull();
   });
 
+  it('a pin pressed from the keyboard starts a keyboard link; a mouse click does not (#213)', () => {
+    const { result } = drawing();
+    act(() => result.current.d.flowProps.onClickConnectStart({ detail: 0 }, start));
+    expect(result.current.d.linking?.keyboard).toBe(true);
+    act(() => result.current.d.cancel());
+    act(() => result.current.d.flowProps.onClickConnectStart({ detail: 1 }, start));
+    expect(result.current.d.linking?.keyboard).toBe(false);
+  });
+
   it('a click on the empty board cancels it too', () => {
     const { result } = drawing();
     act(() => result.current.d.flowProps.onClickConnectStart(null, start));
@@ -319,6 +333,7 @@ describe('click-to-connect and the toolbar Link', () => {
       to: 'cn_q',
       fromPort: 'claim_out',
       toPort: 'evidence_in',
+      returnTo: document.activeElement, // focus comes back to the Link button after (#213)
     });
     act(() => result.current.d.setPending(null));
     act(() => result.current.d.link('cn_q', 'cn_p'));
