@@ -122,7 +122,8 @@ test.describe('#204: streaming, Stop and the daily cap (faux agent)', () => {
     const card = panel.locator('.pt-budget-card');
     await expect(card.locator('.pt-budget-card__title')).toHaveText('Daily spend cap reached');
     await expect(card.locator('[data-budget-detail]')).toContainText(
-      /^≈ \$\d+\.\d\d of \$\d+\.\d\d used in the last 24 hours \(estimate\)\.$/,
+      // Cents, or four decimals below a cent (`formatUsd`): a fresh stack has spent a fraction of one.
+      /^≈ \$\d+\.\d{2,4} of \$\d+\.\d{2,4} used in the last 24 hours \(estimate\)\.$/,
     );
     await expect(card).toContainText(
       'Your question was not sent; your text is kept in the box below. Reading, highlights, the board and cached summaries still work.',
