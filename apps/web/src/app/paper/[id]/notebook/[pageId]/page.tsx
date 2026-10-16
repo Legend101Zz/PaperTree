@@ -29,7 +29,8 @@ export default function NotebookPageRoute(): ReactNode {
           <p className="pt-state__body">This link does not say which notebook page to open.</p>
         </div>
       ) : (
-        <NotebookView paperId={paperId} pageId={pageId} />
+        // Keyed by page: a new page id is a new editing session, never a carried-over one.
+        <NotebookView key={pageId} paperId={paperId} pageId={pageId} />
       )}
     </AuthGuard>
   );

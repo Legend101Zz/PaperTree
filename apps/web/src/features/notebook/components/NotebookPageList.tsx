@@ -2,7 +2,7 @@
 
 /**
  * A paper's notebook pages (S5c, #208): `/paper/<id>/notebook`. Every page listed is one the
- * person made; with none, it says how a page starts (Dive in from an answer) and invents nothing.
+ * person made; with none, it says where a page comes from and invents nothing.
  */
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -55,10 +55,7 @@ export function NotebookPageList({ paperId }: NotebookPageListProps): ReactNode 
       ) : query.isError ? (
         <p role="alert">The notebook could not be read. Check the connection and reload.</p>
       ) : pages.length === 0 ? (
-        <p>
-          No pages yet. A page starts from an answer: open the paper, ask about a passage, then
-          choose Dive in.
-        </p>
+        <p>No pages yet. A page starts from one of the AI’s answers about this paper.</p>
       ) : (
         <ul>
           {pages.map((p) => (

@@ -11,6 +11,8 @@ import { Fragment } from 'react';
 
 import { dehyphenate, parseMarkdown } from '@/lib/markdown';
 
+import { handlesIn } from '../model/exchange';
+
 import type { AnswerLayout } from '../model/exchange';
 import type { Citation } from '@/lib/api/types';
 import type { Inline } from '@/lib/markdown';
@@ -37,11 +39,9 @@ export interface AnswerProseProps {
  */
 export function paragraphNumbers(text: string, layout: AnswerLayout): number[] {
   const out: number[] = [];
-  for (const m of text.matchAll(/\[(b\d+(?:\s*,\s*b\d+)*)\]/g)) {
-    for (const handle of (m[1] ?? '').split(',')) {
-      const n = layout.numberOf.get(handle.trim());
-      if (n !== undefined && !out.includes(n)) out.push(n);
-    }
+  for (const handle of handlesIn(text)) {
+    const n = layout.numberOf.get(handle);
+    if (n !== undefined && !out.includes(n)) out.push(n);
   }
   return out;
 }

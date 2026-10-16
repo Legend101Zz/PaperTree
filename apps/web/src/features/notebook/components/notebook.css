@@ -21,6 +21,10 @@
     --pt-nb-margin: rgb(240 138 126 / 40%);
     --pt-nb-card-rule: rgb(169 193 236 / 12%);
     --pt-nb-clip: #a39a8e;
+    --pt-nb-binding: rgb(0 0 0 / 35%);
+    --pt-nb-binding-fade: rgb(0 0 0 / 0%);
+    --pt-nb-binding-edge: rgb(255 236 210 / 8%);
+    --pt-nb-stitch: rgb(226 196 142 / 35%);
   }
 }
 
@@ -31,6 +35,10 @@
   --pt-nb-margin: rgb(240 138 126 / 40%);
   --pt-nb-card-rule: rgb(169 193 236 / 12%);
   --pt-nb-clip: #a39a8e;
+  --pt-nb-binding: rgb(0 0 0 / 35%);
+  --pt-nb-binding-fade: rgb(0 0 0 / 0%);
+  --pt-nb-binding-edge: rgb(255 236 210 / 8%);
+  --pt-nb-stitch: rgb(226 196 142 / 35%);
 }
 
 .pt-nb {
@@ -181,6 +189,65 @@
   pointer-events: none;
 }
 
+/* Everything below the exchange box, moved down while the exchange outgrows it (exchangeShift).
+   It covers the page, so it lets pointers through to the items above and takes them for its own. */
+.pt-nb-page__below {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.pt-nb-page__below > :not(.pt-nb-ink) {
+  pointer-events: auto;
+}
+
+.pt-nb-page__title h1:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+/* A conflict: nothing on the page is saved any more. It stays until Reload. */
+.pt-nb-alert {
+  position: fixed;
+  inset-block-start: 56px;
+  inset-inline: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--pt-space-4);
+  padding: 8px 20px;
+  background: var(--pt-page);
+  border-block-end: 2px solid var(--pt-danger);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+  color: var(--pt-danger);
+  font-size: 15px;
+}
+
+/* A dismissed failure, still visible until the save succeeds. */
+.pt-nb-chip {
+  position: fixed;
+  inset-block-end: 12px;
+  inset-inline-start: 16px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: var(--pt-space-2);
+  padding: 4px 4px 4px 12px;
+  background: var(--pt-e2-fill);
+  border: 1px solid var(--pt-danger);
+  border-radius: var(--pt-radius-menu);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+  color: var(--pt-danger);
+  font-size: 14px;
+}
+
+.pt-nb-note__count {
+  margin: 4px 0 0;
+  font: var(--pt-t-num-s) var(--pt-font-you);
+  color: var(--pt-ink-muted);
+}
+
 .pt-nb-exchange {
   display: flex;
   flex-direction: column;
@@ -196,8 +263,9 @@
   max-inline-size: 652px;
 }
 
+/* Open, the slip lifts a little; it needs no z-index, because what is below it moves down
+   (exchangeShift), and a z-index would put its source line over the Collapse button. */
 .pt-nb-exchange__answer[data-open='true'] .pt-ai-slip {
-  z-index: 30;
   box-shadow: var(--pt-e2), var(--pt-e2-edge);
 }
 
@@ -205,7 +273,7 @@
   position: absolute;
   inset-inline-end: 0;
   inset-block-start: -2px;
-  z-index: 1;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   gap: 4px;

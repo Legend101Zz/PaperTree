@@ -113,6 +113,11 @@ export interface PatchItemBody {
   readonly body?: string;
 }
 
+/** Per-request options for a write: `keepalive` lets it outlive a page that is closing. */
+export interface SendInit {
+  readonly keepalive?: boolean;
+}
+
 /** The S5a routes, one function each. */
 export const notebookApi = {
   listPages: (paperId: string) =>
@@ -123,26 +128,40 @@ export const notebookApi = {
       { method: 'POST', body: JSON.stringify(body) },
     ),
   getPage: (pageId: string) => request<NotebookPageView>(`/notebook/pages/${seg(pageId)}`),
-  createItem: (pageId: string, body: CreateItemBody) =>
+  createItem: (pageId: string, body: CreateItemBody, init: SendInit = {}) =>
     request<NotebookItemWire>(`/notebook/pages/${seg(pageId)}/items`, {
+      ...init,
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  patchItem: (pageId: string, itemId: string, body: PatchItemBody) =>
+  patchItem: (pageId: string, itemId: string, body: PatchItemBody, init: SendInit = {}) =>
     request<NotebookItemWire>(`/notebook/pages/${seg(pageId)}/items/${seg(itemId)}`, {
+      ...init,
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
-  deleteItem: (pageId: string, itemId: string) =>
-    request<void>(`/notebook/pages/${seg(pageId)}/items/${seg(itemId)}`, { method: 'DELETE' }),
+  /**
+   * Deletes an item; with `version`, only that version (409 `stale_version` otherwise).
+   *
+   * @param pageId - The page.
+   * @param itemId - The item.
+   * @param version - The version this client last saw; omit for an unconditional delete.
+   * @param init - Per-request options (`keepalive`).
+   * @returns Nothing (204).
+   */
+  deleteItem: (pageId: string, itemId: string, version?: number, init: SendInit = {}) =>
+    request<void>(
+      `/notebook/pages/${seg(pageId)}/items/${seg(itemId)}${version === undefined ? '' : `?version=${String(version)}`}`,
+      { ...init, method: 'DELETE' },
+    ),
 };
 
 /**
- * The react-query keys. Everything sits under `['notebook', paperId]`, so invalidating a paper
- * refreshes its page list and every page of it, and two papers never share an entry.
+ * The react-query keys. Everything sits under `['notebook', paperId]`, so two papers never share
+ * an entry. An open page is loaded once and then edited locally, so refetching it changes nothing
+ * on screen (`useNotebookPage`).
  */
 export const notebookKeys = {
-  paper: (paperId: string) => ['notebook', paperId] as const,
   pages: (paperId: string) => ['notebook', paperId, 'pages'] as const,
   page: (paperId: string, pageId: string) => ['notebook', paperId, 'page', pageId] as const,
 };

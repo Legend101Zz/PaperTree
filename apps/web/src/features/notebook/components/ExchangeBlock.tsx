@@ -103,6 +103,7 @@ export function ExchangeBlock({ body, exchange, onFocusAnchor }: ExchangeBlockPr
         <AiSlip
           model={modelLabel(answer?.run?.model ?? body.ai.model)}
           source="from the paper"
+          headingLevel={2}
           {...(own.length === 0
             ? {}
             : { uncited: own.map((p) => <p key={p.i}>{prose(p.text)}</p>) })}

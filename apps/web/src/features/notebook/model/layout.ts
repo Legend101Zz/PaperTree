@@ -42,6 +42,59 @@ function overlaps(items: readonly Item[], x: number, y: number, w: number, h: nu
   );
 }
 
+/** How far the page below the exchange moves down while the exchange is taller than its box. */
+export interface ExchangeShift {
+  /** Items whose top is at or below this page-unit line (the exchange box's bottom) move. */
+  readonly boundary: number;
+  /** How far they move, in page units; 0 when the exchange fits its box. */
+  readonly extra: number;
+}
+
+/**
+ * The display offset that keeps an expanded exchange from sliding under the cards seeded below it
+ * (frame 05 draws the slip open with the cards after it). Display only: nothing is saved, so
+ * collapsing puts everything back where it is stored.
+ *
+ * @param items - Everything on the page.
+ * @param measured - The exchange's rendered height in page units, or null before it is measured.
+ * @returns The shift, or null for a page without an exchange.
+ */
+export function exchangeShift(
+  items: readonly Item[],
+  measured: number | null,
+): ExchangeShift | null {
+  const exchange = items.find((i) => i.kind === 'exchange');
+  if (exchange === undefined) return null;
+  const extra = measured === null ? 0 : Math.max(0, Math.ceil(measured - exchange.h));
+  return { boundary: exchange.y + exchange.h, extra };
+}
+
+/**
+ * Reading order on the page: top to bottom, then left to right. The DOM and the keyboard follow it.
+ *
+ * @param a - One item.
+ * @param b - Another.
+ * @returns Negative when `a` comes first.
+ */
+export function readingOrder(a: Item, b: Item): number {
+  return a.y - b.y || a.x - b.x;
+}
+
+/**
+ * Where the keyboard goes when an item is removed: the next item in reading order, else the one
+ * before it, else nowhere on the page (null: the caller focuses the page itself).
+ *
+ * @param items - Everything on the page, the removed item included.
+ * @param id - The item being removed.
+ * @returns The id to focus, or null.
+ */
+export function neighbourOf(items: readonly Item[], id: string): string | null {
+  const ordered = [...items].sort(readingOrder);
+  const at = ordered.findIndex((i) => i.id === id);
+  if (at < 0) return null;
+  return ordered[at + 1]?.id ?? ordered[at - 1]?.id ?? null;
+}
+
 /**
  * Where a new `w × h` item goes: the first free grid spot, reading the page top to bottom, left to
  * right. Nothing on the page is ever covered.

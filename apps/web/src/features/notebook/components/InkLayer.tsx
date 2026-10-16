@@ -19,6 +19,11 @@ export interface InkLayerProps {
   /** Page height in page units (the width is always `PAGE_WIDTH`). */
   readonly height: number;
   readonly width: number;
+  /**
+   * Announce the layer as "Your handwriting". Default true; false for a second layer on the same
+   * page, so the ink is announced once. No count: like the panel's "Ink: yours", it says whose.
+   */
+  readonly labelled?: boolean;
 }
 
 /** A token name is letters, digits and dashes; anything else falls back to the pen colour. */
@@ -35,7 +40,7 @@ export function inkColour(token: string): string {
 }
 
 /** All strokes of a page as filled outlines. */
-export function InkLayer({ strokes, height, width }: InkLayerProps): ReactNode {
+export function InkLayer({ strokes, height, width, labelled = true }: InkLayerProps): ReactNode {
   const paths = useMemo(
     () => strokes.map((s) => ({ id: s.id, d: strokeToPath(s), fill: inkColour(s.color) })),
     [strokes],
@@ -47,8 +52,9 @@ export function InkLayer({ strokes, height, width }: InkLayerProps): ReactNode {
       width={width}
       height={height}
       viewBox={`0 0 ${String(width)} ${String(height)}`}
-      role="img"
-      aria-label={`Your handwriting: ${String(paths.length)} ${paths.length === 1 ? 'stroke' : 'strokes'}, not searchable`}
+      {...(labelled
+        ? { role: 'img', 'aria-label': 'Your handwriting (not searchable)' }
+        : { 'aria-hidden': true })}
     >
       {paths.map((p) => (
         <path key={p.id} d={p.d} style={{ fill: p.fill }} />

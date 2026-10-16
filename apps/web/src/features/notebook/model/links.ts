@@ -4,6 +4,8 @@
  * Anchor (`?nb=<page>&item=<item>`), reads that item back, and flashes its stored Anchor
  * (`hooks/useFocusFromNotebook`). Pure.
  */
+import { blockIdOf } from './exchange';
+
 import type { Item } from './page';
 import type { ExchangeBody } from './wire';
 import type { Anchor } from '@papertree/anchoring';
@@ -32,14 +34,10 @@ export function notebookHref(paperId: string, pageId: string): string {
   return `/paper/${encodeURIComponent(paperId)}/notebook/${encodeURIComponent(pageId)}`;
 }
 
-function blockOf(anchor: Anchor): string | null {
-  const s = anchor.selectors.find((x) => x.type === 'BlockSelector');
-  return s?.type === 'BlockSelector' ? s.blockId : null;
-}
-
 /**
- * The item on the page that stores `anchor` (or a passage on the same block): a quote card, or the
- * exchange whose question started on it.
+ * The item on the page that stores `anchor`: a quote card holding that very Anchor, else the quote
+ * card on the same block (by S4a's passage key that is the same passage, so the same number), else
+ * the exchange whose question started on it.
  *
  * @param items - The page's items.
  * @param exchanges - Exchange item id → its stored body.
@@ -51,11 +49,11 @@ export function itemForAnchor(
   exchanges: ReadonlyMap<string, ExchangeBody | null>,
   anchor: Anchor,
 ): string | null {
-  const block = blockOf(anchor);
+  const block = blockIdOf(anchor);
   const quotes = items.flatMap((i) => (i.kind === 'quote' ? [i] : []));
   const same =
     quotes.find((q) => q.anchor.id === anchor.id) ??
-    quotes.find((q) => block !== null && blockOf(q.anchor) === block);
+    quotes.find((q) => block !== null && blockIdOf(q.anchor) === block);
   if (same !== undefined) return same.id;
   for (const [id, body] of exchanges) if (body?.call.originAnchor?.id === anchor.id) return id;
   return null;

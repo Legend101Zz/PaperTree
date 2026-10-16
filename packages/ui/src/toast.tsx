@@ -1,9 +1,9 @@
 /**
  * ui/toast — the Ex Libris toast (v0.2, #189).
  *
- * One message, an optional Undo or other action, a Dismiss. It is a polite live region (it never interrupts a
- * screen reader), dismisses itself after `duration`, and holds still while the pointer or focus is
- * on it. `bottomInset` keeps it clear of whatever sits at the bottom edge: the v0.1 canvas toast
+ * One message, an optional Undo or other action, a Dismiss. It is a polite live region (it never
+ * interrupts a screen reader), dismisses itself after `duration`, and holds still while the pointer
+ * or focus is on it. Losing work is not a toast: say that with a `role="alert"` of its own. `bottomInset` keeps it clear of whatever sits at the bottom edge: the v0.1 canvas toast
  * covered the composer at 390 px (#178), so the caller states the inset instead of hoping.
  */
 

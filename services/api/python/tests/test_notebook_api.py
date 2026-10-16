@@ -346,7 +346,20 @@ def test_page_lifecycle_counts_and_stale_version(tmp_path: Path) -> None:
             _stale(c.patch(item_url, json={"version": 1, "x": 1}, headers=hdr))["current"]["body"]
             == "moved"
         )
-        assert c.delete(item_url, headers=hdr).status_code == 204
+        # A delete at a stale version is refused with the item as it now is (S5c, #208): a tab
+        # that last saw v1 must not remove an edit made at v2. At the current version it goes.
+        stale_delete = c.delete(f"{item_url}?version=1", headers=hdr)
+        assert _stale(stale_delete)["current"]["body"] == "moved"
+        kept = c.get(f"/notebook/pages/{pid}", headers=hdr).json()["items"]
+        assert "ni_sticky0001" in {i["item_id"] for i in kept}
+        for bad in ("0", "-1", "two", ""):
+            assert_envelope(c.delete(f"{item_url}?version={bad}", headers=hdr),
+                            422, "validation_failed")  # fmt: skip
+        assert c.delete(f"{item_url}?version=2", headers=hdr).status_code == 204
+        assert_envelope(c.delete(f"{item_url}?version=2", headers=hdr), 404, "not_found")
+        # Without a version the delete is unconditional, as before.
+        text_url = f"/notebook/pages/{pid}/items/ni_text00001"
+        assert c.delete(text_url, headers=hdr).status_code == 204
         assert_envelope(c.delete(item_url, headers=hdr), 404, "not_found")
 
         # The eraser, then the page itself (cascade).

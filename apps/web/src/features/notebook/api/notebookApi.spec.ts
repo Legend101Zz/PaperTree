@@ -55,7 +55,7 @@ describe('cache keys', () => {
     expect(notebookKeys.page('ppr_A', 'np_1')).toEqual(['notebook', 'ppr_A', 'page', 'np_1']);
     expect(notebookKeys.pages('ppr_A')).toEqual(['notebook', 'ppr_A', 'pages']);
     for (const key of [notebookKeys.page('ppr_A', 'np_1'), notebookKeys.pages('ppr_A')]) {
-      expect(key.slice(0, 2)).toEqual(notebookKeys.paper('ppr_A'));
+      expect(key.slice(0, 2)).toEqual(['notebook', 'ppr_A']);
     }
     expect(notebookKeys.page('ppr_A', 'np_1')).not.toEqual(notebookKeys.page('ppr_B', 'np_1'));
   });
@@ -69,13 +69,13 @@ describe('routes', () => {
     await notebookApi.createItem('np_page0001', { ...ITEM, kind: 'text', anchor: undefined });
     await notebookApi.patchItem('np_page0001', 'ni_item0001', { version: 3, x: 64 });
     fetchMock.mockImplementation(async () => answer(204, undefined));
-    await notebookApi.deleteItem('np_page0001', 'ni_item0001');
+    await notebookApi.deleteItem('np_page0001', 'ni_item0001', 3);
     expect(calls()).toEqual([
       'GET /notebook/pages/np_page0001',
       'GET /papers/ppr_A/notebook/pages',
       'POST /notebook/pages/np_page0001/items',
       'PATCH /notebook/pages/np_page0001/items/ni_item0001',
-      'DELETE /notebook/pages/np_page0001/items/ni_item0001',
+      'DELETE /notebook/pages/np_page0001/items/ni_item0001?version=3',
     ]);
   });
 });
@@ -110,18 +110,54 @@ describe('pushItem and the 409 path', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('treats deleting what is already gone as deleted, and any other failure as failed', async () => {
+  it('reports a delete over a newer edit as a conflict too (the version rides on the DELETE)', async () => {
+    fetchMock.mockImplementation(async () =>
+      answer(409, { detail: 'changed', code: 'stale_version', retryable: false }),
+    );
+    expect(await pushItem('np_page0001', 'ni_item0001', { kind: 'delete', version: 1 })).toEqual({
+      kind: 'conflict',
+    });
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url.endsWith('/items/ni_item0001?version=1')).toBe(true);
+  });
+
+  it('sorts the rest: gone, refused, deleted, failed', async () => {
+    const notFound = answer(404, { detail: 'no', code: 'not_found', retryable: false });
+    fetchMock.mockImplementation(async () => notFound);
+    expect(await pushItem('np_page0001', 'ni_item0001', { kind: 'delete', version: 2 })).toEqual({
+      kind: 'deleted',
+    });
     fetchMock.mockImplementation(async () =>
       answer(404, { detail: 'no', code: 'not_found', retryable: false }),
     );
-    expect(await pushItem('np_page0001', 'ni_item0001', { kind: 'delete' })).toEqual({
-      kind: 'deleted',
+    const patch = { kind: 'patch', body: { version: 2, x: 8 } } as const;
+    expect(await pushItem('np_page0001', 'ni_item0001', patch)).toEqual({ kind: 'gone' });
+    fetchMock.mockImplementation(async () =>
+      answer(422, { detail: 'body: too long', code: 'validation_failed', retryable: false }),
+    );
+    expect(await pushItem('np_page0001', 'ni_item0001', patch)).toEqual({
+      kind: 'rejected',
+      detail: 'body: too long',
     });
     fetchMock.mockImplementation(async () =>
       answer(500, { detail: 'x', code: 'internal', retryable: true }),
     );
-    const failed = await pushItem('np_page0001', 'ni_item0001', { kind: 'delete' });
+    const failed = await pushItem('np_page0001', 'ni_item0001', patch);
     expect(failed.kind).toBe('failed');
     expect(isStaleVersion(failed.kind === 'failed' ? failed.error : null)).toBe(false);
+  });
+
+  it('sends keepalive while the page is being left', async () => {
+    fetchMock.mockImplementation(async () => answer(200, ITEM));
+    await pushItem(
+      'np_page0001',
+      'ni_item0001',
+      { kind: 'patch', body: { version: 1, x: 1 } },
+      {
+        keepalive: true,
+      },
+    );
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.keepalive).toBe(true);
   });
 });

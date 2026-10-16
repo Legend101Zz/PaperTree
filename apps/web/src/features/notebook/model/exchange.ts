@@ -48,7 +48,13 @@ export function handlesIn(text: string): string[] {
   );
 }
 
-function blockIdOf(anchor: Anchor): string | null {
+/**
+ * The block an Anchor names (its BlockSelector), the passage key's basis.
+ *
+ * @param anchor - An Anchor.
+ * @returns The block id, or null when the Anchor has no BlockSelector.
+ */
+export function blockIdOf(anchor: Anchor): string | null {
   const selector = anchor.selectors.find((s) => s.type === 'BlockSelector');
   return selector?.type === 'BlockSelector' ? selector.blockId : null;
 }

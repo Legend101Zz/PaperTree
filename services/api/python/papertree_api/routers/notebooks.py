@@ -8,7 +8,7 @@
     DELETE /notebook/pages/{pid}                                       -> 204
     POST   /notebook/pages/{pid}/items              NotebookItemCreate -> 201 item
     PATCH  /notebook/pages/{pid}/items/{iid}        NotebookItemPatch  -> item | 409 stale_version
-    DELETE /notebook/pages/{pid}/items/{iid}                           -> 204
+    DELETE /notebook/pages/{pid}/items/{iid}[?version=N]               -> 204 | 409 stale_version
     POST   /notebook/pages/{pid}/strokes            [NotebookStrokeIn] -> 201 {added}
     DELETE /notebook/pages/{pid}/strokes/{sid}                         -> 204   (the eraser)
 
@@ -229,10 +229,23 @@ async def patch_item(call: CallerDep, page_id: str, item_id: str, request: Reque
     return JSONResponse(_item_wire(result))
 
 
-@router.delete("/notebook/pages/{page_id}/items/{item_id}", status_code=204)
-async def delete_item(call: CallerDep, page_id: str, item_id: str) -> Response:
-    """Deletes one item."""
-    if call.db.delete_notebook_item(call.db_owner, page_id, item_id) == 0:
+@router.delete(
+    "/notebook/pages/{page_id}/items/{item_id}",
+    status_code=204,
+    responses={409: {"model": NotebookItemStale}},
+)
+async def delete_item(call: CallerDep, page_id: str, item_id: str, request: Request) -> Response:
+    """Deletes one item; with `?version=N` only at that version (409 `stale_version` if not)."""
+    raw = request.query_params.get("version")
+    version: int | None = None
+    if raw is not None:
+        if not raw.isdigit() or int(raw) < 1:
+            raise ApiError("validation_failed", "version: a positive integer")
+        version = int(raw)
+    result = call.db.delete_notebook_item(call.db_owner, page_id, item_id, version)
+    if isinstance(result, NotebookStale):
+        raise _stale("item", _item_wire(result.current))
+    if result == 0:
         raise ApiError("not_found", "no such item on this page")
     return Response(status_code=204)
 

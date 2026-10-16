@@ -3,12 +3,15 @@
 /**
  * A typed note or a sticky on the notebook page (S5c, #208): the person's own words in Courier
  * Prime (`data-voice="you"`). It moves by drag or by arrow keys (8 units; Shift for 24), Enter edits
- * it in place, Delete removes it. A drag moves the element with a CSS translate and commits ONE
- * history command on release, so dragging never re-renders the page (the 16 ms frame budget).
+ * it in place (`NoteEditor`), Delete removes it. A drag moves the element with a CSS translate and
+ * commits ONE history command on release, so dragging never re-renders the page (the 16 ms frame
+ * budget); a cancelled pointer snaps back and records nothing.
  */
 import { YouText } from '@papertree/ui';
 import { X } from 'lucide-react';
 import { useRef } from 'react';
+
+import { NoteEditor } from './NoteEditor';
 
 import type { StickyItem, TextItem } from '../model/page';
 import type { KeyboardEvent, PointerEvent, ReactNode } from 'react';
@@ -19,13 +22,13 @@ export interface NoteItemProps {
   /** Screen px per page unit, to turn a pointer drag into page units. */
   readonly scale: number;
   readonly editing: boolean;
-  /** Start editing in place. */
-  readonly onEdit: () => void;
-  /** Finish editing with this text. */
-  readonly onCommit: (text: string) => void;
-  /** Move by this much, in page units. */
-  readonly onMove: (dx: number, dy: number) => void;
-  readonly onDelete: () => void;
+  /** Start editing this item in place. */
+  readonly onEdit: (id: string) => void;
+  /** Finish editing this item with this text. */
+  readonly onCommit: (id: string, text: string) => void;
+  /** Move this item by this much, in page units. */
+  readonly onMove: (id: string, dx: number, dy: number) => void;
+  readonly onDelete: (id: string) => void;
 }
 
 const ARROWS: Readonly<Record<string, readonly [number, number]>> = {
@@ -63,14 +66,18 @@ export function NoteItem(props: NoteItemProps): ReactNode {
     drag.current = null;
     if (d === null || !d.moved) return;
     if (ref.current !== null) ref.current.style.translate = '';
-    props.onMove(Math.round(d.dx), Math.round(d.dy));
+    props.onMove(item.id, Math.round(d.dx), Math.round(d.dy));
+  };
+  const onPointerCancel = (): void => {
+    drag.current = null;
+    if (ref.current !== null) ref.current.style.translate = '';
   };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
     const arrow = ARROWS[e.key];
     const step = e.shiftKey ? 24 : 8;
-    if (arrow !== undefined) props.onMove(arrow[0] * step, arrow[1] * step);
-    else if (e.key === 'Enter' || e.key === ' ') props.onEdit();
-    else if (e.key === 'Delete' || e.key === 'Backspace') props.onDelete();
+    if (arrow !== undefined) props.onMove(item.id, arrow[0] * step, arrow[1] * step);
+    else if (e.key === 'Enter' || e.key === ' ') props.onEdit(item.id);
+    else if (e.key === 'Delete' || e.key === 'Backspace') props.onDelete(item.id);
     else return;
     e.preventDefault();
   };
@@ -83,20 +90,10 @@ export function NoteItem(props: NoteItemProps): ReactNode {
       style={{ left: item.x, top: item.y, width: item.w, minHeight: item.h, zIndex: item.z + 10 }}
     >
       {editing ? (
-        <textarea
-          className="pt-nb-note__editor"
-          aria-label={item.kind === 'text' ? 'Typed note' : 'Sticky note'}
-          data-voice="you"
-          defaultValue={item.text}
-          // eslint-disable-next-line jsx-a11y/no-autofocus -- the person just asked to type here
-          autoFocus
-          onBlur={(e) => props.onCommit(e.currentTarget.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape' || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) {
-              e.preventDefault();
-              e.currentTarget.blur();
-            }
-          }}
+        <NoteEditor
+          kind={item.kind}
+          initial={item.text}
+          onCommit={(text) => props.onCommit(item.id, text)}
         />
       ) : (
         <div
@@ -109,8 +106,8 @@ export function NoteItem(props: NoteItemProps): ReactNode {
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-          onDoubleClick={props.onEdit}
+          onPointerCancel={onPointerCancel}
+          onDoubleClick={() => props.onEdit(item.id)}
           onKeyDown={onKeyDown}
         >
           <YouText as="div" className="pt-nb-note__text">
@@ -123,7 +120,7 @@ export function NoteItem(props: NoteItemProps): ReactNode {
           type="button"
           className="pt-nb-note__delete"
           aria-label={`Delete ${noun}`}
-          onClick={props.onDelete}
+          onClick={() => props.onDelete(item.id)}
         >
           <X size={14} aria-hidden />
         </button>

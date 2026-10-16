@@ -11,14 +11,13 @@
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef } from 'react';
 
+import { FOCUS_SETTLE_MS } from '@/components/canvas/useFocusFromCanvas';
+
 import { notebookApi } from '../api/notebookApi';
 import { parseExchangeBody } from '../model/wire';
 
 import type { NotebookItemWire } from '../api/notebookApi';
 import type { Anchor } from '@papertree/anchoring';
-
-/** Long enough for the page list to mount and the scroll to settle before the flash starts. */
-const SETTLE_MS = 400;
 
 /**
  * The Anchor a notebook item points at in the paper.
@@ -64,7 +63,7 @@ export function useFocusFromNotebook(
         const item = view.items.find((i) => i.item_id === itemId);
         const anchor = item === undefined ? null : anchorOfItem(item);
         if (cancelled || anchor === null || view.page.paper_id !== paperId) return;
-        timer = setTimeout(() => latest.current(anchor), SETTLE_MS);
+        timer = setTimeout(() => latest.current(anchor), FOCUS_SETTLE_MS);
       },
       () => undefined,
     );

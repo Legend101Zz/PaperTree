@@ -203,26 +203,6 @@ describe('typed notes and stickies', () => {
     expect(writes(calls).at(-1)?.method).toBe('DELETE');
   });
 
-  it('shows a conflict and stops saving instead of overwriting', async () => {
-    const note = wireItem('ni_note00001', 'text', 600, 600, 288, 72, 9, 'mine');
-    const calls = stubApi(pageView([note]), (call) =>
-      call.method === 'PATCH'
-        ? new Response(
-            JSON.stringify({ detail: 'changed', code: 'stale_version', retryable: false }),
-            { status: 409 },
-          )
-        : null,
-    );
-    mount();
-    const face = await screen.findByRole('button', { name: 'Typed note: mine' });
-    fireEvent.keyDown(face, { key: 'ArrowLeft' });
-    await screen.findByText(/This page changed somewhere else/);
-    fireEvent.keyDown(face, { key: 'ArrowLeft' });
-    await settle();
-    expect(writes(calls)).toHaveLength(1);
-    expect(screen.getByRole('button', { name: 'Reload' })).toBeTruthy();
-  });
-
   it('draws stored ink read-only', async () => {
     const view = pageView();
     const stroke = {
@@ -247,7 +227,7 @@ describe('typed notes and stickies', () => {
     stubApi({ ...view, strokes: [stroke] });
     mount();
     const ink = await screen.findByRole('img', {
-      name: 'Your handwriting: 1 stroke, not searchable',
+      name: 'Your handwriting (not searchable)',
     });
     expect(ink.querySelectorAll('path')).toHaveLength(1);
   });

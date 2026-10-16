@@ -44,8 +44,8 @@ describe('saveOp', () => {
     });
   });
 
-  it('deletes what was removed, and does nothing when the two agree', () => {
-    expect(saveOp(SAVED, undefined, '')).toEqual({ kind: 'delete' });
+  it('deletes what was removed at the version it last saw, and does nothing when the two agree', () => {
+    expect(saveOp(SAVED, undefined, '')).toEqual({ kind: 'delete', version: 4 });
     expect(saveOp(undefined, undefined, '')).toBeNull();
     expect(saveOp(SAVED, NOTE, 'Hi')).toBeNull();
   });

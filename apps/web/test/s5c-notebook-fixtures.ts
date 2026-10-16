@@ -251,7 +251,7 @@ export function stubApi(view: NotebookPageView, onWrite?: (call: Call) => Respon
       if (method === 'GET') return json(200, {});
       const answered = onWrite?.(call) ?? null;
       if (answered !== null) return answered;
-      const id = String(body?.['item_id'] ?? path.split('/').at(-1));
+      const id = String(body?.['item_id'] ?? path.split('?')[0]?.split('/').at(-1));
       if (method === 'DELETE') {
         server.delete(id);
         return new Response(null, { status: 204 });
