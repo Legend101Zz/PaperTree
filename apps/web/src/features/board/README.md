@@ -31,7 +31,10 @@ answer out (bottom). A thread is dragged from a brass pin (a dashed navy line); 
 can land on lights; a drop the server would refuse shows its sentence ("That pin does not take
 that thread.") and saves nothing; a good drop opens the kind picker (v0.1's until S6c) and the
 thread is saved with `from_port` / `to_port`. Pins are named buttons; Enter presses one, which is
-xyflow's click-to-connect. The seven threads draw their colour token and the cue `THREAD_LINES`
+xyflow's click-to-connect; Escape or a click on the empty board cancels it. The toolbar's Link takes
+its pins from the table (`resolvePorts`) and refuses a pair no pin can hold. A stored thread with
+no pins is drawn between the pins the table names, or two hidden fallback handles every card and
+frame carries (`edgeHandles`), so no stored thread is ever invisible. The seven threads draw their colour token and the cue `THREAD_LINES`
 (`@papertree/ui`) gives each kind, with a paper tag (glyph and words) beside the line; the legend
 strip uses the same `ThreadSwatch`.
 
@@ -59,7 +62,8 @@ per set of cards.
 - `hooks/useCardSources.ts`: the thread and notebook reads behind the cards, once per id.
 - `model/flow.ts`: wire rows ↔ xyflow nodes and edges, names. `model/cards.ts`: what each card
   shows (pure). `model/clip.ts`: the fade and "more" rule.
-- `components/cards.css`: the cards' stock and type, from `--pt-*` tokens.
+- `components/cards.css`, `threads.css`, `legend.css`: the cards, the pins and threads, the
+  legend, from `--pt-*` tokens.
 
 The reader-side helpers (`components/canvas/sendToCanvas.ts`, `toast.tsx`, `duplicate.ts`,
 `useFocusFromCanvas.ts`) stay where the reader imports them until the Board wording sweep (S6d).
