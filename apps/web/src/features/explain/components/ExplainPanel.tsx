@@ -134,6 +134,7 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
       <header className="pt-explain__header">
         <h2 className="pt-explain__title">
           {inSummary ? 'Summary' : 'Explain'}
+          {inSummary && state.summary.cached ? ' ' : null}
           {inSummary && state.summary.cached ? (
             <span className="pt-explain__badge">cached</span>
           ) : null}

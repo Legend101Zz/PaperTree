@@ -56,5 +56,6 @@ and 390 × 844, light and dark: **0 serious or critical** (20 runs, re-run on th
 10. **04d: no Dive in, no Send to board** (#258: their APIs take a message, not a summary). **No ¶ on the
     summary's tabs and the section names are the anchor's** ("Decoder:", where the frame says "3.1 Encoder and
     Decoder Stacks"): summary citations carry no locator (#257).
-11. **04d: the bullet dot is the AI face's small "•"**, lighter than the frame's disc; the composer reads "Ask a
-    follow-up …" (the frame: "Ask anything about the paper").
+11. **04d: the bullet dot is the AI face's small "•"**, lighter than the frame's disc. **The summary view shows no
+    composer** (the frame draws one, "Ask anything about the paper"): the composer belongs to the thread view;
+    its text is kept in the controller across the switch.

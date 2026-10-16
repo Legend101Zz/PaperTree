@@ -3394,6 +3394,23 @@ span.pt-paper .pt-paper__cite {
   }
 }
 
+/* The highlight Undo toast and the reader's notices stay clear of the explain drawer (centred over the
+   page beside it) and of each other: a notice lifts above a live Undo toast (#204 review 2.1). */
+.pt-notice-holder {
+  display: contents;
+}
+
+@media (min-width: 768px) {
+  html[data-pt-explain='open'] .pt-notice,
+  html[data-pt-explain='open'] .pt-toast {
+    inset-inline-end: calc(var(--pt-explain-width) + 16px);
+  }
+}
+
+html:has(.pt-notice--undo) .pt-toast {
+  inset-block-end: calc(88px + env(safe-area-inset-bottom, 0px));
+}
+
 .pt-explain__badge {
   margin-inline-start: var(--pt-space-3);
   padding: 1px 8px;

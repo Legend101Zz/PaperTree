@@ -42,7 +42,8 @@ function footerFacts(summary: Summary, state: SummaryState): string {
   const made = `made with ${shortModelName(summary.model)}`;
   const day = summaryDay(summary.created_at);
   if (state.cached) return `Cached ${day} · no new tokens used · ${made}`;
-  return [day, formatUsage(state.usage) ?? 'usage not reported', made].join(' · ');
+  // A usage line always ends "(estimate)" (DESIGN §4.8), so the usage goes last.
+  return [day, made, formatUsage(state.usage) ?? 'usage not reported'].join(' · ');
 }
 
 /**

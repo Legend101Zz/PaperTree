@@ -162,7 +162,7 @@ describe('the paper summary', () => {
     expect(document.querySelector('[data-summary-warning]')).toBeNull();
     // A new run spent tokens: its footer gives the usage, never "no new tokens used".
     expect(document.querySelector('[data-summary-footer]')?.textContent).toMatch(
-      /\(estimate\) · made with M3$/,
+      /made with M3 · [\d,]+ tokens · ≈ \$[\d.]+ \(estimate\)$/,
     );
   });
 

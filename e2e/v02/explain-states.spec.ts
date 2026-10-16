@@ -160,11 +160,12 @@ test.describe('#204: streaming, Stop and the daily cap (faux agent)', () => {
     };
     const fresh = await openSummary();
     await expect(fresh.locator('[data-summary-footer]')).toContainText(
-      /\(estimate\) · made with \S+/,
+      /made with \S+ · .*\(estimate\)$/,
     );
     await page.screenshot({ path: shot('v02-states-04-summary-1440.png') });
     await page.reload();
-    await page.getByRole('button', { name: 'Ask AI' }).click();
+    // #203: the header's Explain toggle opens the panel (it replaced the floating "Ask AI").
+    await page.getByRole('button', { name: 'Explain', exact: true }).click();
     const cached = await openSummary();
     await expect(cached.locator('[data-summary-footer]')).toHaveText(
       /^Cached \d{1,2} \w{3} · no new tokens used · made with \S+/,

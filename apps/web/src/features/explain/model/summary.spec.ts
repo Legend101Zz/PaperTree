@@ -64,6 +64,18 @@ describe('the summary as an exchange (frame 04d)', () => {
     ).toBe('Stands on 1 passage on 1 page · 2 bullets · 2 citations');
   });
 
+  it('counts a bullet with no citation under its own label, never also as not verified', () => {
+    const bare: Summary['bullets'][number] = {
+      text: 'An overall claim.',
+      citations: [],
+      supported: false,
+    };
+    const model = buildSummary({ ...SUMMARY, bullets: [...SUMMARY.bullets, bare] }, null);
+    expect(model.readout).toBe(
+      "Stands on 7 passages on 6 pages · 9 bullets · 11 citations · 3 bullets not verified · 1 bullet uncited (the AI's own reading)",
+    );
+  });
+
   it('marks not verified per bullet, and the trace by page with section names', () => {
     const model = buildSummary(SUMMARY, null);
     expect(

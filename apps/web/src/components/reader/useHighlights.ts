@@ -593,18 +593,27 @@ export function useHighlights({ paper, doc, onNotice }: UseHighlightsOptions): U
   // Undo re-creates the row the delete removed (the API deletes for real, and an id is free again
   // once its row is gone), from what the page still holds: the same id, colour, note and stored
   // Anchors, so it paints from the same quads. A failed restore stays on the page "not saved" with
-  // Retry, like any create (#177).
+  // Retry, like any create (#177). The server gives the row a new `created_at`, so it keeps its id,
+  // colour, note and Anchors but moves to the end of the creation order.
   const restore = useCallback(async () => {
     const gone = removed;
     if (gone === null) return;
     setRemoved(null);
-    const local = paperId === null || gone.status === 'session' || generation === null;
+    const local = paperId === null || gone.status === 'session';
+    // Unreachable today (a parse with no generation lists no highlights), but never painted back
+    // as saved when nothing could be sent.
+    const stuck: Partial<ReaderHighlight> = {
+      status: 'unsaved',
+      error: "Couldn't put this highlight back: this parse has no generation number.",
+      retryable: false,
+    };
+    const back = local ? {} : generation === null ? stuck : { status: 'saving' as const };
     setHighlights((current) =>
       current.some((h) => h.highlightId === gone.highlightId)
         ? current
-        : [...current, { ...gone, status: local ? gone.status : 'saving' }],
+        : [...current, { ...gone, ...back }],
     );
-    if (local) return;
+    if (local || generation === null) return;
     pendingBodies.current.set(gone.highlightId, {
       highlight_id: gone.highlightId,
       color: gone.color,

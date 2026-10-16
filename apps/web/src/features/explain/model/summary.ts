@@ -135,12 +135,16 @@ export function buildSummary(summary: Summary, thread: PassageNumbers | null): S
     .sort((a, b) => a.marker.page - b.marker.page || a.marker.n - b.marker.n)
     .map((use) => traceRow(use));
   const pages = new Set(trace.map((row) => row.page)).size;
-  const unsupported = summary.bullets.filter((b) => !b.supported).length;
+  // A bullet with no citation is counted under its own label, never also as "not verified" (the
+  // server marks it unsupported, but there is no tab to verify).
+  const uncited = bullets.filter((b) => !b.paragraph.cited).length;
+  const unsupported = bullets.filter((b) => b.paragraph.cited && !b.supported).length;
   const readout = [
     `Stands on ${plural(trace.length, 'passage')} on ${plural(pages, 'page')}`,
     plural(summary.bullets.length, 'bullet'),
     plural(citations, 'citation'),
     ...(unsupported > 0 ? [`${plural(unsupported, 'bullet')} not verified`] : []),
+    ...(uncited > 0 ? [`${plural(uncited, 'bullet')} uncited (the AI's own reading)`] : []),
   ].join(' · ');
   return { bullets, handleNumbers, trace, readout };
 }

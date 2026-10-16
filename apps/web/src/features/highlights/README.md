@@ -11,6 +11,13 @@ its anchors and their cache entries cascade). The hook keeps the deleted highlig
 held: the same `highlight_id`, colour, note and stored Anchors (so it paints from the same quads), with the
 current parse's resolutions. A failed restore stays on the page "not saved" with Retry, like any create. A
 delete of a highlight whose create is still in flight offers no Undo (it is deleted when the create answers).
+The server gives a restored row a new `created_at`, so it keeps its id, colour, note and Anchors but moves to the
+end of the creation order. Only the last delete can be undone.
+
+Focus moves to Undo when the toast appears (the card that held Delete is gone), which also holds the toast
+until the reader acts or moves on; when it goes, focus returns to where it was, else to the paper's pages. The
+toast sits above the explain sheet on a phone (`bottomInset`, measured) and beside the drawer on a wide screen,
+and a reader notice shown at the same time lifts above it (CSS in `packages/ui`).
 
 ## Key files
 

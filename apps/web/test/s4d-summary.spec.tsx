@@ -9,6 +9,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import raw from './fixtures/attention-summary.json';
+import { GOLDEN } from './fixtures/attention-thread';
 import { focusAnchor, Harness, stubDesktop } from './s6-harness';
 import { installFetch, jsonResponse, PAPER } from './s6-support';
 
@@ -31,12 +32,58 @@ async function openSummary(): Promise<HTMLElement> {
       jsonResponse(200, { state: raw.state, summary: raw.summary }),
   });
   render(<Harness />);
-  fireEvent.click(screen.getByRole('button', { name: 'Ask AI' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Explain' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Summarize paper' }));
   await waitFor(() => expect(document.querySelectorAll('[data-summary-bullet]')).toHaveLength(8));
   expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
   return document.querySelector('[data-summary-exchange]') as HTMLElement;
 }
+
+describe('the summary shares the open thread’s passage numbers (review 2.3)', () => {
+  it('golden thread open → Summarize: the Abstract is passage 1, the first new passage is 5', async () => {
+    installFetch({
+      [`GET /papers/${PAPER}/threads`]: () => jsonResponse(200, [GOLDEN.thread]),
+      [`GET /papers/${PAPER}/threads/${GOLDEN.thread.thread_id}`]: () => jsonResponse(200, GOLDEN),
+      [`GET /papers/${PAPER}/summary`]: () =>
+        jsonResponse(200, { state: raw.state, summary: raw.summary }),
+    });
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Explain' }));
+    await waitFor(() => expect(screen.getAllByText(/central proposal/).length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole('button', { name: 'Summarize paper' }));
+    await waitFor(() => expect(document.querySelectorAll('[data-summary-bullet]')).toHaveLength(8));
+    const labels = Array.from(
+      document.querySelectorAll('[data-summary-bullet] [data-citation-id] button'),
+      (m) => m.getAttribute('aria-label'),
+    );
+    // The thread numbered b1 (the Abstract) 1 and its passages up to 4; the summary's new ones follow.
+    expect(labels.slice(0, 3)).toEqual(['Passage 1, p. 1', 'Passage 1, p. 1', 'Passage 5, p. 2']);
+  });
+});
+
+describe('Retry after a failed "Summarise again" (review 2.2)', () => {
+  it('asks for a new run again, never the cached copy', async () => {
+    let posts = 0;
+    const { calls } = installFetch({
+      [`GET /papers/${PAPER}/threads`]: () => jsonResponse(200, []),
+      [`GET /papers/${PAPER}/summary`]: () =>
+        jsonResponse(200, { state: raw.state, summary: raw.summary }),
+      [`POST /papers/${PAPER}/summary`]: () => {
+        posts += 1;
+        return jsonResponse(503, { detail: 'x', code: 'agent_unavailable', retryable: true });
+      },
+    });
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Explain' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Summarize paper' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Summarise again' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(posts).toBe(2));
+    const bodies = calls.filter((c) => c.method === 'POST').map((c) => c.body);
+    expect(bodies).toEqual([{ regenerate: true }, { regenerate: true }]);
+    expect(document.querySelector('[data-summary-exchange]')).toBeNull();
+  });
+});
 
 describe('the summary as an exchange (04d)', () => {
   it('your slip, the AI’s bullets, the paper’s words: three voices apart', async () => {
@@ -53,7 +100,7 @@ describe('the summary as an exchange (04d)', () => {
     const paper = exchange.querySelectorAll('.pt-trace-list [data-voice="paper"]');
     expect(paper).toHaveLength(7);
     expect(ai.contains(paper[0] as Node)).toBe(false);
-    expect(document.querySelector('.pt-explain__title')?.textContent).toBe('Summarycached');
+    expect(document.querySelector('.pt-explain__title')?.textContent).toBe('Summary cached');
   });
 
   it('numbered markers with "not verified" where the check failed, and the flash says which', async () => {

@@ -112,7 +112,8 @@ export function ThreadView({ controller, threads, initial, onShow }: ThreadViewP
         ) : state.view === 'summary' ? (
           <SummaryView
             state={state.summary}
-            onRetry={() => controller.summarize()}
+            // A failed "Summarise again" retries the new run, never the cached copy (review 2.2).
+            onRetry={() => controller.summarize({ regenerate: state.summary.regenerate })}
             onStop={controller.stopSummary}
           />
         ) : (

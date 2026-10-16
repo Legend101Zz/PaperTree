@@ -64,6 +64,8 @@ export interface SummaryView {
   readonly usage: RunSummary | null;
   /** Shown from the stored derivation, so no tokens were spent on it now (#204's footer). */
   readonly cached: boolean;
+  /** The last request skipped the cache ("Summarise again"): its Retry asks for a new run again. */
+  readonly regenerate: boolean;
 }
 
 export type PanelView = 'thread' | 'summary';
@@ -97,6 +99,7 @@ const IDLE_SUMMARY: SummaryView = {
   failure: null,
   usage: null,
   cached: false,
+  regenerate: false,
 };
 
 const INITIAL: ExplainState = {
@@ -652,7 +655,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       };
       const controller = new AbortController();
       summaryAbort.current = controller;
-      set({ phase: 'loading', failure: null, label: null, usage: null, cached: false });
+      set({ phase: 'loading', failure: null, label: null, usage: null, cached: false, regenerate });
 
       const finish = async (): Promise<void> => {
         const status = await summaryApi.get(paperId);

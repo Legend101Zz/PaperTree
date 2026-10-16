@@ -78,7 +78,14 @@ derived on read from the parse, never stored).
   bullets not verified" and the trace by page. A passage the open thread cited keeps its number: summary
   citations carry no locator (#257), so `buildSummary` keys them as the server keys passages
   (`g{generation}:{block id}`). A citation is one bullet citing one passage (the frame's 10 merged two blocks of
-  p. 10). Dive in and Send to board wait for APIs that take a summary (#258).
+  p. 10). A bullet with no citation counts as "uncited (the AI's own reading)", never also as "not verified". A
+  new run's footer puts its usage last, so the line ends "(estimate)"; Retry after a failed "Summarise again"
+  asks for a new run again (`SummaryView.regenerate`). Dive in and Send to board wait for APIs that take a
+  summary (#258).
+- **Shared numbers go one way.** The summary takes the open thread's numbers and numbers its new passages after
+  the thread's highest; a later follow-up that cites one of those is numbered by the thread's own order, and if
+  a thread answer streams while the summary is shown, the summary's new numbers can shift as its citations land.
+  Numbers are computed per view, never stored.
 - `buildExchanges` pairs asks and answers and builds each answer's paragraphs (the server's
   `answer_paragraphs` rule), markers, trace rows ("where · cited n×", the paper's words, "not verified" when
   `supported === false`) and coverage.

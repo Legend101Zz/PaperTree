@@ -91,7 +91,12 @@ function mount(): () => UseHighlights {
     useEffect(() => {
       latest = api;
     });
-    return <HighlightUndoToast highlights={api} />;
+    return (
+      <>
+        <button type="button">Where focus was</button>
+        <HighlightUndoToast highlights={api} />
+      </>
+    );
   }
   render(<Harness />);
   return () => {
@@ -134,6 +139,17 @@ describe('highlight delete with Undo (#177)', () => {
     expect(back?.anchors[0]?.anchor.selectors).toEqual(ANCHOR.selectors);
     expect(hook().removed).toBeNull();
     expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+  });
+
+  it('focus moves to Undo when the toast appears, and goes back when it leaves (review 2.1)', async () => {
+    const hook = mount();
+    await waitFor(() => expect(hook().highlights).toHaveLength(1));
+    const was = screen.getByRole('button', { name: 'Where focus was' });
+    was.focus();
+    await deleteIt(hook);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Undo' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(document.activeElement).toBe(was);
   });
 
   it('Dismiss lets it go: nothing is sent again', async () => {
