@@ -152,10 +152,15 @@ export interface Citation {
 /** How much of an assistant answer is cited (#201). */
 export interface MessageCoverage {
   passages: number;
+  /** Marker handle occurrences that have a stored citation (`[b1, b8]` counts 2). */
   citations: number;
+  /** Occurrences whose handle has no stored citation; never counted in `citations`. */
+  unresolved_markers: number;
   paragraphs: number;
-  /** 0-based indexes of paragraphs with no marker. */
+  /** 0-based indexes into the list `exchanges.answer_paragraphs` builds (blank-line split, bare
+   * Markdown heading lines dropped) of the paragraphs with no marker. */
   uncited_paragraphs: number[];
+  /** Stored citations with `supported === false`; an unchecked one (null) is not counted. */
   not_verified: number;
 }
 

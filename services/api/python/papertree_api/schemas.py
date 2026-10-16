@@ -594,12 +594,17 @@ class MessageCoverage(Wire):
 
     #: Distinct cited passages among the message's citations.
     passages: NonNegative
-    #: Marker handle occurrences in the text (`[b1, b8]` counts 2).
+    #: Marker handle occurrences in the text that have a stored citation (`[b1, b8]` counts 2).
     citations: NonNegative
+    #: Occurrences whose handle has no stored citation (a handle the run dropped): never counted
+    #: in `citations`.
+    unresolved_markers: NonNegative
     paragraphs: NonNegative
-    #: 0-based indexes of the paragraphs that carry no marker.
+    #: 0-based indexes, into exactly the list `exchanges.answer_paragraphs` returns (split on
+    #: blank lines, bare Markdown heading lines dropped), of the paragraphs with no marker.
     uncited_paragraphs: list[NonNegative]
-    #: Citations whose `supported` is false ("not verified", never "wrong").
+    #: Stored citations whose `supported` is false ("not verified", never "wrong"); an
+    #: unchecked one (`supported: null`) is not counted.
     not_verified: NonNegative
 
 
@@ -646,7 +651,9 @@ class Thread(Wire):
     message_count: NonNegative
     #: The first user message, cut to 160 characters on a word boundary ("" if none yet).
     ask: str
-    #: Status of the thread's last assistant message; null when there is none.
+    #: Stored status of the thread's last assistant message; null when there is none. A run that
+    #: died but has not expired still reads `streaming` here, where the thread detail already says
+    #: `partial` or `error`.
     last_status: MessageStatus | None
 
 

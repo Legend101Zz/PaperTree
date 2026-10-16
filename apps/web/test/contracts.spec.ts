@@ -229,12 +229,13 @@ const LOCATOR: PassageLocator = {
   passage_key: 'g1:blk_qbvf5imegh7s3l5q',
   page_index: 1,
   para_index: 2,
-  section_heading: '1 Introduction',
+  section_heading: 'Introduction',
 };
 
 const COVERAGE: MessageCoverage = {
   passages: 1,
   citations: 1,
+  unresolved_markers: 0,
   paragraphs: 1,
   uncited_paragraphs: [],
   not_verified: 0,

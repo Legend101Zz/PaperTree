@@ -49,6 +49,7 @@ from ..deps import (
 )
 from ..errors import ApiError, ErrorEnvelope
 from ..exchanges import ask_excerpt, message_coverage
+from ..logging import log_event
 from ..schemas import (
     AgentHistory,
     AgentPaper,
@@ -463,6 +464,40 @@ def _run_is_live(run: dict[str, Any] | None) -> bool:
     )
 
 
+def _citation_wire(c: dict[str, Any], locators: evidence.PassageLocators | None) -> dict[str, Any]:
+    """One stored citation as the wire shape, with its derived ``locator`` when one can be had."""
+    item: dict[str, Any] = {
+        "citation_id": c["citation_id"],
+        "ordinal": c["ordinal"],
+        "marker": c["marker"],
+        "page_index": c["page_index"],
+        "anchor": c["anchor"],
+        "supported": c["supported"],
+    }
+    locator = locators.locate(c["anchor"]) if locators is not None else None
+    if locator is not None:
+        item["locator"] = locator
+    return item
+
+
+def _coverage_of(row: dict[str, Any], cited: list[dict[str, Any]]) -> dict[str, Any]:
+    """``MessageCoverage`` of an assistant row. A citation without a locator (its parse could not
+    be loaded) still has a passage key, built from its Anchor the way the locator builds it."""
+    keys = [
+        (
+            c["marker"],
+            c["locator"]["passage_key"]
+            if "locator" in c
+            else evidence.passage_key(
+                int(row["generation"]), evidence.anchor_block_id(c["anchor"]) or str(c["marker"])
+            ),
+            c["supported"],
+        )
+        for c in cited
+    ]
+    return message_coverage(row["content"], keys)
+
+
 def message_wire(
     row: dict[str, Any],
     run: dict[str, Any] | None,
@@ -480,20 +515,7 @@ def message_wire(
         status = "partial" if row["content"] else "error"
         error_code = "agent_unavailable"
     failed = status in ("error", "partial", "aborted")
-    cited: list[dict[str, Any]] = []
-    for c in citations:
-        item: dict[str, Any] = {
-            "citation_id": c["citation_id"],
-            "ordinal": c["ordinal"],
-            "marker": c["marker"],
-            "page_index": c["page_index"],
-            "anchor": c["anchor"],
-            "supported": c["supported"],
-        }
-        locator = locators.locate(c["anchor"]) if locators is not None else None
-        if locator is not None:
-            item["locator"] = locator
-        cited.append(item)
+    cited = [_citation_wire(c, locators) for c in citations]
     wire: dict[str, Any] = {
         "message_id": row["message_id"],
         "thread_id": row["thread_id"],
@@ -509,21 +531,7 @@ def message_wire(
         "completed_at": wire_time(row["completed_at"]) if row["completed_at"] else None,
     }
     if row["role"] == "assistant" and status in ("complete", "partial"):
-        wire["coverage"] = message_coverage(
-            row["content"],
-            [
-                (
-                    c["locator"]["passage_key"]
-                    if "locator" in c
-                    else evidence.passage_key(
-                        int(row["generation"]),
-                        evidence.anchor_block_id(c["anchor"]) or str(c["marker"]),
-                    ),
-                    c["supported"],
-                )
-                for c in cited
-            ],
-        )
+        wire["coverage"] = _coverage_of(row, cited)
     return wire
 
 
@@ -541,9 +549,15 @@ def _locators(
         index = evidence.load_index(
             cache, call.db, call.db_owner, call.user_id, paper_id, generation
         )
-    except KeyError:
+        return evidence.PassageLocators(index)
+    except Exception as error:  # a missing or unreadable parse must not fail the thread read
+        log_event(
+            "thread.locators_unavailable",
+            level="warning",
+            paper_id=paper_id,
+            error_type=type(error).__name__,
+        )
         return None
-    return evidence.PassageLocators(index)
 
 
 @router.get("/papers/{paper_id}/threads", response_model=list[Thread], responses=ERRORS)

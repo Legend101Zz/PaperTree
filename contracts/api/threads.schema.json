@@ -420,6 +420,10 @@
           "minimum": 0,
           "type": "integer"
         },
+        "unresolved_markers": {
+          "minimum": 0,
+          "type": "integer"
+        },
         "paragraphs": {
           "minimum": 0,
           "type": "integer"
@@ -436,7 +440,14 @@
           "type": "integer"
         }
       },
-      "required": ["passages", "citations", "paragraphs", "uncited_paragraphs", "not_verified"],
+      "required": [
+        "passages",
+        "citations",
+        "unresolved_markers",
+        "paragraphs",
+        "uncited_paragraphs",
+        "not_verified"
+      ],
       "title": "MessageCoverage",
       "type": "object"
     },
