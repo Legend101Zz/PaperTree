@@ -17,8 +17,14 @@ its authors popover open, and the frame's second state ("2 need a look" applied)
 | `01d-table-1440-{light,dark}.png`, `01d-table-1440-light-full.png` | the Table tab, sorted by topic then title |
 | `01d-lit-row-1440-light.png` | a hovered row (navy rule, arrow and "…") with "Authors · full" open |
 | `01d-need-a-look-1440-{light,dark}.png` | "2 need a look" from the title: All and the pressed chip, the sentence, two rows |
-| `01d-table-390-{light,dark}.png`, `01d-need-a-look-390-light.png` | phone: the table scrolls sideways in its own region |
+| `01d-table-390-{light,dark}.png`, `01d-need-a-look-390-light.png` | phone: the table scrolls sideways in its own region, the Title about 58% of the screen |
+| `01d-focused-row-scrolled-390-{light,dark}.png` | phone: a focused (and a hovered) row with the table scrolled 300 px: the pinned title stays opaque |
+| `01d-last-row-menu-390-light.png` | phone: the last row's "…" menu, placed on the screen and opened upward (the table scrolled to its end) |
+| `01d-filter-390-light.png`, `01d-filter-320-light.png` | phone: the Filter panel opens rightward, inside the screen |
 | `compare-01d-light.png`, `compare-01d-need-a-look-light.png` | frame beside build |
+
+The 1440 shots and the comparisons are from before the review: nothing they show changed. The phone shots were
+taken again after it, from a fresh copy of the data on the SSD, the account seeded the same way.
 
 axe (wcag2a/aa, 21a/aa, 22aa, every rule including colour contrast) on the whole page: the Table and "need a
 look" applied at 1440 and 390, and at 1440 also with an authors popover open and with a row's "…" menu open, light
@@ -27,8 +33,16 @@ and 1440: only the table's own region scrolls sideways on a phone. The first 390
 the screen-reader-only text in the cells is absolutely placed and escaped the scrolling region; the region is now
 positioned (`table.css`).
 
-The e2e `e2e/v02/library-table.spec.ts` was run once against these servers with a scratch Playwright config
-(no `pnpm e2e`, no servers of its own): 1 passed.
+After the review (`shots2.mjs` in the scratch folder): axe, every rule, on the whole page at 1440 and 390, light
+and dark, on the Table, with the authors popover (1440), the last row's "…" menu, the Filter and Columns open, and
+"need a look" applied: **0 violations in 22 runs**. Measured: the phone Title column is 226 px at 390 (it was
+138) and 186 at 320; the pinned title on a focused row is opaque (`color(srgb 0.905 0.884 0.843)` light); the last
+row's menu is `position: fixed` at 589–735 of an 844 px screen, over its button; Tab six times from an open menu
+leaves no menu in the page; the Filter panel spans 16–374 px at 390 and 16–304 at 320; no page scrolls sideways
+at 320, 390 or 1440.
+
+The e2e `e2e/v02/library-table.spec.ts` (now two papers with known years, so the Year order shows its reversal)
+was run against these servers with a scratch Playwright config (no `pnpm e2e`, no servers of its own): 1 passed.
 
 ## Performance at 400 rows (no virtualisation, ADR-004)
 
@@ -47,15 +61,19 @@ average 6–12 during the runs.
 | scrolling the whole table, 40 px a frame (588 frames, 23,492 px) | median 16.7 ms, p95 17.8–18.2, max 18.1–22.2; **0 frames over 33 ms** |
 
 Scrolling holds 60 fps. Opening, sorting and "All" are one-off costs over a frame (every row mounts or moves); a
-keystroke is around a frame, with a 50 ms worst case.
+keystroke is around a frame, with a 50 ms worst case. Not measured again after the review, whose changes only
+take work away: one `Intl.Collator` for every compare (the review measured 6.9 ms against 0.19 ms per 400-row
+sort in node), and a poll re-draws only the rows whose paper changed (it re-drew all of them).
 
 ## Deliberate deviations
 
 - **"N need a look" opens the Table filtered** (the owner's default for this slice); before, it filtered the
   shelf. It stays a toggle: pressed while the Table shows those papers; pressing it again shows All.
-- **The chips count the whole library**, not the search or the Filter's result, so the five states add up to
-  All as in the frame (24 = 3 + 10 + 9 + 2). A queued paper is "Queued · Readable in Source mode now" and, like
-  one being read, counts only under "need a look".
+- **The chips count what the search and the Filter leave**, so a chip's number is the rows it shows ("Not
+  started 1" under the search "atten" shows one row). The states still add up to All, as in the frame (24 = 3 +
+  10 + 9 + 2): they partition any set of papers, and with no search or filter both readings print the frame's
+  numbers. The title's "N need a look" counts the whole library. A queued paper is "Queued · Readable in Source
+  mode now" and, like one being read, counts only under "need a look".
 - **In the "need a look" state the Filter button and the sort caption stay** (the frame's second state draws
   only the chips and the sentence); they still apply.
 - **The sentence** names the papers by their short title ("garbage could not be read."); the frame's "could not
@@ -67,7 +85,8 @@ keystroke is around a frame, with a 50 ms worst case.
   keyboard row has one stop for it, not two. The "…" menu has Open too.
 - **Remove's confirmation** is the catalogue card's, in a row of its own under the paper; it now takes focus on
   "Keep it" when it appears, in the card as well (the button that opened it disappears, and focus used to fall to
-  the page and be put back on the spine).
+  the page and be put back on the spine). "Keep it" returns focus to what opened it: the card's Delete, the row's
+  title.
 - **Authors with three or more names** are a dotted-underlined button (the popover's affordance); the frame draws
   them as plain text.
 - **"—" in a cell** is read as "unknown", "none" or "never" by a screen reader; the brief's "never" for Last
@@ -83,4 +102,5 @@ keystroke is around a frame, with a 50 ms worst case.
 - The title row's "2 need a look" has no chevron (S2d's alert); the frame draws one, as if it opened a menu.
 - No highlights in the account, so the Highlights column shows no number (Attention shows 3 in the frame).
 - Phone (no frame for the Table at 390): the table keeps its columns and scrolls sideways in its own region, with
-  the titles held at the left; chips, Filter and Columns wrap above it, all 44 px.
+  the titles (about 58% of the screen, up to three lines) held at the left; chips, Filter and Columns wrap above
+  it, all 44 px.
