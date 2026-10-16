@@ -12,9 +12,9 @@ import Link from 'next/link';
 import { TOUCH_TARGET } from '@/components/library/primitives';
 import { ThemeSwitch, useTheme } from '@/features/settings';
 
-import { usePopover } from '../hooks/usePopover';
 import { useTouchTargets } from '../hooks/useTouchTargets';
 import { AddPapers } from './AddPapers';
+import { PopoverMenu } from './PopoverMenu';
 import { SearchField, type SearchFieldProps } from './SearchField';
 
 import type { ReactNode, RefObject } from 'react';
@@ -33,32 +33,15 @@ interface HeaderMenuProps {
 
 /** A header button that opens a small panel under it. */
 function HeaderMenu({ label, face, round = false, touch, children }: HeaderMenuProps): ReactNode {
-  const { open, toggle, wrapper, button, panelId } = usePopover();
+  const classes = [
+    'pt-hmenu__button',
+    round ? 'pt-hmenu__button--round' : '',
+    touch ? TOUCH_TARGET : '',
+  ];
   return (
-    <div ref={wrapper} className="pt-hmenu">
-      <button
-        ref={button}
-        type="button"
-        className={[
-          'pt-hmenu__button',
-          round ? 'pt-hmenu__button--round' : '',
-          touch ? TOUCH_TARGET : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-        aria-label={label}
-        aria-expanded={open}
-        aria-controls={open ? panelId : undefined}
-        onClick={toggle}
-      >
-        <span aria-hidden="true">{face}</span>
-      </button>
-      {open ? (
-        <div id={panelId} className="pt-hmenu__panel" role="group" aria-label={label}>
-          {children}
-        </div>
-      ) : null}
-    </div>
+    <PopoverMenu label={label} face={face} buttonClassName={classes.filter(Boolean).join(' ')}>
+      {children}
+    </PopoverMenu>
   );
 }
 

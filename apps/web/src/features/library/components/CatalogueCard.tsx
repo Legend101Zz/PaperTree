@@ -8,7 +8,7 @@
 'use client';
 
 import { Button } from '@papertree/ui';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 
 import { ProgressMeter, TOUCH_TARGET } from '@/components/library/primitives';
 
@@ -33,15 +33,26 @@ export interface CatalogueCardProps {
   readonly onClose?: () => void;
 }
 
-type ActionsProps = Pick<CatalogueCardProps, 'book' | 'onRetry' | 'onDelete'>;
+type ActionsProps = Pick<CatalogueCardProps, 'book' | 'onRetry' | 'onDelete'> & {
+  /** The card, to find Delete again after Keep it. */
+  readonly card: RefObject<HTMLElement>;
+};
 
 /** Retry (failed papers only) and Delete with its inline confirmation; failures as sentences. */
-function CardActions({ book, onRetry, onDelete }: ActionsProps): ReactNode {
+function CardActions({ book, onRetry, onDelete, card }: ActionsProps): ReactNode {
   const { confirming, setConfirming, busy, error, retry, remove } = useBookActions(
     book.id,
     onRetry,
     onDelete,
   );
+  // Keep it takes the confirmation (and the focused button) away: focus goes back to Delete, the
+  // button that opened it, once Delete is drawn again. `Button` does not forward refs.
+  const kept = useRef(false);
+  useEffect(() => {
+    if (confirming || !kept.current) return;
+    kept.current = false;
+    card.current?.querySelector<HTMLElement>('[data-card-delete]')?.focus({ preventScroll: true });
+  }, [confirming, card]);
   return (
     <>
       {book.processing === 'failed' ? (
@@ -54,7 +65,10 @@ function CardActions({ book, onRetry, onDelete }: ActionsProps): ReactNode {
           title={book.title}
           busy={busy}
           onConfirm={remove}
-          onKeep={() => setConfirming(false)}
+          onKeep={() => {
+            kept.current = true;
+            setConfirming(false);
+          }}
         />
       ) : (
         <Button
@@ -62,6 +76,7 @@ function CardActions({ book, onRetry, onDelete }: ActionsProps): ReactNode {
           size="touch"
           className={TOUCH_TARGET}
           aria-label={`Delete ${book.title}`}
+          data-card-delete=""
           onClick={() => setConfirming(true)}
         >
           Delete
@@ -155,7 +170,7 @@ export function CatalogueCard({
         >
           Read<span className="pt-sr-only">{` ${book.title}`}</span>
         </Button>
-        <CardActions book={book} onRetry={onRetry} onDelete={onDelete} />
+        <CardActions book={book} onRetry={onRetry} onDelete={onDelete} card={card} />
       </div>
       {placement === null ? null : (
         <span

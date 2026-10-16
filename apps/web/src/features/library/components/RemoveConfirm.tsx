@@ -1,7 +1,8 @@
 /**
  * RemoveConfirm: the inline confirmation before a paper is deleted (#195), shared by the catalogue
  * card and a Table row (#197). Danger is red ink, never a red fill; "Keep it" takes focus when it
- * appears, so the button that opened it vanishing never drops focus to the page.
+ * appears, so the button that opened it vanishing never drops focus to the page. Keep it removes
+ * this group, so `onKeep` puts focus back where the confirmation came from.
  */
 'use client';
 
@@ -18,6 +19,7 @@ export interface RemoveConfirmProps {
   readonly title: string;
   readonly busy: boolean;
   readonly onConfirm: () => void;
+  /** Close the confirmation and focus what opened it (the card's Delete, the row's title). */
   readonly onKeep: () => void;
 }
 

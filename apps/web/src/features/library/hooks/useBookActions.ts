@@ -1,11 +1,12 @@
 /**
  * useBookActions: Retry and Remove for one book, shared by the catalogue card (#195) and a Table
- * row (#197): the inline confirmation's state, a busy flag while a request runs, and a failure
- * said as a sentence (never a raw error).
+ * row (#197): the inline confirmation's state, a busy flag while a request runs (a second press
+ * meanwhile does nothing, so a double click sends one request), and a failure said as a sentence
+ * (never a raw error).
  */
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { describeError } from '@/components/ui/errors';
 
@@ -36,7 +37,11 @@ export function useBookActions(
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A ref, not `busy`: two clicks in one frame both see the state from before the first.
+  const inFlight = useRef(false);
   const run = useCallback(async (action: () => Promise<unknown>, fallback: string) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -45,6 +50,7 @@ export function useBookActions(
     } catch (caught) {
       setError(describeError(caught, fallback));
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }, []);

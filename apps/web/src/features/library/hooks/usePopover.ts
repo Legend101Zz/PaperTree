@@ -1,7 +1,8 @@
 /**
  * usePopover: the library's disclosure popovers (#195, #197): the header's Aa and account menus,
  * the Table's Columns and Filter menus, a row's "…" menu and its authors. A button with
- * `aria-expanded` opens a panel under it; Esc (focus back on the button) or a press outside closes it.
+ * `aria-expanded` opens a panel under it; Esc (focus back on the button), a press outside or focus
+ * leaving it (Tab past the panel) closes it, so a panel never stays open behind other content.
  */
 'use client';
 
@@ -44,8 +45,17 @@ export function usePopover(): Popover {
   useEffect(() => {
     const node = wrapper.current;
     if (!open || node === null) return undefined;
+    // A press on the panel's own background moves focus to the page (relatedTarget null): that is
+    // still inside. Kept until the next press, because a touch moves focus only after it ends.
+    let pressedInside = false;
     const outside = (event: PointerEvent): void => {
-      if (!node.contains(event.target as Node)) setOpen(false);
+      pressedInside = node.contains(event.target as Node);
+      if (!pressedInside) setOpen(false);
+    };
+    const focusLeft = (event: FocusEvent): void => {
+      const next = event.relatedTarget as Node | null;
+      if (next === null ? pressedInside : node.contains(next)) return;
+      setOpen(false);
     };
     // Esc from the button or anything in the panel; stopped here so it never also puts a book back.
     const escape = (event: KeyboardEvent): void => {
@@ -55,9 +65,11 @@ export function usePopover(): Popover {
     };
     document.addEventListener('pointerdown', outside);
     node.addEventListener('keydown', escape);
+    node.addEventListener('focusout', focusLeft);
     return () => {
       document.removeEventListener('pointerdown', outside);
       node.removeEventListener('keydown', escape);
+      node.removeEventListener('focusout', focusLeft);
     };
   }, [open, close]);
   return { open, setOpen, toggle, close, wrapper, button, panelId };
