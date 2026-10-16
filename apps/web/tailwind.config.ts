@@ -6,7 +6,9 @@ const config: Config = {
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
-  darkMode: 'class',
+  // The same attribute the token blocks read (`@papertree/ui/styles.css`), set before paint by the
+  // no-flash script in app/layout.tsx, so `dark:` and the tokens never disagree (#175).
+  darkMode: ['selector', '[data-pt-theme="dark"]'],
   theme: {
     extend: {
       colors: {
