@@ -37,6 +37,9 @@ function message(over: Partial<ViewMessage> = {}): ViewMessage {
     citations: [citation('b1') as Citation, citation('b2', { supported: false }) as Citation],
     usage: null,
     question: 'q',
+    createdAt: null,
+    coverage: null,
+    generation: null,
     ...over,
   };
 }

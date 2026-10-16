@@ -11,6 +11,7 @@ import type { Anchor } from '@papertree/anchoring';
 import { ExplainPanel, useExplainActions } from '@/components/explain';
 import { ReaderActionsProvider, type ReaderActions } from '@/components/reader/actions';
 
+import { TestQueryProvider } from './query-client';
 import { anchorFixture } from './s6-support';
 
 export const focusAnchor = vi.fn();
@@ -25,11 +26,15 @@ export function stubDesktop(desktop = true): void {
   }));
 }
 
-export function Harness({
-  paperId = 'ppr_s6test',
-}: {
-  readonly paperId?: string | null;
-}): ReactNode {
+export function Harness(props: { readonly paperId?: string | null }): ReactNode {
+  return (
+    <TestQueryProvider>
+      <HarnessBody {...props} />
+    </TestQueryProvider>
+  );
+}
+
+function HarnessBody({ paperId = 'ppr_s6test' }: { readonly paperId?: string | null }): ReactNode {
   const explain = useExplainActions({ paperId });
   const { openExplain } = explain;
   const actions = useMemo<ReaderActions>(

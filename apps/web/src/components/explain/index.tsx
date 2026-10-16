@@ -25,6 +25,8 @@ import {
 } from 'react';
 
 import { useReaderActions } from '@/components/reader/actions';
+import { ThreadReadFailure } from '@/features/explain/components/ThreadReadFailure';
+import { useThreads } from '@/features/explain/hooks/useThreads';
 import type { Citation } from '@/lib/api/types';
 import { dehyphenate, truncateAtWord } from '@/lib/markdown';
 
@@ -167,6 +169,9 @@ function Body({
 }): ReactNode {
   const actions = useReaderActions();
   const { state, paperId } = controller;
+  // The stored threads: an empty panel opens on the newest one, and a settled answer is re-read
+  // so its locators and coverage replace the live copy (#202).
+  const threads = useThreads(controller);
   const scroller = useRef<HTMLDivElement | null>(null);
   const stick = useRef(true);
   const busy = state.messages.some((m) => m.status === 'streaming');
@@ -248,6 +253,15 @@ function Body({
                 This is a sample paper, and a sample has no server to ask. Upload a PDF to ask
                 questions about it.
               </p>
+            ) : threads.failure !== null && state.messages.length === 0 ? (
+              <ThreadReadFailure
+                kind={threads.failure.kind}
+                of={threads.failure.of}
+                onRetry={threads.retry}
+                {...(threads.failure.of === 'thread'
+                  ? { onStartFresh: controller.startFresh }
+                  : {})}
+              />
             ) : state.messages.length === 0 && state.request === null ? (
               <p className="pt-explain__empty">
                 Select a passage in the paper and press Ask, or type a question about the whole
