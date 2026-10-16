@@ -405,6 +405,12 @@
   color: var(--pt-danger);
 }
 
+/* v0.1's inline Delete confirmation, on the lifted card: its soft red wash over the lamp-lit
+   card (e2) put the red at 4.43:1, so on the card it sits on the card's own paper. */
+.pt-catalogue .pt-s3-alert--error {
+  background: transparent;
+}
+
 .pt-catalogue__actions {
   display: flex;
   flex-wrap: wrap;
