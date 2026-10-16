@@ -30,10 +30,11 @@ export function ShelfRows({
   cardId,
   onActivate,
   onPutBack,
+  focus,
 }: ShelfProps): ReactNode {
   const groups = useMemo(() => arrangeShelf(papers, arrangement), [papers, arrangement]);
   const order = useMemo(() => groups.flatMap((g) => g.papers.map((p) => p.id)), [groups]);
-  const { toolbar, stop, onFocusBook, onKeyDown } = useRovingShelf(order, openId, onPutBack);
+  const { toolbar, stop, onFocusBook, onKeyDown } = useRovingShelf(order, openId, onPutBack, focus);
   return (
     <div
       ref={toolbar}

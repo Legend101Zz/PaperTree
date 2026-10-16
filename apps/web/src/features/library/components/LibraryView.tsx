@@ -1,9 +1,9 @@
 /**
- * LibraryView: the signed-in library (#195, #196; frames 01, 01b, 01c). The compact header
+ * LibraryView: the signed-in library (#195, #196; frames 01, 01b, 01c, 01f). The compact header
  * (search, Add papers, Aa, account), "Your library" with its stats and "N need a look", the view
  * row with Arrange by, Reading now with Continue, then the shelf (face-out covers for a short
- * library) with its catalogue card in the band above and the hint row under the plank; an empty
- * library shows the accession slip. PDFs drop anywhere on the page.
+ * library, a plank per row at scale) with its catalogue card in the band above and the hint row
+ * under the plank; an empty library shows the accession slip. PDFs drop anywhere on the page.
  *
  * The data layer is `useLibrary` (polling only while a row is unfinished, Retry, Delete) and the
  * uploads are `useUploadQueue`, both unchanged in behaviour from v0.1. Read goes to

@@ -1,10 +1,11 @@
 /**
  * ShelfSection: the shelf with its band above and its hints below (#195); spines, face-out covers
- * for a short library, or a plank per row at scale (#196). Owns taking a book down and putting it back: the catalogue
- * card stands in the band, pointing at the open spine, and Esc (on the card or the shelf)
- * returns focus to that spine. It also decides where focus goes when the control that had it
- * disappears: after Retry (to Read), after Delete (to the next spine, else the previous, else Add
- * papers) and after the key hints are dismissed (to the shelf).
+ * for a short library, or a plank per row at scale (#196). Owns taking a book down and putting
+ * it back: the catalogue card stands in the band, pointing at the open book, and Esc (on the card
+ * or the shelf) returns focus to it. It also decides where focus goes when the control that had
+ * it disappears: after Retry (to Read), after Delete (to the next book, else the previous, else
+ * Add papers), after the key hints are dismissed (to the shelf), and when the layout changes
+ * under it (`useShelfFocus`).
  */
 'use client';
 

@@ -12,15 +12,11 @@ import { memo, useMemo, useRef, useState } from 'react';
 
 import { useElementWidth } from '../hooks/useElementWidth';
 import { spineWidth, type ShelfGroup, type ShelfPaper } from '../model/shelf';
-import { rowWindow } from '../model/states';
+import { ROW_BOOKEND, ROW_GAP, rowWindow } from '../model/states';
 import { PlankHolder, ShelfPlank } from './ShelfPlank';
 import { Spine } from './Spine';
 
-import type { ReactNode } from 'react';
-
-/** `.pt-rows__spines`'s gap, and the room its sticky "+n more" bookend takes (`library.css`). */
-const SPINE_GAP = 2;
-const MORE_WIDTH = 104;
+import type { FocusEvent, ReactNode } from 'react';
 
 /** Props for `ShelfRow`. */
 export interface ShelfRowProps {
@@ -44,6 +40,20 @@ function moreName(group: ShelfGroup, after: number, matchesHere: number | null):
 }
 
 /**
+ * A focused spine scrolls clear of the sticky bookend (WCAG 2.4.11, review S3). Focus scrolls a
+ * spine only when it is outside the row, and one under the bookend is inside it; `nearest` here
+ * honours the row's `scroll-padding-inline-end`, which is the bookend's width and a gap.
+ *
+ * @param event - The focus event bubbling from a spine or the bookend.
+ */
+function keepClearOfBookend(event: FocusEvent<HTMLDivElement>): void {
+  const target = event.target;
+  if (target instanceof HTMLElement && target.dataset['paperId'] !== undefined) {
+    target.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }
+}
+
+/**
  * One row at scale. Memoised: a search keystroke re-renders the rows, whose spines re-render only
  * when their own `match` changed.
  *
@@ -64,7 +74,7 @@ export const ShelfRow = memo(function ShelfRow({
   const room = useElementWidth(scroller);
   const [scrollLeft, setScrollLeft] = useState(0);
   const widths = useMemo(() => group.papers.map((p) => spineWidth(p.pageCount)), [group.papers]);
-  const { shown, after } = rowWindow(widths, SPINE_GAP, scrollLeft, room, MORE_WIDTH);
+  const { shown, after } = rowWindow(widths, ROW_GAP, scrollLeft, room, ROW_BOOKEND);
   const hidden: readonly ShelfPaper[] = after > 0 ? group.papers.slice(-after) : [];
   const matchesHere = matches === null ? null : hidden.filter((p) => matches.has(p.id)).length;
 
@@ -77,7 +87,7 @@ export const ShelfRow = memo(function ShelfRow({
     const spine = row.querySelector<HTMLElement>(`[data-paper-id="${CSS.escape(first.id)}"]`);
     if (spine === null) return;
     spine.focus({ preventScroll: true });
-    row.scrollTo({ left: spine.offsetLeft - row.offsetLeft - SPINE_GAP });
+    row.scrollTo({ left: spine.offsetLeft - row.offsetLeft - ROW_GAP });
   };
 
   return (
@@ -91,6 +101,7 @@ export const ShelfRow = memo(function ShelfRow({
           ref={scroller}
           className="pt-rows__spines"
           onScroll={(event) => setScrollLeft(event.currentTarget.scrollLeft)}
+          onFocus={keepClearOfBookend}
         >
           {group.papers.map((paper) => (
             <Spine

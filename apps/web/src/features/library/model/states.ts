@@ -54,6 +54,16 @@ export function statsLine(stats: LibraryStats, atScale: boolean): readonly [numb
   return parts;
 }
 
+/**
+ * A sideways row's measures, which `library.css` draws: `.pt-rows__spines`'s gap, the room its
+ * sticky "+n more" bookend covers at the right edge (96 px wide, 8 px from the spines), and the
+ * scroll padding that keeps a focused spine clear of it. `library-rows-css.spec.ts` reads the CSS
+ * and holds the two together.
+ */
+export const ROW_GAP = 2;
+export const ROW_BOOKEND = 104;
+export const ROW_SCROLL_PADDING = 112;
+
 /** What a sideways row shows from where it is scrolled. */
 export interface RowWindow {
   /** Spines wholly in view. */

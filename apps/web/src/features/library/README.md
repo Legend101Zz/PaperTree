@@ -31,7 +31,10 @@ while you are reading it, a kraft wrap while we read it, a torn red label when w
   group) stands on its own plank, with shorter spines, and scrolls sideways. A row wider than the page says
   "28 of 36 shown · scroll sideways" on its plank and ends in a sticky "+8 more" bookend: a tab stop that brings
   the next spine into view and focus (and with it the shelf's tab stop). While a search runs the bookend says
-  how many of those it hides match ("3 matches here"); the header's "2 of 24" always counted the overflow. The
+  how many of those it hides match ("3 matches here"); the header's "2 of 24" always counts every match. The
+  bookend counts only what is past the right edge: once a row is scrolled, matches off to the left are counted
+  in the header but not on the bookend. A spine the arrows focus scrolls clear of the bookend
+  (`scroll-padding-inline-end` and a `nearest` scroll, WCAG 2.4.11). The
   stats line drops the pages at scale. Nothing is virtualised (ADR-004): every spine is drawn, and a search
   re-renders only the spines whose match changed (memoised rows and spines).
 

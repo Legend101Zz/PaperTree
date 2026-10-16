@@ -1272,6 +1272,9 @@
   gap: 2px;
   align-items: flex-end;
   padding: 24px 2px 54px; /* a lifted spine above; below, the plank the ribbons hang over */
+  /* A spine focused by the arrows scrolls clear of the sticky bookend (WCAG 2.4.11): the
+     bookend's 104 px and a gap (`ROW_SCROLL_PADDING` in model/states.ts). */
+  scroll-padding-inline-end: 112px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: thin;

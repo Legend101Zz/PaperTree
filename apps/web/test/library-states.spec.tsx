@@ -471,6 +471,79 @@ describe('a library at scale (01f)', () => {
     );
   });
 
+  it('groups the rows by topic when the papers have topics, Unshelved last (S2b, #193)', async () => {
+    const topic = (id: string, name: string, cloth: 'transformers' | 'vision') => ({
+      topic_id: id,
+      name,
+      cloth,
+      source: 'arxiv_category' as const,
+      source_detail: null,
+    });
+    const rows = corpusRows(60).map((row) =>
+      row.arxiv_category === 'cs.CL'
+        ? { ...row, topic: topic('top_t', 'Transformers & attention', 'transformers') }
+        : row.arxiv_category === 'cs.CV'
+          ? { ...row, topic: topic('top_v', 'Vision & detection', 'vision') }
+          : row,
+    );
+    const count = (category: string) => rows.filter((r) => r.arxiv_category === category).length;
+    await renderLibrary(rows);
+    const shelf = screen.getByRole('toolbar', { name: 'Shelf' });
+    expect(
+      within(shelf)
+        .getAllByRole('group')
+        .map((g) => g.getAttribute('aria-label')),
+    ).toEqual([
+      `Transformers & attention, ${String(count('cs.CL'))} papers`,
+      `Vision & detection, ${String(count('cs.CV'))} papers`,
+      `Unshelved, ${String(count('cs.LG'))} papers`,
+    ]);
+    // Without topics the same library is one Unshelved row (the fallback).
+    cleanup();
+    await renderLibrary(corpusRows(60));
+    expect(
+      within(screen.getByRole('toolbar', { name: 'Shelf' }))
+        .getAllByRole('group')
+        .map((g) => g.getAttribute('aria-label')),
+    ).toEqual(['Unshelved, 60 papers']);
+  });
+
+  it('Delete at 41 papers (rows → spines) lands on the next book, now on the one plank', async () => {
+    api.remove.mockResolvedValue(undefined);
+    await renderLibrary(corpusRows(41));
+    expect(document.querySelector('.pt-rows')).not.toBeNull();
+    fireEvent.click(bookOf('ppr_c20') as HTMLElement);
+    const card = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>('[data-card-paper-id="ppr_c20"]');
+      if (found === null) throw new Error('no card');
+      return found;
+    });
+    fireEvent.click(within(card).getByRole('button', { name: /^Delete / }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Delete paper' }));
+    await waitFor(() => expect(document.querySelector('.pt-rows')).toBeNull());
+    expect(document.activeElement).toBe(bookOf('ppr_c21'));
+    expect(bookOf('ppr_c21')?.tabIndex).toBe(0);
+  });
+
+  it('a 41st paper arriving while a spine has focus keeps it there, now in a row', async () => {
+    const { client } = await renderLibrary(corpusRows(40));
+    bookOf('ppr_c7')?.focus();
+    await serverNowLists(client, corpusRows(41));
+    await waitFor(() => expect(document.querySelector('.pt-rows')).not.toBeNull());
+    expect(document.activeElement).toBe(bookOf('ppr_c7'));
+    expect(bookOf('ppr_c7')?.tabIndex).toBe(0);
+  });
+
+  it('a spine focused in a row scrolls clear of the bookend (review S3)', async () => {
+    await renderLibrary(corpusRows(60));
+    const spine = bookOf('ppr_c30') as HTMLElement;
+    const scroll = vi.fn();
+    spine.scrollIntoView = scroll as unknown as HTMLElement['scrollIntoView'];
+    spine.focus();
+    // `nearest` honours the row's scroll-padding-inline-end (library-rows-css.spec.ts).
+    expect(scroll).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
+  });
+
   it('keeps the shelf one tab stop across rows, and axe finds nothing', async () => {
     const { container } = await renderLibrary(
       corpusRows(60).map((row, i) => ({ ...row, year: 2014 + (i % 3) })),
