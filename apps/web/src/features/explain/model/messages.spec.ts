@@ -22,12 +22,22 @@ function live(message: Message, over: Partial<ThreadMessage> = {}): ThreadMessag
 
 describe('mergeStored: the live stream and the stored thread', () => {
   it('a settled first answer takes the stored copy under its live key; the stored ask appears', () => {
-    const merged = mergeStored([live(answer1)], [ask1, answer1]);
+    const shown = live(answer1);
+    const merged = mergeStored([shown], [ask1, answer1]);
     expect(merged.map((m) => m.key)).toEqual([`s:${ask1.message_id}`, 'live-1']);
     expect(merged[0]?.text).toBe('Explain this passage.');
-    expect(merged[1]?.citations[0]?.locator?.para_index).toBe(1);
     expect(merged[1]?.coverage?.citations).toBe(11);
     expect(merged[1]?.createdAt).toBe(answer1.created_at);
+    // The markers on screen were drawn from the live citations: they are kept, so no tab changes
+    // under the reader (#252); the stored locators show the next time the thread is opened.
+    expect(merged[1]?.citations).toBe(shown.citations);
+  });
+
+  it('a settled answer that showed no citations live takes the stored ones (#252)', () => {
+    const stopped = live(answer1, { citations: [], stopped: true, status: 'aborted' });
+    const merged = mergeStored([stopped], [ask1, { ...answer1, status: 'aborted' }]);
+    expect(merged[1]?.citations[0]?.locator?.para_index).toBe(1);
+    expect(merged[1]?.stopped).toBe(true);
   });
 
   it('keeps the live message while either copy is still streaming', () => {

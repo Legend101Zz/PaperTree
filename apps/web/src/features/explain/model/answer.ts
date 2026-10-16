@@ -9,9 +9,10 @@
  *   resolved draws no marker, so its paragraph is the AI's own reading and the readout counts it
  *   (§4.6: every claim on screen carries a marker, or says it has none). The server's
  *   `uncited_paragraphs` counts any handle, so it is not used for this.
- * - Tabs never change under the reader (review 1.3). A live citation borrows the locator the thread
- *   already knows for its passage; one whose passage is placed nowhere yet is HELD (drawn as while
- *   streaming: no markers, no trace) until the stored read lands, then shown once, in its final form.
+ * - Markers and tabs never change under the reader (review 1.3, #252). They appear when the answer
+ *   settles, with the locator the thread already knows for the passage (else the page alone), and
+ *   `mergeStored` keeps the citations they were drawn from when the stored copy lands, so the same
+ *   marker stays, same number, same node, same tab. Nothing is hidden once shown.
  */
 import { quoteOf, selectorOf } from './anchor';
 import { citationUse, handleRuns, passageKeyOf, runNumbers, type PassageNumbers } from './passages';
@@ -82,10 +83,7 @@ export interface AnswerModel {
   readonly coverage: Coverage;
   /** Handles the AI wrote that resolved to no passage (`[b9]`); none of them draws a marker. */
   readonly unresolvedMarkers: number;
-  /**
-   * Drawn as while streaming (no markers, no trace, nothing classed uncited): streaming, or settled
-   * with a passage not placed yet while its stored read is on the way.
-   */
+  /** Still streaming: drawn without markers or trace, nothing classed uncited yet. */
   readonly live: boolean;
 }
 
@@ -178,19 +176,13 @@ function traceOf(
  *
  * @param answer The answer message.
  * @param numbers The thread's passage numbering.
- * @param options `settling`: its stored read is on the way, so a passage not placed yet is held.
  * @returns The paragraphs, markers, trace and coverage.
  */
-export function buildAnswer(
-  answer: ExchangeMessage,
-  numbers: PassageNumbers,
-  options: { readonly settling?: boolean } = {},
-): AnswerModel {
+export function buildAnswer(answer: ExchangeMessage, numbers: PassageNumbers): AnswerModel {
   const streaming = answer.status === 'streaming';
   const text = streaming ? answer.text.replace(PARTIAL_TAIL, '') : answer.text;
   const passages = answerPassages(answer, numbers);
-  const unplaced = [...passages.markers.values()].some((m) => m.locator === null);
-  const live = streaming || (options.settling === true && answer.coverage == null && unplaced);
+  const live = streaming;
   const paragraphs = answerParagraphs(text).map((paragraph, index) => {
     const ns = live ? [] : handleRuns(paragraph).flatMap((run) => runNumbers(run, answer, numbers));
     const markers = [...new Set(ns)].flatMap((n) => passages.markers.get(n) ?? []);

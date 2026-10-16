@@ -6,7 +6,7 @@
  * The controller (`useExplainActions`) stays the one owner of what is on screen.
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { ApiError } from '@/lib/api/types';
 
@@ -34,11 +34,6 @@ export interface ThreadsState {
   readonly total: number;
   /** Show another stored thread. */
   readonly select: (threadId: string) => void;
-  /**
-   * A settled answer's stored read is on the way: a passage not placed yet is held, so its tab
-   * appears once, in its final form (`buildExchanges`' `settling`).
-   */
-  readonly settling: boolean;
   /** The current thread (or the thread list) could not be read; null when all is well. */
   readonly failure: { readonly kind: ThreadReadFailureKind; readonly of: 'thread' | 'list' } | null;
   /** Read the failed thread or list again. */
@@ -62,7 +57,7 @@ function failureKind(error: unknown): ThreadReadFailureKind {
  * nothing while the panel is closed or the paper is a fixture.
  *
  * @param controller The explain controller.
- * @returns The sorted threads, the current position, `select`, the settling flag and any failure.
+ * @returns The sorted threads, the current position, `select` and any read failure.
  */
 export function useThreads(controller: ExplainController): ThreadsState {
   const { paperId, state, selectThread, hydrateThread } = controller;
@@ -102,24 +97,19 @@ export function useThreads(controller: ExplainController): ThreadsState {
     if (newest !== null) selectThread(newest);
   }, [newest, selectThread]);
 
-  const [settling, setSettling] = useState(false);
   const epoch = state.epoch;
-  useEffect(() => setSettling(false), [epoch]);
-
-  // Keyed by `dataUpdatedAt`, not the data: a re-read that returns the same rows must still end
-  // the settling; `epoch` so that reselecting a thread whose read is cached merges it again.
+  // Keyed by `dataUpdatedAt`, not the data: a re-read that returns the same rows still merges;
+  // `epoch` so that reselecting a thread whose read is cached merges it again.
   const data = detail.data;
   useEffect(() => {
     if (data !== undefined && threadId !== null && data.thread.thread_id === threadId) {
       hydrateThread(threadId, data.messages);
-      setSettling(false);
     }
   }, [detail.dataUpdatedAt, data, threadId, epoch, hydrateThread]);
 
   const detailFailed = detail.isError && !detail.isFetching;
   useEffect(() => {
     if (!detailFailed) return;
-    setSettling(false);
     // A thread that is gone should leave the menu too.
     if (failureKind(detail.error) === 'not_found' && paperId !== null) {
       void client.invalidateQueries({ queryKey: threadListKey(paperId) });
@@ -132,7 +122,6 @@ export function useThreads(controller: ExplainController): ThreadsState {
   const wasBusy = useRef(busy);
   useEffect(() => {
     if (wasBusy.current && !busy && paperId !== null) {
-      if (threadId !== null) setSettling(true);
       void client.invalidateQueries({ queryKey: threadsKey(paperId) });
     }
     wasBusy.current = busy;
@@ -172,5 +161,5 @@ export function useThreads(controller: ExplainController): ThreadsState {
   }, [refetchDetail, refetchList, threadId]);
 
   const { position, total } = threadPosition(threads, threadId);
-  return { threads, position, total, select, settling, failure, retry };
+  return { threads, position, total, select, failure, retry };
 }

@@ -457,7 +457,7 @@ describe('honest, stable answers (review 1.1, 1.3)', () => {
     expect(last().querySelector('.pt-trace-list')?.textContent).toBe(before);
   });
 
-  it('a first answer’s passages are held until placed, then shown once, final', async () => {
+  it('a marker shown at done stays through the stored read: same node, same tab, and a click in between flashes (#252)', async () => {
     let release: (() => void) | null = null;
     const msgs = GOLDEN.messages as Message[];
     const b6 = msgs[1]!.citations.find((c) => c.marker === 'b6')!;
@@ -471,7 +471,7 @@ describe('honest, stable answers (review 1.1, 1.3)', () => {
       citations: [b6],
       coverage: undefined,
     };
-    installFetch({
+    const { calls } = installFetch({
       [`GET /papers/${PAPER}/threads`]: () => jsonResponse(200, []),
       [`POST /papers/${PAPER}/threads`]: (_c, signal) =>
         sseResponse(
@@ -496,22 +496,36 @@ describe('honest, stable answers (review 1.1, 1.3)', () => {
     });
     render(<Harness />);
     fireEvent.click(screen.getByRole('button', { name: 'ask one' }));
+    // Settling: the answer is done and its stored re-read has been asked for, not answered.
+    await waitFor(() =>
+      expect(
+        calls.some((c) => c.method === 'GET' && c.path === `/papers/${PAPER}/threads/thr_1`),
+      ).toBe(true),
+    );
     await waitFor(() =>
       expect(document.querySelector('[data-message-status="complete"]')).not.toBeNull(),
     );
-    // Held: the claim's words, no marker, no tab, no trace, nothing classed uncited.
-    expect(screen.getByText(/Recurrence is sequential/)).toBeTruthy();
-    expect(document.querySelector('[data-passage]')).toBeNull();
-    expect(document.querySelector('.pt-trace-list')).toBeNull();
-    expect(document.querySelector('.pt-ai-slip__uncited')).toBeNull();
+    const marker = document.querySelector<HTMLElement>('[data-passage="1"] button');
+    expect(marker?.getAttribute('aria-label')).toBe('Passage 1, p. 2');
+    const trace = document.querySelector('.pt-trace-list')?.textContent;
+    fireEvent.click(marker as HTMLElement);
+    expect(focusAnchor).toHaveBeenCalledTimes(1);
+    expect(focusAnchor.mock.calls[0]?.[1]).toEqual({
+      flash: true,
+      from: { n: 1, page: 2, para: null, notVerified: false },
+    });
     await act(async () => {
       release?.();
       await new Promise((r) => setTimeout(r, 50));
     });
-    expect(document.querySelector('[data-passage="1"] button')?.getAttribute('aria-label')).toBe(
-      'Passage 1, p. 2 ¶2',
+    // The stored copy landed (its time is on the call slip now), and nothing moved.
+    expect(document.querySelector('[data-passage="1"] button')).toBe(marker);
+    expect(marker?.isConnected).toBe(true);
+    expect(marker?.getAttribute('aria-label')).toBe('Passage 1, p. 2');
+    expect(document.querySelector('.pt-trace-list')?.textContent).toBe(trace);
+    expect(document.querySelector('.pt-call-slip time')?.getAttribute('datetime')).toBe(
+      answer.created_at,
     );
-    expect(document.querySelector('.pt-trace-list')?.textContent).toContain('p. 2 ¶2');
   });
 
   it('a claim whose citation matched no passage is the AI’s own reading, and the readout says so', () => {

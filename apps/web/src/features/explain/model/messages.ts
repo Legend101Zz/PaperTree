@@ -111,7 +111,8 @@ function shownStored(stored: readonly Message[]): ThreadMessage[] {
 /**
  * The live message or its stored copy, whichever is the truth now. Live while either side is
  * still streaming (a detail fetched mid-stream is stale); stored once both have settled, under the
- * live key, keeping the live-only facts (Stop was pressed; the question it answers).
+ * live key, keeping the live-only facts (Stop was pressed; the question it answers; the citations
+ * the markers on screen were drawn from).
  *
  * @param live The message on screen.
  * @param stored The same message from the server.
@@ -122,6 +123,10 @@ function settle(live: ThreadMessage, stored: ThreadMessage): ThreadMessage {
   return {
     ...stored,
     key: live.key,
+    // The markers already on screen were drawn from the live citations: keep them, so no marker,
+    // number or tab changes under the reader (#252). The stored locators (a finer "¶") are shown
+    // the next time the thread is opened; a live answer that had no citations takes the stored ones.
+    citations: live.citations.length > 0 ? live.citations : stored.citations,
     stopped: live.stopped,
     question: live.role === 'assistant' && live.question !== '' ? live.question : stored.question,
   };

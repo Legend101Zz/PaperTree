@@ -26,8 +26,8 @@ import type { PassageMarker } from '../model/exchange';
 /** Props for `ThreadView`. */
 export interface ThreadViewProps {
   readonly controller: ExplainController;
-  /** The stored threads' state (`useThreads`): settling, and a read that failed. */
-  readonly threads: Pick<ThreadsState, 'settling' | 'failure' | 'retry'>;
+  /** The stored threads' state (`useThreads`): a read that failed, and its retry. */
+  readonly threads: Pick<ThreadsState, 'failure' | 'retry'>;
   /** The account's initial for the call slips. */
   readonly initial: string;
   /** Flash an exchange's passage (markers and trace rows). */
@@ -61,10 +61,9 @@ export function ThreadView({
   const scroller = useRef<HTMLDivElement | null>(null);
   const stick = useRef(true);
   const busy = state.messages.some((m) => m.status === 'streaming');
-  const settling = threads.settling;
   const exchanges = useMemo(
-    () => buildExchanges(state.messages, state.request, { settling }),
-    [state.messages, state.request, settling],
+    () => buildExchanges(state.messages, state.request),
+    [state.messages, state.request],
   );
 
   const last = state.messages[state.messages.length - 1];
