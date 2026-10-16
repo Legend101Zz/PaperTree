@@ -6,3 +6,4 @@
 export * from './model/page';
 export * from './model/stroke';
 export * from './model/outline';
+export * from './model/hitTest';
