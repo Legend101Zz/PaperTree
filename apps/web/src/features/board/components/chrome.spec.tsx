@@ -43,6 +43,8 @@ function toolbar(extra: Partial<BoardToolbarProps> = {}) {
     addFrame: tool('Add frame'),
     thread: { ...threadTool(0, false), pressed: false, run: vi.fn() },
     fitAll: tool('Fit all'),
+    undo: tool('Undo', { icon: 'undo', enabled: false }),
+    redo: tool('Redo', { icon: 'redo', enabled: false }),
     zoom: vi.fn(),
     more: [tool('Frame selected cards'), tool('Remove frame'), tool('Delete', { danger: true })],
     ...extra,
@@ -73,6 +75,8 @@ describe('the toolbar (frame 06)', () => {
       'Add note',
       'Add frame',
       'Thread',
+      'Undo',
+      'Redo',
       'Fit all',
       'Zoom out',
       'Zoom in',
@@ -122,7 +126,7 @@ describe('the toolbar (frame 06)', () => {
     expect(within(bar).queryByRole('button', { name: 'Zoom in' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'More board tools' }));
     const menu = screen.getByRole('group', { name: 'More board tools' });
-    expect(names(menu).slice(0, 3)).toEqual(['Select', 'Zoom out', 'Zoom in']);
+    expect(names(menu).slice(0, 5)).toEqual(['Undo', 'Redo', 'Select', 'Zoom out', 'Zoom in']);
     vi.restoreAllMocks();
   });
 });

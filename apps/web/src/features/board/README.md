@@ -3,7 +3,7 @@
 The linen board (frame 06, lamp-lit 09c): index cards and AI-slip cards that a person sends from
 the paper, joined by typed threads. v0.2 slices: S6a (#211, backend), S6b (#212, cards, pins,
 threads), S6c (#213, Link as and keyboard linking), S6d (#214, frames, minimap, toolbar, empty
-board, the Board wording), S6e (#215, undo and 500 cards).
+board, the Board wording), S6e (#215, undo and redo; 500 cards).
 
 ## The cards
 
@@ -120,6 +120,34 @@ column. On a phone it folds behind a "Map" button at the top right. The empty bo
 06b) is a ruled card on a brass pin with the sprout, how cards arrive, Back to the paper and two
 hints. Everything sits in the `main` landmark under the header.
 
+## Undo and redo (S6e, #215)
+
+Every gesture that writes records ONE step (`model/history`'s `BoardCommand`, plain data): a move
+(a drag of any number of cards, a frame and the cards it carries, a run of arrow-key nudges, the
+frame a dropped card joins), a resize (with the cards a frame takes in or lets go), a note's text or
+a frame's name, a new note or frame, Frame selected cards, a delete (cards, threads, or both), a new
+thread, and a thread's kind or label. Cmd/Ctrl+Z undoes the newest, Shift+Cmd/Ctrl+Z (or Ctrl+Y)
+redoes; the toolbar's Undo and Redo say what they take back ("Undo move of 3 cards"; on a phone they
+are the first two entries of More). No history key acts while a text field or the Link-as picker
+has focus (`useUndoKeys`), so a note keeps the browser's own undo of its text.
+
+- **Replay, not snapshots of the board.** Undo replays the step's inverse and redo the step through
+  the controller's own writes (`replay` → PATCH, DELETE, POST), local first, with the `version` the
+  board holds when it runs. A card changed somewhere else answers 409: the board reloads, says
+  "Couldn't undo move of “…”. The card “…” was changed somewhere else. The latest version is
+  shown.", drops that step and forgets every other step about that card, so no later undo
+  overwrites the other change without a word. Any other refusal also drops the step and reloads.
+- **Deleted rows come back with their ids**, words, anchors, message and page ids, frame and
+  threads (POST with the old `node_id` / `edge_id`: the server accepts it once the row is gone).
+  NodeCreate has no `z`, so a card comes back at z 0 (every card v0.2 makes is z 0), with a new
+  `created_at` and version 1. A frame's cards rejoin it by PATCH; the server's ungroup trigger does
+  not bump their versions (0008), so no fresh read is needed and a member changed elsewhere 409s.
+- **One stack, one toast.** The Undo toast after a delete or a new thread is the stack's newest
+  step: its Undo is Cmd/Ctrl+Z. Any other step puts the toast away (its Undo would now take back
+  that step), and after its 8 s the step can still be undone from the keyboard or the toolbar.
+- **The cap is 100 steps** (`HISTORY_CAP`); the oldest is forgotten past it. The history belongs to
+  the page: a reload starts it empty. The viewport (pan and zoom) is not a step.
+
 ## Data flow
 
 UI (`BoardView`, the cards) → `useBoardController` (local first, then one request per explicit
@@ -144,7 +172,9 @@ per set of cards.
   the curve between two pins, where the cue marks and the tag go.
 - `components/cards/`: one file per card family, `CardShell` (stock, handles, the clip) and
   `index.ts` (`nodeTypes`).
-- `hooks/useBoardController.ts`: the only module that writes.
+- `hooks/useBoardController.ts`: the only module that writes; it records each gesture's step.
+- `model/history.ts` (steps, inverse, replay, keys, names), `hooks/useBoardHistory.ts` (the stack
+  as React state, one replay at a time), `hooks/useUndoKeys.ts` (the keys).
 - `hooks/useCardSources.ts`: the thread and notebook reads behind the cards, once per id.
 - `model/flow.ts`: wire rows ↔ xyflow nodes and edges, names. `model/cards.ts`: what each card
   shows (pure). `model/clip.ts`: the fade and "more" rule.

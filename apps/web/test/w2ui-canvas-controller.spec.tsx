@@ -175,16 +175,17 @@ describe('Undo after a delete', () => {
       node('cn_g', { kind: 'group', title: 'Group' }),
       node('cn_a', { group_id: 'cn_g' }),
     ]);
-    api.get.mockResolvedValue({ board: BOARD, nodes: [node('cn_a', { version: 3 })], edges: [] });
     act(() => result.current.deleteNodes(['cn_g']));
     await act(async () => {
       await result.current.runUndo();
     });
     expect(api.createNode.mock.calls[0]![1]).toMatchObject({ node_id: 'cn_g', kind: 'group' });
-    // The member's version comes from a fresh read: the server's trigger ungrouped it.
+    // The server's trigger ungroups without a new version (0008), so the version held is the
+    // server's and no fresh read is made; a member changed elsewhere answers 409 (#215).
     await waitFor(() =>
-      expect(api.patchNode).toHaveBeenCalledWith('brd_1', 'cn_a', { version: 3, group_id: 'cn_g' }),
+      expect(api.patchNode).toHaveBeenCalledWith('brd_1', 'cn_a', { version: 1, group_id: 'cn_g' }),
     );
+    expect(api.get).toHaveBeenCalledTimes(1);
     expect(result.current.nodes.find((n) => n.id === 'cn_a')?.data.node.group_id).toBe('cn_g');
   });
 
@@ -214,7 +215,11 @@ describe('Undo after a delete', () => {
     await act(async () => {
       await result.current.runUndo();
     });
-    await waitFor(() => expect(result.current.notice).toMatch(/bring that back/i));
+    await waitFor(() =>
+      expect(result.current.notice).toBe(
+        "Couldn't undo delete of “b”. The board was reloaded from your last saved version.",
+      ),
+    );
     expect(api.get).toHaveBeenCalledTimes(2);
   });
 });

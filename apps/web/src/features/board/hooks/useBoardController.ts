@@ -17,6 +17,12 @@
  *
  * `nodesRef` is the working copy: handlers read and write it synchronously and then publish it with
  * `setNodes`, so two events in the same tick cannot overwrite each other.
+ *
+ * UNDO AND REDO (#215). Every gesture that writes records ONE step in `useBoardHistory` (a drag of
+ * several cards, a frame and the cards it carries, a resize with the cards it takes in); undo and
+ * redo replay it through these same writes, with the version held when they run, so a card changed
+ * somewhere else answers 409: the board reloads, says so, and forgets the steps about that card.
+ * The Undo toast after a delete or a new thread is the same stack's Undo.
  */
 import {
   applyEdgeChanges,
@@ -38,11 +44,29 @@ import {
   type ToPort,
 } from '@/lib/api/types';
 
-import { cardName, toFlowEdge, toFlowNode, type PtEdge, type PtNode } from '../model/flow';
+import {
+  cardName,
+  kindLabel,
+  toFlowEdge,
+  toFlowNode,
+  withFields,
+  type PtEdge,
+  type PtNode,
+} from '../model/flow';
 import { cardBoxes, frameBoxes, regroup, regroupAround } from '../model/frames';
+import {
+  itemsPhrase,
+  type BoardCommand,
+  type CardChange,
+  type CardFields,
+  type ReplayIo,
+  type RowsCommand,
+  type ThreadFields,
+} from '../model/history';
 import { newEdgeId, newNodeId } from '../model/ids';
 import { linkedSentence } from '../model/linkAs';
 import { DEFAULT_SIZE, boundsOf, freeSpot, spotNear } from '../model/placement';
+import { useBoardHistory, type BoardHistory, type HistoryHooks } from './useBoardHistory';
 
 export const NUDGE_DEBOUNCE_MS = 400;
 /** How long the Undo offer after a delete stays on screen. */
@@ -50,7 +74,7 @@ export const UNDO_VISIBLE_MS = 8000;
 /** How long the "changed somewhere else" notice stays when nothing else clears it first. */
 export const STALE_NOTICE_MS = 8000;
 
-/** What a delete just removed, enough to put it back with the same ids. */
+/** The Undo toast after a delete or a new thread: its words (its Undo is the history's). */
 export interface UndoOffer {
   readonly token: number;
   readonly message: string;
@@ -75,9 +99,12 @@ export interface BoardController {
   readonly editingId: string | null;
   readonly setEditingId: (id: string | null) => void;
   readonly dismissNotice: () => void;
-  /** The Undo offer after a delete (8 s), or null. */
+  /** The Undo offer after a delete or a new thread (8 s), or null. */
   readonly undo: UndoOffer | null;
+  /** The toast's Undo: the history's newest step, which is the one the toast names. */
   readonly runUndo: () => Promise<void>;
+  /** Undo and redo of every gesture that writes (#215). */
+  readonly history: BoardHistory;
   readonly dismissUndo: () => void;
   /** Several deletes that arrive in one gesture (cards AND their links) become one Undo. */
   readonly deleteSelection: (nodeIds: readonly string[], edgeIds: readonly string[]) => void;
@@ -123,6 +150,9 @@ export function staleSubject(card: string | undefined): string {
     : `${card.charAt(0).toUpperCase()}${card.slice(1)}`;
 }
 
+/** The end of every sentence that follows a reload. */
+const RELOADED = 'The board was reloaded from your last saved version.';
+
 function sentence(error: unknown, fallback: string): string {
   if (error instanceof ApiError && error.status !== 0 && error.detail.trim() !== '') {
     return error.code === 'internal' ? fallback : error.detail;
@@ -157,12 +187,15 @@ export function useBoardController(paperId: string): BoardController {
   const nudgeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastViewport = useRef<Viewport | null>(null);
   const aliveRef = useRef(true);
-  const undoRestore = useRef<(() => Promise<void>) | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const undoSeq = useRef(0);
   /** True while the notice on screen is the stale-version one, which clears itself. */
   const staleShown = useRef(false);
   const staleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Filled at the end of every render: what an undo or redo runs (the writes below). */
+  const historyHooks = useRef<HistoryHooks | null>(null);
+  const hist = useBoardHistory(historyHooks);
+  const { record: remember, forget: forgetRow, after: afterWrite } = hist;
 
   const setNodes = useCallback((next: PtNode[]) => {
     nodesRef.current = next;
@@ -242,9 +275,11 @@ export function useBoardController(paperId: string): BoardController {
    * has after the reload, never by the reader's unsaved text still on the card when the save failed.
    */
   const failed = useCallback(
-    (error: unknown, fallback: string, cardId?: string) => {
+    (error: unknown, fallback: string, cardId?: string, lead?: string) => {
       if (!aliveRef.current) return;
       if (error instanceof ApiError && error.code === 'stale_version') {
+        // No later undo may overwrite what changed somewhere else (#215).
+        if (cardId !== undefined) forgetRow(cardId);
         staleShown.current = true;
         if (staleTimer.current !== null) clearTimeout(staleTimer.current);
         staleTimer.current = setTimeout(clearStale, STALE_NOTICE_MS);
@@ -253,16 +288,18 @@ export function useBoardController(paperId: string): BoardController {
           const fresh =
             cardId === undefined ? undefined : nodesRef.current.find((n) => n.id === cardId);
           setNotice(
-            `${staleSubject(fresh === undefined ? undefined : cardName(fresh.data.node))} was changed somewhere else. The latest version is shown.`,
+            `${lead === undefined ? '' : `${lead} `}${staleSubject(fresh === undefined ? undefined : cardName(fresh.data.node))} was changed somewhere else. The latest version is shown.`,
           );
         });
         return;
       }
       staleShown.current = false;
-      setNotice(sentence(error, fallback));
+      setNotice(
+        lead === undefined ? sentence(error, fallback) : `${lead} ${sentence(error, RELOADED)}`,
+      );
       void reload();
     },
-    [clearStale, reload],
+    [clearStale, forgetRow, reload],
   );
 
   const mergeData = useCallback(
@@ -276,31 +313,61 @@ export function useBoardController(paperId: string): BoardController {
     [setNodes],
   );
 
+  /** One PATCH, after the card's earlier ones; resolves true once saved (`lead` heads a refusal). */
   const patchNode = useCallback(
-    (id: string, fields: Record<string, unknown>) => {
+    (id: string, fields: CardFields, lead?: string): Promise<boolean> => {
       const boardId = boardRef.current?.board_id;
-      if (boardId === undefined) return;
+      if (boardId === undefined) return Promise.resolve(false);
+      let saved = false;
       const run = async (): Promise<void> => {
         const version = versionRef.current.get(id);
         if (version === undefined) return;
         try {
-          const saved = await boardsApi.patchNode(boardId, id, { version, ...fields });
-          versionRef.current.set(id, saved.version);
+          const row = await boardsApi.patchNode(boardId, id, { version, ...fields });
+          versionRef.current.set(id, row.version);
+          saved = true;
           if (aliveRef.current) {
-            mergeData(id, { version: saved.version, updated_at: saved.updated_at });
+            mergeData(id, { version: row.version, updated_at: row.updated_at });
             clearStale();
           }
         } catch (error) {
-          failed(
-            error,
-            "Couldn't save that change. The board was reloaded from your last saved version.",
-            id,
-          );
+          failed(error, `Couldn't save that change. ${RELOADED}`, id, lead);
         }
       };
-      chainRef.current.set(id, (chainRef.current.get(id) ?? Promise.resolve()).then(run));
+      const done = (chainRef.current.get(id) ?? Promise.resolve()).then(run);
+      chainRef.current.set(id, done);
+      return done.then(() => saved);
     },
     [clearStale, failed, mergeData],
+  );
+
+  const offerUndo = useCallback((message: string) => {
+    undoSeq.current += 1;
+    setUndo({ token: undoSeq.current, message });
+    if (undoTimer.current !== null) clearTimeout(undoTimer.current);
+    undoTimer.current = setTimeout(() => {
+      undoTimer.current = null;
+      setUndo(null);
+    }, UNDO_VISIBLE_MS);
+  }, []);
+
+  const dismissUndo = useCallback(() => {
+    if (undoTimer.current !== null) clearTimeout(undoTimer.current);
+    undoTimer.current = null;
+    setUndo(null);
+  }, []);
+
+  /**
+   * A gesture's one step. Only a delete and a new thread show the Undo toast (`toast` is its
+   * words); any other step puts an earlier toast away, since its Undo would now take back this one.
+   */
+  const recordStep = useCallback(
+    (command: BoardCommand, toast?: string) => {
+      remember(command);
+      if (toast === undefined) dismissUndo();
+      else offerUndo(toast);
+    },
+    [dismissUndo, offerUndo, remember],
   );
 
   /**
@@ -319,18 +386,36 @@ export function useBoardController(paperId: string): BoardController {
       });
       const frames = frameBoxes(nodesRef.current);
       const joins = new Map(regroup(cardBoxes(moved), frames).map((c) => [c.id, c.groupId]));
+      // The whole gesture is one step: every card a drag (or a frame) moved, and the frames joined.
+      const changes: CardChange[] = [];
       for (const node of moved) {
         const { x, y } = node.position;
-        const fields = joins.has(node.id)
-          ? { x, y, group_id: joins.get(node.id) ?? null }
-          : { x, y };
+        const joined = joins.has(node.id);
+        const fields = joined ? { x, y, group_id: joins.get(node.id) ?? null } : { x, y };
+        const was = sentRef.current.get(node.id);
+        if (was !== undefined) {
+          const before = joined ? { ...was, group_id: node.data.node.group_id } : { ...was };
+          changes.push({ id: node.id, before, after: fields });
+        }
         sentRef.current.set(node.id, { x, y });
         mergeData(node.id, fields);
-        patchNode(node.id, fields);
+        void patchNode(node.id, fields);
       }
+      if (changes.length === 0) return;
+      const label = `move of ${itemsPhrase(moved.map((n) => n.data.node))}`;
+      recordStep({ type: 'patch', label, cards: changes });
     },
-    [mergeData, patchNode],
+    [mergeData, patchNode, recordStep],
   );
+
+  /** A run of arrow-key nudges, sent (and recorded as one step) now rather than after the debounce. */
+  const flushNudges = useCallback(() => {
+    if (nudgeTimer.current !== null) clearTimeout(nudgeTimer.current);
+    nudgeTimer.current = null;
+    const ids = [...nudgeIds.current];
+    nudgeIds.current.clear();
+    if (ids.length > 0) flushPositions(ids);
+  }, [flushPositions]);
 
   const onNodesChange = useCallback(
     (incoming: NodeChange<PtNode>[]) => {
@@ -371,15 +456,10 @@ export function useBoardController(paperId: string): BoardController {
       }
       if (changes.length > 0) setNodes(applyNodeChanges(changes, nodesRef.current));
       if (nudgeIds.current.size > 0 && nudgeTimer.current === null) {
-        nudgeTimer.current = setTimeout(() => {
-          nudgeTimer.current = null;
-          const ids = [...nudgeIds.current];
-          nudgeIds.current.clear();
-          flushPositions(ids);
-        }, NUDGE_DEBOUNCE_MS);
+        nudgeTimer.current = setTimeout(flushNudges, NUDGE_DEBOUNCE_MS);
       }
     },
-    [flushPositions, setNodes],
+    [flushNudges, setNodes],
   );
 
   /** Selection of a link; deleting goes through `deleteEdges`, never through xyflow's removal. */
@@ -405,10 +485,16 @@ export function useBoardController(paperId: string): BoardController {
     (id: string, body: string) => {
       const current = nodesRef.current.find((n) => n.id === id);
       if (current === undefined || current.data.node.body === body) return;
+      const before = { body: current.data.node.body };
+      recordStep({
+        type: 'patch',
+        label: `edit of ${cardName(current.data.node)}`,
+        cards: [{ id, before, after: { body } }],
+      });
       mergeData(id, { body });
-      patchNode(id, { body });
+      void patchNode(id, { body });
     },
-    [mergeData, patchNode],
+    [mergeData, patchNode, recordStep],
   );
 
   const commitTitle = useCallback(
@@ -416,31 +502,53 @@ export function useBoardController(paperId: string): BoardController {
       const current = nodesRef.current.find((n) => n.id === id);
       const next = title.trim() === '' ? null : title.trim();
       if (current === undefined || current.data.node.title === next) return;
+      const what = current.data.node.kind === 'group' ? 'rename' : 'edit';
+      recordStep({
+        type: 'patch',
+        label: `${what} of ${cardName(current.data.node)}`,
+        cards: [{ id, before: { title: current.data.node.title }, after: { title: next } }],
+      });
       mergeData(id, { title: next });
-      patchNode(id, { title: next });
+      void patchNode(id, { title: next });
     },
-    [mergeData, patchNode],
+    [mergeData, patchNode, recordStep],
   );
 
   const commitSize = useCallback(
     (id: string, rect: { x: number; y: number; w: number; h: number }) => {
+      const node = nodesRef.current.find((n) => n.id === id);
+      const was = sentRef.current.get(id);
+      if (node === undefined || was === undefined) return;
+      const before = { x: was.x, y: was.y, w: node.data.node.w, h: node.data.node.h };
+      if (before.x === rect.x && before.y === rect.y && before.w === rect.w && before.h === rect.h)
+        return;
+      // The resize and the cards a frame takes in or lets go are one step.
+      const changes: CardChange[] = [{ id, before, after: rect }];
       sentRef.current.set(id, { x: rect.x, y: rect.y });
       mergeData(id, rect);
-      patchNode(id, rect);
-      if (nodesRef.current.find((n) => n.id === id)?.data.node.kind !== 'group') return;
-      // A resized frame takes in the cards it now holds and lets go of the ones it no longer does,
-      // measured at the size it was given (whatever xyflow's copy of the node says).
-      const nodes = nodesRef.current.map((n) =>
-        n.id === id
-          ? { ...n, position: { x: rect.x, y: rect.y }, width: rect.w, height: rect.h }
-          : n,
-      );
-      for (const change of regroupAround(id, cardBoxes(nodes), frameBoxes(nodes))) {
-        mergeData(change.id, { group_id: change.groupId });
-        patchNode(change.id, { group_id: change.groupId });
+      void patchNode(id, rect);
+      if (node.data.node.kind === 'group') {
+        // A resized frame takes in the cards it now holds and lets go of the ones it no longer
+        // does, measured at the size it was given (whatever xyflow's copy of the node says).
+        const nodes = nodesRef.current.map((n) =>
+          n.id === id
+            ? { ...n, position: { x: rect.x, y: rect.y }, width: rect.w, height: rect.h }
+            : n,
+        );
+        for (const change of regroupAround(id, cardBoxes(nodes), frameBoxes(nodes))) {
+          const groupId = nodes.find((n) => n.id === change.id)?.data.node.group_id ?? null;
+          changes.push({
+            id: change.id,
+            before: { group_id: groupId },
+            after: { group_id: change.groupId },
+          });
+          mergeData(change.id, { group_id: change.groupId });
+          void patchNode(change.id, { group_id: change.groupId });
+        }
       }
+      recordStep({ type: 'patch', label: `resize of ${cardName(node.data.node)}`, cards: changes });
     },
-    [mergeData, patchNode],
+    [mergeData, patchNode, recordStep],
   );
 
   const addNode = useCallback(
@@ -486,12 +594,13 @@ export function useBoardController(paperId: string): BoardController {
           near,
         );
         const node = await addNode('note', spot, size, {});
+        recordStep({ type: 'add', label: 'new note', nodes: [node], edges: [], members: [] });
         setEditingId(node.node_id);
       } catch (error) {
         setNotice(sentence(error, "Couldn't add a note. Check your connection and try again."));
       }
     },
-    [addNode],
+    [addNode, recordStep],
   );
 
   const addFrame = useCallback(
@@ -508,40 +617,156 @@ export function useBoardController(paperId: string): BoardController {
       const at = spotNear(taken, size, centre);
       try {
         const node = await addNode('group', at, size, { title: 'New frame' });
+        recordStep({ type: 'add', label: 'new frame', nodes: [node], edges: [], members: [] });
         setEditingId(node.node_id);
       } catch (error) {
         setNotice(sentence(error, "Couldn't add a frame. Check your connection and try again."));
       }
     },
-    [addNode],
+    [addNode, recordStep],
   );
 
-  const offerUndo = useCallback((message: string, restore: () => Promise<void>) => {
-    undoSeq.current += 1;
-    undoRestore.current = restore;
-    setUndo({ token: undoSeq.current, message });
-    if (undoTimer.current !== null) clearTimeout(undoTimer.current);
-    undoTimer.current = setTimeout(() => {
-      undoTimer.current = null;
-      undoRestore.current = null;
-      setUndo(null);
-    }, UNDO_VISIBLE_MS);
-  }, []);
+  /**
+   * Takes cards and threads off the board: on screen at once, then one DELETE each (a card's own
+   * threads go with it by the server's cascade). A gesture's delete and the replay of a step
+   * (redo a delete, undo an add) both come here; the next undo waits for these requests.
+   */
+  const removeRows = useCallback(
+    (rows: RowsCommand, lead?: string): Promise<boolean> => {
+      const boardId = boardRef.current?.board_id;
+      if (boardId === undefined) return Promise.resolve(false);
+      const doomed = new Set(rows.nodes.map((n) => n.node_id));
+      const edgeIds = new Set(rows.edges.map((e) => e.edge_id));
+      const lost = edgesRef.current.filter(
+        (e) => edgeIds.has(e.id) || doomed.has(e.source) || doomed.has(e.target),
+      );
+      const own = rows.edges.filter(
+        (e) => !doomed.has(e.from_node_id) && !doomed.has(e.to_node_id),
+      );
+      if (doomed.size > 0) {
+        setNodes(
+          nodesRef.current
+            .filter((n) => !doomed.has(n.id))
+            .map((n) =>
+              n.data.node.group_id !== null && doomed.has(n.data.node.group_id)
+                ? withFields(n, { group_id: null })
+                : n,
+            ),
+        );
+      }
+      setEdges(edgesRef.current.filter((e) => !lost.includes(e)));
 
-  const dismissUndo = useCallback(() => {
-    if (undoTimer.current !== null) clearTimeout(undoTimer.current);
-    undoTimer.current = null;
-    undoRestore.current = null;
-    setUndo(null);
-  }, []);
+      let ok = true;
+      const refused = (what: string) => (error: unknown) => {
+        if (error instanceof ApiError && error.status === 404) return;
+        ok = false;
+        failed(error, `Couldn't delete ${what}. ${RELOADED}`, undefined, lead);
+      };
+      const pending: Promise<void>[] = [];
+      for (const id of doomed) {
+        const previous = chainRef.current.get(id) ?? Promise.resolve();
+        const done = previous.then(() => boardsApi.deleteNode(boardId, id)).catch(refused('that'));
+        chainRef.current.set(id, done);
+        pending.push(done);
+        sentRef.current.delete(id);
+        versionRef.current.delete(id);
+      }
+      for (const edge of own) {
+        pending.push(boardsApi.deleteEdge(boardId, edge.edge_id).catch(refused('that link')));
+      }
+      const all = Promise.all(pending).then(() => ok);
+      afterWrite(all);
+      return all;
+    },
+    [afterWrite, failed, setEdges, setNodes],
+  );
+
+  /**
+   * Puts rows back with the same ids, content and anchors (frames first, so a card can rejoin its
+   * frame; then the cards a deleted frame held; then the threads whose two cards are present).
+   * NodeCreate has no `z`, so a card comes back at z 0 (every card v0.2 makes has z 0), with a new
+   * `created_at` and version 1 (#215).
+   */
+  const restoreRows = useCallback(
+    async (rows: RowsCommand, lead?: string): Promise<boolean> => {
+      const boardId = boardRef.current?.board_id;
+      if (!aliveRef.current || boardId === undefined) return false;
+      try {
+        const live = new Set(nodesRef.current.map((n) => n.id));
+        const ordered = [...rows.nodes].sort(
+          (a, b) => Number(b.kind === 'group') - Number(a.kind === 'group'),
+        );
+        for (const snap of ordered) {
+          if (live.has(snap.node_id)) continue;
+          const groupId = snap.group_id !== null && live.has(snap.group_id) ? snap.group_id : null;
+          const created = await boardsApi.createNode(paperId, {
+            node_id: snap.node_id,
+            kind: snap.kind,
+            x: snap.x,
+            y: snap.y,
+            w: snap.w,
+            h: snap.h,
+            title: snap.title,
+            body: snap.body,
+            ...(snap.source_anchor === null ? {} : { source_anchor: snap.source_anchor as never }),
+            ...(snap.source_message_id === null
+              ? {}
+              : { source_message_id: snap.source_message_id }),
+            // A notebook or diagram card is refused without the thing it shows (S6a).
+            ...(snap.source_page_id === null ? {} : { source_page_id: snap.source_page_id }),
+            ...(snap.source_diagram_id === null
+              ? {}
+              : { source_diagram_id: snap.source_diagram_id }),
+            group_id: groupId,
+          });
+          live.add(snap.node_id);
+          sentRef.current.set(snap.node_id, { x: created.node.x, y: created.node.y });
+          versionRef.current.set(snap.node_id, created.node.version);
+          setNodes([...nodesRef.current, toFlowNode(created.node, paperId)]);
+        }
+        // The server's trigger ungrouped a deleted frame's cards without a new version, so the
+        // versions held here are still the server's.
+        const rejoin = rows.members.filter((m) => live.has(m.groupId) && live.has(m.id));
+        for (const member of rejoin) mergeData(member.id, { group_id: member.groupId });
+        const rejoined = await Promise.all(
+          rejoin.map((m) => patchNode(m.id, { group_id: m.groupId }, lead)),
+        );
+        for (const edge of rows.edges) {
+          if (!live.has(edge.from_node_id) || !live.has(edge.to_node_id)) continue;
+          if (edgesRef.current.some((e) => e.id === edge.edge_id)) continue;
+          const saved = await boardsApi.createEdge(boardId, {
+            edge_id: edge.edge_id,
+            from_node_id: edge.from_node_id,
+            to_node_id: edge.to_node_id,
+            kind: edge.kind,
+            label: edge.label,
+            // The thread comes back on the pins it was drawn between (a keyboard link has none).
+            ...(edge.from_port === null ? {} : { from_port: edge.from_port }),
+            ...(edge.to_port === null ? {} : { to_port: edge.to_port }),
+          });
+          setEdges([...edgesRef.current, threadOf(saved)]);
+        }
+        clearStale();
+        return rejoined.every(Boolean);
+      } catch (error) {
+        const fallback = `Couldn't bring that back. ${RELOADED}`;
+        setNotice(
+          lead === undefined ? sentence(error, fallback) : `${lead} ${sentence(error, RELOADED)}`,
+        );
+        void reload();
+        return false;
+      }
+    },
+    [clearStale, mergeData, paperId, patchNode, reload, setEdges, setNodes, threadOf],
+  );
 
   /**
    * Deletes cards and links, and offers to take it back. Nothing is asked first (no confirm
-   * dialog): the delete happens, and for 8 s an Undo puts the same rows back with the same ids.
+   * dialog): the delete happens, and for 8 s the toast's Undo puts the same rows back with the
+   * same ids (the history's step, so Cmd/Ctrl+Z does the same, for as long as it is the newest).
    */
   const deleteSelection = useCallback(
     (nodeIds: readonly string[], edgeIds: readonly string[]) => {
-      const boardId = boardRef.current?.board_id;
       const doomed = new Set(nodeIds.filter((id) => nodesRef.current.some((n) => n.id === id)));
       const edgeSet = new Set(edgeIds);
       // Links that go with a card are removed by the server's cascade; links picked on their own
@@ -550,7 +775,7 @@ export function useBoardController(paperId: string): BoardController {
         (e) => edgeSet.has(e.id) || doomed.has(e.source) || doomed.has(e.target),
       );
       const ownEdges = lostEdges.filter((e) => !doomed.has(e.source) && !doomed.has(e.target));
-      if (boardId === undefined || (doomed.size === 0 && ownEdges.length === 0)) return;
+      if (boardRef.current === null || (doomed.size === 0 && ownEdges.length === 0)) return;
 
       const removedNodes: CanvasNode[] = nodesRef.current
         .filter((n) => doomed.has(n.id))
@@ -561,59 +786,18 @@ export function useBoardController(paperId: string): BoardController {
           w: n.width ?? n.data.node.w,
           h: n.height ?? n.data.node.h,
         }));
-      const removedEdges: CanvasEdge[] = lostEdges.flatMap((e) =>
-        e.data === undefined ? [] : [e.data.edge],
-      );
-      const released = nodesRef.current
-        .filter(
-          (n) =>
-            !doomed.has(n.id) && n.data.node.group_id !== null && doomed.has(n.data.node.group_id),
-        )
-        .map((n) => ({ id: n.id, groupId: n.data.node.group_id as string }));
-
-      const pending: Promise<void>[] = [];
-      if (doomed.size > 0) {
-        setNodes(
-          nodesRef.current
-            .filter((n) => !doomed.has(n.id))
-            .map((n) =>
-              n.data.node.group_id !== null && doomed.has(n.data.node.group_id)
-                ? { ...n, data: { ...n.data, node: { ...n.data.node, group_id: null } } }
-                : n,
-            ),
-        );
-      }
-      setEdges(edgesRef.current.filter((e) => !lostEdges.includes(e)));
-
-      for (const id of doomed) {
-        const previous = chainRef.current.get(id) ?? Promise.resolve();
-        const done = previous.then(async () => {
-          try {
-            await boardsApi.deleteNode(boardId, id);
-          } catch (error) {
-            if (error instanceof ApiError && error.status === 404) return;
-            failed(
-              error,
-              "Couldn't delete that. The board was reloaded from your last saved version.",
-            );
-          }
-        });
-        chainRef.current.set(id, done);
-        pending.push(done);
-        sentRef.current.delete(id);
-        versionRef.current.delete(id);
-      }
-      for (const edge of ownEdges) {
-        pending.push(
-          boardsApi.deleteEdge(boardId, edge.id).catch((error: unknown) => {
-            if (error instanceof ApiError && error.status === 404) return;
-            failed(
-              error,
-              "Couldn't delete that link. The board was reloaded from your last saved version.",
-            );
-          }),
-        );
-      }
+      const rows: RowsCommand = {
+        type: 'remove',
+        label: `delete of ${itemsPhrase(removedNodes, ownEdges.length)}`,
+        nodes: removedNodes,
+        edges: lostEdges.flatMap((e) => (e.data === undefined ? [] : [e.data.edge])),
+        members: nodesRef.current.flatMap((n) =>
+          !doomed.has(n.id) && n.data.node.group_id !== null && doomed.has(n.data.node.group_id)
+            ? [{ id: n.id, groupId: n.data.node.group_id }]
+            : [],
+        ),
+      };
+      void removeRows(rows);
 
       const first = removedNodes[0];
       const message =
@@ -624,89 +808,9 @@ export function useBoardController(paperId: string): BoardController {
             : ownEdges.length === 1
               ? 'Deleted a link.'
               : `Deleted ${String(ownEdges.length)} links.`;
-
-      offerUndo(message, async () => {
-        await Promise.all(pending);
-        if (!aliveRef.current) return;
-        try {
-          const restored = new Set<string>();
-          const live = new Set(nodesRef.current.map((n) => n.id));
-          // Groups first, so a member can point at its group again.
-          const ordered = [...removedNodes].sort(
-            (a, b) => Number(b.kind === 'group') - Number(a.kind === 'group'),
-          );
-          for (const snap of ordered) {
-            const groupId =
-              snap.group_id !== null && (live.has(snap.group_id) || restored.has(snap.group_id))
-                ? snap.group_id
-                : null;
-            const created = await boardsApi.createNode(paperId, {
-              node_id: snap.node_id,
-              kind: snap.kind,
-              x: snap.x,
-              y: snap.y,
-              w: snap.w,
-              h: snap.h,
-              title: snap.title,
-              body: snap.body,
-              ...(snap.source_anchor === null
-                ? {}
-                : { source_anchor: snap.source_anchor as never }),
-              ...(snap.source_message_id === null
-                ? {}
-                : { source_message_id: snap.source_message_id }),
-              // A notebook or diagram card is refused without the thing it shows (S6a).
-              ...(snap.source_page_id === null ? {} : { source_page_id: snap.source_page_id }),
-              ...(snap.source_diagram_id === null
-                ? {}
-                : { source_diagram_id: snap.source_diagram_id }),
-              group_id: groupId,
-            });
-            restored.add(snap.node_id);
-            sentRef.current.set(snap.node_id, { x: created.node.x, y: created.node.y });
-            versionRef.current.set(snap.node_id, created.node.version);
-            setNodes([...nodesRef.current, toFlowNode(created.node, paperId)]);
-          }
-          const reattach = released.filter(
-            (m) => restored.has(m.groupId) && nodesRef.current.some((n) => n.id === m.id),
-          );
-          if (reattach.length > 0) {
-            // The server ungrouped them itself, so the versions held here may be behind.
-            const fresh = await boardsApi.get(paperId);
-            for (const row of fresh.nodes) versionRef.current.set(row.node_id, row.version);
-            for (const member of reattach) {
-              mergeData(member.id, { group_id: member.groupId });
-              patchNode(member.id, { group_id: member.groupId });
-            }
-          }
-          const present = new Set(nodesRef.current.map((n) => n.id));
-          for (const edge of removedEdges) {
-            if (!present.has(edge.from_node_id) || !present.has(edge.to_node_id)) continue;
-            if (edgesRef.current.some((e) => e.id === edge.edge_id)) continue;
-            const saved = await boardsApi.createEdge(boardId, {
-              edge_id: edge.edge_id,
-              from_node_id: edge.from_node_id,
-              to_node_id: edge.to_node_id,
-              kind: edge.kind,
-              label: edge.label,
-              // The thread comes back on the pins it was drawn between (a keyboard link has none).
-              ...(edge.from_port === null ? {} : { from_port: edge.from_port }),
-              ...(edge.to_port === null ? {} : { to_port: edge.to_port }),
-            });
-            setEdges([...edgesRef.current, threadOf(saved)]);
-          }
-        } catch (error) {
-          setNotice(
-            sentence(
-              error,
-              "Couldn't bring that back. The board was reloaded from your last saved version.",
-            ),
-          );
-          void reload();
-        }
-      });
+      recordStep(rows, message);
     },
-    [failed, mergeData, offerUndo, paperId, patchNode, reload, setEdges, setNodes, threadOf],
+    [recordStep, removeRows],
   );
 
   const deleteNodes = useCallback(
@@ -723,11 +827,13 @@ export function useBoardController(paperId: string): BoardController {
     [deleteSelection],
   );
 
+  const undoStep = hist.view.undo;
   const runUndo = useCallback(async () => {
-    const restore = undoRestore.current;
+    // Only while the toast shows: after it goes, Cmd/Ctrl+Z and the toolbar's Undo still can.
+    if (undoTimer.current === null) return;
     dismissUndo();
-    if (restore !== null) await restore();
-  }, [dismissUndo]);
+    await undoStep();
+  }, [dismissUndo, undoStep]);
 
   const connect = useCallback(
     async (from: string, to: string, kind: EdgeKind, label: string | null, ports?: ThreadPorts) => {
@@ -744,43 +850,60 @@ export function useBoardController(paperId: string): BoardController {
         });
         setEdges([...edgesRef.current, threadOf(edge)]);
         clearStale();
-        offerUndo(linkedSentence(kind), async () => {
-          setEdges(edgesRef.current.filter((e) => e.id !== edge.edge_id));
-          await boardsApi.deleteEdge(boardId, edge.edge_id).catch((error: unknown) => {
-            failed(
-              error,
-              "Couldn't take that thread back. The board was reloaded from your last saved version.",
-            );
-          });
-        });
+        const step: RowsCommand = {
+          type: 'add',
+          label: `new thread “${kindLabel(kind)}”`,
+          nodes: [],
+          edges: [edge],
+          members: [],
+        };
+        recordStep(step, linkedSentence(kind));
         return true;
       } catch (error) {
         setNotice(sentence(error, "Couldn't connect those two cards. Try again."));
         return false;
       }
     },
-    [clearStale, failed, offerUndo, setEdges, threadOf],
+    [clearStale, recordStep, setEdges, threadOf],
   );
 
-  const patchEdge = useCallback(
-    (id: string, fields: { kind?: EdgeKind; label?: string | null }) => {
+  /** A thread's kind or label: on screen at once, then the PATCH; resolves true once saved. */
+  const sendEdge = useCallback(
+    (id: string, fields: ThreadFields, lead?: string): Promise<boolean> => {
       const boardId = boardRef.current?.board_id;
       const current = edgesRef.current.find((e) => e.id === id);
-      if (boardId === undefined || current === undefined || current.data === undefined) return;
+      if (boardId === undefined || current?.data === undefined) return Promise.resolve(false);
       const merged = { ...current.data.edge, ...fields };
       setEdges(
         edgesRef.current.map((e) =>
           e.id === id ? { ...threadOf(merged), selected: e.selected } : e,
         ),
       );
-      boardsApi.patchEdge(boardId, id, fields).catch((error: unknown) => {
-        failed(
-          error,
-          "Couldn't save that link. The board was reloaded from your last saved version.",
-        );
-      });
+      return boardsApi.patchEdge(boardId, id, fields).then(
+        () => true,
+        (error: unknown) => {
+          failed(error, `Couldn't save that link. ${RELOADED}`, undefined, lead);
+          return false;
+        },
+      );
     },
     [failed, setEdges, threadOf],
+  );
+
+  const patchEdge = useCallback(
+    (id: string, fields: ThreadFields) => {
+      const current = edgesRef.current.find((e) => e.id === id)?.data?.edge;
+      if (current === undefined) return;
+      const before: ThreadFields = {
+        ...('kind' in fields ? { kind: current.kind } : {}),
+        ...('label' in fields ? { label: current.label } : {}),
+      };
+      const label =
+        fields.kind === undefined ? 'thread label' : `change to “${kindLabel(fields.kind)}”`;
+      recordStep({ type: 'thread', label, id, before, after: fields });
+      void sendEdge(id, fields);
+    },
+    [recordStep, sendEdge],
   );
 
   const groupNodes = useCallback(
@@ -804,16 +927,73 @@ export function useBoardController(paperId: string): BoardController {
           { w: box.w, h: box.h },
           { title: 'Frame' },
         );
+        const label = `framing of ${itemsPhrase(members.map((m) => m.data.node))}`;
+        const cards = members.map((m) => ({
+          id: m.id,
+          before: { group_id: m.data.node.group_id },
+          after: { group_id: group.node_id },
+        }));
+        // One step: the frame, then its cards; undone cards first, then the frame.
+        recordStep({
+          type: 'batch',
+          label,
+          steps: [
+            { type: 'add', label, nodes: [group], edges: [], members: [] },
+            { type: 'patch', label, cards },
+          ],
+        });
         for (const member of members) {
           mergeData(member.id, { group_id: group.node_id });
-          patchNode(member.id, { group_id: group.node_id });
+          void patchNode(member.id, { group_id: group.node_id });
         }
       } catch (error) {
         setNotice(sentence(error, "Couldn't frame those cards. Try again."));
       }
     },
-    [addNode, mergeData, patchNode],
+    [addNode, mergeData, patchNode, recordStep],
   );
+
+  /**
+   * The writes an undo or redo replays.
+   *
+   * @param lead The sentence each failure starts with ("Couldn't undo move of 3 cards.").
+   * @returns The board's writes for one replay.
+   */
+  const replayIo = (lead: string): ReplayIo => ({
+    patchCards: async (changes) => {
+      if (changes.some((c) => !nodesRef.current.some((n) => n.id === c.id))) {
+        setNotice(`${lead} That card is no longer on the board.`);
+        return false;
+      }
+      const by = new Map(changes.map((c) => [c.id, c.fields] as const));
+      setNodes(
+        nodesRef.current.map((n) => {
+          const fields = by.get(n.id);
+          return fields === undefined ? n : withFields(n, fields);
+        }),
+      );
+      for (const { id, fields } of changes) {
+        if (fields.x !== undefined && fields.y !== undefined)
+          sentRef.current.set(id, { x: fields.x, y: fields.y });
+      }
+      const saved = await Promise.all(changes.map((c) => patchNode(c.id, c.fields, lead)));
+      return saved.every(Boolean);
+    },
+    patchThread: (id, fields) => {
+      if (edgesRef.current.some((e) => e.id === id)) return sendEdge(id, fields, lead);
+      setNotice(`${lead} That thread is no longer on the board.`);
+      return Promise.resolve(false);
+    },
+    restore: (rows) => restoreRows(rows, lead),
+    remove: (rows) => removeRows(rows, lead),
+  });
+  historyHooks.current = {
+    before: () => {
+      flushNudges();
+      dismissUndo();
+    },
+    io: replayIo,
+  };
 
   const saveViewport = useCallback((viewport: Viewport) => {
     const boardId = boardRef.current?.board_id;
@@ -848,6 +1028,7 @@ export function useBoardController(paperId: string): BoardController {
       undo,
       runUndo,
       dismissUndo,
+      history: hist.view,
       deleteSelection,
       reload,
       onNodesChange,
@@ -876,6 +1057,7 @@ export function useBoardController(paperId: string): BoardController {
       undo,
       runUndo,
       dismissUndo,
+      hist.view,
       deleteSelection,
       reload,
       onNodesChange,
