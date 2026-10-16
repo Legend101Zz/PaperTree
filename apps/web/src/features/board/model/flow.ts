@@ -30,21 +30,17 @@ export type PtNode = Node<PtNodeData, PtNodeType>;
 export type PtEdge = Edge<PtEdgeData, 'thread'>;
 
 /** The seven relation kinds in the design's order, named as `THREAD_KINDS` names them. */
-export const EDGE_KINDS: readonly {
-  readonly kind: EdgeKind;
-  readonly label: string;
-  readonly hint: string;
-}[] = (
+export const EDGE_KINDS: readonly { readonly kind: EdgeKind; readonly label: string }[] = (
   [
-    ['supports', 'This backs up that'],
-    ['contradicts', 'This disagrees with that'],
-    ['derives_from', 'This follows from that'],
-    ['answers', 'This answers that'],
-    ['compares', 'Read these side by side'],
-    ['references', 'This points to that'],
-    ['relates', 'Connected, no stronger claim'],
+    'supports',
+    'contradicts',
+    'derives_from',
+    'answers',
+    'compares',
+    'references',
+    'relates',
   ] as const
-).map(([kind, hint]) => ({ kind, label: threadInfo(kind).label, hint }));
+).map((kind) => ({ kind, label: threadInfo(kind).label }));
 
 /**
  * The words for a relation kind.

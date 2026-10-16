@@ -40,6 +40,7 @@ import {
 
 import { cardName, toFlowEdge, toFlowNode, type PtEdge, type PtNode } from '../model/flow';
 import { newEdgeId, newNodeId } from '../model/ids';
+import { linkedSentence } from '../model/linkAs';
 import { DEFAULT_SIZE, boundsOf, freeSpot } from '../model/placement';
 
 export const NUDGE_DEBOUNCE_MS = 400;
@@ -89,14 +90,17 @@ export interface BoardController {
   readonly commitSize: (id: string, rect: { x: number; y: number; w: number; h: number }) => void;
   readonly deleteNodes: (ids: readonly string[]) => void;
   readonly deleteEdges: (ids: readonly string[]) => void;
-  /** A thread between two cards; `ports` are the pins it was drawn between (none from the keyboard). */
+  /**
+   * A thread between two cards, drawn between `ports`; resolves true once the server saved it, and
+   * offers Undo for 8 s ("Linked as supports.", the toast every delete uses).
+   */
   readonly connect: (
     from: string,
     to: string,
     kind: EdgeKind,
     label: string | null,
     ports?: ThreadPorts,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   readonly patchEdge: (id: string, fields: { kind?: EdgeKind; label?: string | null }) => void;
   readonly groupNodes: (ids: readonly string[]) => Promise<void>;
   readonly saveViewport: (viewport: Viewport) => void;
@@ -673,7 +677,7 @@ export function useBoardController(paperId: string): BoardController {
   const connect = useCallback(
     async (from: string, to: string, kind: EdgeKind, label: string | null, ports?: ThreadPorts) => {
       const boardId = boardRef.current?.board_id;
-      if (boardId === undefined || from === to) return;
+      if (boardId === undefined || from === to) return false;
       try {
         const edge = await boardsApi.createEdge(boardId, {
           edge_id: newEdgeId(),
@@ -685,11 +689,22 @@ export function useBoardController(paperId: string): BoardController {
         });
         setEdges([...edgesRef.current, threadOf(edge)]);
         clearStale();
+        offerUndo(linkedSentence(kind), async () => {
+          setEdges(edgesRef.current.filter((e) => e.id !== edge.edge_id));
+          await boardsApi.deleteEdge(boardId, edge.edge_id).catch((error: unknown) => {
+            failed(
+              error,
+              "Couldn't take that thread back. The canvas was reloaded from your last saved version.",
+            );
+          });
+        });
+        return true;
       } catch (error) {
         setNotice(sentence(error, "Couldn't connect those two cards. Try again."));
+        return false;
       }
     },
-    [clearStale, setEdges, threadOf],
+    [clearStale, failed, offerUndo, setEdges, threadOf],
   );
 
   const patchEdge = useCallback(

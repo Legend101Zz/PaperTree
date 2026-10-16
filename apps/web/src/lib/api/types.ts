@@ -380,7 +380,7 @@ export interface CanvasEdge {
   to_node_id: string;
   kind: EdgeKind;
   label: string | null;
-  /** The pins the thread was drawn between; null on a keyboard link and every v0.1 edge. */
+  /** The pins the thread was drawn between; null on every v0.1 edge. */
   from_port: FromPort | null;
   to_port: ToPort | null;
   created_at: string;

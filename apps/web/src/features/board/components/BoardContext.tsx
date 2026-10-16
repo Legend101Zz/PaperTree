@@ -27,6 +27,8 @@ export interface LinkStart {
   readonly nodeId: string;
   readonly kind: CanvasNode['kind'];
   readonly port: string;
+  /** Started from the keyboard (L on a card, Enter on a brass pin): Tab and the arrows pick the target. */
+  readonly keyboard?: boolean;
 }
 
 const Context = createContext<CanvasActions | null>(null);
