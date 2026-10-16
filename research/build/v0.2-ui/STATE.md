@@ -18,6 +18,10 @@ Read this first after a compaction, then `PLAN.md` and the open PRs (`gh pr list
 - Screenshot tool: `/Volumes/Mrigesh SSD/PaperTree-scratch/v02/tools/shoot.mjs`. Agent briefs:
   `PaperTree-scratch/v02/briefs/`. Issue specs: `PaperTree-scratch/v02/issues/` (issues.json = key → number).
 
+## Owner rulings during the build
+- 2026-10-16: any OSI open-source code may be used, whole or in part (ADR-004 §4).
+- 2026-10-16: the live MiniMax budget for this build is **$10** (was $1.00). Spend so far: $0.00 (estimate method: tokens × list price, logged per smoke in RESULT.md).
+
 ## Done (merged into release/v0.2)
 - Phases 0–3: #223 (research, ADR-004, GAP-AUDIT, PLAN; review points 1 and 2 on #175). Owner ruling mid-build: any
   OSI open-source code may be used, whole or in part (ADR-004 §4).
