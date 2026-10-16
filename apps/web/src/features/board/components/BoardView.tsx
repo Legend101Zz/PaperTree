@@ -247,6 +247,12 @@ function Canvas({ paperId }: { readonly paperId: string }) {
               type="button"
               className="pt-btn pt-btn--outline"
               disabled={selection.nodes.length !== 2}
+              // The tooltip, and the accessible description, say why it is off and what turns it on.
+              title={
+                selection.nodes.length === 2
+                  ? 'Link the two selected cards with a thread, from the first to the second.'
+                  : 'Select exactly two cards to link them: Shift, Ctrl or Cmd plus click, or Select area.'
+              }
               onClick={() => {
                 const [from, to] = selection.nodes;
                 if (from !== undefined && to !== undefined) drawing.link(from, to);

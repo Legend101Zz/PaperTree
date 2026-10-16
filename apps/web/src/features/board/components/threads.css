@@ -158,9 +158,13 @@
   pointer-events: none;
 }
 
-/* Phone: a pin keeps a 44 px target ON SCREEN whatever the board zoom, like the card buttons. */
+/* Phone: a pin keeps a 44 px target ON SCREEN down to a 50 % board zoom, like the card buttons.
+   Not below: a pin's target reaches past its card's edge (it sits on the edge), so at an overview
+   zoom a 44 px target would cover the empty board beside every card, and a drag that starts
+   there to select or pan would start a thread instead (#212 e2e screens, Linux CI at 20 %).
+   Below 50 % the board is an overview of thumbnails: zoom in to draw threads. */
 @media (max-width: 639px) {
   .pt-cv .react-flow__handle.pt-pin::after {
-    inset: min(-15px, calc((14px - 44px / clamp(0.2, var(--pt-cv-zoom, 1), 1)) / 2));
+    inset: min(-15px, calc((14px - 44px / clamp(0.5, var(--pt-cv-zoom, 1), 1)) / 2));
   }
 }
