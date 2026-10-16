@@ -25,6 +25,8 @@ export interface MarkerHandlers {
   readonly onLight: (n: number | null) => void;
   /** The citation flash: scroll to the passage and flash it. */
   readonly onShow: (marker: PassageMarker) => void;
+  /** The phone sheet: each marker answers taps over 44 px (frame 08b). */
+  readonly touch?: boolean;
 }
 
 /** Props for `AnswerText`. */
@@ -45,6 +47,7 @@ function Marker({ marker, ctx }: { marker: PassageMarker; ctx: MarkerHandlers })
       label={formatPageLabel(marker.page, marker.para)}
       lit={ctx.lit === marker.n}
       notVerified={marker.notVerified}
+      size={ctx.touch === true ? 'touch' : 'compact'}
       onFlash={() => ctx.onShow(marker)}
       onLight={(on) => ctx.onLight(on ? marker.n : null)}
     />

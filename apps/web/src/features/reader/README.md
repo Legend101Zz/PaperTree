@@ -18,6 +18,17 @@ calls no API. The page count comes from pdf.js (`usePdfDocument`) or, before the
 - **Board** is a link to `/paper/<id>/board` (#214; the v0.1 `/paper/<id>/canvas` redirects there).
 - **Zoom** is − / select / +; "Fit width" is one of the select's options, as frame 04 draws it.
 
+## The lamp-lit page (#205, frame 09b)
+
+The PDF page stays paper in the dark scheme: pdf.js's canvas is multiplied onto `--pt-pdf-page` (`#E9E1D1`), so its
+white becomes the dimmed ivory and black type stays black (16.2:1). What is painted ON the page uses page tokens, not
+the scheme's: the flash ring and a focused highlight are `--pt-pdf-ring` (daylight navy in both schemes; the lamp-lit
+focus blue would be 1.6:1 there), the selection is `--pt-pdf-selection`, the outline a flash leaves is drawn at
+`--pt-flash-rest` (0.35 by day, 0.7 lamp-lit for 3.5:1), and the highlight washes are `--pt-pdf-hl-*` (raised in the
+dark so each stands off the ivory at least as far as off white by day; Guided's dark page keeps the plain
+`--pt-hl-*`). `packages/ui/test/tokens.spec.ts` recomputes all of it from the stylesheet. The blend's scroll cost at
+300 % zoom: none the 60 Hz cadence shows (frame interval mean 16.5 ms in both schemes, 1440 × 900, headless Chromium).
+
 ## The selection toolbar (#203)
 
 `hooks/useSelectionToolbar` (used by `components/reader/SourcePane`) asks `model/toolbarPlacement.placeToolbar`

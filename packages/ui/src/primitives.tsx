@@ -641,6 +641,11 @@ export interface SheetProps {
    */
   readonly trapFocus?: boolean;
   readonly className?: string;
+  /** Controls in the header between the title and the close button (the phone explain sheet's
+   * thread menu and Summary, frame 08b). */
+  readonly actions?: ReactNode;
+  /** The close button's name. Default `Dismiss`. */
+  readonly closeLabel?: string;
 }
 
 /**
@@ -668,6 +673,8 @@ export function Sheet({
   children,
   trapFocus,
   className,
+  actions,
+  closeLabel = 'Dismiss',
 }: SheetProps): ReactNode {
   const titleId = useId();
   const sheetRef = useRef<HTMLElement | null>(null);
@@ -857,7 +864,8 @@ export function Sheet({
           <h2 className="pt-sheet__title" id={titleId}>
             {title}
           </h2>
-          <IconButton label="Dismiss" icon="✕" onPress={onDismiss} className="pt-sheet__close" />
+          {actions}
+          <IconButton label={closeLabel} icon="✕" onPress={onDismiss} className="pt-sheet__close" />
         </header>
 
         {/* The sheet's own content scrolls; the document behind it does not. */}

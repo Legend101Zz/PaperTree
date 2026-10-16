@@ -182,3 +182,104 @@ describe('TextField on touch', () => {
     expect(block?.[1]).toMatch(/font-size:\s*16px/);
   });
 });
+
+/** A token as a paint: its colour and alpha (`#rrggbb`, or `rgb(r g b / a%)`), aliases followed. */
+function paint(
+  scheme: Map<string, string>,
+  name: string,
+): { rgb: [number, number, number]; alpha: number } {
+  let value = scheme.get(name);
+  for (let hops = 0; value !== undefined && value.startsWith('var(') && hops < 4; hops += 1) {
+    value = scheme.get(/var\((--pt-[a-z0-9-]+)\)/.exec(value)?.[1] ?? '');
+  }
+  const rgb = /^rgb\((\d+) (\d+) (\d+) \/ (\d+)%\)$/.exec(value ?? '');
+  if (rgb !== null) {
+    const [r, g, b, a] = rgb.slice(1).map(Number) as [number, number, number, number];
+    return { rgb: [r, g, b], alpha: a / 100 };
+  }
+  return { rgb: colour(scheme, name), alpha: 1 };
+}
+
+/** A translucent paint laid over an opaque ground, as the browser composites it. */
+function over(
+  top: { rgb: [number, number, number]; alpha: number },
+  ground: [number, number, number],
+): [number, number, number] {
+  return top.rgb.map((c, i) => c * top.alpha + ground[i]! * (1 - top.alpha)) as [
+    number,
+    number,
+    number,
+  ];
+}
+
+function contrast(a: [number, number, number], b: [number, number, number]): number {
+  const [x, y] = [luminance(a), luminance(b)];
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+
+const WASHES = ['amber', 'green', 'blue', 'pink', 'purple'] as const;
+/** pdf.js paints black type; lamp-lit multiplies the canvas onto the page, so it stays black. */
+const PDF_TYPE: [number, number, number] = [0, 0, 0];
+
+describe('the PDF page, which stays paper in both schemes (#205, frame 09b)', () => {
+  for (const [name, scheme] of [
+    ['daylight', LIGHT],
+    ['lamp-lit', DARK],
+  ] as const) {
+    const page = colour(scheme, '--pt-pdf-page');
+
+    it(`${name}: PDF type reads at 4.5:1 on the page, on every wash and under the selection`, () => {
+      expect(contrast(PDF_TYPE, page)).toBeGreaterThanOrEqual(4.5);
+      for (const wash of WASHES) {
+        const ground = over(paint(scheme, `--pt-pdf-hl-${wash}`), page);
+        expect(contrast(PDF_TYPE, ground), wash).toBeGreaterThanOrEqual(4.5);
+      }
+      const selected = over(paint(scheme, '--pt-pdf-selection'), page);
+      expect(contrast(PDF_TYPE, selected)).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it(`${name}: the flash ring keeps 3:1 on the page and on the lit wash it rings`, () => {
+      const ring = colour(scheme, '--pt-pdf-ring');
+      expect(contrast(ring, page)).toBeGreaterThanOrEqual(3);
+      expect(contrast(ring, over(paint(scheme, '--pt-lit-wash'), page))).toBeGreaterThanOrEqual(3);
+    });
+
+    it(`${name}: each highlight's underline ink keeps 3:1 on the page`, () => {
+      for (const wash of WASHES) {
+        expect(ratioOn(scheme, `--pt-hl-${wash}-ink`, page), wash).toBeGreaterThanOrEqual(3);
+      }
+    });
+  }
+
+  it('lamp-lit: the outline a flash leaves behind (data-flash="linger") keeps 3:1', () => {
+    const page = colour(DARK, '--pt-pdf-page');
+    const rest = Number(DARK.get('--pt-flash-rest'));
+    const outline = over({ rgb: colour(DARK, '--pt-pdf-ring'), alpha: rest }, page);
+    expect(contrast(outline, page)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('lamp-lit: each wash stands off the dimmed page at least as far as off white by day', () => {
+    const [day, night] = [colour(LIGHT, '--pt-pdf-page'), colour(DARK, '--pt-pdf-page')];
+    for (const wash of WASHES) {
+      const byDay = contrast(over(paint(LIGHT, `--pt-pdf-hl-${wash}`), day), day);
+      const byLamp = contrast(over(paint(DARK, `--pt-pdf-hl-${wash}`), night), night);
+      expect(byLamp, wash).toBeGreaterThanOrEqual(byDay);
+    }
+  });
+
+  it("lamp-lit: Guided's dark page keeps the plain washes, so its light ink still reads", () => {
+    const page = colour(DARK, '--pt-page');
+    for (const wash of WASHES) {
+      const ground = over(paint(DARK, `--pt-hl-${wash}`), page);
+      expect(contrast(colour(DARK, '--pt-ink'), ground), wash).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
+
+function ratioOn(
+  scheme: Map<string, string>,
+  fg: string,
+  ground: [number, number, number],
+): number {
+  return contrast(colour(scheme, fg), ground);
+}

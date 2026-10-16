@@ -47,6 +47,12 @@ function useMediaQuery(query: string): boolean {
   return matches;
 }
 
+/** The Summary toggle's words; the phone header has room for short ones only (frame 08b). */
+function summaryLabel(inSummary: boolean, desktop: boolean): string {
+  if (desktop) return inSummary ? 'Back to conversation' : 'Summarize paper';
+  return inSummary ? 'Back to thread' : 'Summary';
+}
+
 /** The call slip's stamp: the signed-in account's initial ("Y" for you, when it is unknown). */
 function useInitial(): string {
   const email = useAuthStore((s) => s.user?.email);
@@ -111,7 +117,7 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
         disabled={!inSummary && controller.paperId === null}
         onClick={() => (inSummary ? controller.setView('thread') : controller.summarize())}
       >
-        {inSummary ? 'Back to conversation' : 'Summarize paper'}
+        {summaryLabel(inSummary, desktop)}
       </button>
     </div>
   );
@@ -122,20 +128,23 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
       initial={initial}
       onShow={onShow}
       onFlash={onFlash}
+      phone={!desktop}
     />
   );
 
   if (!desktop) {
+    // Frame 08b: the thread menu (and Summary) in the sheet's own header, beside its title.
     return (
       <Sheet
         open
-        title="Explain"
+        title={inSummary ? 'Summary' : 'Explain'}
         detent={detent}
         onDetentChange={setDetent}
         onDismiss={controller.closeExplain}
         className="pt-explain-sheet"
+        actions={tools}
+        closeLabel="Close explain panel"
       >
-        <div className="pt-explain__toolbar">{tools}</div>
         {body}
       </Sheet>
     );
