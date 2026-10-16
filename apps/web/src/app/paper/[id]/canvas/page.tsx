@@ -1,37 +1,27 @@
 // apps/web/src/app/paper/[id]/canvas/page.tsx
-'use client';
+/**
+ * The v0.1 canvas route, kept so bookmarks and old links still work: it sends the reader on to the
+ * paper's board (`/paper/<id>/board`, #214) with the same query string. The board is the one route
+ * that draws; this one only redirects (a server component, so it happens before any paint).
+ */
+import { redirect } from 'next/navigation';
+
+/** What Next hands the route: the paper id and the query string. */
+interface CanvasRedirectProps {
+  readonly params: { readonly id: string };
+  readonly searchParams: Readonly<Record<string, string | readonly string[] | undefined>>;
+}
 
 /**
- * The canvas route: one board per paper, made only by what the reader sends to it (S7).
- * `[id]` is the paper id, as on the reader route.
+ * Redirects `/paper/<id>/canvas[?…]` to `/paper/<id>/board[?…]`.
+ *
+ * @returns Never: `redirect` throws Next's redirect signal.
  */
-import { useParams } from 'next/navigation';
-
-import { AuthGuard } from '@/components/auth/AuthGuard';
-import { BoardView } from '@/features/board';
-
-export default function CanvasPage() {
-  const params = useParams();
-  const rawId = params?.id;
-  const id = Array.isArray(rawId) ? rawId[0] : rawId;
-
-  return (
-    <AuthGuard>
-      {typeof id === 'string' && id.length > 0 ? (
-        <BoardView paperId={id} />
-      ) : (
-        <div className="pt-reader">
-          <div className="pt-state" role="alert">
-            <h1 className="pt-state__title">No paper was named</h1>
-            <p className="pt-state__body">
-              This link does not say which paper&apos;s canvas to open.
-            </p>
-            <a className="pt-btn pt-btn--primary" href="/dashboard">
-              Back to your library
-            </a>
-          </div>
-        </div>
-      )}
-    </AuthGuard>
-  );
+export default function CanvasRedirect({ params, searchParams }: CanvasRedirectProps): never {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(searchParams)) {
+    for (const one of typeof value === 'string' ? [value] : (value ?? [])) query.append(key, one);
+  }
+  const rest = query.toString();
+  redirect(`/paper/${encodeURIComponent(params.id)}/board${rest === '' ? '' : `?${rest}`}`);
 }

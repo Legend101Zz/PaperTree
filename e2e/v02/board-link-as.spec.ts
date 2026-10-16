@@ -71,7 +71,7 @@ test('Link as: drag then key 2, and a keyboard-only supports', async ({ browser,
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   await tokenInit(page, token);
-  await page.goto(`/paper/${paperId}/canvas`);
+  await page.goto(`/paper/${paperId}/board`);
   await expect(page.locator('.react-flow__node')).toHaveCount(3);
   await page.waitForTimeout(1000);
   // The board's live region (#214 moved it into the page's `main`; the test id follows it).

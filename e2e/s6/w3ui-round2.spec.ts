@@ -5,7 +5,7 @@
  *   R4  a marker keeps the punctuation that follows it on its line (chips until #202)
  *   R10 light markdown is rendered (no asterisks), markers still work inside lists and bold
  *   R5  a canvas explanation card shows page labels, never "[bN]", and renders the same markdown
- *   R7  the "Send to canvas" toast lasts 8 s, waits while hovered or focused, and "Open canvas" is
+ *   R7  the "Send to board" toast lasts 8 s, waits while hovered or focused, and "Open board" is
  *       reachable by keyboard
  *
  * The panel visuals (R3/R4/R10) use a CRAFTED event stream (page.route) so the answer carries the
@@ -269,11 +269,11 @@ test.describe('W3UI round 2 (YOLO)', () => {
     });
 
     // R7, mouse: the toast is still there after 6.5 s (the old one went at 6 s), waits while hovered.
-    const send = panel.getByRole('button', { name: 'Send to canvas' });
+    const send = panel.getByRole('button', { name: 'Send to board' });
     await send.click();
     const toast = page.getByTestId('canvas-toast');
     await expect(toast).toBeVisible();
-    await expect(toast).toContainText('Answer added to your canvas.');
+    await expect(toast).toContainText('Answer added to your board.');
     await page.waitForTimeout(6_500);
     await expect(toast).toBeVisible();
     await page.screenshot({ path: shot('r2-toast-1440-light.png') });
@@ -283,17 +283,17 @@ test.describe('W3UI round 2 (YOLO)', () => {
     await page.mouse.move(100, 100);
     await expect(toast).toBeHidden({ timeout: 15_000 });
 
-    // R7, keyboard: a second answer's toast takes the keyboard to "Open canvas"; Escape returns.
+    // R7, keyboard: a second answer's toast takes the keyboard to "Open board"; Escape returns.
     await panel.getByLabel('Ask a question about this paper').fill('Why is that fast?');
     await panel.getByRole('button', { name: 'Ask', exact: true }).click();
     await expect(panel.locator('[data-message-status="complete"]')).toHaveCount(2, {
       timeout: 120_000,
     });
-    const sendSecond = panel.getByRole('button', { name: 'Send to canvas' }).last();
+    const sendSecond = panel.getByRole('button', { name: 'Send to board' }).last();
     await sendSecond.focus();
     await page.keyboard.press('Enter');
     await expect(toast).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Open canvas' })).toBeFocused();
+    await expect(page.getByRole('link', { name: 'Open board' })).toBeFocused();
     await page.waitForTimeout(9_000);
     await expect(toast).toBeVisible(); // focus inside holds the clock
     await page.keyboard.press('Escape');
@@ -342,7 +342,7 @@ test.describe('W3UI round 2 (YOLO)', () => {
           }
         }, token);
         const canvas = await ctx.newPage();
-        await canvas.goto(`/paper/${paperId}/canvas`);
+        await canvas.goto(`/paper/${paperId}/board`);
         await expect(canvas.locator('.react-flow__node-explanation')).toHaveCount(2);
         // #212: a board card cites with the passage's numbered marker, not a "p. 4" label.
         await expect(

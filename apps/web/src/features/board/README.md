@@ -151,6 +151,9 @@ per set of cards.
 - `components/cards.css`, `threads.css`, `legend.css`, `linkAs.css`: the cards, the pins and
   threads, the legend, the picker, from `--pt-*` tokens.
 
-The reader-side helpers (`components/canvas/sendToCanvas.ts`, `toast.tsx`, `duplicate.ts`,
-`useFocusFromCanvas.ts`) stay where the reader imports them until the Board wording sweep (S6d,
-second branch).
+The board lives at `/paper/<id>/board`; `/paper/<id>/canvas` redirects there with its query string,
+so v0.1 bookmarks keep working (#214). The reader-side helpers keep their v0.1 names and home
+(`components/canvas/sendToCanvas.ts`, `toast.tsx`, `duplicate.ts`, `useFocusFromCanvas.ts`), as do
+the API, the tables and the wire types (`CanvasNode`); everything they show a person says "board"
+("Send to board", "Passage added to your board.", "Open board"), and `test/board-wording.spec.tsx`
+and `chrome.spec.tsx` fail on a "canvas" in any text, name or tooltip they render.

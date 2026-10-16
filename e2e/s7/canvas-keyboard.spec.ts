@@ -27,7 +27,7 @@ test('canvas by keyboard', async ({ browser, stack }) => {
   const page = await context.newPage();
   await tokenInit(page, token);
   const calls = recordApi(page, stack.apiUrl);
-  await page.goto(`/paper/${paperId}/canvas`);
+  await page.goto(`/paper/${paperId}/board`);
   await expect(page.locator('.react-flow__node')).toHaveCount(2);
   await page.waitForTimeout(1500);
 

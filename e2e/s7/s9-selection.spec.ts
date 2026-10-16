@@ -30,7 +30,7 @@ test('a body click selects the card and Shift-click adds to the selection', asyn
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   await tokenInit(page, token);
-  await page.goto(`/paper/${paperId}/canvas`);
+  await page.goto(`/paper/${paperId}/board`);
   await expect(page.locator('.react-flow__node')).toHaveCount(2);
   await page.waitForTimeout(1500);
 
@@ -79,7 +79,7 @@ test('a click that reaches only the card body still selects the card', async ({
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   await tokenInit(page, token);
-  await page.goto(`/paper/${paperId}/canvas`);
+  await page.goto(`/paper/${paperId}/board`);
   await expect(page.locator('.react-flow__node')).toHaveCount(1);
   await page.waitForTimeout(1500);
   const card = page.locator(`.react-flow__node[data-id="${id}"]`);

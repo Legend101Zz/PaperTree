@@ -980,7 +980,7 @@ function ReaderWorkspaceView(props: ViewProps) {
         highlightCount={props.highlights.highlights.length}
         boardHref={
           props.paper.kind === 'api'
-            ? `/paper/${encodeURIComponent(props.paper.paperId)}/canvas`
+            ? `/paper/${encodeURIComponent(props.paper.paperId)}/board`
             : null
         }
         explain={explain}

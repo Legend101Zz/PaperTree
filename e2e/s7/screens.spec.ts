@@ -184,7 +184,7 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
       // ── the empty state: explains how to send things; nothing was made for the reader ──
       await tokenInit(page, empty.token);
       const emptyCalls = recordApi(page, stack.apiUrl);
-      await page.goto(`/paper/${empty.paperId}/canvas`);
+      await page.goto(`/paper/${empty.paperId}/board`);
       await expect(page.getByTestId('canvas-empty')).toBeVisible();
       await expect(page.getByTestId('canvas-empty')).toContainText('Send to board');
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(vp.width);
@@ -200,14 +200,14 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
         await new Promise((done) => setTimeout(done, 2500));
         await route.continue();
       });
-      await slow.goto(`/paper/${full.paperId}/canvas`);
+      await slow.goto(`/paper/${full.paperId}/board`);
       await expect(slow.getByRole('status', { name: 'Loading your board' })).toBeVisible();
       await slow.screenshot({ path: shot(`s02-loading-${tag}.png`) });
       await slow.close();
       const broken = await context.newPage();
       await tokenInit(broken, full.token);
       await broken.route('**/board', (route) => route.abort());
-      await broken.goto(`/paper/${full.paperId}/canvas`);
+      await broken.goto(`/paper/${full.paperId}/board`);
       await expect(broken.getByRole('heading', { name: /didn.t load/ })).toBeVisible();
       await expect(broken.getByRole('button', { name: 'Try again' })).toBeVisible();
       expect(await broken.locator('body').innerText()).not.toMatch(/\{|ppr_|brd_|NetworkError/);
@@ -217,7 +217,7 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
       // ── a populated board ──
       const fullPage = await context.newPage();
       await tokenInit(fullPage, full.token);
-      await fullPage.goto(`/paper/${full.paperId}/canvas`);
+      await fullPage.goto(`/paper/${full.paperId}/board`);
       await expect(fullPage.locator('.react-flow__node')).toHaveCount(6);
       await expect(fullPage.getByTestId('edge-label')).toHaveText('supports');
       expect(await fullPage.evaluate(() => document.documentElement.scrollWidth)).toBe(vp.width);

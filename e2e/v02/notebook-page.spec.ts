@@ -200,7 +200,7 @@ test.describe('S5c — the notebook page (faux agent)', () => {
     await expect(page.getByRole('complementary', { name: 'Page' })).toContainText('4 quotes');
     expect(await axeSerious(page), 'with the board card in the panel').toEqual([]);
     await page.getByRole('button', { name: 'Open board' }).click();
-    await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/canvas$`));
+    await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/board$`));
     await expect(page.locator('.react-flow__node')).toHaveCount(1);
     await page.screenshot({ path: shot('s5c-board-with-notebook-card-1440.png') });
     await context.close();

@@ -2,7 +2,7 @@
  * W2UI #141, the canvas should-fixes on the real stack (api + worker + faux agent + web):
  *
  *   - the API refuses oversized cards, labels, coordinates and zoom (422 naming the field);
- *   - the same passage sent twice makes ONE card and says "Already on your canvas";
+ *   - the same passage sent twice makes ONE card and says "Already on your board";
  *   - on a phone the first view is the WHOLE board, "Fit all" is visible, in-card controls keep a
  *     40 px hit area and the frame name is 40 px tall;
  *   - a stale-version refusal names the card (by its server text) and clears itself.
@@ -147,7 +147,7 @@ test('a phone opens on the whole board; controls are tappable; the group name is
     });
     const page = await context.newPage();
     await tokenInit(page, token);
-    await page.goto(`/paper/${paperId}/canvas`);
+    await page.goto(`/paper/${paperId}/board`);
     await expect(page.locator('.react-flow__node')).toHaveCount(4);
     await page.waitForTimeout(1200);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
@@ -256,7 +256,7 @@ test('a stale-version refusal names the card and clears itself', async ({
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   await tokenInit(page, token);
-  await page.goto(`/paper/${paperId}/canvas`);
+  await page.goto(`/paper/${paperId}/board`);
   await expect(page.locator('.react-flow__node')).toHaveCount(1);
   await page.waitForTimeout(1200);
   // Somewhere else changes the card: the page's copy of its version is now stale.

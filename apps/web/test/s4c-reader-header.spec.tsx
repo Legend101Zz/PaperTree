@@ -35,7 +35,7 @@ const BASE: ReaderHeaderProps = {
   navigatorAvailable: true,
   onNavigatorToggle: () => undefined,
   highlightCount: 0,
-  boardHref: `/paper/${PAPER}/canvas`,
+  boardHref: `/paper/${PAPER}/board`,
   explain: null,
 };
 
@@ -95,7 +95,7 @@ describe('the reader header', () => {
     expect(within(header).queryByRole('button', { name: 'Fit width' })).toBeNull();
     expect(within(header).getByRole('option', { name: 'Fit width' })).toBeTruthy();
     expect(within(header).getByRole('link', { name: 'Board' }).getAttribute('href')).toBe(
-      `/paper/${PAPER}/canvas`,
+      `/paper/${PAPER}/board`,
     );
   });
 

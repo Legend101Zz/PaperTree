@@ -1,14 +1,15 @@
 /**
  * v0.2 S6d (#214): the board's chrome on the real stack.
  *
- * An empty board (a freshly seeded paper, as DDPM is on the demo account) shows frame 06b's words
- * and its "Back to the paper" goes to the reader. On a board with two notes: the header counts
- * them, Add frame makes a frame in clear space nearest the middle of the view with its name ready
- * to type, a note dragged into it joins it (saved as its `group_id`), and the frame dragged by its
- * paper tag carries the note with it (both saved, by the same distance). Then the #214 review's
- * cases: arrow keys move the frame and save the note it carries; a resize from the top-left corner
- * leaves the note where it is and saves only the frame, once; and with a card lying over the
- * frame's tag, the frame's outline still selects and moves it.
+ * A v0.1 `/paper/<id>/canvas` link redirects to `/paper/<id>/board`. An empty board (a freshly
+ * seeded paper, as DDPM is on the demo account) shows frame 06b's words and its "Back to the
+ * paper" goes to the reader. On a board with two notes: the header counts them, Add frame makes a
+ * frame in clear space nearest the middle of the view with its name ready to type, a note dragged
+ * into it joins it (saved as its `group_id`), and the frame dragged by its paper tag carries the
+ * note with it (both saved, by the same distance). Then the #214 review's cases: arrow keys move
+ * the frame and save the note it carries; a resize from the top-left corner leaves the note where
+ * it is and saves only the frame, once; and with a card lying over the frame's tag, the frame's
+ * outline still selects and moves it.
  */
 import { expect, test } from '../harness/test';
 import { api, getBoard, recordApi, seedPaper, shotPath, tokenInit } from '../s7/support';
@@ -52,7 +53,7 @@ async function dragBy(page: Page, from: { x: number; y: number }, to: { x: numbe
   await page.mouse.up();
 }
 
-test('the empty board says how cards arrive, and goes back to the paper', async ({
+test('/canvas redirects to /board; the empty board says how cards arrive, and goes back', async ({
   browser,
   stack,
 }, info) => {
@@ -61,7 +62,10 @@ test('the empty board says how cards arrive, and goes back to the paper', async 
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   await tokenInit(page, token);
-  await page.goto(`/paper/${paperId}/canvas`);
+  // A v0.1 bookmark: /canvas still opens the board, at /board, with its query string.
+  await page.goto(`/paper/${paperId}/canvas?from=bookmark`);
+  await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/board\\?from=bookmark$`));
+  await expect(page).toHaveTitle('Board · PaperTree');
   const card = page.getByRole('region', { name: 'Nothing on this board yet.' });
   await expect(card).toContainText(
     'Select a passage and choose Send to board, or Dive in from an explanation.',
@@ -100,7 +104,7 @@ test('Add frame, a card dropped in it, and the frame carries the card', async ({
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   await tokenInit(page, token);
-  await page.goto(`/paper/${paperId}/canvas`);
+  await page.goto(`/paper/${paperId}/board`);
   await expect(page.locator('.react-flow__node')).toHaveCount(2);
   await expect(page.getByRole('banner')).toContainText('2 cards');
   await page.waitForTimeout(1000);

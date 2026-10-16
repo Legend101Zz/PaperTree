@@ -109,10 +109,10 @@ describe('Send page to board', () => {
     ]);
     await within(panel).findByText('4 quotes');
     expect(within(panel).getByRole('link', { name: 'Open it there' }).getAttribute('href')).toBe(
-      `/paper/${PAPER}/canvas`,
+      `/paper/${PAPER}/board`,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Open board' }));
-    expect(push).toHaveBeenCalledWith(`/paper/${PAPER}/canvas`);
+    expect(push).toHaveBeenCalledWith(`/paper/${PAPER}/board`);
   });
 });
 
@@ -179,7 +179,7 @@ describe('Send page to board, once', () => {
     const posts = writes(calls).filter((c) => c.path === `/papers/${PAPER}/board/nodes`);
     expect(posts).toHaveLength(1);
     fireEvent.click(headerSend());
-    await waitFor(() => expect(push).toHaveBeenCalledWith(`/paper/${PAPER}/canvas`));
+    await waitFor(() => expect(push).toHaveBeenCalledWith(`/paper/${PAPER}/board`));
     expect(writes(calls).filter((c) => c.path === `/papers/${PAPER}/board/nodes`)).toHaveLength(1);
   });
 

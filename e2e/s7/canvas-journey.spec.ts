@@ -3,7 +3,7 @@
  * reader sends a passage with the mouse, a faux-agent explanation is sent to the canvas, and every
  * gesture is checked against the REQUESTS it makes and the ROWS the API then holds.
  *
- * WHAT IS NOT DRIVEN THROUGH A BUTTON: the explanation's "Send to canvas" lives in the explain
+ * WHAT IS NOT DRIVEN THROUGH A BUTTON: the explanation's "Send to board" lives in the explain
  * panel, which is track S6's and is not in this branch. The explanation node is therefore created
  * through the real `POST /papers/{id}/board/nodes` with the id of a REAL assistant message that the
  * faux agent wrote through the real `POST /papers/{id}/threads`. `sendToCanvas`'s explanation path
@@ -74,7 +74,7 @@ test.describe('Journey D: the canvas', () => {
       })
       .toBeGreaterThan(20);
     expect(await page.evaluate(() => document.visibilityState)).toBe('visible');
-    // #203: the header names the canvas "Board" (the route stays /canvas).
+    // #203: the reader's header names the board "Board".
     await expect(page.getByRole('link', { name: 'Board' })).toBeVisible();
     await reveal(page, 'Deeper neural networks');
     const points = await pointsFor(page, 'Deeper neural networks', 'substantially deeper');
@@ -132,7 +132,7 @@ test.describe('Journey D: the canvas', () => {
 
     // ── 3. open the canvas from the toast's link: exactly 2 nodes ──
     await page.getByRole('link', { name: 'Open board' }).click(); // the passage's toast (#203)
-    await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/canvas$`));
+    await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/board$`));
     await expect(page.locator('.react-flow__node')).toHaveCount(2);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1440);
     await expect(
