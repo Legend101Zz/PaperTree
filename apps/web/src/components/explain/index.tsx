@@ -25,6 +25,7 @@ import {
 } from 'react';
 
 import { useReaderActions } from '@/components/reader/actions';
+import { useThreads } from '@/features/explain/hooks/useThreads';
 import type { Citation } from '@/lib/api/types';
 import { dehyphenate, truncateAtWord } from '@/lib/markdown';
 
@@ -167,6 +168,9 @@ function Body({
 }): ReactNode {
   const actions = useReaderActions();
   const { state, paperId } = controller;
+  // The stored threads: an empty panel opens on the newest one, and a settled answer is re-read
+  // so its locators and coverage replace the live copy (#202).
+  useThreads(controller);
   const scroller = useRef<HTMLDivElement | null>(null);
   const stick = useRef(true);
   const busy = state.messages.some((m) => m.status === 'streaming');
