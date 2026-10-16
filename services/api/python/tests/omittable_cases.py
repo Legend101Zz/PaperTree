@@ -103,6 +103,24 @@ CASES: Final[dict[str, tuple[dict[str, Any], tuple[str, ...]]]] = {
         },
         ("coverage",),
     ),
+    # v0.2 S5a (#206): the notebook.
+    "NotebookPageCreate": (
+        {"page_id": "pg_0f9e8d7caaaa4bbb"},
+        ("title", "template", "from_message_id"),
+    ),
+    "NotebookPagePatch": ({"version": 1}, ("title", "template")),
+    "NotebookItemCreate": (
+        {
+            "item_id": "ni_0f9e8d7caaaa4bbb",
+            "kind": "sticky",
+            "x": 0,
+            "y": 0,
+            "w": 120,
+            "h": 60,
+        },
+        ("anchor",),
+    ),
+    "NotebookItemPatch": ({"version": 1}, ("x", "y", "w", "h", "z", "body")),
     "AgentStatus": ({"phase": "tool"}, ("tool", "label", "attempt", "delay_ms")),
 }
 

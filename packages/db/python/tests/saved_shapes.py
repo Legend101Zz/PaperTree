@@ -35,9 +35,13 @@ from pathlib import Path
 from typing import Any, Final
 
 import sqlite_vec  # type: ignore[import-untyped]
-from papertree_db import PaperId, find_migrations_dir, generation, open_database
+from papertree_db import PaperId, find_migrations_dir, generation, load_migrations, open_database
 
 MIGRATIONS_DIR: Final = find_migrations_dir()
+#: Every version on disk, read from the directory so no test hard-codes the head.
+HEAD_VERSIONS: Final = tuple(m.version for m in load_migrations(MIGRATIONS_DIR))
+#: What a database at head 4 applies (0005 and everything after it).
+FROM_0005: Final = tuple(v for v in HEAD_VERSIONS if v >= 5)
 FIXTURE_FILE: Final = (
     Path(__file__).resolve().parents[3]
     / "document-ir"

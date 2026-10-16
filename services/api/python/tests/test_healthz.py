@@ -95,7 +95,6 @@ def test_healthz_without_an_agent_is_200_and_says_so(tmp_path: Path) -> None:
         "migrations": [m.version for m in load_migrations()],
         "agent": {"reachable": False, "key_present": None, "sdk": None},
     }
-    assert body["migrations"] == [1, 2, 3, 4, 5, 6]
     assert elapsed < 3.0, f"an absent agent made /healthz take {elapsed:.1f}s"
     assert "SECRET" not in response.text
 

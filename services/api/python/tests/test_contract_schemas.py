@@ -131,6 +131,10 @@ WHERE: dict[str, tuple[tuple[str, str], ...]] = {
     "NodePatch": (("api/boards", "NodePatch"),),
     "EdgePatch": (("api/boards", "EdgePatch"),),
     "BoardPatch": (("api/boards", "BoardPatch"),),
+    "NotebookPageCreate": (("api/notebooks", "NotebookPageCreate"),),
+    "NotebookPagePatch": (("api/notebooks", "NotebookPagePatch"),),
+    "NotebookItemCreate": (("api/notebooks", "NotebookItemCreate"),),
+    "NotebookItemPatch": (("api/notebooks", "NotebookItemPatch"),),
     "AgentStatus": (("agent/run-events", "status"),),
 }
 

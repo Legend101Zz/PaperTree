@@ -81,6 +81,7 @@ from .ids import (
 )
 from .library import LibraryMixin
 from .migrate import MigrationResult, migrate
+from .notebook import NotebookMixin
 from .reading import ReadingMixin
 
 __all__ = [
@@ -637,7 +638,9 @@ class DatabaseCore:
         return list(self._conn.execute(sql, params).fetchall())
 
 
-class PaperTreeDb(LibraryMixin, ReadingMixin, HighlightsMixin, AiMixin, CanvasMixin, DatabaseCore):
+class PaperTreeDb(
+    LibraryMixin, ReadingMixin, HighlightsMixin, AiMixin, CanvasMixin, NotebookMixin, DatabaseCore
+):
     """The only way to reach the SQLite connection, and therefore the only place SQL is.
 
     ``DatabaseCore`` plus the feature mixins (see the module docstring for who owns which).
