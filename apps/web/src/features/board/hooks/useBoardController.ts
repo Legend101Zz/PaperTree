@@ -34,6 +34,8 @@ import {
   type CanvasEdge,
   type CanvasNode,
   type EdgeKind,
+  type FromPort,
+  type ToPort,
 } from '@/lib/api/types';
 
 import { cardName, toFlowEdge, toFlowNode, type PtEdge, type PtNode } from '../model/flow';
@@ -50,6 +52,12 @@ export const STALE_NOTICE_MS = 8000;
 export interface UndoOffer {
   readonly token: number;
   readonly message: string;
+}
+
+/** The pins a thread was drawn between. */
+export interface ThreadPorts {
+  readonly from_port: FromPort | null;
+  readonly to_port: ToPort | null;
 }
 
 /** Where the board's first read stands. */
@@ -81,11 +89,13 @@ export interface BoardController {
   readonly commitSize: (id: string, rect: { x: number; y: number; w: number; h: number }) => void;
   readonly deleteNodes: (ids: readonly string[]) => void;
   readonly deleteEdges: (ids: readonly string[]) => void;
+  /** A thread between two cards; `ports` are the pins it was drawn between (none from the keyboard). */
   readonly connect: (
     from: string,
     to: string,
     kind: EdgeKind,
     label: string | null,
+    ports?: ThreadPorts,
   ) => Promise<void>;
   readonly patchEdge: (id: string, fields: { kind?: EdgeKind; label?: string | null }) => void;
   readonly groupNodes: (ids: readonly string[]) => Promise<void>;
@@ -609,6 +619,9 @@ export function useBoardController(paperId: string): BoardController {
               to_node_id: edge.to_node_id,
               kind: edge.kind,
               label: edge.label,
+              // The thread comes back on the pins it was drawn between (a keyboard link has none).
+              ...(edge.from_port === null ? {} : { from_port: edge.from_port }),
+              ...(edge.to_port === null ? {} : { to_port: edge.to_port }),
             });
             setEdges([...edgesRef.current, toFlowEdge(saved)]);
           }
@@ -647,7 +660,7 @@ export function useBoardController(paperId: string): BoardController {
   }, [dismissUndo]);
 
   const connect = useCallback(
-    async (from: string, to: string, kind: EdgeKind, label: string | null) => {
+    async (from: string, to: string, kind: EdgeKind, label: string | null, ports?: ThreadPorts) => {
       const boardId = boardRef.current?.board_id;
       if (boardId === undefined || from === to) return;
       try {
@@ -657,6 +670,7 @@ export function useBoardController(paperId: string): BoardController {
           to_node_id: to,
           kind,
           label,
+          ...ports,
         });
         setEdges([...edgesRef.current, toFlowEdge(edge)]);
         clearStale();

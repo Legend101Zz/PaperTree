@@ -5,7 +5,9 @@
  * The server row rides along in `data.node` / `data.edge`; xyflow owns position, size and selection
  * while the reader works, and the controller writes them back on the explicit gestures only.
  */
-import { MarkerType, type Edge, type Node } from '@xyflow/react';
+import { type Edge, type Node } from '@xyflow/react';
+
+import { threadInfo } from './threads';
 
 import type { CanvasEdge, CanvasNode, EdgeKind } from '@/lib/api/types';
 
@@ -23,23 +25,25 @@ export type PtNodeType =
   'excerpt' | 'explanation' | 'note' | 'question' | 'notebook' | 'diagram' | 'frame';
 /** A card on the board, as xyflow holds it. */
 export type PtNode = Node<PtNodeData, PtNodeType>;
-/** A link on the board, as xyflow holds it. */
-export type PtEdge = Edge<PtEdgeData, 'labeled'>;
+/** A thread on the board, as xyflow holds it. */
+export type PtEdge = Edge<PtEdgeData, 'thread'>;
 
-/** The seven relation kinds with their words and a hint for the picker. */
+/** The seven relation kinds in the design's order, named as `THREAD_KINDS` names them. */
 export const EDGE_KINDS: readonly {
   readonly kind: EdgeKind;
   readonly label: string;
   readonly hint: string;
-}[] = [
-  { kind: 'supports', label: 'supports', hint: 'This backs up that' },
-  { kind: 'contradicts', label: 'contradicts', hint: 'This disagrees with that' },
-  { kind: 'derives_from', label: 'derives from', hint: 'This follows from that' },
-  { kind: 'answers', label: 'answers', hint: 'This answers that' },
-  { kind: 'compares', label: 'compares with', hint: 'Read these side by side' },
-  { kind: 'references', label: 'references', hint: 'This points to that' },
-  { kind: 'relates', label: 'relates to', hint: 'Connected, no stronger claim' },
-];
+}[] = (
+  [
+    ['supports', 'This backs up that'],
+    ['contradicts', 'This disagrees with that'],
+    ['derives_from', 'This follows from that'],
+    ['answers', 'This answers that'],
+    ['compares', 'Read these side by side'],
+    ['references', 'This points to that'],
+    ['relates', 'Connected, no stronger claim'],
+  ] as const
+).map(([kind, hint]) => ({ kind, label: threadInfo(kind).label, hint }));
 
 /**
  * The words for a relation kind.
@@ -145,7 +149,8 @@ export function withPageTitles(
 }
 
 /**
- * A wire link as an xyflow edge.
+ * A wire link as an xyflow edge, drawn between the pins it was made on. A link with no pins (a
+ * keyboard link, every v0.1 link) joins each card's first out-pin and first in-pin.
  *
  * @param edge The server row.
  * @returns The xyflow edge.
@@ -153,11 +158,12 @@ export function withPageTitles(
 export function toFlowEdge(edge: CanvasEdge): PtEdge {
   return {
     id: edge.edge_id,
-    type: 'labeled',
+    type: 'thread',
     source: edge.from_node_id,
     target: edge.to_node_id,
-    markerEnd: { type: MarkerType.ArrowClosed },
-    ariaLabel: `${edgeText(edge)} edge`,
+    sourceHandle: edge.from_port,
+    targetHandle: edge.to_port,
+    ariaLabel: `${edgeText(edge)} thread`,
     data: { edge },
   };
 }

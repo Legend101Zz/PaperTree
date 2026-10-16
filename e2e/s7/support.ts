@@ -52,6 +52,8 @@ export interface WireEdge {
   readonly to_node_id: string;
   readonly kind: string;
   readonly label: string | null;
+  readonly from_port?: string | null;
+  readonly to_port?: string | null;
 }
 export interface WireBoard {
   readonly board: {

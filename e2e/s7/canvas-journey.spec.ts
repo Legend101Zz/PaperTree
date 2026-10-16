@@ -163,11 +163,12 @@ test.describe('Journey D: the canvas', () => {
 
     // ── 5. connect with "supports": the label is visible ──
     calls.length = 0;
+    // #212: the link handles are the brass pins; a thread runs from a claim-out to an evidence-in.
     const src = await page
-      .locator(`.react-flow__node[data-id="${excerpt.node_id}"] .react-flow__handle.source`)
+      .locator(`.react-flow__node[data-id="${excerpt.node_id}"] [data-handleid="claim_out"]`)
       .boundingBox();
     const dst = await page
-      .locator(`.react-flow__node[data-id="${explanationId}"] .react-flow__handle.target`)
+      .locator(`.react-flow__node[data-id="${explanationId}"] [data-handleid="evidence_in"]`)
       .boundingBox();
     expect(src && dst).toBeTruthy();
     await mouseDrag(
@@ -189,6 +190,8 @@ test.describe('Journey D: the canvas', () => {
       kind: 'supports',
       from_node_id: excerpt.node_id,
       to_node_id: explanationId,
+      from_port: 'claim_out',
+      to_port: 'evidence_in',
     });
 
     // ── 5b. the link is editable: kind and label are one PATCH each, and the new words are on the edge ──

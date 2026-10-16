@@ -7,6 +7,7 @@
 import { createContext, useContext } from 'react';
 
 import type { CardSources } from '../hooks/useCardSources';
+import type { CanvasNode } from '@/lib/api/types';
 
 /** The controller's card-facing half, plus what the cards' sources have read. */
 export interface CanvasActions {
@@ -19,6 +20,15 @@ export interface CanvasActions {
   readonly openCitation?: (nodeId: string, citationId: string, threadId?: string) => void;
   /** Thread and notebook reads behind the cards; absent until read, then empty if unavailable. */
   readonly sources?: CardSources;
+  /** The pin a thread is being drawn from, so the pins it could land on light; null otherwise. */
+  readonly linking?: LinkStart | null;
+}
+
+/** Where a thread being drawn started. */
+export interface LinkStart {
+  readonly nodeId: string;
+  readonly kind: CanvasNode['kind'];
+  readonly port: string;
 }
 
 const Context = createContext<CanvasActions | null>(null);

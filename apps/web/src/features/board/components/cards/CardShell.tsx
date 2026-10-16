@@ -2,22 +2,25 @@
 
 /**
  * board/cards/CardShell — what every card shares: the stock it is cut from (index card, call slip,
- * or bare for the slip cards), the resize handles, the link handles and select-on-click; and the
- * person's stamp. Each card kind fills it with its own voice; long bodies go in a `ClipBody`.
+ * or bare for the slip cards), the resize handles, the brass port pins and select-on-click; and
+ * the person's stamp. Each card kind fills it with its own voice; long bodies go in a `ClipBody`.
  *
  * No hover-only actions: every action is a visible button.
  */
-import { Handle, NodeResizer, Position, useStoreApi } from '@xyflow/react';
+import { NodeResizer, useStoreApi } from '@xyflow/react';
 import { type MouseEvent, type ReactNode } from 'react';
 
 import { useCanvasActions } from '../BoardContext';
+import { CardPins } from '../CardPins';
+
+import type { CanvasNode } from '@/lib/api/types';
 
 /** Props for `CardShell`. */
 export interface CardShellProps {
   readonly id: string;
   readonly selected: boolean;
-  /** The wire kind, published as `data-kind` for styles and tests. */
-  readonly kind: string;
+  /** The wire kind: its pins, and `data-kind` for styles and tests. */
+  readonly kind: CanvasNode['kind'];
   /** `card` = ruled index card, `call` = call slip, `bare` = the card is its slips. */
   readonly stock: 'card' | 'call' | 'bare';
   readonly children: ReactNode;
@@ -59,9 +62,8 @@ export function CardShell({ id, selected, kind, stock, children }: CardShellProp
         lineClassName="pt-cv-resize-line"
         onResizeEnd={(_, p) => ctx.commitSize(id, { x: p.x, y: p.y, w: p.width, h: p.height })}
       />
-      <Handle type="target" position={Position.Left} className="pt-cv-handle" />
       {children}
-      <Handle type="source" position={Position.Right} className="pt-cv-handle" />
+      <CardPins nodeId={id} kind={kind} />
     </div>
   );
 }

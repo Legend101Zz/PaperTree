@@ -13,18 +13,19 @@ import {
   ReactFlowProvider,
   useReactFlow,
   useStore,
-  type Connection,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { useBoardController } from '../hooks/useBoardController';
 import { useCardSources } from '../hooks/useCardSources';
+import { useThreadDrawing } from '../hooks/useThreadDrawing';
 import { EDGE_KINDS, withPageTitles, type PtEdge, type PtNode } from '../model/flow';
 import { CanvasActionsProvider } from './BoardContext';
 import { nodeTypes } from './cards';
 import { KindPicker } from './KindPicker';
-import { edgeTypes } from './LabeledEdge';
+import { edgeTypes } from './ThreadEdge';
+import { ThreadLegend } from './ThreadLegend';
 import './cards.css';
 
 import type { EdgeKind } from '@/lib/api/types';
@@ -93,7 +94,9 @@ function Canvas({ paperId }: { readonly paperId: string }) {
   const flow = useReactFlow<PtNode, PtEdge>();
   const [selection, setSelection] = useState<Selection>(NONE);
   const order = useRef<string[]>([]);
-  const [picking, setPicking] = useState<{ from: string; to: string } | null>(null);
+  const drawing = useThreadDrawing(ctl.nodes);
+  const picking = drawing.pending;
+  const setPicking = drawing.setPending;
   const [areaMode, setAreaMode] = useState(false);
   // The first view on any width is the WHOLE board (never zoomed in past 100 %, never out past 20 %).
   // A phone used to be capped at 60 %, which cropped a board wider than the screen; "Fit all" in
@@ -156,10 +159,6 @@ function Canvas({ paperId }: { readonly paperId: string }) {
     [nodes],
   );
 
-  const onConnect = useCallback((c: Connection) => {
-    if (c.source !== c.target) setPicking({ from: c.source, to: c.target });
-  }, []);
-
   const selectedNodes = useMemo(
     () => ctl.nodes.filter((n) => selection.nodes.includes(n.id)),
     [ctl.nodes, selection.nodes],
@@ -184,6 +183,7 @@ function Canvas({ paperId }: { readonly paperId: string }) {
       openCitation: (nodeId: string, citationId: string, threadId?: string) =>
         window.location.assign(citationHref(paperId, nodeId, citationId, threadId)),
       sources,
+      linking: drawing.linking,
     }),
     [
       ctl.editingId,
@@ -193,6 +193,7 @@ function Canvas({ paperId }: { readonly paperId: string }) {
       ctl.commitSize,
       paperId,
       sources,
+      drawing.linking,
     ],
   );
 
@@ -248,7 +249,8 @@ function Canvas({ paperId }: { readonly paperId: string }) {
               disabled={selection.nodes.length !== 2}
               onClick={() => {
                 const [from, to] = selection.nodes;
-                if (from !== undefined && to !== undefined) setPicking({ from, to });
+                if (from !== undefined && to !== undefined)
+                  setPicking({ from, to, fromPort: null, toPort: null });
               }}
             >
               Link
@@ -274,10 +276,17 @@ function Canvas({ paperId }: { readonly paperId: string }) {
           </div>
         </header>
 
-        {ctl.notice === null || ctl.status === 'error' ? null : (
+        {(drawing.refusal ?? ctl.notice) === null || ctl.status === 'error' ? null : (
           <div className="pt-cv__notice" role="alert">
-            <span>{ctl.notice}</span>
-            <button type="button" className="pt-btn" onClick={ctl.dismissNotice}>
+            <span>{drawing.refusal ?? ctl.notice}</span>
+            <button
+              type="button"
+              className="pt-btn"
+              onClick={() => {
+                drawing.dismissRefusal();
+                ctl.dismissNotice();
+              }}
+            >
               Dismiss
             </button>
           </div>
@@ -349,7 +358,7 @@ function Canvas({ paperId }: { readonly paperId: string }) {
                 onNodesChange={ctl.onNodesChange}
                 onEdgesChange={ctl.onEdgesChange}
                 onNodeDragStop={ctl.onNodeDragStop}
-                onConnect={onConnect}
+                {...drawing.flowProps}
                 onNodesDelete={(ns) =>
                   queueDelete(
                     ns.map((n) => n.id),
@@ -400,7 +409,7 @@ function Canvas({ paperId }: { readonly paperId: string }) {
                   fitViewOptions={fitOptions}
                 />
               </ReactFlow>
-              {empty ? <EmptyState paperId={paperId} /> : null}
+              {empty ? <EmptyState paperId={paperId} /> : <ThreadLegend />}
             </>
           )}
         </div>
@@ -439,9 +448,9 @@ function Canvas({ paperId }: { readonly paperId: string }) {
             toLabel={labelOf(picking.to)}
             onCancel={() => setPicking(null)}
             onPick={(kind, label) => {
-              const { from, to } = picking;
+              const { from, to, fromPort, toPort } = picking;
               setPicking(null);
-              void ctl.connect(from, to, kind, label);
+              void ctl.connect(from, to, kind, label, { from_port: fromPort, to_port: toPort });
             }}
           />
         )}
