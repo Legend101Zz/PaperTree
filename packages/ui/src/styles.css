@@ -3155,6 +3155,9 @@ span.pt-paper .pt-paper__cite {
     display: none;
   }
   .pt-reader__controls .pt-zoom__select {
+    /* Not shrinkable: with the v0.2 faces the row's labels are wider, and a shrinking select fell
+       to 79 px, below the 80 px the RFIX2 screens test holds it to (readable "Fit width"). */
+    flex: none;
     inline-size: 6.25rem;
     max-inline-size: 6.25rem;
   }
