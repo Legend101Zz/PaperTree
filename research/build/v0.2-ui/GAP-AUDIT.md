@@ -1,7 +1,7 @@
 # v0.2 gap audit: the final design against the running app
 
 Checked on 2026-10-16 against `main` = `release/v0.2` = `79f637d` (v0.1.0 + docs), running on a copy of the README
-demo data (four accounts; YOLO, ResNet, BERT, Attention and DDPM with real parses and real stored MiniMax answers),
+demo data (four demo accounts; YOLO, ResNet, BERT, Attention and DDPM with real parses and real stored MiniMax answers),
 faux agent. Three agents audited one area each, frame by frame, against the PNGs at design size, the `.dc.html`
 mock-ups and the code; each row carries evidence (a `file:line`, an endpoint and what it returned, or a
 screenshot). The full tables, with an **Issue** column added to every frame row, are:
@@ -23,7 +23,7 @@ affected rows; the cause is recorded in `STATE.md`.
 
 | Area | Rows | exists | partial | missing | wrong |
 | --- | --- | --- | --- | --- | --- |
-| A1 library and book | ~90 | ~4 | ~20 | ~60 | 3 |
+| A1 library and book | 87 | 6 | 21 | 56 | 3 (+1 not confirmed) |
 | A2 reader, explain, diagrams | ~79 | 7 | 30 | 34 | 8 |
 | A3 notebook, board, system, motion | 98 | 11 | 31 | 50 | 6 |
 
@@ -94,7 +94,7 @@ flashes, the canvas basics with delete + Undo). Almost everything drawn in the 3
 11. **There is no `diagram` run kind anywhere** (agent contract, prompts, SSE, API, DB); ADR-004 §2.9 named the
     wrong prompt home: prompts live in `services/agent/src/prompts.ts`, `packages/prompts` is Python helpers (#216).
 12. **No theme switch**: dark follows the OS only; fonts are the system stack on purpose (the old Google Fonts
-    download broke offline builds), so the faces must be self-hosted (#188, done that way).
+    download broke offline builds), so the faces must be self-hosted (#188 does that: `next/font/local` over `@fontsource`).
 13. **500 cards**: the board loaded in 553 ms and zoom frames ran at a median 16.7 ms / p95 17.7 ms (load 3.6–9.1),
     with all 500 nodes in the DOM and the first view at the 0.2 zoom floor (unreadable) (#214, #215).
 14. **Map links are sparse on real data**: 2 citation links among the demo papers, both by title, none by arXiv id;
@@ -107,12 +107,12 @@ flashes, the canvas basics with delete + Undo). Almost everything drawn in the 3
 | Need | Issue | Migration |
 | --- | --- | --- |
 | Reading state; year, arXiv id and category, thread count, summary flag on the list; display name | #192 | 0006 |
-| Topics with source and acceptance; deterministic + Flash suggestion | #193 | 0007 |
+| Topics with source and acceptance; deterministic + Flash suggestion | #193 | 0009 |
 | Real citation links for the Map | #194 | none |
-| Figure list and the chosen plate (an Anchor) | #200 | 0008 |
+| Figure list and the chosen plate (an Anchor) | #200 | 0010 |
 | Thread `ask` and stable order; citation `locator`; message `coverage` | #201 | none |
-| Notebook pages, items (quote cards need an Anchor), strokes; Dive in seeding | #206 | 0009 |
-| Board card kinds and typed ports (rebuild) | #211 | 0010 |
+| Notebook pages, items (quote cards need an Anchor), strokes; Dive in seeding | #206 | 0007 |
+| Board card kinds and typed ports (rebuild) | #211 | 0008 |
 | Diagram runs: kind, prompt, NDJSON parts, quotes → Anchors, budget (rebuild) | #216 | 0011 |
 | A per-person daily cap ("Change the daily cap" in 04c) | not in v0.2 scope by default: the cap stays a server setting; 04c's link is drawn as text pointing to the setting. Filed with S4d's PR if the owner wants it. | — |
 

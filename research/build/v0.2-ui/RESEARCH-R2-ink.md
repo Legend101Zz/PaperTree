@@ -1,5 +1,10 @@
 # RESEARCH R2: ink, hatching and the notebook (PaperTree v0.2, Ex Libris)
 
+> **Licence verdicts here are superseded by ADR-004 §4** (the owner's ruling of 2026-10-16: any OSI open-source
+> code may be used, whole or in part). "Owner's call" below now means: allowed if open source (elkjs is); still out if
+> not open source (tldraw, React Flow Pro examples).
+
+
 Date read: 2026-10-16. Status: COMPLETE. Author: research agent R2 (unattended). Prototype files (not in the repo): `PaperTree-research/v0.2/prototypes/r2/` on the SSD (`geom.mjs`, `geom.test.mjs`, `store.mjs`, `bench1.mjs`, `r1.mjs`).
 
 ## Summary

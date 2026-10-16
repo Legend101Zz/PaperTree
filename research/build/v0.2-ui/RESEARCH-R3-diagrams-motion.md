@@ -1,5 +1,10 @@
 # RESEARCH R3 — diagrams, layout, motion, scale, 3D (PaperTree v0.2)
 
+> **Licence verdicts here are superseded by ADR-004 §4** (the owner's ruling of 2026-10-16: any OSI open-source
+> code may be used, whole or in part). "Owner's call" below now means: allowed if open source (elkjs is); still out if
+> not open source (tldraw, React Flow Pro examples).
+
+
 Date read: 2026-10-16. Status: complete.
 
 ## Summary (10 lines)

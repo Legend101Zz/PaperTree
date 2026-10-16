@@ -134,7 +134,8 @@ formatted.
 ## Order and parallelism
 
 1. S0 → S1a → (S1b ∥ S1c) → S1d. Backend slices only need S0: S2a, S4a and S5a can start beside S1.
-2. Library: S2a → S2b → S2c (backend, in migration order) ∥ S2d → S2e → S2f → S2g → S2h (UI, after S1).
+2. Library: S2a → S2c, and S2b after S2a (backend; migrations land in the order of the table above) ∥ S2d → S2e → S2f →
+   S2g → S2h (UI, after S1).
 3. S3 after S2d (the shelf it pulls from) and S2a (display name).
 4. Reader: S4a ∥ S4c; S4b after S1c and S4a; S4d after S4b; S4e last.
 5. Notebook: S5a ∥ S5b; S5c after S1c and S5b; S5d after S5c; S5e after S4b.

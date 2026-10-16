@@ -1,5 +1,10 @@
 # RESEARCH R1 - Canvas engines for the notebook and the board (PaperTree v0.2)
 
+> **Licence verdicts here are superseded by ADR-004 §4** (the owner's ruling of 2026-10-16: any OSI open-source
+> code may be used, whole or in part). "Owner's call" below now means: allowed if open source (elkjs is); still out if
+> not open source (tldraw, React Flow Pro examples).
+
+
 All evidence read 2026-10-16. Clone paths are under `/Volumes/Mrigesh SSD/PaperTree-research/v0.2/src/` (abbreviated `src/`). Clone heads: excalidraw `4c37956` (2026-10-14), tldraw `1304f95` (2026-10-16), xyflow `654ba5a` (2026-10-16), blocksuite `5cb5cb6` (2025-07-07). Bundle numbers I measured myself by `npm pack` + `gzip -9` of the published files (scratch folder, not in the repo); a real Next build was NOT run, so treat them as upper-bound estimates. Anything I could not verify is marked **NOT CONFIRMED**.
 
 ## Summary (recommendation first)

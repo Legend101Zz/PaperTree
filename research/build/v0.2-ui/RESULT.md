@@ -21,10 +21,12 @@ Run uncached in worktree `v02-ui` with `PaperTree-scratch/v02/gate/run-gate.sh`;
 | peak-RSS test, own process | pass | 29 s | 4.03 4.94 4.74 |
 | `pnpm e2e` (faux agent, YOLO PDF set) | **58 passed, 2 failed** in 15.9 min | — | 3.57 4.69 4.66 at start |
 
-**The two e2e failures are load flakes, not defects.** Both are in `e2e/s7/w2ui-canvas.spec.ts` ("a phone opens on
-the whole board…" and "a stale-version refusal…"), both timed out waiting 30 s for `.react-flow__node`, and both ran
-at 15:44 while this session was starting its dev stack (`next dev` compiling) and three audit agents. Re-run alone
-at 15:46 the whole file passed 4 of 4 (14.5 s and 12.7 s for the two). They are the baseline to beat, not a red.
+**The two e2e failures are not product defects, but their cause was not isolated.** Both are in `e2e/s7/w2ui-canvas.spec.ts`
+("a phone opens on the whole board…" and "a stale-version refusal…"), both timed out waiting 30 s for
+`.react-flow__node`, and both ran at 15:44, the moment this session started its own `next dev` in the same worktree
+(which shares `apps/web/.next` with the harness's server; see STATE.md) while three audit agents loaded the machine.
+Re-run alone at 15:46 the whole file passed 4 of 4 (14.5 s and 12.7 s for the two). So either the shared `.next` or
+the load caused it; the passing re-run shows the specs and the code are fine. They are the baseline, not a red.
 
 Known pre-existing warning: `pnpm add` reports an unmet peer, `@typescript-eslint/parser@^8.65.0` wanted by
 `@typescript-eslint/eslint-plugin@8` (v0.1's devDependency) against the 6.21.0 that `eslint-config-next` 14.1 brings.
@@ -32,7 +34,16 @@ Lint runs green with it.
 
 ## Slices
 
-(see PLAN.md; filled in at each merge)
+Each row: merged into `release/v0.2` (head verified an ancestor with `git merge-base --is-ancestor`), CI green on the
+head, the local uncached gate, and a code review whose findings were fixed before merge.
+
+| Slice | Issue | PR | Merged | Notes |
+| --- | --- | --- | --- | --- |
+| S0 tooling | #184 | #186 | e435bb6 | full gate on 8157cd7 (pytest 2,235); review fixes cf2d0a6 |
+| Prettier on apps/web | #187 | #220 | 3fe504b | mechanical: identical TS emit on all 98 files (review); found #219 |
+| S5b notebook model: page, stroke, outline | #207 | #225 | d02e4d0 | full gate on b3fdefa (pytest 2,235); review fixes 679bde2 (encoder bounds, strict decoder) |
+| S5b-2 lasso and eraser hit-testing | #221 | #232 | d51d7b3 | lasso by length inside; 50-vertex lasso over 500 × 80-point strokes ≈ 11 ms at load ~50 |
+| S5b-3 undo history | #222 | #233 | cf959cd | cap validated, duplicate ids refused, exact move undo |
 
 ## Live AI spend (estimates)
 
