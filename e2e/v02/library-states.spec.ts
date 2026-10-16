@@ -1,9 +1,14 @@
 /**
- * S2e (#196) on the real stack: an empty account shows the accession slip (frame 01b) → one corpus
- * PDF goes up through "choose files" → it stands on the shelf face-out (01c) → open it and go to
- * p. 3 → back in the library its cover says "p. 3 of 15" with Continue → Continue opens the reader
- * on p. 3, from the place the server stored (the browser's own place is cleared first, so this is
- * the cross-device path, not the reader restoring itself).
+ * S2e (#196) on the real stack: a new account → one corpus PDF goes up → it stands on the shelf
+ * face-out (01c) → open it and go to p. 3 → back in the library its cover says "p. 3 of 15" with
+ * Continue → Continue opens the reader on p. 3, from the place the server stored (the browser's own
+ * place is cleared first, so this is the cross-device path, not the reader restoring itself).
+ *
+ * The e2e web runs with the committed sample papers ON (harness/stack.ts), for every spec at once,
+ * so a new account is not empty: it shows the three samples, and that is asserted as it is. On a
+ * web without samples the same spec walks the accession slip (01b) instead. The slip itself is
+ * covered by apps/web/test/library-states.spec.tsx either way. One sample shares its title with
+ * the upload ("Attention Is All You Need"), so the uploaded book is found by its paper id only.
  *
  * A one-paper shelf stands face-out, and 01c carries Continue under the cover instead of the
  * Reading now strip; the strip above the spines is covered by apps/web/test/library-states.spec.tsx.
@@ -11,6 +16,8 @@
  */
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+
+import type { Locator } from '@playwright/test';
 
 import { expect, test } from '../harness/test';
 import { register, REPO, shotPath, topLine, waitParsed } from '../s4/support';
@@ -34,24 +41,39 @@ test('empty → upload → read to p. 3 → the library says p. 3 → Continue o
   await page.setViewportSize({ width: 1440, height: 900 });
   await tokenInit(page, token);
 
-  // ── the empty library: "No papers yet", the tabs, the accession slip ──
+  // ── a new account: the accession slip, or (samples on) the samples and no slip ──
   await page.goto('/dashboard');
+  const shelf = page.getByRole('toolbar', { name: 'Shelf' });
   const slip = page.getByRole('region', { name: 'Drop PDFs here or choose files' });
-  await expect(slip).toBeVisible({ timeout: 60_000 });
-  await expect(page.getByText('No papers yet', { exact: true })).toBeVisible();
+  await expect(slip.or(shelf)).toBeVisible({ timeout: 60_000 });
   await expect(page.getByRole('button', { name: 'Shelf' })).toBeVisible();
-  await page.screenshot({ path: shot('s2e-empty-1440.png') });
+  let choose: Locator;
+  if (await slip.isVisible()) {
+    await expect(page.getByText('No papers yet', { exact: true })).toBeVisible();
+    choose = slip.getByRole('button', { name: 'choose files' });
+  } else {
+    const samples = await shelf
+      .locator('button[data-paper-id]')
+      .evaluateAll((all) => all.map((el) => el.getAttribute('data-paper-id') ?? ''));
+    const note = `sample papers are on (${samples.join(', ')}): no accession slip on this stack`;
+    console.log(`[e2e s2e] ${note}; the empty slip is covered by library-states.spec.tsx`);
+    info.annotations.push({ type: 'samples', description: note });
+    expect(samples.length).toBeGreaterThan(0);
+    expect(samples.some((id) => id.startsWith('ppr_'))).toBe(false);
+    await expect(slip).toHaveCount(0);
+    choose = page.getByRole('button', { name: 'Add papers', exact: true });
+  }
+  await page.screenshot({ path: shot('s2e-new-account-1440.png') });
 
-  // ── "choose files" opens the picker; the PDF goes up and stands face-out ──
+  // ── the picker; the PDF goes up and stands face-out ──
   const chooser = page.waitForEvent('filechooser');
-  await slip.getByRole('button', { name: 'choose files' }).click();
+  await choose.click();
   const posted = page.waitForResponse(
     (r) => r.url() === `${stack.apiUrl}/papers` && r.request().method() === 'POST',
   );
   await (await chooser).setFiles(ATTENTION);
   const paperId = ((await (await posted).json()) as { paper_id: string }).paper_id;
   await waitParsed(stack.apiUrl, token, paperId);
-  const shelf = page.getByRole('toolbar', { name: 'Shelf' });
   const cover = shelf.locator(`button[data-paper-id="${paperId}"]`);
   await expect(cover).toHaveClass(/pt-cover/, { timeout: 60_000 });
   await expect(cover).toHaveAttribute('data-spine-state', 'ready', { timeout: 60_000 });
@@ -84,7 +106,7 @@ test('empty → upload → read to p. 3 → the library says p. 3 → Continue o
   // Clear this browser's own place, so Continue must use the server's (the other-device path).
   await page.evaluate((id) => window.localStorage.removeItem(`papertree/reader/${id}`), paperId);
   await page.goto('/dashboard');
-  const caption = shelf.locator('[data-cover-caption]').first();
+  const caption = shelf.locator(`[data-caption-paper-id="${paperId}"]`);
   await expect(caption).toContainText('p. 3 of 15', { timeout: 60_000 });
   await expect(cover.locator('.pt-cover__ribbon')).toBeAttached();
   await expect(page.locator('.pt-libtitle__stats')).toContainText('1 reading now');

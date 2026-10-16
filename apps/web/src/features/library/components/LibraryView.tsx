@@ -85,9 +85,10 @@ export function LibraryView(): ReactNode {
   const filtered = needALookOnly && stats !== null && stats.needALook > 0;
   const shelved = useMemo(() => (filtered ? books.filter(needsALook) : books), [books, filtered]);
   const matches = useMemo(() => matchPapers(shelved, search), [shelved, search]);
-  // A face-out shelf carries Continue under each cover (frame 01c draws no strip), so the strip
-  // stands above spines only.
-  const faceOut = shelfLayout(shelved.length) === 'face-out';
+  // A short library stands face-out and carries Continue under each cover (frame 01c draws no
+  // strip), so the strip stands above a library of spines only. Decided from the whole library,
+  // not the "need a look" filter, so filtering never takes Continue away (review N1).
+  const faceOut = shelfLayout(books.length) === 'face-out';
   const reading = useMemo(() => (faceOut ? [] : readingNow(books)), [faceOut, books]);
 
   // The filter ends when nothing needs a look any more, so a later upload cannot switch it back

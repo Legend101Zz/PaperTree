@@ -5,6 +5,8 @@
  */
 import { arrangeShelf, isReadingNow, type Arrangement, type ShelfPaper } from './shelf';
 
+import type { ReadingMode } from '@/lib/api/types';
+
 /** At or below this many papers the books stand face-out as covers (frame 01c). */
 export const FACE_OUT_MAX = 12;
 
@@ -86,42 +88,80 @@ export function coverRows<P extends ShelfPaper>(
   return rows;
 }
 
-const ZOOM_KINDS = new Set(['fit-width', 'fit-page', 'scale']);
+/** The reader's saved place (contracts.md §5), as `ReaderWorkspace`'s `readSavedReaderState` accepts it. */
+export interface ReaderPlace {
+  readonly v: 1;
+  readonly mode: ReadingMode;
+  readonly zoomMode:
+    | { readonly kind: 'fit-width' | 'fit-page' }
+    | { readonly kind: 'scale'; readonly scale: number };
+  readonly page: number;
+  readonly yPt: number;
+  readonly blockId?: string;
+}
+
+const MODES: ReadonlySet<unknown> = new Set(['source', 'guided', 'split']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+function isZoom(value: unknown): value is ReaderPlace['zoomMode'] {
+  if (!isRecord(value)) return false;
+  if (value['kind'] === 'fit-width' || value['kind'] === 'fit-page') return true;
+  const scale = value['scale'];
+  return (
+    value['kind'] === 'scale' && typeof scale === 'number' && Number.isFinite(scale) && scale > 0
+  );
+}
+
 /**
- * The reader place Continue writes before it opens a paper (contracts.md §5's `papertree/reader/
- * <paper_id>`, the reader's own restore). The server's page wins: it is the place on every device,
- * the browser's only on this one. A saved place already on that page is kept as it is (its exact
- * line), and a saved mode and zoom are kept; with none, the reader's own defaults (Source; fit-width
- * on a phone, 125 % otherwise).
+ * The browser's saved place, if the reader would restore it: the same checks as the reader's
+ * `readSavedReaderState` (a test holds the two together), so Continue never trusts a place the
+ * reader would throw away.
+ *
+ * @param saved - The parsed `papertree/reader/<paper_id>` value, or null.
+ * @returns The place, or null when the reader would ignore it.
+ */
+export function readerPlace(saved: unknown): ReaderPlace | null {
+  if (!isRecord(saved) || saved['v'] !== 1 || !MODES.has(saved['mode'])) return null;
+  const { page, yPt, zoomMode } = saved;
+  if (!isZoom(zoomMode) || typeof page !== 'number' || !Number.isInteger(page) || page < 0) {
+    return null;
+  }
+  if (typeof yPt !== 'number' || !Number.isFinite(yPt) || yPt < 0) return null;
+  return saved as unknown as ReaderPlace;
+}
+
+/** What Continue does before it opens the reader. */
+export interface ContinuePlan {
+  /** The place to store for the reader, or null to keep the one this browser has. */
+  readonly store: ReaderPlace | null;
+  /** A later page this browser holds than the server: send it again (its write was lost). */
+  readonly resend: { readonly page: number; readonly mode: ReadingMode } | null;
+}
+
+/**
+ * Where Continue opens the reader (contracts.md §5's `papertree/reader/<paper_id>`, the reader's
+ * own restore). The server's page is the place on every device, so it is stored when this browser
+ * has none, or an earlier one. A place already on that page is kept to the line. A LATER page here
+ * than on the server means this browser's write was lost (`readingStateSync` never retries), so
+ * that place is kept and sent again rather than erased (review S1). The cost: a person who went
+ * back on another device is returned to their furthest place here, which is the place they last
+ * saw on this screen.
  *
  * @param saved - What the browser holds for the paper, parsed (null when nothing).
  * @param page - The server's zero-based `last_page`.
- * @param narrow - The window is phone-width (under 768 px, as the reader decides).
- * @returns The place to store, or null when the stored one already opens on that page.
+ * @param narrow - The window is phone-width (under 768 px, as the reader decides its default zoom).
+ * @returns What to store and what to re-send.
  */
-export function placeForContinue(
-  saved: unknown,
-  page: number,
-  narrow: boolean,
-): Record<string, unknown> | null {
-  const zoom = isRecord(saved) ? saved['zoomMode'] : undefined;
-  const valid =
-    isRecord(saved) &&
-    saved['v'] === 1 &&
-    typeof saved['mode'] === 'string' &&
-    isRecord(zoom) &&
-    ZOOM_KINDS.has(String(zoom['kind']));
-  if (valid && saved['page'] === page) return null;
-  const kept = valid
-    ? { mode: saved['mode'], zoomMode: zoom }
-    : {
-        mode: 'source',
-        zoomMode: narrow ? { kind: 'fit-width' } : { kind: 'scale', scale: 1.25 },
-      };
-  return { v: 1, ...kept, page, yPt: 0 };
+export function planContinue(saved: unknown, page: number, narrow: boolean): ContinuePlan {
+  const here = readerPlace(saved);
+  if (here !== null && here.page > page) {
+    return { store: null, resend: { page: here.page, mode: here.mode } };
+  }
+  if (here !== null && here.page === page) return { store: null, resend: null };
+  const zoomMode: ReaderPlace['zoomMode'] =
+    here?.zoomMode ?? (narrow ? { kind: 'fit-width' } : { kind: 'scale', scale: 1.25 });
+  return { store: { v: 1, mode: here?.mode ?? 'source', zoomMode, page, yPt: 0 }, resend: null };
 }

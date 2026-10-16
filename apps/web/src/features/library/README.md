@@ -9,7 +9,10 @@ while you are reading it, a kraft wrap while we read it, a torn red label when w
   "p. 4 of 15", the rule and **Continue**. "N reading now" in the stats line counts the same set
   (`isReadingNow`). Continue writes the server's page into the reader's own place
   (`papertree/reader/<paper_id>`, contracts.md §5) and opens the reader, so a place read on another device is
-  honoured; a place already on that page keeps its exact line.
+  honoured; a place already on that page keeps its exact line; a LATER place in this browser than on the server
+  (its write was lost: `readingStateSync` never retries) is kept and sent to the server again
+  (`planContinue`). The library checks a stored place exactly as the reader does (`readerPlace`, held to the
+  reader's `readSavedReaderState` by `test/library-reader-place.spec.ts`).
 - **Empty** (01b): "No papers yet" in the stats slot, the view tabs (no Arrange by), and an empty plank with the
   accession slip: "Drop PDFs here or choose files" (the header's picker; drops land in the page-wide target)
   and what happens next.
@@ -17,8 +20,13 @@ while you are reading it, a kraft wrap while we read it, a torn red label when w
   typographic covers in their cloth, as many to a plank as fit (four at 1440 px), each with its caption under
   the plank: title, authors · year · pages, the topic once topics exist, then Continue with the rule while you
   read it, or the state ("Read", "Not started", "Queued"…) and Open. The covers keep the spines' keyboard
-  model (`useRovingShelf`); the caption's buttons are ordinary tab stops. A face-out shelf carries Continue
-  itself, so Reading now is not shown above it (01c draws no strip).
+  model (`useRovingShelf`); the caption's buttons are ordinary tab stops. A face-out library carries Continue
+  itself, so Reading now is not shown above it (01c draws no strip); the strip is decided from the whole
+  library, so the "need a look" filter never hides it.
+- **Focus across layouts:** the shelf swaps components at its thresholds, so the roving tab stop lives in the
+  section (`useShelfFocus`), keyed by paper id. When a commit removes the focused book (Delete, an upload
+  crossing a threshold, a poll) and focus fell to the page, it goes back to the same paper's book, or Delete's
+  neighbour; focus the person moved elsewhere is left alone.
 
 - **Header:** the sprout and name; the search ("/" focuses it, Esc clears it, "2 of 24" inside the field, Enter
   takes down the first match); Add papers; Aa (the theme switch from `features/settings`); the account (its

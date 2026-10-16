@@ -1103,10 +1103,11 @@
   padding: 22px 28px 0;
 }
 
+/* 264 px columns that may shrink, so a 320 px window does not scroll sideways (WCAG 1.4.10). */
 .pt-covers__slot,
 .pt-covercap {
-  flex: none;
-  inline-size: 264px;
+  flex: 0 1 264px;
+  min-inline-size: 0;
 }
 
 .pt-covers__slot {

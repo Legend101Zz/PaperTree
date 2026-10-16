@@ -11,7 +11,8 @@ import {
   READING_NOW_MAX,
   coverRows,
   coversPerRow,
-  placeForContinue,
+  planContinue,
+  readerPlace,
   readingNow,
   shelfLayout,
 } from './states';
@@ -113,34 +114,52 @@ describe("Continue's reader place", () => {
   };
 
   it('keeps a saved place already on the page, to the line', () => {
-    expect(placeForContinue(saved, 3, false)).toBeNull();
+    expect(planContinue(saved, 3, false)).toEqual({ store: null, resend: null });
   });
 
-  it("moves a saved place to the server's page, keeping its mode and zoom", () => {
-    expect(placeForContinue(saved, 7, false)).toEqual({
-      v: 1,
-      mode: 'guided',
-      zoomMode: { kind: 'fit-page' },
-      page: 7,
-      yPt: 0,
+  it("moves an earlier saved place to the server's page, keeping its mode and zoom", () => {
+    expect(planContinue(saved, 7, false)).toEqual({
+      store: { v: 1, mode: 'guided', zoomMode: { kind: 'fit-page' }, page: 7, yPt: 0 },
+      resend: null,
+    });
+  });
+
+  it("keeps a later place than the server's, and sends it again (its write was lost)", () => {
+    expect(planContinue({ ...saved, page: 9 }, 2, false)).toEqual({
+      store: null,
+      resend: { page: 9, mode: 'guided' },
     });
   });
 
   it("writes the reader's defaults when nothing (or nothing valid) is saved", () => {
-    expect(placeForContinue(null, 2, false)).toEqual({
+    expect(planContinue(null, 2, false).store).toEqual({
       v: 1,
       mode: 'source',
       zoomMode: { kind: 'scale', scale: 1.25 },
       page: 2,
       yPt: 0,
     });
-    expect(placeForContinue({ v: 2, page: 2 }, 2, true)).toEqual({
+    expect(planContinue({ v: 2, page: 2 }, 2, true).store).toEqual({
       v: 1,
       mode: 'source',
       zoomMode: { kind: 'fit-width' },
       page: 2,
       yPt: 0,
     });
-    expect(placeForContinue('garbage', 0, false)?.['page']).toBe(0);
+    expect(planContinue('garbage', 0, false).store?.page).toBe(0);
+  });
+
+  it('never trusts a place the reader would throw away (review N2)', () => {
+    // An unknown mode, a scale with no number, a negative scale: the reader rejects each whole.
+    for (const bad of [
+      { ...saved, mode: 'notes' },
+      { ...saved, zoomMode: { kind: 'scale' } },
+      { ...saved, zoomMode: { kind: 'scale', scale: -1 } },
+      { ...saved, page: 2.5 },
+      { ...saved, yPt: -4 },
+    ]) {
+      expect(readerPlace(bad)).toBeNull();
+      expect(planContinue(bad, 3, false).store?.zoomMode).toEqual({ kind: 'scale', scale: 1.25 });
+    }
   });
 });

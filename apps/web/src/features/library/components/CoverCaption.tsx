@@ -12,8 +12,8 @@ import { ArrowRight } from 'lucide-react';
 import { TOUCH_TARGET } from '@/components/library/primitives';
 
 import { useTouchTargets } from '../hooks/useTouchTargets';
-import { clothFor, readingPage, type ShelfPaper } from '../model/shelf';
-import { cardStateLine, metaLine } from './CatalogueCard';
+import { cardStateLine, metaLine } from '../model/catalogue';
+import { clothFor, isReadingNow, readingPage } from '../model/shelf';
 
 import type { LibraryBook } from '../hooks/useLibrary';
 import type { CSSProperties, ReactNode } from 'react';
@@ -37,16 +37,16 @@ export function CoverCaption({ book, onOpen, onContinue }: CoverCaptionProps): R
   const touch = useTouchTargets();
   const size = touch ? 'touch' : 'md';
   const target = touch ? TOUCH_TARGET : undefined;
-  const at = readingPage(book);
+  // Continue under a cover for exactly the papers in Reading now and "N reading now" (review N6).
+  const at = isReadingNow(book) ? readingPage(book) : null;
   const title = book.title.trim();
-  // A topic arrives with S2b (#193); until then a book has none and the line is left out.
-  const { topic } = book as ShelfPaper;
+  const { topic } = book;
   // The Reading now row's rule and page (ui `.pt-readnow__*`), so both progress readouts match.
   const fill = {
     '--pt-readnow-fill': `${at === null ? 0 : readingFraction(at.page, at.of) * 100}%`,
   };
   return (
-    <div className="pt-covercap" data-cover-caption="">
+    <div className="pt-covercap" data-cover-caption="" data-caption-paper-id={book.id}>
       <p className="pt-covercap__title">{title}</p>
       <p className="pt-covercap__meta">{metaLine(book)}</p>
       {topic ? (

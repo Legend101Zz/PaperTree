@@ -1,26 +1,30 @@
 /**
  * useContinue: Continue opens the reader at the page the server has for you (#196). The reader
  * restores its place from `papertree/reader/<paper_id>` (contracts.md §5), so Continue writes the
- * server's page there first (`placeForContinue`) and then opens the paper: a place read on another
- * device is honoured, and a place already on that page keeps its exact line.
+ * server's page there first (`planContinue`) and then opens the paper: a place read on another
+ * device is honoured, a place already on that page keeps its exact line, and a later place here
+ * (a write the server never got) is kept and sent again.
  */
 'use client';
 
 import { useCallback } from 'react';
 
+import { papersApi } from '@/lib/api/papers';
 import { readerStorageKey, resolvePaperRef } from '@/lib/paperSource';
 
-import { placeForContinue } from '../model/states';
+import { planContinue } from '../model/states';
 
 import type { ShelfPaper } from '../model/shelf';
 
 /**
- * Stores the reader place for Continue; storage that is blocked only costs the exact page.
+ * Prepares the reader for Continue: stores the server's page as the reader's place, or keeps a
+ * later place this browser holds and sends it to the server again. Storage that is blocked costs
+ * the exact place: the reader then opens at its own default.
  *
  * @param paperId - The paper.
  * @param lastPage - The server's zero-based page.
  */
-function storeContinuePlace(paperId: string, lastPage: number): void {
+function prepareContinue(paperId: string, lastPage: number): void {
   const key = readerStorageKey(resolvePaperRef(paperId));
   try {
     const raw = window.localStorage.getItem(key);
@@ -30,8 +34,12 @@ function storeContinuePlace(paperId: string, lastPage: number): void {
     } catch {
       saved = null; // a corrupt entry is replaced, as the reader would ignore it
     }
-    const next = placeForContinue(saved, lastPage, window.innerWidth < 768);
-    if (next !== null) window.localStorage.setItem(key, JSON.stringify(next));
+    const plan = planContinue(saved, lastPage, window.innerWidth < 768);
+    if (plan.store !== null) window.localStorage.setItem(key, JSON.stringify(plan.store));
+    if (plan.resend !== null) {
+      // Best effort, as the reader's own writes are; the reader writes again once it shows the page.
+      papersApi.putReadingState(paperId, plan.resend.page, plan.resend.mode).catch(() => undefined);
+    }
   } catch {
     // Private mode or full storage: the reader opens where it can, never a crash.
   }
@@ -50,7 +58,7 @@ export function useContinue(open: (paperId: string) => void): (paper: ShelfPaper
   return useCallback(
     (paper: ShelfPaper) => {
       const page = paper.reading?.last_page;
-      if (typeof page === 'number') storeContinuePlace(paper.id, page);
+      if (typeof page === 'number') prepareContinue(paper.id, page);
       open(paper.id);
     },
     [open],

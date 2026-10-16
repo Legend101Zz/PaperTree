@@ -134,6 +134,7 @@ export function corpusRows(count: number): LibraryPaper[] {
       arxiv_category: category,
       thread_count: 0,
       has_summary: false,
+      topic: null,
     };
   });
 }

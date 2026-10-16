@@ -73,8 +73,10 @@ test('search lights the shelf, the keyboard walks it, a drop anywhere uploads', 
   await expect(search).toHaveValue('');
   await expect(shelf.locator('[data-match]')).toHaveCount(0);
 
-  // One tab stop; ← → along the shelf; Enter takes it down; Esc puts it back.
-  await expect(shelf.locator('[tabindex="0"]')).toHaveCount(1);
+  // The books are one tab stop (the rest are -1); ← → along the shelf; Enter takes it down; Esc
+  // puts it back. A face-out shelf's caption buttons (Open, Continue) are their own tab stops.
+  await expect(spines.and(page.locator('[tabindex="0"]'))).toHaveCount(1);
+  await expect(spines.and(page.locator('[tabindex="-1"]'))).toHaveCount(total - 1);
   await spines.first().focus();
   await page.keyboard.press('ArrowRight');
   const second = spines.nth(1);

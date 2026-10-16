@@ -25,6 +25,7 @@ const api = vi.hoisted(() => ({
   retry: vi.fn(),
   remove: vi.fn(),
   uploadWithProgress: vi.fn(),
+  putReadingState: vi.fn(),
 }));
 vi.mock('@/lib/api/papers', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api/papers')>()),
@@ -57,6 +58,7 @@ function row(
     arxiv_category: null,
     thread_count: 0,
     has_summary: false,
+    topic: null,
     ...overrides,
   };
 }
@@ -101,8 +103,17 @@ async function renderLibrary(rows: LibraryPaper[]) {
   await waitFor(() =>
     expect(screen.queryByRole('status', { name: 'Loading your papers' })).toBeNull(),
   );
-  return view;
+  return { ...view, client };
 }
+
+/** The server now lists `rows`, and the library reads it again (as a poll would). */
+async function serverNowLists(client: QueryClient, rows: LibraryPaper[]): Promise<void> {
+  api.list.mockResolvedValue(rows);
+  await act(() => client.invalidateQueries({ queryKey: ['papers'] }));
+}
+
+const bookOf = (paperId: string) =>
+  document.querySelector<HTMLElement>(`button[data-paper-id="${paperId}"]`);
 
 const books = (shelf: HTMLElement) =>
   within(shelf)
@@ -281,5 +292,105 @@ describe('a short library stands face-out', () => {
     const spines = books(screen.getByRole('toolbar', { name: 'Shelf' }));
     expect(spines).toHaveLength(13);
     expect(spines.every((s) => s.classList.contains('pt-spine'))).toBe(true);
+  });
+});
+
+describe('a library of spines (13 to 40 papers) at page level (review S2)', () => {
+  it('is one tab stop; the arrows walk it; Enter takes a book down, Esc puts it back', async () => {
+    await renderLibrary(corpusRows(13));
+    const shelf = screen.getByRole('toolbar', { name: 'Shelf' });
+    const spines = books(shelf);
+    expect(spines.every((s) => s.classList.contains('pt-spine'))).toBe(true);
+    expect(spines.filter((s) => s.tabIndex === 0)).toEqual([spines[0]]);
+    spines[0]?.focus();
+    fireEvent.keyDown(spines[0] as HTMLElement, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(spines[1]);
+    fireEvent.keyDown(spines[1] as HTMLElement, { key: 'End' });
+    expect(document.activeElement).toBe(spines[12]);
+    fireEvent.click(spines[12] as HTMLElement);
+    const card = await screen.findByRole('region', { name: /^Asynchronous Methods/ });
+    expect(document.activeElement).toBe(within(card).getByRole('button', { name: /^Read / }));
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' });
+    expect(document.activeElement).toBe(spines[12]);
+  });
+});
+
+describe('focus survives a change of layout (review B2)', () => {
+  async function deleteByCard(paperId: string): Promise<void> {
+    fireEvent.click(bookOf(paperId) as HTMLElement);
+    const card = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>(`[data-card-paper-id="${paperId}"]`);
+      if (found === null) throw new Error('no card');
+      return found;
+    });
+    fireEvent.click(within(card).getByRole('button', { name: /^Delete / }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Delete paper' }));
+  }
+
+  it('Delete at 13 papers (spines → covers) lands on the next book, now a cover', async () => {
+    api.remove.mockResolvedValue(undefined);
+    await renderLibrary(corpusRows(13));
+    await deleteByCard('ppr_c5');
+    await waitFor(() => expect(bookOf('ppr_c6')?.classList.contains('pt-cover')).toBe(true));
+    expect(document.activeElement).toBe(bookOf('ppr_c6'));
+    expect(bookOf('ppr_c6')?.tabIndex).toBe(0);
+  });
+
+  it('Delete of the last book at 13 lands on the one before it', async () => {
+    api.remove.mockResolvedValue(undefined);
+    await renderLibrary(corpusRows(13));
+    await deleteByCard('ppr_c12');
+    await waitFor(() => expect(document.activeElement).toBe(bookOf('ppr_c11')));
+    expect(bookOf('ppr_c11')?.classList.contains('pt-cover')).toBe(true);
+  });
+
+  it('a 13th paper arriving while a cover has focus keeps focus on that paper, now a spine', async () => {
+    const { client } = await renderLibrary(corpusRows(12));
+    bookOf('ppr_c3')?.focus();
+    expect(document.activeElement?.classList.contains('pt-cover')).toBe(true);
+    await serverNowLists(client, corpusRows(13));
+    await waitFor(() => expect(bookOf('ppr_c3')?.classList.contains('pt-spine')).toBe(true));
+    expect(document.activeElement).toBe(bookOf('ppr_c3'));
+    expect(bookOf('ppr_c3')?.tabIndex).toBe(0);
+  });
+
+  it("a 13th paper arriving while a caption's Continue has focus moves it to that paper", async () => {
+    const rows = corpusRows(12).map((row, i) =>
+      i === 2 ? { ...row, reading: readingAt(3, 25, '2026-10-14T09:00:00Z') } : row,
+    );
+    const { client } = await renderLibrary(rows);
+    screen.getByRole('button', { name: /^Continue reading Denoising/ }).focus();
+    await serverNowLists(client, [...rows, ...corpusRows(13).slice(12)]);
+    await waitFor(() => expect(bookOf('ppr_c2')?.classList.contains('pt-spine')).toBe(true));
+    expect(document.activeElement).toBe(bookOf('ppr_c2'));
+  });
+
+  it('never takes focus from where the person moved it', async () => {
+    const { client } = await renderLibrary(corpusRows(12));
+    bookOf('ppr_c3')?.focus();
+    const search = screen.getByRole('searchbox', { name: 'Search the library' });
+    search.focus();
+    await serverNowLists(client, corpusRows(13));
+    await waitFor(() => expect(bookOf('ppr_c3')?.classList.contains('pt-spine')).toBe(true));
+    expect(document.activeElement).toBe(search);
+  });
+});
+
+describe('Continue keeps a later place this browser holds (review S1)', () => {
+  it('keeps it, sends it to the server again, and opens the reader there', async () => {
+    api.putReadingState.mockResolvedValue(undefined);
+    const rows = corpusRows(14).map((row, i) =>
+      i === 0 ? { ...row, reading: readingAt(2, 15, '2026-10-14T09:00:00Z') } : row,
+    );
+    // The reader showed p. 10 here, but its write never reached the server (p. 3 there).
+    const here = { v: 1, mode: 'source', zoomMode: { kind: 'fit-width' }, page: 9, yPt: 120 };
+    window.localStorage.setItem('papertree/reader/ppr_c0', JSON.stringify(here));
+    await renderLibrary(rows);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Continue reading Attention Is All You Need' }),
+    );
+    expect(JSON.parse(window.localStorage.getItem('papertree/reader/ppr_c0') ?? '')).toEqual(here);
+    expect(api.putReadingState).toHaveBeenCalledWith('ppr_c0', 9, 'source');
+    expect(push).toHaveBeenCalledWith('/paper/ppr_c0/read');
   });
 });

@@ -22,21 +22,31 @@ export interface RovingShelf {
   readonly onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
 }
 
+/** The tab stop held by the shelf section, so it survives a change of layout (`useShelfFocus`). */
+export interface LiftedFocus {
+  readonly focusedId: string | null;
+  readonly onFocusBook: (paperId: string) => void;
+}
+
 /**
  * The roving tab stop and key handling for a shelf toolbar.
  *
  * @param order - Every book's id, in the order the keys walk them.
  * @param openId - The book whose catalogue card is open.
  * @param onPutBack - Esc while a card is open.
+ * @param lifted - The section's tab stop; without it (a shelf on its own) the hook keeps its own.
  * @returns The toolbar ref, the tab stop and the handlers.
  */
 export function useRovingShelf(
   order: readonly string[],
   openId: string | null,
   onPutBack?: () => void,
+  lifted?: LiftedFocus,
 ): RovingShelf {
   const toolbar = useRef<HTMLDivElement>(null);
-  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [ownId, setOwnId] = useState<string | null>(null);
+  const focusedId = lifted === undefined ? ownId : lifted.focusedId;
+  const setFocusedId = lifted === undefined ? setOwnId : lifted.onFocusBook;
   // The spine that last had focus, else the open one, else the first. A deleted paper's id falls
   // through to the next rule, so the shelf never loses its tab stop.
   const stop =
@@ -59,7 +69,7 @@ export function useRovingShelf(
       setFocusedId(id);
       toolbar.current?.querySelector<HTMLElement>(`[data-paper-id="${CSS.escape(id)}"]`)?.focus();
     },
-    [order, stop, openId, onPutBack],
+    [order, stop, openId, onPutBack, setFocusedId],
   );
   return { toolbar, stop, onFocusBook: setFocusedId, onKeyDown };
 }

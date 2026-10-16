@@ -9,7 +9,7 @@
 import { paperCountLabel } from '@papertree/ui';
 import { useMemo } from 'react';
 
-import { useRovingShelf } from '../hooks/useRovingShelf';
+import { useRovingShelf, type LiftedFocus } from '../hooks/useRovingShelf';
 import { arrangeShelf, type Arrangement, type ShelfPaper } from '../model/shelf';
 import { ShelfPlank, PlankHolder } from './ShelfPlank';
 import { Spine } from './Spine';
@@ -30,6 +30,8 @@ export interface ShelfProps {
   readonly onActivate: (paperId: string) => void;
   /** Esc on the shelf while a card is open: put the book back. */
   readonly onPutBack?: () => void;
+  /** The section's tab stop, so it survives a change of layout (#196). */
+  readonly focus?: LiftedFocus;
 }
 
 /**
@@ -47,10 +49,11 @@ export function Shelf({
   cardId,
   onActivate,
   onPutBack,
+  focus,
 }: ShelfProps): ReactNode {
   const groups = useMemo(() => arrangeShelf(papers, arrangement), [papers, arrangement]);
   const order = useMemo(() => groups.flatMap((g) => g.papers.map((p) => p.id)), [groups]);
-  const { toolbar, stop, onFocusBook, onKeyDown } = useRovingShelf(order, openId, onPutBack);
+  const { toolbar, stop, onFocusBook, onKeyDown } = useRovingShelf(order, openId, onPutBack, focus);
 
   return (
     <ShelfPlank>

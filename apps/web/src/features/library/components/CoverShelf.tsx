@@ -9,7 +9,7 @@
 import { useMemo, useRef } from 'react';
 
 import { useElementWidth } from '../hooks/useElementWidth';
-import { useRovingShelf } from '../hooks/useRovingShelf';
+import { useRovingShelf, type LiftedFocus } from '../hooks/useRovingShelf';
 import { coverRows, coversPerRow } from '../model/states';
 import { Cover } from './Cover';
 import { CoverCaption } from './CoverCaption';
@@ -30,6 +30,8 @@ export interface CoverShelfProps {
   /** A cover was clicked or Entered: take the book down. */
   readonly onActivate: (paperId: string) => void;
   readonly onPutBack?: () => void;
+  /** The section's tab stop, so it survives a change of layout. */
+  readonly focus?: LiftedFocus;
   /** A caption's Open. */
   readonly onOpen: (paperId: string) => void;
   /** A caption's Continue. */
@@ -51,6 +53,7 @@ export function CoverShelf({
   cardId,
   onActivate,
   onPutBack,
+  focus,
   onOpen,
   onContinue,
 }: CoverShelfProps): ReactNode {
@@ -61,7 +64,7 @@ export function CoverShelf({
     [papers, arrangement, width],
   );
   const order = useMemo(() => rows.flat().map((paper) => paper.id), [rows]);
-  const { toolbar, stop, onFocusBook, onKeyDown } = useRovingShelf(order, openId, onPutBack);
+  const { toolbar, stop, onFocusBook, onKeyDown } = useRovingShelf(order, openId, onPutBack, focus);
   return (
     <div ref={host} className="pt-covers">
       <div

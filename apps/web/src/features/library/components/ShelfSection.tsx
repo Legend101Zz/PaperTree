@@ -11,6 +11,7 @@
 import { useCallback, useId, useMemo, useRef } from 'react';
 
 import { useCardPlacement } from '../hooks/useCardPlacement';
+import { useShelfFocus } from '../hooks/useShelfFocus';
 import { arrangeShelf } from '../model/shelf';
 import { shelfLayout } from '../model/states';
 import { CatalogueCard } from './CatalogueCard';
@@ -22,8 +23,8 @@ import type { LibraryBook } from '../hooks/useLibrary';
 import type { Arrangement } from '../model/shelf';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
 
-/** Focus a spine by its paper id. */
-function focusSpine(paperId: string): void {
+/** Focus a book by its paper id. */
+function focusBook(paperId: string): void {
   document.querySelector<HTMLElement>(`[data-paper-id="${CSS.escape(paperId)}"]`)?.focus();
 }
 
@@ -65,6 +66,11 @@ export function ShelfSection({
   onDelete,
 }: ShelfSectionProps): ReactNode {
   const band = useRef<HTMLDivElement>(null);
+  const focus = useShelfFocus();
+  const lifted = useMemo(
+    () => ({ focusedId: focus.focusedId, onFocusBook: focus.setFocusedId }),
+    [focus.focusedId, focus.setFocusedId],
+  );
   const faceOut = shelfLayout(books.length) === 'face-out';
   const cardId = useId();
   const openBook = books.find((book) => book.id === openId) ?? null;
@@ -81,7 +87,7 @@ export function ShelfSection({
     [setOpenId],
   );
   const putBack = useCallback(() => {
-    if (shownId !== null) focusSpine(shownId);
+    if (shownId !== null) focusBook(shownId);
     setOpenId(null);
   }, [shownId, setOpenId]);
   // The Retry button leaves with the failed state, so focus goes to Read, which stays.
@@ -93,16 +99,19 @@ export function ShelfSection({
     [onRetry, cardId],
   );
   // The deleted book's card and spine leave; focus stays on the shelf, next to where it stood.
+  // After the commit, not now: losing a book can re-lay the shelf out (13 → 12 is face-out), and
+  // a neighbour focused in the old layout would be unmounted with it (review B2).
+  const { focusAfterCommit } = focus;
   const remove = useCallback(
     async (paperId: string) => {
       const at = order.indexOf(paperId);
       const neighbour = order[at + 1] ?? order[at - 1];
       await onDelete(paperId);
       setOpenId(null);
-      if (neighbour !== undefined) focusSpine(neighbour);
+      if (neighbour !== undefined) focusAfterCommit(neighbour);
       else document.querySelector<HTMLElement>('[data-add-papers] button')?.focus();
     },
-    [order, onDelete, setOpenId],
+    [order, onDelete, setOpenId, focusAfterCommit],
   );
   const toShelf = useCallback(() => {
     document
@@ -111,8 +120,10 @@ export function ShelfSection({
   }, []);
   return (
     <section
+      ref={focus.section}
       className={`pt-shelfband${faceOut ? ' pt-shelfband--faceout' : ''}`}
       aria-label="Your shelf"
+      onFocus={focus.onFocus}
     >
       <div className="pt-shelfband__band" ref={band}>
         {openBook === null ? null : (
@@ -141,6 +152,7 @@ export function ShelfSection({
           cardId={cardId}
           onActivate={takeDown}
           onPutBack={putBack}
+          focus={lifted}
           onOpen={onRead}
           onContinue={onContinue}
         />
@@ -153,6 +165,7 @@ export function ShelfSection({
           cardId={cardId}
           onActivate={takeDown}
           onPutBack={putBack}
+          focus={lifted}
         />
       )}
       <ShelfHints
