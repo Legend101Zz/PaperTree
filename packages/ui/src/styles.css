@@ -3822,7 +3822,7 @@ button.pt-holder {
   background-image: repeating-linear-gradient(
     180deg,
     transparent 0 23px,
-    rgb(60 96 130 / 13%) 23px 24px
+    var(--pt-call-slip-rule) 23px 24px
   );
   box-shadow: var(--pt-e1);
   border-radius: var(--pt-radius-paper);
@@ -3864,6 +3864,11 @@ button.pt-holder {
 }
 
 .pt-call-slip__quote-text {
+  /* Hang the opening mark INSIDE the clipping box: a negative indent alone is cut off by
+     overflow: hidden (review #231/2), so the box grows left by the hang and pads it back. */
+  margin-inline-start: -0.42em;
+  padding-inline-start: 0.42em;
+  text-indent: -0.42em;
   flex: 1;
   min-inline-size: 0;
   overflow: hidden;
@@ -3922,8 +3927,12 @@ button.pt-holder {
   /* Beside the standing AI tab, above the stock (04-reader-explain). */
   position: absolute;
   inset-inline-start: 64px;
+  inset-inline-end: 16px;
   inset-block-start: -20px;
   margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font: var(--pt-t-label-s) / 20px var(--pt-font-ai);
   color: var(--pt-ink-2);
 }
@@ -3931,19 +3940,40 @@ button.pt-holder {
 .pt-ai-slip__grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--pt-space-4);
+  column-gap: var(--pt-space-4);
+  row-gap: var(--pt-space-3);
+}
+
+/* A paragraph and its margin cell are one grid row (display: contents keeps them siblings of the
+   grid), so a marker and tab sit level with the paragraph they belong to. Content that is not an
+   AiParagraph spans both columns. */
+.pt-ai-slip__row {
+  display: contents;
+}
+
+.pt-ai-slip__grid > :not(.pt-ai-slip__row) {
+  grid-column: 1 / -1;
+}
+
+.pt-ai-slip__text {
+  margin: 0;
 }
 
 .pt-ai-slip__aside {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: var(--pt-space-2);
   align-items: flex-start;
+  align-content: flex-start;
 }
 
 @media (max-width: 480px) {
+  .pt-ai-slip__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .pt-ai-slip__aside {
-    display: none; /* the margin column is desktop only */
+    display: none; /* the margin column is desktop only; the trace list carries the passages */
   }
 }
 
@@ -3988,9 +4018,13 @@ button.pt-holder {
   border-radius: var(--pt-radius-paper);
 }
 
+.pt-trace-row + .pt-trace-row {
+  border-block-start: 1px solid var(--pt-rule); /* the design's row divider */
+}
+
 .pt-trace-row.is-lit {
   background: var(--pt-lit-wash);
-  box-shadow: inset 0 0 0 1px rgb(160 120 40 / 25%);
+  box-shadow: inset 0 0 0 1px var(--pt-lit-ring);
 }
 
 .pt-trace-row__body {
@@ -4012,6 +4046,9 @@ button.pt-holder {
 }
 
 .pt-trace-row__quote {
+  margin-inline-start: -0.42em; /* same hang as .pt-call-slip__quote-text */
+  padding-inline-start: 0.42em;
+  text-indent: -0.42em;
   display: -webkit-box;
   overflow: hidden;
   -webkit-line-clamp: 1;
@@ -4024,9 +4061,19 @@ button.pt-holder {
   -webkit-line-clamp: 3;
 }
 
-.pt-trace-row__show {
+/* "Show in paper" is drawn here as the design's secondary button (32 px, 1 px control edge, page
+   fill, 14 px) on top of the v0.1 `.pt-btn` class; it becomes `Button variant="secondary"` once
+   this chain sits on S1b. */
+.pt-trace-row__show.pt-btn {
   flex: none;
-  min-block-size: var(--pt-target-desktop);
+  min-block-size: 32px;
+  min-inline-size: 0;
+  padding-inline: var(--pt-space-3);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+  background: var(--pt-page);
+  color: var(--pt-ink);
+  font: var(--pt-t-meta) / 1 var(--pt-font-ai);
 }
 
 .pt-trace-row--touch {

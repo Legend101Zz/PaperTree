@@ -8,7 +8,14 @@
 import axe from 'axe-core';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { AiSlip, CallSlip, CoverageReadout, NumberedMarker, TraceList } from '@papertree/ui';
+import {
+  AiParagraph,
+  AiSlip,
+  CallSlip,
+  CoverageReadout,
+  NumberedMarker,
+  TraceList,
+} from '@papertree/ui';
 
 afterEach(cleanup);
 
@@ -34,11 +41,12 @@ describe('axe over the voices', () => {
           <AiSlip
             model="M3.1 Flash"
             source="from the paper"
-            aside={<NumberedMarker n={1} label="p. 1 ¶1" onFlash={() => undefined} />}
             footer={<CoverageReadout passages={2} citations={3} uncitedParagraphs={1} />}
             uncited={<p>My own reading.</p>}
           >
-            <p>A claim.</p>
+            <AiParagraph aside={<NumberedMarker n={1} label="p. 1 ¶1" onFlash={() => undefined} />}>
+              A claim.
+            </AiParagraph>
           </AiSlip>
           <TraceList rows={ROWS} lit={2} layout={layout} onShowInPaper={() => undefined} />
         </main>,

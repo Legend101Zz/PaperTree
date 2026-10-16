@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { AiSlip, CallSlip, TraceList, type TraceRowData } from '../src/index.js';
+import { AiParagraph, AiSlip, CallSlip, TraceList, type TraceRowData } from '../src/index.js';
 
 afterEach(cleanup);
 
@@ -55,6 +55,15 @@ describe('CallSlip', () => {
     expect(screen.getByText('2:14 pm')).not.toBeNull();
   });
 
+  it('is a labelled group (not a landmark), with a label and dateTime of its own', () => {
+    const { container } = render(
+      <CallSlip ask="Why?" time="9:00 am" label="Ihre Frage" dateTime="2026-10-16T09:00" />,
+    );
+    expect(screen.getByRole('group', { name: 'Ihre Frage' })).not.toBeNull();
+    expect(container.querySelector('section')).toBeNull();
+    expect(container.querySelector('time')?.getAttribute('datetime')).toBe('2026-10-16T09:00');
+  });
+
   it('takes another initial and omits the quote when none is given', () => {
     const { container } = render(<CallSlip initial="R" ask="Why?" time="9:00 am" />);
     expect(container.querySelector('.pt-call-slip__stamp')?.textContent).toBe('R');
@@ -68,11 +77,10 @@ describe('AiSlip', () => {
       <AiSlip
         model="M3.1 Flash"
         source="from the paper"
-        aside={<span>margin</span>}
         footer={<span>estimate: 1.2k tokens</span>}
         uncited={<p>My own reading.</p>}
       >
-        <p>Cited claim.</p>
+        <AiParagraph aside={<span>margin</span>}>Cited claim.</AiParagraph>
       </AiSlip>,
     );
     const slip = container.querySelector('[data-voice="ai"]');
@@ -86,6 +94,51 @@ describe('AiSlip', () => {
     ).not.toBeNull();
     // The reserved marker is AiText's alone (provenance.spec); the slip must not emit it.
     expect(container.textContent).not.toContain('⊙');
+  });
+
+  it('puts each paragraph and its margin cell on the same grid row', () => {
+    const { container } = render(
+      <AiSlip model="m" source="s">
+        <AiParagraph aside={<span>marker 1</span>}>
+          First paragraph, long enough to wrap.
+        </AiParagraph>
+        <AiParagraph>Second, with no citation.</AiParagraph>
+        <AiParagraph aside={<span>marker 3</span>}>Third.</AiParagraph>
+      </AiSlip>,
+    );
+    const grid = container.querySelector('.pt-ai-slip__grid') as HTMLElement;
+    const rows = [...grid.children] as HTMLElement[];
+    expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      // One row wrapper per paragraph, holding its text cell then its margin cell, so the two can
+      // only ever land on the same grid row (the wrapper is `display: contents`).
+      expect(row.className).toBe('pt-ai-slip__row');
+      expect([...row.children].map((c) => c.className)).toEqual([
+        'pt-ai-slip__text',
+        'pt-ai-slip__aside',
+      ]);
+    }
+    // A paragraph without an aside still has an (empty) cell, so the next one keeps its column.
+    expect(rows[1]?.querySelector('.pt-ai-slip__aside')?.textContent).toBe('');
+    expect(rows[2]?.querySelector('.pt-ai-slip__aside')?.textContent).toBe('marker 3');
+  });
+
+  it('keeps a plain children path and takes its words as props', () => {
+    render(
+      <AiSlip
+        model="m"
+        source="s"
+        tabLabel="KI"
+        uncitedHeading="ohne Beleg"
+        headingLevel={3}
+        uncited={<p>x</p>}
+      >
+        <p>Plain content.</p>
+      </AiSlip>,
+    );
+    expect(screen.getByText('Plain content.')).not.toBeNull();
+    expect(screen.getByText('KI')).not.toBeNull();
+    expect(screen.getByRole('heading', { level: 3, name: 'ohne Beleg' })).not.toBeNull();
   });
 
   it('omits the uncited block when there is nothing uncited', () => {
@@ -104,7 +157,7 @@ describe('TraceList', () => {
     const { container } = render(<TraceList rows={ROWS} onShowInPaper={onShow} />);
     expect(container.querySelector('ol')).not.toBeNull();
     expect(container.querySelectorAll('ol > li')).toHaveLength(2);
-    fireEvent.click(screen.getByRole('button', { name: 'Show passage 2 in paper' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show in paper, passage 2' }));
     expect(onShow).toHaveBeenCalledWith(2);
     expect(screen.getByText('Introduction · cited 2×')).not.toBeNull();
     expect(screen.getByText('Abstract · cited once')).not.toBeNull();
@@ -118,7 +171,7 @@ describe('TraceList', () => {
     const lit = container.querySelectorAll('li[data-lit="true"]');
     expect(lit).toHaveLength(1);
     expect(lit[0]?.getAttribute('data-n')).toBe('2');
-    expect(lit[0]?.getAttribute('aria-current')).toBe('true');
+    expect(lit[0]?.getAttribute('aria-current')).toBeNull();
     fireEvent.mouseEnter(screen.getByRole('button', { name: 'Passage 1, p. 1 ¶1' }));
     expect(onLight).toHaveBeenLastCalledWith(1);
   });
@@ -130,6 +183,30 @@ describe('TraceList', () => {
     fireEvent.click(container.querySelectorAll('li > button')[0] as HTMLElement);
     expect(onShow).toHaveBeenCalledWith(1);
   });
+
+  it('on touch the row button is named by its content: number, section, count and the quote', () => {
+    render(<TraceList rows={ROWS} layout="touch" onShowInPaper={() => undefined} />);
+    const name = (n: number): string =>
+      screen.getAllByRole('button')[n]?.textContent?.replace(/\s+/g, ' ') ?? '';
+    expect(screen.getAllByRole('button')[1]?.hasAttribute('aria-label')).toBe(false);
+    expect(name(1)).toContain('Introduction · cited 2×');
+    expect(name(1)).toContain('Recurrent models factor');
+    expect(name(1)).toContain('not verified');
+    expect(name(0)).toContain('Show in paper');
+  });
+
+  it('takes its list name and button words as props', () => {
+    render(
+      <TraceList
+        rows={ROWS}
+        label="Belege"
+        showLabel="Im Papier zeigen"
+        onShowInPaper={() => undefined}
+      />,
+    );
+    expect(screen.getByRole('list', { name: 'Belege' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Im Papier zeigen, passage 1' })).not.toBeNull();
+  });
 });
 
 // ─── the stylesheet: the slips sit on their own stock ─────────────────────────────────────────
@@ -139,6 +216,21 @@ const CSS = readFileSync(
 );
 
 describe('styles.css — the slips', () => {
+  it('hangs the opening quotation mark inside the clipping box, not outside it', () => {
+    for (const selector of ['.pt-trace-row__quote', '.pt-call-slip__quote-text']) {
+      const block =
+        new RegExp(`\\n${selector.replace('.', '\\.')}\\s*\\{([^}]*)\\}`).exec(CSS)?.[1] ?? '';
+      expect(block, selector).toMatch(/margin-inline-start:\s*-0\.42em/);
+      expect(block, selector).toMatch(/padding-inline-start:\s*0\.42em/);
+      expect(block, selector).toMatch(/text-indent:\s*-0\.42em/);
+    }
+  });
+
+  it('keeps a raw rgb() out of the slip rules', () => {
+    const slips = CSS.slice(CSS.indexOf('/* The person'));
+    expect(slips).not.toMatch(/rgb\(/);
+  });
+
   it('puts the answer on AI-slip stock and the ask on call-slip stock', () => {
     expect(CSS).toMatch(/\n\.pt-ai-slip\s*\{[^}]*background:\s*var\(--pt-ai-slip\)/);
     expect(CSS).toMatch(/\n\.pt-call-slip\s*\{[^}]*background-color:\s*var\(--pt-call-slip\)/);

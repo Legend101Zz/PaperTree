@@ -10,6 +10,9 @@
  * marker and an "AI" label, which would duplicate this slip's standing "AI" tab and show the marker
  * twice. The slip therefore sets `data-voice="ai"` and the same `role="note"` announcement itself
  * and emits no marker.
+ *
+ * Every visible or announced word the slips add is a prop with its design default, so the notebook
+ * and the diagram pages can reuse them in their own words.
  */
 
 import type { ReactNode } from 'react';
@@ -31,12 +34,26 @@ export interface CallSlipProps {
   readonly ask: string;
   /** When it was asked, e.g. `"2:14 pm"`. */
   readonly time: string;
+  /** Machine-readable time for `<time dateTime>`, e.g. an ISO string. Omitted when unknown. */
+  readonly dateTime?: string;
+  /**
+   * The group's accessible name. Default `Your question`. A thread repeats this slip, so it is a
+   * labelled group and not a landmark.
+   */
+  readonly label?: string;
 }
 
 /** The person's ask on a ruled ivory slip: stamp, optional quoted passage, the ask, the time. */
-export function CallSlip({ initial = 'M', quote, ask, time }: CallSlipProps): ReactNode {
+export function CallSlip({
+  initial = 'M',
+  quote,
+  ask,
+  time,
+  dateTime,
+  label = 'Your question',
+}: CallSlipProps): ReactNode {
   return (
-    <section className="pt-call-slip" aria-label="Your question">
+    <div className="pt-call-slip" role="group" aria-label={label}>
       <span className="pt-call-slip__stamp" aria-hidden="true">
         {initial}
       </span>
@@ -51,8 +68,41 @@ export function CallSlip({ initial = 'M', quote, ask, time }: CallSlipProps): Re
         )}
         <YouText className="pt-call-slip__ask">{ask}</YouText>
       </div>
-      <time className="pt-call-slip__time">{time}</time>
-    </section>
+      <time className="pt-call-slip__time" {...(dateTime === undefined ? {} : { dateTime })}>
+        {time}
+      </time>
+    </div>
+  );
+}
+
+/** Props for `AiParagraph`. */
+export interface AiParagraphProps {
+  /** The paragraph's text, with its inline markers. */
+  readonly children: ReactNode;
+  /**
+   * The margin cell on the same grid row: typically a `NumberedMarker` and a `PageTab` for each
+   * claim in the paragraph. Desktop only (hidden on a phone, where the trace list carries them).
+   */
+  readonly aside?: ReactNode;
+}
+
+/**
+ * One paragraph of an `AiSlip` answer with its margin cell. The text and the cell are two grid
+ * items of one row (`display: contents` wrapper), so the cell sits level with its paragraph however
+ * tall the paragraph is. The cell is always rendered, empty when there is no `aside`, so a
+ * paragraph without citations never shifts the next one into the wrong column.
+ *
+ * @example
+ * <AiParagraph aside={<><NumberedMarker n={1} label="p. 1 ¶1" onFlash={f} /></>}>
+ *   The passage states the paper's central proposal.
+ * </AiParagraph>
+ */
+export function AiParagraph({ children, aside }: AiParagraphProps): ReactNode {
+  return (
+    <div className="pt-ai-slip__row">
+      <p className="pt-ai-slip__text">{children}</p>
+      <div className="pt-ai-slip__aside">{aside}</div>
+    </div>
   );
 }
 
@@ -62,14 +112,21 @@ export interface AiSlipProps {
   readonly model: string;
   /** What it read, e.g. `"from the paper"`. */
   readonly source: string;
-  /** The answer: the caller renders paragraphs with their markers. */
+  /**
+   * The answer: `AiParagraph`s for paragraphs with margin cells, or any other content (it spans
+   * both grid columns).
+   */
   readonly children: ReactNode;
-  /** Desktop margin column of marker + tab per claim. */
-  readonly aside?: ReactNode;
   /** Usage line (an estimate) and actions. */
   readonly footer?: ReactNode;
   /** Uncited AI paragraphs; always labelled under a dashed rule. */
   readonly uncited?: ReactNode;
+  /** The standing tab's text. Default `AI`. */
+  readonly tabLabel?: string;
+  /** Heading above the uncited block. Default `no citation · the AI's own reading`. */
+  readonly uncitedHeading?: string;
+  /** Its heading level, to fit the page outline. Default 4. */
+  readonly headingLevel?: 2 | 3 | 4 | 5 | 6;
 }
 
 /** The AI's answer on AI-slip stock under a standing "AI" tab. */
@@ -77,28 +134,28 @@ export function AiSlip({
   model,
   source,
   children,
-  aside,
   footer,
   uncited,
+  tabLabel = 'AI',
+  uncitedHeading = "no citation · the AI's own reading",
+  headingLevel = 4,
 }: AiSlipProps): ReactNode {
+  const Heading = (['h2', 'h3', 'h4', 'h5', 'h6'] as const)[headingLevel - 2] ?? 'h4';
   return (
     <section
       className="pt-ai-slip"
       data-voice="ai"
       role="note"
-      aria-label={`AI answer by ${model}, not the paper's words`}
+      aria-label={`${tabLabel} answer by ${model}, not the paper's words`}
     >
-      <span className="pt-ai-tab">AI</span>
+      <span className="pt-ai-tab">{tabLabel}</span>
       <p className="pt-ai-slip__source">
         {model} · {source}
       </p>
-      <div className="pt-ai-slip__grid">
-        <div className="pt-ai-slip__body">{children}</div>
-        {aside === undefined ? null : <div className="pt-ai-slip__aside">{aside}</div>}
-      </div>
+      <div className="pt-ai-slip__grid">{children}</div>
       {uncited === undefined ? null : (
         <div className="pt-ai-slip__uncited">
-          <h4 className="pt-ai-slip__uncited-head">no citation · the AI&apos;s own reading</h4>
+          <Heading className="pt-ai-slip__uncited-head">{uncitedHeading}</Heading>
           <div className="pt-ai-slip__uncited-body">{uncited}</div>
         </div>
       )}

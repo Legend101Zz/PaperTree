@@ -37,6 +37,8 @@ export interface TraceRowProps extends TraceRowData {
   readonly onShowInPaper: (n: number) => void;
   /** `touch` makes the whole row one 44 px button with a chevron and a two-line quote. */
   readonly layout?: 'desktop' | 'touch';
+  /** The button's words. Default `Show in paper`; the notebook and diagrams pass their own. */
+  readonly showLabel?: string;
 }
 
 /**
@@ -50,7 +52,13 @@ export function formatCitedCount(count: number): string {
   return count === 1 ? 'cited once' : `cited ${String(count)}×`;
 }
 
-/** One passage: marker, tab, where, the paper's words, and a Show in paper button. */
+/**
+ * One passage: marker, tab, where, the paper's words, and a Show in paper button.
+ *
+ * @param props The row's data (`TraceRowData`) plus `lit`, `onLight`, `onShowInPaper`, `layout`
+ *   (`touch` = one 44 px button for the whole row) and `showLabel`.
+ * @returns A list item; render it inside an `<ol>` (`TraceList` does).
+ */
 export function TraceRow(props: TraceRowProps): ReactNode {
   const {
     n,
@@ -62,10 +70,12 @@ export function TraceRow(props: TraceRowProps): ReactNode {
     status,
     lit = false,
     layout = 'desktop',
+    showLabel = 'Show in paper',
   } = props;
   const label = formatPageLabel(page, para);
   const className = `pt-trace-row${lit ? ' is-lit' : ''}${layout === 'touch' ? ' pt-trace-row--touch' : ''}`;
-  const litProps = lit ? { 'aria-current': 'true' as const, 'data-lit': 'true' } : {};
+  // `data-lit` only: lighting is a hover/focus echo, not a "current item" (review #230/2).
+  const litProps = lit ? { 'data-lit': 'true' } : {};
   const quoted = (
     <PaperText as="span" className="pt-paper-quote pt-trace-row__quote">
       {`“${quote}”`}
@@ -85,12 +95,13 @@ export function TraceRow(props: TraceRowProps): ReactNode {
         <button
           type="button"
           className="pt-trace-row__touch"
-          aria-label={`Show passage ${String(n)} in paper, ${label}`}
           onClick={() => props.onShowInPaper(n)}
         >
-          <span className="pt-marker pt-marker--static" aria-hidden="true">
-            {n}
-          </span>
+          {/* The button's own content is its name (number, tab, section, count, the quote and, for
+              a not-verified passage, its caption), so a screen reader hears what the passage is
+              and says (review #231/1). The prefix says what the button does. */}
+          <span className="pt-sr-only">{showLabel}: </span>
+          <span className="pt-marker pt-marker--static">{n}</span>
           <span className="pt-trace-row__body">
             <span className="pt-trace-row__head">
               <PageTab page={page} para={para} status={status} lit={lit} />
@@ -132,10 +143,10 @@ export function TraceRow(props: TraceRowProps): ReactNode {
       <button
         type="button"
         className="pt-btn pt-btn--outline pt-trace-row__show"
-        aria-label={`Show passage ${String(n)} in paper`}
+        aria-label={`${showLabel}, passage ${String(n)}`}
         onClick={() => props.onShowInPaper(n)}
       >
-        Show in paper
+        {showLabel}
       </button>
     </li>
   );
@@ -149,6 +160,10 @@ export interface TraceListProps {
   readonly onLight?: (n: number | null) => void;
   readonly onShowInPaper: (n: number) => void;
   readonly layout?: 'desktop' | 'touch';
+  /** The list's accessible name. Default `Passages the answer stands on`. */
+  readonly label?: string;
+  /** Passed to every row's button. Default `Show in paper`. */
+  readonly showLabel?: string;
 }
 
 /** The passages an answer stands on, as an ordered list (the numbers are the citation numbers). */
@@ -158,15 +173,18 @@ export function TraceList({
   onLight,
   onShowInPaper,
   layout = 'desktop',
+  label = 'Passages the answer stands on',
+  showLabel = 'Show in paper',
 }: TraceListProps): ReactNode {
   return (
-    <ol className="pt-trace-list" aria-label="Passages the answer stands on">
+    <ol className="pt-trace-list" aria-label={label}>
       {rows.map((row) => (
         <TraceRow
           key={row.n}
           {...row}
           lit={lit === row.n}
           layout={layout}
+          showLabel={showLabel}
           onShowInPaper={onShowInPaper}
           {...(onLight === undefined ? {} : { onLight })}
         />
