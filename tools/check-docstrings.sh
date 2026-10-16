@@ -10,12 +10,24 @@
 # baseline module fully, delete its line. Tests are exempt (their names are the documentation).
 # CI runs this in the Python job, so a new undocumented module fails the build.
 set -euo pipefail
-cd "$(dirname "$0")/.."
+root="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Arguments are paths as the caller typed them (relative to the caller's directory, `./`-prefixed or
+# absolute); make each repo-relative BEFORE changing directory, so the baseline lookup compares like
+# with like. A path that does not exist is an error, not a silent skip.
+candidates=()
+for arg in "$@"; do
+  if [[ ! -f "$arg" ]]; then
+    echo "docstrings: no such file: $arg" >&2
+    exit 2
+  fi
+  abs="$(cd "$(dirname "$arg")" && pwd)/$(basename "$arg")"
+  candidates+=("${abs#"$root"/}")
+done
+cd "$root"
 
 baseline="tools/docstring-baseline.txt"
-if [[ $# -gt 0 ]]; then
-  candidates=("$@")
-else
+if [[ $# -eq 0 ]]; then
   candidates=()
   while IFS= read -r f; do candidates+=("$f"); done < <(
     find packages services -name '*.py' -not -path '*/.venv/*' -not -path '*/node_modules/*' | LC_ALL=C sort
@@ -27,7 +39,6 @@ for f in "${candidates[@]}"; do
   case "$f" in
     */tests/* | */test_*.py | */conftest.py) continue ;;
   esac
-  [[ -f "$f" ]] || continue
   /usr/bin/grep -a -qxF -- "$f" "$baseline" && continue
   targets+=("$f")
 done

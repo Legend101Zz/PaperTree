@@ -60,13 +60,16 @@ pnpm e2e                                # Playwright journeys against a faux age
 
 ## Lint and format
 
-- **Prettier** formats everything it understands (`.prettierrc.json`: 100 columns, single quotes, trailing
-  commas). Run `pnpm format` to fix.
+- **Prettier** formats everything it understands outside `.prettierignore` (`.prettierrc.json`: 100 columns,
+  single quotes, trailing commas). Run `pnpm format` to fix. `apps/` is still in the ignore list at the start of
+  v0.2; #187 removes it in one mechanical pass.
 - **TypeScript packages** (`packages/*`, `services/agent`) lint with **oxlint**. `packages/ui` also runs
   ESLint with `eslint-plugin-jsdoc`, because every export there is shared and must be documented.
 - **`apps/web`** lints with **`next lint`** (`apps/web/.eslintrc.cjs`):
   - `next/core-web-vitals`, `jsx-a11y/recommended`, `import/order`, and `jsdoc/require-jsdoc` on exports;
   - `@typescript-eslint/no-explicit-any` is a warning;
+  - exported constants (for example Next's `metadata`) are not required to carry a doc comment; functions,
+    components, hooks, classes, interfaces and types are;
   - inside `src/features/` every rule is an **error**: docs on every export (with `@param` and
     `@returns` in `.ts` files), import order and accessibility. Outside it, the docs and import rules are
     warnings, so the v0.1 code is not rewritten wholesale. Move code into a feature folder and it is held
@@ -82,6 +85,9 @@ pnpm e2e                                # Playwright journeys against a faux age
 `pnpm install` installs a [lefthook](https://lefthook.dev) pre-commit hook (`lefthook.yml`). It runs
 Prettier (and re-stages what it fixed), ESLint, oxlint, ruff and the docstring check on the **staged**
 files only. It is a fast courtesy, not the gate: CI still runs everything.
+
+(`prepare` runs `lefthook install || true` so that installing from a copy without a `.git` directory, such as
+a release tarball, still works; in a clone, a failed install shows in the `pnpm install` output.)
 
 To bypass it in an emergency, say why in the commit or PR and use either:
 
