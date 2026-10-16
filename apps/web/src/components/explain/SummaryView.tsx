@@ -22,7 +22,13 @@ export interface SummaryViewProps {
   readonly onStop: () => void;
 }
 
-export function SummaryView({ state, onCite, onRetry, onRegenerate, onStop }: SummaryViewProps): ReactNode {
+export function SummaryView({
+  state,
+  onCite,
+  onRetry,
+  onRegenerate,
+  onStop,
+}: SummaryViewProps): ReactNode {
   const { phase, summary } = state;
 
   if (phase === 'idle' || phase === 'loading' || phase === 'streaming') {

@@ -57,11 +57,20 @@ import { ReaderToast } from '@/components/reader/ReaderToast';
 import { paintItemsOf, SourcePane } from '@/components/reader/SourcePane';
 import { SplitView } from '@/components/reader/SplitView';
 import { UnanchoredTray } from '@/components/reader/UnanchoredTray';
-import { useHighlights, type ReaderHighlight, type UseHighlights } from '@/components/reader/useHighlights';
+import {
+  useHighlights,
+  type ReaderHighlight,
+  type UseHighlights,
+} from '@/components/reader/useHighlights';
 import type { PendingSelection, SelectionCapture } from '@/components/reader/useSelectionCapture';
 import { displayQuote } from '@/components/reader/quote';
 import type { ReadingPosition } from '@/components/reader/VirtualPageList';
-import { FIT_WIDTH, resolveZoom, ZoomControl, type ZoomMode } from '@/components/reader/ZoomControl';
+import {
+  FIT_WIDTH,
+  resolveZoom,
+  ZoomControl,
+  type ZoomMode,
+} from '@/components/reader/ZoomControl';
 import {
   applyScroll,
   type DocumentHandle,
@@ -112,7 +121,8 @@ export function readSavedReaderState(key: string): SavedReaderState | null {
     if (value.v !== 1) return null;
     if (value.mode !== 'source' && value.mode !== 'guided' && value.mode !== 'split') return null;
     if (!isZoomMode(value.zoomMode)) return null;
-    if (typeof value.page !== 'number' || !Number.isInteger(value.page) || value.page < 0) return null;
+    if (typeof value.page !== 'number' || !Number.isInteger(value.page) || value.page < 0)
+      return null;
     if (typeof value.yPt !== 'number' || !Number.isFinite(value.yPt) || value.yPt < 0) return null;
     return {
       v: 1,
@@ -120,7 +130,9 @@ export function readSavedReaderState(key: string): SavedReaderState | null {
       zoomMode: value.zoomMode,
       page: value.page,
       yPt: value.yPt,
-      ...(typeof value.blockId === 'string' && value.blockId !== '' ? { blockId: value.blockId } : {}),
+      ...(typeof value.blockId === 'string' && value.blockId !== ''
+        ? { blockId: value.blockId }
+        : {}),
     };
   } catch {
     // Private mode, blocked storage, a corrupt entry: the paper opens at the top. Never a crash.
@@ -184,7 +196,10 @@ export function topBlockAt(doc: IndexedDocument, position: ReadingPosition): str
  * the parse had loaded, or the reader scrolled before it did - and "no block" must not mean "the top
  * of the paper" (RFIX2 R8).
  */
-export function initialBlockFor(doc: IndexedDocument | null, at: SavedReaderState | null): string | null {
+export function initialBlockFor(
+  doc: IndexedDocument | null,
+  at: SavedReaderState | null,
+): string | null {
   if (at === null) return null;
   if (at.blockId !== undefined) return at.blockId;
   return doc === null ? null : (topBlockAt(doc, { page: at.page, yPt: at.yPt }) ?? null);
@@ -192,7 +207,10 @@ export function initialBlockFor(doc: IndexedDocument | null, at: SavedReaderStat
 
 function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(
-    () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(query).matches,
+    () =>
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia(query).matches,
   );
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
@@ -229,7 +247,12 @@ function failureOf(error: unknown): Failure {
 }
 
 /** Where a highlight's card opens from: the click, and the passage's top and bottom, client px. */
-type CardAt = { readonly clientX: number; readonly clientY: number; readonly top?: number; readonly bottom?: number };
+type CardAt = {
+  readonly clientX: number;
+  readonly clientY: number;
+  readonly top?: number;
+  readonly bottom?: number;
+};
 
 /** While a paper is still being read, try again this often. */
 const RETRY_MS = 4000;
@@ -242,7 +265,9 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const paper = useMemo(() => given, [paperKey]);
   const storageKey = readerStorageKey(paper);
-  const [saved] = useState(() => (typeof window === 'undefined' ? null : readSavedReaderState(storageKey)));
+  const [saved] = useState(() =>
+    typeof window === 'undefined' ? null : readSavedReaderState(storageKey),
+  );
 
   const [pdfSource, setPdfSource] = useState<string | ArrayBuffer | null>(null);
   const [pdfFailure, setPdfFailure] = useState<Failure | null>(null);
@@ -390,7 +415,8 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
         yPt: Math.max(0, block.bbox[1] - 12),
         blockId,
       };
-      if (modeRef.current === 'split') requestScroll({ kind: 'rect', pageIndex: block.pageIndex, bbox: block.bbox });
+      if (modeRef.current === 'split')
+        requestScroll({ kind: 'rect', pageIndex: block.pageIndex, bbox: block.bbox });
       persist();
     },
     [doc, persist, requestScroll],
@@ -453,13 +479,19 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
       }
       const paint = sourcePaint(anchor, doc, resolution);
       if (paint === null) {
-        if (resolution.pageIndex !== null) requestScroll({ kind: 'page', pageIndex: resolution.pageIndex });
+        if (resolution.pageIndex !== null)
+          requestScroll({ kind: 'page', pageIndex: resolution.pageIndex });
         return;
       }
       const extent: BBox | null = extentOf(paint.polygons);
-      if (extent !== null) requestScroll({ kind: 'rect', pageIndex: paint.pageIndex, bbox: extent });
+      if (extent !== null)
+        requestScroll({ kind: 'rect', pageIndex: paint.pageIndex, bbox: extent });
       if (!shouldFlash) return;
-      setFlash({ key: `${anchor.id}:${String(Date.now())}`, pageIndex: paint.pageIndex, polygons: paint.polygons });
+      setFlash({
+        key: `${anchor.id}:${String(Date.now())}`,
+        pageIndex: paint.pageIndex,
+        polygons: paint.polygons,
+      });
       if (flashTimer.current !== null) clearTimeout(flashTimer.current);
       flashTimer.current = setTimeout(() => setFlash(null), FLASH_MS + 100);
     },
@@ -533,7 +565,8 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
       />
     );
   }
-  const unreachable = docFailure?.kind === 'unreachable' && (pdfFailure !== null || pdfSource === null);
+  const unreachable =
+    docFailure?.kind === 'unreachable' && (pdfFailure !== null || pdfSource === null);
   const hardError = docFailure?.kind === 'error' && (pdfFailure !== null || pdfSource === null);
   if (unreachable || hardError) {
     return (
@@ -597,7 +630,11 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
           onJumpToPage={jumpToPage}
           selection={selection}
           onSelectionChange={setSelection}
-          initialPosition={positionRef.current === null ? null : { page: positionRef.current.page, yPt: positionRef.current.yPt }}
+          initialPosition={
+            positionRef.current === null
+              ? null
+              : { page: positionRef.current.page, yPt: positionRef.current.yPt }
+          }
           initialBlockId={initialBlockFor(doc, positionRef.current)}
           onSourcePosition={onSourcePosition}
           onGuidedTop={onGuidedTop}
@@ -787,9 +824,13 @@ function ReaderWorkspaceView(props: ViewProps) {
       const pageIndex =
         first === undefined
           ? null
-          : ((first.anchor.selectors.find((s) => s.type === 'PageSelector') as { index?: number } | undefined)
-              ?.index ?? first.resolution.pageIndex);
-      const nowhere = highlight.anchors.length > 0 && highlight.anchors.every((a) => unplacedAnchors.has(a.anchor.id));
+          : ((
+              first.anchor.selectors.find((s) => s.type === 'PageSelector') as
+                { index?: number } | undefined
+            )?.index ?? first.resolution.pageIndex);
+      const nowhere =
+        highlight.anchors.length > 0 &&
+        highlight.anchors.every((a) => unplacedAnchors.has(a.anchor.id));
       return {
         id: highlight.highlightId,
         blockIds: highlight.anchors.flatMap((a) => a.resolution.blockIds),
@@ -818,7 +859,11 @@ function ReaderWorkspaceView(props: ViewProps) {
         navigatorOpen={props.navigatorOpen}
         navigatorAvailable={doc !== null}
         highlightCount={props.highlights.highlights.length}
-        canvasHref={props.paper.kind === 'api' ? `/paper/${encodeURIComponent(props.paper.paperId)}/canvas` : null}
+        canvasHref={
+          props.paper.kind === 'api'
+            ? `/paper/${encodeURIComponent(props.paper.paperId)}/canvas`
+            : null
+        }
       />
 
       {props.stillReading ? (
@@ -830,7 +875,11 @@ function ReaderWorkspaceView(props: ViewProps) {
       {props.highlights.load === 'error' && props.highlights.loadError !== null ? (
         <div className="pt-banner" role="alert">
           <span className="flex-1">{props.highlights.loadError}</span>
-          <button type="button" className="pt-btn pt-btn--outline" onClick={props.highlights.reload}>
+          <button
+            type="button"
+            className="pt-btn pt-btn--outline"
+            onClick={props.highlights.reload}
+          >
             Try again
           </button>
         </div>
@@ -926,7 +975,11 @@ function ReaderToolbarShell({
         aria-expanded={navigatorOpen}
         aria-pressed={navigatorOpen}
         disabled={!navigatorAvailable}
-        title={navigatorAvailable ? 'Outline, pages and highlights' : 'Available when the paper has been read'}
+        title={
+          navigatorAvailable
+            ? 'Outline, pages and highlights'
+            : 'Available when the paper has been read'
+        }
         onClick={onNavigatorToggle}
       >
         Contents
@@ -946,7 +999,9 @@ function ReaderToolbarShell({
           guidedAvailable={guidedAvailable}
           unavailableReason="Guided and Split open when the paper has been read."
         />
-        {mode === 'guided' ? null : <ZoomControl mode={zoomMode} zoom={zoom} onModeChange={onZoomChange} />}
+        {mode === 'guided' ? null : (
+          <ZoomControl mode={zoomMode} zoom={zoom} onModeChange={onZoomChange} />
+        )}
         {canvasHref === null ? null : (
           <a className="pt-btn" href={canvasHref}>
             Canvas
@@ -972,7 +1027,13 @@ function GuidedPane(props: ViewProps & { readonly doc: IndexedDocument }) {
   );
 }
 
-function PdfUnavailable({ failure, onRetry }: { readonly failure: Failure; readonly onRetry: () => void }) {
+function PdfUnavailable({
+  failure,
+  onRetry,
+}: {
+  readonly failure: Failure;
+  readonly onRetry: () => void;
+}) {
   const body =
     failure.kind === 'unreachable'
       ? 'The PDF could not be downloaded: PaperTree is not reachable. Check the connection, then try again.'
@@ -995,7 +1056,8 @@ function PdfUnavailable({ failure, onRetry }: { readonly failure: Failure; reado
 }
 
 function SourceSlot(props: ViewProps) {
-  if (props.pdfFailure !== null) return <PdfUnavailable failure={props.pdfFailure} onRetry={props.onRetryPdf} />;
+  if (props.pdfFailure !== null)
+    return <PdfUnavailable failure={props.pdfFailure} onRetry={props.onRetryPdf} />;
   return (
     <SourcePane
       doc={props.doc}
@@ -1022,7 +1084,13 @@ function DocumentSlot(props: ViewProps) {
   const doc = props.doc;
   if (props.mode === 'guided' && doc !== null) return <GuidedPane {...props} doc={doc} />;
   if (props.mode === 'split' && doc !== null) {
-    return <SplitView source={<SourceSlot {...props} />} guided={<GuidedPane {...props} doc={doc} />} className="h-full" />;
+    return (
+      <SplitView
+        source={<SourceSlot {...props} />}
+        guided={<GuidedPane {...props} doc={doc} />}
+        className="h-full"
+      />
+    );
   }
   return <SourceSlot {...props} />;
 }

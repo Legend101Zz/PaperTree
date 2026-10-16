@@ -2,7 +2,15 @@
  * W3UI round 2 (#141): the explain panel's quote, a markdown answer with chips, the canvas toast's
  * clock, the canvas citation reader, and the stale-version notice naming the SERVER's card.
  */
-import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { stubDesktop } from './s6-harness';
@@ -51,7 +59,7 @@ describe('the explain panel quote', () => {
     expect(shown).toContain('end-to-end');
     expect(shown).not.toMatch(/sin- gle|multi- ple|detec- tion/);
     expect(shown).toContain('…');
-            fireEvent.click(screen.getByRole('button', { name: 'Show all' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show all' }));
     const full = quote.querySelector('blockquote')?.textContent ?? '';
     expect(full).toContain('detection performance.');
     expect(full).not.toContain('…');
@@ -72,7 +80,9 @@ describe('the canvas toast clock', () => {
         await new Promise<void>((r) => setImmediate(r));
       });
     };
-    act(() => showCanvasToast({ message: 'Passage added to your canvas.', href: '/paper/x/canvas' }));
+    act(() =>
+      showCanvasToast({ message: 'Passage added to your canvas.', href: '/paper/x/canvas' }),
+    );
     await tick(7500);
     expect(screen.getByTestId('canvas-toast')).toBeTruthy();
     await tick(700);
@@ -110,7 +120,9 @@ describe('the canvas toast and the keyboard', () => {
     button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     // The button disables itself while it works and drops focus, as the real one does.
     button.blur();
-    act(() => showCanvasToast({ message: 'Answer added to your canvas.', href: '/paper/x/canvas' }));
+    act(() =>
+      showCanvasToast({ message: 'Answer added to your canvas.', href: '/paper/x/canvas' }),
+    );
     const link = screen.getByRole('link', { name: 'Open canvas' });
     expect(document.activeElement).toBe(link);
     fireEvent.keyDown(link, { key: 'Escape' });
@@ -124,7 +136,9 @@ describe('the canvas toast and the keyboard', () => {
     document.body.appendChild(button);
     button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     window.dispatchEvent(new Event('pointerdown'));
-    act(() => showCanvasToast({ message: 'Passage added to your canvas.', href: '/paper/x/canvas' }));
+    act(() =>
+      showCanvasToast({ message: 'Passage added to your canvas.', href: '/paper/x/canvas' }),
+    );
     expect(document.activeElement).not.toBe(screen.getByRole('link', { name: 'Open canvas' }));
     button.remove();
   });
@@ -137,19 +151,34 @@ describe('canvas citations', () => {
   });
   const explanation = (id: string, messageId: string): CanvasNode =>
     ({
-      node_id: id, board_id: 'b', kind: 'explanation', group_id: null, x: 0, y: 0, w: 300, h: 200, z: 0,
-      title: 'T', body: 'x [b1]', source_anchor: null, source_message_id: messageId, version: 1,
-      created_at: '', updated_at: '',
+      node_id: id,
+      board_id: 'b',
+      kind: 'explanation',
+      group_id: null,
+      x: 0,
+      y: 0,
+      w: 300,
+      h: 200,
+      z: 0,
+      title: 'T',
+      body: 'x [b1]',
+      source_anchor: null,
+      source_message_id: messageId,
+      version: 1,
+      created_at: '',
+      updated_at: '',
     }) as CanvasNode;
 
-  it('reads a message\'s citations from its thread', async () => {
+  it("reads a message's citations from its thread", async () => {
     vi.mocked(threadsApi.list).mockResolvedValue([
       { thread_id: 'thr_old', updated_at: '2026-01-01' },
       { thread_id: 'thr_new', updated_at: '2026-02-01' },
     ] as never);
     vi.mocked(threadsApi.get).mockImplementation(async (_p, tid) => ({
       thread: {} as never,
-      messages: (tid === 'thr_old' ? [message('msg_1', ['b1', 'b2'])] : [message('msg_other', ['b1'])]) as never,
+      messages: (tid === 'thr_old'
+        ? [message('msg_1', ['b1', 'b2'])]
+        : [message('msg_other', ['b1'])]) as never,
     }));
     const nodes = [toFlowNode(explanation('cn_1', 'msg_1'), 'ppr_1')];
     const { result } = renderHook(() => useExplanationCitations('ppr_1', nodes));
@@ -168,15 +197,41 @@ describe('canvas citations', () => {
 describe('the stale-version notice', () => {
   it('names the card by the server text after the reload, not the unsaved edit', async () => {
     const server: CanvasNode = {
-      node_id: 'cn_a', board_id: 'brd_1', kind: 'note', group_id: null, x: 0, y: 0, w: 260, h: 150, z: 0,
-      title: null, body: 'Server text', source_anchor: null, source_message_id: null, version: 2,
-      created_at: '', updated_at: '',
+      node_id: 'cn_a',
+      board_id: 'brd_1',
+      kind: 'note',
+      group_id: null,
+      x: 0,
+      y: 0,
+      w: 260,
+      h: 150,
+      z: 0,
+      title: null,
+      body: 'Server text',
+      source_anchor: null,
+      source_message_id: null,
+      version: 2,
+      created_at: '',
+      updated_at: '',
     };
-    const board = { board_id: 'brd_1', paper_id: 'ppr_1', title: 'Canvas', viewport: null, created_at: '', updated_at: '' };
-    vi.mocked(boardsApi.get).mockResolvedValue({ board, nodes: [{ ...server, version: 1, body: 'Original' }], edges: [] } as never);
+    const board = {
+      board_id: 'brd_1',
+      paper_id: 'ppr_1',
+      title: 'Canvas',
+      viewport: null,
+      created_at: '',
+      updated_at: '',
+    };
+    vi.mocked(boardsApi.get).mockResolvedValue({
+      board,
+      nodes: [{ ...server, version: 1, body: 'Original' }],
+      edges: [],
+    } as never);
     const { result } = renderHook(() => useBoardController('ppr_1'));
     await waitFor(() => expect(result.current.status).toBe('ready'));
-    vi.mocked(boardsApi.patchNode).mockRejectedValueOnce(new ApiError(409, 'stale_version', 'stale', false));
+    vi.mocked(boardsApi.patchNode).mockRejectedValueOnce(
+      new ApiError(409, 'stale_version', 'stale', false),
+    );
     vi.mocked(boardsApi.get).mockResolvedValue({ board, nodes: [server], edges: [] } as never);
     act(() => result.current.commitBody('cn_a', 'My edit'));
     await waitFor(() =>

@@ -26,8 +26,11 @@ export interface FollowUpBody {
 }
 
 export const threadsApi = {
-  create: (paperId: string, body: CreateThreadBody, signal?: AbortSignal): AsyncGenerator<SseEvent> =>
-    streamSse(`/papers/${seg(paperId)}/threads`, body, signal),
+  create: (
+    paperId: string,
+    body: CreateThreadBody,
+    signal?: AbortSignal,
+  ): AsyncGenerator<SseEvent> => streamSse(`/papers/${seg(paperId)}/threads`, body, signal),
   followUp: (
     paperId: string,
     threadId: string,

@@ -27,7 +27,10 @@ import {
   type ReaderActions,
 } from '@/components/reader/actions';
 
-const FIXTURE = join(process.cwd(), '../../packages/document-ir/fixtures/resnet-cvpr-2col.paperir.json');
+const FIXTURE = join(
+  process.cwd(),
+  '../../packages/document-ir/fixtures/resnet-cvpr-2col.paperir.json',
+);
 const paper = JSON.parse(readFileSync(FIXTURE, 'utf8')) as PaperSource & { ir_version?: string };
 const doc = indexDocument(paper, `fixture/${paper.ir_version ?? 'unknown'}`);
 
@@ -39,17 +42,19 @@ const probe = vi.hoisted(() => ({
 }));
 
 vi.mock('@/components/reader/VirtualPageList', () => ({
-  VirtualPageList: forwardRef<unknown, Record<string, unknown>>(function VirtualPageListSpy(_props, ref) {
-    useImperativeHandle(ref, () => ({
-      scrollToPage: () => undefined,
-      scrollToBlock(pageIndex: number, bbox: readonly number[]) {
-        probe.scrolls.push({ page: pageIndex, bbox });
-      },
-      getVisiblePages: () => ({ first: 0, last: 0 }),
-      getScrollElement: () => null,
-    }));
-    return <div data-testid="scroller" />;
-  }),
+  VirtualPageList: forwardRef<unknown, Record<string, unknown>>(
+    function VirtualPageListSpy(_props, ref) {
+      useImperativeHandle(ref, () => ({
+        scrollToPage: () => undefined,
+        scrollToBlock(pageIndex: number, bbox: readonly number[]) {
+          probe.scrolls.push({ page: pageIndex, bbox });
+        },
+        getVisiblePages: () => ({ first: 0, last: 0 }),
+        getScrollElement: () => null,
+      }));
+      return <div data-testid="scroller" />;
+    },
+  ),
 }));
 
 vi.mock('@/components/reader/PdfDocumentProvider', () => ({
@@ -86,14 +91,18 @@ vi.mock('@/components/reader/ModeSwitch', async () => {
         <div>
           <button
             type="button"
-            onClick={() => actions.openExplain({ anchor: probe.anchor as Anchor, quote: probe.quote })}
+            onClick={() =>
+              actions.openExplain({ anchor: probe.anchor as Anchor, quote: probe.quote })
+            }
           >
             probe explain
           </button>
           <button
             type="button"
             onClick={() => {
-              probe.sent.push(actions.sendToCanvas({ kind: 'excerpt', anchor: probe.anchor as Anchor }));
+              probe.sent.push(
+                actions.sendToCanvas({ kind: 'excerpt', anchor: probe.anchor as Anchor }),
+              );
             }}
           >
             probe canvas

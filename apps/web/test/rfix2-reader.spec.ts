@@ -8,7 +8,12 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
-import { guidedProjectionFor, indexDocument, type IndexedBlock, type PaperSource } from '@papertree/anchoring';
+import {
+  guidedProjectionFor,
+  indexDocument,
+  type IndexedBlock,
+  type PaperSource,
+} from '@papertree/anchoring';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { planFigures } from '../src/components/reader/guidedFigures';
@@ -119,7 +124,10 @@ describe('R8 topBlockAt - a position names a block Guided can find', () => {
         const id = topBlockAt(doc, { page: page.index, yPt });
         if (id === undefined) continue;
         checked += 1;
-        expect(placement.get(id)?.kind, `${id} at page ${String(page.index)} y ${String(yPt)}`).not.toBe('absent');
+        expect(
+          placement.get(id)?.kind,
+          `${id} at page ${String(page.index)} y ${String(yPt)}`,
+        ).not.toBe('absent');
       }
     }
     expect(checked).toBeGreaterThan(50);
@@ -128,11 +136,16 @@ describe('R8 topBlockAt - a position names a block Guided can find', () => {
   it('skips a furniture block that would come first (a REAL absent block ahead of the text)', () => {
     // The arXiv stamp is a real margin_note the projection leaves out (placement 'absent'). Put it
     // first in reading order on its page: only the placement filter keeps topBlockAt off it.
-    const stamp = (doc.byPage.get(0) ?? []).find((b) => placement.get(b.id)?.kind === 'absent' && b.text.trim() !== '');
+    const stamp = (doc.byPage.get(0) ?? []).find(
+      (b) => placement.get(b.id)?.kind === 'absent' && b.text.trim() !== '',
+    );
     if (stamp === undefined) throw new Error('no absent block on page 0');
     const first = { ...stamp, readingIndex: -1 } as IndexedBlock;
     const rest = (doc.byPage.get(0) ?? []).filter((b) => b.id !== stamp.id);
-    const withFurniture = { ...doc, byPage: new Map(doc.byPage).set(0, [first, ...rest]) } as unknown as typeof doc;
+    const withFurniture = {
+      ...doc,
+      byPage: new Map(doc.byPage).set(0, [first, ...rest]),
+    } as unknown as typeof doc;
     const named = topBlockAt(withFurniture, { page: 0, yPt: 0 });
     expect(named).toBeDefined();
     expect(named).not.toBe(stamp.id);
@@ -161,10 +174,16 @@ describe('R8 topBlockAt - a position names a block Guided can find', () => {
 describe('R8 initialBlockFor - no saved block does not mean the top of the paper', () => {
   const path = join(root(), 'packages/document-ir/fixtures', 'resnet-cvpr-2col.paperir.json');
   const doc = indexDocument(JSON.parse(readFileSync(path, 'utf8')) as PaperSource, 'rfix2-initial');
-  const base = { v: 1 as const, mode: 'source' as const, zoomMode: { kind: 'scale' as const, scale: 1.25 } };
+  const base = {
+    v: 1 as const,
+    mode: 'source' as const,
+    zoomMode: { kind: 'scale' as const, scale: 1.25 },
+  };
 
   it('uses the saved block when there is one', () => {
-    expect(initialBlockFor(doc, { ...base, page: 2, yPt: 100, blockId: 'blk_saved' })).toBe('blk_saved');
+    expect(initialBlockFor(doc, { ...base, page: 2, yPt: 100, blockId: 'blk_saved' })).toBe(
+      'blk_saved',
+    );
   });
 
   it('derives the block from the page and offset when none was saved', () => {

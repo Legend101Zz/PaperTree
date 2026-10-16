@@ -62,7 +62,12 @@ import {
   type CreateHighlightBody,
   type ResolutionItem,
 } from '@/lib/api/highlights';
-import { ApiError, type Highlight, type HighlightColor, type ResolutionWire } from '@/lib/api/types';
+import {
+  ApiError,
+  type Highlight,
+  type HighlightColor,
+  type ResolutionWire,
+} from '@/lib/api/types';
 import { documentGeneration, type PaperRef } from '@/lib/paperSource';
 
 export type HighlightStatus = 'saved' | 'saving' | 'unsaved' | 'session';
@@ -94,8 +99,14 @@ export interface UseHighlights {
   /** Why Highlight cannot be used on this document, or null when it can. */
   readonly unavailableReason: string | null;
   readonly reload: () => void;
-  readonly create: (anchors: readonly Anchor[], color: HighlightColor) => Promise<ReaderHighlight | null>;
-  readonly update: (highlightId: string, patch: { color?: HighlightColor; note?: string | null }) => Promise<void>;
+  readonly create: (
+    anchors: readonly Anchor[],
+    color: HighlightColor,
+  ) => Promise<ReaderHighlight | null>;
+  readonly update: (
+    highlightId: string,
+    patch: { color?: HighlightColor; note?: string | null },
+  ) => Promise<void>;
   readonly remove: (highlightId: string) => Promise<void>;
   readonly retry: (highlightId: string) => Promise<void>;
 }
@@ -136,17 +147,29 @@ interface WriteFailure {
  */
 function failureFor(error: unknown, action: string, refused: string): WriteFailure {
   if (error instanceof NetworkError) {
-    return { sentence: `Couldn't ${action}: PaperTree is not reachable. Check the connection and try again.`, retryable: true };
+    return {
+      sentence: `Couldn't ${action}: PaperTree is not reachable. Check the connection and try again.`,
+      retryable: true,
+    };
   }
   if (error instanceof ApiError) {
     if (error.code === 'not_parsed') {
-      return { sentence: `Couldn't ${action}: this paper is still being read. Try again in a moment.`, retryable: true };
+      return {
+        sentence: `Couldn't ${action}: this paper is still being read. Try again in a moment.`,
+        retryable: true,
+      };
     }
     if (error.status >= 500 || error.retryable) {
-      return { sentence: `Couldn't ${action}: the server had a problem. Try again.`, retryable: true };
+      return {
+        sentence: `Couldn't ${action}: the server had a problem. Try again.`,
+        retryable: true,
+      };
     }
     if (error.status === 404) {
-      return { sentence: `Couldn't ${action}: it is no longer in your library. Reload the paper.`, retryable: false };
+      return {
+        sentence: `Couldn't ${action}: it is no longer in your library. Reload the paper.`,
+        retryable: false,
+      };
     }
     return { sentence: `Couldn't ${action}: PaperTree refused it. ${refused}`, retryable: false };
   }
@@ -165,7 +188,10 @@ export function tooLongSentence(count: number): string {
   );
 }
 
-function resolutionWire(resolution: Resolution, generation: number): Omit<ResolutionItem, 'anchor_id'> & { generation: number } {
+function resolutionWire(
+  resolution: Resolution,
+  generation: number,
+): Omit<ResolutionItem, 'anchor_id'> & { generation: number } {
   return {
     generation,
     tier: resolution.tier as ResolutionWire['tier'],
@@ -185,16 +211,31 @@ function resolutionWire(resolution: Resolution, generation: number): Omit<Resolu
  * there re-PUT every anchor as tier 0 on the first reload and erased which tier had resolved it
  * (s4-review.md F3).
  */
-function sameResolution(wire: ResolutionWire | null, resolution: Resolution, generation: number): boolean {
-  if (wire === null || wire.generation !== generation || wire.resolver_version !== RESOLVER_VERSION) return false;
-  const sameLink = wire.state === resolution.state && wire.block_ids.join(' ') === resolution.blockIds.join(' ');
+function sameResolution(
+  wire: ResolutionWire | null,
+  resolution: Resolution,
+  generation: number,
+): boolean {
+  if (wire === null || wire.generation !== generation || wire.resolver_version !== RESOLVER_VERSION)
+    return false;
+  const sameLink =
+    wire.state === resolution.state && wire.block_ids.join(' ') === resolution.blockIds.join(' ');
   if (resolution.tier === Tier.Cache) return sameLink;
   return sameLink && wire.tier === resolution.tier;
 }
 
 /** The server's cache entry as the ladder's T0 input, when it is for THIS parse and resolver. */
-function withCache(anchor: Anchor, wire: ResolutionWire | null, doc: IndexedDocument, generation: number): Anchor {
-  if (wire === null || wire.generation !== generation || wire.resolver_version !== RESOLVER_VERSION) {
+function withCache(
+  anchor: Anchor,
+  wire: ResolutionWire | null,
+  doc: IndexedDocument,
+  generation: number,
+): Anchor {
+  if (
+    wire === null ||
+    wire.generation !== generation ||
+    wire.resolver_version !== RESOLVER_VERSION
+  ) {
     return anchor;
   }
   const cache: ResolutionCache = {
@@ -228,7 +269,9 @@ function upgradeOf(anchor: Anchor, resolution: Resolution, doc: IndexedDocument)
     return captureAnchor({
       doc,
       blockId,
-      ...(sameBlock && selector.startOffset !== undefined ? { startOffset: selector.startOffset } : {}),
+      ...(sameBlock && selector.startOffset !== undefined
+        ? { startOffset: selector.startOffset }
+        : {}),
       ...(sameBlock && selector.endOffset !== undefined ? { endOffset: selector.endOffset } : {}),
       targetKind: 'text',
       provenanceClass: 'source',
@@ -287,7 +330,8 @@ export function useHighlights({ paper, doc, onNotice }: UseHighlightsOptions): U
   const generation = doc === null ? null : documentGeneration(doc);
 
   const unavailableReason = useMemo(() => {
-    if (doc === null) return 'This paper is still being read. Highlights become available when it is ready.';
+    if (doc === null)
+      return 'This paper is still being read. Highlights become available when it is ready.';
     if (paper.kind === 'api' && generation === null) {
       return 'This parse has no generation number, so a highlight could not be saved against it.';
     }
@@ -317,7 +361,10 @@ export function useHighlights({ paper, doc, onNotice }: UseHighlightsOptions): U
         // Keep a create the reader made while the list was in flight.
         setHighlights((current) => {
           const ids = new Set(loaded.map((h) => h.highlightId));
-          return [...loaded, ...current.filter((h) => !ids.has(h.highlightId) && h.status !== 'saved')];
+          return [
+            ...loaded,
+            ...current.filter((h) => !ids.has(h.highlightId) && h.status !== 'saved'),
+          ];
         });
         setLoad('ready');
 
@@ -330,7 +377,11 @@ export function useHighlights({ paper, doc, onNotice }: UseHighlightsOptions): U
           for (const { anchor, resolution } of reader.anchors) {
             const wire = byId.get(anchor.id);
             const upgraded = upgradeOf(anchor, resolution, doc);
-            if (upgraded === null && sameResolution(wire?.resolution ?? null, resolution, generation)) continue;
+            if (
+              upgraded === null &&
+              sameResolution(wire?.resolution ?? null, resolution, generation)
+            )
+              continue;
             const { generation: _g, ...fields } = resolutionWire(resolution, generation);
             items.push({
               anchor_id: anchor.id,
@@ -341,7 +392,10 @@ export function useHighlights({ paper, doc, onNotice }: UseHighlightsOptions): U
         });
         for (let at = 0; at < items.length; at += 500) {
           if (cancelled) return;
-          await highlightsApi.putResolutions(paperId, { generation, items: items.slice(at, at + 500) });
+          await highlightsApi.putResolutions(paperId, {
+            generation,
+            items: items.slice(at, at + 500),
+          });
         }
       } catch (error) {
         if (cancelled) return;
@@ -384,18 +438,33 @@ export function useHighlights({ paper, doc, onNotice }: UseHighlightsOptions): U
           // A colour or note the reader chose after the first POST wins; it is PATCHed below.
           ...(current === undefined ? {} : { color: current.color, note: current.note }),
         });
-        if (current !== undefined && (current.color !== stored.color || current.note !== stored.note)) {
-          await highlightsApi.update(paperId, highlightId, { color: current.color, note: current.note });
+        if (
+          current !== undefined &&
+          (current.color !== stored.color || current.note !== stored.note)
+        ) {
+          await highlightsApi.update(paperId, highlightId, {
+            color: current.color,
+            note: current.note,
+          });
         }
       } catch (error) {
-        const failure = failureFor(error, 'save this highlight', 'Delete it and select the passage again.');
+        const failure = failureFor(
+          error,
+          'save this highlight',
+          'Delete it and select the passage again.',
+        );
         if (abandoned.current.delete(highlightId)) {
           pendingBodies.current.delete(highlightId);
           return;
         }
         const current = stateRef.current.find((h) => h.highlightId === highlightId);
         if (current !== undefined) {
-          replace(highlightId, { ...current, status: 'unsaved', error: failure.sentence, retryable: failure.retryable });
+          replace(highlightId, {
+            ...current,
+            status: 'unsaved',
+            error: failure.sentence,
+            retryable: failure.retryable,
+          });
         }
         noticeRef.current?.(failure.sentence);
       }
@@ -471,7 +540,9 @@ export function useHighlights({ paper, doc, onNotice }: UseHighlightsOptions): U
         await highlightsApi.update(paperId, highlightId, patch);
       } catch (error) {
         replace(highlightId, before);
-        noticeRef.current?.(sentenceFor(error, patch.color === undefined ? 'save the note' : 'change the colour'));
+        noticeRef.current?.(
+          sentenceFor(error, patch.color === undefined ? 'save the note' : 'change the colour'),
+        );
       }
     },
     [paperId, replace],

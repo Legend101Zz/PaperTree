@@ -384,40 +384,40 @@ const EDGE: CanvasEdge = {
 
 // `satisfies` makes each object exactly its union: a missing or an extra key fails tsc.
 const CODES = {
-    auth_required: true,
-    invalid_credentials: true,
-    email_taken: true,
-    not_found: true,
-    validation_failed: true,
-    empty_upload: true,
-    payload_too_large: true,
-    unsupported_media_type: true,
-    not_parsed: true,
-    not_failed: true,
-    busy: true,
-    stale_version: true,
-    generation_not_found: true,
-    anchor_incomplete: true,
-    anchor_mismatch: true,
-    budget_exhausted: true,
-    agent_unavailable: true,
-    not_configured: true,
-    internal: true,
-    not_implemented: true,
+  auth_required: true,
+  invalid_credentials: true,
+  email_taken: true,
+  not_found: true,
+  validation_failed: true,
+  empty_upload: true,
+  payload_too_large: true,
+  unsupported_media_type: true,
+  not_parsed: true,
+  not_failed: true,
+  busy: true,
+  stale_version: true,
+  generation_not_found: true,
+  anchor_incomplete: true,
+  anchor_mismatch: true,
+  budget_exhausted: true,
+  agent_unavailable: true,
+  not_configured: true,
+  internal: true,
+  not_implemented: true,
 } satisfies Record<ErrorCode, true>;
 const RUN_CODES = {
-    provider_auth: true,
-    rate_limited: true,
-    quota: true,
-    upstream_unavailable: true,
-    timeout: true,
-    aborted: true,
-    bad_request: true,
-    tool_failed: true,
-    tool_budget_exhausted: true,
-    output_truncated: true,
-    agent_unavailable: true,
-    internal: true,
+  provider_auth: true,
+  rate_limited: true,
+  quota: true,
+  upstream_unavailable: true,
+  timeout: true,
+  aborted: true,
+  bad_request: true,
+  tool_failed: true,
+  tool_budget_exhausted: true,
+  output_truncated: true,
+  agent_unavailable: true,
+  internal: true,
 } satisfies Record<RunErrorCode, true>;
 
 // ─── every key and every enum (S0 review S3) ──────────────────────────────────────────────────
@@ -434,8 +434,10 @@ const SCHEMAS = {
 };
 type Schemas = typeof SCHEMAS;
 /** The property names of `<group>.schema.json#/$defs/<model>`, at type level. */
-type SchemaKeys<G extends keyof Schemas, M extends keyof Schemas[G]['$defs']> =
-  Schemas[G]['$defs'][M] extends { properties: infer P } ? keyof P : never;
+type SchemaKeys<
+  G extends keyof Schemas,
+  M extends keyof Schemas[G]['$defs'],
+> = Schemas[G]['$defs'][M] extends { properties: infer P } ? keyof P : never;
 /** The keys `T` lets the sender leave out. */
 type OptionalKeys<T> = { [K in keyof T]-?: object extends Pick<T, K> ? K : never }[keyof T];
 /** Type equality (mutual assignability is not it: `string` and a union of strings pass one way). */
@@ -561,8 +563,14 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<keyof SseData<'usage'>, SchemaKeys<'sse', 'RunSummary'>>,
   true satisfies Equal<keyof SseData<'done'>, SchemaKeys<'sse', 'SseDone'>>,
   true satisfies Equal<OptionalKeys<SseData<'done'>>, Opt<'sse.SseDone'>>,
-  true satisfies Equal<keyof NonNullable<SseData<'done'>['error']>, SchemaKeys<'sse', 'MessageError'>>,
-  true satisfies Equal<OptionalKeys<NonNullable<SseData<'done'>['error']>>, Opt<'sse.MessageError'>>,
+  true satisfies Equal<
+    keyof NonNullable<SseData<'done'>['error']>,
+    SchemaKeys<'sse', 'MessageError'>
+  >,
+  true satisfies Equal<
+    OptionalKeys<NonNullable<SseData<'done'>['error']>>,
+    Opt<'sse.MessageError'>
+  >,
   true satisfies Equal<keyof Summary, SchemaKeys<'summary', 'Summary'>>,
   true satisfies Equal<OptionalKeys<Summary>, Opt<'summary.Summary'>>,
   true satisfies Equal<keyof Summary['bullets'][number], SchemaKeys<'summary', 'SummaryBullet'>>,
@@ -789,7 +797,9 @@ function shapeProblems(shape: Shape, def: Def): string[] {
   for (const key of keys) {
     const web = optional.has(key) ? 'optional' : 'required';
     const schema = required.has(key) ? 'required' : 'optional';
-    const wrong = REQUESTS.has(shape) ? web === 'optional' && schema === 'required' : web !== schema;
+    const wrong = REQUESTS.has(shape)
+      ? web === 'optional' && schema === 'required'
+      : web !== schema;
     if (wrong) problems.push(`${shape}.${key}: web ${web}, schema ${schema}`);
   }
   return problems;

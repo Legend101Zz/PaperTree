@@ -307,7 +307,10 @@ interface StampedItem {
 }
 
 /** Every stamped item on the page, per block, in content order. */
-function stampedItemsByBlock(doc: IndexedDocument, elements: ReadonlyMap<number, HTMLElement>): Map<string, StampedItem[]> {
+function stampedItemsByBlock(
+  doc: IndexedDocument,
+  elements: ReadonlyMap<number, HTMLElement>,
+): Map<string, StampedItem[]> {
   const out = new Map<string, StampedItem[]>();
   const indices = Array.from(elements.keys()).sort((a, b) => a - b);
   for (const index of indices) {
@@ -412,14 +415,18 @@ function partition(
 ): { targets: SelectionTarget[]; quadsByBlock: Map<string, BBox[]> } {
   type Slot = { kind: 'ir'; blockId: string } | { kind: 'page-text'; range: PageTextRange };
   const slots: Slot[] = [];
-  const byBlock = new Map<string, { start: number; end: number; page: PagePieces; pieces: ItemPiece[] }>();
+  const byBlock = new Map<
+    string,
+    { start: number; end: number; page: PagePieces; pieces: ItemPiece[] }
+  >();
 
   for (const page of pages) {
     const elements = page.page === null ? new Map<number, HTMLElement>() : itemElements(page.page);
     const stamped = stampedItemsByBlock(doc, elements);
     const selectedWhole = new Set<number>();
     for (const piece of page.pieces) {
-      const text = elements.get(piece.item)?.textContent ?? page.source.items[piece.item]?.str ?? '';
+      const text =
+        elements.get(piece.item)?.textContent ?? page.source.items[piece.item]?.str ?? '';
       const { length, leading, trailing } = shapeOf(text);
       if (piece.from <= leading && piece.to >= length - trailing) selectedWhole.add(piece.item);
     }
@@ -468,12 +475,18 @@ function partition(
         continue;
       }
       const placedIn = stamp === null ? element?.getAttribute(BLOCK_ID_ATTR) : null;
-      const block = placedIn === null || placedIn === undefined || placedIn === '' ? undefined : doc.byId.get(placedIn);
+      const block =
+        placedIn === null || placedIn === undefined || placedIn === ''
+          ? undefined
+          : doc.byId.get(placedIn);
       if (block !== undefined) {
         const gap = gapAround(piece.item, block, stamped.get(block.id) ?? [], elements);
         if (gap !== null) {
           if (!absorbable.has(gap.key)) {
-            absorbable.set(gap.key, gap.members.every((member) => selectedWhole.has(member)) ? gap : null);
+            absorbable.set(
+              gap.key,
+              gap.members.every((member) => selectedWhole.has(member)) ? gap : null,
+            );
           }
           const whole = absorbable.get(gap.key);
           if (whole !== null && whole !== undefined) {
@@ -496,8 +509,14 @@ function partition(
     }
     const entry = byBlock.get(slot.blockId);
     if (entry === undefined || entry.end <= entry.start) continue;
-    targets.push({ kind: 'ir', range: { blockId: slot.blockId, start: entry.start, end: entry.end } });
-    quadsByBlock.set(slot.blockId, itemPieceQuads(entry.page.source.frame, entry.page.source.items, entry.pieces, measure));
+    targets.push({
+      kind: 'ir',
+      range: { blockId: slot.blockId, start: entry.start, end: entry.end },
+    });
+    quadsByBlock.set(
+      slot.blockId,
+      itemPieceQuads(entry.page.source.frame, entry.page.source.items, entry.pieces, measure),
+    );
   }
   return { targets, quadsByBlock };
 }
@@ -519,26 +538,34 @@ function piecesPerPage(
   end: ItemEndpoint,
   pageText: (pageIndex: number) => PageTextSource | null,
 ): PagePieces[] | null {
-  const [first, last] =
-    start.pageIndex <= end.pageIndex ? [start, end] : [end, start];
+  const [first, last] = start.pageIndex <= end.pageIndex ? [start, end] : [end, start];
   const out: PagePieces[] = [];
   for (let pageIndex = first.pageIndex; pageIndex <= last.pageIndex; pageIndex += 1) {
     const source = pageText(pageIndex);
     if (source === null || source.items.length === 0) return null;
     const lastItem = source.items.length - 1;
     const s: PageTextEndpoint =
-      pageIndex === first.pageIndex ? { item: first.item, offset: first.offset } : { item: 0, offset: 0 };
+      pageIndex === first.pageIndex
+        ? { item: first.item, offset: first.offset }
+        : { item: 0, offset: 0 };
     const e: PageTextEndpoint =
       pageIndex === last.pageIndex
         ? { item: last.item, offset: last.offset }
         : { item: lastItem, offset: countCodePoints(source.items[lastItem]?.str ?? '') };
     // Within one page a backwards drag hands back the endpoints in DOM order already; guard anyway.
-    const [a, b] =
-      s.item < e.item || (s.item === e.item && s.offset <= e.offset) ? [s, e] : [e, s];
+    const [a, b] = s.item < e.item || (s.item === e.item && s.offset <= e.offset) ? [s, e] : [e, s];
     const page =
-      root.querySelector<HTMLElement>(`.papertree-page[${PAGE_INDEX_ATTR}="${String(pageIndex)}"]`) ??
-      null;
-    out.push({ pageIndex, page, source, start: a, end: b, pieces: piecesBetween(source.items, a, b) });
+      root.querySelector<HTMLElement>(
+        `.papertree-page[${PAGE_INDEX_ATTR}="${String(pageIndex)}"]`,
+      ) ?? null;
+    out.push({
+      pageIndex,
+      page,
+      source,
+      start: a,
+      end: b,
+      pieces: piecesBetween(source.items, a, b),
+    });
   }
   return out;
 }
@@ -613,7 +640,9 @@ function signatureOf(selection: PendingSelection | null): string {
     .join('|');
 }
 
-export function useSelectionCapture(options: UseSelectionCaptureOptions): UseSelectionCaptureResult {
+export function useSelectionCapture(
+  options: UseSelectionCaptureOptions,
+): UseSelectionCaptureResult {
   const {
     doc,
     root,
@@ -683,7 +712,9 @@ export function useSelectionCapture(options: UseSelectionCaptureOptions): UseSel
         : partitioned.targets;
     if (targets.length === 0) return null;
     const ranges = targets.flatMap((target) => (target.kind === 'ir' ? [target.range] : []));
-    const pageTextRuns = targets.flatMap((target) => (target.kind === 'page-text' ? [target.range] : []));
+    const pageTextRuns = targets.flatMap((target) =>
+      target.kind === 'page-text' ? [target.range] : [],
+    );
 
     const { quadsByBlock } = partitioned;
     /** The selection's quads on one of its pages (IR ranges and page-text runs alike). */
@@ -811,7 +842,8 @@ export function useSelectionCapture(options: UseSelectionCaptureOptions): UseSel
               startOffset: range.start,
               endOffset: range.end,
               // A table cell is a table-cell target whichever path captured it (contracts.md §6).
-              targetKind: indexed.byId.get(range.blockId)?.type === 'table_cell' ? 'table_cell' : targetKind,
+              targetKind:
+                indexed.byId.get(range.blockId)?.type === 'table_cell' ? 'table_cell' : targetKind,
               provenanceClass,
               id: newAnchorId(),
               at,

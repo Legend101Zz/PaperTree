@@ -51,7 +51,9 @@ function fakeResponse(init: FakeResponseInit = {}): Response {
     ok: status >= 200 && status < 300,
     status,
     statusText: init.statusText ?? '',
-    headers: new Headers(init.contentType === undefined ? {} : { 'content-type': init.contentType }),
+    headers: new Headers(
+      init.contentType === undefined ? {} : { 'content-type': init.contentType },
+    ),
     body: init.stream ?? null,
     text: async () => body,
     json: async () => JSON.parse(body) as unknown,
@@ -132,7 +134,11 @@ afterEach(() => {
 
 describe('apiErrorFrom — the §0 envelope, and the bodies that are not one', () => {
   it('takes code, detail and retryable from an envelope', () => {
-    const error = apiErrorFrom(409, 'Conflict', envelope('not_parsed', 'Still reading this paper.'));
+    const error = apiErrorFrom(
+      409,
+      'Conflict',
+      envelope('not_parsed', 'Still reading this paper.'),
+    );
 
     expect(error).toBeInstanceOf(ApiError);
     expect(error).toBeInstanceOf(Error);
@@ -147,9 +153,9 @@ describe('apiErrorFrom — the §0 envelope, and the bodies that are not one', (
     expect(apiErrorFrom(503, '', envelope('not_configured', 'AI is off.', false)).retryable).toBe(
       false,
     );
-    expect(apiErrorFrom(429, '', envelope('budget_exhausted', 'Budget used.', true)).retryable).toBe(
-      true,
-    );
+    expect(
+      apiErrorFrom(429, '', envelope('budget_exhausted', 'Budget used.', true)).retryable,
+    ).toBe(true);
   });
 
   it("reads FastAPI's bare {detail} and derives the code from the status", () => {
@@ -319,7 +325,10 @@ describe('the 401 policy — only a 401 signs the user out', () => {
   it('a 401 from login or register is a wrong password, not an expired session', async () => {
     setSessionToken(TOKEN);
     fetchMock.mockResolvedValue(
-      fakeResponse({ status: 401, body: envelope('invalid_credentials', 'Wrong email or password.') }),
+      fakeResponse({
+        status: 401,
+        body: envelope('invalid_credentials', 'Wrong email or password.'),
+      }),
     );
 
     const error = await caught(
@@ -490,9 +499,9 @@ describe('SseFrameParser — contracts §0 framing', () => {
 
   it('holds a frame until its blank line arrives', () => {
     const parser = new SseFrameParser();
-    expect(parser.push('event: done\ndata: {"status":"complete","error":null,"message_id":"m"}\n')).toEqual(
-      [],
-    );
+    expect(
+      parser.push('event: done\ndata: {"status":"complete","error":null,"message_id":"m"}\n'),
+    ).toEqual([]);
     expect(parser.push('\n')).toHaveLength(1);
   });
 
@@ -516,9 +525,7 @@ describe('readSseEvents / streamSse — over a real ReadableStream', () => {
     const marker = bytes.indexOf(0xe2); // the first byte of U+2299
     const { stream } = chunkedStream([bytes.slice(0, marker + 1), bytes.slice(marker + 1)]);
 
-    expect(await collect(readSseEvents(stream))).toEqual([
-      { event: 'text', data: { delta: '⊙' } },
-    ]);
+    expect(await collect(readSseEvents(stream))).toEqual([{ event: 'text', data: { delta: '⊙' } }]);
   });
 
   it('discards a frame still incomplete when the stream ends', async () => {
@@ -533,7 +540,11 @@ describe('readSseEvents / streamSse — over a real ReadableStream', () => {
 
   it('POSTs JSON with Accept: text/event-stream and the Bearer header, then yields the events', async () => {
     setSessionToken(TOKEN);
-    const { stream } = chunkedStream([STREAM.slice(0, 100), STREAM.slice(100, 333), STREAM.slice(333)]);
+    const { stream } = chunkedStream([
+      STREAM.slice(0, 100),
+      STREAM.slice(100, 333),
+      STREAM.slice(333),
+    ]);
     fetchMock.mockResolvedValue(
       fakeResponse({ status: 200, stream, contentType: 'text/event-stream' }),
     );
@@ -555,7 +566,10 @@ describe('readSseEvents / streamSse — over a real ReadableStream', () => {
 
   it('throws a pre-stream ApiError from the first next(), before any event', async () => {
     fetchMock.mockResolvedValue(
-      fakeResponse({ status: 429, body: envelope('budget_exhausted', "Today's AI budget is used.") }),
+      fakeResponse({
+        status: 429,
+        body: envelope('budget_exhausted', "Today's AI budget is used."),
+      }),
     );
     const error = await caught(streamSse('/papers/ppr_1/threads', { kind: 'ask' }).next());
     expect((error as ApiError).code).toBe('budget_exhausted');

@@ -472,9 +472,7 @@ export function uploadWithProgress(
         try {
           resolve(JSON.parse(xhr.responseText) as UploadResponse);
         } catch {
-          reject(
-            new ApiError(xhr.status, 'internal', 'The upload response was not JSON.', false),
-          );
+          reject(new ApiError(xhr.status, 'internal', 'The upload response was not JSON.', false));
         }
         return;
       }

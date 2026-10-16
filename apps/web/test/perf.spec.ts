@@ -56,7 +56,11 @@ function windowAt(layout: PageLayout, scrollTop: number, overscan = DEFAULT_OVER
 }
 
 /** The visible set, recomputed independently of the implementation's forward walk. */
-function visibleByBruteForce(layout: PageLayout, scrollTop: number, viewportHeight: number): number[] {
+function visibleByBruteForce(
+  layout: PageLayout,
+  scrollTop: number,
+  viewportHeight: number,
+): number[] {
   const out: number[] = [];
   for (let i = 0; i < layout.offsets.length; i += 1) {
     const top = layout.offsets[i] as number;
@@ -121,8 +125,11 @@ describe('total height is stable', () => {
     for (const scrollTop of [0, 1_000, 20_000, layout.totalHeight]) {
       const win = windowAt(layout, scrollTop);
       // The mounted set changes; the scroll height must not, or the scrollbar jumps under the thumb.
-      expect(win.leadingSpacer + mountedExtent(layout, win.firstMounted, win.lastMounted) + win.trailingSpacer)
-        .toBe(layout.totalHeight);
+      expect(
+        win.leadingSpacer +
+          mountedExtent(layout, win.firstMounted, win.lastMounted) +
+          win.trailingSpacer,
+      ).toBe(layout.totalHeight);
     }
   });
 
@@ -145,8 +152,11 @@ describe('total height is stable', () => {
     const tight = computePageWindow(layout, 5_000, VIEWPORT, 0);
     const loose = computePageWindow(layout, 5_000, VIEWPORT, 5);
     for (const win of [tight, loose]) {
-      expect(win.leadingSpacer + mountedExtent(layout, win.firstMounted, win.lastMounted) + win.trailingSpacer)
-        .toBe(layout.totalHeight);
+      expect(
+        win.leadingSpacer +
+          mountedExtent(layout, win.firstMounted, win.lastMounted) +
+          win.trailingSpacer,
+      ).toBe(layout.totalHeight);
     }
   });
 });

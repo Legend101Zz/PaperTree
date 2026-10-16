@@ -42,7 +42,9 @@ function message(over: Partial<ViewMessage> = {}): ViewMessage {
 }
 
 const view = (m: ViewMessage) =>
-  render(<AnswerView message={m} onCite={noop} onRetry={noop} onSendToCanvas={async () => undefined} />);
+  render(
+    <AnswerView message={m} onCite={noop} onRetry={noop} onSendToCanvas={async () => undefined} />,
+  );
 
 describe('an unsupported claim is flagged, not deleted', () => {
   it('keeps the claim on screen AND marks its chip "not verified" in words', () => {
@@ -58,7 +60,12 @@ describe('an unsupported claim is flagged, not deleted', () => {
   });
 
   it('an unchecked citation (supported: null) is neither verified nor flagged', () => {
-    view(message({ citations: [citation('b1', { supported: null }) as Citation], text: 'Claim [b1].' }));
+    view(
+      message({
+        citations: [citation('b1', { supported: null }) as Citation],
+        text: 'Claim [b1].',
+      }),
+    );
     const chip = document.querySelector<HTMLElement>('[data-citation-id]');
     expect(chip?.getAttribute('data-supported')).toBe('unknown');
     expect(chip?.textContent).not.toContain('not verified');
@@ -70,7 +77,12 @@ describe('the registers stay apart', () => {
     render(
       <>
         <PaperText as="blockquote">We reframe detection.</PaperText>
-        <AnswerView message={message()} onCite={noop} onRetry={noop} onSendToCanvas={async () => undefined} />
+        <AnswerView
+          message={message()}
+          onCite={noop}
+          onRetry={noop}
+          onSendToCanvas={async () => undefined}
+        />
       </>,
     );
     const paper = document.querySelector('[data-register="paper"]');
@@ -96,7 +108,9 @@ describe('handles never reach the screen as text', () => {
   });
 
   it('while streaming, handles and a half-typed "[b" are hidden', () => {
-    render(<RichText text="Streaming now [b1] and then [b" citations={[]} streaming onCite={noop} />);
+    render(
+      <RichText text="Streaming now [b1] and then [b" citations={[]} streaming onCite={noop} />,
+    );
     expect(document.body.textContent).toContain('and then');
     expect(document.body.textContent).not.toMatch(/\[b/);
   });

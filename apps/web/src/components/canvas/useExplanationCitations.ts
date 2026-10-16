@@ -26,7 +26,8 @@ export function useExplanationCitations(
     const ids = new Set<string>();
     for (const n of nodes) {
       const node = n.data.node;
-      if (node.kind === 'explanation' && node.source_message_id !== null) ids.add(node.source_message_id);
+      if (node.kind === 'explanation' && node.source_message_id !== null)
+        ids.add(node.source_message_id);
     }
     return [...ids].sort();
   }, [nodes]);

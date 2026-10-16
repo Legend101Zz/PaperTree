@@ -78,7 +78,9 @@ function Toast({ content, onDismiss }: { content: CanvasToastContent; onDismiss:
   }, []);
   const close = (): void => {
     const back = previous.current;
-    const hadFocus = document.activeElement !== null && link.current?.parentElement?.contains(document.activeElement) === true;
+    const hadFocus =
+      document.activeElement !== null &&
+      link.current?.parentElement?.contains(document.activeElement) === true;
     onDismiss();
     if (hadFocus && back !== null && back.isConnected) back.focus();
   };

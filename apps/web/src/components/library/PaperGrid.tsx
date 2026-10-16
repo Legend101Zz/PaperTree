@@ -144,7 +144,10 @@ export function PaperGrid({ papers, onOpen, onRetry, onDelete, emptyMessage }: P
   }
 
   return (
-    <ul className="grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3" data-view="grid">
+    <ul
+      className="grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3"
+      data-view="grid"
+    >
       {papers.map((paper) => (
         <li key={paper.id}>
           <PaperCard

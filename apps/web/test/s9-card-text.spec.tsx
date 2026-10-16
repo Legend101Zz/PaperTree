@@ -6,12 +6,15 @@ import { ProcessingBadge } from '@/components/library/primitives';
 import { PROCESSING_DETAIL, type ProcessingState } from '@/components/library/types';
 
 describe('ProcessingBadge screen-reader text', () => {
-  it.each(Object.keys(PROCESSING_DETAIL) as ProcessingState[])('%s has no leading punctuation', (state) => {
-    const { container } = render(<ProcessingBadge state={state} />);
-    const hidden = container.querySelector('.sr-only');
-    expect(hidden).not.toBeNull();
-    expect(hidden?.textContent?.trim()).toBe(PROCESSING_DETAIL[state]);
-    expect(hidden?.textContent).not.toMatch(/^\s*[.,;:]/);
-    expect(container.textContent).not.toMatch(/\s\.\s/);
-  });
+  it.each(Object.keys(PROCESSING_DETAIL) as ProcessingState[])(
+    '%s has no leading punctuation',
+    (state) => {
+      const { container } = render(<ProcessingBadge state={state} />);
+      const hidden = container.querySelector('.sr-only');
+      expect(hidden).not.toBeNull();
+      expect(hidden?.textContent?.trim()).toBe(PROCESSING_DETAIL[state]);
+      expect(hidden?.textContent).not.toMatch(/^\s*[.,;:]/);
+      expect(container.textContent).not.toMatch(/\s\.\s/);
+    },
+  );
 });

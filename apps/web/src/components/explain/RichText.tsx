@@ -70,18 +70,24 @@ function renderInline(nodes: readonly Inline[], ctx: Ctx): ReactNode {
       case 'code':
         return <code key={key}>{node.v}</code>;
       case 'cite': {
-        if (ctx.streaming) return node.after === '' ? null : <Fragment key={key}>{node.after}</Fragment>;
+        if (ctx.streaming)
+          return node.after === '' ? null : <Fragment key={key}>{node.after}</Fragment>;
         const found = node.markers.flatMap((marker) => {
           const citation = ctx.byMarker.get(marker);
           return citation === undefined ? [] : [citation];
         });
-        if (found.length === 0) return node.after === '' ? null : <Fragment key={key}>{node.after}</Fragment>;
+        if (found.length === 0)
+          return node.after === '' ? null : <Fragment key={key}>{node.after}</Fragment>;
         return (
           <span className="pt-cite-run" key={key}>
             <span className="pt-chips">
               {found.map((citation) =>
                 ctx.citeAs === 'chip' ? (
-                  <CitationChip key={citation.citation_id} citation={citation} onFocus={ctx.onCite} />
+                  <CitationChip
+                    key={citation.citation_id}
+                    citation={citation}
+                    onFocus={ctx.onCite}
+                  />
                 ) : (
                   <span key={citation.citation_id} className="pt-cite-label" data-cite-label>
                     {citationPageLabel(citation)}
@@ -185,7 +191,8 @@ export function RichText({
   const cleaned = stripPartialTail(text);
   const blocks = parseMarkdown(dehyphenate(cleaned), { streaming });
   const mentioned = new Set(handlesInBlocks(blocks));
-  const loose = streaming || citeAs === 'label' ? [] : citations.filter((c) => !mentioned.has(c.marker));
+  const loose =
+    streaming || citeAs === 'label' ? [] : citations.filter((c) => !mentioned.has(c.marker));
   return (
     <div className="pt-explain__prose" onClickCapture={redirectToNearestChip}>
       {blocks.map((block, index) => renderBlock(block, index, ctx))}

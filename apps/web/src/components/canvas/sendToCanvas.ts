@@ -47,7 +47,10 @@ function sentence(error: unknown): string {
   return "Couldn't add this to the canvas. Check your connection and try again.";
 }
 
-export async function sendToCanvas(paperId: string | null, input: SendToCanvasInput): Promise<void> {
+export async function sendToCanvas(
+  paperId: string | null,
+  input: SendToCanvasInput,
+): Promise<void> {
   if (paperId === null) {
     // A fixture paper has no account, so there is nowhere to keep a board.
     const message = 'This sample paper is not in your library, so it has no canvas.';
@@ -79,7 +82,12 @@ export async function sendToCanvas(paperId: string | null, input: SendToCanvasIn
     } else {
       const found = await messageText(paperId, input.messageId);
       if (found === null) {
-        throw new ApiError(404, 'not_found', "This answer isn't saved yet, so it can't be added.", false);
+        throw new ApiError(
+          404,
+          'not_found',
+          "This answer isn't saved yet, so it can't be added.",
+          false,
+        );
       }
       await boardsApi.createNode(paperId, {
         node_id: newNodeId(),
@@ -92,7 +100,8 @@ export async function sendToCanvas(paperId: string | null, input: SendToCanvasIn
       });
     }
     showCanvasToast({
-      message: input.kind === 'excerpt' ? 'Passage added to your canvas.' : 'Answer added to your canvas.',
+      message:
+        input.kind === 'excerpt' ? 'Passage added to your canvas.' : 'Answer added to your canvas.',
       href: `/paper/${encodeURIComponent(paperId)}/canvas`,
       linkLabel: 'Open canvas',
     });

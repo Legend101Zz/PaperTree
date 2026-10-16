@@ -240,7 +240,8 @@ export function computePageWindow(
   for (let i = firstVisible; i <= lastVisible; i += 1) visible.push(i);
 
   const consumedTop = layout.offsets[firstMounted] as number;
-  const lastBottom = (layout.offsets[lastMounted] as number) + (layout.heights[lastMounted] as number);
+  const lastBottom =
+    (layout.offsets[lastMounted] as number) + (layout.heights[lastMounted] as number);
   // Every page but the document's last carries a bottom gutter, so the trailing spacer must not
   // count it twice.
   const trailingGap = lastMounted < n - 1 ? layout.gap : 0;
@@ -499,7 +500,12 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
     const layout = useMemo(() => computePageLayout(units, zoom, gap), [units, zoom, gap]);
     const win = useMemo(
       () =>
-        computePageWindow(layout, Math.max(0, scrollTop - CONTENT_PAD_TOP), viewportHeight, overscan),
+        computePageWindow(
+          layout,
+          Math.max(0, scrollTop - CONTENT_PAD_TOP),
+          viewportHeight,
+          overscan,
+        ),
       [layout, scrollTop, viewportHeight, overscan],
     );
 
@@ -641,7 +647,11 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
           // right would drag a centred page sideways for nothing.
           const left = layout.maxWidth > el.clientWidth ? target.left : el.scrollLeft;
           releaseScrollHold(el);
-          el.scrollTo({ top: CONTENT_PAD_TOP + target.top, left, behavior: opts?.behavior ?? 'auto' });
+          el.scrollTo({
+            top: CONTENT_PAD_TOP + target.top,
+            left,
+            behavior: opts?.behavior ?? 'auto',
+          });
         },
         scrollToPosition(position) {
           const el = scrollRef.current;
@@ -678,7 +688,10 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
     return (
       <div
         ref={scrollRef}
-        className={joinClasses('relative h-full w-full overflow-auto overscroll-contain', className)}
+        className={joinClasses(
+          'relative h-full w-full overflow-auto overscroll-contain',
+          className,
+        )}
         onScroll={onScroll}
         onPointerDown={surfaceProps?.onPointerDown}
         onPointerMove={surfaceProps?.onPointerMove}

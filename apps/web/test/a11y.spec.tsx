@@ -104,13 +104,18 @@ describe('axe: zero violations at WCAG 2.2 AA', () => {
   it('actually ran a meaningful set of rules (guards against a vacuous pass)', async () => {
     // A `runOnly` typo, or an axe that silently found nothing to evaluate, produces "zero
     // violations" too. This asserts the sweep had teeth.
-    const { container } = render(<PaperGrid papers={PAPERS} onOpen={() => {}} onRetry={() => {}} />);
+    const { container } = render(
+      <PaperGrid papers={PAPERS} onOpen={() => {}} onRetry={() => {}} />,
+    );
     const results = await analyse(container);
 
     const evaluated = new Set(
-      [...results.passes, ...results.violations, ...results.incomplete, ...results.inapplicable].map(
-        (result) => result.id,
-      ),
+      [
+        ...results.passes,
+        ...results.violations,
+        ...results.incomplete,
+        ...results.inapplicable,
+      ].map((result) => result.id),
     );
     for (const rule of ['button-name', 'aria-valid-attr-value', 'aria-required-attr', 'list']) {
       expect(evaluated.has(rule), `axe did not evaluate ${rule}`).toBe(true);
@@ -212,7 +217,11 @@ describe('keyboard operation', () => {
   it('Enter/Space on a hatched page opens that page', () => {
     const onOpenPage = vi.fn();
     const { container } = render(
-      <PartialState partialReason="Pages 12-14 were skipped." affectedPages={[11]} onOpenPage={onOpenPage} />,
+      <PartialState
+        partialReason="Pages 12-14 were skipped."
+        affectedPages={[11]}
+        onOpenPage={onOpenPage}
+      />,
     );
     const chip = container.querySelector<HTMLButtonElement>('[data-testid="partial-pages"] button');
     expect(chip).not.toBeNull();
@@ -296,7 +305,9 @@ describe('keyboard operation', () => {
 function assertDerivedRegionsAnnounced(root: HTMLElement, label: string): number {
   const regions = Array.from(root.querySelectorAll<HTMLElement>('[data-derived="true"]'));
   for (const region of regions) {
-    expect(region.getAttribute('role'), `${label}: derived region without role="note"`).toBe('note');
+    expect(region.getAttribute('role'), `${label}: derived region without role="note"`).toBe(
+      'note',
+    );
     const ariaLabel = region.getAttribute('aria-label') ?? '';
     expect(
       ariaLabel,

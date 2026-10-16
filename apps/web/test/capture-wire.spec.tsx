@@ -72,7 +72,13 @@ class FakeTextLayer {
   #source: { items: FakeItem[] };
   #container: HTMLElement;
 
-  constructor({ textContentSource, container }: { textContentSource: { items: FakeItem[] }; container: HTMLElement }) {
+  constructor({
+    textContentSource,
+    container,
+  }: {
+    textContentSource: { items: FakeItem[] };
+    container: HTMLElement;
+  }) {
     this.#source = textContentSource;
     this.#container = container;
   }
@@ -117,7 +123,8 @@ vi.mock('@/lib/pdf/worker', () => ({
                 convertToPdfPoint: (x: number, y: number) => [x / scale, size.height - y / scale],
               }),
               render: () => ({ promise: Promise.resolve(), cancel: () => undefined }),
-              getTextContent: () => Promise.resolve({ items: ITEMS_BY_PAGE.get(index) ?? [], styles: {} }),
+              getTextContent: () =>
+                Promise.resolve({ items: ITEMS_BY_PAGE.get(index) ?? [], styles: {} }),
               cleanup: () => undefined,
             });
           },
@@ -176,7 +183,10 @@ const SLUG = 'attention-is-all-you-need';
 async function loadFixtureDoc(): Promise<IndexedDocument> {
   const { readFileSync } = await import('node:fs');
   const paper = JSON.parse(
-    readFileSync(`${process.cwd()}/../../packages/document-ir/fixtures/${SLUG}.paperir.json`, 'utf8'),
+    readFileSync(
+      `${process.cwd()}/../../packages/document-ir/fixtures/${SLUG}.paperir.json`,
+      'utf8',
+    ),
   ) as PaperSource;
   return indexDocument(paper, 'capture-wire.spec');
 }
@@ -185,7 +195,6 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
-
 
 function renderPane(
   doc: IndexedDocument,
@@ -287,11 +296,21 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
     expect(JSON.stringify(anchor)).toContain(target.id);
     expect(anchor.doc.textStreamId).toBe('capture-wire.spec');
     const types = anchor.selectors.map((s) => s.type);
-    expect(types).toEqual(expect.arrayContaining(['BlockSelector', 'PageSelector', 'TextQuoteSelector', 'ShapeSelector']));
+    expect(types).toEqual(
+      expect.arrayContaining([
+        'BlockSelector',
+        'PageSelector',
+        'TextQuoteSelector',
+        'ShapeSelector',
+      ]),
+    );
     // The quads are the SELECTED item's box, not the block polygon (the 17x over-paint).
-    const shape = anchor.selectors.find((s): s is ShapeSelector => s.type === 'ShapeSelector') as ShapeSelector;
+    const shape = anchor.selectors.find(
+      (s): s is ShapeSelector => s.type === 'ShapeSelector',
+    ) as ShapeSelector;
     const [bx0, , bx1] = target.bbox;
-    const area = (q: readonly number[]) => ((q[2] ?? 0) - (q[0] ?? 0)) * ((q[3] ?? 0) - (q[1] ?? 0));
+    const area = (q: readonly number[]) =>
+      ((q[2] ?? 0) - (q[0] ?? 0)) * ((q[3] ?? 0) - (q[1] ?? 0));
     const selectedArea = shape.quads.reduce((sum, q) => sum + area(q), 0);
     expect(selectedArea).toBeLessThan(area(target.bbox));
     for (const quad of shape.quads) {
@@ -302,7 +321,11 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
 
   it('one selection across a paragraph break is ONE capture with an anchor per block', async () => {
     const next = doc.blocks.find(
-      (b) => b.readingIndex > target.readingIndex && b.pageIndex === target.pageIndex && b.type === 'paragraph' && b.spans.length > 0,
+      (b) =>
+        b.readingIndex > target.readingIndex &&
+        b.pageIndex === target.pageIndex &&
+        b.type === 'paragraph' &&
+        b.spans.length > 0,
     );
     if (next === undefined) throw new Error('fixture has no second paragraph on the page');
     const captured: SelectionCapture[] = [];
@@ -320,7 +343,9 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
     fireEvent.click(await screen.findByRole('button', { name: 'Highlight' }));
     await waitFor(() => expect(captured.length).toBe(1));
     const blocks = captured[0]?.anchors.map(
-      (a) => (a.selectors.find((s) => s.type === 'BlockSelector') as { blockId: string } | undefined)?.blockId,
+      (a) =>
+        (a.selectors.find((s) => s.type === 'BlockSelector') as { blockId: string } | undefined)
+          ?.blockId,
     );
     expect(blocks?.[0]).toBe(target.id);
     expect(blocks).toContain(next.id);
@@ -342,7 +367,12 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
     // One extra item on the target's page that belongs to no IR block (a figure label, say).
     const page = target.pageIndex;
     const height = PAGE_SIZES.get(page)?.height ?? 792;
-    ITEMS_BY_PAGE.get(page)?.push({ str: 'conv 7x7', transform: [9, 0, 0, 9, 20, height - 20], width: 30, height: 9 });
+    ITEMS_BY_PAGE.get(page)?.push({
+      str: 'conv 7x7',
+      transform: [9, 0, 0, 9, 20, height - 20],
+      width: 30,
+      height: 9,
+    });
     const captured: SelectionCapture[] = [];
     renderPane(doc, { onCreateHighlight: (capture) => captured.push(capture) });
     const label = await waitFor(() => {
@@ -359,12 +389,20 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
     await waitFor(() => expect(captured.length).toBeGreaterThan(0));
     const anchor = captured[0]?.anchor as Anchor;
     expect(anchor.doc.textStreamId).toBe('pdfjs@5.7.284/page-text');
-    expect(anchor.selectors.map((s) => s.type)).toEqual(['PageSelector', 'TextQuoteSelector', 'ShapeSelector']);
-    const shape = anchor.selectors.find((s): s is ShapeSelector => s.type === 'ShapeSelector') as ShapeSelector;
+    expect(anchor.selectors.map((s) => s.type)).toEqual([
+      'PageSelector',
+      'TextQuoteSelector',
+      'ShapeSelector',
+    ]);
+    const shape = anchor.selectors.find(
+      (s): s is ShapeSelector => s.type === 'ShapeSelector',
+    ) as ShapeSelector;
     // Inside the item's own box: x 20..50, baseline at IR y 20, 9 pt high (0.85 up, 0.2 down).
     expect(shape.quads).toHaveLength(1);
     const [x0, y0, x1, y1] = shape.quads[0] as readonly number[];
-    expect([x0, y0, x1, y1].map((v) => Math.round((v ?? 0) * 1000) / 1000)).toEqual([20, 12.35, 50, 21.8]);
+    expect([x0, y0, x1, y1].map((v) => Math.round((v ?? 0) * 1000) / 1000)).toEqual([
+      20, 12.35, 50, 21.8,
+    ]);
   });
 });
 
@@ -394,12 +432,18 @@ async function itemElement(str: string): Promise<HTMLElement> {
     const found = Array.from(document.querySelectorAll<HTMLElement>('[data-item-index]')).find(
       (el) => el.textContent === str,
     );
-    if (found === undefined) throw new Error(`item ${JSON.stringify(str.slice(0, 30))} not rendered yet`);
+    if (found === undefined)
+      throw new Error(`item ${JSON.stringify(str.slice(0, 30))} not rendered yet`);
     return found;
   });
 }
 
-function selectBetween(from: HTMLElement, fromOffset: number, to: HTMLElement, toOffset: number): void {
+function selectBetween(
+  from: HTMLElement,
+  fromOffset: number,
+  to: HTMLElement,
+  toOffset: number,
+): void {
   const range = document.createRange();
   range.setStart(from.firstChild as Text, fromOffset);
   range.setEnd(to.firstChild as Text, toOffset);
@@ -411,7 +455,8 @@ function selectBetween(from: HTMLElement, fromOffset: number, to: HTMLElement, t
 }
 
 function quadsOf(anchor: Anchor): readonly (readonly number[])[] {
-  return (anchor.selectors.find((s): s is ShapeSelector => s.type === 'ShapeSelector')?.quads ?? []) as readonly (readonly number[])[];
+  return (anchor.selectors.find((s): s is ShapeSelector => s.type === 'ShapeSelector')?.quads ??
+    []) as readonly (readonly number[])[];
 }
 
 function kindOf(anchor: Anchor): 'ir' | 'page-text' {
@@ -424,7 +469,8 @@ function kindOf(anchor: Anchor): 'ir' | 'page-text' {
  * bands touch by ~5 % of a line (descent 0.2 below one baseline, ascent 0.85 above the next).
  */
 function worstCrossAnchorOverlap(anchors: readonly Anchor[]): number {
-  const area = (q: readonly number[]) => Math.max(0, (q[2] ?? 0) - (q[0] ?? 0)) * Math.max(0, (q[3] ?? 0) - (q[1] ?? 0));
+  const area = (q: readonly number[]) =>
+    Math.max(0, (q[2] ?? 0) - (q[0] ?? 0)) * Math.max(0, (q[3] ?? 0) - (q[1] ?? 0));
   let worst = 0;
   anchors.forEach((a, i) => {
     anchors.slice(i + 1).forEach((b) => {
@@ -505,8 +551,7 @@ describe('reader/capture-wire.spec — review F1: each selected glyph is stored 
     const anchors = captured[0]?.anchors ?? [];
     expect(anchors.map(kindOf)).toEqual(['ir']);
     const quote = (anchors[0] as Anchor).selectors.find((s) => s.type === 'TextQuoteSelector') as
-      | { exact: string }
-      | undefined;
+      { exact: string } | undefined;
     // The range reaches the block's last glyph: the quote ends where the paragraph does.
     const squash = (value: string) => value.replace(/\s+/gu, ' ').trim();
     const text = squash(String.fromCodePoint(...target.textCodePoints));
@@ -552,7 +597,12 @@ describe('reader/capture-wire.spec — review F1: each selected glyph is stored 
     // A figure label between the two paragraphs in CONTENT order, in the page's top margin by
     // geometry, so no block's band holds it.
     const height = PAGE_SIZES.get(target.pageIndex)?.height ?? 792;
-    const label: FakeItem = { str: 'Figure 9: a label', transform: [9, 0, 0, 9, 20, height - 20], width: 60, height: 9 };
+    const label: FakeItem = {
+      str: 'Figure 9: a label',
+      transform: [9, 0, 0, 9, 20, height - 20],
+      width: 60,
+      height: 9,
+    };
     items.splice((lines[lines.length - 1] as number) + 1, 0, label);
     const firstStr = (items[lines[0] as number] as FakeItem).str;
     const nextStr = (items[(nextLines[0] as number) + 1] as FakeItem).str;
@@ -567,7 +617,8 @@ describe('reader/capture-wire.spec — review F1: each selected glyph is stored 
 
     const anchors = captured[0]?.anchors ?? [];
     const blockOf = (a: Anchor) =>
-      (a.selectors.find((s) => s.type === 'BlockSelector') as { blockId: string } | undefined)?.blockId ?? 'page-text';
+      (a.selectors.find((s) => s.type === 'BlockSelector') as { blockId: string } | undefined)
+        ?.blockId ?? 'page-text';
     const order = anchors.map(blockOf);
     const labelAt = order.indexOf('page-text');
     expect(order[0]).toBe(target.id);
@@ -584,14 +635,18 @@ describe('reader/capture-wire.spec — review F2: a selection longer than one hi
     PAGE_SIZES = new Map(doc.pages.map((p) => [p.index, { width: p.width, height: p.height }]));
     // The fullest page, with a stray label (no block holds it) after every line: every line's
     // block and every label is its own target, which is well past 64 on one page.
-    const [pageIndex, items] = Array.from(ITEMS_BY_PAGE.entries()).sort((a, b) => b[1].length - a[1].length)[0] as [
-      number,
-      FakeItem[],
-    ];
+    const [pageIndex, items] = Array.from(ITEMS_BY_PAGE.entries()).sort(
+      (a, b) => b[1].length - a[1].length,
+    )[0] as [number, FakeItem[]];
     const height = PAGE_SIZES.get(pageIndex)?.height ?? 792;
     const lines = items.length;
     for (let i = lines - 1; i >= 0; i -= 1) {
-      items.splice(i + 1, 0, { str: `label ${String(i)}`, transform: [6, 0, 0, 6, 4, height - 6], width: 20, height: 6 });
+      items.splice(i + 1, 0, {
+        str: `label ${String(i)}`,
+        transform: [6, 0, 0, 6, 4, height - 6],
+        width: 20,
+        height: 6,
+      });
     }
     const captured: SelectionCapture[] = [];
     renderPane(doc, { onCreateHighlight: (capture) => captured.push(capture) });
@@ -609,7 +664,9 @@ describe('reader/capture-wire.spec — review F2: a selection longer than one hi
     fireEvent.click(button);
     expect(captured).toEqual([]);
     // Ask and Copy still work on it.
-    expect((screen.getByRole('button', { name: 'Copy' }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole('button', { name: 'Copy' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
   });
 });
 

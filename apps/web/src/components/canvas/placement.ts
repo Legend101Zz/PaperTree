@@ -60,5 +60,10 @@ export function boundsOf(rects: readonly Rect[], pad = 24): Rect {
   const minY = Math.min(...rects.map((r) => r.y));
   const maxX = Math.max(...rects.map((r) => r.x + r.w));
   const maxY = Math.max(...rects.map((r) => r.y + r.h));
-  return { x: minX - pad, y: minY - pad - 28, w: maxX - minX + pad * 2, h: maxY - minY + pad * 2 + 28 };
+  return {
+    x: minX - pad,
+    y: minY - pad - 28,
+    w: maxX - minX + pad * 2,
+    h: maxY - minY + pad * 2 + 28,
+  };
 }

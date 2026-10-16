@@ -11,7 +11,9 @@ import { installFetch, jsonResponse, PAPER } from './s6-support';
 
 beforeEach(() => {
   window.localStorage.setItem('papertree.session', 'test-token');
-  installFetch({ [`GET /papers/${PAPER}/summary`]: () => jsonResponse(200, { state: 'none', summary: null }) });
+  installFetch({
+    [`GET /papers/${PAPER}/summary`]: () => jsonResponse(200, { state: 'none', summary: null }),
+  });
 });
 afterEach(() => {
   cleanup();
@@ -25,7 +27,9 @@ describe('focus after the panel closes', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ask AI' }));
     const drawer = await screen.findByRole('complementary', { name: 'Explain' });
     fireEvent.keyDown(drawer, { key: 'Escape' });
-    await waitFor(() => expect(screen.queryByRole('complementary', { name: 'Explain' })).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole('complementary', { name: 'Explain' })).toBeNull(),
+    );
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Ask AI' }));
   });
 
@@ -34,7 +38,9 @@ describe('focus after the panel closes', () => {
     render(<Harness />);
     fireEvent.click(screen.getByRole('button', { name: 'Ask AI' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Close explain panel' }));
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Ask AI' })));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Ask AI' })),
+    );
   });
 
   it('phone: dismissing the sheet with Esc lands on the launcher', async () => {

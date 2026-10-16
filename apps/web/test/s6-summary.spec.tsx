@@ -6,7 +6,20 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { focusAnchor, Harness, stubDesktop } from './s6-harness';
-import { citation, done, errorBody, frame, installFetch, jsonResponse, PAPER, run, sseResponse, status, text, usage } from './s6-support';
+import {
+  citation,
+  done,
+  errorBody,
+  frame,
+  installFetch,
+  jsonResponse,
+  PAPER,
+  run,
+  sseResponse,
+  status,
+  text,
+  usage,
+} from './s6-support';
 
 beforeEach(() => {
   stubDesktop();
@@ -39,7 +52,8 @@ async function open(): Promise<void> {
 describe('the paper summary', () => {
   it('a cached summary renders from GET and starts NO run', async () => {
     const { calls } = installFetch({
-      [`GET /papers/${PAPER}/summary`]: () => jsonResponse(200, { state: 'ready', summary: SUMMARY('complete') }),
+      [`GET /papers/${PAPER}/summary`]: () =>
+        jsonResponse(200, { state: 'ready', summary: SUMMARY('complete') }),
     });
     render(<Harness />);
     await open();
@@ -58,18 +72,33 @@ describe('the paper summary', () => {
     installFetch({
       [`GET /papers/${PAPER}/summary`]: () => {
         gets += 1;
-        return jsonResponse(200, gets === 1 ? { state: 'none', summary: null } : { state: 'ready', summary: SUMMARY('complete', 6) });
+        return jsonResponse(
+          200,
+          gets === 1
+            ? { state: 'none', summary: null }
+            : { state: 'ready', summary: SUMMARY('complete', 6) },
+        );
       },
       [`POST /papers/${PAPER}/summary`]: (_c, signal) =>
-        sseResponse([run({ thread_id: null }), status({ phase: 'tool', label: 'Reading p. 2 · 2. Unified Detection' })], {
-          hold: true,
-          signal,
-          onHandle: (h) => (handle = h),
-        }),
+        sseResponse(
+          [
+            run({ thread_id: null }),
+            status({ phase: 'tool', label: 'Reading p. 2 · 2. Unified Detection' }),
+          ],
+          {
+            hold: true,
+            signal,
+            onHandle: (h) => (handle = h),
+          },
+        ),
     });
     render(<Harness />);
     await open();
-    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Reading p. 2 · 2. Unified Detection'));
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toContain(
+        'Reading p. 2 · 2. Unified Detection',
+      ),
+    );
     handle?.push(text('- raw streamed bullet [b1]\n'));
     handle?.push(frame('citations', { items: [] }) + usage() + done());
     handle?.close();
@@ -80,11 +109,16 @@ describe('the paper summary', () => {
 
   it('a partial summary says so in plain words and marks the bullet without a passage', async () => {
     installFetch({
-      [`GET /papers/${PAPER}/summary`]: () => jsonResponse(200, { state: 'partial', summary: SUMMARY('partial') }),
+      [`GET /papers/${PAPER}/summary`]: () =>
+        jsonResponse(200, { state: 'partial', summary: SUMMARY('partial') }),
     });
     render(<Harness />);
     await open();
-    await waitFor(() => expect(document.querySelector('[data-summary-warning]')?.textContent).toBe('Some points could not be linked to a passage.'));
+    await waitFor(() =>
+      expect(document.querySelector('[data-summary-warning]')?.textContent).toBe(
+        'Some points could not be linked to a passage.',
+      ),
+    );
     expect(screen.getByText('No linked passage')).toBeTruthy();
   });
 
@@ -103,7 +137,12 @@ describe('the paper summary', () => {
     const { calls } = installFetch({
       [`GET /papers/${PAPER}/summary`]: () => {
         gets += 1;
-        return jsonResponse(200, gets <= 1 ? { state: 'partial', summary: SUMMARY('partial') } : { state: 'ready', summary: SUMMARY('complete', 7) });
+        return jsonResponse(
+          200,
+          gets <= 1
+            ? { state: 'partial', summary: SUMMARY('partial') }
+            : { state: 'ready', summary: SUMMARY('complete', 7) },
+        );
       },
       [`POST /papers/${PAPER}/summary`]: (_c, signal) =>
         sseResponse([run({ thread_id: null }), usage(), done()], { signal }),
@@ -123,7 +162,8 @@ describe('the paper summary', () => {
 
   it('a complete summary has no Regenerate button', async () => {
     installFetch({
-      [`GET /papers/${PAPER}/summary`]: () => jsonResponse(200, { state: 'ready', summary: SUMMARY('complete') }),
+      [`GET /papers/${PAPER}/summary`]: () =>
+        jsonResponse(200, { state: 'ready', summary: SUMMARY('complete') }),
     });
     render(<Harness />);
     await open();

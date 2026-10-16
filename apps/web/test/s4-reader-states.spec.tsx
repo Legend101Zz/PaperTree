@@ -67,7 +67,9 @@ describe('s4: the reader’s failure states are designed sentences', () => {
   });
 
   it('a server error (5xx) says so plainly and offers Try again', async () => {
-    const state = await openWith(new ApiError(500, 'internal', 'Traceback (most recent call last)', true));
+    const state = await openWith(
+      new ApiError(500, 'internal', 'Traceback (most recent call last)', true),
+    );
     expect(state.textContent).not.toMatch(/Traceback/);
     expect(state.textContent).toMatch(/Try again in a moment/);
     expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
@@ -80,7 +82,9 @@ describe('s4: the reader’s failure states are designed sentences', () => {
   });
 
   it('an unexpected exception is not shown either', async () => {
-    const state = await openWith(new Error('Cannot read properties of undefined (reading "blocks")'));
+    const state = await openWith(
+      new Error('Cannot read properties of undefined (reading "blocks")'),
+    );
     expect(state.textContent).not.toMatch(/Cannot read properties/);
     expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
   });
@@ -89,19 +93,25 @@ describe('s4: the reader’s failure states are designed sentences', () => {
     const { readFileSync } = await import('node:fs');
     const { indexDocument } = await import('@papertree/anchoring');
     const source = JSON.parse(
-      readFileSync(`${process.cwd()}/../../packages/document-ir/fixtures/resnet-cvpr-2col.paperir.json`, 'utf8'),
+      readFileSync(
+        `${process.cwd()}/../../packages/document-ir/fixtures/resnet-cvpr-2col.paperir.json`,
+        'utf8',
+      ),
     ) as import('@papertree/anchoring').PaperSource;
     const doc = indexDocument(source, `api/${source.paper_id}/g1/1.0.0`);
     const notParsed = new ApiError(409, 'not_parsed', 'no promoted generation', true);
     plan.doc = (attempt) => (attempt === 0 ? Promise.reject(notParsed) : Promise.resolve(doc));
-    plan.pdf = (attempt) => (attempt === 0 ? Promise.reject(notParsed) : new Promise(() => undefined));
+    plan.pdf = (attempt) =>
+      attempt === 0 ? Promise.reject(notParsed) : new Promise(() => undefined);
     const { ReaderWorkspace } = await import('@/app/paper/[id]/read/ReaderWorkspace');
     render(<ReaderWorkspace paper={{ kind: 'api', paperId: source.paper_id }} />);
     const waiting = await screen.findByRole('status');
     expect(waiting.textContent).toContain('Still reading this paper');
     expect(waiting.textContent).not.toMatch(/no promoted generation/);
     // The reader retries by itself (every 4 s): no reload, no button.
-    await waitFor(() => expect(screen.queryByText('Still reading this paper')).toBeNull(), { timeout: 8000 });
+    await waitFor(() => expect(screen.queryByText('Still reading this paper')).toBeNull(), {
+      timeout: 8000,
+    });
     expect(plan.docCalls).toBeGreaterThanOrEqual(2);
     expect(await screen.findByRole('radio', { name: 'Guided' })).toBeTruthy();
   }, 15_000);

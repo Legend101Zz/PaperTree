@@ -4,7 +4,13 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_SIZE, boundsOf, freeSpot, overlaps, type Rect } from '@/components/canvas/placement';
+import {
+  DEFAULT_SIZE,
+  boundsOf,
+  freeSpot,
+  overlaps,
+  type Rect,
+} from '@/components/canvas/placement';
 
 describe('freeSpot', () => {
   it('starts at the origin on an empty board', () => {
@@ -14,7 +20,12 @@ describe('freeSpot', () => {
   it('never overlaps, however many nodes are already there, and is deterministic', () => {
     const board: Rect[] = [];
     for (let i = 0; i < 60; i += 1) {
-      const size = i % 3 === 0 ? DEFAULT_SIZE.explanation : i % 3 === 1 ? DEFAULT_SIZE.excerpt : DEFAULT_SIZE.note;
+      const size =
+        i % 3 === 0
+          ? DEFAULT_SIZE.explanation
+          : i % 3 === 1
+            ? DEFAULT_SIZE.excerpt
+            : DEFAULT_SIZE.note;
       const spot = freeSpot(board, size);
       expect(freeSpot(board, size)).toEqual(spot);
       const rect = { ...spot, ...size };

@@ -31,7 +31,10 @@ export function findExcerptFor(nodes: readonly CanvasNode[], anchor: Anchor): Ca
   if (key === null) return null;
   return (
     nodes.find(
-      (n) => n.kind === 'excerpt' && n.source_anchor !== null && anchorKey(n.source_anchor as Anchor) === key,
+      (n) =>
+        n.kind === 'excerpt' &&
+        n.source_anchor !== null &&
+        anchorKey(n.source_anchor as Anchor) === key,
     ) ?? null
   );
 }

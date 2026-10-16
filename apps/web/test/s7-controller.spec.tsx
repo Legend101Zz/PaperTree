@@ -24,13 +24,34 @@ vi.mock('@/lib/api/boards', () => ({
 }));
 
 const api = vi.mocked(boardsApi);
-const BOARD: Board = { board_id: 'brd_1', paper_id: 'ppr_1', title: 'Canvas', viewport: null, created_at: '', updated_at: '' };
+const BOARD: Board = {
+  board_id: 'brd_1',
+  paper_id: 'ppr_1',
+  title: 'Canvas',
+  viewport: null,
+  created_at: '',
+  updated_at: '',
+};
 
 function node(id: string, extra: Partial<CanvasNode> = {}): CanvasNode {
   return {
-    node_id: id, board_id: 'brd_1', kind: 'note', group_id: null, x: 0, y: 0, w: 260, h: 150, z: 0,
-    title: null, body: 'b', source_anchor: null, source_message_id: null, version: 1,
-    created_at: '', updated_at: '', ...extra,
+    node_id: id,
+    board_id: 'brd_1',
+    kind: 'note',
+    group_id: null,
+    x: 0,
+    y: 0,
+    w: 260,
+    h: 150,
+    z: 0,
+    title: null,
+    body: 'b',
+    source_anchor: null,
+    source_message_id: null,
+    version: 1,
+    created_at: '',
+    updated_at: '',
+    ...extra,
   };
 }
 
@@ -68,7 +89,8 @@ describe('useBoardController', () => {
   it('sends exactly one PATCH for a drag, however many move events it had', async () => {
     const { result } = await mount([node('cn_a'), node('cn_b', { x: 500 })]);
     act(() => {
-      for (let i = 1; i <= 20; i += 1) result.current.onNodesChange([move('cn_a', i * 5, i * 3, true)]);
+      for (let i = 1; i <= 20; i += 1)
+        result.current.onNodesChange([move('cn_a', i * 5, i * 3, true)]);
     });
     expect(api.patchNode).not.toHaveBeenCalled();
     act(() => {
@@ -149,7 +171,10 @@ describe('useBoardController', () => {
     });
     await waitFor(() => expect(api.patchNode).toHaveBeenCalledTimes(2));
     const sent = api.patchNode.mock.calls.map((c) => [c[1], (c[2] as { x: number }).x]).sort();
-    expect(sent).toEqual([['cn_a', 60], ['cn_g', 50]]);
+    expect(sent).toEqual([
+      ['cn_a', 60],
+      ['cn_g', 50],
+    ]);
   });
 
   it('saves the viewport only when it changed, and only through patchBoard', async () => {

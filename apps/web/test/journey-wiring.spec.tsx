@@ -105,7 +105,10 @@ describe('D3 — the library page talks to the service that is actually running'
     // `lib/api.ts` (v1) and the v2 client both exported a symbol called `papersApi`, so which one a
     // file got was invisible at every call site — and the v1 one posts `/papers/upload`, which the
     // v2 service answers **405 Method Not Allowed** (measured in the browser).
-    const source = readFileSync(resolve(process.cwd(), 'src/components/library/LibraryView.tsx'), 'utf8');
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/components/library/LibraryView.tsx'),
+      'utf8',
+    );
 
     expect(source).toContain("import { papersApi } from '@/lib/api/papers'");
     // The v1 client is not merely unimported, it is GONE (S0, slice-plan §R R1), so no file can
@@ -152,7 +155,10 @@ describe('D6 — the explain panel is asked about the selection', () => {
     // about the Anchor the selection toolbar captured (`openExplain({anchor, quote})`), so the
     // mount site no longer computes a context at all. What stays pinned: the shell receives the
     // selection from the pane, and nothing of the old Inspector is mounted.
-    const source = readFileSync(resolve(process.cwd(), 'src/app/paper/[id]/read/ReaderWorkspace.tsx'), 'utf8');
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/app/paper/[id]/read/ReaderWorkspace.tsx'),
+      'utf8',
+    );
 
     expect(source).not.toContain('components/inspector');
     expect(source).not.toContain('inspectorContext');
@@ -162,9 +168,14 @@ describe('D6 — the explain panel is asked about the selection', () => {
   it('SourcePane requires the selection callback, so a shell cannot silently drop it', async () => {
     // Required, not optional — the same argument `onViewportResize` records after being optional
     // for one commit and silently never supplied. An optional prop here reproduces D6 exactly.
-    const source = readFileSync(resolve(process.cwd(), 'src/components/reader/SourcePane.tsx'), 'utf8');
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/components/reader/SourcePane.tsx'),
+      'utf8',
+    );
 
-    expect(source).toContain('readonly onSelectionChange: (selection: PendingSelection | null) => void;');
+    expect(source).toContain(
+      'readonly onSelectionChange: (selection: PendingSelection | null) => void;',
+    );
     expect(source).not.toContain('readonly onSelectionChange?:');
   });
 });

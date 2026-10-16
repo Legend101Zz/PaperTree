@@ -40,7 +40,12 @@ export const summaryApi = {
       return { kind: 'cached', status: (await response.json()) as SummaryStatus };
     }
     if (response.body === null) {
-      throw new ApiError(response.status, 'internal', 'The server sent an empty event stream.', true);
+      throw new ApiError(
+        response.status,
+        'internal',
+        'The server sent an empty event stream.',
+        true,
+      );
     }
     return { kind: 'stream', events: readSseEvents(response.body) };
   },

@@ -18,11 +18,23 @@
  * `nodesRef` is the working copy: handlers read and write it synchronously and then publish it with
  * `setNodes`, so two events in the same tick cannot overwrite each other.
  */
-import { applyEdgeChanges, applyNodeChanges, type EdgeChange, type NodeChange, type Viewport } from '@xyflow/react';
+import {
+  applyEdgeChanges,
+  applyNodeChanges,
+  type EdgeChange,
+  type NodeChange,
+  type Viewport,
+} from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { boardsApi } from '@/lib/api/boards';
-import { ApiError, type Board, type CanvasEdge, type CanvasNode, type EdgeKind } from '@/lib/api/types';
+import {
+  ApiError,
+  type Board,
+  type CanvasEdge,
+  type CanvasNode,
+  type EdgeKind,
+} from '@/lib/api/types';
 
 import { newEdgeId, newNodeId } from './ids';
 import { cardName, toFlowEdge, toFlowNode, type PtEdge, type PtNode } from './model';
@@ -67,7 +79,12 @@ export interface BoardController {
   readonly commitSize: (id: string, rect: { x: number; y: number; w: number; h: number }) => void;
   readonly deleteNodes: (ids: readonly string[]) => void;
   readonly deleteEdges: (ids: readonly string[]) => void;
-  readonly connect: (from: string, to: string, kind: EdgeKind, label: string | null) => Promise<void>;
+  readonly connect: (
+    from: string,
+    to: string,
+    kind: EdgeKind,
+    label: string | null,
+  ) => Promise<void>;
   readonly patchEdge: (id: string, fields: { kind?: EdgeKind; label?: string | null }) => void;
   readonly groupNodes: (ids: readonly string[]) => Promise<void>;
   readonly saveViewport: (viewport: Viewport) => void;
@@ -77,7 +94,9 @@ export interface BoardController {
 /** "The card “first words”", "A passage" ... the start of the stale-version sentence. */
 export function staleSubject(card: string | undefined): string {
   if (card === undefined) return 'A card';
-  return card.startsWith('\u201c') ? `The card ${card}` : `${card.charAt(0).toUpperCase()}${card.slice(1)}`;
+  return card.startsWith('\u201c')
+    ? `The card ${card}`
+    : `${card.charAt(0).toUpperCase()}${card.slice(1)}`;
 }
 
 function sentence(error: unknown, fallback: string): string {
@@ -354,7 +373,12 @@ export function useBoardController(paperId: string): BoardController {
   );
 
   const addNode = useCallback(
-    async (kind: 'note' | 'group', at: { x: number; y: number }, size: { w: number; h: number }, extra: Partial<CanvasNode>) => {
+    async (
+      kind: 'note' | 'group',
+      at: { x: number; y: number },
+      size: { w: number; h: number },
+      extra: Partial<CanvasNode>,
+    ) => {
       const node_id = newNodeId();
       const created = await boardsApi.createNode(paperId, {
         node_id,
@@ -381,7 +405,12 @@ export function useBoardController(paperId: string): BoardController {
       try {
         const size = DEFAULT_SIZE.note;
         const spot = freeSpot(
-          nodesRef.current.map((n) => ({ x: n.position.x, y: n.position.y, w: n.width ?? n.data.node.w, h: n.height ?? n.data.node.h })),
+          nodesRef.current.map((n) => ({
+            x: n.position.x,
+            y: n.position.y,
+            w: n.width ?? n.data.node.w,
+            h: n.height ?? n.data.node.h,
+          })),
           size,
           near,
         );
@@ -439,9 +468,14 @@ export function useBoardController(paperId: string): BoardController {
           w: n.width ?? n.data.node.w,
           h: n.height ?? n.data.node.h,
         }));
-      const removedEdges: CanvasEdge[] = lostEdges.flatMap((e) => (e.data === undefined ? [] : [e.data.edge]));
+      const removedEdges: CanvasEdge[] = lostEdges.flatMap((e) =>
+        e.data === undefined ? [] : [e.data.edge],
+      );
       const released = nodesRef.current
-        .filter((n) => !doomed.has(n.id) && n.data.node.group_id !== null && doomed.has(n.data.node.group_id))
+        .filter(
+          (n) =>
+            !doomed.has(n.id) && n.data.node.group_id !== null && doomed.has(n.data.node.group_id),
+        )
         .map((n) => ({ id: n.id, groupId: n.data.node.group_id as string }));
 
       const pending: Promise<void>[] = [];
@@ -465,7 +499,10 @@ export function useBoardController(paperId: string): BoardController {
             await boardsApi.deleteNode(boardId, id);
           } catch (error) {
             if (error instanceof ApiError && error.status === 404) return;
-            failed(error, "Couldn't delete that. The canvas was reloaded from your last saved version.");
+            failed(
+              error,
+              "Couldn't delete that. The canvas was reloaded from your last saved version.",
+            );
           }
         });
         chainRef.current.set(id, done);
@@ -477,7 +514,10 @@ export function useBoardController(paperId: string): BoardController {
         pending.push(
           boardsApi.deleteEdge(boardId, edge.id).catch((error: unknown) => {
             if (error instanceof ApiError && error.status === 404) return;
-            failed(error, "Couldn't delete that link. The canvas was reloaded from your last saved version.");
+            failed(
+              error,
+              "Couldn't delete that link. The canvas was reloaded from your last saved version.",
+            );
           }),
         );
       }
@@ -499,7 +539,9 @@ export function useBoardController(paperId: string): BoardController {
           const restored = new Set<string>();
           const live = new Set(nodesRef.current.map((n) => n.id));
           // Groups first, so a member can point at its group again.
-          const ordered = [...removedNodes].sort((a, b) => Number(b.kind === 'group') - Number(a.kind === 'group'));
+          const ordered = [...removedNodes].sort(
+            (a, b) => Number(b.kind === 'group') - Number(a.kind === 'group'),
+          );
           for (const snap of ordered) {
             const groupId =
               snap.group_id !== null && (live.has(snap.group_id) || restored.has(snap.group_id))
@@ -514,8 +556,12 @@ export function useBoardController(paperId: string): BoardController {
               h: snap.h,
               title: snap.title,
               body: snap.body,
-              ...(snap.source_anchor === null ? {} : { source_anchor: snap.source_anchor as never }),
-              ...(snap.source_message_id === null ? {} : { source_message_id: snap.source_message_id }),
+              ...(snap.source_anchor === null
+                ? {}
+                : { source_anchor: snap.source_anchor as never }),
+              ...(snap.source_message_id === null
+                ? {}
+                : { source_message_id: snap.source_message_id }),
               group_id: groupId,
             });
             restored.add(snap.node_id);
@@ -523,7 +569,9 @@ export function useBoardController(paperId: string): BoardController {
             versionRef.current.set(snap.node_id, created.node.version);
             setNodes([...nodesRef.current, toFlowNode(created.node, paperId)]);
           }
-          const reattach = released.filter((m) => restored.has(m.groupId) && nodesRef.current.some((n) => n.id === m.id));
+          const reattach = released.filter(
+            (m) => restored.has(m.groupId) && nodesRef.current.some((n) => n.id === m.id),
+          );
           if (reattach.length > 0) {
             // The server ungrouped them itself, so the versions held here may be behind.
             const fresh = await boardsApi.get(paperId);
@@ -547,7 +595,12 @@ export function useBoardController(paperId: string): BoardController {
             setEdges([...edgesRef.current, toFlowEdge(saved)]);
           }
         } catch (error) {
-          setNotice(sentence(error, "Couldn't bring that back. The canvas was reloaded from your last saved version."));
+          setNotice(
+            sentence(
+              error,
+              "Couldn't bring that back. The canvas was reloaded from your last saved version.",
+            ),
+          );
           void reload();
         }
       });
@@ -603,10 +656,15 @@ export function useBoardController(paperId: string): BoardController {
       if (boardId === undefined || current === undefined || current.data === undefined) return;
       const merged = { ...current.data.edge, ...fields };
       setEdges(
-        edgesRef.current.map((e) => (e.id === id ? { ...toFlowEdge(merged), selected: e.selected } : e)),
+        edgesRef.current.map((e) =>
+          e.id === id ? { ...toFlowEdge(merged), selected: e.selected } : e,
+        ),
       );
       boardsApi.patchEdge(boardId, id, fields).catch((error: unknown) => {
-        failed(error, "Couldn't save that link. The canvas was reloaded from your last saved version.");
+        failed(
+          error,
+          "Couldn't save that link. The canvas was reloaded from your last saved version.",
+        );
       });
     },
     [failed, setEdges],
@@ -614,13 +672,25 @@ export function useBoardController(paperId: string): BoardController {
 
   const groupNodes = useCallback(
     async (ids: readonly string[]) => {
-      const members = nodesRef.current.filter((n) => ids.includes(n.id) && n.data.node.kind !== 'group');
+      const members = nodesRef.current.filter(
+        (n) => ids.includes(n.id) && n.data.node.kind !== 'group',
+      );
       if (members.length < 2) return;
       try {
         const box = boundsOf(
-          members.map((n) => ({ x: n.position.x, y: n.position.y, w: n.width ?? n.data.node.w, h: n.height ?? n.data.node.h })),
+          members.map((n) => ({
+            x: n.position.x,
+            y: n.position.y,
+            w: n.width ?? n.data.node.w,
+            h: n.height ?? n.data.node.h,
+          })),
         );
-        const group = await addNode('group', { x: box.x, y: box.y }, { w: box.w, h: box.h }, { title: 'Group' });
+        const group = await addNode(
+          'group',
+          { x: box.x, y: box.y },
+          { w: box.w, h: box.h },
+          { title: 'Group' },
+        );
         for (const member of members) {
           mergeData(member.id, { group_id: group.node_id });
           patchNode(member.id, { group_id: group.node_id });
@@ -632,31 +702,82 @@ export function useBoardController(paperId: string): BoardController {
     [addNode, mergeData, patchNode],
   );
 
-  const saveViewport = useCallback(
-    (viewport: Viewport) => {
-      const boardId = boardRef.current?.board_id;
-      if (boardId === undefined) return;
-      const last = lastViewport.current;
-      if (last !== null && last.x === viewport.x && last.y === viewport.y && last.zoom === viewport.zoom) return;
-      lastViewport.current = viewport;
-      boardsApi.patchBoard(boardId, { viewport }).catch(() => {
-        // A viewport is a convenience: failing to remember it is not worth interrupting the reader.
-      });
-    },
-    [],
-  );
+  const saveViewport = useCallback((viewport: Viewport) => {
+    const boardId = boardRef.current?.board_id;
+    if (boardId === undefined) return;
+    const last = lastViewport.current;
+    if (
+      last !== null &&
+      last.x === viewport.x &&
+      last.y === viewport.y &&
+      last.zoom === viewport.zoom
+    )
+      return;
+    lastViewport.current = viewport;
+    boardsApi.patchBoard(boardId, { viewport }).catch(() => {
+      // A viewport is a convenience: failing to remember it is not worth interrupting the reader.
+    });
+  }, []);
 
   return useMemo(
     () => ({
-      status, board, nodes, edges, notice, editingId, setEditingId,
+      status,
+      board,
+      nodes,
+      edges,
+      notice,
+      editingId,
+      setEditingId,
       dismissNotice: () => {
         staleShown.current = false;
         setNotice(null);
       },
-      undo, runUndo, dismissUndo, deleteSelection,
-      reload, onNodesChange, onEdgesChange, onNodeDragStop, addNote, commitBody, commitTitle, commitSize,
-      deleteNodes, deleteEdges, connect, patchEdge, groupNodes, saveViewport, initialViewport,
+      undo,
+      runUndo,
+      dismissUndo,
+      deleteSelection,
+      reload,
+      onNodesChange,
+      onEdgesChange,
+      onNodeDragStop,
+      addNote,
+      commitBody,
+      commitTitle,
+      commitSize,
+      deleteNodes,
+      deleteEdges,
+      connect,
+      patchEdge,
+      groupNodes,
+      saveViewport,
+      initialViewport,
     }),
-    [status, board, nodes, edges, notice, editingId, undo, runUndo, dismissUndo, deleteSelection, reload, onNodesChange, onEdgesChange, onNodeDragStop, addNote, commitBody, commitTitle, commitSize, deleteNodes, deleteEdges, connect, patchEdge, groupNodes, saveViewport, initialViewport],
+    [
+      status,
+      board,
+      nodes,
+      edges,
+      notice,
+      editingId,
+      undo,
+      runUndo,
+      dismissUndo,
+      deleteSelection,
+      reload,
+      onNodesChange,
+      onEdgesChange,
+      onNodeDragStop,
+      addNote,
+      commitBody,
+      commitTitle,
+      commitSize,
+      deleteNodes,
+      deleteEdges,
+      connect,
+      patchEdge,
+      groupNodes,
+      saveViewport,
+      initialViewport,
+    ],
   );
 }

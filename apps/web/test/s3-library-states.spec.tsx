@@ -50,7 +50,9 @@ function row(overrides: Partial<LibraryPaper> = {}): LibraryPaper {
   };
 }
 
-function job(overrides: Partial<NonNullable<LibraryPaper['job']>> = {}): NonNullable<LibraryPaper['job']> {
+function job(
+  overrides: Partial<NonNullable<LibraryPaper['job']>> = {},
+): NonNullable<LibraryPaper['job']> {
   return {
     job_id: 'job_1',
     kind: 'parse',
@@ -154,10 +156,17 @@ describe('library rows from the API (S1 shape)', () => {
   });
 
   it('opening any card goes to /paper/<id>/read, including a failed one', async () => {
-    api.list.mockResolvedValue([row({ paper_id: 'ppr_X', processing: 'failed', job: job({ state: 'dead_letter' }) })]);
+    api.list.mockResolvedValue([
+      row({ paper_id: 'ppr_X', processing: 'failed', job: job({ state: 'dead_letter' }) }),
+    ]);
     renderLibrary();
     const card = await screen.findByRole('article');
-    fireEvent.click(within(card).getByRole('button', { name: 'You Only Look Once: Unified, Real-Time Object Detection' }), { detail: 0 });
+    fireEvent.click(
+      within(card).getByRole('button', {
+        name: 'You Only Look Once: Unified, Real-Time Object Detection',
+      }),
+      { detail: 0 },
+    );
     expect(push).toHaveBeenCalledWith('/paper/ppr_X/read');
   });
 
@@ -189,13 +198,15 @@ describe('library rows from the API (S1 shape)', () => {
   });
 });
 
-describe('#137: nothing in the library is not the user\'s', () => {
+describe("#137: nothing in the library is not the user's", () => {
   it('shows no sample cards and no audio claims by default, and an upload call to action when empty', async () => {
     api.list.mockResolvedValue([]);
     renderLibrary();
     await screen.findByRole('heading', { name: 'Add your first paper' });
     expect(screen.getByRole('button', { name: /Upload a PDF/ })).toBeTruthy();
-    expect(document.body.textContent).not.toMatch(/Attention Is All You Need|Deep Residual|Neural Ordinary/);
+    expect(document.body.textContent).not.toMatch(
+      /Attention Is All You Need|Deep Residual|Neural Ordinary/,
+    );
     expect(document.body.textContent).not.toMatch(/audio/i);
   });
 });
@@ -204,7 +215,9 @@ describe('polling', () => {
   it('pollInterval is on only while a row is queued or reading', () => {
     expect(pollInterval([row({ processing: 'queued' })])).toBe(POLL_INTERVAL_MS);
     expect(pollInterval([row(), row({ processing: 'reading' })])).toBe(POLL_INTERVAL_MS);
-    expect(pollInterval([row(), row({ processing: 'partial' }), row({ processing: 'failed' })])).toBe(false);
+    expect(
+      pollInterval([row(), row({ processing: 'partial' }), row({ processing: 'failed' })]),
+    ).toBe(false);
     expect(pollInterval([])).toBe(false);
     expect(pollInterval(undefined)).toBe(false);
   });
@@ -296,7 +309,9 @@ describe('UploadDropzone', () => {
     await waitFor(() => expect(bar.getAttribute('aria-valuenow')).toBe('40'));
     fireEvent.click(screen.getByRole('button', { name: /Cancel/ }), { detail: 0 });
     await waitFor(() =>
-      expect(document.querySelector('[data-upload-state]')?.getAttribute('data-upload-state')).toBe('cancelled'),
+      expect(document.querySelector('[data-upload-state]')?.getAttribute('data-upload-state')).toBe(
+        'cancelled',
+      ),
     );
     expect(signal?.aborted).toBe(true);
     expect(document.body.textContent).toMatch(/Cancelled/);
@@ -313,7 +328,9 @@ describe('UploadDropzone', () => {
     render(<UploadDropzone onUpload={onUpload} />);
     pick(pdf());
     await waitFor(() =>
-      expect(document.querySelector('[data-upload-state]')?.getAttribute('data-upload-state')).toBe('failed'),
+      expect(document.querySelector('[data-upload-state]')?.getAttribute('data-upload-state')).toBe(
+        'failed',
+      ),
     );
     expect(document.body.textContent).toMatch(pattern);
     expect(document.body.textContent).not.toMatch(/\{"detail"/);

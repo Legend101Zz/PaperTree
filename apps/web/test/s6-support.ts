@@ -82,7 +82,11 @@ export interface SseHandle {
  */
 export function sseResponse(
   frames: readonly string[],
-  options: { readonly hold?: boolean; readonly signal?: AbortSignal | null; readonly onHandle?: (h: SseHandle) => void } = {},
+  options: {
+    readonly hold?: boolean;
+    readonly signal?: AbortSignal | null;
+    readonly onHandle?: (h: SseHandle) => void;
+  } = {},
 ): Response {
   const encoder = new TextEncoder();
   let controller!: ReadableStreamDefaultController<Uint8Array>;
@@ -147,7 +151,11 @@ export function installFetch(
     calls.push(call);
     const handler = routes[`${method} ${path}`];
     if (handler === undefined) {
-      return jsonResponse(404, { detail: `no route ${method} ${path}`, code: 'not_found', retryable: false });
+      return jsonResponse(404, {
+        detail: `no route ${method} ${path}`,
+        code: 'not_found',
+        retryable: false,
+      });
     }
     return handler(call, init.signal ?? null);
   });
@@ -155,4 +163,8 @@ export function installFetch(
   return { calls, fetch: fetchMock };
 }
 
-export const errorBody = (code: string, detail = 'x', retryable = false) => ({ detail, code, retryable });
+export const errorBody = (code: string, detail = 'x', retryable = false) => ({
+  detail,
+  code,
+  retryable,
+});

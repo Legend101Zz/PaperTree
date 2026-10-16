@@ -34,7 +34,8 @@ const REASON_TEXT: Record<AnchorFailureReason, string> = {
     'The quoted text was searched for across the whole paper, and the closest match was not close enough to trust.',
   quote_too_short_no_context:
     'The highlighted text was too short to find on its own, and the surrounding words did not survive.',
-  no_geometric_overlap: 'Nothing in the current reading overlaps the place on the page where it was drawn.',
+  no_geometric_overlap:
+    'Nothing in the current reading overlaps the place on the page where it was drawn.',
   section_not_found: 'The section it was in is not in the current reading.',
   page_out_of_range: 'That page is not in this document.',
   no_selectors: 'It was stored without anything to search for, so it cannot be placed.',

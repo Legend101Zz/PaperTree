@@ -66,7 +66,8 @@ export function holdScroll(scroller: HTMLElement | null, ms: number = HOLD_SCROL
   const timer = setTimeout(release, ms);
   active.set(scroller, release);
   scroller.addEventListener('scroll', onScroll);
-  for (const type of USER_INPUT) window.addEventListener(type, release, { capture: true, passive: true });
+  for (const type of USER_INPUT)
+    window.addEventListener(type, release, { capture: true, passive: true });
   if (typeof ResizeObserver !== 'undefined') {
     // A change of the scroller's own size (a panel opening, a window resize) repositions the paper
     // on purpose; the first callback is the observation itself, not a change.

@@ -63,7 +63,10 @@ export function PaperActions({ paper, onRetry, onDelete }: PaperActionsProps) {
               if (onRetry !== undefined) void run('retry', () => onRetry(paper.id));
             })}
           >
-            <RotateCcw className={`h-4 w-4 ${busy === 'retry' ? 'pt-s3-spin' : ''}`} aria-hidden="true" />
+            <RotateCcw
+              className={`h-4 w-4 ${busy === 'retry' ? 'pt-s3-spin' : ''}`}
+              aria-hidden="true"
+            />
             Retry
             <span className="sr-only">{` reading ${paper.title}`}</span>
           </button>

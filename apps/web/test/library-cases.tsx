@@ -96,7 +96,10 @@ export interface LibraryCase {
 }
 
 /** Opens `UncertaintyState`'s disclosure the way a keyboard user would. */
-export function openDisclosure(container: HTMLElement, click: (element: HTMLElement) => void): void {
+export function openDisclosure(
+  container: HTMLElement,
+  click: (element: HTMLElement) => void,
+): void {
   const toggle = container.querySelector<HTMLButtonElement>('button[aria-expanded="false"]');
   if (toggle === null) throw new Error('disclosure toggle not found');
   click(toggle);

@@ -108,7 +108,10 @@ const FIXTURE_SLUGS = [
 ] as const;
 
 function loadFixture(slug: string): PaperSource {
-  const url = new URL(`../../../packages/document-ir/fixtures/${slug}.paperir.json`, import.meta.url);
+  const url = new URL(
+    `../../../packages/document-ir/fixtures/${slug}.paperir.json`,
+    import.meta.url,
+  );
   return JSON.parse(readFileSync(fileURLToPath(url), 'utf8')) as PaperSource;
 }
 
@@ -174,7 +177,8 @@ function measure(doc: IndexedDocument, against: IndexedDocument): Map<CitationTa
     });
 
     // Resolve against the (possibly perturbed) target document.
-    const resolution = against === doc ? citation.resolution : resolveAnchor(citation.anchor, against);
+    const resolution =
+      against === doc ? citation.resolution : resolveAnchor(citation.anchor, against);
 
     const tally = byType.get(classifyTarget(block.type)) ?? emptyTally();
     tally.total += 1;
@@ -198,11 +202,7 @@ function measure(doc: IndexedDocument, against: IndexedDocument): Map<CitationTa
  * meaningful across a re-parse is whether the citation still resolves and still lands on the right
  * page; polygon exactness is only well-defined within one parse.
  */
-function report(
-  title: string,
-  byType: Map<CitationTargetType, Tally>,
-  withPolygon: boolean,
-): void {
+function report(title: string, byType: Map<CitationTargetType, Tally>, withPolygon: boolean): void {
   const lines = [
     `\n  ${title}`,
     withPolygon

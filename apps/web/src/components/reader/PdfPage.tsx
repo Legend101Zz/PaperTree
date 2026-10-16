@@ -38,7 +38,6 @@ import { getPdfjs } from '@/lib/pdf/worker';
 import { alignedItems } from './stampTextLayer';
 import { attachSelectionEnd } from './textLayerSelection';
 
-
 import { irToCssScale, pageCssSize, usePdfDocument } from './PdfDocumentProvider';
 
 /**
@@ -97,7 +96,10 @@ export interface TextLayerInfo {
   readonly items: readonly PdfTextItem[];
   /** `textContent.styles`: the fonts' ascent/descent, for `bridge.ts`'s item boxes. */
   readonly styles: Readonly<
-    Record<string, { readonly ascent?: number; readonly descent?: number; readonly fontFamily?: string }>
+    Record<
+      string,
+      { readonly ascent?: number; readonly descent?: number; readonly fontFamily?: string }
+    >
   >;
   readonly viewport: { convertToPdfPoint(x: number, y: number): number[] };
   /** `PDFPageProxy.view` / `.rotate`. Raw PDF space; `bridge.ts` turns them into an IR frame. */
@@ -277,8 +279,11 @@ export function PdfPage({
             onTextLayerRef.current?.({
               pageIndex,
               divs,
-              items: alignedItems(content.items as readonly { str?: string }[]) as unknown as TextLayerInfo['items'],
-              styles: ((content as { styles?: TextLayerInfo['styles'] }).styles ?? {}) as TextLayerInfo['styles'],
+              items: alignedItems(
+                content.items as readonly { str?: string }[],
+              ) as unknown as TextLayerInfo['items'],
+              styles: ((content as { styles?: TextLayerInfo['styles'] }).styles ??
+                {}) as TextLayerInfo['styles'],
               viewport: cssViewport as unknown as TextLayerInfo['viewport'],
               page: { view: page.view as BBox, rotate: page.rotate },
             });
@@ -337,7 +342,11 @@ export function PdfPage({
   };
 
   return (
-    <div className={joinClasses('papertree-page', className)} data-page-index={pageIndex} style={pageStyle}>
+    <div
+      className={joinClasses('papertree-page', className)}
+      data-page-index={pageIndex}
+      style={pageStyle}
+    >
       <canvas
         ref={canvasRef}
         role="presentation"
@@ -353,7 +362,12 @@ export function PdfPage({
       ) : null}
       <div
         className="absolute left-0 top-0"
-        style={{ width: `${css.width}px`, height: `${css.height}px`, pointerEvents: 'none', zIndex: 2 }}
+        style={{
+          width: `${css.width}px`,
+          height: `${css.height}px`,
+          pointerEvents: 'none',
+          zIndex: 2,
+        }}
         data-papertree-overlay-slot=""
       >
         {children}
@@ -368,7 +382,7 @@ function joinClasses(...values: readonly (string | undefined)[]): string {
 
 /** `/Rotate` is any multiple of 90, positive or negative; pdf.js's `data-main-rotation` wants 0–270. */
 function normaliseRotation(rotate: number): number {
-  return (((rotate % 360) + 360) % 360);
+  return ((rotate % 360) + 360) % 360;
 }
 
 /** pdf.js signals cancellation by name, not by type, and the names differ between layers. */

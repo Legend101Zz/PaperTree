@@ -117,7 +117,9 @@ export function libraryPaperFromWire(paper: ApiLibraryPaper): LibraryPaper {
       ? Math.min(Math.max(job.done + 1, 1), Math.max(job.total, 1))
       : null;
   const stepName =
-    job?.step !== null && job?.step !== undefined ? (STEP_WORDS[job.step] ?? 'Reading') : 'Reading the PDF';
+    job?.step !== null && job?.step !== undefined
+      ? (STEP_WORDS[job.step] ?? 'Reading')
+      : 'Reading the PDF';
 
   const base: LibraryPaper = {
     id: paper.paper_id,

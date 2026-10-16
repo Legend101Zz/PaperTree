@@ -33,8 +33,13 @@ import {
 import { useHighlights, type UseHighlights } from '@/components/reader/useHighlights';
 import { MAX_ANCHORS_PER_HIGHLIGHT } from '@/lib/api/highlights';
 
-const FIXTURE = join(process.cwd(), '../../packages/document-ir/fixtures/resnet-cvpr-2col.paperir.json');
-const source = JSON.parse(readFileSync(FIXTURE, 'utf8')) as PaperSource & { parser: { version: string } };
+const FIXTURE = join(
+  process.cwd(),
+  '../../packages/document-ir/fixtures/resnet-cvpr-2col.paperir.json',
+);
+const source = JSON.parse(readFileSync(FIXTURE, 'utf8')) as PaperSource & {
+  parser: { version: string };
+};
 const PAPER = source.paper_id;
 const doc: IndexedDocument = indexDocument(source, `api/${PAPER}/g1/${source.parser.version}`);
 const paragraphs = doc.blocks.filter((b) => b.type === 'paragraph' && b.textCodePoints.length > 80);
@@ -63,7 +68,12 @@ function legacy(id: string): Anchor {
     anchorVersion: 1,
     offsetUnit: 'unicode',
     id,
-    doc: { paperId: PAPER, pdfSha256: doc.sourceHash, parserVersion: doc.parserVersion, textStreamId: 'legacy-0001' },
+    doc: {
+      paperId: PAPER,
+      pdfSha256: doc.sourceHash,
+      parserVersion: doc.parserVersion,
+      textStreamId: 'legacy-0001',
+    },
     targetKind: 'text',
     provenanceClass: 'source',
     selectors: [
@@ -123,7 +133,11 @@ afterEach(() => {
 let notices: string[] = [];
 
 function Harness({ onReady }: { readonly onReady: (api: UseHighlights) => void }) {
-  const api = useHighlights({ paper: { kind: 'api', paperId: PAPER }, doc, onNotice: (message) => notices.push(message) });
+  const api = useHighlights({
+    paper: { kind: 'api', paperId: PAPER },
+    doc,
+    onNotice: (message) => notices.push(message),
+  });
   useEffect(() => {
     onReady(api);
   });
@@ -154,7 +168,12 @@ const wire = (highlightId: string, anchors: readonly Anchor[], color = 'amber') 
   created_generation: 1,
   created_at: '2026-09-26T00:00:00.000Z',
   updated_at: '2026-09-26T00:00:00.000Z',
-  anchors: anchors.map((anchor, ordinal) => ({ anchor_id: anchor.id, ordinal, anchor, resolution: null })),
+  anchors: anchors.map((anchor, ordinal) => ({
+    anchor_id: anchor.id,
+    ordinal,
+    anchor,
+    resolution: null,
+  })),
 });
 
 describe('s4: highlights persist through the API', () => {
@@ -163,7 +182,13 @@ describe('s4: highlights persist through the API', () => {
     const old = legacy('anc_01K0LEGACY0000000000001');
     answer = (call) =>
       call.method === 'GET'
-        ? { status: 200, body: [wire('hl_01K0SAVED0000000000000001', [saved]), wire('hl_01K0LEGACY000000000000001', [old])] }
+        ? {
+            status: 200,
+            body: [
+              wire('hl_01K0SAVED0000000000000001', [saved]),
+              wire('hl_01K0LEGACY000000000000001', [old]),
+            ],
+          }
         : { status: 204 };
     const hook = mount();
     await waitFor(() => expect(hook.current().load).toBe('ready'));
@@ -173,7 +198,15 @@ describe('s4: highlights persist through the API', () => {
     await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
     const put = calls.find((c) => c.method === 'PUT') as Call;
     expect(put.path).toBe(`/papers/${PAPER}/highlights/resolutions`);
-    const body = put.body as { generation: number; items: { anchor_id: string; resolver_version: string; tier: number; upgraded_anchor?: Anchor }[] };
+    const body = put.body as {
+      generation: number;
+      items: {
+        anchor_id: string;
+        resolver_version: string;
+        tier: number;
+        upgraded_anchor?: Anchor;
+      }[];
+    };
     expect(body.generation).toBe(1);
     expect(body.items.map((i) => i.anchor_id).sort()).toEqual([old.id, saved.id].sort());
     for (const item of body.items) expect(item.resolver_version).toBe(RESOLVER_VERSION);
@@ -182,7 +215,12 @@ describe('s4: highlights persist through the API', () => {
     expect(upgraded?.id).toBe(old.id);
     expect(upgraded?.doc.textStreamId).toBe(doc.textStreamId);
     expect(upgraded?.selectors.map((s) => s.type)).toEqual(
-      expect.arrayContaining(['BlockSelector', 'PageSelector', 'TextQuoteSelector', 'ShapeSelector']),
+      expect.arrayContaining([
+        'BlockSelector',
+        'PageSelector',
+        'TextQuoteSelector',
+        'ShapeSelector',
+      ]),
     );
     expect(body.items.find((i) => i.anchor_id === saved.id)?.upgraded_anchor).toBeUndefined();
   });
@@ -193,15 +231,28 @@ describe('s4: highlights persist through the API', () => {
       if (call.method === 'GET') return { status: 200, body: [] };
       if (call.method === 'POST') {
         posts += 1;
-        if (posts === 1) return { status: 503, body: { detail: 'the database is busy', code: 'internal', retryable: true } };
+        if (posts === 1)
+          return {
+            status: 503,
+            body: { detail: 'the database is busy', code: 'internal', retryable: true },
+          };
         const sent = call.body as { highlight_id: string; anchors: { anchor: Anchor }[] };
-        return { status: 201, body: wire(sent.highlight_id, sent.anchors.map((a) => a.anchor)) };
+        return {
+          status: 201,
+          body: wire(
+            sent.highlight_id,
+            sent.anchors.map((a) => a.anchor),
+          ),
+        };
       }
       return { status: 204 };
     };
     const hook = mount();
     await waitFor(() => expect(hook.current().load).toBe('ready'));
-    const anchors = [capture(0, '6f0e4f8e-0000-4000-8000-00000000000a'), capture(1, '6f0e4f8e-0000-4000-8000-00000000000b')];
+    const anchors = [
+      capture(0, '6f0e4f8e-0000-4000-8000-00000000000a'),
+      capture(1, '6f0e4f8e-0000-4000-8000-00000000000b'),
+    ];
     await act(async () => {
       await hook.current().create(anchors, 'blue');
     });
@@ -233,9 +284,12 @@ describe('s4: highlights persist through the API', () => {
   it('a colour change PATCHes; a failed delete puts the highlight back', async () => {
     const saved = capture(0, '6f0e4f8e-0000-4000-8000-000000000021');
     answer = (call) => {
-      if (call.method === 'GET') return { status: 200, body: [wire('hl_01K0SAVED0000000000000021', [saved])] };
-      if (call.method === 'PATCH') return { status: 200, body: wire('hl_01K0SAVED0000000000000021', [saved], 'pink') };
-      if (call.method === 'DELETE') return { status: 500, body: { detail: 'boom', code: 'internal', retryable: false } };
+      if (call.method === 'GET')
+        return { status: 200, body: [wire('hl_01K0SAVED0000000000000021', [saved])] };
+      if (call.method === 'PATCH')
+        return { status: 200, body: wire('hl_01K0SAVED0000000000000021', [saved], 'pink') };
+      if (call.method === 'DELETE')
+        return { status: 500, body: { detail: 'boom', code: 'internal', retryable: false } };
       return { status: 204 };
     };
     const hook = mount();
@@ -286,8 +340,14 @@ describe('s4: highlights persist through the API', () => {
   it('the reader’s anchor limit IS the contract’s (contracts/api/highlights.schema.json)', () => {
     const schema = JSON.parse(
       readFileSync(join(process.cwd(), '../../contracts/api/highlights.schema.json'), 'utf8'),
-    ) as { $defs: { HighlightCreate: { properties: { anchors: { maxItems: number; minItems: number } } } } };
-    expect(MAX_ANCHORS_PER_HIGHLIGHT).toBe(schema.$defs.HighlightCreate.properties.anchors.maxItems);
+    ) as {
+      $defs: {
+        HighlightCreate: { properties: { anchors: { maxItems: number; minItems: number } } };
+      };
+    };
+    expect(MAX_ANCHORS_PER_HIGHLIGHT).toBe(
+      schema.$defs.HighlightCreate.properties.anchors.maxItems,
+    );
   });
 
   it('review F2: a selection over the 64-anchor limit is refused up front with a designed sentence, and nothing is sent', async () => {
@@ -346,13 +406,35 @@ describe('s4: highlights persist through the API', () => {
       if (call.method === 'GET') return { status: 200, body: [] };
       if (call.method === 'POST') {
         posts += 1;
-        if (posts === 1) return { status: 503, body: { detail: 'busy', code: 'internal', retryable: true } };
-        const sent = call.body as { highlight_id: string; color: string; anchors: { anchor: Anchor }[] };
-        return { status: 201, body: wire(sent.highlight_id, sent.anchors.map((a) => a.anchor), sent.color) };
+        if (posts === 1)
+          return { status: 503, body: { detail: 'busy', code: 'internal', retryable: true } };
+        const sent = call.body as {
+          highlight_id: string;
+          color: string;
+          anchors: { anchor: Anchor }[];
+        };
+        return {
+          status: 201,
+          body: wire(
+            sent.highlight_id,
+            sent.anchors.map((a) => a.anchor),
+            sent.color,
+          ),
+        };
       }
       if (call.method === 'PATCH') {
-        const sent = calls.filter((c) => c.method === 'POST')[0]?.body as { highlight_id: string; anchors: { anchor: Anchor }[] };
-        return { status: 200, body: wire(sent.highlight_id, sent.anchors.map((a) => a.anchor), 'green') };
+        const sent = calls.filter((c) => c.method === 'POST')[0]?.body as {
+          highlight_id: string;
+          anchors: { anchor: Anchor }[];
+        };
+        return {
+          status: 200,
+          body: wire(
+            sent.highlight_id,
+            sent.anchors.map((a) => a.anchor),
+            'green',
+          ),
+        };
       }
       return { status: 204 };
     };
@@ -373,15 +455,22 @@ describe('s4: highlights persist through the API', () => {
     const [first, second] = calls.filter((c) => c.method === 'POST');
     // Byte-for-byte the same request: §2.4's idempotent replay only holds for the SAME body.
     expect(second?.body).toEqual(first?.body);
-    await waitFor(() => expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ color: 'green', note: null }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ color: 'green', note: null }),
+    );
     expect(hook.current().highlights[0]?.color).toBe('green');
   });
 
   it('deleting an unsaved highlight still asks the server (the lost-response POST may have landed)', async () => {
     answer = (call) => {
       if (call.method === 'GET') return { status: 200, body: [] };
-      if (call.method === 'POST') return { status: 503, body: { detail: 'busy', code: 'internal', retryable: true } };
-      if (call.method === 'DELETE') return { status: 404, body: { detail: 'no such highlight', code: 'not_found', retryable: false } };
+      if (call.method === 'POST')
+        return { status: 503, body: { detail: 'busy', code: 'internal', retryable: true } };
+      if (call.method === 'DELETE')
+        return {
+          status: 404,
+          body: { detail: 'no such highlight', code: 'not_found', retryable: false },
+        };
       return { status: 204 };
     };
     const hook = mount();
@@ -394,7 +483,9 @@ describe('s4: highlights persist through the API', () => {
     await act(async () => {
       await hook.current().remove(id);
     });
-    expect(calls.find((c) => c.method === 'DELETE')?.path).toBe(`/papers/${PAPER}/highlights/${id}`);
+    expect(calls.find((c) => c.method === 'DELETE')?.path).toBe(
+      `/papers/${PAPER}/highlights/${id}`,
+    );
     expect(hook.current().highlights).toEqual([]);
   });
 });

@@ -66,7 +66,8 @@ function glueTrailing(nodes: Inline[]): Inline[] {
       const match = TRAILING.exec(node.v);
       if (match !== null) {
         out[out.length - 1] = { ...last, after: last.after + match[0] };
-        if (node.v.length > match[0].length) out.push({ t: 'text', v: node.v.slice(match[0].length) });
+        if (node.v.length > match[0].length)
+          out.push({ t: 'text', v: node.v.slice(match[0].length) });
         continue;
       }
     }
@@ -236,13 +237,15 @@ export function handlesInBlocks(blocks: readonly Block[]): string[] {
 export function plainText(blocks: readonly Block[]): string {
   const flat = (nodes: readonly Inline[]): string =>
     nodes
-      .map((n) =>
-        n.t === 'text' || n.t === 'code' ? n.v : n.t === 'cite' ? n.after : flat(n.c),
-      )
+      .map((n) => (n.t === 'text' || n.t === 'code' ? n.v : n.t === 'cite' ? n.after : flat(n.c)))
       .join('');
   return blocks
     .map((b) =>
-      b.k === 'p' ? b.lines.map(flat).join('\n') : b.k === 'h' ? flat(b.c) : b.items.map(flat).join('\n'),
+      b.k === 'p'
+        ? b.lines.map(flat).join('\n')
+        : b.k === 'h'
+          ? flat(b.c)
+          : b.items.map(flat).join('\n'),
     )
     .join('\n\n');
 }
@@ -255,7 +258,17 @@ const COORDINATORS = new Set(['and', 'or', 'nor', 'to', 'vs', 'versus', 'but']);
  * "non- linear"): a break after one of them keeps its hyphen.
  */
 const COMPOUND_HEADS = new Set([
-  'data', 'non', 'well', 'self', 'end', 'cross', 'semi', 'anti', 'state', 'fine', 'ill',
+  'data',
+  'non',
+  'well',
+  'self',
+  'end',
+  'cross',
+  'semi',
+  'anti',
+  'state',
+  'fine',
+  'ill',
 ]);
 
 function keepsHyphen(head: string): boolean {
@@ -272,13 +285,17 @@ function keepsHyphen(head: string): boolean {
  */
 export function dehyphenate(text: string): string {
   return text
-    .replace(/([\p{L}\p{N}-]*[\p{Ll}\p{N}])-[ \t]*\r?\n[ \t]*(\p{Ll})/gu, (_m, head: string, next: string) =>
-      head.includes('-') || keepsHyphen(head) ? `${head}-${next}` : `${head}${next}`,
-    )
     .replace(
-      /([\p{L}\p{N}-]*[\p{Ll}])- ([\p{Ll}][\p{L}]*)/gu,
-      (m, head: string, word: string) =>
-        COORDINATORS.has(word) ? m : head.includes('-') || keepsHyphen(head) ? `${head}-${word}` : `${head}${word}`,
+      /([\p{L}\p{N}-]*[\p{Ll}\p{N}])-[ \t]*\r?\n[ \t]*(\p{Ll})/gu,
+      (_m, head: string, next: string) =>
+        head.includes('-') || keepsHyphen(head) ? `${head}-${next}` : `${head}${next}`,
+    )
+    .replace(/([\p{L}\p{N}-]*[\p{Ll}])- ([\p{Ll}][\p{L}]*)/gu, (m, head: string, word: string) =>
+      COORDINATORS.has(word)
+        ? m
+        : head.includes('-') || keepsHyphen(head)
+          ? `${head}-${word}`
+          : `${head}${word}`,
     );
 }
 

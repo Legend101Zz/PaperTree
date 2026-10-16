@@ -13,7 +13,9 @@ function named(name: string, message: string): Error {
 
 describe('classifyPdfFailure', () => {
   it('blames the file for a bad or missing PDF', () => {
-    expect(classifyPdfFailure(named('InvalidPDFException', 'Invalid PDF structure.'))).toBe('document');
+    expect(classifyPdfFailure(named('InvalidPDFException', 'Invalid PDF structure.'))).toBe(
+      'document',
+    );
     expect(classifyPdfFailure(named('MissingPDFException', 'Missing PDF'))).toBe('document');
     expect(classifyPdfFailure(named('PasswordException', 'No password given'))).toBe('document');
   });
@@ -28,13 +30,15 @@ describe('classifyPdfFailure', () => {
     ).toBe('engine');
     expect(classifyPdfFailure(new TypeError('Failed to fetch'))).toBe('engine');
     expect(classifyPdfFailure(new Error('Loading chunk 123 failed.'))).toBe('engine');
-    expect(classifyPdfFailure(new PdfEngineError('The PDF engine could not be loaded.'))).toBe('engine');
+    expect(classifyPdfFailure(new PdfEngineError('The PDF engine could not be loaded.'))).toBe(
+      'engine',
+    );
   });
 
   it('does not let a document exception be mistaken for an engine one by its words', () => {
-    expect(classifyPdfFailure(named('InvalidPDFException', 'worker said: Invalid PDF structure.'))).toBe(
-      'document',
-    );
+    expect(
+      classifyPdfFailure(named('InvalidPDFException', 'worker said: Invalid PDF structure.')),
+    ).toBe('document');
   });
 
   it('keeps the file as the default for anything else', () => {

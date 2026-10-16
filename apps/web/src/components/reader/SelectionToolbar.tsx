@@ -40,7 +40,12 @@ export type ToolbarPlacement =
   | {
       readonly kind: 'float';
       /** Content coordinates (CSS px inside the scroller's content box) of the selection's extent. */
-      readonly extent: { readonly left: number; readonly top: number; readonly right: number; readonly bottom: number };
+      readonly extent: {
+        readonly left: number;
+        readonly top: number;
+        readonly right: number;
+        readonly bottom: number;
+      };
       /** The content box's width, to keep the bar inside it. */
       readonly boundsWidth: number;
       /** Above the extent (a selection on one page), or below it (the end of one across pages). */
@@ -148,7 +153,9 @@ export function SelectionToolbar(props: SelectionToolbarProps): JSX.Element | nu
     if (el === null) return;
     const next = { width: el.offsetWidth, height: el.offsetHeight };
     setSize((current) =>
-      current !== null && current.width === next.width && current.height === next.height ? current : next,
+      current !== null && current.width === next.width && current.height === next.height
+        ? current
+        : next,
     );
   }, [props.placement.kind, props.highlightDisabledReason]);
 
@@ -186,7 +193,9 @@ export function SelectionToolbar(props: SelectionToolbarProps): JSX.Element | nu
         .filter(Boolean)
         .join(' ')}
       data-placement={props.placement.kind}
-      style={props.placement.kind === 'float' ? floatStyle(props.placement, size, flipped) : undefined}
+      style={
+        props.placement.kind === 'float' ? floatStyle(props.placement, size, flipped) : undefined
+      }
       // Preventing pointerdown also suppresses the compatibility mousedown, whose default action
       // is what would collapse the selection.
       onPointerDown={(event) => event.preventDefault()}

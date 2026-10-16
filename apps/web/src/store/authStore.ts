@@ -26,10 +26,10 @@
  * response, so a rename on either side fails a test instead of silently signing nobody in.
  */
 
-import { create } from "zustand";
-import { authApi } from "@/lib/api/papers";
-import { ApiError } from "@/lib/api/types";
-import { setToken, removeToken, getToken } from "@/lib/auth";
+import { create } from 'zustand';
+import { authApi } from '@/lib/api/papers';
+import { ApiError } from '@/lib/api/types';
+import { setToken, removeToken, getToken } from '@/lib/auth';
 
 /**
  * The signed-in user. It lived in `types/index.ts` with the v1 types, and this store was its only

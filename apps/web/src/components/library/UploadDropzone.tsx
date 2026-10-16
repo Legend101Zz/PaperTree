@@ -268,9 +268,7 @@ export function UploadDropzone({
     queueRef.current = queueRef.current.filter((entry) => entry.id !== id);
     setItems((prev) =>
       prev.map((item) =>
-        item.id === id
-          ? { ...item, state: 'cancelled', error: CANCEL_COPY['not-added'] }
-          : item,
+        item.id === id ? { ...item, state: 'cancelled', error: CANCEL_COPY['not-added'] } : item,
       ),
     );
   }, []);

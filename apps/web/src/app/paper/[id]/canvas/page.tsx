@@ -23,7 +23,9 @@ export default function CanvasPage() {
         <div className="pt-reader">
           <div className="pt-state" role="alert">
             <h1 className="pt-state__title">No paper was named</h1>
-            <p className="pt-state__body">This link does not say which paper&apos;s canvas to open.</p>
+            <p className="pt-state__body">
+              This link does not say which paper&apos;s canvas to open.
+            </p>
             <a className="pt-btn pt-btn--primary" href="/dashboard">
               Back to your library
             </a>
