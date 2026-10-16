@@ -18,6 +18,7 @@ import { notebookPagesApi, type NotebookPageRead } from '../api/notebook';
 import { explanationSource, type ExplanationSource } from '../model/cards';
 
 import type { PtNode } from '../model/flow';
+import type { MessageDiagram } from '@/lib/api/types';
 
 const MAX_THREADS = 20;
 
@@ -25,6 +26,8 @@ const MAX_THREADS = 20;
 export interface CardSources {
   readonly explanations: ReadonlyMap<string, ExplanationSource>;
   readonly pages: ReadonlyMap<string, NotebookPageRead>;
+  /** A diagram card's plate, by its message id (#217). */
+  readonly diagrams: ReadonlyMap<string, MessageDiagram>;
 }
 
 /**
@@ -37,7 +40,7 @@ export interface CardSources {
  */
 function wantedIds(
   nodes: readonly PtNode[],
-  kind: 'explanation' | 'notebook',
+  kind: 'explanation' | 'notebook' | 'diagram',
   pick: (node: PtNode['data']['node']) => string | null,
 ): string[] {
   const ids = new Set<string>();
@@ -69,6 +72,33 @@ async function readExplanations(
     for (const id of wanted) {
       const source = found.has(id) ? null : explanationSource(thread.thread_id, messages, id);
       if (source !== null) found.set(id, source);
+    }
+  }
+  return found;
+}
+
+/**
+ * Reads the diagram threads, newest first, until every wanted plate is found (#217).
+ *
+ * @param paperId The board's paper.
+ * @param wanted The message ids on diagram cards.
+ * @returns Message id → its stored plate, for the ones found.
+ */
+async function readDiagrams(
+  paperId: string,
+  wanted: readonly string[],
+): Promise<Map<string, MessageDiagram>> {
+  const found = new Map<string, MessageDiagram>();
+  const threads = [...(await threadsApi.list(paperId))]
+    .filter((t) => t.kind === 'diagram')
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    .slice(0, MAX_THREADS);
+  for (const thread of threads) {
+    if (found.size === wanted.length) break;
+    const { messages } = await threadsApi.get(paperId, thread.thread_id);
+    for (const m of messages) {
+      if (m.diagram !== undefined && wanted.includes(m.message_id))
+        found.set(m.message_id, m.diagram);
     }
   }
   return found;
@@ -148,5 +178,12 @@ export function useCardSources(paperId: string, nodes: readonly PtNode[]): CardS
     readExplanations(paperId, missing),
   );
   const pageReads = useReadOnce(pages.join('|'), pages, readPages);
-  return useMemo(() => ({ explanations, pages: pageReads }), [explanations, pageReads]);
+  const plates = wantedIds(nodes, 'diagram', (n) => n.source_diagram_id);
+  const diagrams = useReadOnce(`${paperId}:${plates.join('|')}`, plates, (missing) =>
+    readDiagrams(paperId, missing),
+  );
+  return useMemo(
+    () => ({ explanations, pages: pageReads, diagrams }),
+    [explanations, pageReads, diagrams],
+  );
 }

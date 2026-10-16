@@ -19,7 +19,7 @@ import { quoteOf, selectorOf } from './anchor';
 import { citationUse, handleRuns, passageKeyOf, runNumbers, type PassageNumbers } from './passages';
 
 import type { Coverage, TraceRowData } from '@papertree/ui';
-import type { Citation, MessageCoverage, PassageLocator } from '@/lib/api/types';
+import type { Citation, DiagramPart, MessageCoverage, PassageLocator } from '@/lib/api/types';
 
 /** The message fields an exchange is built from; the controller's `ViewMessage` has them all. */
 export interface ExchangeMessage {
@@ -42,6 +42,8 @@ export interface ExchangeMessage {
    * while streaming (#204).
    */
   readonly awaitingStored?: boolean;
+  /** A diagram answer's parts (#217): their located Anchors place the call slip's ¶. */
+  readonly diagram?: { readonly parts: readonly Pick<DiagramPart, 'cite'>[] } | null;
 }
 
 /** One numbered marker: a passage of this answer, where it is, and the citation it flashes. */

@@ -35,6 +35,10 @@ export interface DiagramExchangeProps {
   readonly onStop: () => void;
   /** Draw the plate again: Retry after a failure or a Stop (and Redraw). */
   readonly onRedraw: (key: string) => void;
+  /** Put the plate on the board as a diagram card. */
+  readonly onSendToBoard: (messageId: string, title: string) => Promise<void>;
+  /** Another plate of the thread is being drawn: Redraw and Retry wait for it (review S7). */
+  readonly busy: boolean;
 }
 
 /**
@@ -58,6 +62,8 @@ export function DiagramExchange({
   onFlash,
   onStop,
   onRedraw,
+  onSendToBoard,
+  busy,
 }: DiagramExchangeProps): ReactNode {
   const [said, setSaid] = useState<string | null>(null);
   const handoff: FocusHandoff = useRef(null);
@@ -117,7 +123,14 @@ export function DiagramExchange({
           <p className="pt-plate-answer__said" aria-live="polite" data-plate-said>
             {said}
           </p>
-          <PlateNotes answer={answer} handoff={handoff} onRedraw={() => onRedraw(answer.key)} />
+          <PlateNotes
+            answer={answer}
+            plateNo={plateNo}
+            handoff={handoff}
+            busy={busy}
+            onRedraw={() => onRedraw(answer.key)}
+            onSendToBoard={onSendToBoard}
+          />
         </>
       )}
     </div>

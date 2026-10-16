@@ -55,7 +55,9 @@
 }
 
 .pt-plate__no {
+  flex: none;
   margin: 0;
+  white-space: nowrap;
   font: 700 14px / 1 var(--pt-font-label);
   letter-spacing: 0.24em;
   text-transform: lowercase; /* the small-caps face draws lowercase as small capitals */
@@ -127,7 +129,7 @@
 
 .pt-plate__route text,
 .pt-plate__gap text {
-  font: italic 14px var(--pt-font-paper);
+  font: italic 13px var(--pt-font-paper);
   fill: var(--pt-ink);
 }
 
@@ -192,7 +194,8 @@
 }
 
 .pt-plate__label {
-  font: 700 15px var(--pt-font-paper);
+  font-family: var(--pt-font-paper);
+  font-weight: 700;
   fill: var(--pt-ink);
 }
 
@@ -322,6 +325,13 @@
   color: var(--pt-ink-2);
 }
 
+.pt-plate-key__where {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
 .pt-plate-key__label {
   margin-inline-end: auto;
   font: 700 14.5px / 20px var(--pt-font-ai);
@@ -389,6 +399,82 @@
 .pt-exchange--diagram .pt-explain__usage,
 .pt-exchange--diagram .pt-explain__note {
   margin-block-start: 10px;
+}
+
+/* The board card's miniature (frame 06): the same grid, drawn small, in a taller frame. */
+.pt-bc__plate:has(> .pt-plate-mini) {
+  block-size: 150px;
+  padding: 6px;
+}
+
+.pt-plate-mini {
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.pt-plate-mini__route {
+  fill: none;
+  stroke: var(--pt-ink);
+  stroke-width: 2;
+}
+
+.pt-plate-mini__letter {
+  font: italic 24px var(--pt-font-paper);
+  fill: var(--pt-ink);
+  text-anchor: middle;
+}
+
+/* What a settled plate offers: Send to board, Redraw. */
+.pt-plate-answer__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pt-space-2);
+  margin-block-start: var(--pt-space-4);
+}
+
+/* 07d, as information only (no job is queued in v0.2). */
+.pt-crafted {
+  margin-block-start: var(--pt-space-5);
+  padding: var(--pt-space-5) 28px;
+  background: var(--pt-page);
+  border-radius: var(--pt-radius-paper);
+  box-shadow: var(--pt-e2);
+}
+
+.pt-crafted__kicker {
+  margin: 0;
+  font: 700 12.5px / 1 var(--pt-font-label);
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  color: var(--pt-ink-2);
+}
+
+.pt-crafted__title {
+  margin: 12px 0 8px;
+  font: 22px / 1.25 var(--pt-font-paper);
+}
+
+.pt-crafted__body {
+  margin: 0;
+  font: 15px / 23px var(--pt-font-ai);
+}
+
+.pt-crafted__dismiss {
+  min-block-size: 44px;
+  margin-block-start: var(--pt-space-2);
+  padding: 0;
+  color: var(--pt-primary);
+  font: 15px var(--pt-font-ai);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.pt-crafted__dismiss:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {

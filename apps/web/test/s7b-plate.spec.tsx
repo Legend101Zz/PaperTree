@@ -175,6 +175,63 @@ describe('a finished plate', () => {
   });
 });
 
+describe('what a settled plate offers', () => {
+  it('Send to board puts a diagram card holding the plate on the board, once', async () => {
+    const { calls } = routes((signal) => sseResponse(plateFrames('diagram-plate'), { signal }));
+    mount();
+    const panel = await screen.findByRole('complementary', { name: 'Explain' });
+    fireEvent.click(await within(panel).findByRole('button', { name: 'Send to board' }));
+    await waitFor(() =>
+      expect(within(panel).getByRole('button', { name: 'On your board' })).toBeTruthy(),
+    );
+    const created = calls.filter((c) => c.method === 'POST' && c.path.endsWith('/board/nodes'));
+    expect(created).toHaveLength(1);
+    expect(created[0]?.body).toMatchObject({
+      kind: 'diagram',
+      title: 'Scaled dot-product attention',
+      source_diagram_id: 'msg_01M536X6ADDW22T669B1QXQM1E',
+    });
+    expect(
+      within(panel).getByRole('button', { name: 'On your board' }).getAttribute('aria-disabled'),
+    ).toBe('true');
+  });
+
+  it('Redraw adds Plate 2 under its own ask, with redraw_of the first', async () => {
+    const { calls } = routes((signal) => sseResponse(plateFrames('diagram-plate'), { signal }));
+    mount();
+    const panel = await screen.findByRole('complementary', { name: 'Explain' });
+    await waitFor(() =>
+      expect(panel.querySelector('[data-plate-phase="complete"]')).not.toBeNull(),
+    );
+    fireEvent.click(within(panel).getByRole('button', { name: 'Redraw' }));
+    await waitFor(() =>
+      expect(within(panel).getByRole('group', { name: /^Plate 2,/ })).toBeTruthy(),
+    );
+    const redraw = calls.find((c) => c.path.endsWith('/messages'));
+    expect(redraw?.body).toEqual({
+      question: 'Redraw the diagram.',
+      redraw_of: 'msg_01M536X6ADDW22T669B1QXQM1E',
+    });
+    expect(within(panel).getByText('Redraw the diagram.')).toBeTruthy();
+    // Plate 1 stays as it was, above.
+    expect(within(panel).getByRole('group', { name: /^Plate 1,/ })).toBeTruthy();
+  });
+
+  it('offers the crafted figure as information only, with Not now and no job button', async () => {
+    routes((signal) => sseResponse(plateFrames('diagram-plate'), { signal }));
+    mount();
+    const offer = await screen.findByRole('note', { name: 'A crafted figure, not available yet' });
+    expect(offer.textContent).toContain('It is not available yet');
+    expect(
+      within(offer)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Not now']);
+    fireEvent.click(within(offer).getByRole('button', { name: 'Not now' }));
+    expect(screen.queryByRole('note', { name: 'A crafted figure, not available yet' })).toBeNull();
+  });
+});
+
 describe('what the run left out, and a plate refused', () => {
   it('says a quote the paper does not hold is not verified, and lists what was dropped', async () => {
     routes((signal) => sseResponse(plateFrames('diagram-plate-bad'), { signal }));

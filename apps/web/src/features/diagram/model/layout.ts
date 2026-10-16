@@ -53,8 +53,10 @@ export interface Route {
   readonly feedback: boolean;
   /** The polyline, in drawing order; the arrowhead sits on the last point. */
   readonly points: readonly (readonly [number, number])[];
-  /** Where the label goes (its left end, vertically centred). */
+  /** Where the label goes (its left end, vertically centred; its right end for a link). */
   readonly labelAt: readonly [number, number];
+  /** How wide the label may run there before it meets a lane or the plate's edge. */
+  readonly labelRoom: number;
 }
 
 /** Everything the drawing needs. */
@@ -158,6 +160,7 @@ function afterRoutes(placed: readonly LayoutPart[], slots: ReadonlyMap<string, S
             [x, to.y],
           ],
           labelAt: [x + 8, (y0 + to.y) / 2],
+          labelRoom: GRID.laneX - (x + 8) - 4,
         });
         return;
       }
@@ -176,6 +179,7 @@ function afterRoutes(placed: readonly LayoutPart[], slots: ReadonlyMap<string, S
           [to.x + to.w, y1],
         ],
         labelAt: [x + 5, (y0 + y1) / 2],
+        labelRoom: 0, // set once every lane is known (`withLabelRooms`)
       });
     });
   }
@@ -215,9 +219,32 @@ function linkRoutes(links: readonly DiagramLink[], slots: ReadonlyMap<string, Sl
         [to.x + to.w, y1],
       ],
       labelAt: [x + 5, (y0 + y1) / 2],
+      labelRoom: 0, // set once every lane is known (`withLabelRooms`)
     });
   }
   return routes;
+}
+
+/**
+ * How far each lane label may run to its right before it meets another lane at its height, or the
+ * drawing's edge: a label cut to that never crosses a line (the key says it in full).
+ *
+ * @param routes The routes, lane ones with their label room unset.
+ * @param width The drawing's width.
+ * @returns The routes with every lane label's room.
+ */
+function withLabelRooms(routes: readonly Route[], width: number): Route[] {
+  const lanes = routes.filter((r) => r.points.length === 4);
+  return routes.map((route) => {
+    if (route.points.length !== 4) return route;
+    const [x, y] = route.labelAt;
+    const blocking = lanes.flatMap((other) => {
+      const ox = other.points[1]?.[0] ?? 0;
+      const [y0, y1] = [other.points[1]?.[1] ?? 0, other.points[2]?.[1] ?? 0];
+      return ox > x && Math.min(y0, y1) <= y && y <= Math.max(y0, y1) ? [ox] : [];
+    });
+    return { ...route, labelRoom: Math.min(width, ...blocking) - x - 2 };
+  });
 }
 
 /**
@@ -259,7 +286,7 @@ export function layoutPlate(
     slots: placed.map((p) => slots.get(p.letter) as Slot),
     gaps,
     ghost,
-    routes,
+    routes: withLabelRooms(routes, widest),
     width: widest,
     height: GRID.top + (rows - 1) * GRID.row + GRID.boxH + GRID.bottom + (outputLast ? 3 : 0),
   };

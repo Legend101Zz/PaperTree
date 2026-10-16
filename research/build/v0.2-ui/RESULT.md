@@ -49,4 +49,4 @@ head, the local uncached gate, and a code review whose findings were fixed befor
 
 | When | Slice | Kind | Model | Tokens | Cost (estimate) |
 | --- | --- | --- | --- | --- | --- |
-| — | — | — | — | — | $0.0000 |
+| 2026-10-17 02:45 IST | S7b #217 | diagram (the one live smoke, [shots/S7b/live-smoke.md](shots/S7b/live-smoke.md)) | MiniMax-M3.1-Flash-Preview, effort low | 4,487 in (4,416 cache reads) / 351 out | ≈ $0.0020 (on M3 rates) |

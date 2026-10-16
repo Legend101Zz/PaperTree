@@ -36,7 +36,10 @@ export interface FlashSource {
 }
 
 export type SendToCanvasInput =
-  { kind: 'excerpt'; anchor: Anchor } | { kind: 'explanation'; messageId: string };
+  | { kind: 'excerpt'; anchor: Anchor }
+  | { kind: 'explanation'; messageId: string }
+  /** A diagram answer's plate (#217): the card keeps the message id and draws the stored parts. */
+  | { kind: 'diagram'; messageId: string; title: string };
 
 export type ReaderActions = {
   openExplain(input: { anchor: Anchor; quote: string }): void;

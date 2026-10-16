@@ -8,6 +8,7 @@
  */
 import { useId, type ReactNode } from 'react';
 
+import { cut, fitLabel } from '../model/fit';
 import { GRID, type PlateLayout, type Route, type Slot } from '../model/layout';
 import { verdictOf } from '../model/plate';
 
@@ -24,12 +25,6 @@ export interface PlateDrawingProps {
   readonly onPart: (letter: string) => void;
 }
 
-/** A label cut to what a box holds at the drawing's type size; the key keeps every word. */
-function fit(label: string, width: number): string {
-  const max = Math.floor((width - 24) / 7.6);
-  return label.length <= max ? label : `${label.slice(0, max - 1).trimEnd()}…`;
-}
-
 function Arrow({ route }: { route: Route }): ReactNode {
   const [x1, y1] = route.points[route.points.length - 2] ?? [0, 0];
   const [x2, y2] = route.points[route.points.length - 1] ?? [0, 0];
@@ -38,9 +33,10 @@ function Arrow({ route }: { route: Route }): ReactNode {
     <g className="pt-plate__route" data-route={route.key} data-feedback={route.feedback}>
       <polyline points={route.points.map((p) => p.join(',')).join(' ')} />
       <path d="M0,0 L-8,-4.5 L-8,4.5 Z" transform={`translate(${x2},${y2}) rotate(${angle})`} />
-      {route.label === null ? null : (
+      {/* A label with no room for three letters is left to the key, never set across a line. */}
+      {route.label === null || route.labelRoom < 22 ? null : (
         <text x={route.labelAt[0]} y={route.labelAt[1] + 5} textAnchor="start">
-          {route.label}
+          {cut(route.label, route.labelRoom, 13)}
         </text>
       )}
     </g>
@@ -96,6 +92,8 @@ function PartBox({ slot, part, n, lit, hatch, onPart }: PartBoxProps): ReactNode
   // Only a cited part stands on the page: the others are drawn lighter, never more solid (S3).
   const caption = CAPTION[verdict];
   const { x, y, w, h } = slot;
+  const label = fitLabel(part.label, w - 20, caption === undefined ? 2 : 1);
+  const two = label.lines.length === 2;
   return (
     <g
       className="pt-plate__part"
@@ -123,10 +121,15 @@ function PartBox({ slot, part, n, lit, hatch, onPart }: PartBoxProps): ReactNode
       <text
         className="pt-plate__label"
         x={x + w / 2}
-        y={caption === undefined ? y + h / 2 + 5 : y + 19}
+        y={caption === undefined ? y + h / 2 + (two ? -2 : 5) : y + 19}
         textAnchor="middle"
+        fontSize={label.size}
       >
-        {fit(part.label, w)}
+        {label.lines.map((line, i) => (
+          <tspan key={i} x={x + w / 2} dy={i === 0 ? 0 : 15}>
+            {line}
+          </tspan>
+        ))}
       </text>
       {caption === undefined ? null : (
         <text className="pt-plate__caption" x={x + w / 2} y={y + 36} textAnchor="middle">

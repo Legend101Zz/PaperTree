@@ -8,13 +8,15 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { useMemo, type ReactNode } from 'react';
 import { vi } from 'vitest';
 
+import { sendToCanvas } from '@/components/canvas/sendToCanvas';
 import { useExplainActions } from '@/components/explain';
 import { ReaderActionsProvider, type ReaderActions } from '@/components/reader/actions';
 
 import { HeaderAndPanel } from './explain-toggle';
+import { plateFrames } from './fixtures/diagram-plate';
 import storedThread from './fixtures/diagram-thread.json';
 import { TestQueryProvider } from './query-client';
-import { anchorFixture, installFetch, jsonResponse } from './s6-support';
+import { anchorFixture, installFetch, jsonResponse, sseResponse } from './s6-support';
 
 import type { DiagramPart, Thread } from '@/lib/api/types';
 
@@ -29,7 +31,8 @@ function Reader(): ReactNode {
     () => ({
       openExplain: explain.openExplain,
       explainWithDiagram: explain.openDiagram,
-      sendToCanvas: async () => undefined,
+      // The real send: the board read, then the node, through the stubbed fetch.
+      sendToCanvas: (input) => sendToCanvas(PAPER, input),
       focusAnchor: (anchor, opts) => focusAnchor(anchor, opts),
     }),
     [explain.openExplain, explain.openDiagram],
@@ -96,7 +99,10 @@ export function stoppedAtThree(): StoredRead {
   return copy;
 }
 
-/** The panel's routes: the diagram stream (held, or whole), the cancel, the reads. */
+/** The faux bad run's thread: its frames are re-addressed to `THREAD` when used as a Redraw. */
+const BAD_THREAD = 'thr_01M536XJMQX7900YB9C2S1R819';
+
+/** The panel's routes: the diagram stream (held, or whole), the cancel, the reads, the board. */
 export function routes(
   stream: (signal: AbortSignal | null) => Response,
   stored: StoredRead = storedThread,
@@ -106,6 +112,15 @@ export function routes(
     [`POST /runs/${RUN}/cancel`]: () => jsonResponse(202, {}),
     [`GET /papers/${PAPER}/threads`]: () => jsonResponse(200, [stored.thread]),
     [`GET /papers/${PAPER}/threads/${THREAD}`]: () => jsonResponse(200, stored),
+    [`POST /papers/${PAPER}/threads/${THREAD}/messages`]: (_call, signal) =>
+      // A Redraw's plate: the bad run's frames, as a turn of THIS thread.
+      sseResponse(
+        plateFrames('diagram-plate-bad').map((f) => f.replaceAll(BAD_THREAD, THREAD)),
+        { signal },
+      ),
+    [`GET /papers/${PAPER}/board`]: () => jsonResponse(200, { board: null, nodes: [], edges: [] }),
+    [`POST /papers/${PAPER}/board/nodes`]: (call) =>
+      jsonResponse(201, { board: { board_id: 'brd_1' }, node: call.body }),
   });
 }
 

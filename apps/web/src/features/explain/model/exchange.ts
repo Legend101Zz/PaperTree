@@ -55,14 +55,21 @@ function slipQuote(origin: ThreadOrigin, answers: readonly ExchangeMessage[]): S
   const blockId = selectorOf(origin.anchor, 'BlockSelector')?.blockId;
   // The ¶ of the selection is known only when the thread cites that same block (a located
   // citation); a guessed number would be a misattribution (GAP-A2 Risks 1).
-  const same = answers
-    .flatMap((a) => a.citations)
-    .find(
-      (c) =>
-        c.locator !== undefined &&
-        selectorOf(c.anchor, 'BlockSelector')?.blockId === blockId &&
-        c.locator.page_index === pageIndex,
-    );
+  const located = [
+    ...answers.flatMap((a) => a.citations),
+    // A plate's parts carry located Anchors of their own (#217).
+    ...answers.flatMap((a) =>
+      (a.diagram?.parts ?? []).flatMap(({ cite }) =>
+        cite?.anchor && cite.locator ? [{ anchor: cite.anchor, locator: cite.locator }] : [],
+      ),
+    ),
+  ];
+  const same = located.find(
+    (c) =>
+      c.locator !== undefined &&
+      selectorOf(c.anchor, 'BlockSelector')?.blockId === blockId &&
+      c.locator.page_index === pageIndex,
+  );
   return {
     text: cleanQuote(origin.quote),
     page: pageIndex === undefined ? null : pageIndex + 1,

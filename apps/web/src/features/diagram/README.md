@@ -53,6 +53,17 @@ plate once it settles (`features/explain/model/messages.mergeStored`), keyed by 
   before the stream is stamped "not sent".
 - Plates are numbered among those drawn or drawing: one that ended with no part never takes "Plate 1".
 - A diagram thread has no composer: its only next turn is a Redraw (the API answers 422 to a typed follow-up).
+- **Send to board** (`ReaderActions.sendToCanvas({kind: 'diagram', messageId, title})`) creates a `diagram` card whose
+  `source_diagram_id` is the plate's assistant message id; one plate, one card. The board's card
+  (`features/board/components/cards/NotebookCard.tsx` `DiagramCard`) reads the stored plate through
+  `useCardSources` (the paper's diagram threads, newest first, once per id) and draws it with `PlateMiniature`, the same
+  slot grid, small; before the read lands it claims nothing. The API does not yet check that the id names a plate
+  (#277).
+- **Redraw** asks for a new plate in the same thread (`redraw_of` the plate): "Redraw the diagram." becomes the new
+  exchange's ask and the new plate is Plate 2, with the thread's passage numbers. **Add to notebook** is left out: a
+  notebook page holds no diagram item (#276).
+- **07d** is information only: "A crafted figure, later", not available yet, with Not now (no job is queued in v0.2),
+  under the first finished plate of a thread.
 
 ## On screen
 
@@ -64,6 +75,8 @@ plate once it settles (`features/explain/model/messages.mergeStored`), keyed by 
   concept rounded; inferred dashed), hatched shadows from one `<pattern>`, letter circles, arrows, the part
   arriving. `aria-hidden`: the key is the accessible content.
 - `components/PlateKey.tsx`: the key rows (buttons), the empty row of a dropped letter, the part arriving.
+- `components/PlateActions.tsx`: Send to board (sending / on your board / failed) and Redraw.
+  `components/CraftedOffer.tsx`: the 07d offer. `components/PlateMiniature.tsx`: the board card's plate.
 - `components/plate.css`: tokens only; parts settle in over 180 ms and simply appear with reduced motion.
 
 ## Key files
@@ -71,5 +84,7 @@ plate once it settles (`features/explain/model/messages.mergeStored`), keyed by 
 - `model/layout.ts`: the slot grid. Pure, tested (`layout.spec.ts`: stability under streaming on the recorded
   run, determinism, arrows only from earlier letters, gaps kept, a 12-part plate in well under 16 ms).
 - `model/plate.ts`: events → plate, verdicts, readout, passage numbers, tabs, the phase. Pure, tested on the
-  recorded faux runs (`plate.spec.ts`).
+  recorded faux runs (`plate.spec.ts`). `model/fit.ts`: a box label at 15 or 13 px, on one or two lines, else cut;
+  an edge label cut to its lane (`fit.spec.ts`).
+- `e2e/v02/diagram.spec.ts`: the walk on the faux agent (select → plate → tap B → Send to board → the board card).
 - `apps/web/test/s7b-plate.spec.tsx`: the panel on recorded SSE frames (`test/fixtures/diagram-plate*.sse`).

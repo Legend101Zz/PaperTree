@@ -209,9 +209,14 @@ export function pagesLine(parts: readonly DiagramPart[]): string | null {
  *
  * @param parts The parts.
  * @param live True while the run is still drawing.
+ * @param pages False to leave out "drawn by AI …" (a board card's short line).
  * @returns The line, or null for a plate with no part.
  */
-export function plateReadout(parts: readonly DiagramPart[], live: boolean): string | null {
+export function plateReadout(
+  parts: readonly DiagramPart[],
+  live: boolean,
+  pages = true,
+): string | null {
   if (parts.length === 0) return null;
   const c = countParts(parts);
   const words = [
@@ -219,7 +224,9 @@ export function plateReadout(parts: readonly DiagramPart[], live: boolean): stri
     `${String(c.cited)} cited`,
   ];
   if (c.notVerified > 0) words.push(`${String(c.notVerified)} not verified`);
-  const pages = pagesLine(parts);
-  if (!live) words.push(pages === null ? 'drawn by AI' : `drawn by AI from ${pages}`);
+  if (!live && pages) {
+    const span = pagesLine(parts);
+    words.push(span === null ? 'drawn by AI' : `drawn by AI from ${span}`);
+  }
   return words.join(' · ');
 }

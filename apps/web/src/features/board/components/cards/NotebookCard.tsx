@@ -5,11 +5,14 @@
  *
  * A notebook card (DESIGN.md §7) is one index card with a miniature of the page drawn from the
  * page's own items, its title, its counts from the board read ("4 quotes · 1 sticky") and "Open
- * page". A diagram card is the AI slip with an empty plate frame and the diagram's title: the
- * diagrams (S7) are not built yet, so it draws no parts and claims no counts, and no art is made up.
+ * page". A diagram card is the AI slip with the plate drawn small from its stored parts (#217) and
+ * the plate's counts; no part is drawn and no count claimed before the plate is read.
  */
 import { AiSlip } from '@papertree/ui';
 import { type NodeProps } from '@xyflow/react';
+
+import { PlateMiniature } from '@/features/diagram/components/PlateMiniature';
+import { plateReadout } from '@/features/diagram/model/plate';
 
 import { countsLine, miniature } from '../../model/cards';
 import { useCanvasActions } from '../BoardContext';
@@ -54,14 +57,26 @@ export function NotebookCard({ id, data, selected }: NodeProps<PtNode>): ReactNo
   );
 }
 
-/** A diagram card: a `diagram` row, its title on an empty plate until the diagrams land. */
+/**
+ * A diagram card: a `diagram` row. Its plate is read from the stored parts (#217) and drawn as a
+ * miniature with its counts; until that read lands (or if it fails) the frame stays empty and no
+ * count is claimed.
+ */
 export function DiagramCard({ id, data, selected }: NodeProps<PtNode>): ReactNode {
-  const title = (data.node.title ?? '').trim();
+  const ctx = useCanvasActions();
+  const plate = ctx.sources?.diagrams.get(data.node.source_diagram_id ?? '');
+  const title = (plate?.title ?? data.node.title ?? '').trim();
+  const counts = plate === undefined ? null : plateReadout(plate.parts, false, false);
   return (
     <CardShell id={id} selected={selected} kind="diagram" stock="bare">
       <AiSlip>
-        <div className="pt-bc__plate" aria-hidden="true" />
+        <div className="pt-bc__plate">
+          {plate === undefined || plate.parts.length === 0 ? null : (
+            <PlateMiniature plate={plate} />
+          )}
+        </div>
         <p className="pt-bc__title">{title === '' ? 'Untitled diagram' : title}</p>
+        {counts === null ? null : <p className="pt-bc__meta">{counts}</p>}
       </AiSlip>
     </CardShell>
   );
