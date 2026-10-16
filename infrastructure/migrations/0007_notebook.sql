@@ -1,7 +1,6 @@
 -- 0007 (v0.2, S5a, #206): the notebook. Pages, the items placed on them, and ink strokes.
 --
--- Numbered 0007 because 0006 is reading state (S2a), built in parallel. The runner applies by
--- version, so a gap is fine and neither slice depends on the other.
+-- Numbered 0007 because 0006 is reading state (S2a), which this follows.
 --
 -- Three NEW tables, nothing rebuilt, so this version is NOT in BACKUP_BEFORE_VERSIONS.
 -- Every FK between owned tables carries owner_id (0005 rule); ids are client-minted; a quote

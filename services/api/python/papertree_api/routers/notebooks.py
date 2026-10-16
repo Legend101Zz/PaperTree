@@ -18,13 +18,14 @@ that is not the caller's is a 404, never a 403 (no existence oracle).
 from __future__ import annotations
 
 import base64
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 from papertree_db import NotebookRejected, NotebookStale, PaperId, PaperNotFound
 
+from .. import evidence
 from ..deps import CallerDep
 from ..errors import ApiError
 from ..schemas import (
@@ -44,6 +45,20 @@ from ..wiretime import wire_time
 from ._shared import read_json
 
 router = APIRouter()
+
+
+def _passage_key(generation: int, anchor: Mapping[str, Any], marker: str) -> str:
+    """S4a's passage key for a stored citation, built as the explain panel's coverage builds it.
+
+    Args:
+        generation: The citation's generation.
+        anchor: The citation's stored Anchor.
+        marker: The citation's handle (the fallback when the Anchor has no BlockSelector).
+
+    Returns:
+        ``evidence.passage_key`` over the Anchor's BlockSelector block id, else the marker.
+    """
+    return evidence.passage_key(generation, evidence.anchor_block_id(anchor) or marker)
 
 
 def _guard[T](action: Callable[[], T]) -> T:
@@ -99,6 +114,7 @@ async def create_page(call: CallerDep, paper_id: str, request: Request) -> Respo
             title=body.title,
             template=body.template or "dot",
             from_message_id=body.from_message_id,
+            passage_key=_passage_key,
         )
     )
     return JSONResponse(

@@ -17,7 +17,7 @@ from typing import Any
 import httpx
 import pytest
 from ai_support import SECRET, ai_harness, alice_with_paper, paragraph_anchor, read_sse
-from api_support import assert_envelope, auth, register
+from api_support import assert_envelope, auth, register, seed_paper
 from fake_agent import FakeAgent, Script
 from fastapi.testclient import TestClient
 from papertree_api import create_app
@@ -144,6 +144,18 @@ def test_dive_in_on_a_real_parse_seeds_the_exchange_and_one_quote_per_cited_pass
             if block_id(c["anchor"]) not in {block_id(e) for e in expected}:
                 expected.append(c["anchor"])
         assert [q["anchor"] for q in quotes] == expected
+        # ... and that order IS the explain panel's passage numbering: quote i is the i-th
+        # distinct `passage_key` (S4a's locator key) in citation order, and coverage counts the
+        # same number of passages.
+        numbered: list[str] = []
+        first_anchor: dict[str, dict[str, Any]] = {}
+        for c in sorted(cited, key=lambda c: c["ordinal"]):
+            key = c["locator"]["passage_key"]
+            if key not in first_anchor:
+                numbered.append(key)
+                first_anchor[key] = c["anchor"]
+        assert [q["anchor"] for q in quotes] == [first_anchor[k] for k in numbered]
+        assert message["coverage"]["passages"] == len(quotes)
         assert len(quotes) >= 1 and all(q["body"] for q in quotes)
         body = json.loads(exchanges[0]["body"])
         assert body["ai"]["message_id"] == message["message_id"]
@@ -422,3 +434,56 @@ def test_auth_required_and_bad_bodies_are_422_not_500(tmp_path: Path) -> None:
             422,
             "validation_failed",
         )
+
+
+def test_item_patch_holds_exchange_and_shape_bodies_to_a_json_object(tmp_path: Path) -> None:
+    with ai_harness(tmp_path, Script("explain-ok")) as h:
+        token, paper_id = alice_with_paper(h)
+        c, hdr = h.client, auth(token)
+        pid = _make_page(c, token, paper_id)["page"]["page_id"]
+        url = f"/notebook/pages/{pid}/items"
+        good = json.dumps({"call": {"text": "q"}, "ai": {"content": "hello"}})
+        for item_id, kind in (("ni_exchange01", "exchange"), ("ni_shape00002", "shape")):
+            r = c.post(url, json=_note(item_id, kind, body=good), headers=hdr)
+            assert r.status_code == 201, r.text
+            for bad in ("not json{", "[1]", "3", '"s"', "null"):
+                r = c.patch(f"{url}/{item_id}", json={"version": 1, "body": bad}, headers=hdr)
+                assert_envelope(r, 422, "validation_failed")
+            r = c.patch(f"{url}/{item_id}", json={"version": 1, "body": good}, headers=hdr)
+            assert r.status_code == 200 and r.json()["version"] == 2
+        # A sticky or text card is free text: any string is fine there.
+        c.post(url, json=_note("ni_sticky0003"), headers=hdr)
+        r = c.patch(f"{url}/ni_sticky0003", json={"version": 1, "body": "not json{"}, headers=hdr)
+        assert r.status_code == 200
+        # An unknown item is still a 404, not a validation error.
+        r = c.patch(f"{url}/ni_nothere001", json={"version": 1, "body": "x"}, headers=hdr)
+        assert_envelope(r, 404, "not_found")
+
+
+def test_dive_in_mints_fresh_item_ids_for_pages_that_share_a_suffix_and_for_two_owners(
+    tmp_path: Path,
+) -> None:
+    with ai_harness(tmp_path, Script("explain-ok")) as h:
+        c = h.client
+        made: list[dict[str, Any]] = []
+        for email, slug, prefixes in (
+            ("alice@example.com", "resnet-cvpr-2col", ("pg", "px")),
+            ("bob@example.com", "neural-odes-mathheavy", ("py", "pz")),
+        ):
+            token = register(c, email)
+            paper_id = seed_paper(h.settings, c, token, slug)
+            message = _answer(c, token, paper_id, paragraph_anchor(slug))
+            # The same suffix after the prefix: two pages of one owner, and the other owner's.
+            for prefix in prefixes:
+                made.append(
+                    _make_page(
+                        c,
+                        token,
+                        paper_id,
+                        page_id=f"{prefix}_same0000001",
+                        from_message_id=message["message_id"],
+                    )  # fmt: skip
+                )
+        ids = [i["item_id"] for page in made for i in page["items"]]
+        assert len(made) == 4 and len(ids) == len(set(ids)) == h.count("notebook_items")
+        assert all(len(page["items"]) >= 2 for page in made)

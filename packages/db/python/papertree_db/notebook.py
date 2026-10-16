@@ -21,13 +21,13 @@ from __future__ import annotations
 import json
 import math
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final, Literal
 
 from ._support import Row, client_json, now_iso
 from .errors import PaperNotFound
-from .ids import OwnerId, PaperId
+from .ids import OwnerId, PaperId, new_id
 
 if TYPE_CHECKING:
     from .database import DatabaseCore as _Base
@@ -53,6 +53,10 @@ _EXCHANGE_H: Final = 320.0
 _QUOTE_W: Final = 272.0
 _QUOTE_H: Final = 140.0
 _GAP: Final = 24.0
+
+
+#: ``(generation, anchor, marker) -> key``: equal keys are "the same passage" (S4a's rule).
+PassageKey = Callable[[int, Mapping[str, Any], str], str]
 
 
 class NotebookRejected(ValueError):
@@ -96,6 +100,19 @@ def _item(row: Row) -> Row:
     return out
 
 
+def _require_json_object(body: str) -> None:
+    """An exchange or shape ``body`` is the JSON of an object; create AND patch hold to it.
+
+    Search runs ``json_extract`` over exchange bodies, so a stored non-object is not only
+    malformed data: it was once able to take every search on the paper down (review of S5a).
+    """
+    try:
+        if not isinstance(json.loads(body), dict):
+            raise ValueError
+    except ValueError as exc:
+        raise _bad("body: an exchange or shape carries a JSON object") from exc
+
+
 def _finite(name: str, value: object, *, positive: bool = False) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
         raise _bad(f"{name}: must be a finite number")
@@ -132,6 +149,7 @@ class NotebookMixin(_Base):
         title: str | None = None,
         template: str = "dot",
         from_message_id: str | None = None,
+        passage_key: PassageKey | None = None,
     ) -> tuple[Row, list[Row]]:
         """Creates a page, optionally seeded by "Dive in" from an assistant answer.
 
@@ -139,7 +157,19 @@ class NotebookMixin(_Base):
         back. With ``from_message_id`` the page gets one ``exchange`` item (the call slip: the
         question and the thread's origin anchor; the AI slip: message id, model, content) and one
         ``quote`` item per DISTINCT cited passage, in order of first use, each with the citation's
-        stored Anchor and the quoted words as a display cache.
+        stored Anchor and the quoted words as a display cache. "Distinct" is ``passage_key``, the
+        same key the explain panel numbers passages by, so quote ``i`` is passage number ``i``.
+
+        Args:
+            owner: The caller.
+            paper_id: The paper the page belongs to.
+            page_id: The client-minted page id.
+            title: The page title; defaults to "Untitled page" or "Dive in: <thread title>".
+            template: One of the five page templates.
+            from_message_id: An assistant message of this paper's threads, to seed from.
+            passage_key: Required with ``from_message_id``. ``(generation, anchor, marker)`` ->
+                the passage's key; the API passes ``evidence.passage_key`` built on the Anchor's
+                BlockSelector. It is injected because the key's rule lives in the API package.
 
         Returns:
             ``(page, items)``.
@@ -167,7 +197,7 @@ class NotebookMixin(_Base):
             seed = (
                 None
                 if from_message_id is None
-                else self._dive_in_seed(owner_id, paper_id, from_message_id)
+                else self._dive_in_seed(owner_id, paper_id, from_message_id, passage_key)
             )
             now = now_iso()
             thread_id = None if seed is None else seed["thread_id"]
@@ -184,10 +214,13 @@ class NotebookMixin(_Base):
                 )  # fmt: skip
             except sqlite3.IntegrityError as exc:
                 raise _bad("page_id: already in use") from exc
-            for n, item in enumerate(() if seed is None else seed["items"]):
-                self._insert_item(
-                    owner_id, page_id, f"ni_{page_id.split('_', 1)[-1]}_{n:03d}", item, now
-                )
+            # Fresh ids: ``item_id`` is a global primary key, so ids derived from the page id's
+            # suffix collided across pages and owners (a 500). A retry never reaches here: the
+            # page exists, so it returned above with the items it already has.
+            # ``z`` carries the seed order: items read back ``ORDER BY z, created_at, item_id`` and
+            # random ids no longer sort in insertion order.
+            for z, item in enumerate(() if seed is None else seed["items"]):
+                self._insert_item(owner_id, page_id, new_id("ni"), {**item, "z": z}, now)
             row = self._one(
                 f"SELECT {_PAGE_COLUMNS} FROM notebook_pages WHERE owner_id = ? AND page_id = ?",
                 (owner_id, page_id),
@@ -195,7 +228,11 @@ class NotebookMixin(_Base):
             assert row is not None
             return _page(row), self._items(owner_id, page_id)
 
-    def _dive_in_seed(self, owner_id: str, paper_id: str, message_id: str) -> dict[str, Any]:
+    def _dive_in_seed(
+        self, owner_id: str, paper_id: str, message_id: str, passage_key: PassageKey | None
+    ) -> dict[str, Any]:
+        if passage_key is None:
+            raise ValueError("passage_key is required to seed a page from a message")
         message = self._one(
             "SELECT m.message_id, m.thread_id, m.ordinal, m.role, m.content, t.paper_id, "
             "t.title AS thread_title, t.origin_anchor_json FROM ai_messages m "
@@ -236,19 +273,21 @@ class NotebookMixin(_Base):
         ]  # fmt: skip
         seen: set[str] = set()
         for cite in self._all(
-            "SELECT block_id, anchor_json FROM ai_citations WHERE owner_id = ? AND message_id = ? "
-            "ORDER BY ordinal",
+            "SELECT marker, generation, anchor_json FROM ai_citations "
+            "WHERE owner_id = ? AND message_id = ? ORDER BY ordinal",
             (owner_id, message_id),
         ):
-            if cite["block_id"] in seen:
+            anchor = json.loads(cite["anchor_json"])
+            key = passage_key(cite["generation"], anchor, cite["marker"])
+            if key in seen:
                 continue
-            seen.add(cite["block_id"])
+            seen.add(key)
             slot = len(seen) - 1
             items.append(
                 {"kind": "quote", "x": _MARGIN + (slot % 3) * (_QUOTE_W + _GAP),
                  "y": _MARGIN + _EXCHANGE_H + _GAP + (slot // 3) * (_QUOTE_H + _GAP),
                  "w": _QUOTE_W, "h": _QUOTE_H,
-                 "body": _quote_text(json.loads(cite["anchor_json"])),
+                 "body": _quote_text(anchor),
                  "anchor_json": cite["anchor_json"]}
             )  # fmt: skip
         return {"thread_id": message["thread_id"], "thread_title": message["thread_title"],
@@ -363,11 +402,7 @@ class NotebookMixin(_Base):
             "anchor_json": None,
         }
         if kind in ("exchange", "shape"):
-            try:
-                if not isinstance(json.loads(body), dict):
-                    raise ValueError
-            except ValueError as exc:
-                raise _bad("body: an exchange or shape carries a JSON object") from exc
+            _require_json_object(body)
         with self.transaction():
             page = self._page_row(owner_id, page_id)
             if page is None:
@@ -400,6 +435,10 @@ class NotebookMixin(_Base):
 
         Returns:
             The item at ``version + 1``; ``NotebookStale(current)``; None when not found.
+
+        Raises:
+            NotebookRejected: ``validation_failed`` for a non-finite number, a non-string
+                ``body``, or an exchange or shape ``body`` that is not a JSON object.
         """
         owner_id = self._resolve(owner)
         sets: list[str] = []
@@ -414,6 +453,15 @@ class NotebookMixin(_Base):
         if "body" in fields:
             if not isinstance(fields["body"], str):
                 raise _bad("body: must be a string")
+            stored = self._one(
+                "SELECT kind FROM notebook_items WHERE owner_id = ? AND page_id = ? "
+                "AND item_id = ?",
+                (owner_id, page_id, item_id),
+            )
+            if stored is None:
+                return None
+            if stored["kind"] in ("exchange", "shape"):
+                _require_json_object(fields["body"])
             sets.append("body = ?")
             params.append(fields["body"])
         result = self._versioned_update("notebook_items", "item_id", owner_id, item_id, version,
