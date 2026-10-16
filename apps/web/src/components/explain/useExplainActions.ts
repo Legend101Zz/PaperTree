@@ -67,6 +67,11 @@ export interface ExplainState {
   readonly threadId: string | null;
   readonly messages: readonly ViewMessage[];
   readonly summary: SummaryView;
+  /**
+   * The person chose "New thread" (#202): the panel stays empty for a fresh question instead of
+   * opening on the newest stored thread, and that question starts a new thread.
+   */
+  readonly fresh: boolean;
 }
 
 const IDLE_SUMMARY: SummaryView = {
@@ -86,6 +91,7 @@ const INITIAL: ExplainState = {
   threadId: null,
   messages: [],
   summary: IDLE_SUMMARY,
+  fresh: false,
 };
 
 type Action =
@@ -94,6 +100,7 @@ type Action =
   | { type: 'view'; view: PanelView }
   | { type: 'thread'; epoch: number; threadId: string }
   | { type: 'select'; epoch: number; threadId: string; request: ExplainRequest | null }
+  | { type: 'fresh'; epoch: number }
   | { type: 'hydrate'; threadId: string; messages: readonly Message[] }
   | { type: 'add'; epoch: number; message: ViewMessage }
   | { type: 'patch'; epoch: number; key: string; patch: Partial<ViewMessage> }
@@ -111,6 +118,18 @@ export function explainReducer(state: ExplainState, action: Action): ExplainStat
         request: action.request,
         threadId: null,
         messages: [],
+        fresh: false,
+      };
+    case 'fresh':
+      return {
+        ...state,
+        epoch: action.epoch,
+        open: true,
+        view: 'thread',
+        request: null,
+        threadId: null,
+        messages: [],
+        fresh: true,
       };
     case 'close':
       return { ...state, open: false };
@@ -127,6 +146,7 @@ export function explainReducer(state: ExplainState, action: Action): ExplainStat
         request: action.request,
         threadId: action.threadId,
         messages: [],
+        fresh: false,
       };
     case 'hydrate':
       // A detail read for a thread the panel has left (the menu moved on) is dropped.
@@ -185,6 +205,8 @@ export interface ExplainController {
   readonly stopSummary: () => void;
   /** Show a stored thread (the thread menu, or the newest one when the panel opens empty). */
   readonly selectThread: (thread: Thread) => void;
+  /** "New thread": an empty panel whose next question starts a new thread (owner may change). */
+  readonly startFresh: () => void;
   /**
    * Merge a stored read of the current thread into the panel (#202): live while streaming, the
    * stored copy (locators, coverage) once settled, under the same keys. Other threads are ignored.
@@ -213,6 +235,7 @@ function blankAssistant(question: string): ViewMessage {
     question,
     createdAt: new Date().toISOString(),
     coverage: null,
+    generation: null,
   };
 }
 
@@ -269,7 +292,11 @@ export function useExplainActions(options: { readonly paperId: string | null }):
           if (epochRef.current !== epoch) return;
           switch (event.event) {
             case 'run':
-              patch({ runId: event.data.run_id, messageId: event.data.message_id });
+              patch({
+                runId: event.data.run_id,
+                messageId: event.data.message_id,
+                generation: event.data.generation,
+              });
               // The ask's server id lets a stored read of the thread recognise it (no duplicate).
               if (userKey !== null && event.data.user_message_id !== null) {
                 dispatch({
@@ -417,8 +444,14 @@ export function useExplainActions(options: { readonly paperId: string | null }):
   );
 
   const openPanel = useCallback((): void => {
-    if (stateRef.current.messages.length > 0 || stateRef.current.request !== null) {
-      dispatch({ type: 'view', view: stateRef.current.view });
+    const current = stateRef.current;
+    if (
+      current.messages.length > 0 ||
+      current.request !== null ||
+      current.threadId !== null ||
+      current.fresh
+    ) {
+      dispatch({ type: 'view', view: current.view });
       return;
     }
     const epoch = (epochRef.current += 1);
@@ -449,34 +482,9 @@ export function useExplainActions(options: { readonly paperId: string | null }):
     [paperId, sendCreate, startTurn],
   );
 
-  const stop = useCallback((): void => {
-    halt(true);
-    // The server keeps the partial text it had; fetch it back (and its citations) once it has
-    // written them, best effort: what the reader already sees is the truth they were shown.
-    const { threadId, epoch } = stateRef.current;
-    if (paperId === null || threadId === null) return;
-    window.setTimeout(() => {
-      threadsApi
-        .get(paperId, threadId)
-        .then((detail) => {
-          if (epochRef.current !== epoch) return;
-          for (const server of detail.messages) {
-            const local = stateRef.current.messages.find((m) => m.messageId === server.message_id);
-            if (local === undefined || local.role !== 'assistant' || local.status === 'streaming')
-              continue;
-            if (server.citations.length > 0 && local.citations.length === 0) {
-              dispatch({
-                type: 'patch',
-                epoch,
-                key: local.key,
-                patch: { citations: server.citations },
-              });
-            }
-          }
-        })
-        .catch(() => undefined);
-    }, 900);
-  }, [halt, paperId]);
+  // The server keeps the partial text it had; `useThreads` reads the thread again once the run
+  // has settled (one path for done, Stop and failures), so the stored copy replaces this one.
+  const stop = useCallback((): void => halt(true), [halt]);
 
   const retry = useCallback(
     (key: string): void => {
@@ -649,6 +657,20 @@ export function useExplainActions(options: { readonly paperId: string | null }):
     [halt],
   );
 
+  const startFresh = useCallback((): void => {
+    halt(true);
+    const epoch = (epochRef.current += 1);
+    dispatch({ type: 'fresh', epoch });
+    stateRef.current = {
+      ...stateRef.current,
+      epoch,
+      request: null,
+      threadId: null,
+      messages: [],
+      fresh: true,
+    };
+  }, [halt]);
+
   const hydrateThread = useCallback(
     (threadId: string, messages: readonly Message[]): void =>
       dispatch({ type: 'hydrate', threadId, messages }),
@@ -679,6 +701,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       summarize,
       stopSummary,
       selectThread,
+      startFresh,
       hydrateThread,
     }),
     [
@@ -694,6 +717,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       summarize,
       stopSummary,
       selectThread,
+      startFresh,
       hydrateThread,
     ],
   );

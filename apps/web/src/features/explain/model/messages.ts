@@ -33,6 +33,8 @@ export interface ThreadMessage {
   readonly createdAt: string | null;
   /** The server's coverage of a stored answer; null while live. */
   readonly coverage: MessageCoverage | null;
+  /** The parse generation of the run (the `run` event's, or the stored message's); null until known. */
+  readonly generation: number | null;
 }
 
 function failureOfStored(message: Message): Failure | null {
@@ -65,6 +67,7 @@ export function fromStored(message: Message, question: string): ThreadMessage {
     question,
     createdAt: message.created_at,
     coverage: message.coverage ?? null,
+    generation: message.generation,
   };
 }
 
@@ -130,7 +133,18 @@ export function mergeStored(
     live.flatMap((m) => (m.messageId === null ? [] : [[m.messageId, m] as const])),
   );
   const storedIds = new Set(stored.map((m) => m.message_id));
-  const merged = shownStored(stored).map((s) => {
+  const shown = shownStored(stored);
+  // A read can land after the server wrote a new turn's rows but before the client handled its
+  // `run` event: the live ask and answer have no ids yet, so the stored copies of that same turn
+  // (an unmatched trailing ask and still-streaming answer) are left out until they can be matched.
+  if (live.some((m) => m.messageId === null && m.status === 'streaming')) {
+    for (let last = shown.at(-1); last !== undefined; last = shown.at(-1)) {
+      const unmatched = last.messageId === null || !liveById.has(last.messageId);
+      if (!unmatched || (last.role === 'assistant' && last.status !== 'streaming')) break;
+      shown.pop();
+    }
+  }
+  const merged = shown.map((s) => {
     const match = s.messageId === null ? undefined : liveById.get(s.messageId);
     return match === undefined ? s : settle(match, s);
   });

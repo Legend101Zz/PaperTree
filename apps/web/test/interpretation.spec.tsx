@@ -39,6 +39,7 @@ function message(over: Partial<ViewMessage> = {}): ViewMessage {
     question: 'q',
     createdAt: null,
     coverage: null,
+    generation: null,
     ...over,
   };
 }

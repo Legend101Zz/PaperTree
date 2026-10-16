@@ -14,6 +14,7 @@ import { Harness, stubDesktop } from './s6-harness';
 import {
   citation,
   done,
+  errorBody,
   frame,
   installFetch,
   jsonResponse,
@@ -173,5 +174,58 @@ describe('the panel reads the stored threads', () => {
     expect(document.querySelector('[data-user-message]')?.textContent).toBe(
       'Explain this passage.',
     );
+  });
+
+  it('a thread that is gone says so; New thread empties the panel and a question starts anew', async () => {
+    let lists = 0;
+    const { calls } = installFetch({
+      [LIST]: () => {
+        lists += 1;
+        return jsonResponse(200, lists === 1 ? [NEWER] : []);
+      },
+      [`GET /papers/${PAPER}/threads/thr_new`]: () =>
+        jsonResponse(404, errorBody('not_found', 'no such thread')),
+      [`POST /papers/${PAPER}/threads`]: (_c, signal) =>
+        sseResponse([run({ thread_id: 'thr_free' }), text('A fresh answer.'), done()], {
+          signal,
+        }),
+    });
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ask AI' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('This conversation is no longer here.');
+    // The list is read again, so the menu stops offering the thread that is gone.
+    await waitFor(() => expect(lists).toBeGreaterThanOrEqual(2));
+
+    fireEvent.click(screen.getByRole('button', { name: 'New thread' }));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByText(/type a question about the whole paper below/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Ask a question about this paper'), {
+      target: { value: 'What is new here?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Ask' }));
+    await waitFor(() => expect(screen.getByText('A fresh answer.')).toBeTruthy());
+    const posts = calls.filter((c) => c.method === 'POST');
+    expect(posts.map((c) => c.path)).toEqual([`/papers/${PAPER}/threads`]);
+    expect(posts[0]?.body).toMatchObject({ kind: 'ask', question: 'What is new here?' });
+  });
+
+  it('a read that fails says so with Try again, and Try again shows the thread', async () => {
+    let fail = true;
+    installFetch({
+      [LIST]: () => jsonResponse(200, [NEWER]),
+      [`GET /papers/${PAPER}/threads/thr_new`]: () =>
+        fail
+          ? jsonResponse(500, errorBody('internal', 'boom', true))
+          : jsonResponse(200, stored('thr_new')),
+    });
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ask AI' }));
+    const alert = await screen.findByRole('alert', {}, { timeout: 5000 });
+    expect(alert.textContent).toContain('This conversation could not be loaded.');
+    fail = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(screen.getByText(/central proposal/)).toBeTruthy());
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

@@ -21,6 +21,18 @@ derived on read from the parse, never stored).
   the thread again and `mergeStored` replaces the live copy with the stored one (locators, coverage) under
   the same key: no duplicate, no remount. A live citation has no locator yet; its handle finds its passage
   through the thread's other citations, so numbers never shift.
+- **Tabs never change under the reader.** A live citation (the SSE `citations` event has no locator) borrows the
+  locator the thread already knows for its passage (`PassageNumbers.locatorOfKey`). A passage placed nowhere
+  yet is held, drawn as while streaming (no markers, no trace), until the stored read after `done` lands
+  (`useThreads().settling`); then its markers and tabs appear once, in their final form.
+- **A claim with no resolved citation is the AI's own reading.** A paragraph is cited only when one of its
+  handles resolves; a `[b9]` the run never resolved draws no marker, so its paragraph goes under "no citation
+  · the AI's own reading" and the readout counts it (DESIGN §4.6). The server's `uncited_paragraphs` counts
+  any handle, so the client does not use it for this.
+- **New thread** (owner may change): `startFresh()` empties the panel and keeps it from reopening on the
+  newest thread, so the next free question starts a new thread. Explain on a selection always starts one.
+- **A read that fails** (404, network) shows a designed failure with Try again and New thread
+  (`ThreadReadFailure`), never a blank panel; a 404 is not retried and re-reads the list.
 - `buildExchanges` pairs asks and answers and builds each answer's paragraphs (the server's
   `answer_paragraphs` rule), markers, trace rows ("where · cited n×", the paper's words, "not verified" when
   `supported === false`) and coverage.
@@ -29,7 +41,8 @@ derived on read from the parse, never stored).
 
 - `model/passages.ts`: passage keys and numbers, handle runs (`[b1, b8]` is two markers). Pure, tested on the
   golden thread (`test/fixtures/attention-thread.json`, frame 04's real stored thread).
-- `model/exchange.ts`: the exchange view model. Pure, tested.
+- `model/exchange.ts` and `model/answer.ts`: the exchange and answer view models. `model/anchor.ts`: the
+  typed selector lookup and display quotes. Pure, tested.
 - `model/messages.ts`: the panel's message shape (`ThreadMessage`, the controller's `ViewMessage`), stored →
   panel, and the live + stored merge. Pure, tested.
 - `model/threads.ts`: menu order, position, a stored thread's origin, the thread an empty panel opens on.

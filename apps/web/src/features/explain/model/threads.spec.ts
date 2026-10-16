@@ -29,6 +29,7 @@ const EMPTY: PanelSnapshot = {
   threadId: null,
   hasRequest: false,
   messageCount: 0,
+  fresh: false,
 };
 
 describe('thread order for "Thread n of N"', () => {
@@ -62,6 +63,8 @@ describe('the thread an empty panel opens on', () => {
     expect(opensOnNewest({ ...EMPTY, messageCount: 1 }, sorted)).toBeNull();
     expect(opensOnNewest({ ...EMPTY, view: 'summary' }, sorted)).toBeNull();
     expect(opensOnNewest({ ...EMPTY, open: false }, sorted)).toBeNull();
+    // "New thread": the person asked for an empty panel, so a fresh question starts a new thread.
+    expect(opensOnNewest({ ...EMPTY, fresh: true }, sorted)).toBeNull();
   });
 });
 

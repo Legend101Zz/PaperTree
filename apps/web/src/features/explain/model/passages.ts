@@ -4,12 +4,16 @@
  * each passage, so marker 2 is the same passage in the answer, its trace and every later exchange.
  * Pure: no React, no fetch. `exchange.ts` builds the on-screen exchange from these numbers.
  */
-import type { Citation } from '@/lib/api/types';
+import { selectorOf } from './anchor';
+
+import type { Citation, PassageLocator } from '@/lib/api/types';
 
 /** One answer as numbering reads it: its text (with `[bN]` handles) and its citations. */
 export interface CitedAnswer {
   readonly text: string;
   readonly citations: readonly Citation[];
+  /** The parse generation the answer was written against (the run's), when known. */
+  readonly generation?: number | null;
 }
 
 /** The thread's passage numbering. */
@@ -22,6 +26,11 @@ export interface PassageNumbers {
    * which arrives without a locator, still finds its passage through its handle.
    */
   readonly keyOfHandle: ReadonlyMap<string, string>;
+  /**
+   * Passage key → its locator, from any citation of the thread that carries one: a follow-up's
+   * live citation of a passage the thread already placed shows its final tab at once (#202).
+   */
+  readonly locatorOfKey: ReadonlyMap<string, PassageLocator>;
 }
 
 /** Mirrors `MARKER_PATTERN` (agent contract) and `evidence.MARKER` (API): `[b3]`, `[b1, b8]`. */
@@ -42,18 +51,28 @@ export function handleRuns(text: string): string[][] {
 }
 
 /**
- * The passage a citation points at. Its locator's key when it has one; else the key its handle
- * had elsewhere in the thread; else the handle itself, so an unlocated citation is still one
- * passage of its own and never merges with another.
+ * The passage a citation points at. Its locator's key when it has one; else the server's own key
+ * rebuilt from the Anchor's block and the answer's generation (`g{generation}:{block_id}`, as
+ * `routers/threads.py` builds it, so two handles on one block are one passage on both sides); else
+ * the key its handle had elsewhere in the thread; else the handle itself, so a citation with
+ * nothing to go on is one passage of its own and never merges with another.
  *
  * @param citation The citation.
  * @param keyOfHandle Handle → key, from `numberPassages`.
+ * @param generation The answer's parse generation, when known.
  * @returns The passage key.
  */
-export function passageKeyOf(citation: Citation, keyOfHandle: ReadonlyMap<string, string>): string {
-  return (
-    citation.locator?.passage_key ?? keyOfHandle.get(citation.marker) ?? `handle:${citation.marker}`
-  );
+export function passageKeyOf(
+  citation: Citation,
+  keyOfHandle: ReadonlyMap<string, string>,
+  generation?: number | null,
+): string {
+  if (citation.locator !== undefined) return citation.locator.passage_key;
+  const blockId = selectorOf(citation.anchor, 'BlockSelector')?.blockId;
+  if (blockId !== undefined && generation !== undefined && generation !== null) {
+    return `g${String(generation)}:${blockId}`;
+  }
+  return keyOfHandle.get(citation.marker) ?? `handle:${citation.marker}`;
 }
 
 /** An answer's citations split by how its text uses them. */
@@ -98,22 +117,23 @@ export function citationUse(answer: CitedAnswer): CitationUse {
  */
 export function numberPassages(answers: readonly CitedAnswer[]): PassageNumbers {
   const keyOfHandle = new Map<string, string>();
+  const locatorOfKey = new Map<string, PassageLocator>();
   for (const answer of answers) {
-    for (const citation of answer.citations) {
-      if (citation.locator !== undefined && !keyOfHandle.has(citation.marker)) {
-        keyOfHandle.set(citation.marker, citation.locator.passage_key);
-      }
+    for (const { marker, locator } of answer.citations) {
+      if (locator === undefined) continue;
+      if (!keyOfHandle.has(marker)) keyOfHandle.set(marker, locator.passage_key);
+      if (!locatorOfKey.has(locator.passage_key)) locatorOfKey.set(locator.passage_key, locator);
     }
   }
   const byKey = new Map<string, number>();
   for (const answer of answers) {
     const use = citationUse(answer);
     for (const citation of [...use.occurrences, ...use.loose]) {
-      const key = passageKeyOf(citation, keyOfHandle);
+      const key = passageKeyOf(citation, keyOfHandle, answer.generation);
       if (!byKey.has(key)) byKey.set(key, byKey.size + 1);
     }
   }
-  return { byKey, keyOfHandle };
+  return { byKey, keyOfHandle, locatorOfKey };
 }
 
 /**
@@ -134,7 +154,7 @@ export function runNumbers(
   for (const handle of run) {
     const citation = answer.citations.find((c) => c.marker === handle);
     if (citation === undefined) continue;
-    const n = numbers.byKey.get(passageKeyOf(citation, numbers.keyOfHandle));
+    const n = numbers.byKey.get(passageKeyOf(citation, numbers.keyOfHandle, answer.generation));
     if (n !== undefined && !out.includes(n)) out.push(n);
   }
   return out;

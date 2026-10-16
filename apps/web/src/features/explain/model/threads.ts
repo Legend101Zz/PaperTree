@@ -3,6 +3,8 @@
  * oldest first by `created_at`: the API lists newest first and a follow-up must never renumber a
  * thread (GAP-A2 Risks 4). Pure; `useThreads` feeds it the list.
  */
+import { selectorOf } from './anchor';
+
 import type { Anchor } from '@papertree/anchoring';
 import type { Thread } from '@/lib/api/types';
 
@@ -48,10 +50,8 @@ export function originOf(
 ): { readonly anchor: Anchor; readonly quote: string } | null {
   const anchor = thread.origin_anchor;
   if (anchor === null) return null;
-  const selectors = (anchor as { selectors?: readonly { type?: string; exact?: unknown }[] })
-    .selectors;
-  const exact = selectors?.find((s) => s.type === 'TextQuoteSelector')?.exact;
-  return typeof exact === 'string' ? { anchor, quote: exact } : null;
+  const exact = selectorOf(anchor, 'TextQuoteSelector')?.exact;
+  return exact === undefined ? null : { anchor, quote: exact };
 }
 
 /** The panel state `opensOnNewest` reads. */
@@ -61,6 +61,8 @@ export interface PanelSnapshot {
   readonly threadId: string | null;
   readonly hasRequest: boolean;
   readonly messageCount: number;
+  /** The person chose "New thread": the panel stays empty for a fresh question. */
+  readonly fresh: boolean;
 }
 
 /**
@@ -78,6 +80,7 @@ export function opensOnNewest(panel: PanelSnapshot, sorted: readonly Thread[]): 
     panel.view === 'thread' &&
     panel.threadId === null &&
     !panel.hasRequest &&
-    panel.messageCount === 0;
+    panel.messageCount === 0 &&
+    !panel.fresh;
   return empty ? (sorted[sorted.length - 1] ?? null) : null;
 }

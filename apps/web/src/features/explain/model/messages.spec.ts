@@ -81,3 +81,31 @@ describe('mergeStored: the live stream and the stored thread', () => {
     expect(fromStored(answer1, 'q').failure).toBeNull();
   });
 });
+
+describe('mergeStored: a read that lands before the run event names the ids (review 1.5)', () => {
+  it('leaves out the stored copy of the turn in flight, so it is never shown twice', () => {
+    const askInFlight = live(ask2, { key: 'm9', messageId: null });
+    const answerInFlight = live(answer2, {
+      key: 'm10',
+      messageId: null,
+      status: 'streaming',
+      text: 'The paper',
+      citations: [],
+    });
+    const serverMid = [ask1, answer1, ask2, { ...answer2, status: 'streaming' as const }];
+    const merged = mergeStored(
+      [fromStored(ask1, ''), fromStored(answer1, 'q'), askInFlight, answerInFlight],
+      serverMid,
+    );
+    expect(merged.map((m) => m.key)).toEqual([
+      `s:${ask1.message_id}`,
+      `s:${answer1.message_id}`,
+      'm9',
+      'm10',
+    ]);
+  });
+
+  it('keeps the stored generation, which the passage key is built from', () => {
+    expect(fromStored(answer1, 'q').generation).toBe(answer1.generation);
+  });
+});

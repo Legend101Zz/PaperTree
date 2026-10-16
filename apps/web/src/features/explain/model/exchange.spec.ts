@@ -5,6 +5,8 @@ import { originOf } from './threads';
 import { GOLDEN, goldenMessages } from '../../../../test/fixtures/attention-thread';
 
 import type { ThreadMessage } from './messages';
+import type { Anchor } from '@papertree/anchoring';
+import type { Citation } from '@/lib/api/types';
 
 const origin = originOf(GOLDEN.thread);
 
@@ -142,5 +144,107 @@ describe('exchange building beyond the stored copy', () => {
       'One [b1].',
       'Two\nstill two.',
     ]);
+  });
+});
+
+/** A citation as the live SSE `citations` event sends it: no locator. */
+function unlocated<T extends { citations: readonly Citation[] }>(m: T): T {
+  return { ...m, citations: m.citations.map(({ locator: _l, ...rest }) => rest) };
+}
+
+describe('review fixes (#202 review 1.1, 1.3, 1.6, 1.8)', () => {
+  const answer = goldenMessages()[1] as ThreadMessage;
+  const b1 = answer.citations.find((c) => c.marker === 'b1') as Citation;
+
+  it('a claim whose only handle resolves to nothing is the AI’s own reading, and is counted', () => {
+    // The server counts [b9] as "a marker", so its coverage calls paragraph 1 cited; the client
+    // does not: nothing on screen would mark that claim (DESIGN §4.6).
+    const model = build([
+      {
+        ...answer,
+        text: 'Cited claim [b1].\n\nInvented claim [b9].',
+        citations: [b1],
+        coverage: {
+          passages: 1,
+          citations: 1,
+          unresolved_markers: 1,
+          paragraphs: 2,
+          uncited_paragraphs: [],
+          not_verified: 0,
+        },
+      },
+    ])[0]?.model;
+    expect(model?.body.map((p) => [p.index, p.cited])).toEqual([[0, true]]);
+    expect(model?.uncited.map((p) => p.index)).toEqual([1]);
+    expect(model?.coverage).toEqual({ passages: 1, citations: 1, uncitedParagraphs: 1 });
+    expect(model?.unresolvedMarkers).toBe(1);
+    expect(model?.handleNumbers.has('b9')).toBe(false);
+  });
+
+  it('an unresolved claim between cited ones stays in place, flagged uncited', () => {
+    const model = build([
+      { ...answer, text: 'A [b1].\n\nB [b9].\n\nC [b1].', citations: [b1], coverage: null },
+    ])[0]?.model;
+    expect(model?.body.map((p) => p.cited)).toEqual([true, false, true]);
+    expect(model?.unresolvedMarkers).toBe(1);
+    expect(model?.coverage.uncitedParagraphs).toBe(1);
+  });
+
+  it('a follow-up’s live citations borrow the tabs the thread already placed: no swap', () => {
+    const [first, ask2, second] = goldenMessages().slice(1) as ThreadMessage[];
+    const live = { ...unlocated(second as ThreadMessage), coverage: null };
+    const model = buildExchanges([first as ThreadMessage, ask2 as ThreadMessage, live], null, {
+      settling: true,
+    })[1]?.model;
+    expect(model?.live).toBe(false);
+    expect(model?.trace.map((r) => [r.n, r.page, r.para, r.where])).toEqual([
+      [1, 1, 1, 'Abstract'],
+      [2, 2, 2, 'Introduction'],
+      [4, 2, 4, 'Introduction'],
+    ]);
+  });
+
+  it('a passage placed nowhere yet is held while its stored read is on the way, then final', () => {
+    const fresh = { ...unlocated(answer), coverage: null };
+    const held = buildExchanges([fresh], null, { settling: true });
+    expect(held[0]?.model?.live).toBe(true);
+    expect(held[0]?.model?.trace).toEqual([]);
+    expect(held[0]?.model?.handleNumbers.size).toBe(0);
+    expect(held[0]?.model?.uncited).toEqual([]);
+    // The read failed or the passage has no locator at all: show what is known, once.
+    const shown = buildExchanges([fresh], null, { settling: false })[0]?.model;
+    expect(shown?.live).toBe(false);
+    expect(shown?.trace.map((r) => [r.page, r.para])).toEqual([
+      [1, null],
+      [2, null],
+      [2, null],
+      [2, null],
+    ]);
+  });
+
+  it('two handles on one block are one passage even without a locator (the server’s key)', () => {
+    const twice = {
+      ...answer,
+      text: 'A [b1]. B [b2].',
+      citations: [
+        { ...unlocated(answer).citations[0]!, marker: 'b1', citation_id: 'c1' },
+        { ...unlocated(answer).citations[0]!, marker: 'b2', citation_id: 'c2', ordinal: 1 },
+      ],
+      coverage: null,
+      generation: 1,
+    };
+    const model = build([twice])[0]?.model;
+    expect(model?.trace.map((r) => r.n)).toEqual([1]);
+    expect(model?.coverage.passages).toBe(1);
+  });
+
+  it('a selection whose Anchor names no page gets no tab, never a guessed "p. 1"', () => {
+    const anchor = GOLDEN.thread.origin_anchor as Anchor;
+    const noPage = {
+      ...anchor,
+      selectors: anchor.selectors.filter((s) => s.type !== 'PageSelector'),
+    };
+    const [first] = buildExchanges(goldenMessages(), { anchor: noPage, quote: 'We propose' });
+    expect(first?.quote).toMatchObject({ page: null });
   });
 });
