@@ -99,11 +99,11 @@ export function Toast({
         {announced}
       </span>
       {onUndo === undefined ? null : (
-        <Button variant="ghost" onClick={onUndo}>
+        <Button variant="secondary" onClick={onUndo}>
           Undo
         </Button>
       )}
-      <Button variant="ghost" onClick={onDismiss}>
+      <Button variant="secondary" onClick={onDismiss}>
         Dismiss
       </Button>
     </div>

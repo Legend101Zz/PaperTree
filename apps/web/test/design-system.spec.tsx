@@ -28,11 +28,53 @@ describe('design-system board', () => {
       'Type',
       'Who wrote this? Marking AI, paper and you',
       'Spacing, radius, elevation, motion',
+      'Components',
     ]) {
       expect(
         screen.getByRole('heading', { name, level: name === 'Design system' ? 1 : 2 }),
       ).toBeTruthy();
     }
+  });
+
+  it('renders at least one instance of each shared component', () => {
+    const { container } = render(<DesignSystemBoard />);
+    for (const selector of [
+      '.pt-button--primary',
+      '.pt-button--secondary',
+      '.pt-button--outline',
+      '.pt-button--danger',
+      '.pt-button--ghost',
+      '.pt-toolbtn',
+      '.pt-textfield',
+      '[role="radiogroup"]',
+      '.pt-notice',
+      '.pt-sprout',
+      '.pt-marker',
+      '.pt-marker--not-verified',
+      '.pt-call-slip',
+      '.pt-ai-slip',
+      '.pt-ai-slip__aside',
+      '.pt-ai-slip__uncited',
+      '.pt-trace-list',
+      '.pt-trace-list .is-lit',
+      '.pt-coverage',
+      '[data-voice="paper"]',
+      '[data-voice="you"]',
+      '[data-voice="ai"]',
+    ]) {
+      expect(container.querySelector(selector), selector).not.toBeNull();
+    }
+    expect(screen.getAllByRole('button', { name: /Transformers/ }).length).toBeGreaterThan(0);
+    // Forced-state demos are pure illustrations: out of the tab order, one live instance kept.
+    for (const el of container.querySelectorAll('[data-state="hover"], [data-state="focus"]')) {
+      expect(el.closest('[inert]'), 'forced state is inert').not.toBeNull();
+    }
+    const live = [...container.querySelectorAll('.pt-button--primary')].filter(
+      (el) => el.closest('[inert]') === null,
+    );
+    expect(live.length).toBe(1);
+    expect(container.querySelectorAll('.pt-thread-swatch').length).toBe(7);
+    expect(screen.getByText('Attention Is All You Need')).toBeTruthy();
   });
 });
 

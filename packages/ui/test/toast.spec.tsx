@@ -64,4 +64,14 @@ describe('Toast', () => {
     render(<Toast message="Saved" onDismiss={() => undefined} bottomInset={88} />);
     expect(screen.getByRole('status').parentElement!.style.insetBlockEnd).toBe('100px');
   });
+
+  it('draws Undo and Dismiss as bordered secondary buttons, not bare text', () => {
+    render(
+      <Toast message="Highlight removed" onUndo={() => undefined} onDismiss={() => undefined} />,
+    );
+    for (const name of ['Undo', 'Dismiss']) {
+      const button = screen.getByRole('button', { name });
+      expect(button.classList.contains('pt-button--secondary')).toBe(true);
+    }
+  });
 });
