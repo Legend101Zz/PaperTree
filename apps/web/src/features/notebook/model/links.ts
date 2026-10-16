@@ -63,8 +63,8 @@ export function itemForAnchor(
  * The paper's board.
  *
  * @param paperId - The paper.
- * @returns `/paper/<id>/canvas` (the board's route keeps its v0.1 name).
+ * @returns `/paper/<id>/board` (#214; the v0.1 `/canvas` route redirects there).
  */
 export function boardHref(paperId: string): string {
-  return `/paper/${encodeURIComponent(paperId)}/canvas`;
+  return `/paper/${encodeURIComponent(paperId)}/board`;
 }

@@ -4,7 +4,7 @@
  *   - Shift-click adds a second card to the selection, so Group is enabled.
  */
 import { expect, test } from '../harness/test';
-import { api, getBoard, seedPaper, tokenInit } from './support';
+import { api, boardTool, getBoard, seedPaper, tokenInit } from './support';
 
 test.use({ actionTimeout: 20_000 });
 
@@ -30,28 +30,30 @@ test('a body click selects the card and Shift-click adds to the selection', asyn
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   await tokenInit(page, token);
-  await page.goto(`/paper/${paperId}/canvas`);
+  await page.goto(`/paper/${paperId}/board`);
   await expect(page.locator('.react-flow__node')).toHaveCount(2);
   await page.waitForTimeout(1500);
 
   const card = (i: number) => page.locator(`.react-flow__node[data-id="${ids[i]}"]`);
-  const group = page.getByRole('button', { name: 'Group', exact: true });
-  const del = page.getByRole('button', { name: 'Delete', exact: true });
+  // #214: Group ("Frame selected cards") and Delete are in "More board tools"; a press on a card
+  // closes the menu, and each check opens it again.
+  const group = () => boardTool(page, 'Frame selected cards');
+  const del = () => boardTool(page, 'Delete');
 
-  await expect(del).toBeDisabled();
+  await expect(await del()).toBeDisabled();
   await card(0).getByText('note body 0').click();
   await expect(card(0)).toHaveClass(/selected/);
-  await expect(del).toBeEnabled();
-  await expect(group).toBeDisabled();
+  await expect(await del()).toBeEnabled();
+  await expect(await group()).toBeDisabled();
 
   await card(1)
     .getByText('note body 1')
     .click({ modifiers: ['Shift'] });
   await expect(card(0)).toHaveClass(/selected/);
   await expect(card(1)).toHaveClass(/selected/);
-  await expect(group).toBeEnabled();
+  await expect(await group()).toBeEnabled();
 
-  await group.click();
+  await (await group()).click();
   await expect
     .poll(async () => (await getBoard(stack.apiUrl, token, paperId)).nodes.length)
     .toBe(3);
@@ -77,15 +79,15 @@ test('a click that reaches only the card body still selects the card', async ({
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   await tokenInit(page, token);
-  await page.goto(`/paper/${paperId}/canvas`);
+  await page.goto(`/paper/${paperId}/board`);
   await expect(page.locator('.react-flow__node')).toHaveCount(1);
   await page.waitForTimeout(1500);
   const card = page.locator(`.react-flow__node[data-id="${id}"]`);
-  const del = page.getByRole('button', { name: 'Delete', exact: true });
   // A bare click event on the body text (no pointer-down before it).
   await card.getByText('The second paragraph').dispatchEvent('click', { bubbles: true });
   await expect(card).toHaveClass(/selected/);
-  await expect(del).toBeEnabled();
+  await expect(await boardTool(page, 'Delete')).toBeEnabled(); // #214: in "More board tools"
+  await page.keyboard.press('Escape');
   // Real mouse: clear on the empty pane, then click the blank lower corner of the card.
   await page.mouse.click(900, 700);
   await expect(card).not.toHaveClass(/selected/);

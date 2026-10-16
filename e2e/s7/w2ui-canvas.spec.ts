@@ -2,9 +2,9 @@
  * W2UI #141, the canvas should-fixes on the real stack (api + worker + faux agent + web):
  *
  *   - the API refuses oversized cards, labels, coordinates and zoom (422 naming the field);
- *   - the same passage sent twice makes ONE card and says "Already on your canvas";
+ *   - the same passage sent twice makes ONE card and says "Already on your board";
  *   - on a phone the first view is the WHOLE board, "Fit all" is visible, in-card controls keep a
- *     40 px hit area and the group name is 40 px tall;
+ *     40 px hit area and the frame name is 40 px tall;
  *   - a stale-version refusal names the card (by its server text) and clears itself.
  *
  * Screenshots go to PAPERTREE_E2E_SHOTS and are looked at by the author.
@@ -12,6 +12,7 @@
 import { expect, test } from '../harness/test';
 import {
   api,
+  boardTool,
   drag,
   getBoard,
   pointsFor,
@@ -146,7 +147,7 @@ test('a phone opens on the whole board; controls are tappable; the group name is
     });
     const page = await context.newPage();
     await tokenInit(page, token);
-    await page.goto(`/paper/${paperId}/canvas`);
+    await page.goto(`/paper/${paperId}/board`);
     await expect(page.locator('.react-flow__node')).toHaveCount(4);
     await page.waitForTimeout(1200);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
@@ -172,8 +173,9 @@ test('a phone opens on the whole board; controls are tappable; the group name is
     await expect(fit).toBeVisible();
     const fb = await fit.boundingBox();
     expect(fb!.height).toBeGreaterThanOrEqual(40);
-    await page.locator('.react-flow__controls-zoomin').tap();
-    await page.locator('.react-flow__controls-zoomin').tap();
+    // #214: the zoom is in "More board tools" on a phone.
+    await (await boardTool(page, 'Zoom in')).tap();
+    await (await boardTool(page, 'Zoom in')).tap();
     await page.waitForTimeout(500);
     await fit.tap();
     await page.waitForTimeout(800);
@@ -219,9 +221,9 @@ test('a phone opens on the whole board; controls are tappable; the group name is
     for (const p of probes)
       expect(p.missed, `hit area of ${p.node} at zoom ${String(zoom)}`).toEqual([]);
 
-    // The group name input is >= 40 px tall on screen (the board fits at a zoom >= 0.3).
+    // The frame name input is >= 40 px tall on screen (the board fits at a zoom >= 0.3).
     expect(zoom).toBeGreaterThanOrEqual(0.3);
-    const input = await page.getByLabel('Group name').boundingBox();
+    const input = await page.getByLabel('Frame name').boundingBox();
     expect(input!.height).toBeGreaterThanOrEqual(39.5);
     console.log(
       `[w2ui] phone ${theme}: zoom ${zoom.toFixed(3)}, group input ${input!.height.toFixed(1)} px`,
@@ -254,7 +256,7 @@ test('a stale-version refusal names the card and clears itself', async ({
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   await tokenInit(page, token);
-  await page.goto(`/paper/${paperId}/canvas`);
+  await page.goto(`/paper/${paperId}/board`);
   await expect(page.locator('.react-flow__node')).toHaveCount(1);
   await page.waitForTimeout(1200);
   // Somewhere else changes the card: the page's copy of its version is now stale.

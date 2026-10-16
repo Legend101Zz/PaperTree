@@ -1,7 +1,6 @@
 /**
  * S7: `sendToCanvas` creates the excerpt / explanation node (with the Anchor, never a bare block id),
- * places it clear of the existing nodes, and shows a toast with a link to the board ("Open board" for
- * a passage, #203; "Open canvas" for an answer until the S6d sweep). A failure
+ * places it clear of the existing nodes, and shows a toast with an "Open board" link (#214). A failure
  * rejects. The API module is the only stub.
  */
 import { cleanup } from '@testing-library/react';
@@ -84,7 +83,7 @@ describe('sendToCanvas', () => {
     const link = document.querySelector<HTMLAnchorElement>('[data-testid="canvas-toast"] a');
     // #203: the toolbar says "Send to board", and its toast agrees.
     expect(link?.textContent).toBe('Open board');
-    expect(link?.getAttribute('href')).toBe(`/paper/${PAPER}/canvas`);
+    expect(link?.getAttribute('href')).toBe(`/paper/${PAPER}/board`);
   });
 
   it('places the new node clear of the nodes already on the board', async () => {
@@ -194,7 +193,7 @@ describe('sendToCanvas', () => {
       );
       const toast = document.querySelector('[data-testid="canvas-toast"]')!;
       expect(toast.textContent).toContain('Already on your board');
-      expect(toast.querySelector('a')?.getAttribute('href')).toBe(`/paper/${PAPER}/canvas`);
+      expect(toast.querySelector('a')?.getAttribute('href')).toBe(`/paper/${PAPER}/board`);
       expect(toast.querySelector('a')?.textContent).toBe('Open board');
     });
 

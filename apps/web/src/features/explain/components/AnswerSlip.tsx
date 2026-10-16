@@ -6,7 +6,7 @@
  * The interface's own words sit around the AI's: in the slip's source line on the tab row (the
  * model, the working label while it streams, "Stopped · M3" after Stop, as `AiSlip`'s model line
  * always has) and outside the slip: Stop (frame 04b), the typed caret, the usage line and Send to
- * canvas on a footer that continues the slip, the note after Stop with Retry (04c), a designed
+ * board on a footer that continues the slip, the note after Stop with Retry (04c), a designed
  * failure (the daily-cap card among them), a refused Retry's note, and, for an answer that opened
  * folded, its two-line preview with Show.
  */

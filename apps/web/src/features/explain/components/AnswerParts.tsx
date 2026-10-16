@@ -3,7 +3,7 @@
 /**
  * The small interface pieces around one AI answer (#204), split out of `AnswerSlip`: Stop on the
  * tab row (sticky, so a long answer never scrolls it away), the note after Stop with Retry, the fold
- * row, Send to canvas and the skeleton. Focus hands over Stop → Retry → Stop through `FocusHandoff`,
+ * row, Send to board and the skeleton. Focus hands over Stop → Retry → Stop through `FocusHandoff`,
  * so a keyboard reader never falls back to `<body>`.
  */
 import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
@@ -123,11 +123,11 @@ export interface SendToCanvasProps {
   readonly onSend: () => Promise<void>;
 }
 
-/** Send to canvas, saying when it is sending, sent, or failed. */
+/** Send to board, saying when it is sending, sent, or failed. */
 export function SendToCanvas({ onSend }: SendToCanvasProps): ReactNode {
   const [send, setSend] = useState<SendState>('idle');
   const label =
-    send === 'sending' ? 'Sending…' : send === 'sent' ? 'Sent to canvas' : 'Send to canvas';
+    send === 'sending' ? 'Sending…' : send === 'sent' ? 'Sent to board' : 'Send to board';
   return (
     <div className="pt-explain__actions">
       <button
@@ -146,7 +146,7 @@ export function SendToCanvas({ onSend }: SendToCanvasProps): ReactNode {
       </button>
       {send === 'failed' ? (
         <span className="pt-explain__note" role="alert">
-          Couldn&apos;t send this to the canvas. Try again.
+          Couldn&apos;t send this to the board. Try again.
         </span>
       ) : null}
     </div>

@@ -1,6 +1,6 @@
 /**
  * Keyboard: nodes are focusable with a visible ring, Enter selects, arrows nudge (ONE PATCH after
- * the debounce, however many presses), Delete removes. And "Back to paper" is the way out.
+ * the debounce, however many presses), Delete removes. And "Back to the paper" is the way out.
  */
 import { expect, test } from '../harness/test';
 import { api, getBoard, recordApi, seedPaper, tokenInit } from './support';
@@ -27,7 +27,7 @@ test('canvas by keyboard', async ({ browser, stack }) => {
   const page = await context.newPage();
   await tokenInit(page, token);
   const calls = recordApi(page, stack.apiUrl);
-  await page.goto(`/paper/${paperId}/canvas`);
+  await page.goto(`/paper/${paperId}/board`);
   await expect(page.locator('.react-flow__node')).toHaveCount(2);
   await page.waitForTimeout(1500);
 
@@ -67,9 +67,15 @@ test('canvas by keyboard', async ({ browser, stack }) => {
   expect(calls.filter((c) => c.startsWith('DELETE /boards/'))).toHaveLength(0);
 
   calls.length = 0;
+  // The board is read back once the server has ANSWERED the DELETE: a request that has only
+  // started can lose the race to that read under load (1 in 3 at load ~22, #214 review).
+  const deleted = page.waitForResponse(
+    (r) => r.request().method() === 'DELETE' && r.url().endsWith(`/nodes/${ids[0]!}`),
+  );
   await page.keyboard.press('Delete');
   await expect(page.locator('.react-flow__node')).toHaveCount(1);
-  await expect.poll(() => calls.filter((c) => c.startsWith('DELETE /boards/')).length).toBe(1);
+  expect((await deleted).status()).toBe(204);
+  expect(calls.filter((c) => c.startsWith('DELETE /boards/'))).toHaveLength(1);
   expect((await getBoard(stack.apiUrl, token, paperId)).nodes.map((n) => n.node_id)).toEqual([
     ids[1],
   ]);
@@ -87,7 +93,7 @@ test('canvas by keyboard', async ({ browser, stack }) => {
   expect(restored).toEqual([...ids].sort());
 
   // The way out.
-  await page.getByRole('link', { name: 'Back to paper' }).focus();
+  await page.getByRole('link', { name: 'Back to the paper' }).focus();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/read`));
   await context.close();

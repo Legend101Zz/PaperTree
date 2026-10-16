@@ -37,6 +37,11 @@ export interface KeyboardLink {
   readonly walking: boolean;
   /** For the stage's `onKeyDown`: L on a focused card starts a thread from it. */
   readonly onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
+  /**
+   * Start a thread from a card as L does, from outside the board (the toolbar's Thread, #214);
+   * Escape gives focus back to whatever had it.
+   */
+  readonly start: (nodeId: string) => void;
 }
 
 /** The targets a keyboard link walks, fixed when it starts, and the highlighted one. */
@@ -164,6 +169,21 @@ export function useKeyboardLink(
     };
   }, [walk, fromId, fromPort, stage, cancel, setPending, say]);
 
+  /** A thread from the card's first brass pin; `from` gets focus back on Escape. */
+  const startFrom = useCallback(
+    (id: string, from: HTMLElement | null) => {
+      const node = nodes.find((n) => n.id === id);
+      const port = node === undefined ? undefined : PIN_TABLE[node.data.node.kind].out[0];
+      if (port === undefined) {
+        refuse(stop(`${nameOf(id)} has no brass pin to start a thread from`));
+        return;
+      }
+      origin.current = from;
+      startLink(id, port);
+    },
+    [nodes, nameOf, refuse, startLink],
+  );
+
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLElement>) => {
       const card = event.target as HTMLElement;
@@ -172,19 +192,22 @@ export function useKeyboardLink(
       const isL = event.code === 'KeyL' || event.key === 'l' || event.key === 'L';
       if (!isL || !plain || linking !== null) return;
       if (!card.classList.contains('react-flow__node')) return; // typing in a card, not on it
-      const id = card.getAttribute('data-id') ?? '';
-      const node = nodes.find((n) => n.id === id);
-      const port = node === undefined ? undefined : PIN_TABLE[node.data.node.kind].out[0];
       event.preventDefault();
-      if (port === undefined) {
-        refuse(stop(`${nameOf(id)} has no brass pin to start a thread from`));
-        return;
-      }
-      origin.current = card;
-      startLink(id, port);
+      startFrom(card.getAttribute('data-id') ?? '', card);
     },
-    [linking, nodes, nameOf, refuse, startLink],
+    [linking, startFrom],
   );
 
-  return { target, walking: walk !== null, onKeyDown };
+  const start = useCallback(
+    (nodeId: string) => {
+      if (linking !== null) return;
+      startFrom(
+        nodeId,
+        document.activeElement instanceof HTMLElement ? document.activeElement : null,
+      );
+    },
+    [linking, startFrom],
+  );
+
+  return { target, walking: walk !== null, onKeyDown, start };
 }

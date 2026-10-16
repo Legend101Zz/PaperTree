@@ -158,27 +158,27 @@ describe('Ask: a streamed answer with markers, a usage line and nothing raw', ()
     expect(screen.getByText('What does that mean?')).toBeTruthy();
   });
 
-  it('Send to canvas calls the context action with the message id and reports a failure', async () => {
+  it('Send to board calls the context action with the message id and reports a failure', async () => {
     installFetch({ [THREADS]: (_c, signal) => sseResponse(answerFrames(), { signal }) });
     render(<Harness />);
     await ask();
-    const button = await screen.findByRole('button', { name: 'Send to canvas' });
+    const button = await screen.findByRole('button', { name: 'Send to board' });
     fireEvent.click(button);
     await waitFor(() =>
       expect(sendToCanvas).toHaveBeenCalledWith({ kind: 'explanation', messageId: 'msg_a1' }),
     );
-    await screen.findByRole('button', { name: 'Sent to canvas' });
+    await screen.findByRole('button', { name: 'Sent to board' });
   });
 
-  it('Send to canvas failing is said in a sentence, with the button usable again', async () => {
+  it('Send to board failing is said in a sentence, with the button usable again', async () => {
     sendToCanvas.mockRejectedValueOnce(new Error('boom'));
     installFetch({ [THREADS]: (_c, signal) => sseResponse(answerFrames(), { signal }) });
     render(<Harness />);
     await ask();
-    fireEvent.click(await screen.findByRole('button', { name: 'Send to canvas' }));
-    await screen.findByText("Couldn't send this to the canvas. Try again.");
+    fireEvent.click(await screen.findByRole('button', { name: 'Send to board' }));
+    await screen.findByText("Couldn't send this to the board. Try again.");
     expect(
-      (screen.getByRole('button', { name: 'Send to canvas' }) as HTMLButtonElement).disabled,
+      (screen.getByRole('button', { name: 'Send to board' }) as HTMLButtonElement).disabled,
     ).toBe(false);
   });
 });

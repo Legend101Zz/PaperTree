@@ -15,7 +15,7 @@ calls no API. The page count comes from pdf.js (`usePdfDocument`) or, before the
 - **Explain** is a `ToolbarButton` toggle (`aria-pressed`). The workspace hands its ref to `ExplainPanel`
   (`toggleRef`), so the panel draws no floating "Ask AI" launcher and gives focus back to the toggle when it
   closes. From 768 px the drawer opens under the 56 px header, which stays the full window width.
-- **Board** is a link to `/paper/<id>/canvas` (the route keeps its v0.1 name; the wording is the design's).
+- **Board** is a link to `/paper/<id>/board` (#214; the v0.1 `/paper/<id>/canvas` redirects there).
 - **Zoom** is − / select / +; "Fit width" is one of the select's options, as frame 04 draws it.
 
 ## The selection toolbar (#203)

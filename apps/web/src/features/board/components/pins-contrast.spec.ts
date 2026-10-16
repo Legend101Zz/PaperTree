@@ -3,6 +3,7 @@
  * (WCAG 1.4.11; #212 review N5). This reads the pin rules in `threads.css` (each pin is edged in
  * `--pt-pin-ring`) and computes that token against `--pt-linen` from `@papertree/ui`'s styles,
  * in daylight and by lamplight. The brass fill alone is checked too, to show why the rim exists.
+ * The minimap's blocks and frames, and the frames on the board, are held to the same 3:1 (#214).
  */
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -15,6 +16,7 @@ const THREADS_CSS = readFileSync(resolve(HERE, 'threads.css'), 'utf8').replace(
   /\/\*[\s\S]*?\*\//g,
   '',
 );
+const CHROME_CSS = readFileSync(resolve(HERE, 'chrome.css'), 'utf8');
 const TOKENS = readFileSync(resolve(HERE, '../../../../../../packages/ui/src/styles.css'), 'utf8');
 
 /** `--name: #rrggbb` from the first block whose selector is exactly `selector`. */
@@ -72,4 +74,35 @@ describe('port pins reach 3:1 against the board', () => {
     expect(TOKENS).toContain('--pt-brass: linear-gradient(180deg, #e7cf8e, #b8944c 45%');
     expect(contrast('#b8944c', token(':root', '--pt-linen'))).toBeLessThan(3);
   });
+});
+
+/** `a` mixed with `b` in sRGB, as `color-mix(in srgb, a p%, b)` draws it. */
+function mix(a: string, p: number, b: string): string {
+  const ch = (hex: string, i: number): number =>
+    Number.parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+  const out = [0, 1, 2].map((i) => Math.round((ch(a, i) * p + ch(b, i) * (100 - p)) / 100));
+  return `#${out.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
+describe('the minimap and the frames reach 3:1 (#214)', () => {
+  it('draws the map ground, the block edges and the frames from the tokens checked below', () => {
+    expect(CHROME_CSS).toContain(
+      '--pt-bc-map-ground: color-mix(in srgb, var(--pt-linen) 94%, var(--pt-ink));',
+    );
+    expect(CHROME_CSS).toMatch(/\.pt-map__card \{[^}]*stroke: var\(--pt-ink-muted\)/);
+    expect(CHROME_CSS).toMatch(/\.pt-map__slip \{[^}]*stroke: var\(--pt-tab\)/);
+    expect(CHROME_CSS).toMatch(/\.pt-map__frame \{[^}]*stroke: var\(--pt-ink-muted\)/);
+    expect(CHROME_CSS).toMatch(/\.pt-frame \{[^}]*dashed var\(--pt-frame-outline\)/);
+  });
+
+  for (const [scheme, selector] of Object.entries(SCHEMES)) {
+    it(`${scheme}: card, slip, frame and view edges on the map; frame outlines on linen`, () => {
+      const linen = token(selector, '--pt-linen');
+      const ground = mix(linen, 94, token(selector, '--pt-ink'));
+      for (const edge of ['--pt-ink-muted', '--pt-tab', '--pt-focus']) {
+        expect(contrast(token(selector, edge), ground), edge).toBeGreaterThanOrEqual(3);
+      }
+      expect(contrast(token(selector, '--pt-frame-outline'), linen)).toBeGreaterThanOrEqual(3);
+    });
+  }
 });

@@ -3,7 +3,7 @@
  * marker run. Neither the panel after a real Stop nor a stored partial text may show raw `[b42, ...`.
  */
 import { expect, test } from '../harness/test';
-import { api } from '../s7/support';
+import { api, boardTool } from '../s7/support';
 import {
   drag,
   pointsFor,
@@ -83,9 +83,9 @@ test.describe('S9-4: a stopped answer never shows raw citation markers', () => {
     await page.screenshot({ path: shot('s9-stopped-answer-1440.png') });
 
     // ── a STORED partial: the same text a cancelled run leaves, on a canvas card ──
-    // "Send to canvas" makes an explanation card from the first (complete) answer; its stored body
+    // "Send to board" makes an explanation card from the first (complete) answer; its stored body
     // is then replaced by the partial text, and the card is read back from the API.
-    await panel.getByRole('button', { name: 'Send to canvas' }).first().click();
+    await panel.getByRole('button', { name: 'Send to board' }).first().click();
     type Board = {
       board: { board_id: string };
       nodes: { node_id: string; kind: string; version: number }[];
@@ -108,7 +108,7 @@ test.describe('S9-4: a stopped answer never shows raw citation markers', () => {
       { version: card!.version, body: PARTIAL },
     );
     expect(patched.status, JSON.stringify(patched.json)).toBe(200);
-    await page.goto(`/paper/${paperId}/canvas`);
+    await page.goto(`/paper/${paperId}/board`);
     const node = page.locator(`.react-flow__node[data-id="${card!.node_id}"]`);
     await expect(node).toBeVisible();
     const shown = (await node.innerText()).replace(/\s+/g, ' ');
@@ -119,6 +119,6 @@ test.describe('S9-4: a stopped answer never shows raw citation markers', () => {
     // S9 canvas nit: a click on the BODY text of an explanation card selects it (Delete turns on).
     await node.getByText('Each cell predicts boxes').click();
     await expect(node).toHaveClass(/selected/);
-    await expect(page.getByRole('button', { name: 'Delete', exact: true })).toBeEnabled();
+    await expect(await boardTool(page, 'Delete')).toBeEnabled(); // #214: in "More board tools"
   });
 });
