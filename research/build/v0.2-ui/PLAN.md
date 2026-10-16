@@ -35,13 +35,14 @@ smoke per AI slice (topics, explain/trace, diagrams), total ≤ $1.00 (estimate)
 
 | # | Slice | Contents |
 | --- | --- | --- |
-| 0006 | S2a | `reading_state`; `users.display_name` |
-| 0007 | S2b | `topics`, `paper_topics` |
-| 0008 | S3 | `paper_plate` (an Anchor on the chosen figure) |
-| 0009 | S5a | `notebook_pages`, `notebook_items`, `notebook_strokes` |
-| 0010 | S6a | rebuild `canvas_nodes` (kinds `question`, `notebook`, `diagram`; `source_page_id`, `source_diagram_id`); `canvas_edges.from_port`/`to_port` |
-| 0011 | S7a | rebuild `ai_threads`/`ai_runs` (kind `diagram`, `topic`); `ai_diagram_parts`; `ai_messages.diagram_json` |
+| 0006 | S2a #192 | `reading_state`; `users.display_name` |
+| 0007 | S5a #206 | `notebook_pages`, `notebook_items`, `notebook_strokes` |
+| 0008 | S6a #211 | rebuild `canvas_nodes` (kinds `question`, `notebook`, `diagram`; `source_page_id`, `source_diagram_id`); `canvas_edges.from_port`/`to_port` |
+| 0009 | S2b #193 | `topics`, `paper_topics` |
+| 0010 | S3 #200 | `paper_plate` (an Anchor on the chosen figure) |
+| 0011 | S7a #216 | rebuild `ai_threads`/`ai_runs` (kinds `diagram`, `topic`); `ai_diagram_parts`; `ai_messages.diagram_json` |
 
+Renumbered on 2026-10-16 to the order the slices actually merge (backend slices that need no UI first).
 If a slice ahead in this table has not merged when a later one is ready, the later one waits or takes the next
 free number at merge time (an applied migration file is immutable, so numbers are fixed only once merged).
 
@@ -73,7 +74,7 @@ formatted.
 | Issue | Slice | What | Frames | Owns | Size |
 | --- | --- | --- | --- | --- | --- |
 | S2a #192 | reading state + library facts (backend) | migration 0006; `PUT /papers/{id}/reading-state`; `LibraryPaper` gains `reading`, `year` (from the arXiv id), `arxiv_id`, `arxiv_category` (from the stamp, no re-parse), `thread_count`, `has_summary`; `users.display_name` + `PATCH /auth/me`; the progress rule as one tested function; the reader writes reading state (debounced) | 01, 01d, 02 | `infrastructure/migrations/0006_*`, `papertree_db/library.py`, `routers/papers.py`, `routers/auth.py`, `schemas.py` (library + me), reader position writer | M |
-| S2b #193 | topics (backend + Flash suggestion) | migration 0007; `GET/POST/PATCH/DELETE /topics`; `GET /papers/{id}/topic-suggestion`, `PUT/DELETE /papers/{id}/topic`; deterministic suggestion from the arXiv category and the person's topics; a short `topic` run (Flash) only when that finds nothing; faux scenario; **one live smoke** | 01, 02, 03 | `0007_*`, `papertree_db/topics.py`, `routers/topics.py`, agent `topic` kind + prompt | M |
+| S2b #193 | topics (backend + Flash suggestion) | migration 0009; `GET/POST/PATCH/DELETE /topics`; `GET /papers/{id}/topic-suggestion`, `PUT/DELETE /papers/{id}/topic`; deterministic suggestion from the arXiv category and the person's topics; a short `topic` run (Flash) only when that finds nothing; faux scenario; **one live smoke** | 01, 02, 03 | `0009_*`, `papertree_db/topics.py`, `routers/topics.py`, agent `topic` kind + prompt | M |
 | S2c #194 | library links (backend) | `GET /library/links`: citation matches by arXiv id or normalised title, each labelled with how it matched; board links later | 01e | `routers/library.py`, `papertree_db/library.py` (links) | S |
 | S2d #195 | the shelf | `features/library/`: header (sprout, central search with "/", Add papers, Aa with the theme switch, account), "Your library" + stats + "N need a look", view tabs, Arrange by; shelf layout model (rows per topic, spine width from pages capped at 48, states: ribbon, kraft, torn label); walnut plank, brass label holders; search filters in place (dim, never reorder, "2 of 24 match"); keyboard along the shelf (←/→, Enter, Esc, /); catalogue card in the band above; drop PDFs anywhere; upload progress surface | 01, 00 | `apps/web/src/features/library/`, `app/dashboard/` | M (may split d1/d2) |
 | S2e #196 | reading now, empty, few, many | Reading-now strip with Continue; empty library (01b); face-out covers at ≤ 12 papers (01c); per-topic rows with "+n more" past ~40 (01f) | 01, 01b, 01c, 01f | `features/library/` | M |
@@ -85,7 +86,7 @@ formatted.
 
 | Issue | Slice | What | Frames | Owns | Size |
 | --- | --- | --- | --- | --- | --- |
-| S3 #200 | pull out and open | Enter lifts the spine and turns the book out (02a), Enter again opens the spread (02): bookplate ("From the library of …", from `display_name`; asks once when unset), right page with topic + source line, year · arXiv · pages · figures, title, byline, the abstract with its tab, reading state, counts, **Read**, Summary, "Put it back (Esc)"; migration 0008 + `GET /papers/{id}/figures` + `PUT/DELETE /papers/{id}/plate` for "Use Figure 1 as the plate"; CSS 3D + WAAPI motion with the reduced path | 02a, 02, 11 | `features/book/`, `0008_*`, figures/plate routes | M (may split backend) |
+| S3 #200 | pull out and open | Enter lifts the spine and turns the book out (02a), Enter again opens the spread (02): bookplate ("From the library of …", from `display_name`; asks once when unset), right page with topic + source line, year · arXiv · pages · figures, title, byline, the abstract with its tab, reading state, counts, **Read**, Summary, "Put it back (Esc)"; migration 0010 + `GET /papers/{id}/figures` + `PUT/DELETE /papers/{id}/plate` for "Use Figure 1 as the plate"; CSS 3D + WAAPI motion with the reduced path | 02a, 02, 11 | `features/book/`, `0010_*`, figures/plate routes | M (may split backend) |
 
 ### S4 · Reader and explain (ask → answer → trace)
 
@@ -101,7 +102,7 @@ formatted.
 
 | Issue | Slice | What | Frames | Owns | Size |
 | --- | --- | --- | --- | --- | --- |
-| S5a #206 | notebook (backend) | migration 0009; pages, items, strokes API; Dive in seeds a page from an exchange (call slip, AI slip, one quote card per distinct citation Anchor); counts; search over typed text, quotes and the AI slip; tests on a real parse | 05 | `0009_*`, `papertree_db/notebook.py`, `routers/notebooks.py` | M |
+| S5a #206 | notebook (backend) | migration 0007; pages, items, strokes API; Dive in seeds a page from an exchange (call slip, AI slip, one quote card per distinct citation Anchor); counts; search over typed text, quotes and the AI slip; tests on a real parse | 05 | `0007_*`, `papertree_db/notebook.py`, `routers/notebooks.py` | M |
 | S5b #207 | notebook model | page units and transform, stroke encoding (varint deltas + pressure), stroke → outline (perfect-freehand), lasso selection and stroke-eraser hit-testing, the notebook undo stack: pure, vitest, benchmarks | 05 | `features/notebook/model/` | M |
 | S5c #208 | the page | `features/notebook/`: bound dot-grid page, the exchange block (call slip, AI slip, trace as quote cards), typed text, stickies, shapes, the five templates, the side panel (Paper, On this page, On the board), Back to the paper / Send page to board / Open board | 05 | `features/notebook/components/`, `app/paper/[id]/notebook/` | M |
 | S5d #209 | ink and lasso | pen, highlighter, stroke eraser, lasso with its menu (Ask about this, Make sticky, Send to board, Copy, Delete), nibs EF/F/M, colours, undo/redo; pointer events with pen mode; ink latency measured | 05, 05b | `features/notebook/` (ink) | M |
@@ -111,7 +112,7 @@ formatted.
 
 | Issue | Slice | What | Frames | Owns | Size |
 | --- | --- | --- | --- | --- | --- |
-| S6a #211 | board (backend) | migration 0010 (rebuild): node kinds `question`, `notebook`, `diagram` (+ source ids), edge ports with a compatibility table (422 on a wrong pin); notebook-page card counts on read | 06 | `0010_*`, `papertree_db/canvas.py`, `routers/boards.py` | M |
+| S6a #211 | board (backend) | migration 0008 (rebuild): node kinds `question`, `notebook`, `diagram` (+ source ids), edge ports with a compatibility table (422 on a wrong pin); notebook-page card counts on read | 06 | `0008_*`, `papertree_db/canvas.py`, `routers/boards.py` | M |
 | S6b #212 | cards, pins and threads | `features/board/`: index cards (passage, note, question, notebook page, diagram) and AI-slip cards; brass port pins (evidence in, question in, claim out, answer out) with `isValidConnection`; the seven threads (colour + stitch/glyph + paper tag); the legend; "Board" naming | 06, 00 | `features/board/` (nodes, edges) | M |
 | S6c #213 | Link as | the picker at the midpoint (4 + 3 grid, keys 1–7, header naming both ends, Esc = plain link) and a keyboard way to start and finish a link | 06, 09c, 11 | `features/board/` (picker, keyboard) | M |
 | S6d #214 | frames, minimap, toolbar, empty | frames as dashed outlines with paper tags (from groups), the minimap, the toolbar (Select, Add note, Add frame, Thread L, Fit all, zoom), the empty board (06b), phone first-open readable | 06, 06b | `features/board/` | M |
