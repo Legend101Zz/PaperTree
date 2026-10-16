@@ -122,7 +122,7 @@ test.describe('S5d — ink on the notebook page', () => {
       await page.mouse.move(x, y, { steps: 6 });
     }
     await page.mouse.up();
-    const menu = page.getByRole('menu', { name: 'Lasso selection, 1 item' });
+    const menu = page.getByRole('menu', { name: 'Lasso selection: 1 note' });
     await expect(menu).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Ask about this' })).toBeFocused();
     await page.screenshot({ path: shot('s5d-lasso-menu-1440.png') });
@@ -136,6 +136,11 @@ test.describe('S5d — ink on the notebook page', () => {
         await page.setViewportSize({ width, height });
         await scheme(page, colorScheme);
         await expect(menu).toBeVisible();
+        // All five actions on screen, at a phone's width too (the menu moves to the screen's foot).
+        const at = (await menu.boundingBox())!;
+        expect(at.x).toBeGreaterThanOrEqual(0);
+        expect(at.x + at.width).toBeLessThanOrEqual(width);
+        expect(at.y + at.height).toBeLessThanOrEqual(height);
         expect(await axeSerious(page), `${String(width)} ${colorScheme}`).toEqual([]);
       }
     }
@@ -179,6 +184,9 @@ async function scheme(page: Page, colorScheme: 'light' | 'dark'): Promise<void> 
     getComputedStyle(document.documentElement).getPropertyValue('--pt-page').trim(),
   );
   expect(ground).toBe(colorScheme === 'dark' ? '#2c251f' : '#faf8f3');
+  // Buttons fade their background (`.pt-button` transition): axe must see the colours they settle
+  // on, not a frame of the fade (a loaded machine showed a false contrast failure there).
+  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
 }
 
 /** axe-core's serious and critical violations on the page (axe from apps/web's devDependencies). */

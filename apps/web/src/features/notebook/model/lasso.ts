@@ -27,7 +27,7 @@ export interface Picked {
   readonly typed: readonly (TextItem | StickyItem)[];
   /** Items the person may delete from here: notes, stickies, shapes. */
   readonly deletable: readonly string[];
-  /** How many things the lasso holds, for the menu's name. */
+  /** How many things the lasso holds (strokes and items). */
   readonly count: number;
 }
 
@@ -59,6 +59,24 @@ export function picked(state: NotebookState, selection: LassoSelection): Picked 
     deletable: items.filter((i) => i.kind !== 'exchange' && i.kind !== 'quote').map((i) => i.id),
     count: selection.strokeIds.length + items.length,
   };
+}
+
+/**
+ * The menu's name: what the lasso holds, counted by kind (a stroke is not an "item").
+ *
+ * @param p - What the lasso picked up.
+ * @returns For example `Lasso selection: 1 note, 7 strokes`.
+ */
+export function selectionName(p: Picked): string {
+  const n = (count: number, one: string, many: string): string =>
+    `${String(count)} ${count === 1 ? one : many}`;
+  const other = p.count - p.typed.length - p.strokeIds.length;
+  const parts = [
+    p.typed.length > 0 ? n(p.typed.length, 'note', 'notes') : null,
+    p.strokeIds.length > 0 ? n(p.strokeIds.length, 'stroke', 'strokes') : null,
+    other > 0 ? n(other, 'other thing', 'other things') : null,
+  ].filter((part): part is string => part !== null);
+  return `Lasso selection: ${parts.join(', ')}`;
 }
 
 /**

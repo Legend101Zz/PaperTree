@@ -4,7 +4,8 @@
  * A closed lasso on the page (S5d, #209, frame 05): its dashed loop, drawn over the items, and its
  * menu just under it. Both sit outside the page's scaled layer (the loop is scaled inside its own
  * SVG), so the menu keeps its own size on a small page and never scales with it. A loop in the
- * page's right half hangs its menu from its right edge, so the menu never runs off the page.
+ * page's right half hangs its menu from its right edge, so the menu never runs off the page; on a
+ * phone the menu sits at the foot of the screen (`notebook.css`).
  */
 import { LassoMenu } from './LassoMenu';
 import { boundsOf } from '../model/hitTest';
@@ -14,7 +15,7 @@ import { PAGE_WIDTH } from '../model/page';
 
 import type { LassoMenuProps } from './LassoMenu';
 import type { Vec2 } from '../model/page';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 /** Props for `LassoLayer`. */
 export interface LassoLayerProps extends LassoMenuProps {
@@ -27,11 +28,14 @@ export interface LassoLayerProps extends LassoMenuProps {
 /** The closed loop and its menu. */
 export function LassoLayer({ path, scale, ...menu }: LassoLayerProps): ReactNode {
   const box = boundsOf(path);
-  const top = (TITLE_BAND + box.y1) * scale + 12;
-  const at =
-    box.x0 > PAGE_WIDTH / 2
-      ? { right: Math.max(0, (PAGE_WIDTH - box.x1) * scale), top }
-      : { left: BINDING + Math.max(0, box.x0) * scale, top };
+  const px = (n: number): string => `${String(n)}px`;
+  // Custom properties, not insets: a phone's stylesheet puts the menu at the screen's foot instead.
+  const at: CSSProperties & Record<`--pt-lasso-${string}`, string> = {
+    '--pt-lasso-top': px((TITLE_BAND + box.y1) * scale + 12),
+    ...(box.x0 > PAGE_WIDTH / 2
+      ? { '--pt-lasso-right': px(Math.max(0, (PAGE_WIDTH - box.x1) * scale)) }
+      : { '--pt-lasso-left': px(BINDING + Math.max(0, box.x0) * scale) }),
+  };
   return (
     <>
       <svg

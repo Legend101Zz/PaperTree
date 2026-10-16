@@ -111,10 +111,13 @@ and the tablet and phone layouts are S5e (#210).
 - The lasso (`hooks/useLasso.ts`, `model/lasso.ts`, `components/LassoLayer.tsx` + `LassoMenu.tsx`):
   a loop drawn over the items is tested against the page as SHOWN (`shown`, by the same rule as the
   ink layers) with S5b's `lassoSelect`; its dashed loop stays and the menu opens under it with the
-  keyboard on its first action (arrows, Home, End; Escape closes it and keeps the lasso). The AI
-  cannot read handwriting, so **Ask about this**, **Make sticky**, **Send to board** and **Copy**
-  take only the typed notes and stickies inside the loop; an action whose need is missing stays in
-  place, disabled, and says why. **Ask about this** hands the words to the reader in this tab's
+  keyboard on its first action (arrows, Home, End; Escape closes it and keeps the lasso). Its name
+  counts what it holds by kind ("Lasso selection: 1 note, 7 strokes", `selectionName`). On a phone
+  (600 px and below) the menu sits at the foot of the screen, wrapping, since the page is wider
+  than the screen there. The AI cannot read handwriting, so **Ask about this**, **Make sticky**,
+  **Send to board** and **Copy** take only the typed notes and stickies inside the loop; an action
+  whose need is missing stays in place, disabled, and says why: to a screen reader with it
+  (`aria-describedby`), and on screen under the menu while it has the keyboard or the pointer. **Ask about this** hands the words to the reader in this tab's
   `sessionStorage` under a short key (`model/askHandoff.ts`; only when storage is blocked do they
   travel in the URL), and the reader (`components/AskFromNotebook.tsx`) takes them once: it drops
   the key from the URL, starts a NEW ask (`startFresh`) with the words as the explain controller's
@@ -124,7 +127,8 @@ and the tablet and phone layouts are S5e (#210).
   sticky (the notes go, one sticky with their words takes the first's place) and **Delete**
   (strokes and the person's items; never the exchange or a quote card) are each ONE history
   command (`batch`), so one undo puts everything back. Send to board makes one note card from the
-  words (ink is not sent); Copy puts them on the clipboard.
+  words, below everything already on the board (read first if this page has not read it; ink is
+  not sent); Copy puts them on the clipboard.
 - Ink latency (`model/latency.ts`, probe `apps/web/scripts/ink-latency.mjs`): pointer-event times
   paired with the frame that wrote the live path and with the next frame; measured in a production
   build by scripted 200-point strokes. The probe's header says what each number does and does not

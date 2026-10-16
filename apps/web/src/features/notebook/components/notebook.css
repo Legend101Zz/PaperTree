@@ -741,6 +741,7 @@
 
 .pt-nb-lasso-at {
   position: absolute;
+  inset: var(--pt-lasso-top) var(--pt-lasso-right, auto) auto var(--pt-lasso-left, auto);
   z-index: 50;
 }
 
@@ -790,4 +791,30 @@
 .pt-nb-lasso-menu [aria-disabled='true'] {
   color: var(--pt-ink-muted);
   cursor: not-allowed;
+}
+
+/* Why a disabled action is not offered, for the eyes (screen readers get aria-describedby). */
+.pt-nb-lasso-why {
+  max-inline-size: 360px;
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  font: 13px / 18px var(--pt-font-ai);
+  color: var(--pt-ink-2);
+  background: var(--pt-e2-fill);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-menu);
+}
+
+/* A phone: the page is wider than the screen, so the menu leaves the page for the screen's foot,
+   where all five actions fit, wrapping if they must (the lasso itself is S5e's to rethink). */
+@media (max-width: 600px) {
+  .pt-nb-lasso-at {
+    position: fixed;
+    inset: auto 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .pt-nb-lasso-menu {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
 }

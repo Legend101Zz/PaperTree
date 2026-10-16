@@ -55,7 +55,7 @@ const CARD_MAX = 20_000;
  * Puts the typed words on the board as one note card, below everything already there.
  *
  * @param paperId - The paper whose board it is.
- * @param board - The board as last read (undefined: unknown, the card goes at the top).
+ * @param board - The board as read (undefined: it could not be read, the card goes at the top).
  * @param text - The typed words.
  * @returns Whether the card was created, and whether the words had to be cut to fit it.
  */
@@ -111,7 +111,11 @@ export function useLasso(paperId: string, model: NotebookPageModel, active: bool
     setSelection(got.count === 0 ? null : { path, picked: got });
   };
   const toBoard = async (text: string): Promise<void> => {
-    const { sent, cut } = await sendCard(paperId, client.getQueryData(boardKey(paperId)), text);
+    // Below everything already there: the board is read first when this page has not read it.
+    const board = await client
+      .ensureQueryData({ queryKey: boardKey(paperId), queryFn: () => boardsApi.get(paperId) })
+      .catch(() => undefined);
+    const { sent, cut } = await sendCard(paperId, board, text);
     if (!sent) {
       say('The note card could not be sent to the board. Try again.');
       return;

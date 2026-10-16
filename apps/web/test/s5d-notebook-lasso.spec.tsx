@@ -109,7 +109,7 @@ describe('the lasso menu', () => {
     await mount();
     const menu = lasso(AROUND_BOTH);
     expect(screen.getByRole('button', { name: 'Lasso' }).getAttribute('aria-pressed')).toBe('true');
-    expect(menu.getAttribute('aria-label')).toBe('Lasso selection, 2 items');
+    expect(menu.getAttribute('aria-label')).toBe('Lasso selection: 1 note, 1 stroke');
     expect(document.activeElement?.textContent).toBe('Ask about this');
     expect(
       within(menu)
@@ -130,8 +130,19 @@ describe('the lasso menu', () => {
     const why = document.getElementById(item('Ask about this').getAttribute('aria-describedby')!);
     expect(why?.textContent).toMatch(/the AI cannot read handwriting/);
     expect(document.activeElement?.textContent).toBe('Delete');
+    expect(document.querySelector('.pt-nb-lasso-why')).toBeNull();
+    // A sighted keyboard user who reaches a disabled action sees why, not only a screen reader.
+    fireEvent.keyDown(menu, { key: 'ArrowLeft' });
+    expect(document.activeElement?.textContent).toBe('Copy');
+    expect(document.querySelector('.pt-nb-lasso-why')?.textContent).toMatch(
+      /handwriting is not copied/,
+    );
     fireEvent.click(item('Ask about this'));
     expect(push).not.toHaveBeenCalled();
+    expect(document.querySelector('.pt-nb-lasso-why')?.textContent).toMatch(
+      /the AI cannot read handwriting/,
+    );
+    expect(menu.getAttribute('aria-label')).toBe('Lasso selection: 1 stroke');
   });
 
   it('moves along by arrow keys, and Escape closes it but keeps the lasso in the hand', async () => {
@@ -154,13 +165,15 @@ describe('the lasso menu', () => {
 
 describe('where the menu sits', () => {
   const menu = {
-    count: 1,
+    name: 'Lasso selection: 1 note',
     enabled: { ask: true, sticky: true, board: true, copy: true, delete: true },
     onAction: vi.fn(),
     onClose: vi.fn(),
   };
-  const at = (): CSSStyleDeclaration =>
-    document.querySelector<HTMLElement>('.pt-nb-lasso-at')!.style;
+  const at = (): string[] => {
+    const style = document.querySelector<HTMLElement>('.pt-nb-lasso-at')!.style;
+    return ['left', 'right', 'top'].map((k) => style.getPropertyValue(`--pt-lasso-${k}`));
+  };
 
   it('hangs from the loop’s left edge in the page’s left half, just under the loop', () => {
     render(
@@ -175,7 +188,7 @@ describe('where the menu sits', () => {
         ]}
       />,
     );
-    expect([at().left, at().right, at().top]).toEqual(['140px', '', '308px']);
+    expect(at()).toEqual(['140px', '', '308px']);
   });
 
   it('hangs from the loop’s right edge in the right half, so it never runs off the page', () => {
@@ -191,7 +204,7 @@ describe('where the menu sits', () => {
         ]}
       />,
     );
-    expect([at().left, at().right]).toEqual(['', '20px']);
+    expect(at().slice(0, 2)).toEqual(['', '20px']);
   });
 });
 

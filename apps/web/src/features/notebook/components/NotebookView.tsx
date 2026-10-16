@@ -31,7 +31,7 @@ import { usePageEditing } from '../hooks/usePageEditing';
 import { usePageScale } from '../hooks/usePageScale';
 import { usePageTemplate } from '../hooks/usePageTemplate';
 import { dayAndTime, originPlace } from '../model/exchange';
-import { enabledActions } from '../model/lasso';
+import { enabledActions, selectionName } from '../model/lasso';
 import { boardHref, itemForAnchor, readerHref } from '../model/links';
 import { parseExchangeBody } from '../model/wire';
 
@@ -215,7 +215,7 @@ export function NotebookView({ paperId, pageId }: NotebookViewProps): ReactNode 
                   ? null
                   : {
                       path: lasso.selection.path,
-                      count: picked.count,
+                      name: selectionName(picked),
                       enabled: enabledActions(picked),
                       onAction: lasso.act,
                       onClose: lasso.close,
