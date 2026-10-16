@@ -13,6 +13,7 @@ import { TOUCH_TARGET } from '@/components/library/primitives';
 
 import { useTouchTargets } from '../hooks/useTouchTargets';
 import { ARRANGEMENTS, type Arrangement, type LibraryStats } from '../model/shelf';
+import { statsLine } from '../model/states';
 
 import type { ReactNode } from 'react';
 
@@ -20,20 +21,13 @@ import type { ReactNode } from 'react';
 export interface LibraryTitleProps {
   /** The counts, or null while the library has not loaded (no number is shown until then). */
   readonly stats: LibraryStats | null;
+  /** The shelf is laid out in rows (a library at scale): the stats line drops the pages. */
+  readonly atScale?: boolean;
   /** The "need a look" filter is on. */
   readonly needALookOnly: boolean;
   readonly onNeedALook: (on: boolean) => void;
   readonly arrangement: Arrangement;
   readonly onArrange: (next: Arrangement) => void;
-}
-
-/** "24 papers · 6 topics · 3 reading now · 484 pages", leaving out what is zero and unknown. */
-function statsParts(stats: LibraryStats): readonly [number, string][] {
-  const parts: [number, string][] = [[stats.papers, stats.papers === 1 ? 'paper' : 'papers']];
-  if (stats.topics > 0) parts.push([stats.topics, stats.topics === 1 ? 'topic' : 'topics']);
-  if (stats.readingNow > 0) parts.push([stats.readingNow, 'reading now']);
-  if (stats.pages > 0) parts.push([stats.pages, stats.pages === 1 ? 'page' : 'pages']);
-  return parts;
 }
 
 const VIEWS = [
@@ -50,6 +44,7 @@ const VIEWS = [
  */
 export function LibraryTitle({
   stats,
+  atScale = false,
   needALookOnly,
   onNeedALook,
   arrangement,
@@ -69,7 +64,7 @@ export function LibraryTitle({
           <p className="pt-libtitle__stats">No papers yet</p>
         ) : (
           <p className="pt-libtitle__stats">
-            {statsParts(stats).map(([count, noun], index) => (
+            {statsLine(stats, atScale).map(([count, noun], index) => (
               <span key={noun}>
                 {index === 0 ? null : (
                   <span className="pt-libtitle__sep" aria-hidden="true">

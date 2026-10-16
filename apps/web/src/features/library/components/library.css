@@ -121,7 +121,8 @@
   padding-inline: 2px;
 }
 
-.pt-shelf[data-searching='true'] .pt-plank__holder {
+.pt-shelf[data-searching='true'] .pt-plank__holder,
+.pt-rows[data-searching='true'] .pt-plank__holder {
   opacity: 0.7; /* the holder's ink stays above 5:1 on its card */
   filter: saturate(0.5);
 }
@@ -293,6 +294,7 @@
 .pt-spine__title {
   font-family: var(--pt-font-paper);
   line-height: 1.1;
+  text-overflow: ellipsis;
 }
 
 .pt-spine__title--wrap {
@@ -1255,6 +1257,105 @@
   margin-block-start: 8px;
 }
 
+/* ── a library at scale (#196, frame 01f): a plank per row, scrolling sideways ─────────── */
+
+.pt-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+
+.pt-rows__spines {
+  display: flex;
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  gap: 2px;
+  align-items: flex-end;
+  padding: 24px 2px 54px; /* a lifted spine above; below, the plank the ribbons hang over */
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+/* The "+n more" bookend ends an overflowing row in place of the brass one, sticky at its right
+   edge (96 + 8 px: `MORE_WIDTH` in ShelfRow.tsx). */
+.pt-rows__more {
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  display: flex;
+  flex: none;
+  inline-size: 96px;
+  block-size: 132px;
+  margin-inline-start: 8px;
+  padding: 6px;
+  cursor: pointer;
+  background: var(--pt-bookend);
+  border: 0;
+  border-radius: 3px 3px 0 0;
+  /* The ground above the bookend hides the taller spines running on beneath it. */
+  box-shadow:
+    0 -60px 0 var(--pt-ground),
+    -6px 0 12px -4px var(--pt-spine-cast);
+}
+
+/* The spines run on under the bookend: they fade into the ground before it, as in 01f. */
+.pt-rows__more::before {
+  position: absolute;
+  inset-block: -56px 0;
+  right: calc(100% + 8px);
+  inline-size: 72px;
+  pointer-events: none;
+  content: '';
+  background: linear-gradient(90deg, transparent, var(--pt-ground) 90%);
+}
+
+.pt-rows__spines:has(.pt-rows__more) ~ .pt-plank__bookend--end {
+  display: none;
+}
+
+.pt-rows__more:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+.pt-rows__card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--pt-paper-label-ink);
+  background: var(--pt-paper-label);
+  box-shadow: inset 0 1px 2px var(--pt-holder-inset);
+}
+
+.pt-rows__count {
+  font: 30px/1 var(--pt-font-display);
+}
+
+.pt-rows__holder {
+  position: absolute;
+  bottom: 0;
+  left: 40px;
+  z-index: 4;
+  display: flex;
+}
+
+/* Paper-coloured on the walnut: 7:1 and more in both schemes. */
+.pt-rows__shown {
+  position: absolute;
+  right: 160px;
+  bottom: 17px;
+  z-index: 4;
+  font-size: 13.5px;
+  color: var(--pt-paper-label);
+}
+
 @media (max-width: 900px) {
   .pt-libhead {
     display: flex;
@@ -1306,7 +1407,8 @@
 }
 
 @media (max-width: 560px) {
-  .pt-addpapers__label {
+  .pt-addpapers__label,
+  .pt-rows__shown {
     display: none;
   }
 }

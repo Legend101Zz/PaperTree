@@ -148,6 +148,7 @@ export function LibraryView(): ReactNode {
         )}
         <LibraryTitle
           stats={stats}
+          atScale={shelfLayout(books.length) === 'rows'}
           needALookOnly={filtered}
           onNeedALook={setNeedALookOnly}
           arrangement={arrangement}

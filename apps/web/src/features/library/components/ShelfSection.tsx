@@ -1,6 +1,6 @@
 /**
- * ShelfSection: the shelf with its band above and its hints below (#195); spines, or face-out
- * covers for a short library (#196). Owns taking a book down and putting it back: the catalogue
+ * ShelfSection: the shelf with its band above and its hints below (#195); spines, face-out covers
+ * for a short library, or a plank per row at scale (#196). Owns taking a book down and putting it back: the catalogue
  * card stands in the band, pointing at the open spine, and Esc (on the card or the shelf)
  * returns focus to that spine. It also decides where focus goes when the control that had it
  * disappears: after Retry (to Read), after Delete (to the next spine, else the previous, else Add
@@ -17,6 +17,7 @@ import { shelfLayout } from '../model/states';
 import { CatalogueCard } from './CatalogueCard';
 import { CoverShelf } from './CoverShelf';
 import { Shelf } from './Shelf';
+import { ShelfRows } from './ShelfRows';
 import { ShelfHints } from './ShelfHints';
 
 import type { LibraryBook } from '../hooks/useLibrary';
@@ -71,7 +72,9 @@ export function ShelfSection({
     () => ({ focusedId: focus.focusedId, onFocusBook: focus.setFocusedId }),
     [focus.focusedId, focus.setFocusedId],
   );
-  const faceOut = shelfLayout(books.length) === 'face-out';
+  const layout = shelfLayout(books.length);
+  const faceOut = layout === 'face-out';
+  const OnPlanks = layout === 'rows' ? ShelfRows : Shelf;
   const cardId = useId();
   const openBook = books.find((book) => book.id === openId) ?? null;
   const shownId = openBook === null ? null : openBook.id;
@@ -157,7 +160,7 @@ export function ShelfSection({
           onContinue={onContinue}
         />
       ) : (
-        <Shelf
+        <OnPlanks
           papers={books}
           arrangement={arrangement}
           matches={matches}

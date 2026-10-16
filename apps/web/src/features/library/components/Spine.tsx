@@ -39,6 +39,8 @@ export interface SpineProps {
   readonly onActivate: (paperId: string) => void;
   /** Keeps the roving tab stop on the spine that last had focus. */
   readonly onFocusSpine: (paperId: string) => void;
+  /** The shorter spine of a library at scale (frame 01f). */
+  readonly compact?: boolean;
 }
 
 /** How the face is drawn: gilt on cloth, a paper label, a kraft wrap or a torn label. */
@@ -57,26 +59,33 @@ const MEAN_ADVANCE_EM = 0.5;
  * Frame 01's sizes: 17 px for a word, 14 px for a phrase, 12.5 px when that does not fit the
  * spine, else 12 px on two lines.
  */
-function titleSize(short: string, room: number): { readonly size: number; readonly wrap: boolean } {
+function titleSize(
+  short: string,
+  room: number,
+  compact: boolean,
+): { readonly size: number; readonly wrap: boolean } {
   if (short.length <= 4) return { size: 17, wrap: false };
   for (const size of [14, 12.5]) {
     if (short.length * size * MEAN_ADVANCE_EM <= room) return { size, wrap: false };
   }
-  return { size: 12, wrap: true };
+  // A short spine at scale has no room for a second line: the title ends in an ellipsis.
+  return { size: 12, wrap: !compact };
 }
 
 /** The title (and, on a wide gilt spine, the author line) in the middle of the spine. */
 function SpineFace({
   paper,
   face,
+  compact,
 }: {
   readonly paper: ShelfPaper;
   readonly face: Face;
+  readonly compact: boolean;
 }): ReactNode {
   const short = spineTitle(paper.title);
   // The vertical title's length is bounded by the spine, less its bands, year and padding.
-  const room = spineHeight(paper.id) - 88;
-  const { size, wrap } = titleSize(short, room);
+  const room = spineHeight(paper.id, compact) - 88;
+  const { size, wrap } = titleSize(short, room, compact);
   const title = (
     <span
       className={`pt-spine__title${wrap ? ' pt-spine__title--wrap' : ''}`}
@@ -121,6 +130,7 @@ export const Spine = memo(function Spine({
   cardId,
   onActivate,
   onFocusSpine,
+  compact = false,
 }: SpineProps): ReactNode {
   const state = spineState(paper);
   const face = faceOf(state, paper);
@@ -133,7 +143,7 @@ export const Spine = memo(function Spine({
       className={`pt-spine pt-spine--${face}`}
       style={{
         width: spineWidth(paper.pageCount),
-        height: spineHeight(paper.id),
+        height: spineHeight(paper.id, compact),
         ...(face === 'kraft' ? {} : { backgroundColor: `var(--pt-cloth-${clothFor(paper)})` }),
       }}
       tabIndex={tabIndex}
@@ -150,7 +160,7 @@ export const Spine = memo(function Spine({
       <span className="pt-spine__inner" aria-hidden="true">
         <span className={face === 'gilt' ? 'pt-spine__band' : 'pt-spine__gap'} />
         <span className="pt-spine__middle">
-          <SpineFace paper={paper} face={face} />
+          <SpineFace paper={paper} face={face} compact={compact} />
         </span>
         {year === null ? null : <span className="pt-spine__year">{year}</span>}
         <span className={face === 'gilt' ? 'pt-spine__band' : 'pt-spine__gap'} />

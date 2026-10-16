@@ -2,7 +2,7 @@
  * useRovingShelf: the shelf's one tab stop, shared by the spines (#195) and the face-out covers
  * (#196) so both keep the same keyboard model: ←/→ walk the books (no wrap), Home and End jump to
  * the ends, Esc puts an open book back. Keys pressed on a cover's caption controls (Continue,
- * Open) are theirs, not the shelf's.
+ * Open) or a row's "+n more" bookend are theirs, not the shelf's.
  */
 'use client';
 
@@ -61,7 +61,8 @@ export function useRovingShelf(
         onPutBack();
         return;
       }
-      if (event.target instanceof Element && event.target.closest('[data-cover-caption]')) return;
+      const own = '[data-cover-caption], [data-row-more]';
+      if (event.target instanceof Element && event.target.closest(own)) return;
       const next = shelfStep(stop === null ? 0 : order.indexOf(stop), event.key, order.length);
       const id = next === null ? undefined : order[next];
       if (id === undefined) return;

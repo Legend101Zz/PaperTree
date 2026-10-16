@@ -64,9 +64,11 @@ export interface ShelfGroup<P extends ShelfPaper = ShelfPaper> {
 export const SPINE_MAX_WIDTH = 48;
 /** Used while the page count is unknown (see `spineWidth`). */
 export const SPINE_DEFAULT_WIDTH = 40;
-/** Frame 01's spine heights run 262–318 px; heights are decoration and carry no data. */
+/** Frame 01's spine heights run 262–318 px, 01f's shorter rows 150–179; decoration, not data. */
 const SPINE_HEIGHT_MIN = 262;
 const SPINE_HEIGHT_SPAN = 57;
+const COMPACT_HEIGHT_MIN = 150;
+const COMPACT_HEIGHT_SPAN = 30;
 
 /**
  * Which picture a spine shows. Processing wins over reading: a paper being read by the parser is
@@ -109,10 +111,14 @@ function fnv1a(text: string): number {
  * across reloads. A hash of the id; never encodes anything about the paper.
  *
  * @param id - The paper id.
- * @returns Height in CSS px, 262–318.
+ * @param compact - The shorter spines of a library at scale (frame 01f).
+ * @returns Height in CSS px, 262–318 (150–179 compact).
  */
-export function spineHeight(id: string): number {
-  return SPINE_HEIGHT_MIN + (fnv1a(id) % SPINE_HEIGHT_SPAN);
+export function spineHeight(id: string, compact = false): number {
+  const hash = fnv1a(id);
+  return compact
+    ? COMPACT_HEIGHT_MIN + (hash % COMPACT_HEIGHT_SPAN)
+    : SPINE_HEIGHT_MIN + (hash % SPINE_HEIGHT_SPAN);
 }
 
 /**

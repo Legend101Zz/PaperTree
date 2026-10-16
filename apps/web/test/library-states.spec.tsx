@@ -394,3 +394,93 @@ describe('Continue keeps a later place this browser holds (review S1)', () => {
     expect(push).toHaveBeenCalledWith('/paper/ppr_c0/read');
   });
 });
+
+describe('a library at scale (01f)', () => {
+  // happy-dom lays nothing out: give each sideways row 600 px of room and let scrollTo move it.
+  const width = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+  beforeEach(() => {
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.classList.contains('pt-rows__spines') ? 600 : 0;
+      },
+    });
+  });
+  afterEach(() => {
+    if (width !== undefined) Object.defineProperty(HTMLElement.prototype, 'clientWidth', width);
+  });
+
+  it('stands each row on its own plank with "N of M shown" and a "+n more" bookend', async () => {
+    await renderLibrary(corpusRows(60));
+    const shelf = screen.getByRole('toolbar', { name: 'Shelf' });
+    expect(shelf.classList.contains('pt-rows')).toBe(true);
+    expect(books(shelf)).toHaveLength(60);
+    const row = within(shelf).getByRole('group', { name: 'Unshelved, 60 papers' });
+    const more = within(row).getByRole('button', {
+      name: /^\d+ more in Unshelved, scroll sideways$/,
+    });
+    const after = Number(/^(\d+)/.exec(more.getAttribute('aria-label') ?? '')?.[1]);
+    const shown = Number(/(\d+) of 60 shown/.exec(row.textContent ?? '')?.[1]);
+    expect(after).toBeGreaterThan(0);
+    expect(shown).toBeGreaterThan(0);
+    expect(shown + after).toBeLessThanOrEqual(60);
+    // The stats line drops the pages at scale.
+    const stats = document.querySelector('.pt-libtitle__stats')?.textContent ?? '';
+    expect(stats.replace(/\s+/g, ' ')).toBe('60 papers');
+  });
+
+  it('"+n more" is a tab stop that brings the next spine into view and focus', async () => {
+    await renderLibrary(corpusRows(60));
+    const shelf = screen.getByRole('toolbar', { name: 'Shelf' });
+    const more = within(shelf).getByRole('button', { name: /more in Unshelved/ });
+    expect(more.getAttribute('tabindex')).toBeNull(); // a plain button: in the tab order
+    const after = Number(/^(\d+)/.exec(more.getAttribute('aria-label') ?? '')?.[1]);
+    const scroller = shelf.querySelector<HTMLElement>('.pt-rows__spines') as HTMLElement;
+    const scrollTo = vi.fn();
+    scroller.scrollTo = scrollTo as unknown as HTMLElement['scrollTo'];
+    more.focus();
+    // Its arrows are its own; Enter on a button is a click.
+    fireEvent.keyDown(more, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(more);
+    fireEvent.click(more);
+    const firstHidden = books(shelf)[60 - after];
+    expect(document.activeElement).toBe(firstHidden);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    // Focus took the tab stop with it: Tab back into the shelf lands there.
+    expect(books(shelf).filter((b) => b.tabIndex === 0)).toEqual([firstHidden]);
+  });
+
+  it('a search counts the matches inside the overflow, in the header and on the bookend', async () => {
+    await renderLibrary(corpusRows(60));
+    const shelf = screen.getByRole('toolbar', { name: 'Shelf' });
+    const more = within(shelf).getByRole('button', { name: /more in Unshelved/ });
+    const after = Number(/^(\d+)/.exec(more.getAttribute('aria-label') ?? '')?.[1]);
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search the library' }), {
+      target: { value: 'atten' },
+    });
+    // Attention and FlashAttention, in each of the corpus's repeats: 60 rows hold 10 of them.
+    const lit = books(shelf).filter((b) => b.dataset['match'] === 'true');
+    expect(lit).toHaveLength(10);
+    expect(screen.getByText('10 of 60')).toBeTruthy();
+    const here = lit.filter((b) => books(shelf).indexOf(b) >= 60 - after).length;
+    expect(here).toBeGreaterThan(0);
+    const words = `${String(here)} ${here === 1 ? 'match' : 'matches'} here`;
+    expect(more.textContent).toContain(words);
+    expect(more.getAttribute('aria-label')).toBe(
+      `${String(after)} more in Unshelved, ${words}, scroll sideways`,
+    );
+  });
+
+  it('keeps the shelf one tab stop across rows, and axe finds nothing', async () => {
+    const { container } = await renderLibrary(
+      corpusRows(60).map((row, i) => ({ ...row, year: 2014 + (i % 3) })),
+    );
+    fireEvent.change(screen.getByRole('combobox', { name: 'Arrange by' }), {
+      target: { value: 'year' },
+    });
+    const shelf = screen.getByRole('toolbar', { name: 'Shelf' });
+    expect(within(shelf).getAllByRole('group')).toHaveLength(3);
+    expect(books(shelf).filter((b) => b.tabIndex === 0)).toHaveLength(1);
+    expect(await axeViolations(container)).toEqual([]);
+  });
+});
