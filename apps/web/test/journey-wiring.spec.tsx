@@ -56,6 +56,7 @@ const REAL_ROW: WirePaper = {
   arxiv_category: null,
   thread_count: 0,
   has_summary: false,
+  topic: null,
 };
 
 describe('D1/D2 — the session survives sign-in', () => {

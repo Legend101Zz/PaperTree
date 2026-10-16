@@ -35,6 +35,8 @@ export type ErrorCode =
   | 'busy'
   | 'stale_version'
   | 'generation_not_found'
+  // #193: a topic name the person already uses (409).
+  | 'topic_exists'
   | 'anchor_incomplete'
   | 'anchor_mismatch'
   | 'budget_exhausted'
@@ -103,6 +105,16 @@ export interface ReadingProgress {
   state: 'reading' | 'finished';
 }
 
+/** The topic the caller ACCEPTED for a paper (#193); an unaccepted offer is not here. */
+interface LibraryTopic {
+  topic_id: string;
+  name: string;
+  cloth: 'transformers' | 'vision' | 'generative' | 'optimization' | 'language' | 'rl' | null;
+  source: 'arxiv_category' | 'manual' | 'model';
+  /** `cs.CL` for `arxiv_category`, the model id for `model`, else null. */
+  source_detail: string | null;
+}
+
 export interface LibraryPaper {
   paper_id: string;
   title: string;
@@ -126,6 +138,8 @@ export interface LibraryPaper {
   arxiv_category: string | null;
   thread_count: number;
   has_summary: boolean;
+  /** v0.2 (#193): the accepted topic, or null (unshelved, or only offered). */
+  topic: LibraryTopic | null;
 }
 
 /** The bibliography entry behind a library link; `index` is zero-based. */

@@ -24,6 +24,15 @@ class PaperNotFound(LookupError):
     """
 
 
+class TopicNotFound(LookupError):
+    """The owner has no topic with that id. Like ``PaperNotFound``, one error for "does not exist"
+    and "belongs to someone else"."""
+
+
+class TopicExists(ValueError):
+    """The owner already has a topic with that name (compared without regard to case)."""
+
+
 class GenerationNotFound(LookupError):
     """That parse generation of the paper was never stored, or has since been deleted."""
 

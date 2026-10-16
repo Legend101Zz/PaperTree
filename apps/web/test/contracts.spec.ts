@@ -184,6 +184,7 @@ const PAPER: LibraryPaper = {
   arxiv_category: 'cs.CV',
   thread_count: 2,
   has_summary: false,
+  topic: null,
 };
 
 const HIGHLIGHT: Highlight = {
@@ -441,6 +442,7 @@ const CODES = {
   busy: true,
   stale_version: true,
   generation_not_found: true,
+  topic_exists: true,
   anchor_incomplete: true,
   anchor_mismatch: true,
   budget_exhausted: true,
