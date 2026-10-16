@@ -128,7 +128,8 @@
 
 /* ── a spine ───────────────────────────────────────────────────────────────────────────── */
 
-.pt-spine {
+.pt-spine,
+.pt-cover {
   position: relative;
   flex: none;
   padding: 0;
@@ -167,17 +168,20 @@
   border-radius: 2px 2px 0 0;
 }
 
-.pt-spine:hover {
+.pt-spine:hover,
+.pt-cover:hover {
   transform: translateY(-4px);
 }
 
-.pt-spine:focus-visible {
+.pt-spine:focus-visible,
+.pt-cover:focus-visible {
   z-index: 2;
   outline: var(--pt-focus-width) solid var(--pt-focus);
   outline-offset: 3px;
 }
 
-.pt-spine[aria-expanded='true'] {
+.pt-spine[aria-expanded='true'],
+.pt-cover[aria-expanded='true'] {
   z-index: 2;
   transform: translateY(-14px);
 }
@@ -187,7 +191,8 @@
  * goes over the cloth, the gilt fades with it, and a paper label keeps 6:1 ink: the label is text
  * someone may still need to read, so it recedes without dropping under 4.5:1 (WCAG 1.4.3).
  */
-.pt-spine::after {
+.pt-spine::after,
+.pt-cover::after {
   position: absolute;
   inset: -3px 0 0;
   pointer-events: none;
@@ -197,11 +202,13 @@
   transition: opacity var(--pt-dur-quick) var(--pt-ease-out);
 }
 
-.pt-spine[data-match='false'] {
+.pt-spine[data-match='false'],
+.pt-cover[data-match='false'] {
   filter: saturate(0.45);
 }
 
-.pt-spine[data-match='false']::after {
+.pt-spine[data-match='false']::after,
+.pt-cover[data-match='false']::after {
   opacity: 0.68;
 }
 
@@ -212,7 +219,9 @@
 
 .pt-spine[data-match='false'] .pt-spine__face,
 .pt-spine[data-match='false'] .pt-spine__year,
-.pt-spine[data-match='false'] .pt-spine__ribbon {
+.pt-spine[data-match='false'] .pt-spine__ribbon,
+.pt-cover--gilt[data-match='false'] .pt-cover__inner,
+.pt-cover[data-match='false'] .pt-cover__ribbon {
   opacity: 0.5;
 }
 
@@ -226,7 +235,8 @@
   color: var(--pt-spine-dim-ink);
 }
 
-.pt-spine[data-match='true'] {
+.pt-spine[data-match='true'],
+.pt-cover[data-match='true'] {
   z-index: 1;
   box-shadow:
     inset 0 0 0 2px var(--pt-paper-label),
@@ -234,7 +244,8 @@
     8px 8px 14px -4px rgb(48 30 16 / 55%);
 }
 
-.pt-spine__inner {
+.pt-spine__inner,
+.pt-cover__inner {
   position: absolute;
   inset: 0;
   z-index: 1; /* above the search veil */
@@ -296,7 +307,8 @@
   text-transform: lowercase;
 }
 
-.pt-spine__year {
+.pt-spine__year,
+.pt-cover__year {
   margin-block-end: 6px;
   font-family: var(--pt-font-you);
   font-size: 11px;
@@ -305,7 +317,9 @@
 
 .pt-spine--gilt .pt-spine__title,
 .pt-spine--gilt .pt-spine__authors,
-.pt-spine--gilt .pt-spine__year {
+.pt-spine--gilt .pt-spine__year,
+.pt-cover--gilt :is(.pt-cover__title, .pt-cover__authors, .pt-cover__year),
+.pt-cover--torn :is(.pt-cover__title, .pt-cover__authors, .pt-cover__year) {
   color: transparent;
   background-image: var(--pt-spine-gilt);
   -webkit-background-clip: text;
@@ -326,7 +340,8 @@
     inset 0 0 0 2.6px rgb(122 90 34 / 50%);
 }
 
-.pt-spine__note {
+.pt-spine__note,
+.pt-cover__note {
   font-family: var(--pt-font-label);
   font-size: 12px;
   letter-spacing: 0.05em;
@@ -343,12 +358,14 @@
   clip-path: polygon(0 0, 100% 0, 100% 89%, 84% 93%, 70% 87%, 52% 96%, 36% 90%, 18% 97%, 0 91%);
 }
 
-.pt-spine__label--torn .pt-spine__note {
+.pt-spine__label--torn .pt-spine__note,
+.pt-cover--torn .pt-cover__note {
   font-weight: 700;
   color: var(--pt-spine-danger);
 }
 
-.pt-spine--kraft {
+.pt-spine--kraft,
+.pt-cover--kraft {
   background-color: var(--pt-kraft);
   background-image:
     linear-gradient(
@@ -384,7 +401,8 @@
   box-shadow: 0 6px 0 -0.5px var(--pt-spine-string);
 }
 
-.pt-spine__ribbon {
+.pt-spine__ribbon,
+.pt-cover__ribbon {
   position: absolute;
   bottom: -50px;
   left: calc(50% - 5px);
@@ -1060,6 +1078,182 @@
   color: var(--pt-ink-2);
 }
 
+/* ── face-out covers (#196, frame 01c): a short library stands its books face-out ───────── */
+
+/* 01c's covers start 64 px under the view row; the card's band grows when a book comes down. */
+.pt-shelfband--faceout .pt-shelfband__band {
+  min-block-size: 56px;
+}
+
+.pt-covers__shelf + .pt-covers__shelf {
+  margin-block-start: 48px;
+}
+
+/* Covers and captions share columns: the captions are inset by the plank's ends
+   (`PLANK_ENDS` in model/states.ts) and both rows space their items evenly. */
+.pt-covers__row,
+.pt-covers__captions {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 36px;
+  justify-content: space-evenly;
+}
+
+.pt-covers__captions {
+  padding: 22px 28px 0;
+}
+
+.pt-covers__slot,
+.pt-covercap {
+  flex: none;
+  inline-size: 264px;
+}
+
+.pt-covers__slot {
+  padding: 16px 0 54px 8px; /* room for a lifted cover above; the plank below */
+}
+
+.pt-cover {
+  inline-size: 224px;
+  block-size: 304px;
+  text-align: start;
+  border-radius: 2px 4px 4px 2px;
+  /* The spine's light budget (sheen peak + weave), so its gilt keeps the tested 4.5:1. */
+  background-image:
+    linear-gradient(135deg, rgb(255 255 255 / var(--pt-spine-sheen-peak)), transparent 45%),
+    repeating-linear-gradient(
+      45deg,
+      rgb(255 255 255 / var(--pt-spine-weave-light)) 0 1px,
+      transparent 1px 3px
+    ),
+    repeating-linear-gradient(-45deg, rgb(0 0 0 / 9%) 0 1px, transparent 1px 3px);
+  box-shadow:
+    inset 6px 0 0 rgb(0 0 0 / 18%),
+    12px 6px 18px -6px var(--pt-spine-cast),
+    3px 0 0 -1px #e9e2d3,
+    4px 1px 0 -1px #cfc4b0;
+}
+
+.pt-cover__inner {
+  align-items: flex-start;
+  padding: 34px 26px 22px 34px;
+}
+
+.pt-cover__frame {
+  position: absolute;
+  inset: 12px 12px 12px 18px;
+  border: 1px solid rgb(232 212 160 / 75%);
+  box-shadow: inset 0 0 0 4px rgb(232 212 160 / 45%);
+}
+
+.pt-cover__title {
+  display: -webkit-box;
+  overflow: hidden;
+  font: 28px/1.05 var(--pt-font-display);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+}
+
+.pt-cover__rule {
+  flex: none;
+  inline-size: 44px;
+  block-size: 1px;
+  margin-block: 16px 12px;
+  background: var(--pt-spine-gilt);
+}
+
+.pt-cover__authors {
+  font: 14px var(--pt-font-label);
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+}
+
+.pt-cover__year {
+  margin-block: auto 0;
+  font-size: 13px;
+}
+
+/* Gilt cannot be read on the Language cloth or on kraft: ink on a paper label instead. */
+.pt-cover--label .pt-cover__inner,
+.pt-cover--kraft .pt-cover__inner {
+  inset: 22px 16px 22px 24px;
+  padding: 18px 16px 14px;
+  background: var(--pt-paper-label);
+  border: 1px solid var(--pt-spine-label-edge);
+}
+
+.pt-cover--label .pt-cover__frame,
+.pt-cover--kraft .pt-cover__frame {
+  display: none;
+}
+
+.pt-cover--torn .pt-cover__note {
+  align-self: flex-start;
+  margin-block-start: 12px;
+  padding: 6px 10px 14px;
+  background: var(--pt-paper-label);
+  clip-path: polygon(0 0, 100% 0, 100% 82%, 80% 92%, 58% 80%, 36% 94%, 16% 84%, 0 92%);
+}
+
+.pt-cover__ribbon {
+  bottom: -56px;
+  left: 150px;
+  block-size: 56px;
+}
+
+.pt-covercap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: 14px;
+  font-variant-numeric: lining-nums;
+  color: var(--pt-ink-2);
+}
+
+/* Zero specificity, so the state line's own margin wins. */
+:where(.pt-covercap) p {
+  margin: 0;
+}
+
+.pt-covercap__title {
+  font: 700 15px/1.35 var(--pt-font-paper);
+  color: var(--pt-ink);
+}
+
+.pt-covercap__meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.pt-covercap__swatch {
+  inline-size: 7px;
+  block-size: 14px;
+}
+
+.pt-covercap__state {
+  margin-block-start: 6px;
+  font-size: 15px;
+  color: var(--pt-ink);
+}
+
+.pt-covercap__progress {
+  display: flex;
+  align-self: stretch;
+  gap: 10px;
+  align-items: center;
+  margin-block: 6px 8px;
+}
+
+.pt-covercap__progress .pt-readnow__rule {
+  flex: 1 1 auto;
+}
+
+.pt-covercap__state + .pt-button {
+  margin-block-start: 8px;
+}
+
 @media (max-width: 900px) {
   .pt-libhead {
     display: flex;
@@ -1117,6 +1311,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .pt-cover,
+  .pt-cover::after,
   .pt-spine,
   .pt-spine::after,
   .pt-spine__face,

@@ -1,9 +1,9 @@
 /**
- * LibraryView: the signed-in library (#195, #196; frames 01, 01b). The compact header (search,
- * Add papers, Aa, account), "Your library" with its stats and "N need a look", the view row with
- * Arrange by, Reading now with Continue, then the shelf with its catalogue card in the band above
- * and the hint row under the plank; an empty library shows the accession slip. PDFs drop anywhere
- * on the page.
+ * LibraryView: the signed-in library (#195, #196; frames 01, 01b, 01c). The compact header
+ * (search, Add papers, Aa, account), "Your library" with its stats and "N need a look", the view
+ * row with Arrange by, Reading now with Continue, then the shelf (face-out covers for a short
+ * library) with its catalogue card in the band above and the hint row under the plank; an empty
+ * library shows the accession slip. PDFs drop anywhere on the page.
  *
  * The data layer is `useLibrary` (polling only while a row is unfinished, Retry, Delete) and the
  * uploads are `useUploadQueue`, both unchanged in behaviour from v0.1. Read goes to
@@ -31,7 +31,7 @@ import {
   needsALook,
   type Arrangement,
 } from '../model/shelf';
-import { readingNow } from '../model/states';
+import { readingNow, shelfLayout } from '../model/states';
 import './library.css';
 import { AccessionSlip } from './AccessionSlip';
 import { DropAnywhere } from './AddPapers';
@@ -85,7 +85,10 @@ export function LibraryView(): ReactNode {
   const filtered = needALookOnly && stats !== null && stats.needALook > 0;
   const shelved = useMemo(() => (filtered ? books.filter(needsALook) : books), [books, filtered]);
   const matches = useMemo(() => matchPapers(shelved, search), [shelved, search]);
-  const reading = useMemo(() => readingNow(books), [books]);
+  // A face-out shelf carries Continue under each cover (frame 01c draws no strip), so the strip
+  // stands above spines only.
+  const faceOut = shelfLayout(shelved.length) === 'face-out';
+  const reading = useMemo(() => (faceOut ? [] : readingNow(books)), [faceOut, books]);
 
   // The filter ends when nothing needs a look any more, so a later upload cannot switch it back
   // on by itself; and a card whose book has left the shelf closes rather than waiting to return.
@@ -180,6 +183,7 @@ export function LibraryView(): ReactNode {
               openId={openId}
               setOpenId={setOpenId}
               onRead={read}
+              onContinue={resume}
               onRetry={retry}
               onDelete={remove}
             />

@@ -1,6 +1,6 @@
 /**
- * The library's states (#196): Reading now with Continue (frame 01) and the empty library's
- * accession slip (01b). Titles and authors are the corpus
+ * The library's states (#196): Reading now with Continue (frame 01), the empty library's accession
+ * slip (01b) and a short library standing face-out (01c). Titles and authors are the corpus
  * papers' own (research/benchmarks/corpus and fresh/pdfs parses), never invented.
  */
 import axe from 'axe-core';
@@ -61,6 +61,34 @@ function row(
   };
 }
 
+const ATTENTION = row('ppr_att', 'Attention Is All You Need', ['Ashish Vaswani', 'Noam Shazeer'], {
+  year: 2017,
+  arxiv_category: 'cs.CL',
+  reading: readingAt(3, 15, '2026-10-12T09:00:00Z'),
+});
+const DDPM = row('ppr_ddpm', 'Denoising Diffusion Probabilistic Models', ['Jonathan Ho'], {
+  page_count: 25,
+  year: 2020,
+  reading: readingAt(8, 25, '2026-10-14T09:00:00Z'),
+});
+const YOLO = row(
+  'ppr_yolo',
+  'You Only Look Once: Unified, Real-Time Object Detection',
+  ['Joseph Redmon', 'Santosh Divvala', 'Ross Girshick'],
+  {
+    page_count: 10,
+    year: 2015,
+    reading: {
+      ...readingAt(9, 10, '2026-10-02T09:00:00Z'),
+      finished_at: '2026-10-02T10:00:00Z',
+      state: 'finished',
+    },
+  },
+);
+const RESNET = row('ppr_res', 'Deep Residual Learning for Image Recognition', ['Kaiming He'], {
+  page_count: 12,
+});
+
 async function renderLibrary(rows: LibraryPaper[]) {
   api.list.mockResolvedValue(rows);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -75,6 +103,11 @@ async function renderLibrary(rows: LibraryPaper[]) {
   );
   return view;
 }
+
+const books = (shelf: HTMLElement) =>
+  within(shelf)
+    .getAllByRole('button')
+    .filter((b) => b.dataset['paperId'] !== undefined);
 
 async function axeViolations(container: Element): Promise<string[]> {
   const results = await axe.run(container, {
@@ -150,8 +183,14 @@ describe('Reading now', () => {
     expect(JSON.parse(window.localStorage.getItem('papertree/reader/ppr_c1') ?? '')).toEqual(saved);
   });
 
-  it('is absent when nothing is in progress', async () => {
+  it('is absent when nothing is in progress, and on a face-out shelf (01c)', async () => {
     await renderLibrary(corpusRows(14));
+    expect(screen.queryByRole('region', { name: 'Reading now' })).toBeNull();
+    cleanup();
+    // A short shelf carries Continue under each cover instead.
+    await renderLibrary([ATTENTION, DDPM]);
+    const stats = document.querySelector('.pt-libtitle__stats')?.textContent ?? '';
+    expect(stats.replace(/\s+/g, ' ')).toContain('2 reading now');
     expect(screen.queryByRole('region', { name: 'Reading now' })).toBeNull();
   });
 });
@@ -193,5 +232,54 @@ describe('the empty library', () => {
     });
     await waitFor(() => expect(api.uploadWithProgress).toHaveBeenCalledTimes(1));
     expect((api.uploadWithProgress.mock.calls[0] as [File])[0].name).toBe('attention.pdf');
+  });
+});
+
+describe('a short library stands face-out', () => {
+  it('draws covers, one tab stop, the arrows walk them and Enter takes one down', async () => {
+    await renderLibrary([ATTENTION, DDPM, YOLO]);
+    const shelf = screen.getByRole('toolbar', { name: 'Shelf' });
+    const covers = books(shelf);
+    expect(covers).toHaveLength(3);
+    expect(covers.every((c) => c.classList.contains('pt-cover'))).toBe(true);
+    expect(covers.filter((c) => c.tabIndex === 0)).toHaveLength(1);
+    covers[0]?.focus();
+    fireEvent.keyDown(covers[0] as HTMLElement, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(covers[1]);
+    fireEvent.keyDown(covers[1] as HTMLElement, { key: 'End' });
+    expect(document.activeElement).toBe(covers[2]);
+    fireEvent.click(covers[2] as HTMLElement);
+    expect(covers[2]?.getAttribute('aria-expanded')).toBe('true');
+    expect(document.querySelector('[data-card-paper-id="ppr_yolo"]')).not.toBeNull();
+  });
+
+  it('puts Continue, or the state and Open, under each cover by its state', async () => {
+    const { container } = await renderLibrary([ATTENTION, YOLO, RESNET]);
+    const shelf = screen.getByRole('toolbar', { name: 'Shelf' });
+    const continueButton = within(shelf).getByRole('button', {
+      name: 'Continue reading Attention Is All You Need',
+    });
+    expect(continueButton.closest('[data-cover-caption]')?.textContent).toMatch(/p\. 4 of 15/);
+    const yolo = within(shelf).getByRole('button', { name: /^Open You Only Look Once/ });
+    expect(yolo.closest('[data-cover-caption]')?.textContent).toMatch(/Read/);
+    const resnet = within(shelf).getByRole('button', { name: /^Open Deep Residual/ });
+    expect(resnet.closest('[data-cover-caption]')?.textContent).toMatch(/Not started/);
+
+    // A caption's controls are ordinary tab stops: the arrows there belong to them.
+    resnet.focus();
+    fireEvent.keyDown(resnet, { key: 'ArrowLeft' });
+    expect(document.activeElement).toBe(resnet);
+    fireEvent.click(resnet);
+    expect(push).toHaveBeenCalledWith('/paper/ppr_res/read');
+    fireEvent.click(continueButton);
+    expect(push).toHaveBeenLastCalledWith('/paper/ppr_att/read');
+    expect(await axeViolations(container)).toEqual([]);
+  });
+
+  it('stands thirteen papers as spines again', async () => {
+    await renderLibrary(corpusRows(13));
+    const spines = books(screen.getByRole('toolbar', { name: 'Shelf' }));
+    expect(spines).toHaveLength(13);
+    expect(spines.every((s) => s.classList.contains('pt-spine'))).toBe(true);
   });
 });

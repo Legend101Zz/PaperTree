@@ -1,11 +1,29 @@
 /**
- * library/model/states — who is "reading now", and where Continue opens the reader (#196,
- * DESIGN.md §1). Pure, so the strip and Continue's reader place are tested without a DOM.
+ * library/model/states — which shelf the library shows, and who is "reading now" (#196, DESIGN.md
+ * §1 and §9). Pure: the strip, the face-out covers and Continue's reader place are decided here so
+ * they can be tested without a DOM. Thresholds are the design's "about 12" (owner may change).
  */
-import { isReadingNow, type ShelfPaper } from './shelf';
+import { arrangeShelf, isReadingNow, type Arrangement, type ShelfPaper } from './shelf';
+
+/** At or below this many papers the books stand face-out as covers (frame 01c). */
+export const FACE_OUT_MAX = 12;
 
 /** The Reading now strip shows at most this many papers on a desktop (frame 01). */
 export const READING_NOW_MAX = 3;
+
+/** How the shelf draws its books: covers face-out, or spines on one plank (frame 01). */
+export type ShelfLayout = 'face-out' | 'spines';
+
+/**
+ * The shelf's layout for a number of papers on it.
+ *
+ * @param count - Papers on the shelf (after the "need a look" filter, never after a search, which
+ *   dims in place and must not re-lay the shelf out while you type).
+ * @returns The layout.
+ */
+export function shelfLayout(count: number): ShelfLayout {
+  return count <= FACE_OUT_MAX ? 'face-out' : 'spines';
+}
 
 /**
  * The Reading now strip: papers with a place that are not finished, most recently opened first.
@@ -27,6 +45,45 @@ export function readingNow<P extends ShelfPaper>(
         a.id.localeCompare(b.id),
     )
     .slice(0, limit);
+}
+
+/** A face-out column: the 224 px cover and the caption under it; at least 36 px between. */
+const COVER_COLUMN = 264;
+const COVER_GAP = 36;
+/** The plank's ends: its padding, the bookends and their margins (`library.css`), both sides. */
+const PLANK_ENDS = 56;
+
+/**
+ * How many covers stand on one plank at a width: four on a 1440 px window, one on a phone.
+ *
+ * @param width - The shelf's width in px (0 before it is measured).
+ * @returns At least 1.
+ */
+export function coversPerRow(width: number): number {
+  const room = width - PLANK_ENDS + COVER_GAP;
+  return Math.max(1, Math.floor(room / (COVER_COLUMN + COVER_GAP)));
+}
+
+/**
+ * The face-out shelf: the arranged order, cut into planks of `perRow`. Grouping labels are not
+ * drawn face-out (each caption names its topic), but the order still follows Arrange by.
+ *
+ * @param papers - The papers on the shelf.
+ * @param arrangement - Arrange by.
+ * @param perRow - From `coversPerRow`.
+ * @returns The planks, each a list of papers, left to right and top to bottom.
+ */
+export function coverRows<P extends ShelfPaper>(
+  papers: readonly P[],
+  arrangement: Arrangement,
+  perRow: number,
+): P[][] {
+  const order = arrangeShelf(papers, arrangement).flatMap((group) => group.papers);
+  const rows: P[][] = [];
+  for (let i = 0; i < order.length; i += Math.max(1, perRow)) {
+    rows.push(order.slice(i, i + Math.max(1, perRow)));
+  }
+  return rows;
 }
 
 const ZOOM_KINDS = new Set(['fit-width', 'fit-page', 'scale']);

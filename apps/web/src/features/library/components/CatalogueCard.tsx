@@ -40,7 +40,7 @@ export interface CatalogueCardProps {
  * @param book - The book.
  * @returns The line.
  */
-function cardStateLine(book: LibraryBook): string {
+export function cardStateLine(book: LibraryBook): string {
   if (book.processing === 'parsing' && book.step !== undefined) {
     return `${book.step.name} - step ${String(book.step.n)} of ${String(book.step.of)}`;
   }
@@ -55,9 +55,12 @@ function cardStateLine(book: LibraryBook): string {
 
 /**
  * "Ashish Vaswani et al. · 2017 · 15 pages": only what the server knows. Full first names on
- * purpose (frame 01's card), so not the spine's surname-only `authorLine`.
+ * purpose (frame 01's card and 01c's captions), so not the spine's surname-only `authorLine`.
+ *
+ * @param book - The book.
+ * @returns The line.
  */
-function metaLine(book: LibraryBook): string {
+export function metaLine(book: LibraryBook): string {
   const [first, second] = book.authors;
   const authors =
     first === undefined

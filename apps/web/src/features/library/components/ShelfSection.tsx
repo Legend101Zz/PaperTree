@@ -1,9 +1,10 @@
 /**
- * ShelfSection: the shelf with its band above and its hints below (#195). Owns taking a book
- * down and putting it back: the catalogue card stands in the band, pointing at the open spine,
- * and Esc (on the card or the shelf) returns focus to that spine. It also decides where focus
- * goes when the control that had it disappears: after Retry (to Read), after Delete (to the next
- * spine, else the previous, else Add papers) and after the key hints are dismissed (to the shelf).
+ * ShelfSection: the shelf with its band above and its hints below (#195); spines, or face-out
+ * covers for a short library (#196). Owns taking a book down and putting it back: the catalogue
+ * card stands in the band, pointing at the open spine, and Esc (on the card or the shelf)
+ * returns focus to that spine. It also decides where focus goes when the control that had it
+ * disappears: after Retry (to Read), after Delete (to the next spine, else the previous, else Add
+ * papers) and after the key hints are dismissed (to the shelf).
  */
 'use client';
 
@@ -11,7 +12,9 @@ import { useCallback, useId, useMemo, useRef } from 'react';
 
 import { useCardPlacement } from '../hooks/useCardPlacement';
 import { arrangeShelf } from '../model/shelf';
+import { shelfLayout } from '../model/states';
 import { CatalogueCard } from './CatalogueCard';
+import { CoverShelf } from './CoverShelf';
 import { Shelf } from './Shelf';
 import { ShelfHints } from './ShelfHints';
 
@@ -36,6 +39,8 @@ export interface ShelfSectionProps {
   readonly openId: string | null;
   readonly setOpenId: Dispatch<SetStateAction<string | null>>;
   readonly onRead: (paperId: string) => void;
+  /** Continue on a face-out cover's caption: the reader at your page. */
+  readonly onContinue: (book: LibraryBook) => void;
   readonly onRetry: (paperId: string) => Promise<unknown>;
   readonly onDelete: (paperId: string) => Promise<unknown>;
 }
@@ -45,7 +50,7 @@ export interface ShelfSectionProps {
  *
  * @example
  * <ShelfSection books={books} arrangement="topic" search="" matches={null} openId={id}
- *   setOpenId={setId} onRead={read} onRetry={retry} onDelete={remove} />
+ *   setOpenId={setId} onRead={read} onContinue={resume} onRetry={retry} onDelete={remove} />
  */
 export function ShelfSection({
   books,
@@ -55,10 +60,12 @@ export function ShelfSection({
   openId,
   setOpenId,
   onRead,
+  onContinue,
   onRetry,
   onDelete,
 }: ShelfSectionProps): ReactNode {
   const band = useRef<HTMLDivElement>(null);
+  const faceOut = shelfLayout(books.length) === 'face-out';
   const cardId = useId();
   const openBook = books.find((book) => book.id === openId) ?? null;
   const shownId = openBook === null ? null : openBook.id;
@@ -103,7 +110,10 @@ export function ShelfSection({
       ?.focus();
   }, []);
   return (
-    <section className="pt-shelfband" aria-label="Your shelf">
+    <section
+      className={`pt-shelfband${faceOut ? ' pt-shelfband--faceout' : ''}`}
+      aria-label="Your shelf"
+    >
       <div className="pt-shelfband__band" ref={band}>
         {openBook === null ? null : (
           // Keyed by paper: a half-armed Delete or a Retry error belongs to one book and must
@@ -120,15 +130,31 @@ export function ShelfSection({
           />
         )}
       </div>
-      <Shelf
-        papers={books}
-        arrangement={arrangement}
-        matches={matches}
-        openId={shownId}
-        cardId={cardId}
-        onActivate={takeDown}
-        onPutBack={putBack}
-      />
+      {/* Face-out below about 12 papers (DESIGN.md §9); the count is the shelf's, so a search,
+          which dims in place, never re-lays it out. */}
+      {faceOut ? (
+        <CoverShelf
+          papers={books}
+          arrangement={arrangement}
+          matches={matches}
+          openId={shownId}
+          cardId={cardId}
+          onActivate={takeDown}
+          onPutBack={putBack}
+          onOpen={onRead}
+          onContinue={onContinue}
+        />
+      ) : (
+        <Shelf
+          papers={books}
+          arrangement={arrangement}
+          matches={matches}
+          openId={shownId}
+          cardId={cardId}
+          onActivate={takeDown}
+          onPutBack={putBack}
+        />
+      )}
       <ShelfHints
         query={search}
         matched={matches?.size ?? 0}
