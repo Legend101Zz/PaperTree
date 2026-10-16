@@ -1009,6 +1009,8 @@ class UsageByKind(Wire):
     ask: UsageBucket
     summary: UsageBucket
     diagram: UsageBucket
+    #: The topic run (#242) is not built yet; its bucket is 0 until it is.
+    topic: UsageBucket
 
 
 class UsageTotals(Wire):

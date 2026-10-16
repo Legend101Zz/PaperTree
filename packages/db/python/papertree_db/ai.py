@@ -50,9 +50,10 @@ else:
     _Base = object
 
 THREAD_KINDS: Final = frozenset({"explain", "ask", "diagram"})
-#: 0011's CHECKs also allow ``topic`` (the topic Flash run, #242), which is not built yet: this
-#: layer accepts only a kind the API can run, so ``require_budget`` always has a reserve for it.
-RUN_KINDS: Final = frozenset({"explain", "ask", "summary", "diagram"})
+#: Every kind 0011's CHECK allows. ``topic`` (the topic Flash run, #242) is not built yet, but a
+#: row of it is already recorded, reserved for (``RUN_RESERVE_USD``) and counted in ``GET /usage``,
+#: so the day one exists it cannot break the spend cap or the usage read.
+RUN_KINDS: Final = frozenset({"explain", "ask", "summary", "diagram", "topic"})
 #: ``ai_diagram_parts.part_kind`` (0011): how the plate draws a part (DESIGN.md §1 "Diagrams").
 DIAGRAM_PART_KINDS: Final = frozenset({"input", "step", "output", "concept"})
 #: A plate holds at most twelve parts, lettered A-L in arrival order.

@@ -9,7 +9,8 @@ diagram thread) each meet:
   * the SPENT edge: a finished spend of exactly the budget is 429 ``budget_exhausted``; a budget a
     millionth of a dollar larger lets the run start;
   * the RESERVE edge, per KIND in flight (explain $0.01, ask $0.02, summary $0.05, diagram
-    $0.02): ``spent +
+    $0.02, and topic $0.01: #242's run is not built, but a row of it must not break the cap):
+    ``spent +
     reservation == budget`` is 429 with the in-flight sentence, a millionth more is admitted.
 """
 
@@ -24,6 +25,7 @@ from ai_support import (
     AiHarness,
     ai_harness,
     alice_with_paper,
+    contract_errors,
     events,
     explain,
     paragraph_anchor,
@@ -32,6 +34,7 @@ from ai_support import (
 from api_support import assert_envelope, auth, seed_paper
 from fake_agent import Script
 from papertree_api.agent_client import RUN_RESERVE_USD
+from papertree_api.schemas import UsageTotals
 from papertree_db import PaperTreeDb
 
 ROUTES = ("explain", "ask", "followup", "summary", "diagram")
@@ -165,7 +168,27 @@ def test_a_run_in_flight_reserves_its_kind_on_every_route(
 
 
 def test_the_reserves_are_the_contracts_numbers() -> None:
-    assert RUN_RESERVE_USD == {"explain": 0.01, "ask": 0.02, "summary": 0.05, "diagram": 0.02}
+    assert RUN_RESERVE_USD == {
+        "explain": 0.01,
+        "ask": 0.02,
+        "summary": 0.05,
+        "diagram": 0.02,
+        "topic": 0.01,
+    }
+
+
+def test_a_topic_run_row_is_counted_and_breaks_no_route(tmp_path: Path) -> None:
+    """0011 allows `topic` (#242) before its run exists: a row of it, in flight, is reserved for and
+    shows in `GET /usage` in the contract's shape, and a run still starts (review N9)."""
+    with ai_harness(tmp_path, _scripts("explain")) as h:
+        token, paper_id, _thread, _spent = _after_setup_run(h)
+        _in_flight(h, token, _other_paper(h, token), "run_01K63AE8M4Q2T7V9X3B5N6R0T1", "topic")
+        usage = h.client.get("/usage", headers=auth(token))
+        assert usage.status_code == 200, usage.text
+        body = usage.json()
+        assert body["by_kind"]["topic"]["runs"] == 1
+        assert contract_errors(body, "api/usage.schema.json", "UsageTotals", UsageTotals) == []
+        assert _start(h, token, paper_id, "explain", _thread).status_code == 200
 
 
 def test_two_runs_in_flight_reserve_twice(tmp_path: Path) -> None:

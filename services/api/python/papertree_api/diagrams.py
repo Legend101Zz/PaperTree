@@ -88,12 +88,17 @@ def diagram_wire(
         locators: As for :func:`part_wire`.
 
     Returns:
-        ``{title, status, parts, links}``.
+        ``{title, status, parts, links}``. A plate that ended (``complete`` or ``partial``) with no
+        part reads as ``error``: never an empty plate (an orphan swept with raw lines but no part
+        is ``partial`` on the message).
     """
     plate = plate or {}
+    status = plate_status(message_status)
+    if status in ("complete", "partial") and not parts:
+        status = "error"
     return {
         "title": plate.get("title"),
-        "status": plate_status(message_status),
+        "status": status,
         "parts": [part_wire(part, locators) for part in parts],
         "links": [dict(link) for link in plate.get("links", [])],
     }

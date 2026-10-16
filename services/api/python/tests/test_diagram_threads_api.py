@@ -8,6 +8,8 @@ parts is held separately, against the agent's recorded diagram stream.
 
 from __future__ import annotations
 
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -105,7 +107,8 @@ def test_a_diagram_thread_starts_like_an_explain_with_its_own_question(tmp_path:
         asked, answer = detail["messages"]
         assert asked["content"] == "Explain with a diagram." and "diagram" not in asked
         assert "coverage" not in answer, "a plate has no prose paragraphs to count"
-        assert answer["diagram"] == {"title": None, "status": "complete", "parts": [], "links": []}
+        # The replayed prose draws no part: the plate reads as an error, never an empty plate.
+        assert answer["diagram"] == {"title": None, "status": "error", "parts": [], "links": []}
         usage = h.client.get("/usage", headers=auth(token)).json()
         assert usage["by_kind"]["diagram"]["runs"] == 1 and usage["by_kind"]["explain"]["runs"] == 0
 
@@ -201,6 +204,19 @@ def test_a_stopped_plate_reads_as_stopped(tmp_path: Path) -> None:
         assert answer["diagram"]["status"] == "stopped" and answer["error"]["code"] == "aborted"
 
 
+def test_an_ended_plate_with_raw_lines_but_no_part_reads_as_an_error(tmp_path: Path) -> None:
+    """The orphan sweep ends a message with text as ``partial``; a plate with no part is still an
+    error, never an empty plate (review N10)."""
+    with ai_harness(tmp_path, Script("explain-ok")) as h:
+        token, paper_id = _alice(h)
+        run = events(read_sse(_diagram(h, token, paper_id))[0], "run")[0]
+        db, owner, _ = _db_for(h, token)
+        db.update_message(owner, run["message_id"], status="partial", content='{"t":"plate"')
+        db.close()
+        answer = _detail(h, token, paper_id, run["thread_id"])["messages"][1]
+        assert answer["status"] == "partial" and answer["diagram"]["status"] == "error"
+
+
 # ── Redraw ───────────────────────────────────────────────────────────────────────────────────
 
 
@@ -225,9 +241,7 @@ def test_a_redraw_appends_a_new_turn_and_plate_to_the_same_thread(tmp_path: Path
         assert roles == [("user", False), ("assistant", True)] * 2
 
 
-@pytest.mark.parametrize(
-    "case", ["missing", "retry", "null", "a user turn", "another thread", "streaming"]
-)
+@pytest.mark.parametrize("case", ["missing", "retry", "null", "a user turn", "another thread"])
 def test_a_redraw_must_name_a_finished_diagram_answer_of_this_thread(
     tmp_path: Path, case: str
 ) -> None:
@@ -241,12 +255,7 @@ def test_a_redraw_must_name_a_finished_diagram_answer_of_this_thread(
             "null": {"redraw_of": None},
             "a user turn": {"redraw_of": run["user_message_id"]},
             "another thread": {"redraw_of": other["message_id"]},
-            "streaming": {"redraw_of": run["message_id"]},
         }[case]
-        if case == "streaming":
-            db, owner, _ = _db_for(h, token)
-            db.update_message(owner, run["message_id"], status="streaming")
-            db.close()
         before = (h.count("ai_messages"), h.count("ai_runs"), len(h.fake.requests))
         refused = _redraw(h, token, paper_id, run["thread_id"], **body)
         assert assert_envelope(refused, 422, "validation_failed")["detail"].startswith("redraw_of")
@@ -311,31 +320,31 @@ def test_the_daily_budget_refuses_a_diagram_before_any_row(tmp_path: Path) -> No
         assert (h.count("ai_threads"), h.count("ai_messages"), len(h.fake.requests)) == before
 
 
-def test_a_redraw_while_the_plate_is_drawing_is_409_busy(tmp_path: Path) -> None:
-    with ai_harness(tmp_path, Script("explain-ok")) as h:
+def test_a_redraw_of_the_plate_still_drawing_is_409_busy(tmp_path: Path) -> None:
+    """B7: a run on a busy thread is 409 ``busy``, the drawing plate itself included."""
+    with ai_harness(tmp_path, Script("explain-ok", hold_after_text=2)) as h:
         token, paper_id = _alice(h)
-        run = events(read_sse(_diagram(h, token, paper_id))[0], "run")[0]
-        db, owner, _ = _db_for(h, token)
-        db.create_run(
-            owner,
-            run_id="run_01K63AE8M4Q2T7V9X3B5N6R0L9",
-            paper_id=paper_id,  # type: ignore[arg-type]
-            generation=1,
-            kind="diagram",
-            thread_id=run["thread_id"],
-            message_id=None,
-            token_sha256="0" * 64,
-            datamark="^00000000",
-            expires_at="2099-01-01T00:00:00Z",
-            code_path="x",
-            request_id=None,
-            prompt_version=None,
-        )
-        db.close()
+        box: dict[str, Any] = {}
+        streamer = threading.Thread(target=lambda: box.update(r=_diagram(h, token, paper_id)))
+        streamer.start()
+        deadline = time.monotonic() + 20
+        drawing: list[dict[str, Any]] = []
+        while not drawing and time.monotonic() < deadline:
+            drawing = h.rows(
+                "SELECT message_id, thread_id FROM ai_messages "
+                "WHERE role = 'assistant' AND status = 'streaming' AND content <> ''"
+            )
+            time.sleep(0.02)
+        (plate,) = drawing
         before = h.count("ai_messages")
-        redraw = _redraw(h, token, paper_id, run["thread_id"], redraw_of=run["message_id"])
+        redraw = _redraw(h, token, paper_id, plate["thread_id"], redraw_of=plate["message_id"])
         assert_envelope(redraw, 409, "busy")
         assert h.count("ai_messages") == before and len(h.fake.requests) == 1
+        run_id = h.fake.requests[0]["run_id"]
+        assert h.client.post(f"/runs/{run_id}/cancel", headers=auth(token)).status_code == 202
+        streamer.join(20)
+        assert not streamer.is_alive()
+        assert events(read_sse(box["r"])[0], "done")[0]["status"] == "aborted"
 
 
 def test_bob_cannot_read_or_redraw_alices_plate(tmp_path: Path) -> None:

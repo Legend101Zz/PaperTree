@@ -1061,7 +1061,13 @@ describe('contracts.spec — lib/api/types.ts against contracts/api (exported fr
       since: T,
       ...bucket,
       budget_usd: 1,
-      by_kind: { explain: bucket, ask: { ...bucket, runs: 0 }, summary: bucket, diagram: bucket },
+      by_kind: {
+        explain: bucket,
+        ask: { ...bucket, runs: 0 },
+        summary: bucket,
+        diagram: bucket,
+        topic: bucket,
+      },
     };
     expectValid('usage', 'UsageTotals', usage);
   });

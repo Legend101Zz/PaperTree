@@ -2,8 +2,10 @@
 
 0011 rebuilds ``ai_threads`` and ``ai_runs`` (their ``kind`` CHECKs gain ``diagram`` and ``topic``)
 together with their children, adds ``ai_messages.diagram_json`` and creates ``ai_diagram_parts``.
-The migration tests run it over a real 0008-shaped database with every AI table filled, column by
-column, and check every row, every FK, the cascades and the 0005/0008 triggers survive. The parts
+The migration tests run it over a real database with every AI table filled, column by column, at
+two bases (v0.2's 0008, and every migration below 11, which on release puts 0009's topics first),
+and check every row, every FK, the cascades and the triggers survive; and the row-count guard is
+made to fire. The parts
 tests hold the three states a part can be in (cited, not verified, inferred) to the table's CHECKs
 from Python AND from raw SQL, and bob to nothing.
 """
@@ -20,7 +22,12 @@ import pytest
 from papertree_db import OwnerId, PaperId, PaperTreeDb, generation, open_database
 from papertree_db.ai import AiRecordNotFound, DiagramPartIn
 
-from .saved_shapes import load_capture_anchor, load_fixture_paper, migrations_through
+from .saved_shapes import (
+    MIGRATIONS_DIR,
+    load_capture_anchor,
+    load_fixture_paper,
+    migrations_through,
+)
 
 NOW = "2026-10-01T00:00:00.000000+00:00"
 LATER = "2026-10-01T00:00:05.000000+00:00"
@@ -39,7 +46,7 @@ def _rows(conn: sqlite3.Connection, sql: str) -> list[tuple[Any, ...]]:
     return [tuple(r) for r in conn.execute(sql).fetchall()]
 
 
-def _fill_0008(conn: sqlite3.Connection, owner_id: str, paper_id: str) -> None:
+def _fill_ai_tables(conn: sqlite3.Connection, owner_id: str, paper_id: str) -> None:
     """Every AI table of 0005, with every nullable column set, so a dropped column would show."""
     anchor = '{"doc":{"paperId":"p"},"id":"anc_1"}'
     conn.execute(
@@ -105,9 +112,10 @@ def _fill_0008(conn: sqlite3.Connection, owner_id: str, paper_id: str) -> None:
     conn.execute("UPDATE canvas_nodes SET group_id = 'cn_g' WHERE node_id = 'cn_n'")
 
 
-def _populated_0008(tmp_path: Path) -> tuple[Path, str, str]:
+def _populated(tmp_path: Path, base: int) -> tuple[Path, str, str]:
+    """A database at migration ``base`` (every file numbered up to it) with the AI tables filled."""
     file = tmp_path / "old.sqlite"
-    with open_database(file, migrations_through(8, tmp_path / "m8")) as db:
+    with open_database(file, migrations_through(base, tmp_path / f"m{base}")) as db:
         db.migrate()
         owner = db.create_user("reader@papertree.test").owner
         document = load_fixture_paper()
@@ -116,14 +124,15 @@ def _populated_0008(tmp_path: Path) -> tuple[Path, str, str]:
         owner_id, paper_id = db._resolve(owner), str(document["paper_id"])
     conn = sqlite3.connect(file)
     conn.execute("PRAGMA foreign_keys = ON")
-    _fill_0008(conn, owner_id, paper_id)
+    _fill_ai_tables(conn, owner_id, paper_id)
     conn.commit()
     conn.close()
     return file, owner_id, paper_id
 
 
-def test_0011_carries_every_ai_row_fk_cascade_and_trigger(tmp_path: Path) -> None:
-    file, owner_id, paper_id = _populated_0008(tmp_path)
+@pytest.mark.parametrize("base", [8, 10], ids=["from 0008", "from everything below 0011"])
+def test_0011_carries_every_ai_row_fk_cascade_and_trigger(tmp_path: Path, base: int) -> None:
+    file, owner_id, paper_id = _populated(tmp_path, base)
     conn = sqlite3.connect(file)
     before = {table: _rows(conn, sql) for table, sql in REBUILT.items()}
     triggers = _rows(conn, TRIGGERS)
@@ -132,7 +141,9 @@ def test_0011_carries_every_ai_row_fk_cascade_and_trigger(tmp_path: Path) -> Non
 
     with open_database(file) as db:
         result = db.migrate()
-        assert 11 in result.applied
+        assert result.applied[-1] == 11, "0011 applies after every migration below it"
+        if base == 10:
+            assert result.applied == (11,)
         assert any(path.name.endswith(".pre-0011.bak") for path in result.backups)
 
     conn = sqlite3.connect(file)
@@ -149,7 +160,10 @@ def test_0011_carries_every_ai_row_fk_cascade_and_trigger(tmp_path: Path) -> Non
         assert _rows(conn, "PRAGMA foreign_key_check") == []
         assert _rows(conn, "PRAGMA integrity_check") == [("ok",)]
         assert _rows(conn, "SELECT name FROM sqlite_master WHERE name LIKE '%_new'") == []
-        assert _rows(conn, TRIGGERS) == triggers
+        # Every trigger survives (from 0008, a later migration such as 0009 adds its own).
+        assert set(triggers) <= set(_rows(conn, TRIGGERS))
+        if base == 10:
+            assert _rows(conn, TRIGGERS) == triggers
         indexes = {r[0] for r in _rows(conn, "SELECT name FROM sqlite_master WHERE type='index'")}
         assert {"ai_threads_by_paper", "ai_runs_by_owner", "ai_diagram_parts_by_message"} <= indexes
         # The widened CHECKs are live, and still refuse what they refused.
@@ -177,6 +191,35 @@ def test_0011_carries_every_ai_row_fk_cascade_and_trigger(tmp_path: Path) -> Non
         # 0008's ungroup trigger.
         conn.execute("DELETE FROM canvas_nodes WHERE node_id = 'cn_g'")
         assert _rows(conn, "SELECT group_id FROM canvas_nodes") == [(None,)]
+    finally:
+        conn.close()
+
+
+def test_the_row_count_guard_aborts_0011_and_leaves_the_database_as_it_was(
+    tmp_path: Path,
+) -> None:
+    """Non-vacuity for the guard: a copy of 0011 that loses one citation row in the copy must
+    fail on the guard's CHECK, and the rollback must leave every table and the record unchanged."""
+    file, _owner, _paper = _populated(tmp_path, 10)
+    broken = migrations_through(10, tmp_path / "broken")
+    source = MIGRATIONS_DIR / "0011_diagrams.sql"
+    sql = source.read_text(encoding="utf-8")
+    lossy = "    FROM ai_citations;\n"
+    assert sql.count(lossy) == 1
+    (broken / source.name).write_text(
+        sql.replace(lossy, "    FROM ai_citations WHERE ordinal > 0;\n")
+    )
+    conn = sqlite3.connect(file)
+    schema = _rows(conn, "SELECT type, name, sql FROM sqlite_master ORDER BY name")
+    rows = {table: _rows(conn, sql) for table, sql in REBUILT.items()}
+    conn.close()
+    with open_database(file, broken) as db, pytest.raises(sqlite3.IntegrityError, match="ok = 1"):
+        db.migrate()
+    conn = sqlite3.connect(file)
+    try:
+        assert _rows(conn, "SELECT type, name, sql FROM sqlite_master ORDER BY name") == schema
+        assert {table: _rows(conn, sql) for table, sql in REBUILT.items()} == rows
+        assert 11 not in {v for (v,) in _rows(conn, "SELECT version FROM schema_migrations")}
     finally:
         conn.close()
 

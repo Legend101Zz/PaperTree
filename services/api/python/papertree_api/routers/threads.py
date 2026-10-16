@@ -450,7 +450,10 @@ def _retry_target(db: PaperTreeDb, owner: OwnerId, thread_id: str, retry_of: str
 def _check_redraw(
     db: PaperTreeDb, owner: OwnerId, thread: dict[str, Any], redraw_of: str | None, *, retry: bool
 ) -> None:
-    """A diagram thread takes a Redraw and nothing else; no other thread takes one (422)."""
+    """A diagram thread takes a Redraw (of one of its own answers) and nothing else; no other
+    thread takes one (422). A plate still drawing is not refused here: its live run makes the
+    thread 409 ``busy`` (the check after this one), and a run that died is swept, so its plate can
+    be redrawn."""
     if thread["kind"] != "diagram":
         if redraw_of is not None:
             raise ApiError("validation_failed", "redraw_of: only a diagram answer is redrawn")
@@ -466,8 +469,6 @@ def _check_redraw(
         or message["role"] != "assistant"
     ):
         raise ApiError("validation_failed", "redraw_of: not a diagram answer of this thread")
-    if message["status"] == "streaming":
-        raise ApiError("validation_failed", "redraw_of: that diagram is still being drawn")
 
 
 # ── reads ────────────────────────────────────────────────────────────────────────────────────

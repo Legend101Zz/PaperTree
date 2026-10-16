@@ -19,6 +19,7 @@ CREATE TABLE ai_threads_new (
   kind               TEXT NOT NULL CHECK (kind IN ('explain', 'ask', 'diagram', 'topic')),
   title              TEXT NOT NULL,
   origin_anchor_json TEXT CHECK (origin_anchor_json IS NULL OR json_valid(origin_anchor_json)),
+  -- Pi SessionManager entries (exportEntries) as of the last COMPLETED turn; restored per run.
   agent_state_json   TEXT CHECK (agent_state_json IS NULL OR json_valid(agent_state_json)),
   created_at         TEXT NOT NULL,
   updated_at         TEXT NOT NULL,
@@ -39,7 +40,7 @@ CREATE TABLE ai_messages_new (
   thread_id    TEXT    NOT NULL,
   ordinal      INTEGER NOT NULL CHECK (ordinal >= 0),
   role         TEXT    NOT NULL CHECK (role IN ('user', 'assistant')),
-  generation   INTEGER NOT NULL CHECK (generation >= 1),
+  generation   INTEGER NOT NULL CHECK (generation >= 1),   -- the parse the answer was grounded in
   content      TEXT    NOT NULL,
   status       TEXT    NOT NULL CHECK (status IN ('streaming', 'complete', 'partial', 'error', 'aborted')),
   error_code   TEXT,
@@ -68,8 +69,8 @@ CREATE TABLE ai_citations_new (
   owner_id    TEXT    NOT NULL,
   message_id  TEXT    NOT NULL,
   ordinal     INTEGER NOT NULL CHECK (ordinal >= 0),
-  marker      TEXT    NOT NULL,
-  anchor_json TEXT    NOT NULL CHECK (json_valid(anchor_json)),
+  marker      TEXT    NOT NULL,                    -- the handle as the model wrote it, e.g. "b3"
+  anchor_json TEXT    NOT NULL CHECK (json_valid(anchor_json)),   -- server-minted Anchor (#124)
   generation  INTEGER NOT NULL,
   block_id    TEXT    NOT NULL,                    -- hint only; never an FK (AGENTS.md §4)
   page_index  INTEGER NOT NULL CHECK (page_index >= 0),
@@ -96,8 +97,8 @@ CREATE TABLE ai_runs_new (
                                                       'topic')),
   thread_id          TEXT,
   message_id         TEXT,
-  token_sha256       TEXT    NOT NULL,
-  datamark           TEXT    NOT NULL,
+  token_sha256       TEXT    NOT NULL,             -- sha256 of the run token; the token is never stored
+  datamark           TEXT    NOT NULL,             -- papertree_prompts.mint_datamark(), per run
   expires_at         TEXT    NOT NULL,
   status             TEXT    NOT NULL CHECK (status IN ('running', 'done', 'error', 'aborted')),
   code_path          TEXT    NOT NULL,
@@ -189,11 +190,12 @@ CREATE INDEX ai_threads_by_paper ON ai_threads (owner_id, paper_id, updated_at);
 --;;
 CREATE INDEX ai_runs_by_owner ON ai_runs (owner_id, started_at);
 --;;
--- One row per part of a diagram answer, in arrival order: the Nth valid part line IS letter N
--- (the agent assigns it, so a model's miscount is corrected, not trusted). A part is CITED (an
--- Anchor the API minted over the block its quote was found in; `supported` 1 when the quote is
--- verbatim, 0 when it is there with differences), NOT VERIFIED (a quote found nowhere: no Anchor,
--- `supported` 0, the quote kept to show), or INFERRED (no quote at all: every cite column NULL).
+-- One row per part of a diagram answer, in the order the parts were placed (letter = A + ordinal;
+-- the agent maps the model's own letters onto placed ones). DESIGN.md §4 has two labels only. A
+-- part is CITED when its quote is in a passage word for word: an Anchor the API minted over that
+-- block, `supported` 1. It is NOT VERIFIED when the quote is there with differences (an Anchor
+-- over the closest block, `supported` 0) or found nowhere (no Anchor, `supported` 0); the quote is
+-- kept to show either way. It is INFERRED when it has no quote at all: every cite column NULL.
 -- Never a bare block id: `block_id` is a hint beside the Anchor (AGENTS.md §4).
 CREATE TABLE ai_diagram_parts (
   part_id     TEXT    PRIMARY KEY,

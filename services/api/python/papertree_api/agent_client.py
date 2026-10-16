@@ -899,6 +899,9 @@ RUN_RESERVE_USD: Final[dict[str, float]] = {
     # Unmeasured until S7b's live smoke: a seed like an explain's and at most 2,048 output tokens
     # cost about $0.004 on M3 rates, so the ask's reserve errs on the side of waiting.
     "diagram": 0.02,
+    # The topic Flash run (#242) is not built; a row of it may already be recorded (0011 allows
+    # the kind), so it has a reserve now, the explain's, and never meets a missing key here.
+    "topic": 0.01,
 }
 
 
