@@ -91,6 +91,7 @@ import {
   type DocumentRef,
   type PendingScroll,
 } from '@/components/reader/documentHandle';
+import { useFocusFromNotebook } from '@/features/notebook/hooks/useFocusFromNotebook';
 import { ReaderHeader, type ExplainToggle } from '@/features/reader';
 import { NetworkError } from '@/lib/api/client';
 import { papersApi } from '@/lib/api/papers';
@@ -595,6 +596,8 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
 
   // S7: the canvas's "Open source" lands here as `?focus=<node_id>`.
   useFocusFromCanvas(paper.kind === 'api' ? paper.paperId : null, doc !== null, focusAnchor);
+  // S5c: the notebook's "Open source" lands here as `?nb=<page>&item=<item>`.
+  useFocusFromNotebook(paper.kind === 'api' ? paper.paperId : null, doc !== null, focusAnchor);
 
   /** The colour a new highlight gets: the wash pressed, else the last one picked (amber at first). */
   const lastColor = useRef<HighlightColor>('amber');
