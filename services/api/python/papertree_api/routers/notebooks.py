@@ -22,11 +22,17 @@ from __future__ import annotations
 import base64
 import binascii
 from collections.abc import Callable, Mapping
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse, Response
-from papertree_db import NotebookRejected, NotebookStale, PaperId, PaperNotFound
+from papertree_db import (
+    SQLITE_INTEGER_MAX,
+    NotebookRejected,
+    NotebookStale,
+    PaperId,
+    PaperNotFound,
+)
 
 from .. import evidence
 from ..deps import CallerDep
@@ -234,14 +240,24 @@ async def patch_item(call: CallerDep, page_id: str, item_id: str, request: Reque
     status_code=204,
     responses={409: {"model": NotebookItemStale}},
 )
-async def delete_item(call: CallerDep, page_id: str, item_id: str, request: Request) -> Response:
-    """Deletes one item; with `?version=N` only at that version (409 `stale_version` if not)."""
-    raw = request.query_params.get("version")
-    version: int | None = None
-    if raw is not None:
-        if not raw.isdigit() or int(raw) < 1:
-            raise ApiError("validation_failed", "version: a positive integer")
-        version = int(raw)
+async def delete_item(
+    call: CallerDep,
+    page_id: str,
+    item_id: str,
+    version: Annotated[
+        int | None,
+        Query(
+            ge=1,
+            le=SQLITE_INTEGER_MAX,
+            description="Delete only at this version (409 stale_version if it is not current).",
+        ),
+    ] = None,
+) -> Response:
+    """Deletes one item; with `?version=N` only at that version (409 `stale_version` if not).
+
+    The version is declared, so it is validated (any value that is not a positive integer in ASCII
+    digits is a 422) and listed in the OpenAPI document.
+    """
     result = call.db.delete_notebook_item(call.db_owner, page_id, item_id, version)
     if isinstance(result, NotebookStale):
         raise _stale("item", _item_wire(result.current))

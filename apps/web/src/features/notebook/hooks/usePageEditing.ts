@@ -5,13 +5,14 @@
  * in, the draft of a new one (it joins the page, as ONE history command, only when it has words),
  * moves and deletes, and the Ctrl/Cmd+Z, Shift+Ctrl/Cmd+Z and Ctrl+Y shortcuts. Every finished
  * gesture is one S5b command run through `useNotebookPage`, which saves what it touched. The
- * keyboard never falls to `<body>`: a delete moves it to the next item, an undone delete to the
- * item it brings back.
+ * keyboard never falls to `<body>`: whatever takes an item away (a delete, undoing an add, redoing
+ * a delete) moves it to the next item, else the previous, else the page title; whatever brings
+ * one back gives it to that item.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { newClientId } from '../api/notebookApi';
-import { focusItem } from '../components/focus';
+import { focusItem } from './focus';
 import { neighbourOf, placeNewItem } from '../model/layout';
 import { STICKY_COLOUR } from '../model/wire';
 
@@ -51,16 +52,25 @@ function inField(target: EventTarget | null): boolean {
 }
 
 /**
- * The item an undo or redo of `cmd` puts back on the page, to give it the keyboard.
+ * Where the keyboard goes after an undo or redo of `cmd`, worked out BEFORE the step: to the item
+ * it puts back on the page, or, when it takes one away, to the next item in reading order, else
+ * the previous one, else the page title (`null`). `undefined`: the step moves nothing in or out.
  *
  * @param cmd - The command being undone (or redone).
  * @param undoing - True for an undo.
- * @returns The item id, or null.
+ * @param items - The page's items before the step.
+ * @returns The item id to focus, null for the page title, or undefined to leave focus alone.
  */
-function restored(cmd: Command | undefined, undoing: boolean): string | null {
-  if (cmd?.type === 'remove-items' && undoing) return cmd.removed[0]?.value.id ?? null;
-  if (cmd?.type === 'add-items' && !undoing) return cmd.items[0]?.id ?? null;
-  return null;
+function focusAfter(
+  cmd: Command | undefined,
+  undoing: boolean,
+  items: readonly Item[],
+): string | null | undefined {
+  if (cmd?.type !== 'add-items' && cmd?.type !== 'remove-items') return undefined;
+  const first = cmd.type === 'add-items' ? cmd.items[0]?.id : cmd.removed[0]?.value.id;
+  if (first === undefined) return undefined;
+  const bringsBack = (cmd.type === 'remove-items') === undoing;
+  return bringsBack ? first : neighbourOf(items, first);
 }
 
 /**
@@ -108,14 +118,14 @@ export function usePageEditing(model: NotebookPageModel): PageEditing {
       focusItem(next);
     },
     undo: () => {
-      const back = restored(history?.past.at(-1), true);
+      const next = focusAfter(history?.past.at(-1), true, items);
       model.undo();
-      if (back !== null) focusItem(back);
+      if (next !== undefined) focusItem(next);
     },
     redo: () => {
-      const back = restored(history?.future.at(-1), false);
+      const next = focusAfter(history?.future.at(-1), false, items);
       model.redo();
-      if (back !== null) focusItem(back);
+      if (next !== undefined) focusItem(next);
     },
   };
   // Stable identities for the page's memoised items: each wrapper calls this render's action.

@@ -17,7 +17,7 @@ import { papersApi } from '@/lib/api/papers';
 
 import { NotebookPage } from './NotebookPage';
 import { NotebookToolbar } from './NotebookToolbar';
-import { SaveNotice } from './SaveNotice';
+import { SaveNotice, unsavedPhrase } from './SaveNotice';
 import { useExchange } from '../hooks/useExchange';
 import { useNotebookPage } from '../hooks/useNotebookPage';
 import { usePageEditing } from '../hooks/usePageEditing';
@@ -156,7 +156,8 @@ export function NotebookView({ paperId, pageId }: NotebookViewProps): ReactNode 
       </main>
       <SaveNotice
         status={model.save}
-        unsaved={model.unsaved}
+        unsaved={unsavedPhrase(model.unsaved)}
+        unsavedText={model.unsavedText}
         onRetry={model.retry}
         onReload={() => window.location.reload()}
       />

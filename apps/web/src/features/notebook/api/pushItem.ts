@@ -2,8 +2,9 @@
  * Sends one `SaveOp` (model/save.ts) and says how it went, in words the page can act on (S5c,
  * #208). A 409 `stale_version` (a patch, or a delete at a version, over an edit made somewhere
  * else) is a conflict and is NEVER retried with the newer version: that retry would overwrite the
- * other edit. A 404 on a patch means the item was deleted somewhere else; a 422 is a refusal that
- * would fail the same way again. Only `failed` is worth trying again.
+ * other edit. A 404 on a patch means the item was deleted somewhere else; on a create, that the
+ * PAGE was. A 422 is a refusal that would fail the same way again. Only `failed` is worth trying
+ * again.
  */
 import { ApiError } from '@/lib/api/types';
 
@@ -20,6 +21,8 @@ export type PushResult =
   | { readonly kind: 'conflict' }
   /** The item was deleted somewhere else (a patch answered 404). */
   | { readonly kind: 'gone' }
+  /** The page itself was deleted somewhere else (a create answered 404 "no such page"). */
+  | { readonly kind: 'pageGone' }
   /** The server refused the item itself (422); sending it again cannot help. */
   | { readonly kind: 'rejected'; readonly detail: string }
   | { readonly kind: 'failed'; readonly error: unknown };
@@ -59,7 +62,8 @@ export async function pushItem(
     if (isStaleVersion(error)) return { kind: 'conflict' };
     if (error instanceof ApiError && error.status === 404) {
       // Deleting what is already gone has reached the state the person asked for.
-      return op.kind === 'delete' ? { kind: 'deleted' } : { kind: 'gone' };
+      if (op.kind === 'delete') return { kind: 'deleted' };
+      return op.kind === 'create' ? { kind: 'pageGone' } : { kind: 'gone' };
     }
     if (error instanceof ApiError && error.status === 422) {
       return { kind: 'rejected', detail: error.detail };

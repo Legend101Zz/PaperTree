@@ -21,16 +21,23 @@ phone layouts are S5e (#210).
   that item back and flashes its STORED Anchor (`hooks/useFocusFromNotebook.ts`).
 - Typed notes and stickies: create (tool bar), move (drag; arrow keys, Shift for 24), edit in
   place (Enter, double-click), delete (Delete key or the × button), undo/redo (Ctrl/Cmd+Z,
-  Shift+Ctrl/Cmd+Z, Ctrl+Y). After a delete the keyboard goes to the next item, else the previous,
-  else the page title; an undone delete gives it back to the item. What is being typed is
-  committed on blur, Escape, unmount (Back, a route change) and `pagehide` / a hidden tab, and is
-  capped at the API's 100,000 characters with a count near the limit.
+  Shift+Ctrl/Cmd+Z, Ctrl+Y). Whatever takes an item away (a delete, undoing an add, redoing a
+  delete) moves the keyboard to the next item, else the previous, else the page title; whatever
+  brings one back gives it the keyboard. What is being typed is committed on blur, Escape, unmount
+  (Back, a route change), a hidden tab and `pagehide`, and is capped at the API's 100,000
+  characters with a count near the limit.
 - Saving never stops silently (`hooks/useItemSaver.ts`, `components/SaveNotice.tsx`): a 409 (a
   PATCH, or a DELETE sent with `?version=`, over an edit made elsewhere) is a bar that cannot be
-  dismissed, counts the unsaved edits and stays until Reload; a failure is a notice with Try again
-  that, once dismissed, stays as a "Not saved" chip until the save succeeds, and comes back for
-  the next failure; an item deleted elsewhere (404) is dropped with a quiet notice; a refusal (422)
-  is said once and never retried.
+  dismissed, recounts what is not saved here as saves land, and stays until Reload; a failure is a
+  notice with Try again that, once dismissed, stays as a "Not saved" chip until the save succeeds,
+  and comes back for the next failure; an item deleted elsewhere (404) that held changes is
+  created again from this page and says so; a page deleted elsewhere (a create's 404) is a bar with
+  "Copy text"; a refusal (422) is said once and never retried.
+- Leaving (`model/leave.ts`, `hooks/pageLeave.ts`): a hidden tab sends with `keepalive` within the
+  browser's 64 KiB budget; on `pagehide` every open editor commits, then everything owed goes out in
+  chunks under the budget, one request per item, a write queued behind one in flight included
+  (sent with the version it will have); a write too big for any keepalive request makes the page
+  warn before it closes ("A long note has not been saved yet"), and only then.
 
 ## Data flow
 
@@ -39,8 +46,8 @@ UI gesture → one S5b history `Command` (`execute` / `undo` / `redo`) → local
 (api/) sends ONE create, patch-of-changed-fields (with `version`) or delete (with `?version=`) →
 `routers/notebooks.py` → `papertree_db.notebook` → SQLite (migration 0007). Saves run one at a time
 per item and read the latest local state when they run, so a burst of nudges costs one PATCH per
-round trip (10 quick nudges measured 3); while the page is being left they go out with
-`keepalive`.
+round trip (10 quick nudges measured 3); while the page is hidden or being left they go out with
+`keepalive` when they fit its budget.
 
 Reading: `GET /notebook/pages/{id}` → `wire.ts` (`itemFromWire`, `strokeFromWire`: base64 →
 `decodeStroke` → `strokeToPath`) → the page; the exchange's citations, locators and usage come from

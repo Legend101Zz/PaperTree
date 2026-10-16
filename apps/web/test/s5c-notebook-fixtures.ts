@@ -221,13 +221,19 @@ export interface Call {
   readonly method: string;
   readonly path: string;
   readonly body: Record<string, unknown> | null;
+  /** Whether the request asked to outlive the page. */
+  readonly keepalive: boolean;
 }
 
 /**
  * Stubs `fetch` with the routes the notebook page calls. Item writes echo back with the version
- * bumped; `onWrite` may answer instead (a 409, say).
+ * bumped; `onWrite` may answer instead (a 409, say), or hold the request (a promise) to keep it in
+ * flight.
  */
-export function stubApi(view: NotebookPageView, onWrite?: (call: Call) => Response | null): Call[] {
+export function stubApi(
+  view: NotebookPageView,
+  onWrite?: (call: Call) => Response | null | Promise<Response | null>,
+): Call[] {
   const calls: Call[] = [];
   const server = new Map(view.items.map((i) => [i.item_id, i]));
   const json = (status: number, body: unknown): Response =>
@@ -239,7 +245,7 @@ export function stubApi(view: NotebookPageView, onWrite?: (call: Call) => Respon
       const method = init.method ?? 'GET';
       const body =
         typeof init.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : null;
-      const call = { method, path, body };
+      const call = { method, path, body, keepalive: init.keepalive === true };
       calls.push(call);
       if (method === 'GET' && path === `/notebook/pages/${PAGE}`) return json(200, view);
       if (method === 'GET' && path === `/papers/${PAPER}/threads/${THREAD}`) {
@@ -249,7 +255,7 @@ export function stubApi(view: NotebookPageView, onWrite?: (call: Call) => Respon
         return json(200, [{ paper_id: PAPER, title: 'Attention Is All You Need' }]);
       }
       if (method === 'GET') return json(200, {});
-      const answered = onWrite?.(call) ?? null;
+      const answered = (await onWrite?.(call)) ?? null;
       if (answered !== null) return answered;
       const id = String(body?.['item_id'] ?? path.split('?')[0]?.split('/').at(-1));
       if (method === 'DELETE') {

@@ -13,7 +13,7 @@ import Link from 'next/link';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { ExchangeBlock } from './ExchangeBlock';
-import { PAGE_TITLE_ID } from './focus';
+import { PAGE_TITLE_ID } from '../hooks/focus';
 import { InkLayer } from './InkLayer';
 import { NoteItem } from './NoteItem';
 import { QuoteCard } from './QuoteCard';

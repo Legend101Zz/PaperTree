@@ -5,7 +5,8 @@
  *   bar that cannot be dismissed, counts every unsaved edit, and sends nothing more.
  * - Dismiss, then fail: a dismissed failure stays visible as a chip until the save succeeds, and
  *   the next failure brings the notice back. Try again re-sends every failed write.
- * - An item deleted elsewhere is dropped quietly; a refused (422) note is said once, never retried.
+ * - An item deleted elsewhere that held changes is saved again, words kept; a refused (422) note is
+ *   said once, never retried.
  * - The DELETE carries the version; typing survives an unmount and a `pagehide`; the keyboard
  *   moves to the next item after a delete, never to `<body>`; the editor caps a note's length.
  */
@@ -60,7 +61,7 @@ describe('a conflict (409) after another tab’s edit', () => {
     });
     const bar = await screen.findByRole('alert');
     expect(bar.textContent).toContain('Not saved: this page changed somewhere else');
-    expect(bar.textContent).toContain('your unsaved edits: 1');
+    expect(bar.textContent).toContain('(not saved here: 1 item)');
     expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Sticky note' }));
@@ -68,7 +69,7 @@ describe('a conflict (409) after another tab’s edit', () => {
     fireEvent.change(editor, { target: { value: 'written after the conflict' } });
     fireEvent.blur(editor);
     await settle();
-    expect(screen.getByRole('alert').textContent).toContain('your unsaved edits: 2');
+    expect(screen.getByRole('alert').textContent).toContain('(not saved here: 2 items)');
     expect(writes(calls)).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Reload' })).toBeTruthy();
   });
@@ -128,14 +129,31 @@ describe('a failed save', () => {
 });
 
 describe('what cannot be saved', () => {
-  it('drops an item deleted elsewhere (404) quietly, with no Try again', async () => {
-    stubApi(pageView([NOTE_A]), (c) => (c.method === 'PATCH' ? answer(404, 'not_found') : null));
+  it('saves again a note deleted elsewhere (404) that held changes: the words are kept', async () => {
+    let gone = true;
+    const calls = stubApi(pageView([NOTE_A]), (c) => {
+      if (c.method !== 'PATCH' || !gone) return null;
+      gone = false;
+      return answer(404, 'not_found');
+    });
     mount();
     fireEvent.keyDown(await screen.findByRole('button', { name: 'Typed note: alpha' }), {
-      key: 'ArrowLeft',
+      key: 'Enter',
     });
-    await screen.findByText('A note was deleted somewhere else, so it is gone here too.');
-    expect(screen.queryByRole('button', { name: 'Typed note: alpha' })).toBeNull();
+    const editor = screen.getByRole('textbox', { name: 'Typed note' });
+    fireEvent.change(editor, { target: { value: 'alpha, with a paragraph I just wrote' } });
+    fireEvent.blur(editor);
+    await screen.findByText(
+      'A note you changed had been deleted somewhere else. Your version is kept and saved again.',
+    );
+    expect(
+      screen.getByRole('button', { name: 'Typed note: alpha, with a paragraph I just wrote' }),
+    ).toBeTruthy();
+    expect(writes(calls).map((c) => c.method)).toEqual(['PATCH', 'POST']);
+    expect(writes(calls)[1]?.body).toMatchObject({
+      item_id: 'ni_note0000a',
+      body: 'alpha, with a paragraph I just wrote',
+    });
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
   });
 

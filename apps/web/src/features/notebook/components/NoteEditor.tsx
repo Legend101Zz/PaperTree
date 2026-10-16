@@ -1,13 +1,17 @@
 'use client';
 
 /**
- * The in-place editor of a typed note or sticky (S5c, #208). What was typed is never lost: it is
- * committed on blur, Escape or Ctrl/Cmd+Enter, when the editor is unmounted (Back, a route change),
- * and when the page is being left (`pagehide`, or the tab hidden), whichever comes first and only
- * once. The text is capped at the API's limit, with a visible count near it, so a note can never be
- * refused for its length and loop on "Try again".
+ * The in-place editor of a typed note or sticky (S5c, #208). What was typed is committed on blur,
+ * Escape or Ctrl/Cmd+Enter, when the editor is unmounted (Back, a route change), when the tab is
+ * hidden, and on `pagehide` (the saver makes every open editor commit before it flushes,
+ * `hooks/pageLeave.ts`), whichever comes first and only once. A note too long for the browser's
+ * keepalive budget cannot be sent while the page closes, so the page warns before it closes then.
+ * The text is capped at the API's limit, with a visible count near it, so a note can never be
+ * refused for its length.
  */
 import { useEffect, useRef, useState } from 'react';
+
+import { registerEditor } from '../hooks/pageLeave';
 
 import type { ReactNode } from 'react';
 
@@ -44,14 +48,16 @@ export function NoteEditor({ kind, initial, onCommit }: NoteEditorProps): ReactN
   const alive = useRef(false);
   useEffect(() => {
     alive.current = true;
-    const leave = (): void => finishRef.current();
+    const unregister = registerEditor({
+      commit: () => finishRef.current(),
+      text: () => text.current,
+    });
     const hidden = (): void => {
       if (document.visibilityState === 'hidden') finishRef.current();
     };
-    window.addEventListener('pagehide', leave);
     document.addEventListener('visibilitychange', hidden);
     return () => {
-      window.removeEventListener('pagehide', leave);
+      unregister();
       document.removeEventListener('visibilitychange', hidden);
       // Unmounted while typing (Back, a route change): keep the words. React's development Strict
       // Mode unmounts and remounts once on purpose, so only an editor still gone a tick later

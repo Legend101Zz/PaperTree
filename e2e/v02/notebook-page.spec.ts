@@ -130,6 +130,43 @@ test.describe('S5c — the notebook page (faux agent)', () => {
     expect((await saved).status()).toBe(201);
     await page.reload();
     await expect(page.getByRole('button', { name: `Typed note: ${note}` })).toBeVisible();
+
+    // ── 4b. a sticky typed and never blurred survives its tab being closed (pagehide, keepalive) ──
+    const closing = await context.newPage();
+    await tokenInit(closing, token);
+    await closing.goto(`/paper/${paperId}/notebook/${pageId}`);
+    await expect(closing.locator('.pt-nb-quote')).toHaveCount(4);
+    const kept = 'typed, then the tab was closed';
+    await closing.getByRole('button', { name: 'Sticky note' }).click();
+    await closing.getByRole('textbox', { name: 'Sticky note' }).fill(kept);
+    await closing.close({ runBeforeUnload: true });
+    await expect
+      .poll(async () => {
+        const view = (await api(stack.apiUrl, token, 'GET', `/notebook/pages/${pageId}`)).json as {
+          items: { body: string }[];
+        };
+        return view.items.some((i) => i.body === kept);
+      })
+      .toBe(true);
+    await page.reload();
+    await expect(page.getByRole('button', { name: `Sticky note: ${kept}` })).toBeVisible();
+
+    // ── 4c. a note too long for keepalive makes the page warn before it closes ──
+    const long = await context.newPage();
+    await tokenInit(long, token);
+    await long.goto(`/paper/${paperId}/notebook/${pageId}`);
+    await expect(long.locator('.pt-nb-quote')).toHaveCount(4);
+    await long.getByRole('button', { name: 'Text' }).click();
+    await long.getByRole('textbox', { name: 'Typed note' }).fill('x'.repeat(70_000));
+    const warned = long.waitForEvent('dialog');
+    await long.close({ runBeforeUnload: true });
+    const dialog = await warned;
+    expect(dialog.type()).toBe('beforeunload');
+    await dialog.dismiss();
+    await long.getByRole('textbox', { name: 'Typed note' }).press('Escape');
+    await expect(long.getByRole('button', { name: /^Typed note: x{100}/ })).toBeVisible();
+    await long.waitForTimeout(1000);
+    await long.close();
     await context.close();
   });
 });

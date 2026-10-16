@@ -224,6 +224,14 @@
   font-size: 15px;
 }
 
+/* "Copy text" fell back to showing the words: they are selectable, never lost. */
+.pt-nb-alert__text {
+  inline-size: min(420px, 60vw);
+  block-size: 64px;
+  font: 14px/20px var(--pt-font-you);
+  color: var(--pt-pen);
+}
+
 /* A dismissed failure, still visible until the save succeeds. */
 .pt-nb-chip {
   position: fixed;

@@ -3,8 +3,7 @@
 /**
  * useNotebookPage — one page, loaded once and then edited locally through S5b's `history.ts`
  * (S5c, #208). Every command's touched items go to `useItemSaver`, which saves them in the
- * background and reports where saving stands; an item deleted somewhere else (a 404) is dropped
- * from the page here, without a history entry.
+ * background and reports where saving stands.
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -29,8 +28,10 @@ export interface NotebookPageModel {
   readonly step: Step | null;
   /** Where saving stands (conflict, failures, refusals, items gone). */
   readonly save: SaveStatus;
-  /** Items on the page that the server does not have as shown. */
+  /** Items on the page that the server does not have as shown, counted at this render. */
   readonly unsaved: number;
+  /** The words of unsaved notes and stickies, for "Copy text". */
+  readonly unsavedText: () => string;
   readonly run: (cmd: Command) => void;
   readonly undo: () => void;
   readonly redo: () => void;
@@ -88,13 +89,6 @@ export function useNotebookPage(paperId: string, pageId: string): NotebookPageMo
   const saver = useItemSaver(pageId, {
     items: () => stepRef.current?.state.items ?? [],
     body: (item) => bodyOf(item, bodies.current),
-    onGone: (id) => {
-      const now = stepRef.current;
-      if (now === null) return;
-      const items = now.state.items.filter((i) => i.id !== id);
-      stepRef.current = { ...now, state: { ...now.state, items } };
-      setStep(stepRef.current);
-    },
     // The page list's counts are the server's; re-read them once a burst has landed.
     onSettled: () => void client.invalidateQueries({ queryKey: notebookKeys.pages(paperId) }),
   });
@@ -128,6 +122,7 @@ export function useNotebookPage(paperId: string, pageId: string): NotebookPageMo
     step,
     save: saver.status,
     unsaved: step === null ? 0 : saver.unsaved(),
+    unsavedText: saver.unsavedText,
     run: (cmd) =>
       apply(
         (s) => execute(s, cmd),
