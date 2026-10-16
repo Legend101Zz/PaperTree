@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "PaperTree API contract: papers",
-  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: LibraryPaper, JobSummary, UploadAccepted, JobAccepted, JobStatus, ReparseRequest.",
+  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: LibraryPaper, JobSummary, UploadAccepted, JobAccepted, JobStatus, ReparseRequest, ReadingStateUpdate.",
   "$defs": {
     "JobAccepted": {
       "additionalProperties": false,
@@ -310,6 +310,54 @@
         "updated_at": {
           "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
           "type": "string"
+        },
+        "reading": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReadingProgress"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "year": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "arxiv_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "arxiv_category": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "thread_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "has_summary": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -325,9 +373,80 @@
         "parser_version",
         "highlight_count",
         "created_at",
-        "updated_at"
+        "updated_at",
+        "reading",
+        "year",
+        "arxiv_id",
+        "arxiv_category",
+        "thread_count",
+        "has_summary"
       ],
       "title": "LibraryPaper",
+      "type": "object"
+    },
+    "ReadingProgress": {
+      "additionalProperties": false,
+      "description": "Where the caller is in a paper (#192). A paper they have not started has `reading: null`.\n\nPages are zero-based. `state` is the progress rule: `finished` once the last page was\nreached (or the paper was marked read), else `reading`.",
+      "properties": {
+        "last_page": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "furthest_page": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "opened_at": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+          "type": "string"
+        },
+        "finished_at": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "state": {
+          "enum": ["reading", "finished"],
+          "type": "string"
+        }
+      },
+      "required": ["last_page", "furthest_page", "page_count", "opened_at", "finished_at", "state"],
+      "title": "ReadingProgress",
+      "type": "object"
+    },
+    "ReadingStateUpdate": {
+      "additionalProperties": false,
+      "description": "`PUT /papers/{id}/reading-state` (#192): the page the reader is on now.",
+      "properties": {
+        "last_page": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mode": {
+          "enum": ["source", "guided", "split"],
+          "type": "string"
+        }
+      },
+      "required": ["last_page"],
+      "title": "ReadingStateUpdate",
       "type": "object"
     },
     "ReparseRequest": {

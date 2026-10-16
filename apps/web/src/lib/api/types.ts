@@ -83,6 +83,26 @@ export interface JobSummary {
   error_code: string | null;
 }
 
+/** The reading mode the reader saves with a place (`PUT /papers/{id}/reading-state`). */
+export type ReadingMode = 'source' | 'guided' | 'split';
+
+/** `GET /auth/me` and `PATCH /auth/me`. `display_name` is null until the person sets one. */
+export interface Me {
+  user_id: string;
+  email: string;
+  display_name: string | null;
+}
+
+/** The caller's place in a paper (#192); pages are zero-based. */
+export interface ReadingProgress {
+  last_page: number;
+  furthest_page: number;
+  page_count: number | null;
+  opened_at: string;
+  finished_at: string | null;
+  state: 'reading' | 'finished';
+}
+
 export interface LibraryPaper {
   paper_id: string;
   title: string;
@@ -97,6 +117,15 @@ export interface LibraryPaper {
   highlight_count: number;
   created_at: string;
   updated_at: string;
+  /** v0.2 (#192): the caller's place, or null when they have not started it. */
+  reading: ReadingProgress | null;
+  /** Year first published (arXiv id, else parser), or null. */
+  year: number | null;
+  arxiv_id: string | null;
+  /** Primary category from the arXiv stamp (`cs.CL`), or null. */
+  arxiv_category: string | null;
+  thread_count: number;
+  has_summary: boolean;
 }
 
 export interface ResolutionWire {

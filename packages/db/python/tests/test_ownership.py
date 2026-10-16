@@ -278,6 +278,7 @@ def test_conn_is_a_forbidden_token_outside_papertree_db() -> None:
         # is a slice of the one class that owns the connection, split into files only so that one
         # slice owns each file. They hold no connection of their own (`__slots__ = ()`).
         "packages/db/python/papertree_db/library.py",
+        "packages/db/python/papertree_db/reading.py",
         "packages/db/python/papertree_db/highlights.py",
         "packages/db/python/papertree_db/ai.py",
         "packages/db/python/papertree_db/canvas.py",

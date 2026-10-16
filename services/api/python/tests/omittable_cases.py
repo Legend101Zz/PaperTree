@@ -46,6 +46,7 @@ CASES: Final[dict[str, tuple[dict[str, Any], tuple[str, ...]]]] = {
     "AnchorV1": (capture_anchor(), ("subTarget",)),
     "AnchorV1In": (capture_anchor(), ("subTarget",)),
     "ReparseRequest": ({}, ("reason",)),
+    "ReadingStateUpdate": ({"last_page": 0}, ("mode",)),
     "HighlightPatch": ({}, ("color",)),
     "ResolutionPutItem": (
         {

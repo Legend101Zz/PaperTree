@@ -59,7 +59,7 @@ def test_the_legacy_0001_example_is_what_0005_writes(tmp_path: Path) -> None:
     shape = shapes.build_demo_shape(tmp_path)
     conn = shapes.raw_connect(shape.file)
     try:
-        assert migrate(conn, find_migrations_dir()).applied == (5,)
+        assert migrate(conn, find_migrations_dir()).applied == (5, 6)
         [row] = conn.execute(
             "SELECT anchor_json FROM anchors WHERE anchor_id = ?", (shapes.LEGACY_ANCHOR,)
         ).fetchall()

@@ -25,7 +25,14 @@ from typing import Annotated, Any, Final
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import FileResponse, JSONResponse, Response
-from papertree_db import SQLITE_INTEGER_MAX, BlockId, PaperId, PaperTreeDb, generation
+from papertree_db import (
+    SQLITE_INTEGER_MAX,
+    BlockId,
+    PaperId,
+    PaperNotFound,
+    PaperTreeDb,
+    generation,
+)
 from papertree_document_worker.crops import CropStore
 from papertree_document_worker.pdf import pymupdf
 from starlette.datastructures import UploadFile
@@ -46,7 +53,13 @@ from ..library import (
     plan_upload,
 )
 from ..logging import user_ref
-from ..schemas import JobAccepted, LibraryPaper, ReparseRequest, UploadAccepted
+from ..schemas import (
+    JobAccepted,
+    LibraryPaper,
+    ReadingStateUpdate,
+    ReparseRequest,
+    UploadAccepted,
+)
 from ..security import user_for_token
 from ..settings import Settings
 from ._shared import GenParam, json_body, public_row
@@ -258,6 +271,27 @@ async def get_paper(call: CallerDep, paper_id: str, gen: GenParam) -> LibraryPap
     if gen is not None and gen not in call.db.list_generations(call.db_owner, PaperId(paper_id)):
         raise ApiError("not_found", "no such generation")
     return paper
+
+
+@router.put("/papers/{paper_id}/reading-state", status_code=status.HTTP_204_NO_CONTENT)
+async def put_reading_state(
+    call: CallerDep,
+    paper_id: str,
+    body: Annotated[ReadingStateUpdate, Depends(json_body(ReadingStateUpdate))],
+) -> Response:
+    """The reader says which page it is on (#192). A convenience write: the reader keeps its exact
+    place locally, this is what the library's "reading now" and "continue" are built from.
+
+    404 for a paper that is not the caller's; 422 for a page past the last one when the page count
+    is known. `ReadingStateUpdate` already refused a negative page.
+    """
+    try:
+        call.db.put_reading_state(call.db_owner, PaperId(paper_id), body.last_page, body.mode)
+    except PaperNotFound as exc:
+        raise ApiError("not_found", "no such paper") from exc
+    except ValueError as exc:
+        raise ApiError("validation_failed", f"last_page: {exc}") from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ── delete, retry, re-parse ──────────────────────────────────────────────────────────────────

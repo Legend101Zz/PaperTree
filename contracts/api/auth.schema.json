@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "PaperTree API contract: auth",
-  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: Credentials, Session, Me.",
+  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: Credentials, Session, Me, MeUpdate.",
   "$defs": {
     "Credentials": {
       "additionalProperties": false,
@@ -30,10 +30,34 @@
         },
         "email": {
           "type": "string"
+        },
+        "display_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
-      "required": ["user_id", "email"],
+      "required": ["user_id", "email", "display_name"],
       "title": "Me",
+      "type": "object"
+    },
+    "MeUpdate": {
+      "additionalProperties": false,
+      "description": "`PATCH /auth/me` (#192).",
+      "properties": {
+        "display_name": {
+          "maxLength": 60,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["display_name"],
+      "title": "MeUpdate",
       "type": "object"
     },
     "Session": {
