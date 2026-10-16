@@ -444,6 +444,88 @@ class DocumentCache:
         return indexed
 
 
+# ── passage locators: where a cited block sits (#201) ────────────────────────────────────────
+
+#: Block types a reader counts as a numbered paragraph.
+_BODY_PARAGRAPH_TYPES: Final = frozenset({"paragraph", "abstract"})
+
+
+def anchor_block_id(anchor: Mapping[str, Any]) -> str | None:
+    """The block a citation Anchor names (its ``BlockSelector``), or None."""
+    for selector in _selectors(anchor, "BlockSelector"):
+        block_id = selector.get("blockId")
+        if isinstance(block_id, str) and block_id:
+            return block_id
+    return None
+
+
+def passage_key(generation: int, block_id: str) -> str:
+    """``g{generation}:{block_id}``: equal keys mean "the same passage" within one answer.
+
+    A display key for numbering passages, never stored on a user row (a block id is only a hint,
+    AGENTS.md §4)."""
+    return f"g{generation}:{block_id}"
+
+
+class PassageLocators:
+    """Derives ``{passage_key, page_index, para_index, section_heading}`` for cited blocks.
+
+    ``para_index`` is the 1-based position of a block among its page's body paragraphs IN READING
+    ORDER (``PaperIndex.reading_order``: ``Page.flows`` plus parent/child descent, never
+    ``doc_order ?? 0``, AGENTS.md §4). Counted: top-level ``body`` blocks typed ``paragraph`` or
+    ``abstract``. Not counted: a section's heading block (the parser sometimes types one
+    ``paragraph``), and on the page holding the abstract every block before it (front matter, e.g.
+    the attribution banner on p. 1 of Attention, which would otherwise make the abstract ¶2).
+    Built once per index; ``locate`` is then a dict lookup.
+    """
+
+    def __init__(self, index: PaperIndex) -> None:
+        self._index = index
+        self._para_of: dict[str, int] = {}
+        heading_ids = {s.heading_block_id for s in index.sections}
+        abstract_id = next(
+            (b for b in index.reading_order if (blk := index.block(b)) and blk.type == "abstract"),
+            None,
+        )
+        abstract = index.block(abstract_id) if abstract_id else None
+        before_abstract = abstract is not None
+        counts: dict[int, int] = {}
+        for block_id in index.reading_order:
+            block = index.block(block_id)
+            if block is None:
+                continue
+            if abstract is not None and block.page_index == abstract.page_index:
+                if block_id == abstract_id:
+                    before_abstract = False
+                elif before_abstract:
+                    continue
+            if (
+                block.type not in _BODY_PARAGRAPH_TYPES
+                or block.flow != "body"
+                or not index.is_top_level(block_id)
+                or block_id in heading_ids
+            ):
+                continue
+            counts[block.page_index] = counts.get(block.page_index, 0) + 1
+            self._para_of[block_id] = counts[block.page_index]
+
+    def locate(self, anchor: Mapping[str, Any]) -> dict[str, Any] | None:
+        """The locator of the block ``anchor`` names, or None when this generation lacks it."""
+        block_id = anchor_block_id(anchor)
+        block = self._index.block(block_id) if block_id else None
+        if block_id is None or block is None:
+            return None
+        heading = section_title(self._index, block_id)
+        if heading is None and block.type == "abstract":
+            heading = "Abstract"
+        return {
+            "passage_key": passage_key(int(self._index.generation), block_id),
+            "page_index": block.page_index,
+            "para_index": self._para_of.get(block_id),
+            "section_heading": heading,
+        }
+
+
 # ── on done: markers, claims, grounding, citation Anchors ─────────────────────────────────────
 
 

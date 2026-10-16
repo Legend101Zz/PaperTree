@@ -74,6 +74,34 @@ CASES: Final[dict[str, tuple[dict[str, Any], tuple[str, ...]]]] = {
     "NodePatch": ({"version": 1}, ("x", "y", "w", "h", "z", "body")),
     "EdgePatch": ({}, ("kind",)),
     "BoardPatch": ({}, ("title",)),
+    "Citation": (
+        {
+            "citation_id": "cit_01K63A9W4XJ7Q2N8R5T0V3Y6ZE",
+            "ordinal": 0,
+            "marker": "b1",
+            "page_index": 0,
+            "anchor": capture_anchor(),
+            "supported": True,
+        },
+        ("locator",),
+    ),
+    "Message": (
+        {
+            "message_id": "msg_01K63A9W4XJ7Q2N8R5T0V3Y6ZF",
+            "thread_id": "thr_01K63A9W4XJ7Q2N8R5T0V3Y6ZB",
+            "ordinal": 0,
+            "role": "user",
+            "content": "Explain this passage.",
+            "status": "complete",
+            "error": None,
+            "generation": 1,
+            "run": None,
+            "citations": [],
+            "created_at": "2026-09-26T05:00:00.000Z",
+            "completed_at": None,
+        },
+        ("coverage",),
+    ),
     "AgentStatus": ({"phase": "tool"}, ("tool", "label", "attempt", "delay_ms")),
 }
 

@@ -48,6 +48,7 @@ from ..deps import (
     SettingsDep,
 )
 from ..errors import ApiError, ErrorEnvelope
+from ..exchanges import ask_excerpt, message_coverage
 from ..schemas import (
     AgentHistory,
     AgentPaper,
@@ -449,6 +450,8 @@ def thread_wire(row: dict[str, Any]) -> dict[str, Any]:
         "created_at": wire_time(row["created_at"]),
         "updated_at": wire_time(row["updated_at"]),
         "message_count": int(row["message_count"]),
+        "ask": ask_excerpt(row["first_ask"]),
+        "last_status": row["last_status"],
     }
 
 
@@ -464,7 +467,11 @@ def message_wire(
     row: dict[str, Any],
     run: dict[str, Any] | None,
     citations: list[dict[str, Any]],
+    locators: evidence.PassageLocators | None = None,
 ) -> dict[str, Any]:
+    """One stored message as the wire shape. ``locators`` (the parse of the message's generation,
+    None when that parse can no longer be loaded) adds each citation's ``locator``; an assistant
+    message that is complete or partial also gets its ``coverage`` (#201)."""
     status, error_code = row["status"], row["error_code"]
     if status == "streaming" and not _run_is_live(run):
         # An answer whose run can no longer finish (the API process stopped mid-stream, so no
@@ -473,7 +480,21 @@ def message_wire(
         status = "partial" if row["content"] else "error"
         error_code = "agent_unavailable"
     failed = status in ("error", "partial", "aborted")
-    return {
+    cited: list[dict[str, Any]] = []
+    for c in citations:
+        item: dict[str, Any] = {
+            "citation_id": c["citation_id"],
+            "ordinal": c["ordinal"],
+            "marker": c["marker"],
+            "page_index": c["page_index"],
+            "anchor": c["anchor"],
+            "supported": c["supported"],
+        }
+        locator = locators.locate(c["anchor"]) if locators is not None else None
+        if locator is not None:
+            item["locator"] = locator
+        cited.append(item)
+    wire: dict[str, Any] = {
         "message_id": row["message_id"],
         "thread_id": row["thread_id"],
         "ordinal": row["ordinal"],
@@ -483,25 +504,46 @@ def message_wire(
         "error": runs.error_wire(error_code) if failed and error_code else None,
         "generation": row["generation"],
         "run": runs.run_summary(run) if run is not None else None,
-        "citations": [
-            {
-                "citation_id": c["citation_id"],
-                "ordinal": c["ordinal"],
-                "marker": c["marker"],
-                "page_index": c["page_index"],
-                "anchor": c["anchor"],
-                "supported": c["supported"],
-            }
-            for c in citations
-        ],
+        "citations": cited,
         "created_at": wire_time(row["created_at"]),
         "completed_at": wire_time(row["completed_at"]) if row["completed_at"] else None,
     }
+    if row["role"] == "assistant" and status in ("complete", "partial"):
+        wire["coverage"] = message_coverage(
+            row["content"],
+            [
+                (
+                    c["locator"]["passage_key"]
+                    if "locator" in c
+                    else evidence.passage_key(
+                        int(row["generation"]),
+                        evidence.anchor_block_id(c["anchor"]) or str(c["marker"]),
+                    ),
+                    c["supported"],
+                )
+                for c in cited
+            ],
+        )
+    return wire
 
 
 # RESPONSES ARE BUILT, NOT RE-VALIDATED (the highlight routes' rule): the wire shape is written
 # field by field and returned as JSON; `response_model` is what the OpenAPI document says, and
 # `test_threads_api.py` holds every response to `contracts/api/threads.schema.json` and the model.
+
+
+def _locators(
+    call: Caller, cache: IndexCacheDep, paper_id: str, generation: int
+) -> evidence.PassageLocators | None:
+    """The locators of one generation's parse, None if it can no longer be loaded (the citations
+    are then shown by page only, the same as a caption)."""
+    try:
+        index = evidence.load_index(
+            cache, call.db, call.db_owner, call.user_id, paper_id, generation
+        )
+    except KeyError:
+        return None
+    return evidence.PassageLocators(index)
 
 
 @router.get("/papers/{paper_id}/threads", response_model=list[Thread], responses=ERRORS)
@@ -513,7 +555,9 @@ async def list_threads(call: CallerDep, paper_id: str) -> Response:
 
 
 @router.get("/papers/{paper_id}/threads/{thread_id}", response_model=ThreadDetail, responses=ERRORS)
-async def get_thread(call: CallerDep, paper_id: str, thread_id: str) -> Response:
+async def get_thread(
+    call: CallerDep, paper_id: str, thread_id: str, cache: IndexCacheDep
+) -> Response:
     owned_paper(call, paper_id)
     db, owner = call.db, call.db_owner
     runs.sweep_orphans(db)
@@ -524,10 +568,15 @@ async def get_thread(call: CallerDep, paper_id: str, thread_id: str) -> Response
     citations: dict[str, list[dict[str, Any]]] = {}
     for citation in db.list_citations(owner, [m["message_id"] for m in messages]):
         citations.setdefault(citation["message_id"], []).append(citation)
+    parses: dict[int, evidence.PassageLocators | None] = {}  # one parse per generation read
     out = []
     for message in messages:
         run = db.get_run(owner, message["run_id"]) if message["run_id"] else None
-        out.append(message_wire(message, run, citations.get(message["message_id"], [])))
+        mine = citations.get(message["message_id"], [])
+        generation = int(message["generation"])
+        if mine and generation not in parses:
+            parses[generation] = _locators(call, cache, paper_id, generation)
+        out.append(message_wire(message, run, mine, parses.get(generation)))
     return JSONResponse({"thread": thread_wire(thread), "messages": out})
 
 

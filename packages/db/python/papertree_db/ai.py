@@ -340,7 +340,8 @@ class AiMixin(_Base):
                 )
 
     def list_threads(self, owner: OwnerId, paper_id: PaperId) -> list[Row]:
-        """This owner's threads on a paper, most recently active first, with ``message_count``."""
+        """This owner's threads on a paper, most recently active first (the order canvas code relies
+        on; do not change it), with ``message_count``, ``first_ask`` and ``last_status``."""
         owner_id = self._resolve(owner)
         return self._all(
             _THREAD_SELECT + " WHERE t.owner_id = ? AND t.paper_id = ? "
@@ -917,7 +918,15 @@ class AiMixin(_Base):
 
 _THREAD_SELECT: Final = (
     "SELECT t.thread_id, t.paper_id, t.kind, t.title, t.origin_anchor_json, t.agent_state_json, "
-    "t.created_at, t.updated_at, COUNT(m.message_id) AS message_count FROM ai_threads t "
+    "t.created_at, t.updated_at, COUNT(m.message_id) AS message_count, "
+    # The thread list's `ask` and `last_status` (#201) ride on the same query as two scalar
+    # subqueries, so a list of N threads is still one statement (no N+1). The ask is bounded here;
+    # the API cuts it to 160 characters on a word boundary.
+    "(SELECT substr(f.content, 1, 1000) FROM ai_messages f WHERE f.owner_id = t.owner_id "
+    "AND f.thread_id = t.thread_id AND f.role = 'user' ORDER BY f.ordinal LIMIT 1) AS first_ask, "
+    "(SELECT l.status FROM ai_messages l WHERE l.owner_id = t.owner_id "
+    "AND l.thread_id = t.thread_id AND l.role = 'assistant' ORDER BY l.ordinal DESC LIMIT 1) "
+    "AS last_status FROM ai_threads t "
     "LEFT JOIN ai_messages m ON m.owner_id = t.owner_id AND m.thread_id = t.thread_id"
 )
 

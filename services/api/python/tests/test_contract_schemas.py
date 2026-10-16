@@ -123,6 +123,8 @@ WHERE: dict[str, tuple[tuple[str, str], ...]] = {
     "ResolutionPutItem": (("api/highlights", "ResolutionPutItem"),),
     "ThreadCreate": (("api/threads", "ThreadCreate"),),
     "FollowUp": (("api/threads", "FollowUp"),),
+    "Citation": (("api/threads", "Citation"),),
+    "Message": (("api/threads", "Message"),),
     "SseStatus": (("api/sse", "SseStatus"),),
     "NodeCreate": (("api/boards", "NodeCreate"),),
     "NodePatch": (("api/boards", "NodePatch"),),
