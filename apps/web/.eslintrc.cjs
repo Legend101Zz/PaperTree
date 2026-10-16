@@ -18,6 +18,8 @@ const importOrder = {
 /** Docs on everything exported: functions, components, hooks, classes, interfaces and types. */
 const requireDocs = {
   publicOnly: true,
+  // No autofix: `eslint --fix` would insert empty `/** */` stubs that satisfy this rule and say nothing.
+  enableFixer: false,
   require: {
     FunctionDeclaration: true,
     ClassDeclaration: true,

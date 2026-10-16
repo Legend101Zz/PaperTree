@@ -14,6 +14,8 @@ module.exports = {
       'error',
       {
         publicOnly: true,
+        // No autofix: `eslint --fix` would insert empty `/** */` stubs that say nothing.
+        enableFixer: false,
         require: {
           FunctionDeclaration: true,
           ClassDeclaration: true,
