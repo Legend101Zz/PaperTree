@@ -29,16 +29,25 @@ const STATES = ['default', 'hover', 'focus', 'disabled'] as const;
 
 function noop(): void {}
 
+/**
+ * `inert` as the plain attribute `inert=""`: React 18 drops a boolean `inert`, so the value is a string
+ * that the type pretends is a boolean.
+ */
+const INERT = { inert: '' } as unknown as { readonly inert: boolean };
+
 /** A labelled cell of the states grid. */
 function Cell({
   caption,
+  inert = false,
   children,
 }: {
   readonly caption: string;
+  /** A pure illustration of a state: out of the tab order and the accessibility tree. */
+  readonly inert?: boolean;
   readonly children: ReactNode;
 }): ReactNode {
   return (
-    <div className="ds-cell">
+    <div className="ds-cell" {...(inert ? INERT : {})}>
       {children}
       <span className="ds-caption">{caption}</span>
     </div>
@@ -54,7 +63,7 @@ function ButtonGrid(): ReactNode {
           <h3 className="ds-label">Button · {variant}</h3>
           <div className="ds-cells">
             {STATES.map((state) => (
-              <Cell key={state} caption={state}>
+              <Cell key={state} caption={state} inert={state !== 'default'}>
                 <Button
                   variant={variant}
                   disabled={state === 'disabled'}
@@ -86,7 +95,7 @@ export function ControlStates(): ReactNode {
           <Cell caption="default">
             <ToolbarButton label="Board" icon={<Layers size={16} />} />
           </Cell>
-          <Cell caption="pressed">
+          <Cell caption="pressed" inert>
             <ToolbarButton
               label="Board"
               icon={<Layers size={16} />}
@@ -94,10 +103,10 @@ export function ControlStates(): ReactNode {
               onPressedChange={noop}
             />
           </Cell>
-          <Cell caption="icon only · 44 touch">
+          <Cell caption="icon only · 44 touch" inert>
             <ToolbarButton label="Board" icon={<Layers size={16} />} iconOnly size="touch" />
           </Cell>
-          <Cell caption="disabled">
+          <Cell caption="disabled" inert>
             <ToolbarButton label="Board" icon={<Layers size={16} />} disabled />
           </Cell>
         </div>
@@ -108,7 +117,7 @@ export function ControlStates(): ReactNode {
           <Cell caption="empty">
             <TextField label="Ask a follow-up" placeholder="Ask a follow-up" />
           </Cell>
-          <Cell caption="focus · your words">
+          <Cell caption="focus · your words" inert>
             <TextField
               label="Follow-up"
               voice="you"
@@ -116,7 +125,7 @@ export function ControlStates(): ReactNode {
               data-state="focus"
             />
           </Cell>
-          <Cell caption="error · text kept">
+          <Cell caption="error · text kept" inert>
             <TextField label="Follow-up" voice="you" defaultValue="Explain p. 99" error />
           </Cell>
         </div>

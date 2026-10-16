@@ -65,6 +65,15 @@ describe('design-system board', () => {
       expect(container.querySelector(selector), selector).not.toBeNull();
     }
     expect(screen.getAllByRole('button', { name: /Transformers/ }).length).toBeGreaterThan(0);
+    // Forced-state demos are pure illustrations: out of the tab order, one live instance kept.
+    for (const el of container.querySelectorAll('[data-state="hover"], [data-state="focus"]')) {
+      expect(el.closest('[inert]'), 'forced state is inert').not.toBeNull();
+    }
+    const live = [...container.querySelectorAll('.pt-button--primary')].filter(
+      (el) => el.closest('[inert]') === null,
+    );
+    expect(live.length).toBe(1);
+    expect(container.querySelectorAll('.pt-thread-swatch').length).toBe(7);
     expect(screen.getByText('Attention Is All You Need')).toBeTruthy();
   });
 });

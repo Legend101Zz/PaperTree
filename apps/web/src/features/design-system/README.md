@@ -30,3 +30,7 @@ Hover and focus are held still with `data-state="hover|focus"` on a `Button` or 
 answers it like `:hover` and `:focus-visible`). Pressed (`:active`), a marker's real lit echo and SegmentedControl
 focus cannot be held still and are not shown. Elevation fills and the lamp-lit stepping show when you switch the
 scheme; the colour tables show both schemes at once.
+
+Forced-state copies are `inert` (out of the tab order and the accessibility tree), so exactly one live,
+focusable instance of each component remains. Relation kinds are drawn by the shared `ThreadSwatch`
+(`packages/ui/src/threads.tsx`): colour plus a second cue, as DESIGN.md §5 says.

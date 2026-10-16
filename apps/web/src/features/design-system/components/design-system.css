@@ -130,13 +130,6 @@
   background: var(--pt-linen);
   border-radius: var(--pt-radius-paper);
 }
-.ds-wire__name,
-.ds-wire__glyph {
-  font-size: var(--pt-t-meta);
-}
-.ds-wire__glyph {
-  color: var(--pt-ink-2);
-}
 .ds-chip {
   display: flex;
   gap: var(--pt-space-2);

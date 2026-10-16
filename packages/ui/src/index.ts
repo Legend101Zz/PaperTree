@@ -37,3 +37,4 @@ export * from './furniture.js';
 export * from './citations.js';
 export * from './slips.js';
 export * from './trace.js';
+export * from './threads.js';

@@ -49,6 +49,12 @@ const ROWS: readonly TraceRowData[] = [
 
 function noop(): void {}
 
+/**
+ * `inert` as the plain attribute `inert=""`: React 18 drops a boolean `inert`, so the value is a string
+ * that the type pretends is a boolean.
+ */
+const INERT = { inert: '' } as unknown as { readonly inert: boolean };
+
 /** The reader-side half of the Components section. */
 export function ReaderStates(): ReactNode {
   const [lit, setLit] = useState<number | null>(2);
@@ -73,15 +79,15 @@ export function ReaderStates(): ReactNode {
             <NumberedMarker n={2} label="p. 2 ¶2" onFlash={noop} />
             <PageTab page={2} para={2} />
           </Cell2>
-          <Cell2 caption="lit (hover or focus)">
+          <Cell2 caption="lit (hover or focus)" inert>
             <NumberedMarker n={2} label="p. 2 ¶2" lit onFlash={noop} />
             <PageTab page={2} para={2} lit />
           </Cell2>
-          <Cell2 caption="not verified · dashed tab">
+          <Cell2 caption="not verified · dashed tab" inert>
             <NumberedMarker n={6} label="p. 10" notVerified onFlash={noop} />
             <PageTab page={10} status="not-verified" />
           </Cell2>
-          <Cell2 caption="touch · 44 px target">
+          <Cell2 caption="touch · 44 px target" inert>
             <NumberedMarker n={3} label="p. 4 ¶1" size="touch" onFlash={noop} />
           </Cell2>
         </div>
@@ -134,7 +140,9 @@ export function ReaderStates(): ReactNode {
         <h3 className="ds-label">Shelf label holder</h3>
         <div className="ds-cells ds-cells--inline">
           <LabelHolder name="Transformers & attention" count={7} onSelect={noop} />
-          <LabelHolder name="Optimization" count={3} onSelect={noop} selected />
+          <span {...INERT}>
+            <LabelHolder name="Optimization" count={3} onSelect={noop} selected />
+          </span>
         </div>
       </div>
       <div className="ds-row">
@@ -154,13 +162,16 @@ export function ReaderStates(): ReactNode {
 /** Inline cell: items side by side over a caption. */
 function Cell2({
   caption,
+  inert = false,
   children,
 }: {
   readonly caption: string;
+  /** A pure illustration of a state: out of the tab order and the accessibility tree. */
+  readonly inert?: boolean;
   readonly children: ReactNode;
 }): ReactNode {
   return (
-    <div className="ds-cell">
+    <div className="ds-cell" {...(inert ? INERT : {})}>
       <div className="ds-cell__items">{children}</div>
       <span className="ds-caption">{caption}</span>
     </div>
