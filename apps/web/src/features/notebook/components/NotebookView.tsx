@@ -54,6 +54,11 @@ const SENT: Readonly<Record<Exclude<SendResult, 'already'>, string>> = {
   failed: 'The page could not be sent to the board. Try again.',
 };
 
+/** Said when a stroke starts in the band the open answer opened (`model/inkPlace`). */
+export const INK_FOLD_NOTE =
+  'Ink can’t start beside the opened part of the answer: that space goes when the answer ' +
+  'closes. Start above it or below it, or collapse the answer first.';
+
 /** One notebook page, editable. */
 export function NotebookView({ paperId, pageId }: NotebookViewProps): ReactNode {
   const model = useNotebookPage(paperId, pageId);
@@ -84,6 +89,7 @@ export function NotebookView({ paperId, pageId }: NotebookViewProps): ReactNode 
   const [matches, setMatches] = useState<ReadonlySet<string>>(NO_MATCHES);
   const [sent, setSent] = useState<SendResult | null>(null);
   const [dismissed, setDismissed] = useState<string | null>(null);
+  const [foldNote, setFoldNote] = useState(0);
   const items = model.step?.state.items ?? [];
 
   const exchanges = useMemo(
@@ -131,7 +137,11 @@ export function NotebookView({ paperId, pageId }: NotebookViewProps): ReactNode 
     pageGone: model.save.pageGone || template.save.pageGone || model.ink.pageGone,
     failed: model.save.failed + (template.save.failed ? 1 : 0) + model.ink.failed,
     failure: model.save.failure + template.save.failure + model.ink.failure,
-    rejected: [...model.save.rejected, ...model.ink.rejected],
+    // Said as sentences (`SaveNotice`), so a refused stroke is never called a note.
+    rejected: [
+      ...model.save.rejected.map((d) => `A note could not be saved: ${d}`),
+      ...model.ink.rejected.map((d) => `A stroke could not be saved: ${d}`),
+    ],
   };
   const retry = (): void => {
     model.retry();
@@ -244,6 +254,8 @@ export function NotebookView({ paperId, pageId }: NotebookViewProps): ReactNode 
                             },
                       onStroke: editing.draw,
                       onErase: editing.erase,
+                      penSeen: tools.penSeen,
+                      onRefused: () => setFoldNote((n) => n + 1),
                     }
               }
             />
@@ -276,7 +288,9 @@ export function NotebookView({ paperId, pageId }: NotebookViewProps): ReactNode 
         onRetry={retry}
         onReload={() => window.location.reload()}
       />
-      {notice === null || dismissed === notice.key ? null : (
+      {foldNote > 0 ? (
+        <Toast key={foldNote} message={INK_FOLD_NOTE} onDismiss={() => setFoldNote(0)} />
+      ) : notice === null || dismissed === notice.key ? null : (
         <Toast
           message={notice.message}
           action={notice.action}

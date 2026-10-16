@@ -4,7 +4,8 @@
  * The ink tools on the page (S5d, #209): the live stroke, drawn under the items like the stored
  * ink (`LiveInk`), and the surface that takes the pointer from the page while a tool is in the hand
  * (`InkSurface`). The surface exists only while a tool is held, so `touch-action: none` (no browser
- * pan or zoom mid-stroke) never stops a finger scrolling the page otherwise.
+ * pan or zoom mid-stroke) never stops a finger scrolling the page otherwise; nothing changes it
+ * mid-stroke (a palm is ignored by `useInkInput`, not by CSS).
  */
 import { forwardRef } from 'react';
 
@@ -52,9 +53,14 @@ export interface InkSurfaceProps {
   readonly top: number;
 }
 
-/** The pointer surface over the page while an ink tool is held. */
+/**
+ * The pointer surface over the page while an ink tool is held. With a drawing tool and the answer
+ * open, the band the answer opened says so under the pointer: no stroke can start there
+ * (`model/inkPlace`), and starting one there says why (`onRefused`).
+ */
 export function InkSurface({ options, top }: InkSurfaceProps): ReactNode {
   const handlers = useInkInput(options);
+  const { shift, scale } = options;
   return (
     <div
       className="pt-nb-surface"
@@ -62,6 +68,13 @@ export function InkSurface({ options, top }: InkSurfaceProps): ReactNode {
       aria-hidden="true"
       style={{ top }}
       {...handlers}
-    />
+    >
+      {options.pen === null || shift === null || shift.extra <= 0 ? null : (
+        <div
+          className="pt-nb-surface__fold"
+          style={{ top: shift.boundary * scale, height: shift.extra * scale }}
+        />
+      )}
+    </div>
   );
 }

@@ -132,11 +132,12 @@ export function SaveNotice(props: SaveNoticeProps): ReactNode {
       />
     );
   }
+  // `rejected` holds whole sentences: the page says whether a note or a stroke was refused.
   const quiet =
     status.rejected.length > 0
       ? {
           key: `rejected-${String(status.rejected.length)}`,
-          message: `A note could not be saved: ${status.rejected.at(-1) ?? ''}`,
+          message: status.rejected.at(-1) ?? '',
         }
       : status.recreated > 0
         ? {

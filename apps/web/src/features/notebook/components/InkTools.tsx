@@ -28,9 +28,10 @@ const TOOLS: readonly { tool: InkTool; label: string; key: string; icon: ReactNo
 
 /** Each nib with the diameter of its dot in the frame, in px. */
 const NIBS: readonly { nib: StrokeNib; label: string; dot: number }[] = [
-  { nib: 'EF', label: 'Extra fine nib', dot: 3 },
-  { nib: 'F', label: 'Fine nib', dot: 5 },
-  { nib: 'M', label: 'Medium nib', dot: 8 },
+  // Each name starts with the letters shown, so "click EF" works by voice (WCAG 2.5.3).
+  { nib: 'EF', label: 'EF, extra fine nib', dot: 3 },
+  { nib: 'F', label: 'F, fine nib', dot: 5 },
+  { nib: 'M', label: 'M, medium nib', dot: 8 },
 ];
 
 /** A swatch shows the pen's solid ink of its colour (notebook.css tokens, both schemes). */

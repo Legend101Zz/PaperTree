@@ -122,8 +122,9 @@ export type PointerRole = 'draw' | 'scroll';
 
 /**
  * Palm rejection. A pen draws, a mouse draws, and a finger draws until a pen has been seen on this
- * page; from then on a finger only scrolls, so a palm resting on the glass never inks. The latch
- * lasts until the page is left (a reload is the way back to finger drawing).
+ * page; from then on a finger only scrolls, so a palm resting on the glass never inks, and while the
+ * pen is down a finger does nothing at all (`useInkInput`). The latch lasts until the page is left,
+ * whatever tool is in the hand (`useInkTools`); a reload is the way back to finger drawing.
  *
  * @param pointerType - `PointerEvent.pointerType`.
  * @param penSeen - Whether a `pen` pointer has touched the ink surface on this page.

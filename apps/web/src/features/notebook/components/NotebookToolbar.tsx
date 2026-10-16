@@ -45,8 +45,11 @@ function ShapesTool({ onShape }: { onShape: NotebookToolbarProps['onShape'] }): 
     setOpen(false);
     trigger.current?.querySelector('button')?.focus();
   };
-  const escape = (e: { key: string }): void => {
-    if (e.key === 'Escape') close();
+  // Escape closes the menu and nothing else: the ink tool in the hand stays (`useInkTools`).
+  const escape = (e: { key: string; preventDefault: () => void }): void => {
+    if (e.key !== 'Escape' || !open) return;
+    e.preventDefault();
+    close();
   };
   useEffect(() => {
     if (!open) return undefined;

@@ -20,6 +20,7 @@ import { NoteItem } from './NoteItem';
 import { QuoteCard } from './QuoteCard';
 import { ShapeItem } from './ShapeItem';
 import { passageOfQuote } from '../model/exchange';
+import { inkLayers } from '../model/inkPlace';
 import {
   BINDING,
   TITLE_BAND,
@@ -73,7 +74,10 @@ export interface NotebookPageProps {
   /** Items the notebook search matched on this page; they are lit. */
   readonly matches: ReadonlySet<string>;
   /** The ink tool in the hand (S5d, #209); null while the page's own editing has the pointer. */
-  readonly ink?: Pick<InkInputOptions, 'tool' | 'pen' | 'onStroke' | 'onErase'> | null;
+  readonly ink?: Pick<
+    InkInputOptions,
+    'tool' | 'pen' | 'onStroke' | 'onErase' | 'penSeen' | 'onRefused'
+  > | null;
 }
 
 /** The exchange's rendered height in layout units (the scale transform does not change it). */
@@ -89,10 +93,6 @@ function useMeasuredHeight(): [(el: HTMLElement | null) => void, number | null] 
   return [ref, height];
 }
 
-function topOf(stroke: Stroke): number {
-  return stroke.points.reduce((min, p) => Math.min(min, p[1]), Infinity);
-}
-
 /** One notebook page, its template, title and items. */
 export function NotebookPage(props: NotebookPageProps): ReactNode {
   const { page, scale, exchange } = props;
@@ -102,13 +102,13 @@ export function NotebookPage(props: NotebookPageProps): ReactNode {
   const shift = exchangeShift(all, measured);
   const extra = shift?.extra ?? 0;
   const below = (y: number): boolean => shift !== null && y >= shift.boundary;
-  const [inkAbove, inkBelow] = useMemo(() => {
-    const line = shift?.boundary ?? Infinity;
-    return [
-      props.strokes.filter((s) => topOf(s) < line),
-      props.strokes.filter((s) => topOf(s) >= line),
-    ];
-  }, [props.strokes, shift?.boundary]);
+  // A stroke belongs to the layer it starts in (`model/inkPlace`): the eraser and the stored place
+  // of a new stroke follow the same rule.
+  const boundary = shift?.boundary ?? null;
+  const { above: inkAbove, below: inkBelow } = useMemo(
+    () => inkLayers(props.strokes, boundary),
+    [props.strokes, boundary],
+  );
   const height = pageHeight(all) + TITLE_BAND + extra;
   const live = useRef<SVGPathElement>(null);
   const ink = props.ink ?? null;

@@ -706,3 +706,10 @@
 .pt-nb-surface[data-tool='eraser'] {
   cursor: cell;
 }
+
+/* The band the open answer opened: no stroke can start there (model/inkPlace). */
+.pt-nb-surface__fold {
+  position: absolute;
+  inset-inline: 0;
+  cursor: not-allowed;
+}

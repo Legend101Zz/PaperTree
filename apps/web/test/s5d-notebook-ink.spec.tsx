@@ -5,16 +5,13 @@
  * inking, and a failed save is said and sent again. Synthetic pointer events on the real surface;
  * `fetch` plays the API (s5c-notebook-fixtures).
  */
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { NotebookView, decodeStroke } from '@/features/notebook';
+import { decodeStroke } from '@/features/notebook';
 import { bytesFromBase64 } from '@/features/notebook/model/wire';
 
-import { PAGE, PAPER, pageView, stubApi } from './s5c-notebook-fixtures';
-
-import type { Call } from './s5c-notebook-fixtures';
+import { STROKES, deletes, drag, mount, posts, sent, settle, stubInk } from './s5d-ink-fixtures';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
@@ -26,59 +23,6 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
-
-const STROKES = `/notebook/pages/${PAGE}/strokes`;
-
-/** The stroke routes, answered as the server does; `fail` answers the next POSTs with a 500. */
-function stubInk(fail = { posts: 0 }): Call[] {
-  return stubApi(pageView(), (call) => {
-    if (!call.path.startsWith(STROKES)) return null;
-    if (call.method === 'DELETE') return new Response(null, { status: 204 });
-    if (fail.posts > 0) {
-      fail.posts -= 1;
-      return new Response(JSON.stringify({ detail: 'down', code: 'internal' }), { status: 500 });
-    }
-    const added = (call.body as unknown as unknown[]).length;
-    return new Response(JSON.stringify({ added }), { status: 201 });
-  });
-}
-
-async function mount(): Promise<void> {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
-    <QueryClientProvider client={client}>
-      <NotebookView paperId={PAPER} pageId={PAGE} />
-    </QueryClientProvider>,
-  );
-  await screen.findByRole('toolbar', { name: 'Notebook tools' });
-}
-
-const surface = (): HTMLElement => {
-  const el = document.querySelector<HTMLElement>('.pt-nb-surface');
-  if (el === null) throw new Error('no ink surface: no tool in the hand');
-  return el;
-};
-
-/** A drag on the ink surface from one point to another, in screen px. */
-function drag(points: [number, number][], pointerType = 'mouse', pointerId = 1): void {
-  const [first, ...rest] = points;
-  const at = (p: [number, number]) => ({ pointerId, pointerType, clientX: p[0], clientY: p[1] });
-  fireEvent.pointerDown(surface(), { ...at(first!), button: 0, pressure: 0.5 });
-  for (const p of rest) fireEvent.pointerMove(surface(), at(p));
-  fireEvent.pointerUp(surface(), at(points.at(-1)!));
-}
-
-const posts = (calls: Call[]) => calls.filter((c) => c.method === 'POST' && c.path === STROKES);
-const deletes = (calls: Call[]) =>
-  calls.filter((c) => c.method === 'DELETE' && c.path.startsWith(`${STROKES}/`));
-const sent = (call: Call) =>
-  call.body as unknown as { stroke_id: string; tool: string; colour: string; points_b64: string }[];
-
-async function settle(): Promise<void> {
-  await act(async () => {
-    await new Promise((r) => setTimeout(r, 30));
-  });
-}
 
 describe('drawing', () => {
   it('saves a pen stroke as one POST whose blob decodeStroke reads back', async () => {
@@ -108,7 +52,7 @@ describe('drawing', () => {
     await mount();
     fireEvent.click(screen.getByRole('button', { name: 'Highlighter' }));
     fireEvent.click(screen.getByRole('button', { name: 'Green' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Medium nib' }));
+    fireEvent.click(screen.getByRole('button', { name: 'M, medium nib' }));
     drag([
       [100, 300],
       [200, 300],
@@ -141,7 +85,7 @@ describe('drawing', () => {
   });
 
   it('says a failed save, keeps the stroke, and sends it again on Try again', async () => {
-    const calls = stubInk({ posts: 1 });
+    const calls = stubInk({ failPosts: 1 });
     await mount();
     fireEvent.click(screen.getByRole('button', { name: 'Pen' }));
     drag([
