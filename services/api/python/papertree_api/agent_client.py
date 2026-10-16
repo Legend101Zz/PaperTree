@@ -89,12 +89,15 @@ KNOWN_MODELS: Final = ("MiniMax-M3", "MiniMax-M3.1-Flash-Preview")
 MODEL_PREFIX: Final = "minimax/"
 UNKNOWN_SDK: Final = "unknown"
 
-RunKind = Literal["explain", "ask", "summary"]
+RunKind = Literal["explain", "ask", "summary", "diagram"]
 
-PROMPT_VERSIONS: Final[dict[RunKind, Literal["explain-v1", "ask-v1", "summary-v1"]]] = {
+PROMPT_VERSIONS: Final[
+    dict[RunKind, Literal["explain-v1", "ask-v1", "summary-v1", "diagram-v1"]]
+] = {
     "explain": "explain-v1",
     "ask": "ask-v1",
     "summary": "summary-v1",
+    "diagram": "diagram-v1",
 }
 
 #: contracts.md §8 `ai_runs.code_path` literals.
@@ -102,6 +105,7 @@ CODE_PATHS: Final[dict[RunKind, str]] = {
     "explain": "api.threads.explain>agent.v1.runs>pi.createAgentSession>minimax.anthropic-messages",
     "ask": "api.threads.ask>agent.v1.runs>pi.createAgentSession>minimax.anthropic-messages",
     "summary": "api.summary>agent.v1.runs>pi.createAgentSession>minimax.anthropic-messages",
+    "diagram": "api.threads.diagram>agent.v1.runs>pi.createAgentSession>minimax.anthropic-messages",
 }
 
 #: contracts.md §3.2 "Limits by kind".
@@ -131,6 +135,18 @@ LIMITS: Final[dict[RunKind, AgentLimits]] = {
         max_tool_calls=12,
         max_turns=6,
         max_output_tokens=6144,
+        max_retries=1,
+    ),
+    # A plate (v0.2 S7a, #216): at most twelve one-line parts, so about 2,000 output tokens, read
+    # from the seed and at most a few passages or sections (the agent refuses the other tools for
+    # this kind). idle_ms 30 s: the first line comes after the model has planned the whole figure.
+    # Whether Flash's thinking leaves room in 2,048 tokens is NOT CONFIRMED until S7b's live smoke.
+    "diagram": AgentLimits(
+        deadline_ms=90_000,
+        idle_ms=30_000,
+        max_tool_calls=4,
+        max_turns=4,
+        max_output_tokens=2048,
         max_retries=1,
     ),
 }
@@ -712,6 +728,8 @@ class RunBroker:
                     for b in bullets
                 ],
             }
+        elif spec.kind == "diagram":
+            citations = []  # a plate's evidence is its parts' Anchors, not `[bN]` markers
         else:
             citations = evidence.cite_answer(final_text, minter) if final_text else []
 
@@ -874,7 +892,17 @@ def require_configured(settings: Settings) -> None:
 #: the check and overshoot the budget N-fold. These are deliberately above the live-measured costs
 #: (2026-10-15, MiniMax-M3: an explain about $0.002-0.003, an ask about $0.002-0.005, a summary
 #: about $0.015 when it read the whole paper by tools), so the cap errs on the side of waiting.
-RUN_RESERVE_USD: Final[dict[str, float]] = {"explain": 0.01, "ask": 0.02, "summary": 0.05}
+RUN_RESERVE_USD: Final[dict[str, float]] = {
+    "explain": 0.01,
+    "ask": 0.02,
+    "summary": 0.05,
+    # Unmeasured until S7b's live smoke: a seed like an explain's and at most 2,048 output tokens
+    # cost about $0.004 on M3 rates, so the ask's reserve errs on the side of waiting.
+    "diagram": 0.02,
+    # The topic Flash run (#242) is not built; a row of it may already be recorded (0011 allows
+    # the kind), so it has a reserve now, the explain's, and never meets a missing key here.
+    "topic": 0.01,
+}
 
 
 def sweep_orphans(db: PaperTreeDb) -> int:

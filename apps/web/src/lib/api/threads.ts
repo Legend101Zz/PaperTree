@@ -12,10 +12,11 @@ import type { Anchor, Message, SseEvent, Thread } from './types';
 const seg = encodeURIComponent;
 
 export interface CreateThreadBody {
-  readonly kind: 'explain' | 'ask';
-  /** Required for `explain`. */
+  readonly kind: 'explain' | 'ask' | 'diagram';
+  /** Required for `explain` and `diagram`. */
   readonly anchor?: Anchor;
-  /** 1..2000; the server defaults it to "Explain this passage." */
+  /** 1..2000; the server defaults it to "Explain this passage." ("Explain with a diagram." for a
+   * diagram). */
   readonly question?: string;
 }
 
@@ -23,6 +24,8 @@ export interface FollowUpBody {
   readonly question: string;
   /** Re-run a failed assistant message instead of appending a new user turn. */
   readonly retry_of?: string;
+  /** Redraw a finished diagram answer of this thread (required on a diagram thread). */
+  readonly redraw_of?: string;
 }
 
 export const threadsApi = {

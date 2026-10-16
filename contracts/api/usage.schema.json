@@ -39,9 +39,15 @@
         },
         "summary": {
           "$ref": "#/$defs/UsageBucket"
+        },
+        "diagram": {
+          "$ref": "#/$defs/UsageBucket"
+        },
+        "topic": {
+          "$ref": "#/$defs/UsageBucket"
         }
       },
-      "required": ["explain", "ask", "summary"],
+      "required": ["explain", "ask", "summary", "diagram", "topic"],
       "title": "UsageByKind",
       "type": "object"
     },

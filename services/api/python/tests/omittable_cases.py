@@ -63,7 +63,7 @@ CASES: Final[dict[str, tuple[dict[str, Any], tuple[str, ...]]]] = {
         ("upgraded_anchor",),
     ),
     "ThreadCreate": ({"kind": "ask"}, ("anchor",)),
-    "FollowUp": ({"question": "And that?"}, ("retry_of",)),
+    "FollowUp": ({"question": "And that?"}, ("retry_of", "redraw_of")),
     "SseStatus": ({"phase": "tool"}, ("label", "attempt", "delay_ms")),
     "NodeCreate": (
         {
@@ -108,7 +108,7 @@ CASES: Final[dict[str, tuple[dict[str, Any], tuple[str, ...]]]] = {
             "created_at": "2026-09-26T05:00:00.000Z",
             "completed_at": None,
         },
-        ("coverage",),
+        ("coverage", "diagram"),
     ),
     # v0.2 S5a (#206): the notebook.
     "NotebookPageCreate": (
