@@ -10,20 +10,24 @@ import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
 
 import { SummaryView } from '@/components/explain/SummaryView';
 import { useReaderActions } from '@/components/reader/actions';
-import { dehyphenate } from '@/lib/markdown';
 
+import { cleanQuote, selectorOf } from '../model/anchor';
 import { buildExchanges } from '../model/exchange';
 import { isStored } from '../model/messages';
 import { Composer } from './Composer';
 import { Exchange } from './Exchange';
+import { ThreadReadFailure } from './ThreadReadFailure';
 
 import type { ExplainController, ExplainRequest } from '@/components/explain/useExplainActions';
 import type { Citation } from '@/lib/api/types';
+import type { ThreadsState } from '../hooks/useThreads';
 import type { PassageMarker } from '../model/exchange';
 
 /** Props for `ThreadView`. */
 export interface ThreadViewProps {
   readonly controller: ExplainController;
+  /** The stored threads' state (`useThreads`): settling, and a read that failed. */
+  readonly threads: Pick<ThreadsState, 'settling' | 'failure' | 'retry'>;
   /** The account's initial for the call slips. */
   readonly initial: string;
   /** Flash an exchange's passage (markers and trace rows). */
@@ -34,29 +38,33 @@ export interface ThreadViewProps {
 
 /** The passage alone, for a sample paper that has no server to ask. */
 function SelectedPassage({ request }: { request: ExplainRequest }): ReactNode {
-  const selectors = (
-    request.anchor as unknown as { selectors?: readonly { type?: string; index?: number }[] }
-  ).selectors;
-  const page = selectors?.find((s) => s.type === 'PageSelector')?.index;
+  const page = selectorOf(request.anchor, 'PageSelector')?.index;
   return (
     <section className="pt-explain__quote" aria-label="Selected passage" data-explain-quote>
       <PaperText as="blockquote" {...(page === undefined ? {} : { pageLabel: `p. ${page + 1}` })}>
-        {dehyphenate(request.quote).replace(/\s+/g, ' ').trim()}
+        {cleanQuote(request.quote)}
       </PaperText>
     </section>
   );
 }
 
 /** The thread (or summary) and the composer. */
-export function ThreadView({ controller, initial, onShow, onCite }: ThreadViewProps): ReactNode {
+export function ThreadView({
+  controller,
+  threads,
+  initial,
+  onShow,
+  onCite,
+}: ThreadViewProps): ReactNode {
   const actions = useReaderActions();
   const { state, paperId } = controller;
   const scroller = useRef<HTMLDivElement | null>(null);
   const stick = useRef(true);
   const busy = state.messages.some((m) => m.status === 'streaming');
+  const settling = threads.settling;
   const exchanges = useMemo(
-    () => buildExchanges(state.messages, state.request),
-    [state.messages, state.request],
+    () => buildExchanges(state.messages, state.request, { settling }),
+    [state.messages, state.request, settling],
   );
 
   const last = state.messages[state.messages.length - 1];
@@ -107,6 +115,15 @@ export function ThreadView({ controller, initial, onShow, onCite }: ThreadViewPr
                 This is a sample paper, and a sample has no server to ask. Upload a PDF to ask
                 questions about it.
               </p>
+            ) : threads.failure !== null && exchanges.length === 0 ? (
+              <ThreadReadFailure
+                kind={threads.failure.kind}
+                of={threads.failure.of}
+                onRetry={threads.retry}
+                {...(threads.failure.of === 'thread'
+                  ? { onStartFresh: controller.startFresh }
+                  : {})}
+              />
             ) : exchanges.length === 0 && state.threadId === null ? (
               <p className="pt-explain__empty">
                 Select a passage in the paper and press Ask, or type a question about the whole

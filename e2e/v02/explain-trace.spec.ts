@@ -127,14 +127,17 @@ test.describe('v0.2 steps 6–8: select → Explain → marker 2 lights passage 
     expect(Math.abs((tabBox?.y ?? 0) - (box?.y ?? 0))).toBeLessThan(40);
     await page.screenshot({ path: shot('v02-trace-03-flash-1440.png') });
 
-    // After in 180 + hold 900 + out 600 a faint outline stays, until the next action.
-    await page.waitForTimeout(1_400);
-    await expect(flash.first()).toBeVisible();
-    const rest = await flash.first().evaluate((el) => getComputedStyle(el).strokeOpacity);
-    expect(Number(rest)).toBeGreaterThan(0);
-    expect(Number(rest)).toBeLessThan(1);
+    // After in 180 + hold 900 + out 600 (from the end of the scroll) the ring and wash are over,
+    // and a faint outline stays until the next action. Waited out, not sampled mid-fade.
+    await expect(page.locator('svg [data-flash="true"]')).toHaveCount(0, { timeout: 4_000 });
+    const linger = page.locator('svg [data-flash="linger"] polygon.pt-flash--linger');
+    await expect(linger.first()).toBeVisible();
+    await page.waitForTimeout(400);
+    const rest = await linger.first().evaluate((el) => getComputedStyle(el).strokeOpacity);
+    expect(Number(rest)).toBeCloseTo(0.35, 2);
+    await expect(tab).toBeVisible();
     await page.mouse.click(5, 450);
-    await expect(page.locator('svg [data-flash="true"]')).toHaveCount(0);
+    await expect(page.locator('svg [data-flash]')).toHaveCount(0);
     await expect(tab).toHaveCount(0);
     await context.close();
   });

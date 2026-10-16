@@ -22,8 +22,9 @@
  *   `papertree/reader/<paper_id>` (contracts.md §5), in try/catch because it is a convenience. A
  *   zoom keeps the top line (`VirtualPageList`), a mode switch keeps the block, a reload keeps both.
  *
- *   `focusAnchor` IS REAL (contracts.md §5/§6): resolve, scroll the passage into view, flash it for
- *   1.2 s. The explain panel's citation chips (S6) and the canvas's "open source" (S7) call it.
+ *   `focusAnchor` IS REAL (contracts.md §5/§6): resolve, scroll the passage into view if it is not,
+ *   and run the citation flash (`reader/flash`). The explain panel's markers and trace (#202) and
+ *   the canvas's "open source" (S7) call it.
  *
  *   DESIGNED STATES: opening, still being read (Source works from the PDF alone, and the reader
  *   retries on its own), not in your library, unreachable, a PDF pdf.js cannot open.
@@ -53,6 +54,7 @@ import {
 import {
   FLASH_MS,
   FLASH_SCROLL_MS,
+  nextFlashPhase,
   prefersReducedMotion,
   useClearOnNextAction,
 } from '@/components/reader/flash';
@@ -441,12 +443,12 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   const documentRef = useRef<DocumentHandle | null>(null);
   const pendingScroll = useRef<PendingScroll | null>(null);
 
-  /** Returns whether the view moved (a deferred scroll counts: the pane is not there yet). */
-  const requestScroll = useCallback((request: PendingScroll): boolean => {
+  /** Returns how long the scroll takes (a deferred one is assumed to take the flash's 240 ms). */
+  const requestScroll = useCallback((request: PendingScroll): number => {
     const handle = documentRef.current;
     if (handle === null) {
       pendingScroll.current = request;
-      return true;
+      return request.kind === 'rect' ? FLASH_SCROLL_MS : 0;
     }
     return applyScroll(handle, request);
   }, []);
@@ -507,7 +509,19 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
     [],
   );
 
-  // The flash's faint outline (and its margin tab) stays until the reader's next action.
+  // The flash's phases (`reader/flash`): scroll → flash → linger, each keyed to this flash, so a
+  // newer flash is never moved on by an older one's timer. The faint outline (and its margin tab)
+  // stays until the reader's next action.
+  useEffect(() => {
+    if (flash === null) return undefined;
+    const next = nextFlashPhase(flash.phase, flash.scrollMs, prefersReducedMotion());
+    if (next === null) return undefined;
+    const timer = setTimeout(
+      () => setFlash((f) => (f?.key === flash.key ? { ...f, phase: next.phase } : f)),
+      next.afterMs,
+    );
+    return () => clearTimeout(timer);
+  }, [flash]);
   const clearFlash = useCallback(() => setFlash(null), []);
   useClearOnNextAction(flash !== null, clearFlash);
 
@@ -538,16 +552,18 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
         return;
       }
       const extent: BBox | null = extentOf(paint.polygons);
-      const scrolled =
-        extent !== null &&
-        requestScroll({ kind: 'rect', pageIndex: paint.pageIndex, bbox: extent });
+      const scrollMs =
+        extent === null
+          ? 0
+          : requestScroll({ kind: 'rect', pageIndex: paint.pageIndex, bbox: extent });
       if (!shouldFlash) return;
       setFlash({
         key: `${anchor.id}:${String(Date.now())}`,
         pageIndex: paint.pageIndex,
         polygons: paint.polygons,
         extent,
-        delayMs: scrolled && !prefersReducedMotion() ? FLASH_SCROLL_MS : 0,
+        phase: scrollMs > 0 ? 'scroll' : 'flash',
+        scrollMs,
         ...(opts?.from === undefined ? {} : { from: opts.from }),
       });
     },
@@ -775,7 +791,7 @@ function HighlightCardSlot({
  * It decides which implementation fills each action; the callers (`SourcePane`'s toolbar, the
  * explain panel's chips in S6, the canvas in S7) reach them through `useReaderActions()`.
  * `openExplain` and `sendToCanvas` are owned by S6 and S7 and change behind these same lines.
- * `focusAnchor` is S4's: resolve → scroll → 1.2 s flash, implemented by the workspace above.
+ * `focusAnchor` is S4's: resolve → scroll → the citation flash, implemented by the workspace above.
  *
  * A component of its own because the workspace returns early (loading, error) and hooks may not
  * follow an early return.
@@ -786,7 +802,7 @@ function ReaderActionsMount({
   children,
 }: {
   readonly paper: PaperRef;
-  readonly onFocusAnchor: (anchor: Anchor, opts?: { flash?: boolean }) => void;
+  readonly onFocusAnchor: (anchor: Anchor, opts?: { flash?: boolean; from?: FlashSource }) => void;
   readonly children: React.ReactNode;
 }) {
   const paperId = paper.kind === 'api' ? paper.paperId : null;

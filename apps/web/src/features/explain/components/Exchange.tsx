@@ -16,6 +16,13 @@ import { AnswerSlip } from './AnswerSlip';
 import type { ViewMessage } from '@/components/explain/useExplainActions';
 import type { Exchange as ExchangeModel, PassageMarker } from '../model/exchange';
 
+/** A citation the AI wrote that matched no passage is said, not hidden (DESIGN §4.6). */
+function unresolvedNote(count: number): string {
+  return count === 1
+    ? '1 citation the AI wrote matches no passage; its claim is shown as the AI’s own reading.'
+    : `${String(count)} citations the AI wrote match no passage; their claims are shown as the AI’s own reading.`;
+}
+
 /** Props for `Exchange`: the small interface any ask → answer → trace layout implements. */
 export interface ExchangeProps {
   readonly exchange: ExchangeModel<ViewMessage>;
@@ -81,10 +88,17 @@ export function Exchange({
           onSendToCanvas={onSendToCanvas}
         />
       )}
-      {settled && model !== null && model.trace.length > 0 ? (
+      {settled && model !== null && !model.live ? (
         <div className="pt-exchange__trace">
           <CoverageReadout {...model.coverage} />
-          <TraceList rows={model.trace} lit={lit} onLight={setLit} onShowInPaper={showRow} />
+          {model.unresolvedMarkers > 0 ? (
+            <p className="pt-exchange__unresolved" data-unresolved={model.unresolvedMarkers}>
+              {unresolvedNote(model.unresolvedMarkers)}
+            </p>
+          ) : null}
+          {model.trace.length === 0 ? null : (
+            <TraceList rows={model.trace} lit={lit} onLight={setLit} onShowInPaper={showRow} />
+          )}
         </div>
       ) : null}
     </div>

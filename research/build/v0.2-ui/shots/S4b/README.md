@@ -1,6 +1,6 @@
 # S4b shots: ask → answer → trace in the explain panel (#202)
 
-Taken 2026-10-16 with headless Chromium (Playwright 1.63, deviceScaleFactor 1) against the slice's own dev
+Taken 2026-10-16 (re-taken after the review fixes) with headless Chromium (Playwright 1.63, deviceScaleFactor 1) against the slice's own dev
 server (web 18904 → API 18909 on a COPY of the demo data root), signed in as `demo@example.test`, on the REAL
 stored thread `thr_01M508X9PC9K9HKHSVB2J9W1A1` of "Attention Is All You Need" (frame 04's exchange). Steps:
 open the panel ("Ask AI"; it opens on the newest of the account's 6 threads), pick Thread 1 in the thread
@@ -14,7 +14,12 @@ menu, hover and click marker 2, shoot 700 ms later (inside the flash's 900 ms ho
 | `04-explain-390x844-light.png`, `-dark.png` | the phone sheet (frame 08b is S4e's; shown so the panel is seen not to break) |
 
 axe-core 4.12.1 on the panel (menu open, Thread 1, marker 2 lit) at 1440 and 390, light and dark: **0 serious or
-critical** (moderate only: `landmark-no-duplicate-banner` on the phone Sheet, which is `packages/ui`'s).
+critical** (moderate only: `landmark-unique` for the two exchanges' AI slips, which are S1c's `AiSlip` sections
+named by the same model, and `landmark-no-duplicate-banner` on the phone Sheet, which is `packages/ui`'s).
+
+The flash's timeline, measured live with the passage off screen: at 60 ms nothing is painted and no tab shows
+(the 240 ms scroll), at 400 ms `data-flash="true"` with the tab, at 1.2 s the hold, at 2.2 s
+`data-flash="linger"` (stroke-opacity 0.35), still there at 3 s, gone after the next key.
 
 ## What matches frame 04
 
@@ -37,7 +42,7 @@ follow-up's call slip has no tab; the flashed passage has the navy ring and the 
 3. **Stamp "D"** (the signed-in account's initial, demo@…) where the design shows the owner's "M"; and the
    stamp sits inside the slip (S1c's `CallSlip`) where the design has a left gutter with M / ◇ / ¶ icons.
 4. **Time 22:44**: the stored 17:14 UTC in the reader's zone (IST); the design's 21:14 is sample.
-5. **No "· first text after 2.4 s"** in the usage line: `run.first_text_ms` counts the model's first delta of
+5. **No "· first text after 2.4 s"** in the usage line (now in Courier, as §4.8 asks): `run.first_text_ms` counts the model's first delta of
    any kind, which can be thinking (GAP-A2 Risk 7); left for S4d to label honestly rather than mislabel.
 6. **Actions under the answer**: only "Send to canvas". Dive in is the notebook (S5e), Explain with a diagram
    is S7b, and the board rename is not this slice's.
@@ -56,3 +61,9 @@ follow-up's call slip has no tab; the flashed passage has the navy ring and the 
 14. **Page position**: the passage was already in view, so the flash did not scroll (scroll only if needed);
     the frame shows p. 2 at the top.
 15. **Dark scheme**: the PDF page stays white (lamp-lit page is S4e, #205).
+16. **Guided mode** keeps v0.1's steady outline: the v0.2 flash phases and the margin tab there are #245.
+17. **Not in the design, added for the review:** "New thread" as the thread menu's last option (owner may
+    change); an uncited paragraph between cited ones keeps its place under its own "no citation · the AI's own
+    reading" label; a line under the readout when a citation the AI wrote matched no passage.
+18. **The selected passage is one line with an ellipsis** on the call slip (frame 04); v0.1's "Show all" is
+    gone. The whole passage is in the DOM (a screen reader hears it) and on the page; flagged for the owner.

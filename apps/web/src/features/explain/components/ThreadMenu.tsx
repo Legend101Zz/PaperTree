@@ -2,9 +2,11 @@
 
 /**
  * The thread menu of the explain panel header (#202, frame 04): "‹ Thread 1 of 2 ›" with a
- * listbox of the paper's threads, each named by its ask (DESIGN.md §4.5, never "Turn 1"). Threads
- * count oldest first (`sortThreads`). The listbox is keyboard-driven (arrows, Home/End, Enter,
- * Esc) with `aria-activedescendant`, so focus stays on the list while the option moves.
+ * listbox of the paper's threads, each named by its ask (DESIGN.md §4.5, never "Turn 1"), and a
+ * last option, "New thread", that empties the panel for a fresh question (owner may change: the
+ * design draws no such item). Threads count oldest first (`sortThreads`). The listbox is driven by
+ * the keyboard (arrows, Home/End, Enter, Esc) with `aria-activedescendant`. Focus stays in the
+ * menu across a switch: on the arrow used, or on the trigger once that arrow is disabled.
  */
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 
@@ -14,9 +16,11 @@ import type { Thread } from '@/lib/api/types';
 export interface ThreadMenuProps {
   /** The paper's threads, oldest first. */
   readonly threads: readonly Thread[];
-  /** The current thread's 1-based place; 0 while a new thread is not listed yet. */
+  /** The current thread's 1-based place; 0 for a new thread (not listed yet, or "New thread"). */
   readonly position: number;
   readonly onSelect: (threadId: string) => void;
+  /** "New thread": an empty panel whose next question starts a thread of its own. */
+  readonly onNewThread: () => void;
   /** While an answer streams the thread cannot change (switching would cancel it). */
   readonly disabled?: boolean;
 }
@@ -34,37 +38,41 @@ export function ThreadMenu({
   threads,
   position,
   onSelect,
+  onNewThread,
   disabled = false,
 }: ThreadMenuProps): ReactNode {
   const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(Math.max(0, position - 1));
+  const total = threads.length;
+  // Options: the threads, then "New thread" (index `total`).
+  const current = position === 0 ? total : position - 1;
+  const [active, setActive] = useState(current);
   const trigger = useRef<HTMLButtonElement | null>(null);
   const list = useRef<HTMLUListElement | null>(null);
   const id = useId();
-  const total = threads.length;
 
   useEffect(() => {
     if (!open) return;
-    setActive(Math.max(0, position - 1));
+    setActive(current);
     list.current?.focus();
-  }, [open, position]);
+  }, [open, current]);
 
   const close = (focusTrigger: boolean): void => {
     setOpen(false);
     if (focusTrigger) trigger.current?.focus();
   };
   const choose = (index: number): void => {
-    const thread = threads[index];
     close(true);
-    if (thread !== undefined && index !== position - 1) onSelect(thread.thread_id);
+    if (index === current) return;
+    const thread = threads[index];
+    if (thread === undefined) onNewThread();
+    else onSelect(thread.thread_id);
   };
   const onKeyDown = (event: KeyboardEvent<HTMLUListElement>): void => {
-    const last = total - 1;
     const moves: Record<string, number> = {
-      ArrowDown: Math.min(last, active + 1),
+      ArrowDown: Math.min(total, active + 1),
       ArrowUp: Math.max(0, active - 1),
       Home: 0,
-      End: last,
+      End: total,
     };
     if (event.key in moves) {
       event.preventDefault();
@@ -80,12 +88,15 @@ export function ThreadMenu({
       close(false);
     }
   };
+  const step = (to: number): void => {
+    const thread = threads[to - 1];
+    if (thread === undefined) return;
+    onSelect(thread.thread_id);
+    // The arrow just used is about to be disabled at either end: keep focus in the menu.
+    if (to <= 1 || to >= total) trigger.current?.focus();
+  };
 
   const label = position === 0 ? 'New thread' : `Thread ${String(position)} of ${String(total)}`;
-  const step = (to: number) => {
-    const thread = threads[to - 1];
-    if (thread !== undefined) onSelect(thread.thread_id);
-  };
   return (
     <div className="pt-thread-menu">
       <button
@@ -102,9 +113,10 @@ export function ThreadMenu({
         type="button"
         className="pt-thread-menu__trigger"
         aria-haspopup="listbox"
+        aria-label={`${label}: choose a thread by its ask`}
         aria-expanded={open}
         aria-controls={open ? `${id}-list` : undefined}
-        disabled={disabled || total === 0}
+        disabled={disabled}
         onClick={() => setOpen((v) => !v)}
       >
         {label}
@@ -130,25 +142,27 @@ export function ThreadMenu({
           className="pt-thread-menu__list"
           onKeyDown={onKeyDown}
           onBlur={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget)) close(false);
+            // A press on the trigger blurs the list first: let the trigger's click do the closing.
+            const to = event.relatedTarget;
+            if (!event.currentTarget.contains(to) && to !== trigger.current) close(false);
           }}
         >
-          {threads.map((thread, index) => (
+          {[...threads.map((t) => t.ask || t.title), null].map((ask, index) => (
             // Options are picked by the listbox's own keyboard handler (`aria-activedescendant`);
             // a click is the pointer path to the same choice.
             // eslint-disable-next-line jsx-a11y/click-events-have-key-events
             <li
-              key={thread.thread_id}
+              key={index}
               id={`${id}-${String(index)}`}
               role="option"
-              aria-selected={index === position - 1}
+              aria-selected={index === current}
               data-active={index === active ? 'true' : undefined}
-              className="pt-thread-menu__option"
+              className={`pt-thread-menu__option${ask === null ? ' pt-thread-menu__option--new' : ''}`}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => choose(index)}
             >
-              <span className="pt-thread-menu__n">{index + 1}</span>
-              <span className="pt-thread-menu__ask">{thread.ask || thread.title}</span>
+              <span className="pt-thread-menu__n">{ask === null ? '+' : index + 1}</span>
+              <span className="pt-thread-menu__ask">{ask ?? 'New thread'}</span>
             </li>
           ))}
         </ul>

@@ -8,7 +8,7 @@ trace row and every later exchange of the thread.
 
 ## Data flow
 
-UI (`components/explain` panel) → controller (`components/explain/useExplainActions`, a reducer holding the
+UI (`components/ExplainPanel` → `ThreadView` → `Exchange`) → controller (`components/explain/useExplainActions`, a reducer holding the
 live messages) + `hooks/useThreads` (react-query) → `api/threads` → `lib/api/threads` →
 `GET /papers/{id}/threads` and `GET /papers/{id}/threads/{tid}` (`services/api` `routers/threads.py`) → DB
 (`ai_threads`, `ai_messages`, `ai_citations`; each citation's `locator` and each answer's `coverage` are
@@ -46,12 +46,16 @@ derived on read from the parse, never stored).
   citation · the AI's own reading") → `CoverageReadout` → `TraceList`. One component behind `ExchangeProps`,
   so the sidenote or claim → evidence options of frame 13 could replace it. A marker and its trace row light
   each other on hover and focus (120 ms); either one runs the citation flash.
-- `components/ThreadMenu.tsx`: "‹ Thread 1 of 2 ›" and a listbox of the threads named by their asks.
-- The citation flash is the reader's (`components/reader/flash.ts`, `ReaderWorkspace.focusAnchor`, `.pt-flash`):
-  scroll 240 ms if needed → in 180 → hold 900 → out 600, a faint outline that stays until the next action;
-  `components/FlashMarginTab.tsx` draws "from marker 2 in the answer" beside the passage.
-- `components/explain` keeps thin re-exports (`index.tsx`, `AnswerView.tsx`) and still owns the controller
-  (`useExplainActions`), the summary view and `RichText` (the summary and the canvas cards use it).
+- `components/ThreadMenu.tsx`: "‹ Thread 1 of 2 ›" and a listbox of the threads named by their asks, ending in
+  "New thread" (owner may change). A switch keeps focus in the menu, never on the drawer.
+- The citation flash is the reader's (`components/reader/flash.ts`, `ReaderWorkspace.focusAnchor`, `.pt-flash`),
+  in phases: `scroll` (240 ms, only if the passage is off screen; nothing painted) → `flash`
+  (`data-flash="true"`: in 180 → hold 900 → out 600) → `linger` (`data-flash="linger"`, a faint outline) until
+  the next pointer press or key (capture phase). `components/FlashMarginTab.tsx` draws "from marker 2 in the
+  answer" beside the passage in `flash` and `linger`. Guided mode does not have it yet (#245).
+- `components/explain` keeps a thin re-export (`index.tsx`, the path `ReaderWorkspace` imports) and still owns
+  the controller (`useExplainActions`), the summary view and `RichText` (the summary and the canvas cards use
+  it); moving those into the feature is the next split.
 
 ## Key files
 

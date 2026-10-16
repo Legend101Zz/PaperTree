@@ -1381,9 +1381,9 @@ span.pt-paper .pt-paper__cite {
   vector-effect: non-scaling-stroke;
 }
 
-/* The citation flash (DESIGN.md §6, #202): after the scroll (`--pt-flash-delay`, set inline when
-   the passage had to be scrolled to), the wash and ring come in 180, hold 900 and go out 600 to a
-   faint outline, which stays until the reader's next action (the reader clears it). */
+/* The citation flash (DESIGN.md §6, #202; phases in apps/web `reader/flash`): painted once the
+   scroll is over, the wash and ring come in 180, hold 900 and go out 600 to a faint outline; then
+   `--linger` keeps that outline, without animation, until the reader's next action. */
 .pt-flash {
   fill: var(--pt-lit-wash);
   stroke: var(--pt-focus);
@@ -1392,9 +1392,13 @@ span.pt-paper .pt-paper__cite {
   fill-opacity: 0;
   stroke-opacity: 0.35;
   animation:
-    pt-flash-in var(--pt-dur-flash-in) var(--pt-ease-out) var(--pt-flash-delay, 0ms) both,
+    pt-flash-in var(--pt-dur-flash-in) var(--pt-ease-out) both,
     pt-flash-out var(--pt-dur-flash-out) var(--pt-ease-out)
-      calc(var(--pt-flash-delay, 0ms) + var(--pt-dur-flash-in) + var(--pt-dur-flash-hold)) forwards;
+      calc(var(--pt-dur-flash-in) + var(--pt-dur-flash-hold)) forwards;
+}
+
+.pt-flash--linger {
+  animation: none;
 }
 
 @keyframes pt-flash-in {
@@ -2518,7 +2522,9 @@ span.pt-paper .pt-paper__cite {
 }
 
 .pt-explain__usage {
-  font-variant-numeric: tabular-nums;
+  /* Numbers and usage are Courier, lining and tabular (DESIGN.md §2, §4.8). */
+  font: var(--pt-t-num) / 1.5 var(--pt-font-you); /* 13 px: the muted ink's smallest size */
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .pt-explain__warn {
@@ -2872,6 +2878,13 @@ span.pt-paper .pt-paper__cite {
 
 .pt-exchange__inline-marker .pt-marker {
   margin-inline-start: 2px;
+}
+
+/* A marker and the punctuation after it are one unbreakable box: "…output 4." never leaves its
+   full stop on the next line (R4), and the run is one line box however it is measured. */
+.pt-exchange .pt-cite-run {
+  display: inline-block;
+  white-space: nowrap;
 }
 
 /* Marker ↔ trace light each other: 120 ms in and out, colour only (unchanged under reduced

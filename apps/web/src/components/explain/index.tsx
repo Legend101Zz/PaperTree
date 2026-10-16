@@ -3,7 +3,7 @@
  * answer → trace). This module keeps the import path `ReaderWorkspace` and the specs use, and
  * still owns the controller (`useExplainActions`).
  */
-export { ExplainPanel, type ExplainPanelProps } from '@/features/explain/components/ExplainPanel';
+export { ExplainPanel, type ExplainPanelProps } from '@/features/explain';
 
 export type { ExplainController, ExplainRequest } from './useExplainActions';
 export { useExplainActions } from './useExplainActions';

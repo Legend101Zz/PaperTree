@@ -19,16 +19,35 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { GOLDEN } from './fixtures/attention-thread';
+import { GOLDEN, goldenMessages } from './fixtures/attention-thread';
 import { focusAnchor, Harness, stubDesktop } from './s6-harness';
-import { installFetch, jsonResponse, PAPER, type Call } from './s6-support';
+import {
+  done,
+  frame,
+  installFetch,
+  jsonResponse,
+  PAPER,
+  run,
+  sseResponse,
+  text,
+  type Call,
+} from './s6-support';
 
-import { useClearOnNextAction } from '@/components/reader/flash';
+import {
+  FLASH_MS,
+  nextFlashPhase,
+  useClearOnNextAction,
+  type FlashPhase,
+} from '@/components/reader/flash';
 import { HighlightOverlay } from '@/components/reader/HighlightOverlay';
+import type { ViewMessage } from '@/components/explain/useExplainActions';
+import { Exchange } from '@/features/explain/components/Exchange';
 import { FlashMarginTab } from '@/features/explain/components/FlashMarginTab';
-import type { Thread } from '@/lib/api/types';
+import { buildExchanges, type Exchange as ExchangeModel } from '@/features/explain/model/exchange';
+import type { Message, Thread } from '@/lib/api/types';
 
 beforeEach(() => {
   stubDesktop();
@@ -67,16 +86,21 @@ const FREE_DETAIL = {
 };
 
 /** The golden thread (older) and a free question (newer): the panel opens on the newer one. */
-async function openGolden(): Promise<{ calls: Call[] }> {
+async function openGolden(extra: Parameters<typeof installFetch>[0] = {}): Promise<{
+  calls: Call[];
+}> {
   const { calls } = installFetch({
     [`GET /papers/${PAPER}/threads`]: () => jsonResponse(200, [OLDER, GOLDEN.thread]),
     [`GET /papers/${PAPER}/threads/${GOLDEN_ID}`]: () => jsonResponse(200, GOLDEN),
     [`GET /papers/${PAPER}/threads/thr_free`]: () => jsonResponse(200, FREE_DETAIL),
+    ...extra,
   });
   render(<Harness />);
   fireEvent.click(screen.getByRole('button', { name: 'Ask AI' }));
   await waitFor(() => expect(screen.getByText(/Attention looks at every position/)).toBeTruthy());
-  fireEvent.click(screen.getByRole('button', { name: 'Previous thread' }));
+  const previous = screen.getByRole('button', { name: 'Previous thread' });
+  previous.focus();
+  fireEvent.click(previous);
   await waitFor(() => expect(screen.getByText(/central proposal/)).toBeTruthy());
   return { calls };
 }
@@ -125,6 +149,13 @@ describe('the exchange: ask → answer → trace', () => {
     expect(inline(1).every((b) => b.getAttribute('data-lit') === null)).toBe(true);
     fireEvent.mouseLeave(row(2));
     expect(inline(2).some((b) => b.getAttribute('data-lit') === 'true')).toBe(false);
+  });
+
+  it('focus on Show in paper lights its marker too (review 2.6)', async () => {
+    await openGolden();
+    fireEvent.focus(screen.getAllByRole('button', { name: 'Show in paper, passage 2' })[0]!);
+    expect(inline(2)[0]?.getAttribute('data-lit')).toBe('true');
+    expect(row(2).getAttribute('data-lit')).toBe('true');
   });
 
   it('focus lights them too, both ways', async () => {
@@ -189,6 +220,7 @@ describe('the thread menu', () => {
     expect(options.map((o) => o.textContent)).toEqual([
       '1Explain this passage.',
       '2Why does attention help?',
+      '+New thread',
     ]);
     expect(options[0]?.getAttribute('aria-selected')).toBe('true');
     fireEvent.keyDown(list, { key: 'ArrowDown' });
@@ -198,6 +230,54 @@ describe('the thread menu', () => {
     expect(screen.queryByRole('listbox')).toBeNull();
     expect(calls.filter((c) => c.path.endsWith('/threads/thr_free')).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Next thread' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('a switch keeps focus in the menu, never on the drawer (review 2.1)', async () => {
+    await openGolden();
+    // "Previous thread" took it to Thread 1, where that arrow is disabled: focus is on the trigger.
+    const trigger = screen.getByRole('button', { name: /Thread 1 of 2/ });
+    expect(document.activeElement).toBe(trigger);
+    fireEvent.click(trigger);
+    const list = screen.getByRole('listbox');
+    fireEvent.keyDown(list, { key: 'ArrowDown' });
+    fireEvent.keyDown(list, { key: 'Enter' });
+    await waitFor(() => expect(screen.getByText(/Attention looks at every position/)).toBeTruthy());
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /Thread 2 of 2/ }));
+    expect(document.activeElement?.tagName).not.toBe('ASIDE');
+  });
+
+  it('the trigger toggles: a press while the list is open closes it (review 2.2)', async () => {
+    await openGolden();
+    const trigger = screen.getByRole('button', { name: /Thread 1 of 2/ });
+    fireEvent.click(trigger);
+    const list = screen.getByRole('listbox');
+    // A real pointer: pressing the trigger moves focus to it first, which blurs the list.
+    fireEvent.blur(list, { relatedTarget: trigger });
+    fireEvent.click(trigger);
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('"New thread" empties the panel, and the next question starts a thread of its own', async () => {
+    const { calls } = await openGolden({
+      [`POST /papers/${PAPER}/threads`]: (_c, signal) =>
+        sseResponse([run({ thread_id: 'thr_fresh' }), text('A fresh answer.'), done()], {
+          signal,
+        }),
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Thread 1 of 2/ }));
+    fireEvent.click(screen.getByRole('option', { name: /New thread/ }));
+    expect(screen.queryByText(/central proposal/)).toBeNull();
+    expect(screen.getByRole('button', { name: /^New thread/ })).toBeTruthy();
+    expect(screen.getByText(/type a question about the whole paper below/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Ask a question about this paper'), {
+      target: { value: 'What else?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Ask' }));
+    await waitFor(() => expect(screen.getByText('A fresh answer.')).toBeTruthy());
+    const posts = calls.filter((c) => c.method === 'POST');
+    expect(posts.map((c) => c.path)).toEqual([`/papers/${PAPER}/threads`]);
+    expect(posts[0]?.body).toMatchObject({ kind: 'ask', question: 'What else?' });
   });
 
   it('Esc closes the list and gives focus back, without closing the panel', async () => {
@@ -232,8 +312,46 @@ describe('the citation flash in the reader', () => {
     expect(clear).toHaveBeenCalledTimes(2);
   });
 
-  it('paints the flash after the scroll, and the margin tab names the marker', () => {
-    const { container } = render(
+  it('a key on a marker while a flash shows starts the new flash: the clear runs first', () => {
+    // Capture phase matters: in the bubble phase the document hears the key AFTER the marker's
+    // own handler set the new flash, and would clear it (review 2.14).
+    function Probe() {
+      const [active, setActive] = useState(true);
+      const [count, setCount] = useState(1);
+      useClearOnNextAction(active, () => setActive(false));
+      return (
+        <>
+          <button
+            type="button"
+            onKeyDown={() => {
+              setActive(true);
+              setCount((c) => c + 1);
+            }}
+          >
+            marker
+          </button>
+          <span data-testid="state">{active ? `flash ${String(count)}` : 'none'}</span>
+          <button type="button">elsewhere</button>
+        </>
+      );
+    }
+    render(<Probe />);
+    fireEvent.keyDown(screen.getByRole('button', { name: 'marker' }), { key: 'Enter' });
+    expect(screen.getByTestId('state').textContent).toBe('flash 2');
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'elsewhere' }));
+    expect(screen.getByTestId('state').textContent).toBe('none');
+  });
+
+  it('runs scroll → flash → linger, and stays in linger (reduced: in flash) until the next action', () => {
+    expect(nextFlashPhase('scroll', 240, false)).toEqual({ phase: 'flash', afterMs: 240 });
+    expect(nextFlashPhase('flash', 240, false)).toEqual({ phase: 'linger', afterMs: FLASH_MS });
+    expect(FLASH_MS).toBe(180 + 900 + 600);
+    expect(nextFlashPhase('linger', 240, false)).toBeNull();
+    expect(nextFlashPhase('flash', 0, true)).toBeNull();
+  });
+
+  it('paints nothing while it scrolls, the ring and wash in flash, a faint outline in linger', () => {
+    const paint = (phase: FlashPhase) => (
       <svg>
         <HighlightOverlay
           pageIndex={1}
@@ -253,20 +371,182 @@ describe('the citation flash in the reader', () => {
               ],
             ],
             extent: [100, 200, 400, 260],
-            delayMs: 240,
+            phase,
+            scrollMs: 240,
           }}
         />
-      </svg>,
+      </svg>
     );
-    const group = container.querySelector<SVGGElement>('[data-flash="true"]');
-    expect(group?.style.getPropertyValue('--pt-flash-delay')).toBe('240ms');
-    expect(group?.querySelectorAll('polygon.pt-flash')).toHaveLength(1);
+    const { container, rerender } = render(paint('scroll'));
+    expect(container.querySelector('[data-flash]')).toBeNull();
+    rerender(paint('flash'));
+    expect(container.querySelectorAll('[data-flash="true"] polygon.pt-flash')).toHaveLength(1);
+    rerender(paint('linger'));
+    expect(container.querySelector('[data-flash="true"]')).toBeNull();
+    expect(
+      container.querySelectorAll('[data-flash="linger"] polygon.pt-flash.pt-flash--linger'),
+    ).toHaveLength(1);
+  });
 
+  it('the margin tab names the marker it came from', () => {
     render(
       <FlashMarginTab from={{ n: 2, page: 2, para: 2, notVerified: false }} left={140} top={300} />,
     );
     const tab = document.querySelector('[data-flash-tab="2"]');
     expect(tab?.textContent).toBe('2p. 2 ¶2from marker 2 in the answer');
     expect(tab?.getAttribute('aria-hidden')).toBe('true');
+  });
+});
+
+describe('honest, stable answers (review 1.1, 1.3)', () => {
+  it('a follow-up’s tabs are final before its stored read lands: no "p. 2" → "p. 2 ¶2" swap', async () => {
+    let reads = 0;
+    let release: (() => void) | null = null;
+    const msgs = GOLDEN.messages as Message[];
+    const ask3: Message = { ...msgs[2]!, message_id: 'msg_u3', ordinal: 4, content: 'Cost?' };
+    const answer3: Message = {
+      ...msgs[3]!,
+      message_id: 'msg_a3',
+      ordinal: 5,
+      content: 'Cheaper to train [b6].',
+      citations: [msgs[3]!.citations[0]!],
+      coverage: undefined,
+    };
+    const { locator: _dropped, ...liveCitation } = msgs[3]!.citations[0]!;
+    installFetch({
+      [`GET /papers/${PAPER}/threads`]: () => jsonResponse(200, [GOLDEN.thread]),
+      [`GET /papers/${PAPER}/threads/${GOLDEN_ID}`]: () => {
+        reads += 1;
+        if (reads === 1) return jsonResponse(200, GOLDEN);
+        return new Promise<Response>((resolve) => {
+          release = () =>
+            resolve(jsonResponse(200, { ...GOLDEN, messages: [...msgs, ask3, answer3] }));
+        });
+      },
+      [`POST /papers/${PAPER}/threads/${GOLDEN_ID}/messages`]: (_c, signal) =>
+        sseResponse(
+          [
+            run({ thread_id: GOLDEN_ID, user_message_id: 'msg_u3', message_id: 'msg_a3' }),
+            text('Cheaper to train [b6].'),
+            frame('citations', { items: [liveCitation] }),
+            done('complete', null, 'msg_a3'),
+          ],
+          { signal },
+        ),
+    });
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ask AI' }));
+    await waitFor(() => expect(screen.getByText(/central proposal/)).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('Ask a question about this paper'), {
+      target: { value: 'Cost?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Ask' }));
+    await waitFor(() => expect(reads).toBe(2));
+    const last = () =>
+      Array.from(document.querySelectorAll('[data-exchange]')).at(-1) as HTMLElement;
+    await waitFor(() => expect(last().querySelector('.pt-trace-list')).not.toBeNull());
+    const before = last().querySelector('.pt-trace-list')?.textContent;
+    const name = last().querySelector('[data-passage="2"] button')?.getAttribute('aria-label');
+    expect(before).toContain('p. 2 ¶2');
+    expect(before).toContain('Introduction');
+    expect(name).toBe('Passage 2, p. 2 ¶2');
+    await act(async () => {
+      release?.();
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    expect(last().querySelector('.pt-trace-list')?.textContent).toBe(before);
+  });
+
+  it('a first answer’s passages are held until placed, then shown once, final', async () => {
+    let release: (() => void) | null = null;
+    const msgs = GOLDEN.messages as Message[];
+    const b6 = msgs[1]!.citations.find((c) => c.marker === 'b6')!;
+    const { locator: _dropped, ...liveB6 } = b6;
+    const ask: Message = { ...msgs[0]!, thread_id: 'thr_1', message_id: 'msg_u1' };
+    const answer: Message = {
+      ...msgs[1]!,
+      thread_id: 'thr_1',
+      message_id: 'msg_a1',
+      content: 'Recurrence is sequential [b6].',
+      citations: [b6],
+      coverage: undefined,
+    };
+    installFetch({
+      [`GET /papers/${PAPER}/threads`]: () => jsonResponse(200, []),
+      [`POST /papers/${PAPER}/threads`]: (_c, signal) =>
+        sseResponse(
+          [
+            run(),
+            text('Recurrence is sequential [b6].'),
+            frame('citations', { items: [liveB6] }),
+            done(),
+          ],
+          { signal },
+        ),
+      [`GET /papers/${PAPER}/threads/thr_1`]: () =>
+        new Promise<Response>((resolve) => {
+          release = () =>
+            resolve(
+              jsonResponse(200, {
+                thread: { ...GOLDEN.thread, thread_id: 'thr_1' },
+                messages: [ask, answer],
+              }),
+            );
+        }),
+    });
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'ask one' }));
+    await waitFor(() =>
+      expect(document.querySelector('[data-message-status="complete"]')).not.toBeNull(),
+    );
+    // Held: the claim's words, no marker, no tab, no trace, nothing classed uncited.
+    expect(screen.getByText(/Recurrence is sequential/)).toBeTruthy();
+    expect(document.querySelector('[data-passage]')).toBeNull();
+    expect(document.querySelector('.pt-trace-list')).toBeNull();
+    expect(document.querySelector('.pt-ai-slip__uncited')).toBeNull();
+    await act(async () => {
+      release?.();
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    expect(document.querySelector('[data-passage="1"] button')?.getAttribute('aria-label')).toBe(
+      'Passage 1, p. 2 ¶2',
+    );
+    expect(document.querySelector('.pt-trace-list')?.textContent).toContain('p. 2 ¶2');
+  });
+
+  it('a claim whose citation matched no passage is the AI’s own reading, and the readout says so', () => {
+    const answer = goldenMessages()[1]!;
+    const b1 = answer.citations.find((c) => c.marker === 'b1')!;
+    const ask = { ...goldenMessages()[0]! };
+    const [exchange] = buildExchanges(
+      [
+        ask,
+        {
+          ...answer,
+          text: 'Cited claim [b1].\n\nInvented claim [b9].',
+          citations: [b1],
+          coverage: null,
+        },
+      ],
+      null,
+    );
+    render(
+      <Exchange
+        exchange={exchange as ExchangeModel<ViewMessage>}
+        initial="M"
+        onShow={() => undefined}
+        onRetry={() => undefined}
+        onSendToCanvas={async () => undefined}
+      />,
+    );
+    const uncited = document.querySelector('.pt-ai-slip__uncited');
+    expect(uncited?.textContent).toMatch(/no citation · the AI's own reading.*Invented claim/);
+    expect(document.body.textContent).not.toContain('[b9]');
+    expect(document.querySelector('.pt-coverage')?.textContent).toContain(
+      "1 paragraph uncited (the AI's own reading)",
+    );
+    expect(document.querySelector('[data-unresolved="1"]')?.textContent).toContain(
+      'matches no passage',
+    );
   });
 });

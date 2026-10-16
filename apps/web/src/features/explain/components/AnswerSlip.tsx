@@ -44,6 +44,8 @@ function Skeleton(): ReactNode {
   );
 }
 
+const UNCITED = "no citation · the AI's own reading";
+
 type SendState = 'idle' | 'sending' | 'sent' | 'failed';
 
 function SendToCanvas({ onSend }: { onSend: () => Promise<void> }): ReactNode {
@@ -84,6 +86,7 @@ export function AnswerSlip({
   ...lights
 }: AnswerSlipProps): ReactNode {
   const streaming = answer.status === 'streaming';
+  // A held answer (`AnswerModel.live`) has no markers in its model: nothing to hold back here.
   const ctx: MarkerHandlers = {
     ...lights,
     handleNumbers: model?.handleNumbers ?? new Map(),
@@ -98,6 +101,16 @@ export function AnswerSlip({
       {...ctx}
     />
   );
+  // An uncited paragraph between cited ones keeps its place, under the same label (§4.7).
+  const bodyParagraph = (p: AnswerModel['body'][number]) =>
+    p.cited ? (
+      paragraph(p, true)
+    ) : (
+      <div key={p.index} className="pt-ai-slip__uncited pt-exchange__uncited-inline">
+        <h3 className="pt-ai-slip__uncited-head">{UNCITED}</h3>
+        <div className="pt-ai-slip__uncited-body">{paragraph(p, false)}</div>
+      </div>
+    );
   const messageId = answer.messageId;
   const canSend = answer.status === 'complete' && messageId !== null;
   const footer =
@@ -117,7 +130,7 @@ export function AnswerSlip({
           headingLevel={3}
           {...(uncited.length > 0 ? { uncited: uncited.map((p) => paragraph(p, false)) } : {})}
         >
-          {model === null ? <Skeleton /> : model.body.map((p) => paragraph(p, true))}
+          {model === null ? <Skeleton /> : model.body.map(bodyParagraph)}
         </AiSlip>
       )}
       {streaming && answer.label !== null ? <StatusLine label={answer.label} /> : null}

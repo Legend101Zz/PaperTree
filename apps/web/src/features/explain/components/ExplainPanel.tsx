@@ -92,6 +92,7 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
           threads={threads.threads}
           position={threads.position}
           onSelect={threads.select}
+          onNewThread={controller.startFresh}
           disabled={busy}
         />
       )}
@@ -106,7 +107,13 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
     </div>
   );
   const body = (
-    <ThreadView controller={controller} initial={initial} onShow={onShow} onCite={onCite} />
+    <ThreadView
+      controller={controller}
+      threads={threads}
+      initial={initial}
+      onShow={onShow}
+      onCite={onCite}
+    />
   );
 
   if (!desktop) {
@@ -175,7 +182,9 @@ export function ExplainPanel({ controller }: ExplainPanelProps): ReactNode {
   useEffect(() => {
     const aside = asideRef.current;
     if (!state.open || !desktop || aside === null) return undefined;
-    aside.focus({ preventScroll: true });
+    // The drawer takes focus when it opens, or when a new ask comes from the page; never from a
+    // control inside it (the thread menu keeps focus across a thread switch, review 2.1).
+    if (!aside.contains(document.activeElement)) aside.focus({ preventScroll: true });
     // Esc inside the drawer closes it. Listened for on the document, after React's root, so a
     // control that handles its own Esc (the thread menu) stops it from closing the whole panel.
     const onKey = (event: KeyboardEvent): void => {
