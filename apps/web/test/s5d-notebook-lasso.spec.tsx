@@ -11,6 +11,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NotebookView, encodeStroke } from '@/features/notebook';
+import { LassoLayer } from '@/features/notebook/components/LassoLayer';
 import { base64FromBytes } from '@/features/notebook/model/wire';
 
 import { PAGE, PAPER, pageView, stubApi, wireItem } from './s5c-notebook-fixtures';
@@ -148,6 +149,49 @@ describe('the lasso menu', () => {
     const button = screen.getByRole('button', { name: 'Lasso' });
     expect(button.getAttribute('aria-pressed')).toBe('true');
     expect(document.activeElement).toBe(button);
+  });
+});
+
+describe('where the menu sits', () => {
+  const menu = {
+    count: 1,
+    enabled: { ask: true, sticky: true, board: true, copy: true, delete: true },
+    onAction: vi.fn(),
+    onClose: vi.fn(),
+  };
+  const at = (): CSSStyleDeclaration =>
+    document.querySelector<HTMLElement>('.pt-nb-lasso-at')!.style;
+
+  it('hangs from the loop’s left edge in the page’s left half, just under the loop', () => {
+    render(
+      <LassoLayer
+        {...menu}
+        scale={1}
+        path={[
+          [100, 100],
+          [300, 100],
+          [300, 200],
+          [100, 200],
+        ]}
+      />,
+    );
+    expect([at().left, at().right, at().top]).toEqual(['140px', '', '308px']);
+  });
+
+  it('hangs from the loop’s right edge in the right half, so it never runs off the page', () => {
+    render(
+      <LassoLayer
+        {...menu}
+        scale={1}
+        path={[
+          [700, 100],
+          [940, 100],
+          [940, 200],
+          [700, 200],
+        ]}
+      />,
+    );
+    expect([at().left, at().right]).toEqual(['', '20px']);
   });
 });
 

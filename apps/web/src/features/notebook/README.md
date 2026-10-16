@@ -128,7 +128,8 @@ and the tablet and phone layouts are S5e (#210).
 - Ink latency (`model/latency.ts`, probe `apps/web/scripts/ink-latency.mjs`): pointer-event times
   paired with the frame that wrote the live path and with the next frame; measured in a production
   build by scripted 200-point strokes. The probe's header says what each number does and does not
-  include.
+  include; the numbers, load averages and what a real tablet still needs are in
+  `research/build/v0.2-ui/shots/S5d/README.md`.
 
 ## Data flow
 

@@ -3,7 +3,8 @@
 /**
  * A closed lasso on the page (S5d, #209, frame 05): its dashed loop, drawn over the items, and its
  * menu just under it. Both sit outside the page's scaled layer (the loop is scaled inside its own
- * SVG), so the menu keeps its own size on a small page and never scales with it.
+ * SVG), so the menu keeps its own size on a small page and never scales with it. A loop in the
+ * page's right half hangs its menu from its right edge, so the menu never runs off the page.
  */
 import { LassoMenu } from './LassoMenu';
 import { boundsOf } from '../model/hitTest';
@@ -26,6 +27,11 @@ export interface LassoLayerProps extends LassoMenuProps {
 /** The closed loop and its menu. */
 export function LassoLayer({ path, scale, ...menu }: LassoLayerProps): ReactNode {
   const box = boundsOf(path);
+  const top = (TITLE_BAND + box.y1) * scale + 12;
+  const at =
+    box.x0 > PAGE_WIDTH / 2
+      ? { right: Math.max(0, (PAGE_WIDTH - box.x1) * scale), top }
+      : { left: BINDING + Math.max(0, box.x0) * scale, top };
   return (
     <>
       <svg
@@ -37,10 +43,7 @@ export function LassoLayer({ path, scale, ...menu }: LassoLayerProps): ReactNode
       >
         <path d={loopPath(path)} transform={`scale(${String(scale)})`} />
       </svg>
-      <div
-        className="pt-nb-lasso-at"
-        style={{ left: BINDING + box.x0 * scale, top: (TITLE_BAND + box.y1) * scale + 12 }}
-      >
+      <div className="pt-nb-lasso-at" style={at}>
         <LassoMenu {...menu} />
       </div>
     </>

@@ -134,13 +134,13 @@ test.describe('S5d — ink on the notebook page', () => {
     ] as const) {
       for (const colorScheme of ['light', 'dark'] as const) {
         await page.setViewportSize({ width, height });
-        await page.emulateMedia({ colorScheme });
+        await scheme(page, colorScheme);
         await expect(menu).toBeVisible();
         expect(await axeSerious(page), `${String(width)} ${colorScheme}`).toEqual([]);
       }
     }
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.emulateMedia({ colorScheme: 'light' });
+    await scheme(page, 'light');
 
     // ── 7. Make sticky: the note becomes a sticky, and stays one after a reload ──
     const stuck = page.waitForResponse(
@@ -163,6 +163,23 @@ test.describe('S5d — ink on the notebook page', () => {
     await context.close();
   });
 });
+
+/**
+ * Daylight or lamp-lit, as the "Aa" choice sets it (`data-pt-theme`). An OS scheme emulated after
+ * load does not reach a page that does not mount `useTheme` (the no-flash script reads it once), so
+ * the spec sets the choice itself, and checks that the lamp-lit page colour really applies.
+ */
+async function scheme(page: Page, colorScheme: 'light' | 'dark'): Promise<void> {
+  await page.emulateMedia({ colorScheme });
+  await page.evaluate(
+    (s) => document.documentElement.setAttribute('data-pt-theme', s),
+    colorScheme,
+  );
+  const ground = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--pt-page').trim(),
+  );
+  expect(ground).toBe(colorScheme === 'dark' ? '#2c251f' : '#faf8f3');
+}
 
 /** axe-core's serious and critical violations on the page (axe from apps/web's devDependencies). */
 async function axeSerious(page: Page): Promise<string[]> {
