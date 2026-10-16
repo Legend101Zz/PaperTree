@@ -11,6 +11,7 @@ import {
   DEFAULT_SORT,
   parseHidden,
   sortCaption,
+  tablePool,
   tableRows,
   toggleSort,
   type TableColumn,
@@ -97,6 +98,21 @@ describe('sorting', () => {
     expect(ids(rows, { column: 'opened', direction: 'ascending' })).toEqual(['v', 't', 'u']);
   });
 
+  it("sorts authors by the first author's surname, as a catalogue does; no authors last", () => {
+    const rows = [
+      paper('attention', { authors: ['Ashish Vaswani∗', 'Noam Shazeer'] }),
+      paper('resnet', { authors: ['Kaiming He'] }),
+      paper('nobody'),
+      paper('bert', { authors: ['Jacob Devlin'] }),
+    ];
+    expect(ids(rows, { column: 'authors', direction: 'ascending' })).toEqual([
+      'bert',
+      'resnet',
+      'attention',
+      'nobody',
+    ]);
+  });
+
   it('orders the State column from reading now to could not read', () => {
     const rows = [
       paper('failed', { processing: 'failed' }),
@@ -128,22 +144,21 @@ describe('sorting', () => {
 });
 
 describe('the rows', () => {
-  it('are the search matches under the chip, through the filter, sorted', () => {
+  it('are the search matches through the filter (the pool), under the chip, sorted', () => {
     const rows = [
       paper('b', { year: 2016 }),
       paper('a', { year: 2015 }),
       paper('x', { processing: 'failed' }),
     ];
-    const view = {
-      chip: 'all' as const,
-      filter: NO_FILTER,
-      sort: { ...DEFAULT_SORT, column: 'year' as TableColumn },
-    };
-    expect(tableRows(rows, view, null).map((p) => p.id)).toEqual(['a', 'b', 'x']);
-    expect(tableRows(rows, view, new Set(['b', 'x'])).map((p) => p.id)).toEqual(['b', 'x']);
-    expect(tableRows(rows, { ...view, chip: 'look' }, null).map((p) => p.id)).toEqual(['x']);
+    const view = { chip: 'all' as const, sort: { ...DEFAULT_SORT, column: 'year' as TableColumn } };
+    const all = tablePool(rows, NO_FILTER, null);
+    expect(tableRows(all, view).map((p) => p.id)).toEqual(['a', 'b', 'x']);
+    const matched = tablePool(rows, NO_FILTER, new Set(['b', 'x']));
+    expect(matched.map((p) => p.id)).toEqual(['b', 'x']);
+    expect(tableRows(matched, view).map((p) => p.id)).toEqual(['b', 'x']);
+    expect(tableRows(all, { ...view, chip: 'look' }).map((p) => p.id)).toEqual(['x']);
     const from2016 = { ...NO_FILTER, year: { from: 2016, to: null } };
-    expect(tableRows(rows, { ...view, filter: from2016 }, null).map((p) => p.id)).toEqual(['b']);
+    expect(tableRows(tablePool(rows, from2016, null), view).map((p) => p.id)).toEqual(['b']);
   });
 });
 

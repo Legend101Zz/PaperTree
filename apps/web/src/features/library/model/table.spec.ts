@@ -1,22 +1,27 @@
 /**
  * The Table view's model (#197): the State cell from `processing` and `reading`, the chips' counts
- * (the five states partition the library, as frame 01d's 24 = 3 + 10 + 9 + 2), the Filter menu
- * (an unknown value is in no range), the source line, the date and the "need a look" sentence.
+ * (the five states partition any set of papers, as frame 01d's 24 = 3 + 10 + 9 + 2), the Filter
+ * menu (an unknown value is in no range; a topic that has left is dropped), the source line, the
+ * date, the "need a look" sentence and what an empty table says.
  */
 import { describe, expect, it } from 'vitest';
 
 import { libraryStats } from './shelf';
 import {
   chipCounts,
+  emptyWords,
+  filterIsOn,
   filterSummary,
   inChip,
   lookSentence,
   NO_FILTER,
   openedLabel,
   passesFilter,
+  readerHref,
   tableState,
   topicSource,
   UNSHELVED,
+  withoutGoneTopic,
   type TablePaper,
 } from './table';
 
@@ -52,6 +57,8 @@ const LIBRARY: readonly TablePaper[] = [
   paper('e', { processing: 'pending' }),
   paper('f', { processing: 'parsing', reading: reading('reading') }),
   paper('g', { processing: 'failed', pageCount: 0 }),
+  // A place in a paper whose page count nobody knows: the stats line cannot count it as reading.
+  paper('h', { pageCount: 0, reading: { ...reading('reading'), page_count: null } }),
 ];
 
 describe('the State cell', () => {
@@ -60,23 +67,30 @@ describe('the State cell', () => {
       ['a', 'Reading now', 'p. 4 of 15'],
       ['b', 'Read', null],
       ['c', 'Not started', null],
-      ['d', 'Not started', 'Partly read'],
+      // Our partial reading, said so it cannot read as the person's progress.
+      ['d', 'Not started', 'Some parts unreadable'],
       ['e', 'Queued', 'Readable in Source mode now'],
       // Processing wins over reading, as on the spine (kraft, not a ribbon).
       ['f', 'Reading', 'Readable in Source mode now'],
       ['g', 'Could not read', null],
+      ['h', 'Opened', null],
     ]);
+    expect(tableState(LIBRARY[7] as TablePaper).kind).toBe('not-started');
+  });
+
+  it('opens a paper at its reader in every state', () => {
+    expect(readerHref('ppr_1')).toBe('/paper/ppr_1/read');
   });
 });
 
 describe('the chips', () => {
   it('count from data, the four states and "need a look" adding up to All', () => {
     const counts = chipCounts(LIBRARY);
-    expect(counts).toEqual({ all: 7, 'reading-now': 1, read: 1, 'not-started': 2, look: 3 });
-    expect(counts['reading-now'] + counts.read + counts['not-started'] + counts.look).toBe(7);
+    expect(counts).toEqual({ all: 8, 'reading-now': 1, read: 1, 'not-started': 3, look: 3 });
+    expect(counts['reading-now'] + counts.read + counts['not-started'] + counts.look).toBe(8);
   });
 
-  it('agree with the stats line: reading now and need a look', () => {
+  it('agree with the stats line: reading now and need a look, a place without a page count too', () => {
     const stats = libraryStats(LIBRARY);
     const counts = chipCounts(LIBRARY);
     expect([counts['reading-now'], counts.look]).toEqual([stats.readingNow, stats.needALook]);
@@ -126,6 +140,22 @@ describe('the Filter menu', () => {
     );
     expect(filterSummary({ ...NO_FILTER, topic: UNSHELVED }, null)).toBe('Unshelved');
   });
+
+  it('knows when it is on', () => {
+    expect(filterIsOn(NO_FILTER)).toBe(false);
+    expect(filterIsOn({ ...NO_FILTER, pages: { from: null, to: 9 } })).toBe(true);
+    expect(filterIsOn({ ...NO_FILTER, topic: UNSHELVED })).toBe(true);
+  });
+
+  it('drops a topic that has left the library, and keeps one that is still there', () => {
+    const on = { ...NO_FILTER, topic: 't1', year: { from: 2015, to: null } };
+    expect(withoutGoneTopic(on, new Set(['t1']), false)).toBe(on);
+    expect(withoutGoneTopic(on, new Set(['t2']), true)).toEqual({ ...on, topic: null });
+    const unshelved = { ...NO_FILTER, topic: UNSHELVED };
+    expect(withoutGoneTopic(unshelved, new Set(), true)).toBe(unshelved);
+    expect(withoutGoneTopic(unshelved, new Set(['t1']), false)).toEqual(NO_FILTER);
+    expect(withoutGoneTopic(NO_FILTER, new Set(), false)).toBe(NO_FILTER);
+  });
 });
 
 describe('the words around the cells', () => {
@@ -164,5 +194,22 @@ describe('the words around the cells', () => {
     ];
     expect(lookSentence(many)).toBe('2 are still to be read; 2 could not be read.');
     expect(lookSentence([paper('x')])).toBeNull();
+  });
+
+  it('says what emptied the table: the chip, the search, the filter or both', () => {
+    const none = { search: false, filter: false };
+    expect(emptyWords('read', 4, none)).toBe('Nothing here is Read yet.');
+    expect(emptyWords('reading-now', 2, { search: true, filter: false })).toBe(
+      'Nothing here is being read now.',
+    );
+    expect(emptyWords('all', 0, { search: true, filter: false })).toBe(
+      'No papers match the search. Clear it to see them all.',
+    );
+    expect(emptyWords('read', 0, { search: false, filter: true })).toBe(
+      'No papers pass the filter. Clear the filter to see them all.',
+    );
+    expect(emptyWords('all', 0, { search: true, filter: true })).toBe(
+      'No papers match the search and the filter. Clear them to see them all.',
+    );
   });
 });

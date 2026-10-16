@@ -1,21 +1,23 @@
 /**
  * TableView: the library as a ruled catalogue (#197, frame 01d). The state chips with their counts,
  * the Filter menu and the sort caption over a native `<table>` whose headers sort (aria-sort; a
- * second press reverses). The header's search filters the rows (the shelf's `matchPapers`). With
- * "need a look" on, the chips row says why each of those papers needs one. Focus never falls to
- * the page: after Retry it is on the row's title, after Remove on the next row's (else the
- * previous one's, else the Table tab).
+ * second press reverses). The header's search filters the rows (the shelf's `matchPapers`), and
+ * the chips count what the search and the Filter leave. With "need a look" on, the chips row says
+ * why each of those papers needs one; an empty table says what emptied it. A topic filter whose
+ * topic has left the library clears itself. Focus never falls to the page: after Retry it is on
+ * the row's title, after Remove on the next row's (else the previous one's, else the Table tab).
  */
 'use client';
 
-import { ChevronDown, X } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { TOUCH_TARGET } from '@/components/library/primitives';
 
-import { chipCounts, lookSentence, STATE_CHIPS, type StateChip } from '../model/table';
-import { sortCaption, TABLE_COLUMNS, tableRows, toggleSort } from '../model/tableSort';
+import { emptyWords, filterIsOn, lookSentence, withoutGoneTopic } from '../model/table';
+import { sortCaption, TABLE_COLUMNS, tablePool, tableRows, toggleSort } from '../model/tableSort';
 import './table.css';
+import { TableChips } from './TableChips';
 import { FilterMenu } from './TableMenus';
 import { TableRow } from './TableRow';
 
@@ -36,48 +38,8 @@ export interface TableViewProps {
   readonly onRetry: (paperId: string) => Promise<unknown>;
   readonly onDelete: (paperId: string) => Promise<unknown>;
   readonly onShowOnShelf: (paperId: string) => void;
-}
-
-/** The chips: All and the four states; with "need a look" on, All and that chip (frame 01d). */
-function Chips({
-  books,
-  chip,
-  onChip,
-  touch,
-}: {
-  readonly books: readonly LibraryBook[];
-  readonly chip: StateChip;
-  readonly onChip: (chip: StateChip) => void;
-  readonly touch: boolean;
-}): ReactNode {
-  const counts = useMemo(() => chipCounts(books), [books]);
-  const shown = STATE_CHIPS.filter((c) =>
-    c.id === 'look' ? counts.look > 0 : chip !== 'look' || c.id === 'all',
-  );
-  return (
-    <div role="group" aria-label="Show papers" className="pt-libtable__chips">
-      {shown.map((c) => {
-        const look = c.id === 'look';
-        const pressed = chip === c.id;
-        return (
-          <button
-            key={c.id}
-            type="button"
-            className={['pt-libtable__chip', touch ? TOUCH_TARGET : ''].join(' ')}
-            data-look={look || undefined}
-            aria-pressed={pressed}
-            // Pressing the pressed "need a look" chip (its ×) goes back to All.
-            onClick={() => onChip(look && pressed ? 'all' : c.id)}
-          >
-            {look ? <span className="pt-libtable__dot" aria-hidden="true" /> : null}
-            {look ? `${String(counts.look)} ${c.label}` : c.label}
-            {look ? null : <span className="pt-libtable__count">{counts[c.id]}</span>}
-            {look && pressed ? <X size={14} strokeWidth={1.5} aria-hidden="true" /> : null}
-          </button>
-        );
-      })}
-    </div>
-  );
+  /** Opens a paper in the reader. */
+  readonly onRead: (paperId: string) => void;
 }
 
 /**
@@ -85,7 +47,7 @@ function Chips({
  *
  * @example
  * <TableView books={books} matches={matches} table={table} touch={false} onRetry={retry}
- *   onDelete={remove} onShowOnShelf={show} />
+ *   onDelete={remove} onShowOnShelf={show} onRead={read} />
  */
 export function TableView({
   books,
@@ -95,13 +57,12 @@ export function TableView({
   onRetry,
   onDelete,
   onShowOnShelf,
+  onRead,
 }: TableViewProps): ReactNode {
   const captionId = useId();
-  const { chip, filter, sort, hidden } = table;
-  const rows = useMemo(
-    () => tableRows(books, { chip, filter, sort }, matches),
-    [books, chip, filter, sort, matches],
-  );
+  const { chip, filter, setFilter, sort, hidden } = table;
+  const pool = useMemo(() => tablePool(books, filter, matches), [books, filter, matches]);
+  const rows = useMemo(() => tableRows(pool, { chip, sort }), [pool, chip, sort]);
   const columns = useMemo(
     () => TABLE_COLUMNS.filter((c) => c.id !== 'title' && !hidden.has(c.id)).map((c) => c.id),
     [hidden],
@@ -111,6 +72,12 @@ export function TableView({
     for (const book of books) if (book.topic) byId.set(book.topic.id, book.topic);
     return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [books]);
+  const unshelved = useMemo(() => books.some((b) => !b.topic), [books]);
+  // Before paint: a filter on a topic with no papers left would hide every row, nameless.
+  useLayoutEffect(() => {
+    const kept = withoutGoneTopic(filter, new Set(topics.map((t) => t.id)), unshelved);
+    if (kept !== filter) setFilter(kept);
+  }, [filter, setFilter, topics, unshelved]);
 
   // Where focus goes once the next render has committed (the acted-on row may be gone by then).
   const [focusTo, setFocusTo] = useState<string | null>(null);
@@ -144,19 +111,19 @@ export function TableView({
     [onDelete],
   );
 
-  const look = chip === 'look' ? lookSentence(books) : null;
+  const look = chip === 'look' ? lookSentence(pool) : null;
   const size = touch ? 'touch' : 'md';
   return (
     <section className="pt-libtable" aria-label="Your papers as a table">
       <div className="pt-libtable__bar">
-        <Chips books={books} chip={chip} onChip={table.setChip} touch={touch} />
+        <TableChips counted={pool} chip={chip} onChip={table.setChip} touch={touch} />
         {look === null ? null : <p className="pt-libtable__why">{look}</p>}
         <div className="pt-libtable__tools">
           <FilterMenu
             filter={filter}
-            onFilter={table.setFilter}
+            onFilter={setFilter}
             topics={topics}
-            unshelved={books.some((b) => !b.topic)}
+            unshelved={unshelved}
             size={size}
           />
           <p id={captionId} className="pt-libtable__sorted">
@@ -211,13 +178,17 @@ export function TableView({
                 onRetry={retry}
                 onDelete={remove}
                 onShowOnShelf={onShowOnShelf}
+                onRead={onRead}
                 touch={touch}
               />
             ))}
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={columns.length + 2} className="pt-libtable__none">
-                  No papers match. Clear the search or the filter to see them all.
+                  {emptyWords(chip, pool.length, {
+                    search: matches !== null,
+                    filter: filterIsOn(filter),
+                  })}
                 </td>
               </tr>
             ) : null}

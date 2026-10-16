@@ -1,18 +1,20 @@
 /**
  * TableCells: the Table view's richer cells (#197, frame 01d): the authors with the full list in a
  * popover, the topic with its cloth and source line, the "…" menu of a row, and the dash that says
- * a value is missing in words a screen reader hears ("unknown", "never").
+ * a value is missing in words a screen reader hears ("unknown", "never"). The popover and the menu
+ * are placed by `usePanelPlace`, so a phone's scrolling table never clips them.
  */
 'use client';
 
 import { MoreHorizontal } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
+import { usePanelPlace } from '../hooks/usePanelPlace';
 import { usePopover } from '../hooks/usePopover';
 import { authorsShort } from '../model/catalogue';
 import { clothFor } from '../model/shelf';
-import { topicSource } from '../model/table';
+import { readerHref, topicSource } from '../model/table';
 
 import type { LibraryBook } from '../hooks/useLibrary';
 import type { ReactNode } from 'react';
@@ -48,6 +50,8 @@ export function AuthorsCell({
   readonly target?: string;
 }): ReactNode {
   const popover = usePopover();
+  const panel = useRef<HTMLDivElement>(null);
+  const place = usePanelPlace(popover.open, popover.button, panel, 'start');
   const short = authorsShort(authors);
   if (short === null) return <Dash words="no authors found" />;
   if (authors.length <= 2) return <span className="pt-trow__authors">{short}</span>;
@@ -65,7 +69,14 @@ export function AuthorsCell({
         <span className="pt-sr-only">{`, all ${String(authors.length)} authors`}</span>
       </button>
       {popover.open ? (
-        <div id={popover.panelId} className="pt-trow__popover" role="group" aria-label="Authors">
+        <div
+          ref={panel}
+          id={popover.panelId}
+          className="pt-trow__popover"
+          style={place}
+          role="group"
+          aria-label="Authors"
+        >
           <span className="pt-trow__popover-head" aria-hidden="true">
             authors · full
           </span>
@@ -106,6 +117,8 @@ export interface RowMenuProps {
   readonly book: LibraryBook;
   /** Retry is offered only for a paper we could not read. */
   readonly onRetry: () => void;
+  /** A Retry or Remove is running: Retry says so and does nothing. */
+  readonly busy?: boolean;
   /** Remove is never offered for a sample paper. */
   readonly onRemove: () => void;
   readonly onShowOnShelf: (paperId: string) => void;
@@ -123,14 +136,21 @@ export interface RowMenuProps {
 export function RowMenu({
   book,
   onRetry,
+  busy = false,
   onRemove,
   onShowOnShelf,
   target = '',
 }: RowMenuProps): ReactNode {
   const menu = usePopover();
   const { open, wrapper } = menu;
+  const panel = useRef<HTMLDivElement>(null);
+  const place = usePanelPlace(open, menu.button, panel, 'end');
+  // preventScroll: the first draw may be before the panel is placed, under the region's edge.
   useEffect(() => {
-    if (open) wrapper.current?.querySelector<HTMLElement>('[data-row-menu-item]')?.focus();
+    if (!open) return;
+    wrapper.current
+      ?.querySelector<HTMLElement>('[data-row-menu-item]')
+      ?.focus({ preventScroll: true });
   }, [open, wrapper]);
   // An item that takes the row away from the menu closes it without returning focus to "…".
   const then = (action: () => void) => () => {
@@ -151,9 +171,16 @@ export function RowMenu({
         <MoreHorizontal size={16} strokeWidth={1.5} aria-hidden="true" />
       </button>
       {menu.open ? (
-        <div id={menu.panelId} className="pt-trow__menu" role="group" aria-label={book.title}>
+        <div
+          ref={panel}
+          id={menu.panelId}
+          className="pt-trow__menu"
+          style={place}
+          role="group"
+          aria-label={book.title}
+        >
           <Link
-            href={`/paper/${book.id}/read`}
+            href={readerHref(book.id)}
             prefetch={false}
             className={target}
             data-row-menu-item=""
@@ -161,7 +188,13 @@ export function RowMenu({
             Open
           </Link>
           {book.processing === 'failed' ? (
-            <button type="button" className={target} data-row-menu-item="" onClick={then(onRetry)}>
+            <button
+              type="button"
+              className={target}
+              data-row-menu-item=""
+              aria-disabled={busy || undefined}
+              onClick={busy ? undefined : then(onRetry)}
+            >
               Retry
             </button>
           ) : null}

@@ -2,8 +2,10 @@
  * library/model/tableSort — the Table view's columns and sort (#197, frame 01d). Every column
  * sorts; a value the server does not have (no year, no page count, never opened, no topic) sorts
  * last whichever way, and ties go by title then id, so equal rows never trade places when the
- * direction flips. Which columns are shown is stored per viewer (`parseHidden`).
+ * direction flips. Authors sort by the first author's surname, as a catalogue does. Which columns
+ * are shown is stored in this browser (`parseHidden`).
  */
+import { surname } from './shelf';
 import {
   inChip,
   passesFilter,
@@ -59,8 +61,10 @@ function sortKey(paper: TablePaper, column: TableColumn): Key {
   switch (column) {
     case 'title':
       return paper.title;
-    case 'authors':
-      return paper.authors[0]?.trim() || null;
+    case 'authors': {
+      const first = paper.authors[0]?.trim() ?? '';
+      return first === '' ? null : surname(first);
+    }
     case 'year':
       return paper.year ?? null;
     case 'topic':
@@ -76,8 +80,12 @@ function sortKey(paper: TablePaper, column: TableColumn): Key {
   }
 }
 
-const compareText = (a: string, b: string): number =>
-  a.localeCompare(b, 'en', { sensitivity: 'base', numeric: true });
+// One collator for every compare: `localeCompare` with options builds one per call (about 7 ms
+// against 0.2 ms for a 400-row sort with many ties).
+const COLLATOR = new Intl.Collator('en', { sensitivity: 'base', numeric: true });
+const compareText = (a: string, b: string): number => COLLATOR.compare(a, b);
+// Ids are ASCII: a plain compare keeps the order total without a collator.
+const compareId = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 /**
  * The comparator for a sort: by the column, nulls last in both directions, then by title and id.
@@ -94,7 +102,7 @@ export function compareRows(sort: TableSort): (a: TablePaper, b: TablePaper) => 
     if (ka === null || kb === null) order = Number(ka === null) - Number(kb === null);
     else if (typeof ka === 'number' && typeof kb === 'number') order = sign * (ka - kb);
     else order = sign * compareText(String(ka), String(kb));
-    return order || compareText(a.title, b.title) || a.id.localeCompare(b.id);
+    return order || compareText(a.title, b.title) || compareId(a.id, b.id);
   };
 }
 
@@ -140,27 +148,38 @@ export function sortCaption(sort: TableSort): string {
 }
 
 /**
- * The table's rows: the search's matches (the same `matchPapers` as the shelf), under the chip,
- * through the Filter menu, sorted.
+ * The papers the search (the same `matchPapers` as the shelf) and the Filter menu leave: what the
+ * chips count, before a chip narrows them further.
  *
  * @param papers - Every paper.
- * @param view - The chip, the filter and the sort.
+ * @param filter - The Filter menu.
  * @param matches - The search's matches, or null when no search runs.
- * @returns The rows, in order.
+ * @returns Those papers, in the order given.
  */
-export function tableRows<P extends TablePaper>(
+export function tablePool<P extends TablePaper>(
   papers: readonly P[],
-  view: { readonly chip: StateChip; readonly filter: TableFilter; readonly sort: TableSort },
+  filter: TableFilter,
   matches: ReadonlySet<string> | null,
 ): P[] {
-  return papers
-    .filter((p) => (matches === null || matches.has(p.id)) && inChip(p, view.chip))
-    .filter((p) => passesFilter(p, view.filter))
-    .sort(compareRows(view.sort));
+  return papers.filter((p) => (matches === null || matches.has(p.id)) && passesFilter(p, filter));
 }
 
 /**
- * The hidden columns stored for this viewer, checked: unknown names and the Title (always shown)
+ * The table's rows: the pool (`tablePool`) under the chip, sorted.
+ *
+ * @param pool - The papers the search and the Filter leave.
+ * @param view - The chip and the sort.
+ * @returns The rows, in order.
+ */
+export function tableRows<P extends TablePaper>(
+  pool: readonly P[],
+  view: { readonly chip: StateChip; readonly sort: TableSort },
+): P[] {
+  return pool.filter((p) => inChip(p, view.chip)).sort(compareRows(view.sort));
+}
+
+/**
+ * The hidden columns stored in this browser, checked: unknown names and the Title (always shown)
  * are dropped, so a stale or hand-edited value can never hide the row's name.
  *
  * @param raw - The stored JSON, or null.

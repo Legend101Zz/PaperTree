@@ -200,6 +200,7 @@ const TABLE_VIEW = (
     onRetry={noopAsync}
     onDelete={noopAsync}
     onShowOnShelf={noop}
+    onRead={noop}
   />
 );
 

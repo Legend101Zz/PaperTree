@@ -61,6 +61,19 @@ export function libraryBookFromWire(row: ApiLibraryPaper): LibraryBook {
   };
 }
 
+// One book per wire row object. React Query keeps an unchanged row's object across polls
+// (structural sharing), so its book stays the same object too, and a memoised Table row or spine
+// whose paper did not change does not draw again.
+const BOOKS = new WeakMap<ApiLibraryPaper, LibraryBook>();
+function bookOf(row: ApiLibraryPaper): LibraryBook {
+  let book = BOOKS.get(row);
+  if (book === undefined) {
+    book = libraryBookFromWire(row);
+    BOOKS.set(row, book);
+  }
+  return book;
+}
+
 /**
  * The refetch interval: on while any row is unfinished, `false` (off) otherwise.
  *
@@ -114,22 +127,21 @@ export function useLibrary(online: boolean) {
   const rows = query.data;
 
   const own = useMemo<readonly LibraryBook[]>(
-    () => (Array.isArray(rows) ? rows : []).map((row) => libraryBookFromWire(row)),
+    () => (Array.isArray(rows) ? rows : []).map(bookOf),
     [rows],
   );
-  const books = useMemo<readonly LibraryBook[]>(
-    () => [
-      ...visibleSamples().map((s) => ({
+  const samples = useMemo<readonly LibraryBook[]>(
+    () =>
+      visibleSamples().map((s) => ({
         ...s,
         year: null,
         reading: null,
         arxivCategory: null,
         topic: null,
       })),
-      ...own,
-    ],
-    [own],
+    [],
   );
+  const books = useMemo<readonly LibraryBook[]>(() => [...samples, ...own], [samples, own]);
 
   const upload = useCallback(
     async (file: File, context: UploadContext) => {

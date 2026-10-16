@@ -54,19 +54,27 @@ same papers as a ruled catalogue.
 - **The Table** (01d) is a native `<table>`: Title (a link to the reader), Authors (first author "et al.";
   three or more open "Authors · full", a popover with every name), Year, Topic (its cloth, name and source line,
   "arXiv cs.CL · accepted", "chosen by you" or "suggested · accepted"; else "Unshelved"), Pages, State
-  ("Reading now · p. 4 of 15", "Read", "Not started", "Queued" / "Reading · Readable in Source mode now", "Could
-  not read" with Retry · Remove), Highlights, Last opened (`reading.opened_at`, "16 Oct"). A missing value is a
+  ("Reading now · p. 4 of 15" (the stats line's set), "Read", "Not started" ("Some parts unreadable" under it
+  for our partial reading; "Opened" for a place in a paper whose page count is unknown), "Queued" / "Reading ·
+  Readable in Source mode now", "Could not read" with Retry · Remove, which says it is busy while it runs and
+  sends one request however often it is pressed), Highlights, Last opened (`reading.opened_at`, "16 Oct"). A missing value is a
   dash that a screen reader hears as "unknown", "none" or "never"; nothing is invented. Every header sorts
   (`aria-sort`; a second press reverses; a missing value sorts last both ways; ties go by title, so "Sorted by
-  topic, then title" is literal). Chips over it: All, Reading now, Read, Not started and "N need a look", counted
-  over the whole library (the states partition it); with "need a look" on, only All and that chip show, with a
-  sentence saying why ("LoRA is still being read; SuperGLUE could not be read."). Filter: topic, a year range
-  and a pages range (a paper with no year or no page count is in no range). Columns hides any column but Title,
-  stored per viewer (`papertree/library/table-columns`, try/catch). A row's arrow opens the reader (for a
-  pointer; the title link is the keyboard's one stop); its "…" menu has Open, Retry (could not read only),
+  topic, then title" is literal; Authors sort by the first author's surname). Chips over it: All, Reading now,
+  Read, Not started and "N need a look", counted over what the search and the Filter leave, so a chip's number
+  is the rows it shows (the states partition any set; the title's "N need a look" counts the whole library);
+  with "need a look" on, only All and that chip show, with a sentence saying why ("LoRA is still being read;
+  SuperGLUE could not be read."). An empty table says what emptied it (the chip, the search or the Filter).
+  Filter: topic, a year range and a pages range (a paper with no year or no page count is in no range); a topic
+  that leaves the library leaves the Filter too. Columns hides any column but Title, stored in this browser
+  (`papertree/library/table-columns`, try/catch). A row's arrow opens the reader (for a pointer; the title link
+  is the keyboard's one stop); its "…" menu has Open, Retry (could not read only),
   Remove (confirmed in a row under it, with the card's confirmation) and Show on the shelf (the Shelf tab, that
-  spine focused). After Retry focus is on the row's title, after Remove on the next row's. At phone width the
-  table scrolls sideways in its own region with the titles held at the left; every column stays reachable.
+  spine focused). After Retry focus is on the row's title, after Remove on the next row's. Every popover and
+  menu closes when focus leaves it. At phone width the table scrolls sideways in its own region with the titles
+  (about 58% of the screen, up to three lines) held at the left; every column stays reachable, and a row's
+  popover or menu is placed on the screen (upward on the last rows), so the region never clips it. A poll
+  re-draws only the rows whose paper changed: `useLibrary` keeps an unchanged paper's object.
   Nothing is virtualised: 400 rows are measured in `research/build/v0.2-ui/shots/S2f/README.md`.
 - **The shelf** is one tab stop: ←/→ walk along it, Home and End jump to its ends. Enter or a click takes a
   book down: its catalogue card opens in the band above, pointing at the spine, with focus on Read (Enter again
@@ -115,11 +123,14 @@ ribbon, no year means no year on the spine.
   `hooks/useElementWidth.ts` measures the plank for `coversPerRow`.
 - `model/table.ts`: the Table's State cell, chips and counts, the Filter model, the source line, the date and the
   "need a look" sentence; `model/tableSort.ts`: columns, the comparators (nulls last, ties by title), the caption,
-  `tableRows` and the stored columns (pure; tested beside them). `hooks/useTableView.ts` holds the Table's state;
-  `hooks/usePopover.ts` is every disclosure's open/close rules (the header menus too); `hooks/useBookActions.ts` is
-  Retry and the confirmed Remove for the card and a row.
-- `components/TableView.tsx` (chips, Filter, the table) with `TableRow.tsx`, `TableCells.tsx` (authors popover,
-  topic, "…" menu), `TableMenus.tsx` (Columns, Filter), `RemoveConfirm.tsx` (shared with the card) and `table.css`.
+  `tablePool` and `tableRows`, and the stored columns (pure; tested beside them). `hooks/useTableView.ts` holds
+  the Table's state; `hooks/usePopover.ts` is every disclosure's open/close rules (Esc, a press outside, focus
+  leaving; the header menus too), drawn by `PopoverMenu.tsx`; `hooks/usePanelPlace.ts` places a row's popover
+  and menu on the screen; `hooks/useBookActions.ts` is Retry and the confirmed Remove for the card and a row,
+  with one guard against a second request.
+- `components/TableView.tsx` (Filter, the table) with `TableChips.tsx`, `TableRow.tsx`, `TableCells.tsx` (authors
+  popover, topic, "…" menu), `TableMenus.tsx` (Columns, Filter), `RemoveConfirm.tsx` (shared with the card) and
+  `table.css`.
 - `hooks/useLibrary.ts`: the data layer (query, polling, upload, cancel's re-read, retry, delete);
   `hooks/useUploadQueue.ts`: the upload queue (progress, Cancel, refusals); `hooks/useCardPlacement.ts`.
 - `components/LibraryView.tsx`: the page; `LibraryHeader.tsx` (with `SearchField.tsx`, `AddPapers.tsx`),

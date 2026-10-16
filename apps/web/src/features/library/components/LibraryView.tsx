@@ -30,6 +30,7 @@ import { useTouchTargets } from '../hooks/useTouchTargets';
 import { useUploadQueue } from '../hooks/useUploadQueue';
 import { arrangeShelf, libraryStats, matchPapers, type Arrangement } from '../model/shelf';
 import { readingNow, shelfLayout } from '../model/states';
+import { readerHref } from '../model/table';
 import './library.css';
 import { AccessionSlip } from './AccessionSlip';
 import { DropAnywhere } from './AddPapers';
@@ -122,7 +123,7 @@ export function LibraryView(): ReactNode {
     [setChip],
   );
 
-  const read = useCallback((paperId: string) => router.push(`/paper/${paperId}/read`), [router]);
+  const read = useCallback((paperId: string) => router.push(readerHref(paperId)), [router]);
   const resume = useContinue(read);
   const takeFirstMatch = useCallback(() => {
     // In the Table the rows are already the matches: Enter goes to the first one.
@@ -237,6 +238,7 @@ export function LibraryView(): ReactNode {
                 onRetry={retry}
                 onDelete={remove}
                 onShowOnShelf={showOnShelf}
+                onRead={read}
               />
             ) : null}
           </>

@@ -1,6 +1,6 @@
 /**
  * TableMenus: the Table view's two menus (#197, frame 01d). Columns hides and shows columns (the
- * Title always stays; the choice is stored per viewer by `useTableView`). Filter narrows the rows
+ * Title always stays; the choice is stored in this browser by `useTableView`). Filter narrows the rows
  * by topic, a year range and a pages range; its button says what is on.
  */
 'use client';
@@ -11,17 +11,14 @@ import { useId } from 'react';
 
 import { TOUCH_TARGET } from '@/components/library/primitives';
 
-import { usePopover } from '../hooks/usePopover';
 import { filterSummary, NO_FILTER, UNSHELVED, type Range, type TableFilter } from '../model/table';
 import { TABLE_COLUMNS, type TableColumn } from '../model/tableSort';
+import { PopoverMenu } from './PopoverMenu';
 
 import type { ShelfTopic } from '../model/shelf';
 import type { ReactNode } from 'react';
 
-/**
- * A menu button with its panel. A plain `<button>` drawn as the secondary `Button`, because that
- * component does not forward a ref and Esc must put focus back on the button.
- */
+/** A menu button drawn as the secondary `Button`, with its panel (the header's `PopoverMenu`). */
 function Menu({
   label,
   size,
@@ -31,29 +28,24 @@ function Menu({
   readonly size: ControlSize;
   readonly children: ReactNode;
 }): ReactNode {
-  const menu = usePopover();
   return (
-    <div ref={menu.wrapper} className="pt-hmenu">
-      <button
-        ref={menu.button}
-        type="button"
-        className={`pt-button pt-button--secondary pt-button--${size} ${size === 'touch' ? TOUCH_TARGET : ''}`}
-        style={{ minHeight: CONTROL_MIN_HEIGHT_PX[size] }}
-        aria-expanded={menu.open}
-        aria-controls={menu.open ? menu.panelId : undefined}
-        onClick={menu.toggle}
-      >
-        <span className="pt-button__icon" aria-hidden="true">
-          <ListFilter size={18} strokeWidth={1.5} />
-        </span>
-        <span className="pt-button__label">{label}</span>
-      </button>
-      {menu.open ? (
-        <div id={menu.panelId} className="pt-hmenu__panel pt-tmenu" role="group" aria-label={label}>
-          {children}
-        </div>
-      ) : null}
-    </div>
+    <PopoverMenu
+      label={label}
+      worded
+      face={
+        <>
+          <span className="pt-button__icon" aria-hidden="true">
+            <ListFilter size={18} strokeWidth={1.5} />
+          </span>
+          <span className="pt-button__label">{label}</span>
+        </>
+      }
+      buttonClassName={`pt-button pt-button--secondary pt-button--${size} ${size === 'touch' ? TOUCH_TARGET : ''}`}
+      buttonStyle={{ minHeight: CONTROL_MIN_HEIGHT_PX[size] }}
+      panelClassName="pt-tmenu"
+    >
+      {children}
+    </PopoverMenu>
   );
 }
 

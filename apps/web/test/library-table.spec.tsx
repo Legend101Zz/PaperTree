@@ -7,14 +7,21 @@
  * and axe finds nothing at WCAG 2.2 AA (contrast and target size need a browser: see a11y.spec).
  */
 import axe from 'axe-core';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LibraryView } from '@/features/library';
 import { COLUMNS_KEY } from '@/features/library/hooks/useTableView';
-import type { LibraryPaper } from '@/lib/api/types';
 import { useAuthStore } from '@/store/authStore';
+
+import {
+  header,
+  openTable,
+  renderLibrary,
+  rowIds,
+  rowOf,
+  ROWS,
+  VASWANI,
+} from './library-table-cases';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
@@ -31,100 +38,6 @@ vi.mock('@/lib/api/papers', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api/papers')>()),
   papersApi: api,
 }));
-
-const VASWANI = [
-  'Ashish Vaswani',
-  'Noam Shazeer',
-  'Niki Parmar',
-  'Jakob Uszkoreit',
-  'Llion Jones',
-  'Aidan N. Gomez',
-  'Lukasz Kaiser',
-  'Illia Polosukhin',
-];
-
-function row(id: string, title: string, overrides: Partial<LibraryPaper> = {}): LibraryPaper {
-  return {
-    paper_id: id,
-    title,
-    authors: ['Kaiming He', 'Xiangyu Zhang', 'Shaoqing Ren'],
-    original_filename: `${title}.pdf`,
-    source_hash: 'sha256:00',
-    page_count: 12,
-    processing: 'ready',
-    job: null,
-    generation: 1,
-    parser_version: '1.0.0',
-    highlight_count: 0,
-    created_at: '2026-10-01T10:00:00+00:00',
-    updated_at: '2026-10-15T10:00:00+00:00',
-    reading: null,
-    year: 2015,
-    arxiv_id: null,
-    arxiv_category: 'cs.CV',
-    thread_count: 0,
-    has_summary: false,
-    topic: null,
-    ...overrides,
-  };
-}
-
-const TRANSFORMERS = {
-  topic_id: 'top_t',
-  name: 'Transformers & attention',
-  cloth: 'transformers' as const,
-  source: 'arxiv_category' as const,
-  source_detail: 'cs.CL',
-};
-
-const ROWS = (): LibraryPaper[] => [
-  row('ppr_1', 'Attention Is All You Need', {
-    authors: VASWANI,
-    page_count: 15,
-    year: 2017,
-    highlight_count: 3,
-    topic: TRANSFORMERS,
-    reading: {
-      last_page: 3,
-      furthest_page: 3,
-      page_count: 15,
-      opened_at: '2026-10-16T10:00:00Z',
-      finished_at: null,
-      state: 'reading',
-    },
-  }),
-  row('ppr_2', 'FlashAttention: Fast and Memory-Efficient Exact Attention', {
-    authors: ['Tri Dao'],
-    page_count: 34,
-    year: 2022,
-    topic: TRANSFORMERS,
-  }),
-  row('ppr_3', 'Deep Residual Learning for Image Recognition'),
-  row('ppr_4', 'garbage', { processing: 'failed', page_count: null, year: null, authors: [] }),
-];
-
-async function renderLibrary(): Promise<void> {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
-    <QueryClientProvider client={client}>
-      <LibraryView />
-    </QueryClientProvider>,
-  );
-  await screen.findByRole('toolbar', { name: 'Shelf' });
-}
-
-async function openTable(): Promise<HTMLElement> {
-  await renderLibrary();
-  fireEvent.click(screen.getByRole('button', { name: 'Table' }));
-  return screen.getByRole('table', { name: 'Papers' });
-}
-
-const rowIds = (table: HTMLElement) =>
-  [...table.querySelectorAll<HTMLElement>('tbody tr[data-row-id]')].map((r) => r.dataset['rowId']);
-const rowOf = (table: HTMLElement, id: string) =>
-  table.querySelector<HTMLElement>(`tr[data-row-id="${id}"]`) as HTMLElement;
-const header = (table: HTMLElement, name: string) =>
-  within(table).getByRole('columnheader', { name: new RegExp(`^${name}`) });
 
 beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();

@@ -4,9 +4,7 @@
  * and pages ranges), the words around them, and which columns are shown. Sorting is in
  * `tableSort.ts`. Nothing is invented: an unknown year or page count is in no range.
  */
-import { PROCESSING_LABEL } from '@/components/library/types';
-
-import { needsALook, readingPage, spineTitle, type ShelfPaper } from './shelf';
+import { isReadingNow, needsALook, readingPage, spineTitle, type ShelfPaper } from './shelf';
 
 /** What a table row reads: the shelf's facts plus the highlight count. `LibraryBook` satisfies it. */
 export type TablePaper = ShelfPaper & { readonly highlightCount: number };
@@ -25,8 +23,20 @@ export interface TableState {
 const SOURCE_NOW = 'Readable in Source mode now';
 
 /**
+ * Where the reader opens a paper, in every state (Source mode works for a failed paper too).
+ *
+ * @param paperId - The paper.
+ * @returns `/paper/<id>/read`.
+ */
+export function readerHref(paperId: string): string {
+  return `/paper/${paperId}/read`;
+}
+
+/**
  * The State cell. Processing wins over reading, as on the spine: a paper we are still reading
- * says so even if the person has it open in Source mode.
+ * says so even if the person has it open in Source mode. "Reading now" is the stats line's set
+ * (`isReadingNow`, which needs the page count); a place in a paper whose page count is unknown
+ * reads "Opened", under Not started, so the chip and the stats line never disagree.
  *
  * @param paper - The paper.
  * @returns "Reading now · p. 4 of 15", "Read", "Not started", "Queued", "Reading" or "Could not read".
@@ -38,14 +48,16 @@ export function tableState(paper: ShelfPaper): TableState {
     return { kind: 'queued', label: 'Queued', detail: SOURCE_NOW };
   if (paper.processing === 'parsing')
     return { kind: 'parsing', label: 'Reading', detail: SOURCE_NOW };
-  if (paper.reading?.state === 'reading') {
-    const at = readingPage(paper);
-    const detail = at === null ? null : `p. ${String(at.page)} of ${String(at.of)}`;
+  const at = readingPage(paper);
+  if (isReadingNow(paper) && at !== null) {
+    const detail = `p. ${String(at.page)} of ${String(at.of)}`;
     return { kind: 'reading-now', label: 'Reading now', detail };
   }
   if (paper.reading?.state === 'finished') return { kind: 'read', label: 'Read', detail: null };
-  const partly = paper.processing === 'partial' ? PROCESSING_LABEL.partial : null;
-  return { kind: 'not-started', label: 'Not started', detail: partly };
+  // "Partly read" here would read as the person's progress; it is ours.
+  const partly = paper.processing === 'partial' ? 'Some parts unreadable' : null;
+  const opened = paper.reading?.state === 'reading';
+  return { kind: 'not-started', label: opened ? 'Opened' : 'Not started', detail: partly };
 }
 
 /** The chips over the table. A paper that needs a look is in none of the three reading chips. */
@@ -74,10 +86,11 @@ export function inChip(paper: ShelfPaper, chip: StateChip): boolean {
 }
 
 /**
- * Each chip's count, over the whole library (the frame's "All 24 · Reading now 3 · Read 10 · Not
- * started 9 · 2 need a look" adds up: the five states partition the papers).
+ * Each chip's count, over the papers the search and the Filter leave, so a chip's number is the
+ * rows it shows (frame 01d's "All 24 · Reading now 3 · Read 10 · Not started 9 · 2 need a look"
+ * adds up: the four states and "need a look" partition any set of papers).
  *
- * @param papers - Every paper.
+ * @param papers - The papers counted.
  * @returns The counts by chip.
  */
 export function chipCounts(papers: readonly ShelfPaper[]): Readonly<Record<StateChip, number>> {
@@ -110,6 +123,25 @@ export interface TableFilter {
 /** The topic filter's value for papers without a topic. */
 export const UNSHELVED = 'unshelved';
 
+/**
+ * The filter without a topic that has left the library (its last paper removed or moved), which
+ * would otherwise hide every row with no name to show for it on the Filter button.
+ *
+ * @param filter - The filter.
+ * @param topicIds - The topics the library has now.
+ * @param unshelved - Whether some paper has no topic.
+ * @returns The same filter when its topic is still there, else the filter with no topic.
+ */
+export function withoutGoneTopic(
+  filter: TableFilter,
+  topicIds: ReadonlySet<string>,
+  unshelved: boolean,
+): TableFilter {
+  const { topic } = filter;
+  if (topic === null || (topic === UNSHELVED ? unshelved : topicIds.has(topic))) return filter;
+  return { ...filter, topic: null };
+}
+
 /** No filter at all. */
 export const NO_FILTER: TableFilter = {
   topic: null,
@@ -118,6 +150,16 @@ export const NO_FILTER: TableFilter = {
 };
 
 const isOpen = (range: Range): boolean => range.from === null && range.to === null;
+
+/**
+ * Whether the Filter menu narrows anything.
+ *
+ * @param filter - The filter.
+ * @returns True when a topic or a range is set.
+ */
+export function filterIsOn(filter: TableFilter): boolean {
+  return filter.topic !== null || !isOpen(filter.year) || !isOpen(filter.pages);
+}
 
 // An unknown value is in no range: a paper with no year is not "from 2015".
 function inRange(value: number | null, range: Range): boolean {
@@ -197,11 +239,40 @@ export function openedLabel(iso: string | null | undefined, now: Date = new Date
   return at.getFullYear() === now.getFullYear() ? day : `${day} ${String(at.getFullYear())}`;
 }
 
+const CHIP_EMPTY: Readonly<Record<StateChip, string>> = {
+  all: 'No papers here.',
+  'reading-now': 'Nothing here is being read now.',
+  read: 'Nothing here is Read yet.',
+  'not-started': 'Everything here has been started.',
+  look: 'Nothing here needs a look.',
+};
+
+/**
+ * What an empty table says, naming what emptied it: the search, the Filter, or only the chip.
+ *
+ * @param chip - The pressed chip.
+ * @param counted - How many papers the search and the Filter leave (before the chip).
+ * @param narrowed - Whether a search runs and whether a filter is on.
+ * @returns The sentence.
+ */
+export function emptyWords(
+  chip: StateChip,
+  counted: number,
+  narrowed: { readonly search: boolean; readonly filter: boolean },
+): string {
+  if (counted > 0 || (!narrowed.search && !narrowed.filter)) return CHIP_EMPTY[chip];
+  if (narrowed.search && narrowed.filter)
+    return 'No papers match the search and the filter. Clear them to see them all.';
+  return narrowed.search
+    ? 'No papers match the search. Clear it to see them all.'
+    : 'No papers pass the filter. Clear the filter to see them all.';
+}
+
 /**
  * The sentence beside the "need a look" chip: "LoRA is still being read; SuperGLUE could not be
  * read." Names up to three papers; past that it counts them.
  *
- * @param papers - Every paper.
+ * @param papers - The papers the search and the Filter leave.
  * @returns The sentence, or null when nothing needs a look.
  */
 export function lookSentence(papers: readonly ShelfPaper[]): string | null {

@@ -137,8 +137,13 @@ export function spineTitle(title: string): string {
   return head.length > 0 ? head : title.trim();
 }
 
-// "Ashish Vaswani∗" → "Vaswani": the last word, without footnote marks.
-function surname(name: string): string {
+/**
+ * "Ashish Vaswani∗" → "Vaswani": the last word, without footnote marks.
+ *
+ * @param name - An author as printed.
+ * @returns The surname.
+ */
+export function surname(name: string): string {
   const words = name
     .replace(/[^\p{L}\p{M}'’.-]+$/u, '')
     .trim()

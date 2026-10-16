@@ -2,11 +2,11 @@
  * useTableView: the Table view's page state (#197): the state chip, the Filter menu, the sort and
  * the hidden columns. Held by the page, not the table, so it survives a switch to the Shelf and
  * back, and so "N need a look" in the title can open the table filtered. Only the hidden columns
- * are stored (per viewer, in this browser).
+ * are stored, in this browser (not per account, like the shelf's hints).
  */
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { NO_FILTER, type StateChip, type TableFilter } from '../model/table';
 import { DEFAULT_SORT, parseHidden, type TableColumn, type TableSort } from '../model/tableSort';
@@ -47,16 +47,22 @@ export function useTableView(): TableViewState {
   const [hidden, setHidden] = useState<ReadonlySet<TableColumn>>(new Set());
   // After mount: the server render has no storage, and both renders must agree.
   useEffect(() => setHidden(readHidden()), []);
+  // Stored once the person changes it, never for the first read (which would only echo it back).
+  const chosen = useRef(false);
+  useEffect(() => {
+    if (!chosen.current) return;
+    try {
+      window.localStorage.setItem(COLUMNS_KEY, JSON.stringify([...hidden]));
+    } catch {
+      // Not stored: the choice holds for this visit only.
+    }
+  }, [hidden]);
   const setShown = useCallback((column: TableColumn, shown: boolean) => {
+    chosen.current = true;
     setHidden((was) => {
       const next = new Set(was);
       if (shown) next.delete(column);
       else if (column !== 'title') next.add(column);
-      try {
-        window.localStorage.setItem(COLUMNS_KEY, JSON.stringify([...next]));
-      } catch {
-        // Not stored: the choice holds for this visit only.
-      }
       return next;
     });
   }, []);

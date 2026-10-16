@@ -196,7 +196,7 @@
   font-weight: 400;
 }
 
-.pt-trow__title a,
+.pt-trow__name,
 .pt-trow__authors {
   display: -webkit-box;
   overflow: hidden;
@@ -204,7 +204,10 @@
   -webkit-line-clamp: 2;
 }
 
+/* A flex box, so a one-line title sits on the row's middle line inside a 44 px target too. */
 .pt-trow__title a {
+  display: flex;
+  align-items: center;
   font-family: var(--pt-font-paper);
   font-size: 14px;
   color: var(--pt-ink);
@@ -301,6 +304,13 @@
 
 .pt-trow__danger {
   color: var(--pt-danger) !important;
+}
+
+/* A Retry already running: said in grey, and a press does nothing. */
+.pt-trow__link[aria-disabled='true'],
+.pt-trow__menu > [aria-disabled='true'] {
+  color: var(--pt-ink-2);
+  cursor: default;
 }
 
 /* The row's arrow and "…": shown on hover or focus, always on touch (they stay in the tab order). */
@@ -492,7 +502,6 @@
     inline-size: 104px;
   }
 
-  /* Two lines of a title fill the 44 px target exactly, so the clamp never shows a third. */
   .pt-trow__title a {
     line-height: 22px;
   }
@@ -504,14 +513,38 @@
     margin-inline-start: 0;
   }
 
+  /* The tools sit at the left here: the Filter panel opens rightward from its button, inside the
+     screen (a panel hanging left of x = 0 cannot be scrolled to). */
+  .pt-libtable__tools .pt-hmenu__panel {
+    right: auto;
+    left: 0;
+    inline-size: min(360px, calc(100vw - 32px));
+    min-inline-size: 0;
+  }
+
+  .pt-tmenu__range {
+    flex-wrap: wrap;
+  }
+
   /* Positioned, so the screen-reader-only text (absolutely placed) scrolls inside it too. */
   .pt-libtable__scroll {
     position: relative;
     overflow-x: auto;
   }
 
+  /* Every column has its width here, the Title most of the screen, and the table is as wide as
+     their sum (a fixed table grows to its columns), whichever columns are shown. */
   .pt-libtable__grid {
-    min-inline-size: 1120px;
+    inline-size: 0;
+    min-inline-size: 100%;
+  }
+
+  .pt-libtable__th--title {
+    inline-size: clamp(180px, 58vw, 320px);
+  }
+
+  .pt-trow__name {
+    -webkit-line-clamp: 3;
   }
 
   .pt-trow__title,
@@ -520,5 +553,12 @@
     left: 0;
     z-index: 1;
     background: var(--pt-ground);
+  }
+
+  /* The row's wash, opaque on the pinned title: the cells scrolling under it must not show through
+     (a tap leaves :hover on, so this is the usual touch state). */
+  .pt-trow:hover > .pt-trow__title,
+  .pt-trow:focus-within > .pt-trow__title {
+    background: color-mix(in srgb, var(--pt-rule) 45%, var(--pt-ground));
   }
 }
