@@ -42,7 +42,7 @@ describe('the explain panel quote', () => {
     vi.unstubAllGlobals();
   });
 
-  it('shows the quote de-hyphenated and cut at a word, with Show all', async () => {
+  it('quotes the selection de-hyphenated on the call slip, in the paper’s voice', async () => {
     installFetch({
       [`POST /papers/${PAPER}/threads`]: () =>
         sseResponse([run(), text('ok'), done()], { hold: true }),
@@ -52,17 +52,22 @@ describe('the explain panel quote', () => {
       'improves detec- tion performance. '.repeat(6);
     render(<QuoteProbe quote={long} />);
     fireEvent.click(screen.getByText('open'));
-    const quote = await screen.findByLabelText('Selected passage');
-    const shown = quote.querySelector('blockquote')?.textContent ?? '';
+    // #202: the selection is the first call slip's quote; the slip shows it on one line (CSS) and
+    // keeps the whole passage in the DOM, so nothing is cut from what a screen reader hears.
+    const slip = await waitFor(() => {
+      const found = document.querySelector('[data-explain-quote] [data-voice="paper"]');
+      expect(found).not.toBeNull();
+      return found as Element;
+    });
+    const shown = slip.textContent ?? '';
     expect(shown).toContain('A single convolutional network');
     expect(shown).toContain('multiple bounding boxes');
     expect(shown).toContain('end-to-end');
+    expect(shown).toContain('detection performance.');
     expect(shown).not.toMatch(/sin- gle|multi- ple|detec- tion/);
-    expect(shown).toContain('…');
-    fireEvent.click(screen.getByRole('button', { name: 'Show all' }));
-    const full = quote.querySelector('blockquote')?.textContent ?? '';
-    expect(full).toContain('detection performance.');
-    expect(full).not.toContain('…');
+    expect(document.querySelector('[data-explain-quote] [data-voice="you"]')?.textContent).toBe(
+      'Explain this passage.',
+    );
   });
 });
 

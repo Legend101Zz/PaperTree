@@ -109,7 +109,8 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
     await expect(panel.locator('[data-explain-quote]')).toContainText('We reframe object');
     const answer = panel.locator('[data-message-status]').first();
     await expect(answer).toHaveAttribute('data-message-status', 'complete', { timeout: 120_000 });
-    await expect(panel.locator('[data-register="ai"]').first()).toContainText('AI interpretation');
+    // #202: the answer is an AI slip (the AI's voice), its citations numbered passage markers.
+    await expect(panel.locator('[data-voice="ai"]').first()).toBeVisible();
     const text = (await panel.innerText()).replace(/\s+/g, ' ');
     expect(text).not.toMatch(/\[b\d+\]|\bmsg_|\bthr_|\brun_|\bblk_|\{"|"citation_id"/);
     const chips = panel.locator('[data-citation-id]');
@@ -133,7 +134,7 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
     expect(threadPosts.filter((p) => !p.endsWith('/messages'))).toHaveLength(1);
     await page.screenshot({ path: shot('c03-followup-1440.png') });
 
-    // ── a chip: the cited passage scrolls into view and flashes ──
+    // ── a marker: the cited passage scrolls into view and flashes ──
     await panel.locator('[data-citation-id]').first().click();
     const flash = page.locator('svg [data-flash="true"] polygon');
     await expect(flash.first()).toBeVisible({ timeout: 10_000 });

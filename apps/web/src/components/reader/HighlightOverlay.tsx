@@ -25,12 +25,14 @@
  * same quads; each highlight is still a focusable button for the keyboard (Enter/Space).
  */
 
-import { useMemo } from 'react';
+import { useMemo, type CSSProperties } from 'react';
 
 import { irPolygonToSvgPoints } from '@papertree/anchoring';
 import type { BBox, Polygon } from '@papertree/document-ir';
 
 import type { HighlightColor } from '@/lib/api/types';
+
+import type { FlashSource } from './actions';
 
 export interface PaintItem {
   /** The anchor id: one highlight paints one item per anchor. */
@@ -54,6 +56,12 @@ export interface FlashPaint {
   readonly key: string;
   readonly pageIndex: number;
   readonly polygons: readonly Polygon[];
+  /** IR-space extent of the polygons: where the margin tab sits. */
+  readonly extent: BBox | null;
+  /** The flash waits for the 240 ms scroll that brings the passage into view (0 when in view). */
+  readonly delayMs: number;
+  /** The numbered marker it came from (#202): "from marker 2 in the answer" in the margin. */
+  readonly from?: FlashSource;
 }
 
 export interface HighlightOverlayProps {
@@ -162,7 +170,12 @@ export function HighlightOverlay({
         </g>
       ))}
       {flashPoints.length === 0 || flash === null ? null : (
-        <g key={flash.key} data-flash="true" aria-hidden="true">
+        <g
+          key={flash.key}
+          data-flash="true"
+          aria-hidden="true"
+          style={{ '--pt-flash-delay': `${String(flash.delayMs)}ms` } as CSSProperties}
+        >
           {flashPoints.map((p, index) => (
             <polygon key={String(index)} className="pt-flash" points={p} />
           ))}

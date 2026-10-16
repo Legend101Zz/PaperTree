@@ -45,7 +45,17 @@ import { sendToCanvas } from '@/components/canvas/sendToCanvas';
 import { useFocusFromCanvas } from '@/components/canvas/useFocusFromCanvas';
 import { ExplainPanel } from '@/components/explain';
 import { useExplainActions } from '@/components/explain/useExplainActions';
-import { ReaderActionsProvider, type ReaderActions } from '@/components/reader/actions';
+import {
+  ReaderActionsProvider,
+  type FlashSource,
+  type ReaderActions,
+} from '@/components/reader/actions';
+import {
+  FLASH_MS,
+  FLASH_SCROLL_MS,
+  prefersReducedMotion,
+  useClearOnNextAction,
+} from '@/components/reader/flash';
 import { GuidedView } from '@/components/reader/GuidedView';
 import { HighlightCard } from '@/components/reader/HighlightCard';
 import type { FlashPaint } from '@/components/reader/HighlightOverlay';
@@ -258,7 +268,6 @@ type CardAt = {
 
 /** While a paper is still being read, try again this often. */
 const RETRY_MS = 4000;
-const FLASH_MS = 1200;
 
 export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   const paperKey = paperRefKey(given);
@@ -432,13 +441,14 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   const documentRef = useRef<DocumentHandle | null>(null);
   const pendingScroll = useRef<PendingScroll | null>(null);
 
-  const requestScroll = useCallback((request: PendingScroll) => {
+  /** Returns whether the view moved (a deferred scroll counts: the pane is not there yet). */
+  const requestScroll = useCallback((request: PendingScroll): boolean => {
     const handle = documentRef.current;
     if (handle === null) {
       pendingScroll.current = request;
-      return;
+      return true;
     }
-    applyScroll(handle, request);
+    return applyScroll(handle, request);
   }, []);
 
   const onGuidedTop = useCallback(
@@ -497,15 +507,20 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
     [],
   );
 
+  // The flash's faint outline (and its margin tab) stays until the reader's next action.
+  const clearFlash = useCallback(() => setFlash(null), []);
+  useClearOnNextAction(flash !== null, clearFlash);
+
   /**
-   * `focusAnchor` (contracts.md §5/§6): resolve, scroll the passage into view, flash it 1.2 s.
+   * `focusAnchor` (contracts.md §5/§6): resolve, scroll the passage into view if it is not, and
+   * run the citation flash (`reader/flash`: in 180 → hold 900 → out 600, a faint outline stays).
    *
    * In Source and Split the passage is the anchor's Source paint — its stored quads for a user
    * highlight, the ladder's matched range for a citation. In Guided it is the paragraph that renders
    * it. An anchor painted nowhere still gets its page, and the tray says why.
    */
   const focusAnchor = useCallback(
-    (anchor: Anchor, opts?: { flash?: boolean }) => {
+    (anchor: Anchor, opts?: { flash?: boolean; from?: FlashSource }) => {
       if (doc === null) return;
       const resolution = resolveAnchor(anchor, doc);
       const shouldFlash = opts?.flash !== false;
@@ -523,16 +538,18 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
         return;
       }
       const extent: BBox | null = extentOf(paint.polygons);
-      if (extent !== null)
+      const scrolled =
+        extent !== null &&
         requestScroll({ kind: 'rect', pageIndex: paint.pageIndex, bbox: extent });
       if (!shouldFlash) return;
       setFlash({
         key: `${anchor.id}:${String(Date.now())}`,
         pageIndex: paint.pageIndex,
         polygons: paint.polygons,
+        extent,
+        delayMs: scrolled && !prefersReducedMotion() ? FLASH_SCROLL_MS : 0,
+        ...(opts?.from === undefined ? {} : { from: opts.from }),
       });
-      if (flashTimer.current !== null) clearTimeout(flashTimer.current);
-      flashTimer.current = setTimeout(() => setFlash(null), FLASH_MS + 100);
     },
     [doc, requestScroll],
   );

@@ -37,6 +37,22 @@ derived on read from the parse, never stored).
   `answer_paragraphs` rule), markers, trace rows ("where · cited n×", the paper's words, "not verified" when
   `supported === false`) and coverage.
 
+## On screen
+
+- `components/ExplainPanel.tsx`: the drawer (≥ 768 px) or sheet; its header holds the thread menu, Summarize
+  and Close. `components/ThreadView.tsx`: the thread as exchanges (or the summary) above the `Composer`.
+- `components/Exchange.tsx`: THE layout of one exchange (frame 13 option 1, the owner's default; owner may
+  change): `CallSlip` → `AnswerSlip` (markers inline, marker + tab in the margin, the uncited run under "no
+  citation · the AI's own reading") → `CoverageReadout` → `TraceList`. One component behind `ExchangeProps`,
+  so the sidenote or claim → evidence options of frame 13 could replace it. A marker and its trace row light
+  each other on hover and focus (120 ms); either one runs the citation flash.
+- `components/ThreadMenu.tsx`: "‹ Thread 1 of 2 ›" and a listbox of the threads named by their asks.
+- The citation flash is the reader's (`components/reader/flash.ts`, `ReaderWorkspace.focusAnchor`, `.pt-flash`):
+  scroll 240 ms if needed → in 180 → hold 900 → out 600, a faint outline that stays until the next action;
+  `components/FlashMarginTab.tsx` draws "from marker 2 in the answer" beside the passage.
+- `components/explain` keeps thin re-exports (`index.tsx`, `AnswerView.tsx`) and still owns the controller
+  (`useExplainActions`), the summary view and `RichText` (the summary and the canvas cards use it).
+
 ## Key files
 
 - `model/passages.ts`: passage keys and numbers, handle runs (`[b1, b8]` is two markers). Pure, tested on the
