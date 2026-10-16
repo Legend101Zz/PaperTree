@@ -1072,47 +1072,144 @@ span.pt-paper .pt-paper__cite {
   height: 100dvh;
   font-family: var(--pt-font-ui);
   color: var(--pt-ink);
-  background: var(--pt-page-ground);
+  /* the reader desk (frame 04): a fine laid pattern under the pages, both schemes */
+  background-color: var(--pt-desk);
+  background-image:
+    repeating-linear-gradient(0deg, rgb(90 70 40 / 4%) 0 1px, transparent 1px 5px),
+    repeating-linear-gradient(90deg, rgb(90 70 40 / 4%) 0 1px, transparent 1px 34px);
 }
 
+/* The PDF page is a sheet on the desk: `--pt-pdf-page`, e1, the paper radius. */
 .pt-reader .papertree-page {
-  box-shadow: var(--pt-sheet-shadow);
+  background-color: var(--pt-pdf-page);
+  border-radius: var(--pt-radius-paper);
+  box-shadow: var(--pt-e1);
 }
 
+/* The header (frame 04, #203): one 56 px ivory row from 768 px up, so the explain drawer can open
+   under it; the controls keep their 40-44 px targets inside it. */
 .pt-reader__bar {
+  position: relative;
+  z-index: 31;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: var(--pt-panel-ground);
+  gap: 4px;
+  padding: 6px 16px 6px 20px;
+  background: var(--pt-page);
   border-block-end: 1px solid var(--pt-rule);
 }
 
+@media (min-width: 768px) {
+  .pt-reader__bar {
+    flex-wrap: nowrap;
+    box-sizing: border-box;
+    block-size: var(--pt-reader-bar-h);
+  }
+}
+
+:root {
+  --pt-reader-bar-h: 56px;
+}
+
+.pt-reader__bar .pt-toolbtn {
+  text-decoration: none;
+}
+
+.pt-reader__rule {
+  flex: none;
+  inline-size: 1px;
+  block-size: 24px;
+  margin-inline: 8px;
+  background: var(--pt-rule);
+}
+
 .pt-reader__title {
-  flex: 1 1 12rem;
+  flex: 0 1 auto;
   min-inline-size: 0;
   margin: 0;
   overflow: hidden;
-  font-family: var(--pt-font-body);
-  font-size: 1rem;
-  font-weight: 600;
+  font-family: var(--pt-font-paper);
+  font-size: 16px;
+  font-weight: 700;
   line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.pt-reader__page,
+.pt-reader__count {
+  flex: none;
+  font-family: var(--pt-font-you);
+  font-size: var(--pt-t-num);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--pt-ink-muted);
+}
+
+.pt-reader__page {
+  margin-inline: 8px 16px;
+  white-space: nowrap;
+}
+
 .pt-reader__controls {
   display: flex;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   align-items: center;
   gap: 8px;
+  margin-inline-start: auto;
+}
+
+/* Explain is a tab onto the drawer below it: the AI-slip fill and an oxblood underline (frame 04). */
+.pt-reader__explain .pt-toolbtn__icon:empty {
+  display: none;
+}
+
+/* (two classes and the attribute: it must win over the shared `.pt-toolbtn[aria-pressed]`) */
+.pt-reader__bar .pt-reader__explain[aria-pressed='true'] {
+  color: var(--pt-ink);
+  background: var(--pt-ai-slip);
+  border-color: transparent;
+  border-radius: var(--pt-radius-control) var(--pt-radius-control) 0 0;
+  box-shadow: inset 0 -2px 0 var(--pt-primary);
+}
+
+/* The drawer opens under the header, which stays the full width (frame 04). */
+@media (min-width: 768px) {
+  html[data-pt-explain='open'] .pt-reader__bar {
+    margin-inline-end: calc(-1 * var(--pt-explain-width));
+  }
+  html:has(.pt-reader__bar) .pt-explain {
+    inset-block-start: var(--pt-reader-bar-h);
+  }
+}
+
+/* Narrower windows keep every name but draw Library and Board as their icons, and drop the counter. */
+@media (max-width: 1099px) {
+  .pt-reader__back .pt-toolbtn__label,
+  .pt-reader__board .pt-toolbtn__label {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .pt-reader__back,
+  .pt-reader__board {
+    padding-inline: 10px;
+  }
+  .pt-reader__page {
+    display: none;
+  }
 }
 
 /* Below 640 px the controls take a row of their own, full width, the mode switch first. */
 @media (max-width: 639px) {
   .pt-reader__bar {
     padding: 8px 16px;
+  }
+  .pt-reader__rule {
+    display: none;
   }
   .pt-reader__controls {
     flex: 1 1 100%;
@@ -1123,14 +1220,27 @@ span.pt-paper .pt-paper__cite {
     flex: 1 1 auto;
     min-inline-size: 0;
   }
-  /* The select says "Fit width (56%)"; on a phone it truncates rather than pushing "+" off-screen. */
-  .pt-zoom__select {
-    max-inline-size: 6.75rem;
-  }
   .pt-reader__controls .pt-segmented__option {
     flex: 1 1 0;
     padding-inline: 8px;
   }
+}
+
+/* The selected text reads through a blue-grey wash (frame 04), not the browser's bright blue. */
+.pt-reader .papertree-text-layer ::selection {
+  background: rgb(31 78 121 / 24%);
+}
+
+/* Lamp-lit: the PDF page stays paper, dimmed (DESIGN.md §2). pdf.js paints white, and multiply
+   turns that white into the sheet's own `--pt-pdf-page` while black type stays black. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-pt-theme='light']) .pt-reader .papertree-page canvas {
+    mix-blend-mode: multiply;
+  }
+}
+
+:root[data-pt-theme='dark'] .pt-reader .papertree-page canvas {
+  mix-blend-mode: multiply;
 }
 
 .pt-btn {
@@ -1213,19 +1323,19 @@ span.pt-paper .pt-paper__cite {
 
 .pt-zoom__select {
   flex: 0 1 auto;
-  /* Sized by its text, "Fit width" in Alegreya Sans measures 79 px on Linux (83 on macOS): under
-     the 80 px the RFIX2 screens test holds it to. A floor keeps it readable on every platform. */
+  /* Sized by its text, "Fit width" measures 79-83 px across platforms: under the 80 px the RFIX2
+     screens test holds it to. A floor keeps it readable on every platform. */
   min-inline-size: 5.5rem;
   max-inline-size: 11rem;
   min-block-size: 40px;
   padding-inline: 8px 4px;
-  font: inherit;
-  font-size: 0.875rem;
-  font-variant-numeric: tabular-nums;
+  font-family: var(--pt-font-you);
+  font-size: var(--pt-t-num);
+  font-variant-numeric: lining-nums tabular-nums;
   color: var(--pt-ink);
-  background: transparent;
-  border: 1px solid var(--pt-rule);
-  border-radius: 10px;
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
 }
 
 .pt-num {
@@ -1235,16 +1345,10 @@ span.pt-paper .pt-paper__cite {
 .pt-zoom__pct {
   min-inline-size: 3.25rem;
   padding-inline: 4px;
-  font-size: 0.8125rem;
+  font-family: var(--pt-font-you);
+  font-size: var(--pt-t-num);
   color: var(--pt-ink-muted);
   text-align: end;
-}
-
-/* The select already offers "Fit width"; the button is a shortcut for wide screens only. */
-@media (max-width: 1023px) {
-  .pt-zoom__fit {
-    display: none;
-  }
 }
 
 @media (max-width: 639px) {
@@ -1796,8 +1900,10 @@ span.pt-paper .pt-paper__cite {
   max-inline-size: 44rem;
   margin: 24px auto 48px;
   padding: 40px 48px;
-  background: var(--pt-ground-raised);
-  box-shadow: var(--pt-sheet-shadow);
+  /* the Guided page: ivory `--pt-page` on the desk, e1, the paper's words in Caslon (#203) */
+  background: var(--pt-page);
+  border-radius: var(--pt-radius-paper);
+  box-shadow: var(--pt-e1), var(--pt-e1-edge);
 }
 
 @media (max-width: 639px) {
@@ -3392,16 +3498,16 @@ span.pt-paper .pt-paper__cite {
 
 /* ── RFIX2 (additive) ──────────────────────────────────────────────────────────────────────────
    H390: the reader header at phone width. Row one is Back, Contents, the title on ONE line with an
-   ellipsis, and Canvas; row two is the reading-mode switch and ONE compact zoom control (the select:
-   the platform picker on touch). The step buttons and the "Fit width" shortcut are wide-screen
-   shortcuts; pinch zooms on a phone. Every control keeps its 40 px target. */
+   ellipsis, Board and Explain (#203); row two is the reading-mode switch and ONE compact zoom control
+   (the select: the platform picker on touch). The step buttons are wide-screen shortcuts; pinch
+   zooms on a phone. Every control keeps its 40 px target. */
 
 @media (max-width: 639px) {
   .pt-reader__bar {
     flex-wrap: wrap;
     row-gap: 8px;
   }
-  /* The controls group dissolves into the bar so Canvas can join row one and the rest row two. */
+  /* The controls group dissolves into the bar so Board and Explain join row one, the rest row two. */
   .pt-reader__bar > .pt-reader__controls {
     display: contents;
   }
@@ -3410,7 +3516,8 @@ span.pt-paper .pt-paper__cite {
     min-inline-size: 0;
     order: 1;
   }
-  .pt-reader__controls > a.pt-btn {
+  .pt-reader__controls > .pt-reader__board,
+  .pt-reader__controls > .pt-reader__explain {
     flex: 0 0 auto;
     order: 2;
   }
@@ -3421,7 +3528,7 @@ span.pt-paper .pt-paper__cite {
     block-size: 0;
     order: 3;
   }
-  .pt-reader__controls > :not(a) {
+  .pt-reader__controls > :not(.pt-reader__board, .pt-reader__explain) {
     order: 4;
   }
   .pt-reader__controls > div:first-child {
@@ -3431,14 +3538,14 @@ span.pt-paper .pt-paper__cite {
   .pt-reader__controls .pt-zoom {
     flex: 0 0 auto;
   }
-  .pt-reader__controls .pt-zoom__step,
-  .pt-reader__controls .pt-zoom__fit {
+  .pt-reader__controls .pt-zoom__step {
     display: none;
   }
+  /* "Fit width" in Courier Prime needs 7 rem to show whole (#203) */
   .pt-reader__controls .pt-zoom__select {
     flex: none;
-    inline-size: 6.25rem;
-    max-inline-size: 6.25rem;
+    inline-size: 7rem;
+    max-inline-size: 7rem;
   }
 }
 

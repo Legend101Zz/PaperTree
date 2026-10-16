@@ -5,10 +5,11 @@
  * right drawer from 768 px up, a bottom `Sheet` below it, mounted once by `ReaderWorkspace` with
  * the controller as one prop; it reaches the reader only through `useReaderActions()`. Its header
  * holds the thread menu (threads named by their asks), Summarize and Close; its body is the thread
- * as exchanges. Closed, "Ask AI" is the entry for a free question or the summary.
+ * as exchanges. Closed, the reader header's Explain toggle (#203) is the entry for a free question or
+ * the summary; without one (a panel mounted on its own), a floating "Ask AI" launcher is.
  */
 import { Sheet, type SheetDetent } from '@papertree/ui';
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 import { useReaderActions } from '@/components/reader/actions';
 import { useAuthStore } from '@/store/authStore';
@@ -24,6 +25,11 @@ import type { PassageMarker } from '../model/exchange';
 /** Props for `ExplainPanel`. */
 export interface ExplainPanelProps {
   readonly controller: ExplainController;
+  /**
+   * The reader header's Explain toggle (#203). Given, the panel draws no launcher of its own and
+   * hands focus back to this button when it closes.
+   */
+  readonly toggleRef?: RefObject<HTMLButtonElement>;
 }
 
 const DESKTOP = '(min-width: 768px)';
@@ -159,7 +165,7 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
 }
 
 /** The explain panel, or its "Ask AI" launcher while closed. */
-export function ExplainPanel({ controller }: ExplainPanelProps): ReactNode {
+export function ExplainPanel({ controller, toggleRef }: ExplainPanelProps): ReactNode {
   const desktop = useMediaQuery(DESKTOP);
   const [detent, setDetent] = useState<SheetDetent>('half');
   const asideRef = useRef<HTMLElement>(null);
@@ -167,12 +173,13 @@ export function ExplainPanel({ controller }: ExplainPanelProps): ReactNode {
   const wasOpen = useRef(false);
   const { state, closeExplain } = controller;
 
-  // Closing hands focus back to "Ask AI"; otherwise it falls to <body> and a keyboard reader
-  // starts again from the top of the page.
+  // Closing hands focus back to the toggle (or "Ask AI"); otherwise it falls to <body> and a
+  // keyboard reader starts again from the top of the page.
   useEffect(() => {
-    if (wasOpen.current && !state.open) launcherRef.current?.focus({ preventScroll: true });
+    if (wasOpen.current && !state.open)
+      (toggleRef ?? launcherRef).current?.focus({ preventScroll: true });
     wasOpen.current = state.open;
-  }, [state.open]);
+  }, [state.open, toggleRef]);
 
   // A new ask opens at the readable height, not wherever the last one was left.
   useEffect(() => {
@@ -204,7 +211,7 @@ export function ExplainPanel({ controller }: ExplainPanelProps): ReactNode {
   }, [state.open, desktop]);
 
   if (!state.open) {
-    if (controller.paperId === null) return null;
+    if (controller.paperId === null || toggleRef !== undefined) return null;
     return (
       <button
         ref={launcherRef}

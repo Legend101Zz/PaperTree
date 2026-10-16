@@ -12,9 +12,10 @@
  * and this package is outside Tailwind's content globs).
  */
 
-import { useId } from 'react';
+import { forwardRef, useId } from 'react';
 import type {
   ButtonHTMLAttributes,
+  ForwardedRef,
   InputHTMLAttributes,
   MouseEvent as ReactMouseEvent,
   ReactNode,
@@ -123,26 +124,22 @@ export interface ToolbarButtonProps extends Omit<
   readonly disabled?: boolean;
 }
 
-/**
- * A labelled icon button for the reader header and the board and notebook tool bars (Board,
- * Explain, Select, Add note, Thread, Fit all). With `pressed` it is a toggle.
- *
- * @example
- * <ToolbarButton label="Board" icon={<Grid />} pressed={open} onPressedChange={setOpen} />
- */
-export function ToolbarButton({
-  label,
-  icon,
-  iconOnly = false,
-  pressed,
-  onPressedChange,
-  size = 'md',
-  disabled = false,
-  className,
-  style,
-  onClick,
-  ...rest
-}: ToolbarButtonProps): ReactNode {
+function ToolbarButtonBase(
+  {
+    label,
+    icon,
+    iconOnly = false,
+    pressed,
+    onPressedChange,
+    size = 'md',
+    disabled = false,
+    className,
+    style,
+    onClick,
+    ...rest
+  }: ToolbarButtonProps,
+  ref: ForwardedRef<HTMLButtonElement>,
+): ReactNode {
   const handleClick = (event: ReactMouseEvent<HTMLButtonElement>): void => {
     if (disabled) {
       event.preventDefault();
@@ -155,6 +152,7 @@ export function ToolbarButton({
   return (
     <button
       {...rest}
+      ref={ref}
       type="button"
       className={joinClasses('pt-toolbtn', iconOnly && 'pt-toolbtn--icon', className)}
       style={{
@@ -176,6 +174,16 @@ export function ToolbarButton({
     </button>
   );
 }
+
+/**
+ * A labelled icon button for the reader header and the board and notebook tool bars (Board,
+ * Explain, Select, Add note, Thread, Fit all). With `pressed` it is a toggle. The ref reaches the
+ * `<button>`, so a panel the toggle opens can hand focus back to it when it closes.
+ *
+ * @example
+ * <ToolbarButton label="Board" icon={<Grid />} pressed={open} onPressedChange={setOpen} />
+ */
+export const ToolbarButton = forwardRef(ToolbarButtonBase);
 
 /** The default text for an ask that could not be sent. The typed value is never cleared. */
 export const NOT_SENT_MESSAGE = 'Not sent; your text is kept';

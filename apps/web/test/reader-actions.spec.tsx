@@ -259,7 +259,8 @@ describe('the mount site itself', () => {
       'utf8',
     );
     expect(source).toContain('<ReaderActionsProvider value={actions}>');
-    expect(source).toContain('<ExplainPanel controller={explain} />');
+    // #203: mounted with the header's Explain toggle, which replaced its floating launcher.
+    expect(source).toContain('<ExplainPanel controller={explain} toggleRef={toggleRef} />');
     expect(source).toContain('sendToCanvas: (input) => sendToCanvas(paperId, input)');
   });
 });

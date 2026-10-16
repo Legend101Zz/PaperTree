@@ -30,7 +30,15 @@
  *   retries on its own), not in your library, unreachable, a PDF pdf.js cannot open.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import {
   extentOf,
@@ -61,7 +69,6 @@ import {
 import { GuidedView } from '@/components/reader/GuidedView';
 import { HighlightCard } from '@/components/reader/HighlightCard';
 import type { FlashPaint } from '@/components/reader/HighlightOverlay';
-import { ModeSwitch } from '@/components/reader/ModeSwitch';
 import { Navigator, type NavigatorHighlight } from '@/components/reader/Navigator';
 import { PageThumbnail } from '@/components/reader/PageThumbnail';
 import { PdfDocumentProvider, usePdfDocument } from '@/components/reader/PdfDocumentProvider';
@@ -77,18 +84,14 @@ import {
 import type { PendingSelection, SelectionCapture } from '@/components/reader/useSelectionCapture';
 import { displayQuote } from '@/components/reader/quote';
 import type { ReadingPosition } from '@/components/reader/VirtualPageList';
-import {
-  FIT_WIDTH,
-  resolveZoom,
-  ZoomControl,
-  type ZoomMode,
-} from '@/components/reader/ZoomControl';
+import { FIT_WIDTH, resolveZoom, type ZoomMode } from '@/components/reader/ZoomControl';
 import {
   applyScroll,
   type DocumentHandle,
   type DocumentRef,
   type PendingScroll,
 } from '@/components/reader/documentHandle';
+import { ReaderHeader, type ExplainToggle } from '@/features/reader';
 import { NetworkError } from '@/lib/api/client';
 import { papersApi } from '@/lib/api/papers';
 import { ApiError, type HighlightColor } from '@/lib/api/types';
@@ -299,6 +302,9 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   const [flash, setFlash] = useState<FlashPaint | null>(null);
   const [guidedFlash, setGuidedFlash] = useState<string | null>(null);
   const [followBlockId, setFollowBlockId] = useState<string | null>(null);
+  // The page at the top of the view, for the header's "p. 2 of 15" (#203). The reader opens at the
+  // saved place, or at the top: nothing reports a position until the reader scrolls.
+  const [topPage, setTopPage] = useState<number>(saved?.page ?? 0);
   const narrow = useMediaQuery('(max-width: 639px)');
 
   // Guided and Split need the parse; until it is here the reader stays in Source.
@@ -426,6 +432,7 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
     (position: ReadingPosition) => {
       const blockId = doc === null ? undefined : topBlockAt(doc, position);
       shownRef.current = true;
+      setTopPage(position.page);
       positionRef.current = {
         v: 1,
         mode: modeRef.current,
@@ -458,6 +465,7 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
       const block = doc?.byId.get(blockId);
       if (block === undefined) return;
       shownRef.current = true;
+      setTopPage(block.pageIndex);
       positionRef.current = {
         v: 1,
         mode: modeRef.current,
@@ -679,6 +687,7 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
         <ReaderWorkspaceView
           doc={doc}
           paper={paper}
+          page={topPage}
           mode={mode}
           onModeChange={setMode}
           zoom={zoom}
@@ -786,6 +795,12 @@ function HighlightCardSlot({
 }
 
 /**
+ * The header's Explain toggle (#203), provided by the mount that owns the explain controller; null
+ * for a sample paper, which has no server to ask.
+ */
+const ExplainToggleContext = createContext<ExplainToggle | null>(null);
+
+/**
  * The `ReaderActions` mount (contracts.md §5) — S0's lines in this file.
  *
  * It decides which implementation fills each action; the callers (`SourcePane`'s toolbar, the
@@ -807,7 +822,20 @@ function ReaderActionsMount({
 }) {
   const paperId = paper.kind === 'api' ? paper.paperId : null;
   const explain = useExplainActions({ paperId });
-  const { openExplain } = explain;
+  const { openExplain, openPanel, closeExplain } = explain;
+  const explainOpen = explain.state.open;
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const toggle = useMemo<ExplainToggle | null>(
+    () =>
+      paperId === null
+        ? null
+        : {
+            open: explainOpen,
+            ref: toggleRef,
+            onToggle: (next) => (next ? openPanel() : closeExplain()),
+          },
+    [paperId, explainOpen, openPanel, closeExplain],
+  );
   const actions = useMemo<ReaderActions>(
     () => ({
       openExplain,
@@ -819,8 +847,8 @@ function ReaderActionsMount({
 
   return (
     <ReaderActionsProvider value={actions}>
-      {children}
-      <ExplainPanel controller={explain} />
+      <ExplainToggleContext.Provider value={toggle}>{children}</ExplainToggleContext.Provider>
+      <ExplainPanel controller={explain} toggleRef={toggleRef} />
     </ReaderActionsProvider>
   );
 }
@@ -832,6 +860,8 @@ function ReaderActionsMount({
 interface ViewProps {
   readonly doc: IndexedDocument | null;
   readonly paper: PaperRef;
+  /** 0-based page at the top of the view (the header's counter). */
+  readonly page: number | null;
   readonly mode: ReadingMode;
   readonly onModeChange: (mode: ReadingMode) => void;
   readonly zoom: number;
@@ -877,6 +907,10 @@ function ReaderWorkspaceView(props: ViewProps) {
     doc?.blocks.find((block) => block.type === 'title')?.text.replace(/\n/g, ' ') ??
     (paper.kind === 'api' ? 'Opening the paper…' : paper.slug);
 
+  const explain = useContext(ExplainToggleContext);
+  const { numPages } = usePdfDocument();
+  const pageCount = (numPages ?? 0) > 0 ? numPages : (doc?.pages.length ?? null);
+
   const { items: painted, unplaced } = useMemo(
     () => paintItemsOf(doc, props.highlights.highlights),
     [doc, props.highlights.highlights],
@@ -919,23 +953,26 @@ function ReaderWorkspaceView(props: ViewProps) {
 
   return (
     <div className="pt-reader" data-reader-mode={mode}>
-      <ReaderToolbarShell
+      <ReaderHeader
         title={title}
+        page={props.page}
+        pageCount={pageCount}
         mode={mode}
         onModeChange={props.onModeChange}
         guidedAvailable={doc !== null}
         zoom={props.zoom}
         zoomMode={props.zoomMode}
         onZoomChange={props.onZoomChange}
-        onNavigatorToggle={props.onNavigatorToggle}
         navigatorOpen={props.navigatorOpen}
         navigatorAvailable={doc !== null}
+        onNavigatorToggle={props.onNavigatorToggle}
         highlightCount={props.highlights.highlights.length}
-        canvasHref={
+        boardHref={
           props.paper.kind === 'api'
             ? `/paper/${encodeURIComponent(props.paper.paperId)}/canvas`
             : null
         }
+        explain={explain}
       />
 
       {props.stillReading ? (
@@ -994,93 +1031,6 @@ function ReaderWorkspaceView(props: ViewProps) {
         />
       )}
     </div>
-  );
-}
-
-/**
- * The reader's one toolbar: back to the library, the Navigator, the paper's title, zoom, mode.
- * Below 640 px the controls take their own row, the mode switch first, all reachable by thumb.
- */
-function ReaderToolbarShell({
-  title,
-  mode,
-  onModeChange,
-  guidedAvailable,
-  zoom,
-  zoomMode,
-  onZoomChange,
-  onNavigatorToggle,
-  navigatorOpen,
-  navigatorAvailable,
-  highlightCount,
-  canvasHref,
-}: {
-  title: string;
-  mode: ReadingMode;
-  onModeChange: (mode: ReadingMode) => void;
-  guidedAvailable: boolean;
-  zoom: number;
-  zoomMode: ZoomMode;
-  onZoomChange: (mode: ZoomMode) => void;
-  onNavigatorToggle: () => void;
-  navigatorOpen: boolean;
-  navigatorAvailable: boolean;
-  highlightCount: number;
-  canvasHref: string | null;
-}) {
-  return (
-    <header className="pt-reader__bar">
-      <a className="pt-btn" href="/dashboard" aria-label="Back to your library">
-        <span aria-hidden="true">←</span>
-        <span className="hidden sm:inline">Library</span>
-      </a>
-      {/* The accessible name STARTS WITH the visible label (WCAG 2.5.3, s4-review.md F9): a
-          speech user says "Contents", and the panel it opens is titled the same. */}
-      <button
-        type="button"
-        className="pt-btn"
-        aria-label={
-          highlightCount > 0
-            ? `Contents, ${String(highlightCount)} ${highlightCount === 1 ? 'highlight' : 'highlights'}`
-            : 'Contents'
-        }
-        aria-expanded={navigatorOpen}
-        aria-pressed={navigatorOpen}
-        disabled={!navigatorAvailable}
-        title={
-          navigatorAvailable
-            ? 'Outline, pages and highlights'
-            : 'Available when the paper has been read'
-        }
-        onClick={onNavigatorToggle}
-      >
-        Contents
-        {highlightCount > 0 ? (
-          <span className="pt-num text-[--pt-ink-muted]" aria-hidden="true">
-            {highlightCount}
-          </span>
-        ) : null}
-      </button>
-      <h1 className="pt-reader__title" title={title}>
-        {title}
-      </h1>
-      <div className="pt-reader__controls">
-        <ModeSwitch
-          mode={mode}
-          onModeChange={onModeChange}
-          guidedAvailable={guidedAvailable}
-          unavailableReason="Guided and Split open when the paper has been read."
-        />
-        {mode === 'guided' ? null : (
-          <ZoomControl mode={zoomMode} zoom={zoom} onModeChange={onZoomChange} />
-        )}
-        {canvasHref === null ? null : (
-          <a className="pt-btn" href={canvasHref}>
-            Canvas
-          </a>
-        )}
-      </div>
-    </header>
   );
 }
 
