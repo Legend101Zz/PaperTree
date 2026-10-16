@@ -9,6 +9,10 @@
 import { Upload } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import { TOUCH_TARGET } from '@/components/library/primitives';
+
+import { useTouchTargets } from '../hooks/useTouchTargets';
+
 import type { ReactNode } from 'react';
 
 const HINTS_KEY = 'papertree/library/shelf-hints';
@@ -20,6 +24,8 @@ export interface ShelfHintsProps {
   /** How many papers the query matched. */
   readonly matched: number;
   readonly total: number;
+  /** Got it hides the key hints; focus goes here instead of falling to the page. */
+  readonly onKeysHidden?: () => void;
 }
 
 /**
@@ -28,7 +34,8 @@ export interface ShelfHintsProps {
  * @example
  * <ShelfHints query="atten" matched={2} total={24} />
  */
-export function ShelfHints({ query, matched, total }: ShelfHintsProps): ReactNode {
+export function ShelfHints({ query, matched, total, onKeysHidden }: ShelfHintsProps): ReactNode {
+  const touch = useTouchTargets();
   // Shown until "Got it"; read after mount, because the server cannot see localStorage.
   const [keysHidden, setKeysHidden] = useState(false);
   useEffect(() => {
@@ -70,9 +77,10 @@ export function ShelfHints({ query, matched, total }: ShelfHintsProps): ReactNod
           </span>
           <button
             type="button"
-            className="pt-hints__gotit"
+            className={`pt-hints__gotit${touch ? ` ${TOUCH_TARGET}` : ''}`}
             onClick={() => {
               setKeysHidden(true);
+              onKeysHidden?.();
               try {
                 window.localStorage.setItem(HINTS_KEY, 'hidden');
               } catch {

@@ -46,7 +46,9 @@ function useSlashToSearch(search: { readonly current: HTMLInputElement | null })
       const typing =
         target instanceof HTMLElement &&
         (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
-      if (event.key !== '/' || typing) return;
+      // Ctrl, Cmd or Alt with "/" belongs to the browser or the system, never to the search.
+      const chord = event.ctrlKey || event.metaKey || event.altKey;
+      if (event.key !== '/' || typing || chord) return;
       event.preventDefault();
       search.current?.focus();
     };
@@ -71,18 +73,33 @@ export function LibraryView(): ReactNode {
   const searchRef = useRef<HTMLInputElement>(null);
   useSlashToSearch(searchRef);
 
-  const stats = useMemo(() => libraryStats(books), [books]);
-  const filtered = needALookOnly && stats.needALook > 0;
+  // No count until the server has answered: "0 papers" while loading or after a failed load would
+  // be a fact the page does not have.
+  const loaded = Array.isArray(query.data);
+  const stats = useMemo(() => (loaded ? libraryStats(books) : null), [loaded, books]);
+  const filtered = needALookOnly && stats !== null && stats.needALook > 0;
   const shelved = useMemo(() => (filtered ? books.filter(needsALook) : books), [books, filtered]);
   const matches = useMemo(() => matchPapers(shelved, search), [shelved, search]);
+
+  // The filter ends when nothing needs a look any more, so a later upload cannot switch it back
+  // on by itself; and a card whose book has left the shelf closes rather than waiting to return.
+  useEffect(() => {
+    if (needALookOnly && stats !== null && stats.needALook === 0) setNeedALookOnly(false);
+  }, [needALookOnly, stats]);
+  useEffect(() => {
+    if (openId !== null && !shelved.some((book) => book.id === openId)) setOpenId(null);
+  }, [openId, shelved]);
 
   const read = useCallback((paperId: string) => router.push(`/paper/${paperId}/read`), [router]);
   const takeFirstMatch = useCallback(() => {
     const first = arrangeShelf(shelved, arrangement)
       .flatMap((group) => group.papers)
       .find((book) => matches?.has(book.id) === true);
-    if (first !== undefined) setOpenId(first.id);
-  }, [shelved, arrangement, matches]);
+    if (first === undefined) return;
+    // Already down: Enter goes to its Read, as taking it down would have.
+    if (first.id === openId) document.querySelector<HTMLElement>('[data-card-read]')?.focus();
+    else setOpenId(first.id);
+  }, [shelved, arrangement, matches, openId]);
   const chooseFiles = useCallback(() => {
     document.querySelector<HTMLElement>('[data-add-papers] input[type="file"]')?.click();
   }, []);
@@ -144,7 +161,10 @@ export function LibraryView(): ReactNode {
             </div>
           </div>
         ) : books.length === 0 ? (
-          <EmptyLibrary onAddPaper={chooseFiles} />
+          <>
+            <EmptyLibrary onAddPaper={chooseFiles} />
+            <p className="pt-hints pt-hints--empty">Drop PDFs anywhere to add them</p>
+          </>
         ) : (
           <ShelfSection
             books={shelved}

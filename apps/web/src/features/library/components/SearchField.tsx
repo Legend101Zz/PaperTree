@@ -8,6 +8,10 @@
 import { Search } from 'lucide-react';
 import { forwardRef, useId } from 'react';
 
+import { TOUCH_TARGET } from '@/components/library/primitives';
+
+import { useTouchTargets } from '../hooks/useTouchTargets';
+
 import type { ReactNode } from 'react';
 
 /** Props for `SearchField`. */
@@ -33,13 +37,14 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
   ref,
 ): ReactNode {
   const countId = useId();
+  const target = useTouchTargets() ? ` ${TOUCH_TARGET}` : '';
   return (
     <div className="pt-search" role="search">
       <Search className="pt-search__icon" size={20} strokeWidth={1.5} aria-hidden="true" />
       <input
         ref={ref}
         type="search"
-        className="pt-search__input"
+        className={`pt-search__input${target}`}
         aria-label="Search the library"
         aria-describedby={countId}
         placeholder="Search titles, authors, topics"
@@ -66,7 +71,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
       ) : (
         <button
           type="button"
-          className="pt-search__clear"
+          className={`pt-search__clear${target}`}
           aria-label="Clear the search"
           onClick={(event) => {
             // The button goes with the query; keep focus in the field rather than losing it.

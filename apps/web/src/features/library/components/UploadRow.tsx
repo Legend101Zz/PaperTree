@@ -7,7 +7,7 @@
 
 import { Button } from '@papertree/ui';
 
-import { ProgressMeter } from '@/components/library/primitives';
+import { ProgressMeter, TOUCH_TARGET } from '@/components/library/primitives';
 
 import { formatBytes, type UploadItemState, type UploadQueue } from '../hooks/useUploadQueue';
 
@@ -20,9 +20,6 @@ const STATE_LABEL: Record<UploadItemState, string> = {
   failed: 'Upload failed',
   cancelled: 'Cancelled',
 };
-
-/** 44 px both ways (the touch audit reads the declaration). */
-const TOUCH = { minWidth: 44 } as const;
 
 /** Props for `UploadRow`. */
 export interface UploadRowProps {
@@ -54,7 +51,7 @@ export function UploadRow({ queue }: UploadRowProps): ReactNode {
               <Button
                 variant="ghost"
                 size="touch"
-                style={TOUCH}
+                className={TOUCH_TARGET}
                 onClick={() => dismiss(rejection.id)}
               >
                 Dismiss<span className="pt-sr-only">{` ${rejection.fileName}`}</span>
@@ -91,7 +88,7 @@ export function UploadRow({ queue }: UploadRowProps): ReactNode {
                 <Button
                   variant="ghost"
                   size="touch"
-                  style={TOUCH}
+                  className={TOUCH_TARGET}
                   onClick={() => (inFlight ? cancel : dismiss)(item.id)}
                 >
                   {inFlight ? 'Cancel' : 'Dismiss'}

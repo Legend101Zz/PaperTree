@@ -9,6 +9,10 @@ import { Button } from '@papertree/ui';
 import { Plus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
+import { TOUCH_TARGET } from '@/components/library/primitives';
+
+import { useTouchTargets } from '../hooks/useTouchTargets';
+
 import type { ReactNode } from 'react';
 
 /** Props for `AddPapers`. */
@@ -26,10 +30,13 @@ export interface AddPapersProps {
  */
 export function AddPapers({ onFiles }: AddPapersProps): ReactNode {
   const input = useRef<HTMLInputElement>(null);
+  const touch = useTouchTargets();
   return (
     <span className="pt-addpapers" data-add-papers="">
       <Button
         leadingIcon={<Plus size={20} strokeWidth={1.5} />}
+        size={touch ? 'touch' : 'md'}
+        className={touch ? TOUCH_TARGET : undefined}
         onClick={() => input.current?.click()}
         aria-label="Add papers"
       >

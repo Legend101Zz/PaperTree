@@ -10,8 +10,10 @@ import { Button, SproutMark } from '@papertree/ui';
 import Link from 'next/link';
 import { useEffect, useId, useRef, useState } from 'react';
 
+import { TOUCH_TARGET } from '@/components/library/primitives';
 import { ThemeSwitch, useTheme } from '@/features/settings';
 
+import { useTouchTargets } from '../hooks/useTouchTargets';
 import { AddPapers } from './AddPapers';
 import { SearchField, type SearchFieldProps } from './SearchField';
 
@@ -24,11 +26,13 @@ interface HeaderMenuProps {
   /** What the button shows ("Aa", "M"). */
   readonly face: string;
   readonly round?: boolean;
+  /** 44 px on touch (useTouchTargets). */
+  readonly touch: boolean;
   readonly children: ReactNode;
 }
 
 /** A header button that opens a small panel under it. */
-function HeaderMenu({ label, face, round = false, children }: HeaderMenuProps): ReactNode {
+function HeaderMenu({ label, face, round = false, touch, children }: HeaderMenuProps): ReactNode {
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const wrapper = useRef<HTMLDivElement>(null);
@@ -58,7 +62,13 @@ function HeaderMenu({ label, face, round = false, children }: HeaderMenuProps): 
       <button
         ref={button}
         type="button"
-        className={`pt-hmenu__button${round ? ' pt-hmenu__button--round' : ''}`}
+        className={[
+          'pt-hmenu__button',
+          round ? 'pt-hmenu__button--round' : '',
+          touch ? TOUCH_TARGET : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
         aria-label={label}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
@@ -101,23 +111,39 @@ export function LibraryHeader({
   onSignOut,
 }: LibraryHeaderProps): ReactNode {
   const { choice, setChoice } = useTheme();
-  // The account's initial; the email is all the account has until a display name is set (#192).
+  const touch = useTouchTargets();
+  // The account's initial, from the email: S2a serves `display_name` on /auth/me, but the auth
+  // store does not carry it yet, so the frame's "M" for a named owner waits for that.
   const initial = (email ?? '?').trim().charAt(0).toUpperCase() || '?';
   return (
     <header className="pt-libhead">
-      <Link href="/dashboard" className="pt-libhead__brand">
+      <Link
+        href="/dashboard"
+        className={['pt-libhead__brand', touch ? TOUCH_TARGET : ''].filter(Boolean).join(' ')}
+      >
         <SproutMark size={24} />
         <span>PaperTree</span>
       </Link>
       <SearchField ref={searchRef} {...search} />
       <div className="pt-libhead__actions">
         <AddPapers onFiles={onFiles} />
-        <HeaderMenu label="Reading settings" face="Aa">
+        <HeaderMenu label="Reading settings" face="Aa" touch={touch}>
           <ThemeSwitch value={choice} onChange={setChoice} />
         </HeaderMenu>
-        <HeaderMenu label={`Account${email === null ? '' : `: ${email}`}`} face={initial} round>
+        <HeaderMenu
+          label={`Account${email === null ? '' : `: ${email}`}`}
+          face={initial}
+          round
+          touch={touch}
+        >
           <p className="pt-hmenu__email">{email}</p>
-          <Button variant="secondary" disabled={signingOut} onClick={onSignOut}>
+          <Button
+            variant="secondary"
+            size={touch ? 'touch' : 'md'}
+            className={touch ? TOUCH_TARGET : undefined}
+            disabled={signingOut}
+            onClick={onSignOut}
+          >
             {signingOut ? 'Signing out' : 'Sign out'}
           </Button>
         </HeaderMenu>

@@ -9,15 +9,23 @@ reading it, a kraft wrap while we read it, a torn red label when we could not.
   initial; a menu with the email and Sign out).
 - **Uploads** show as a quiet row under the header with Cancel; PDFs also drop anywhere on the page.
 - **Title block:** "Your library", the stats line computed from the papers ("24 papers · 6 topics · 3 reading
-  now · 484 pages", leaving out what is zero), and "N need a look" (queued, being read or failed), which for
-  now filters the shelf to those papers (owner may change; S2f makes it open the Table filtered).
+  now · 484 pages", leaving out what is zero; nothing at all until the list has loaded), and "N need a look"
+  (queued, being read or failed), which for now filters the shelf to those papers and switches itself off
+  when nothing needs a look (owner may change; S2f makes it open the Table filtered).
 - **Views:** Shelf is live; Topics, Map and Table are shown disabled with "Coming in this release" (S2f, S2g).
   Arrange by: Topic, Year, Title, Recently opened.
 - **The shelf** is one tab stop: ←/→ walk along it, Home and End jump to its ends. Enter or a click takes a
   book down: its catalogue card opens in the band above, pointing at the spine, with focus on Read (Enter again
   opens the reader), Retry for a paper we could not read, and Delete (danger, confirmed inline). Esc puts it
-  back and returns focus to the spine. A search dims what does not match and lights what does, without
-  reordering anything; the hint row under the plank says what the keys do.
+  back and returns focus to the spine. The card is keyed by paper (an armed Delete never follows it to
+  the next book), sits in the band's flow (a taller card moves the shelf down rather than covering the view
+  row) and re-points at its spine whenever the shelf re-lays itself out. Focus never falls to the page: after
+  Retry it is on Read, after Delete on the next spine (else the previous, else Add papers), after "Got it" on
+  the shelf. A search dims what does not match and lights what does, without reordering anything; the hint
+  row under the plank says what the keys do.
+- **Touch:** on a phone width or a coarse pointer every control in the header, title row and hints is 44 px
+  (`useTouchTargets`); on a desktop they keep frame 01's 36–40 px. The spines keep their 26–48 px widths
+  (WCAG 2.5.8's 24 px holds; the phone shelf is S2h).
 
 ## Data flow
 

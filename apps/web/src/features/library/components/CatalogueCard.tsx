@@ -10,7 +10,7 @@
 import { Button } from '@papertree/ui';
 import { useEffect, useRef, useState } from 'react';
 
-import { ProgressMeter } from '@/components/library/primitives';
+import { ProgressMeter, TOUCH_TARGET } from '@/components/library/primitives';
 import { PROCESSING_LABEL } from '@/components/library/types';
 import { describeError } from '@/components/ui/errors';
 
@@ -33,9 +33,6 @@ export interface CatalogueCardProps {
   readonly onClose?: () => void;
 }
 
-/** 44 px both ways on every card control (the touch audit reads the declaration). */
-const TOUCH = { minWidth: 44 } as const;
-
 /**
  * The state line: "Reading now · p. 4 of 15", "Not started", "Read", or the processing state in
  * words while the paper is not ready ("Reading the PDF - step 1 of 3").
@@ -43,7 +40,7 @@ const TOUCH = { minWidth: 44 } as const;
  * @param book - The book.
  * @returns The line.
  */
-export function cardStateLine(book: LibraryBook): string {
+function cardStateLine(book: LibraryBook): string {
   if (book.processing === 'parsing' && book.step !== undefined) {
     return `${book.step.name} - step ${String(book.step.n)} of ${String(book.step.of)}`;
   }
@@ -56,7 +53,10 @@ export function cardStateLine(book: LibraryBook): string {
   return book.processing === 'partial' ? PROCESSING_LABEL.partial : 'Not started';
 }
 
-/** "Ashish Vaswani et al. · 2017 · 15 pages": only what the server knows. */
+/**
+ * "Ashish Vaswani et al. · 2017 · 15 pages": only what the server knows. Full first names on
+ * purpose (frame 01's card), so not the spine's surname-only `authorLine`.
+ */
 function metaLine(book: LibraryBook): string {
   const [first, second] = book.authors;
   const authors =
@@ -105,7 +105,7 @@ function CardActions({ book, onRetry, onDelete }: ActionsProps): ReactNode {
   return (
     <>
       {book.processing === 'failed' ? (
-        <Button size="touch" style={TOUCH} disabled={busy} onClick={retry}>
+        <Button size="touch" className={TOUCH_TARGET} disabled={busy} onClick={retry}>
           Retry<span className="pt-sr-only">{` reading ${book.title}`}</span>
         </Button>
       ) : null}
@@ -117,10 +117,21 @@ function CardActions({ book, onRetry, onDelete }: ActionsProps): ReactNode {
           data-delete-confirm=""
         >
           <p>Delete this paper and its highlights? This cannot be undone.</p>
-          <Button variant="danger" size="touch" style={TOUCH} disabled={busy} onClick={remove}>
+          <Button
+            variant="danger"
+            size="touch"
+            className={TOUCH_TARGET}
+            disabled={busy}
+            onClick={remove}
+          >
             {busy ? 'Deleting' : 'Delete paper'}
           </Button>
-          <Button size="touch" style={TOUCH} disabled={busy} onClick={() => setConfirming(false)}>
+          <Button
+            size="touch"
+            className={TOUCH_TARGET}
+            disabled={busy}
+            onClick={() => setConfirming(false)}
+          >
             Keep it
           </Button>
         </div>
@@ -128,7 +139,7 @@ function CardActions({ book, onRetry, onDelete }: ActionsProps): ReactNode {
         <Button
           variant="danger"
           size="touch"
-          style={TOUCH}
+          className={TOUCH_TARGET}
           aria-label={`Delete ${book.title}`}
           onClick={() => setConfirming(true)}
         >
@@ -188,7 +199,7 @@ export function CatalogueCard({
       aria-labelledby={titleId}
       data-card-paper-id={book.id}
       data-processing-state={book.processing}
-      style={placement === null ? undefined : { left: placement.left }}
+      style={placement === null ? undefined : { marginInlineStart: placement.left }}
     >
       <div className="pt-catalogue__head">
         <h2 id={titleId} className="pt-catalogue__title">
@@ -217,7 +228,7 @@ export function CatalogueCard({
         <Button
           variant="primary"
           size="touch"
-          style={TOUCH}
+          className={TOUCH_TARGET}
           data-card-read=""
           onClick={() => onRead(book.id)}
         >

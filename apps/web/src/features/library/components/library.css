@@ -361,6 +361,18 @@
     repeating-linear-gradient(112deg, rgb(255 255 255 / 10%) 0 2px, transparent 2px 15px);
 }
 
+/*
+ * Desktop floors for the small text buttons, at zero specificity, so the 44 px touch class
+ * (`useTouchTargets`) wins on a phone or touch screen.
+ */
+:where(.pt-search__clear, .pt-libtitle__alert) {
+  min-block-size: 24px;
+}
+
+:where(.pt-hints__gotit) {
+  min-block-size: 28px;
+}
+
 /* the string round the kraft wrap, behind its label */
 .pt-spine--kraft::before {
   position: absolute;
@@ -392,16 +404,19 @@
 
 /* The band above the spines: the card stands in it, so it never covers a book. */
 .pt-shelfband__band {
-  position: relative;
-  block-size: 136px;
+  display: flex;
+  min-block-size: 136px;
+  align-items: flex-end;
   margin-block-start: 16px;
 }
 
 .pt-catalogue {
-  position: absolute;
-  bottom: 4px;
-  left: 0;
+  /* In the band's flow, so a taller card (a long title, a confirmation) grows the band and moves
+     the shelf down instead of covering the view row above it. */
+  position: relative;
   z-index: 5;
+  flex: none;
+  margin-block-end: 10px;
   display: flex;
   inline-size: min(480px, 100%);
   flex-direction: column;
@@ -522,7 +537,7 @@
   grid-column: 4 / span 6;
   gap: 10px;
   align-items: center;
-  block-size: 40px;
+  min-block-size: 40px;
   padding-inline: 14px 10px;
   background: var(--pt-call-slip);
   border: 1px solid var(--pt-control-border);
@@ -568,7 +583,6 @@
 
 .pt-search__clear {
   display: inline-flex;
-  min-block-size: 24px;
   align-items: center;
   padding: 0;
   cursor: pointer;
@@ -758,7 +772,6 @@
 
 .pt-libtitle__alert {
   display: inline-flex;
-  min-block-size: 24px;
   gap: 6px;
   align-items: center;
   padding: 0;
@@ -860,7 +873,6 @@
 }
 
 .pt-hints__gotit {
-  min-block-size: 28px;
   padding-inline: 8px;
   font: inherit;
   color: var(--pt-primary);
@@ -869,6 +881,10 @@
   cursor: pointer;
   background: none;
   border: 0;
+}
+
+.pt-hints--empty {
+  justify-content: center;
 }
 
 .pt-hints__note {

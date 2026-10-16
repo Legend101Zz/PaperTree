@@ -23,12 +23,16 @@ import {
 import type { LibraryPaper } from '@/components/library/types';
 import { AddPapers } from '@/features/library/components/AddPapers';
 import { CatalogueCard } from '@/features/library/components/CatalogueCard';
+import { LibraryHeader } from '@/features/library/components/LibraryHeader';
+import { LibraryTitle } from '@/features/library/components/LibraryTitle';
+import { ShelfHints } from '@/features/library/components/ShelfHints';
 import { UploadRow } from '@/features/library/components/UploadRow';
 import {
   useUploadQueue,
   type UploadQueue,
   type UploadQueueOptions,
 } from '@/features/library/hooks/useUploadQueue';
+import { TOUCH_QUERY } from '@/features/library/hooks/useTouchTargets';
 
 export const TOUCH_TARGET_MIN_PX = 44;
 
@@ -94,6 +98,25 @@ export const PAPERS: readonly LibraryPaper[] = [
 
 const noop = (): void => {};
 const noopAsync = async (): Promise<void> => {};
+
+/**
+ * The library's chrome draws its desktop sizes (36–40 px, frame 01) on a wide screen with a fine
+ * pointer and 44 px targets on a phone or touch screen (`useTouchTargets`). These audits are the
+ * touch audits, so every file that imports the cases sees a touch screen.
+ */
+Object.defineProperty(window, 'matchMedia', {
+  configurable: true,
+  value: (query: string) => ({
+    matches: query === TOUCH_QUERY,
+    media: query,
+    onchange: null,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    addListener: () => undefined,
+    removeListener: () => undefined,
+    dispatchEvent: () => false,
+  }),
+});
 
 /** A queue in every state, so the upload row's Cancel and Dismiss are all audited (#195). */
 const QUEUE: UploadQueue = {
@@ -186,6 +209,32 @@ export const CASES: readonly LibraryCase[] = [
     },
   },
   { name: 'UploadRow', element: <UploadRow queue={QUEUE} /> },
+  {
+    name: 'LibraryHeader (searching)',
+    element: (
+      <LibraryHeader
+        search={{ value: 'atten', onChange: noop, matched: 2, total: 4, onSubmit: noop }}
+        searchRef={{ current: null }}
+        onFiles={noop}
+        email="mrigesh@example.test"
+        signingOut={false}
+        onSignOut={noop}
+      />
+    ),
+  },
+  {
+    name: 'LibraryTitle',
+    element: (
+      <LibraryTitle
+        stats={{ papers: 4, topics: 0, readingNow: 1, pages: 36, needALook: 1 }}
+        needALookOnly={false}
+        onNeedALook={noop}
+        arrangement="topic"
+        onArrange={noop}
+      />
+    ),
+  },
+  { name: 'ShelfHints', element: <ShelfHints query="" matched={0} total={4} /> },
   {
     name: 'ParsingState',
     element: <ParsingState totalPages={6} parsedPages={[0, 1, 2]} onOpenPage={noop} />,

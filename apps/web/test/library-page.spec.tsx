@@ -128,6 +128,27 @@ describe('the header search', () => {
     expect(document.activeElement).toBe(search);
   });
 
+  it('"/" typed in another field stays there, and in the search it is just a character', async () => {
+    await renderLibrary();
+    const search = screen.getByRole('searchbox', { name: 'Search the library' });
+    const arrange = screen.getByRole('combobox', { name: 'Arrange by' });
+    arrange.focus();
+    expect(fireEvent.keyDown(arrange, { key: '/' })).toBe(true); // not prevented
+    expect(document.activeElement).toBe(arrange);
+    search.focus();
+    expect(fireEvent.keyDown(search, { key: '/' })).toBe(true); // the "/" is typed, not eaten
+    expect(document.activeElement).toBe(search);
+  });
+
+  it('Ctrl, Cmd or Alt with "/" is left to the browser', async () => {
+    await renderLibrary();
+    const search = screen.getByRole('searchbox', { name: 'Search the library' });
+    for (const chord of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }]) {
+      expect(fireEvent.keyDown(document.body, { key: '/', ...chord })).toBe(true);
+      expect(document.activeElement).not.toBe(search);
+    }
+  });
+
   it('lights the matches, dims the rest, counts "2 of 4", reorders nothing, and Esc clears', async () => {
     const shelf = await renderLibrary();
     const before = spineOrder(shelf);
@@ -310,5 +331,232 @@ describe('drop PDFs anywhere', () => {
     expect(
       await screen.findByRole('button', { name: /^dropped, .*waiting to be read$/ }),
     ).toBeTruthy();
+  });
+});
+
+/** Every focusable thing in `root` that the browser would put in the tab order. */
+const tabbable = (root: ParentNode) =>
+  Array.from(root.querySelectorAll<HTMLElement>('a[href], button, input, select')).filter(
+    (el) => el.getAttribute('tabindex') !== '-1' && el.closest('[aria-hidden="true"]') === null,
+  );
+
+describe('the catalogue card belongs to one book (review B1)', () => {
+  it('an armed Delete does not follow the card to the next book taken down', async () => {
+    const shelf = await renderLibrary();
+    fireEvent.click(within(shelf).getByRole('button', { name: /^Attention/ }));
+    const first = await screen.findByRole('region', { name: 'Attention Is All You Need' });
+    fireEvent.click(
+      within(first).getByRole('button', { name: 'Delete Attention Is All You Need' }),
+    );
+    expect(within(first).getByRole('group', { name: /^Confirm deleting/ })).toBeTruthy();
+
+    fireEvent.click(within(shelf).getByRole('button', { name: /^Deep Residual/ }));
+    const next = await screen.findByRole('region', { name: /^Deep Residual/ });
+    expect(within(next).queryByRole('group', { name: /Confirm deleting/ })).toBeNull();
+    expect(api.remove).not.toHaveBeenCalled();
+  });
+});
+
+describe('no count the page does not have (review S1)', () => {
+  it('prints no stats while loading, and none beside the load error', async () => {
+    let fail: (error: Error) => void = () => undefined;
+    api.list.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          fail = reject;
+        }),
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <LibraryView />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole('heading', { name: 'Your library' });
+    expect(screen.getByRole('status', { name: 'Loading your papers' })).toBeTruthy();
+    expect(document.querySelector('.pt-libtitle__stats')).toBeNull();
+    expect(document.body.textContent).not.toMatch(/\b0 papers\b/);
+
+    // useLibrary retries once while online, so the retry must fail too.
+    api.list.mockRejectedValue(new Error('boom'));
+    act(() => fail(new Error('boom')));
+    await screen.findByText(/Your papers could not be loaded/, undefined, { timeout: 5000 });
+    expect(document.querySelector('.pt-libtitle__stats')).toBeNull();
+    expect(screen.queryByRole('button', { name: /need a look/ })).toBeNull();
+  });
+});
+
+describe('the card points at its spine after the shelf moves (review S3)', () => {
+  it('re-measures when Arrange by reorders the spines', async () => {
+    // happy-dom lays nothing out: give each spine a box by its place on the shelf.
+    const real = HTMLElement.prototype.getBoundingClientRect;
+    HTMLElement.prototype.getBoundingClientRect = function box(this: HTMLElement) {
+      const spines = Array.from(document.querySelectorAll('[data-paper-id]'));
+      const at = spines.indexOf(this);
+      const left = at < 0 ? 0 : 60 + at * 50;
+      return {
+        left,
+        width: at < 0 ? 1280 : 40,
+        top: 0,
+        height: 0,
+        right: 0,
+        bottom: 0,
+        x: left,
+        y: 0,
+        toJSON: () => ({}),
+      };
+    };
+    try {
+      const shelf = await renderLibrary();
+      fireEvent.click(within(shelf).getByRole('button', { name: /^Deep Residual/ }));
+      const card = await screen.findByRole('region', { name: /^Deep Residual/ });
+      const before = card.style.marginInlineStart; // third spine in shelving order
+      fireEvent.change(screen.getByRole('combobox', { name: 'Arrange by' }), {
+        target: { value: 'year' },
+      });
+      // By year it stands first (2015), so the card moves left with it.
+      await waitFor(() => expect(card.style.marginInlineStart).not.toBe(before));
+      expect(parseFloat(card.style.marginInlineStart)).toBeLessThan(parseFloat(before));
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = real;
+    }
+  });
+});
+
+describe('focus never falls to the page (review S4)', () => {
+  it('after Retry it is on Read', async () => {
+    api.retry.mockImplementation(async () => {
+      // The server now reports the paper queued: Retry leaves with the failed state.
+      api.list.mockResolvedValue(
+        ROWS().map((r) =>
+          r.paper_id === 'ppr_4' ? { ...r, processing: 'queued' as const, job: null } : r,
+        ),
+      );
+      return { job_id: 'j2', generation: 2 };
+    });
+    const shelf = await renderLibrary();
+    fireEvent.click(within(shelf).getByRole('button', { name: /^garbage,/ }));
+    const card = await screen.findByRole('region', { name: 'garbage' });
+    const retry = within(card).getByRole('button', { name: 'Retry reading garbage' });
+    retry.focus();
+    fireEvent.click(retry);
+    await waitFor(() => expect(within(card).queryByRole('button', { name: /^Retry/ })).toBeNull());
+    expect(document.activeElement).toBe(within(card).getByRole('button', { name: 'Read garbage' }));
+  });
+
+  it('after Delete it is on the next spine, or the previous one at the end', async () => {
+    api.remove.mockResolvedValue(undefined);
+    const shelf = await renderLibrary();
+    fireEvent.click(within(shelf).getByRole('button', { name: /^FlashAttention/ }));
+    let card = await screen.findByRole('region', { name: /^FlashAttention/ });
+    fireEvent.click(within(card).getByRole('button', { name: /^Delete FlashAttention/ }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Delete paper' }));
+    await waitFor(() =>
+      expect(document.activeElement?.getAttribute('data-paper-id')).toBe('ppr_3'),
+    );
+
+    fireEvent.click(within(shelf).getByRole('button', { name: /^garbage,/ }));
+    card = await screen.findByRole('region', { name: 'garbage' });
+    fireEvent.click(within(card).getByRole('button', { name: 'Delete garbage' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Delete paper' }));
+    await waitFor(() =>
+      expect(document.activeElement?.getAttribute('data-paper-id')).toBe('ppr_3'),
+    );
+    expect(within(shelf).getByRole('button', { name: /^Deep Residual/ }).tabIndex).toBe(0);
+  });
+
+  it('after the last paper goes it is on Add papers', async () => {
+    api.list.mockResolvedValue(ROWS().slice(0, 1));
+    api.remove.mockResolvedValue(undefined);
+    const shelf = await renderLibrary();
+    fireEvent.click(within(shelf).getByRole('button', { name: /^Attention/ }));
+    const card = await screen.findByRole('region', { name: 'Attention Is All You Need' });
+    fireEvent.click(within(card).getByRole('button', { name: /^Delete Attention/ }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Delete paper' }));
+    await screen.findByRole('heading', { name: 'Add your first paper' });
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Add papers' }));
+  });
+
+  it('after "Got it" it is on the shelf', async () => {
+    const shelf = await renderLibrary();
+    const gotIt = screen.getByRole('button', { name: 'Got it' });
+    gotIt.focus();
+    fireEvent.click(gotIt);
+    expect(screen.queryByRole('button', { name: 'Got it' })).toBeNull();
+    expect(document.activeElement).toBe(within(shelf).getByRole('button', { name: /^Attention/ }));
+  });
+});
+
+describe('"need a look" ends when nothing does (review S5)', () => {
+  it('a later upload does not switch the filter back on', async () => {
+    api.remove.mockResolvedValue(undefined);
+    const shelf = await renderLibrary();
+    fireEvent.click(screen.getByRole('button', { name: '1 need a look' }));
+    expect(spineOrder(shelf)).toEqual(['ppr_4']);
+    fireEvent.click(within(shelf).getByRole('button', { name: /^garbage,/ }));
+    const card = await screen.findByRole('region', { name: 'garbage' });
+    fireEvent.click(within(card).getByRole('button', { name: 'Delete garbage' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Delete paper' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: /need a look/ })).toBeNull());
+
+    const fresh = row('fresh', { paper_id: 'ppr_NEW', processing: 'queued' });
+    api.uploadWithProgress.mockResolvedValue({
+      paper_id: 'ppr_NEW',
+      job_id: 'j',
+      created: true,
+      paper: fresh,
+    });
+    api.list.mockResolvedValue([...ROWS().slice(0, 3), fresh]);
+    const input = document.querySelector<HTMLInputElement>('[data-add-papers] input[type="file"]');
+    fireEvent.change(input as HTMLInputElement, {
+      target: { files: [new File(['%PDF'], 'fresh.pdf', { type: 'application/pdf' })] },
+    });
+    await screen.findByRole('button', { name: /^fresh,/ });
+    expect(screen.getByRole('button', { name: '1 need a look' }).getAttribute('aria-pressed')).toBe(
+      'false',
+    );
+    expect(spineOrder(screen.getByRole('toolbar', { name: 'Shelf' }))).toHaveLength(4);
+  });
+});
+
+describe('only a file drag lights the page (review S6)', () => {
+  it('dragging text shows no drop overlay', async () => {
+    await renderLibrary();
+    const event = new Event('dragenter', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', { value: { types: ['text/plain'], files: [] } });
+    act(() => {
+      window.dispatchEvent(event);
+    });
+    expect(document.querySelector('[data-drop-anywhere]')).toBeNull();
+    expect(event.defaultPrevented).toBe(false);
+  });
+});
+
+describe('44 px targets on a phone (review S7)', () => {
+  it('every control in the header, title row and hints declares 44 px when the pointer is coarse', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.includes('pointer: coarse'),
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+    try {
+      await renderLibrary();
+      const chrome = [
+        document.querySelector('.pt-libhead'),
+        document.querySelector('.pt-libtitle'),
+        document.querySelector('.pt-libviews'),
+        document.querySelector('.pt-hints'),
+      ];
+      const controls = chrome.flatMap((part) => (part === null ? [] : tabbable(part)));
+      expect(controls.length).toBeGreaterThan(10);
+      for (const control of controls) {
+        const declared = `${control.className} min-h:${control.style.minHeight}`;
+        expect(declared, control.outerHTML.slice(0, 100)).toMatch(/min-w-\[44px\]/);
+        expect(declared, control.outerHTML.slice(0, 100)).toMatch(/min-h-\[44px\]|min-h:44px/);
+      }
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

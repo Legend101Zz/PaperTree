@@ -9,13 +9,17 @@ import { ToolbarButton } from '@papertree/ui';
 import { ChevronDown, LayoutGrid, Library, Network, Table2 } from 'lucide-react';
 import { useId } from 'react';
 
+import { TOUCH_TARGET } from '@/components/library/primitives';
+
+import { useTouchTargets } from '../hooks/useTouchTargets';
 import { ARRANGEMENTS, type Arrangement, type LibraryStats } from '../model/shelf';
 
 import type { ReactNode } from 'react';
 
 /** Props for `LibraryTitle`. */
 export interface LibraryTitleProps {
-  readonly stats: LibraryStats;
+  /** The counts, or null while the library has not loaded (no number is shown until then). */
+  readonly stats: LibraryStats | null;
   /** The "need a look" filter is on. */
   readonly needALookOnly: boolean;
   readonly onNeedALook: (on: boolean) => void;
@@ -53,27 +57,32 @@ export function LibraryTitle({
 }: LibraryTitleProps): ReactNode {
   const soonId = useId();
   const arrangeId = useId();
+  const touch = useTouchTargets();
+  const size = touch ? 'touch' : 'md';
+  const target = touch ? TOUCH_TARGET : undefined;
   return (
     <>
       <div className="pt-libtitle">
         <h1 className="pt-libtitle__h1">Your library</h1>
-        <p className="pt-libtitle__stats">
-          {statsParts(stats).map(([count, noun], index) => (
-            <span key={noun}>
-              {index === 0 ? null : (
-                <span className="pt-libtitle__sep" aria-hidden="true">
-                  {' · '}
-                </span>
-              )}
-              <b>{count}</b> {noun}
-            </span>
-          ))}
-        </p>
-        {stats.needALook > 0 ? (
+        {stats === null ? null : (
+          <p className="pt-libtitle__stats">
+            {statsParts(stats).map(([count, noun], index) => (
+              <span key={noun}>
+                {index === 0 ? null : (
+                  <span className="pt-libtitle__sep" aria-hidden="true">
+                    {' · '}
+                  </span>
+                )}
+                <b>{count}</b> {noun}
+              </span>
+            ))}
+          </p>
+        )}
+        {stats !== null && stats.needALook > 0 ? (
           // Filters the shelf to those papers for now; it will open the Table, filtered, in S2f.
           <button
             type="button"
-            className="pt-libtitle__alert"
+            className={['pt-libtitle__alert', target].filter(Boolean).join(' ')}
             aria-pressed={needALookOnly}
             onClick={() => onNeedALook(!needALookOnly)}
           >
@@ -84,10 +93,18 @@ export function LibraryTitle({
       </div>
       <div className="pt-libviews">
         <div role="group" aria-label="View" className="pt-libviews__tabs">
-          <ToolbarButton label="Shelf" icon={<Library size={20} strokeWidth={1.5} />} pressed />
+          <ToolbarButton
+            label="Shelf"
+            icon={<Library size={20} strokeWidth={1.5} />}
+            pressed
+            size={size}
+            className={target}
+          />
           {VIEWS.map((view) => (
             <ToolbarButton
               key={view.label}
+              size={size}
+              className={target}
               label={view.label}
               icon={view.icon}
               pressed={false}
@@ -105,6 +122,7 @@ export function LibraryTitle({
           <span className="pt-libviews__select">
             <select
               id={arrangeId}
+              className={target}
               value={arrangement}
               onChange={(event) => onArrange(event.target.value as Arrangement)}
             >
