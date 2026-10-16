@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ZOOM_RANGE,
   boardCounts,
+  boardRedirectPath,
   countsLine,
   mapLabel,
   readerHref,
@@ -70,5 +71,23 @@ describe('Back to the paper and Thread (L)', () => {
     expect(off.action).toBe('none');
     expect(off.hint).toMatch(/press L/);
     expect(threadTool(3, false).action).toBe('none');
+  });
+});
+
+describe('a v0.1 /canvas link goes to the board (#214)', () => {
+  it('keeps the paper and the whole query string, repeated keys included', () => {
+    expect(boardRedirectPath('ppr_X', { focus: 'cn_1', cite: '2' })).toBe(
+      '/paper/ppr_X/board?focus=cn_1&cite=2',
+    );
+    expect(boardRedirectPath('ppr_X', { a: ['1', '2'], b: 'x y&z', none: undefined })).toBe(
+      '/paper/ppr_X/board?a=1&a=2&b=x+y%26z',
+    );
+    expect(boardRedirectPath('ppr_X', {})).toBe('/paper/ppr_X/board');
+  });
+
+  it('never encodes an id twice: Next hands it over still encoded (review P2-N1)', () => {
+    expect(boardRedirectPath('a%2Fb', { x: '1' })).toBe('/paper/a%2Fb/board?x=1');
+    expect(boardRedirectPath('a/b', {})).toBe('/paper/a%2Fb/board');
+    expect(boardRedirectPath('100%', {})).toBe('/paper/100%25/board'); // not a valid escape
   });
 });

@@ -6,22 +6,19 @@
  */
 import { redirect } from 'next/navigation';
 
-/** What Next hands the route: the paper id and the query string. */
+import { boardRedirectPath, type RouteQuery } from '@/features/board/model/chrome';
+
+/** What Next hands the route: the paper id (still percent-encoded) and the query string. */
 interface CanvasRedirectProps {
   readonly params: { readonly id: string };
-  readonly searchParams: Readonly<Record<string, string | readonly string[] | undefined>>;
+  readonly searchParams: RouteQuery;
 }
 
 /**
- * Redirects `/paper/<id>/canvas[?…]` to `/paper/<id>/board[?…]`.
+ * Redirects `/paper/<id>/canvas[?…]` to `/paper/<id>/board[?…]` (`boardRedirectPath`).
  *
  * @returns Never: `redirect` throws Next's redirect signal.
  */
 export default function CanvasRedirect({ params, searchParams }: CanvasRedirectProps): never {
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(searchParams)) {
-    for (const one of typeof value === 'string' ? [value] : (value ?? [])) query.append(key, one);
-  }
-  const rest = query.toString();
-  redirect(`/paper/${encodeURIComponent(params.id)}/board${rest === '' ? '' : `?${rest}`}`);
+  redirect(boardRedirectPath(params.id, searchParams));
 }

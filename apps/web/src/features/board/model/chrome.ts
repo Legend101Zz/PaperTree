@@ -76,6 +76,35 @@ export function readerHref(paperId: string): string {
   return `/paper/${encodeURIComponent(paperId)}/read`;
 }
 
+/** A route's query string as Next hands it to a page. */
+export type RouteQuery = Readonly<Record<string, string | readonly string[] | undefined>>;
+
+/**
+ * Where a v0.1 `/paper/<id>/canvas` link goes now: the same paper's board, with the same query
+ * string (#214). Next hands a route its `[id]` still percent-encoded, so the id is decoded once and
+ * encoded once: it is never encoded twice (`a%2Fb` stays `a%2Fb`, not `a%252Fb`).
+ *
+ * @param rawId The `[id]` segment as the route received it.
+ * @param searchParams The route's query.
+ * @returns `/paper/<id>/board[?…]`.
+ * @example
+ * boardRedirectPath('ppr_1', { focus: 'cn_1' }); // '/paper/ppr_1/board?focus=cn_1'
+ */
+export function boardRedirectPath(rawId: string, searchParams: RouteQuery): string {
+  let id: string;
+  try {
+    id = encodeURIComponent(decodeURIComponent(rawId));
+  } catch {
+    id = encodeURIComponent(rawId); // not a valid escape: it was never encoded
+  }
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(searchParams)) {
+    for (const one of typeof value === 'string' ? [value] : (value ?? [])) query.append(key, one);
+  }
+  const rest = query.toString();
+  return `/paper/${id}/board${rest === '' ? '' : `?${rest}`}`;
+}
+
 /** What the toolbar's Thread does now, and the sentence that says so. */
 export interface ThreadTool {
   /** `cancel` a thread being drawn, `link` the two selected cards, `walk` from the one, or `none`. */
