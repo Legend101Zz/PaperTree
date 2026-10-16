@@ -30,8 +30,10 @@ in (left), open diamond = question in (top), brass circle = claim out (right), b
 answer out (bottom). A thread is dragged from a brass pin (a dashed navy line); every open pin it
 can land on lights; a drop the server would refuse shows its sentence ("That pin does not take
 that thread.") and saves nothing; a good drop opens "Link as" (below) and the thread is saved with
-`from_port` / `to_port`. Pins are named buttons; Enter presses one, which is xyflow's
-click-to-connect; Escape or a click on the empty board cancels it. The toolbar's Link takes
+`from_port` / `to_port`. Pins are named buttons. A pointer click on a brass pin, then on an open
+pin, is xyflow's click-to-connect; Enter (or Space) on a brass pin starts the keyboard walk below
+instead, which reaches every open pin too. Escape or a click on the empty board cancels either.
+The toolbar's Link takes
 its pins from the table (`resolvePorts`) and refuses a pair no pin can hold. A stored thread with
 no pins is drawn between the pins the table names, or two hidden fallback handles every card and
 frame carries (`edgeHandles`), so no stored thread is ever invisible. The seven threads draw their colour token and the cue `THREAD_LINES`
@@ -44,24 +46,45 @@ strip uses the same `ThreadSwatch`.
 the settle curve; at once under reduced motion), a header naming both ends (`endName`: a passage by
 its page tab, other cards by kind and first words) and the seven kinds in a 4 + 3 grid (two
 columns on a phone), each drawn by `ThreadSwatch` with its key. Keys 1–7 choose, Enter or a click
-chooses the focused kind, the arrows walk the grid, Tab stays inside it. **Escape keeps a plain
-link** (`relates`, "7 = plain link"): v0.1's Escape saved nothing, and that changed on purpose. A
-press outside the picker counts as Escape. "Add a label" unfolds the optional label field. Focus
-goes back to where the thread started: the source pin after a drag, the card after L, the button
-that asked otherwise. Kinds are enabled from the server's pin table (`kindChoices`); that table
-limits pins, not kinds, so every pair the server takes offers all seven, and a pair it refuses
-offers none, each saying why on focus. The selected-thread bar's Kind button (`ThreadBar`) opens
-the same picker on the saved thread; there Escape changes nothing.
+chooses the focused kind. The grid is one Tab stop that the arrows walk (a roving grid), so Tab
+goes grid ↔ "Add a label", which unfolds the optional label field; Enter there saves the kind
+focused last. No key pressed inside the picker reaches the board (`nokey`, and every key is
+stopped), so Delete in it never deletes a card or a thread.
+
+- **Escape keeps a plain link** (`relates`, "7 = plain link"): v0.1's Escape saved nothing, and
+  that changed on purpose (frame 06, DESIGN.md §3.9).
+- **A press outside the picker saves nothing**, for a new thread as for a change of kind. This is
+  the coordinator's default for #213; the owner may still decide otherwise (the alternative was
+  "an outside press keeps a plain link, with Undo").
+- **Every new thread offers Undo** for 8 s in the shared toast ("Linked as supports.", which is
+  also its announcement); Undo deletes it.
+
+Focus goes back to where the thread started: the source pin after a drag, the card after L, the
+button that asked otherwise. Kinds are enabled from the server's pin table (`kindChoices`). That
+table limits pins, not kinds, so every way into the picker (a drop, a click-to-connect, the walk,
+the toolbar's Link, a saved thread) arrives with all seven enabled; the disabled state, which says
+why on focus, is a guard, and Escape never saves a pair the table refuses. The selected-thread
+bar's Kind button (`ThreadBar`) opens the same picker on the saved thread; there Escape changes
+nothing. A request whose thread or cards are gone (deleted, then put back by Undo) is dropped,
+never reopened.
 
 Keyboard linking (`useKeyboardLink`; xyflow has none, ADR-004 §2.8) reuses the click-to-connect
 state: **L** on a focused card starts a thread from its first brass pin (as does Enter on a brass
-pin). Every card that can take it is a target (`linkTargets`, landing on the pin of the same shape
-first), walked in reading order (rows of card tops within 96 px, top to bottom, then left to
-right) starting at the card nearest the source; Tab, → and ↓ step forward, Shift+Tab, ← and ↑
-back, wrapping. Focus follows the highlight (xyflow pans to it), a dashed navy thread
-(`ThreadPreview`) shows where it would go, Enter opens the picker, and Escape cancels with nothing
-saved and focus back where it started. The board's live region says "Linking from …", "Target: …,
-2 of 5" and "Linked as supports."
+pin). Every card and open pin that can take it is a target (`linkTargets`): a card with two such
+pins is visited once per pin, the pin of the same shape first, so a claim still reaches a question
+card's "question in" by keyboard. Targets are walked in reading order (rows of card tops within
+96 px, top to bottom, then left to right) starting at the card nearest the source; Tab, → and ↓
+step forward, Shift+Tab, ← and ↑ back, wrapping. Focus follows the highlight (xyflow pans to it),
+a dashed navy thread (`ThreadPreview`) shows where it would go, Enter opens the picker, and Escape
+cancels with nothing saved and focus back where it started.
+
+The walk is scoped to the board: it takes keys only from inside the stage, never from a text
+field, and ends with nothing saved when focus leaves the stage, on a press anywhere but a pin (a
+pin may still finish it by pointer), or when another thread starts. While it runs, a card's
+description says the walk's keys instead of "the arrow keys to move it", and no arrow reaches
+xyflow. Each thing is said once: focus says the card's name; the live region says "Linking from
+…" and then "Target 2 of 5, question in."; a refusal ("… has no brass pin …") is the notice line
+(an alert) only; "Linked as …" is the Undo toast.
 
 A numbered marker opens `/paper/<id>/read?focus=<card>&cite=<citation>`; the reader's
 `useFocusFromCanvas` reads the citation's anchor from the thread and flashes the passage.

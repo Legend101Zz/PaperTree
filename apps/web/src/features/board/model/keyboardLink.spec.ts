@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { toFlowNode } from './flow';
 import {
   ROW_BAND,
-  inPinFor,
+  inPinsFor,
   linkTargets,
   nearestTarget,
   inReadingOrder,
@@ -28,13 +28,13 @@ const BOARD = [
   card('fr', 'group', 40, 40),
 ];
 
-describe('the pin a keyboard thread lands on', () => {
-  it('prefers the pin of the same shape, else the card’s first in-pin', () => {
-    expect(inPinFor('answer_out', 'question')).toBe('question_in');
-    expect(inPinFor('answer_out', 'explanation')).toBe('question_in');
-    expect(inPinFor('claim_out', 'question')).toBe('evidence_in');
-    expect(inPinFor('answer_out', 'excerpt')).toBe('evidence_in');
-    expect(inPinFor('claim_out', 'group')).toBeNull();
+describe('the pins a keyboard thread can land on', () => {
+  it('are every in-pin of the card, the pin of the same shape first', () => {
+    expect(inPinsFor('answer_out', 'question')).toEqual(['question_in', 'evidence_in']);
+    expect(inPinsFor('answer_out', 'explanation')).toEqual(['question_in', 'evidence_in']);
+    expect(inPinsFor('claim_out', 'question')).toEqual(['evidence_in', 'question_in']);
+    expect(inPinsFor('answer_out', 'excerpt')).toEqual(['evidence_in']);
+    expect(inPinsFor('claim_out', 'group')).toEqual([]);
   });
 });
 
@@ -49,20 +49,26 @@ describe('the cards a keyboard thread walks', () => {
     expect(inReadingOrder(two).map((n) => n.id)).toEqual(['a', 'b']);
   });
 
-  it('never include the source card or a frame, and carry the pin each lands on', () => {
+  it('never include the source card or a frame, and visit a card once per pin it can land on', () => {
     const targets = linkTargets(BOARD, { nodeId: 'rnn', kind: 'note', port: 'claim_out' });
     expect(targets).toEqual([
       { id: 'p1', toPort: 'evidence_in' },
       { id: 'e1', toPort: 'evidence_in' },
+      { id: 'e1', toPort: 'question_in' },
       { id: 'nb', toPort: 'evidence_in' },
       { id: 'p2', toPort: 'evidence_in' },
+      // a claim can reach the question card's "question in" by keyboard too (S6b's pin choice)
       { id: 'q', toPort: 'evidence_in' },
+      { id: 'q', toPort: 'question_in' },
       { id: 'dg', toPort: 'evidence_in' },
     ]);
     // A question card has no brass pin, so nothing can start from it (the hook says so).
     expect(linkTargets(BOARD, { nodeId: 'q', kind: 'question', port: 'claim_out' })).toEqual([]);
     const answers = linkTargets(BOARD, { nodeId: 'e1', kind: 'explanation', port: 'answer_out' });
-    expect(answers.find((t) => t.id === 'q')).toEqual({ id: 'q', toPort: 'question_in' });
+    expect(answers.filter((t) => t.id === 'q').map((t) => t.toPort)).toEqual([
+      'question_in',
+      'evidence_in',
+    ]);
   });
 
   it('start at the card nearest the source (centre to centre)', () => {

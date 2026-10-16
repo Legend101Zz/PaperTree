@@ -8,8 +8,10 @@ import {
   gridMove,
   kindChoices,
   kindForKey,
+  linkedSentence,
   placePicker,
   portsHold,
+  stop,
 } from './linkAs';
 import { PIN_TABLE, pinRefusal, type Port } from './pins';
 import { cardRow, citation } from './test-data';
@@ -90,10 +92,25 @@ describe('keys and Escape', () => {
   });
 
   it('Escape keeps a plain link on a new thread and changes nothing on a saved one', () => {
-    expect(escapeKind('new')).toBe('relates');
+    expect(escapeKind('new', ok)).toBe('relates');
     expect(PLAIN_LINK).toBe('relates');
     expect(kindForKey('7', ok)).toBe(PLAIN_LINK); // "7 = plain link", frame 06
-    expect(escapeKind('change')).toBeNull();
+    expect(escapeKind('change', ok)).toBeNull();
+  });
+
+  it('Escape never saves a pair the server refuses, even the plain link', () => {
+    expect(escapeKind('new', refused)).toBeNull();
+  });
+
+  it('says what was saved, and ends a name once', () => {
+    expect(linkedSentence('supports')).toBe('Linked as supports.');
+    expect(linkedSentence('derives_from')).toBe('Linked as derives from.');
+    expect(linkedSentence('relates')).toBe('Linked as a plain link.');
+    expect(stop('from Note ‘Depth is the question.’')).toBe('from Note ‘Depth is the question.’');
+    expect(stop('from Note ‘Next: read 3.2 on multi…’')).toBe(
+      'from Note ‘Next: read 3.2 on multi…’',
+    );
+    expect(stop('from Passage p. 1')).toBe('from Passage p. 1.');
   });
 });
 

@@ -13,7 +13,7 @@ thread dragged from the diagram's brass pin to the evidence pin of Passage p. 1.
 | `06-change-kind-1440-light.png`               | the selected thread's Kind button opens the same picker      |
 
 axe (serious or critical) with the picker open: 0 at 1440 and 390, daylight and lamp-lit, and 0 at
-1440 in both schemes while a keyboard target is highlighted. Motion: `pt-linkas-settle` 0.24 s on
+1440 in both schemes while a keyboard target is highlighted. Re-run after the review fixes (#213 review, scoped walk, roving grid): still 0 in all six. Motion: `pt-linkas-settle` 0.24 s on
 the settle curve; `none` under `prefers-reduced-motion: reduce` (computed style, Chromium).
 
 ## Departures from the frame, on purpose

@@ -12,20 +12,22 @@ import type { ReactNode } from 'react';
 /** Props for `ThreadBar`. */
 export interface ThreadBarProps {
   readonly edge: CanvasEdge;
+  /** Whether the picker is open for this thread. */
+  readonly open: boolean;
   /** Open the picker to change the kind; `opener` gets focus back afterwards. */
   readonly onKind: (opener: HTMLElement) => void;
   readonly onLabel: (label: string | null) => void;
 }
 
 /** The selected thread's kind and label. */
-export function ThreadBar({ edge, onKind, onLabel }: ThreadBarProps): ReactNode {
+export function ThreadBar({ edge, open, onKind, onLabel }: ThreadBarProps): ReactNode {
   const info = threadInfo(edge.kind);
   return (
     <div className="pt-cv__edgebar" role="group" aria-label="Selected link">
       <button
         type="button"
         className="pt-btn pt-btn--outline"
-        aria-haspopup="listbox"
+        aria-expanded={open}
         onClick={(e) => onKind(e.currentTarget)}
       >
         Kind:{' '}

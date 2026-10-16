@@ -4,9 +4,12 @@
  *
  * 1. A thread dragged from a note's brass claim-out pin to a passage's open evidence-in pin: the
  *    picker settles in (not a dialog), names both ends, and key 2 inks it as "contradicts" with that
- *    kind's cue; focus goes back to the pin; after a reload it is still there with both pins.
- * 2. Keyboard only: L on a second note, Tab to the passage, Enter, then key 1: saved as "supports"
- *    from the note's claim-out pin, said in the live region, and focus back on the note.
+ *    kind's cue; focus goes back to the pin; the Undo toast says "Linked as contradicts."; after a
+ *    reload it is still there with both pins.
+ * 2. A press outside a new thread's picker closes it with nothing saved.
+ * 3. Keyboard only: L on a second note; the arrows walk the targets and never move the selected
+ *    card they land on; Enter, then key 1: saved as "supports" from the note's claim-out pin, focus
+ *    back on the note; Undo takes it back.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -96,7 +99,8 @@ test('Link as: drag then key 2, and a keyboard-only supports', async ({ browser,
   await expect(thread).toHaveAttribute('data-cue', 'dashed with crosses');
   await expect(page.getByTestId('edge-label')).toHaveText('contradicts');
   await expect(page.locator(claimOut)).toBeFocused();
-  await expect(live).toHaveText('Linked as contradicts.');
+  const toast = page.getByTestId('undo-toast');
+  await expect(toast).toContainText('Linked as contradicts.');
   await expect
     .poll(async () => (await getBoard(stack.apiUrl, token, paperId)).edges)
     .toEqual([
@@ -115,8 +119,27 @@ test('Link as: drag then key 2, and a keyboard-only supports', async ({ browser,
     'dashed with crosses',
   );
 
-  // ── 2. keyboard only: L on note B, Tab to the passage, Enter, 1 ──
+  // ── 2. a press outside a new thread's picker saves nothing ──
   await page.waitForTimeout(800);
+  const claimB = `.react-flow__node[data-id="${noteB}"] [data-handleid="claim_out"]`;
+  const b0 = await centre(page, claimB);
+  const b1 = await centre(page, evidenceIn);
+  await page.mouse.move(b0.x, b0.y);
+  await page.mouse.down();
+  await page.mouse.move((b0.x + b1.x) / 2, (b0.y + b1.y) / 2, { steps: 8 });
+  await page.mouse.move(b1.x, b1.y, { steps: 8 });
+  await page.mouse.up();
+  await expect(picker).toBeVisible();
+  const stage = await page.getByTestId('canvas-stage').boundingBox();
+  await page.mouse.click(stage!.x + stage!.width - 24, stage!.y + 24); // the empty board
+  await expect(picker).toBeHidden();
+  await page.waitForTimeout(500);
+  expect((await getBoard(stack.apiUrl, token, paperId)).edges).toHaveLength(1);
+
+  // ── 3. keyboard only: L on note B, the arrows to the passage, Enter, 1 ──
+  const noteACard = page.locator(`.react-flow__node[data-id="${noteA}"]`);
+  await noteACard.click({ position: { x: 24, y: 6 } }); // selected: xyflow's arrows would move it
+  await expect(noteACard).toHaveClass(/selected/);
   const cardB = page.locator(`.react-flow__node[data-id="${noteB}"]`);
   for (let i = 0; i < 30; i += 1) {
     await page.keyboard.press('Tab');
@@ -128,22 +151,27 @@ test('Link as: drag then key 2, and a keyboard-only supports', async ({ browser,
   await expect(page.locator(`[id="${described ?? ''}"]`)).toContainText('L to start a thread');
   await page.keyboard.press('l');
   await expect(live).toContainText('Linking from Note ‘Residual blocks train.’');
+  // The walk starts on the nearest card, note A, which is selected; an arrow steps the walk and
+  // must not move the card (xyflow moves a focused, selected card on an arrow key).
+  await expect(noteACard).toBeFocused();
+  const before = await noteACard.boundingBox();
+  await page.keyboard.press('ArrowRight');
   const passageCard = page.locator(`.react-flow__node[data-id="${passage}"]`);
-  for (
-    let i = 0;
-    i < 3 && !(await passageCard.evaluate((n) => n === document.activeElement));
-    i += 1
-  )
-    await page.keyboard.press('Tab');
   await expect(passageCard).toBeFocused();
-  await expect(live).toContainText('Target: Passage p.');
+  await expect(live).toHaveText('Target 2 of 2, evidence in.');
+  await page.waitForTimeout(700); // past the nudge debounce: a moved card would have been saved
+  expect(await noteACard.boundingBox()).toEqual(before);
+  const stillA = (await getBoard(stack.apiUrl, token, paperId)).nodes.find(
+    (n) => n.node_id === noteA,
+  );
+  expect([stillA?.x, stillA?.y]).toEqual([0, 0]);
   await page.keyboard.press('Enter');
   await expect(picker).toBeVisible();
   await expect(picker).toContainText('Note ‘Residual blocks train.’ → Passage p.');
   await page.screenshot({ path: shot('l02-link-as-keyboard-1440.png') });
   await page.keyboard.press('1');
   await expect(picker).toBeHidden();
-  await expect(live).toHaveText('Linked as supports.');
+  await expect(toast).toContainText('Linked as supports.');
   await expect(cardB).toBeFocused();
   await expect
     .poll(async () =>
@@ -157,5 +185,12 @@ test('Link as: drag then key 2, and a keyboard-only supports', async ({ browser,
         to_port: 'evidence_in',
       }),
     );
+  // Undo takes the new thread back.
+  await toast.getByRole('button', { name: 'Undo' }).click();
+  await expect
+    .poll(async () =>
+      (await getBoard(stack.apiUrl, token, paperId)).edges.some((e) => e.from_node_id === noteB),
+    )
+    .toBe(false);
   await context.close();
 });

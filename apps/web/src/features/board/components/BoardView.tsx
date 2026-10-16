@@ -62,15 +62,22 @@ const NONE: Selection = { nodes: [], edges: [] };
 /** Shift as well as Ctrl/Cmd adds to the selection (S9). */
 const MULTI_SELECT_KEYS = ['Shift', 'Meta', 'Control'];
 
-/** What a focused card tells a screen reader it can do, L (keyboard linking, #213) included. */
-const CARD_KEYS =
-  'Press Enter or Space to select a card, the arrow keys to move it, L to start a thread from it, and Delete to remove it.';
-// xyflow 12.12 reads `keyboardDisabled` when the keyboard is ENABLED (its names are swapped), so
-// both carry the sentence.
-const ARIA_LABELS = {
-  'node.a11yDescription.default': CARD_KEYS,
-  'node.a11yDescription.keyboardDisabled': CARD_KEYS,
-};
+/**
+ * What a focused card tells a screen reader it can do, L (keyboard linking, #213) included; while a
+ * keyboard thread walks the cards, the walk's keys instead (the arrows pick, they do not move).
+ * xyflow 12.12 reads `keyboardDisabled` when the keyboard is ENABLED (its names are swapped), so
+ * both carry the sentence.
+ */
+const cardDescription = (text: string) => ({
+  'node.a11yDescription.default': text,
+  'node.a11yDescription.keyboardDisabled': text,
+});
+const CARD_KEYS = cardDescription(
+  'Press Enter or Space to select a card, the arrow keys to move it, L to start a thread from it, and Delete to remove it.',
+);
+const WALK_KEYS = cardDescription(
+  'Tab or the arrow keys choose where the thread goes, Enter links, Escape cancels.',
+);
 
 /**
  * The board page for one paper.
@@ -166,7 +173,7 @@ function Canvas({ paperId }: { readonly paperId: string }) {
     () => withPageTitles(ctl.nodes, (pageId) => sources.pages.get(pageId)?.page.title),
     [ctl.nodes, sources.pages],
   );
-  const link = useLinkAs(ctl, drawing, nodes);
+  const link = useLinkAs(ctl, drawing, nodes, stage);
 
   const selectedNodes = useMemo(
     () => ctl.nodes.filter((n) => selection.nodes.includes(n.id)),
@@ -313,6 +320,7 @@ function Canvas({ paperId }: { readonly paperId: string }) {
           {selectedEdge?.data === undefined ? null : (
             <ThreadBar
               edge={selectedEdge.data.edge}
+              open={link.request?.mode === 'change'}
               onKind={(opener) => link.changeKind(selectedEdge.id, opener)}
               onLabel={(label) => ctl.patchEdge(selectedEdge.id, { label })}
             />
@@ -388,7 +396,7 @@ function Canvas({ paperId }: { readonly paperId: string }) {
                   elevateNodesOnSelect={false}
                   nodesFocusable
                   edgesFocusable
-                  ariaLabelConfig={ARIA_LABELS}
+                  ariaLabelConfig={link.keyboard.walking ? WALK_KEYS : CARD_KEYS}
                   onKeyDown={link.keyboard.onKeyDown}
                   aria-label="Canvas of passages, explanations and notes"
                 >

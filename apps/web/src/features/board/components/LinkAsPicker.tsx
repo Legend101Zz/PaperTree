@@ -5,10 +5,13 @@
  * seven kinds in a 4 + 3 grid, each drawn by `ThreadSwatch` with its key 1–7, under a header that
  * names both ends. Not a modal: no scrim, it settles at the thread's midpoint (240 ms, settle).
  *
- * Keys: 1–7 choose; Enter or a click chooses the focused kind; the arrows walk the grid; Tab moves
- * within the picker; Escape keeps a plain link on a new thread and changes nothing on a saved one
- * (`escapeKind`); a press outside the picker counts as Escape. A disabled kind stays focusable and
- * says why. The label field is folded behind "Add a label" so it never sits between you and a key.
+ * Keys: 1–7 choose; Enter or a click chooses the focused kind; the grid is ONE Tab stop the arrows
+ * walk (a roving grid), so Tab goes grid ↔ label and Enter in the label saves the kind last focused;
+ * Escape keeps a plain link on a new thread and changes nothing on a saved one (`escapeKind`). A
+ * press outside the picker saves nothing, in both modes (the coordinator's default for #213; the new
+ * thread has an Undo once saved). No key pressed inside reaches the board (`nokey`, and every key is
+ * stopped), so Delete never deletes a card. A disabled kind stays focusable and says why. The label
+ * field is folded behind "Add a label" so it never sits between you and a key.
  */
 import { ThreadSwatch } from '@papertree/ui';
 import {
@@ -76,12 +79,12 @@ export function LinkAsPicker(props: LinkAsPickerProps): ReactNode {
     if (choice?.enabled === true) onChoose(choice.kind, words());
   };
   const escape = (): void => {
-    const kind = escapeKind(mode);
+    const kind = escapeKind(mode, choices);
     if (kind === null) onCancel();
     else onChoose(kind, words());
   };
-  const latest = useRef({ escape, start });
-  latest.current = { escape, start };
+  const latest = useRef({ onCancel, start });
+  latest.current = { onCancel, start };
   const focusAt = (index: number): void => focusOption(root.current, index);
 
   // Once placed (a hidden element cannot take focus), focus the first option.
@@ -89,10 +92,10 @@ export function LinkAsPicker(props: LinkAsPickerProps): ReactNode {
   useEffect(() => {
     if (placed) focusOption(root.current, latest.current.start);
   }, [placed]);
-  // A press anywhere outside the picker counts as Escape.
+  // A press anywhere outside the picker closes it with nothing saved.
   useEffect(() => {
     const outside = (event: PointerEvent): void => {
-      if (!root.current?.contains(event.target as Node)) latest.current.escape();
+      if (!root.current?.contains(event.target as Node)) latest.current.onCancel();
     };
     document.addEventListener('pointerdown', outside, true);
     return () => document.removeEventListener('pointerdown', outside, true);
@@ -101,13 +104,15 @@ export function LinkAsPicker(props: LinkAsPickerProps): ReactNode {
     if (labelling) root.current?.querySelector<HTMLElement>('input')?.focus();
   }, [labelling]);
   const onKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
+    event.stopPropagation(); // the board under it never takes a key: not Delete, not an arrow
     const typing = (event.target as HTMLElement).tagName === 'INPUT';
     if (event.key === 'Escape') escape();
     else if (event.key === 'Tab') {
-      const stops = [...(root.current?.querySelectorAll<HTMLElement>('[data-stop]') ?? [])];
-      const here = stops.indexOf(event.target as HTMLElement);
-      const step = event.shiftKey ? stops.length - 1 : 1;
-      stops[(here + step) % stops.length]?.focus();
+      // Two stops, both ways: the grid (its focused option) and the label control, if any.
+      const label = root.current?.querySelector<HTMLElement>('[data-stop]');
+      const onGrid = (event.target as HTMLElement).getAttribute('role') === 'option';
+      if (onGrid && label != null) label.focus();
+      else focusAt(active);
     } else if (typing) {
       if (event.key !== 'Enter') return;
       choose(choices[active]);
@@ -122,7 +127,6 @@ export function LinkAsPicker(props: LinkAsPickerProps): ReactNode {
       focusAt(next);
     }
     event.preventDefault();
-    event.stopPropagation(); // the board under it must not take the key too
   };
 
   const current = choices[active];
@@ -134,7 +138,7 @@ export function LinkAsPicker(props: LinkAsPickerProps): ReactNode {
     // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <section
       ref={root}
-      className="pt-linkas nodrag nopan nowheel"
+      className="pt-linkas nodrag nopan nowheel nokey"
       role="group"
       aria-labelledby={`${id}-title ${id}-ends`}
       style={style}
@@ -159,7 +163,6 @@ export function LinkAsPicker(props: LinkAsPickerProps): ReactNode {
             role="option"
             className="pt-linkas__opt"
             data-index={i}
-            data-stop
             data-kind={c.kind}
             aria-label={c.label}
             aria-selected={i === active}

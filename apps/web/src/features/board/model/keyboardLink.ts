@@ -1,13 +1,14 @@
 /**
  * board/model/keyboardLink — linking by keyboard (ADR-004 §2.8: xyflow has none, so it is ours):
- * which cards a thread from a pin can reach, the order Tab and the arrow keys walk them, and which
- * card is highlighted first. Pure; `useKeyboardLink` drives it.
+ * which card and pin a thread from a pin can reach, the order Tab and the arrow keys walk them,
+ * and which is highlighted first. Pure; `useKeyboardLink` drives it.
  *
  * THE ORDER: cards are walked in reading order — rows top to bottom (a row is every card whose top
- * is within `ROW_BAND` px of the row's highest), left to right within a row — and the walk STARTS
- * at the card nearest the source
- * (centre to centre), so the likeliest target is one Enter away. Tab, → and ↓ step forward;
- * Shift+Tab, ← and ↑ step back; both wrap.
+ * is within `ROW_BAND` px of the row's highest), left to right within a row. A card with two open
+ * pins that take the thread is visited once per pin, the pin of the same shape first, so a claim
+ * can still reach a question card's "question in" (S6b's choice of pin, kept for the keyboard).
+ * The walk STARTS at the card nearest the source (centre to centre), so the likeliest target is
+ * one Enter away. Tab, → and ↓ step forward; Shift+Tab, ← and ↑ step back; both wrap.
  */
 import { PIN_TABLE, canConnect } from './pins';
 
@@ -17,25 +18,23 @@ import type { CanvasNode, FromPort, ToPort } from '@/lib/api/types';
 /** How tall a "row" of the board is for reading order: about one short card's top band. */
 export const ROW_BAND = 96;
 
-/** A card a thread can be linked to, and the in-pin it would land on. */
+/** A card a thread can be linked to, and the in-pin it lands on (one target per pin). */
 export interface LinkTarget {
   readonly id: string;
   readonly toPort: ToPort;
 }
 
 /**
- * The in-pin a thread from `fromPort` lands on: the pin of the same shape first (a brass diamond,
- * answer out, to an open diamond, question in; a brass circle to an open circle), else the card's
- * first in-pin.
+ * The in-pins a thread from `fromPort` can land on, the pin of the same shape first (a brass
+ * diamond, answer out, to an open diamond, question in; a brass circle to an open circle).
  *
  * @param fromPort The out-pin the thread leaves.
  * @param toKind The target card's kind.
- * @returns The in-pin, or null when the card offers none.
+ * @returns The card's in-pins in that order (empty when it offers none).
  */
-export function inPinFor(fromPort: FromPort, toKind: CanvasNode['kind']): ToPort | null {
-  const into = PIN_TABLE[toKind].into;
+export function inPinsFor(fromPort: FromPort, toKind: CanvasNode['kind']): ToPort[] {
   const same: ToPort = fromPort === 'answer_out' ? 'question_in' : 'evidence_in';
-  return into.includes(same) ? same : (into[0] ?? null);
+  return [...PIN_TABLE[toKind].into].sort((a, b) => Number(b === same) - Number(a === same));
 }
 
 const box = (n: PtNode) => ({
@@ -66,21 +65,21 @@ export function inReadingOrder(nodes: readonly PtNode[]): PtNode[] {
 }
 
 /**
- * Every card a thread from this pin can land on, in reading order.
+ * Every card and pin a thread from this pin can land on, in reading order.
  *
  * @param nodes The board's cards and frames.
  * @param from The source card and the out-pin the thread leaves.
- * @returns The targets with their in-pins (never the source, never a frame).
+ * @returns The targets, one per in-pin (never the source, never a frame).
  */
 export function linkTargets(
   nodes: readonly PtNode[],
   from: { readonly nodeId: string; readonly kind: CanvasNode['kind']; readonly port: FromPort },
 ): LinkTarget[] {
-  return inReadingOrder(nodes.filter((n) => n.id !== from.nodeId)).flatMap((n) => {
-    const toPort = inPinFor(from.port, n.data.node.kind);
-    const ok = toPort !== null && canConnect(from, { kind: n.data.node.kind, port: toPort });
-    return ok ? [{ id: n.id, toPort }] : [];
-  });
+  return inReadingOrder(nodes.filter((n) => n.id !== from.nodeId)).flatMap((n) =>
+    inPinsFor(from.port, n.data.node.kind)
+      .filter((toPort) => canConnect(from, { kind: n.data.node.kind, port: toPort }))
+      .map((toPort) => ({ id: n.id, toPort })),
+  );
 }
 
 /**

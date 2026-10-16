@@ -78,13 +78,38 @@ export function kindForKey(key: string, choices: readonly KindChoice[]): EdgeKin
 /**
  * What Escape does. On a NEW thread it keeps a plain link: the thread was drawn, it just has no
  * stronger claim (v0.1's Escape saved nothing; frame 06 and #213 change that on purpose). On a
- * change of kind it leaves the thread as it was.
+ * change of kind, or a pair whose pins refuse even the plain link, it saves nothing.
  *
  * @param mode A new thread, or changing a saved thread's kind.
- * @returns The kind to save, or null for "change nothing".
+ * @param choices The picker's options, so a refused pair is never saved.
+ * @returns The kind to save, or null for "save nothing".
  */
-export function escapeKind(mode: 'new' | 'change'): EdgeKind | null {
-  return mode === 'new' ? PLAIN_LINK : null;
+export function escapeKind(
+  mode: 'new' | 'change',
+  choices: readonly KindChoice[],
+): EdgeKind | null {
+  const plain = choices.find((c) => c.kind === PLAIN_LINK);
+  return mode === 'new' && plain?.enabled === true ? PLAIN_LINK : null;
+}
+
+/**
+ * What the board says once a thread is saved (the Undo toast's words).
+ *
+ * @param kind The kind it was saved as.
+ * @returns E.g. "Linked as supports." or "Linked as a plain link."
+ */
+export function linkedSentence(kind: EdgeKind): string {
+  return kind === PLAIN_LINK ? 'Linked as a plain link.' : `Linked as ${threadInfo(kind).label}.`;
+}
+
+/**
+ * A sentence that ends in a card's name, without a second full stop after ‘…here.’.
+ *
+ * @param text The sentence so far.
+ * @returns It, ended once.
+ */
+export function stop(text: string): string {
+  return /[.!?…]’?$/.test(text) ? text : `${text}.`;
 }
 
 const clip = (text: string, max: number): string =>

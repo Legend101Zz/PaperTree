@@ -3,10 +3,11 @@
 /**
  * board/components/LinkAsLayer — puts the "Link as" picker on the board for one thread: names its
  * two ends, offers the kinds its pins take (`kindChoices`, the server's table), settles it at the
- * thread's midpoint inside the stage (`placePicker`), and gives focus back to where the thread
- * started (the source pin or card, or the button that asked) once the kind is chosen.
+ * thread's midpoint inside the stage (`placePicker`), following it when the board pans or zooms,
+ * and gives focus back to where the thread started (the source pin or card, or the button that
+ * asked) once the kind is chosen.
  */
-import { useReactFlow } from '@xyflow/react';
+import { useReactFlow, useStore } from '@xyflow/react';
 import { useLayoutEffect, useMemo, useState, type ReactNode, type RefObject } from 'react';
 
 import { endName, kindChoices, placePicker } from '../model/linkAs';
@@ -50,6 +51,7 @@ export function LinkAsLayer({
 }: LinkAsLayerProps): ReactNode {
   const flow = useReactFlow<PtNode, PtEdge>();
   const [at, setAt] = useState<Point | null>(null);
+  const transform = useStore((s) => s.transform);
   const from = nodes.find((n) => n.id === request.from);
   const to = nodes.find((n) => n.id === request.to);
   const choices = useMemo(
@@ -80,7 +82,7 @@ export function LinkAsLayer({
         { w: r.width, h: r.height },
       ),
     );
-  }, [flow, stage, request.from, request.to, request.fromPort, request.toPort]);
+  }, [flow, stage, request.from, request.to, request.fromPort, request.toPort, transform]);
 
   if (from === undefined || to === undefined) return null;
   const giveFocusBack = (): void => {

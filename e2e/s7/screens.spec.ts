@@ -287,8 +287,8 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
         .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
       expect(kinds).toHaveLength(7);
       for (const h of kinds) expect(h).toBeGreaterThanOrEqual(40);
-      // #213 changes v0.1's "Escape cancels" on purpose: Escape keeps a PLAIN LINK. It is removed
-      // again through the API so the next pass starts from the same one-thread board.
+      // #213 changes v0.1's "Escape cancels" on purpose: Escape keeps a PLAIN LINK. The new
+      // thread's Undo takes it back, so the board on screen and the next pass are one thread again.
       await fullPage.keyboard.press('Escape');
       await expect(dialog).toBeHidden();
       const plainLink = async () =>
@@ -296,11 +296,11 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
           (e) => e.from_node_id === explanationId && e.to_node_id === ids[2],
         );
       await expect.poll(async () => (await plainLink())?.kind).toBe('relates');
-      const kept = await plainLink();
-      expect(
-        (await api(stack.apiUrl, full.token, 'DELETE', `/boards/${board}/edges/${kept!.edge_id}`))
-          .status,
-      ).toBe(204);
+      const undoLink = fullPage.getByTestId('undo-toast');
+      await expect(undoLink).toContainText('Linked as a plain link.');
+      await undoLink.getByRole('button', { name: 'Undo' }).click();
+      await expect.poll(plainLink).toBeUndefined();
+      await expect(fullPage.getByTestId('edge-label')).toHaveCount(1);
       await fullPage.getByRole('button', { name: 'Select area' }).click();
 
       // a selected edge shows its editor
