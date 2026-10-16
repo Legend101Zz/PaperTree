@@ -30,6 +30,20 @@ export function cardStateLine(book: LibraryBook): string {
 }
 
 /**
+ * "Ashish Vaswani et al.", "Diederik P. Kingma and Jimmy Ba", "Alex Wang": full names as printed,
+ * shared by the card, the captions and the Table's Authors column (frame 01d).
+ *
+ * @param authors - The authors, in order.
+ * @returns The short line, or null when there are none.
+ */
+export function authorsShort(authors: readonly string[]): string | null {
+  const [first, second] = authors;
+  if (first === undefined) return null;
+  if (authors.length === 1) return first;
+  return authors.length === 2 ? `${first} and ${second ?? ''}` : `${first} et al.`;
+}
+
+/**
  * "Ashish Vaswani et al. · 2017 · 15 pages": only what the server knows. Full first names on
  * purpose (frame 01's card and 01c's captions), so not the spine's surname-only `authorLine`.
  *
@@ -37,15 +51,7 @@ export function cardStateLine(book: LibraryBook): string {
  * @returns The line.
  */
 export function metaLine(book: LibraryBook): string {
-  const [first, second] = book.authors;
-  const authors =
-    first === undefined
-      ? null
-      : book.authors.length === 1
-        ? first
-        : book.authors.length === 2
-          ? `${first} and ${second ?? ''}`
-          : `${first} et al.`;
+  const authors = authorsShort(book.authors);
   const pages = book.pageCount > 0 ? `${String(book.pageCount)} pages` : null;
   return [authors, book.year === null ? null : String(book.year), pages]
     .filter((part): part is string => part !== null)

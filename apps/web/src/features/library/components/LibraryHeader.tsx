@@ -8,11 +8,11 @@
 
 import { Button, SproutMark } from '@papertree/ui';
 import Link from 'next/link';
-import { useEffect, useId, useRef, useState } from 'react';
 
 import { TOUCH_TARGET } from '@/components/library/primitives';
 import { ThemeSwitch, useTheme } from '@/features/settings';
 
+import { usePopover } from '../hooks/usePopover';
 import { useTouchTargets } from '../hooks/useTouchTargets';
 import { AddPapers } from './AddPapers';
 import { SearchField, type SearchFieldProps } from './SearchField';
@@ -33,30 +33,7 @@ interface HeaderMenuProps {
 
 /** A header button that opens a small panel under it. */
 function HeaderMenu({ label, face, round = false, touch, children }: HeaderMenuProps): ReactNode {
-  const [open, setOpen] = useState(false);
-  const panelId = useId();
-  const wrapper = useRef<HTMLDivElement>(null);
-  const button = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    const node = wrapper.current;
-    if (!open || node === null) return undefined;
-    const outside = (event: PointerEvent): void => {
-      if (!node.contains(event.target as Node)) setOpen(false);
-    };
-    // Esc from the button or anything in the panel closes it and puts focus back on the button.
-    const escape = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return;
-      event.stopPropagation();
-      setOpen(false);
-      button.current?.focus();
-    };
-    document.addEventListener('pointerdown', outside);
-    node.addEventListener('keydown', escape);
-    return () => {
-      document.removeEventListener('pointerdown', outside);
-      node.removeEventListener('keydown', escape);
-    };
-  }, [open]);
+  const { open, toggle, wrapper, button, panelId } = usePopover();
   return (
     <div ref={wrapper} className="pt-hmenu">
       <button
@@ -72,7 +49,7 @@ function HeaderMenu({ label, face, round = false, touch, children }: HeaderMenuP
         aria-label={label}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
-        onClick={() => setOpen((was) => !was)}
+        onClick={toggle}
       >
         <span aria-hidden="true">{face}</span>
       </button>

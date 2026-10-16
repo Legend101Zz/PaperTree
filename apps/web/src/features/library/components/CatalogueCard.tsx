@@ -8,12 +8,13 @@
 'use client';
 
 import { Button } from '@papertree/ui';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { ProgressMeter, TOUCH_TARGET } from '@/components/library/primitives';
-import { describeError } from '@/components/ui/errors';
 
+import { useBookActions } from '../hooks/useBookActions';
 import { cardStateLine, metaLine } from '../model/catalogue';
+import { RemoveConfirm } from './RemoveConfirm';
 
 import type { LibraryBook } from '../hooks/useLibrary';
 import type { ReactNode } from 'react';
@@ -36,31 +37,11 @@ type ActionsProps = Pick<CatalogueCardProps, 'book' | 'onRetry' | 'onDelete'>;
 
 /** Retry (failed papers only) and Delete with its inline confirmation; failures as sentences. */
 function CardActions({ book, onRetry, onDelete }: ActionsProps): ReactNode {
-  const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const run = async (action: () => Promise<unknown>, fallback: string): Promise<void> => {
-    setBusy(true);
-    setError(null);
-    try {
-      await action();
-      setConfirming(false);
-    } catch (caught) {
-      setError(describeError(caught, fallback));
-    } finally {
-      setBusy(false);
-    }
-  };
-  const retry = (): void =>
-    void run(
-      () => onRetry(book.id),
-      'Could not start reading again. Check your connection and retry.',
-    );
-  const remove = (): void =>
-    void run(
-      () => onDelete(book.id),
-      'Could not delete this paper. Check your connection and try again.',
-    );
+  const { confirming, setConfirming, busy, error, retry, remove } = useBookActions(
+    book.id,
+    onRetry,
+    onDelete,
+  );
   return (
     <>
       {book.processing === 'failed' ? (
@@ -69,31 +50,12 @@ function CardActions({ book, onRetry, onDelete }: ActionsProps): ReactNode {
         </Button>
       ) : null}
       {book.isSample === true ? null : confirming ? (
-        <div
-          role="group"
-          aria-label={`Confirm deleting ${book.title}`}
-          className="pt-catalogue__confirm"
-          data-delete-confirm=""
-        >
-          <p>Delete this paper and its highlights? This cannot be undone.</p>
-          <Button
-            variant="danger"
-            size="touch"
-            className={TOUCH_TARGET}
-            disabled={busy}
-            onClick={remove}
-          >
-            {busy ? 'Deleting' : 'Delete paper'}
-          </Button>
-          <Button
-            size="touch"
-            className={TOUCH_TARGET}
-            disabled={busy}
-            onClick={() => setConfirming(false)}
-          >
-            Keep it
-          </Button>
-        </div>
+        <RemoveConfirm
+          title={book.title}
+          busy={busy}
+          onConfirm={remove}
+          onKeep={() => setConfirming(false)}
+        />
       ) : (
         <Button
           variant="danger"
