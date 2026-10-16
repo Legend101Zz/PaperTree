@@ -13,6 +13,7 @@
  * - a marker tap lowers the sheet to peek and flashes the passage.
  */
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { useState, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { hitOutset, SHEET_PEEK_PX, TOUCH_MARKER_PX, TOUCH_TARGET_PX } from '@papertree/ui';
@@ -21,6 +22,7 @@ import { GOLDEN } from './fixtures/attention-thread';
 import { focusAnchor, Harness, sendToCanvas, stubDesktop } from './s6-harness';
 import { installFetch, jsonResponse, PAPER } from './s6-support';
 
+import { tableRegionName } from '@/components/reader/guidedTables';
 import { spanInView } from '@/components/reader/VirtualPageList';
 import { ReaderHeader, type ReaderHeaderProps } from '@/features/reader';
 import type { Thread } from '@/lib/api/types';
@@ -233,11 +235,70 @@ describe('the phone header (frame 08b)', () => {
     expect(screen.queryByRole('group', { name: 'Reading options' })).toBeNull();
   });
 
-  it('closes on a press outside it', () => {
-    render(<ReaderHeader {...BASE} />);
+  it('closes on a press outside it, and when focus moves out of it', () => {
+    render(
+      <>
+        <ReaderHeader {...BASE} />
+        <button type="button">in the page</button>
+      </>,
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Reading options' }));
     fireEvent.pointerDown(document.body);
     expect(screen.queryByRole('group', { name: 'Reading options' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Reading options' }));
+    fireEvent.focusIn(screen.getByRole('button', { name: 'in the page' }));
+    expect(screen.queryByRole('group', { name: 'Reading options' })).toBeNull();
+  });
+
+  it('draws Explain as a 44 px target on the phone row', () => {
+    render(<ReaderHeader {...BASE} />);
+    expect(screen.getByRole('button', { name: 'Explain' }).style.minHeight).toBe('44px');
+  });
+
+  it('Contents from the menu hands focus into Contents, and back to the menu when it closes', () => {
+    render(<WithContents />);
+    const menu = screen.getByRole('button', { name: 'Reading options' });
+    fireEvent.click(menu);
+    fireEvent.click(screen.getByRole('button', { name: 'Contents, 1 highlight' }));
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Outline' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close Contents' }));
+    expect(document.activeElement).toBe(menu);
+  });
+});
+
+/** The phone header with a stand-in for the workspace's Contents panel (its tablist). */
+function WithContents(): ReactNode {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <ReaderHeader {...BASE} navigatorOpen={open} onNavigatorToggle={() => setOpen((v) => !v)} />
+      {open ? (
+        <div>
+          <div role="tablist" aria-label="Contents sections">
+            <button type="button" role="tab" aria-selected="true">
+              Outline
+            </button>
+          </div>
+          <button type="button" onClick={() => setOpen(false)}>
+            Close Contents
+          </button>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+describe('tableRegionName: a sideways-scrolling Guided table is named', () => {
+  it('by its caption, else its first header, else "Table"', () => {
+    expect(tableRegionName('Maximum path lengths per layer type')).toBe(
+      'Table: Maximum path lengths per layer type',
+    );
+    expect(tableRegionName('Table 2: The Transformer achieves better BLEU')).toBe(
+      'Table 2: The Transformer achieves better BLEU',
+    );
+    expect(tableRegionName(undefined, 'Layer Type')).toBe('Table: Layer Type');
+    expect(tableRegionName()).toBe('Table');
+    expect(tableRegionName('x'.repeat(200)).length).toBe(80);
   });
 });
 

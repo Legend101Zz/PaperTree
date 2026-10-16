@@ -19,8 +19,13 @@ calls no API. The page count comes from pdf.js (`usePdfDocument`) or, before the
 - **Zoom** is − / select / +; "Fit width" is one of the select's options, as frame 04 draws it.
 - **Below 768 px (#205, frame 08b)** the header is one 56 px row: back, the title, "p. 2" (no count), Explain and a
   44 px menu button (`ReaderMenu`, a disclosure: Esc or a press outside closes it and focus goes back to the button)
-  holding Contents, the reading mode, zoom and Board. `hooks/usePhone` is the explain sheet's breakpoint. A zoom
-  picked there survives a reload (measured at 390, `e2e/v02/phone-reader.spec.ts`).
+  holding Contents, the reading mode, zoom and Board. `hooks/usePhone` reads the same 768 px query as
+  `ExplainPanel`'s own, so the header and the sheet switch together. A zoom picked there survives a reload
+  (measured at 390, `e2e/v02/phone-reader.spec.ts`). Every target on the row is 44 px (Explain is a `touch`
+  `ToolbarButton`). While open, the menu is drawn above the explain sheet; focus leaving it closes it.
+  Contents from the menu hands focus into the Contents panel and back to the menu button when it closes
+  (`hooks/useMenuContentsFocus`). e2e specs reach these controls through `readingControls` (`e2e/s4/support.ts`),
+  which opens the menu below 768 px.
 
 ## The lamp-lit page (#205, frame 09b)
 
@@ -98,6 +103,8 @@ selects.
 - `model/toolbarPlacement.ts`, `model/highlightClick.ts`, `model/contents.ts`: the rules above, pure and
   tested beside them; `hooks/useSelectionToolbar.tsx` and `hooks/useHighlightClick.ts`: their wiring.
 - `components/PageCounter.tsx`: "p. 2 of 15", subscribed to the page list on its own.
+- `components/reader/guidedTables.ts` (v0.1 folder): a Guided table wider than its column is a named region
+  ("Table: <caption or first header>") and a tab stop, so a keyboard can scroll it; one that fits is neither.
 - `packages/ui/src/styles.css`, "the reader (S4)": the header, the desk (`--pt-desk` with a laid pattern),
   the PDF page as a `--pt-pdf-page` sheet with e1 (lamp-lit: the canvas is multiplied onto the dimmed sheet),
   and the Guided page on `--pt-page`.

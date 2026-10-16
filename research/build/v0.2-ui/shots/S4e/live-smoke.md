@@ -12,8 +12,8 @@ it), stopped by its PID right after. One run started and one finished (the agent
 | Passage (selected with the mouse) | p. 2 ¶2 (Introduction): "Recurrent models typically factor computation along the symbol positions of the input and output sequences." |
 | Question | "Explain this passage." (the selection toolbar's Explain) |
 | Model | `MiniMax-M3.1-Flash-Preview`, effort `low` (the explain default, ADR-003); the slip reads "M3.1 Flash · from the paper" |
-| Tokens | 4,004 in · 394 out (190 of the input read from cache) = 4,398 |
-| Cost | ≈ $0.0017 (estimate): the usage line reads "4,398 tokens · ≈ $0.0017 (estimate)"; the run's `cost_usd_est` 0.0016854, on M3 rates (MiniMax publishes no Flash price) |
+| Tokens | 4,004 in (plus 190 read from cache) · 394 out; the usage line counts in + out = 4,398 (the run processed 4,588) |
+| Cost | ≈ $0.0017 (estimate): the usage line reads "4,398 tokens · ≈ $0.0017 (estimate)"; the run's `cost_usd_est` 0.0016854 = 4,004 × $0.30 + 394 × $1.20 + 190 × $0.06 per Mtok, M3's rates (MiniMax publishes no Flash price) |
 | Time to first text | 2.20 s in the page (the Explain click to the first AI words on the slip); the run's `first_text_ms` 2,173 |
 | Total | 3.84 s in the page (click to the settled answer); the run's `latency_ms` 3,813 |
 | Answer | complete; 4 paragraphs, 4 passages, 9 citations, no uncited paragraph, no unresolved handle; tool calls 0 |

@@ -39,6 +39,7 @@ import {
   perLineEdges,
   pointsFor,
   rangeRects,
+  readingControls,
   register,
   reveal,
   selectionRects,
@@ -519,23 +520,29 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
       })
       .toBeGreaterThan(20);
     expect(await mobile.evaluate(() => document.visibilityState)).toBe('visible');
-    const layout = await mobile.evaluate(() => {
-      const radios = Array.from(document.querySelectorAll('[role="radio"]')).map(
-        (r) => r.getBoundingClientRect().right,
-      );
-      const pageEl = document.querySelector('.papertree-page');
-      return {
-        scrollWidth: document.documentElement.scrollWidth,
-        bodyWidth: document.body.scrollWidth,
-        radioRight: Math.max(...radios),
-        pageWidth: pageEl?.getBoundingClientRect().width ?? 0,
-        zoomLabel:
-          (document.querySelector('#papertree-zoom-select') as HTMLSelectElement | null)
-            ?.selectedOptions[0]?.textContent ?? '',
-      };
-    });
+    // Below 768 px the mode switch and zoom sit in the header's "Reading options" menu (#205):
+    // measured with it open.
+    const layout = await readingControls(mobile, () =>
+      mobile.evaluate(() => {
+        const radios = Array.from(document.querySelectorAll('[role="radio"]')).map(
+          (r) => r.getBoundingClientRect().right,
+        );
+        const pageEl = document.querySelector('.papertree-page');
+        return {
+          scrollWidth: document.documentElement.scrollWidth,
+          bodyWidth: document.body.scrollWidth,
+          radioRight: Math.max(...radios),
+          pageWidth: pageEl?.getBoundingClientRect().width ?? 0,
+          zoomLabel:
+            (document.querySelector('#papertree-zoom-select') as HTMLSelectElement | null)
+              ?.selectedOptions[0]?.textContent ?? '',
+          radioCount: radios.length,
+        };
+      }),
+    );
     note(`390 px: ${JSON.stringify(layout)}`);
     expect(layout.scrollWidth).toBeLessThanOrEqual(390);
+    expect(layout.radioCount, 'the three modes are measured, not an empty list').toBe(3);
     expect(layout.radioRight).toBeLessThanOrEqual(390);
     expect(layout.pageWidth).toBeLessThanOrEqual(390);
     expect(layout.zoomLabel).toBe('Fit width');
@@ -548,19 +555,25 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
     const mHit = await hitTest(mobile, 'Highlight');
     expect(mHit.hit).toBe('button');
     await mobile.screenshot({ path: shot('b14-select-390.png') });
-    await mobile.getByRole('button', { name: /^Contents/ }).click();
+    await readingControls(mobile, (controls) =>
+      controls.getByRole('button', { name: /^Contents/ }).click(),
+    );
     await mobile.getByRole('tab', { name: /Highlights/ }).click();
     // The Contents sheet is where the thumb is now: the selection bar waits under it, not on it.
     await expect(mobile.getByRole('toolbar', { name: 'Selection actions' })).toHaveCount(0);
     await mobile.screenshot({ path: shot('b15-navigator-390.png') });
     await mobile.keyboard.press('Escape');
-    await mobile.getByRole('radio', { name: 'Guided' }).click();
+    await readingControls(mobile, (controls) =>
+      controls.getByRole('radio', { name: 'Guided' }).click(),
+    );
     await expect(mobile.locator('[data-guided-root]')).toBeVisible();
     expect(await mobile.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
       390,
     );
     await mobile.screenshot({ path: shot('b16-guided-390.png') });
-    await mobile.getByRole('radio', { name: 'Source' }).click();
+    await readingControls(mobile, (controls) =>
+      controls.getByRole('radio', { name: 'Source' }).click(),
+    );
     await expect.poll(() => spanCount(mobile), { timeout: 60_000 }).toBeGreaterThan(20);
     const mTray = mobile.getByRole('region', { name: 'Highlights that could not be placed' });
     await mTray.getByRole('button', { name: /could not be placed/ }).click();

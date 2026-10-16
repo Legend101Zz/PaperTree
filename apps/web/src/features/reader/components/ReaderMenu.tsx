@@ -4,14 +4,17 @@
  * The phone header's menu (#205, frame 08b): Contents, the reading mode, zoom and Board, folded
  * behind one 44 px button so the header keeps one row (back, title, "p. 2", Explain, menu). A
  * disclosure, not an ARIA menu: it holds a radio group and a select. Esc and a press outside close
- * it and focus goes back to its button; Contents and Board close it as they act.
+ * it and focus goes back to its button; focus moving out of it closes it too; Contents and Board
+ * close it as they act. While open it is drawn above the explain sheet (`styles.css`, S4e).
  */
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 /** Props for `ReaderMenu`. */
 export interface ReaderMenuProps {
   /** The controls it folds away; a press inside that should close it calls `close`. */
   readonly children: (close: () => void) => ReactNode;
+  /** The menu button, for a caller that must hand focus back to it later (Contents does). */
+  readonly buttonRef?: RefObject<HTMLButtonElement>;
 }
 
 /**
@@ -20,9 +23,10 @@ export interface ReaderMenuProps {
  * @example
  * <ReaderMenu>{(close) => <button onClick={close}>Contents</button>}</ReaderMenu>
  */
-export function ReaderMenu({ children }: ReaderMenuProps): ReactNode {
+export function ReaderMenu({ children, buttonRef }: ReaderMenuProps): ReactNode {
   const [open, setOpen] = useState(false);
-  const button = useRef<HTMLButtonElement | null>(null);
+  const own = useRef<HTMLButtonElement | null>(null);
+  const button = buttonRef ?? own;
   const panel = useRef<HTMLDivElement | null>(null);
   const id = useId();
 
@@ -37,13 +41,21 @@ export function ReaderMenu({ children }: ReaderMenuProps): ReactNode {
       setOpen(false);
       button.current?.focus();
     };
+    // Tabbing past Board must not leave the panel open over the page (and a later Esc from
+    // anywhere pulling focus back here).
+    const away = (event: FocusEvent): void => {
+      const target = event.target as Node;
+      if (!panel.current?.contains(target) && !button.current?.contains(target)) setOpen(false);
+    };
     document.addEventListener('pointerdown', outside);
     document.addEventListener('keydown', onKey);
+    document.addEventListener('focusin', away);
     return () => {
       document.removeEventListener('pointerdown', outside);
       document.removeEventListener('keydown', onKey);
+      document.removeEventListener('focusin', away);
     };
-  }, [open]);
+  }, [open, button]);
 
   const close = (): void => setOpen(false);
   return (

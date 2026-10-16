@@ -8,15 +8,15 @@
  */
 import { ToolbarButton } from '@papertree/ui';
 import { AlignLeft, ArrowLeft, Workflow } from 'lucide-react';
+import { useRef, type ReactNode, type RefObject } from 'react';
 
 import { ModeSwitch, type ReadingMode } from '@/components/reader/ModeSwitch';
 import { ZoomControl, type ZoomMode } from '@/components/reader/ZoomControl';
 
+import { useMenuContentsFocus } from '../hooks/useMenuContentsFocus';
 import { usePhone } from '../hooks/usePhone';
 import { PageCounter } from './PageCounter';
 import { ReaderMenu } from './ReaderMenu';
-
-import type { ReactNode, RefObject } from 'react';
 
 /** The Explain toggle's state; absent for a sample paper, which has no server to ask. */
 export interface ExplainToggle {
@@ -121,16 +121,53 @@ function ReadingControls({ props, onLeave }: { props: ReaderHeaderProps; onLeave
   );
 }
 
-function ExplainButton({ explain }: { explain: ExplainToggle | null }): ReactNode {
+/** The Explain toggle, the panel's only entry (#203); 44 px tall on the phone row (#205). */
+function ExplainButton({
+  explain,
+  touch = false,
+}: {
+  explain: ExplainToggle | null;
+  touch?: boolean;
+}): ReactNode {
   return explain === null ? null : (
     <ToolbarButton
       ref={explain.ref}
       label="Explain"
       icon={null}
+      size={touch ? 'touch' : 'md'}
       className="pt-reader__explain"
       pressed={explain.open}
       onPressedChange={explain.onToggle}
     />
+  );
+}
+
+/** The phone row (frame 08b): back, the title, "p. 2", Explain and the menu with the rest. */
+function PhoneHeader({ props, title }: { props: ReaderHeaderProps; title: ReactNode }) {
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const fromMenu = useMenuContentsFocus(props.navigatorOpen, menuButton);
+  return (
+    <header className="pt-reader__bar pt-reader__bar--phone">
+      <BackLink />
+      {title}
+      {/* "p. 2": the count does not fit a phone row (frame 08b). */}
+      <PageCounter mode={props.mode} page={props.page} pageCount={null} />
+      <ExplainButton explain={props.explain} touch />
+      <ReaderMenu buttonRef={menuButton}>
+        {(close) => (
+          <>
+            <ContentsButton
+              props={props}
+              onPress={() => {
+                fromMenu();
+                close();
+              }}
+            />
+            <ReadingControls props={props} onLeave={close} />
+          </>
+        )}
+      </ReaderMenu>
+    </header>
   );
 }
 
@@ -160,25 +197,7 @@ export function ReaderHeader(props: ReaderHeaderProps): ReactNode {
       {props.title}
     </h1>
   );
-  if (phone) {
-    return (
-      <header className="pt-reader__bar pt-reader__bar--phone">
-        <BackLink />
-        {title}
-        {/* "p. 2": the count does not fit a phone row (frame 08b). */}
-        <PageCounter mode={props.mode} page={props.page} pageCount={null} />
-        <ExplainButton explain={props.explain} />
-        <ReaderMenu>
-          {(close) => (
-            <>
-              <ContentsButton props={props} onPress={close} />
-              <ReadingControls props={props} onLeave={close} />
-            </>
-          )}
-        </ReaderMenu>
-      </header>
-    );
-  }
+  if (phone) return <PhoneHeader props={props} title={title} />;
   return (
     <header className="pt-reader__bar">
       <BackLink />

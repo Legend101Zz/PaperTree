@@ -4714,6 +4714,12 @@ button.pt-holder {
   padding: 0;
 }
 
+/* While the menu is open the row (and the menu in it) sits above the explain sheet (z 35), so every
+   item can be seen and pressed with the sheet open (#205 review: only Contents showed). */
+.pt-reader__bar--phone:has(.pt-reader-menu) {
+  z-index: 36;
+}
+
 .pt-reader-menu {
   position: absolute;
   inset-block-start: calc(100% + 4px);
@@ -4746,6 +4752,17 @@ button.pt-holder {
 .pt-reader-menu .pt-zoom__select,
 .pt-reader-menu .pt-segmented__option {
   min-block-size: var(--pt-target-touch);
+}
+
+.pt-reader-menu .pt-zoom__step {
+  min-inline-size: var(--pt-target-touch);
+}
+
+/* A Guided table wider than the column scrolls sideways and takes focus (GuidedView): the token
+   ring, not the browser's. */
+.pt-guided__table-scroller:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
 }
 
 .pt-explain-sheet .pt-sheet__header {
