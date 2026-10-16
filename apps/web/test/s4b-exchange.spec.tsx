@@ -96,7 +96,7 @@ async function openGolden(extra: Parameters<typeof installFetch>[0] = {}): Promi
     ...extra,
   });
   render(<Harness />);
-  fireEvent.click(screen.getByRole('button', { name: 'Ask AI' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Explain' }));
   await waitFor(() => expect(screen.getByText(/Attention looks at every position/)).toBeTruthy());
   const previous = screen.getByRole('button', { name: 'Previous thread' });
   previous.focus();
@@ -435,7 +435,7 @@ describe('honest, stable answers (review 1.1, 1.3)', () => {
         ),
     });
     render(<Harness />);
-    fireEvent.click(screen.getByRole('button', { name: 'Ask AI' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Explain' }));
     await waitFor(() => expect(screen.getByText(/central proposal/)).toBeTruthy());
     fireEvent.change(screen.getByLabelText('Ask a question about this paper'), {
       target: { value: 'Cost?' },

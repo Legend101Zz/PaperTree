@@ -193,7 +193,8 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
 
     // ── reload: the cached summary, with NO new run ──
     await open();
-    await page.getByRole('button', { name: 'Ask AI' }).click();
+    // #203: the header's Explain toggle opens the panel (it replaced the floating "Ask AI").
+    await page.getByRole('button', { name: 'Explain', exact: true }).click();
     await page
       .getByRole('complementary', { name: 'Explain' })
       .getByRole('button', { name: 'Summarize paper' })
@@ -207,7 +208,7 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
     );
     await page.screenshot({ path: shot('c06-summary-cached-1440.png') });
 
-    // ── Esc closes the drawer and focus goes back to the launcher, not <body> ──
+    // ── Esc closes the drawer and focus goes back to the header's Explain toggle, not <body> ──
     await page.keyboard.press('Escape');
     await expect(page.getByRole('complementary', { name: 'Explain' })).toHaveCount(0);
     const focused = await page.evaluate(() => ({
@@ -215,6 +216,10 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
       text: (document.activeElement?.textContent ?? '').trim(),
     }));
     note(`after Esc, focus is on ${JSON.stringify(focused)}`);
-    expect(focused).toEqual({ tag: 'BUTTON', text: 'Ask AI' });
+    expect(focused).toEqual({ tag: 'BUTTON', text: 'Explain' });
+    await expect(page.getByRole('button', { name: 'Explain', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
   });
 });

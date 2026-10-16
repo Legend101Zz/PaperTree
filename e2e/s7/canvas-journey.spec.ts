@@ -73,7 +73,8 @@ test.describe('Journey D: the canvas', () => {
       })
       .toBeGreaterThan(20);
     expect(await page.evaluate(() => document.visibilityState)).toBe('visible');
-    await expect(page.getByRole('link', { name: 'Canvas' })).toBeVisible();
+    // #203: the header names the canvas "Board" (the route stays /canvas).
+    await expect(page.getByRole('link', { name: 'Board' })).toBeVisible();
     await reveal(page, 'Deeper neural networks');
     const points = await pointsFor(page, 'Deeper neural networks', 'substantially deeper');
     await drag(page, points.from, points.to);

@@ -64,6 +64,12 @@ describe('Button', () => {
 });
 
 describe('ToolbarButton', () => {
+  it("a null icon draws no icon box: a text-only button (the reader header's Explain tab)", () => {
+    render(<ToolbarButton label="Explain" icon={null} pressed={false} />);
+    const button = screen.getByRole('button', { name: 'Explain' });
+    expect(button.querySelector('.pt-toolbtn__icon')).toBeNull();
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+  });
   function Harness(): React.ReactNode {
     const [on, setOn] = useState(false);
     return <ToolbarButton label="Board" icon={<svg />} pressed={on} onPressedChange={setOn} />;
