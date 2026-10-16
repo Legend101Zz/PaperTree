@@ -21,7 +21,9 @@
 
 .pt-boardbar {
   position: relative;
-  z-index: 6;
+  /* Over everything on the stage (legend 5, selected-thread bar 7, Link-as picker 8), so the
+     "More board tools" menu that drops from it is never covered (`layers.spec.ts`). */
+  z-index: 9;
   display: flex;
   flex: none;
   align-items: center;
