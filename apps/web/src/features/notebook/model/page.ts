@@ -132,3 +132,27 @@ export function screenToPage(p: Vec2, view: Viewport): Vec2 {
   const s = pageScale(view.containerWidth);
   return [(p[0] + view.scrollX) / s, (p[1] + view.scrollY) / s];
 }
+
+/** The title Dive in gives a page: this, then the thread's title (the passage's words). */
+export const DIVE_IN_PREFIX = 'Dive in: ';
+
+/**
+ * Whose words a page title is, so the three voices stay apart in the `<h1>` too: Dive in's
+ * "Dive in: " is the interface's and the rest the paper's; the default "Untitled page" is the
+ * interface's; any other title is one the person gave.
+ *
+ * @param title - The page title.
+ * @returns The interface's lead-in, the words, and their voice (null: the interface's).
+ * @example
+ * titleVoice('Dive in: We propose…'); // { lead: 'Dive in: ', words: 'We propose…', voice: 'paper' }
+ */
+export function titleVoice(title: string): {
+  lead: string;
+  words: string;
+  voice: 'paper' | 'you' | null;
+} {
+  if (title.startsWith(DIVE_IN_PREFIX)) {
+    return { lead: DIVE_IN_PREFIX, words: title.slice(DIVE_IN_PREFIX.length), voice: 'paper' };
+  }
+  return { lead: '', words: title, voice: title === 'Untitled page' ? null : 'you' };
+}

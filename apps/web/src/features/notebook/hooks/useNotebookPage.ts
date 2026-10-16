@@ -8,7 +8,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { boardKey } from './useBoardCard';
+import { boardKey, cardOn } from './useBoardCard';
 import { useItemSaver } from './useItemSaver';
 import { notebookApi, notebookKeys } from '../api/notebookApi';
 import { createHistory, execute, redo, undo } from '../model/history';
@@ -16,6 +16,7 @@ import { bodyOf, itemFromWire, strokeFromWire } from '../model/wire';
 
 import type { SaveStatus } from './useItemSaver';
 import type { NotebookPageView } from '../api/notebookApi';
+import type { BoardView } from '@/lib/api/boards';
 import type { Command, Step } from '../model/history';
 import type { Item } from '../model/page';
 import type { Stroke } from '../model/stroke';
@@ -91,11 +92,15 @@ export function useNotebookPage(paperId: string, pageId: string): NotebookPageMo
   const saver = useItemSaver(pageId, {
     items: () => stepRef.current?.state.items ?? [],
     body: (item) => bodyOf(item, bodies.current),
-    // The panel's counts and the board card's are the server's; re-read both once a burst has
-    // landed, so neither goes stale after an edit.
+    // The panel's counts and the board card's are the server's; re-read them once a burst has
+    // landed, so neither goes stale after an edit. The board only while it holds this page's card:
+    // a board read returns every node and edge, and a page not on it has no counts there.
     onSettled: () => {
       void client.invalidateQueries({ queryKey: notebookKeys.pages(paperId) });
-      void client.invalidateQueries({ queryKey: boardKey(paperId) });
+      const card = cardOn(client.getQueryData<BoardView>(boardKey(paperId)), pageId);
+      if (card !== null && card !== undefined) {
+        void client.invalidateQueries({ queryKey: boardKey(paperId) });
+      }
     },
   });
   const { seed, sync } = saver;

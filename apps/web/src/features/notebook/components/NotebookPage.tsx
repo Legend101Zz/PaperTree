@@ -27,7 +27,7 @@ import {
   readingOrder,
   templatePaint,
 } from '../model/layout';
-import { PAGE_WIDTH } from '../model/page';
+import { PAGE_WIDTH, titleVoice } from '../model/page';
 
 import type { NotebookPageWire } from '../api/notebookApi';
 import type { Exchange } from '../hooks/useExchange';
@@ -92,6 +92,7 @@ function topOf(stroke: Stroke): number {
 /** One notebook page, its template, title and items. */
 export function NotebookPage(props: NotebookPageProps): ReactNode {
   const { page, scale, exchange } = props;
+  const title = titleVoice(page.title);
   const all = props.draft === null ? props.items : [...props.items, props.draft];
   const [measure, measured] = useMeasuredHeight();
   const shift = exchangeShift(all, measured);
@@ -120,7 +121,12 @@ export function NotebookPage(props: NotebookPageProps): ReactNode {
             data-match={props.matches.has(item.id) ? 'true' : undefined}
             style={{ left: item.x, top: item.y, width: item.w, minHeight: item.h, zIndex: item.z }}
           >
-            <ExchangeBlock body={body} exchange={exchange} onFocusAnchor={props.onFocusAnchor} />
+            <ExchangeBlock
+              body={body}
+              exchange={exchange}
+              matched={props.matches.has(item.id)}
+              onFocusAnchor={props.onFocusAnchor}
+            />
           </div>
         );
       }
@@ -183,7 +189,12 @@ export function NotebookPage(props: NotebookPageProps): ReactNode {
       >
         <header className="pt-nb-page__title">
           <h1 id={PAGE_TITLE_ID} tabIndex={-1}>
-            {page.title}
+            {title.lead}
+            {title.voice === null ? (
+              title.words
+            ) : (
+              <span data-voice={title.voice}>{title.words}</span>
+            )}
           </h1>
           {props.source === null ? null : (
             <p>

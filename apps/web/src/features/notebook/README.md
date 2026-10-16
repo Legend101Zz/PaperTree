@@ -45,11 +45,14 @@ phone layouts are S5e (#210).
   focus ring), **On this page** (the server's counts; ink is "yours", never a number), and **On the
   board** (the page's `notebook` card with a miniature and "4 quotes · 1 sticky", or the offer to
   send it). The header's Send page to board creates that card (S6a) and offers Open board. One
-  page, one card: the card's id is minted once per page, the button waits while a send is in
-  flight or the board is unknown, and a page already on the board opens it instead. The panel's
-  and the card's counts are re-read after every burst of saves. A failed template save is in the
-  same "Not saved" notice, and its Try again sends the template too. Search matches are lit and
-  named ("matches your search").
+  page, one card: the card's id is derived from the page id (`cardIdFor`), so a second tab sends
+  the same id and the idempotent create returns the card already there; the button waits while a
+  send is in flight or the board is unknown, and a page already on the board opens it instead.
+  The panel's counts are re-read after every burst of saves, and the board too while it holds the
+  page's card. A failed template save is in the same "Not saved" notice, and its Try again sends
+  the template too; choosing the saved template back clears it; a 404 is the page-gone bar.
+  Search matches are lit and named ("matches your search"), the exchange included; the title's
+  words after "Dive in: " carry the paper's voice.
 - Performance: items are memoised and their callbacks stable, stroke outlines are cached per stroke
   object, and a drag restyles one element; a 200-item, 500-stroke page drags at the frame rate.
 

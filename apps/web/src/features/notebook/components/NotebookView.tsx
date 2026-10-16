@@ -77,7 +77,7 @@ export function NotebookView({ paperId, pageId }: NotebookViewProps): ReactNode 
   const scale = usePageScale(desk);
   const router = useRouter();
   const [matches, setMatches] = useState<ReadonlySet<string>>(NO_MATCHES);
-  const [sent, setSent] = useState<Exclude<SendResult, 'already'> | null>(null);
+  const [sent, setSent] = useState<SendResult | null>(null);
   const [dismissed, setDismissed] = useState<string | null>(null);
   const items = model.step?.state.items ?? [];
 
@@ -114,7 +114,6 @@ export function NotebookView({ paperId, pageId }: NotebookViewProps): ReactNode 
       return;
     }
     void board.send().then((result) => {
-      if (result === 'already') return;
       setSent(result);
       setDismissed(null);
     });
@@ -124,6 +123,7 @@ export function NotebookView({ paperId, pageId }: NotebookViewProps): ReactNode 
   const saving: SaveStatus = {
     ...model.save,
     conflict: model.save.conflict || template.save.conflict,
+    pageGone: model.save.pageGone || template.save.pageGone,
     failed: model.save.failed + (template.save.failed ? 1 : 0),
     failure: model.save.failure + template.save.failure,
   };

@@ -3,22 +3,25 @@
 /**
  * useBoardCard — the notebook page's card on the paper's board (S5c, #208, S6a's `notebook` kind).
  * Reads the board to find the card that points at this page; "Send page to board" creates it
- * through the board API. One page gets one card: the card's `node_id` is minted once per page
- * (the create is idempotent on it), a send already in flight is not sent again, nothing is sent
- * while the board is unknown, and a page already on the board is not sent at all. The card holds
- * the page id, never a copy of the page; its counts are the server's, computed on read.
+ * through the board API. One page gets one card: the card's `node_id` is DERIVED from the page id
+ * (`cardIdFor`), so a second tab, or a tab whose board is out of date, sends the same id and the
+ * idempotent create answers with the card already there; a send in flight is not sent again,
+ * nothing is sent while the board is unknown, and a page already on the board is not sent at all.
+ * The card holds the page id, never a copy of the page; its counts are the server's, computed on
+ * read.
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { boardsApi } from '@/lib/api/boards';
 
 import { newClientId } from '../api/notebookApi';
 
+import type { BoardView } from '@/lib/api/boards';
 import type { CanvasNode } from '@/lib/api/types';
 
-/** How a send went: `already` when the page was on the board before. */
-export type SendResult = 'sent' | 'already' | 'failed';
+/** How a send went. */
+export type SendResult = 'sent' | 'failed';
 
 /** What `useBoardCard` returns. */
 export interface BoardCard {
@@ -45,6 +48,38 @@ export function boardKey(paperId: string): readonly ['board', string] {
 }
 
 /**
+ * The page's card on a board as read.
+ *
+ * @param board - The board, undefined while it is unknown.
+ * @param pageId - The page.
+ * @returns The card; null when the page is not on the board; undefined while the board is unknown.
+ */
+export function cardOn(
+  board: BoardView | undefined,
+  pageId: string,
+): CanvasNode | null | undefined {
+  if (board === undefined) return undefined;
+  return board.nodes.find((n) => n.kind === 'notebook' && n.source_page_id === pageId) ?? null;
+}
+
+/** The API's client-id shape (contracts.md §0). */
+const CLIENT_ID = /^[a-z]{2,4}_[0-9A-Za-z-]{8,64}$/;
+
+/**
+ * The `node_id` of a page's card: `cn_` and the page id's own suffix. Page ids are global keys, so
+ * this one is too, and every tab mints the same one for the same page.
+ *
+ * @param pageId - The notebook page, e.g. `np_01J…`.
+ * @returns The card id, or a fresh one when the page id does not have the client-id shape.
+ * @example
+ * cardIdFor('np_G9AYN750E5MG1NRBMGSQJ4N5JM'); // 'cn_G9AYN750E5MG1NRBMGSQJ4N5JM'
+ */
+export function cardIdFor(pageId: string): string {
+  const derived = `cn_${pageId.slice(pageId.indexOf('_') + 1)}`;
+  return CLIENT_ID.test(derived) ? derived : newClientId('cn');
+}
+
+/**
  * The page's board card and the send action.
  *
  * @param paperId - The paper whose board it is.
@@ -55,14 +90,10 @@ export function boardKey(paperId: string): readonly ['board', string] {
 export function useBoardCard(paperId: string, pageId: string, title: string): BoardCard {
   const client = useQueryClient();
   const board = useQuery({ queryKey: boardKey(paperId), queryFn: () => boardsApi.get(paperId) });
-  const nodeId = useMemo(() => newClientId('cn'), []);
+  const nodeId = useRef(cardIdFor(pageId)).current;
   const flight = useRef<Promise<SendResult> | null>(null);
   const [sending, setSending] = useState(false);
-  const card =
-    board.data === undefined
-      ? undefined
-      : (board.data.nodes.find((n) => n.kind === 'notebook' && n.source_page_id === pageId) ??
-        null);
+  const card = cardOn(board.data, pageId);
 
   const create = async (): Promise<SendResult> => {
     const nodes = board.data?.nodes ?? [];
@@ -85,9 +116,10 @@ export function useBoardCard(paperId: string, pageId: string, title: string): Bo
     }
   };
 
+  // The view opens the board for a page already on it, so this runs only while the card is null.
   const send = (): Promise<SendResult> => {
-    if (card !== null && card !== undefined) return Promise.resolve('already');
     if (card === undefined) return Promise.resolve('failed');
+    if (card !== null) return Promise.resolve('sent');
     if (flight.current === null) {
       setSending(true);
       flight.current = create().finally(() => {

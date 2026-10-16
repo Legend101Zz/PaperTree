@@ -2,7 +2,9 @@
  * s5c-notebook-panel.spec — the notebook's side panel and page actions (#208, part 2): the template
  * switch saves with the page's version, the counts are the server's, Send page to board creates the
  * `notebook` card and offers Open board, shapes are created, moved, resized and deleted by
- * keyboard, and search lights its matches on the page. `fetch` plays the API.
+ * keyboard, and search lights its matches on the page. Two tabs send one card; the board is re-read
+ * only while the page has a card; the template's failure clears when its choice goes back; the
+ * title and a lit exchange keep their voice and say their match. `fetch` plays the API.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -10,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NotebookView } from '@/features/notebook';
 import { citationsPhrase } from '@/features/notebook/components/NotebookPanel';
+import { cardIdFor } from '@/features/notebook/hooks/useBoardCard';
 
 import { PAGE, PAPER, pageView, stubApi, wireItem } from './s5c-notebook-fixtures';
 
@@ -28,13 +31,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function mount(): void {
+function mount(): HTMLElement {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
+  return render(
     <QueryClientProvider client={client}>
       <NotebookView paperId={PAPER} pageId={PAGE} />
     </QueryClientProvider>,
-  );
+  ).container;
 }
 
 const writes = (calls: Call[]): Call[] => calls.filter((c) => c.method !== 'GET');
@@ -249,8 +252,106 @@ describe('the Shapes menu', () => {
 });
 
 describe('the counts’ words', () => {
-  it('says "1 citation", and counts passages from the answer, not from the cards', () => {
+  it('says "1 citation", and counts passages from the answer, not from the cards', async () => {
     expect(citationsPhrase(1)).toBe('1 citation');
     expect(citationsPhrase(11)).toBe('11 citations');
+    // Two quote cards deleted: the answer still stands on its four passages.
+    const view = pageView();
+    stubApi({ ...view, items: view.items.filter((i) => !/^ni_quote000[12]$/.test(i.item_id)) });
+    mount();
+    await waitFor(() => expect(count('Passages it stands on')).toBe('4'));
+    expect(document.querySelectorAll('.pt-nb-quote')).toHaveLength(2);
+  });
+});
+
+describe('one card per page, across tabs', () => {
+  it('derives the card id from the page id, and keeps the client-id shape', () => {
+    expect(cardIdFor('np_G9AYN750E5MG1NRBMGSQJ4N5JM')).toBe('cn_G9AYN750E5MG1NRBMGSQJ4N5JM');
+    expect(cardIdFor('np_shot00001')).toBe('cn_shot00001');
+    // Not the shape (too short): a fresh id, so the API never refuses the send for its id.
+    expect(cardIdFor('np_x')).toMatch(/^cn_[0-9a-f-]{36}$/);
+  });
+
+  it('a second tab that has not seen the card sends the same id and gets the one card', async () => {
+    const calls = stubApi(pageView());
+    const first = mount();
+    const second = mount();
+    await within(second).findByText(/not on the board yet/);
+    fireEvent.click(within(first).getAllByRole('button', { name: 'Send page to board' })[0]!);
+    await within(first).findByText('The page is on the board now, as one card.');
+    // The second tab's board is out of date; its send goes out and comes back with the first card.
+    within(second).getByText(/not on the board yet/);
+    fireEvent.click(within(second).getAllByRole('button', { name: 'Send page to board' })[0]!);
+    await within(second).findByText('4 quotes');
+    const posts = writes(calls).filter((c) => c.path === `/papers/${PAPER}/board/nodes`);
+    expect(posts.map((c) => c.body?.['node_id'])).toEqual([cardIdFor(PAGE), cardIdFor(PAGE)]);
+  });
+
+  it('re-reads the board after an edit only while the page has a card on it', async () => {
+    const calls = stubApi(pageView([STICKY]));
+    mount();
+    const sticky = await screen.findByRole('button', { name: 'Sticky note: word order?' });
+    await screen.findByText(/not on the board yet/);
+    const boardReads = (): number =>
+      calls.filter((c) => c.method === 'GET' && c.path === `/papers/${PAPER}/board`).length;
+    const before = boardReads();
+    fireEvent.keyDown(sticky, { key: 'ArrowLeft' });
+    await waitFor(() =>
+      expect(calls.filter((c) => c.method === 'PATCH').length).toBeGreaterThan(0),
+    );
+    await settle();
+    expect(boardReads()).toBe(before);
+    fireEvent.click(headerSend());
+    await screen.findByText('The page is on the board now, as one card.');
+    const sent = boardReads();
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Sticky note: word order?' }), {
+      key: 'ArrowLeft',
+    });
+    await waitFor(() => expect(boardReads()).toBe(sent + 1));
+  });
+});
+
+describe('the template’s saving, at the edges', () => {
+  const failing = (status: number, code: string) => (c: Call) =>
+    c.method === 'PATCH' && c.path === `/notebook/pages/${PAGE}`
+      ? new Response(JSON.stringify({ detail: code, code, retryable: false }), { status })
+      : null;
+
+  it('choosing the saved template back clears a failure, and Try again then sends nothing', async () => {
+    const calls = stubApi(pageView(), failing(503, 'agent_unavailable'));
+    mount();
+    fireEvent.click(await screen.findByRole('radio', { name: 'Lined' }));
+    await screen.findByText(/Not saved yet: 1 edit could not be sent/);
+    fireEvent.click(screen.getByRole('radio', { name: /Dot grid/ }));
+    await waitFor(() => expect(screen.queryByText(/Not saved/)).toBeNull());
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    expect(writes(calls).filter((c) => c.path === `/notebook/pages/${PAGE}`)).toHaveLength(1);
+  });
+
+  it('a template save on a page deleted elsewhere is the page-gone bar', async () => {
+    stubApi(pageView(), failing(404, 'not_found'));
+    mount();
+    fireEvent.click(await screen.findByRole('radio', { name: 'Lined' }));
+    const bar = await screen.findByRole('alert');
+    expect(bar.textContent).toContain('This page was deleted somewhere else');
+  });
+});
+
+describe('voices and search, said', () => {
+  it('the title is the paper’s words after Dive in’s lead-in; a lit exchange says it matched', async () => {
+    stubApi(pageView());
+    mount();
+    const title = await screen.findByRole('heading', { level: 1 });
+    expect(title.textContent).toBe('Dive in: the Transformer’s central proposal');
+    expect(title.querySelector('[data-voice="paper"]')?.textContent).toBe(
+      'the Transformer’s central proposal',
+    );
+    expect(
+      screen.getByRole('region', { name: 'The exchange this page started from' }),
+    ).toBeTruthy();
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Transformer' } });
+    await screen.findByRole('region', {
+      name: 'The exchange this page started from (matches your search)',
+    });
   });
 });

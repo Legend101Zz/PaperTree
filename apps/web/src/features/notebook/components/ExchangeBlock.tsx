@@ -26,6 +26,8 @@ export interface ExchangeBlockProps {
   readonly exchange: Exchange;
   /** Scroll the paper to an Anchor and flash it. */
   readonly onFocusAnchor: (anchor: Anchor) => void;
+  /** True when the notebook search matched it: lit on screen, and said. */
+  readonly matched?: boolean;
 }
 
 function Margin({ numbers, exchange }: { numbers: number[]; exchange: Exchange }): ReactNode {
@@ -50,6 +52,7 @@ export const ExchangeBlock = memo(function ExchangeBlock({
   body,
   exchange,
   onFocusAnchor,
+  matched = false,
 }: ExchangeBlockProps): ReactNode {
   const [open, setOpen] = useState(false);
   const { answer, question, layout } = exchange;
@@ -83,7 +86,10 @@ export const ExchangeBlock = memo(function ExchangeBlock({
       ? 'Its citations could not be read; the passages it stood on are the cards below.'
       : usageLine(answer?.run ?? null);
   return (
-    <section className="pt-nb-exchange" aria-label="The exchange this page started from">
+    <section
+      className="pt-nb-exchange"
+      aria-label={`The exchange this page started from${matched ? ' (matches your search)' : ''}`}
+    >
       <CallSlip
         ask={body.call.text}
         time={asked === null ? '' : `${asked.day} · ${asked.time}`}

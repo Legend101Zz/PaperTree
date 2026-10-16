@@ -288,9 +288,7 @@ export function stubApi(
       }
       if (method === 'GET' && path.startsWith(`/papers/${PAPER}/notebook/search?`)) {
         const q = new URLSearchParams(path.split('?')[1]).get('q') ?? '';
-        const hits = [...server.values()].filter(
-          (i) => i.kind !== 'exchange' && i.body.includes(q),
-        );
+        const hits = [...server.values()].filter((i) => i.body.includes(q));
         return json(
           200,
           hits.map((i) => ({
@@ -310,6 +308,9 @@ export function stubApi(
         return json(200, page);
       }
       if (method === 'POST' && path === `/papers/${PAPER}/board/nodes`) {
+        // Idempotent on node_id, as the server is: a retried or second send gets the stored card.
+        const stored = board.nodes.find((n) => n['node_id'] === body?.['node_id']);
+        if (stored !== undefined) return json(201, { board: { board_id: 'brd_1' }, node: stored });
         const node = { ...body, board_id: 'brd_1', counts, version: 1 };
         board = { ...board, nodes: [...board.nodes, node] };
         return json(201, { board: { board_id: 'brd_1' }, node });

@@ -3,11 +3,14 @@
 /**
  * usePageTemplate — the page's paper, switched from the side panel and saved with the page's
  * `version` (S5c, #208). Saves run one at a time and send the latest choice, so arrowing through
- * the five templates is never a race on `version`; a 409 is a conflict and is never retried. A
- * failure stays failed until a save succeeds, counts in the page's "Not saved" notice, and is sent
- * again by that notice's Try again (`retry`).
+ * the five templates is never a race on `version`; a 409 is a conflict and a 404 a page deleted
+ * elsewhere, and neither is retried. A failure stays failed until a save succeeds or the choice
+ * goes back to the saved template, counts in the page's "Not saved" notice, and is sent again by
+ * that notice's Try again (`retry`).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+
+import { ApiError } from '@/lib/api/types';
 
 import { isStaleVersion, notebookApi } from '../api/notebookApi';
 
@@ -17,6 +20,8 @@ import type { PageTemplate } from '../model/page';
 /** Where the template's saving stands, in the same terms as the items' `SaveStatus`. */
 export interface TemplateSave {
   readonly conflict: boolean;
+  /** True when the page was deleted somewhere else (the PATCH was a 404). */
+  readonly pageGone: boolean;
   /** True while the latest choice failed to save. */
   readonly failed: boolean;
   /** Bumped by every failure, so a dismissed notice comes back for the next one. */
@@ -43,7 +48,12 @@ export interface PageTemplateModel {
  */
 export function usePageTemplate(page: NotebookPageWire | null): PageTemplateModel {
   const [template, setTemplate] = useState<PageTemplate | null>(null);
-  const [save, setSave] = useState<TemplateSave>({ conflict: false, failed: false, failure: 0 });
+  const [save, setSave] = useState<TemplateSave>({
+    conflict: false,
+    pageGone: false,
+    failed: false,
+    failure: 0,
+  });
   const version = useRef<number | null>(null);
   const saved = useRef<PageTemplate | null>(null);
   const wanted = useRef<PageTemplate | null>(null);
@@ -61,7 +71,12 @@ export function usePageTemplate(page: NotebookPageWire | null): PageTemplateMode
 
   const push = useCallback(async (id: string): Promise<void> => {
     const target = wanted.current;
-    if (stopped.current || target === null || target === saved.current) return;
+    if (stopped.current || target === null) return;
+    if (target === saved.current) {
+      // Back to what the server has: nothing is owed, so an earlier failure is over too.
+      setSave((s) => (s.failed ? { ...s, failed: false } : s));
+      return;
+    }
     try {
       const next = await notebookApi.patchPage(id, {
         version: version.current ?? 0,
@@ -74,6 +89,9 @@ export function usePageTemplate(page: NotebookPageWire | null): PageTemplateMode
       if (isStaleVersion(error)) {
         stopped.current = true;
         setSave((s) => ({ ...s, conflict: true }));
+      } else if (error instanceof ApiError && error.status === 404) {
+        stopped.current = true;
+        setSave((s) => ({ ...s, pageGone: true, failed: false }));
       } else {
         setSave((s) => ({ ...s, failed: true, failure: s.failure + 1 }));
       }
