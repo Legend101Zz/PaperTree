@@ -268,7 +268,7 @@ describe('the title block', () => {
     expect(tableIds(screen.getByRole('table', { name: 'Papers' }))).toHaveLength(4);
   });
 
-  it('Arrange by Year regroups the shelf; the other views say they are coming', async () => {
+  it('Arrange by Year regroups the shelf; every view is live', async () => {
     // Thirteen papers: past the face-out threshold (#196), so the shelf has its labelled rows.
     // The nine added are corpus papers, dated 2015 here so the row counts are easy to read.
     const more = corpusRows(13)
@@ -288,13 +288,9 @@ describe('the title block', () => {
       '2022, 1 paper',
       'Year unknown, 1 paper',
     ]);
-    const map = screen.getByRole('button', { name: 'Map' });
-    expect(map.getAttribute('aria-disabled')).toBe('true');
-    expect(map.getAttribute('aria-describedby')).toBeTruthy();
-    expect(document.getElementById(map.getAttribute('aria-describedby') ?? '')?.textContent).toBe(
-      'Coming in this release',
-    );
-    for (const live of ['Topics', 'Table']) {
+    // Every view is live since #198; nothing says "Coming in this release" any more.
+    expect(screen.queryByText('Coming in this release')).toBeNull();
+    for (const live of ['Shelf', 'Topics', 'Map', 'Table']) {
       expect(screen.getByRole('button', { name: live }).getAttribute('aria-disabled')).toBeNull();
     }
   });

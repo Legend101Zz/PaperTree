@@ -1,8 +1,8 @@
 /**
  * LibraryTitle: "Your library" with its stats line and the one alert, "N need a look" (#195,
  * frame 01), then the view tabs and, for the shelf, Arrange by (the Table puts its Columns menu
- * there instead, frame 01d; Topics puts New topic, #198). Shelf, Topics and Table are live; Map is
- * shown, disabled, and says "Coming in this release" (S2g's second half).
+ * there instead, frame 01d; Topics puts New topic, #198). All four views are live (#198 made Topics
+ * and Map so).
  */
 'use client';
 
@@ -19,7 +19,7 @@ import { statsLine } from '../model/states';
 import type { ReactNode } from 'react';
 
 /** The library's views that exist so far. */
-export type LibraryViewName = 'shelf' | 'topics' | 'table';
+export type LibraryViewName = 'shelf' | 'topics' | 'map' | 'table';
 
 /** Props for `LibraryTitle`. */
 export interface LibraryTitleProps {
@@ -46,8 +46,6 @@ const VIEWS = [
   { id: 'table', label: 'Table', icon: <Table2 size={20} strokeWidth={1.5} /> },
 ] as const;
 
-const isLive = (id: string): id is LibraryViewName => id !== 'map';
-
 /**
  * The title block and the view row.
  *
@@ -65,7 +63,6 @@ export function LibraryTitle({
   arrangement,
   onArrange,
 }: LibraryTitleProps): ReactNode {
-  const soonId = useId();
   const arrangeId = useId();
   const touch = useTouchTargets();
   const size = touch ? 'touch' : 'md';
@@ -105,35 +102,18 @@ export function LibraryTitle({
       </div>
       <div className="pt-libviews">
         <div role="group" aria-label="View" className="pt-libviews__tabs">
-          {VIEWS.map((tab) =>
-            isLive(tab.id) ? (
-              <ToolbarButton
-                key={tab.id}
-                size={size}
-                className={target}
-                label={tab.label}
-                icon={tab.icon}
-                pressed={view === tab.id}
-                data-view={tab.id}
-                onClick={() => onView(tab.id as LibraryViewName)}
-              />
-            ) : (
-              <ToolbarButton
-                key={tab.id}
-                size={size}
-                className={target}
-                label={tab.label}
-                icon={tab.icon}
-                pressed={false}
-                disabled
-                title="Coming in this release"
-                aria-describedby={soonId}
-              />
-            ),
-          )}
-          <span id={soonId} className="pt-sr-only">
-            Coming in this release
-          </span>
+          {VIEWS.map((tab) => (
+            <ToolbarButton
+              key={tab.id}
+              size={size}
+              className={target}
+              label={tab.label}
+              icon={tab.icon}
+              pressed={view === tab.id}
+              data-view={tab.id}
+              onClick={() => onView(tab.id)}
+            />
+          ))}
         </div>
         {/* Nothing to arrange on an empty shelf (01b keeps the view tabs, not Arrange by). */}
         {stats !== null && stats.papers === 0 ? null : view !== 'shelf' ? (
