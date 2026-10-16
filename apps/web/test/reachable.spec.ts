@@ -270,7 +270,8 @@ describe('reader/reachable.spec — nothing ships that no route can reach', () =
       // #195: the card grid and the list view went; the shelf replaced both.
       ['features/library/components/Shelf.tsx', '#195'],
       ['features/library/components/CatalogueCard.tsx', '#195'],
-      ['components/library/UploadDropzone.tsx', '#59'],
+      ['features/library/components/UploadRow.tsx', '#195'],
+      ['features/library/components/AddPapers.tsx', '#195'],
       ['components/library/SystemStates.tsx', '#59'],
     ] as const) {
       expect(reachable.has(join(SRC, file)), `${file} is unreachable again — see ${issue}`).toBe(

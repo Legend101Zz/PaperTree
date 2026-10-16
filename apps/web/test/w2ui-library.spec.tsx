@@ -8,13 +8,15 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SESSION_RETRY_DELAYS_MS, SessionBanner } from '@/components/auth/SessionBanner';
-import { CANCEL_COPY, UploadDropzone } from '@/components/library/UploadDropzone';
 import { LibraryView } from '@/features/library';
+import { CANCEL_COPY } from '@/features/library/hooks/useUploadQueue';
 import { NetworkError } from '@/lib/api/client';
 import { authApi } from '@/lib/api/papers';
 import type { LibraryPaper } from '@/lib/api/types';
 import { setToken } from '@/lib/auth';
 import { useAuthStore } from '@/store/authStore';
+
+import { UploadHarness } from './library-cases';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
@@ -187,7 +189,7 @@ describe('the transient upload row (item 3)', () => {
       paper: row({ paper_id: 'ppr_NEW' }),
     });
     renderLibrary();
-    await screen.findByText('My papers');
+    await screen.findByRole('heading', { name: 'Your library' });
     api.list.mockResolvedValue([row({ paper_id: 'ppr_NEW', processing: 'failed' })]);
     pick(pdf());
     await screen.findByRole('button', { name: /^garbage,/ });
@@ -218,7 +220,7 @@ describe('cancelling an upload (item 4)', () => {
     ['unknown', CANCEL_COPY.unknown],
   ] as const)('the row says the truth when the re-read finds: %s', async (outcome, sentence) => {
     const onCancelled = vi.fn().mockResolvedValue(outcome);
-    render(<UploadDropzone onUpload={neverEnding()} onCancelled={onCancelled} />);
+    render(<UploadHarness onUpload={neverEnding()} onCancelled={onCancelled} />);
     pick(pdf('paper.pdf'));
     await screen.findByRole('button', { name: /Cancel/ });
     cancel();
@@ -231,7 +233,7 @@ describe('cancelling an upload (item 4)', () => {
 
   it('a failing re-read is "unknown", never "nothing was added"', async () => {
     const onCancelled = vi.fn().mockRejectedValue(new Error('offline'));
-    render(<UploadDropzone onUpload={neverEnding()} onCancelled={onCancelled} />);
+    render(<UploadHarness onUpload={neverEnding()} onCancelled={onCancelled} />);
     pick(pdf());
     await screen.findByRole('button', { name: /Cancel/ });
     cancel();
@@ -249,7 +251,7 @@ describe('cancelling an upload (item 4)', () => {
         }),
     );
     renderLibrary();
-    await screen.findByText('My papers');
+    await screen.findByRole('heading', { name: 'Your library' });
     pick(pdf('late.pdf'));
     await screen.findByRole('button', { name: /Cancel/ });
     // The server had the whole body before the abort landed: the paper is in the list now.
@@ -278,7 +280,7 @@ describe('cancelling an upload (item 4)', () => {
         }),
     );
     renderLibrary();
-    await screen.findByText('My papers');
+    await screen.findByRole('heading', { name: 'Your library' });
     pick(pdf('never.pdf'));
     await screen.findByRole('button', { name: /Cancel/ });
     cancel();

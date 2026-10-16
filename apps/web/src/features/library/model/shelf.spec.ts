@@ -12,7 +12,10 @@ import {
   clothFor,
   clothTakesLabel,
   foldForSearch,
+  libraryStats,
   matchPapers,
+  needsALook,
+  placeCard,
   readingPage,
   shelfStep,
   spineHeight,
@@ -311,5 +314,46 @@ describe('shelf keyboard', () => {
     expect(shelfStep(0, 'End', 3)).toBe(2);
     expect(shelfStep(1, 'Enter', 3)).toBeNull();
     expect(shelfStep(0, 'ArrowRight', 0)).toBeNull();
+  });
+});
+
+describe('stats and need a look', () => {
+  it('counts papers, topics, reading now, known pages and the papers that need a look', () => {
+    const papers = [
+      paper({ id: 'a', pageCount: 15, reading: reading() }),
+      paper({ id: 'b', pageCount: 0, processing: 'pending' }),
+      paper({ id: 'c', pageCount: 29, processing: 'failed' }),
+      paper({
+        id: 'd',
+        pageCount: 12,
+        processing: 'partial',
+        topic: { id: 't', name: 'T', cloth: null },
+      }),
+      paper({ id: 'e', pageCount: 26, processing: 'parsing', reading: reading() }),
+    ];
+    expect(libraryStats(papers)).toEqual({
+      papers: 5,
+      topics: 1,
+      readingNow: 1,
+      pages: 82,
+      needALook: 3,
+    });
+    expect(needsALook(paper({ id: 'x', processing: 'partial' }))).toBe(false);
+    expect(libraryStats([])).toEqual({
+      papers: 0,
+      topics: 0,
+      readingNow: 0,
+      pages: 0,
+      needALook: 0,
+    });
+  });
+});
+
+describe('catalogue card placement', () => {
+  it('points at the spine and stays inside the band', () => {
+    expect(placeCard(123, 1280, 480)).toEqual({ left: 81, pointer: 42 });
+    expect(placeCard(20, 1280, 480)).toEqual({ left: 0, pointer: 20 });
+    expect(placeCard(1270, 1280, 480)).toEqual({ left: 800, pointer: 468 });
+    expect(placeCard(200, 358, 480)).toEqual({ left: 0, pointer: 200 });
   });
 });

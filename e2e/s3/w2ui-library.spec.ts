@@ -48,8 +48,8 @@ test('a garbage upload leaves ONE failed card, one sentence, no lingering upload
       const page = await context.newPage();
       await tokenInit(page, token);
       await page.goto('/dashboard');
-      await expect(page.getByRole('heading', { name: 'My papers' })).toBeVisible();
-      await page.locator('[data-upload-dropzone] input[type=file]').setInputFiles(GARBAGE);
+      await expect(page.getByRole('heading', { name: 'Your library' })).toBeVisible();
+      await page.locator('[data-add-papers] input[type=file]').setInputFiles(GARBAGE);
       // #195: the paper is a spine on the shelf, and its catalogue card (a click on the spine)
       // holds the reason and Retry. The assertions are the card grid's, on the spine and card.
       const spine = page.locator('button[data-paper-id^="ppr_"]').first();
@@ -96,8 +96,8 @@ test('Cancel after the server had the whole body says it is in the library', asy
     await route.fulfill({ response: real }).catch(() => undefined);
   });
   await page.goto('/dashboard');
-  await expect(page.getByRole('heading', { name: 'My papers' })).toBeVisible();
-  await page.locator('[data-upload-dropzone] input[type=file]').setInputFiles(GARBAGE);
+  await expect(page.getByRole('heading', { name: 'Your library' })).toBeVisible();
+  await page.locator('[data-add-papers] input[type=file]').setInputFiles(GARBAGE);
   const cancel = page.getByRole('button', { name: /Cancel/ });
   await expect(cancel).toBeVisible();
   await page.waitForTimeout(1500);

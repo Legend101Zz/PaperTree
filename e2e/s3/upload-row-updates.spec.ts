@@ -60,7 +60,7 @@ test.describe('S3 upload row', () => {
     await page.getByLabel('Confirm password').fill('e2e-password-1');
     await page.getByRole('button', { name: 'Create account' }).click();
     await page.waitForURL('**/dashboard');
-    await expect(page.getByRole('heading', { name: 'My papers' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Your library' })).toBeVisible();
 
     // A marker that a full page load would erase: proves "no reload".
     await page.evaluate(() => {
@@ -70,7 +70,7 @@ test.describe('S3 upload row', () => {
     const posted = page.waitForResponse(
       (r) => r.url() === `${stack.apiUrl}/papers` && r.request().method() === 'POST',
     );
-    await page.locator('[data-upload-dropzone] input[type=file]').setInputFiles(PDF);
+    await page.locator('[data-add-papers] input[type=file]').setInputFiles(PDF);
     const accepted = await posted;
     expect(accepted.status()).toBe(202);
     const uploaded = ((await accepted.json()) as { paper: { paper_id: string } }).paper.paper_id;

@@ -381,3 +381,67 @@ export function shelfStep(current: number, key: string, count: number): number |
   if (key === 'End') return count - 1;
   return null;
 }
+
+/**
+ * Papers that need a look: queued, being read or could not be read (the header's "2 need a look").
+ * A partly read paper is readable, so it does not count (owner may change).
+ *
+ * @param paper - The paper.
+ * @returns True when the paper needs a look.
+ */
+export function needsALook(paper: ShelfPaper): boolean {
+  return (
+    paper.processing === 'pending' ||
+    paper.processing === 'parsing' ||
+    paper.processing === 'failed'
+  );
+}
+
+/** The library's stats line, computed from the papers. */
+export interface LibraryStats {
+  readonly papers: number;
+  /** Distinct accepted topics. */
+  readonly topics: number;
+  readonly readingNow: number;
+  /** Pages of the papers whose count is known. */
+  readonly pages: number;
+  readonly needALook: number;
+}
+
+/**
+ * The numbers for "24 papers · 6 topics · 3 reading now · 484 pages" and "2 need a look".
+ *
+ * @param papers - Every paper.
+ * @returns The counts.
+ */
+export function libraryStats(papers: readonly ShelfPaper[]): LibraryStats {
+  const topics = new Set(papers.flatMap((p) => (p.topic ? [p.topic.id] : [])));
+  return {
+    papers: papers.length,
+    topics: topics.size,
+    readingNow: papers.filter((p) => spineState(p) === 'reading').length,
+    pages: papers.reduce((sum, p) => sum + (p.pageCount > 0 ? p.pageCount : 0), 0),
+    needALook: papers.filter(needsALook).length,
+  };
+}
+
+/**
+ * Where the catalogue card goes in the band above the shelf: its left edge in band coordinates,
+ * kept inside the band, and its pointer's offset from that edge, so it points at the spine.
+ *
+ * @param spineCenter - The open spine's centre, in px from the band's left edge.
+ * @param bandWidth - The band's width.
+ * @param cardWidth - The card's width (at most the band's).
+ * @returns The card's left edge and the pointer's offset inside the card.
+ */
+export function placeCard(
+  spineCenter: number,
+  bandWidth: number,
+  cardWidth: number,
+): { readonly left: number; readonly pointer: number } {
+  const width = Math.min(cardWidth, bandWidth);
+  // Frame 01: the pointer sits 42 px in from the card's left edge when there is room.
+  const left = Math.max(0, Math.min(spineCenter - 42, bandWidth - width));
+  const pointer = Math.max(12, Math.min(spineCenter - left, width - 12));
+  return { left, pointer };
+}

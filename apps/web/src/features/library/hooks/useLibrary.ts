@@ -12,8 +12,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isNonTerminal, libraryPaperFromWire, visibleSamples } from '@/components/library/types';
 import { papersApi } from '@/lib/api/papers';
 
+import type { CancelOutcome, UploadContext } from './useUploadQueue';
 import type { LibraryPaper } from '@/components/library/types';
-import type { CancelOutcome, UploadContext } from '@/components/library/UploadDropzone';
 import type { LibraryPaper as ApiLibraryPaper } from '@/lib/api/types';
 
 /** How often a library with unfinished papers asks again. */

@@ -27,6 +27,8 @@ export interface ShelfProps {
   readonly cardId: string;
   /** A spine was clicked or Entered. */
   readonly onActivate: (paperId: string) => void;
+  /** Esc on the shelf while a card is open: put the book back. */
+  readonly onPutBack?: () => void;
 }
 
 /**
@@ -43,6 +45,7 @@ export function Shelf({
   openId,
   cardId,
   onActivate,
+  onPutBack,
 }: ShelfProps): ReactNode {
   const toolbar = useRef<HTMLDivElement>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
@@ -57,6 +60,11 @@ export function Shelf({
 
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === 'Escape' && openId !== null && onPutBack !== undefined) {
+        event.preventDefault();
+        onPutBack();
+        return;
+      }
       const next = shelfStep(stop === null ? 0 : order.indexOf(stop), event.key, order.length);
       const id = next === null ? undefined : order[next];
       if (id === undefined) return;
@@ -64,7 +72,7 @@ export function Shelf({
       setFocusedId(id);
       toolbar.current?.querySelector<HTMLElement>(`[data-paper-id="${CSS.escape(id)}"]`)?.focus();
     },
-    [order, stop],
+    [order, stop, openId, onPutBack],
   );
 
   return (

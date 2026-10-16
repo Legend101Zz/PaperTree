@@ -13,9 +13,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LibraryView, POLL_INTERVAL_MS, pollInterval } from '@/features/library';
-import { UploadDropzone } from '@/components/library/UploadDropzone';
 import { ApiError, type LibraryPaper } from '@/lib/api/types';
 import { NetworkError } from '@/lib/api/client';
+
+import { UploadHarness } from './library-cases';
 
 const push = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -257,6 +258,7 @@ describe("#137: nothing in the library is not the user's", () => {
     api.list.mockResolvedValue([]);
     renderLibrary();
     await screen.findByRole('heading', { name: 'Add your first paper' });
+    expect(screen.getByRole('heading', { name: 'Your library' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Upload a PDF/ })).toBeTruthy();
     expect(document.body.textContent).not.toMatch(
       /Attention Is All You Need|Deep Residual|Neural Ordinary/,
@@ -310,7 +312,9 @@ describe('polling', () => {
   });
 });
 
-describe('UploadDropzone', () => {
+// #195: the queue moved out of UploadDropzone into useUploadQueue, behind Add papers and the
+// upload row under the header; the same behaviours are asserted on that path.
+describe('the upload queue (Add papers and the upload row)', () => {
   const pdf = () => new File(['%PDF-1.4 x'], 'paper.pdf', { type: 'application/pdf' });
 
   function pick(file: File) {
@@ -330,7 +334,7 @@ describe('UploadDropzone', () => {
     );
     render(
       <StrictMode>
-        <UploadDropzone onUpload={onUpload} />
+        <UploadHarness onUpload={onUpload} />
       </StrictMode>,
     );
     pick(pdf());
@@ -359,7 +363,7 @@ describe('UploadDropzone', () => {
     );
     render(
       <StrictMode>
-        <UploadDropzone onUpload={onUpload} />
+        <UploadHarness onUpload={onUpload} />
       </StrictMode>,
     );
     pick(pdf());
@@ -383,7 +387,7 @@ describe('UploadDropzone', () => {
     const onUpload = vi.fn(async () => {
       throw new ApiError(status, 'internal', '{"detail":"raw"}', false);
     });
-    render(<UploadDropzone onUpload={onUpload} />);
+    render(<UploadHarness onUpload={onUpload} />);
     pick(pdf());
     await waitFor(() =>
       expect(document.querySelector('[data-upload-state]')?.getAttribute('data-upload-state')).toBe(
@@ -396,15 +400,19 @@ describe('UploadDropzone', () => {
 
   it('refuses a non-PDF before any bytes leave, with a sentence', () => {
     const onUpload = vi.fn();
-    render(<UploadDropzone onUpload={onUpload} />);
+    render(<UploadHarness onUpload={onUpload} />);
     pick(new File(['x'], 'notes.txt', { type: 'text/plain' }));
     expect(onUpload).not.toHaveBeenCalled();
     expect(document.body.textContent).toMatch(/notes\.txt is not a PDF/);
   });
 
-  it('the file input has an associated label', () => {
-    render(<UploadDropzone onUpload={vi.fn()} />);
-    const input = document.querySelector<HTMLInputElement>('input[type="file"]');
-    expect(input?.labels?.length).toBeGreaterThan(0);
+  it('Add papers is a named button that opens the file picker', () => {
+    render(<UploadHarness onUpload={vi.fn()} />);
+    const input = document.querySelector<HTMLInputElement>('[data-add-papers] input[type="file"]');
+    const opened = vi.fn();
+    input?.addEventListener('click', opened);
+    fireEvent.click(screen.getByRole('button', { name: 'Add papers' }));
+    expect(opened).toHaveBeenCalledTimes(1);
+    expect(input?.accept).toContain('application/pdf');
   });
 });
