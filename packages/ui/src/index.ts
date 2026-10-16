@@ -32,3 +32,4 @@ export * from './fixtureUri.js';
 // v0.2 interface components (#189)
 export * from './controls.js';
 export * from './toast.js';
+export * from './furniture.js';

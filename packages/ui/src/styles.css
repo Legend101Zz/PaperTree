@@ -3430,6 +3430,159 @@ span.pt-paper .pt-paper__cite {
   white-space: nowrap;
 }
 
+.pt-sprout {
+  flex: none;
+}
+
+/* Holder lighting: the brass frame's cast shadow and the card's recessed inset, both schemes. */
+:root {
+  --pt-holder-shadow-1: rgb(0 0 0 / 35%);
+  --pt-holder-shadow-2: rgb(0 0 0 / 25%);
+  --pt-holder-inset: rgb(60 40 20 / 25%);
+}
+
+/* The shelf label holder: a brass frame around a paper card that stays paper in both schemes. */
+.pt-holder {
+  display: inline-block;
+  box-sizing: border-box;
+  max-inline-size: 100%;
+  padding: 3px;
+  color: var(--pt-paper-label-ink);
+  cursor: default;
+  background: var(--pt-brass);
+  border: 0;
+  border-radius: 2px;
+  box-shadow:
+    0 1px 1px var(--pt-holder-shadow-1),
+    1px 2px 3px var(--pt-holder-shadow-2);
+}
+
+button.pt-holder {
+  cursor: pointer;
+}
+
+.pt-holder[aria-pressed='true'] .pt-holder__card {
+  box-shadow: inset 0 0 0 2px var(--pt-primary);
+}
+
+.pt-holder__card {
+  display: flex;
+  min-block-size: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 2px 12px;
+  background: var(--pt-paper-label);
+  box-shadow: inset 0 1px 2px var(--pt-holder-inset);
+}
+
+.pt-holder__name {
+  /* real small caps: the face is the SC cut, and the source text keeps its lowercase */
+  font-family: var(--pt-font-label);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: 0.05em;
+  text-align: center;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.pt-holder__count {
+  font-family: var(--pt-font-you);
+  font-size: 12px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.pt-readnow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 12px 8px 0;
+  font-family: var(--pt-font-ai);
+  color: var(--pt-ink);
+}
+
+.pt-readnow__ribbon {
+  align-self: flex-start;
+  inline-size: 10px;
+  block-size: 28px;
+  margin-inline-start: 12px;
+  background: var(--pt-ribbon);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%);
+}
+
+.pt-readnow__spine {
+  align-self: stretch;
+  inline-size: 6px;
+  border-radius: 1px;
+}
+
+.pt-readnow__text {
+  display: flex;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pt-readnow__title {
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--pt-font-display);
+  font-size: 18px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pt-readnow__rule {
+  position: relative;
+  block-size: 4px;
+  background: color-mix(in srgb, var(--pt-ink) 14%, var(--pt-page));
+  border-radius: 2px;
+}
+
+.pt-readnow__rule::before {
+  position: absolute;
+  inset: 0;
+  inline-size: var(--pt-readnow-fill, 0%);
+  content: '';
+  background: var(--pt-primary);
+  border-radius: 2px;
+}
+
+.pt-readnow__tick {
+  position: absolute;
+  inset-block: -3px;
+  inset-inline-start: var(--pt-readnow-fill, 0%);
+  inline-size: 2px;
+  background: var(--pt-ink);
+}
+
+.pt-readnow__page {
+  flex: none;
+  font-family: var(--pt-font-you);
+  font-size: 13px;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--pt-ink-2);
+}
+
+@media (max-width: 480px) {
+  .pt-readnow {
+    flex-wrap: wrap;
+  }
+
+  .pt-readnow__text {
+    flex-basis: 60%;
+  }
+}
+
+.pt-holder:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
 /* SegmentedControl restyle (no prop changes): the Source · Guided · Split switch, ink current. */
 .pt-segmented {
   padding: 0;
