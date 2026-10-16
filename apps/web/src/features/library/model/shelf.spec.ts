@@ -87,8 +87,11 @@ describe('spine height', () => {
       expect(spineHeight(id)).toBe(spineHeight(id));
       expect(spineHeight(id)).toBeGreaterThanOrEqual(262);
       expect(spineHeight(id)).toBeLessThanOrEqual(318);
+      // A library at scale stands shorter spines (01f, #196).
+      expect(spineHeight(id, true)).toBeGreaterThanOrEqual(150);
+      expect(spineHeight(id, true)).toBeLessThanOrEqual(179);
     }
-    expect(new Set(['a', 'b', 'c', 'd', 'e'].map(spineHeight)).size).toBeGreaterThan(1);
+    expect(new Set(['a', 'b', 'c', 'd', 'e'].map((id) => spineHeight(id))).size).toBeGreaterThan(1);
   });
 });
 

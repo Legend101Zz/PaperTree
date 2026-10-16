@@ -1,12 +1,14 @@
 /**
  * The library's states (#196): who is "reading now" (and that the stats line counts the same set),
- * the face-out threshold, how many covers stand on a plank, and the place Continue writes for the
+ * the face-out and at-scale thresholds, how many covers stand on a plank, what a sideways row shows
+ * ("28 of 36 shown", "+8 more"), the stats line at scale, and the place Continue writes for the
  * reader.
  */
 import { describe, expect, it } from 'vitest';
 
 import { libraryStats, type ShelfPaper } from './shelf';
 import {
+  AT_SCALE_MIN,
   FACE_OUT_MAX,
   READING_NOW_MAX,
   coverRows,
@@ -14,7 +16,9 @@ import {
   planContinue,
   readerPlace,
   readingNow,
+  rowWindow,
   shelfLayout,
+  statsLine,
 } from './states';
 
 import type { ReadingProgress } from '@/lib/api/types';
@@ -80,10 +84,13 @@ describe('reading now', () => {
 });
 
 describe('the shelf layout', () => {
-  it(`stands up to ${String(FACE_OUT_MAX)} papers face-out, and spines past that`, () => {
+  it(`stands up to ${String(FACE_OUT_MAX)} papers face-out, spines to ${String(AT_SCALE_MIN)}, rows past that`, () => {
     expect(shelfLayout(1)).toBe('face-out');
     expect(shelfLayout(FACE_OUT_MAX)).toBe('face-out');
     expect(shelfLayout(FACE_OUT_MAX + 1)).toBe('spines');
+    expect(shelfLayout(AT_SCALE_MIN)).toBe('spines');
+    expect(shelfLayout(AT_SCALE_MIN + 1)).toBe('rows');
+    expect(shelfLayout(400)).toBe('rows');
   });
 
   it('puts four covers on a plank at 1440 px, one on a phone, one before measuring', () => {
@@ -161,5 +168,56 @@ describe("Continue's reader place", () => {
       expect(readerPlace(bad)).toBeNull();
       expect(planContinue(bad, 3, false).store?.zoomMode).toEqual({ kind: 'scale', scale: 1.25 });
     }
+  });
+});
+
+describe('a sideways row at scale', () => {
+  // Ten 40 px spines, 2 px apart: 418 px in all.
+  const widths = Array.from({ length: 10 }, () => 40);
+
+  it('says how many are in view and how many are past the edge, the bookend counted', () => {
+    expect(rowWindow(widths, 2, 0, 418, 104)).toEqual({ shown: 10, after: 0 });
+    // 300 px of room overflows, so the bookend takes 104 of it: 196 px, four spines.
+    expect(rowWindow(widths, 2, 0, 300, 104)).toEqual({ shown: 4, after: 6 });
+    expect(rowWindow(widths, 2, 0, 300)).toEqual({ shown: 7, after: 3 });
+  });
+
+  it('counts from where the row is scrolled, a part-hidden spine on the left as not shown', () => {
+    expect(rowWindow(widths, 2, 42, 300, 104)).toEqual({ shown: 4, after: 5 });
+    expect(rowWindow(widths, 2, 50, 300, 104)).toEqual({ shown: 3, after: 5 });
+    // Scrolled to the end: nothing past the edge, so no bookend covers anything.
+    expect(rowWindow(widths, 2, 118, 300, 104)).toEqual({ shown: 7, after: 0 });
+  });
+
+  it('shows nothing before the row is measured', () => {
+    expect(rowWindow(widths, 2, 0, 0, 104)).toEqual({ shown: 0, after: 10 });
+    expect(rowWindow([], 2, 0, 300, 104)).toEqual({ shown: 0, after: 0 });
+  });
+});
+
+describe('the stats line', () => {
+  const stats = { papers: 120, topics: 6, readingNow: 3, pages: 1934, needALook: 2 };
+
+  it('drops the pages at scale (01f) and keeps them otherwise (01)', () => {
+    expect(statsLine(stats, false)).toEqual([
+      [120, 'papers'],
+      [6, 'topics'],
+      [3, 'reading now'],
+      [1934, 'pages'],
+    ]);
+    expect(statsLine(stats, true)).toEqual([
+      [120, 'papers'],
+      [6, 'topics'],
+      [3, 'reading now'],
+    ]);
+  });
+
+  it('leaves out what is zero, and says "1 paper"', () => {
+    expect(
+      statsLine({ papers: 1, topics: 0, readingNow: 0, pages: 1, needALook: 0 }, false),
+    ).toEqual([
+      [1, 'paper'],
+      [1, 'page'],
+    ]);
   });
 });

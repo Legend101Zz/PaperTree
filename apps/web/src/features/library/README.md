@@ -1,6 +1,6 @@
 # library
 
-The signed-in library at `/dashboard` (#195, #196; frames 00, 01, 01b, 01c): the papers stand as cloth spines on
+The signed-in library at `/dashboard` (#195, #196; frames 00, 01, 01b, 01c, 01f): the papers stand as cloth spines on
 one walnut plank, a row per group, each row under a brass label holder. A spine shows its state: a red ribbon
 while you are reading it, a kraft wrap while we read it, a torn red label when we could not.
 
@@ -27,6 +27,16 @@ while you are reading it, a kraft wrap while we read it, a torn red label when w
   section (`useShelfFocus`), keyed by paper id. When a commit removes the focused book (Delete, an upload
   crossing a threshold, a poll) and focus fell to the page, it goes back to the same paper's book, or Delete's
   neighbour; focus the person moved elsewhere is left alone.
+- **Many** (01f): past **40 papers** (`AT_SCALE_MIN`, owner may change) each row (a topic, or the arrangement's
+  group) stands on its own plank, with shorter spines, and scrolls sideways. A row wider than the page says
+  "28 of 36 shown · scroll sideways" on its plank and ends in a sticky "+8 more" bookend: a tab stop that brings
+  the next spine into view and focus (and with it the shelf's tab stop). While a search runs the bookend says
+  how many of those it hides match ("3 matches here"); the header's "2 of 24" always counts every match. The
+  bookend counts only what is past the right edge: once a row is scrolled, matches off to the left are counted
+  in the header but not on the bookend. A spine the arrows focus scrolls clear of the bookend
+  (`scroll-padding-inline-end` and a `nearest` scroll, WCAG 2.4.11). The
+  stats line drops the pages at scale. Nothing is virtualised (ADR-004): every spine is drawn, and a search
+  re-renders only the spines whose match changed (memoised rows and spines).
 
 - **Header:** the sprout and name; the search ("/" focuses it, Esc clears it, "2 of 24" inside the field, Enter
   takes down the first match); Add papers; Aa (the theme switch from `features/settings`); the account (its
@@ -77,8 +87,9 @@ ribbon, no year means no year on the spine.
 - `model/shelf.ts`: arrangements, spine width, height, title, author line, state, name, cloth, search
   matching, the arrow-key step (pure; tested in `model/shelf.spec.ts`).
 - `model/shelf.ts` also: the stats line, "need a look", where the catalogue card goes (`placeCard`).
-- `model/states.ts`: who is reading now, the face-out threshold, covers per plank, Continue's reader place
-  (pure; tested in `model/states.spec.ts`). `hooks/useContinue.ts` stores that place and opens the reader;
+- `model/states.ts`: who is reading now, the face-out and at-scale thresholds, covers per plank, what a
+  sideways row shows (`rowWindow`), the stats line (`statsLine`), Continue's reader place (pure; tested in
+  `model/states.spec.ts`). `hooks/useContinue.ts` stores that place and opens the reader;
   `hooks/useRovingShelf.ts` is the one-tab-stop keyboard model for spines and covers;
   `hooks/useElementWidth.ts` measures the plank for `coversPerRow`.
 - `hooks/useLibrary.ts`: the data layer (query, polling, upload, cancel's re-read, retry, delete);
@@ -86,7 +97,7 @@ ribbon, no year means no year on the spine.
 - `components/LibraryView.tsx`: the page; `LibraryHeader.tsx` (with `SearchField.tsx`, `AddPapers.tsx`),
   `UploadRow.tsx`, `LibraryTitle.tsx`, `ShelfSection.tsx` (with `Shelf.tsx`, `Spine.tsx`, `ShelfPlank.tsx`,
   `CatalogueCard.tsx`, `ShelfHints.tsx`), `ReadingNow.tsx`, `AccessionSlip.tsx`, `CoverShelf.tsx` (with
-  `Cover.tsx`, `CoverCaption.tsx`); `library.css`: their styles, from the tokens.
+  `Cover.tsx`, `CoverCaption.tsx`), `ShelfRows.tsx` (with `ShelfRow.tsx`); `library.css`: their styles, from the tokens.
 - Tests: `apps/web/test/library-shelf.spec.tsx`, `library-page.spec.tsx`, `library-states.spec.tsx` (with
   the corpus rows in `library-corpus.ts`), `s3-library-states.spec.tsx`, `w2ui-library.spec.tsx`; e2e
   `e2e/s2d/shelf.spec.ts`, `e2e/v02/library-states.spec.ts` and `e2e/s3/*`.

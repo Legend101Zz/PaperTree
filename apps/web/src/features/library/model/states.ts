@@ -1,20 +1,30 @@
 /**
  * library/model/states — which shelf the library shows, and who is "reading now" (#196, DESIGN.md
- * §1 and §9). Pure: the strip, the face-out covers and Continue's reader place are decided here so
- * they can be tested without a DOM. Thresholds are the design's "about 12" (owner may change).
+ * §1 and §9). Pure: the strip, the face-out covers, the sideways rows at scale, the stats line and
+ * Continue's reader place are decided here so they can be tested without a DOM. Thresholds are the
+ * design's "about 12" and "about 40" (owner may change).
  */
-import { arrangeShelf, isReadingNow, type Arrangement, type ShelfPaper } from './shelf';
+import {
+  arrangeShelf,
+  isReadingNow,
+  type Arrangement,
+  type LibraryStats,
+  type ShelfPaper,
+} from './shelf';
 
 import type { ReadingMode } from '@/lib/api/types';
 
 /** At or below this many papers the books stand face-out as covers (frame 01c). */
 export const FACE_OUT_MAX = 12;
 
+/** Past this many papers each group gets its own plank that scrolls sideways (frame 01f). */
+export const AT_SCALE_MIN = 40;
+
 /** The Reading now strip shows at most this many papers on a desktop (frame 01). */
 export const READING_NOW_MAX = 3;
 
-/** How the shelf draws its books: covers face-out, or spines on one plank (frame 01). */
-export type ShelfLayout = 'face-out' | 'spines';
+/** How the shelf draws its books: covers face-out, spines on one plank (01), a plank per row (01f). */
+export type ShelfLayout = 'face-out' | 'spines' | 'rows';
 
 /**
  * The shelf's layout for a number of papers on it.
@@ -24,7 +34,75 @@ export type ShelfLayout = 'face-out' | 'spines';
  * @returns The layout.
  */
 export function shelfLayout(count: number): ShelfLayout {
-  return count <= FACE_OUT_MAX ? 'face-out' : 'spines';
+  if (count <= FACE_OUT_MAX) return 'face-out';
+  return count > AT_SCALE_MIN ? 'rows' : 'spines';
+}
+
+/**
+ * "24 papers · 6 topics · 3 reading now · 484 pages", leaving out what is zero; at scale the pages
+ * go (frame 01f: a sum of thousands of pages says nothing about a library that size).
+ *
+ * @param stats - The counts.
+ * @param atScale - The shelf is laid out in rows (`shelfLayout` is `'rows'`).
+ * @returns The parts, each a count and its noun.
+ */
+export function statsLine(stats: LibraryStats, atScale: boolean): readonly [number, string][] {
+  const parts: [number, string][] = [[stats.papers, stats.papers === 1 ? 'paper' : 'papers']];
+  if (stats.topics > 0) parts.push([stats.topics, stats.topics === 1 ? 'topic' : 'topics']);
+  if (stats.readingNow > 0) parts.push([stats.readingNow, 'reading now']);
+  if (stats.pages > 0 && !atScale) parts.push([stats.pages, stats.pages === 1 ? 'page' : 'pages']);
+  return parts;
+}
+
+/**
+ * A sideways row's measures, which `library.css` draws: `.pt-rows__spines`'s gap, the room its
+ * sticky "+n more" bookend covers at the right edge (96 px wide, 8 px from the spines), and the
+ * scroll padding that keeps a focused spine clear of it. `library-rows-css.spec.ts` reads the CSS
+ * and holds the two together.
+ */
+export const ROW_GAP = 2;
+export const ROW_BOOKEND = 104;
+export const ROW_SCROLL_PADDING = 112;
+
+/** What a sideways row shows from where it is scrolled. */
+export interface RowWindow {
+  /** Spines wholly in view. */
+  readonly shown: number;
+  /** Spines past the right edge: the "+n more" on the bookend; always the row's last `after`. */
+  readonly after: number;
+}
+
+/**
+ * How much of a sideways row is in view (frame 01f's "28 of 36 shown" and "+8 more").
+ *
+ * @param widths - Each spine's width in px, in row order (`spineWidth`).
+ * @param gap - The gap between spines.
+ * @param scrollLeft - How far the row is scrolled.
+ * @param room - The row's visible width (0 before it is measured: nothing is in view).
+ * @param reserve - What the "+n more" bookend covers at the right edge while the row overflows.
+ * @returns The spines in view and those past the right edge (or under the bookend).
+ */
+export function rowWindow(
+  widths: readonly number[],
+  gap: number,
+  scrollLeft: number,
+  room: number,
+  reserve = 0,
+): RowWindow {
+  const total = widths.reduce((sum, width) => sum + width + gap, -gap);
+  const overflows = scrollLeft + room < total - 0.5;
+  // Half a pixel of slack: sub-pixel layout must not hide a spine that is in view.
+  const left = scrollLeft - 0.5;
+  const right = scrollLeft + room - (overflows ? reserve : 0) + 0.5;
+  let x = 0;
+  let shown = 0;
+  let after = 0;
+  for (const width of widths) {
+    if (x + width > right) after += 1;
+    else if (x >= left) shown += 1;
+    x += width + gap;
+  }
+  return { shown, after };
 }
 
 /**
