@@ -1,4 +1,4 @@
-"""The notebook store: pages and the items placed on them (v0.2 S5a, #206; 0007).
+"""The notebook store: pages, the items placed on them, and ink strokes (v0.2 S5a, #206; 0007).
 
 Owns every SQL statement behind ``routers/notebooks.py``. It follows ``canvas.py``: owner-scoped
 through ``_resolve``, client-minted ids, ``version`` + optimistic concurrency, and a
@@ -8,9 +8,9 @@ Two rules the schema cannot express and this module keeps:
 
 * A quote card holds the full Anchor of its passage (never a bare block id, AGENTS.md section 4),
   and that anchor must be on the page's own paper.
-* Ink is opaque here. A page read returns its stroke blobs as stored; writing and erasing strokes,
-  and typed-text search, arrive in #240 (S5a2). The table itself is in 0007 because the schema is
-  one unit.
+* Ink is opaque here. The blob is the web's ``encodeStroke`` bytes; we walk it once to prove the
+  web's ``decodeStroke`` would accept it (version, flags, count, every varint, no trailing bytes),
+  and never read a coordinate.
 
 "Dive in" (``create_page(from_message_id=...)``) seeds the page in the same transaction from a
 stored assistant answer, so a page never exists half-seeded.
@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import math
 import sqlite3
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final, Literal
 
@@ -36,6 +36,32 @@ else:
 
 TEMPLATES: Final = frozenset({"blank", "dot", "lined", "cornell", "derivation"})
 ITEM_KINDS: Final = frozenset({"exchange", "text", "sticky", "quote", "shape"})
+STROKE_TOOLS: Final = frozenset({"pen", "highlighter"})
+STROKE_NIBS: Final = frozenset({"EF", "F", "M"})
+
+#: Mirrors the web's ``MAX_STROKE_POINTS`` (stroke.ts); a count above it is refused.
+MAX_STROKE_POINTS: Final = 20_000
+#: Bytes of one coordinate's varint at the worst case the encoder can write: a delta between the
+#: two coordinate extremes is 2 * 16e6 = 3.2e7 steps, zigzag doubles it to 6.4e7, and 7 payload
+#: bits per byte reach 2**28 = 2.68e8 in four bytes (three reach only 2.1e6).
+_WORST_COORDINATE_BYTES: Final = 4
+#: version + flags + the varint count of 20,000 (above 16,383, so three bytes).
+_WORST_HEADER_BYTES: Final = 2 + 3
+#: x + y at the worst case, plus the pressure byte.
+_WORST_POINT_BYTES: Final = 2 * _WORST_COORDINATE_BYTES + 1
+#: One stroke's blob: the encoder's real worst case, 5 + 20,000 * 9 = 180,005 bytes (alternating
+#: between the coordinate extremes, with pressure), plus 1 KiB of margin. The earlier "~3.4 bytes
+#: per point" is the typical smooth stroke, not the bound, and a cap below the worst case answers
+#: 413 to a legal pen-up.
+MAX_STROKE_BYTES: Final = _WORST_HEADER_BYTES + MAX_STROKE_POINTS * _WORST_POINT_BYTES + 1024
+#: Decoded bytes of one ``add_strokes`` batch, so 200 strokes cannot each be near the cap.
+MAX_BATCH_BYTES: Final = 2 * 1024 * 1024
+#: The blob layout version the web writes as its first byte (stroke.ts ``FORMAT_VERSION``).
+STROKE_FORMAT_VERSION: Final = 1
+#: stroke.ts ``FLAG_PRESSURE``: one pressure byte follows each point.
+STROKE_FLAG_PRESSURE: Final = 1
+#: Search results are a list for a person to scan, not a dump.
+SEARCH_LIMIT: Final = 50
 
 _PAGE_COLUMNS: Final = (
     "page_id, paper_id, title, template, source_thread_id, source_message_id, version, "
@@ -113,12 +139,79 @@ def _require_json_object(body: str) -> None:
         raise _bad("body: an exchange or shape carries a JSON object") from exc
 
 
+def _read_varint(blob: bytes, at: int) -> tuple[int, int]:
+    """One unsigned LEB128 varint at ``at``, as stroke.ts ``decodeStroke`` reads it.
+
+    Returns:
+        ``(value, next offset)``.
+
+    Raises:
+        NotebookRejected: ``validation_failed`` when the blob ends inside it, or it is longer than
+            the 8 bytes ``decodeStroke`` accepts.
+    """
+    value = 0
+    for n in range(8):
+        if at >= len(blob):
+            raise _bad("points: truncated stroke")
+        byte = blob[at]
+        at += 1
+        value |= (byte & 0x7F) << (7 * n)
+        if byte < 0x80:
+            return value, at
+    raise _bad("points: varint too long")
+
+
+def check_stroke_blob(blob: bytes) -> None:
+    """Refuses a stroke blob that stroke.ts ``decodeStroke`` would refuse.
+
+    The layout is ``[version, flags, varint count]`` then, per point, a zigzag varint x and a
+    zigzag varint y (deltas), and one pressure byte when the pressure flag is set. This walks every
+    point so a count that lies, a truncated point, junk after the last point, or a blob that
+    claims zero points and carries more bytes cannot be stored: the page GET would then hand the
+    web a stroke it cannot draw. Coordinates are not interpreted (zigzag deltas are skipped).
+
+    Args:
+        blob: The decoded ``points`` bytes.
+
+    Raises:
+        NotebookRejected: ``payload_too_large`` over ``MAX_STROKE_BYTES``; ``validation_failed``
+            for a truncated blob, a version byte other than 1, unknown flag bits, a point count
+            above ``MAX_STROKE_POINTS``, or trailing bytes.
+    """
+    if len(blob) > MAX_STROKE_BYTES:
+        raise NotebookRejected("payload_too_large", "points: the stroke is too large")
+    if len(blob) < 2:
+        raise _bad("points: truncated stroke")
+    if blob[0] != STROKE_FORMAT_VERSION:
+        raise _bad(f"points: unknown stroke format version {blob[0]}")
+    if blob[1] & ~STROKE_FLAG_PRESSURE:
+        raise _bad("points: unknown stroke flags")
+    count, at = _read_varint(blob, 2)
+    if count > MAX_STROKE_POINTS:
+        raise _bad("points: too many points in one stroke")
+    for _ in range(count):
+        _, at = _read_varint(blob, at)  # x delta
+        _, at = _read_varint(blob, at)  # y delta
+        if blob[1] & STROKE_FLAG_PRESSURE:
+            if at >= len(blob):
+                raise _bad("points: truncated stroke")
+            at += 1
+    if at != len(blob):
+        raise _bad("points: trailing bytes after the last point")
+
+
 def _finite(name: str, value: object, *, positive: bool = False) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
         raise _bad(f"{name}: must be a finite number")
     if positive and value <= 0:
         raise _bad(f"{name}: must be greater than 0")
     return float(value)
+
+
+def _snippet(text: str, needle: str) -> str:
+    at = text.lower().find(needle.lower())
+    start = max(0, at - 40)
+    return ("..." if start else "") + text[start : at + len(needle) + 80].replace("\n", " ")
 
 
 def _quote_text(anchor: Mapping[str, Any]) -> str:
@@ -130,7 +223,7 @@ def _quote_text(anchor: Mapping[str, Any]) -> str:
 
 
 class NotebookMixin(_Base):
-    """The notebook half of ``PaperTreeDb``: pages, items and "Dive in" (strokes and search: #240).
+    """The notebook half of ``PaperTreeDb``: pages, items, strokes, "Dive in" and search.
 
     Stateless like the other mixins (``__slots__ = ()``); every method takes an ``OwnerId`` and
     filters on it, so another owner's page, item or stroke is simply not found.
@@ -481,6 +574,118 @@ class NotebookMixin(_Base):
             if n:
                 self._touch(owner_id, page_id)
             return n
+
+    # ── strokes ──────────────────────────────────────────────────────────────────────────
+
+    def add_notebook_strokes(
+        self, owner: OwnerId, page_id: str, strokes: Sequence[Mapping[str, Any]]
+    ) -> int:
+        """Stores a pen-up batch of strokes, all or none. Idempotent on ``stroke_id``.
+
+        Args:
+            owner: The caller.
+            page_id: The page they were drawn on.
+            strokes: ``stroke_id``, ``tool``, ``nib``, ``colour`` and ``points`` (bytes).
+
+        Returns:
+            How many strokes were new.
+
+        Raises:
+            NotebookRejected: ``not_found`` for an unknown page; ``payload_too_large`` over the
+                per-stroke or per-batch byte cap; ``validation_failed`` for a bad tool, nib or
+                blob header, or a ``stroke_id`` held elsewhere.
+        """
+        owner_id = self._resolve(owner)
+        total = 0
+        for stroke in strokes:
+            if stroke.get("tool") not in STROKE_TOOLS or stroke.get("nib") not in STROKE_NIBS:
+                raise _bad("tool or nib: not a known pen, highlighter or nib")
+            blob = stroke["points"]
+            check_stroke_blob(blob)
+            total += len(blob)
+        if total > MAX_BATCH_BYTES:
+            raise NotebookRejected("payload_too_large", "strokes: the batch is too large")
+        added = 0
+        with self.transaction():
+            if self._page_row(owner_id, page_id) is None:
+                raise NotebookRejected("not_found", "no such page")
+            now = now_iso()
+            for stroke in strokes:
+                found = self._one(
+                    "SELECT page_id FROM notebook_strokes WHERE owner_id = ? AND stroke_id = ?",
+                    (owner_id, stroke["stroke_id"]),
+                )
+                if found is not None:
+                    if found["page_id"] != page_id:
+                        raise _bad("stroke_id: already in use")
+                    continue
+                try:
+                    self._conn.execute(
+                        "INSERT INTO notebook_strokes (stroke_id, owner_id, page_id, tool, nib, "
+                        "colour, points, created_at) VALUES (?,?,?,?,?,?,?,?)",
+                        (stroke["stroke_id"], owner_id, page_id, stroke["tool"], stroke["nib"],
+                         stroke["colour"], stroke["points"], now),
+                    )  # fmt: skip
+                except sqlite3.IntegrityError as exc:
+                    raise _bad("stroke_id: already in use") from exc
+                added += 1
+            if added:
+                self._touch(owner_id, page_id)
+        return added
+
+    def delete_notebook_stroke(self, owner: OwnerId, page_id: str, stroke_id: str) -> int:
+        """The eraser: deletes one stroke. Returns rows deleted (0: not found)."""
+        owner_id = self._resolve(owner)
+        with self.transaction():
+            n = self._conn.execute(
+                "DELETE FROM notebook_strokes WHERE owner_id = ? AND page_id = ? AND stroke_id = ?",
+                (owner_id, page_id, stroke_id),
+            ).rowcount
+            if n:
+                self._touch(owner_id, page_id)
+            return n
+
+    # ── search ───────────────────────────────────────────────────────────────────────────
+
+    def search_notebook(self, owner: OwnerId, paper_id: PaperId, query: str) -> list[Row]:
+        """Hits for ``query`` in typed text, sticky text, quote text and the AI slip's words.
+
+        Never ink: a stroke has no text. Case-insensitive substring match (``LIKE`` with the
+        wildcards escaped), at most ``SEARCH_LIMIT`` hits, newest page first.
+
+        Returns:
+            Rows ``page_id``, ``page_title``, ``item_id``, ``kind``, ``snippet``.
+        """
+        owner_id = self._resolve(owner)
+        needle = query.strip()
+        if not needle:
+            raise _bad("q: required")
+        pattern = "%" + needle.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        # json_valid() first, inside the CASE: a stored exchange body that is not JSON must make
+        # that ONE row unsearchable, never turn every search on the paper into a 500.
+        ai_text = "CASE WHEN json_valid(i.body) THEN json_extract(i.body, '$.ai.content') END"
+        call_text = "CASE WHEN json_valid(i.body) THEN json_extract(i.body, '$.call.text') END"
+        sql_text = f"CASE i.kind WHEN 'exchange' THEN {ai_text} ELSE i.body END"
+        rows = self._all(
+            "SELECT p.page_id, p.title AS page_title, i.item_id, i.kind, "
+            f"{sql_text} AS text, CASE i.kind WHEN 'exchange' THEN {call_text} END AS call_text "
+            "FROM notebook_items i JOIN notebook_pages p "
+            "ON p.owner_id = i.owner_id AND p.page_id = i.page_id "
+            "WHERE i.owner_id = ? AND p.paper_id = ? "
+            "AND i.kind IN ('text','sticky','quote','exchange') "
+            f"AND ({sql_text} LIKE ? ESCAPE '\\' "
+            f"OR (i.kind = 'exchange' AND {call_text} LIKE ? ESCAPE '\\')) "
+            "ORDER BY p.updated_at DESC, p.page_id, i.z, i.item_id LIMIT ?",
+            (owner_id, paper_id, pattern, pattern, SEARCH_LIMIT),
+        )
+        hits: list[Row] = []
+        for row in rows:
+            text = str(row["text"] or "")
+            if needle.lower() not in text.lower():
+                text = str(row["call_text"] or text)
+            hits.append({k: row[k] for k in ("page_id", "page_title", "item_id", "kind")}
+                        | {"snippet": _snippet(text, needle)})  # fmt: skip
+        return hits
 
     # ── internals ────────────────────────────────────────────────────────────────────────
 

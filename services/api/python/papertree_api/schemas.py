@@ -37,6 +37,7 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
+    RootModel,
     ValidationError,
     ValidationInfo,
     WithJsonSchema,
@@ -1008,7 +1009,11 @@ StrokeTool = Literal["pen", "highlighter"]
 StrokeNib = Literal["EF", "F", "M"]
 #: Page units (the web's PAGE_WIDTH is 960); same bounds as a canvas card.
 NOTEBOOK_BODY_MAX = 100_000
+#: A stroke colour is a TOKEN NAME (`pen`, `hl-amber`), never a hex, so a theme can re-map it.
+ColourToken = Annotated[str, Field(pattern=r"^[a-z][a-z0-9-]{0,31}$")]
 NotebookTitle = Annotated[str, Field(min_length=1, max_length=200)]
+#: Base64 of one stroke blob. Generous on the wire so the store, not the parser, answers 413.
+PointsB64 = Annotated[str, Field(min_length=1, max_length=8_000_000)]
 
 
 class NotebookPage(Wire):
@@ -1084,6 +1089,14 @@ class NotebookPageCreated(Wire):
     items: list[NotebookItem]
 
 
+class NotebookHit(Wire):
+    page_id: str
+    page_title: str
+    item_id: str
+    kind: NotebookItemKind
+    snippet: str
+
+
 class NotebookPageCreate(Wire):
     """`from_message_id` is "Dive in": an assistant message of this paper's threads."""
 
@@ -1126,6 +1139,24 @@ class NotebookItemPatch(Wire):
     h: Extent | None = omittable()
     z: SqlInt | None = omittable()
     body: Annotated[str, Field(max_length=NOTEBOOK_BODY_MAX)] | None = omittable()
+
+
+class NotebookStrokeIn(Wire):
+    stroke_id: ClientId
+    tool: StrokeTool
+    nib: StrokeNib
+    colour: ColourToken
+    points_b64: PointsB64
+
+
+class NotebookStrokeBatch(RootModel[list[NotebookStrokeIn]]):
+    """`POST /notebook/pages/{id}/strokes`: a bare JSON array, one pen-up batch of 1 to 200."""
+
+    root: Annotated[list[NotebookStrokeIn], Field(min_length=1, max_length=200)]
+
+
+class NotebookStrokesAdded(Wire):
+    added: NonNegative
 
 
 class NotebookPageStale(Wire):
