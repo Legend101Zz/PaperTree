@@ -32,6 +32,7 @@ from .routers import (
     papers,
     summary,
     threads,
+    topics,
     usage,
 )
 from .routers.papers import derive_paper_id  # re-exported: it lived here before the split
@@ -121,5 +122,6 @@ def create_app(
     app.include_router(usage.router)
     app.include_router(boards.router)
     app.include_router(notebooks.router)
+    app.include_router(topics.router)
     app.include_router(internal.router)
     return app

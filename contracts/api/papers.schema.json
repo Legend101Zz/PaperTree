@@ -399,6 +399,16 @@
         },
         "has_summary": {
           "type": "boolean"
+        },
+        "topic": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LibraryTopic"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -420,7 +430,8 @@
         "arxiv_id",
         "arxiv_category",
         "thread_count",
-        "has_summary"
+        "has_summary",
+        "topic"
       ],
       "title": "LibraryPaper",
       "type": "object"
@@ -440,6 +451,51 @@
       },
       "required": ["index", "text"],
       "title": "LibraryReference",
+      "type": "object"
+    },
+    "LibraryTopic": {
+      "additionalProperties": false,
+      "description": "`LibraryPaper.topic`: the topic the caller ACCEPTED for the paper. A mere offer is not\nhere (`GET /papers/{id}/topic` has it): an unaccepted suggestion must not group the shelf.",
+      "properties": {
+        "topic_id": {
+          "pattern": "^top_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "cloth": {
+          "anyOf": [
+            {
+              "enum": ["transformers", "vision", "generative", "optimization", "language", "rl"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "const": "accepted",
+          "type": "string"
+        },
+        "source": {
+          "enum": ["arxiv_category", "manual", "model"],
+          "type": "string"
+        },
+        "source_detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["topic_id", "name", "cloth", "status", "source", "source_detail"],
+      "title": "LibraryTopic",
       "type": "object"
     },
     "ReadingProgress": {

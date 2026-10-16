@@ -52,6 +52,19 @@ _PARSE: Final = "parse"
 
 
 @dataclass(frozen=True, slots=True)
+class ShelfTopic:
+    """The topic a paper is ACCEPTED under (#193). A suggestion is not shown on the shelf: it is an
+    offer the UI makes beside the book, so only ``status == 'accepted'`` ever lands here."""
+
+    topic_id: str
+    name: str
+    cloth: str | None
+    status: str
+    source: str
+    source_detail: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class LibraryRow:
     """One ``paper_owners`` row joined to its promoted generation and its latest parse job.
 
@@ -102,6 +115,8 @@ class LibraryRow:
     arxiv_category: str | None
     thread_count: int
     has_summary: bool
+    #: The topic the owner accepted for this paper, or None (unshelved, or only an offer).
+    topic: ShelfTopic | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,10 +195,16 @@ SELECT po.paper_id, po.source_hash, po.original_filename, po.byte_size, po.creat
                   AND d.kind = 'paper_summary') AS has_summary,
        rs.last_page AS rs_last_page, rs.furthest_page AS rs_furthest_page, rs.mode AS rs_mode,
        rs.opened_at AS rs_opened_at, rs.updated_at AS rs_updated_at,
-       rs.finished_at AS rs_finished_at
+       rs.finished_at AS rs_finished_at,
+       tp.topic_id AS tp_topic_id, tp.name AS tp_name, tp.cloth AS tp_cloth,
+       pt.status AS tp_status, pt.source AS tp_source, pt.source_detail AS tp_source_detail
   FROM paper_owners po
   LEFT JOIN reading_state rs
          ON rs.owner_id = po.owner_id AND rs.paper_id = po.paper_id
+  LEFT JOIN paper_topics pt
+         ON pt.owner_id = po.owner_id AND pt.paper_id = po.paper_id AND pt.status = 'accepted'
+  LEFT JOIN topics tp
+         ON tp.owner_id = pt.owner_id AND tp.topic_id = pt.topic_id
   LEFT JOIN paper_promotions pp
          ON pp.owner_id = po.owner_id AND pp.paper_id = po.paper_id
   LEFT JOIN papers p
@@ -386,6 +407,18 @@ def _library_row(row: Row) -> LibraryRow:
         arxiv_category=stamp_category(row["stamp_text"], arxiv_id),
         thread_count=int(row["thread_count"]),
         has_summary=bool(row["has_summary"]),
+        topic=(
+            None
+            if row["tp_topic_id"] is None
+            else ShelfTopic(
+                topic_id=row["tp_topic_id"],
+                name=row["tp_name"],
+                cloth=row["tp_cloth"],
+                status=row["tp_status"],
+                source=row["tp_source"],
+                source_detail=row["tp_source_detail"],
+            )
+        ),
     )
 
 

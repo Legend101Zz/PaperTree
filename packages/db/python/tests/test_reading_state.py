@@ -22,6 +22,7 @@ from papertree_db import (
     PaperTreeDb,
     find_migrations_dir,
     generation,
+    load_migrations,
     migrate,
     open_database,
     progress_state,

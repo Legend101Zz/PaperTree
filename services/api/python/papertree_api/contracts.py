@@ -108,6 +108,15 @@ GROUPS: Final[dict[str, tuple[tuple[type[BaseModel], Mode], ...]]] = {
         (s.NotebookItemPatch, IN),
         (s.NotebookStrokeBatch, IN),
     ),
+    "topics": (
+        (s.Topic, OUT),
+        (s.TopicRef, OUT),
+        (s.PaperTopic, OUT),
+        (s.LibraryTopic, OUT),
+        (s.TopicCreate, IN),
+        (s.TopicPatch, IN),
+        (s.PaperTopicPut, IN),
+    ),
     "healthz": ((s.Healthz, OUT),),
     "internal": ((s.ToolResult, OUT),),
 }

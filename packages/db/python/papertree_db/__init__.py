@@ -50,6 +50,8 @@ from .errors import (
     MigrationError,
     OwnershipError,
     PaperNotFound,
+    TopicExists,
+    TopicNotFound,
 )
 from .highlights import (
     SQLITE_INTEGER_MAX,
@@ -73,7 +75,7 @@ from .ids import (
     mint_owner,
     new_id,
 )
-from .library import DISPLAY_NAME_MAX, LibraryRow, LinkReference, LinkSource
+from .library import DISPLAY_NAME_MAX, LibraryRow, LinkReference, LinkSource, ShelfTopic
 from .migrate import (
     AppliedMigration,
     Migration,
@@ -87,8 +89,31 @@ from .migrate import (
 )
 from .notebook import NotebookRejected, NotebookStale
 from .reading import ProgressState, ReadingState, progress_state, reached_last_page
+from .topics import (
+    CLOTHS,
+    TOPIC_NAME_MAX,
+    Holding,
+    PaperTopicRow,
+    TopicRef,
+    TopicRow,
+    TopicSuggestion,
+    clean_topic_name,
+    suggest_by_category,
+)
 
 __all__ = [
+    "CLOTHS",
+    "TOPIC_NAME_MAX",
+    "Holding",
+    "PaperTopicRow",
+    "ShelfTopic",
+    "TopicExists",
+    "TopicNotFound",
+    "TopicRef",
+    "TopicRow",
+    "TopicSuggestion",
+    "clean_topic_name",
+    "suggest_by_category",
     "DISPLAY_NAME_MAX",
     "MAX_DERIVATION_DEPTH",
     "SQLITE_INTEGER_MAX",
