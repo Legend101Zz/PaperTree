@@ -3662,3 +3662,144 @@ button.pt-holder {
 .pt-button--primary[aria-disabled='true']:hover {
   background: var(--pt-ground);
 }
+
+/* ── v0.2 voices and citations (#190) ──────────────────────────────────────────────────────────
+   The three voices, the numbered marker, the margin tab, the slips and the trace list. Measurements
+   are ported from the design's tokens.css onto --pt-* tokens; contrast pairs are the ones
+   test/tokens.spec.ts already covers (ink / pen / tab / nv-ink on page, AI slip and call slip). */
+
+.pt-you {
+  font: var(--pt-t-you) / var(--pt-lh-you) var(--pt-font-you);
+  color: var(--pt-pen);
+}
+
+.pt-paper-quote {
+  font-family: var(--pt-font-paper);
+  text-indent: -0.42em; /* the opening quotation mark hangs in the margin */
+}
+
+.pt-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 16px;
+  block-size: 16px;
+  padding: 0 3px;
+  border: 0;
+  border-radius: var(--pt-radius-paper);
+  background: var(--pt-tab);
+  color: var(--pt-on-tab);
+  font: 700 11px/1 var(--pt-font-you);
+  vertical-align: 2px;
+  cursor: pointer;
+}
+
+.pt-marker.is-lit,
+.pt-marker[aria-current='true'] {
+  background: var(--pt-focus);
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: 1px;
+}
+
+.pt-marker:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+/* Not verified: no fill, a dashed edge, so it is never colour alone. */
+.pt-marker--not-verified {
+  background: transparent;
+  color: var(--pt-nv-ink);
+  outline: 1px dashed var(--pt-tab);
+  outline-offset: -1px;
+}
+
+.pt-marker--not-verified.is-lit {
+  color: var(--pt-on-tab);
+  background: var(--pt-focus);
+}
+
+/* Phone: the same small square inside a 44 px target. */
+.pt-marker--touch {
+  min-inline-size: var(--pt-target-touch);
+  block-size: var(--pt-target-touch);
+  background: transparent;
+  vertical-align: middle;
+}
+
+.pt-marker--touch .pt-marker__n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 16px;
+  block-size: 16px;
+  padding: 0 3px;
+  border-radius: var(--pt-radius-paper);
+  background: var(--pt-tab);
+  color: var(--pt-on-tab);
+}
+
+.pt-marker--touch.is-lit {
+  outline: none;
+  background: transparent;
+}
+
+.pt-marker--touch.is-lit .pt-marker__n {
+  background: var(--pt-focus);
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: 1px;
+}
+
+.pt-marker--static {
+  vertical-align: baseline;
+}
+
+.pt-tab-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pt-space-2);
+}
+
+.pt-tab {
+  display: inline-flex;
+  align-items: center;
+  block-size: 20px;
+  padding: 0 11px 0 6px;
+  background: var(--pt-tab);
+  color: var(--pt-on-tab);
+  font: 700 var(--pt-t-num-s) / 1 var(--pt-font-you);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 5px) 50%, 100% 100%, 0 100%);
+}
+
+.pt-tab.is-lit {
+  background: var(--pt-focus);
+}
+
+.pt-tab--not-verified {
+  clip-path: none;
+  background: transparent;
+  color: var(--pt-nv-ink);
+  border: 1px dashed var(--pt-tab);
+  padding: 0 7px;
+}
+
+.pt-nv-caption {
+  font: 700 var(--pt-t-label-s) / 15px var(--pt-font-ai);
+  color: var(--pt-ink);
+}
+
+.pt-coverage {
+  display: flex;
+  align-items: baseline;
+  gap: var(--pt-space-2);
+  margin: 0;
+  font: var(--pt-t-label-s) / 18px var(--pt-font-ai);
+  color: var(--pt-ink-2);
+}
+
+.pt-coverage__icon {
+  font-family: var(--pt-font-paper);
+  color: var(--pt-ink-muted);
+}
