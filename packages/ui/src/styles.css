@@ -4061,19 +4061,9 @@ button.pt-holder {
   -webkit-line-clamp: 3;
 }
 
-/* "Show in paper" is drawn here as the design's secondary button (32 px, 1 px control edge, page
-   fill, 14 px) on top of the v0.1 `.pt-btn` class; it becomes `Button variant="secondary"` once
-   this chain sits on S1b. */
-.pt-trace-row__show.pt-btn {
+/* "Show in paper" is the shared secondary `Button`; the row only keeps it from shrinking. */
+.pt-trace-row__show {
   flex: none;
-  min-block-size: 32px;
-  min-inline-size: 0;
-  padding-inline: var(--pt-space-3);
-  border: 1px solid var(--pt-control-border);
-  border-radius: var(--pt-radius-control);
-  background: var(--pt-page);
-  color: var(--pt-ink);
-  font: var(--pt-t-meta) / 1 var(--pt-font-ai);
 }
 
 .pt-trace-row--touch {

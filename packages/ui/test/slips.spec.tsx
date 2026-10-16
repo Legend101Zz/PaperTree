@@ -157,7 +157,11 @@ describe('TraceList', () => {
     const { container } = render(<TraceList rows={ROWS} onShowInPaper={onShow} />);
     expect(container.querySelector('ol')).not.toBeNull();
     expect(container.querySelectorAll('ol > li')).toHaveLength(2);
-    fireEvent.click(screen.getByRole('button', { name: 'Show in paper, passage 2' }));
+    const show = screen.getByRole('button', { name: 'Show in paper, passage 2' });
+    // The shared secondary Button, not the v0.1 `.pt-btn` class.
+    expect(show.className).toContain('pt-button--secondary');
+    expect(show.className).not.toContain('pt-btn');
+    fireEvent.click(show);
     expect(onShow).toHaveBeenCalledWith(2);
     expect(screen.getByText('Introduction · cited 2×')).not.toBeNull();
     expect(screen.getByText('Abstract · cited once')).not.toBeNull();
@@ -227,7 +231,7 @@ describe('styles.css — the slips', () => {
   });
 
   it('keeps a raw rgb() out of the slip rules', () => {
-    const slips = CSS.slice(CSS.indexOf('/* The person'));
+    const slips = CSS.slice(CSS.indexOf("/* The person's ask: ruled ivory"));
     expect(slips).not.toMatch(/rgb\(/);
   });
 

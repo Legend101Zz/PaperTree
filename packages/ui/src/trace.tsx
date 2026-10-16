@@ -10,6 +10,7 @@
 
 import type { ReactNode } from 'react';
 
+import { Button } from './controls.js';
 import { NumberedMarker, PageTab, formatPageLabel } from './citations.js';
 import { PaperText } from './provenance.js';
 
@@ -140,14 +141,14 @@ export function TraceRow(props: TraceRowProps): ReactNode {
         </div>
         {quoted}
       </div>
-      <button
-        type="button"
-        className="pt-btn pt-btn--outline pt-trace-row__show"
+      <Button
+        variant="secondary"
+        className="pt-trace-row__show"
         aria-label={`${showLabel}, passage ${String(n)}`}
         onClick={() => props.onShowInPaper(n)}
       >
         {showLabel}
-      </button>
+      </Button>
     </li>
   );
 }
