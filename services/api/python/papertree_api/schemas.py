@@ -842,7 +842,11 @@ class UsageTotals(Wire):
 
 # ── §2.7 canvas ──────────────────────────────────────────────────────────────────────────────
 
-NodeKind = Literal["excerpt", "explanation", "note", "group"]
+#: "frame" on the design's board is the `group` kind on the wire.
+NodeKind = Literal["excerpt", "explanation", "note", "group", "question", "notebook", "diagram"]
+#: The four typed pins (DESIGN.md section 5); `papertree_db.canvas.PIN_TABLE` says who offers which.
+FromPort = Literal["claim_out", "answer_out"]
+ToPort = Literal["evidence_in", "question_in"]
 EdgeKind = Literal[
     "supports", "contradicts", "derives_from", "answers", "compares", "references", "relates"
 ]
@@ -881,6 +885,16 @@ class Board(Wire):
     updated_at: WireTime
 
 
+class NotebookCardCounts(Wire):
+    """What a notebook card says about its page ("4 quotes · 1 sticky"), counted on read."""
+
+    quotes: NonNegative
+    stickies: NonNegative
+    text: NonNegative
+    shapes: NonNegative
+    strokes: NonNegative
+
+
 class CanvasNode(Wire):
     node_id: str
     board_id: str
@@ -895,6 +909,10 @@ class CanvasNode(Wire):
     body: str
     source_anchor: AnchorV1 | None
     source_message_id: str | None
+    source_page_id: str | None
+    source_diagram_id: str | None
+    #: A notebook card's page counts, computed on read; null on every other kind.
+    counts: NotebookCardCounts | None
     version: Version
     created_at: WireTime
     updated_at: WireTime
@@ -907,6 +925,9 @@ class CanvasEdge(Wire):
     to_node_id: str
     kind: EdgeKind
     label: str | None
+    from_port: FromPort | None
+    to_port: ToPort | None
+    created_at: WireTime
 
 
 class BoardView(Wire):
@@ -931,6 +952,8 @@ class NodeCreate(Wire):
     body: CanvasBody = ""
     source_anchor: AnchorV1In | None = omittable(validate_default=True)
     source_message_id: str | None = omittable(validate_default=True)
+    source_page_id: str | None = omittable(validate_default=True)
+    source_diagram_id: str | None = omittable(validate_default=True)
     group_id: str | None = None
 
     @field_validator("source_anchor", mode="after")
@@ -945,6 +968,20 @@ class NodeCreate(Wire):
     def _explanation_needs_a_message(cls, value: str | None, info: ValidationInfo) -> Any:
         if value is None and info.data.get("kind") == "explanation":
             raise PydanticCustomError("missing", "Field required for an explanation node")
+        return value
+
+    @field_validator("source_page_id", mode="after")
+    @classmethod
+    def _notebook_needs_a_page(cls, value: str | None, info: ValidationInfo) -> Any:
+        if value is None and info.data.get("kind") == "notebook":
+            raise PydanticCustomError("missing", "Field required for a notebook node")
+        return value
+
+    @field_validator("source_diagram_id", mode="after")
+    @classmethod
+    def _diagram_needs_a_diagram(cls, value: str | None, info: ValidationInfo) -> Any:
+        if value is None and info.data.get("kind") == "diagram":
+            raise PydanticCustomError("missing", "Field required for a diagram node")
         return value
 
 
@@ -965,6 +1002,8 @@ class NodePatch(Wire):
     title: CanvasTitle | None = None
     body: CanvasBody | None = omittable()
     group_id: str | None = None
+    source_page_id: str | None = omittable()
+    source_diagram_id: str | None = omittable()
 
 
 class StaleVersion(Wire):
@@ -982,6 +1021,9 @@ class EdgeCreate(Wire):
     to_node_id: str
     kind: EdgeKind
     label: CanvasLabel | None = None
+    #: Both optional: a link made with the keyboard (and every v0.1 edge) has no pins.
+    from_port: FromPort | None = None
+    to_port: ToPort | None = None
 
     @field_validator("to_node_id", mode="after")
     @classmethod
@@ -994,6 +1036,8 @@ class EdgeCreate(Wire):
 class EdgePatch(Wire):
     kind: EdgeKind | None = omittable()
     label: CanvasLabel | None = None
+    from_port: FromPort | None = None
+    to_port: ToPort | None = None
 
 
 class BoardPatch(Wire):

@@ -5,7 +5,7 @@
  * board is created by the first `createNode` (an explicit send). The server answers 501 until S7.
  */
 import { request } from './client';
-import type { Anchor, Board, CanvasEdge, CanvasNode, EdgeKind } from './types';
+import type { Anchor, Board, CanvasEdge, CanvasNode, EdgeKind, FromPort, ToPort } from './types';
 
 const seg = encodeURIComponent;
 
@@ -27,8 +27,12 @@ export interface CreateNodeBody {
   readonly body?: string;
   /** Required for `excerpt`, and its `doc.paperId` must be this paper. */
   readonly source_anchor?: Anchor;
-  /** Required for `explanation`. */
+  /** Required for `explanation`; optional (a user message) for `question`. */
   readonly source_message_id?: string;
+  /** Required for `notebook`. */
+  readonly source_page_id?: string;
+  /** Required for `diagram`. */
+  readonly source_diagram_id?: string;
   readonly group_id?: string | null;
 }
 
@@ -43,6 +47,8 @@ export interface PatchNodeBody {
   readonly title?: string | null;
   readonly body?: string;
   readonly group_id?: string | null;
+  readonly source_page_id?: string;
+  readonly source_diagram_id?: string;
 }
 
 export interface CreateEdgeBody {
@@ -52,11 +58,16 @@ export interface CreateEdgeBody {
   readonly to_node_id: string;
   readonly kind: EdgeKind;
   readonly label?: string | null;
+  /** Both optional: a link made with the keyboard has no pins. */
+  readonly from_port?: FromPort | null;
+  readonly to_port?: ToPort | null;
 }
 
 export interface PatchEdgeBody {
   readonly kind?: EdgeKind;
   readonly label?: string | null;
+  readonly from_port?: FromPort | null;
+  readonly to_port?: ToPort | null;
 }
 
 export interface PatchBoardBody {

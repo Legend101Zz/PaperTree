@@ -56,10 +56,20 @@ export function nodeLabel(node: CanvasNode): string {
   return text === '' ? what : `${what}: ${text.length > 70 ? `${text.slice(0, 70)}…` : text}`;
 }
 
+/**
+ * The React Flow node type a card kind renders as. S6a adds the question, notebook and diagram
+ * kinds to the wire; their cards arrive with the board UI (S6b, #212), so until then they show as
+ * plain notes instead of an unknown node type.
+ */
+function flowType(kind: CanvasNode['kind']): PtNode['type'] {
+  if (kind === 'group') return 'frame';
+  return kind === 'excerpt' || kind === 'explanation' ? kind : 'note';
+}
+
 export function toFlowNode(node: CanvasNode, paperId: string, selected = false): PtNode {
   return {
     id: node.node_id,
-    type: node.kind === 'group' ? 'frame' : node.kind,
+    type: flowType(node.kind),
     position: { x: node.x, y: node.y },
     width: node.w,
     height: node.h,

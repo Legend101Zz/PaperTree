@@ -28,6 +28,7 @@ from papertree_db import (
     reached_last_page,
 )
 from papertree_db.library import arxiv_year, stamp_category
+from papertree_db.migrate import BACKUP_BEFORE_VERSIONS
 
 from .fixtures import block_id_for, make_paper
 from .saved_shapes import HEAD_VERSIONS, migrations_through, raw_connect
@@ -42,6 +43,11 @@ def db(tmp_path: Path) -> Iterator[PaperTreeDb]:
     database.migrate()
     yield database
     database.close()
+
+
+def backup_suffixes(result: object) -> list[str]:
+    """The ``NNNN.bak`` tail of each pre-migration copy the run wrote, in order."""
+    return [b.name.rsplit(".pre-", 1)[-1] for b in result.backups]  # type: ignore[attr-defined]
 
 
 def _paper(db: PaperTreeDb, owner: OwnerId, pages: int | None = 10, n: int = 0) -> PaperId:
@@ -81,7 +87,10 @@ def test_0006_keeps_the_rows_of_a_saved_0005_database(tmp_path: Path) -> None:
             (HASH,),
         )
         result = migrate(conn, find_migrations_dir())
-        assert result.applied == tuple(v for v in HEAD_VERSIONS if v >= 6) and result.backups == ()
+        assert result.applied == tuple(v for v in HEAD_VERSIONS if v >= 6)
+        assert backup_suffixes(result) == [
+            f"{v:04d}.bak" for v in sorted(BACKUP_BEFORE_VERSIONS) if v in result.applied
+        ]  # only the rebuilding migrations (0008) are backed up, not 0006/0007
         assert conn.execute("SELECT email, display_name FROM users").fetchone()[:] == (
             "a@b.test",
             None,

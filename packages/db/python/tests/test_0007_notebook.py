@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 from papertree_db import migrate, open_database
+from papertree_db.migrate import BACKUP_BEFORE_VERSIONS
 
 from .saved_shapes import (
     HEAD_VERSIONS,
@@ -24,6 +25,11 @@ from .saved_shapes import (
 )
 
 NOTEBOOK_TABLES = ("notebook_pages", "notebook_items", "notebook_strokes")
+
+
+def backup_suffixes(result: object) -> list[str]:
+    """The ``NNNN.bak`` tail of each pre-migration copy the run wrote, in order."""
+    return [b.name.rsplit(".pre-", 1)[-1] for b in result.backups]  # type: ignore[attr-defined]
 
 
 def _tables(conn: sqlite3.Connection) -> set[str]:
@@ -54,7 +60,10 @@ def test_a_saved_0005_database_migrates_to_0007_and_keeps_every_row(tmp_path: Pa
 
         result = migrate(conn, MIGRATIONS_DIR)
 
-        assert result.applied == tuple(v for v in HEAD_VERSIONS if v > 5) and result.backups == ()
+        assert result.applied == tuple(v for v in HEAD_VERSIONS if v > 5)
+        assert backup_suffixes(result) == [
+            f"{v:04d}.bak" for v in sorted(BACKUP_BEFORE_VERSIONS) if v in result.applied
+        ]  # only the rebuilding migrations (0008) are backed up, not 0006/0007
         assert counts(conn) == before
         assert set(NOTEBOOK_TABLES) <= _tables(conn)
         assert [tuple(r) for r in conn.execute("PRAGMA foreign_key_check")] == []

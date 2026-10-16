@@ -38,6 +38,7 @@ from papertree_db import (
     MigrationResult,
     PaperId,
     ResolutionIn,
+    backup_path_for,
     generation,
     migrate,
     open_database,
@@ -65,6 +66,8 @@ from .saved_shapes import (
 SHAPES = sorted(BUILDERS)
 #: The runner MODULE: ``papertree_db.migrate`` the attribute is the function, which shadows it.
 migrate_module = importlib.import_module("papertree_db.migrate")
+#: The versions that get a pre-migration copy (0005, 0008, ...), in the order they are written.
+BACKUP_VERSIONS = tuple(sorted(migrate_module.BACKUP_BEFORE_VERSIONS))
 
 
 def _fk_and_integrity(conn: sqlite3.Connection) -> tuple[list[Any], str]:
@@ -555,7 +558,7 @@ def test_pre_0005_backup_is_written_before_0005_touches_a_saved_database(tmp_pat
         result = db.migrate()
     backup = shape.file.with_name(shape.file.name + ".pre-0005.bak")
     assert result.applied == FROM_0005
-    assert result.backups == (backup,)
+    assert result.backups == tuple(backup_path_for(shape.file, v) for v in BACKUP_VERSIONS)
     assert backup.is_file()
     assert not backup.with_name(backup.name + ".tmp").exists()
 
@@ -645,7 +648,7 @@ def test_a_concurrent_start_never_replaces_the_backup_with_a_migrated_copy(
         except Exception as exc:  # recorded, so the backup is checked first: it is the data
             outcome = exc
         assert [r.applied for r in fired] == [FROM_0005]
-        assert fired[0].backups == (backup,)
+        assert fired[0].backups == tuple(backup_path_for(shape.file, v) for v in BACKUP_VERSIONS)
 
         copy = sqlite3.connect(f"file:{backup}?mode=ro", uri=True)
         try:

@@ -15,6 +15,11 @@ BUILT BY S7. The model-level rules (an excerpt needs `source_anchor`, an explana
 database (the anchor is on THIS paper, the answer is on THIS paper, the nodes are on THIS board)
 answer 422 from `papertree_db.canvas` as `CanvasRejected`, mapped here.
 
+v0.2 (S6a, #211): the node kinds `question`, `notebook` (with `source_page_id`) and `diagram` (with
+`source_diagram_id`); edges may carry `from_port` / `to_port`, checked against
+`papertree_db.canvas.PIN_TABLE`; a notebook card's wire body carries `counts`, computed on read.
+A "frame" is the `group` kind: create it empty with a title, w and h; moving it moves no other row.
+
 `GET /papers/{id}/board` NEVER writes: a board exists only after an explicit send. The wire bodies
 are built field by field (like the highlight routes), so a stored Anchor leaves exactly as it
 arrived and nothing can carry `owner_id`.
@@ -27,7 +32,15 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
-from papertree_db import BoardRow, CanvasRejected, EdgeRow, NodeRow, PaperId, StaleVersion
+from papertree_db import (
+    BoardRow,
+    CanvasRejected,
+    EdgeRow,
+    NodeRow,
+    NotebookCounts,
+    PaperId,
+    StaleVersion,
+)
 
 from ..deps import Caller, CallerDep
 from ..errors import ApiError
@@ -66,8 +79,19 @@ def _board_wire(board: BoardRow) -> dict[str, Any]:
     }
 
 
-def _node_wire(node: NodeRow) -> dict[str, Any]:
+def _counts_wire(counts: NotebookCounts) -> dict[str, int]:
     return {
+        "quotes": counts.quotes,
+        "stickies": counts.stickies,
+        "text": counts.text,
+        "shapes": counts.shapes,
+        "strokes": counts.strokes,
+    }
+
+
+def _node_wire(node: NodeRow, counts: NotebookCounts | None = None) -> dict[str, Any]:
+    """The node as the wire carries it; `counts` only for a notebook card (null otherwise)."""
+    wire: dict[str, Any] = {
         "node_id": node.node_id,
         "board_id": node.board_id,
         "kind": node.kind,
@@ -81,10 +105,14 @@ def _node_wire(node: NodeRow) -> dict[str, Any]:
         "body": node.body,
         "source_anchor": None if node.source_anchor is None else dict(node.source_anchor),
         "source_message_id": node.source_message_id,
+        "source_page_id": node.source_page_id,
+        "source_diagram_id": node.source_diagram_id,
         "version": node.version,
         "created_at": wire_time(node.created_at),
         "updated_at": wire_time(node.updated_at),
     }
+    wire["counts"] = None if counts is None else _counts_wire(counts)
+    return wire
 
 
 def _edge_wire(edge: EdgeRow) -> dict[str, Any]:
@@ -95,6 +123,9 @@ def _edge_wire(edge: EdgeRow) -> dict[str, Any]:
         "to_node_id": edge.to_node_id,
         "kind": edge.kind,
         "label": edge.label,
+        "from_port": edge.from_port,
+        "to_port": edge.to_port,
+        "created_at": wire_time(edge.created_at),
     }
 
 
@@ -114,7 +145,9 @@ async def get_board(call: CallerDep, paper_id: str) -> Response:
     return JSONResponse(
         {
             "board": None if snapshot.board is None else _board_wire(snapshot.board),
-            "nodes": [_node_wire(n) for n in snapshot.nodes],
+            "nodes": [
+                _node_wire(n, snapshot.notebook_counts.get(n.node_id)) for n in snapshot.nodes
+            ],
             "edges": [_edge_wire(e) for e in snapshot.edges],
         }
     )
@@ -137,7 +170,11 @@ async def create_node(call: CallerDep, paper_id: str, request: Request) -> Respo
     snapshot = call.db.get_board(call.db_owner, PaperId(paper_id))
     assert snapshot.board is not None  # created in the same transaction as the node
     return JSONResponse(
-        {"board": _board_wire(snapshot.board), "node": _node_wire(stored)}, status_code=201
+        {
+            "board": _board_wire(snapshot.board),
+            "node": _node_wire(stored, snapshot.notebook_counts.get(stored.node_id)),
+        },
+        status_code=201,
     )
 
 
@@ -159,9 +196,17 @@ async def patch_node(call: CallerDep, board_id: str, node_id: str, request: Requ
         raise ApiError(
             "stale_version",
             "This note changed somewhere else. The latest version is shown; try again.",
-            extra={"current": _node_wire(result.current)},
+            extra={
+                "current": _node_wire(
+                    result.current,
+                    call.db.notebook_counts(call.db_owner, (result.current,)).get(
+                        result.current.node_id
+                    ),
+                )
+            },
         )
-    return JSONResponse(_node_wire(result))
+    counts = call.db.notebook_counts(call.db_owner, (result,)).get(result.node_id)
+    return JSONResponse(_node_wire(result, counts))
 
 
 @router.delete("/boards/{board_id}/nodes/{node_id}", status_code=204)
@@ -184,6 +229,8 @@ async def create_edge(call: CallerDep, board_id: str, request: Request) -> Respo
                 "to_node_id": body.to_node_id,
                 "kind": body.kind,
                 "label": body.label,
+                "from_port": body.from_port,
+                "to_port": body.to_port,
             },
         )
     )
