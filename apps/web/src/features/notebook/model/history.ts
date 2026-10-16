@@ -43,7 +43,22 @@ export type Command =
       readonly itemId: string;
       readonly before: string;
       readonly after: string;
+    }
+  | {
+      /** A shape's box changed from a resize handle or the keyboard (S5c, #208). */
+      readonly type: 'resize';
+      readonly itemId: string;
+      readonly before: Box;
+      readonly after: Box;
     };
+
+/** An item's rectangle in page units. */
+export interface Box {
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+}
 
 /** The undo and redo stacks. The newest command is last in each. */
 export interface History {
@@ -184,6 +199,11 @@ export function applyCommand(state: NotebookState, cmd: Command): NotebookState 
             : i,
         ),
       };
+    case 'resize':
+      return {
+        ...state,
+        items: state.items.map((i) => (i.id === cmd.itemId ? { ...i, ...cmd.after } : i)),
+      };
   }
 }
 
@@ -218,6 +238,8 @@ function revertCommand(state: NotebookState, cmd: Command): NotebookState {
       };
     }
     case 'edit-text':
+      return applyCommand(state, { ...cmd, before: cmd.after, after: cmd.before });
+    case 'resize':
       return applyCommand(state, { ...cmd, before: cmd.after, after: cmd.before });
   }
 }
@@ -282,6 +304,12 @@ function prepare(state: NotebookState, cmd: Command): Command | null {
       const editable =
         item && (item.kind === 'text' || item.kind === 'sticky' || item.kind === 'quote');
       return editable && cmd.before !== cmd.after ? cmd : null;
+    }
+    case 'resize': {
+      const { before: b, after: a } = cmd;
+      const same = b.x === a.x && b.y === a.y && b.w === a.w && b.h === a.h;
+      const sized = a.w > 0 && a.h > 0;
+      return !same && sized && state.items.some((i) => i.id === cmd.itemId) ? cmd : null;
     }
   }
 }

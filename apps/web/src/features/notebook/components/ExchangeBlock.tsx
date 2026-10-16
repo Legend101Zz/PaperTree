@@ -8,7 +8,7 @@
  */
 import { AiParagraph, AiSlip, CallSlip, CoverageReadout, PageTab } from '@papertree/ui';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 
 import { AnswerProse, paragraphNumbers } from './AnswerProse';
 import { anchorQuote, dayAndTime, modelLabel, originPlace, usageLine } from '../model/exchange';
@@ -46,7 +46,11 @@ function Margin({ numbers, exchange }: { numbers: number[]; exchange: Exchange }
 }
 
 /** The call slip, the AI slip and the coverage line of a dived page. */
-export function ExchangeBlock({ body, exchange, onFocusAnchor }: ExchangeBlockProps): ReactNode {
+export const ExchangeBlock = memo(function ExchangeBlock({
+  body,
+  exchange,
+  onFocusAnchor,
+}: ExchangeBlockProps): ReactNode {
   const [open, setOpen] = useState(false);
   const { answer, question, layout } = exchange;
   const citations = useMemo(
@@ -134,4 +138,4 @@ export function ExchangeBlock({ body, exchange, onFocusAnchor }: ExchangeBlockPr
       )}
     </section>
   );
-}
+});

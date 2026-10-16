@@ -89,6 +89,22 @@ export interface CreatePageBody {
   readonly from_message_id?: string;
 }
 
+/** One hit of `GET /papers/{id}/notebook/search`: typed text, a sticky, a quote or the AI slip. */
+export interface NotebookHit {
+  readonly page_id: string;
+  readonly page_title: string;
+  readonly item_id: string;
+  readonly kind: NotebookItemKind;
+  readonly snippet: string;
+}
+
+/** `PATCH /notebook/pages/{id}`: `version` is the one last seen (409 if stale). */
+export interface PatchPageBody {
+  readonly version: number;
+  readonly title?: string;
+  readonly template?: PageTemplate;
+}
+
 /** `POST /notebook/pages/{id}/items`. A quote must carry its Anchor. */
 export interface CreateItemBody {
   readonly item_id: string;
@@ -128,6 +144,22 @@ export const notebookApi = {
       { method: 'POST', body: JSON.stringify(body) },
     ),
   getPage: (pageId: string) => request<NotebookPageView>(`/notebook/pages/${seg(pageId)}`),
+  patchPage: (pageId: string, body: PatchPageBody) =>
+    request<NotebookPageWire>(`/notebook/pages/${seg(pageId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  /**
+   * Typed text, stickies, quotes and the AI slip's words; never ink (handwriting is not searchable).
+   *
+   * @param paperId - The paper whose notebook to search.
+   * @param q - One to 200 characters.
+   * @returns The hits, newest page first.
+   */
+  search: (paperId: string, q: string) =>
+    request<NotebookHit[]>(
+      `/papers/${seg(paperId)}/notebook/search?${new URLSearchParams({ q }).toString()}`,
+    ),
   createItem: (pageId: string, body: CreateItemBody, init: SendInit = {}) =>
     request<NotebookItemWire>(`/notebook/pages/${seg(pageId)}/items`, {
       ...init,
@@ -164,6 +196,7 @@ export const notebookApi = {
 export const notebookKeys = {
   pages: (paperId: string) => ['notebook', paperId, 'pages'] as const,
   page: (paperId: string, pageId: string) => ['notebook', paperId, 'page', pageId] as const,
+  search: (paperId: string, q: string) => ['notebook', paperId, 'search', q] as const,
 };
 
 /**

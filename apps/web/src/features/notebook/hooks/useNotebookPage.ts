@@ -54,6 +54,7 @@ function touched(cmd: Command): string[] {
     case 'move':
       return [...cmd.itemIds];
     case 'edit-text':
+    case 'resize':
       return [cmd.itemId];
     default:
       return [];

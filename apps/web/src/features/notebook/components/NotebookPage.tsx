@@ -17,7 +17,7 @@ import { PAGE_TITLE_ID } from '../hooks/focus';
 import { InkLayer } from './InkLayer';
 import { NoteItem } from './NoteItem';
 import { QuoteCard } from './QuoteCard';
-import { ShapeView } from './ShapeView';
+import { ShapeItem } from './ShapeItem';
 import { passageOfQuote } from '../model/exchange';
 import {
   BINDING,
@@ -31,7 +31,8 @@ import { PAGE_WIDTH } from '../model/page';
 
 import type { NotebookPageWire } from '../api/notebookApi';
 import type { Exchange } from '../hooks/useExchange';
-import type { Item, StickyItem, TextItem } from '../model/page';
+import type { Box } from '../model/history';
+import type { Item, PageTemplate, StickyItem, TextItem } from '../model/page';
 import type { Stroke } from '../model/stroke';
 import type { ExchangeBody } from '../model/wire';
 import type { Anchor } from '@papertree/anchoring';
@@ -42,6 +43,8 @@ const TILTS = [-0.6, 0.5, -0.3, 0.7];
 /** Props for `NotebookPage`. */
 export interface NotebookPageProps {
   readonly page: NotebookPageWire;
+  /** The template on screen (the page's, or the one just chosen in the panel). */
+  readonly template: PageTemplate;
   readonly items: readonly Item[];
   readonly strokes: readonly Stroke[];
   /** Exchange item id → what Dive in stored in it. */
@@ -63,7 +66,10 @@ export interface NotebookPageProps {
   readonly onCommit: (id: string, text: string) => void;
   readonly onMove: (id: string, dx: number, dy: number) => void;
   readonly onDelete: (id: string) => void;
+  readonly onResize: (id: string, box: Box) => void;
   readonly onFocusAnchor: (anchor: Anchor) => void;
+  /** Items the notebook search matched on this page; they are lit. */
+  readonly matches: ReadonlySet<string>;
 }
 
 /** The exchange's rendered height in layout units (the scale transform does not change it). */
@@ -111,6 +117,7 @@ export function NotebookPage(props: NotebookPageProps): ReactNode {
             ref={measure}
             className="pt-nb-item"
             data-item-id={item.id}
+            data-match={props.matches.has(item.id) ? 'true' : undefined}
             style={{ left: item.x, top: item.y, width: item.w, minHeight: item.h, zIndex: item.z }}
           >
             <ExchangeBlock body={body} exchange={exchange} onFocusAnchor={props.onFocusAnchor} />
@@ -124,12 +131,22 @@ export function NotebookPage(props: NotebookPageProps): ReactNode {
             key={item.id}
             item={item}
             tilt={TILTS[(quotes - 1) % TILTS.length]}
+            matched={props.matches.has(item.id)}
             passage={exchange.layout === null ? null : passageOfQuote(exchange.layout, item.anchor)}
             onFocusAnchor={props.onFocusAnchor}
           />
         );
       case 'shape':
-        return <ShapeView key={item.id} item={item} />;
+        return (
+          <ShapeItem
+            key={item.id}
+            item={item}
+            scale={scale}
+            onMove={props.onMove}
+            onResize={props.onResize}
+            onDelete={props.onDelete}
+          />
+        );
       case 'text':
       case 'sticky':
         return (
@@ -138,6 +155,7 @@ export function NotebookPage(props: NotebookPageProps): ReactNode {
             item={item}
             scale={scale}
             editing={props.editingId === item.id}
+            matched={props.matches.has(item.id)}
             onEdit={props.onEdit}
             onCommit={props.onCommit}
             onMove={props.onMove}
@@ -150,7 +168,7 @@ export function NotebookPage(props: NotebookPageProps): ReactNode {
   return (
     <div
       className="pt-nb-page"
-      data-template={page.template}
+      data-template={props.template}
       style={{ width: BINDING + PAGE_WIDTH * scale, height: height * scale }}
     >
       <div className="pt-nb-page__binding" aria-hidden="true" />
@@ -160,7 +178,7 @@ export function NotebookPage(props: NotebookPageProps): ReactNode {
           width: PAGE_WIDTH,
           height,
           transform: `scale(${String(scale)})`,
-          ...templatePaint(page.template),
+          ...templatePaint(props.template),
         }}
       >
         <header className="pt-nb-page__title">
@@ -193,6 +211,9 @@ export function NotebookPage(props: NotebookPageProps): ReactNode {
         </div>
         <p id="pt-nb-note-help" className="pt-sr-only">
           Arrow keys move it, with Shift further. Enter edits it. Delete removes it.
+        </p>
+        <p id="pt-nb-shape-help" className="pt-sr-only">
+          Arrow keys move it, Alt with arrows resizes it, with Shift further. Delete removes it.
         </p>
       </div>
     </div>

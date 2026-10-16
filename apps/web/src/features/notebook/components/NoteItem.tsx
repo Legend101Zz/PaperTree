@@ -9,12 +9,13 @@
  */
 import { YouText } from '@papertree/ui';
 import { X } from 'lucide-react';
-import { useRef } from 'react';
+import { memo, useRef } from 'react';
 
 import { NoteEditor } from './NoteEditor';
+import { usePointerDrag } from '../hooks/usePointerDrag';
 
 import type { StickyItem, TextItem } from '../model/page';
-import type { KeyboardEvent, PointerEvent, ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 
 /** Props for `NoteItem`. */
 export interface NoteItemProps {
@@ -22,6 +23,8 @@ export interface NoteItemProps {
   /** Screen px per page unit, to turn a pointer drag into page units. */
   readonly scale: number;
   readonly editing: boolean;
+  /** True when the notebook search matched this note; it is lit. */
+  readonly matched?: boolean;
   /** Start editing this item in place. */
   readonly onEdit: (id: string) => void;
   /** Finish editing this item with this text. */
@@ -38,40 +41,35 @@ const ARROWS: Readonly<Record<string, readonly [number, number]>> = {
   ArrowDown: [0, 1],
 };
 
+/**
+ * Re-render only when what is drawn changes; the callbacks are `usePageEditing`'s stable,
+ * id-taking actions, so they never need comparing.
+ */
+function sameNote(a: NoteItemProps, b: NoteItemProps): boolean {
+  return (
+    a.item === b.item && a.scale === b.scale && a.editing === b.editing && a.matched === b.matched
+  );
+}
+
 /** One typed note or sticky, movable and editable. */
-export function NoteItem(props: NoteItemProps): ReactNode {
+export const NoteItem = memo(function NoteItem(props: NoteItemProps): ReactNode {
   const { item, scale, editing } = props;
   const ref = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ x: number; y: number; dx: number; dy: number; moved: boolean } | null>(
-    null,
-  );
   const noun = item.kind === 'text' ? 'typed note' : 'sticky note';
-
-  const onPointerDown = (e: PointerEvent<HTMLDivElement>): void => {
-    if (e.button !== 0 || editing) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    drag.current = { x: e.clientX, y: e.clientY, dx: 0, dy: 0, moved: false };
+  const place = (dx: number, dy: number): void => {
+    if (ref.current !== null) {
+      ref.current.style.translate = dx === 0 && dy === 0 ? '' : `${String(dx)}px ${String(dy)}px`;
+    }
   };
-  const onPointerMove = (e: PointerEvent<HTMLDivElement>): void => {
-    const d = drag.current;
-    if (d === null) return;
-    d.dx = (e.clientX - d.x) / scale;
-    d.dy = (e.clientY - d.y) / scale;
-    if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 3) return;
-    d.moved = true;
-    if (ref.current !== null) ref.current.style.translate = `${String(d.dx)}px ${String(d.dy)}px`;
-  };
-  const onPointerUp = (): void => {
-    const d = drag.current;
-    drag.current = null;
-    if (d === null || !d.moved) return;
-    if (ref.current !== null) ref.current.style.translate = '';
-    props.onMove(item.id, Math.round(d.dx), Math.round(d.dy));
-  };
-  const onPointerCancel = (): void => {
-    drag.current = null;
-    if (ref.current !== null) ref.current.style.translate = '';
-  };
+  const drag = usePointerDrag(
+    scale,
+    place,
+    (dx, dy) => {
+      place(0, 0);
+      props.onMove(item.id, dx, dy);
+    },
+    () => place(0, 0),
+  );
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
     const arrow = ARROWS[e.key];
     const step = e.shiftKey ? 24 : 8;
@@ -87,6 +85,7 @@ export function NoteItem(props: NoteItemProps): ReactNode {
       ref={ref}
       className={`pt-nb-note pt-nb-note--${item.kind}`}
       data-item-id={item.id}
+      data-match={props.matched === true ? 'true' : undefined}
       style={{ left: item.x, top: item.y, width: item.w, minHeight: item.h, zIndex: item.z + 10 }}
     >
       {editing ? (
@@ -103,10 +102,7 @@ export function NoteItem(props: NoteItemProps): ReactNode {
           aria-roledescription={noun}
           aria-label={`${noun[0]?.toUpperCase() ?? ''}${noun.slice(1)}: ${item.text}`}
           aria-describedby="pt-nb-note-help"
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerCancel}
+          {...drag}
           onDoubleClick={() => props.onEdit(item.id)}
           onKeyDown={onKeyDown}
         >
@@ -127,4 +123,4 @@ export function NoteItem(props: NoteItemProps): ReactNode {
       )}
     </div>
   );
-}
+}, sameNote);
