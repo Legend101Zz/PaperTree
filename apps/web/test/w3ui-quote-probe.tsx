@@ -6,6 +6,7 @@ import type { Anchor } from '@papertree/anchoring';
 import { ExplainPanel, useExplainActions } from '@/components/explain';
 import { ReaderActionsProvider, type ReaderActions } from '@/components/reader/actions';
 
+import { TestQueryProvider } from './query-client';
 import { anchorFixture, PAPER } from './s6-support';
 
 export function QuoteProbe({ quote }: { readonly quote: string }): ReactNode {
@@ -20,11 +21,13 @@ export function QuoteProbe({ quote }: { readonly quote: string }): ReactNode {
     [openExplain],
   );
   return (
-    <ReaderActionsProvider value={actions}>
-      <button type="button" onClick={() => openExplain({ anchor: anchorFixture('q'), quote })}>
-        open
-      </button>
-      <ExplainPanel controller={explain} />
-    </ReaderActionsProvider>
+    <TestQueryProvider>
+      <ReaderActionsProvider value={actions}>
+        <button type="button" onClick={() => openExplain({ anchor: anchorFixture('q'), quote })}>
+          open
+        </button>
+        <ExplainPanel controller={explain} />
+      </ReaderActionsProvider>
+    </TestQueryProvider>
   );
 }

@@ -56,6 +56,7 @@ const REAL_ROW: WirePaper = {
   arxiv_category: null,
   thread_count: 0,
   has_summary: false,
+  topic: null,
 };
 
 describe('D1/D2 — the session survives sign-in', () => {
@@ -112,7 +113,8 @@ describe('D3 — the library page talks to the service that is actually running'
     // file got was invisible at every call site — and the v1 one posts `/papers/upload`, which the
     // v2 service answers **405 Method Not Allowed** (measured in the browser).
     const source = readFileSync(
-      resolve(process.cwd(), 'src/components/library/LibraryView.tsx'),
+      // #195 moved the library's data layer out of LibraryView into this hook.
+      resolve(process.cwd(), 'src/features/library/hooks/useLibrary.ts'),
       'utf8',
     );
 

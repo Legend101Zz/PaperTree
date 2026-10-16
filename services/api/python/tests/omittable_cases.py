@@ -47,6 +47,10 @@ CASES: Final[dict[str, tuple[dict[str, Any], tuple[str, ...]]]] = {
     "AnchorV1In": (capture_anchor(), ("subTarget",)),
     "ReparseRequest": ({}, ("reason",)),
     "ReadingStateUpdate": ({"last_page": 0}, ("mode",)),
+    "TopicCreate": ({"name": "Vision"}, ("cloth",)),
+    "TopicPatch": ({}, ("name", "sort_order")),
+    # "Exactly one of topic_id / new_topic_name" is the route's rule (422), not the model's.
+    "PaperTopicPut": ({}, ("topic_id", "new_topic_name", "cloth")),
     "HighlightPatch": ({}, ("color",)),
     "ResolutionPutItem": (
         {
@@ -70,9 +74,12 @@ CASES: Final[dict[str, tuple[dict[str, Any], tuple[str, ...]]]] = {
             "w": 240,
             "h": 120,
         },
-        ("source_anchor", "source_message_id"),
+        ("source_anchor", "source_message_id", "source_page_id", "source_diagram_id"),
     ),
-    "NodePatch": ({"version": 1}, ("x", "y", "w", "h", "z", "body")),
+    "NodePatch": (
+        {"version": 1},
+        ("x", "y", "w", "h", "z", "body", "source_page_id", "source_diagram_id"),
+    ),
     "EdgePatch": ({}, ("kind",)),
     "BoardPatch": ({}, ("title",)),
     "Citation": (

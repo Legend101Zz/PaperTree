@@ -43,6 +43,7 @@ import type { BBox } from '@papertree/document-ir';
 
 import { PdfPage, type TextLayerInfo } from './PdfPage';
 import { pageUnitSize, usePdfDocument, type PdfPageMeta } from './PdfDocumentProvider';
+import { tweenScroll } from './flash';
 import { releaseScrollHold } from './scrollHold';
 
 /* ────────────────────────────── the pure windowing math ────────────────────────────── */
@@ -404,12 +405,19 @@ export function useVisiblePages(): VisiblePages {
 export interface ScrollToOptions {
   readonly behavior?: ScrollBehavior;
   readonly margin?: number;
+  /** Leave the scroll alone when the whole rectangle is already in view (the citation flash). */
+  readonly ifNeeded?: boolean;
+  /** Tween the scroll over this many ms instead of `behavior` (`reader/flash`, #202). */
+  readonly durationMs?: number;
 }
 
 export interface VirtualPageListHandle {
   scrollToPage(pageIndex: number, opts?: ScrollToOptions): void;
-  /** `bbox` is IR space: PDF points, origin top-left, `/Rotate` applied. */
-  scrollToBlock(pageIndex: number, bbox: BBox, opts?: ScrollToOptions): void;
+  /**
+   * `bbox` is IR space: PDF points, origin top-left, `/Rotate` applied. Returns whether it
+   * scrolled (false with `ifNeeded` when the rectangle was already in view).
+   */
+  scrollToBlock(pageIndex: number, bbox: BBox, opts?: ScrollToOptions): boolean;
   getVisiblePages(): VisiblePages;
   getScrollElement(): HTMLDivElement | null;
   /** Put this position at the top of the viewport. */
@@ -638,7 +646,13 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
         },
         scrollToBlock(pageIndex, bbox, opts) {
           const el = scrollRef.current;
-          if (el === null) return;
+          if (el === null) return false;
+          if (opts?.ifNeeded === true) {
+            const scale = irScaleFor(pageIndex);
+            const top = CONTENT_PAD_TOP + offsetForPage(layout, pageIndex) + bbox[1] * scale;
+            const bottom = top + (bbox[3] - bbox[1]) * scale;
+            if (top >= el.scrollTop && bottom <= el.scrollTop + el.clientHeight) return false;
+          }
           const target = offsetForBlock(layout, pageIndex, bbox, irScaleFor(pageIndex), {
             margin: opts?.margin ?? 24,
             viewportHeight,
@@ -647,11 +661,16 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
           // right would drag a centred page sideways for nothing.
           const left = layout.maxWidth > el.clientWidth ? target.left : el.scrollLeft;
           releaseScrollHold(el);
+          if (opts?.durationMs !== undefined) {
+            tweenScroll(el, CONTENT_PAD_TOP + target.top, left, opts.durationMs);
+            return true;
+          }
           el.scrollTo({
             top: CONTENT_PAD_TOP + target.top,
             left,
             behavior: opts?.behavior ?? 'auto',
           });
+          return true;
         },
         scrollToPosition(position) {
           const el = scrollRef.current;

@@ -37,6 +37,7 @@ import {
 import type { HighlightColor } from '@/lib/api/types';
 
 import { assetSrc } from './assetSrc';
+import { FLASH_MS } from './flash';
 import { planFigures } from './guidedFigures';
 import { displayQuote } from './quote';
 import { joinContinuedBlocks, reflow, reflowPreservingLines } from './reflow';
@@ -594,7 +595,7 @@ export function GuidedView({
     if (element === null) return undefined;
     scrollToBlock(flashBlockId);
     element.setAttribute('data-guided-flash', 'true');
-    const timer = setTimeout(() => element.removeAttribute('data-guided-flash'), 1200);
+    const timer = setTimeout(() => element.removeAttribute('data-guided-flash'), FLASH_MS);
     return () => {
       clearTimeout(timer);
       element.removeAttribute('data-guided-flash');

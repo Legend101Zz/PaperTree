@@ -26,9 +26,11 @@ import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 
 import type { Anchor } from '@papertree/anchoring';
 
+import { mergeStored, type ThreadMessage } from '@/features/explain/model/messages';
+import { originOf } from '@/features/explain/model/threads';
 import { summaryApi } from '@/lib/api/summary';
 import { threadsApi, type CreateThreadBody } from '@/lib/api/threads';
-import type { Citation, RunSummary, SseEvent, Summary } from '@/lib/api/types';
+import type { Message, RunSummary, SseEvent, Summary, Thread } from '@/lib/api/types';
 
 import { failureOf, type Failure } from './errors';
 
@@ -38,28 +40,10 @@ export interface ExplainRequest {
   readonly quote: string;
 }
 
-export type MessageStatus = 'streaming' | 'complete' | 'partial' | 'error' | 'aborted';
+export type { MessageStatus } from '@/features/explain/model/messages';
 
-/** One line of the conversation as the panel shows it. */
-export interface ViewMessage {
-  /** Local, stable across the message's whole life (the server id only arrives with `run`). */
-  readonly key: string;
-  readonly role: 'user' | 'assistant';
-  readonly text: string;
-  /** The server's `message_id`, once known. `sendToCanvas` and `retry_of` need it. */
-  readonly messageId: string | null;
-  readonly runId: string | null;
-  readonly status: MessageStatus;
-  /** The reader pressed Stop: the partial text is kept and marked as stopped. */
-  readonly stopped: boolean;
-  /** The status label while it works ("Reading p. 4 · §2.1"). */
-  readonly label: string | null;
-  readonly failure: Failure | null;
-  readonly citations: readonly Citation[];
-  readonly usage: RunSummary | null;
-  /** For an assistant message: the question it answers (a retry sends it again). */
-  readonly question: string;
-}
+/** One line of the conversation as the panel shows it (defined beside the merge that builds it). */
+export type ViewMessage = ThreadMessage;
 
 export type SummaryPhase = 'idle' | 'loading' | 'streaming' | 'ready' | 'partial' | 'failed';
 
@@ -83,6 +67,11 @@ export interface ExplainState {
   readonly threadId: string | null;
   readonly messages: readonly ViewMessage[];
   readonly summary: SummaryView;
+  /**
+   * The person chose "New thread" (#202): the panel stays empty for a fresh question instead of
+   * opening on the newest stored thread, and that question starts a new thread.
+   */
+  readonly fresh: boolean;
 }
 
 const IDLE_SUMMARY: SummaryView = {
@@ -102,6 +91,7 @@ const INITIAL: ExplainState = {
   threadId: null,
   messages: [],
   summary: IDLE_SUMMARY,
+  fresh: false,
 };
 
 type Action =
@@ -109,6 +99,9 @@ type Action =
   | { type: 'close' }
   | { type: 'view'; view: PanelView }
   | { type: 'thread'; epoch: number; threadId: string }
+  | { type: 'select'; epoch: number; threadId: string; request: ExplainRequest | null }
+  | { type: 'fresh'; epoch: number }
+  | { type: 'hydrate'; threadId: string; messages: readonly Message[] }
   | { type: 'add'; epoch: number; message: ViewMessage }
   | { type: 'patch'; epoch: number; key: string; patch: Partial<ViewMessage> }
   | { type: 'append'; epoch: number; key: string; delta: string }
@@ -125,6 +118,18 @@ export function explainReducer(state: ExplainState, action: Action): ExplainStat
         request: action.request,
         threadId: null,
         messages: [],
+        fresh: false,
+      };
+    case 'fresh':
+      return {
+        ...state,
+        epoch: action.epoch,
+        open: true,
+        view: 'thread',
+        request: null,
+        threadId: null,
+        messages: [],
+        fresh: true,
       };
     case 'close':
       return { ...state, open: false };
@@ -132,6 +137,22 @@ export function explainReducer(state: ExplainState, action: Action): ExplainStat
       return { ...state, view: action.view, open: true };
     case 'thread':
       return action.epoch === state.epoch ? { ...state, threadId: action.threadId } : state;
+    case 'select':
+      return {
+        ...state,
+        epoch: action.epoch,
+        open: true,
+        view: 'thread',
+        request: action.request,
+        threadId: action.threadId,
+        messages: [],
+        fresh: false,
+      };
+    case 'hydrate':
+      // A detail read for a thread the panel has left (the menu moved on) is dropped.
+      return action.threadId === state.threadId
+        ? { ...state, messages: mergeStored(state.messages, action.messages) }
+        : state;
     case 'add':
       return action.epoch === state.epoch
         ? { ...state, messages: [...state.messages, action.message] }
@@ -182,6 +203,15 @@ export interface ExplainController {
    */
   readonly summarize: (options?: { readonly regenerate?: boolean }) => void;
   readonly stopSummary: () => void;
+  /** Show a stored thread (the thread menu, or the newest one when the panel opens empty). */
+  readonly selectThread: (thread: Thread) => void;
+  /** "New thread": an empty panel whose next question starts a new thread (owner may change). */
+  readonly startFresh: () => void;
+  /**
+   * Merge a stored read of the current thread into the panel (#202): live while streaming, the
+   * stored copy (locators, coverage) once settled, under the same keys. Other threads are ignored.
+   */
+  readonly hydrateThread: (threadId: string, messages: readonly Message[]) => void;
 }
 
 const DEFAULT_EXPLAIN_QUESTION = 'Explain this passage.';
@@ -203,6 +233,9 @@ function blankAssistant(question: string): ViewMessage {
     citations: [],
     usage: null,
     question,
+    createdAt: new Date().toISOString(),
+    coverage: null,
+    generation: null,
   };
 }
 
@@ -247,6 +280,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       epoch: number,
       key: string,
       open: (signal: AbortSignal) => AsyncGenerator<SseEvent>,
+      userKey: string | null,
     ): Promise<void> => {
       const controller = new AbortController();
       threadAbort.current = controller;
@@ -258,7 +292,20 @@ export function useExplainActions(options: { readonly paperId: string | null }):
           if (epochRef.current !== epoch) return;
           switch (event.event) {
             case 'run':
-              patch({ runId: event.data.run_id, messageId: event.data.message_id });
+              patch({
+                runId: event.data.run_id,
+                messageId: event.data.message_id,
+                generation: event.data.generation,
+              });
+              // The ask's server id lets a stored read of the thread recognise it (no duplicate).
+              if (userKey !== null && event.data.user_message_id !== null) {
+                dispatch({
+                  type: 'patch',
+                  epoch,
+                  key: userKey,
+                  patch: { messageId: event.data.user_message_id },
+                });
+              }
               if (event.data.thread_id !== null) {
                 dispatch({ type: 'thread', epoch, threadId: event.data.thread_id });
               }
@@ -323,13 +370,14 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       open: (signal: AbortSignal) => AsyncGenerator<SseEvent>,
       reuse?: string,
     ): void => {
-      if (show) {
+      const userKey = show ? nextKey() : null;
+      if (userKey !== null) {
         dispatch({
           type: 'add',
           epoch,
           message: {
             ...blankAssistant(question),
-            key: nextKey(),
+            key: userKey,
             role: 'user',
             text: question,
             status: 'complete',
@@ -357,7 +405,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
           },
         });
       }
-      void consume(epoch, key, open);
+      void consume(epoch, key, open, userKey);
     },
     [consume],
   );
@@ -396,8 +444,14 @@ export function useExplainActions(options: { readonly paperId: string | null }):
   );
 
   const openPanel = useCallback((): void => {
-    if (stateRef.current.messages.length > 0 || stateRef.current.request !== null) {
-      dispatch({ type: 'view', view: stateRef.current.view });
+    const current = stateRef.current;
+    if (
+      current.messages.length > 0 ||
+      current.request !== null ||
+      current.threadId !== null ||
+      current.fresh
+    ) {
+      dispatch({ type: 'view', view: current.view });
       return;
     }
     const epoch = (epochRef.current += 1);
@@ -428,34 +482,9 @@ export function useExplainActions(options: { readonly paperId: string | null }):
     [paperId, sendCreate, startTurn],
   );
 
-  const stop = useCallback((): void => {
-    halt(true);
-    // The server keeps the partial text it had; fetch it back (and its citations) once it has
-    // written them, best effort: what the reader already sees is the truth they were shown.
-    const { threadId, epoch } = stateRef.current;
-    if (paperId === null || threadId === null) return;
-    window.setTimeout(() => {
-      threadsApi
-        .get(paperId, threadId)
-        .then((detail) => {
-          if (epochRef.current !== epoch) return;
-          for (const server of detail.messages) {
-            const local = stateRef.current.messages.find((m) => m.messageId === server.message_id);
-            if (local === undefined || local.role !== 'assistant' || local.status === 'streaming')
-              continue;
-            if (server.citations.length > 0 && local.citations.length === 0) {
-              dispatch({
-                type: 'patch',
-                epoch,
-                key: local.key,
-                patch: { citations: server.citations },
-              });
-            }
-          }
-        })
-        .catch(() => undefined);
-    }, 900);
-  }, [halt, paperId]);
+  // The server keeps the partial text it had; `useThreads` reads the thread again once the run
+  // has settled (one path for done, Stop and failures), so the stored copy replaces this one.
+  const stop = useCallback((): void => halt(true), [halt]);
 
   const retry = useCallback(
     (key: string): void => {
@@ -611,6 +640,43 @@ export function useExplainActions(options: { readonly paperId: string | null }):
 
   const setView = useCallback((view: PanelView): void => dispatch({ type: 'view', view }), []);
 
+  const selectThread = useCallback(
+    (thread: Thread): void => {
+      halt(true);
+      const epoch = (epochRef.current += 1);
+      const request = originOf(thread);
+      dispatch({ type: 'select', epoch, threadId: thread.thread_id, request });
+      stateRef.current = {
+        ...stateRef.current,
+        epoch,
+        request,
+        threadId: thread.thread_id,
+        messages: [],
+      };
+    },
+    [halt],
+  );
+
+  const startFresh = useCallback((): void => {
+    halt(true);
+    const epoch = (epochRef.current += 1);
+    dispatch({ type: 'fresh', epoch });
+    stateRef.current = {
+      ...stateRef.current,
+      epoch,
+      request: null,
+      threadId: null,
+      messages: [],
+      fresh: true,
+    };
+  }, [halt]);
+
+  const hydrateThread = useCallback(
+    (threadId: string, messages: readonly Message[]): void =>
+      dispatch({ type: 'hydrate', threadId, messages }),
+    [],
+  );
+
   // Leaving the reader stops what is streaming: nothing is left running for nobody.
   useEffect(
     () => () => {
@@ -634,6 +700,9 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       retry,
       summarize,
       stopSummary,
+      selectThread,
+      startFresh,
+      hydrateThread,
     }),
     [
       paperId,
@@ -647,6 +716,9 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       retry,
       summarize,
       stopSummary,
+      selectThread,
+      startFresh,
+      hydrateThread,
     ],
   );
 }

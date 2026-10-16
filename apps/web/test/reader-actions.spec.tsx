@@ -27,6 +27,8 @@ import {
   type ReaderActions,
 } from '@/components/reader/actions';
 
+import { TestQueryProvider } from './query-client';
+
 const FIXTURE = join(
   process.cwd(),
   '../../packages/document-ir/fixtures/resnet-cvpr-2col.paperir.json',
@@ -197,7 +199,9 @@ describe('ReaderActions — mounted by ReaderWorkspace, reached from inside the 
     });
     probe.quote = target!.text.slice(0, 40);
     const { ReaderWorkspace } = await import('@/app/paper/[id]/read/ReaderWorkspace');
-    render(<ReaderWorkspace paper={{ kind: 'fixture', slug: 'resnet-cvpr-2col' }} />);
+    render(<ReaderWorkspace paper={{ kind: 'fixture', slug: 'resnet-cvpr-2col' }} />, {
+      wrapper: TestQueryProvider,
+    });
     await waitFor(() => expect(screen.getByRole('button', { name: 'probe explain' })).toBeTruthy());
   }
 

@@ -14,7 +14,7 @@ import {
   uploadWithProgress as uploadWithProgressTransport,
   type UploadOptions,
 } from './client';
-import type { LibraryPaper, Me, ReadingMode } from './types';
+import type { LibraryLinks, LibraryPaper, Me, ReadingMode } from './types';
 
 const seg = encodeURIComponent;
 
@@ -84,6 +84,12 @@ export const papersApi = {
 
   /** Every paper this caller owns, newest first (contracts §2.2). */
   list: () => request<readonly LibraryPaper[]>('/papers'),
+
+  /**
+   * Citation links between the caller's own papers, computed on read (#194). Each link says how it
+   * matched (`matched_by`), so word the label from that field.
+   */
+  links: () => request<LibraryLinks>('/library/links'),
 
   /**
    * 204. Tells the server which page (zero-based) the reader is on, for the library's "reading

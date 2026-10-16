@@ -5,6 +5,7 @@
  *      check succeeds, and after the last try says so and offers "Try again";
  *   2. a failed card says ONE sentence (no second, near-identical one for a screen reader);
  *   3. after a garbage upload there is no upload row above the paper's own "Could not read" card;
+ *      (since #195 the card is the spine's catalogue card, opened by a click on the spine)
  *   4. Cancel re-reads GET /papers and says it was added when it was.
  *
  * Screenshots go to PAPERTREE_E2E_SHOTS and are looked at by the author.
@@ -47,16 +48,21 @@ test('a garbage upload leaves ONE failed card, one sentence, no lingering upload
       const page = await context.newPage();
       await tokenInit(page, token);
       await page.goto('/dashboard');
-      await expect(page.getByRole('heading', { name: 'My papers' })).toBeVisible();
-      await page.locator('[data-upload-dropzone] input[type=file]').setInputFiles(GARBAGE);
-      const card = page.locator('article[data-paper-id^="ppr_"]').first();
-      await expect(card).toHaveAttribute('data-processing-state', 'failed', { timeout: 120_000 });
+      await expect(page.getByRole('heading', { name: 'Your library' })).toBeVisible();
+      await page.locator('[data-add-papers] input[type=file]').setInputFiles(GARBAGE);
+      // #195: the paper is a spine on the shelf, and its catalogue card (a click on the spine)
+      // holds the reason and Retry. The assertions are the card grid's, on the spine and card.
+      const spine = page.locator('button[data-paper-id^="ppr_"]').first();
+      await expect(spine).toHaveAttribute('data-processing-state', 'failed', { timeout: 120_000 });
       // The transient row is gone as soon as the server row is in the list: one place to look.
       await expect(page.locator('[data-testid=upload-queue] li')).toHaveCount(0);
       await expect(page.getByText('Uploaded - queued for reading')).toHaveCount(0);
+      await spine.click();
+      const card = page.locator('[data-card-paper-id^="ppr_"]');
       // One sentence: the reason; the generic state sentence is not in the card at all (the
-      // badge's screen-reader text included).
+      // screen-reader text included), nor in the spine's name.
       expect(await card.textContent()).not.toContain(GENERIC);
+      expect(await spine.getAttribute('aria-label')).not.toContain(GENERIC);
       await expect(card.locator('[data-failure-reason]')).toHaveCount(1);
       await expect(card.getByRole('button', { name: /Retry/ })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(vp.width);
@@ -90,8 +96,8 @@ test('Cancel after the server had the whole body says it is in the library', asy
     await route.fulfill({ response: real }).catch(() => undefined);
   });
   await page.goto('/dashboard');
-  await expect(page.getByRole('heading', { name: 'My papers' })).toBeVisible();
-  await page.locator('[data-upload-dropzone] input[type=file]').setInputFiles(GARBAGE);
+  await expect(page.getByRole('heading', { name: 'Your library' })).toBeVisible();
+  await page.locator('[data-add-papers] input[type=file]').setInputFiles(GARBAGE);
   const cancel = page.getByRole('button', { name: /Cancel/ });
   await expect(cancel).toBeVisible();
   await page.waitForTimeout(1500);
@@ -101,7 +107,8 @@ test('Cancel after the server had the whole body says it is in the library', asy
     'It had already uploaded; it is in your library. Delete it if you did not mean to add it.',
   );
   // ...and that is TRUE: the paper's card is in the list.
-  await expect(page.locator('article[data-paper-id^="ppr_"]')).toHaveCount(1, { timeout: 30_000 });
+  // #195: a paper is a spine on the shelf now.
+  await expect(page.locator('button[data-paper-id^="ppr_"]')).toHaveCount(1, { timeout: 30_000 });
   await page.screenshot({ path: shot('w2-04-cancel-truth-1440.png') });
   await context.close();
 });

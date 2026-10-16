@@ -6,7 +6,7 @@
  *
  *   openExplain   S6 implements it (`components/explain/useExplainActions.ts`)
  *   sendToCanvas  S7 implements it (`components/canvas/sendToCanvas.ts`)
- *   focusAnchor   S4 implements it (resolve, scroll, 1.2 s flash)
+ *   focusAnchor   S4 implements it (resolve, scroll, the citation flash of DESIGN.md §6)
  *
  * `ReaderWorkspace` mounts `<ReaderActionsProvider>` and decides which implementation fills each
  * slot; `SourcePane`'s toolbar, the explain panel's citation chips and the canvas's "open source"
@@ -21,13 +21,25 @@ import { createContext, createElement, useContext, type ReactNode } from 'react'
 
 import type { Anchor } from '@papertree/anchoring';
 
+/**
+ * The numbered marker a citation flash was started from (#202): the reader draws its margin tab
+ * ("from marker 2 in the answer") beside the flashed passage.
+ */
+export interface FlashSource {
+  readonly n: number;
+  /** 1-based page and ¶, as the marker's tab shows them. */
+  readonly page: number;
+  readonly para: number | null;
+  readonly notVerified: boolean;
+}
+
 export type SendToCanvasInput =
   { kind: 'excerpt'; anchor: Anchor } | { kind: 'explanation'; messageId: string };
 
 export type ReaderActions = {
   openExplain(input: { anchor: Anchor; quote: string }): void;
   sendToCanvas(input: SendToCanvasInput): Promise<void>;
-  focusAnchor(anchor: Anchor, opts?: { flash?: boolean }): void;
+  focusAnchor(anchor: Anchor, opts?: { flash?: boolean; from?: FlashSource }): void;
 };
 
 const ReaderActionsContext = createContext<ReaderActions | null>(null);

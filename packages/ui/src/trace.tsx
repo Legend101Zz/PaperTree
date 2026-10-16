@@ -146,6 +146,9 @@ export function TraceRow(props: TraceRowProps): ReactNode {
         className="pt-trace-row__show"
         aria-label={`${showLabel}, passage ${String(n)}`}
         onClick={() => props.onShowInPaper(n)}
+        // Focus lights the row and its markers too, as hover does (DESIGN.md §4.9, #202 review).
+        onFocus={() => props.onLight?.(n)}
+        onBlur={() => props.onLight?.(null)}
       >
         {showLabel}
       </Button>

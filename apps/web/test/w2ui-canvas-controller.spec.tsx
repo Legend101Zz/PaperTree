@@ -50,6 +50,9 @@ function node(id: string, extra: Partial<CanvasNode> = {}): CanvasNode {
     body: 'b',
     source_anchor: null,
     source_message_id: null,
+    source_page_id: null,
+    source_diagram_id: null,
+    counts: null,
     version: 1,
     created_at: '',
     updated_at: '',
@@ -64,6 +67,9 @@ function edge(id: string, from: string, to: string): CanvasEdge {
     to_node_id: to,
     kind: 'supports',
     label: 'because',
+    from_port: null,
+    to_port: null,
+    created_at: '',
   };
 }
 

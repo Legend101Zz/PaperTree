@@ -1,0 +1,937 @@
+/*
+ * The library's shelf (#195): spines, the walnut plank, bookends, holders and the catalogue card,
+ * measured from frame 01 (`01-shelf-1440.dc.html`). Colours are the Ex Libris tokens; the furniture
+ * values below are the same in both schemes because furniture does not change at night (DESIGN.md §2).
+ */
+:root {
+  --pt-spine-cast: rgb(48 30 16 / 38%);
+  --pt-spine-headband: repeating-linear-gradient(90deg, #ede1c2 0 2px, #8e2e27 2px 4px);
+  --pt-spine-rule: rgb(232 212 160 / 85%);
+  --pt-spine-label-edge: #7a5a22;
+  --pt-spine-string: #6e5226;
+  --pt-spine-note: #6a4a2c; /* 6.3:1 on the paper label */
+  --pt-spine-danger: #9e2420; /* labels stay paper at night, so their red stays the daylight red */
+  --pt-spine-dim-ink: #675d53; /* a dimmed label's ink: 6.1:1 on the day label, 5.4:1 at night */
+  --pt-plank-lip: linear-gradient(#9a7353, #80583a);
+  --pt-bookend: linear-gradient(90deg, #8c6b2e, #e7cf8e 35%, #b8944c 60%, #6e5420);
+  /*
+   * Gilt on cloth. DESIGN.md's 4.7–6.5:1 holds on flat cloth only; with the spine's sheen and weave
+   * under a title, the shared --pt-gilt fell to about 3.6:1 on Vision and Reinforcement. So the
+   * spine's gilt starts lighter and the light under the title is capped; test/library-gilt.spec.ts
+   * recomputes every cloth's title pair from these values (a deviation from the mock-up, recorded
+   * in shots/S2d/README.md).
+   */
+  --pt-spine-gilt-low: #efe1b4;
+  --pt-spine-gilt: linear-gradient(
+    100deg,
+    var(--pt-spine-gilt-low) 0%,
+    #faf1d6 36%,
+    #f1e4ba 54%,
+    #f8eecd 76%,
+    var(--pt-spine-gilt-low) 100%
+  );
+  --pt-spine-sheen-peak: 5%;
+  --pt-spine-weave-light: 3%;
+}
+
+/* ── the plank ─────────────────────────────────────────────────────────────────────────── */
+
+.pt-plank {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  padding-inline: 8px;
+}
+
+.pt-plank__wood {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  block-size: 54px;
+  border-radius: 2px 2px 3px 3px;
+  background:
+    var(--pt-plank-lip) top / 100% 8px no-repeat,
+    repeating-linear-gradient(
+      90deg,
+      rgb(0 0 0 / 9%) 0 2px,
+      transparent 2px 11px,
+      rgb(255 255 255 / 5%) 11px 12px,
+      transparent 12px 27px
+    ),
+    var(--pt-walnut);
+  box-shadow:
+    inset 0 -2px 0 rgb(30 16 6 / 35%),
+    0 2px 2px rgb(40 24 10 / 30%),
+    6px 14px 18px -8px var(--pt-spine-cast);
+}
+
+/* Bookends stand on the plank at each end of the books, so a short shelf is held, not stretched. */
+.pt-plank__bookend {
+  position: relative;
+  flex: none;
+  inline-size: 12px;
+  block-size: 168px;
+  margin-block-end: 54px;
+  margin-inline-end: 8px;
+  border-radius: 2px 2px 0 0;
+  background: var(--pt-bookend);
+  box-shadow: 4px 0 8px -2px var(--pt-spine-cast);
+}
+
+.pt-plank__bookend--end {
+  margin-inline: 8px 0;
+  transform: scaleX(-1);
+}
+
+.pt-plank__holder {
+  position: relative;
+  z-index: 4; /* in front of the ribbons that hang over the plank */
+  display: flex;
+  margin-inline: -16px; /* a holder may reach half-way into the gap, so one book is not islanded */
+  block-size: 54px;
+  padding-block-start: 12px;
+  justify-content: center;
+}
+
+/* ── the rows: one tab stop, scrolling sideways when wider than the page ─────────────── */
+
+.pt-shelf {
+  position: relative;
+  display: flex;
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  gap: 32px;
+  align-items: flex-end;
+  padding-block-start: 24px; /* room for a lifted spine and its focus ring */
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.pt-shelf__row {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+}
+
+.pt-shelf__spines {
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+  padding-inline: 2px;
+}
+
+.pt-shelf[data-searching='true'] .pt-plank__holder {
+  opacity: 0.7; /* the holder's ink stays above 5:1 on its card */
+  filter: saturate(0.5);
+}
+
+/* ── a spine ───────────────────────────────────────────────────────────────────────────── */
+
+.pt-spine {
+  position: relative;
+  flex: none;
+  padding: 0;
+  color: var(--pt-paper-label-ink);
+  cursor: pointer;
+  border: 0;
+  border-radius: 2px 2px 0 0;
+  background-image:
+    linear-gradient(
+      90deg,
+      rgb(0 0 0 / 30%),
+      rgb(255 255 255 / 3%) 26%,
+      rgb(255 255 255 / var(--pt-spine-sheen-peak)) 40%,
+      rgb(0 0 0 / 4%) 68%,
+      rgb(0 0 0 / 34%)
+    ),
+    repeating-linear-gradient(
+      45deg,
+      rgb(255 255 255 / var(--pt-spine-weave-light)) 0 1px,
+      transparent 1px 3px
+    ),
+    repeating-linear-gradient(-45deg, rgb(0 0 0 / 9%) 0 1px, transparent 1px 3px);
+  box-shadow:
+    6px 0 9px -4px var(--pt-spine-cast),
+    inset 0 2px 0 rgb(255 255 255 / 7%);
+  transition: transform var(--pt-dur-quick) var(--pt-ease-lift);
+}
+
+.pt-spine:not(.pt-spine--kraft)::before {
+  position: absolute;
+  inset-inline: 2px;
+  top: -3px;
+  block-size: 3px;
+  content: '';
+  background: var(--pt-spine-headband);
+  border-radius: 2px 2px 0 0;
+}
+
+.pt-spine:hover {
+  transform: translateY(-4px);
+}
+
+.pt-spine:focus-visible {
+  z-index: 2;
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: 3px;
+}
+
+.pt-spine[aria-expanded='true'] {
+  z-index: 2;
+  transform: translateY(-14px);
+}
+
+/*
+ * A search dims what does not match to about a third (DESIGN.md §1). A veil of the ground colour
+ * goes over the cloth, the gilt fades with it, and a paper label keeps 6:1 ink: the label is text
+ * someone may still need to read, so it recedes without dropping under 4.5:1 (WCAG 1.4.3).
+ */
+.pt-spine::after {
+  position: absolute;
+  inset: -3px 0 0;
+  pointer-events: none;
+  content: '';
+  background: var(--pt-ground);
+  opacity: 0;
+  transition: opacity var(--pt-dur-quick) var(--pt-ease-out);
+}
+
+.pt-spine[data-match='false'] {
+  filter: saturate(0.45);
+}
+
+.pt-spine[data-match='false']::after {
+  opacity: 0.68;
+}
+
+.pt-spine__face,
+.pt-spine__year {
+  transition: opacity var(--pt-dur-quick) var(--pt-ease-out);
+}
+
+.pt-spine[data-match='false'] .pt-spine__face,
+.pt-spine[data-match='false'] .pt-spine__year,
+.pt-spine[data-match='false'] .pt-spine__ribbon {
+  opacity: 0.5;
+}
+
+.pt-spine[data-match='false'] .pt-spine__label {
+  filter: saturate(0.5);
+  box-shadow: none;
+}
+
+.pt-spine[data-match='false'] .pt-spine__label .pt-spine__title,
+.pt-spine[data-match='false'] .pt-spine__label .pt-spine__note {
+  color: var(--pt-spine-dim-ink);
+}
+
+.pt-spine[data-match='true'] {
+  z-index: 1;
+  box-shadow:
+    inset 0 0 0 2px var(--pt-paper-label),
+    inset 0 0 0 3.5px var(--pt-focus),
+    8px 8px 14px -4px rgb(48 30 16 / 55%);
+}
+
+.pt-spine__inner {
+  position: absolute;
+  inset: 0;
+  z-index: 1; /* above the search veil */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.pt-spine__band {
+  flex: none;
+  inline-size: 100%;
+  block-size: 6px;
+  margin-block: 12px;
+  border-block: 1px solid var(--pt-spine-rule);
+}
+
+.pt-spine__gap {
+  flex: none;
+  block-size: 16px;
+}
+
+.pt-spine__middle {
+  display: flex;
+  flex: 1 1 0;
+  min-block-size: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.pt-spine__face {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.pt-spine__title,
+.pt-spine__authors,
+.pt-spine__note {
+  overflow: hidden;
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+}
+
+.pt-spine__title {
+  font-family: var(--pt-font-paper);
+  line-height: 1.1;
+}
+
+.pt-spine__title--wrap {
+  line-height: 1.12;
+  white-space: normal;
+}
+
+.pt-spine__authors {
+  font-family: var(--pt-font-label);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+}
+
+.pt-spine__year {
+  margin-block-end: 6px;
+  font-family: var(--pt-font-you);
+  font-size: 11px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.pt-spine--gilt .pt-spine__title,
+.pt-spine--gilt .pt-spine__authors,
+.pt-spine--gilt .pt-spine__year {
+  color: transparent;
+  background-image: var(--pt-spine-gilt);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+/* Paper labels: the Language cloth, the kraft wrap and the torn "could not read" label. */
+.pt-spine__label {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 3px;
+  background: var(--pt-paper-label);
+  border: 1px solid var(--pt-spine-label-edge);
+  box-shadow:
+    inset 0 0 0 2px var(--pt-paper-label),
+    inset 0 0 0 2.6px rgb(122 90 34 / 50%);
+}
+
+.pt-spine__note {
+  font-family: var(--pt-font-label);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  color: var(--pt-spine-note);
+}
+
+.pt-spine__label--kraft .pt-spine__title {
+  font-family: var(--pt-font-you);
+  font-weight: 700;
+}
+
+.pt-spine__label--torn {
+  padding-block-end: 24px;
+  clip-path: polygon(0 0, 100% 0, 100% 89%, 84% 93%, 70% 87%, 52% 96%, 36% 90%, 18% 97%, 0 91%);
+}
+
+.pt-spine__label--torn .pt-spine__note {
+  font-weight: 700;
+  color: var(--pt-spine-danger);
+}
+
+.pt-spine--kraft {
+  background-color: var(--pt-kraft);
+  background-image:
+    linear-gradient(
+      90deg,
+      rgb(0 0 0 / 18%),
+      rgb(255 255 255 / 8%) 30%,
+      rgb(255 255 255 / 12%) 42%,
+      rgb(0 0 0 / 18%)
+    ),
+    repeating-linear-gradient(112deg, rgb(255 255 255 / 10%) 0 2px, transparent 2px 15px);
+}
+
+/*
+ * Desktop floors for the small text buttons, at zero specificity, so the 44 px touch class
+ * (`useTouchTargets`) wins on a phone or touch screen.
+ */
+:where(.pt-search__clear, .pt-libtitle__alert) {
+  min-block-size: 24px;
+}
+
+:where(.pt-hints__gotit) {
+  min-block-size: 28px;
+}
+
+/* the string round the kraft wrap, behind its label */
+.pt-spine--kraft::before {
+  position: absolute;
+  inset-inline: 0;
+  top: 92px;
+  block-size: 2px;
+  content: '';
+  background: var(--pt-spine-string);
+  box-shadow: 0 6px 0 -0.5px var(--pt-spine-string);
+}
+
+.pt-spine__ribbon {
+  position: absolute;
+  bottom: -50px;
+  left: calc(50% - 5px);
+  z-index: 3;
+  inline-size: 10px;
+  block-size: 50px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--pt-ribbon) 72%, black),
+    var(--pt-ribbon) 45%,
+    color-mix(in srgb, var(--pt-ribbon) 80%, black)
+  );
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 86%, 0 100%);
+}
+
+/* ── the catalogue card in the band above the shelf ───────────────────────────────────── */
+
+/* The band above the spines: the card stands in it, so it never covers a book. */
+.pt-shelfband__band {
+  display: flex;
+  min-block-size: 136px;
+  align-items: flex-end;
+  margin-block-start: 16px;
+}
+
+.pt-catalogue {
+  /* In the band's flow, so a taller card (a long title, a confirmation) grows the band and moves
+     the shelf down instead of covering the view row above it. */
+  position: relative;
+  z-index: 5;
+  flex: none;
+  margin-block-end: 10px;
+  display: flex;
+  inline-size: min(480px, 100%);
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  color: var(--pt-ink);
+  background: var(--pt-e2-fill);
+  border: 1px solid var(--pt-rule);
+  border-radius: var(--pt-radius-paper);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+}
+
+.pt-catalogue__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.pt-catalogue__title {
+  margin: 0;
+  font-family: var(--pt-font-paper);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.pt-catalogue__state {
+  margin: 0;
+  font-size: var(--pt-t-meta);
+  font-variant-numeric: lining-nums;
+  color: var(--pt-primary);
+}
+
+.pt-catalogue__meta,
+.pt-catalogue__reason {
+  margin: 0;
+  font-size: var(--pt-t-meta);
+  font-variant-numeric: lining-nums;
+  color: var(--pt-ink-2);
+}
+
+.pt-catalogue__reason[data-failure-reason] {
+  color: var(--pt-danger);
+}
+
+.pt-catalogue__pointer {
+  position: absolute;
+  bottom: -7px;
+  inline-size: 12px;
+  block-size: 12px;
+  margin-inline-start: -6px;
+  background: var(--pt-e2-fill);
+  border-inline-end: 1px solid var(--pt-rule);
+  border-block-end: 1px solid var(--pt-rule);
+  transform: rotate(45deg);
+}
+
+.pt-catalogue__confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.pt-catalogue__confirm p,
+.pt-catalogue__error {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--pt-t-meta);
+  color: var(--pt-ink-2);
+}
+
+.pt-catalogue__error {
+  color: var(--pt-danger);
+}
+
+.pt-catalogue__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+  margin-block-start: 8px;
+}
+
+/* ── the page: header, uploads, title, views, hints (frame 01) ─────────────────────────── */
+
+.pt-library {
+  min-block-size: 100vh;
+  color: var(--pt-ink);
+  font-family: var(--pt-font-ai);
+}
+
+.pt-libhead {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: 24px;
+  align-items: center;
+  min-block-size: 64px;
+  padding-inline: var(--pt-margin-desktop);
+  background: var(--pt-page);
+  border-block-end: 1px solid var(--pt-rule);
+}
+
+.pt-libhead__brand {
+  display: flex;
+  grid-column: 1 / span 3;
+  gap: 10px;
+  align-items: center;
+  font-family: var(--pt-font-paper);
+  font-size: 20px;
+  color: var(--pt-ink);
+  text-decoration: none;
+}
+
+.pt-search {
+  display: flex;
+  grid-column: 4 / span 6;
+  gap: 10px;
+  align-items: center;
+  min-block-size: 40px;
+  padding-inline: 14px 10px;
+  background: var(--pt-call-slip);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-search:focus-within {
+  border-color: var(--pt-focus);
+  box-shadow: 0 0 0 1px var(--pt-focus);
+}
+
+.pt-search__icon {
+  flex: none;
+  color: var(--pt-ink-muted);
+}
+
+.pt-search__input {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  font: inherit;
+  font-size: 16px;
+  color: var(--pt-ink);
+  background: none;
+  border: 0;
+  outline: none;
+}
+
+.pt-search__input::placeholder {
+  color: var(--pt-ink-muted);
+  opacity: 1;
+}
+
+.pt-search__input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.pt-search__count {
+  font-size: var(--pt-t-meta);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--pt-ink-2);
+  white-space: nowrap;
+}
+
+.pt-search__clear {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+.pt-kbd {
+  padding: 3px 6px 2px;
+  font-family: var(--pt-font-you);
+  font-size: 12px;
+  line-height: 1;
+  color: var(--pt-ink-2);
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-block-end-width: 2px;
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-libhead__actions {
+  display: flex;
+  grid-column: 10 / span 3;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.pt-hmenu {
+  position: relative;
+}
+
+.pt-hmenu__button {
+  display: inline-flex;
+  inline-size: 40px;
+  block-size: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-family: var(--pt-font-paper);
+  font-size: 15px;
+  color: var(--pt-ink);
+  cursor: pointer;
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-hmenu__button--round {
+  font-size: 16px;
+  background: var(--pt-ground);
+  border-radius: var(--pt-radius-round);
+}
+
+.pt-hmenu__button:focus-visible,
+.pt-search__clear:focus-visible,
+.pt-libtitle__alert:focus-visible,
+.pt-hints__gotit:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+.pt-hmenu__panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  min-inline-size: 240px;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--pt-e2-fill);
+  border: 1px solid var(--pt-rule);
+  border-radius: var(--pt-radius-menu);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+}
+
+.pt-hmenu__email {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--pt-t-meta);
+  color: var(--pt-ink-2);
+}
+
+/* uploads: one quiet line per file under the header, no separators (#175) */
+.pt-uploads__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 8px var(--pt-margin-desktop);
+  list-style: none;
+  background: var(--pt-page);
+  border-block-end: 1px solid var(--pt-rule);
+}
+
+.pt-uploads__item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: center;
+  font-size: var(--pt-t-meta);
+  color: var(--pt-ink-2);
+}
+
+.pt-uploads__text {
+  flex: 1 1 240px;
+  min-inline-size: 0;
+}
+
+.pt-uploads__name {
+  font-weight: 500;
+  color: var(--pt-ink);
+}
+
+.pt-uploads__note {
+  display: block;
+}
+
+.pt-uploads__note[data-failed='true'],
+.pt-uploads__item--refused .pt-uploads__text {
+  color: var(--pt-danger);
+}
+
+.pt-uploads__bar {
+  flex: 0 0 160px;
+}
+
+.pt-dropall {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--pt-ground) 72%, transparent);
+  border: 2px dashed var(--pt-focus);
+}
+
+.pt-dropall__note {
+  padding: 12px 20px;
+  font-size: 17px;
+  background: var(--pt-e2-fill);
+  border-radius: var(--pt-radius-menu);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+}
+
+.pt-library__main {
+  display: flex;
+  flex-direction: column;
+  padding: 32px var(--pt-margin-desktop) 48px;
+}
+
+.pt-libtitle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 32px;
+  align-items: baseline;
+}
+
+.pt-libtitle__h1 {
+  margin: 0;
+  font-family: var(--pt-font-display);
+  font-size: var(--pt-t-display-xl);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.012em;
+}
+
+.pt-libtitle__stats {
+  margin: 0;
+  font-size: 17px;
+  font-variant-numeric: lining-nums;
+  color: var(--pt-ink-2);
+}
+
+.pt-libtitle__sep {
+  margin-inline: 4px;
+  white-space: pre;
+}
+
+.pt-libtitle__stats b {
+  font-weight: 500;
+  color: var(--pt-ink);
+}
+
+.pt-libtitle__alert {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 0;
+  font: inherit;
+  font-size: 17px;
+  color: var(--pt-primary);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+.pt-libtitle__alert[aria-pressed='true'] {
+  font-weight: 500;
+  text-decoration-thickness: 2px;
+}
+
+.pt-libtitle__dot {
+  inline-size: 7px;
+  block-size: 7px;
+  background: var(--pt-danger);
+  border-radius: var(--pt-radius-round);
+}
+
+.pt-libviews {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: center;
+  margin-block-start: 24px;
+  padding-block-end: 12px;
+  border-block-end: 1px solid var(--pt-rule);
+}
+
+.pt-libviews__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.pt-libviews__tabs .pt-toolbtn[aria-pressed='true'] {
+  font-weight: 500;
+  color: var(--pt-ink);
+  background: none;
+  border-color: transparent;
+  border-radius: 0;
+  box-shadow: inset 0 -2px 0 var(--pt-primary);
+}
+
+.pt-libviews__arrange {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-inline-start: auto;
+  font-size: 15px;
+  color: var(--pt-ink-2);
+}
+
+.pt-libviews__select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.pt-libviews__select svg {
+  position: absolute;
+  right: 10px;
+  pointer-events: none;
+}
+
+.pt-libviews__arrange select {
+  block-size: 36px;
+  min-inline-size: 128px;
+  padding-inline: 12px 34px;
+  appearance: none;
+  font: inherit;
+  color: var(--pt-ink);
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  margin-block-start: 14px;
+  font-size: var(--pt-t-meta);
+  color: var(--pt-ink-2);
+}
+
+.pt-hints__key {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.pt-hints__gotit {
+  padding-inline: 8px;
+  font: inherit;
+  color: var(--pt-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+.pt-hints--empty {
+  justify-content: center;
+}
+
+.pt-hints__note {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  margin-inline-start: auto;
+}
+
+@media (max-width: 900px) {
+  .pt-libhead {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding: 12px var(--pt-gutter-phone);
+  }
+
+  .pt-libhead__brand {
+    flex: 1 1 auto;
+  }
+
+  .pt-search {
+    flex: 1 1 100%;
+    order: 3;
+  }
+
+  .pt-library__main,
+  .pt-uploads__list {
+    padding-inline: var(--pt-gutter-phone);
+  }
+
+  .pt-libtitle__h1 {
+    font-size: var(--pt-t-display-l);
+  }
+}
+
+@media (max-width: 560px) {
+  .pt-addpapers__label {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-spine,
+  .pt-spine::after,
+  .pt-spine__face,
+  .pt-spine__year {
+    transition: none;
+  }
+}

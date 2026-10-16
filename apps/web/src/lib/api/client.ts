@@ -85,6 +85,7 @@ const ERROR_CODES: Record<ErrorCode, true> = {
   busy: true,
   stale_version: true,
   generation_not_found: true,
+  topic_exists: true,
   anchor_incomplete: true,
   anchor_mismatch: true,
   budget_exhausted: true,

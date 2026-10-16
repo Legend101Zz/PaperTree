@@ -8,8 +8,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DERIVED_MARKER } from '@papertree/ui';
-
 import { focusAnchor, Harness, sendToCanvas, stubDesktop } from './s6-harness';
 import {
   citation,
@@ -59,8 +57,8 @@ async function ask(): Promise<void> {
   fireEvent.click(screen.getByRole('button', { name: 'ask one' }));
 }
 
-describe('Ask: a streamed answer with chips, a usage line and nothing raw', () => {
-  it('POSTs an explain thread with the anchor, streams, then shows chips that focus the passage', async () => {
+describe('Ask: a streamed answer with markers, a usage line and nothing raw', () => {
+  it('POSTs an explain thread with the anchor, streams, then shows markers that flash the passage', async () => {
     const { calls } = installFetch({
       [THREADS]: (_c, signal) => sseResponse(answerFrames(), { signal }),
     });
@@ -72,29 +70,40 @@ describe('Ask: a streamed answer with chips, a usage line and nothing raw', () =
     expect(post?.body).toMatchObject({ kind: 'explain', anchor: { id: 'anchor-sel1' } });
     expect((post?.body as Record<string, unknown>)['question']).toBeUndefined();
 
-    // Both chips arrive with the citations event; the second is not verified, in words.
-    const chips = await waitFor(() => {
-      const found = document.querySelectorAll('[data-citation-id]');
+    // Deterministic (#252): wait until the answer has settled and its stored re-read has been
+    // asked for (a 404 here), so the click below lands on the markers that stay.
+    await waitFor(() =>
+      expect(
+        calls.some((c) => c.method === 'GET' && c.path === `/papers/${PAPER}/threads/thr_1`),
+      ).toBe(true),
+    );
+    // Both passages arrive with the citations event as numbered markers (#202); the second is
+    // not verified, in words.
+    const markers = await waitFor(() => {
+      const found = document.querySelectorAll('[data-citation-id] button');
       expect(found).toHaveLength(2);
       return found;
     });
-    expect(chips[1]?.textContent).toContain('not verified');
-    expect(chips[0]?.textContent).not.toContain('not verified');
+    expect(markers[1]?.getAttribute('aria-label')).toBe('Passage 2, p. 4, not verified');
+    expect(markers[0]?.getAttribute('aria-label')).toBe('Passage 1, p. 4');
 
-    fireEvent.click(chips[0] as Element);
+    fireEvent.click(markers[0] as Element);
     expect(focusAnchor).toHaveBeenCalledTimes(1);
     expect(focusAnchor.mock.calls[0]?.[0]).toMatchObject({ id: 'anchor-b1' });
-    expect(focusAnchor.mock.calls[0]?.[1]).toEqual({ flash: true });
+    expect(focusAnchor.mock.calls[0]?.[1]).toEqual({
+      flash: true,
+      from: { n: 1, page: 4, para: null, notVerified: false },
+    });
 
     // The usage line: tokens and an estimate marker.
     expect(document.querySelector('[data-usage-line]')?.textContent).toBe(
       '1,234 tokens · ≈ $0.0012 (estimate)',
     );
 
-    // The model's words wear the AI register; the handles never reach the screen as text.
-    const ai = document.querySelector('[data-register="ai"]');
-    expect(ai?.textContent).toContain(DERIVED_MARKER);
-    expect(ai?.textContent).toContain('AI interpretation');
+    // The model's words are in the AI's voice; the handles never reach the screen as text.
+    const ai = document.querySelector('[data-voice="ai"]');
+    expect(ai?.textContent).toContain('YOLO frames detection');
+    expect(ai?.getAttribute('aria-label')).toMatch(/not the paper's words/);
     const panel = screen.getByRole('complementary', { name: 'Explain' });
     expect(panel.textContent).not.toMatch(/\[b\d+\]|msg_|thr_|run_|blk_|\{"/);
   });

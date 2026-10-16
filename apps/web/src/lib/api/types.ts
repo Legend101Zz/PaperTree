@@ -35,6 +35,8 @@ export type ErrorCode =
   | 'busy'
   | 'stale_version'
   | 'generation_not_found'
+  // #193: a topic name the person already uses (409).
+  | 'topic_exists'
   | 'anchor_incomplete'
   | 'anchor_mismatch'
   | 'budget_exhausted'
@@ -103,6 +105,16 @@ export interface ReadingProgress {
   state: 'reading' | 'finished';
 }
 
+/** The topic the caller ACCEPTED for a paper (#193); an unaccepted offer is not here. */
+interface LibraryTopic {
+  topic_id: string;
+  name: string;
+  cloth: 'transformers' | 'vision' | 'generative' | 'optimization' | 'language' | 'rl' | null;
+  source: 'arxiv_category' | 'manual' | 'model';
+  /** `cs.CL` for `arxiv_category`, the model id for `model`, else null. */
+  source_detail: string | null;
+}
+
 export interface LibraryPaper {
   paper_id: string;
   title: string;
@@ -126,6 +138,33 @@ export interface LibraryPaper {
   arxiv_category: string | null;
   thread_count: number;
   has_summary: boolean;
+  /** v0.2 (#193): the accepted topic, or null (unshelved, or only offered). */
+  topic: LibraryTopic | null;
+}
+
+/** The bibliography entry behind a library link; `index` is zero-based. */
+export interface LibraryReference {
+  index: number;
+  text: string;
+}
+
+/**
+ * One real link between two of the caller's papers (`GET /library/links`, #194). Citation links
+ * only: `via` gains `'board'` when a board can hold a second paper. Word the label from
+ * `matched_by` ("cites it (matched by title)"), never assume it. At most one link per
+ * (from, to): `arxiv_id` when any entry matched it, else `title`.
+ */
+export interface LibraryLink {
+  from_paper_id: string;
+  to_paper_id: string;
+  via: 'citation';
+  matched_by: 'arxiv_id' | 'title';
+  reference: LibraryReference;
+}
+
+/** `GET /library/links`. */
+export interface LibraryLinks {
+  links: LibraryLink[];
 }
 
 export interface ResolutionWire {
@@ -293,7 +332,8 @@ export interface Board {
 export interface CanvasNode {
   node_id: string;
   board_id: string;
-  kind: 'excerpt' | 'explanation' | 'note' | 'group';
+  /** `group` is the design's "frame". */
+  kind: CanvasNodeKind;
   group_id: string | null;
   x: number;
   y: number;
@@ -304,10 +344,31 @@ export interface CanvasNode {
   body: string;
   source_anchor: Anchor | null;
   source_message_id: string | null;
+  /** Notebook card: the notebook page it shows. */
+  source_page_id: string | null;
+  /** Diagram card: the diagram it shows. */
+  source_diagram_id: string | null;
+  /** A notebook card's page counts, computed on read; null on every other kind. */
+  counts: NotebookCardCounts | null;
   version: number;
   created_at: string;
   updated_at: string;
 }
+
+type CanvasNodeKind =
+  'excerpt' | 'explanation' | 'note' | 'group' | 'question' | 'notebook' | 'diagram';
+
+interface NotebookCardCounts {
+  quotes: number;
+  stickies: number;
+  text: number;
+  shapes: number;
+  strokes: number;
+}
+
+/** The typed pins (DESIGN.md section 5): brass out-pins and open in-pins. */
+export type FromPort = 'claim_out' | 'answer_out';
+export type ToPort = 'evidence_in' | 'question_in';
 
 export type EdgeKind =
   'supports' | 'contradicts' | 'derives_from' | 'answers' | 'compares' | 'references' | 'relates';
@@ -319,4 +380,8 @@ export interface CanvasEdge {
   to_node_id: string;
   kind: EdgeKind;
   label: string | null;
+  /** The pins the thread was drawn between; null on a keyboard link and every v0.1 edge. */
+  from_port: FromPort | null;
+  to_port: ToPort | null;
+  created_at: string;
 }

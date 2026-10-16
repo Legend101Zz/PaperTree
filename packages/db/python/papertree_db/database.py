@@ -83,6 +83,7 @@ from .library import LibraryMixin
 from .migrate import MigrationResult, migrate
 from .notebook import NotebookMixin
 from .reading import ReadingMixin
+from .topics import TopicsMixin
 
 __all__ = [
     "MAX_DERIVATION_DEPTH",
@@ -639,7 +640,14 @@ class DatabaseCore:
 
 
 class PaperTreeDb(
-    LibraryMixin, ReadingMixin, HighlightsMixin, AiMixin, CanvasMixin, NotebookMixin, DatabaseCore
+    TopicsMixin,
+    LibraryMixin,
+    ReadingMixin,
+    HighlightsMixin,
+    AiMixin,
+    CanvasMixin,
+    NotebookMixin,
+    DatabaseCore,
 ):
     """The only way to reach the SQLite connection, and therefore the only place SQL is.
 

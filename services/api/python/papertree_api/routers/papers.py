@@ -4,6 +4,7 @@ reader's document routes. S1 owns this module.
 POST   /papers                     the bytes -> uploads/<id>.pdf, a paper_owners row, a parse job
 GET    /papers                     LibraryPaper[], one per paper, newest first
 GET    /papers/{id}                one LibraryPaper
+GET    /library/links              citation links between the caller's own papers (#194)
 DELETE /papers/{id}                the rows, the paper's jobs, its upload, crops and staging
 POST   /papers/{id}/retry          the dead-lettered generation again, as a new attempt
 POST   /papers/{id}/reparse        generation next_generation
@@ -52,10 +53,14 @@ from ..library import (
     parse_jobs,
     plan_upload,
 )
+from ..library_links import find_links
 from ..logging import user_ref
 from ..schemas import (
     JobAccepted,
+    LibraryLink,
+    LibraryLinks,
     LibraryPaper,
+    LibraryReference,
     ReadingStateUpdate,
     ReparseRequest,
     UploadAccepted,
@@ -261,6 +266,32 @@ def _library_paper(call: Caller, paper_id: str) -> LibraryPaper:
 @router.get("/papers", response_model=list[LibraryPaper])
 async def list_papers(call: CallerDep) -> list[LibraryPaper]:
     return [library_paper(row) for row in call.db.list_library(call.db_owner)]
+
+
+@router.get("/library/links", response_model=LibraryLinks)
+async def library_links(call: CallerDep) -> LibraryLinks:
+    """Citation links among the caller's own papers, computed on read from the parses (#194).
+
+    One link per (citing paper, cited paper): a bibliography entry of the citing paper carries
+    the cited paper's arXiv id (preferred), or its title is the entry's title segment (the exact
+    rules, and why nothing is fuzzy, are in ``library_links``). Citation links only: no board can
+    reference a second paper yet, so ``via`` is always ``"citation"``. A paper still being read
+    has no references and yields no links; it is not an error. Another user's papers are never
+    visible.
+    """
+    found = find_links(call.db.library_link_sources(call.db_owner))
+    return LibraryLinks(
+        links=[
+            LibraryLink(
+                from_paper_id=link.from_paper_id,
+                to_paper_id=link.to_paper_id,
+                via="citation",
+                matched_by=link.matched_by,
+                reference=LibraryReference(index=link.reference_index, text=link.reference_text),
+            )
+            for link in found
+        ]
+    )
 
 
 @router.get("/papers/{paper_id}", response_model=LibraryPaper)

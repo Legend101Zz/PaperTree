@@ -250,6 +250,7 @@
                 "busy",
                 "stale_version",
                 "generation_not_found",
+                "topic_exists",
                 "anchor_incomplete",
                 "anchor_mismatch",
                 "budget_exhausted",

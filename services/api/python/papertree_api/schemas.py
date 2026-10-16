@@ -443,6 +443,89 @@ class ReadingStateUpdate(Wire):
     mode: Literal["source", "guided", "split"] | None = omittable()
 
 
+# ── topics (#193) ────────────────────────────────────────────────────────────────────────────
+
+#: The six cloth colours of the design (`papertree_db.CLOTHS`; a test pins that they agree).
+Cloth = Literal["transformers", "vision", "generative", "optimization", "language", "rl"]
+TopicSource = Literal["arxiv_category", "manual", "model"]
+#: 1 to 60 characters AFTER trimming (`papertree_db.TOPIC_NAME_MAX`). Not a CHECK: see 0009.
+TopicName = Annotated[str, BeforeValidator(_trimmed), Field(min_length=1, max_length=60)]
+
+
+class TopicRef(Wire):
+    """A topic as another record points at it."""
+
+    topic_id: str = Field(pattern=server_id("top"))
+    name: str
+    cloth: Cloth | None
+
+
+class Topic(TopicRef):
+    """`GET /topics` (#193): a shelf with what it holds. Counts cover ACCEPTED papers only."""
+
+    sort_order: NonNegative
+    paper_count: NonNegative
+    #: The sum of the held papers' page counts (a paper of unknown length counts for 0).
+    page_count: NonNegative
+    #: The distinct arXiv categories of the held papers, sorted ("arXiv cs.CL, cs.LG").
+    categories: list[str]
+
+
+class TopicCreate(Wire):
+    """`POST /topics`."""
+
+    name: TopicName
+    cloth: Cloth | None = omittable()
+
+
+class TopicPatch(Wire):
+    """`PATCH /topics/{topic_id}`: only what is sent changes (`cloth: null` clears the colour)."""
+
+    name: TopicName | None = omittable()
+    #: Sent as `null` it CLEARS the colour (the design's "no cloth"); left out it is kept.
+    cloth: Cloth | None = None
+    sort_order: PageIndex | None = omittable()
+
+
+class LibraryTopic(TopicRef):
+    """`LibraryPaper.topic`: the topic the caller ACCEPTED for the paper. A mere offer is not
+    here (`GET /papers/{id}/topic` has it): an unaccepted suggestion must not group the shelf."""
+
+    source: TopicSource
+    #: `cs.CL` for `arxiv_category`, the model id for `model`, else null.
+    source_detail: str | None
+
+
+class PaperTopic(Wire):
+    """`GET /papers/{id}/topic` and the body of its writes (#193).
+
+    `none`: no topic, no offer. `suggested`: an offer (`topic`, or `suggested_name` for a topic
+    that does not exist yet); the paper is NOT shelved. `accepted`: shelved under `topic`.
+    `rejected`: the person said no.
+    """
+
+    status: Literal["none", "suggested", "accepted", "rejected"]
+    topic: TopicRef | None
+    suggested_name: str | None
+    source: TopicSource | None
+    source_detail: str | None
+    #: The paper's own arXiv category, whatever the status.
+    arxiv_category: str | None
+
+
+class PaperTopicPut(Wire):
+    """`PUT /papers/{id}/topic`: accept an existing topic, or name a new one (reused if the person
+    already has a topic of that name).
+
+    EXACTLY ONE of `topic_id` and `new_topic_name`. The route enforces it (422), not this model:
+    every field here is omittable, which is what the exported schema and `omittable_cases` say.
+    """
+
+    topic_id: str | None = omittable(pattern=server_id("top"))
+    new_topic_name: TopicName | None = omittable()
+    cloth: Cloth | None = omittable()
+
+
 class LibraryPaper(Wire):
     """The row shape used everywhere a paper is listed (§2.2)."""
 
@@ -469,6 +552,8 @@ class LibraryPaper(Wire):
     thread_count: NonNegative
     #: True when the promoted generation has any cached summary (whatever prompt or model).
     has_summary: bool
+    #: The topic the caller accepted for it (#193); null when unshelved or only offered.
+    topic: LibraryTopic | None
 
 
 class UploadAccepted(Wire):
@@ -486,6 +571,34 @@ class JobAccepted(Wire):
 
     job_id: str
     generation: Generation
+
+
+class LibraryReference(Wire):
+    """The bibliography entry that made a library link: its position and its text."""
+
+    #: Zero-based position in the citing paper's bibliography (document order).
+    index: int = Field(ge=0, le=SQLITE_INTEGER_MAX)
+    text: str
+
+
+class LibraryLink(Wire):
+    """One real link between two of the caller's papers (``GET /library/links``, #194).
+
+    ``via`` is only ``"citation"``: ``"board"`` joins the enum when a board can hold a second
+    paper. ``matched_by`` is what actually matched, so the UI words it from the field.
+    """
+
+    from_paper_id: str
+    to_paper_id: str
+    via: Literal["citation"]
+    matched_by: Literal["arxiv_id", "title"]
+    reference: LibraryReference
+
+
+class LibraryLinks(Wire):
+    """``GET /library/links``."""
+
+    links: list[LibraryLink]
 
 
 class ReparseRequest(Wire):
@@ -842,7 +955,11 @@ class UsageTotals(Wire):
 
 # ── §2.7 canvas ──────────────────────────────────────────────────────────────────────────────
 
-NodeKind = Literal["excerpt", "explanation", "note", "group"]
+#: "frame" on the design's board is the `group` kind on the wire.
+NodeKind = Literal["excerpt", "explanation", "note", "group", "question", "notebook", "diagram"]
+#: The four typed pins (DESIGN.md section 5); `papertree_db.canvas.PIN_TABLE` says who offers which.
+FromPort = Literal["claim_out", "answer_out"]
+ToPort = Literal["evidence_in", "question_in"]
 EdgeKind = Literal[
     "supports", "contradicts", "derives_from", "answers", "compares", "references", "relates"
 ]
@@ -881,6 +998,16 @@ class Board(Wire):
     updated_at: WireTime
 
 
+class NotebookCardCounts(Wire):
+    """What a notebook card says about its page ("4 quotes · 1 sticky"), counted on read."""
+
+    quotes: NonNegative
+    stickies: NonNegative
+    text: NonNegative
+    shapes: NonNegative
+    strokes: NonNegative
+
+
 class CanvasNode(Wire):
     node_id: str
     board_id: str
@@ -895,6 +1022,10 @@ class CanvasNode(Wire):
     body: str
     source_anchor: AnchorV1 | None
     source_message_id: str | None
+    source_page_id: str | None
+    source_diagram_id: str | None
+    #: A notebook card's page counts, computed on read; null on every other kind.
+    counts: NotebookCardCounts | None
     version: Version
     created_at: WireTime
     updated_at: WireTime
@@ -907,6 +1038,9 @@ class CanvasEdge(Wire):
     to_node_id: str
     kind: EdgeKind
     label: str | None
+    from_port: FromPort | None
+    to_port: ToPort | None
+    created_at: WireTime
 
 
 class BoardView(Wire):
@@ -931,6 +1065,8 @@ class NodeCreate(Wire):
     body: CanvasBody = ""
     source_anchor: AnchorV1In | None = omittable(validate_default=True)
     source_message_id: str | None = omittable(validate_default=True)
+    source_page_id: str | None = omittable(validate_default=True)
+    source_diagram_id: str | None = omittable(validate_default=True)
     group_id: str | None = None
 
     @field_validator("source_anchor", mode="after")
@@ -945,6 +1081,20 @@ class NodeCreate(Wire):
     def _explanation_needs_a_message(cls, value: str | None, info: ValidationInfo) -> Any:
         if value is None and info.data.get("kind") == "explanation":
             raise PydanticCustomError("missing", "Field required for an explanation node")
+        return value
+
+    @field_validator("source_page_id", mode="after")
+    @classmethod
+    def _notebook_needs_a_page(cls, value: str | None, info: ValidationInfo) -> Any:
+        if value is None and info.data.get("kind") == "notebook":
+            raise PydanticCustomError("missing", "Field required for a notebook node")
+        return value
+
+    @field_validator("source_diagram_id", mode="after")
+    @classmethod
+    def _diagram_needs_a_diagram(cls, value: str | None, info: ValidationInfo) -> Any:
+        if value is None and info.data.get("kind") == "diagram":
+            raise PydanticCustomError("missing", "Field required for a diagram node")
         return value
 
 
@@ -965,6 +1115,8 @@ class NodePatch(Wire):
     title: CanvasTitle | None = None
     body: CanvasBody | None = omittable()
     group_id: str | None = None
+    source_page_id: str | None = omittable()
+    source_diagram_id: str | None = omittable()
 
 
 class StaleVersion(Wire):
@@ -982,6 +1134,9 @@ class EdgeCreate(Wire):
     to_node_id: str
     kind: EdgeKind
     label: CanvasLabel | None = None
+    #: Both optional: a link made with the keyboard (and every v0.1 edge) has no pins.
+    from_port: FromPort | None = None
+    to_port: ToPort | None = None
 
     @field_validator("to_node_id", mode="after")
     @classmethod
@@ -994,6 +1149,8 @@ class EdgeCreate(Wire):
 class EdgePatch(Wire):
     kind: EdgeKind | None = omittable()
     label: CanvasLabel | None = None
+    from_port: FromPort | None = None
+    to_port: ToPort | None = None
 
 
 class BoardPatch(Wire):

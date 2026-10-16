@@ -188,8 +188,8 @@ async def patch_page(call: CallerDep, page_id: str, request: Request) -> Respons
 
 @router.delete("/notebook/pages/{page_id}", status_code=204)
 async def delete_page(call: CallerDep, page_id: str) -> Response:
-    """Deletes the page; its items and strokes go with it."""
-    if call.db.delete_notebook_page(call.db_owner, page_id) == 0:
+    """Deletes the page; its items and strokes go with it. 422 while a board card shows it."""
+    if _guard(lambda: call.db.delete_notebook_page(call.db_owner, page_id)) == 0:
         raise ApiError("not_found", "no such page")
     return Response(status_code=204)
 

@@ -30,6 +30,7 @@ from papertree_document_worker.job import PARSE_KIND, PARSE_STEPS, enqueue_parse
 from papertree_jobs import Job, JobStore, StepRecord, error_code
 
 from .schemas import (
+    Cloth,
     JobErrorCode,
     JobState,
     JobStatus,
@@ -37,8 +38,10 @@ from .schemas import (
     JobStepStatus,
     JobSummary,
     LibraryPaper,
+    LibraryTopic,
     Processing,
     ReadingProgress,
+    TopicSource,
 )
 
 _ERROR_CODES: Final = frozenset(get_args(JobErrorCode))
@@ -148,6 +151,20 @@ def reading_progress(row: LibraryRow) -> ReadingProgress | None:
     )
 
 
+def library_topic(row: LibraryRow) -> LibraryTopic | None:
+    """`LibraryPaper.topic`: the accepted topic, or None."""
+    shelf = row.topic
+    if shelf is None:
+        return None
+    return LibraryTopic(
+        topic_id=shelf.topic_id,
+        name=shelf.name,
+        cloth=cast(Cloth | None, shelf.cloth),
+        source=cast(TopicSource, shelf.source),
+        source_detail=shelf.source_detail,
+    )
+
+
 def library_paper(row: LibraryRow) -> LibraryPaper:
     return LibraryPaper(
         paper_id=row.paper_id,
@@ -169,6 +186,7 @@ def library_paper(row: LibraryRow) -> LibraryPaper:
         arxiv_category=row.arxiv_category,
         thread_count=row.thread_count,
         has_summary=row.has_summary,
+        topic=library_topic(row),
     )
 
 

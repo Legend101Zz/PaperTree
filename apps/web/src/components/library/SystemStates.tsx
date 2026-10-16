@@ -26,9 +26,7 @@
 import { useId, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { AlertTriangle, CheckCircle2, Flag, Loader2, Plus, RotateCcw, WifiOff } from 'lucide-react';
-import { PaperGrid } from './PaperGrid';
 import { ProgressMeter, TOUCH_TARGET, pointerActivate } from './primitives';
-import type { LibraryPaper } from './types';
 
 /** A subtle 45° hatch. Inline because it is geometry, not a theme token. */
 const HATCH: CSSProperties = {
@@ -552,17 +550,14 @@ export function OfflineState({
 
 export interface EmptyLibraryProps {
   readonly onAddPaper: () => void;
-  /** Sample papers to offer. Empty (the default) unless the fixtures flag is on (#137). */
-  readonly samples?: readonly LibraryPaper[];
-  readonly onOpenSample?: (paperId: string) => void;
 }
 
 /**
- * The empty library: one sentence about what to do and ONE action. Sample papers are offered only
- * when the caller passes some, which the library does only with `NEXT_PUBLIC_PAPERTREE_FIXTURES=on`
- * (#137): a real user never meets a card that is not theirs.
+ * The empty library: one sentence about what to do and ONE action. (The sample-paper offer that
+ * used to sit under it was never passed any samples, so it rendered nowhere; #195 removed it, and
+ * the empty library's v0.2 design, frame 01b, is #196's.)
  */
-export function EmptyLibrary({ onAddPaper, samples = [], onOpenSample }: EmptyLibraryProps) {
+export function EmptyLibrary({ onAddPaper }: EmptyLibraryProps) {
   const headingId = useId();
 
   return (
@@ -589,13 +584,6 @@ export function EmptyLibrary({ onAddPaper, samples = [], onOpenSample }: EmptyLi
           Upload a PDF
         </button>
       </div>
-
-      {samples.length > 0 && onOpenSample !== undefined ? (
-        <div className="flex flex-col gap-3">
-          <h3 className="text-sm font-medium">Or try one of these</h3>
-          <PaperGrid papers={samples} onOpen={onOpenSample} />
-        </div>
-      ) : null}
     </section>
   );
 }

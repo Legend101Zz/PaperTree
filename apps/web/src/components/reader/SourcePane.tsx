@@ -20,7 +20,7 @@
  * eats a drag; the click is hit-tested here, against the same stored quads, in IR space.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import {
   frameForPdfPage,
@@ -31,10 +31,12 @@ import {
   type Resolution,
 } from '@papertree/anchoring';
 
+import { FlashMarginTab } from '@/features/explain/components/FlashMarginTab';
 import { MAX_ANCHORS_PER_HIGHLIGHT } from '@/lib/api/highlights';
 
 import { useReaderActions } from './actions';
 import { type DocumentHandle, type DocumentRef } from './documentHandle';
+import { FLASH_SCROLL_MS, prefersReducedMotion } from './flash';
 import { HighlightOverlay, hitsItem, type FlashPaint, type PaintItem } from './HighlightOverlay';
 import { usePdfDocument } from './PdfDocumentProvider';
 import { displayQuote } from './quote';
@@ -51,6 +53,7 @@ import {
 } from './useSelectionCapture';
 import {
   VirtualPageList,
+  type FloatingGeometry,
   type ReadingPosition,
   type VirtualPageListHandle,
 } from './VirtualPageList';
@@ -278,9 +281,13 @@ export function SourcePane(props: SourcePaneProps) {
         listRef.current?.scrollToPage(pageIndex, { behavior: 'smooth' });
       },
       scrollToRect(pageIndex, bbox) {
-        // Instant, not smooth: `focusAnchor` flashes the passage for 1.2 s, and a smooth scroll
-        // spends most of that travelling — the flash would play before the passage is on screen.
-        listRef.current?.scrollToBlock(pageIndex, bbox, { behavior: 'auto' });
+        // A timed tween, not `smooth` (which has no duration): the flash waits exactly this long
+        // for the passage to arrive, and does not wait at all when it is already in view.
+        const scrolled = listRef.current?.scrollToBlock(pageIndex, bbox, {
+          ifNeeded: true,
+          durationMs: FLASH_SCROLL_MS,
+        });
+        return scrolled === true && !prefersReducedMotion() ? FLASH_SCROLL_MS : 0;
       },
     }),
     [doc],
@@ -370,6 +377,54 @@ export function SourcePane(props: SourcePaneProps) {
     );
   }
 
+  /** "from marker 2 in the answer" beside the flashed passage, while the flash lasts (#202). */
+  function marginTab(geometry: FloatingGeometry): ReactNode {
+    const flash = props.flash;
+    if (flash?.from === undefined || flash.extent === null || flash.phase === 'scroll') return null;
+    const box = geometry.pageBox(flash.pageIndex);
+    if (box === null) return null;
+    const scale = geometry.irScale(flash.pageIndex);
+    return (
+      <FlashMarginTab
+        key={flash.key}
+        from={flash.from}
+        left={box.left + flash.extent[0] * scale}
+        top={box.top + flash.extent[1] * scale}
+      />
+    );
+  }
+
+  function floatingToolbar(geometry: FloatingGeometry): ReactNode {
+    if (props.narrow || selection === null) return null;
+    // Across pages, the bar goes by the selection's END, below it: that is where the pointer
+    // was released (the page auto-scrolled there), while the start is off screen above.
+    const acrossPages =
+      selection.endPageIndex !== selection.pageIndex && selection.endExtent !== null;
+    const pageIndex = acrossPages ? selection.endPageIndex : selection.pageIndex;
+    const at = acrossPages ? selection.endExtent : selection.irExtent;
+    if (at === null) return null;
+    const box = geometry.pageBox(pageIndex);
+    if (box === null) return null;
+    const scale = geometry.irScale(pageIndex);
+    const [x0, y0, x1, y1] = at;
+    return (
+      <SelectionToolbar
+        placement={{
+          kind: 'float',
+          extent: {
+            left: box.left + x0 * scale,
+            top: box.top + y0 * scale,
+            right: box.left + x1 * scale,
+            bottom: box.top + y1 * scale,
+          },
+          boundsWidth: geometry.contentWidth,
+          prefer: acrossPages ? 'below' : 'above',
+        }}
+        {...toolbarProps}
+      />
+    );
+  }
+
   const ready = pdf.pdf !== null && pdf.pdf !== undefined && (pdf.numPages ?? 0) > 0;
 
   return (
@@ -412,36 +467,12 @@ export function SourcePane(props: SourcePaneProps) {
             onActivate={(highlightId) => onActivateHighlight(highlightId, null)}
           />
         )}
-        renderFloating={(geometry) => {
-          if (props.narrow || selection === null) return null;
-          // Across pages, the bar goes by the selection's END, below it: that is where the pointer
-          // was released (the page auto-scrolled there), while the start is off screen above.
-          const acrossPages =
-            selection.endPageIndex !== selection.pageIndex && selection.endExtent !== null;
-          const pageIndex = acrossPages ? selection.endPageIndex : selection.pageIndex;
-          const at = acrossPages ? selection.endExtent : selection.irExtent;
-          if (at === null) return null;
-          const box = geometry.pageBox(pageIndex);
-          if (box === null) return null;
-          const scale = geometry.irScale(pageIndex);
-          const [x0, y0, x1, y1] = at;
-          return (
-            <SelectionToolbar
-              placement={{
-                kind: 'float',
-                extent: {
-                  left: box.left + x0 * scale,
-                  top: box.top + y0 * scale,
-                  right: box.left + x1 * scale,
-                  bottom: box.top + y1 * scale,
-                },
-                boundsWidth: geometry.contentWidth,
-                prefer: acrossPages ? 'below' : 'above',
-              }}
-              {...toolbarProps}
-            />
-          );
-        }}
+        renderFloating={(geometry) => (
+          <>
+            {marginTab(geometry)}
+            {floatingToolbar(geometry)}
+          </>
+        )}
       />
       {props.narrow && selection !== null && props.sheetOpen !== true ? (
         <SelectionToolbar placement={{ kind: 'sheet' }} {...toolbarProps} />

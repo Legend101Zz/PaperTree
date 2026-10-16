@@ -22,8 +22,9 @@
  *   `papertree/reader/<paper_id>` (contracts.md §5), in try/catch because it is a convenience. A
  *   zoom keeps the top line (`VirtualPageList`), a mode switch keeps the block, a reload keeps both.
  *
- *   `focusAnchor` IS REAL (contracts.md §5/§6): resolve, scroll the passage into view, flash it for
- *   1.2 s. The explain panel's citation chips (S6) and the canvas's "open source" (S7) call it.
+ *   `focusAnchor` IS REAL (contracts.md §5/§6): resolve, scroll the passage into view if it is not,
+ *   and run the citation flash (`reader/flash`). The explain panel's markers and trace (#202) and
+ *   the canvas's "open source" (S7) call it.
  *
  *   DESIGNED STATES: opening, still being read (Source works from the PDF alone, and the reader
  *   retries on its own), not in your library, unreachable, a PDF pdf.js cannot open.
@@ -45,7 +46,18 @@ import { sendToCanvas } from '@/components/canvas/sendToCanvas';
 import { useFocusFromCanvas } from '@/components/canvas/useFocusFromCanvas';
 import { ExplainPanel } from '@/components/explain';
 import { useExplainActions } from '@/components/explain/useExplainActions';
-import { ReaderActionsProvider, type ReaderActions } from '@/components/reader/actions';
+import {
+  ReaderActionsProvider,
+  type FlashSource,
+  type ReaderActions,
+} from '@/components/reader/actions';
+import {
+  FLASH_MS,
+  FLASH_SCROLL_MS,
+  nextFlashPhase,
+  prefersReducedMotion,
+  useClearOnNextAction,
+} from '@/components/reader/flash';
 import { GuidedView } from '@/components/reader/GuidedView';
 import { HighlightCard } from '@/components/reader/HighlightCard';
 import type { FlashPaint } from '@/components/reader/HighlightOverlay';
@@ -258,7 +270,6 @@ type CardAt = {
 
 /** While a paper is still being read, try again this often. */
 const RETRY_MS = 4000;
-const FLASH_MS = 1200;
 
 export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   const paperKey = paperRefKey(given);
@@ -432,13 +443,14 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   const documentRef = useRef<DocumentHandle | null>(null);
   const pendingScroll = useRef<PendingScroll | null>(null);
 
-  const requestScroll = useCallback((request: PendingScroll) => {
+  /** Returns how long the scroll takes (a deferred one is assumed to take the flash's 240 ms). */
+  const requestScroll = useCallback((request: PendingScroll): number => {
     const handle = documentRef.current;
     if (handle === null) {
       pendingScroll.current = request;
-      return;
+      return request.kind === 'rect' ? FLASH_SCROLL_MS : 0;
     }
-    applyScroll(handle, request);
+    return applyScroll(handle, request);
   }, []);
 
   const onGuidedTop = useCallback(
@@ -497,15 +509,32 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
     [],
   );
 
+  // The flash's phases (`reader/flash`): scroll → flash → linger, each keyed to this flash, so a
+  // newer flash is never moved on by an older one's timer. The faint outline (and its margin tab)
+  // stays until the reader's next action.
+  useEffect(() => {
+    if (flash === null) return undefined;
+    const next = nextFlashPhase(flash.phase, flash.scrollMs, prefersReducedMotion());
+    if (next === null) return undefined;
+    const timer = setTimeout(
+      () => setFlash((f) => (f?.key === flash.key ? { ...f, phase: next.phase } : f)),
+      next.afterMs,
+    );
+    return () => clearTimeout(timer);
+  }, [flash]);
+  const clearFlash = useCallback(() => setFlash(null), []);
+  useClearOnNextAction(flash !== null, clearFlash);
+
   /**
-   * `focusAnchor` (contracts.md §5/§6): resolve, scroll the passage into view, flash it 1.2 s.
+   * `focusAnchor` (contracts.md §5/§6): resolve, scroll the passage into view if it is not, and
+   * run the citation flash (`reader/flash`: in 180 → hold 900 → out 600, a faint outline stays).
    *
    * In Source and Split the passage is the anchor's Source paint — its stored quads for a user
    * highlight, the ladder's matched range for a citation. In Guided it is the paragraph that renders
    * it. An anchor painted nowhere still gets its page, and the tray says why.
    */
   const focusAnchor = useCallback(
-    (anchor: Anchor, opts?: { flash?: boolean }) => {
+    (anchor: Anchor, opts?: { flash?: boolean; from?: FlashSource }) => {
       if (doc === null) return;
       const resolution = resolveAnchor(anchor, doc);
       const shouldFlash = opts?.flash !== false;
@@ -523,16 +552,20 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
         return;
       }
       const extent: BBox | null = extentOf(paint.polygons);
-      if (extent !== null)
-        requestScroll({ kind: 'rect', pageIndex: paint.pageIndex, bbox: extent });
+      const scrollMs =
+        extent === null
+          ? 0
+          : requestScroll({ kind: 'rect', pageIndex: paint.pageIndex, bbox: extent });
       if (!shouldFlash) return;
       setFlash({
         key: `${anchor.id}:${String(Date.now())}`,
         pageIndex: paint.pageIndex,
         polygons: paint.polygons,
+        extent,
+        phase: scrollMs > 0 ? 'scroll' : 'flash',
+        scrollMs,
+        ...(opts?.from === undefined ? {} : { from: opts.from }),
       });
-      if (flashTimer.current !== null) clearTimeout(flashTimer.current);
-      flashTimer.current = setTimeout(() => setFlash(null), FLASH_MS + 100);
     },
     [doc, requestScroll],
   );
@@ -758,7 +791,7 @@ function HighlightCardSlot({
  * It decides which implementation fills each action; the callers (`SourcePane`'s toolbar, the
  * explain panel's chips in S6, the canvas in S7) reach them through `useReaderActions()`.
  * `openExplain` and `sendToCanvas` are owned by S6 and S7 and change behind these same lines.
- * `focusAnchor` is S4's: resolve → scroll → 1.2 s flash, implemented by the workspace above.
+ * `focusAnchor` is S4's: resolve → scroll → the citation flash, implemented by the workspace above.
  *
  * A component of its own because the workspace returns early (loading, error) and hooks may not
  * follow an early return.
@@ -769,7 +802,7 @@ function ReaderActionsMount({
   children,
 }: {
   readonly paper: PaperRef;
-  readonly onFocusAnchor: (anchor: Anchor, opts?: { flash?: boolean }) => void;
+  readonly onFocusAnchor: (anchor: Anchor, opts?: { flash?: boolean; from?: FlashSource }) => void;
   readonly children: React.ReactNode;
 }) {
   const paperId = paper.kind === 'api' ? paper.paperId : null;

@@ -1,9 +1,9 @@
 /**
  * W3UI round 2 (#141) on the real stack (api + worker + agent + web), YOLO:
  *
- *   R3  the quote is de-hyphenated and never cut mid-word ("Show all" for a long one)
- *   R4  a chip keeps the punctuation that follows it on its line
- *   R10 light markdown is rendered (no asterisks), chips still work inside lists and bold
+ *   R3  the quote is de-hyphenated (on the call slip since #202: one line, ellipsis by CSS)
+ *   R4  a marker keeps the punctuation that follows it on its line (chips until #202)
+ *   R10 light markdown is rendered (no asterisks), markers still work inside lists and bold
  *   R5  a canvas explanation card shows page labels, never "[bN]", and renders the same markdown
  *   R7  the "Send to canvas" toast lasts 8 s, waits while hovered or focused, and "Open canvas" is
  *       reachable by keyboard
@@ -117,7 +117,7 @@ async function noSideScroll(page: Page, width: number): Promise<void> {
 test.describe('W3UI round 2 (YOLO)', () => {
   test.skip(YOLO === null, 'SKIPPED: the YOLO PDF is not present.');
 
-  test('R3 R4 R10: the explain panel quote, chips and markdown', async ({
+  test('R3 R4 R10: the explain panel quote, markers and markdown', async ({
     browser,
     stack,
   }, testInfo) => {
@@ -178,45 +178,32 @@ test.describe('W3UI round 2 (YOLO)', () => {
         await expect(panel).toBeVisible();
         const quote = panel.locator('[data-explain-quote]');
         await expect(quote).toContainText('Prior work');
-        const shown = (await quote.locator('blockquote').innerText()).replace(/\s+/g, ' ');
-        // R3: no line-end hyphen is left, and a long quote is cut at a word, with Show all.
+        // #202: the selection is quoted on the first call slip, in the paper's voice: one line with
+        // an ellipsis by CSS (two on a phone), the whole passage in the DOM, de-hyphenated (R3).
+        const words = quote.locator('[data-voice="paper"]');
+        const shown = (await words.innerText()).replace(/\s+/g, ' ');
         expect(shown).not.toMatch(/\p{L}- \p{Ll}/u);
         expect(shown).toContain('repurposes classifiers to perform detection');
-        const fold = quote.getByRole('button', { name: 'Show all' });
-        await expect(fold).toBeVisible();
-        const cut = shown.replace(/\s*p\. \d+\s*$/, '');
-        expect(cut.endsWith('\u2026')).toBe(true);
-        const kept = cut.slice(0, -1);
-        // Must-fix: the toolbar has its own ground and a hairline, and the scroll area starts
-        // below it, so scrolled quote text never sits behind "Summarize paper".
-        const bar = await panel.locator('.pt-explain__toolbar').evaluate((el) => {
+        expect(shown).toContain('end-to-end');
+        const clip = await words.evaluate((el) => {
           const css = getComputedStyle(el);
-          const scroll = el.parentElement?.querySelector('.pt-explain__scroll');
+          return { overflow: css.textOverflow, wrap: css.whiteSpace, clamp: css.webkitLineClamp };
+        });
+        if (screen.width >= 768)
+          expect(clip).toMatchObject({ overflow: 'ellipsis', wrap: 'nowrap' });
+        else expect(clip.clamp).toBe('2');
+        // Must-fix (kept from v0.1): the scroll area starts below the panel's tools, so scrolled
+        // text never sits behind them.
+        const bar = await panel.locator('.pt-explain__tools').evaluate((el) => {
+          const scroll = el
+            .closest('.pt-explain, .pt-explain-sheet')
+            ?.querySelector('.pt-explain__scroll');
           return {
-            bg: css.backgroundColor,
-            border: css.borderBottomWidth,
             barBottom: el.getBoundingClientRect().bottom,
             scrollTop: scroll?.getBoundingClientRect().top ?? -1,
           };
         });
-        expect(bar.bg).not.toMatch(/rgba\(0, 0, 0, 0\)|transparent/);
-        expect(bar.border).toBe('1px');
         expect(bar.scrollTop).toBeGreaterThanOrEqual(bar.barBottom - 0.5);
-        // Should-fix: "Show all" sits close under the cut quote.
-        const gap = await quote.evaluate((el) => {
-          const q = el.querySelector('blockquote')?.getBoundingClientRect();
-          const f = el.querySelector('.pt-explain__fold')?.getBoundingClientRect();
-          return q && f ? f.top - q.bottom : -1;
-        });
-        expect(gap).toBeGreaterThanOrEqual(-8);
-        expect(gap).toBeLessThan(16);
-        await fold.click();
-        const full = (await quote.locator('blockquote').innerText()).replace(/\s+/g, ' ');
-        expect(full.startsWith(kept)).toBe(true);
-        expect(/\s/.test(full[kept.length] ?? ' ')).toBe(true);
-        expect(full).not.toMatch(/\p{L}- \p{Ll}/u);
-        expect(full).toContain('end-to-end');
-        await quote.getByRole('button', { name: 'Show less' }).click();
 
         const answer = panel.locator('[data-message-status="complete"]').first();
         await expect(answer).toBeVisible({ timeout: 60_000 });
@@ -228,9 +215,11 @@ test.describe('W3UI round 2 (YOLO)', () => {
         expect(await answer.locator('code').count()).toBe(1);
         expect(await answer.locator('ul > li').count()).toBe(2);
         expect(await answer.locator('ol > li').count()).toBe(2);
-        expect(await answer.locator('li .pt-chip').count()).toBe(1);
-        expect(await answer.locator('.pt-chip').count()).toBe(3);
-        // R4: the full stop travels with the chip: the run is one line, and nothing is left after it.
+        // #202: numbered passage markers, not chips: [b1] [b2] [b1] are markers 1, 2, 1.
+        expect(await answer.locator('li [data-citation-id]').count()).toBe(1);
+        expect(await answer.locator('[data-citation-id]').count()).toBe(3);
+        expect(await answer.locator('.pt-chip').count()).toBe(0);
+        // R4: the full stop travels with the marker: the run is one line, nothing left after it.
         const runs = await answer.locator('.pt-cite-run').evaluateAll((nodes) =>
           nodes.map((n) => ({
             text: n.textContent,
@@ -240,7 +229,7 @@ test.describe('W3UI round 2 (YOLO)', () => {
         );
         expect(runs.length).toBe(3);
         for (const run of runs) expect(run.lines).toBe(1);
-        expect(runs[2]).toMatchObject({ text: 'p. 1.', tail: true });
+        expect(runs[2]).toMatchObject({ text: '1.', tail: true });
         await noSideScroll(page, screen.width);
         await page.screenshot({
           path: shotPath(`r2-panel-${label}.png`, testInfo.outputPath('shots')),
