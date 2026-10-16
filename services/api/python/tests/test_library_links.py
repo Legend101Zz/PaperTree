@@ -226,7 +226,8 @@ def test_links_scale(tmp_path: Path) -> None:
     The target is matching under 1 s (measured 0.48 s at low load, 0.84 s under heavy load). The
     assertion is 10 s on purpose: a 3 s bound failed a gate at 3.21 s at a load average of 18-28,
     and machine load must not fail it (the `test_30k_*` timing tests flake that way, #80); it still
-    catches an O(entries x papers) regression, which took 38-150 s. The measured times are printed.
+    catches an O(entries x papers) regression, which took 38-150 s. The DB query gets the same
+    10 s bound (it measures 0.25-0.38 s). The measured times are printed.
     """
     openers = ("Deep", "Learning", "Neural", "Attention", "Efficient")
 
@@ -282,7 +283,7 @@ def test_links_scale(tmp_path: Path) -> None:
         f"{matching:.3f}s; DB query ({len(read)} papers, {sum(len(r.references) for r in read)} "
         f"entries) {query:.3f}s"
     )
-    assert len(read) == 400 and query < 3.0
+    assert len(read) == 400 and query < 10.0
 
 
 def test_a_references_json_that_is_not_an_array_skips_that_paper_only(tmp_path: Path) -> None:
