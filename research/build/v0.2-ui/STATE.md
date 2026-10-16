@@ -3,35 +3,37 @@
 Read this first after a compaction, then `PLAN.md` and the open PRs (`gh pr list --base release/v0.2`).
 
 - Prompt: `~/Desktop/papertree-v0.2-build-prompt.md`. Process contract: `AGENTS.md`.
-- Integration branch: `release/v0.2` (from main `79f637d`, pushed 2026-10-16 15:2x IST). Every PR targets it.
-- Orchestrator worktree: `/Volumes/Mrigesh SSD/PaperTree-worktrees/v02-ui` (branch `v02/research`), both installs
-  done, corpus + fresh PDFs copied in (checksums OK).
-- Gate script: `/Volumes/Mrigesh SSD/PaperTree-scratch/v02/gate/run-gate.sh <worktree> <outdir>`.
-- Dev stack: `/Volumes/Mrigesh SSD/PaperTree-scratch/v02/stack/{start.sh,stop.sh,stack.env}` — web 18901, API 18902,
-  agent 18903 (FAUX=1 default). Data root `/Volumes/Mrigesh SSD/PaperTree-scratch/v02-data` (copy of the README demo
-  data). Demo login: `demo@example.test` / `e2e-s4-password` (also reader@, you@, me@example.test).
-- Research clones: `/Volumes/Mrigesh SSD/PaperTree-research/v0.2/src/`; notes land in `.../v0.2/notes/`.
+- Integration branch: `release/v0.2` (from main `79f637d`). Every PR targets it; release → main is the owner's.
+- Orchestrator worktree: `/Volumes/Mrigesh SSD/PaperTree-worktrees/v02-ui` (branch `v02/research`, the docs PR
+  for #185). Slice worktrees: `PaperTree-worktrees/v02-<slug>`. Review worktree: `PaperTree-worktrees/v02-review`
+  (detached; move it to each PR head before a review).
+- Gate: `/Volumes/Mrigesh SSD/PaperTree-scratch/v02/gate/run-gate.sh <worktree> <outdir>` (logs + SUMMARY.txt).
+- Dev stack: `/Volumes/Mrigesh SSD/PaperTree-scratch/v02/stack/{start.sh,stop.sh,restart-web.sh,stack.env}`:
+  web 18901, API 18902, agent 18903 (FAUX=1 default), data root `PaperTree-scratch/v02-data` (README demo copy).
+  Login `demo@example.test` / `e2e-s4-password` (also reader@, you@, me@example.test). A second web server for a
+  slice worktree can run on 18904 against the same API.
+- **Never run `pnpm e2e` in the worktree that serves the dev stack**: the harness's `next dev` shares
+  `apps/web/.next` and inlines its own API port into the chunks (happened 15:44; fixed by stopping web by pgid,
+  removing `.next`, `restart-web.sh`). Run e2e with `PAPERTREE_E2E_{API,WEB,AGENT}_PORT=18905/18906/18907`.
+- Screenshot tool: `/Volumes/Mrigesh SSD/PaperTree-scratch/v02/tools/shoot.mjs`. Agent briefs:
+  `PaperTree-scratch/v02/briefs/`. Issue specs: `PaperTree-scratch/v02/issues/` (issues.json = key → number).
 
 ## Done
-- Phase 0: worktree, installs, release/v0.2 pushed, pickup comments on #175 and #182.
-
-## Running
-- Baseline gate on 79f637d → `/Volumes/Mrigesh SSD/PaperTree-scratch/v02/gate/baseline-79f637d/`.
-- R1/R2/R3 research agents (Sonnet), writing to `PaperTree-research/v0.2/notes/`.
+- Phase 0: worktree, installs, release/v0.2, pickup comments; baseline gate green; e2e 58/60 with 2 load flakes
+  that pass alone (RESULT.md).
+- Phase 1: R1–R3 notes, ADR-004; review point 1 posted on #175.
+- Phase 2: GAP-AUDIT.md (+ audit/GAP-A1..A3, shots, reference frames).
+- Phase 3: PLAN.md; slice issues #188–#218 filed; #187 (Prettier on apps/web) filed.
+- S0 #184: PR #186 open (head cf2d0a6), full gate green on 8157cd7, review done and fixed; CI running.
+- S1a #188: in progress in worktree `v02-s1` (branch `v02/s1a-tokens`, stacked on S0): tokens, contrast test,
+  fonts, theme switch done locally; not committed yet.
 
 ## Next
-- Record baseline in RESULT.md; start stack; screenshots of the current app at frame sizes.
-- ADR-004 after R1–R3; review point 1 on #175.
+- Merge #186 after CI → #187 mechanical format PR → rebase S1a onto release/v0.2 → S1a PR.
+- Start backend slices beside S1: S2a #192, S4a #201, S5b #207 (implementer agents, own worktrees).
 
 ## PIDs (process-group ids) started by this session
-- (none yet)
+- Dev stack: api 35217, worker 35218, agent 35219, web 46866 (restarted 16:0x). `stack/pids.txt` is authoritative.
 
 ## Open PRs
-- (none yet)
-
-## Update 15:5x
-- Baseline gate 79f637d: ALL GREEN (lint, typecheck, test, prettier, ruff, mypy, web build, pytest 499 s, peak-RSS alone).
-- R1/R2/R3 notes done → research/build/v0.2-ui/RESEARCH-R*.md (prototypes preserved at PaperTree-research/v0.2/prototypes/).
-- ADR-004 written (research/architecture-decisions/ADR-004-v0.2-ui-stack.md).
-- S0: issue #184, worktree v02-s0 branch v02/s0-tooling, commit 8157cd7 (not pushed yet; gate pending).
-- Dev stack started 15:5x: process groups api 35217, worker 35218, agent 35219, web 35220 (pids.txt in stack/).
+- #186 S0 tooling (base release/v0.2).
