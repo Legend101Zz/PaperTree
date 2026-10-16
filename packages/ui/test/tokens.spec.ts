@@ -28,7 +28,11 @@ function rule(selector: string): string {
 function declarations(block: string): Map<string, string> {
   const out = new Map<string, string>();
   const clean = block.replace(/\/\*[\s\S]*?\*\//g, '');
-  for (const m of clean.matchAll(/(--pt-[a-z0-9-]+)\s*:\s*([^;]+);/g)) out.set(m[1]!, m[2]!.trim());
+  for (const m of clean.matchAll(/(--pt-[a-z0-9-]+)\s*:\s*([^;]+);/g)) {
+    // Prettier wraps a long value differently at different indent depths; compare it unwrapped.
+    const value = m[2]!.replace(/\s+/g, ' ').replace(/\(\s/g, '(').replace(/\s\)/g, ')').trim();
+    out.set(m[1]!, value);
+  }
   return out;
 }
 
@@ -74,6 +78,9 @@ const PAIRS: readonly (readonly [string, string, number])[] = [
   ['--pt-ink-muted', '--pt-page', 4.5],
   ['--pt-primary', '--pt-page', 4.5],
   ['--pt-on-primary', '--pt-primary-fill', 4.5],
+  // v0.1 surfaces paint --pt-accent as a fill under --pt-accent-ink, and as text on the page.
+  ['--pt-accent-ink', '--pt-accent', 4.5],
+  ['--pt-accent', '--pt-page', 4.5],
   ['--pt-pen', '--pt-call-slip', 4.5],
   ['--pt-on-tab', '--pt-tab', 4.5],
   ['--pt-ai-tab-ink', '--pt-ai-slip', 4.5],

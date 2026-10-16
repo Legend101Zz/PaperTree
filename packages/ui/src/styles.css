@@ -284,6 +284,9 @@
     --pt-frame-outline: #a39a8e; /* 6.1 */
     --pt-pin-ring: #c9a26b;
     --pt-accent-soft: rgb(240 160 143 / 14%);
+    /* v0.1 paints --pt-accent as a FILL under --pt-accent-ink too; on the light lamp-lit accent the
+     * ink must be dark (7.9:1), as v0.1's light-blue dark accent had a dark ink */
+    --pt-accent-ink: #1c1714;
   }
 }
 
@@ -337,6 +340,9 @@
   --pt-frame-outline: #a39a8e; /* 6.1 */
   --pt-pin-ring: #c9a26b;
   --pt-accent-soft: rgb(240 160 143 / 14%);
+  /* v0.1 paints --pt-accent as a FILL under --pt-accent-ink too; on the light lamp-lit accent the
+   * ink must be dark (7.9:1), as v0.1's light-blue dark accent had a dark ink */
+  --pt-accent-ink: #1c1714;
 
   color-scheme: dark;
 }
