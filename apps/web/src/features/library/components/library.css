@@ -757,6 +757,17 @@
   padding: 32px var(--pt-margin-desktop) 48px;
 }
 
+/* The shelf's wrapper keeps the page's flex column for Reading now and the shelf (laid out as before
+   #197), and hides them, still mounted, under the Table. */
+.pt-library__shelf {
+  display: flex;
+  flex-direction: column;
+}
+
+.pt-library__shelf[hidden] {
+  display: none;
+}
+
 .pt-libtitle {
   display: flex;
   flex-wrap: wrap;

@@ -111,6 +111,10 @@ const spineOrder = (shelf: HTMLElement) =>
     .filter((book) => book.dataset['paperId'] !== undefined)
     .map((book) => book.dataset['paperId']);
 
+// The Table's rows, in order (#197).
+const tableIds = (table: HTMLElement) =>
+  [...table.querySelectorAll<HTMLElement>('tbody tr[data-row-id]')].map((r) => r.dataset['rowId']);
+
 beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
   push.mockReset();
@@ -252,14 +256,16 @@ describe('the title block', () => {
     expect(stats).not.toMatch(/topic/);
   });
 
-  it('"need a look" filters the shelf to the papers that need one, and back', async () => {
-    const shelf = await renderLibrary();
+  it('"need a look" opens the Table filtered to the papers that need one, and back (#197)', async () => {
+    await renderLibrary();
     const alert = screen.getByRole('button', { name: '1 need a look' });
     fireEvent.click(alert);
     expect(alert.getAttribute('aria-pressed')).toBe('true');
-    expect(spineOrder(shelf)).toEqual(['ppr_4']);
+    expect(screen.getByRole('button', { name: 'Table' }).getAttribute('aria-pressed')).toBe('true');
+    const table = screen.getByRole('table', { name: 'Papers that need a look' });
+    expect(tableIds(table)).toEqual(['ppr_4']);
     fireEvent.click(alert);
-    expect(spineOrder(shelf)).toHaveLength(4);
+    expect(tableIds(screen.getByRole('table', { name: 'Papers' }))).toHaveLength(4);
   });
 
   it('Arrange by Year regroups the shelf; the other views say they are coming', async () => {
@@ -282,12 +288,13 @@ describe('the title block', () => {
       '2022, 1 paper',
       'Year unknown, 1 paper',
     ]);
-    const table = screen.getByRole('button', { name: 'Table' });
-    expect(table.getAttribute('aria-disabled')).toBe('true');
-    expect(table.getAttribute('aria-describedby')).toBeTruthy();
-    expect(document.getElementById(table.getAttribute('aria-describedby') ?? '')?.textContent).toBe(
-      'Coming in this release',
-    );
+    const topics = screen.getByRole('button', { name: 'Topics' });
+    expect(topics.getAttribute('aria-disabled')).toBe('true');
+    expect(topics.getAttribute('aria-describedby')).toBeTruthy();
+    expect(
+      document.getElementById(topics.getAttribute('aria-describedby') ?? '')?.textContent,
+    ).toBe('Coming in this release');
+    expect(screen.getByRole('button', { name: 'Table' }).getAttribute('aria-disabled')).toBeNull();
   });
 });
 
@@ -532,13 +539,12 @@ describe('focus never falls to the page (review S4)', () => {
 describe('"need a look" ends when nothing does (review S5)', () => {
   it('a later upload does not switch the filter back on', async () => {
     api.remove.mockResolvedValue(undefined);
-    const shelf = await renderLibrary();
+    await renderLibrary();
     fireEvent.click(screen.getByRole('button', { name: '1 need a look' }));
-    expect(spineOrder(shelf)).toEqual(['ppr_4']);
-    fireEvent.click(within(shelf).getByRole('button', { name: /^garbage,/ }));
-    const card = await screen.findByRole('region', { name: 'garbage' });
-    fireEvent.click(within(card).getByRole('button', { name: 'Delete garbage' }));
-    fireEvent.click(within(card).getByRole('button', { name: 'Delete paper' }));
+    const table = screen.getByRole('table', { name: 'Papers that need a look' });
+    expect(tableIds(table)).toEqual(['ppr_4']);
+    fireEvent.click(within(table).getByRole('button', { name: 'Remove garbage' }));
+    fireEvent.click(within(table).getByRole('button', { name: 'Delete paper' }));
     await waitFor(() => expect(screen.queryByRole('button', { name: /need a look/ })).toBeNull());
 
     const fresh = row('fresh', { paper_id: 'ppr_NEW', processing: 'queued' });
@@ -553,11 +559,11 @@ describe('"need a look" ends when nothing does (review S5)', () => {
     fireEvent.change(input as HTMLInputElement, {
       target: { files: [new File(['%PDF'], 'fresh.pdf', { type: 'application/pdf' })] },
     });
-    await screen.findByRole('button', { name: /^fresh,/ });
-    expect(screen.getByRole('button', { name: '1 need a look' }).getAttribute('aria-pressed')).toBe(
-      'false',
-    );
-    expect(spineOrder(screen.getByRole('toolbar', { name: 'Shelf' }))).toHaveLength(4);
+    await waitFor(() => expect(document.querySelector('[data-row-id="ppr_NEW"]')).not.toBeNull());
+    // The title's alert (the table's chip of the same name follows it).
+    const [alert] = screen.getAllByRole('button', { name: '1 need a look' });
+    expect(alert?.getAttribute('aria-pressed')).toBe('false');
+    expect(tableIds(screen.getByRole('table', { name: 'Papers' }))).toHaveLength(4);
   });
 });
 
