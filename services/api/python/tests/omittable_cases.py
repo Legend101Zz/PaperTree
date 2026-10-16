@@ -64,6 +64,8 @@ CASES: Final[dict[str, tuple[dict[str, Any], tuple[str, ...]]]] = {
     ),
     "ThreadCreate": ({"kind": "ask"}, ("anchor",)),
     "FollowUp": ({"question": "And that?"}, ("retry_of", "redraw_of")),
+    # v0.2 S7a (#216): a diagram part's quote, as the agent sends it.
+    "AgentCite": ({"quote": "queries and keys of dimension dk"}, ("page",)),
     "SseStatus": ({"phase": "tool"}, ("label", "attempt", "delay_ms")),
     "NodeCreate": (
         {

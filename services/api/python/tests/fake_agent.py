@@ -132,6 +132,8 @@ class Script:
     extra_tools: tuple[tuple[str, dict[str, Any]], ...] = ()
     #: Seconds to wait before each text frame (a slow model; the persistence cadence test).
     text_delay: float = 0.0
+    #: A diagram stream's `part` frames, patched by letter (a quote the paper does not hold).
+    part_patch: Mapping[str, Mapping[str, Any]] | None = None
 
 
 def _plain(text: str, datamark: str) -> str:
@@ -270,6 +272,8 @@ class FakeAgent:
                         data["model"] = self.model
                 elif event == "status" and data.get("phase") == "tool" and script.call_tools:
                     await self._fixture_tool(context, data)
+                elif event == "part" and script.part_patch:
+                    data.update(script.part_patch.get(str(data["letter"]), {}))
                 elif event == "text":
                     if mapping is None:
                         mapping = await self._mapping(context, frames)

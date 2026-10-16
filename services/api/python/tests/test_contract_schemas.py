@@ -139,6 +139,7 @@ WHERE: dict[str, tuple[tuple[str, str], ...]] = {
     "NotebookItemCreate": (("api/notebooks", "NotebookItemCreate"),),
     "NotebookItemPatch": (("api/notebooks", "NotebookItemPatch"),),
     "AgentStatus": (("agent/run-events", "status"),),
+    "AgentCite": (("agent/run-events", "PartCite"),),
 }
 
 

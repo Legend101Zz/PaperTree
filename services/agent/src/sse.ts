@@ -5,7 +5,9 @@
  */
 import type { ServerResponse } from 'node:http';
 
-export type AgentEventName = 'run' | 'status' | 'text' | 'usage' | 'done';
+/** `plate`, `part` and `link` come only from a diagram run (v0.2 S7a, diagram.ts). */
+export type AgentEventName =
+  'run' | 'status' | 'text' | 'plate' | 'part' | 'link' | 'usage' | 'done';
 
 export interface SseSink {
   event(name: AgentEventName, data: Record<string, unknown>): void;

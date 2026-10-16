@@ -1233,11 +1233,12 @@ describe('contracts.spec — every key, its presence and every enum, against the
 describe('contracts.spec — the agent contract (hand-written) and its recorded streams', () => {
   const fixtures = readdirSync(`${REPO}contracts/agent/fixtures`).filter((f) => f.endsWith('.sse'));
 
-  it('there are the eight recorded streams', () => {
+  it('there are the eight recorded streams, and the diagram stream (v0.2 S7a, faux brain)', () => {
     expect(fixtures.sort()).toEqual(
       [
         'aborted-partial',
         'auth-error',
+        'diagram-ok',
         'explain-ok',
         'followup-ok',
         'stall-timeout',
@@ -1274,7 +1275,7 @@ describe('contracts.spec — the agent contract (hand-written) and its recorded 
 
   it('the run-request examples validate, and a summary without its digest seed does not', () => {
     const request = validator('run-request');
-    for (const name of ['explain', 'followup', 'summary']) {
+    for (const name of ['explain', 'followup', 'summary', 'diagram']) {
       const body = load(`contracts/agent/examples/run-request-${name}.json`);
       expect(request(body), `${name}: ${JSON.stringify(request.errors)}`).toBe(true);
     }

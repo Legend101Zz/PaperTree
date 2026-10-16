@@ -1,0 +1,135 @@
+event: run
+data: {"run_id":"run_01K63AE8M4Q2T7V9X3B5N6R0D1","model":"minimax/MiniMax-M3","sdk":"pi-coding-agent@0.87.1"}
+
+event: status
+data: {"phase":"thinking","label":"Reading the selected passage"}
+
+event: status
+data: {"phase":"writing"}
+
+event: text
+data: {"delta":"{\"t\":\"plate\",\"title\":\"Scaled dot-prod"}
+
+event: text
+data: {"delta":"uct attention\"}\n{\"t\":\"part\",\"label\":\""}
+
+event: plate
+data: {"title":"Scaled dot-product attention"}
+
+event: text
+data: {"delta":"Q, K, V\",\"text\":\"queries and keys of "}
+
+event: text
+data: {"delta":"dimension dk, values of dimension dv\""}
+
+event: text
+data: {"delta":",\"kind\":\"input\",\"after\":[],\"cite\":{\"q"}
+
+event: text
+data: {"delta":"uote\":\"queries and keys of dimension "}
+
+event: text
+data: {"delta":"dk, and values of dimension dv\",\"page"}
+
+event: text
+data: {"delta":"\":4}}\n{\"t\":\"part\",\"label\":\"MatMul (Q "}
+
+event: part
+data: {"letter":"A","label":"Q, K, V","text":"queries and keys of dimension dk, values of dimension dv","kind":"input","after":[],"edge":[],"cite":{"quote":"queries and keys of dimension dk, and values of dimension dv","page":4}}
+
+event: text
+data: {"delta":"· Kᵀ)\",\"text\":\"one dot product of the"}
+
+event: text
+data: {"delta":" query with each key\",\"kind\":\"step\",\""}
+
+event: text
+data: {"delta":"after\":[\"A\"],\"cite\":{\"quote\":\"We comp"}
+
+event: text
+data: {"delta":"ute the dot products of the query wit"}
+
+event: text
+data: {"delta":"h all keys\",\"page\":4}}\n{\"t\":\"part\",\"l"}
+
+event: part
+data: {"letter":"B","label":"MatMul (Q · Kᵀ)","text":"one dot product of the query with each key","kind":"step","after":["A"],"edge":[null],"cite":{"quote":"We compute the dot products of the query with all keys","page":4}}
+
+event: text
+data: {"delta":"abel\":\"Scale ÷ √dk\",\"text\":\"each dot "}
+
+event: text
+data: {"delta":"product divided by √dk\",\"kind\":\"step\""}
+
+event: text
+data: {"delta":",\"after\":[\"B\"],\"cite\":{\"quote\":\"divid"}
+
+event: text
+data: {"delta":"e each by √dk\",\"page\":4}}\n{\"t\":\"part\""}
+
+event: part
+data: {"letter":"C","label":"Scale ÷ √dk","text":"each dot product divided by √dk","kind":"step","after":["B"],"edge":[null],"cite":{"quote":"divide each by √dk","page":4}}
+
+event: text
+data: {"delta":",\"label\":\"Softmax\",\"text\":\"turns the "}
+
+event: text
+data: {"delta":"scaled scores into weights on the val"}
+
+event: text
+data: {"delta":"ues\",\"kind\":\"step\",\"after\":[\"C\"],\"cit"}
+
+event: text
+data: {"delta":"e\":{\"quote\":\"apply a softmax function"}
+
+event: text
+data: {"delta":" to obtain the weights on the values\""}
+
+event: text
+data: {"delta":",\"page\":4}}\n{\"t\":\"part\",\"label\":\"MatM"}
+
+event: part
+data: {"letter":"D","label":"Softmax","text":"turns the scaled scores into weights on the values","kind":"step","after":["C"],"edge":[null],"cite":{"quote":"apply a softmax function to obtain the weights on the values","page":4}}
+
+event: text
+data: {"delta":"ul with V\",\"text\":\"the weights applie"}
+
+event: text
+data: {"delta":"d to the values give the output\",\"kin"}
+
+event: text
+data: {"delta":"d\":\"output\",\"after\":[\"D\",\"A\"],\"edge\":"}
+
+event: text
+data: {"delta":"[null,\"V\"],\"cite\":{\"quote\":\"We comput"}
+
+event: text
+data: {"delta":"e the matrix of outputs as\",\"page\":4}"}
+
+event: text
+data: {"delta":"}\n{\"t\":\"part\",\"label\":\"Weights sum to"}
+
+event: part
+data: {"letter":"E","label":"MatMul with V","text":"the weights applied to the values give the output","kind":"output","after":["D","A"],"edge":[null,"V"],"cite":{"quote":"We compute the matrix of outputs as","page":4}}
+
+event: text
+data: {"delta":" 1\",\"text\":\"each query's weights over"}
+
+event: text
+data: {"delta":" the keys add up to one\",\"kind\":\"conc"}
+
+event: text
+data: {"delta":"ept\",\"after\":[\"D\"],\"cite\":null}\n{\"t\":"}
+
+event: part
+data: {"letter":"F","label":"Weights sum to 1","text":"each query's weights over the keys add up to one","kind":"concept","after":["D"],"edge":[null],"cite":null}
+
+event: text
+data: {"delta":"\"end\"}"}
+
+event: usage
+data: {"input":5190,"output":298,"cache_read":0,"cache_write":0,"reasoning":0,"cost_usd_est":0.0019146}
+
+event: done
+data: {"status":"complete","stop_reason":"stop","error":null,"final_text":"{\"t\":\"plate\",\"title\":\"Scaled dot-product attention\"}\n{\"t\":\"part\",\"label\":\"Q, K, V\",\"text\":\"queries and keys of dimension dk, values of dimension dv\",\"kind\":\"input\",\"after\":[],\"cite\":{\"quote\":\"queries and keys of dimension dk, and values of dimension dv\",\"page\":4}}\n{\"t\":\"part\",\"label\":\"MatMul (Q · Kᵀ)\",\"text\":\"one dot product of the query with each key\",\"kind\":\"step\",\"after\":[\"A\"],\"cite\":{\"quote\":\"We compute the dot products of the query with all keys\",\"page\":4}}\n{\"t\":\"part\",\"label\":\"Scale ÷ √dk\",\"text\":\"each dot product divided by √dk\",\"kind\":\"step\",\"after\":[\"B\"],\"cite\":{\"quote\":\"divide each by √dk\",\"page\":4}}\n{\"t\":\"part\",\"label\":\"Softmax\",\"text\":\"turns the scaled scores into weights on the values\",\"kind\":\"step\",\"after\":[\"C\"],\"cite\":{\"quote\":\"apply a softmax function to obtain the weights on the values\",\"page\":4}}\n{\"t\":\"part\",\"label\":\"MatMul with V\",\"text\":\"the weights applied to the values give the output\",\"kind\":\"output\",\"after\":[\"D\",\"A\"],\"edge\":[null,\"V\"],\"cite\":{\"quote\":\"We compute the matrix of outputs as\",\"page\":4}}\n{\"t\":\"part\",\"label\":\"Weights sum to 1\",\"text\":\"each query's weights over the keys add up to one\",\"kind\":\"concept\",\"after\":[\"D\"],\"cite\":null}\n{\"t\":\"end\"}","handles_seen":["b1","b2","b3","b4","b5","b6","b7","b8","b9","b10"],"markers":[],"usage_totals":{"input":5190,"output":298,"cache_read":0,"cache_write":0,"reasoning":0,"cost_usd_est":0.0019146},"tool_calls":0,"turns":1,"retries":0,"first_text_ms":4,"latency_ms":6,"entries":[{"type":"message","id":"a29b4076","parentId":null,"timestamp":"2026-10-16T18:42:07.158Z","message":{"role":"user","content":[{"type":"text","text":"Explain with a diagram. [faux:diagram]\n\n<untrusted_document trust=\"untrusted\">\n^7f3a91c2 We ^7f3a91c2 call ^7f3a91c2 our ^7f3a91c2 particular ^7f3a91c2 attention ^7f3a91c2 \"Scaled ^7f3a91c2 Dot-Product ^7f3a91c2 Attention\" ^7f3a91c2 (Figure ^7f3a91c2 2). ^7f3a91c2 The ^7f3a91c2 input ^7f3a91c2 consists ^7f3a91c2 of ^7f3a91c2 queries ^7f3a91c2 and ^7f3a91c2 keys ^7f3a91c2 of ^7f3a91c2 dimension ^7f3a91c2 dk, ^7f3a91c2 and ^7f3a91c2 values ^7f3a91c2 of ^7f3a91c2 dimension ^7f3a91c2 dv. ^7f3a91c2 We ^7f3a91c2 compute ^7f3a91c2 the ^7f3a91c2 dot ^7f3a91c2 products ^7f3a91c2 of ^7f3a91c2 the ^7f3a91c2 query ^7f3a91c2 with ^7f3a91c2 all ^7f3a91c2 keys, ^7f3a91c2 divide ^7f3a91c2 each ^7f3a91c2 by ^7f3a91c2 √dk, ^7f3a91c2 and ^7f3a91c2 apply ^7f3a91c2 a ^7f3a91c2 softmax ^7f3a91c2 function ^7f3a91c2 to ^7f3a91c2 obtain ^7f3a91c2 the ^7f3a91c2 weights ^7f3a91c2 on ^7f3a91c2 the ^7f3a91c2 value… ^7f3a91c2\n</untrusted_document>"}],"timestamp":1792176127158}},{"type":"message","id":"a7b1bd37","parentId":"a29b4076","timestamp":"2026-10-16T18:42:07.162Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"Plan the parts from the selected passage, then write one line per part."},{"type":"text","text":"{\"t\":\"plate\",\"title\":\"Scaled dot-product attention\"}\n{\"t\":\"part\",\"label\":\"Q, K, V\",\"text\":\"queries and keys of dimension dk, values of dimension dv\",\"kind\":\"input\",\"after\":[],\"cite\":{\"quote\":\"queries and keys of dimension dk, and values of dimension dv\",\"page\":4}}\n{\"t\":\"part\",\"label\":\"MatMul (Q · Kᵀ)\",\"text\":\"one dot product of the query with each key\",\"kind\":\"step\",\"after\":[\"A\"],\"cite\":{\"quote\":\"We compute the dot products of the query with all keys\",\"page\":4}}\n{\"t\":\"part\",\"label\":\"Scale ÷ √dk\",\"text\":\"each dot product divided by √dk\",\"kind\":\"step\",\"after\":[\"B\"],\"cite\":{\"quote\":\"divide each by √dk\",\"page\":4}}\n{\"t\":\"part\",\"label\":\"Softmax\",\"text\":\"turns the scaled scores into weights on the values\",\"kind\":\"step\",\"after\":[\"C\"],\"cite\":{\"quote\":\"apply a softmax function to obtain the weights on the values\",\"page\":4}}\n{\"t\":\"part\",\"label\":\"MatMul with V\",\"text\":\"the weights applied to the values give the output\",\"kind\":\"output\",\"after\":[\"D\",\"A\"],\"edge\":[null,\"V\"],\"cite\":{\"quote\":\"We compute the matrix of outputs as\",\"page\":4}}\n{\"t\":\"part\",\"label\":\"Weights sum to 1\",\"text\":\"each query's weights over the keys add up to one\",\"kind\":\"concept\",\"after\":[\"D\"],\"cite\":null}\n{\"t\":\"end\"}"}],"api":"papertree-faux","provider":"papertree-faux","model":"MiniMax-M3","usage":{"input":5190,"output":298,"cacheRead":0,"cacheWrite":0,"reasoning":0,"totalTokens":5488,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0.0019146}},"stopReason":"stop","timestamp":1792176127159}}]}
+

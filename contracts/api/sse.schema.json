@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "PaperTree API contract: sse",
-  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: SseRun, SseStatus, SseText, SseCitations, RunSummary, SseDone.",
+  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: SseRun, SseStatus, SseText, SseCitations, SsePlate, DiagramPart, DiagramLink, RunSummary, SseDone.",
   "$defs": {
     "AnchorCreated": {
       "additionalProperties": false,
@@ -211,6 +211,142 @@
       },
       "required": ["citation_id", "ordinal", "marker", "page_index", "anchor", "supported"],
       "title": "Citation",
+      "type": "object"
+    },
+    "DiagramCite": {
+      "additionalProperties": false,
+      "description": "Where a part's quote was found. `supported` true: verbatim in the Anchor's block (\"cited\");\nfalse: there with differences, or nowhere at all (`anchor` null), \"not verified\".",
+      "properties": {
+        "citation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quote": {
+          "type": "string"
+        },
+        "anchor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AnchorV1"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "locator": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PassageLocator"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "page_index": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "supported": {
+          "type": "boolean"
+        }
+      },
+      "required": ["citation_id", "quote", "anchor", "locator", "page_index", "supported"],
+      "title": "DiagramCite",
+      "type": "object"
+    },
+    "DiagramLink": {
+      "additionalProperties": false,
+      "description": "An edge `after` cannot say (a feedback edge), from one placed part to another.",
+      "properties": {
+        "source": {
+          "pattern": "^[A-L]$",
+          "type": "string"
+        },
+        "target": {
+          "pattern": "^[A-L]$",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["source", "target", "label"],
+      "title": "DiagramLink",
+      "type": "object"
+    },
+    "DiagramPart": {
+      "additionalProperties": false,
+      "properties": {
+        "letter": {
+          "pattern": "^[A-L]$",
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": ["input", "step", "output", "concept"],
+          "type": "string"
+        },
+        "after": {
+          "items": {
+            "pattern": "^[A-L]$",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "edge": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "cite": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DiagramCite"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["letter", "label", "text", "kind", "after", "edge", "cite"],
+      "title": "DiagramPart",
       "type": "object"
     },
     "MessageError": {
@@ -617,6 +753,18 @@
       },
       "required": ["status", "error", "message_id"],
       "title": "SseDone",
+      "type": "object"
+    },
+    "SsePlate": {
+      "additionalProperties": false,
+      "description": "A diagram run's plate title (v0.2 S7a); its parts follow as `part` (a `DiagramPart`, the\nquote already resolved) and its feedback edges as `link` (a `DiagramLink`).",
+      "properties": {
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": ["title"],
+      "title": "SsePlate",
       "type": "object"
     },
     "SseRun": {

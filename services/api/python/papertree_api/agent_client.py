@@ -16,6 +16,12 @@ WHAT THIS MODULE OWNS
     when the agent reports ``upstream_unavailable`` before any text reached the browser, and on
     ``done`` mints the citations (``evidence.py``), persists the message, citations, the run's
     usage and the thread's Pi entries, then emits ``citations``, ``usage``, ``done``.
+  * A DIAGRAM run (v0.2 S7a): the agent's ``text`` is persisted but not forwarded (the browser
+    draws the plate, not the raw lines); each ``plate`` / ``part`` / ``link`` is handed to
+    ``diagrams.PlateBuilder``, which finds the part's quote in the paper, stores the part at once
+    (a Stop keeps what came) and gives back the browser's event. A run that ends with no part at
+    all is an ``error``, never an empty plate; it ends with ``usage`` and ``done`` (no
+    ``citations``: a plate's evidence is its parts' Anchors).
 
 WHY THE READER IS ITS OWN TASK. A browser that closes the tab cancels the response; the run must
 still end on the record. So the SSE generator only drains a queue (with a ``: ping`` every 10 s),
@@ -49,13 +55,17 @@ from pydantic import ValidationError
 from starlette.responses import StreamingResponse
 from starlette.types import Receive, Scope, Send
 
-from . import evidence
+from . import diagrams, evidence
 from .errors import ApiError, ErrorCode, RunErrorCode
 from .logging import log_event, user_ref
 from .middleware import REQUEST_ID_HEADER
+from .quotes import QuoteResolver
 from .schemas import (
     AgentDone,
     AgentLimits,
+    AgentLink,
+    AgentPart,
+    AgentPlate,
     AgentRun,
     AgentRunRequest,
     AgentStatus,
@@ -80,6 +90,8 @@ TOKEN_GRACE_SECONDS: Final = 30
 #: The one API-level retry's pause (the agent's own retry pauses are its own).
 RETRY_DELAY_SECONDS: Final = 1.0
 MAX_STATUS_LABEL: Final = 120
+#: The events only a diagram run sends; one off the contract is dropped, not fatal.
+DIAGRAM_EVENTS: Final = frozenset({"plate", "part", "link"})
 
 PROVIDER: Final = "minimax"
 MODEL: Final = "MiniMax-M3"
@@ -228,19 +240,39 @@ class AgentProtocolError(Exception):
 class AgentStream:
     client: httpx.AsyncClient
     response: httpx.Response
+    #: For the log line of a dropped diagram frame.
+    run_id: str = ""
 
     async def frames(self) -> AsyncIterator[tuple[str, Wire | None]]:
         """``(event, model)`` per frame, and ``("ping", None)`` per ``: ping`` comment: a
-        heartbeat is activity, and the broker's idle timer must see it."""
+        heartbeat is activity, and the broker's idle timer must see it.
+
+        A ``plate`` / ``part`` / ``link`` frame that is not the contract is DROPPED (logged, and
+        yielded as activity), never a protocol error: one bad line of a plate costs that line,
+        not the run (S7a review S1). Any other frame off the contract ends the run as before."""
         event: str | None = None
         data: list[str] = []
         async for line in self.response.aiter_lines():
             if line == "":
                 if event is not None:
+                    parsed: Wire | None
                     try:
-                        yield event, parse_agent_event(event, "\n".join(data))
-                    except (KeyError, ValidationError) as exc:
+                        parsed = parse_agent_event(event, "\n".join(data))
+                    except ValidationError as exc:
+                        if event not in DIAGRAM_EVENTS:
+                            raise AgentProtocolError(
+                                f"a {event!r} frame is not the contract"
+                            ) from exc
+                        log_event(
+                            "run.diagram_dropped",
+                            level="warning",
+                            run_id=self.run_id,
+                            error_code=f"{event}_invalid",
+                        )
+                        event, parsed = "ping", None
+                    except KeyError as exc:
                         raise AgentProtocolError(f"a {event!r} frame is not the contract") from exc
+                    yield event, parsed
                 event, data = None, []
                 continue
             if line.startswith(":"):
@@ -298,7 +330,7 @@ class AgentClient:
                 "agent_unavailable", "The AI service is not reachable. Try again in a moment."
             ) from exc
         if response.status_code == 200:
-            return AgentStream(client, response)
+            return AgentStream(client, response, run_id=body.run_id)
         status = response.status_code
         await response.aclose()
         await client.aclose()
@@ -407,6 +439,8 @@ class RunBroker:
     usage: _Usage = field(default_factory=_Usage)
     #: The `done.usage_totals` of an attempt the API retried: those tokens were spent too.
     retried_usage: _Usage = field(default_factory=_Usage)
+    #: A diagram run's plate, built at its first diagram event (None for every other kind).
+    plate: diagrams.PlateBuilder | None = None
     _task: asyncio.Task[None] | None = None
     _cancel_task: asyncio.Task[None] | None = None
     _last_write: float = 0.0
@@ -603,6 +637,8 @@ class RunBroker:
                 self.queue.put_nowait(sse("status", status))
             elif isinstance(data, AgentText):
                 self._on_text(db, owner, data.delta)
+            elif isinstance(data, AgentPlate | AgentPart | AgentLink):
+                self._on_diagram(db, owner, event, data)
             elif isinstance(data, AgentUsage):
                 self.usage.add(data)
             elif isinstance(data, AgentDone):
@@ -613,15 +649,69 @@ class RunBroker:
     def _on_text(self, db: PaperTreeDb, owner: Any, delta: str) -> None:
         if not delta:
             return
-        if self.first_text_ms is None:
+        if self.first_text_ms is None and self.spec.kind != "diagram":
             self.first_text_ms = self._elapsed_ms()
         self.buffer += delta
         self.text_sent = True
-        self.queue.put_nowait(sse("text", {"delta": delta}))
+        if self.spec.kind != "diagram":  # a plate is drawn from its parts, not its raw lines
+            self.queue.put_nowait(sse("text", {"delta": delta}))
         now = time.monotonic()
         if self.spec.kind != "summary" and now - self._last_write >= PERSIST_EVERY_SECONDS:
             db.update_message(owner, self.spec.message_id, content=self.buffer)
             self._last_write = now
+
+    def _on_diagram(
+        self, db: PaperTreeDb, owner: Any, event: str, data: AgentPlate | AgentPart | AgentLink
+    ) -> None:
+        if self.spec.kind != "diagram":
+            log_event("run.protocol_error", level="warning", run_id=self.spec.run_id)
+            return  # only a diagram run draws; anything else is ignored, not stored
+        plate = self.plate or self._start_plate(db, owner)
+        payload: dict[str, Any] | None
+        if isinstance(data, AgentPlate):
+            payload = plate.on_plate(data.title)
+        elif isinstance(data, AgentPart):
+            payload = plate.on_part(data)
+        else:
+            payload = plate.on_link(data)
+        if payload is not None:
+            if self.first_text_ms is None:  # the reader's wait is for the plate, not raw lines
+                self.first_text_ms = self._elapsed_ms()
+            self.queue.put_nowait(sse(event, payload))
+
+    def _start_plate(self, db: PaperTreeDb, owner: Any) -> diagrams.PlateBuilder:
+        """The plate, from the run's handles as they are at its first line: the tools close once
+        the answer starts (agent run.ts "Text"), so no later read adds a passage."""
+        spec = self.spec
+        handles = db.run_handles(owner, spec.run_id)
+        document = self.documents.get(db, owner, spec.user_id, spec.paper_id, spec.generation)
+        texts: dict[str, str] = {}
+        vocabulary = locators = None
+        try:
+            index = evidence.load_index(
+                self.index_cache, db, owner, spec.user_id, spec.paper_id, spec.generation
+            )
+            texts = {
+                block_id: block.text
+                for block_id in handles.values()
+                if (block := index.block(block_id)) is not None
+            }
+            vocabulary = evidence.vocabulary_of(index)
+            locators = evidence.PassageLocators(index)
+        except KeyError:
+            pass  # the generation is gone: every quote is then "found nowhere"
+        self.plate = diagrams.PlateBuilder(
+            db=db,
+            owner=owner,
+            run_id=spec.run_id,
+            message_id=spec.message_id,
+            generation=spec.generation,
+            resolver=QuoteResolver(document, list(handles.values()), texts, vocabulary),
+            document=document,
+            locators=locators,
+            new_id=new_id,
+        )
+        return self.plate
 
     def _elapsed_ms(self) -> int:
         return max(0, int((time.monotonic() - self.spec.accepted_at) * 1000))
@@ -730,6 +820,13 @@ class RunBroker:
             }
         elif spec.kind == "diagram":
             citations = []  # a plate's evidence is its parts' Anchors, not `[bN]` markers
+            if status in ("complete", "partial") and (self.plate is None or not self.plate.count):
+                # R3 Q1: a stream with no valid part is the error state, never an empty plate.
+                # Logged on its own, so S7b can count how often the lines fail as a whole.
+                log_event(
+                    "run.diagram_empty", level="warning", run_id=spec.run_id, error_code="no_part"
+                )
+                status, error_code = "error", error_code or "internal"
         else:
             citations = evidence.cite_answer(final_text, minter) if final_text else []
 
@@ -817,7 +914,8 @@ class RunBroker:
             first_text_ms=self.first_text_ms,
             ms=latency_ms,
         )
-        self.queue.put_nowait(sse("citations", {"items": [c.wire() for c in citations]}))
+        if spec.kind != "diagram":
+            self.queue.put_nowait(sse("citations", {"items": [c.wire() for c in citations]}))
         if run is not None:
             self.queue.put_nowait(sse("usage", run_summary(run)))
         self.finished = True
