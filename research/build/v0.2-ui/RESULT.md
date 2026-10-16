@@ -44,6 +44,12 @@ head, the local uncached gate, and a code review whose findings were fixed befor
 | S5b notebook model: page, stroke, outline | #207 | #225 | d02e4d0 | full gate on b3fdefa (pytest 2,235); review fixes 679bde2 (encoder bounds, strict decoder) |
 | S5b-2 lasso and eraser hit-testing | #221 | #232 | d51d7b3 | lasso by length inside; 50-vertex lasso over 500 × 80-point strokes ≈ 11 ms at load ~50 |
 | S5b-3 undo history | #222 | #233 | cf959cd | cap validated, duplicate ids refused, exact move undo |
+| S4a exchanges API | #201 | #235 | 5175a02 | full gate on 4e147f2 (pytest 2,261); ¶ rules re-measured on fresh Attention/ResNet/BERT parses; known limit #234 |
+| S1a tokens, faces, theme switch | #188 | #227 | f092ac2 | full gate on ebbd9bd (pytest 2,235); contrast test of 30 pairs in both schemes; zoom-select floor for the new faces (CI found it on Linux) |
+| S1b interface components | #189 | #228 | 8aae920 | Button md 40 (the mock-up won over the brief); toast region mounts empty |
+| S1b-2 sprout, label holder, reading-now row | #226 | #229 | f315851 | the design's own sprout paths |
+| S1c voices, markers, page tabs, coverage | #190 | #230 | 64f15c6 | banned-words scan over source strings with probes |
+| S1c-2 call slip, AI slip, trace list | #224 | #231 | 942ed7e | AiParagraph rows for per-paragraph margins; Show in paper on the shared Button |
 
 ## Live AI spend (estimates)
 

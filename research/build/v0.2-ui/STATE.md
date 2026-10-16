@@ -18,24 +18,30 @@ Read this first after a compaction, then `PLAN.md` and the open PRs (`gh pr list
 - Screenshot tool: `/Volumes/Mrigesh SSD/PaperTree-scratch/v02/tools/shoot.mjs`. Agent briefs:
   `PaperTree-scratch/v02/briefs/`. Issue specs: `PaperTree-scratch/v02/issues/` (issues.json = key → number).
 
-## Done
-- Phase 0–3 (see PLAN, GAP-AUDIT). Review points 1 and 2 posted on #175. Owner (mid-build): any OSI open-source
-  code is allowed, whole or in part (ADR-004 §4).
-- Merged into release/v0.2: #186 (S0, e435bb6), #220 (Prettier on apps/web, d445409).
+## Done (merged into release/v0.2)
+- Phases 0–3: #223 (research, ADR-004, GAP-AUDIT, PLAN; review points 1 and 2 on #175). Owner ruling mid-build: any
+  OSI open-source code may be used, whole or in part (ADR-004 §4).
+- S0 #186, Prettier on apps/web #220, S5b notebook model #225/#232/#233, S4a exchanges API #235,
+  S1a #227, S1b #228/#229, S1c #230/#231.
 
-## Open PRs (base → head)
-- #223 docs (v02/research). #227 S1a (v02/s1a-tokens, review fixed at 41cbc93).
-- #228 S1b-1 ← #229 S1b-2; #230 S1c-1 ← #231 S1c-2 (all stacked on #227; one reviewer on all four).
-- #225 S5b-1 ← #232 S5b-2, #233 S5b-3 (S5b-1 gate running in v02-s5b; do not switch that worktree's branch).
+## Open PRs
+- #236 S2a reading state (migration 0006; gate green except the #80 flake, re-run passes).
+- #238 S1d token board → #239 S1d-2 component states (review fixed; ThreadSwatch added to packages/ui).
 
-## In progress (agents)
-- S2a #192 implementer in v02-s2a (migration 0006). S4a #201: review findings being fixed in v02-s4a (¶ rules,
-  section titles, coverage units); its gate must re-run after.
+## In progress
+- S5a #206/#240: a fresh agent splits the 1,940-line commit into two branches in v02-s5a (migration 0007). The first
+  S5a agent ran `pkill -f "until \["` on its own loop (no collateral found; stopped; recorded in memory).
+- S6a #211 (0008): review fixed (d0d59ec), full gate running; merges after 0006 and 0007.
+- S4b #202 (Opus) in v02-s4b: web 18904, API 18909. S2d #195 (Opus) in v02-s2d, stacked on S2a: web 18908, API 18900.
 
 ## Next
-- Merge #227 on green CI → the stacked PRs retarget; merge chains bottom-up without --delete-branch.
-- Launch S5a #206 (0007) and S6a #211 (0008) when agent slots free (briefs ready); then S1d, S4b, S2d.
-- Migration order: 0006 S2a, 0007 S5a, 0008 S6a, 0009 S2b, 0010 S3, 0011 S7a (PLAN.md).
+- Merge #236 → S5a (0007) → S6a (0008); #238 → #239.
+- Then S2b topics (0009), S4c reader chrome, S5c notebook page, S6b board cards; S2e–S2h after S2d.
+
+## Worktrees
+- v02-ui: the dev stack (v0.1 code; web 18901, API 18902, agent 18903; never run e2e here).
+- v02-docs: this file and RESULT.md (branch v02/docs-progress). v02-review, v02-review2: detached review trees.
+- Slice trees: v02-s1d, v02-s2a, v02-s2d, v02-s4b, v02-s5a, v02-s6a.
 
 ## PIDs (process-group ids) started by this session
 - Dev stack: api 35217, worker 35218, agent 35219, web 46866. `stack/pids.txt` is authoritative.
