@@ -373,9 +373,28 @@ class Session(Wire):
     email: str
 
 
+def _trimmed(value: object) -> object:
+    """Strips a string before its length is checked, so `"  x  "` is `"x"` and 60 letters padded
+    with spaces is still 60 letters. Anything else is left for the type check to refuse."""
+    return value.strip() if isinstance(value, str) else value
+
+
+#: A chosen name for the library's bookplate and the account menu: 1 to 60 characters AFTER
+#: trimming. Enforced here, not by a CHECK, so relaxing it later needs no table rebuild (0006).
+DisplayName = Annotated[str, BeforeValidator(_trimmed), Field(min_length=1, max_length=60)]
+
+
 class Me(Wire):
     user_id: str
     email: str
+    #: Null until the person sets one. Never derived from the email (#192).
+    display_name: str | None
+
+
+class MeUpdate(Wire):
+    """`PATCH /auth/me` (#192)."""
+
+    display_name: DisplayName
 
 
 # ── §2.2 papers, library, jobs ───────────────────────────────────────────────────────────────
@@ -399,6 +418,28 @@ class JobSummary(Wire):
     error_code: JobErrorCode | None
 
 
+class ReadingProgress(Wire):
+    """Where the caller is in a paper (#192). A paper they have not started has `reading: null`.
+
+    Pages are zero-based. `state` is the progress rule: `finished` once the last page was
+    reached (or the paper was marked read), else `reading`.
+    """
+
+    last_page: NonNegative
+    furthest_page: NonNegative
+    page_count: NonNegative | None
+    opened_at: WireTime
+    finished_at: WireTime | None
+    state: Literal["reading", "finished"]
+
+
+class ReadingStateUpdate(Wire):
+    """`PUT /papers/{id}/reading-state` (#192): the page the reader is on now."""
+
+    last_page: PageIndex
+    mode: Literal["source", "guided", "split"] | None = omittable()
+
+
 class LibraryPaper(Wire):
     """The row shape used everywhere a paper is listed (§2.2)."""
 
@@ -415,6 +456,15 @@ class LibraryPaper(Wire):
     highlight_count: NonNegative
     created_at: WireTime
     updated_at: WireTime
+    #: The caller's place in the paper; null when they have not started it (#192).
+    reading: ReadingProgress | None
+    #: The year first published: the arXiv id's `YYMM`, else the parser's year; null if neither.
+    year: NonNegative | None
+    arxiv_id: str | None
+    #: The primary category from the arXiv margin stamp (`cs.CL`); null when absent.
+    arxiv_category: str | None
+    thread_count: NonNegative
+    has_summary: bool
 
 
 class UploadAccepted(Wire):

@@ -125,8 +125,8 @@ def test_0005_on_saved_shapes(
         started = time.perf_counter()
         result = migrate(conn, MIGRATIONS_DIR)
         elapsed_ms = (time.perf_counter() - started) * 1000
-        assert result.applied == (5,)
-        assert result.head == (1, 2, 3, 4, 5)
+        assert result.applied == (5, 6)
+        assert result.head == (1, 2, 3, 4, 5, 6)
 
         # ── counts ───────────────────────────────────────────────────────────────────────
         after = counts(conn)
@@ -552,7 +552,7 @@ def test_pre_0005_backup_is_written_before_0005_touches_a_saved_database(tmp_pat
     with open_database(shape.file) as db:
         result = db.migrate()
     backup = shape.file.with_name(shape.file.name + ".pre-0005.bak")
-    assert result.applied == (5,)
+    assert result.applied == (5, 6)
     assert result.backups == (backup,)
     assert backup.is_file()
     assert not backup.with_name(backup.name + ".tmp").exists()
@@ -579,7 +579,7 @@ def test_pre_0005_backup_is_written_before_0005_touches_a_saved_database(tmp_pat
     restored.write_bytes(backup.read_bytes())
     conn = raw_connect(restored)
     try:
-        assert migrate(conn, MIGRATIONS_DIR).applied == (5,)
+        assert migrate(conn, MIGRATIONS_DIR).applied == (5, 6)
     finally:
         conn.close()
 
@@ -589,7 +589,7 @@ def test_no_backup_for_a_fresh_database(tmp_path: Path) -> None:
     file = tmp_path / "fresh.sqlite"
     with open_database(file) as db:
         result = db.migrate()
-    assert result.applied == (1, 2, 3, 4, 5)
+    assert result.applied == (1, 2, 3, 4, 5, 6)
     assert result.backups == ()
     assert not file.with_name(file.name + ".pre-0005.bak").exists()
 
@@ -642,7 +642,7 @@ def test_a_concurrent_start_never_replaces_the_backup_with_a_migrated_copy(
             outcome: MigrationResult | Exception = migrate(process_b, MIGRATIONS_DIR)
         except Exception as exc:  # recorded, so the backup is checked first: it is the data
             outcome = exc
-        assert [r.applied for r in fired] == [(5,)]
+        assert [r.applied for r in fired] == [(5, 6)]
         assert fired[0].backups == (backup,)
 
         copy = sqlite3.connect(f"file:{backup}?mode=ro", uri=True)
@@ -655,7 +655,7 @@ def test_a_concurrent_start_never_replaces_the_backup_with_a_migrated_copy(
         assert "generation" in columns  # the 0001 highlight shape: still the rollback
 
         # B saw A's work under the lock and did nothing twice: no second backup, no re-apply.
-        assert outcome == MigrationResult(applied=(), head=(1, 2, 3, 4, 5), backups=())
+        assert outcome == MigrationResult(applied=(), head=(1, 2, 3, 4, 5, 6), backups=())
     finally:
         process_a.close()
         process_b.close()
@@ -721,7 +721,7 @@ def test_a_runner_cannot_commit_a_migration_while_another_takes_the_backup(
     # Exactly one of the two applied 0005; the other found it applied and skipped it.
     assert sorted(r.applied for r in outcomes.values() if isinstance(r, MigrationResult)) == [
         (),
-        (5,),
+        (5, 6),
     ]
 
 
@@ -734,7 +734,7 @@ def test_an_in_memory_database_migrates_without_a_backup(tmp_path: Path) -> None
         conn.execute("PRAGMA foreign_keys = ON")
         migrate(conn, migrations_through(4, tmp_path / "m4"))
         result = migrate(conn, MIGRATIONS_DIR)
-        assert result.applied == (5,)
+        assert result.applied == (5, 6)
         assert result.backups == ()
     finally:
         conn.close()

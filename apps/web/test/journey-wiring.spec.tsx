@@ -50,6 +50,12 @@ const REAL_ROW: WirePaper = {
   highlight_count: 0,
   created_at: '2026-08-04T10:40:57.083752+00:00',
   updated_at: '2026-08-04T10:41:57.083752+00:00',
+  reading: null,
+  year: null,
+  arxiv_id: null,
+  arxiv_category: null,
+  thread_count: 0,
+  has_summary: false,
 };
 
 describe('D1/D2 — the session survives sign-in', () => {

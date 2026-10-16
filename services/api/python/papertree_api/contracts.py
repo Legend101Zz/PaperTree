@@ -38,7 +38,7 @@ IN: Final[Mode] = "validation"
 #: file stem -> (model, mode). The web's contracts.spec.ts reads `$defs[<model name>]`.
 GROUPS: Final[dict[str, tuple[tuple[type[BaseModel], Mode], ...]]] = {
     "errors": ((ErrorEnvelope, OUT), (s.StaleVersion, OUT)),
-    "auth": ((s.Credentials, IN), (s.Session, OUT), (s.Me, OUT)),
+    "auth": ((s.Credentials, IN), (s.Session, OUT), (s.Me, OUT), (s.MeUpdate, IN)),
     "papers": (
         (s.LibraryPaper, OUT),
         (s.JobSummary, OUT),
@@ -46,6 +46,7 @@ GROUPS: Final[dict[str, tuple[tuple[type[BaseModel], Mode], ...]]] = {
         (s.JobAccepted, OUT),
         (s.JobStatus, OUT),
         (s.ReparseRequest, IN),
+        (s.ReadingStateUpdate, IN),
     ),
     "highlights": (
         (s.Highlight, OUT),

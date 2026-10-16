@@ -78,6 +78,7 @@ import {
   type PendingScroll,
 } from '@/components/reader/documentHandle';
 import { NetworkError } from '@/lib/api/client';
+import { papersApi } from '@/lib/api/papers';
 import { ApiError, type HighlightColor } from '@/lib/api/types';
 import {
   loadDocument,
@@ -86,6 +87,7 @@ import {
   readerStorageKey,
   type PaperRef,
 } from '@/lib/paperSource';
+import { createReadingStateSync } from '@/lib/readingStateSync';
 
 export type ReadingMode = 'source' | 'guided' | 'split';
 
@@ -347,7 +349,35 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   const zoomModeRef = useRef(zoomMode);
   zoomModeRef.current = zoomMode;
 
+  // The server's copy of the place (#192), for the library's "reading now". Real papers only; a
+  // fixture has no account to write to.
+  const readingSync = useMemo(
+    () =>
+      paper.kind === 'api'
+        ? createReadingStateSync({
+            send: (page, readingMode) =>
+              papersApi.putReadingState(paper.paperId, page, readingMode),
+          })
+        : null,
+    [paper],
+  );
+  useEffect(() => {
+    if (readingSync === null) return undefined;
+    const flush = (): void => readingSync.flush();
+    const onHide = (): void => {
+      if (document.visibilityState === 'hidden') readingSync.flush();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onHide);
+      readingSync.flush(); // not dispose: React strict mode remounts with the same instance
+    };
+  }, [readingSync]);
+
   const persist = useCallback(() => {
+    readingSync?.update(positionRef.current?.page ?? 0, modeRef.current);
     if (saveTimer.current !== null) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       saveTimer.current = null;
@@ -361,7 +391,7 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
         ...(at?.blockId === undefined ? {} : { blockId: at.blockId }),
       });
     }, 250);
-  }, [storageKey]);
+  }, [storageKey, readingSync]);
 
   useEffect(() => {
     persist();

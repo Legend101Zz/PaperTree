@@ -389,6 +389,12 @@ def test_the_library_title_is_one_line() -> None:
         job_steps_done=0,
         job_open_step=None,
         highlight_count=0,
+        reading=None,
+        year=None,
+        arxiv_id=None,
+        arxiv_category=None,
+        thread_count=0,
+        has_summary=False,
     )
     assert title_for(row) == "You Only Look Once: Uniﬁed, Real-Time Object Detection"
     assert title_for(replace(row, title=None, original_filename="  My\nPaper.PDF")) == "My Paper"

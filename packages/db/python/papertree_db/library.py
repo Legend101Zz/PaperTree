@@ -21,12 +21,14 @@ job (if any) is LEFT JOINed, and neither is required.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
 from ._support import Row, now_iso
 from .errors import OwnershipError, PaperNotFound
 from .ids import OwnerId, PaperId
+from .reading import ReadingState, reading_state_from
 
 if TYPE_CHECKING:
     from .database import DatabaseCore as _Base
@@ -36,6 +38,10 @@ else:
 #: SQLite's INTEGER range; `highlights.SQLITE_INTEGER_MAX` is the exported name, restated here
 #: only because importing it from `highlights` would couple two slices' modules.
 _SQLITE_INTEGER_MAX: Final = 2**63 - 1
+
+#: The longest display name, enforced here and by the API rather than by a CHECK, so relaxing it
+#: later needs no table rebuild (0006).
+DISPLAY_NAME_MAX: Final = 60
 
 #: The job kind this module reads. `papertree_document_worker.job.PARSE_KIND`, restated: this
 #: package cannot import the worker (the worker imports this package).
@@ -83,6 +89,16 @@ class LibraryRow:
     #: The step it is in (``running``) or stopped at (``failed``), or None.
     job_open_step: str | None
     highlight_count: int
+    #: The owner's place in the paper, or None when they have not started it (#192).
+    reading: ReadingState | None
+    #: The year the paper was FIRST published: from the arXiv id when it has one, else the
+    #: parser's ``metadata.year``. Derived at read time; the parser is untouched (#192).
+    year: int | None
+    arxiv_id: str | None
+    #: The primary category in the margin stamp (``cs.CL``), or None.
+    arxiv_category: str | None
+    thread_count: int
+    has_summary: bool
 
 
 _ROW_SQL: Final = f"""
@@ -102,8 +118,25 @@ SELECT po.paper_id, po.source_hash, po.original_filename, po.byte_size, po.creat
          WHERE s.owner_id = j.owner_id AND s.job_id = j.job_id AND s.state <> 'succeeded'
          ORDER BY s.step_index DESC LIMIT 1) AS job_open_step,
        (SELECT COUNT(*) FROM highlights h
-         WHERE h.owner_id = po.owner_id AND h.paper_id = po.paper_id) AS highlight_count
+         WHERE h.owner_id = po.owner_id AND h.paper_id = po.paper_id) AS highlight_count,
+       -- The margin stamp's text (``arXiv:1706.03762v7  [cs.CL]  2 Aug 2023``): the block the
+       -- parser cites for the id. blocks' primary key makes this an index lookup per paper.
+       (SELECT b.text FROM blocks b
+         WHERE b.owner_id = pp.owner_id AND b.paper_id = pp.paper_id
+           AND b.generation = pp.generation
+           AND b.block_id = json_extract(p.metadata, '$.arxiv_id.source_block_id')) AS stamp_text,
+       (SELECT COUNT(*) FROM ai_threads t
+         WHERE t.owner_id = po.owner_id AND t.paper_id = po.paper_id) AS thread_count,
+       EXISTS (SELECT 1 FROM derivations d
+                WHERE d.owner_id = pp.owner_id AND d.paper_id = pp.paper_id
+                  AND d.generation = pp.generation
+                  AND d.kind = 'paper_summary') AS has_summary,
+       rs.last_page AS rs_last_page, rs.furthest_page AS rs_furthest_page, rs.mode AS rs_mode,
+       rs.opened_at AS rs_opened_at, rs.updated_at AS rs_updated_at,
+       rs.finished_at AS rs_finished_at
   FROM paper_owners po
+  LEFT JOIN reading_state rs
+         ON rs.owner_id = po.owner_id AND rs.paper_id = po.paper_id
   LEFT JOIN paper_promotions pp
          ON pp.owner_id = po.owner_id AND pp.paper_id = po.paper_id
   LEFT JOIN papers p
@@ -125,18 +158,22 @@ SELECT po.paper_id, po.source_hash, po.original_filename, po.byte_size, po.creat
 _ORDER: Final = " ORDER BY po.created_at DESC, po.paper_id DESC"
 
 
-def _metadata_strings(metadata: Any) -> tuple[str | None, tuple[str, ...]]:
-    """``(title, authors)`` from a stored ``papers.metadata`` JSON text. Anything malformed (a
-    legacy row, a hand-written fixture) reads as "not found", never as an error: the library must
-    list a paper whose metadata it cannot read."""
+def _metadata_object(metadata: Any) -> dict[str, Any]:
+    """A stored ``papers.metadata`` JSON text as a dict; ``{}`` for anything malformed (a legacy
+    row, a hand-written fixture): the library must list a paper whose metadata it cannot read."""
     if not isinstance(metadata, str):
-        return None, ()
+        return {}
     try:
         data = json.loads(metadata)
     except ValueError:
-        return None, ()
-    if not isinstance(data, dict):
-        return None, ()
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _metadata_strings(metadata: Any) -> tuple[str | None, tuple[str, ...]]:
+    """``(title, authors)`` from a stored ``papers.metadata`` JSON text ("not found" when
+    malformed)."""
+    data = _metadata_object(metadata)
     title_field = data.get("title")
     title = title_field.get("value") if isinstance(title_field, dict) else None
     authors = tuple(
@@ -145,6 +182,54 @@ def _metadata_strings(metadata: Any) -> tuple[str | None, tuple[str, ...]]:
         if isinstance(author, dict) and isinstance(author.get("value"), str) and author["value"]
     )
     return (title if isinstance(title, str) and title.strip() else None), authors
+
+
+def _metadata_value(data: dict[str, Any], key: str) -> Any:
+    field = data.get(key)
+    return field.get("value") if isinstance(field, dict) else None
+
+
+#: A new-style arXiv id, ``YYMM.NNNN`` or ``YYMM.NNNNN`` (valid from April 2007).
+_NEW_STYLE_ARXIV = re.compile(r"^(\d{2})(0[1-9]|1[0-2])\.\d{4,5}")
+#: The primary category in a margin stamp: ``[cs.CL]``, ``[stat.ML]``, ``[hep-th]``.
+_STAMP_CATEGORY = re.compile(r"\[([A-Za-z][A-Za-z-]*(?:\.[A-Za-z-]+)?)\]")
+
+
+def arxiv_year(arxiv_id: str | None) -> int | None:
+    """The year an arXiv paper was first submitted, read off its id (``1706.03762`` -> 2017).
+
+    The id's ``YYMM`` prefix is the FIRST submission; the parser's ``metadata.year`` is the stamp's
+    date, i.e. the latest version (Attention reads 2023, not 2017). Derived at read time because
+    changing the parser would bump its version and trigger the re-parse rules (#192).
+
+    Args:
+        arxiv_id: A new-style arXiv id, with or without a ``vN`` suffix, or None.
+
+    Returns:
+        The four-digit year, or None for anything that is not a new-style id (2007 or later).
+    """
+    match = None if arxiv_id is None else _NEW_STYLE_ARXIV.match(arxiv_id)
+    if match is None or int(match.group(1)) < 7:
+        return None
+    return 2000 + int(match.group(1))
+
+
+def stamp_category(stamp_text: str | None) -> str | None:
+    """The bracketed primary category of an arXiv margin stamp, or None.
+
+    Args:
+        stamp_text: The stamp block's text, e.g. ``arXiv:1706.03762v7 [cs.CL] 2 Aug 2023``.
+
+    Returns:
+        ``"cs.CL"`` for that example; None when there is no stamp or no bracketed category.
+    """
+    match = None if not stamp_text else _STAMP_CATEGORY.search(stamp_text)
+    return None if match is None else match.group(1)
+
+
+def _metadata_year(data: dict[str, Any]) -> int | None:
+    value = _metadata_value(data, "year")
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
 def _payload_int(payload: Any, key: str) -> int | None:
@@ -161,6 +246,15 @@ def _payload_int(payload: Any, key: str) -> int | None:
 
 def _library_row(row: Row) -> LibraryRow:
     title, authors = _metadata_strings(row["metadata"])
+    data = _metadata_object(row["metadata"])
+    arxiv_value = _metadata_value(data, "arxiv_id")
+    arxiv_id = arxiv_value if isinstance(arxiv_value, str) and arxiv_value else None
+    page_count = row["page_count"]
+    reading = (
+        None
+        if row["rs_last_page"] is None
+        else reading_state_from({k[3:]: row[k] for k in row if k.startswith("rs_")}, page_count)
+    )
     has_job = row["latest_job_id"] is not None
     return LibraryRow(
         paper_id=row["paper_id"],
@@ -186,6 +280,12 @@ def _library_row(row: Row) -> LibraryRow:
         job_steps_done=int(row["job_steps_done"] or 0),
         job_open_step=row["job_open_step"],
         highlight_count=int(row["highlight_count"]),
+        reading=reading,
+        year=arxiv_year(arxiv_id) or _metadata_year(data),
+        arxiv_id=arxiv_id,
+        arxiv_category=stamp_category(row["stamp_text"]) if arxiv_id else None,
+        thread_count=int(row["thread_count"]),
+        has_summary=bool(row["has_summary"]),
     )
 
 
@@ -305,6 +405,42 @@ class LibraryMixin(_Base):
         owner_id = self._resolve(owner)
         row = self._conn.execute(_ROW_SQL + " AND po.paper_id = ?", (owner_id, paper_id)).fetchone()
         return None if row is None else _library_row(row)
+
+    def get_display_name(self, owner: OwnerId) -> str | None:
+        """The name the owner chose for their library (the bookplate, the account menu), or None
+        until they set one. Never derived from the email (#192).
+
+        Args:
+            owner: The caller's owner handle.
+
+        Returns:
+            The stored display name, or None.
+        """
+        owner_id = self._resolve(owner)
+        row = self._conn.execute(
+            "SELECT display_name FROM users WHERE user_id = ?", (owner_id,)
+        ).fetchone()
+        return None if row is None else row["display_name"]
+
+    def set_display_name(self, owner: OwnerId, display_name: str) -> str:
+        """Stores the owner's display name, trimmed.
+
+        Args:
+            owner: The caller's owner handle.
+            display_name: 1 to 60 characters once trimmed.
+
+        Returns:
+            The name as stored (trimmed).
+
+        Raises:
+            ValueError: The trimmed name is empty or longer than 60 characters.
+        """
+        name = display_name.strip()
+        if not 1 <= len(name) <= DISPLAY_NAME_MAX:
+            raise ValueError(f"display_name must be 1 to {DISPLAY_NAME_MAX} characters")
+        owner_id = self._resolve(owner)
+        self._conn.execute("UPDATE users SET display_name = ? WHERE user_id = ?", (name, owner_id))
+        return name
 
     def asset_grant(self, paper_id: PaperId) -> str | None:
         """THE SECOND UN-OWNED READ (after ``run_grant``): the ``user_id`` that owns ``paper_id``.

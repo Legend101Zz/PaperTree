@@ -90,7 +90,7 @@ describe('the unverified-session notice (item 1)', () => {
     const me = vi
       .spyOn(authApi, 'me')
       .mockRejectedValueOnce(new NetworkError('offline'))
-      .mockResolvedValueOnce({ user_id: 'u', email: 'a@b.test' });
+      .mockResolvedValueOnce({ user_id: 'u', email: 'a@b.test', display_name: null });
     render(<SessionBanner />);
     expect(screen.getByRole('status').textContent).toMatch(/could not confirm your session/);
     expect(screen.getByRole('status').textContent).toMatch(/Checking again shortly/);
@@ -122,7 +122,7 @@ describe('the unverified-session notice (item 1)', () => {
     await act(() => vi.advanceTimersByTimeAsync(60_000));
     expect(me).toHaveBeenCalledTimes(SESSION_RETRY_DELAYS_MS.length);
 
-    me.mockResolvedValueOnce({ user_id: 'u', email: 'a@b.test' });
+    me.mockResolvedValueOnce({ user_id: 'u', email: 'a@b.test', display_name: null });
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Try again' }), { detail: 0 });
     });

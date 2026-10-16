@@ -70,6 +70,9 @@ ADDED: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/papers/{paper_id}/summary"),
         ("POST", "/papers/{paper_id}/summary"),
         ("GET", "/usage"),
+        # v0.2 S2a (#192)
+        ("PATCH", "/auth/me"),
+        ("PUT", "/papers/{paper_id}/reading-state"),
         # §2.7 (S7)
         ("GET", "/papers/{paper_id}/board"),
         ("POST", "/papers/{paper_id}/board/nodes"),

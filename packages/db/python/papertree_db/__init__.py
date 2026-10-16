@@ -62,7 +62,7 @@ from .ids import (
     mint_owner,
     new_id,
 )
-from .library import LibraryRow
+from .library import DISPLAY_NAME_MAX, LibraryRow
 from .migrate import (
     AppliedMigration,
     Migration,
@@ -74,8 +74,10 @@ from .migrate import (
     migrate,
     split_statements,
 )
+from .reading import ProgressState, ReadingState, progress_state, reached_last_page
 
 __all__ = [
+    "DISPLAY_NAME_MAX",
     "MAX_DERIVATION_DEPTH",
     "SQLITE_INTEGER_MAX",
     "VECTOR_DIMENSIONS",
@@ -109,6 +111,8 @@ __all__ = [
     "PaperId",
     "PaperNotFound",
     "PaperTreeDb",
+    "ProgressState",
+    "ReadingState",
     "ResolutionIn",
     "ResolutionRow",
     "Row",
@@ -125,6 +129,8 @@ __all__ = [
     "mint_owner",
     "new_id",
     "open_database",
+    "progress_state",
+    "reached_last_page",
     "split_statements",
     "to_vector_blob",
 ]

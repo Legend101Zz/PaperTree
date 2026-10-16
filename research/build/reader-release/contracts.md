@@ -463,7 +463,8 @@ S0 splits the layer into modules, each owned by one later slice (`slice-plan.md`
 | POST `/auth/register` | `{email, password}` (password 8–1024; the web's client-side minimum becomes **8**, today it is 6) | 201 `{token, user_id, email}` | 409 `email_taken`, 422 |
 | POST `/auth/login` | `{email, password}` | 200 `{token, user_id, email}` | 401 `invalid_credentials` |
 | POST `/auth/logout` | – | 204. The web now **calls it** on sign-out. | – |
-| GET `/auth/me` | – | 200 `{user_id, email}` | 401 `auth_required` |
+| GET `/auth/me` | – | 200 `{user_id, email, display_name}`; `display_name` is `null` until set and is never derived from the email (v0.2, #192) | 401 `auth_required` |
+| PATCH `/auth/me` | `{display_name}` (v0.2, #192) | 200 `Me` | 401 `auth_required`; 422 `validation_failed` unless 1–60 characters after trimming |
 
 ### 2.2 Papers, library, jobs
 
@@ -484,9 +485,18 @@ S0 splits the layer into modules, each owned by one later slice (`slice-plan.md`
   "generation": 1,
   "parser_version": "1.0.0",
   "highlight_count": 3,
-  "created_at": "…", "updated_at": "…"
+  "created_at": "…", "updated_at": "…",
+  "reading": { "last_page": 4, "furthest_page": 6, "page_count": 10, "opened_at": "…", "finished_at": null, "state": "reading | finished" },
+  "year": 2015, "arxiv_id": "1506.02640", "arxiv_category": "cs.CV", "thread_count": 2, "has_summary": false
 }
 ```
+
+v0.2 additions (#192, migration 0006). All six are always sent:
+
+- `reading` is the caller's place, or `null` when they have not started the paper. Pages are zero-based. `state` is `finished` once `furthest_page >= page_count - 1` (or the paper was marked read) and `reading` otherwise; `furthest_page` only grows and `finished_at` is never cleared. The rule is one function, `papertree_db.reading.progress_state`.
+- `year` is the year first published: `2000 + YY` from a new-style arXiv id (`1706.03762` is 2017), otherwise the parser's `metadata.year`, otherwise `null`. The parser's own year is the margin stamp's date (the latest version) and is wrong for Attention, BERT and YOLO, so the id wins. Derived at read time; the parser is unchanged.
+- `arxiv_id` is `metadata.arxiv_id.value`; `arxiv_category` is the bracketed primary category in the margin stamp block that `metadata.arxiv_id.source_block_id` names (`[cs.CL]`), or `null`.
+- `thread_count` counts the paper's AI threads; `has_summary` is true when the promoted generation has a cached summary.
 
 - `title` is `metadata.title.value` of the promoted generation. Otherwise it is `original_filename` without `.pdf`, and otherwise the `paper_id`. PDFs' `/Title` was empty in 4 of 4 papers (MEASURED), so it is not used.
 - `processing` is derived from the latest job and the promotion. `queued` means pending. `reading` means running. `ready` or `partial` follows the promoted `papers.status`. `failed` means dead_letter with no promoted generation.
@@ -497,6 +507,7 @@ S0 splits the layer into modules, each owned by one later slice (`slice-plan.md`
 | POST `/papers` | multipart `file` | 202 `{paper_id, job_id, created: bool, paper: LibraryPaper}` | 400 `empty_upload`, 413 `payload_too_large` (`PAPERTREE_MAX_UPLOAD_MB`, default 100), 415 `unsupported_media_type` (bytes not starting with `%PDF-`). `page_count` comes from one PyMuPDF open, 0.19–0.58 ms (MEASURED). If the latest job for these bytes is `dead_letter`, a **new** job is created. The idempotency key is `parse:{source_hash}:{paper_id}:g{generation}:a{attempt_seq}`. |
 | GET `/papers` | – | 200 `LibraryPaper[]`, newest first | – |
 | GET `/papers/{id}` | – | 200 `LibraryPaper` | 404 `not_found` |
+| PUT `/papers/{id}/reading-state` | `{last_page: int >= 0, mode?: 'source'\|'guided'\|'split'}` (v0.2, #192) | 204. Sets `opened_at` and `updated_at`, raises `furthest_page`, finishes per the rule. | 401; 404 `not_found` (not the caller's paper); 422 `validation_failed` (negative page, or `last_page >= page_count` when the count is known) |
 | DELETE `/papers/{id}` | – | 204. Deletes the DB rows (the `delete_paper` cascade) plus `uploads/<id>.pdf`, `assets/<id>/` and staging. | 404 |
 | POST `/papers/{id}/retry` | – | 202 `{job_id, generation}`: the same generation, a new `attempt_seq` | 409 `not_failed` if the latest job is not `dead_letter` |
 | POST `/papers/{id}/reparse` | `{reason?: string}` | 202 `{job_id, generation}`, with generation = `next_generation` | 409 `busy` if a parse job is pending or running |
