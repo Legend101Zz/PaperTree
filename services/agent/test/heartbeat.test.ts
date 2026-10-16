@@ -43,8 +43,12 @@ describe('the heartbeat', () => {
     const done = result.events.at(-1)!.data;
     const latency = Number(done['latency_ms']);
     const expected = Math.floor(latency / 100);
+    // A busy machine fires a 100 ms timer late and merges ticks, so fewer pings arrive than the
+    // wall clock allows (12 for 1,596 ms at a load average of ~45-90 failed the old +/-2 bound on
+    // several gates). Never more than one per interval, and at least half of them: this still fails
+    // a broken interval (no pings, or a ping per frame) without failing on load.
     assert.ok(
-      Math.abs(pings.length - expected) <= 2,
+      pings.length <= expected + 1 && pings.length >= Math.max(1, Math.floor(expected / 2)),
       `${String(pings.length)} pings for ${String(latency)} ms`,
     );
     assert.equal(
