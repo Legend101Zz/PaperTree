@@ -72,9 +72,9 @@ export interface TraceEntry extends TraceRowData {
 export interface AnswerModel {
   /** Paragraphs up to the last cited one, in order (an uncited one among them has `cited: false`). */
   readonly body: readonly AnswerParagraph[];
-  /** The trailing uncited paragraphs: "no citation · the AI's own reading". Empty while drawn live. */
+  /** The trailing uncited paragraphs: "no citation · the AI's own reading". Empty while streaming. */
   readonly uncited: readonly AnswerParagraph[];
-  /** Handle → passage number in this answer, for the inline markers. Empty while held. */
+  /** Handle → passage number in this answer, for the inline markers. Empty while streaming. */
   readonly handleNumbers: ReadonlyMap<string, number>;
   /** Passage number → its marker (page, ¶, the citation to flash). */
   readonly markers: ReadonlyMap<number, PassageMarker>;
@@ -182,30 +182,31 @@ export function buildAnswer(answer: ExchangeMessage, numbers: PassageNumbers): A
   const streaming = answer.status === 'streaming';
   const text = streaming ? answer.text.replace(PARTIAL_TAIL, '') : answer.text;
   const passages = answerPassages(answer, numbers);
-  const live = streaming;
   const paragraphs = answerParagraphs(text).map((paragraph, index) => {
-    const ns = live ? [] : handleRuns(paragraph).flatMap((run) => runNumbers(run, answer, numbers));
+    const ns = streaming
+      ? []
+      : handleRuns(paragraph).flatMap((run) => runNumbers(run, answer, numbers));
     const markers = [...new Set(ns)].flatMap((n) => passages.markers.get(n) ?? []);
-    return { index, text: paragraph, markers, cited: live || markers.length > 0 };
+    return { index, text: paragraph, markers, cited: streaming || markers.length > 0 };
   });
   // The trailing uncited run is the AI's own reading; an uncited paragraph between cited ones
   // stays in reading order, flagged, so moving it never breaks the answer's argument.
   let tail = paragraphs.length;
   while (tail > 0 && paragraphs[tail - 1]?.cited === false) tail -= 1;
-  const trace = live ? [] : traceOf(passages.markers, passages.counts);
+  const trace = streaming ? [] : traceOf(passages.markers, passages.counts);
   return {
     body: paragraphs.slice(0, tail),
     uncited: paragraphs.slice(tail),
-    handleNumbers: live ? new Map() : passages.handleNumbers,
+    handleNumbers: streaming ? new Map() : passages.handleNumbers,
     markers: passages.markers,
     trace,
     coverage: {
       passages: answer.coverage?.passages ?? passages.markers.size,
       citations: answer.coverage?.citations ?? passages.occurrences,
-      uncitedParagraphs: live ? 0 : paragraphs.filter((p) => !p.cited).length,
+      uncitedParagraphs: streaming ? 0 : paragraphs.filter((p) => !p.cited).length,
     },
     unresolvedMarkers:
       answer.coverage?.unresolved_markers ?? passages.handles - passages.occurrences,
-    live,
+    live: streaming,
   };
 }

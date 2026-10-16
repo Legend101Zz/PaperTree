@@ -27,8 +27,13 @@ derived on read from the parse, never stored).
   alone ("p. 4"). From then on they stay: when the stored copy lands, `mergeStored` keeps the live citations
   the markers were drawn from, so no marker is hidden, renumbered, remounted or re-tabbed, and a click at any
   moment reaches it. **The stored copy does not refine a tab that is already shown**: a finer "p. 4 ¶2" appears
-  the next time the thread is opened (a fresh read). An answer that showed no citations live (stopped before
-  they arrived) takes the stored ones, which are shown once, in final form. Nothing is held.
+  the next time the thread is opened (a fresh read). The same holds for this session's follow-ups: a passage
+  first placed by an answer of this session shows the page and section ("p. 2", "Introduction") in every
+  later exchange until the thread is reopened; only passages that stored (older) answers placed carry their
+  "¶" at once. The stored copy does bring each citation's verdict: a citation it says is unsupported turns
+  its marker and trace row to "not verified" (the honest direction; nothing else moves). An answer that showed
+  no citations live (stopped before they arrived) takes the stored ones, shown once, in final form. Nothing is
+  held. If the live and stored citation sets ever differ, a development build warns in the console.
 - **A claim with no resolved citation is the AI's own reading.** A paragraph is cited only when one of its
   handles resolves; a `[b9]` the run never resolved draws no marker, so its paragraph goes under "no citation
   · the AI's own reading" and the readout counts it (DESIGN §4.6). The server's `uncited_paragraphs` counts
