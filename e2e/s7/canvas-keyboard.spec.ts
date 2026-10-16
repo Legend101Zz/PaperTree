@@ -67,9 +67,15 @@ test('canvas by keyboard', async ({ browser, stack }) => {
   expect(calls.filter((c) => c.startsWith('DELETE /boards/'))).toHaveLength(0);
 
   calls.length = 0;
+  // The board is read back once the server has ANSWERED the DELETE: a request that has only
+  // started can lose the race to that read under load (1 in 3 at load ~22, #214 review).
+  const deleted = page.waitForResponse(
+    (r) => r.request().method() === 'DELETE' && r.url().endsWith(`/nodes/${ids[0]!}`),
+  );
   await page.keyboard.press('Delete');
   await expect(page.locator('.react-flow__node')).toHaveCount(1);
-  await expect.poll(() => calls.filter((c) => c.startsWith('DELETE /boards/')).length).toBe(1);
+  expect((await deleted).status()).toBe(204);
+  expect(calls.filter((c) => c.startsWith('DELETE /boards/'))).toHaveLength(1);
   expect((await getBoard(stack.apiUrl, token, paperId)).nodes.map((n) => n.node_id)).toEqual([
     ids[1],
   ]);

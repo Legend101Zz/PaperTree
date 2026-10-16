@@ -9,7 +9,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { BrowserContext, Page } from '@playwright/test';
+import type { BrowserContext, Locator, Page } from '@playwright/test';
 
 import { expect, test } from '../harness/test';
 import {
@@ -71,6 +71,10 @@ async function touch(page: Page, context: BrowserContext, kind: 'swipe' | 'pinch
   }
   await page.waitForTimeout(800);
 }
+
+/** A board tool that turned itself off (the zoom at its floor): `aria-disabled` or `disabled`. */
+const isOff = async (tool: Locator) =>
+  (await tool.getAttribute('aria-disabled')) === 'true' || (await tool.isDisabled());
 
 const scale = (page: Page) =>
   page.evaluate(() => {
@@ -271,7 +275,7 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
         // The control turns itself off at the floor (#214: in More on a phone).
         for (let i = 0; i < 8; i += 1) {
           const zoomOut = await boardTool(fullPage, 'Zoom out');
-          if ((await zoomOut.getAttribute('aria-disabled')) === 'true') break;
+          if (await isOff(zoomOut)) break;
           await zoomOut.tap();
           await fullPage.waitForTimeout(300);
         }
@@ -356,11 +360,18 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
         await expect(fullPage.locator('.react-flow__node')).toHaveCount(6);
         await fullPage.waitForTimeout(800);
         const calls = recordApi(fullPage, stack.apiUrl);
-        // Two fingers must land on empty pane: zoom out with the visible controls first.
+        // Two fingers must land on empty pane: zoom out with the visible controls first, up to
+        // twice. The control turns itself off at the 20 % floor, and the board can reopen there:
+        // the tap on the empty board above ended a (still) pan, which saves the view it ended on.
         for (let i = 0; i < 2; i += 1) {
-          await (await boardTool(fullPage, 'Zoom out')).tap();
+          const zoomOut = await boardTool(fullPage, 'Zoom out');
+          if (await isOff(zoomOut)) break;
+          await zoomOut.tap();
           await fullPage.waitForTimeout(300);
         }
+        const menu = fullPage.getByRole('group', { name: 'More board tools' });
+        if (await menu.isVisible()) await fullPage.keyboard.press('Escape');
+        await expect(menu).toBeHidden();
         const s0 = await scale(fullPage);
         await touch(fullPage, context, 'pinch');
         const s1 = await scale(fullPage);
