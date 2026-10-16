@@ -3127,7 +3127,9 @@ span.pt-paper .pt-paper__cite {
 }
 
 .pt-cv .react-flow__edgelabel-renderer {
-  z-index: 100;
+  /* A thread's paper tag sits above frames (z 0) and below every card (z 10 and up), so it never
+     covers a card's words or buttons (#212 review N4). */
+  z-index: 5;
 }
 
 .pt-cv-scrim {

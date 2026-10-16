@@ -30,8 +30,14 @@
   border: 2.5px solid var(--pt-pin-ring);
 }
 
-.pt-cv .pt-pin--claim_out {
+/* Brass pins are controls, so their outline needs 3:1 against the board (WCAG 1.4.11): the brass
+   gradient alone reaches 2.2:1 on daylight linen, so a rim in the pin-ring token edges it (4.7:1
+   by day, 7.2:1 by lamplight; tokens.spec checks the pair). A departure from the mock-up's bare
+   brass, recorded in shots/S6b/README.md. */
+.pt-cv .pt-pin--claim_out,
+.pt-cv .pt-pin--answer_out {
   background: var(--pt-brass);
+  border: 1.5px solid var(--pt-pin-ring);
 }
 
 .pt-cv .pt-pin--question_in,
@@ -39,10 +45,6 @@
   inline-size: 12px;
   block-size: 12px;
   border-radius: 1px;
-}
-
-.pt-cv .pt-pin--answer_out {
-  background: var(--pt-brass);
 }
 
 .pt-cv .react-flow__handle-top.pt-pin {
