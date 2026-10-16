@@ -3274,7 +3274,8 @@ span.pt-paper .pt-paper__cite {
     var(--pt-e1);
 }
 
-.pt-button--primary:hover {
+.pt-button--primary:hover,
+.pt-button--primary[data-state='hover'] {
   background: var(--pt-primary-hover);
 }
 
@@ -3285,7 +3286,9 @@ span.pt-paper .pt-paper__cite {
 
 .pt-button--secondary:hover,
 .pt-button--ghost:hover,
-.pt-toolbtn:hover {
+.pt-toolbtn:hover,
+.pt-button--secondary[data-state='hover'],
+.pt-button--ghost[data-state='hover'] {
   background: color-mix(in srgb, var(--pt-ink) 7%, var(--pt-page));
 }
 
@@ -3294,7 +3297,8 @@ span.pt-paper .pt-paper__cite {
   border-color: var(--pt-primary);
 }
 
-.pt-button--outline:hover {
+.pt-button--outline:hover,
+.pt-button--outline[data-state='hover'] {
   background: color-mix(in srgb, var(--pt-primary) 9%, var(--pt-page));
 }
 
@@ -3304,7 +3308,8 @@ span.pt-paper .pt-paper__cite {
   border-color: var(--pt-danger);
 }
 
-.pt-button--danger:hover {
+.pt-button--danger:hover,
+.pt-button--danger[data-state='hover'] {
   background: color-mix(in srgb, var(--pt-danger) 9%, var(--pt-page));
 }
 
@@ -3320,7 +3325,10 @@ span.pt-paper .pt-paper__cite {
 
 .pt-button:focus-visible,
 .pt-toolbtn:focus-visible,
-.pt-textfield__control:focus-visible {
+.pt-textfield__control:focus-visible,
+/* forced focus for /design-system, which cannot hold a real one still */
+.pt-button[data-state='focus'],
+.pt-textfield__control[data-state='focus'] {
   outline: var(--pt-focus-width) solid var(--pt-focus);
   outline-offset: var(--pt-focus-offset);
 }
@@ -3335,9 +3343,14 @@ span.pt-paper .pt-paper__cite {
 }
 
 .pt-button--primary[aria-disabled='true'] {
-  color: var(--pt-ink-muted);
-  background: var(--pt-ground);
-  border-color: var(--pt-control-border);
+  color: var(--pt-ink-2);
+  /* the design's flat cloth: a kraft fill with a fine cross-hatch (frame 10); disabled is exempt from contrast */
+  background-color: var(--pt-rule);
+  background-image:
+    repeating-linear-gradient(45deg, rgb(255 255 255 / 6%) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(-45deg, rgb(0 0 0 / 10%) 0 1px, transparent 1px 3px);
+  border-color: transparent;
+  opacity: 1;
 }
 
 .pt-toolbtn {
@@ -3660,7 +3673,7 @@ button.pt-holder {
 }
 
 .pt-button--primary[aria-disabled='true']:hover {
-  background: var(--pt-ground);
+  background-color: var(--pt-rule);
 }
 
 /* ── v0.2 voices and citations (#190) ──────────────────────────────────────────────────────────
@@ -4093,4 +4106,27 @@ button.pt-holder {
   flex: none;
   font-size: 20px;
   color: var(--pt-ink-muted);
+}
+
+/* ThreadSwatch: a relation kind's line with its second cue, and the paper tag with glyph and name. */
+.pt-thread-swatch {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--pt-font-ai);
+  font-size: var(--pt-t-meta);
+  color: var(--pt-ink);
+}
+
+.pt-thread-swatch__tag {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 1px 6px;
+  background: var(--pt-paper-label);
+  color: var(--pt-paper-label-ink);
+  border-radius: var(--pt-radius-paper);
+}
+
+.pt-thread-swatch__glyph {
+  font-family: var(--pt-font-you);
 }

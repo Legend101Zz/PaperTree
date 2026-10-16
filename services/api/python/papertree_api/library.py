@@ -38,6 +38,7 @@ from .schemas import (
     JobSummary,
     LibraryPaper,
     Processing,
+    ReadingProgress,
 )
 
 _ERROR_CODES: Final = frozenset(get_args(JobErrorCode))
@@ -132,6 +133,21 @@ def _updated_at(row: LibraryRow) -> str:
     return max(candidates)[1] if candidates else row.created_at
 
 
+def reading_progress(row: LibraryRow) -> ReadingProgress | None:
+    """`LibraryPaper.reading`: the caller's place, or None for a paper they have not started."""
+    state = row.reading
+    if state is None:
+        return None
+    return ReadingProgress(
+        last_page=state.last_page,
+        furthest_page=state.furthest_page,
+        page_count=state.page_count,
+        opened_at=state.opened_at,
+        finished_at=state.finished_at,
+        state=state.state,
+    )
+
+
 def library_paper(row: LibraryRow) -> LibraryPaper:
     return LibraryPaper(
         paper_id=row.paper_id,
@@ -147,6 +163,12 @@ def library_paper(row: LibraryRow) -> LibraryPaper:
         highlight_count=row.highlight_count,
         created_at=row.created_at,
         updated_at=_updated_at(row),
+        reading=reading_progress(row),
+        year=row.year,
+        arxiv_id=row.arxiv_id,
+        arxiv_category=row.arxiv_category,
+        thread_count=row.thread_count,
+        has_summary=row.has_summary,
     )
 
 

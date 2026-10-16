@@ -119,6 +119,7 @@ WHERE: dict[str, tuple[tuple[str, str], ...]] = {
     "AnchorV1": (("api/highlights", "AnchorV1"), ("anchor/anchor-v1", "#")),
     "AnchorV1In": (("api/highlights", "AnchorV1In"),),
     "ReparseRequest": (("api/papers", "ReparseRequest"),),
+    "ReadingStateUpdate": (("api/papers", "ReadingStateUpdate"),),
     "HighlightPatch": (("api/highlights", "HighlightPatch"),),
     "ResolutionPutItem": (("api/highlights", "ResolutionPutItem"),),
     "ThreadCreate": (("api/threads", "ThreadCreate"),),
@@ -130,6 +131,10 @@ WHERE: dict[str, tuple[tuple[str, str], ...]] = {
     "NodePatch": (("api/boards", "NodePatch"),),
     "EdgePatch": (("api/boards", "EdgePatch"),),
     "BoardPatch": (("api/boards", "BoardPatch"),),
+    "NotebookPageCreate": (("api/notebooks", "NotebookPageCreate"),),
+    "NotebookPagePatch": (("api/notebooks", "NotebookPagePatch"),),
+    "NotebookItemCreate": (("api/notebooks", "NotebookItemCreate"),),
+    "NotebookItemPatch": (("api/notebooks", "NotebookItemPatch"),),
     "AgentStatus": (("agent/run-events", "status"),),
 }
 

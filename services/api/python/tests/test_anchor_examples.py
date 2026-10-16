@@ -30,7 +30,7 @@ import pytest
 from jsonschema_lite import validate
 from papertree_api import contracts
 from papertree_api.schemas import AnchorV1
-from papertree_db import find_migrations_dir, migrate
+from papertree_db import migrate
 from pydantic import ValidationError
 
 REPO = Path(__file__).resolve().parents[4]
@@ -59,7 +59,7 @@ def test_the_legacy_0001_example_is_what_0005_writes(tmp_path: Path) -> None:
     shape = shapes.build_demo_shape(tmp_path)
     conn = shapes.raw_connect(shape.file)
     try:
-        assert migrate(conn, find_migrations_dir()).applied == (5,)
+        assert migrate(conn, shapes.MIGRATIONS_DIR).applied == shapes.FROM_0005
         [row] = conn.execute(
             "SELECT anchor_json FROM anchors WHERE anchor_id = ?", (shapes.LEGACY_ANCHOR,)
         ).fetchall()

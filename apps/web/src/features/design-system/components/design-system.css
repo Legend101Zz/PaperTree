@@ -1,0 +1,231 @@
+/*
+ * Layout for the /design-system board only. Colours, type and shadows are all tokens from
+ * @papertree/ui/styles.css; nothing here defines a colour of its own.
+ */
+.ds-board {
+  max-inline-size: 1200px;
+  margin-inline: auto;
+  padding: var(--pt-space-6) var(--pt-space-5) var(--pt-space-8);
+  color: var(--pt-ink);
+  font-family: var(--pt-font-ai);
+}
+.ds-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pt-space-4);
+  align-items: flex-start;
+  justify-content: space-between;
+  padding-block-end: var(--pt-space-5);
+}
+.ds-h1 {
+  display: flex;
+  gap: var(--pt-space-3);
+  align-items: center;
+  margin: var(--pt-space-2) 0;
+  font-family: var(--pt-font-display);
+  font-size: var(--pt-t-display-l);
+  font-weight: 400;
+}
+.ds-h2 {
+  margin: 0 0 var(--pt-space-2);
+  font-family: var(--pt-font-display);
+  font-size: var(--pt-t-display-s);
+  font-weight: 400;
+}
+.ds-h3 {
+  margin: var(--pt-space-5) 0 var(--pt-space-3);
+  font-family: var(--pt-font-label);
+  font-size: var(--pt-t-label);
+  font-weight: 400;
+  letter-spacing: var(--pt-ls-label);
+  text-transform: none;
+}
+.ds-section {
+  padding-block: var(--pt-space-6);
+  border-block-start: 1px solid var(--pt-rule);
+}
+.ds-lede {
+  max-inline-size: 70ch;
+  margin: 0 0 var(--pt-space-4);
+  color: var(--pt-ink-2);
+  font-size: var(--pt-t-meta);
+}
+.ds-label {
+  margin: var(--pt-space-4) 0 var(--pt-space-2);
+  color: var(--pt-ink-muted);
+  font-family: var(--pt-font-label);
+  font-size: var(--pt-t-label);
+  font-weight: 400;
+  letter-spacing: var(--pt-ls-label);
+}
+.ds-sr {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.ds-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: var(--pt-t-meta);
+}
+.ds-table th,
+.ds-table td {
+  padding: var(--pt-space-2) var(--pt-space-3);
+  text-align: start;
+  vertical-align: middle;
+  border-block-end: 1px solid var(--pt-rule);
+}
+.ds-table thead th {
+  color: var(--pt-ink-muted);
+  font-family: var(--pt-font-label);
+  font-weight: 400;
+  letter-spacing: var(--pt-ls-label);
+}
+.ds-table tbody th {
+  font-weight: 400;
+}
+.ds-swatch {
+  display: inline-block;
+  inline-size: 28px;
+  block-size: 20px;
+  margin-inline-end: var(--pt-space-2);
+  vertical-align: middle;
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-paper);
+}
+.ds-hex {
+  margin-inline-end: var(--pt-space-2);
+  font-family: var(--pt-font-you);
+  font-size: var(--pt-t-num);
+}
+.ds-ratio {
+  font-family: var(--pt-font-you);
+  font-size: var(--pt-t-num-s);
+  color: var(--pt-ink-2);
+}
+.ds-ratio[data-pass='no'] {
+  color: var(--pt-danger);
+}
+.ds-use {
+  color: var(--pt-ink-2);
+}
+.ds-wires,
+.ds-chips,
+.ds-space,
+.ds-elev,
+.ds-radii {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pt-space-4);
+  padding: 0;
+  margin: 0 0 var(--pt-space-4);
+  list-style: none;
+}
+.ds-wire {
+  display: grid;
+  gap: var(--pt-space-1);
+  padding: var(--pt-space-3);
+  background: var(--pt-linen);
+  border-radius: var(--pt-radius-paper);
+}
+.ds-chip {
+  display: flex;
+  gap: var(--pt-space-2);
+  align-items: center;
+  font-size: var(--pt-t-meta);
+}
+.ds-chip__swatch {
+  inline-size: 56px;
+  block-size: 36px;
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-paper);
+}
+.ds-type {
+  margin: 0;
+}
+.ds-type__row {
+  display: grid;
+  grid-template-columns: 160px 1fr 1fr;
+  gap: var(--pt-space-4);
+  align-items: baseline;
+  padding-block: var(--pt-space-3);
+  border-block-end: 1px solid var(--pt-rule);
+}
+.ds-type__row dd {
+  margin: 0;
+}
+.ds-type__note {
+  color: var(--pt-ink-2);
+  font-size: var(--pt-t-meta);
+}
+.ds-voices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--pt-space-5);
+}
+.ds-space {
+  align-items: flex-end;
+}
+.ds-space li {
+  display: grid;
+  gap: var(--pt-space-1);
+  justify-items: start;
+  font-size: var(--pt-t-num-s);
+}
+.ds-space__bar {
+  display: block;
+  background: var(--pt-tab);
+}
+.ds-elev__card {
+  padding: var(--pt-space-5) var(--pt-space-4);
+  min-inline-size: 200px;
+  border-radius: var(--pt-radius-paper);
+  font-size: var(--pt-t-meta);
+}
+.ds-radii li {
+  display: grid;
+  gap: var(--pt-space-2);
+  justify-items: center;
+  font-size: var(--pt-t-meta);
+}
+.ds-radii__box {
+  inline-size: 56px;
+  block-size: 56px;
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+}
+.ds-row {
+  margin-block: var(--pt-space-5);
+}
+.ds-cells {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pt-space-5);
+  align-items: flex-start;
+}
+.ds-cell {
+  display: grid;
+  gap: var(--pt-space-2);
+  justify-items: start;
+}
+.ds-cell__items {
+  display: flex;
+  gap: var(--pt-space-3);
+  align-items: center;
+}
+.ds-caption {
+  color: var(--pt-ink-muted);
+  font-size: var(--pt-t-num-s);
+}
+/* A toast is fixed to the viewport in the app; on this board it sits in the flow to be inspected. */
+.ds-toast.pt-notice {
+  position: static;
+  margin-inline: 0;
+}
+@media (max-width: 720px) {
+  .ds-type__row {
+    grid-template-columns: 1fr;
+  }
+}

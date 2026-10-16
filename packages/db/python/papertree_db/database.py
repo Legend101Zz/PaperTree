@@ -1,6 +1,6 @@
 """PaperTreeDb — the core of the SQLite data layer, and the class that assembles the mixins.
 
-THE SPLIT (contracts.md §1.1, S0). ``PaperTreeDb`` is ``DatabaseCore`` plus four feature mixins,
+THE SPLIT (contracts.md §1.1, S0). ``PaperTreeDb`` is ``DatabaseCore`` plus the feature mixins,
 each owned by one later slice (slice-plan.md §3), so call sites keep ``db.<method>``:
 
   * ``database.py``   this module: the connection, owner minting, ``transaction()``, and the
@@ -81,6 +81,8 @@ from .ids import (
 )
 from .library import LibraryMixin
 from .migrate import MigrationResult, migrate
+from .notebook import NotebookMixin
+from .reading import ReadingMixin
 
 __all__ = [
     "MAX_DERIVATION_DEPTH",
@@ -143,7 +145,7 @@ class CreatedUser:
 class DatabaseCore:
     """The connection, owner minting, ``transaction()`` and the parse-derived tables.
 
-    Not used directly: ``PaperTreeDb`` below is this class plus the four feature mixins. It holds
+    Not used directly: ``PaperTreeDb`` below is this class plus the feature mixins. It holds
     ALL of the instance state (the mixins declare ``__slots__ = ()``), so there is still exactly
     one place a connection lives.
     """
@@ -636,10 +638,12 @@ class DatabaseCore:
         return list(self._conn.execute(sql, params).fetchall())
 
 
-class PaperTreeDb(LibraryMixin, HighlightsMixin, AiMixin, CanvasMixin, DatabaseCore):
+class PaperTreeDb(
+    LibraryMixin, ReadingMixin, HighlightsMixin, AiMixin, CanvasMixin, NotebookMixin, DatabaseCore
+):
     """The only way to reach the SQLite connection, and therefore the only place SQL is.
 
-    ``DatabaseCore`` plus the four feature mixins (see the module docstring for who owns which).
+    ``DatabaseCore`` plus the feature mixins (see the module docstring for who owns which).
     No state of its own: ``__slots__ = ()`` here and in every mixin, so the instance has exactly
     ``DatabaseCore``'s three slots and no ``__dict__`` to attach a connection accessor to.
     """

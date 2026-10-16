@@ -65,6 +65,7 @@ import type {
   Highlight,
   JobSummary,
   LibraryPaper,
+  ReadingProgress,
   Message,
   MessageCoverage,
   PassageLocator,
@@ -168,6 +169,19 @@ const PAPER: LibraryPaper = {
   highlight_count: 3,
   created_at: T,
   updated_at: T,
+  reading: {
+    last_page: 4,
+    furthest_page: 6,
+    page_count: 10,
+    opened_at: T,
+    finished_at: null,
+    state: 'reading',
+  },
+  year: 2015,
+  arxiv_id: '1506.02640',
+  arxiv_category: 'cs.CV',
+  thread_count: 2,
+  has_summary: false,
 };
 
 const HIGHLIGHT: Highlight = {
@@ -483,6 +497,7 @@ type NodeCreated = Awaited<ReturnType<(typeof boardsApi)['createNode']>>;
 const OPTIONAL = {
   'papers.JobSummary': [],
   'papers.LibraryPaper': [],
+  'papers.ReadingProgress': [],
   'highlights.ResolutionWire': [],
   'highlights.AnchorWire': [],
   'highlights.Highlight': [],
@@ -556,6 +571,8 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<OptionalKeys<JobSummary>, Opt<'papers.JobSummary'>>,
   true satisfies Equal<keyof LibraryPaper, SchemaKeys<'papers', 'LibraryPaper'>>,
   true satisfies Equal<OptionalKeys<LibraryPaper>, Opt<'papers.LibraryPaper'>>,
+  true satisfies Equal<keyof ReadingProgress, SchemaKeys<'papers', 'ReadingProgress'>>,
+  true satisfies Equal<OptionalKeys<ReadingProgress>, Opt<'papers.ReadingProgress'>>,
   true satisfies Equal<keyof ResolutionWire, SchemaKeys<'highlights', 'ResolutionWire'>>,
   true satisfies Equal<OptionalKeys<ResolutionWire>, Opt<'highlights.ResolutionWire'>>,
   true satisfies Equal<keyof AnchorWire, SchemaKeys<'highlights', 'AnchorWire'>>,
@@ -668,6 +685,7 @@ const ENUMS = {
   'JobSummary.state': ['pending', 'running', 'succeeded', 'dead_letter', 'cancelled'],
   'JobSummary.step': ['parse', 'persist', 'promote', null],
   'LibraryPaper.processing': ['queued', 'reading', 'ready', 'partial', 'failed'],
+  'ReadingProgress.state': ['reading', 'finished'],
   'ResolutionWire.state': ['anchored', 'approximate', 'orphan'],
   'ResolutionWire.reason': [
     'block_id_missing',
@@ -739,6 +757,7 @@ const ENUM_TYPES_ARE_EXACT: true[] = [
   true satisfies Equal<JobSummary['state'], Values<'JobSummary.state'>>,
   true satisfies Equal<JobSummary['step'], Values<'JobSummary.step'>>,
   true satisfies Equal<LibraryPaper['processing'], Values<'LibraryPaper.processing'>>,
+  true satisfies Equal<ReadingProgress['state'], Values<'ReadingProgress.state'>>,
   true satisfies Equal<ResolutionWire['state'], Values<'ResolutionWire.state'>>,
   true satisfies Equal<ResolutionWire['reason'], Values<'ResolutionWire.reason'>>,
   true satisfies Equal<Highlight['color'], Values<'Highlight.color'>>,

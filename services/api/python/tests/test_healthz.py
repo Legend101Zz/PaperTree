@@ -1,4 +1,4 @@
-"""contracts.md §2.8: `GET /healthz` = `{ok, version, db: "ok", migrations: [1,2,3,4,5],
+"""contracts.md §2.8: `GET /healthz` = `{ok, version, db: "ok", migrations: [1,2,3,4,5,6],
 agent: {reachable, key_present, sdk}}`. No auth, no secrets, and an absent agent is a FACT the body
 reports, never an error: the reader works without the agent, so health must not say otherwise.
 
@@ -21,7 +21,7 @@ from typing import Any
 from api_support import harness
 from papertree_api.schemas import Healthz
 from papertree_api.settings import Settings
-from papertree_db import load_migrations
+from papertree_db import find_migrations_dir, load_migrations
 
 AGENT_HEALTH = {
     "ok": True,
@@ -95,7 +95,10 @@ def test_healthz_without_an_agent_is_200_and_says_so(tmp_path: Path) -> None:
         "migrations": [m.version for m in load_migrations()],
         "agent": {"reachable": False, "key_present": None, "sdk": None},
     }
-    assert body["migrations"] == [1, 2, 3, 4, 5]
+    # Independent of load_migrations(): the file names themselves, so a migration the runner
+    # skipped or a version it invented shows up here without pinning today's head.
+    on_disk = sorted(int(f.name[:4]) for f in find_migrations_dir().glob("*.sql"))
+    assert body["migrations"] == on_disk and on_disk[:1] == [1]
     assert elapsed < 3.0, f"an absent agent made /healthz take {elapsed:.1f}s"
     assert "SECRET" not in response.text
 

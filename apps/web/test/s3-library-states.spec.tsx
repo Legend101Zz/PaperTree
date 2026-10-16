@@ -46,6 +46,12 @@ function row(overrides: Partial<LibraryPaper> = {}): LibraryPaper {
     highlight_count: 0,
     created_at: '2026-10-15T10:00:00+00:00',
     updated_at: '2026-10-15T10:00:00+00:00',
+    reading: null,
+    year: null,
+    arxiv_id: null,
+    arxiv_category: null,
+    thread_count: 0,
+    has_summary: false,
     ...overrides,
   };
 }

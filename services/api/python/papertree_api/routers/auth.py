@@ -3,15 +3,16 @@
 
 from __future__ import annotations
 
+import sqlite3
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import Response
 from fastapi.security import HTTPBearer
 
-from ..deps import AuthConnDep, CallerDep, SettingsDep
+from ..deps import AuthConnDep, Caller, CallerDep, SettingsDep
 from ..errors import ApiError
-from ..schemas import Credentials, Me, Session
+from ..schemas import Credentials, Me, MeUpdate, Session
 from ..security import create_session, hash_password, now_iso, revoke_session, verify_password
 from ._shared import json_body
 
@@ -91,9 +92,29 @@ async def logout(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/auth/me", response_model=Me)
-async def me(call: CallerDep, conn: AuthConnDep) -> dict[str, str]:
+def _me(call: Caller, conn: sqlite3.Connection) -> dict[str, str | None]:
     row = conn.execute("SELECT email FROM users WHERE user_id = ?", (call.user_id,)).fetchone()
     if row is None:
         raise ApiError("not_found", "no such user")
-    return {"user_id": call.user_id, "email": row["email"]}
+    return {
+        "user_id": call.user_id,
+        "email": row["email"],
+        "display_name": call.db.get_display_name(call.db_owner),
+    }
+
+
+@router.get("/auth/me", response_model=Me)
+async def me(call: CallerDep, conn: AuthConnDep) -> dict[str, str | None]:
+    return _me(call, conn)
+
+
+@router.patch("/auth/me", response_model=Me)
+async def update_me(
+    call: CallerDep,
+    conn: AuthConnDep,
+    body: Annotated[MeUpdate, Depends(json_body(MeUpdate))],
+) -> dict[str, str | None]:
+    """Sets the name the bookplate and the account menu show (#192). `MeUpdate` has trimmed it and
+    refused anything outside 1 to 60 characters, so it is never derived from the email."""
+    call.db.set_display_name(call.db_owner, body.display_name)
+    return _me(call, conn)

@@ -37,6 +37,7 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
+    RootModel,
     ValidationError,
     ValidationInfo,
     WithJsonSchema,
@@ -373,9 +374,28 @@ class Session(Wire):
     email: str
 
 
+def _trimmed(value: object) -> object:
+    """Strips a string before its length is checked, so `"  x  "` is `"x"` and 60 letters padded
+    with spaces is still 60 letters. Anything else is left for the type check to refuse."""
+    return value.strip() if isinstance(value, str) else value
+
+
+#: A chosen name for the library's bookplate and the account menu: 1 to 60 characters AFTER
+#: trimming. Enforced here, not by a CHECK, so relaxing it later needs no table rebuild (0006).
+DisplayName = Annotated[str, BeforeValidator(_trimmed), Field(min_length=1, max_length=60)]
+
+
 class Me(Wire):
     user_id: str
     email: str
+    #: Null until the person sets one. Never derived from the email (#192).
+    display_name: str | None
+
+
+class MeUpdate(Wire):
+    """`PATCH /auth/me` (#192)."""
+
+    display_name: DisplayName
 
 
 # ── §2.2 papers, library, jobs ───────────────────────────────────────────────────────────────
@@ -399,6 +419,30 @@ class JobSummary(Wire):
     error_code: JobErrorCode | None
 
 
+class ReadingProgress(Wire):
+    """Where the caller is in a paper (#192). A paper they have not started has `reading: null`.
+
+    Pages are zero-based. `state` is the progress rule: `finished` once the last page was
+    reached (or the paper was marked read), else `reading`.
+    """
+
+    last_page: NonNegative
+    furthest_page: NonNegative
+    page_count: NonNegative | None
+    #: When the reader last wrote its page (every write counts), not the first open.
+    opened_at: WireTime
+    #: Always set when `state` is `finished`.
+    finished_at: WireTime | None
+    state: Literal["reading", "finished"]
+
+
+class ReadingStateUpdate(Wire):
+    """`PUT /papers/{id}/reading-state` (#192): the page the reader is on now."""
+
+    last_page: PageIndex
+    mode: Literal["source", "guided", "split"] | None = omittable()
+
+
 class LibraryPaper(Wire):
     """The row shape used everywhere a paper is listed (§2.2)."""
 
@@ -415,6 +459,16 @@ class LibraryPaper(Wire):
     highlight_count: NonNegative
     created_at: WireTime
     updated_at: WireTime
+    #: The caller's place in the paper; null when they have not started it (#192).
+    reading: ReadingProgress | None
+    #: The year first submitted, from the arXiv id only; null when unsure (never a guess).
+    year: NonNegative | None
+    arxiv_id: str | None
+    #: The primary category from the arXiv margin stamp (`cs.CL`); null when absent.
+    arxiv_category: str | None
+    thread_count: NonNegative
+    #: True when the promoted generation has any cached summary (whatever prompt or model).
+    has_summary: bool
 
 
 class UploadAccepted(Wire):
@@ -945,6 +999,182 @@ class EdgePatch(Wire):
 class BoardPatch(Wire):
     title: str | None = omittable(min_length=1, max_length=200)
     viewport: Viewport | None = None
+
+
+# ── v0.2 notebook (S5a, #206) ───────────────────────────────────────────────────────────────
+
+PageTemplate = Literal["blank", "dot", "lined", "cornell", "derivation"]
+NotebookItemKind = Literal["exchange", "text", "sticky", "quote", "shape"]
+StrokeTool = Literal["pen", "highlighter"]
+StrokeNib = Literal["EF", "F", "M"]
+#: Page units (the web's PAGE_WIDTH is 960); same bounds as a canvas card.
+NOTEBOOK_BODY_MAX = 100_000
+#: A stroke colour is a TOKEN NAME (`pen`, `hl-amber`), never a hex, so a theme can re-map it.
+ColourToken = Annotated[str, Field(pattern=r"^[a-z][a-z0-9-]{0,31}$")]
+NotebookTitle = Annotated[str, Field(min_length=1, max_length=200)]
+#: Base64 of one stroke blob. Generous on the wire so the store, not the parser, answers 413.
+PointsB64 = Annotated[str, Field(min_length=1, max_length=8_000_000)]
+
+
+class NotebookPage(Wire):
+    page_id: str
+    paper_id: str
+    title: str
+    template: PageTemplate
+    source_thread_id: str | None
+    source_message_id: str | None
+    version: Version
+    created_at: WireTime
+    updated_at: WireTime
+
+
+class NotebookItem(Wire):
+    """`anchor` is the full Anchor of a quote (required for `quote`, null otherwise); `body` is the
+    typed text, the quote's display cache, or the JSON of an exchange / shape."""
+
+    item_id: str
+    page_id: str
+    kind: NotebookItemKind
+    x: float
+    y: float
+    w: Extent
+    h: Extent
+    z: SqlInt
+    body: str
+    anchor: AnchorV1 | None
+    version: Version
+    created_at: WireTime
+    updated_at: WireTime
+
+
+class NotebookStroke(Wire):
+    stroke_id: str
+    page_id: str
+    tool: StrokeTool
+    nib: StrokeNib
+    colour: str
+    points_b64: str
+    created_at: WireTime
+
+
+class NotebookCounts(Wire):
+    quotes: NonNegative
+    stickies: NonNegative
+    text: NonNegative
+    shapes: NonNegative
+    strokes: NonNegative
+
+
+class NotebookPageSummary(Wire):
+    page_id: str
+    title: str
+    template: PageTemplate
+    counts: NotebookCounts
+    version: Version
+    updated_at: WireTime
+
+
+class NotebookPageView(Wire):
+    """`GET /notebook/pages/{id}`."""
+
+    page: NotebookPage
+    items: list[NotebookItem]
+    strokes: list[NotebookStroke]
+
+
+class NotebookPageCreated(Wire):
+    """`POST /papers/{id}/notebook/pages` (201): the page and its seeded items."""
+
+    page: NotebookPage
+    items: list[NotebookItem]
+
+
+class NotebookHit(Wire):
+    page_id: str
+    page_title: str
+    item_id: str
+    kind: NotebookItemKind
+    snippet: str
+
+
+class NotebookPageCreate(Wire):
+    """`from_message_id` is "Dive in": an assistant message of this paper's threads."""
+
+    page_id: ClientId
+    title: NotebookTitle | None = omittable(max_length=200)
+    template: PageTemplate | None = omittable()
+    from_message_id: str | None = omittable(min_length=1, max_length=200)
+
+
+class NotebookPagePatch(Wire):
+    version: Version
+    title: NotebookTitle | None = omittable(max_length=200)
+    template: PageTemplate | None = omittable()
+
+
+class NotebookItemCreate(Wire):
+    item_id: ClientId
+    kind: NotebookItemKind
+    x: Coord
+    y: Coord
+    w: Extent
+    h: Extent
+    z: SqlInt = 0
+    body: Annotated[str, Field(max_length=NOTEBOOK_BODY_MAX)] = ""
+    anchor: AnchorV1In | None = omittable(validate_default=True)
+
+    @field_validator("anchor", mode="after")
+    @classmethod
+    def _quote_needs_an_anchor(cls, value: AnchorV1In | None, info: ValidationInfo) -> Any:
+        if value is None and info.data.get("kind") == "quote":
+            raise PydanticCustomError("missing", "Field required for a quote")
+        return value
+
+
+class NotebookItemPatch(Wire):
+    version: Version
+    x: Coord | None = omittable()
+    y: Coord | None = omittable()
+    w: Extent | None = omittable()
+    h: Extent | None = omittable()
+    z: SqlInt | None = omittable()
+    body: Annotated[str, Field(max_length=NOTEBOOK_BODY_MAX)] | None = omittable()
+
+
+class NotebookStrokeIn(Wire):
+    stroke_id: ClientId
+    tool: StrokeTool
+    nib: StrokeNib
+    colour: ColourToken
+    points_b64: PointsB64
+
+
+class NotebookStrokeBatch(RootModel[list[NotebookStrokeIn]]):
+    """`POST /notebook/pages/{id}/strokes`: a bare JSON array, one pen-up batch of 1 to 200."""
+
+    root: Annotated[list[NotebookStrokeIn], Field(min_length=1, max_length=200)]
+
+
+class NotebookStrokesAdded(Wire):
+    added: NonNegative
+
+
+class NotebookPageStale(Wire):
+    """`409 stale_version` on a page: the envelope plus the page as it now is."""
+
+    detail: str
+    code: Literal["stale_version"]
+    retryable: bool
+    current: NotebookPage
+
+
+class NotebookItemStale(Wire):
+    """`409 stale_version` on an item: the envelope plus the item as it now is."""
+
+    detail: str
+    code: Literal["stale_version"]
+    retryable: bool
+    current: NotebookItem
 
 
 # ── §2.8 health ──────────────────────────────────────────────────────────────────────────────
