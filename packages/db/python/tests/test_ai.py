@@ -519,8 +519,8 @@ def test_in_flight_runs_counts_only_running_unexpired_runs_of_this_owner(env: En
         expires_at="2026-01-01T00:00:00Z",
     )
     _run(env, b, "run_01K63AE8M4Q2T7V9X3B5N6RIF05", token_sha256="3" * 64)
-    assert env.db.in_flight_runs(a.owner) == {"ask": 0, "explain": 1, "summary": 1}
-    assert env.db.in_flight_runs(b.owner) == {"ask": 0, "explain": 1, "summary": 0}
+    assert env.db.in_flight_runs(a.owner) == {"ask": 0, "diagram": 0, "explain": 1, "summary": 1}
+    assert env.db.in_flight_runs(b.owner) == {"ask": 0, "diagram": 0, "explain": 1, "summary": 0}
 
 
 # ── spend and usage ──────────────────────────────────────────────────────────────────────────

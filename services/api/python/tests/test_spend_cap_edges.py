@@ -3,11 +3,13 @@
 The S5F reviewer's mutants r1 (summary reserve 0), r2 (the summary route skips ``require_budget``),
 r10 (ask reserve 0) and r12 (the follow-up route skips ``require_budget``) all survived, because
 the cap was only ever tested through the explain route and with explain runs in flight. Here the
-four routes (explain thread, ask thread, follow-up message, summary) each meet:
+five routes (explain thread, ask thread, follow-up message, summary, and since v0.2 S7a the
+diagram thread) each meet:
 
   * the SPENT edge: a finished spend of exactly the budget is 429 ``budget_exhausted``; a budget a
     millionth of a dollar larger lets the run start;
-  * the RESERVE edge, per KIND in flight (explain $0.01, ask $0.02, summary $0.05): ``spent +
+  * the RESERVE edge, per KIND in flight (explain $0.01, ask $0.02, summary $0.05, diagram
+    $0.02): ``spent +
     reservation == budget`` is 429 with the in-flight sentence, a millionth more is admitted.
 """
 
@@ -32,7 +34,7 @@ from fake_agent import Script
 from papertree_api.agent_client import RUN_RESERVE_USD
 from papertree_db import PaperTreeDb
 
-ROUTES = ("explain", "ask", "followup", "summary")
+ROUTES = ("explain", "ask", "followup", "summary", "diagram")
 EDGE = 1e-6
 
 
@@ -43,6 +45,7 @@ def _scripts(route: str) -> list[Script]:
         "ask": [*first, Script("explain-ok")],
         "followup": [*first, Script("followup-ok")],
         "summary": [*first, Script("summary-ok")],
+        "diagram": [*first, Script("explain-ok")],
     }[route]
 
 
@@ -55,6 +58,12 @@ def _start(h: AiHarness, token: str, paper_id: str, route: str, thread_id: str) 
         response = h.client.post(
             f"/papers/{paper_id}/threads",
             json={"kind": "ask", "question": "What does the paper claim?"},
+            headers=headers,
+        )
+    elif route == "diagram":
+        response = h.client.post(
+            f"/papers/{paper_id}/threads",
+            json={"kind": "diagram", "anchor": paragraph_anchor()},
             headers=headers,
         )
     elif route == "followup":
@@ -156,7 +165,7 @@ def test_a_run_in_flight_reserves_its_kind_on_every_route(
 
 
 def test_the_reserves_are_the_contracts_numbers() -> None:
-    assert RUN_RESERVE_USD == {"explain": 0.01, "ask": 0.02, "summary": 0.05}
+    assert RUN_RESERVE_USD == {"explain": 0.01, "ask": 0.02, "summary": 0.05, "diagram": 0.02}
 
 
 def test_two_runs_in_flight_reserve_twice(tmp_path: Path) -> None:

@@ -23,6 +23,7 @@ export interface UsageTotals extends UsageBucket {
     readonly explain: UsageBucket;
     readonly ask: UsageBucket;
     readonly summary: UsageBucket;
+    readonly diagram: UsageBucket;
   };
 }
 

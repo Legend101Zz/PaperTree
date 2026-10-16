@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "PaperTree agent run request (POST /v1/runs)",
-  "description": "HAND-WRITTEN from contracts.md §3.2 (reader release S0). The API sends it with headers X-PaperTree-Agent-Secret, X-Request-Id, Content-Type: application/json and Accept: text/event-stream. The API's pydantic twin is `AgentRunRequest` in services/api/python/papertree_api/schemas.py; contracts/agent/examples/run-request-*.json are validated against both. `seed` is required (an object) for an explain run and for a summary run (S5F: a summary's seed is a bounded digest of the paper, the abstract, each top-level section's first paragraph(s) and the conclusion, about 6,000 estimated tokens, quote and page_label empty); it is null or an object for an ask run; `history` is null on a thread's first turn. The limits by kind are filled in by the API: explain 45 s / 20 s idle / 8 tools / 4096 tokens, ask 60 s / 20 s / 8 / 4096, summary 90 s / 20 s / 12 / 6144.",
+  "description": "HAND-WRITTEN from contracts.md §3.2 (reader release S0). The API sends it with headers X-PaperTree-Agent-Secret, X-Request-Id, Content-Type: application/json and Accept: text/event-stream. The API's pydantic twin is `AgentRunRequest` in services/api/python/papertree_api/schemas.py; contracts/agent/examples/run-request-*.json are validated against both. `seed` is required (an object) for an explain run, a diagram run (v0.2 S7a: the selection the plate is drawn from) and a summary run (S5F: a summary's seed is a bounded digest of the paper, the abstract, each top-level section's first paragraph(s) and the conclusion, about 6,000 estimated tokens, quote and page_label empty); it is null or an object for an ask run; `history` is null on a thread's first turn. The limits by kind are filled in by the API: explain 45 s / 20 s idle / 8 tools / 4096 tokens, ask 60 s / 20 s / 8 / 4096, summary 90 s / 45 s / 12 / 6144, diagram 90 s / 30 s / 4 / 2048.",
   "type": "object",
   "required": [
     "run_id",
@@ -20,8 +20,8 @@
   "properties": {
     "run_id": { "type": "string", "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$" },
     "request_id": { "type": "string", "pattern": "^req_[0-9A-HJKMNP-TV-Z]{26}$" },
-    "kind": { "enum": ["explain", "ask", "summary"] },
-    "prompt_version": { "enum": ["explain-v1", "ask-v1", "summary-v1"] },
+    "kind": { "enum": ["explain", "ask", "summary", "diagram"] },
+    "prompt_version": { "enum": ["explain-v1", "ask-v1", "summary-v1", "diagram-v1"] },
     "tool": {
       "description": "Where the agent's four paper tools are served (§4) and the run token they take as `Authorization: Bearer <token>`. The API stores only the token's sha256.",
       "type": "object",
@@ -130,6 +130,10 @@
     },
     {
       "if": { "properties": { "kind": { "const": "explain" } } },
+      "then": { "properties": { "seed": { "type": "object" } } }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "diagram" } } },
       "then": { "properties": { "seed": { "type": "object" } } }
     }
   ]
