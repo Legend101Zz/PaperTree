@@ -6,7 +6,9 @@ added by #237. It is the visual baseline later slices compare against; check a n
 `/design-system` before it ships.
 
 **Availability.** On in `next dev` and tests. A production build answers 404 unless
-`NEXT_PUBLIC_PAPERTREE_DESIGN_SYSTEM=on` (`model/guard.ts`, enforced in `app/design-system/page.tsx`).
+`NEXT_PUBLIC_PAPERTREE_DESIGN_SYSTEM=on` (`model/guard.ts`, enforced in `app/design-system/page.tsx`). The flag is inlined when the app is built, so
+it must be set at **build time**; the page is `force-dynamic`, so a production build without it answers a real
+HTTP 404 (a prerendered `notFound()` would be served with 200).
 
 ## Data flow
 

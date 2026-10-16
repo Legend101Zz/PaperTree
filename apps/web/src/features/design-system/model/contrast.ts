@@ -66,3 +66,14 @@ export function contrastRatio(a: Rgba, b: Rgba): number | null {
   const [x, y] = [luminance(a), luminance(b)];
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
+
+/**
+ * A ratio as the board prints it: floored to two decimals, so a ratio just under its bar can never
+ * print as the bar itself (4.46 must not read "4.5").
+ *
+ * @param ratio A contrast ratio.
+ * @returns e.g. `4.46:1`.
+ */
+export function formatRatio(ratio: number): string {
+  return `${(Math.floor(ratio * 100 + 1e-9) / 100).toFixed(2)}:1`;
+}

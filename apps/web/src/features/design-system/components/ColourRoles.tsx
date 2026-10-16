@@ -5,7 +5,7 @@
  */
 'use client';
 
-import { contrastRatio, toHex, type Rgba } from '../model/contrast';
+import { contrastRatio, formatRatio, toHex, type Rgba } from '../model/contrast';
 import { COLOUR_ROLES, RELATION_KINDS, ROLE_TOKENS } from '../model/roles';
 import { useSchemeColours, type Scheme } from '../hooks/useSchemeColours';
 
@@ -14,7 +14,7 @@ import type { ReactNode } from 'react';
 const WIRE_TOKENS = [...RELATION_KINDS.map((k) => k.token), '--pt-linen'];
 const ALL_TOKENS = [...ROLE_TOKENS, ...WIRE_TOKENS];
 
-/** One scheme's cell: swatch, hex and the measured ratio against the role's surface. */
+/** One scheme's cell: swatch, hex and the measured ratio, with the surface it was measured on. */
 function RoleCell({
   fg,
   bg,
@@ -32,7 +32,8 @@ function RoleCell({
       <code className="ds-hex">{toHex(fg)}</code>
       {ratio === null || min === null ? null : (
         <span className="ds-ratio" data-pass={ratio >= min ? 'yes' : 'no'}>
-          {ratio.toFixed(1)}:1 {ratio >= min ? '✓' : '✗ below ' + String(min)}
+          {formatRatio(ratio)} on {bg === undefined ? '' : toHex(bg)}{' '}
+          {ratio >= min ? '✓' : '✗ below ' + String(min)}
         </span>
       )}
     </td>
@@ -108,7 +109,7 @@ export function ColourRoles(): ReactNode {
               return (
                 <code key={scheme} className="ds-hex">
                   {fg === undefined ? '' : toHex(fg)}
-                  {ratio === null ? '' : ` · ${ratio.toFixed(1)}`}
+                  {ratio === null ? '' : ` · ${formatRatio(ratio)}`}
                 </code>
               );
             })}

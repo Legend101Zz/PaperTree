@@ -7,7 +7,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DesignSystemBoard, designSystemEnabled } from '@/features/design-system';
-import { contrastRatio, parseRgb } from '@/features/design-system/model/contrast';
+import { contrastRatio, formatRatio, parseRgb } from '@/features/design-system/model/contrast';
 
 const notFound = vi.hoisted(() =>
   vi.fn(() => {
@@ -65,5 +65,11 @@ describe('contrast maths', () => {
     expect(contrastRatio(black, white)).toBeCloseTo(21, 5);
     expect(contrastRatio(parseRgb('rgba(0,0,0,0.5)')!, white)).toBeNull();
     expect(parseRgb('')).toBeNull();
+  });
+
+  it('never rounds a ratio up across its bar', () => {
+    expect(formatRatio(4.46)).toBe('4.46:1');
+    expect(formatRatio(4.499)).toBe('4.49:1');
+    expect(formatRatio(14.3)).toBe('14.30:1');
   });
 });
