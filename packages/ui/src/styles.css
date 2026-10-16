@@ -22,155 +22,378 @@
  * tokens
  * ───────────────────────────────────────────────────────────────────────────────────────────── */
 
+/*
+ * THE EX LIBRIS TOKENS (v0.2, #175; values from the design's tokens.css, ratios in DESIGN.md §2).
+ *
+ * Daylight is bone laid paper; dark is the lamp-lit study, where the paper objects (the PDF page,
+ * spine labels, holder cards) stay paper. Every ratio in a comment is measured against the surface
+ * it names: text needs 4.5:1, control edges, focus and graphical cues 3:1. `test/tokens.spec.ts`
+ * recomputes the important pairs in both schemes, so a value cannot drift below its bar unnoticed.
+ *
+ * THE v0.1 NAMES STAY. `--pt-ink`, `--pt-ground`, `--pt-derived-*`, `--pt-accent` and the rest are
+ * still read by v0.1 surfaces that the revamp has not rebuilt yet, so each one now points at its
+ * Ex Libris role instead of being deleted: nothing silently loses its colour (ADR-004 §2.1). New
+ * code reads the role names (`--pt-page`, `--pt-ai-slip`, `--pt-primary`, …).
+ *
+ * The faces come from `next/font/local` in apps/web (`app/fonts.ts`), which publishes
+ * `--pt-face-*` on <html>; the fallbacks keep every register distinct without them (tests,
+ * Storybook-less renders, a missing font).
+ */
 :root {
-  /*
-   * Two families, and they must not be neighbours. The document is set in a serif because that is
-   * what the papers are set in; the derived register is a rounded humanist sans, which is
-   * recognisable as "not the paper" at a glance, out of the corner of an eye, and in a screenshot.
-   */
-  --pt-font-body: ui-serif, Georgia, 'Iowan Old Style', 'Times New Roman', serif;
-  --pt-font-derived: ui-rounded, 'SF Pro Rounded', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
-  --pt-font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  /* faces: one per voice (DESIGN.md §4). Display only at 28 px and up. */
+  --pt-font-display: var(--pt-face-display, 'Libre Caslon Display'), Georgia, serif;
+  --pt-font-paper: var(--pt-face-paper, 'Libre Caslon Text'), Georgia, serif;
+  --pt-font-ai: var(--pt-face-ai, 'Alegreya Sans'), 'Gill Sans', 'Trebuchet MS', sans-serif;
+  --pt-font-label: var(--pt-face-label, 'Alegreya Sans SC'), var(--pt-font-ai);
+  --pt-font-you: var(--pt-face-you, 'Courier Prime'), 'Courier New', monospace;
 
-  /* A shorter measure for derived prose: a second signal that costs nothing and reads as an aside. */
+  /* type scale (size / line height) */
+  --pt-t-display-xl: 56px;
+  --pt-t-display-l: 40px;
+  --pt-t-display-m: 34px;
+  --pt-t-display-s: 30px;
+  --pt-t-paper-title: 18px;
+  --pt-t-paper: 15px;
+  --pt-lh-paper: 23px;
+  --pt-t-paper-trace: 14px;
+  --pt-lh-paper-trace: 21px;
+  --pt-t-paper-card: 12.5px;
+  --pt-t-ai: 15px;
+  --pt-lh-ai: 23px;
+  --pt-t-ai-panel: 14.5px;
+  --pt-lh-ai-panel: 22px;
+  --pt-t-meta: 14px;
+  --pt-t-min: 13px;
+  --pt-t-label: 13px;
+  --pt-t-label-s: 12.5px;
+  --pt-ls-label: 0.06em;
+  --pt-t-you: 15px;
+  --pt-lh-you: 22px;
+  --pt-t-num: 13px;
+  --pt-t-num-s: 12px;
+
+  /* space, radius, targets */
+  --pt-space-1: 4px;
+  --pt-space-2: 8px;
+  --pt-space-3: 12px;
+  --pt-space-4: 16px;
+  --pt-space-5: 24px;
+  --pt-space-6: 32px;
+  --pt-space-7: 48px;
+  --pt-space-8: 64px;
+  --pt-margin-desktop: 80px;
+  --pt-gutter-phone: 16px;
+  --pt-measure: 640px;
+  --pt-radius-paper: 2px;
+  --pt-radius-control: 3px;
+  --pt-radius-menu: 4px;
+  --pt-radius-sheet: 14px;
+  --pt-radius-round: 50%;
+  --pt-target-touch: 44px;
+  --pt-target-desktop: 36px;
+  --pt-focus-width: 2px;
+  --pt-focus-offset: 2px;
+
+  /* motion: paper lifts, slides and settles; nothing bounces (DESIGN.md §6) */
+  --pt-dur-quick: 120ms;
+  --pt-dur-sheet: 240ms;
+  --pt-dur-pull: 320ms;
+  --pt-dur-open: 480ms;
+  --pt-dur-flash-in: 180ms;
+  --pt-dur-flash-hold: 900ms;
+  --pt-dur-flash-out: 600ms;
+  --pt-ease-out: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --pt-ease-settle: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --pt-ease-lift: cubic-bezier(0.3, 0, 0.2, 1);
+
+  /* furniture: the same in both schemes */
+  --pt-cloth-transformers: #7e2f2a;
+  --pt-cloth-vision: #2e5a4c;
+  --pt-cloth-generative: #5a3a5e;
+  --pt-cloth-optimization: #2a3f66;
+  --pt-cloth-language: #a87a2a; /* takes paper labels: gilt on it would be 2.4:1 */
+  --pt-cloth-rl: #4a5560;
+  --pt-gilt: linear-gradient(
+    100deg,
+    #e0c98c 0%,
+    #f6eac4 36%,
+    #e3cc90 54%,
+    #f2e2b2 76%,
+    #e0c98c 100%
+  );
+  --pt-gilt-solid: #e0c98c; /* 4.7–6.5:1 on cloth */
+  --pt-brass: linear-gradient(180deg, #e7cf8e, #b8944c 45%, #8c6b2e 100%);
+  --pt-walnut: linear-gradient(#80583a, #5c3d27);
+  --pt-kraft: #c9b08a;
+  --pt-lit-wash: rgb(240 190 70 / 18%); /* a lit passage or trace row, always with the focus ring */
+
+  /* daylight */
+  --pt-ground: #f1ede5; /* bone: the desk */
+  --pt-page: #faf8f3; /* ivory panels, top bars, the Guided page */
+  --pt-surface: var(--pt-page);
+  --pt-ai-slip: #ece3d0; /* only AI text sits here */
+  --pt-call-slip: #fdfbf7; /* your asks; index cards */
+  --pt-linen: #e6dfd2; /* the board */
+  --pt-desk: #e4dccc; /* behind the PDF */
+  --pt-pdf-page: #ffffff;
+  --pt-paper-label: #faf8f3; /* spine labels, holder cards */
+  --pt-paper-label-ink: #2a2521; /* labels stay paper in both schemes, so their ink stays dark */
+  --pt-ink: #2a2521; /* 14.3 on page, 11.9 on the AI slip */
+  --pt-ink-2: #4a423a; /* 9.3 */
+  --pt-ink-muted: #675d53; /* 6.1; 13 px and up */
+  --pt-rule: #dad3c6; /* decorative only */
+  --pt-control-border: #8a7e6e; /* 3.7 */
+  --pt-primary: #7a1f1f; /* oxblood text and outline, 9.7 */
+  --pt-primary-fill: #7a1f1f;
+  --pt-on-primary: #faf8f3; /* 9.7, with a gilt inner ring */
+  --pt-primary-hover: #621819;
+  --pt-ribbon: #a3262a; /* 6.3 on ground */
+  --pt-focus: #1f4e79; /* 8.2 */
+  --pt-pen: #1e2a4a; /* your words, 13.7 on the call slip */
+  --pt-tab: #7a5b3a; /* margin tab fill; 4.9 against the AI slip */
+  --pt-on-tab: #faf8f3; /* 5.8 */
+  --pt-ai-tab-ink: #6a4a2c; /* the "AI" tab, 6.3 on the AI slip */
+  --pt-nv-ink: #5c4228; /* "not verified", 7.3 on the AI slip; dashed tab border, no fill */
+  --pt-danger: #9e2420; /* 7.3 */
+  --pt-sticky: #f2e3a6; /* ink 11.8 */
+  --pt-card-edge: transparent; /* e1's shadow carries the edge by day */
+  --pt-e1: 0 1px 1px rgb(58 40 24 / 14%), 1px 2px 4px -1px rgb(58 40 24 / 18%);
+  --pt-e2: 0 1px 2px rgb(58 40 24 / 12%), 4px 10px 24px -8px rgb(58 40 24 / 32%);
+  --pt-e3: 0 2px 4px rgb(58 40 24 / 14%), 14px 32px 64px -20px rgb(58 40 24 / 48%);
+  --pt-e1-fill: var(--pt-page);
+  --pt-e2-fill: var(--pt-page);
+  --pt-e3-fill: var(--pt-page);
+  --pt-e1-edge: 0 0 0 0 transparent;
+  --pt-e2-edge: 0 0 0 0 transparent;
+  --pt-e3-edge: 0 0 0 0 transparent;
+  --pt-lamp: none;
+
+  /* relation threads on linen: colour + a second cue + a glyph tag (DESIGN.md §5) */
+  --pt-wire-supports: #3e7a4f; /* solid, + , 3.9 */
+  --pt-wire-contradicts: #b5322a; /* dashed with crosses, ×, 4.6 */
+  --pt-wire-derives: #6a4c93; /* chevrons, », 5.2 */
+  --pt-wire-answers: #2a4f7f; /* arrowhead, →, 6.3 */
+  --pt-wire-compares: #8f6b1e; /* doubled, =, 3.7 */
+  --pt-wire-references: #7d766c; /* dotted, ⋯, 3.4 */
+  --pt-wire-plain: #2a2521; /* fine, —, 11.4 */
+  --pt-frame-outline: #7a6e5e; /* 1.5 px dashed, 3.8 on linen */
+  --pt-pin-ring: #7a5c24; /* open in-pins */
+
+  /* the five highlight washes: base hues, drawn at alpha over the PDF page in both schemes, with a
+   * darker underline ink so a pale wash stays legible and amber is not told from green by hue alone */
+  --pt-hl-amber: rgb(240 190 70 / 30%);
+  --pt-hl-amber-ink: #a8650a;
+  --pt-hl-green: rgb(120 190 125 / 30%);
+  --pt-hl-green-ink: #2c7442;
+  --pt-hl-blue: rgb(120 165 220 / 30%);
+  --pt-hl-blue-ink: #2d56a0;
+  --pt-hl-pink: rgb(230 140 165 / 30%);
+  --pt-hl-pink-ink: #a8356a;
+  --pt-hl-purple: rgb(170 135 215 / 30%);
+  --pt-hl-purple-ink: #6442ae;
+  --pt-highlight-fill: rgb(240 190 70 / 30%);
+  --pt-highlight-stroke: rgb(168 101 10 / 70%);
+  --pt-highlight-approx-fill: rgb(240 190 70 / 14%);
+  --pt-highlight-approx-stroke: rgb(168 101 10 / 90%);
+  --pt-highlight-orphan-stroke: var(--pt-danger);
+
+  /* v0.1 names, now aliases of their Ex Libris roles */
+  --pt-font-body: var(--pt-font-paper);
+  --pt-font-derived: var(--pt-font-ai);
+  --pt-font-ui: var(--pt-font-ai);
+  --pt-font-mono: var(--pt-font-you);
   --pt-measure-body: 68ch;
   --pt-measure-derived: 56ch;
-
-  --pt-ink: #1c1a17;
-  --pt-ink-muted: #6b6459;
-  --pt-ground: #fdfcfa;
-  --pt-ground-raised: #ffffff;
-  --pt-rule: #e3ddd3;
-
-  /*
-   * The two grounds the reader shell paints (`ReaderWorkspace`: `bg-[--pt-page-ground]` behind the
-   * pages, `bg-[--pt-panel-ground]` under the Navigator and the explain panel). They were
-   * referenced and defined nowhere until S0, so both surfaces were transparent. The page ground is
-   * a step DARKER than the paper so a white PDF page reads as a sheet; the panel ground sits
-   * between the two so a panel reads as furniture, not as more paper.
-   */
-  --pt-page-ground: #efebe4;
-  --pt-panel-ground: #f8f6f1;
-
-  /* The derived register: a warm tint that is clearly a different ground, not a hover state. */
-  --pt-derived-ground: #f4f1fb;
-  --pt-derived-rule: #6d5ae0;
-  --pt-derived-ink: #241f3a;
-  --pt-derived-ink-muted: #574d80;
-
-  --pt-focus: #2a4e8c;
-
-  /*
-   * THE READER'S ONE ACCENT: ink blue, for interactive state only (the current mode, a pressed
-   * control, the focus flash). Paper and highlights never use it, so "blue" always means "you can
-   * act on this" and never "this is the paper".
-   */
-  --pt-accent: #2a4e8c;
-  --pt-accent-ink: #ffffff;
-  --pt-accent-soft: rgb(42 78 140 / 10%);
-  --pt-font-ui: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --pt-radius-panel: 12px;
-  --pt-sheet-shadow: 0 1px 1px rgb(46 36 24 / 10%), 0 0 0 1px rgb(46 36 24 / 6%);
-  --pt-float-shadow: 0 6px 20px rgb(46 36 24 / 12%), 0 0 0 1px rgb(46 36 24 / 8%);
-  --pt-danger: #9b2c2c;
-
-  /*
-   * The five highlight colours. Drawn OVER the white PDF page in both themes (the paper stays
-   * paper-white in dark mode), so they are one set: a low-alpha tint the text reads through, and a
-   * darker ink for the underline along each line's baseline — the underline is what keeps a pale
-   * tint legible on a bright screen and for a reader who cannot tell amber from green.
-   */
-  --pt-hl-amber: rgb(242 172 32 / 30%);
-  --pt-hl-amber-ink: #a8650a;
-  --pt-hl-green: rgb(78 166 100 / 26%);
-  --pt-hl-green-ink: #2c7442;
-  --pt-hl-blue: rgb(80 132 212 / 25%);
-  --pt-hl-blue-ink: #2d56a0;
-  --pt-hl-pink: rgb(224 102 152 / 25%);
-  --pt-hl-pink-ink: #a8356a;
-  --pt-hl-purple: rgb(142 104 212 / 25%);
-  --pt-hl-purple-ink: #6442ae;
-
-  /* Highlights. Alpha, always: the paper must remain readable through its own annotation. */
-  --pt-highlight-fill: rgb(255 208 0 / 30%);
-  --pt-highlight-stroke: rgb(196 152 0 / 70%);
-  --pt-highlight-approx-fill: rgb(255 208 0 / 14%);
-  --pt-highlight-approx-stroke: rgb(196 152 0 / 90%);
-  --pt-highlight-orphan-stroke: #b23c3c;
-
-  --pt-radius: 10px;
-  --pt-gap: 8px;
+  --pt-ground-raised: var(--pt-page);
+  --pt-page-ground: var(--pt-desk);
+  --pt-panel-ground: var(--pt-page);
+  --pt-derived-ground: var(--pt-ai-slip);
+  --pt-derived-rule: var(--pt-tab);
+  --pt-derived-ink: var(--pt-ink);
+  --pt-derived-ink-muted: var(--pt-ink-2);
+  --pt-accent: var(--pt-primary);
+  --pt-accent-ink: var(--pt-on-primary);
+  --pt-accent-soft: rgb(122 31 31 / 8%);
+  --pt-radius: var(--pt-radius-control);
+  --pt-radius-panel: var(--pt-radius-menu);
+  --pt-sheet-shadow: var(--pt-e1);
+  --pt-float-shadow: var(--pt-e2);
+  --pt-gap: var(--pt-space-2);
 
   color-scheme: light dark;
 }
 
 /*
- * Dark, three ways, because three different mechanisms are already in play: the OS preference,
- * Tailwind's `darkMode: 'class'` (`apps/web/tailwind.config.ts`), and an explicit override for a
- * user who wants dark on a light OS. `:not([data-pt-theme='light'])` is what lets the explicit
- * override win over the OS.
+ * The lamp-lit study, three ways, because three mechanisms are in play: the OS preference, an
+ * explicit choice in Aa (`data-pt-theme`, set before paint by the no-flash script in apps/web's
+ * layout), and Tailwind's `dark:` variant (`tailwind.config.ts` reads the same attribute).
+ * `:not([data-pt-theme='light'])` is what lets an explicit daylight choice win over a dark OS.
+ * Keep the two dark blocks identical; `test/tokens.spec.ts` compares them.
  */
 @media (prefers-color-scheme: dark) {
   :root:not([data-pt-theme='light']) {
-    --pt-ink: #ece7df;
-    --pt-ink-muted: #a09889;
-    --pt-ground: #1f1e1b;
-    --pt-ground-raised: #282723;
-    --pt-rule: #3a3833;
-
-    --pt-page-ground: #171614;
-    --pt-panel-ground: #1f1e1b;
-
-    --pt-derived-ground: #1e1b2e;
-    --pt-derived-rule: #9d8cff;
-    --pt-derived-ink: #ece9fb;
-    --pt-derived-ink-muted: #b3aad8;
-
-    --pt-focus: #8fb0ea;
-    --pt-accent: #8fb0ea;
-    --pt-accent-ink: #10141c;
-    --pt-accent-soft: rgb(143 176 234 / 14%);
-    --pt-sheet-shadow: 0 0 0 1px rgb(0 0 0 / 40%);
-    --pt-float-shadow: 0 8px 24px rgb(0 0 0 / 45%), 0 0 0 1px rgb(255 255 255 / 8%);
-    --pt-danger: #f08a8a;
-
-    --pt-highlight-fill: rgb(255 214 64 / 26%);
-    --pt-highlight-stroke: rgb(255 214 64 / 65%);
-    --pt-highlight-approx-fill: rgb(255 214 64 / 10%);
-    --pt-highlight-approx-stroke: rgb(255 214 64 / 85%);
-    --pt-highlight-orphan-stroke: #ff7a7a;
+    --pt-ground: #1c1714; /* ink 14.1 */
+    --pt-page: #2c251f; /* ink 12.0 */
+    --pt-ai-slip: #3d3124; /* ink 10.0 */
+    --pt-call-slip: #302822; /* pen 7.9 */
+    --pt-linen: #211b17;
+    --pt-desk: #16120f;
+    --pt-pdf-page: #e9e1d1; /* the paper stays paper, dimmed; PDF text 14.5 */
+    --pt-paper-label: #efe6d2; /* labels and holder cards stay paper, ink 12.2 */
+    --pt-ink: #ede4d3;
+    --pt-ink-2: #d3c7b3; /* 9.0 */
+    --pt-ink-muted: #b8ab97; /* 6.7 */
+    --pt-rule: #4a3f35;
+    --pt-control-border: #8e8170; /* 4.0 */
+    --pt-primary: #f0a08f; /* 7.3 */
+    --pt-primary-fill: #a8402f;
+    --pt-on-primary: #fbf3e4; /* 5.5; a gilt ring marks the edge (the fill is 2.5:1 on page) */
+    --pt-primary-hover: #b84b39;
+    --pt-ribbon: #d04a3d; /* 4.0 on ground */
+    --pt-focus: #8fb8e8; /* 7.3 */
+    --pt-pen: #a9c1ec;
+    --pt-tab: #c9a26b;
+    --pt-on-tab: #1c1714; /* 7.5 */
+    --pt-ai-tab-ink: #e2c48e;
+    --pt-nv-ink: #e2c48e; /* 7.5 */
+    --pt-danger: #f08a7e; /* 6.2 */
+    --pt-sticky: #4a4024; /* ink 8.1 */
+    --pt-card-edge: #7d705f; /* 3.5 on linen */
+    --pt-e1: 0 1px 1px rgb(0 0 0 / 45%), 1px 2px 4px -1px rgb(0 0 0 / 50%);
+    --pt-e2: 0 1px 2px rgb(0 0 0 / 40%), 4px 10px 24px -8px rgb(0 0 0 / 65%);
+    --pt-e3: 0 2px 4px rgb(0 0 0 / 45%), 14px 32px 64px -20px rgb(0 0 0 / 75%);
+    /* a black shadow barely shows on near-black, so each level also steps its fill and top edge */
+    --pt-e1-fill: #2c251f;
+    --pt-e2-fill: #352c25;
+    --pt-e3-fill: #3e342b;
+    --pt-e1-edge: inset 0 1px 0 rgb(255 236 210 / 10%);
+    --pt-e2-edge: inset 0 1px 0 rgb(255 236 210 / 16%);
+    --pt-e3-edge: inset 0 1px 0 rgb(255 236 210 / 22%);
+    --pt-lamp: radial-gradient(
+      ellipse 900px 620px at 18% 0%,
+      rgb(255 196 120 / 7%),
+      transparent 70%
+    );
+    --pt-wire-supports: #6fb07f; /* 6.6 */
+    --pt-wire-contradicts: #e0655a; /* 5.0 */
+    --pt-wire-derives: #a88bd6; /* 5.9 */
+    --pt-wire-answers: #79a6e0; /* 6.8 */
+    --pt-wire-compares: #d4a64a; /* 7.6 */
+    --pt-wire-references: #a39a8e; /* 6.1 */
+    --pt-wire-plain: #ede4d3; /* 13.5 */
+    --pt-frame-outline: #a39a8e; /* 6.1 */
+    --pt-pin-ring: #c9a26b;
+    --pt-accent-soft: rgb(240 160 143 / 14%);
+    /* v0.1 paints --pt-accent as a FILL under --pt-accent-ink too; on the light lamp-lit accent the
+     * ink must be dark (7.9:1), as v0.1's light-blue dark accent had a dark ink */
+    --pt-accent-ink: #1c1714;
   }
 }
 
 :root.dark,
 :root[data-pt-theme='dark'] {
-  --pt-ink: #ece7df;
-  --pt-ink-muted: #a09889;
-  --pt-ground: #1f1e1b;
-  --pt-ground-raised: #282723;
-  --pt-rule: #3a3833;
+  --pt-ground: #1c1714; /* ink 14.1 */
+  --pt-page: #2c251f; /* ink 12.0 */
+  --pt-ai-slip: #3d3124; /* ink 10.0 */
+  --pt-call-slip: #302822; /* pen 7.9 */
+  --pt-linen: #211b17;
+  --pt-desk: #16120f;
+  --pt-pdf-page: #e9e1d1; /* the paper stays paper, dimmed; PDF text 14.5 */
+  --pt-paper-label: #efe6d2; /* labels and holder cards stay paper, ink 12.2 */
+  --pt-ink: #ede4d3;
+  --pt-ink-2: #d3c7b3; /* 9.0 */
+  --pt-ink-muted: #b8ab97; /* 6.7 */
+  --pt-rule: #4a3f35;
+  --pt-control-border: #8e8170; /* 4.0 */
+  --pt-primary: #f0a08f; /* 7.3 */
+  --pt-primary-fill: #a8402f;
+  --pt-on-primary: #fbf3e4; /* 5.5; a gilt ring marks the edge (the fill is 2.5:1 on page) */
+  --pt-primary-hover: #b84b39;
+  --pt-ribbon: #d04a3d; /* 4.0 on ground */
+  --pt-focus: #8fb8e8; /* 7.3 */
+  --pt-pen: #a9c1ec;
+  --pt-tab: #c9a26b;
+  --pt-on-tab: #1c1714; /* 7.5 */
+  --pt-ai-tab-ink: #e2c48e;
+  --pt-nv-ink: #e2c48e; /* 7.5 */
+  --pt-danger: #f08a7e; /* 6.2 */
+  --pt-sticky: #4a4024; /* ink 8.1 */
+  --pt-card-edge: #7d705f; /* 3.5 on linen */
+  --pt-e1: 0 1px 1px rgb(0 0 0 / 45%), 1px 2px 4px -1px rgb(0 0 0 / 50%);
+  --pt-e2: 0 1px 2px rgb(0 0 0 / 40%), 4px 10px 24px -8px rgb(0 0 0 / 65%);
+  --pt-e3: 0 2px 4px rgb(0 0 0 / 45%), 14px 32px 64px -20px rgb(0 0 0 / 75%);
+  /* a black shadow barely shows on near-black, so each level also steps its fill and top edge */
+  --pt-e1-fill: #2c251f;
+  --pt-e2-fill: #352c25;
+  --pt-e3-fill: #3e342b;
+  --pt-e1-edge: inset 0 1px 0 rgb(255 236 210 / 10%);
+  --pt-e2-edge: inset 0 1px 0 rgb(255 236 210 / 16%);
+  --pt-e3-edge: inset 0 1px 0 rgb(255 236 210 / 22%);
+  --pt-lamp: radial-gradient(ellipse 900px 620px at 18% 0%, rgb(255 196 120 / 7%), transparent 70%);
+  --pt-wire-supports: #6fb07f; /* 6.6 */
+  --pt-wire-contradicts: #e0655a; /* 5.0 */
+  --pt-wire-derives: #a88bd6; /* 5.9 */
+  --pt-wire-answers: #79a6e0; /* 6.8 */
+  --pt-wire-compares: #d4a64a; /* 7.6 */
+  --pt-wire-references: #a39a8e; /* 6.1 */
+  --pt-wire-plain: #ede4d3; /* 13.5 */
+  --pt-frame-outline: #a39a8e; /* 6.1 */
+  --pt-pin-ring: #c9a26b;
+  --pt-accent-soft: rgb(240 160 143 / 14%);
+  /* v0.1 paints --pt-accent as a FILL under --pt-accent-ink too; on the light lamp-lit accent the
+   * ink must be dark (7.9:1), as v0.1's light-blue dark accent had a dark ink */
+  --pt-accent-ink: #1c1714;
 
-  --pt-page-ground: #171614;
-  --pt-panel-ground: #1f1e1b;
+  color-scheme: dark;
+}
 
-  --pt-derived-ground: #1e1b2e;
-  --pt-derived-rule: #9d8cff;
-  --pt-derived-ink: #ece9fb;
-  --pt-derived-ink-muted: #b3aad8;
+:root[data-pt-theme='light'] {
+  color-scheme: light;
+}
 
-  --pt-focus: #8fb0ea;
-  --pt-accent: #8fb0ea;
-  --pt-accent-ink: #10141c;
-  --pt-accent-soft: rgb(143 176 234 / 14%);
-  --pt-sheet-shadow: 0 0 0 1px rgb(0 0 0 / 40%);
-  --pt-float-shadow: 0 8px 24px rgb(0 0 0 / 45%), 0 0 0 1px rgb(255 255 255 / 8%);
-  --pt-danger: #f08a8a;
+/* Reduced motion: DESIGN.md §6's last column. Moves become cross-fades, flashes appear and clear. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --pt-dur-sheet: 120ms;
+    --pt-dur-pull: 120ms;
+    --pt-dur-open: 120ms;
+    --pt-dur-flash-in: 0ms;
+    --pt-dur-flash-out: 0ms;
+    --pt-ease-settle: linear;
+    --pt-ease-lift: linear;
+  }
+}
 
-  --pt-highlight-fill: rgb(255 214 64 / 26%);
-  --pt-highlight-stroke: rgb(255 214 64 / 65%);
-  --pt-highlight-approx-fill: rgb(255 214 64 / 10%);
-  --pt-highlight-approx-stroke: rgb(255 214 64 / 85%);
-  --pt-highlight-orphan-stroke: #ff7a7a;
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+ * materials: laid paper, cloth weave, gilt foil, linen (the same recipe in both schemes)
+ * ───────────────────────────────────────────────────────────────────────────────────────────── */
+
+.pt-laid {
+  background-color: var(--pt-ground);
+  background-image:
+    var(--pt-lamp),
+    repeating-linear-gradient(0deg, rgb(96 80 60 / 3.5%) 0 1px, transparent 1px 5px),
+    repeating-linear-gradient(90deg, rgb(96 80 60 / 4.5%) 0 1px, transparent 1px 34px);
+}
+
+.pt-cloth {
+  background-image:
+    repeating-linear-gradient(45deg, rgb(255 255 255 / 5%) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(-45deg, rgb(0 0 0 / 9%) 0 1px, transparent 1px 3px);
+}
+
+.pt-gilt {
+  background-image: var(--pt-gilt);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.pt-linen {
+  background-color: var(--pt-linen);
+  background-image:
+    repeating-linear-gradient(0deg, rgb(90 70 40 / 7%) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgb(90 70 40 / 6%) 0 1px, transparent 1px 3px);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -989,7 +1212,9 @@ span.pt-paper .pt-paper__cite {
 
 .pt-zoom__select {
   flex: 0 1 auto;
-  min-inline-size: 0;
+  /* Sized by its text, "Fit width" in Alegreya Sans measures 79 px on Linux (83 on macOS): under
+     the 80 px the RFIX2 screens test holds it to. A floor keeps it readable on every platform. */
+  min-inline-size: 5.5rem;
   max-inline-size: 11rem;
   min-block-size: 40px;
   padding-inline: 8px 4px;
@@ -2932,6 +3157,7 @@ span.pt-paper .pt-paper__cite {
     display: none;
   }
   .pt-reader__controls .pt-zoom__select {
+    flex: none;
     inline-size: 6.25rem;
     max-inline-size: 6.25rem;
   }

@@ -171,23 +171,31 @@ describe('styles.css — the registers look different, in both themes', () => {
     // `ReaderWorkspace` paints `bg-[--pt-page-ground]` and `bg-[--pt-panel-ground]`. Both were
     // referenced and defined NOWHERE, so the reader's ground and the Navigator's panel were
     // transparent in every theme.
+    //
+    // Since v0.2 (#175) the v0.1 names are ALIASES on :root (`--pt-page-ground: var(--pt-desk)`)
+    // and the dark blocks redefine the role they point at, so follow one alias before asserting.
     const light = rule(':root');
     const osDark = nestedBlock('@media (prefers-color-scheme: dark)');
     const explicitDark = rule(":root.dark,\n:root[data-pt-theme='dark']");
+    const value = (block: string, name: string): string | undefined =>
+      new RegExp(`${name}:\\s*([^;]+);`).exec(block)?.[1]?.trim();
 
-    for (const [name, block] of [
-      ['light :root', light],
-      ['prefers-color-scheme: dark', osDark],
-      ['explicit dark', explicitDark],
-    ] as const) {
-      expect(block, `${name} lacks --pt-page-ground`).toMatch(/--pt-page-ground:\s*[^;]+;/);
-      expect(block, `${name} lacks --pt-panel-ground`).toMatch(/--pt-panel-ground:\s*[^;]+;/);
+    for (const name of ['--pt-page-ground', '--pt-panel-ground']) {
+      const own = value(light, name);
+      expect(own, `light :root lacks ${name}`).toBeDefined();
+      // The token whose value actually changes between schemes: the alias target, or itself.
+      const role = /^var\((--pt-[a-z0-9-]+)\)$/.exec(own ?? '')?.[1] ?? name;
+      const lightValue = value(light, role);
+      for (const [scheme, block] of [
+        ['prefers-color-scheme: dark', osDark],
+        ['explicit dark', explicitDark],
+      ] as const) {
+        const darkValue = value(block, role);
+        expect(darkValue, `${scheme} lacks ${role} (behind ${name})`).toBeDefined();
+        // Dark must actually be dark: not the light value copied into the dark block.
+        expect(darkValue, `${scheme} copies the light ${role}`).not.toBe(lightValue);
+      }
     }
-    // Dark must actually be dark: not the light value copied into the dark block.
-    const lightPage = /--pt-page-ground:\s*([^;]+);/.exec(light)?.[1];
-    const darkPage = /--pt-page-ground:\s*([^;]+);/.exec(explicitDark)?.[1];
-    expect(lightPage).toBeDefined();
-    expect(darkPage).not.toBe(lightPage);
   });
 
   it('never writes the reserved marker into the stylesheet', () => {

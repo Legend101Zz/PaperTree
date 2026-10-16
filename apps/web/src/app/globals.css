@@ -2,24 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-rgb: 255, 255, 255;
-}
-
-.dark {
-  --foreground-rgb: 255, 255, 255;
-  --background-rgb: 23, 23, 23;
-}
-
-.sepia {
-  --foreground-rgb: 59, 43, 35;
-  --background-rgb: 248, 241, 231;
-}
-
+/*
+ * The page itself: the bone desk, ink and the interface face, all from the Ex Libris tokens
+ * (`@papertree/ui/styles.css`), so both schemes come from one place (#175). The v0.1
+ * `--foreground-rgb` / `.dark` / `.sepia` triplets had no readers left and are gone.
+ */
 body {
-  color: rgb(var(--foreground-rgb));
-  background: rgb(var(--background-rgb));
+  color: var(--pt-ink);
+  background: var(--pt-ground);
+  font-family: var(--pt-font-ui);
 }
 
 /*
@@ -50,10 +41,10 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
+  background: var(--pt-control-border);
+  border-radius: var(--pt-radius-menu);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #666;
+  background: var(--pt-ink-muted);
 }
