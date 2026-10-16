@@ -181,7 +181,7 @@
 
   /* the five highlight washes: base hues, drawn at alpha over the PDF page in both schemes, with a
    * darker underline ink so a pale wash stays legible and amber is not told from green by hue alone */
-  --pt-hl-amber: rgb(240 190 70 / 32%);
+  --pt-hl-amber: rgb(240 190 70 / 30%);
   --pt-hl-amber-ink: #a8650a;
   --pt-hl-green: rgb(120 190 125 / 30%);
   --pt-hl-green-ink: #2c7442;

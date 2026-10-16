@@ -90,6 +90,18 @@ function Harness(): JSX.Element {
   );
 }
 
+describe('the no-flash script without storage', () => {
+  it('still paints from the OS when localStorage throws', () => {
+    mockOs(true);
+    const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    new Function(NO_FLASH_SCRIPT)();
+    getItem.mockRestore();
+    expect(document.documentElement.getAttribute(THEME_ATTRIBUTE)).toBe('dark');
+  });
+});
+
 describe('ThemeSwitch + useTheme', () => {
   it('offers System, Daylight and Lamp-lit as one named group', () => {
     mockOs(false);
@@ -120,6 +132,26 @@ describe('ThemeSwitch + useTheme', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Daylight' }));
     act(() => os.flip(true));
     expect(document.documentElement.getAttribute(THEME_ATTRIBUTE)).toBe('light');
+  });
+
+  it('never paints daylight over a stored lamp-lit choice while mounting', async () => {
+    // The no-flash script has already painted 'dark'; the hook must not flip it to the 'system'
+    // default before it reads storage (review of #227 saw dark -> light -> dark).
+    mockOs(false);
+    window.localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+    document.documentElement.setAttribute(THEME_ATTRIBUTE, 'dark');
+    // Spy on every write (a MutationObserver batches records and would only show the last value).
+    const setAttribute = vi.spyOn(document.documentElement, 'setAttribute');
+    render(<Harness />);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const seen = setAttribute.mock.calls
+      .filter(([name]) => name === THEME_ATTRIBUTE)
+      .map(([, value]) => value);
+    setAttribute.mockRestore();
+    expect(seen).not.toContain('light');
+    expect(document.documentElement.getAttribute(THEME_ATTRIBUTE)).toBe('dark');
   });
 
   it('restores the stored choice after mount', () => {

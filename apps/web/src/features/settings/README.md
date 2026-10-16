@@ -16,6 +16,6 @@ reader never sees a daylight flash on load. Without JavaScript the stylesheet st
 ## Key files
 
 - `model/theme.ts`: the choices, `parseThemeChoice`, `resolveTheme`, `NO_FLASH_SCRIPT` (pure; tested in
-  `test/theme.spec.ts`).
+  `test/theme.spec.tsx`).
 - `hooks/useTheme.ts`: persistence, the OS listener for System, and painting `<html>`.
 - `components/ThemeSwitch.tsx`: the segmented switch.

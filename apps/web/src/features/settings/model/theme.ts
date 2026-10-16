@@ -50,7 +50,9 @@ export function resolveTheme(choice: ThemeChoice, prefersDark: boolean): Resolve
 
 /**
  * The inline script that sets `data-pt-theme` before the first paint. It repeats
- * `parseThemeChoice` + `resolveTheme` in plain ES5 because it runs before any bundle loads;
- * `test/theme.spec.ts` executes it and checks it agrees with the two functions above.
+ * `parseThemeChoice` + `resolveTheme` in plain ES5 because it runs before any bundle loads. Storage that
+ * throws (private mode, blocked site data) still paints from the OS, so the tokens and Tailwind's `dark:`
+ * never disagree;
+ * `test/theme.spec.tsx` executes it and checks it agrees with the two functions above.
  */
-export const NO_FLASH_SCRIPT = `(function(){try{var c=localStorage.getItem('${THEME_STORAGE_KEY}');if(c!=='light'&&c!=='dark')c=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('${THEME_ATTRIBUTE}',c);}catch(e){}})();`;
+export const NO_FLASH_SCRIPT = `(function(){var c=null;try{c=localStorage.getItem('${THEME_STORAGE_KEY}');}catch(e){}if(c!=='light'&&c!=='dark'){try{c=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}catch(e){c='light';}}document.documentElement.setAttribute('${THEME_ATTRIBUTE}',c);})();`;

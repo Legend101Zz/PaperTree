@@ -52,25 +52,29 @@ export interface ThemeState {
  * <ThemeSwitch value={choice} onChange={setChoice} />
  */
 export function useTheme(): ThemeState {
-  const [choice, setChoiceState] = useState<ThemeChoice>('system');
+  // null until the stored choice is read. Read after mount, never during render: the server has no
+  // storage, and reading it in render would make the first client render disagree with the server's.
+  // Painting nothing until then matters: applying the 'system' default first flipped a stored
+  // 'dark' on a light OS to daylight for a frame (dark → light → dark), undoing the no-flash script.
+  const [stored, setStored] = useState<ThemeChoice | null>(null);
   const [resolved, setResolved] = useState<ResolvedTheme>('light');
+  const choice = stored ?? 'system';
 
-  // Read after mount, never during render: the server has no storage, and reading it in render
-  // would make the first client render disagree with the server's (a hydration warning).
-  useEffect(() => setChoiceState(readChoice()), []);
+  useEffect(() => setStored(readChoice()), []);
 
   useEffect(() => {
+    if (stored === null) return undefined;
     const apply = (): void => {
-      const next = resolveTheme(choice, prefersDark());
+      const next = resolveTheme(stored, prefersDark());
       document.documentElement.setAttribute(THEME_ATTRIBUTE, next);
       setResolved(next);
     };
     apply();
-    if (choice !== 'system' || typeof window.matchMedia !== 'function') return undefined;
+    if (stored !== 'system' || typeof window.matchMedia !== 'function') return undefined;
     const query = window.matchMedia(DARK_QUERY);
     query.addEventListener('change', apply);
     return () => query.removeEventListener('change', apply);
-  }, [choice]);
+  }, [stored]);
 
   const setChoice = useCallback((next: ThemeChoice): void => {
     try {
@@ -78,7 +82,7 @@ export function useTheme(): ThemeState {
     } catch {
       // Not persisted (storage unavailable); the choice still applies for this page view.
     }
-    setChoiceState(next);
+    setStored(next);
   }, []);
 
   return { choice, resolved, setChoice };
