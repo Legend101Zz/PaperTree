@@ -62,6 +62,8 @@ export interface SummaryView {
   readonly summary: Summary | null;
   readonly failure: Failure | null;
   readonly usage: RunSummary | null;
+  /** Shown from the stored derivation, so no tokens were spent on it now (#204's footer). */
+  readonly cached: boolean;
 }
 
 export type PanelView = 'thread' | 'summary';
@@ -94,6 +96,7 @@ const IDLE_SUMMARY: SummaryView = {
   summary: null,
   failure: null,
   usage: null,
+  cached: false,
 };
 
 const INITIAL: ExplainState = {
@@ -649,7 +652,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       };
       const controller = new AbortController();
       summaryAbort.current = controller;
-      set({ phase: 'loading', failure: null, label: null, usage: null });
+      set({ phase: 'loading', failure: null, label: null, usage: null, cached: false });
 
       const finish = async (): Promise<void> => {
         const status = await summaryApi.get(paperId);
@@ -673,7 +676,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
               cached.summary !== null &&
               (cached.state === 'ready' || cached.state === 'partial')
             ) {
-              set({ phase: cached.state, summary: cached.summary });
+              set({ phase: cached.state, summary: cached.summary, cached: true });
               return;
             }
           }
@@ -685,7 +688,11 @@ export function useExplainActions(options: { readonly paperId: string | null }):
           if (start.kind === 'cached') {
             const s = start.status;
             if (s.summary !== null)
-              set({ phase: s.state === 'partial' ? 'partial' : 'ready', summary: s.summary });
+              set({
+                phase: s.state === 'partial' ? 'partial' : 'ready',
+                summary: s.summary,
+                cached: true,
+              });
             return;
           }
           set({ phase: 'streaming', label: 'Starting' });

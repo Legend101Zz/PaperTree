@@ -3,7 +3,8 @@
  * Explain → a slow follow-up streams with the working label, the caret, Stop on its tab row and the
  * live marker of a passage the thread already cited → Stop keeps the part that arrived, with Retry
  * → a follow-up refused by the daily cap (the 429 is the route's, fulfilled by the test: the faux
- * stack's cap is not reachable in a test) shows the card, stamps "not sent" and keeps the text.
+ * stack's cap is not reachable in a test) shows the card, stamps "not sent" and keeps the text →
+ * the summary opens as an exchange (frame 04d), and after a reload it is the cached one.
  *
  * The PDF is the committed corpus's; the spec SKIPS, loudly, without it or without the agent.
  */
@@ -133,6 +134,43 @@ test.describe('#204: streaming, Stop and the daily cap (faux agent)', () => {
     expect(await card.getByRole('link').count()).toBe(0);
     await page.screenshot({ path: shot('v02-states-03-daily-cap-1440.png') });
     await page.unroute('**/threads/*/messages');
+
+    // ── 04d: the summary opens as an exchange; after a reload it is the cached one ──
+    const openSummary = async () => {
+      await panel.getByRole('button', { name: 'Summarize paper' }).click();
+      const summary = panel.locator('[data-summary-exchange]');
+      await expect(summary).toBeVisible({ timeout: 120_000 });
+      await expect(summary.locator('.pt-call-slip [data-voice="you"]')).toHaveText(
+        'Summary of the whole paper',
+      );
+      expect(
+        await summary.locator('[data-voice="ai"] [data-summary-bullet]').count(),
+      ).toBeGreaterThan(0);
+      expect(
+        await summary.locator('[data-summary-bullet] [data-citation-id] button').count(),
+      ).toBeGreaterThan(0);
+      await expect(summary.locator('[data-summary-readout]')).toContainText(
+        /Stands on \d+ passages?/,
+      );
+      expect(await summary.locator('.pt-trace-list [data-voice="paper"]').count()).toBeGreaterThan(
+        0,
+      );
+      expect((await summary.innerText()).replace(/\s+/g, ' ')).not.toMatch(/\[b\d+|\bblk_/);
+      return summary;
+    };
+    const fresh = await openSummary();
+    await expect(fresh.locator('[data-summary-footer]')).toContainText(
+      /\(estimate\) · made with \S+/,
+    );
+    await page.screenshot({ path: shot('v02-states-04-summary-1440.png') });
+    await page.reload();
+    await page.getByRole('button', { name: 'Ask AI' }).click();
+    const cached = await openSummary();
+    await expect(cached.locator('[data-summary-footer]')).toHaveText(
+      /^Cached \d{1,2} \w{3} · no new tokens used · made with \S+/,
+    );
+    await expect(cached.locator('.pt-call-slip time')).toContainText('cached ·');
+    await page.screenshot({ path: shot('v02-states-05-summary-cached-1440.png') });
     await context.close();
   });
 });

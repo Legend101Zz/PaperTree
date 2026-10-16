@@ -3349,6 +3349,61 @@ span.pt-paper .pt-paper__cite {
   }
 }
 
+/* Frame 04d: the summary's bullets on the AI slip, each a row with its margin cell, and the
+   header's "cached" label. */
+.pt-summary__bullets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pt-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pt-summary__bullet {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--pt-space-4);
+  padding-inline-start: 18px;
+}
+
+.pt-summary__bullet::before {
+  content: '•';
+  position: absolute;
+  inset-inline-start: 4px;
+}
+
+.pt-summary__bullet .pt-ai-slip__aside {
+  flex-direction: column;
+  gap: var(--pt-space-1);
+  min-inline-size: 96px;
+}
+
+.pt-summary__uncited {
+  grid-column: 1 / -1;
+  font: 700 var(--pt-t-label-s) / 1.3 var(--pt-font-label);
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--pt-ls-label);
+  color: var(--pt-nv-ink);
+}
+
+@media (max-width: 480px) {
+  .pt-summary__bullet {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.pt-explain__badge {
+  margin-inline-start: var(--pt-space-3);
+  padding: 1px 8px;
+  font: 13px / 18px var(--pt-font-ai);
+  color: var(--pt-ink-2);
+  vertical-align: 3px;
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-paper);
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────────────────────
  * S7 canvas (additive block: owned by track S7; nothing above this line is touched)
  *

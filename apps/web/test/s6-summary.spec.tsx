@@ -60,10 +60,13 @@ describe('the paper summary', () => {
     await waitFor(() => expect(document.querySelectorAll('[data-summary-bullet]')).toHaveLength(5));
     expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
     expect(document.querySelector('[data-summary-warning]')).toBeNull();
-    // chips work
-    fireEvent.click(document.querySelectorAll('[data-citation-id]')[2] as Element);
+    // markers work (#204: numbered by passage, the flash says which marker)
+    fireEvent.click(document.querySelectorAll('[data-citation-id] button')[2] as Element);
     expect(focusAnchor.mock.calls[0]?.[0]).toMatchObject({ id: 'anchor-b3' });
-    expect(focusAnchor.mock.calls[0]?.[1]).toEqual({ flash: true });
+    expect(focusAnchor.mock.calls[0]?.[1]).toEqual({
+      flash: true,
+      from: { n: 3, page: 4, para: null, notVerified: false },
+    });
   });
 
   it('with none cached: POSTs, shows the progress label, then the bullets from GET', async () => {
@@ -119,7 +122,7 @@ describe('the paper summary', () => {
         'Some points could not be linked to a passage.',
       ),
     );
-    expect(screen.getByText('No linked passage')).toBeTruthy();
+    expect(screen.getByText("no citation · the AI's own reading")).toBeTruthy();
   });
 
   it('a failed run shows a designed error with Retry', async () => {
@@ -132,7 +135,7 @@ describe('the paper summary', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('Daily spend cap reached');
   });
 
-  it('a cached PARTIAL summary can be regenerated: Regenerate POSTs {regenerate: true} and shows the new one', async () => {
+  it('a cached PARTIAL summary can be summarised again: it POSTs {regenerate: true} and shows the new one', async () => {
     let gets = 0;
     const { calls } = installFetch({
       [`GET /papers/${PAPER}/summary`]: () => {
@@ -149,7 +152,7 @@ describe('the paper summary', () => {
     });
     render(<Harness />);
     await open();
-    const button = await screen.findByRole('button', { name: 'Regenerate summary' });
+    const button = await screen.findByRole('button', { name: 'Summarise again' });
     expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
     fireEvent.click(button);
     await waitFor(() => expect(document.querySelectorAll('[data-summary-bullet]')).toHaveLength(7));
@@ -157,10 +160,13 @@ describe('the paper summary', () => {
     expect(posts).toHaveLength(1);
     expect(posts[0]?.body).toEqual({ regenerate: true });
     expect(document.querySelector('[data-summary-warning]')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Regenerate summary' })).toBeNull();
+    // A new run spent tokens: its footer gives the usage, never "no new tokens used".
+    expect(document.querySelector('[data-summary-footer]')?.textContent).toMatch(
+      /\(estimate\) · made with M3$/,
+    );
   });
 
-  it('a complete summary has no Regenerate button', async () => {
+  it('a complete summary can be summarised again too (frame 04d)', async () => {
     installFetch({
       [`GET /papers/${PAPER}/summary`]: () =>
         jsonResponse(200, { state: 'ready', summary: SUMMARY('complete') }),
@@ -168,6 +174,6 @@ describe('the paper summary', () => {
     render(<Harness />);
     await open();
     await waitFor(() => expect(document.querySelectorAll('[data-summary-bullet]')).toHaveLength(5));
-    expect(screen.queryByRole('button', { name: 'Regenerate summary' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Summarise again' })).toBeTruthy();
   });
 });

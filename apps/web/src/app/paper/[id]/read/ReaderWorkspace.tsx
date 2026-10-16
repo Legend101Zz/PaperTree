@@ -91,6 +91,7 @@ import {
   type DocumentRef,
   type PendingScroll,
 } from '@/components/reader/documentHandle';
+import { HighlightUndoToast } from '@/features/highlights';
 import { useFocusFromNotebook } from '@/features/notebook/hooks/useFocusFromNotebook';
 import { ReaderHeader, type ExplainToggle } from '@/features/reader';
 import { NetworkError } from '@/lib/api/client';
@@ -742,6 +743,7 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
           />
         )}
         <ReaderToast message={notice} onDismiss={() => setNotice(null)} />
+        <HighlightUndoToast highlights={highlights} />
       </ReaderActionsMount>
     </PdfDocumentProvider>
   );

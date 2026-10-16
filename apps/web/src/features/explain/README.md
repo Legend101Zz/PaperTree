@@ -71,6 +71,14 @@ derived on read from the parse, never stored).
   re-parse the server keeps only handles whose block still exists and numbers new ones after them, so a handle
   can name a different block in the new run; until that run's citations land, a live marker could show the
   old passage's number. Rare (a re-parse during a thread), and corrected at `done`.
+- **The summary as an exchange (#204, frame 04d).** `SummaryExchange`: the call slip "Summary of the whole
+  paper" ("cached · 15 Oct" from `created_at`), the bullets on the AI slip with numbered markers and "not
+  verified" tabs per bullet, the footer's facts ("Cached 15 Oct · no new tokens used · made with M3", or the
+  new run's usage) with Summarise again, then "Stands on 7 passages on 6 pages · 8 bullets · 11 citations · 3
+  bullets not verified" and the trace by page. A passage the open thread cited keeps its number: summary
+  citations carry no locator (#257), so `buildSummary` keys them as the server keys passages
+  (`g{generation}:{block id}`). A citation is one bullet citing one passage (the frame's 10 merged two blocks of
+  p. 10). Dive in and Send to board wait for APIs that take a summary (#258).
 - `buildExchanges` pairs asks and answers and builds each answer's paragraphs (the server's
   `answer_paragraphs` rule), markers, trace rows ("where · cited n×", the paper's words, "not verified" when
   `supported === false`) and coverage.
@@ -92,8 +100,8 @@ derived on read from the parse, never stored).
   the next pointer press or key (capture phase). `components/FlashMarginTab.tsx` draws "from marker 2 in the
   answer" beside the passage in `flash` and `linger`. Guided mode does not have it yet (#245).
 - `components/explain` keeps a thin re-export (`index.tsx`, the path `ReaderWorkspace` imports) and still owns
-  the controller (`useExplainActions`), the summary view and `RichText` (the summary and the canvas cards use
-  it); moving those into the feature is the next split.
+  the controller (`useExplainActions`), the summary's working and failed states (`SummaryView`) and `RichText`
+  (the canvas cards use it); moving those into the feature is the next split.
 
 ## Key files
 
@@ -105,5 +113,7 @@ derived on read from the parse, never stored).
   panel, and the live + stored merge. Pure, tested.
 - `model/states.ts`: the Stop note and its no-text rule, "not sent", the daily-cap figures and usage rows, the
   folded answer. Pure, tested (`states.spec.ts`).
+- `model/summary.ts`: the summary's view model (numbers shared with the thread, the counting rule, the trace by
+  page). Pure, tested on the real cached summary (`test/fixtures/attention-summary.json`).
 - `model/threads.ts`: menu order, position, a stored thread's origin, the thread an empty panel opens on.
 - `api/threads.ts`: query keys and fetchers. `hooks/useThreads.ts`: the reads, the open-on-newest, the merge.
