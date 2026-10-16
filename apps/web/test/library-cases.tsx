@@ -9,10 +9,9 @@
  * partial hint, the audio badge — actually renders and gets audited.
  */
 
+import { fireEvent } from '@testing-library/react';
 import type { ReactElement } from 'react';
 
-import { PaperGrid } from '@/components/library/PaperGrid';
-import { PaperList } from '@/components/library/PaperList';
 import { UploadDropzone } from '@/components/library/UploadDropzone';
 import {
   EmptyLibrary,
@@ -23,6 +22,7 @@ import {
   UncertaintyState,
 } from '@/components/library/SystemStates';
 import type { LibraryPaper } from '@/components/library/types';
+import { CatalogueCard } from '@/features/library/components/CatalogueCard';
 
 export const TOUCH_TARGET_MIN_PX = 44;
 
@@ -87,6 +87,7 @@ export const PAPERS: readonly LibraryPaper[] = [
 ];
 
 const noop = (): void => {};
+const noopAsync = async (): Promise<void> => {};
 
 export interface LibraryCase {
   readonly name: string;
@@ -106,8 +107,49 @@ export function openDisclosure(
 }
 
 export const CASES: readonly LibraryCase[] = [
-  { name: 'PaperGrid', element: <PaperGrid papers={PAPERS} onOpen={noop} onRetry={noop} /> },
-  { name: 'PaperList', element: <PaperList papers={PAPERS} onOpen={noop} onRetry={noop} /> },
+  {
+    // #195: the failed paper's catalogue card, so Read, Retry and Delete are all audited.
+    name: 'CatalogueCard',
+    element: (
+      <CatalogueCard
+        id="card"
+        book={{ ...(PAPERS[4] as LibraryPaper), year: 2019, reading: null, arxivCategory: null }}
+        onRead={noop}
+        onRetry={noopAsync}
+        onDelete={noopAsync}
+      />
+    ),
+  },
+  {
+    name: 'CatalogueCard (a ready paper)',
+    element: (
+      <CatalogueCard
+        id="card"
+        book={{ ...(PAPERS[3] as LibraryPaper), year: 2017, reading: null, arxivCategory: null }}
+        onRead={noop}
+        onRetry={noopAsync}
+        onDelete={noopAsync}
+      />
+    ),
+  },
+  {
+    // The failed paper's card with its Delete confirmation open, so "Delete paper" and "Keep it" are audited.
+    name: 'CatalogueCard (confirming Delete)',
+    element: (
+      <CatalogueCard
+        id="card"
+        book={{ ...(PAPERS[4] as LibraryPaper), year: null, reading: null, arxivCategory: null }}
+        onRead={noop}
+        onRetry={noopAsync}
+        onDelete={noopAsync}
+      />
+    ),
+    afterRender: (container) => {
+      const remove = container.querySelector<HTMLButtonElement>('button[aria-label^="Delete "]');
+      if (remove === null) throw new Error('Delete not found');
+      fireEvent.click(remove, { detail: 0 });
+    },
+  },
   {
     name: 'UploadDropzone',
     element: <UploadDropzone onUpload={async () => {}} maxBytes={50 * 1024 * 1024} />,
@@ -167,5 +209,5 @@ export const CASES: readonly LibraryCase[] = [
     ),
   },
   { name: 'OfflineState', element: <OfflineState onRetryConnection={noop} /> },
-  { name: 'EmptyLibrary', element: <EmptyLibrary onAddPaper={noop} onOpenSample={noop} /> },
+  { name: 'EmptyLibrary', element: <EmptyLibrary onAddPaper={noop} /> },
 ];
