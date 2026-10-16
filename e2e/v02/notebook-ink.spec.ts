@@ -3,8 +3,9 @@
  *
  *   upload Attention → a page (`POST /papers/{id}/notebook/pages`) → pick up the pen → draw a
  *   stroke with the mouse → its POST lands → reload → the stroke is there, at the same place →
- *   the stroke eraser across it → its DELETE lands → reload → gone → axe with the ink tools out,
- *   at 1440 and 390, daylight and lamp-lit.
+ *   the stroke eraser across it → its DELETE lands → reload → gone → a typed note → the lasso
+ *   round it → the menu → axe with the tool bar and the lasso menu open, at 1440 and 390, daylight
+ *   and lamp-lit → Make sticky → reload → the note is a sticky.
  *
  * The corpus PDF is fetched, not committed: the spec SKIPS, loudly, without it.
  */
@@ -26,7 +27,7 @@ test.describe('S5d — ink on the notebook page', () => {
     'SKIPPED: the corpus PDF attention-is-all-you-need.pdf is absent; run research/benchmarks/fetch_corpus.sh.',
   );
 
-  test('a drawn stroke survives a reload, and an erased one stays gone', async ({
+  test('a stroke survives a reload, an erased one stays gone, a lassoed note becomes a sticky', async ({
     browser,
     stack,
   }, testInfo) => {
@@ -99,8 +100,34 @@ test.describe('S5d — ink on the notebook page', () => {
     await expect(tools).toBeVisible();
     await expect(ink).toHaveCount(0);
 
-    // ── 5. axe with the ink tools out ──
-    await tools.getByRole('button', { name: 'Highlighter' }).click();
+    // ── 5. a typed note, and the lasso round it: the menu opens on Ask about this ──
+    const words = 'Q: without recurrence, how does it know word order?';
+    await tools.getByRole('button', { name: 'Text', exact: true }).click();
+    const typed = page.waitForResponse(
+      (r) => r.request().method() === 'POST' && r.url().endsWith(`/notebook/pages/${pageId}/items`),
+    );
+    await page.getByRole('textbox', { name: 'Typed note' }).fill(words);
+    await page.keyboard.press('Escape');
+    expect((await typed).status()).toBe(201);
+    const note = (await page.getByRole('button', { name: `Typed note: ${words}` }).boundingBox())!;
+    await page.keyboard.press('l');
+    await page.mouse.move(note.x - 16, note.y - 16);
+    await page.mouse.down();
+    for (const [x, y] of [
+      [note.x + note.width + 16, note.y - 16],
+      [note.x + note.width + 16, note.y + note.height + 16],
+      [note.x - 16, note.y + note.height + 16],
+      [note.x - 18, note.y - 10],
+    ] as const) {
+      await page.mouse.move(x, y, { steps: 6 });
+    }
+    await page.mouse.up();
+    const menu = page.getByRole('menu', { name: 'Lasso selection, 1 item' });
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Ask about this' })).toBeFocused();
+    await page.screenshot({ path: shot('s5d-lasso-menu-1440.png') });
+
+    // ── 6. axe with the tool bar and the lasso menu open ──
     for (const [width, height] of [
       [1440, 900],
       [390, 844],
@@ -108,9 +135,31 @@ test.describe('S5d — ink on the notebook page', () => {
       for (const colorScheme of ['light', 'dark'] as const) {
         await page.setViewportSize({ width, height });
         await page.emulateMedia({ colorScheme });
+        await expect(menu).toBeVisible();
         expect(await axeSerious(page), `${String(width)} ${colorScheme}`).toEqual([]);
       }
     }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.emulateMedia({ colorScheme: 'light' });
+
+    // ── 7. Make sticky: the note becomes a sticky, and stays one after a reload ──
+    const stuck = page.waitForResponse(
+      (r) => r.request().method() === 'POST' && r.url().endsWith(`/notebook/pages/${pageId}/items`),
+    );
+    await menu.getByRole('menuitem', { name: 'Make sticky' }).click();
+    expect((await stuck).status()).toBe(201);
+    await expect(page.getByRole('button', { name: `Sticky note: ${words}` })).toBeVisible();
+    await expect
+      .poll(async () => {
+        const view = (await api(stack.apiUrl, token, 'GET', `/notebook/pages/${pageId}`)).json as {
+          items: { kind: string; body: string }[];
+        };
+        return view.items.map((i) => `${i.kind}:${i.body}`);
+      })
+      .toEqual([`sticky:${words}`]);
+    await page.reload();
+    await expect(page.getByRole('button', { name: `Sticky note: ${words}` })).toBeVisible();
+    await expect(page.getByRole('button', { name: `Typed note: ${words}` })).toHaveCount(0);
     await context.close();
   });
 });

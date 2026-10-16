@@ -2,11 +2,11 @@
 
 /**
  * The tool bar's ink controls (S5d, #209, frame 05), for `NotebookToolbar`'s two slots: the tools
- * (pen, highlighter, stroke eraser; each a toggle with `aria-pressed` and its key), and the nibs
+ * (pen, highlighter, stroke eraser, lasso; each a toggle with `aria-pressed` and its key), and the nibs
  * (EF / F / M) and the six colours of the drawing tool in the hand, or of the last one held.
  */
 import { ToolbarButton } from '@papertree/ui';
-import { Eraser, Highlighter, PenLine } from 'lucide-react';
+import { Eraser, Highlighter, LassoSelect, PenLine } from 'lucide-react';
 
 import { INK_COLOURS, drawingTool } from '../model/tools';
 
@@ -24,6 +24,7 @@ const TOOLS: readonly { tool: InkTool; label: string; key: string; icon: ReactNo
   { tool: 'pen', label: 'Pen', key: 'P', icon: <PenLine size={20} /> },
   { tool: 'highlighter', label: 'Highlighter', key: 'H', icon: <Highlighter size={20} /> },
   { tool: 'eraser', label: 'Stroke eraser', key: 'E', icon: <Eraser size={20} /> },
+  { tool: 'lasso', label: 'Lasso', key: 'L', icon: <LassoSelect size={20} /> },
 ];
 
 /** Each nib with the diameter of its dot in the frame, in px. */
@@ -38,7 +39,7 @@ const NIBS: readonly { nib: StrokeNib; label: string; dot: number }[] = [
 const swatch = (c: InkColour): CSSProperties =>
   ({ '--pt-swatch': c === 'pen' ? 'var(--pt-pen)' : `var(--pt-pen-${c})` }) as CSSProperties;
 
-/** The pen, highlighter and stroke eraser: pressing the one in the hand puts it down. */
+/** The pen, highlighter, stroke eraser and lasso: pressing the one in the hand puts it down. */
 export function InkToolButtons({ state, onAction }: InkToolsProps): ReactNode {
   return TOOLS.map((t) => (
     <ToolbarButton

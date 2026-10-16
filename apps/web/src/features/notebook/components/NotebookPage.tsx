@@ -10,12 +10,14 @@
  * so an opened answer pushes the cards down instead of hiding under them.
  */
 import Link from 'next/link';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef } from 'react';
 
 import { ExchangeBlock } from './ExchangeBlock';
 import { PAGE_TITLE_ID } from '../hooks/focus';
+import { useMeasuredHeight } from '../hooks/useMeasuredHeight';
 import { InkLayer } from './InkLayer';
 import { InkSurface, LiveInk } from './InkSurface';
+import { LassoLayer } from './LassoLayer';
 import { NoteItem } from './NoteItem';
 import { QuoteCard } from './QuoteCard';
 import { ShapeItem } from './ShapeItem';
@@ -32,7 +34,8 @@ import {
 import { PAGE_WIDTH, titleVoice } from '../model/page';
 
 import type { NotebookPageWire } from '../api/notebookApi';
-import type { InkInputOptions } from '../hooks/useInkInput';
+import type { LassoLayerProps } from './LassoLayer';
+import type { InkInHand } from '../hooks/useInkInput';
 import type { Exchange } from '../hooks/useExchange';
 import type { Box } from '../model/history';
 import type { Item, PageTemplate, StickyItem, TextItem } from '../model/page';
@@ -74,23 +77,9 @@ export interface NotebookPageProps {
   /** Items the notebook search matched on this page; they are lit. */
   readonly matches: ReadonlySet<string>;
   /** The ink tool in the hand (S5d, #209); null while the page's own editing has the pointer. */
-  readonly ink?: Pick<
-    InkInputOptions,
-    'tool' | 'pen' | 'onStroke' | 'onErase' | 'penSeen' | 'onRefused'
-  > | null;
-}
-
-/** The exchange's rendered height in layout units (the scale transform does not change it). */
-function useMeasuredHeight(): [(el: HTMLElement | null) => void, number | null] {
-  const [height, setHeight] = useState<number | null>(null);
-  const observer = useRef<ResizeObserver | null>(null);
-  const ref = useCallback((el: HTMLElement | null) => {
-    observer.current?.disconnect();
-    if (el === null || typeof ResizeObserver === 'undefined') return;
-    observer.current = new ResizeObserver(() => setHeight(el.offsetHeight));
-    observer.current.observe(el);
-  }, []);
-  return [ref, height];
+  readonly ink?: InkInHand | null;
+  /** A closed lasso and what its menu offers (S5d); null while there is none. */
+  readonly lasso?: Omit<LassoLayerProps, 'scale'> | null;
 }
 
 /** One notebook page, its template, title and items. */
@@ -102,8 +91,8 @@ export function NotebookPage(props: NotebookPageProps): ReactNode {
   const shift = exchangeShift(all, measured);
   const extra = shift?.extra ?? 0;
   const below = (y: number): boolean => shift !== null && y >= shift.boundary;
-  // A stroke belongs to the layer it starts in (`model/inkPlace`): the eraser and the stored place
-  // of a new stroke follow the same rule.
+  // A stroke belongs to the layer it starts in (`model/inkPlace`): the eraser, the lasso and the
+  // stored place of a new stroke follow the same rule.
   const boundary = shift?.boundary ?? null;
   const { above: inkAbove, below: inkBelow } = useMemo(
     () => inkLayers(props.strokes, boundary),
@@ -238,7 +227,14 @@ export function NotebookPage(props: NotebookPageProps): ReactNode {
         {ink === null ? null : (
           <InkSurface
             top={TITLE_BAND}
-            options={{ ...ink, scale, strokes: props.strokes, shift, live }}
+            options={{
+              ...ink,
+              scale,
+              strokes: props.strokes,
+              shift,
+              live,
+              onLasso: (path) => ink.onLasso?.(path, { scale, shift }),
+            }}
           />
         )}
         <p id="pt-nb-note-help" className="pt-sr-only">
@@ -248,6 +244,7 @@ export function NotebookPage(props: NotebookPageProps): ReactNode {
           Arrow keys move it, Alt with arrows resizes it, with Shift further. Delete removes it.
         </p>
       </div>
+      {props.lasso ? <LassoLayer {...props.lasso} scale={scale} /> : null}
     </div>
   );
 }

@@ -92,6 +92,7 @@ import {
   type PendingScroll,
 } from '@/components/reader/documentHandle';
 import { HighlightUndoToast } from '@/features/highlights';
+import { AskFromNotebook } from '@/features/notebook/components/AskFromNotebook';
 import { useFocusFromNotebook } from '@/features/notebook/hooks/useFocusFromNotebook';
 import { ReaderHeader, type ExplainToggle } from '@/features/reader';
 import { NetworkError } from '@/lib/api/client';
@@ -860,6 +861,8 @@ function ReaderActionsMount({
     <ReaderActionsProvider value={actions}>
       <ExplainToggleContext.Provider value={toggle}>{children}</ExplainToggleContext.Provider>
       <ExplainPanel controller={explain} toggleRef={toggleRef} />
+      {/* S5d: the notebook lasso's "Ask about this" arrives here as a new ask (`?ask=`). */}
+      <AskFromNotebook paperId={paperId} controller={explain} />
     </ReaderActionsProvider>
   );
 }

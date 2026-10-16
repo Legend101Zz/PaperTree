@@ -713,3 +713,81 @@
   inset-inline: 0;
   cursor: not-allowed;
 }
+
+/* The lasso (S5d): its dashed loop over the items, and the menu under it (frame 05). */
+.pt-nb-lasso {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.pt-nb-lasso--closed {
+  inset: auto;
+  inline-size: auto;
+  block-size: auto;
+}
+
+.pt-nb-lasso path {
+  fill: color-mix(in srgb, var(--pt-focus) 5%, transparent);
+  stroke: var(--pt-focus);
+  stroke-width: 1.6px;
+  stroke-dasharray: 6 5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.pt-nb-lasso-at {
+  position: absolute;
+  z-index: 50;
+}
+
+.pt-nb-lasso-menu {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: var(--pt-e2-fill);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-menu);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+}
+
+.pt-nb-lasso-menu [role='menuitem'] {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  block-size: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--pt-radius-control);
+  background: none;
+  color: var(--pt-ink);
+  font: 14px var(--pt-font-ai);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pt-nb-lasso-menu [data-action='ask'] {
+  font-weight: 700;
+}
+
+.pt-nb-lasso-menu [data-action='delete'] {
+  color: var(--pt-danger);
+}
+
+.pt-nb-lasso-menu [role='menuitem']:hover {
+  background: color-mix(in srgb, var(--pt-ink) 7%, transparent);
+}
+
+.pt-nb-lasso-menu [role='menuitem']:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: -2px;
+}
+
+.pt-nb-lasso-menu [aria-disabled='true'] {
+  color: var(--pt-ink-muted);
+  cursor: not-allowed;
+}

@@ -7,7 +7,7 @@
  * pan or zoom mid-stroke) never stops a finger scrolling the page otherwise; nothing changes it
  * mid-stroke (a palm is ignored by `useInkInput`, not by CSS).
  */
-import { forwardRef } from 'react';
+import { forwardRef, useRef } from 'react';
 
 import { useInkInput } from '../hooks/useInkInput';
 import { inkColour } from './InkLayer';
@@ -54,12 +54,13 @@ export interface InkSurfaceProps {
 }
 
 /**
- * The pointer surface over the page while an ink tool is held. With a drawing tool and the answer
- * open, the band the answer opened says so under the pointer: no stroke can start there
- * (`model/inkPlace`), and starting one there says why (`onRefused`).
+ * The pointer surface over the page while an ink tool is held; the lasso's loop is drawn on it.
+ * With a drawing tool and the answer open, the band the answer opened says so under the pointer:
+ * no stroke can start there (`model/inkPlace`), and starting one there says why (`onRefused`).
  */
 export function InkSurface({ options, top }: InkSurfaceProps): ReactNode {
-  const handlers = useInkInput(options);
+  const lassoLive = useRef<SVGPathElement>(null);
+  const handlers = useInkInput({ ...options, lassoLive });
   const { shift, scale } = options;
   return (
     <div
@@ -75,6 +76,12 @@ export function InkSurface({ options, top }: InkSurfaceProps): ReactNode {
           style={{ top: shift.boundary * scale, height: shift.extra * scale }}
         />
       )}
+      {options.tool === 'lasso' ? (
+        <svg className="pt-nb-lasso">
+          {/* The loop's points are page units: scaled like the closed loop (`LassoLayer`). */}
+          <path ref={lassoLive} transform={`scale(${String(scale)})`} />
+        </svg>
+      ) : null}
     </div>
   );
 }

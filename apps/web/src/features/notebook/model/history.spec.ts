@@ -7,6 +7,7 @@ import {
   redo,
   removalCommands,
   undo,
+  type Command,
   type NotebookState,
   type Step,
 } from './history';
@@ -171,6 +172,47 @@ describe('resize (S5c)', () => {
     const moved = { ...same, w: 120 };
     expect(execute(start, { type: 'resize', itemId: 'nope', before: same, after: moved })).toBe(
       start,
+    );
+  });
+});
+
+describe('batch', () => {
+  const note = { kind: 'text', id: 'n1', x: 0, y: 0, w: 10, h: 10, z: 0, text: 'a' } as const;
+  const ink = {
+    id: 's1',
+    tool: 'pen',
+    nib: 'F',
+    color: 'pen',
+    hasPressure: false,
+    points: [[1, 1, 0.5]],
+  } as const;
+  const start = (): Step => ({
+    state: { strokes: [ink], items: [note] },
+    history: createHistory(),
+  });
+
+  it('runs its parts as ONE undo step, and undoes them in reverse', () => {
+    const s0 = start();
+    const cmd: Command = {
+      type: 'batch',
+      commands: [
+        ...removalCommands(s0.state, ['s1'], ['n1']),
+        { type: 'add-items', items: [{ ...note, id: 'n2', kind: 'sticky', color: 'sticky' }] },
+      ],
+    };
+    const s1 = execute(s0, cmd);
+    expect(s1.state.strokes).toEqual([]);
+    expect(s1.state.items.map((i) => i.id)).toEqual(['n2']);
+    expect(s1.history.past).toHaveLength(1);
+    const back = undo(s1);
+    expect(back.state).toEqual(s0.state);
+    expect(redo(back).state).toEqual(s1.state);
+  });
+
+  it('records nothing when every part would change nothing', () => {
+    const s0 = start();
+    expect(execute(s0, { type: 'batch', commands: removalCommands(s0.state, ['x'], ['y']) })).toBe(
+      s0,
     );
   });
 });
