@@ -29,7 +29,7 @@ export function ClipBody({ children, className }: ClipBodyProps): ReactNode {
   const [size, setSize] = useState({ content: 0, box: 0 });
   const nodeId = useNodeId();
   const updateNodeInternals = useUpdateNodeInternals();
-  const folds = useRef(0);
+  const folded = useRef(expanded);
 
   useEffect(() => {
     const el = body.current;
@@ -56,8 +56,11 @@ export function ClipBody({ children, className }: ClipBodyProps): ReactNode {
   }, [expanded]);
 
   useEffect(() => {
-    // Not on mount: only a fold or an unfold moves the card's handles.
-    if (folds.current++ === 0 || nodeId === null) return;
+    // Only a real fold or unfold moves the card's handles. Never on mount (React's dev re-run
+    // included): xyflow resolves a queued first-open fitView inside updateNodeInternals, and doing
+    // it while the other cards are unmeasured fits the board to this one card (#212 e2e w2ui).
+    if (folded.current === expanded || nodeId === null) return;
+    folded.current = expanded;
     if (!expanded && body.current !== null) body.current.scrollTop = 0;
     updateNodeInternals(nodeId);
   }, [expanded, nodeId, updateNodeInternals]);
