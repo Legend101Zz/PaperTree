@@ -272,11 +272,12 @@ async def list_papers(call: CallerDep) -> list[LibraryPaper]:
 async def library_links(call: CallerDep) -> LibraryLinks:
     """Citation links among the caller's own papers, computed on read from the parses (#194).
 
-    One link per (citing paper, cited paper, ``matched_by``): a bibliography entry of the citing
-    paper carries the cited paper's arXiv id, or names its title (the exact rules, and why nothing
-    is fuzzy, are in ``library_links``). Citation links only: no board can reference a second
-    paper yet, so ``via`` is always ``"citation"``. A paper still being read has no references
-    and yields no links; it is not an error. Another user's papers are never visible.
+    One link per (citing paper, cited paper): a bibliography entry of the citing paper carries
+    the cited paper's arXiv id (preferred), or its title is the entry's title segment (the exact
+    rules, and why nothing is fuzzy, are in ``library_links``). Citation links only: no board can
+    reference a second paper yet, so ``via`` is always ``"citation"``. A paper still being read
+    has no references and yields no links; it is not an error. Another user's papers are never
+    visible.
     """
     found = find_links(call.db.library_link_sources(call.db_owner))
     return LibraryLinks(

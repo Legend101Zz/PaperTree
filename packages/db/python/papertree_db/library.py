@@ -21,6 +21,7 @@ job (if any) is LEFT JOINed, and neither is required.
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
@@ -34,6 +35,8 @@ if TYPE_CHECKING:
     from .database import DatabaseCore as _Base
 else:
     _Base = object
+
+_log = logging.getLogger(__name__)
 
 #: SQLite's INTEGER range; `highlights.SQLITE_INTEGER_MAX` is the exported name, restated here
 #: only because importing it from `highlights` would couple two slices' modules.
@@ -127,12 +130,17 @@ class LinkSource:
 
 _LINKS_SQL: Final = """
 SELECT po.paper_id, p.metadata, je.key AS ref_index,
+       -- A references_json that is not a JSON array is read as "no references" (and logged), never
+       -- allowed to fail the whole library: json_each raises on malformed text.
+       (json_valid(p.references_json) AND json_type(p.references_json) = 'array') AS refs_ok,
        json_extract(je.value, '$.arxiv_id') AS ref_arxiv, b.text AS ref_text
   FROM paper_owners po
   JOIN paper_promotions pp ON pp.owner_id = po.owner_id AND pp.paper_id = po.paper_id
   JOIN papers p
     ON p.owner_id = pp.owner_id AND p.paper_id = pp.paper_id AND p.generation = pp.generation
-  LEFT JOIN json_each(p.references_json) je
+  LEFT JOIN json_each(CASE WHEN json_valid(p.references_json)
+                            AND json_type(p.references_json) = 'array'
+                           THEN p.references_json ELSE '[]' END) je
   LEFT JOIN blocks b
     ON b.owner_id = pp.owner_id AND b.paper_id = pp.paper_id AND b.generation = pp.generation
    AND b.block_id = json_extract(je.value, '$.reference_entry_block_id')
@@ -513,6 +521,8 @@ class LibraryMixin(_Base):
         for row in self._conn.execute(_LINKS_SQL, (owner_id,)):
             paper_id = row["paper_id"]
             if paper_id not in meta:
+                if not row["refs_ok"]:
+                    _log.warning("references_json of paper %s is not an array; none read", paper_id)
                 order.append(paper_id)
                 meta[paper_id] = _metadata_object(row["metadata"])
                 refs[paper_id] = []

@@ -137,7 +137,8 @@ export interface LibraryReference {
 /**
  * One real link between two of the caller's papers (`GET /library/links`, #194). Citation links
  * only: `via` gains `'board'` when a board can hold a second paper. Word the label from
- * `matched_by` ("cites it (matched by title)"), never assume it.
+ * `matched_by` ("cites it (matched by title)"), never assume it. At most one link per
+ * (from, to): `arxiv_id` when any entry matched it, else `title`.
  */
 export interface LibraryLink {
   from_paper_id: string;

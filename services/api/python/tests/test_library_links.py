@@ -73,6 +73,12 @@ def _source(
 
 # ── the matcher ─────────────────────────────────────────────────────────────────────────────
 
+CITED = _source("B", ATTENTION)
+
+
+def _linked(entry: str, cited: LinkSource = CITED) -> bool:
+    return bool(find_links([_source("A", entries=(entry,)), cited]))
+
 
 def test_arxiv_id_in_a_real_reference_string_matches_across_versions() -> None:
     entry = (
@@ -101,56 +107,74 @@ def test_arxiv_id_helpers() -> None:
         "1706.03762",
         "hep-th/9901001",
     ]
+    assert arxiv_ids_in("doi 10.48550/arXiv.1706.03762") == ["1706.03762"]
     assert arxiv_ids_in("pages 1706.03762 of volume 12") == []  # a bare number is not an id
+    assert arxiv_ids_in("arXiv:1706.037621") == []  # a longer digit run is not a shorter id
+    assert arxiv_ids_in("arXiv:1706.03762v5.") == ["1706.03762"]
 
 
-def test_arxiv_wins_when_both_match_and_other_entries_can_still_add_a_title_link() -> None:
+def test_one_link_per_pair_arxiv_preferred_over_title() -> None:
     cited = _source("B", ATTENTION, arxiv="1706.03762")
     same = _source("A", entries=(ATTENTION_ENTRY + " arXiv:1706.03762v5",))
     assert [x.matched_by for x in find_links([same, cited])] == ["arxiv_id"]
-    two = _source("A", entries=("Vaswani. arXiv:1706.03762v5.", ATTENTION_ENTRY))
-    got = find_links([two, cited])
-    assert [(x.matched_by, x.reference_index) for x in got] == [("arxiv_id", 0), ("title", 1)]
+    # Title at entry 0, id at entry 1: still ONE link, the arXiv one.
+    two = _source("A", entries=(ATTENTION_ENTRY, "Vaswani. Other. arXiv:1706.03762v5."))
+    (link,) = find_links([two, cited])
+    assert (link.matched_by, link.reference_index) == ("arxiv_id", 1)
 
 
-def test_title_match_folds_case_ligatures_quotes_and_line_broken_hyphens() -> None:
+def test_title_must_equal_the_title_segment() -> None:
+    for entry in (
+        "K. Smith. “Attention is all you need,” in NeurIPS, 2017.",  # quoted
+        "A. Vaswani, N. Shazeer, and J. Uszkoreit. Attention is all you need. In NIPS, 2017.",
+        "Vaswani, A. (2017). ATTENTION   IS ALL YOU NEED. NeurIPS.",  # APA, year in the block
+        "Vaswani A, Shazeer N, et al. 2017. Attention is all you need? NIPS.",  # trailing mark
+    ):
+        assert _linked(entry), entry
+
+
+def test_longer_titles_prose_and_venue_lines_do_not_link() -> None:
+    for entry in (
+        "Foo. Attention is all you need for graphs. 2019.",  # a different, longer-titled paper
+        "Bar. We think attention is all you need to understand. 2019",  # prose
+        "Baz. Some talk. In Advances: Attention Is All You Need Workshop Track, 2018.",  # venue
+        "Qux. Is Attention Is All You Need Enough? NeurIPS, 2020.",  # a rebuttal
+        "Attention is all you need. 2017.",  # no author block before it
+    ):
+        assert not _linked(entry), entry
+
+
+def test_short_titles_are_exact_title_segments_never_venues_or_authors() -> None:
+    for title, entry in (
+        ("Neural Computation", "Smith. Foo bar. Neural Computation, 2016."),
+        ("Geoffrey", "Hinton, Geoffrey. Foo bar. 2016."),
+        ("Deep Residual Learning", "Deep Residual Learning, ICLR 2016."),
+        ("Attention", "Vaswani. Attention is all you need. 2017."),
+        ("Adam", "Using Adam, we study X. Adam works. 2019 Foo."),  # prose, not the title segment
+    ):
+        assert not _linked(entry, _source("B", title)), (title, entry)
+    adam = _source("B", "Adam")
+    assert _linked("D. P. Kingma and J. Ba. Adam. In ICLR, 2015.", adam)
+    assert _linked("D. P. Kingma and J. Ba. \u201cAdam,\u201d in ICLR, 2015.", adam)
+
+
+def test_title_match_folds_case_ligatures_and_line_broken_hyphens() -> None:
     cited = _source("B", "Deep Residual Learning for Image Recognition")
     for entry in (
-        "K. He. “Deep residual learning for image recognition,” in CVPR, 2016.",
         "He K. DEEP RESIDUAL   LEARNING FOR IM-AGE RECOGNITION. CVPR 2016.",
+        "K. He. \u201cDeep residual learning for image recognition,\u201d in CVPR, 2016.",
     ):
-        assert find_links([_source("A", entries=(entry,)), cited]), entry
-    unified = _source("B", "You Only Look Once: Uniﬁed, Real-Time Object Detection")
-    entry = "J. Redmon. You only look once: Unified, real-time object detection. CVPR 2016."
-    assert title_in_entry(unified.title or "", entry)
+        assert _linked(entry, cited), entry
+    unified = "You Only Look Once: Uni\ufb01ed, Real-Time Object Detection"
+    entry = "J. Redmon, S. Divvala. You only look once: Unified, real-time object detection. CVPR."
+    assert title_in_entry(unified, entry)
     assert title_in_entry(
         "Self-Attention With Relative Position Representations",
-        ("P. Shaw. Self attention with relative position representations. NAACL 2018."),
+        "P. Shaw, J. Uszkoreit. Self attention with relative position representations. NAACL.",
     )
 
 
-def test_a_title_must_be_a_whole_word_run_nothing_fuzzy() -> None:
-    cited = _source("B", "Attention Is All You Need")
-    for entry in (
-        "Attention is all you really need. 2017.",  # one word different
-        "Attention is all you needed. 2017.",  # a longer word is not the word
-        "Attention is not all you need. 2017.",  # an extra word inside the run
-    ):
-        assert find_links([_source("A", entries=(entry,)), cited]) == [], entry
-
-
-def test_a_short_title_matches_only_as_a_whole_entry_segment() -> None:
-    adam = _source("B", "Adam")
-    assert title_in_entry("Adam", "D. Kingma and J. Ba. Adam. In ICLR, 2015.")
-    assert not title_in_entry("Adam", "Using Adam with attention to learn rates. 2019.")
-    assert not title_in_entry("Attention", "Attention is all you need. 2017.")
-    junk = _source("A", entries=("A method using Adam optimisation for attention. 2020.",))
-    assert find_links([junk, adam, _source("C", "Attention")]) == []
-    hit = _source("A", entries=("Ba, J. Adam. ICLR, 2015.",))
-    assert [x.to_paper_id for x in find_links([hit, adam])] == ["B"]
-
-
-def test_a_title_cut_across_two_consecutive_entries_matches_the_first() -> None:
+def test_a_title_cut_across_two_entries_joins_only_a_broken_entry() -> None:
     """The real Attention parse cuts [11] into "...for im-" and "age recognition..."."""
     cited = _source("B", "Deep Residual Learning for Image Recognition")
     citing = _source(
@@ -164,19 +188,28 @@ def test_a_title_cut_across_two_consecutive_entries_matches_the_first() -> None:
     (link,) = find_links([citing, cited])
     assert (link.matched_by, link.reference_index) == ("title", 0)
     assert "im-age recognition" in link.reference_text
-    # Unrelated neighbours that merely end/start with some of the words do not join up.
-    other = _source(
-        "A", entries=("... Deep residual", "learning of cats. 2016.", "Image Recognition")
+    # No hyphen and a sentence end in the first entry: two separate entries, never joined.
+    apart = _source("A", entries=("X. Y. Deep residual learning for.", "Image recognition. Z."))
+    assert find_links([apart, cited]) == []
+    # Joined for lack of a final mark + lower case, but the segment is longer than the title.
+    longer = _source(
+        "A",
+        entries=(
+            "[3] Smith J. A study of transformers. Attention is all",
+            "you need to know: a tutorial.",
+        ),
     )
-    assert find_links([other, cited]) == []
+    assert find_links([longer, CITED]) == []
+    # A genuine unpunctuated split does link.
+    split = _source("A", entries=("Smith J. Study. Attention is all", "you need. In NIPS, 2017."))
+    assert [x.to_paper_id for x in find_links([split, CITED])] == ["B"]
 
 
 def test_no_self_link_one_link_per_pair_and_first_entry_wins() -> None:
     me = _source("A", ATTENTION, arxiv="1706.03762", entries=(ATTENTION_ENTRY, "arXiv:1706.03762"))
     assert find_links([me]) == []
-    cited = _source("B", ATTENTION)
     citing = _source("A", entries=("x", ATTENTION_ENTRY, ATTENTION_ENTRY))
-    (link,) = find_links([citing, cited])
+    (link,) = find_links([citing, CITED])
     assert link.reference_index == 1
 
 
@@ -185,30 +218,82 @@ def test_papers_without_references_or_titles_yield_nothing_and_no_error() -> Non
     assert find_links([_source("A"), _source("B", None), _source("C", "", None)]) == []
 
 
-def test_links_scale() -> None:
-    """400 papers with 60 entries each: no cache is needed (module docstring)."""
-    filler = "Some Author. A study of unrelated things number {n} in context. Venue, 2020."
+def test_links_scale(tmp_path: Path) -> None:
+    """400 papers x 60 entries, realistic: 350 long titles that mostly share first words, 50 short
+    titles, entries in author-block / title / venue form. The matching is timed alone, and the DB
+    query (400 stored papers through `put_paper`) separately."""
+    openers = ("Deep", "Learning", "Neural", "Attention", "Efficient")
 
     def title(k: int) -> str:
-        return f"Distinct Paper Title Number {k} About Topic {k % 7}"
+        if k % 8 == 0:
+            return f"{openers[k % 5]} {k}"  # a short title: 2 words
+        return f"{openers[k % 5]} Methods For Scalable Study Number {k} Of Models"
+
+    def entry(k: int, j: int) -> str:
+        other = (k * 7 + j) % 400 if j == 0 else None
+        return (
+            f"[{j}] A. Author, B. Writer and C. Coauthor. "
+            f"{title(other) if other is not None else f'{openers[j % 5]} notes on topic {j}'}."
+            f" In Proceedings of the Conference {j}, pages 1-9, 2019."
+        )
 
     sources = [
-        _source(
-            f"P{i:03d}",
-            title(i),
-            entries=(
-                *(filler.format(n=i * 100 + j) for j in range(59)),
-                f"X. {title((i + 1) % 400)}.",
-            ),
-        )
-        for i in range(400)
+        _source(f"P{k:03d}", title(k), entries=tuple(entry(k, j) for j in range(60)))
+        for k in range(400)
     ]
     started = time.monotonic()
     links = find_links(sources)
-    elapsed = time.monotonic() - started
-    print(f"\n[library-links] 400 papers x 60 entries: {len(links)} links in {elapsed:.2f}s")
-    assert len(links) == 400  # the ring: each paper cites the next
-    assert elapsed < 10
+    matching = time.monotonic() - started
+    assert len(links) == 398  # 400 ring links minus the two self-references (k = 0, 200)
+    assert matching < 1.0, matching
+
+    with harness(tmp_path) as h:
+        token = register(h.client, "scale@example.com")
+        user_id = h.client.get("/auth/me", headers=auth(token)).json()["user_id"]
+        db = PaperTreeDb(h.settings.database_file)
+        try:
+            owner = db.owner_for(user_id)
+            base = load_fixture("resnet-cvpr-2col")
+            for k in range(400):
+                doc = copy.deepcopy(base)
+                doc["paper_id"], doc["source_hash"] = _crockford(1000 + k), "sha256:" + f"{k:064x}"
+                doc["metadata"]["title"]["value"] = title(k)
+                doc["references"] = []
+                for block, j in zip(doc["blocks"], range(60), strict=False):
+                    block["text"] = entry(k, j)
+                    doc["references"].append(
+                        {"reference_entry_block_id": block["block_id"], "confidence": 0.6}
+                    )
+                db.put_paper(owner, doc)
+                db.promote_generation(owner, doc["paper_id"], generation(1))
+            started = time.monotonic()
+            read = db.library_link_sources(owner)
+            query = time.monotonic() - started
+        finally:
+            db.close()
+    print(
+        f"\n[library-links] 400 papers x 60 entries: {len(links)} links, matching "
+        f"{matching:.3f}s; DB query ({len(read)} papers, {sum(len(r.references) for r in read)} "
+        f"entries) {query:.3f}s"
+    )
+    assert len(read) == 400 and query < 3.0
+
+
+def test_a_references_json_that_is_not_an_array_skips_that_paper_only(tmp_path: Path) -> None:
+    with harness(tmp_path) as h:
+        token = register(h.client, "alice@example.com")
+        cited = _seed(h.settings, h.client, token, 1, ATTENTION, "1706.03762", [])
+        good = _seed(h.settings, h.client, token, 2, "A Later Paper", None, [ATTENTION_ENTRY])
+        bad = _seed(h.settings, h.client, token, 3, "Broken Paper", None, [ATTENTION_ENTRY])
+        db = PaperTreeDb(h.settings.database_file)
+        try:
+            db._conn.execute(  # noqa: SLF001 - a writer never stores this; the row is hand-made
+                "UPDATE papers SET references_json = '{\"oops\": 1}' WHERE paper_id = ?", (bad,)
+            )
+        finally:
+            db.close()
+        links = _links(h.client, token)
+        assert [(x["from_paper_id"], x["to_paper_id"]) for x in links] == [(good, cited)]
 
 
 # ── the route over seeded papers ────────────────────────────────────────────────────────────
