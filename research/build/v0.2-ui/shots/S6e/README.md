@@ -56,6 +56,12 @@ frame of 100–117 ms; 233 ms in one run at load 27–31). A settled 500-card bo
 before and after. The first card's time moves with the load (646 to 2,352 ms over six "after" runs), so it is not
 a gain to claim. Long tasks during the first load: 2 (324–581 ms in all) before and after.
 
+After the review's fixes (a big board draws glances while its first fit is on its way, N9), one run on the rebuilt
+board (load 21.7 29.7 30.7): first card 1,322 ms, 6,370 elements, 2 long tasks in the first load (203 ms in all,
+324–581 before), every gesture one frame at p95 at both views (max 33–83), Fit all from 106 % max 67 ms, a settled
+board 0 requests in 15 s. The shots above were retaken on that build (glances now have an edge by day, N8; the legend
+says how to draw a thread below the switch, N7).
+
 **The v0.1 baseline (GAP-A3 §4.1)** was measured on `next dev`, load 3.6–9.1, with 500 v0.1 note cards (plain
 text, no texture): first card 553 ms, all 500 in the page, wheel zoom 16.7 / 17.7 / 25, mouse pan 17 ms a move. The
 v0.2 cards before this slice were heavier (ruled stock, shadows, real paragraphs in Caslon) and zoomed at p95 50
