@@ -55,6 +55,14 @@ import type {
 import type { SummaryStatus, summaryApi } from '@/lib/api/summary';
 import type { CreateThreadBody, FollowUpBody, threadsApi } from '@/lib/api/threads';
 import type {
+  AcceptTopicBody,
+  CreateTopicBody,
+  PaperTopic,
+  PatchTopicBody,
+  Topic,
+  TopicRef,
+} from '@/lib/api/topics';
+import type {
   Anchor,
   AnchorWire,
   Board,
@@ -90,6 +98,7 @@ import papersSchema from '../../../contracts/api/papers.schema.json';
 import sseSchema from '../../../contracts/api/sse.schema.json';
 import summarySchema from '../../../contracts/api/summary.schema.json';
 import threadsSchema from '../../../contracts/api/threads.schema.json';
+import topicsSchema from '../../../contracts/api/topics.schema.json';
 import usageSchema from '../../../contracts/api/usage.schema.json';
 
 const REPO = fileURLToPath(new URL('../../../', import.meta.url));
@@ -110,6 +119,7 @@ const API_GROUPS = [
   'summary',
   'usage',
   'boards',
+  'topics',
   'healthz',
   'internal',
 ] as const;
@@ -534,6 +544,7 @@ const SCHEMAS = {
   summary: summarySchema,
   usage: usageSchema,
   boards: boardsSchema,
+  topics: topicsSchema,
 };
 type Schemas = typeof SCHEMAS;
 /** The property names of `<group>.schema.json#/$defs/<model>`, at type level. */
@@ -598,6 +609,9 @@ const OPTIONAL = {
   'usage.UsageTotals': [],
   'usage.UsageBucket': [],
   'usage.UsageByKind': [],
+  'topics.TopicRef': [],
+  'topics.Topic': [],
+  'topics.PaperTopic': [],
   // requests
   'highlights.AnchorV1In': ['subTarget', 'resolution'],
   'highlights.HighlightCreate': ['note', 'resolutions'],
@@ -633,6 +647,9 @@ const OPTIONAL = {
   'boards.EdgeCreate': ['label', 'from_port', 'to_port'],
   'boards.EdgePatch': ['kind', 'label', 'from_port', 'to_port'],
   'boards.BoardPatch': ['title', 'viewport'],
+  'topics.TopicCreate': ['cloth'],
+  'topics.TopicPatch': ['name', 'cloth', 'sort_order'],
+  'topics.PaperTopicPut': ['topic_id', 'new_topic_name', 'cloth'],
 } as const;
 type Shape = keyof typeof OPTIONAL;
 type Opt<K extends Shape> = (typeof OPTIONAL)[K][number];
@@ -652,6 +669,9 @@ const REQUESTS = new Set<Shape>([
   'boards.EdgeCreate',
   'boards.EdgePatch',
   'boards.BoardPatch',
+  'topics.TopicCreate',
+  'topics.TopicPatch',
+  'topics.PaperTopicPut',
 ]);
 
 /**
@@ -738,6 +758,18 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<OptionalKeys<UsageBucket>, Opt<'usage.UsageBucket'>>,
   true satisfies Equal<keyof UsageTotals['by_kind'], SchemaKeys<'usage', 'UsageByKind'>>,
   true satisfies Equal<OptionalKeys<UsageTotals['by_kind']>, Opt<'usage.UsageByKind'>>,
+  true satisfies Equal<keyof TopicRef, SchemaKeys<'topics', 'TopicRef'>>,
+  true satisfies Equal<OptionalKeys<TopicRef>, Opt<'topics.TopicRef'>>,
+  true satisfies Equal<keyof Topic, SchemaKeys<'topics', 'Topic'>>,
+  true satisfies Equal<OptionalKeys<Topic>, Opt<'topics.Topic'>>,
+  true satisfies Equal<keyof PaperTopic, SchemaKeys<'topics', 'PaperTopic'>>,
+  true satisfies Equal<OptionalKeys<PaperTopic>, Opt<'topics.PaperTopic'>>,
+  true satisfies Equal<keyof CreateTopicBody, SchemaKeys<'topics', 'TopicCreate'>>,
+  true satisfies Equal<OptionalKeys<CreateTopicBody>, Opt<'topics.TopicCreate'>>,
+  true satisfies Equal<keyof PatchTopicBody, SchemaKeys<'topics', 'TopicPatch'>>,
+  true satisfies Equal<OptionalKeys<PatchTopicBody>, Opt<'topics.TopicPatch'>>,
+  true satisfies Equal<keyof AcceptTopicBody, SchemaKeys<'topics', 'PaperTopicPut'>>,
+  true satisfies Equal<OptionalKeys<AcceptTopicBody>, Opt<'topics.PaperTopicPut'>>,
   // requests
   true satisfies Equal<keyof Anchor, SchemaKeys<'highlights', 'AnchorV1In'>>,
   true satisfies Equal<OptionalKeys<Anchor>, Opt<'highlights.AnchorV1In'>>,
@@ -784,6 +816,7 @@ const KEYS_ARE_EXACT: true[] = [
  * `ENUM_TYPES_ARE_EXACT` holds each list to its TypeScript type in tsc, so a widened key
  * (`color: string`) fails the type-check, and the test holds it to the schema's values.
  */
+const CLOTHS = ['transformers', 'vision', 'generative', 'optimization', 'language', 'rl'] as const;
 const ENUMS = {
   'JobSummary.kind': ['parse'],
   'JobSummary.state': ['pending', 'running', 'succeeded', 'dead_letter', 'cancelled'],
@@ -842,6 +875,13 @@ const ENUMS = {
     'citation',
   ],
   'AnchorV1In.provenanceClass': ['source', 'ai_generated'],
+  'TopicRef.cloth': [...CLOTHS, null],
+  'Topic.cloth': [...CLOTHS, null],
+  'PaperTopic.status': ['none', 'suggested', 'accepted', 'rejected'],
+  'PaperTopic.source': ['arxiv_category', 'manual', 'model', null],
+  'TopicCreate.cloth': CLOTHS,
+  'TopicPatch.cloth': [...CLOTHS, null],
+  'PaperTopicPut.cloth': CLOTHS,
 } as const;
 type Values<K extends keyof typeof ENUMS> = (typeof ENUMS)[K][number];
 /** The enum keys whose values are not a list above: the two error-code unions (the ErrorCode and
@@ -911,6 +951,13 @@ const ENUM_TYPES_ARE_EXACT: true[] = [
   true satisfies Equal<CreateNodeBody['kind'], CanvasNode['kind']>,
   true satisfies Equal<CreateEdgeBody['kind'], CanvasEdge['kind']>,
   true satisfies Equal<Sent<PatchEdgeBody['kind']>, CanvasEdge['kind']>,
+  true satisfies Equal<TopicRef['cloth'], Values<'TopicRef.cloth'>>,
+  true satisfies Equal<Topic['cloth'], Values<'Topic.cloth'>>,
+  true satisfies Equal<PaperTopic['status'], Values<'PaperTopic.status'>>,
+  true satisfies Equal<PaperTopic['source'], Values<'PaperTopic.source'>>,
+  true satisfies Equal<Sent<CreateTopicBody['cloth']>, Values<'TopicCreate.cloth'>>,
+  true satisfies Equal<Sent<PatchTopicBody['cloth']>, Values<'TopicPatch.cloth'>>,
+  true satisfies Equal<Sent<AcceptTopicBody['cloth']>, Values<'PaperTopicPut.cloth'>>,
 ];
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -1070,6 +1117,33 @@ describe('contracts.spec — lib/api/types.ts against contracts/api (exported fr
       },
     };
     expectValid('usage', 'UsageTotals', usage);
+    const topic: Topic = {
+      topic_id: 'top_01J9Z3K8Q4R5S6T7V8W9X0Y1Z2',
+      name: 'Transformers & attention',
+      cloth: 'transformers',
+      sort_order: 0,
+      paper_count: 2,
+      page_count: 31,
+      categories: ['cs.CL'],
+    };
+    expectValid('topics', 'Topic', topic);
+    expectValid('topics', 'Topic', { ...topic, cloth: null, categories: [] } satisfies Topic);
+    const offer: PaperTopic = {
+      status: 'suggested',
+      topic: { topic_id: topic.topic_id, name: topic.name, cloth: topic.cloth },
+      suggested_name: null,
+      source: 'arxiv_category',
+      source_detail: 'cs.CL',
+      arxiv_category: 'cs.CL',
+    };
+    expectValid('topics', 'PaperTopic', offer);
+    expectValid('topics', 'PaperTopic', {
+      ...offer,
+      status: 'none',
+      topic: null,
+      source: null,
+      source_detail: null,
+    } satisfies PaperTopic);
   });
 
   it('every browser SSE event’s data validates against its model', () => {
@@ -1155,6 +1229,19 @@ describe('contracts.spec — lib/api/types.ts against contracts/api (exported fr
       title: 'YOLO',
       viewport: { x: 0, y: 0, zoom: 1 },
     } satisfies PatchBoardBody);
+    expectValid('topics', 'TopicCreate', {
+      name: 'Vision',
+      cloth: 'vision',
+    } satisfies CreateTopicBody);
+    for (const patch of [{ name: 'Vision' }, { cloth: null }, {}] satisfies PatchTopicBody[]) {
+      expectValid('topics', 'TopicPatch', patch);
+    }
+    for (const put of [
+      { topic_id: 'top_01J9Z3K8Q4R5S6T7V8W9X0Y1Z2' },
+      { new_topic_name: 'Generative models', cloth: 'generative' },
+    ] satisfies AcceptTopicBody[]) {
+      expectValid('topics', 'PaperTopicPut', put);
+    }
   });
 
   it('the schemas refuse what the contract forbids (the check is not vacuous)', () => {

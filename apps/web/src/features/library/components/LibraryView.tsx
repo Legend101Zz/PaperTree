@@ -1,9 +1,9 @@
 /**
- * LibraryView: the signed-in library (#195, #196, #197; frames 01, 01b, 01c, 01d, 01f). The compact
+ * LibraryView: the signed-in library (#195–#198; frames 01, 01b, 01c, 01d, 01f, 03). The compact
  * header (search, Add papers, Aa, account), "Your library" with its stats and "N need a look"
  * (which opens the Table filtered to those papers), the view row with Arrange by, Reading now with
  * Continue, then the shelf (face-out covers for a short library, a plank per row at scale) with
- * its catalogue card in the band above and the hint row under the plank, or the Table; an empty
+ * its catalogue card in the band above and the hint row under the plank, or Topics, or the Table; an empty
  * library shows the accession slip. PDFs drop anywhere on the page. The shelf stays mounted
  * (hidden) under the Table, so its focus, open card and scroll survive a switch of view.
  *
@@ -36,10 +36,12 @@ import { AccessionSlip } from './AccessionSlip';
 import { DropAnywhere } from './AddPapers';
 import { LibraryHeader } from './LibraryHeader';
 import { LibraryTitle, type LibraryViewName } from './LibraryTitle';
+import { NewTopic } from './NewTopic';
 import { ReadingNow } from './ReadingNow';
 import { ShelfSection } from './ShelfSection';
 import { ColumnsMenu } from './TableMenus';
 import { TableView } from './TableView';
+import { TopicsView } from './TopicsView';
 import { UploadRow } from './UploadRow';
 
 import type { ReactNode } from 'react';
@@ -115,6 +117,14 @@ export function LibraryView(): ReactNode {
       ?.focus();
     setShelfFocus(null);
   }, [shelfFocus, view]);
+  // Enter on a topic card: the shelf by topic, at that topic's first book (#198).
+  const showTopicOnShelf = useCallback(
+    (paperId: string) => {
+      setArrangement('topic');
+      showOnShelf(paperId);
+    },
+    [showOnShelf],
+  );
   const needALook = useCallback(
     (on: boolean) => {
       setChip(on ? 'look' : 'all');
@@ -181,12 +191,16 @@ export function LibraryView(): ReactNode {
           onNeedALook={needALook}
           view={view}
           onView={setView}
-          tableTools={
-            <ColumnsMenu
-              hidden={table.hidden}
-              onShown={table.setShown}
-              size={touch ? 'touch' : 'md'}
-            />
+          tools={
+            view === 'table' ? (
+              <ColumnsMenu
+                hidden={table.hidden}
+                onShown={table.setShown}
+                size={touch ? 'touch' : 'md'}
+              />
+            ) : (
+              <NewTopic />
+            )
           }
           arrangement={arrangement}
           onArrange={setArrangement}
@@ -240,6 +254,9 @@ export function LibraryView(): ReactNode {
                 onShowOnShelf={showOnShelf}
                 onRead={read}
               />
+            ) : null}
+            {view === 'topics' ? (
+              <TopicsView books={books} matches={matches} onShowOnShelf={showTopicOnShelf} />
             ) : null}
           </>
         )}
