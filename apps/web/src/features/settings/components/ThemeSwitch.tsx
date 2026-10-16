@@ -12,7 +12,6 @@ import { THEME_CHOICES, type ThemeChoice } from '../model/theme';
 
 import type { ReactNode } from 'react';
 
-
 /** Props for `ThemeSwitch`. */
 export interface ThemeSwitchProps {
   /** The current choice. */

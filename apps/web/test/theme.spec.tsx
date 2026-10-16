@@ -126,6 +126,8 @@ describe('ThemeSwitch + useTheme', () => {
     mockOs(false);
     window.localStorage.setItem(THEME_STORAGE_KEY, 'dark');
     render(<Harness />);
-    expect(screen.getByRole('radio', { name: 'Lamp-lit' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: 'Lamp-lit' }).getAttribute('aria-checked')).toBe(
+      'true',
+    );
   });
 });

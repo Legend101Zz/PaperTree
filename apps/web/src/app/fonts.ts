@@ -13,7 +13,13 @@ import localFont from 'next/font/local';
 
 /** Libre Caslon Display: headlines at 28 px and up only. */
 export const caslonDisplay = localFont({
-  src: [{ path: '../../node_modules/@fontsource/libre-caslon-display/files/libre-caslon-display-latin-400-normal.woff2', weight: '400', style: 'normal' }],
+  src: [
+    {
+      path: '../../node_modules/@fontsource/libre-caslon-display/files/libre-caslon-display-latin-400-normal.woff2',
+      weight: '400',
+      style: 'normal',
+    },
+  ],
   variable: '--pt-face-display',
   display: 'swap',
   fallback: ['Georgia', 'serif'],
@@ -22,9 +28,21 @@ export const caslonDisplay = localFont({
 /** Libre Caslon Text: the paper's own words (quotes, trace, Guided, index cards). */
 export const caslonText = localFont({
   src: [
-    { path: '../../node_modules/@fontsource/libre-caslon-text/files/libre-caslon-text-latin-400-normal.woff2', weight: '400', style: 'normal' },
-    { path: '../../node_modules/@fontsource/libre-caslon-text/files/libre-caslon-text-latin-400-italic.woff2', weight: '400', style: 'italic' },
-    { path: '../../node_modules/@fontsource/libre-caslon-text/files/libre-caslon-text-latin-700-normal.woff2', weight: '700', style: 'normal' },
+    {
+      path: '../../node_modules/@fontsource/libre-caslon-text/files/libre-caslon-text-latin-400-normal.woff2',
+      weight: '400',
+      style: 'normal',
+    },
+    {
+      path: '../../node_modules/@fontsource/libre-caslon-text/files/libre-caslon-text-latin-400-italic.woff2',
+      weight: '400',
+      style: 'italic',
+    },
+    {
+      path: '../../node_modules/@fontsource/libre-caslon-text/files/libre-caslon-text-latin-700-normal.woff2',
+      weight: '700',
+      style: 'normal',
+    },
   ],
   variable: '--pt-face-paper',
   display: 'swap',
@@ -34,10 +52,26 @@ export const caslonText = localFont({
 /** Alegreya Sans: the AI's words and the interface. */
 export const alegreyaSans = localFont({
   src: [
-    { path: '../../node_modules/@fontsource/alegreya-sans/files/alegreya-sans-latin-400-normal.woff2', weight: '400', style: 'normal' },
-    { path: '../../node_modules/@fontsource/alegreya-sans/files/alegreya-sans-latin-400-italic.woff2', weight: '400', style: 'italic' },
-    { path: '../../node_modules/@fontsource/alegreya-sans/files/alegreya-sans-latin-500-normal.woff2', weight: '500', style: 'normal' },
-    { path: '../../node_modules/@fontsource/alegreya-sans/files/alegreya-sans-latin-700-normal.woff2', weight: '700', style: 'normal' },
+    {
+      path: '../../node_modules/@fontsource/alegreya-sans/files/alegreya-sans-latin-400-normal.woff2',
+      weight: '400',
+      style: 'normal',
+    },
+    {
+      path: '../../node_modules/@fontsource/alegreya-sans/files/alegreya-sans-latin-400-italic.woff2',
+      weight: '400',
+      style: 'italic',
+    },
+    {
+      path: '../../node_modules/@fontsource/alegreya-sans/files/alegreya-sans-latin-500-normal.woff2',
+      weight: '500',
+      style: 'normal',
+    },
+    {
+      path: '../../node_modules/@fontsource/alegreya-sans/files/alegreya-sans-latin-700-normal.woff2',
+      weight: '700',
+      style: 'normal',
+    },
   ],
   variable: '--pt-face-ai',
   display: 'swap',
@@ -47,8 +81,16 @@ export const alegreyaSans = localFont({
 /** Alegreya Sans SC: labels, set as real small caps from lowercase source text. */
 export const alegreyaSansSc = localFont({
   src: [
-    { path: '../../node_modules/@fontsource/alegreya-sans-sc/files/alegreya-sans-sc-latin-500-normal.woff2', weight: '500', style: 'normal' },
-    { path: '../../node_modules/@fontsource/alegreya-sans-sc/files/alegreya-sans-sc-latin-700-normal.woff2', weight: '700', style: 'normal' },
+    {
+      path: '../../node_modules/@fontsource/alegreya-sans-sc/files/alegreya-sans-sc-latin-500-normal.woff2',
+      weight: '500',
+      style: 'normal',
+    },
+    {
+      path: '../../node_modules/@fontsource/alegreya-sans-sc/files/alegreya-sans-sc-latin-700-normal.woff2',
+      weight: '700',
+      style: 'normal',
+    },
   ],
   variable: '--pt-face-label',
   display: 'swap',
@@ -58,9 +100,21 @@ export const alegreyaSansSc = localFont({
 /** Courier Prime: the person's own words, numbers and usage lines. */
 export const courierPrime = localFont({
   src: [
-    { path: '../../node_modules/@fontsource/courier-prime/files/courier-prime-latin-400-normal.woff2', weight: '400', style: 'normal' },
-    { path: '../../node_modules/@fontsource/courier-prime/files/courier-prime-latin-400-italic.woff2', weight: '400', style: 'italic' },
-    { path: '../../node_modules/@fontsource/courier-prime/files/courier-prime-latin-700-normal.woff2', weight: '700', style: 'normal' },
+    {
+      path: '../../node_modules/@fontsource/courier-prime/files/courier-prime-latin-400-normal.woff2',
+      weight: '400',
+      style: 'normal',
+    },
+    {
+      path: '../../node_modules/@fontsource/courier-prime/files/courier-prime-latin-400-italic.woff2',
+      weight: '400',
+      style: 'italic',
+    },
+    {
+      path: '../../node_modules/@fontsource/courier-prime/files/courier-prime-latin-700-normal.woff2',
+      weight: '700',
+      style: 'normal',
+    },
   ],
   variable: '--pt-face-you',
   display: 'swap',
@@ -68,6 +122,12 @@ export const courierPrime = localFont({
 });
 
 /** Every face's variable class, for `<html className>`. */
-export const FONT_VARIABLES = [caslonDisplay, caslonText, alegreyaSans, alegreyaSansSc, courierPrime]
+export const FONT_VARIABLES = [
+  caslonDisplay,
+  caslonText,
+  alegreyaSans,
+  alegreyaSansSc,
+  courierPrime,
+]
   .map((face) => face.variable)
   .join(' ');

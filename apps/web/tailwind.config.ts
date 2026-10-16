@@ -5,6 +5,8 @@ const config: Config = {
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    // v0.2 feature folders (#175): without this every utility class written there is purged.
+    './src/features/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   // The same attribute the token blocks read (`@papertree/ui/styles.css`), set before paint by the
   // no-flash script in app/layout.tsx, so `dark:` and the tokens never disagree (#175).
