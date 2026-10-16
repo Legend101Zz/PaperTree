@@ -10,7 +10,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ExplainPanel, useExplainActions } from '@/components/explain';
 import { ReaderActionsProvider, type ReaderActions } from '@/components/reader/actions';
-import { pageCounterLabel, ReaderHeader, type ReaderHeaderProps } from '@/features/reader';
+import {
+  counterPage,
+  pageCounterLabel,
+  ReaderHeader,
+  type ReaderHeaderProps,
+} from '@/features/reader';
 
 import { TestQueryProvider } from './query-client';
 import { stubDesktop } from './s6-harness';
@@ -53,6 +58,14 @@ describe('the page counter', () => {
 
   it('never claims a page past the last one (a saved place on a shorter re-upload)', () => {
     expect(pageCounterLabel(17, 15)).toBe('p. 15 of 15');
+  });
+
+  it('Source and Split name the most visible page; Guided (or no page list yet) its own page', () => {
+    expect(counterPage('source', 3, 1)).toBe(3);
+    expect(counterPage('split', 3, 1)).toBe(3);
+    expect(counterPage('guided', 3, 1)).toBe(1);
+    expect(counterPage('source', -1, 1)).toBe(1);
+    expect(counterPage('source', -1, null)).toBeNull();
   });
 });
 

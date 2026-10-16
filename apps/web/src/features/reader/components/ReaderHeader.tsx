@@ -11,7 +11,7 @@ import { AlignLeft, ArrowLeft, Workflow } from 'lucide-react';
 import { ModeSwitch, type ReadingMode } from '@/components/reader/ModeSwitch';
 import { ZoomControl, type ZoomMode } from '@/components/reader/ZoomControl';
 
-import { pageCounterLabel } from '../model/pageCounter';
+import { PageCounter } from './PageCounter';
 
 import type { ReactNode, RefObject } from 'react';
 
@@ -26,7 +26,7 @@ export interface ExplainToggle {
 /** Props for `ReaderHeader`. */
 export interface ReaderHeaderProps {
   readonly title: string;
-  /** 0-based page at the top of the view, or null before the reader has shown one. */
+  /** Guided's top page, or the saved one (0-based); Source and Split show the most visible page. */
   readonly page: number | null;
   /** The paper's page count, or null while the PDF is opening. */
   readonly pageCount: number | null;
@@ -62,11 +62,10 @@ function contentsName(count: number): string {
  * @returns The `<header>`.
  */
 export function ReaderHeader(props: ReaderHeaderProps): ReactNode {
-  const counter = pageCounterLabel(props.page, props.pageCount);
   return (
     <header className="pt-reader__bar">
       {/* A link, not a button: it leaves the reader. The sprout stays on the library's own bar. */}
-      <a className="pt-toolbtn pt-reader__back" href="/dashboard" style={{ minHeight: 40 }}>
+      <a className="pt-toolbtn pt-reader__back" href="/dashboard">
         <span className="pt-toolbtn__icon" aria-hidden="true">
           <ArrowLeft size={ICON} strokeWidth={1.5} />
         </span>
@@ -78,7 +77,6 @@ export function ReaderHeader(props: ReaderHeaderProps): ReactNode {
       <button
         type="button"
         className="pt-toolbtn pt-reader__contents"
-        style={{ minHeight: 40 }}
         aria-label={contentsName(props.highlightCount)}
         aria-expanded={props.navigatorOpen}
         aria-pressed={props.navigatorOpen}
@@ -104,7 +102,7 @@ export function ReaderHeader(props: ReaderHeaderProps): ReactNode {
       <h1 className="pt-reader__title" title={props.title}>
         {props.title}
       </h1>
-      {counter === null ? null : <span className="pt-reader__page">{counter}</span>}
+      <PageCounter mode={props.mode} page={props.page} pageCount={props.pageCount} />
       <div className="pt-reader__controls">
         <ModeSwitch
           mode={props.mode}
@@ -116,11 +114,7 @@ export function ReaderHeader(props: ReaderHeaderProps): ReactNode {
           <ZoomControl mode={props.zoomMode} zoom={props.zoom} onModeChange={props.onZoomChange} />
         )}
         {props.boardHref === null ? null : (
-          <a
-            className="pt-toolbtn pt-reader__board"
-            href={props.boardHref}
-            style={{ minHeight: 40 }}
-          >
+          <a className="pt-toolbtn pt-reader__board" href={props.boardHref}>
             <span className="pt-toolbtn__icon" aria-hidden="true">
               <Workflow size={ICON} strokeWidth={1.5} />
             </span>

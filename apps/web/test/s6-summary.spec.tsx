@@ -45,7 +45,7 @@ const SUMMARY = (statusValue: 'complete' | 'partial', bullets = 5) => ({
 });
 
 async function open(): Promise<void> {
-  fireEvent.click(screen.getByRole('button', { name: 'Ask AI' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Explain' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Summarize paper' }));
 }
 

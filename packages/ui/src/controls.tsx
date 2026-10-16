@@ -113,6 +113,7 @@ export interface ToolbarButtonProps extends Omit<
 > {
   /** The accessible name; also the visible text unless `iconOnly`. */
   readonly label: string;
+  /** Drawn before the label; `null` for a text-only button (the reader's Explain tab). */
   readonly icon: ReactNode;
   /** Hide the visible text; `label` still names the button. */
   readonly iconOnly?: boolean;
@@ -167,9 +168,11 @@ function ToolbarButtonBase(
       data-disabled={disabled ? 'true' : undefined}
       onClick={handleClick}
     >
-      <span className="pt-toolbtn__icon" aria-hidden="true">
-        {icon}
-      </span>
+      {icon === null || icon === undefined ? null : (
+        <span className="pt-toolbtn__icon" aria-hidden="true">
+          {icon}
+        </span>
+      )}
       {iconOnly ? null : <span className="pt-toolbtn__label">{label}</span>}
     </button>
   );

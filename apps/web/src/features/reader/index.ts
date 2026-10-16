@@ -7,4 +7,5 @@ export {
   type ExplainToggle,
   type ReaderHeaderProps,
 } from './components/ReaderHeader';
-export { pageCounterLabel } from './model/pageCounter';
+export { PageCounter, type PageCounterProps } from './components/PageCounter';
+export { counterPage, pageCounterLabel } from './model/pageCounter';

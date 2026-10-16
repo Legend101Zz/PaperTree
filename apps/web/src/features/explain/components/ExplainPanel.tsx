@@ -5,8 +5,8 @@
  * right drawer from 768 px up, a bottom `Sheet` below it, mounted once by `ReaderWorkspace` with
  * the controller as one prop; it reaches the reader only through `useReaderActions()`. Its header
  * holds the thread menu (threads named by their asks), Summarize and Close; its body is the thread
- * as exchanges. Closed, the reader header's Explain toggle (#203) is the entry for a free question or
- * the summary; without one (a panel mounted on its own), a floating "Ask AI" launcher is.
+ * as exchanges. Closed, it draws nothing: the reader header's Explain toggle (#203) is the entry for
+ * a free question or the summary, and the panel hands focus back to it when it closes.
  */
 import { Sheet, type SheetDetent } from '@papertree/ui';
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
@@ -26,10 +26,10 @@ import type { PassageMarker } from '../model/exchange';
 export interface ExplainPanelProps {
   readonly controller: ExplainController;
   /**
-   * The reader header's Explain toggle (#203). Given, the panel draws no launcher of its own and
-   * hands focus back to this button when it closes.
+   * The reader header's Explain toggle (#203): focus goes back to it when the panel closes, and Esc
+   * on it closes the panel (a keyboard reader who opened the phone sheet from it is still there).
    */
-  readonly toggleRef?: RefObject<HTMLButtonElement>;
+  readonly toggleRef: RefObject<HTMLButtonElement>;
 }
 
 const DESKTOP = '(min-width: 768px)';
@@ -164,22 +164,31 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
   );
 }
 
-/** The explain panel, or its "Ask AI" launcher while closed. */
+/** The explain panel: a drawer or a sheet while open, nothing while closed. */
 export function ExplainPanel({ controller, toggleRef }: ExplainPanelProps): ReactNode {
   const desktop = useMediaQuery(DESKTOP);
   const [detent, setDetent] = useState<SheetDetent>('half');
   const asideRef = useRef<HTMLElement>(null);
-  const launcherRef = useRef<HTMLButtonElement | null>(null);
   const wasOpen = useRef(false);
   const { state, closeExplain } = controller;
 
-  // Closing hands focus back to the toggle (or "Ask AI"); otherwise it falls to <body> and a
-  // keyboard reader starts again from the top of the page.
+  // Closing hands focus back to the toggle; otherwise it falls to <body> and a keyboard reader
+  // starts again from the top of the page.
   useEffect(() => {
-    if (wasOpen.current && !state.open)
-      (toggleRef ?? launcherRef).current?.focus({ preventScroll: true });
+    if (wasOpen.current && !state.open) toggleRef.current?.focus({ preventScroll: true });
     wasOpen.current = state.open;
   }, [state.open, toggleRef]);
+
+  // Esc on the toggle closes the panel too. On a phone, Enter on the toggle opens the sheet and
+  // leaves focus on the toggle, and the sheet hears Esc only from inside itself (review S1).
+  useEffect(() => {
+    if (!state.open) return undefined;
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape' && event.target === toggleRef.current) closeExplain();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [state.open, toggleRef, closeExplain]);
 
   // A new ask opens at the readable height, not wherever the last one was left.
   useEffect(() => {
@@ -210,20 +219,7 @@ export function ExplainPanel({ controller, toggleRef }: ExplainPanelProps): Reac
     return () => root.removeAttribute('data-pt-explain');
   }, [state.open, desktop]);
 
-  if (!state.open) {
-    if (controller.paperId === null || toggleRef !== undefined) return null;
-    return (
-      <button
-        ref={launcherRef}
-        type="button"
-        className="pt-explain__launch pt-btn pt-btn--primary"
-        data-explain-launch
-        onClick={controller.openPanel}
-      >
-        Ask AI
-      </button>
-    );
-  }
+  if (!state.open) return null;
   return (
     <OpenPanel
       controller={controller}

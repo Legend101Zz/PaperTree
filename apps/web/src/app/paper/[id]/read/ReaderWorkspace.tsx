@@ -83,7 +83,7 @@ import {
 } from '@/components/reader/useHighlights';
 import type { PendingSelection, SelectionCapture } from '@/components/reader/useSelectionCapture';
 import { displayQuote } from '@/components/reader/quote';
-import { useVisiblePages, type ReadingPosition } from '@/components/reader/VirtualPageList';
+import type { ReadingPosition } from '@/components/reader/VirtualPageList';
 import { FIT_WIDTH, resolveZoom, type ZoomMode } from '@/components/reader/ZoomControl';
 import {
   applyScroll,
@@ -303,7 +303,7 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   const [guidedFlash, setGuidedFlash] = useState<string | null>(null);
   const [followBlockId, setFollowBlockId] = useState<string | null>(null);
   // Guided's page for the header's "p. 2 of 15" (#203): the page of its top paragraph, kept in step
-  // by Source. Source and Split show the page filling most of the view (`useVisiblePages`); before
+  // by Source. Source and Split show the page filling most of the view (`PageCounter`); before
   // either reports, the saved place, or the first page.
   const [topPage, setTopPage] = useState<number>(saved?.page ?? 0);
   const narrow = useMediaQuery('(max-width: 639px)');
@@ -912,8 +912,6 @@ function ReaderWorkspaceView(props: ViewProps) {
     (paper.kind === 'api' ? 'Opening the paper…' : paper.slug);
 
   const explain = useContext(ExplainToggleContext);
-  const visible = useVisiblePages();
-  const page = mode !== 'guided' && visible.current >= 0 ? visible.current : props.page;
   const { numPages } = usePdfDocument();
   const pageCount = (numPages ?? 0) > 0 ? numPages : (doc?.pages.length ?? null);
 
@@ -961,7 +959,7 @@ function ReaderWorkspaceView(props: ViewProps) {
     <div className="pt-reader" data-reader-mode={mode}>
       <ReaderHeader
         title={title}
-        page={page}
+        page={props.page}
         pageCount={pageCount}
         mode={mode}
         onModeChange={props.onModeChange}

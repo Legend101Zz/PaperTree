@@ -1057,13 +1057,12 @@ span.pt-paper .pt-paper__cite {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────────────────────
- * the reader (S4) — a calm desk, the paper as the hero, the chrome receding
+ * the reader (S4; v0.2 chrome #203) — a calm desk, the paper as the hero, the chrome receding
  *
- * The page is the only bright thing on screen: a paper-white sheet on a warm stone desk
- * (`--pt-page-ground`). Chrome sits on `--pt-panel-ground` behind hairlines, in the UI sans;
- * anything that is the paper's own words is in the serif. Ink blue marks interactive state only.
- * Spacing is an 8 px grid; floating things get one soft shadow and 12 px radii; nothing else
- * casts one.
+ * The PDF page is a `--pt-pdf-page` sheet with e1 on the reader desk (`--pt-desk`, a laid pattern).
+ * The header is ivory `--pt-page` behind a rule, in Alegreya Sans; the paper's own words are in
+ * Caslon. Ink blue marks interactive state only. Floating things (the selection toolbar, menus)
+ * take e2 and the menu radius; nothing else casts a shadow.
  * ───────────────────────────────────────────────────────────────────────────────────────────── */
 
 .pt-reader {
@@ -1112,7 +1111,9 @@ span.pt-paper .pt-paper__cite {
   --pt-reader-bar-h: 56px;
 }
 
+/* A link styled as a toolbar button (Library, Board) keeps the 40 px target `ToolbarButton` sets inline. */
 .pt-reader__bar .pt-toolbtn {
+  min-block-size: 40px;
   text-decoration: none;
 }
 
@@ -1160,10 +1161,6 @@ span.pt-paper .pt-paper__cite {
 }
 
 /* Explain is a tab onto the drawer below it: the AI-slip fill and an oxblood underline (frame 04). */
-.pt-reader__explain .pt-toolbtn__icon:empty {
-  display: none;
-}
-
 /* (two classes and the attribute: it must win over the shared `.pt-toolbtn[aria-pressed]`) */
 .pt-reader__bar .pt-reader__explain[aria-pressed='true'] {
   color: var(--pt-ink);
@@ -1183,9 +1180,11 @@ span.pt-paper .pt-paper__cite {
   }
 }
 
-/* Narrower windows keep every name but draw Library and Board as their icons, and drop the counter. */
+/* Narrower windows keep every name but draw Library, Contents and Board as their icons, and drop the
+   counter, so the title keeps some width at 768 px (review N2). */
 @media (max-width: 1099px) {
   .pt-reader__back .pt-toolbtn__label,
+  .pt-reader__contents .pt-toolbtn__label,
   .pt-reader__board .pt-toolbtn__label {
     position: absolute;
     inline-size: 1px;
@@ -1195,6 +1194,7 @@ span.pt-paper .pt-paper__cite {
     white-space: nowrap;
   }
   .pt-reader__back,
+  .pt-reader__contents,
   .pt-reader__board {
     padding-inline: 10px;
   }
@@ -1323,8 +1323,8 @@ span.pt-paper .pt-paper__cite {
 
 .pt-zoom__select {
   flex: 0 1 auto;
-  /* Sized by its text, "Fit width" measures 79-83 px across platforms: under the 80 px the RFIX2
-     screens test holds it to. A floor keeps it readable on every platform. */
+  /* A floor keeps "Fit width" whole in Courier Prime: the RFIX2 screens test holds the select to at
+     least 80 px. */
   min-inline-size: 5.5rem;
   max-inline-size: 11rem;
   min-block-size: 40px;
@@ -2708,14 +2708,6 @@ span.pt-paper .pt-paper__cite {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
-}
-
-.pt-explain__launch {
-  position: fixed;
-  inset-block-end: 16px;
-  inset-inline-end: 16px;
-  z-index: 25;
-  box-shadow: var(--pt-float-shadow);
 }
 
 /* Chips stay inline, after the words they support, so a sentence is never broken in two. The pill

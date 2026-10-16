@@ -19,3 +19,21 @@ export function pageCounterLabel(page: number | null, pageCount: number | null):
   const shown = known ? Math.min(Math.floor(page) + 1, pageCount) : Math.floor(page) + 1;
   return known ? `p. ${String(shown)} of ${String(pageCount)}` : `p. ${String(shown)}`;
 }
+
+/**
+ * Which page the counter names. Source and Split: the page filling most of the view (the page
+ * list's visible-pages store); Guided, or before the page list reports: the page of the top
+ * paragraph, or the saved place.
+ *
+ * @param mode - The reading mode.
+ * @param mostVisible - The page filling most of Source's view, or -1 when none is mounted.
+ * @param fallback - Guided's top page, or the saved one.
+ * @returns The 0-based page to name.
+ */
+export function counterPage(
+  mode: 'source' | 'guided' | 'split',
+  mostVisible: number,
+  fallback: number | null,
+): number | null {
+  return mode !== 'guided' && mostVisible >= 0 ? mostVisible : fallback;
+}
