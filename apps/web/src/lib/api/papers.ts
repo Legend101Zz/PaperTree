@@ -89,9 +89,16 @@ export const papersApi = {
    * 204. Tells the server which page (zero-based) the reader is on, for the library's "reading
    * now" and "Continue" (#192). 404 for another user's paper; 422 past the last page.
    */
-  putReadingState: (paperId: string, lastPage: number, mode?: ReadingMode) =>
+  putReadingState: (
+    paperId: string,
+    lastPage: number,
+    mode?: ReadingMode,
+    options: { readonly keepalive?: boolean } = {},
+  ) =>
     request<void>(`/papers/${seg(paperId)}/reading-state`, {
       method: 'PUT',
+      // keepalive: the page-hide flush must outlive the page (the body is tiny, well under 64 KB).
+      ...(options.keepalive === true ? { keepalive: true } : {}),
       body: json(mode === undefined ? { last_page: lastPage } : { last_page: lastPage, mode }),
     }),
 

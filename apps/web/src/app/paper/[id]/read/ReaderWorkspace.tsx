@@ -344,6 +344,8 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   // ── the reading position ──
   const positionRef = useRef<SavedReaderState | null>(saved);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // True once the reader has reported a position (scroll or guided top), i.e. shown a real page.
+  const shownRef = useRef(false);
   const modeRef = useRef(mode);
   modeRef.current = mode;
   const zoomModeRef = useRef(zoomMode);
@@ -363,9 +365,9 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   );
   useEffect(() => {
     if (readingSync === null) return undefined;
-    const flush = (): void => readingSync.flush();
+    const flush = (): void => readingSync.flush({ keepalive: true });
     const onHide = (): void => {
-      if (document.visibilityState === 'hidden') readingSync.flush();
+      if (document.visibilityState === 'hidden') readingSync.flush({ keepalive: true });
     };
     window.addEventListener('pagehide', flush);
     document.addEventListener('visibilitychange', onHide);
@@ -377,7 +379,12 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   }, [readingSync]);
 
   const persist = useCallback(() => {
-    readingSync?.update(positionRef.current?.page ?? 0, modeRef.current);
+    // Only a page the reader has shown: not on mount, not on a mode or zoom change before the
+    // first reported position (that would overwrite the server's place with page 0).
+    readingSync?.update(
+      shownRef.current ? (positionRef.current?.page ?? null) : null,
+      modeRef.current,
+    );
     if (saveTimer.current !== null) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       saveTimer.current = null;
@@ -407,6 +414,7 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   const onSourcePosition = useCallback(
     (position: ReadingPosition) => {
       const blockId = doc === null ? undefined : topBlockAt(doc, position);
+      shownRef.current = true;
       positionRef.current = {
         v: 1,
         mode: modeRef.current,
@@ -437,6 +445,7 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
     (blockId: string) => {
       const block = doc?.byId.get(blockId);
       if (block === undefined) return;
+      shownRef.current = true;
       positionRef.current = {
         v: 1,
         mode: modeRef.current,

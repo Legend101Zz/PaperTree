@@ -8,9 +8,10 @@ a ~400-paper library is one fixed set of queries rather than one per paper.
 
 from __future__ import annotations
 
-import time
+import sqlite3
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 from papertree_db import (
@@ -20,6 +21,7 @@ from papertree_db import (
     PaperNotFound,
     PaperTreeDb,
     find_migrations_dir,
+    generation,
     migrate,
     open_database,
     progress_state,
@@ -27,6 +29,7 @@ from papertree_db import (
 )
 from papertree_db.library import arxiv_year, stamp_category
 
+from .fixtures import block_id_for, make_paper
 from .saved_shapes import migrations_through, raw_connect
 
 HASH = "sha256:" + "a" * 64
@@ -177,39 +180,168 @@ def test_the_library_row_carries_reading_and_the_new_facts(db: PaperTreeDb) -> N
     assert row is not None and row.reading is not None and row.reading.state == "finished"
 
 
-def test_arxiv_year_is_the_first_submission_not_the_stamp_date() -> None:
+def test_arxiv_year_is_the_first_submission_and_null_when_unsure() -> None:
     assert arxiv_year("1706.03762") == 2017
     assert arxiv_year("1706.03762v7") == 2017
     assert arxiv_year("2006.11239") == 2020
-    assert arxiv_year("0704.0001") == 2007
-    assert arxiv_year("0612.0001") is None  # before the new-style scheme
+    assert arxiv_year("0704.0001") == 2007  # the scheme's first month
+    assert arxiv_year("0703.0001") is None  # 0701-0703 are not new-style ids
+    assert arxiv_year("0612.0001") is None  # before the scheme: null, not the stamp's year
     assert arxiv_year("1713.00001") is None  # no month 13
-    assert arxiv_year("hep-th/9901001") is None and arxiv_year(None) is None
+    assert arxiv_year("hep-th/9901001") == 1999  # old style
+    assert arxiv_year("math.GT/0309136") == 2003
+    assert arxiv_year("astro-ph/9205001") == 1992
+    assert arxiv_year("hep-th/0704001") is None  # old style ended with 0703
+    assert arxiv_year("Smith (1998)") is None and arxiv_year(None) is None
 
 
-def test_stamp_category_reads_the_bracketed_primary_category() -> None:
-    assert stamp_category("arXiv:1706.03762v7  [cs.CL]  2 Aug 2023") == "cs.CL"
-    assert stamp_category("arXiv:2006.11239v2 [cs.LG] 16 Dec 2020") == "cs.LG"
-    assert stamp_category("arXiv:hep-th/9901001v1 [hep-th] 1 Jan 1999") == "hep-th"
-    assert stamp_category("arXiv:1706.03762v7 2 Aug 2023") is None
-    assert stamp_category(None) is None
+@pytest.mark.parametrize(
+    ("category"),
+    [
+        "cs.CL",
+        "stat.ML",
+        "math.OC",
+        "hep-th",
+        "q-bio.NC",
+        "astro-ph.GA",
+        "eess.IV",
+        "physics.optics",
+    ],
+)
+def test_stamp_category_accepts_real_categories_next_to_the_id(category: str) -> None:
+    text = f"arXiv:1706.03762v7  [{category}]  2 Aug 2023"
+    assert stamp_category(text, "1706.03762") == category
 
 
-def test_a_400_paper_library_lists_in_a_fixed_number_of_queries(db: PaperTreeDb) -> None:
-    """The list is ONE statement whatever the library's size (the counts are subqueries and the
-    reading state a join), so the time grows with the rows, not with a query per row. The bound is
-    generous on purpose: AGENTS.md §4, timing tests flake under load."""
+def test_stamp_category_is_null_unless_it_is_a_category_next_to_the_id() -> None:
+    assert stamp_category("arXiv:1706.03762v7 [sic] 2 Aug 2023", "1706.03762") is None
+    assert stamp_category("arXiv:1706.03762v7 [cs] 2 Aug 2023", "1706.03762") is None
+    assert stamp_category("arXiv:1706.03762v7 2 Aug 2023", "1706.03762") is None
+    # A category elsewhere in the block, or after a different id, is not this paper's.
+    assert stamp_category("see [cs.CL] and arXiv:1706.03762v7 2 Aug", "1706.03762") is None
+    assert stamp_category("arXiv:1810.04805v2 [cs.CL] 1 Jan", "1706.03762") is None
+    assert stamp_category("arXiv:1706.03762v7 [cs.CL]", None) is None
+    assert stamp_category(None, "1706.03762") is None
+
+
+# ── the library row on promoted papers: counts, facts, statements ─────────────────────────
+
+
+def _promoted(db: PaperTreeDb, owner: OwnerId, n: int, *, stamp: bool = True) -> PaperId:
+    """A promoted generation with 12 blocks; block 0 is an arXiv margin stamp when ``stamp``."""
+    paper_id = f"ppr_{n:026d}"
+    paper = make_paper(paper_id, "sha256:" + f"{n:064x}", 1, block_count=12, page_count=10)
+    if stamp:
+        paper["blocks"][0]["text"] = "arXiv:1706.03762v7  [cs.CL]  2 Aug 2023"
+        paper["metadata"]["arxiv_id"] = {
+            "value": "1706.03762",
+            "source_block_id": block_id_for(0),
+            "confidence": 0.6,
+        }
+        paper["metadata"]["year"] = {
+            "value": 2023,
+            "source_block_id": block_id_for(0),
+            "confidence": 0.6,
+        }
+    db.put_paper(owner, paper)
+    db.promote_generation(owner, PaperId(paper_id), generation(1))
+    return PaperId(paper_id)
+
+
+def _thread(db: PaperTreeDb, owner: OwnerId, paper_id: PaperId, n: int) -> None:
+    db.create_thread(
+        owner, paper_id, thread_id=f"thr_{n:026d}", kind="ask", title="Q", origin_anchor=None
+    )
+
+
+def test_row_facts_come_from_the_id_not_the_parsers_year(db: PaperTreeDb) -> None:
     owner = db.create_user("a@b.test").owner
-    for n in range(400):
-        paper = _paper(db, owner, pages=10, n=n)
-        if n % 2:
-            db.put_reading_state(owner, paper, n % 10)
-    started = time.perf_counter()
-    rows = db.list_library(owner)
-    elapsed = time.perf_counter() - started
+    stamped = _promoted(db, owner, 1)
+    plain = _promoted(db, owner, 2, stamp=False)
+    row = db.library_row(owner, stamped)
+    assert row is not None
+    assert (row.year, row.arxiv_id, row.arxiv_category) == (2017, "1706.03762", "cs.CL")
+    none = db.library_row(owner, plain)
+    assert none is not None
+    assert (none.year, none.arxiv_id, none.arxiv_category) == (None, None, None)
+
+
+def test_thread_count_and_has_summary_are_per_paper_and_per_owner(db: PaperTreeDb) -> None:
+    alice = db.create_user("a@b.test").owner
+    bob = db.create_user("c@d.test").owner
+    a1, a2 = _promoted(db, alice, 1), _promoted(db, alice, 2)
+    b1 = _promoted(db, bob, 3)
+    _thread(db, alice, a1, 1)
+    _thread(db, alice, a1, 2)
+    _thread(db, bob, b1, 3)  # another owner's thread must not count for alice
+    db.put_summary(
+        alice,
+        a1,
+        generation(1),
+        prompt_hash="summary-v1",
+        model_id="m",
+        content={"status": "complete", "bullets": []},
+        derived_from=[block_id_for(0)],
+    )
+    rows = {r.paper_id: r for r in db.list_library(alice)}
+    assert (rows[a1].thread_count, rows[a1].has_summary) == (2, True)
+    assert (rows[a2].thread_count, rows[a2].has_summary) == (0, False)
+    (bob_row,) = db.list_library(bob)
+    assert (bob_row.thread_count, bob_row.has_summary) == (1, False)
+
+
+def test_a_finished_row_always_has_a_finished_at(db: PaperTreeDb) -> None:
+    """Written while the page count was unknown, read after it arrived: finished, and timed."""
+    owner = db.create_user("a@b.test").owner
+    paper = _paper(db, owner, pages=None)
+    db.put_reading_state(owner, paper, 9)
+    db.register_upload(owner, paper, "sha256:" + f"{0:064x}", "p0.pdf", 1, 10)
+    state = db.get_reading_state(owner, paper)
+    assert state is not None and state.state == "finished"
+    assert state.finished_at == state.updated_at
+
+
+def test_listing_400_promoted_papers_is_one_statement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every paper has blocks, a stamp, a thread, a summary and a reading state, so every new
+    subquery runs. ``list_library`` must still be ONE statement (sqlite's trace callback sees each
+    statement the connection runs, not a subquery), whatever the library's size."""
+    statements: list[str] = []
+    real_connect = sqlite3.connect
+
+    def counting_connect(*args: Any, **kwargs: Any) -> sqlite3.Connection:
+        conn: sqlite3.Connection = real_connect(*args, **kwargs)
+        conn.set_trace_callback(statements.append)
+        return conn
+
+    monkeypatch.setattr(sqlite3, "connect", counting_connect)
+    database = open_database(tmp_path / "many.sqlite")
+    database.migrate()
+    try:
+        owner = database.create_user("a@b.test").owner
+        for n in range(400):
+            paper = _promoted(database, owner, n)
+            _thread(database, owner, paper, n)
+            database.put_summary(
+                owner,
+                paper,
+                generation(1),
+                prompt_hash="summary-v1",
+                model_id="m",
+                content={"status": "complete", "bullets": []},
+                derived_from=[block_id_for(0)],
+            )
+            database.put_reading_state(owner, paper, n % 10)
+        statements.clear()
+        rows = database.list_library(owner)
+    finally:
+        database.close()
     assert len(rows) == 400
-    assert sum(r.reading is not None for r in rows) == 200
-    assert elapsed < 3.0, f"listing 400 papers took {elapsed:.2f}s"
+    assert all(r.thread_count == 1 and r.has_summary and r.reading for r in rows)
+    assert all(r.year == 2017 and r.arxiv_category == "cs.CL" for r in rows)
+    selects = [s for s in statements if s.lstrip().upper().startswith(("SELECT", "WITH"))]
+    assert len(statements) == 1 and len(selects) == 1, statements[:5]
 
 
 # ── the display name ──────────────────────────────────────────────────────────────────────

@@ -83,6 +83,8 @@ class ReadingState:
     #: The paper's page count now (not when the row was written); None while unknown.
     page_count: int | None
     mode: str | None
+    #: When the reader last wrote its page: equal to ``updated_at`` (every write is a "read").
+    #: Named for the library's "Last opened"; it is NOT the first open.
     opened_at: str
     updated_at: str
     finished_at: str | None
@@ -113,6 +115,13 @@ def reading_state_from(row: Mapping[str, Any], page_count: int | None) -> Readin
     Returns:
         The state, the progress rule applied.
     """
+    state = progress_state(int(row["furthest_page"]), page_count, row["finished_at"])
+    # "finished" always carries a time. A row written while the page count was unknown can be
+    # finished only by the count arriving later; the write that got it there is the best time we
+    # have, so that is what is shown (the stored column stays NULL).
+    finished_at = row["finished_at"]
+    if state == "finished" and finished_at is None:
+        finished_at = row["updated_at"]
     return ReadingState(
         last_page=int(row["last_page"]),
         furthest_page=int(row["furthest_page"]),
@@ -120,8 +129,8 @@ def reading_state_from(row: Mapping[str, Any], page_count: int | None) -> Readin
         mode=row["mode"],
         opened_at=row["opened_at"],
         updated_at=row["updated_at"],
-        finished_at=row["finished_at"],
-        state=progress_state(int(row["furthest_page"]), page_count, row["finished_at"]),
+        finished_at=finished_at,
+        state=state,
     )
 
 

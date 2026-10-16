@@ -13,13 +13,24 @@ import type { ReadingMode } from '@/lib/api/types';
 export const READING_STATE_DEBOUNCE_MS = 2000;
 
 /** Sends one write; the real one is `papersApi.putReadingState`. */
-export type SendReadingState = (page: number, mode: ReadingMode) => Promise<unknown>;
+export type SendReadingState = (
+  page: number,
+  mode: ReadingMode,
+  options: { readonly keepalive: boolean },
+) => Promise<unknown>;
 
 export interface ReadingStateSync {
-  /** The reader is on `page` (zero-based) in `mode` now. Restarts the debounce. */
-  update(page: number, mode: ReadingMode): void;
-  /** Send a pending change immediately (page hide, unmount). A no-op when nothing is pending. */
-  flush(): void;
+  /**
+   * The reader is showing `page` (zero-based) in `mode` now. Restarts the debounce. A `null` page
+   * means the reader has not shown any page yet (mount, a mode or zoom change before the PDF
+   * reported a position) and is ignored: nothing is written for a place nobody has seen.
+   */
+  update(page: number | null, mode: ReadingMode): void;
+  /**
+   * Send a pending change immediately. A no-op when nothing is pending. Pass `keepalive` from a
+   * page-hide handler so the browser lets the request outlive the page.
+   */
+  flush(options?: { readonly keepalive?: boolean }): void;
 }
 
 export interface ReadingStateSyncOptions {
@@ -54,7 +65,7 @@ export function createReadingStateSync(options: ReadingStateSyncOptions): Readin
     timer = null;
   };
 
-  const flush = (): void => {
+  const flush = (flushOptions: { readonly keepalive?: boolean } = {}): void => {
     cancelTimer();
     const next = pending;
     pending = null;
@@ -62,14 +73,17 @@ export function createReadingStateSync(options: ReadingStateSyncOptions): Readin
     if (sent !== null && sent.page === next.page && sent.mode === next.mode) return;
     sent = next;
     // Silent on purpose, and not retried: see the module header.
-    void options.send(next.page, next.mode).catch(() => undefined);
+    void options
+      .send(next.page, next.mode, { keepalive: flushOptions.keepalive === true })
+      .catch(() => undefined);
   };
 
   return {
     update(page, mode) {
+      if (page === null) return;
       pending = { page, mode };
       cancelTimer();
-      timer = setTimer(flush, delayMs);
+      timer = setTimer(() => flush(), delayMs);
     },
     flush,
   };

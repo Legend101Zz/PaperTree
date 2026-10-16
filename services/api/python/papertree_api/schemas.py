@@ -428,7 +428,9 @@ class ReadingProgress(Wire):
     last_page: NonNegative
     furthest_page: NonNegative
     page_count: NonNegative | None
+    #: When the reader last wrote its page (every write counts), not the first open.
     opened_at: WireTime
+    #: Always set when `state` is `finished`.
     finished_at: WireTime | None
     state: Literal["reading", "finished"]
 
@@ -458,12 +460,13 @@ class LibraryPaper(Wire):
     updated_at: WireTime
     #: The caller's place in the paper; null when they have not started it (#192).
     reading: ReadingProgress | None
-    #: The year first published: the arXiv id's `YYMM`, else the parser's year; null if neither.
+    #: The year first submitted, from the arXiv id only; null when unsure (never a guess).
     year: NonNegative | None
     arxiv_id: str | None
     #: The primary category from the arXiv margin stamp (`cs.CL`); null when absent.
     arxiv_category: str | None
     thread_count: NonNegative
+    #: True when the promoted generation has any cached summary (whatever prompt or model).
     has_summary: bool
 
 

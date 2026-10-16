@@ -91,8 +91,8 @@ class LibraryRow:
     highlight_count: int
     #: The owner's place in the paper, or None when they have not started it (#192).
     reading: ReadingState | None
-    #: The year the paper was FIRST published: from the arXiv id when it has one, else the
-    #: parser's ``metadata.year``. Derived at read time; the parser is untouched (#192).
+    #: The year first submitted, from the arXiv id ONLY; None when unsure (never the parser's
+    #: ``metadata.year``, which is a stamp date or a year cited in the text). See ``arxiv_year``.
     year: int | None
     arxiv_id: str | None
     #: The primary category in the margin stamp (``cs.CL``), or None.
@@ -189,47 +189,100 @@ def _metadata_value(data: dict[str, Any], key: str) -> Any:
     return field.get("value") if isinstance(field, dict) else None
 
 
-#: A new-style arXiv id, ``YYMM.NNNN`` or ``YYMM.NNNNN`` (valid from April 2007).
-_NEW_STYLE_ARXIV = re.compile(r"^(\d{2})(0[1-9]|1[0-2])\.\d{4,5}")
-#: The primary category in a margin stamp: ``[cs.CL]``, ``[stat.ML]``, ``[hep-th]``.
-_STAMP_CATEGORY = re.compile(r"\[([A-Za-z][A-Za-z-]*(?:\.[A-Za-z-]+)?)\]")
+#: A new-style arXiv id, ``YYMM.NNNN`` or ``YYMM.NNNNN`` (the scheme starts with 0704).
+_NEW_STYLE_ARXIV = re.compile(r"^(\d{2})(0[1-9]|1[0-2])\.\d{4,5}(?:v\d+)?$")
+#: An old-style id, ``archive/YYMMNNN`` (``hep-th/9901001``, ``math.GT/0309136``); used until 0703.
+_OLD_STYLE_ARXIV = re.compile(
+    r"^[a-z]+(?:-[a-z]+)*(?:\.[A-Z]{2})?/(\d{2})(0[1-9]|1[0-2])\d{3}(?:v\d+)?$"
+)
+
+#: The archives arXiv has (the part before the dot, or the whole category when it has no subject).
+#: A closed list on purpose: ``[sic]`` and any other bracketed word in a stamp are not categories.
+_ARCHIVES_WITH_SUBJECT: Final = frozenset(
+    {
+        "cs",
+        "stat",
+        "math",
+        "eess",
+        "q-bio",
+        "q-fin",
+        "econ",
+        "physics",
+        "astro-ph",
+        "cond-mat",
+        "nlin",
+    }
+)
+_ARCHIVES_WITHOUT_SUBJECT: Final = frozenset(
+    {"hep-ex", "hep-lat", "hep-ph", "hep-th", "gr-qc", "math-ph", "nucl-ex", "nucl-th", "quant-ph"}
+)
+_CATEGORY = re.compile(r"([a-z]+(?:-[a-z]+)*)(?:\.([A-Za-z]+(?:-[A-Za-z]+)*))?")
 
 
 def arxiv_year(arxiv_id: str | None) -> int | None:
     """The year an arXiv paper was first submitted, read off its id (``1706.03762`` -> 2017).
 
-    The id's ``YYMM`` prefix is the FIRST submission; the parser's ``metadata.year`` is the stamp's
-    date, i.e. the latest version (Attention reads 2023, not 2017). Derived at read time because
-    changing the parser would bump its version and trigger the re-parse rules (#192).
+    The id's ``YYMM`` is the FIRST submission; the parser's ``metadata.year`` is the stamp's date,
+    i.e. the latest version (Attention reads 2023, not 2017), or even a year cited in the text. So
+    this is the only source of ``year``: a paper without a recognisable id has NO year (null),
+    never a guess (#192). Derived at read time; the parser is untouched.
 
     Args:
-        arxiv_id: A new-style arXiv id, with or without a ``vN`` suffix, or None.
+        arxiv_id: An arXiv id, with or without a ``vN`` suffix, or None.
 
     Returns:
-        The four-digit year, or None for anything that is not a new-style id (2007 or later).
+        The four-digit year for a new-style id from 0704 on, or an old-style
+        ``archive/YYMMNNN`` id (``hep-th/9901001`` -> 1999); None for anything else.
     """
-    match = None if arxiv_id is None else _NEW_STYLE_ARXIV.match(arxiv_id)
-    if match is None or int(match.group(1)) < 7:
+    if arxiv_id is None:
         return None
-    return 2000 + int(match.group(1))
+    new = _NEW_STYLE_ARXIV.match(arxiv_id)
+    if new is not None:
+        yy, mm = int(new.group(1)), int(new.group(2))
+        return 2000 + yy if (yy, mm) >= (7, 4) else None
+    old = _OLD_STYLE_ARXIV.match(arxiv_id)
+    if old is not None:
+        yy, mm = int(old.group(1)), int(old.group(2))
+        if yy >= 91:
+            return 1900 + yy
+        return 2000 + yy if (yy, mm) <= (7, 3) else None
+    return None
 
 
-def stamp_category(stamp_text: str | None) -> str | None:
-    """The bracketed primary category of an arXiv margin stamp, or None.
+def _is_category(text: str) -> bool:
+    match = _CATEGORY.fullmatch(text)
+    if match is None:
+        return False
+    archive, subject = match.group(1), match.group(2)
+    if subject is None:
+        return archive in _ARCHIVES_WITHOUT_SUBJECT or archive == "astro-ph"
+    return archive in _ARCHIVES_WITH_SUBJECT
+
+
+def stamp_category(stamp_text: str | None, arxiv_id: str | None) -> str | None:
+    """The primary category in an arXiv margin stamp, only where the stamp puts it.
+
+    The stamp reads ``arXiv:<id>[vN]  [<category>]  <date>``; the bracket must follow the id and
+    name a real arXiv category (``cs.CL``, ``stat.ML``, ``q-bio.NC``, ``astro-ph.GA``, ``hep-th``).
 
     Args:
         stamp_text: The stamp block's text, e.g. ``arXiv:1706.03762v7 [cs.CL] 2 Aug 2023``.
+        arxiv_id: The id the parser found in that block.
 
     Returns:
-        ``"cs.CL"`` for that example; None when there is no stamp or no bracketed category.
+        ``"cs.CL"`` for that example; None when the id is missing, no bracket follows it, or the
+        bracket is not a category (``[sic]``).
     """
-    match = None if not stamp_text else _STAMP_CATEGORY.search(stamp_text)
-    return None if match is None else match.group(1)
-
-
-def _metadata_year(data: dict[str, Any]) -> int | None:
-    value = _metadata_value(data, "year")
-    return value if isinstance(value, int) and not isinstance(value, bool) else None
+    if not stamp_text or not arxiv_id:
+        return None
+    match = re.search(
+        r"arXiv:\s*" + re.escape(arxiv_id) + r"(?:v\d+)?\s*\[([^\]\s]+)\]",
+        stamp_text,
+        re.IGNORECASE,
+    )
+    if match is None or not _is_category(match.group(1)):
+        return None
+    return match.group(1)
 
 
 def _payload_int(payload: Any, key: str) -> int | None:
@@ -281,9 +334,9 @@ def _library_row(row: Row) -> LibraryRow:
         job_open_step=row["job_open_step"],
         highlight_count=int(row["highlight_count"]),
         reading=reading,
-        year=arxiv_year(arxiv_id) or _metadata_year(data),
+        year=arxiv_year(arxiv_id),
         arxiv_id=arxiv_id,
-        arxiv_category=stamp_category(row["stamp_text"]) if arxiv_id else None,
+        arxiv_category=stamp_category(row["stamp_text"], arxiv_id),
         thread_count=int(row["thread_count"]),
         has_summary=bool(row["has_summary"]),
     )

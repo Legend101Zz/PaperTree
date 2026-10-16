@@ -493,9 +493,9 @@ S0 splits the layer into modules, each owned by one later slice (`slice-plan.md`
 
 v0.2 additions (#192, migration 0006). All six are always sent:
 
-- `reading` is the caller's place, or `null` when they have not started the paper. Pages are zero-based. `state` is `finished` once `furthest_page >= page_count - 1` (or the paper was marked read) and `reading` otherwise; `furthest_page` only grows and `finished_at` is never cleared. The rule is one function, `papertree_db.reading.progress_state`.
-- `year` is the year first published: `2000 + YY` from a new-style arXiv id (`1706.03762` is 2017), otherwise the parser's `metadata.year`, otherwise `null`. The parser's own year is the margin stamp's date (the latest version) and is wrong for Attention, BERT and YOLO, so the id wins. Derived at read time; the parser is unchanged.
-- `arxiv_id` is `metadata.arxiv_id.value`; `arxiv_category` is the bracketed primary category in the margin stamp block that `metadata.arxiv_id.source_block_id` names (`[cs.CL]`), or `null`.
+- `reading` is the caller's place, or `null` when they have not started the paper. Pages are zero-based. `state` is `finished` once `furthest_page >= page_count - 1` (or the paper was marked read) and `reading` otherwise, and `finished` always has a `finished_at`; `opened_at` is the time of the last write; `furthest_page` only grows and `finished_at` is never cleared. The rule is one function, `papertree_db.reading.progress_state`.
+- `year` is the year first submitted, from the arXiv id only: `2000 + YY` for a new-style id from 0704 on (`1706.03762` is 2017), or the year of an old-style `archive/YYMMNNN` id (`hep-th/9901001` is 1999). Anything else is `null`: the parser's `metadata.year` is a stamp date (the latest version) or a year cited in the text, so it is never used. Derived at read time; the parser is unchanged.
+- `arxiv_id` is `metadata.arxiv_id.value`; `arxiv_category` is the primary category in the margin stamp block that `metadata.arxiv_id.source_block_id` names, only where it follows the id (`arXiv:<id>[vN] [cs.CL]`) and is a real arXiv category (`[sic]` is `null`).
 - `thread_count` counts the paper's AI threads; `has_summary` is true when the promoted generation has a cached summary.
 
 - `title` is `metadata.title.value` of the promoted generation. Otherwise it is `original_filename` without `.pdf`, and otherwise the `paper_id`. PDFs' `/Title` was empty in 4 of 4 papers (MEASURED), so it is not used.
