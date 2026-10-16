@@ -9,14 +9,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { sendToCanvas } from '@/components/canvas/sendToCanvas';
 import { dismissCanvasToast } from '@/components/canvas/toast';
-import type { ViewMessage } from '@/components/explain/useExplainActions';
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar';
 import { Exchange } from '@/features/explain/components/Exchange';
 import { buildExchanges, type Exchange as ExchangeModel } from '@/features/explain/model/exchange';
 import { boardsApi } from '@/lib/api/boards';
-import type { Anchor, Citation } from '@/lib/api/types';
 
 import { anchorFixture, citation } from './s6-support';
+
+import type { ViewMessage } from '@/components/explain/useExplainActions';
+import type { Anchor, Citation } from '@/lib/api/types';
 
 vi.mock('@/lib/api/boards', () => ({ boardsApi: { get: vi.fn(), createNode: vi.fn() } }));
 vi.mock('@/lib/api/threads', () => ({ threadsApi: { list: vi.fn(), get: vi.fn() } }));
@@ -75,6 +76,7 @@ describe('“board”, never “canvas”, around the board (#214)', () => {
         initial="M"
         onShow={() => undefined}
         onRetry={() => undefined}
+        onStop={() => undefined}
         onSendToCanvas={send}
       />,
     );
