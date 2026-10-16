@@ -192,6 +192,11 @@ describe('undo and redo by keyboard and from the toolbar (#215)', () => {
     await mount();
     act(() => ctl.patchEdge('ce_1', { kind: 'contradicts' }));
     expect(screen.getByRole('button', { name: 'Undo change to “contradicts”' })).toBeTruthy();
+    api.get.mockResolvedValue({
+      board: BOARD,
+      nodes: [PASSAGE, NOTE],
+      edges: [{ ...EDGE, kind: 'contradicts' }],
+    });
     await key(UNDO);
     await waitFor(() => expect(ctl.edges[0]?.data?.edge.kind).toBe('supports'));
     expect(api.patchEdge).toHaveBeenLastCalledWith('brd_1', 'ce_1', { kind: 'supports' });

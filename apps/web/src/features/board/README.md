@@ -135,16 +135,44 @@ has focus (`useUndoKeys`), so a note keeps the browser's own undo of its text.
   the controller's own writes (`replay` → PATCH, DELETE, POST), local first, with the `version` the
   board holds when it runs. A card changed somewhere else answers 409: the board reloads, says
   "Couldn't undo move of “…”. The card “…” was changed somewhere else. The latest version is
-  shown.", drops that step and forgets every other step about that card, so no later undo
-  overwrites the other change without a word. Any other refusal also drops the step and reloads.
+  shown.", drops that step and forgets every other step that would write over that card (a PATCH
+  of it, or a DELETE of it), so no later undo or redo overwrites the other change without a word.
+  A step that only creates the card again (undoing its delete) is kept: it overwrites nothing, so a
+  deleted card stays restorable. Any other refusal also drops the step and reloads. A card that is
+  gone says so ("That card is no longer on the board."), not in the server's words.
+- **A reload keeps the versions it holds** for every card a step writes (`holds`): a change made in
+  another tab is shown, but an undo of that card still carries this tab's version and answers 409
+  rather than overwriting it. (A new gesture on that card is refused the same way once, then the
+  board takes the server's version.) A card whose DELETE is on its way stays off the board even if
+  a reload's read raced it.
+- **Threads carry no version on the server (#283), so a thread step is guarded on the client
+  only**: before an undo or redo of a change of kind or label, the board reads the board and
+  refuses ("The thread was changed somewhere else. The latest version is shown.") when the thread
+  is not as the step left it. The window left open is the one round trip between that read and
+  the PATCH: a change made in another tab inside it is overwritten. #283 adds the version (a
+  migration and a 409, like cards). One write per thread is in flight at a time (`edgeWrite`), as
+  one PATCH per card is, so a re-kind and its immediate undo reach the server in order.
 - **Deleted rows come back with their ids**, words, anchors, message and page ids, frame and
-  threads (POST with the old `node_id` / `edge_id`: the server accepts it once the row is gone).
-  NodeCreate has no `z`, so a card comes back at z 0 (every card v0.2 makes is z 0), with a new
-  `created_at` and version 1. A frame's cards rejoin it by PATCH; the server's ungroup trigger does
-  not bump their versions (0008), so no fresh read is needed and a member changed elsewhere 409s.
-- **One stack, one toast.** The Undo toast after a delete or a new thread is the stack's newest
-  step: its Undo is Cmd/Ctrl+Z. Any other step puts the toast away (its Undo would now take back
-  that step), and after its 8 s the step can still be undone from the keyboard or the toolbar.
+  threads (POST with the old `node_id` / `edge_id`: the server accepts it once the row is gone,
+  and returns the row it still has if its DELETE has not landed). NodeCreate has no `z`, so a card
+  comes back at z 0 (every card v0.2 makes is z 0), with a new `created_at` and version 1; the
+  board is read in `z, created_at` order, so **a restored card moves to the end**: it is drawn
+  over the others and is the last card Tab reaches, also after a reload. A frame's cards rejoin it
+  by PATCH; the server's ungroup trigger does not bump their versions (0008), so no fresh read is
+  needed and a member changed elsewhere 409s (and is left out of its frame). A thread whose other
+  card was deleted elsewhere is not brought back, and the board says so.
+- **One stack, one toast.** The Undo toast after a delete or a new thread names its own step (its
+  `key`) and takes back that step or nothing: when another step is newer it says "That was not
+  undone: the board changed after it." and leaves the stack alone. Any other step puts the toast
+  away, and so does forgetting its step; after its 8 s the step can still be undone from the
+  keyboard or the toolbar. A nudge still in its 400 ms debounce is newer than the toast's delete
+  but does not block it: the card comes back and the nudge is recorded after.
+- **One replay at a time, in order** (`useBoardHistory`): an undo or redo takes its step only once
+  the replays before it settled, and a gesture made while a replay is saving is recorded after it,
+  so the stacks keep the order things happened in and a newer gesture always clears Redo. One
+  order is still the page's, not the server's: Cmd/Ctrl+Z pressed while a new note's or thread's
+  POST is on its way undoes the step before it, and the new step, once saved, clears that undo's
+  Redo.
 - **The cap is 100 steps** (`HISTORY_CAP`); the oldest is forgotten past it. The history belongs to
   the page: a reload starts it empty. The viewport (pan and zoom) is not a step.
 

@@ -6,6 +6,7 @@
  */
 import { cardName } from './flow';
 
+import type { CreateEdgeBody, CreateNodeBody } from '@/lib/api/boards';
 import type { CanvasEdge, CanvasNode, EdgeKind } from '@/lib/api/types';
 
 /** How many steps the board remembers; past it, the oldest step is forgotten. */
@@ -50,8 +51,11 @@ export interface RowsCommand {
   readonly members: readonly Member[];
 }
 
-/** One step: what it changed, and its name (`label`, as in "Undo move of 3 cards"). */
-export type BoardCommand =
+/**
+ * One step: what it changed, and its name (`label`, as in "Undo move of 3 cards"). `key` marks the
+ * step an Undo toast names, so the toast can take back that step and no other (#215 review S1).
+ */
+export type BoardCommand = (
   | { readonly type: 'patch'; readonly label: string; readonly cards: readonly CardChange[] }
   | {
       readonly type: 'thread';
@@ -61,7 +65,8 @@ export type BoardCommand =
       readonly after: ThreadFields;
     }
   | RowsCommand
-  | { readonly type: 'batch'; readonly label: string; readonly steps: readonly BoardCommand[] };
+  | { readonly type: 'batch'; readonly label: string; readonly steps: readonly BoardCommand[] }
+) & { readonly key?: string };
 
 /** The steps that can be undone (oldest first) and the ones that can be redone (next last). */
 export interface History {
@@ -178,24 +183,133 @@ export function touches(command: BoardCommand, id: string): boolean {
 }
 
 /**
- * Forgets every step about a row that was changed somewhere else, so no later undo can overwrite
- * that change without the 409 that told the reader about it (#215).
+ * A step after its row `id` was changed somewhere else: null when its next replay would write over
+ * that row (a PATCH, or a DELETE of it); else the step, less the frame members that row was (a
+ * rejoin is a PATCH). A replay that only creates the row again (a delete's undo, a new card's redo)
+ * overwrites nothing, so a deleted card stays restorable (#215 review S1).
+ *
+ * @param command The step.
+ * @param id The row changed elsewhere.
+ * @param creating The kind of step whose replay creates rows: `remove` when undone, `add` redone.
+ * @returns The step to keep, or null.
+ */
+function afterConflict(
+  command: BoardCommand,
+  id: string,
+  creating: 'add' | 'remove',
+): BoardCommand | null {
+  switch (command.type) {
+    case 'patch':
+    case 'thread':
+      return touches(command, id) ? null : command;
+    case 'add':
+    case 'remove': {
+      const row =
+        command.nodes.some((n) => n.node_id === id) || command.edges.some((e) => e.edge_id === id);
+      if (row && command.type !== creating) return null;
+      const members = command.members.filter((m) => m.id !== id);
+      return members.length === command.members.length ? command : { ...command, members };
+    }
+    case 'batch': {
+      const steps = command.steps.map((s) => afterConflict(s, id, creating));
+      if (steps.some((s) => s === null)) return null;
+      const kept = steps as BoardCommand[];
+      return kept.every((s, i) => s === command.steps[i]) ? command : { ...command, steps: kept };
+    }
+  }
+}
+
+/**
+ * Forgets the steps about a row that was changed somewhere else, so no later undo or redo writes
+ * over that change without the 409 that told the reader about it (#215). A step that would only
+ * create the row again (bring back a deleted card) is kept: it overwrites nothing.
  *
  * @param history The history.
  * @param id The card or thread.
  * @returns The history without those steps.
  */
 export function forget(history: History, id: string): History {
+  const keep = (steps: readonly BoardCommand[], creating: 'add' | 'remove') =>
+    steps.flatMap((c) => {
+      const kept = afterConflict(c, id, creating);
+      return kept === null ? [] : [kept];
+    });
+  return { past: keep(history.past, 'remove'), future: keep(history.future, 'add') };
+}
+
+/**
+ * Whether a thread is as a step expects to find it before its replay (threads carry no version on
+ * the server, so this read is the only guard; #215 review S3).
+ *
+ * @param edge The thread as the server has it now.
+ * @param expect The fields the step left (a redo) or found (an undo).
+ * @returns True when every expected field matches.
+ */
+export function threadIsAsLeft(
+  edge: { readonly kind: EdgeKind; readonly label: string | null },
+  expect: ThreadFields,
+): boolean {
+  return (
+    (expect.kind === undefined || expect.kind === edge.kind) &&
+    (expect.label === undefined || expect.label === edge.label)
+  );
+}
+
+/**
+ * The POST that puts a deleted card back as it was: same id, words, anchor, message, page or
+ * diagram, size and place (NodeCreate has no `z`).
+ *
+ * @param snap The card as it was deleted.
+ * @param groupId Its frame, when that frame is on the board.
+ * @returns The body of `POST /papers/{id}/board/nodes`.
+ */
+export function restoreBody(snap: CanvasNode, groupId: string | null): CreateNodeBody {
   return {
-    past: history.past.filter((c) => !touches(c, id)),
-    future: history.future.filter((c) => !touches(c, id)),
+    node_id: snap.node_id,
+    kind: snap.kind,
+    x: snap.x,
+    y: snap.y,
+    w: snap.w,
+    h: snap.h,
+    title: snap.title,
+    body: snap.body,
+    ...(snap.source_anchor === null ? {} : { source_anchor: snap.source_anchor }),
+    ...(snap.source_message_id === null ? {} : { source_message_id: snap.source_message_id }),
+    // A notebook or diagram card is refused without the thing it shows (S6a).
+    ...(snap.source_page_id === null ? {} : { source_page_id: snap.source_page_id }),
+    ...(snap.source_diagram_id === null ? {} : { source_diagram_id: snap.source_diagram_id }),
+    group_id: groupId,
+  };
+}
+
+/**
+ * The POST that puts a deleted thread back on the pins it was drawn between (a keyboard link of
+ * v0.1 has none).
+ *
+ * @param edge The thread as it was deleted.
+ * @returns The body of `POST /boards/{bid}/edges`.
+ */
+export function restoreThreadBody(edge: CanvasEdge): CreateEdgeBody {
+  return {
+    edge_id: edge.edge_id,
+    from_node_id: edge.from_node_id,
+    to_node_id: edge.to_node_id,
+    kind: edge.kind,
+    label: edge.label,
+    ...(edge.from_port === null ? {} : { from_port: edge.from_port }),
+    ...(edge.to_port === null ? {} : { to_port: edge.to_port }),
   };
 }
 
 /** What the replay needs from the board; each resolves false after saying what went wrong. */
 export interface ReplayIo {
   readonly patchCards: (changes: readonly { id: string; fields: CardFields }[]) => Promise<boolean>;
-  readonly patchThread: (id: string, fields: ThreadFields) => Promise<boolean>;
+  /** `expect` is what the thread must be now, read from the server before the PATCH. */
+  readonly patchThread: (
+    id: string,
+    fields: ThreadFields,
+    expect: ThreadFields,
+  ) => Promise<boolean>;
   readonly restore: (rows: RowsCommand) => Promise<boolean>;
   readonly remove: (rows: RowsCommand) => Promise<boolean>;
 }
@@ -212,7 +326,7 @@ export async function replay(command: BoardCommand, io: ReplayIo): Promise<boole
     case 'patch':
       return io.patchCards(command.cards.map((c) => ({ id: c.id, fields: c.after })));
     case 'thread':
-      return io.patchThread(command.id, command.after);
+      return io.patchThread(command.id, command.after, command.before);
     case 'add':
       return io.restore(command);
     case 'remove':

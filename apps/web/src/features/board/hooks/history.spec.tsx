@@ -231,6 +231,12 @@ describe('undo and redo on the board (#215)', () => {
     );
     act(() => result.current.patchEdge('ce_1', { kind: 'contradicts' }));
     expect(result.current.history.undoName).toBe('change to “contradicts”');
+    // The undo reads the thread first: the server has it as the step left it.
+    api.get.mockResolvedValue({
+      board: BOARD,
+      nodes: [cardRow('note', { node_id: 'cn_a' }), cardRow('note', { node_id: 'cn_b' })],
+      edges: [{ ...EDGE, kind: 'contradicts' }],
+    });
     await undo(result);
     expect(api.patchEdge).toHaveBeenLastCalledWith('brd_1', 'ce_1', { kind: 'supports' });
     expect(result.current.edges[0]?.data?.edge.kind).toBe('supports');

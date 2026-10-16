@@ -21,8 +21,11 @@
  * UNDO AND REDO (#215). Every gesture that writes records ONE step in `useBoardHistory` (a drag of
  * several cards, a frame and the cards it carries, a resize with the cards it takes in); undo and
  * redo replay it through these same writes, with the version held when they run, so a card changed
- * somewhere else answers 409: the board reloads, says so, and forgets the steps about that card.
- * The Undo toast after a delete or a new thread is the same stack's Undo.
+ * somewhere else answers 409: the board reloads, says so, and forgets the steps that would write
+ * over it. A reload keeps the version held for every card a step writes, so a change made in
+ * another tab is never adopted silently and then overwritten. Threads carry no version (#283), so
+ * a thread step reads the thread first and refuses if it changed. The Undo toast after a delete or
+ * a new thread names its own step and takes back that step or nothing.
  */
 import {
   applyEdgeChanges,
@@ -62,6 +65,9 @@ import {
   type ReplayIo,
   type RowsCommand,
   type ThreadFields,
+  restoreBody,
+  restoreThreadBody,
+  threadIsAsLeft,
 } from '../model/history';
 import { newEdgeId, newNodeId } from '../model/ids';
 import { linkedSentence } from '../model/linkAs';
@@ -152,6 +158,9 @@ export function staleSubject(card: string | undefined): string {
 
 /** The end of every sentence that follows a reload. */
 const RELOADED = 'The board was reloaded from your last saved version.';
+/** The toast's Undo when its step is no longer the newest one (#215 review S1). */
+export const NOT_NEWEST =
+  'That was not undone: the board changed after it. Undo in the toolbar takes back the newest change first.';
 
 function sentence(error: unknown, fallback: string): string {
   if (error instanceof ApiError && error.status !== 0 && error.detail.trim() !== '') {
@@ -189,13 +198,19 @@ export function useBoardController(paperId: string): BoardController {
   const aliveRef = useRef(true);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const undoSeq = useRef(0);
+  /** The `key` of the step the Undo toast names (#215 review S1). */
+  const offerKey = useRef<string | null>(null);
+  /** One write at a time per thread, as `chainRef` does for cards (#215 review S4). */
+  const edgeChainRef = useRef(new Map<string, Promise<unknown>>());
+  /** Cards whose DELETE is on its way: a reload that races it must not show them again. */
+  const deletingRef = useRef(new Set<string>());
   /** True while the notice on screen is the stale-version one, which clears itself. */
   const staleShown = useRef(false);
   const staleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Filled at the end of every render: what an undo or redo runs (the writes below). */
   const historyHooks = useRef<HistoryHooks | null>(null);
   const hist = useBoardHistory(historyHooks);
-  const { record: remember, forget: forgetRow, after: afterWrite } = hist;
+  const { record: remember, forget: forgetHistory, after: afterWrite, holds, undoIf } = hist;
 
   const setNodes = useCallback((next: PtNode[]) => {
     nodesRef.current = next;
@@ -218,18 +233,29 @@ export function useBoardController(paperId: string): BoardController {
 
   const adopt = useCallback(
     (view: { board: Board | null; nodes: CanvasNode[]; edges: CanvasEdge[] }) => {
-      sentRef.current = new Map(view.nodes.map((n) => [n.node_id, { x: n.x, y: n.y }]));
-      versionRef.current = new Map(view.nodes.map((n) => [n.node_id, n.version]));
+      const rows = view.nodes.filter((n) => !deletingRef.current.has(n.node_id));
+      sentRef.current = new Map(rows.map((n) => [n.node_id, { x: n.x, y: n.y }]));
+      // A card a step writes keeps the version held here: if another tab changed it, the undo
+      // answers 409 instead of overwriting what this read just showed (#215 review S2).
+      const held = versionRef.current;
+      versionRef.current = new Map(
+        rows.map((n) => [
+          n.node_id,
+          (holds(n.node_id) ? held.get(n.node_id) : n.version) ?? n.version,
+        ]),
+      );
       setBoardBoth(view.board);
-      setNodes(view.nodes.map((n) => toFlowNode(n, paperId)));
-      const kinds = new Map(view.nodes.map((n) => [n.node_id, n.kind] as const));
+      setNodes(rows.map((n) => toFlowNode(n, paperId)));
+      const kinds = new Map(rows.map((n) => [n.node_id, n.kind] as const));
       setEdges(
-        view.edges.map((e) =>
-          toFlowEdge(e, { from: kinds.get(e.from_node_id), to: kinds.get(e.to_node_id) }),
-        ),
+        view.edges
+          .filter((e) => kinds.has(e.from_node_id) && kinds.has(e.to_node_id))
+          .map((e) =>
+            toFlowEdge(e, { from: kinds.get(e.from_node_id), to: kinds.get(e.to_node_id) }),
+          ),
       );
     },
-    [paperId, setBoardBoth, setEdges, setNodes],
+    [holds, paperId, setBoardBoth, setEdges, setNodes],
   );
 
   const reload = useCallback(async () => {
@@ -270,13 +296,47 @@ export function useBoardController(paperId: string): BoardController {
     setNotice(null);
   }, []);
 
+  const offerUndo = useCallback((message: string, key: string) => {
+    undoSeq.current += 1;
+    offerKey.current = key;
+    setUndo({ token: undoSeq.current, message });
+    if (undoTimer.current !== null) clearTimeout(undoTimer.current);
+    undoTimer.current = setTimeout(() => {
+      undoTimer.current = null;
+      offerKey.current = null;
+      setUndo(null);
+    }, UNDO_VISIBLE_MS);
+  }, []);
+
+  const dismissUndo = useCallback(() => {
+    if (undoTimer.current !== null) clearTimeout(undoTimer.current);
+    undoTimer.current = null;
+    offerKey.current = null;
+    setUndo(null);
+  }, []);
+
+  /** Forgets the steps that would write over a row changed elsewhere, and a toast naming one. */
+  const forgetRow = useCallback(
+    (id: string) => {
+      forgetHistory(id);
+      if (offerKey.current !== null && !hist.contains(offerKey.current)) dismissUndo();
+    },
+    [dismissUndo, forgetHistory, hist],
+  );
+
   /**
-   * `cardId` is the card a stale-version refusal was about. The notice names it by what the SERVER
-   * has after the reload, never by the reader's unsaved text still on the card when the save failed.
+   * `about.card` is the card a stale-version refusal was about. The notice names it by what the
+   * SERVER has after the reload, never by the reader's unsaved text still on the card when the save
+   * failed. `about.lead` starts the sentence of an undo or redo that failed.
    */
   const failed = useCallback(
-    (error: unknown, fallback: string, cardId?: string, lead?: string) => {
+    (
+      error: unknown,
+      fallback: string,
+      about: { readonly card?: string; readonly thread?: string; readonly lead?: string } = {},
+    ) => {
       if (!aliveRef.current) return;
+      const { card: cardId, lead } = about;
       if (error instanceof ApiError && error.code === 'stale_version') {
         // No later undo may overwrite what changed somewhere else (#215).
         if (cardId !== undefined) forgetRow(cardId);
@@ -294,8 +354,12 @@ export function useBoardController(paperId: string): BoardController {
         return;
       }
       staleShown.current = false;
+      const gone = error instanceof ApiError && error.code === 'not_found';
+      const what = about.thread === undefined ? 'That card' : 'That thread';
       setNotice(
-        lead === undefined ? sentence(error, fallback) : `${lead} ${sentence(error, RELOADED)}`,
+        lead === undefined
+          ? sentence(error, fallback)
+          : `${lead} ${gone ? `${what} is no longer on the board.` : sentence(error, RELOADED)}`,
       );
       void reload();
     },
@@ -331,7 +395,7 @@ export function useBoardController(paperId: string): BoardController {
             clearStale();
           }
         } catch (error) {
-          failed(error, `Couldn't save that change. ${RELOADED}`, id, lead);
+          failed(error, `Couldn't save that change. ${RELOADED}`, { card: id, lead });
         }
       };
       const done = (chainRef.current.get(id) ?? Promise.resolve()).then(run);
@@ -341,34 +405,33 @@ export function useBoardController(paperId: string): BoardController {
     [clearStale, failed, mergeData],
   );
 
-  const offerUndo = useCallback((message: string) => {
-    undoSeq.current += 1;
-    setUndo({ token: undoSeq.current, message });
-    if (undoTimer.current !== null) clearTimeout(undoTimer.current);
-    undoTimer.current = setTimeout(() => {
-      undoTimer.current = null;
-      setUndo(null);
-    }, UNDO_VISIBLE_MS);
-  }, []);
-
-  const dismissUndo = useCallback(() => {
-    if (undoTimer.current !== null) clearTimeout(undoTimer.current);
-    undoTimer.current = null;
-    setUndo(null);
-  }, []);
-
   /**
    * A gesture's one step. Only a delete and a new thread show the Undo toast (`toast` is its
    * words); any other step puts an earlier toast away, since its Undo would now take back this one.
    */
   const recordStep = useCallback(
     (command: BoardCommand, toast?: string) => {
-      remember(command);
-      if (toast === undefined) dismissUndo();
-      else offerUndo(toast);
+      if (toast === undefined) {
+        remember(command);
+        dismissUndo();
+        return;
+      }
+      const key = `toast-${String(undoSeq.current + 1)}`;
+      remember({ ...command, key });
+      offerUndo(toast, key);
     },
     [dismissUndo, offerUndo, remember],
   );
+
+  /** One write at a time per thread: `work` starts once the thread's earlier writes settled. */
+  const edgeWrite = useCallback(<T>(id: string, work: () => Promise<T>): Promise<T> => {
+    const done = (edgeChainRef.current.get(id) ?? Promise.resolve()).then(work, work);
+    edgeChainRef.current.set(
+      id,
+      done.catch(() => undefined),
+    );
+    return done;
+  }, []);
 
   /**
    * The nodes that moved since they were last sent, one PATCH each. A card dropped into a frame (or
@@ -657,38 +720,47 @@ export function useBoardController(paperId: string): BoardController {
       setEdges(edgesRef.current.filter((e) => !lost.includes(e)));
 
       let ok = true;
-      const refused = (what: string) => (error: unknown) => {
+      const refused = (what: string, thread?: string) => (error: unknown) => {
         if (error instanceof ApiError && error.status === 404) return;
         ok = false;
-        failed(error, `Couldn't delete ${what}. ${RELOADED}`, undefined, lead);
+        failed(error, `Couldn't delete ${what}. ${RELOADED}`, { lead, thread });
       };
       const pending: Promise<void>[] = [];
       for (const id of doomed) {
         const previous = chainRef.current.get(id) ?? Promise.resolve();
-        const done = previous.then(() => boardsApi.deleteNode(boardId, id)).catch(refused('that'));
+        deletingRef.current.add(id);
+        const done = previous
+          .then(() => boardsApi.deleteNode(boardId, id))
+          .catch(refused('that'))
+          .finally(() => deletingRef.current.delete(id));
         chainRef.current.set(id, done);
         pending.push(done);
         sentRef.current.delete(id);
         versionRef.current.delete(id);
       }
       for (const edge of own) {
-        pending.push(boardsApi.deleteEdge(boardId, edge.edge_id).catch(refused('that link')));
+        const id = edge.edge_id;
+        pending.push(
+          edgeWrite(id, () => boardsApi.deleteEdge(boardId, id)).catch(refused('that link', id)),
+        );
       }
       const all = Promise.all(pending).then(() => ok);
       afterWrite(all);
       return all;
     },
-    [afterWrite, failed, setEdges, setNodes],
+    [afterWrite, edgeWrite, failed, setEdges, setNodes],
   );
 
   /**
    * Puts rows back with the same ids, content and anchors (frames first, so a card can rejoin its
-   * frame; then the cards a deleted frame held; then the threads whose two cards are present).
+   * frame; then the cards a deleted frame held; then the threads). The POST is idempotent on the
+   * id, so a row the server still has (a reload raced its DELETE) is returned, not doubled.
    * NodeCreate has no `z`, so a card comes back at z 0 (every card v0.2 makes has z 0), with a new
-   * `created_at` and version 1 (#215).
+   * `created_at` and version 1; the board sorts by `z, created_at`, so a restored card is drawn
+   * last and is the last card Tab reaches (#215).
    */
   const restoreRows = useCallback(
-    async (rows: RowsCommand, lead?: string): Promise<boolean> => {
+    async (rows: RowsCommand, lead: string): Promise<boolean> => {
       const boardId = boardRef.current?.board_id;
       if (!aliveRef.current || boardId === undefined) return false;
       try {
@@ -697,32 +769,17 @@ export function useBoardController(paperId: string): BoardController {
           (a, b) => Number(b.kind === 'group') - Number(a.kind === 'group'),
         );
         for (const snap of ordered) {
-          if (live.has(snap.node_id)) continue;
           const groupId = snap.group_id !== null && live.has(snap.group_id) ? snap.group_id : null;
-          const created = await boardsApi.createNode(paperId, {
-            node_id: snap.node_id,
-            kind: snap.kind,
-            x: snap.x,
-            y: snap.y,
-            w: snap.w,
-            h: snap.h,
-            title: snap.title,
-            body: snap.body,
-            ...(snap.source_anchor === null ? {} : { source_anchor: snap.source_anchor as never }),
-            ...(snap.source_message_id === null
-              ? {}
-              : { source_message_id: snap.source_message_id }),
-            // A notebook or diagram card is refused without the thing it shows (S6a).
-            ...(snap.source_page_id === null ? {} : { source_page_id: snap.source_page_id }),
-            ...(snap.source_diagram_id === null
-              ? {}
-              : { source_diagram_id: snap.source_diagram_id }),
-            group_id: groupId,
-          });
-          live.add(snap.node_id);
+          const created = await boardsApi.createNode(paperId, restoreBody(snap, groupId));
           sentRef.current.set(snap.node_id, { x: created.node.x, y: created.node.y });
           versionRef.current.set(snap.node_id, created.node.version);
-          setNodes([...nodesRef.current, toFlowNode(created.node, paperId)]);
+          const card = toFlowNode(created.node, paperId);
+          setNodes(
+            live.has(snap.node_id)
+              ? nodesRef.current.map((n) => (n.id === card.id ? card : n))
+              : [...nodesRef.current, card],
+          );
+          live.add(snap.node_id);
         }
         // The server's trigger ungrouped a deleted frame's cards without a new version, so the
         // versions held here are still the server's.
@@ -731,28 +788,21 @@ export function useBoardController(paperId: string): BoardController {
         const rejoined = await Promise.all(
           rejoin.map((m) => patchNode(m.id, { group_id: m.groupId }, lead)),
         );
+        let threads = true;
         for (const edge of rows.edges) {
-          if (!live.has(edge.from_node_id) || !live.has(edge.to_node_id)) continue;
           if (edgesRef.current.some((e) => e.id === edge.edge_id)) continue;
-          const saved = await boardsApi.createEdge(boardId, {
-            edge_id: edge.edge_id,
-            from_node_id: edge.from_node_id,
-            to_node_id: edge.to_node_id,
-            kind: edge.kind,
-            label: edge.label,
-            // The thread comes back on the pins it was drawn between (a keyboard link has none).
-            ...(edge.from_port === null ? {} : { from_port: edge.from_port }),
-            ...(edge.to_port === null ? {} : { to_port: edge.to_port }),
-          });
+          if (!live.has(edge.from_node_id) || !live.has(edge.to_node_id)) {
+            threads = false; // a card it joined was deleted somewhere else (#215 review N1)
+            continue;
+          }
+          const saved = await boardsApi.createEdge(boardId, restoreThreadBody(edge));
           setEdges([...edgesRef.current, threadOf(saved)]);
         }
         clearStale();
-        return rejoined.every(Boolean);
+        if (!threads) setNotice(`${lead} A card that thread joined is no longer on the board.`);
+        return threads && rejoined.every(Boolean);
       } catch (error) {
-        const fallback = `Couldn't bring that back. ${RELOADED}`;
-        setNotice(
-          lead === undefined ? sentence(error, fallback) : `${lead} ${sentence(error, RELOADED)}`,
-        );
+        setNotice(`${lead} ${sentence(error, RELOADED)}`);
         void reload();
         return false;
       }
@@ -827,13 +877,14 @@ export function useBoardController(paperId: string): BoardController {
     [deleteSelection],
   );
 
-  const undoStep = hist.view.undo;
   const runUndo = useCallback(async () => {
+    const key = offerKey.current;
     // Only while the toast shows: after it goes, Cmd/Ctrl+Z and the toolbar's Undo still can.
-    if (undoTimer.current === null) return;
+    if (key === null || undoTimer.current === null) return;
     dismissUndo();
-    await undoStep();
-  }, [dismissUndo, undoStep]);
+    // The toast takes back the step it names, or nothing: never an older one (#215 review S1).
+    if ((await undoIf(key)) === null) setNotice(NOT_NEWEST);
+  }, [dismissUndo, undoIf]);
 
   const connect = useCallback(
     async (from: string, to: string, kind: EdgeKind, label: string | null, ports?: ThreadPorts) => {
@@ -867,27 +918,34 @@ export function useBoardController(paperId: string): BoardController {
     [clearStale, recordStep, setEdges, threadOf],
   );
 
-  /** A thread's kind or label: on screen at once, then the PATCH; resolves true once saved. */
-  const sendEdge = useCallback(
-    (id: string, fields: ThreadFields, lead?: string): Promise<boolean> => {
+  /** A thread's kind or label on screen at once (the PATCH is the caller's, in the thread's turn). */
+  const showEdge = useCallback(
+    (id: string, fields: ThreadFields): string | null => {
       const boardId = boardRef.current?.board_id;
       const current = edgesRef.current.find((e) => e.id === id);
-      if (boardId === undefined || current?.data === undefined) return Promise.resolve(false);
+      if (boardId === undefined || current?.data === undefined) return null;
       const merged = { ...current.data.edge, ...fields };
       setEdges(
         edgesRef.current.map((e) =>
           e.id === id ? { ...threadOf(merged), selected: e.selected } : e,
         ),
       );
-      return boardsApi.patchEdge(boardId, id, fields).then(
+      return boardId;
+    },
+    [setEdges, threadOf],
+  );
+
+  /** One PATCH of a thread, after its earlier writes; resolves true once saved. */
+  const putEdge = useCallback(
+    (boardId: string, id: string, fields: ThreadFields, lead?: string): Promise<boolean> =>
+      boardsApi.patchEdge(boardId, id, fields).then(
         () => true,
         (error: unknown) => {
-          failed(error, `Couldn't save that link. ${RELOADED}`, undefined, lead);
+          failed(error, `Couldn't save that link. ${RELOADED}`, { thread: id, lead });
           return false;
         },
-      );
-    },
-    [failed, setEdges, threadOf],
+      ),
+    [failed],
   );
 
   const patchEdge = useCallback(
@@ -901,9 +959,10 @@ export function useBoardController(paperId: string): BoardController {
       const label =
         fields.kind === undefined ? 'thread label' : `change to “${kindLabel(fields.kind)}”`;
       recordStep({ type: 'thread', label, id, before, after: fields });
-      void sendEdge(id, fields);
+      const boardId = showEdge(id, fields);
+      if (boardId !== null) void edgeWrite(id, () => putEdge(boardId, id, fields));
     },
-    [recordStep, sendEdge],
+    [edgeWrite, putEdge, recordStep, showEdge],
   );
 
   const groupNodes = useCallback(
@@ -954,6 +1013,44 @@ export function useBoardController(paperId: string): BoardController {
   );
 
   /**
+   * A thread step's replay. Threads carry no version (#283), so the thread is read from the server
+   * first and the replay refused, with the board refreshed and a sentence, when it is not as the
+   * step left it: another tab changed it. One round trip remains between that read and the PATCH.
+   *
+   * @param id The thread.
+   * @param fields What the replay sets.
+   * @param expect What the thread must be now.
+   * @param lead The sentence a refusal starts with.
+   * @returns True once saved.
+   */
+  const replayThread = async (
+    id: string,
+    fields: ThreadFields,
+    expect: ThreadFields,
+    lead: string,
+  ): Promise<boolean> => {
+    try {
+      const view = await boardsApi.get(paperId);
+      const row = view.edges.find((e) => e.edge_id === id);
+      if (row === undefined || !threadIsAsLeft(row, expect)) {
+        forgetRow(id);
+        adopt(view);
+        setNotice(
+          row === undefined
+            ? `${lead} That thread is no longer on the board.`
+            : `${lead} The thread was changed somewhere else. The latest version is shown.`,
+        );
+        return false;
+      }
+    } catch (error) {
+      failed(error, RELOADED, { thread: id, lead });
+      return false;
+    }
+    const boardId = showEdge(id, fields);
+    return boardId === null ? false : putEdge(boardId, id, fields, lead);
+  };
+
+  /**
    * The writes an undo or redo replays.
    *
    * @param lead The sentence each failure starts with ("Couldn't undo move of 3 cards.").
@@ -979,11 +1076,8 @@ export function useBoardController(paperId: string): BoardController {
       const saved = await Promise.all(changes.map((c) => patchNode(c.id, c.fields, lead)));
       return saved.every(Boolean);
     },
-    patchThread: (id, fields) => {
-      if (edgesRef.current.some((e) => e.id === id)) return sendEdge(id, fields, lead);
-      setNotice(`${lead} That thread is no longer on the board.`);
-      return Promise.resolve(false);
-    },
+    patchThread: (id, fields, expect) =>
+      edgeWrite(id, () => replayThread(id, fields, expect, lead)),
     restore: (rows) => restoreRows(rows, lead),
     remove: (rows) => removeRows(rows, lead),
   });

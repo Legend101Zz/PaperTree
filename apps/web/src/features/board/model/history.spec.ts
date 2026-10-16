@@ -82,12 +82,34 @@ describe('the command stack', () => {
     expect(taken?.rest).toEqual(EMPTY_HISTORY);
   });
 
-  it('forgets every step that touches a card changed somewhere else', () => {
+  it('forgets every step whose replay would write over a card changed somewhere else', () => {
     let h = record(EMPTY_HISTORY, move('a', 0, 10));
-    h = record(h, { type: 'remove', label: 'delete', nodes: [NOTE], edges: [], members: [] });
+    h = record(h, { type: 'add', label: 'new note', nodes: [NOTE], edges: [], members: [] });
     h = record(h, { type: 'batch', label: 'framing', steps: [move('cn_n', 1, 2)] });
     h = record(h, move('b', 0, 10));
+    // Its move would PATCH it, and undoing its add would DELETE it: both go.
     expect(forget(h, 'cn_n').past.map((c) => c.label)).toEqual(['move of a', 'move of b']);
+  });
+
+  it('keeps a delete restorable: bringing a card back overwrites nothing (review S1)', () => {
+    const frame = cardRow('group', { node_id: 'cn_g', title: 'Why' });
+    const del: BoardCommand = {
+      type: 'remove',
+      label: 'delete of “Why”',
+      key: 'toast-1',
+      nodes: [frame, NOTE],
+      edges: [],
+      members: [
+        { id: 'cn_m', groupId: 'cn_g' },
+        { id: 'cn_k', groupId: 'cn_g' },
+      ],
+    };
+    const h = forget(forget(record(EMPTY_HISTORY, del), 'cn_n'), 'cn_m');
+    // The deleted note's own 409 keeps the step; a member changed elsewhere is not rejoined.
+    expect(h.past).toEqual([{ ...del, members: [{ id: 'cn_k', groupId: 'cn_g' }] }]);
+    expect(h.past[0]?.key).toBe('toast-1');
+    // Undone, its redo would DELETE the card again, over the other change: that goes.
+    expect(forget({ past: [], future: [del] }, 'cn_n').future).toEqual([]);
   });
 });
 
