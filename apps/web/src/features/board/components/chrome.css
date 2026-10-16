@@ -152,6 +152,7 @@
   display: flex;
   flex-direction: column;
   min-inline-size: 220px;
+  max-inline-size: min(340px, calc(100vw - 32px));
   padding: 6px;
   background: var(--pt-e2-fill);
   border-radius: var(--pt-radius-menu);
@@ -162,6 +163,9 @@
   justify-content: flex-start;
   inline-size: 100%;
   padding-inline: 10px;
+  /* Undo and Redo carry the step's name ("Undo move of “…”", #215): it wraps, never overflows. */
+  white-space: normal;
+  text-align: start;
 }
 
 /* Where some tools have icons (a phone's menu), every tool's words line up (10 + 20 + 8). */
