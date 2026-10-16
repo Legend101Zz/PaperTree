@@ -1,20 +1,73 @@
 # notebook
 
-The notebook's pure model (slice S5b, issue #207). The UI comes in S5c (page, items) and S5d (ink
-toolbar, lasso and eraser interaction); this folder has no React, DOM or network code.
+The Dive-in notebook: a bound page that starts from the exchange it came from (frame 05). The pure
+model is slice S5b (#207); the page is slice S5c (#208); ink tools, lasso and the nib/colour bar
+are S5d (#209, through `NotebookToolbar`'s `inkTools` slot); the Dive-in motion and the tablet and
+phone layouts are S5e (#210).
 
-## Data flow (as it will be wired)
+## What the page does (S5c)
 
-pointer input -> `screenToPage` -> a `Stroke` in page units -> `execute(add-strokes)` in the
-notebook store -> `encodeStroke` -> API -> one SQLite blob per stroke. Reading runs the other way:
-`decodeStroke` -> `strokeToPath` (cache the `d` string) -> one `<svg viewBox="0 0 960 H">`.
+- `/paper/<id>/notebook/<page>` shows one page: the binding edge, the template (blank, dot grid,
+  lined, Cornell, derivation grid) drawn as a CSS background, the title with "From your question on
+  p. 1 ¶1 · 15 Oct" linking back to the passage, the exchange block (call slip → AI slip → coverage
+  line), the trace as numbered quote cards, typed notes, stickies, shapes, and stored ink
+  (read-only). "Show all N paragraphs" opens the answer and moves everything below the exchange
+  down by the height it outgrew its box (`exchangeShift`, display only, never saved).
+  `/paper/<id>/notebook` lists the paper's pages or says where one comes from.
+- The three voices stay apart: `data-voice="you"` (call slip, notes, stickies), `paper` (quoted
+  passages), `ai` (the AI slip). Quote card `n` is passage `n` of the answer: numbers run in the
+  order the answer first cites each passage (`model/exchange.ts`), the order Dive in seeded them.
+- "Open source" and every marker leave for the reader at `?nb=<page>&item=<item>`; the reader reads
+  that item back and flashes its STORED Anchor (`hooks/useFocusFromNotebook.ts`).
+- Typed notes and stickies: create (tool bar), move (drag; arrow keys, Shift for 24), edit in
+  place (Enter, double-click), delete (Delete key or the × button), undo/redo (Ctrl/Cmd+Z,
+  Shift+Ctrl/Cmd+Z, Ctrl+Y). Whatever takes an item away (a delete, undoing an add, redoing a
+  delete) moves the keyboard to the next item, else the previous, else the page title; whatever
+  brings one back gives it the keyboard. What is being typed is committed on blur, Escape, unmount
+  (Back, a route change), a hidden tab and `pagehide`, and is capped at the API's 100,000
+  characters with a count near the limit.
+- Saving never stops silently (`hooks/useItemSaver.ts`, `components/SaveNotice.tsx`): a 409 (a
+  PATCH, or a DELETE sent with `?version=`, over an edit made elsewhere) is a bar that cannot be
+  dismissed, recounts what is not saved here as saves land, and stays until Reload; a failure is a
+  notice with Try again that, once dismissed, stays as a "Not saved" chip until the save succeeds,
+  and comes back for the next failure; an item deleted elsewhere (404) that held changes is
+  created again from this page and says so; a page deleted elsewhere (a create's 404) is a bar with
+  "Copy text"; a refusal (422) is said once and never retried.
+- Leaving (`model/leave.ts`, `hooks/pageLeave.ts`): a hidden tab sends with `keepalive` within the
+  browser's 64 KiB budget; on `pagehide` every open editor commits, then everything owed goes out in
+  chunks under the budget, one request per item, a write queued behind one in flight included
+  (sent with the version it will have); a write too big for any keepalive request makes the page
+  warn before it closes ("A long note has not been saved yet"), and only then.
 
-## Key files (`model/`)
+## Data flow
 
-- `page.ts`: fixed page width (960 units), page/screen conversion, the `Item` union, the five templates.
-- `stroke.ts`: `Stroke` and the compact binary format (zigzag varint deltas at 1/16 unit, 1 pressure byte).
-- `outline.ts`: stroke to filled SVG path through `perfect-freehand` 1.2.3 with explicit options.
-- `hitTest.ts`: polygon lasso (strokes: half their points inside; items: centre inside) and the whole-stroke eraser.
-- `history.ts`: undo/redo of commands (add, remove, move, edit text) with a cap.
+UI gesture → one S5b history `Command` (`execute` / `undo` / `redo`) → local `NotebookState` →
+`useNotebookPage` asks `saveOp` (model/save.ts) per touched item what the server lacks → `pushItem`
+(api/) sends ONE create, patch-of-changed-fields (with `version`) or delete (with `?version=`) →
+`routers/notebooks.py` → `papertree_db.notebook` → SQLite (migration 0007). Saves run one at a time
+per item and read the latest local state when they run, so a burst of nudges costs one PATCH per
+round trip (10 quick nudges measured 3); while the page is hidden or being left they go out with
+`keepalive` when they fit its budget.
 
-Colours are token names (`pen`, `hl-amber`), never hex, so the lamp-lit scheme can re-map them.
+Reading: `GET /notebook/pages/{id}` → `wire.ts` (`itemFromWire`, `strokeFromWire`: base64 →
+`decodeStroke` → `strokeToPath`) → the page; the exchange's citations, locators and usage come from
+the stored thread (`hooks/useExchange.ts`, `GET /papers/{id}/threads/{tid}`).
+
+## Key files
+
+- `model/page.ts`, `stroke.ts`, `outline.ts`, `hitTest.ts`, `history.ts`: S5b's pure model (page
+  units, stroke encoding, perfect-freehand outlines, lasso and eraser, undo/redo).
+- `model/wire.ts`: API rows ↔ model items. `model/save.ts`: what to send for one item.
+  `model/exchange.ts`: passage numbers, labels, the usage line. `model/layout.ts`: page height,
+  where a new note lands, the five template paints. `model/links.ts`: reader and page URLs.
+- `api/notebookApi.ts`: typed client and react-query keys (all under `['notebook', paperId]`).
+  `api/pushItem.ts`: one save, with the 409 reported as a conflict and never retried.
+- `hooks/useNotebookPage.ts`: load once, edit locally. `useItemSaver`: the background saves and
+  their honest status. `usePageEditing`: the editing session, focus and shortcuts.
+- `components/NotebookView.tsx` (the screen), `NotebookPage.tsx` (the bound page),
+  `ExchangeBlock.tsx` + `AnswerProse.tsx`, `QuoteCard.tsx`, `NoteItem.tsx` + `NoteEditor.tsx`,
+  `ShapeView.tsx`, `InkLayer.tsx`, `NotebookToolbar.tsx`, `SaveNotice.tsx`,
+  `NotebookPageList.tsx`, `notebook.css`.
+
+Colours are token names (`pen`, `hl-amber`) mapped to `--pt-*`, never hex, so the lamp-lit scheme
+re-maps them; the page's own template inks are `--pt-nb-*` in `notebook.css`, for both schemes.

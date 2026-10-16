@@ -1,0 +1,470 @@
+/* The notebook page (S5c, #208, frame 05): the desk, the bound page and its templates, the exchange
+   block, quote cards, typed notes, stickies and shapes. Colours are --pt-* tokens; the three below
+   are the page's own template inks, defined for both schemes like every token in packages/ui. */
+
+:root {
+  --pt-nb-dot: #c4b6a0;
+  --pt-nb-rule: rgb(60 96 130 / 16%);
+  --pt-nb-margin: rgb(176 74 64 / 45%);
+  --pt-nb-card-rule: rgb(60 96 130 / 12%);
+  --pt-nb-clip: #8a8378;
+  --pt-nb-binding: rgb(60 40 20 / 18%);
+  --pt-nb-binding-fade: rgb(60 40 20 / 0%);
+  --pt-nb-binding-edge: rgb(60 40 20 / 6%);
+  --pt-nb-stitch: rgb(80 55 30 / 40%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-pt-theme='light']) {
+    --pt-nb-dot: #5e5145;
+    --pt-nb-rule: rgb(169 193 236 / 16%);
+    --pt-nb-margin: rgb(240 138 126 / 40%);
+    --pt-nb-card-rule: rgb(169 193 236 / 12%);
+    --pt-nb-clip: #a39a8e;
+    --pt-nb-binding: rgb(0 0 0 / 35%);
+    --pt-nb-binding-fade: rgb(0 0 0 / 0%);
+    --pt-nb-binding-edge: rgb(255 236 210 / 8%);
+    --pt-nb-stitch: rgb(226 196 142 / 35%);
+  }
+}
+
+:root.dark,
+:root[data-pt-theme='dark'] {
+  --pt-nb-dot: #5e5145;
+  --pt-nb-rule: rgb(169 193 236 / 16%);
+  --pt-nb-margin: rgb(240 138 126 / 40%);
+  --pt-nb-card-rule: rgb(169 193 236 / 12%);
+  --pt-nb-clip: #a39a8e;
+  --pt-nb-binding: rgb(0 0 0 / 35%);
+  --pt-nb-binding-fade: rgb(0 0 0 / 0%);
+  --pt-nb-binding-edge: rgb(255 236 210 / 8%);
+  --pt-nb-stitch: rgb(226 196 142 / 35%);
+}
+
+.pt-nb {
+  display: grid;
+  grid-template-rows: 56px minmax(0, 1fr);
+  block-size: 100dvh;
+  background: var(--pt-desk);
+  color: var(--pt-ink);
+  font-family: var(--pt-font-ai);
+}
+
+.pt-nb__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--pt-space-2);
+  padding: 0 20px;
+  background: var(--pt-page);
+  border-block-end: 1px solid var(--pt-rule);
+}
+
+.pt-nb__back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pt-space-2);
+  min-block-size: 40px;
+  padding: 0 10px;
+  color: var(--pt-ink);
+  font-size: 15px;
+  text-decoration: none;
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-nb__back:hover {
+  background: var(--pt-accent-soft);
+}
+
+.pt-nb__paper {
+  font: italic var(--pt-t-paper) var(--pt-font-paper);
+}
+
+.pt-nb__where {
+  font-variant-numeric: lining-nums;
+}
+
+.pt-nb__desk {
+  position: relative;
+  overflow: auto;
+  padding: 16px 24px 64px;
+}
+
+.pt-nb__loading {
+  margin: 48px;
+  color: var(--pt-ink-2);
+}
+
+.pt-nb-tools {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 40;
+  display: flex;
+  inline-size: max-content;
+  align-items: center;
+  gap: 2px;
+  margin: 0 0 16px 116px;
+  padding: 6px 8px;
+  background: var(--pt-e2-fill);
+  border: 1px solid var(--pt-control-border);
+  border-radius: 6px;
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+}
+
+.pt-nb-tools__rule {
+  inline-size: 1px;
+  block-size: 28px;
+  margin: 0 6px;
+  background: var(--pt-rule);
+}
+
+.pt-nb-page {
+  position: relative;
+  background: var(--pt-page);
+  border-radius: 2px 4px 4px 2px;
+  box-shadow: var(--pt-e1), var(--pt-e1-edge);
+}
+
+.pt-nb-page__binding {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: 40px;
+  background: linear-gradient(90deg, var(--pt-nb-binding), var(--pt-nb-binding-fade));
+  border-inline-end: 1px solid var(--pt-nb-binding-edge);
+}
+
+.pt-nb-page__binding::after {
+  content: '';
+  position: absolute;
+  inset-block: 16px;
+  inset-inline-start: 16px;
+  border-inline-start: 2px dotted var(--pt-nb-stitch);
+}
+
+.pt-nb-page__layer {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 40px;
+  transform-origin: 0 0;
+}
+
+.pt-nb-page__title {
+  position: absolute;
+  inset-block-start: 20px;
+  inset-inline: 48px;
+}
+
+.pt-nb-page__title h1 {
+  margin: 0 0 6px;
+  font: 400 32px/1.1 var(--pt-font-display);
+}
+
+.pt-nb-page__title p {
+  margin: 0;
+  font-size: 14.5px;
+  color: var(--pt-ink-muted);
+}
+
+.pt-nb-page__title a,
+.pt-nb-list a {
+  color: var(--pt-primary);
+}
+
+.pt-nb-page__items {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+}
+
+.pt-nb-item,
+.pt-nb-quote,
+.pt-nb-note,
+.pt-nb-shape,
+.pt-nb-ink {
+  position: absolute;
+}
+
+.pt-nb-ink {
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Everything below the exchange box, moved down while the exchange outgrows it (exchangeShift).
+   It covers the page, so it lets pointers through to the items above and takes them for its own. */
+.pt-nb-page__below {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.pt-nb-page__below > :not(.pt-nb-ink) {
+  pointer-events: auto;
+}
+
+.pt-nb-page__title h1:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+/* A conflict: nothing on the page is saved any more. It stays until Reload. */
+.pt-nb-alert {
+  position: fixed;
+  inset-block-start: 56px;
+  inset-inline: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--pt-space-4);
+  padding: 8px 20px;
+  background: var(--pt-page);
+  border-block-end: 2px solid var(--pt-danger);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+  color: var(--pt-danger);
+  font-size: 15px;
+}
+
+/* "Copy text" fell back to showing the words: they are selectable, never lost. */
+.pt-nb-alert__text {
+  inline-size: min(420px, 60vw);
+  block-size: 64px;
+  font: 14px/20px var(--pt-font-you);
+  color: var(--pt-pen);
+}
+
+/* A dismissed failure, still visible until the save succeeds. */
+.pt-nb-chip {
+  position: fixed;
+  inset-block-end: 12px;
+  inset-inline-start: 16px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: var(--pt-space-2);
+  padding: 4px 4px 4px 12px;
+  background: var(--pt-e2-fill);
+  border: 1px solid var(--pt-danger);
+  border-radius: var(--pt-radius-menu);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+  color: var(--pt-danger);
+  font-size: 14px;
+}
+
+.pt-nb-note__count {
+  margin: 4px 0 0;
+  font: var(--pt-t-num-s) var(--pt-font-you);
+  color: var(--pt-ink-muted);
+}
+
+.pt-nb-exchange {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pt-space-3);
+}
+
+.pt-nb-exchange .pt-call-slip {
+  max-inline-size: 540px;
+}
+
+.pt-nb-exchange__answer {
+  position: relative;
+  max-inline-size: 652px;
+}
+
+/* Open, the slip lifts a little; it needs no z-index, because what is below it moves down
+   (exchangeShift), and a z-index would put its source line over the Collapse button. */
+.pt-nb-exchange__answer[data-open='true'] .pt-ai-slip {
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+}
+
+.pt-nb-exchange__toggle {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: -2px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-block-size: 24px;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  color: var(--pt-ink);
+  font: 13.5px var(--pt-font-ai);
+  cursor: pointer;
+}
+
+.pt-nb-exchange__margin {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pt-nb-exchange__claim {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pt-nb-exchange__usage {
+  font: var(--pt-t-num-s) var(--pt-font-you);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.pt-nb-quote {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 12px 10px;
+  background-color: var(--pt-call-slip);
+  background-image:
+    linear-gradient(transparent 31px, var(--pt-nb-margin) 31px 32px, transparent 32px),
+    repeating-linear-gradient(transparent 0 19px, var(--pt-nb-card-rule) 19px 20px);
+  background-position:
+    0 0,
+    0 32px;
+  box-shadow: var(--pt-e1), var(--pt-e1-edge);
+}
+
+.pt-nb-quote__clip {
+  position: absolute;
+  inset-block-start: -14px;
+  inset-inline-start: 20px;
+  stroke: var(--pt-nb-clip);
+}
+
+.pt-nb-quote__head {
+  display: flex;
+  align-items: center;
+  gap: var(--pt-space-2);
+  min-block-size: 24px;
+  padding-inline-start: 28px;
+}
+
+.pt-nb-quote__count {
+  margin-inline-start: auto;
+  font-size: 12.5px;
+  color: var(--pt-ink-muted);
+}
+
+.pt-nb-quote__text {
+  display: -webkit-box;
+  margin: 10px 0 8px;
+  overflow: hidden;
+  font-size: var(--pt-t-paper-card);
+  line-height: 17px;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
+
+.pt-nb-quote .pt-nb-quote__open {
+  align-self: flex-start;
+  margin-block-start: auto;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+.pt-nb-note__face {
+  block-size: 100%;
+  min-block-size: inherit;
+  padding: 4px 6px;
+  border-radius: var(--pt-radius-paper);
+  cursor: grab;
+  touch-action: none;
+}
+
+.pt-nb-note__face:focus-visible,
+.pt-nb-note__editor:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+.pt-nb-note__text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pt-nb-note--sticky .pt-nb-note__face,
+.pt-nb-note--sticky .pt-nb-note__editor {
+  padding: 22px 12px 10px;
+  background: var(--pt-sticky);
+  rotate: 1.5deg;
+  box-shadow: var(--pt-e1);
+}
+
+.pt-nb-note--sticky .pt-nb-note__text {
+  color: var(--pt-ink);
+}
+
+.pt-nb-note__editor {
+  display: block;
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-block-size: inherit;
+  padding: 4px 6px;
+  border: 1px dashed var(--pt-control-border);
+  border-radius: var(--pt-radius-paper);
+  background: var(--pt-page);
+  color: var(--pt-pen);
+  font: 14px/20px var(--pt-font-you);
+  resize: vertical;
+}
+
+.pt-nb-note__delete {
+  position: absolute;
+  inset-block-start: -12px;
+  inset-inline-end: -12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 24px;
+  block-size: 24px;
+  padding: 0;
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-round);
+  background: var(--pt-page);
+  color: var(--pt-danger);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.pt-nb-note:hover .pt-nb-note__delete,
+.pt-nb-note:focus-within .pt-nb-note__delete {
+  opacity: 1;
+}
+
+.pt-nb-shape {
+  overflow: visible;
+  fill: none;
+  stroke: var(--pt-pen);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pt-nb-list {
+  max-inline-size: var(--pt-measure);
+  margin: 64px auto;
+  padding: 0 var(--pt-gutter-phone);
+  color: var(--pt-ink);
+}
+
+.pt-nb-list h1 {
+  font: 400 var(--pt-t-display-l) / 1.1 var(--pt-font-display);
+}
+
+.pt-nb-list ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pt-space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.pt-nb-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--pt-space-4);
+}

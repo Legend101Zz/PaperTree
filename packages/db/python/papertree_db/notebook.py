@@ -581,10 +581,27 @@ class NotebookMixin(_Base):
             return NotebookStale(_item(result.current))
         return None if result is None else _item(result)
 
-    def delete_notebook_item(self, owner: OwnerId, page_id: str, item_id: str) -> int:
-        """Deletes an item. Returns rows deleted (0: not found)."""
+    def delete_notebook_item(
+        self, owner: OwnerId, page_id: str, item_id: str, version: int | None = None
+    ) -> int | NotebookStale:
+        """Deletes an item, only at ``version`` when one is given (S5c, #208).
+
+        A tab that last saw an older version must not delete an edit made somewhere else, so the
+        version is checked in the same transaction as the delete, like a patch.
+
+        Returns:
+            Rows deleted (0: not found), or ``NotebookStale(current)`` for a stale ``version``.
+        """
         owner_id = self._resolve(owner)
         with self.transaction():
+            if version is not None:
+                current = self._one(
+                    f"SELECT {_ITEM_COLUMNS} FROM notebook_items "
+                    "WHERE owner_id = ? AND page_id = ? AND item_id = ?",
+                    (owner_id, page_id, item_id),
+                )
+                if current is not None and current["version"] != version:
+                    return NotebookStale(_item(current))
             n = self._conn.execute(
                 "DELETE FROM notebook_items WHERE owner_id = ? AND page_id = ? AND item_id = ?",
                 (owner_id, page_id, item_id),

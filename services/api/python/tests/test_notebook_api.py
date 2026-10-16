@@ -346,7 +346,20 @@ def test_page_lifecycle_counts_and_stale_version(tmp_path: Path) -> None:
             _stale(c.patch(item_url, json={"version": 1, "x": 1}, headers=hdr))["current"]["body"]
             == "moved"
         )
-        assert c.delete(item_url, headers=hdr).status_code == 204
+        # A delete at a stale version is refused with the item as it now is (S5c, #208): a tab
+        # that last saw v1 must not remove an edit made at v2. At the current version it goes.
+        stale_delete = c.delete(f"{item_url}?version=1", headers=hdr)
+        assert _stale(stale_delete)["current"]["body"] == "moved"
+        kept = c.get(f"/notebook/pages/{pid}", headers=hdr).json()["items"]
+        assert "ni_sticky0001" in {i["item_id"] for i in kept}
+        for bad in ("0", "-1", "two", "", "%C2%B2", "%D9%A1", "1.5"):
+            assert_envelope(c.delete(f"{item_url}?version={bad}", headers=hdr),
+                            422, "validation_failed")  # fmt: skip
+        assert c.delete(f"{item_url}?version=2", headers=hdr).status_code == 204
+        assert_envelope(c.delete(f"{item_url}?version=2", headers=hdr), 404, "not_found")
+        # Without a version the delete is unconditional, as before.
+        text_url = f"/notebook/pages/{pid}/items/ni_text00001"
+        assert c.delete(text_url, headers=hdr).status_code == 204
         assert_envelope(c.delete(item_url, headers=hdr), 404, "not_found")
 
         # The eraser, then the page itself (cascade).
@@ -586,6 +599,9 @@ def test_another_user_sees_and_changes_nothing(tmp_path: Path) -> None:
             c.post(f"{base}/items", json=_note("ni_bobsnote01"), headers=bob),
             c.patch(f"{base}/items/ni_alicenote1", json={"version": 1, "x": 5}, headers=bob),
             c.delete(f"{base}/items/ni_alicenote1", headers=bob),
+            # A versioned delete is no existence oracle either: 404 at any version, never 409.
+            c.delete(f"{base}/items/ni_alicenote1?version=1", headers=bob),
+            c.delete(f"{base}/items/ni_alicenote1?version=2", headers=bob),
             c.delete(f"{base}/strokes/sk_aliceink01", headers=bob),
             c.post(
                 f"{base}/strokes",
@@ -737,3 +753,15 @@ def test_a_stored_exchange_body_that_is_not_json_cannot_break_search(tmp_path: P
             c.get(f"/papers/{paper_id}/notebook/search", params={"q": "7"}, headers=hdr).status_code
             == 200
         )
+
+
+def test_the_item_delete_documents_its_version_query(tmp_path: Path) -> None:
+    """`?version=` is declared on the DELETE route, so the contract (OpenAPI) shows it."""
+    with ai_harness(tmp_path, Script("explain-ok")) as h:
+        spec = h.client.get("/openapi.json").json()
+        route = spec["paths"]["/notebook/pages/{page_id}/items/{item_id}"]["delete"]
+        params = {p["name"]: p for p in route["parameters"]}
+        assert params["version"]["in"] == "query"
+        assert params["version"]["required"] is False
+        assert params["version"]["schema"]["anyOf"][0]["minimum"] == 1
+        assert "409" in route["responses"]
