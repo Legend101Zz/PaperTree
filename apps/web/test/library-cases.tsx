@@ -12,7 +12,6 @@
 import { fireEvent } from '@testing-library/react';
 import type { ReactElement } from 'react';
 
-import { UploadDropzone } from '@/components/library/UploadDropzone';
 import {
   EmptyLibrary,
   FailureState,
@@ -22,7 +21,14 @@ import {
   UncertaintyState,
 } from '@/components/library/SystemStates';
 import type { LibraryPaper } from '@/components/library/types';
+import { AddPapers } from '@/features/library/components/AddPapers';
 import { CatalogueCard } from '@/features/library/components/CatalogueCard';
+import { UploadRow } from '@/features/library/components/UploadRow';
+import {
+  useUploadQueue,
+  type UploadQueue,
+  type UploadQueueOptions,
+} from '@/features/library/hooks/useUploadQueue';
 
 export const TOUCH_TARGET_MIN_PX = 44;
 
@@ -89,6 +95,35 @@ export const PAPERS: readonly LibraryPaper[] = [
 const noop = (): void => {};
 const noopAsync = async (): Promise<void> => {};
 
+/** A queue in every state, so the upload row's Cancel and Dismiss are all audited (#195). */
+const QUEUE: UploadQueue = {
+  items: [
+    { id: 'u1', fileName: 'queued.pdf', sizeBytes: 2048, progress: 0, state: 'queued' },
+    { id: 'u2', fileName: 'going.pdf', sizeBytes: 4096, progress: 0.4, state: 'uploading' },
+    { id: 'u3', fileName: 'bad.pdf', sizeBytes: 10, progress: 0, state: 'failed', error: 'x' },
+    { id: 'u4', fileName: 'gone.pdf', sizeBytes: 10, progress: 0, state: 'cancelled' },
+  ],
+  rejections: [{ id: 'u5', fileName: 'notes.txt', reason: 'is not a PDF.' }],
+  announcement: '',
+  enqueue: noop,
+  cancel: noop,
+  dismiss: noop,
+};
+
+/**
+ * The library's upload path without the page: Add papers feeding the queue, and the row under the
+ * header. The queue tests (StrictMode, Cancel's truth, refusals) render this.
+ */
+export function UploadHarness(props: UploadQueueOptions): ReactElement {
+  const queue = useUploadQueue(props);
+  return (
+    <>
+      <AddPapers onFiles={queue.enqueue} />
+      <UploadRow queue={queue} />
+    </>
+  );
+}
+
 export interface LibraryCase {
   readonly name: string;
   readonly element: ReactElement;
@@ -150,10 +185,7 @@ export const CASES: readonly LibraryCase[] = [
       fireEvent.click(remove, { detail: 0 });
     },
   },
-  {
-    name: 'UploadDropzone',
-    element: <UploadDropzone onUpload={async () => {}} maxBytes={50 * 1024 * 1024} />,
-  },
+  { name: 'UploadRow', element: <UploadRow queue={QUEUE} /> },
   {
     name: 'ParsingState',
     element: <ParsingState totalPages={6} parsedPages={[0, 1, 2]} onOpenPage={noop} />,

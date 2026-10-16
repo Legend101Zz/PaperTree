@@ -7,6 +7,7 @@
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { LibraryView } from '@/features/library';
 
+/** The library page, behind the sign-in guard. */
 export default function LibraryPage() {
   return (
     <AuthGuard>

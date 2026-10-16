@@ -41,7 +41,7 @@ test('console stays clean and the card status text has no stray period', async (
       });
       await tokenInit(page, token);
       await page.goto('/dashboard');
-      await expect(page.getByRole('heading', { name: 'My papers' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Your library' })).toBeVisible();
       // #195: the card grid's status badge became the spine's accessible name and the catalogue
       // card's state line; the same checks run on both.
       const spine = page.locator('button[data-paper-id]').first();
@@ -63,7 +63,7 @@ test('console stays clean and the card status text has no stray period', async (
       expect(icon.status()).toBe(200);
       expect(await page.locator('link[rel~="icon"]').count()).toBeGreaterThan(0);
       await page.reload();
-      await expect(page.getByRole('heading', { name: 'My papers' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Your library' })).toBeVisible();
       await page.screenshot({ path: shot(`s9-library-${vp.name}-${theme}.png`) });
       expect(errors, errors.join('\n')).toEqual([]);
       await context.close();

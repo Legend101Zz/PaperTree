@@ -1,9 +1,11 @@
 /**
- * LibraryView: the signed-in library (#195). The papers stand on the shelf; a click or Enter on a
- * spine opens its catalogue card in the band above, where Read, Retry and Delete live.
+ * LibraryView: the signed-in library (#195, frame 01). The compact header (search, Add papers,
+ * Aa, account), "Your library" with its stats and "N need a look", the view row with Arrange by,
+ * then the shelf with its catalogue card in the band above and the hint row under the plank.
+ * PDFs drop anywhere on the page.
  *
- * The data layer is `useLibrary` (polling only while a row is unfinished, upload with progress and
- * a truthful Cancel, Retry, Delete), unchanged in behaviour from v0.1. Opening a paper goes to
+ * The data layer is `useLibrary` (polling only while a row is unfinished, Retry, Delete) and the
+ * uploads are `useUploadQueue`, both unchanged in behaviour from v0.1. Read goes to
  * `/paper/<id>/read` in every state: Source mode works for a failed paper too. Sample papers (the
  * golden fixtures) are listed only when `NEXT_PUBLIC_PAPERTREE_FIXTURES=on` (#137).
  */
@@ -11,45 +13,78 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { useCallback, useId, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { SessionBanner } from '@/components/auth/SessionBanner';
-import { pointerActivate } from '@/components/library/primitives';
 import { EmptyLibrary, OfflineState } from '@/components/library/SystemStates';
-import { UploadDropzone } from '@/components/library/UploadDropzone';
 import { describeError } from '@/components/ui/errors';
 import { useAuthStore } from '@/store/authStore';
 
 import { useLibrary, useOnline } from '../hooks/useLibrary';
+import { useUploadQueue } from '../hooks/useUploadQueue';
+import {
+  arrangeShelf,
+  libraryStats,
+  matchPapers,
+  needsALook,
+  type Arrangement,
+} from '../model/shelf';
 import './library.css';
-import { CatalogueCard } from './CatalogueCard';
-import { Shelf } from './Shelf';
+import { DropAnywhere } from './AddPapers';
+import { LibraryHeader } from './LibraryHeader';
+import { LibraryTitle } from './LibraryTitle';
+import { ShelfSection } from './ShelfSection';
+import { UploadRow } from './UploadRow';
 
 import type { ReactNode } from 'react';
 
-/** The library page body: header, upload, and the shelf with its catalogue card. */
+/** "/" anywhere focuses the search, unless the person is already typing in a field. */
+function useSlashToSearch(search: { readonly current: HTMLInputElement | null }): void {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      const target = event.target;
+      const typing =
+        target instanceof HTMLElement &&
+        (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+      if (event.key !== '/' || typing) return;
+      event.preventDefault();
+      search.current?.focus();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [search]);
+}
+
+/** The library page. */
 export function LibraryView(): ReactNode {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user, logout } = useAuthStore();
   const online = useOnline();
   const { books, own, query, upload, afterCancel, retry, remove } = useLibrary(online);
+  const queue = useUploadQueue({ onUpload: upload, onCancelled: afterCancel });
+  const [search, setSearch] = useState('');
+  const [arrangement, setArrangement] = useState<Arrangement>('topic');
+  const [needALookOnly, setNeedALookOnly] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
-  const cardId = useId();
-  const openBook = books.find((book) => book.id === openId) ?? null;
+  const searchRef = useRef<HTMLInputElement>(null);
+  useSlashToSearch(searchRef);
 
-  const openPaper = useCallback(
-    (paperId: string) => router.push(`/paper/${paperId}/read`),
-    [router],
-  );
-  // A second activation of the open spine puts the book back.
-  const takeDown = useCallback(
-    (paperId: string) => setOpenId((current) => (current === paperId ? null : paperId)),
-    [],
-  );
-  const focusUpload = useCallback(() => {
-    document.querySelector<HTMLElement>('[data-upload-dropzone] input[type="file"]')?.click();
+  const stats = useMemo(() => libraryStats(books), [books]);
+  const filtered = needALookOnly && stats.needALook > 0;
+  const shelved = useMemo(() => (filtered ? books.filter(needsALook) : books), [books, filtered]);
+  const matches = useMemo(() => matchPapers(shelved, search), [shelved, search]);
+
+  const read = useCallback((paperId: string) => router.push(`/paper/${paperId}/read`), [router]);
+  const takeFirstMatch = useCallback(() => {
+    const first = arrangeShelf(shelved, arrangement)
+      .flatMap((group) => group.papers)
+      .find((book) => matches?.has(book.id) === true);
+    if (first !== undefined) setOpenId(first.id);
+  }, [shelved, arrangement, matches]);
+  const chooseFiles = useCallback(() => {
+    document.querySelector<HTMLElement>('[data-add-papers] input[type="file"]')?.click();
   }, []);
   const signOut = useCallback(async () => {
     setSigningOut(true);
@@ -60,45 +95,36 @@ export function LibraryView(): ReactNode {
   }, [logout, queryClient, router]);
 
   return (
-    <div className="pt-s3-page">
-      <header className="pt-s3-topbar">
-        <div
-          className="pt-s3-container flex items-center justify-between gap-3"
-          style={{ minHeight: 64 }}
-        >
-          <span className="pt-s3-brand">PaperTree</span>
-          <div className="flex min-w-0 items-center gap-2">
-            <span
-              className="pt-s3-muted pt-s3-small hidden truncate sm:inline"
-              style={{ maxWidth: 240 }}
-            >
-              {user?.email}
-            </span>
-            <button
-              type="button"
-              className="pt-s3-btn pt-s3-btn--quiet pt-s3-btn--small"
-              disabled={signingOut}
-              {...pointerActivate<HTMLButtonElement>(() => {
-                void signOut();
-              })}
-            >
-              Sign out
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <main className="pt-s3-container flex flex-col gap-6" style={{ paddingBlock: 32 }}>
-        <h1 className="pt-s3-h1">My papers</h1>
+    <div className="pt-library pt-laid">
+      <LibraryHeader
+        search={{
+          value: search,
+          onChange: setSearch,
+          matched: matches === null ? null : matches.size,
+          total: shelved.length,
+          onSubmit: takeFirstMatch,
+        }}
+        searchRef={searchRef}
+        onFiles={queue.enqueue}
+        email={user?.email ?? null}
+        signingOut={signingOut}
+        onSignOut={() => void signOut()}
+      />
+      <UploadRow queue={queue} />
+      <DropAnywhere onFiles={queue.enqueue} />
+      <main className="pt-library__main">
         {online ? (
           <SessionBanner />
         ) : (
           <OfflineState availableSummary="Papers already open on this device still work. Uploading and questions need the network." />
         )}
-        <div data-upload-dropzone="">
-          <UploadDropzone onUpload={upload} onCancelled={afterCancel} compact={books.length > 0} />
-        </div>
-
+        <LibraryTitle
+          stats={stats}
+          needALookOnly={filtered}
+          onNeedALook={setNeedALookOnly}
+          arrangement={arrangement}
+          onArrange={setArrangement}
+        />
         {query.isLoading ? (
           <div role="status" aria-label="Loading your papers" className="pt-s3-skeleton" />
         ) : query.isError && own.length === 0 ? (
@@ -111,41 +137,26 @@ export function LibraryView(): ReactNode {
               <button
                 type="button"
                 className="pt-s3-btn pt-s3-btn--small"
-                {...pointerActivate<HTMLButtonElement>(() => {
-                  void query.refetch();
-                })}
+                onClick={() => void query.refetch()}
               >
                 Try again
               </button>
             </div>
           </div>
         ) : books.length === 0 ? (
-          <EmptyLibrary onAddPaper={focusUpload} />
+          <EmptyLibrary onAddPaper={chooseFiles} />
         ) : (
-          <section className="pt-shelfband" aria-label="Your shelf">
-            <div className="pt-shelfband__card">
-              {openBook === null ? null : (
-                // Keyed by paper: a half-armed Delete or a Retry error belongs to one book and must
-                // never open on the next one taken down.
-                <CatalogueCard
-                  key={openBook.id}
-                  id={cardId}
-                  book={openBook}
-                  onRead={openPaper}
-                  onRetry={retry}
-                  onDelete={remove}
-                />
-              )}
-            </div>
-            <Shelf
-              papers={books}
-              arrangement="topic"
-              matches={null}
-              openId={openId}
-              cardId={cardId}
-              onActivate={takeDown}
-            />
-          </section>
+          <ShelfSection
+            books={shelved}
+            arrangement={arrangement}
+            search={search}
+            matches={matches}
+            openId={openId}
+            setOpenId={setOpenId}
+            onRead={read}
+            onRetry={retry}
+            onDelete={remove}
+          />
         )}
       </main>
     </div>
