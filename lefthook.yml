@@ -18,7 +18,9 @@ pre-commit:
 
     - name: web-eslint
       root: 'apps/web/'
-      glob: 'apps/web/**/*.{ts,tsx}'
+      # Only what `next lint` lints in CI (src/). It never lints test/, and there the v0.1 pairing of
+      # @typescript-eslint/eslint-plugin 8 with parser 6 crashes no-unused-vars on contracts.spec.ts (#219).
+      glob: 'apps/web/src/**/*.{ts,tsx}'
       # eslint with apps/web/.eslintrc.cjs: the same rules `next lint` runs in CI.
       run: pnpm exec eslint {staged_files}
 
