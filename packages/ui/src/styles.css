@@ -1212,7 +1212,9 @@ span.pt-paper .pt-paper__cite {
 
 .pt-zoom__select {
   flex: 0 1 auto;
-  min-inline-size: 0;
+  /* Sized by its text, "Fit width" in Alegreya Sans measures 79 px on Linux (83 on macOS): under
+     the 80 px the RFIX2 screens test holds it to. A floor keeps it readable on every platform. */
+  min-inline-size: 5.5rem;
   max-inline-size: 11rem;
   min-block-size: 40px;
   padding-inline: 8px 4px;
@@ -3155,8 +3157,6 @@ span.pt-paper .pt-paper__cite {
     display: none;
   }
   .pt-reader__controls .pt-zoom__select {
-    /* Not shrinkable: with the v0.2 faces the row's labels are wider, and a shrinking select fell
-       to 79 px, below the 80 px the RFIX2 screens test holds it to (readable "Fit width"). */
     flex: none;
     inline-size: 6.25rem;
     max-inline-size: 6.25rem;
