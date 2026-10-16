@@ -96,7 +96,7 @@ function SpineFace({
   }
   const authors = authorLine(paper.authors);
   // Frame 01 sets an author line beside the title only on a spine near the 48 px cap.
-  const roomy = spineWidth(paper.pageCount, 'ready') >= SPINE_MAX_WIDTH - 4;
+  const roomy = spineWidth(paper.pageCount) >= SPINE_MAX_WIDTH - 4;
   return (
     <span className="pt-spine__face">
       {title}
@@ -132,7 +132,7 @@ export const Spine = memo(function Spine({
       type="button"
       className={`pt-spine pt-spine--${face}`}
       style={{
-        width: spineWidth(paper.pageCount, state),
+        width: spineWidth(paper.pageCount),
         height: spineHeight(paper.id),
         ...(face === 'kraft' ? {} : { backgroundColor: `var(--pt-cloth-${clothFor(paper)})` }),
       }}

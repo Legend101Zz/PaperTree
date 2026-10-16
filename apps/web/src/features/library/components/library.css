@@ -13,6 +13,24 @@
   --pt-spine-danger: #9e2420; /* labels stay paper at night, so their red stays the daylight red */
   --pt-plank-lip: linear-gradient(#9a7353, #80583a);
   --pt-bookend: linear-gradient(90deg, #8c6b2e, #e7cf8e 35%, #b8944c 60%, #6e5420);
+  /*
+   * Gilt on cloth. DESIGN.md's 4.7–6.5:1 holds on flat cloth only; with the spine's sheen and weave
+   * under a title, the shared --pt-gilt fell to about 3.6:1 on Vision and Reinforcement. So the
+   * spine's gilt starts lighter and the light under the title is capped; test/library-gilt.spec.ts
+   * recomputes every cloth's title pair from these values (a deviation from the mock-up, recorded
+   * in shots/S2d/README.md).
+   */
+  --pt-spine-gilt-low: #efe1b4;
+  --pt-spine-gilt: linear-gradient(
+    100deg,
+    var(--pt-spine-gilt-low) 0%,
+    #faf1d6 36%,
+    #f1e4ba 54%,
+    #f8eecd 76%,
+    var(--pt-spine-gilt-low) 100%
+  );
+  --pt-spine-sheen-peak: 5%;
+  --pt-spine-weave-light: 3%;
 }
 
 /* ── the plank ─────────────────────────────────────────────────────────────────────────── */
@@ -121,12 +139,16 @@
     linear-gradient(
       90deg,
       rgb(0 0 0 / 30%),
-      rgb(255 255 255 / 5%) 26%,
-      rgb(255 255 255 / 11%) 40%,
+      rgb(255 255 255 / 3%) 26%,
+      rgb(255 255 255 / var(--pt-spine-sheen-peak)) 40%,
       rgb(0 0 0 / 4%) 68%,
       rgb(0 0 0 / 34%)
     ),
-    repeating-linear-gradient(45deg, rgb(255 255 255 / 5%) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(
+      45deg,
+      rgb(255 255 255 / var(--pt-spine-weave-light)) 0 1px,
+      transparent 1px 3px
+    ),
     repeating-linear-gradient(-45deg, rgb(0 0 0 / 9%) 0 1px, transparent 1px 3px);
   box-shadow:
     6px 0 9px -4px var(--pt-spine-cast),
@@ -247,7 +269,7 @@
 .pt-spine--gilt .pt-spine__authors,
 .pt-spine--gilt .pt-spine__year {
   color: transparent;
-  background-image: var(--pt-gilt);
+  background-image: var(--pt-spine-gilt);
   -webkit-background-clip: text;
   background-clip: text;
 }

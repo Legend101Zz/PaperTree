@@ -57,11 +57,12 @@ export interface ShelfGroup<P extends ShelfPaper = ShelfPaper> {
 }
 
 /**
- * Spine width in px is `26 + 0.85 × pages`: fitted to the 24 spines of frame 01 (8 pp → 33,
- * 15 → 39, 25 → 47, 34 → 55, 75 → 90), exact to the pixel on every one. Capped at 48 (§9).
+ * Spine width in px is `26 + 0.85 × pages`, fitted uncapped to the 24 spines of frame 01 (8 pp →
+ * 33, 15 → 39, 25 → 47, 34 → 55, 75 → 90) and exact to the pixel on all of them; DESIGN.md §9's
+ * 48 px cap then overrides the frame's four wide spines (FlashAttention, GPT-3, CLIP, SuperGLUE).
  */
 export const SPINE_MAX_WIDTH = 48;
-/** Used while the page count is unknown or the paper is still being read (see `spineWidth`). */
+/** Used while the page count is unknown (see `spineWidth`). */
 export const SPINE_DEFAULT_WIDTH = 40;
 /** Frame 01's spine heights run 262–318 px; heights are decoration and carry no data. */
 const SPINE_HEIGHT_MIN = 262;
@@ -82,31 +83,36 @@ export function spineState(paper: ShelfPaper): SpineState {
 }
 
 /**
- * The spine's width. A kraft-wrapped spine keeps the default until it is read, so a page count
- * that arrives mid-parse does not reflow the shelf (#175's layout shift).
+ * The spine's width: from the page count once it is known, the default until then. A width that
+ * depends only on the count changes at most once, when the count first arrives, and a Retry or
+ * re-parse of a counted paper keeps its width (#175's layout shift).
  *
  * @param pageCount - Pages in the PDF, 0 when unknown.
- * @param state - The spine's state.
  * @returns Width in CSS px, at most `SPINE_MAX_WIDTH`.
  */
-export function spineWidth(pageCount: number, state: SpineState): number {
-  if (state === 'queued' || state === 'parsing' || !(pageCount > 0)) return SPINE_DEFAULT_WIDTH;
+export function spineWidth(pageCount: number): number {
+  if (!(pageCount > 0)) return SPINE_DEFAULT_WIDTH;
   return Math.min(SPINE_MAX_WIDTH, Math.round(26 + 0.85 * pageCount));
+}
+
+// FNV-1a: a small, stable string hash for the decorations below (heights, the fallback cloth).
+function fnv1a(text: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193) >>> 0;
+  }
+  return hash;
 }
 
 /**
  * A stable height for a spine, so the shelf has the uneven skyline of real books and keeps it
- * across reloads. FNV-1a over the id; never encodes anything about the paper.
+ * across reloads. A hash of the id; never encodes anything about the paper.
  *
  * @param id - The paper id.
  * @returns Height in CSS px, 262–318.
  */
 export function spineHeight(id: string): number {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < id.length; i += 1) {
-    hash = Math.imul(hash ^ id.charCodeAt(i), 0x01000193) >>> 0;
-  }
-  return SPINE_HEIGHT_MIN + (hash % SPINE_HEIGHT_SPAN);
+  return SPINE_HEIGHT_MIN + (fnv1a(id) % SPINE_HEIGHT_SPAN);
 }
 
 /**
@@ -227,7 +233,7 @@ export function clothFor(paper: ShelfPaper): ClothId {
   if (topical !== undefined && topical !== null) return topical;
   const category = paper.arxivCategory;
   if (category === undefined || category === null || category === '') return 'rl';
-  return CLOTH_BY_CATEGORY[category] ?? CLOTHS[spineHeight(category) % CLOTHS.length] ?? 'rl';
+  return CLOTH_BY_CATEGORY[category] ?? CLOTHS[fnv1a(category) % CLOTHS.length] ?? 'rl';
 }
 
 /**

@@ -125,7 +125,10 @@ export function LibraryView(): ReactNode {
           <section className="pt-shelfband" aria-label="Your shelf">
             <div className="pt-shelfband__card">
               {openBook === null ? null : (
+                // Keyed by paper: a half-armed Delete or a Retry error belongs to one book and must
+                // never open on the next one taken down.
                 <CatalogueCard
+                  key={openBook.id}
                   id={cardId}
                   book={openBook}
                   onRead={openPaper}

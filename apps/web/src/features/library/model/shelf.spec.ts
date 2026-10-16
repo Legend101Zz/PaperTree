@@ -61,22 +61,19 @@ describe('spine width', () => {
       [22, 45],
       [25, 47],
     ];
-    for (const [pages, width] of frame) expect(spineWidth(pages, 'ready')).toBe(width);
+    for (const [pages, width] of frame) expect(spineWidth(pages)).toBe(width);
   });
 
   it('is capped at 48 px however long the paper is', () => {
-    expect(spineWidth(34, 'ready')).toBe(SPINE_MAX_WIDTH);
-    expect(spineWidth(400, 'reading')).toBe(48);
+    expect(spineWidth(34)).toBe(SPINE_MAX_WIDTH);
+    expect(spineWidth(400)).toBe(48);
   });
 
-  it('uses the default while the page count is unknown', () => {
-    expect(spineWidth(0, 'ready')).toBe(SPINE_DEFAULT_WIDTH);
-    expect(spineWidth(Number.NaN, 'failed')).toBe(SPINE_DEFAULT_WIDTH);
-  });
-
-  it('keeps the default for a spine still being read, so the count arriving mid-parse does not reflow it', () => {
-    expect(spineWidth(0, 'parsing')).toBe(spineWidth(26, 'parsing'));
-    expect(spineWidth(12, 'queued')).toBe(SPINE_DEFAULT_WIDTH);
+  it('uses the default only while the page count is unknown', () => {
+    expect(spineWidth(0)).toBe(SPINE_DEFAULT_WIDTH);
+    expect(spineWidth(Number.NaN)).toBe(SPINE_DEFAULT_WIDTH);
+    // A counted paper keeps its width through a Retry or re-parse (kraft wrap and all).
+    expect(spineWidth(29)).toBe(48);
   });
 });
 

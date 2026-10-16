@@ -216,6 +216,31 @@ describe('library rows from the API (S1 shape)', () => {
     expect(confirm).not.toHaveBeenCalled();
   });
 
+  it('an armed Delete stays with its book: the next book taken down opens unarmed', async () => {
+    api.list.mockResolvedValue([
+      row({ paper_id: 'ppr_A', title: 'Alpha' }),
+      row({ paper_id: 'ppr_B', title: 'Beta', created_at: '2026-10-16T10:00:00+00:00' }),
+    ]);
+    renderLibrary();
+    const shelf = await screen.findByRole('toolbar', { name: 'Shelf' });
+    const cardOf = (id: string) =>
+      waitFor(() => {
+        const found = document.querySelector<HTMLElement>(`[data-card-paper-id="${id}"]`);
+        if (found === null) throw new Error(`no card for ${id}`);
+        return found;
+      });
+    fireEvent.click(within(shelf).getByRole('button', { name: /^Alpha/ }));
+    const alpha = await cardOf('ppr_A');
+    fireEvent.click(within(alpha).getByRole('button', { name: 'Delete Alpha' }), { detail: 0 });
+    expect(within(alpha).getByRole('group', { name: 'Confirm deleting Alpha' })).toBeTruthy();
+
+    fireEvent.click(within(shelf).getByRole('button', { name: /^Beta/ }));
+    const beta = await cardOf('ppr_B');
+    expect(within(beta).queryByRole('group', { name: /Confirm deleting/ })).toBeNull();
+    expect(within(beta).getByRole('button', { name: 'Delete Beta' })).toBeTruthy();
+    expect(api.remove).not.toHaveBeenCalled();
+  });
+
   it('Keep it leaves the paper alone', async () => {
     api.list.mockResolvedValue([row()]);
     renderLibrary();

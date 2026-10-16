@@ -9,9 +9,9 @@
  * partial hint, the audio badge — actually renders and gets audited.
  */
 
+import { fireEvent } from '@testing-library/react';
 import type { ReactElement } from 'react';
 
-import { PaperGrid } from '@/components/library/PaperGrid';
 import { UploadDropzone } from '@/components/library/UploadDropzone';
 import {
   EmptyLibrary,
@@ -107,7 +107,6 @@ export function openDisclosure(
 }
 
 export const CASES: readonly LibraryCase[] = [
-  { name: 'PaperGrid', element: <PaperGrid papers={PAPERS} onOpen={noop} onRetry={noop} /> },
   {
     // #195: the failed paper's catalogue card, so Read, Retry and Delete are all audited.
     name: 'CatalogueCard',
@@ -120,6 +119,36 @@ export const CASES: readonly LibraryCase[] = [
         onDelete={noopAsync}
       />
     ),
+  },
+  {
+    name: 'CatalogueCard (a ready paper)',
+    element: (
+      <CatalogueCard
+        id="card"
+        book={{ ...(PAPERS[3] as LibraryPaper), year: 2017, reading: null, arxivCategory: null }}
+        onRead={noop}
+        onRetry={noopAsync}
+        onDelete={noopAsync}
+      />
+    ),
+  },
+  {
+    // The failed paper's card with its Delete confirmation open, so "Delete paper" and "Keep it" are audited.
+    name: 'CatalogueCard (confirming Delete)',
+    element: (
+      <CatalogueCard
+        id="card"
+        book={{ ...(PAPERS[4] as LibraryPaper), year: null, reading: null, arxivCategory: null }}
+        onRead={noop}
+        onRetry={noopAsync}
+        onDelete={noopAsync}
+      />
+    ),
+    afterRender: (container) => {
+      const remove = container.querySelector<HTMLButtonElement>('button[aria-label^="Delete "]');
+      if (remove === null) throw new Error('Delete not found');
+      fireEvent.click(remove, { detail: 0 });
+    },
   },
   {
     name: 'UploadDropzone',
@@ -180,5 +209,5 @@ export const CASES: readonly LibraryCase[] = [
     ),
   },
   { name: 'OfflineState', element: <OfflineState onRetryConnection={noop} /> },
-  { name: 'EmptyLibrary', element: <EmptyLibrary onAddPaper={noop} onOpenSample={noop} /> },
+  { name: 'EmptyLibrary', element: <EmptyLibrary onAddPaper={noop} /> },
 ];
