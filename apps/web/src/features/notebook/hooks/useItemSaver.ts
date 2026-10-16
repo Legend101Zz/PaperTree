@@ -20,14 +20,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { commitOpenEditors, openEditorTexts } from './pageLeave';
+import { releaseKeepalive, reserveKeepalive } from '../api/keepalive';
 import { pushItem } from '../api/pushItem';
-import {
-  KEEPALIVE_CAP,
-  chunkWrites,
-  needsLeaveWarning,
-  opBytes,
-  predictedAfter,
-} from '../model/leave';
+import { chunkWrites, needsLeaveWarning, opBytes, predictedAfter } from '../model/leave';
 import { saveOp, savedFromWire } from '../model/save';
 
 import type { PushResult } from '../api/pushItem';
@@ -112,7 +107,6 @@ export function useItemSaver(pageId: string, source: SaverSource): ItemSaver {
   const stopped = useRef(false);
   const hidden = useRef(false);
   const leaving = useRef(false);
-  const keepaliveBytes = useRef(0);
   const latest = useRef(source);
   latest.current = source;
 
@@ -142,13 +136,13 @@ export function useItemSaver(pageId: string, source: SaverSource): ItemSaver {
   const send = useCallback(
     async (id: string, op: SaveOp, allowKeepalive: boolean): Promise<PushResult> => {
       const bytes = opBytes(op);
-      const keepalive = allowKeepalive && keepaliveBytes.current + bytes <= KEEPALIVE_CAP;
-      if (keepalive) keepaliveBytes.current += bytes;
+      // One budget with the ink's saver (`api/keepalive`): the browser counts every request.
+      const keepalive = allowKeepalive && reserveKeepalive(bytes);
       try {
         return await pushItem(pageId, id, op, { keepalive });
       } finally {
         release(id, op);
-        if (keepalive) keepaliveBytes.current -= bytes;
+        if (keepalive) releaseKeepalive(bytes);
       }
     },
     [pageId, release],

@@ -15,6 +15,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { ExchangeBlock } from './ExchangeBlock';
 import { PAGE_TITLE_ID } from '../hooks/focus';
 import { InkLayer } from './InkLayer';
+import { InkSurface, LiveInk } from './InkSurface';
 import { NoteItem } from './NoteItem';
 import { QuoteCard } from './QuoteCard';
 import { ShapeItem } from './ShapeItem';
@@ -30,6 +31,7 @@ import {
 import { PAGE_WIDTH, titleVoice } from '../model/page';
 
 import type { NotebookPageWire } from '../api/notebookApi';
+import type { InkInputOptions } from '../hooks/useInkInput';
 import type { Exchange } from '../hooks/useExchange';
 import type { Box } from '../model/history';
 import type { Item, PageTemplate, StickyItem, TextItem } from '../model/page';
@@ -70,6 +72,8 @@ export interface NotebookPageProps {
   readonly onFocusAnchor: (anchor: Anchor) => void;
   /** Items the notebook search matched on this page; they are lit. */
   readonly matches: ReadonlySet<string>;
+  /** The ink tool in the hand (S5d, #209); null while the page's own editing has the pointer. */
+  readonly ink?: Pick<InkInputOptions, 'tool' | 'pen' | 'onStroke' | 'onErase'> | null;
 }
 
 /** The exchange's rendered height in layout units (the scale transform does not change it). */
@@ -106,6 +110,8 @@ export function NotebookPage(props: NotebookPageProps): ReactNode {
     ];
   }, [props.strokes, shift?.boundary]);
   const height = pageHeight(all) + TITLE_BAND + extra;
+  const live = useRef<SVGPathElement>(null);
+  const ink = props.ink ?? null;
   let quotes = 0;
   const render = (item: Item): ReactNode => {
     switch (item.kind) {
@@ -206,6 +212,15 @@ export function NotebookPage(props: NotebookPageProps): ReactNode {
         <div className="pt-nb-page__items" style={{ top: TITLE_BAND }}>
           {ordered.filter((i) => !below(i.y)).map(render)}
           <InkLayer strokes={inkAbove} width={PAGE_WIDTH} height={height - TITLE_BAND} />
+          {ink?.pen ? (
+            <LiveInk
+              ref={live}
+              width={PAGE_WIDTH}
+              height={height - TITLE_BAND}
+              color={ink.pen.color}
+              wash={ink.pen.tool === 'highlighter'}
+            />
+          ) : null}
           <div
             className="pt-nb-page__below"
             data-shift={extra}
@@ -220,6 +235,12 @@ export function NotebookPage(props: NotebookPageProps): ReactNode {
             />
           </div>
         </div>
+        {ink === null ? null : (
+          <InkSurface
+            top={TITLE_BAND}
+            options={{ ...ink, scale, strokes: props.strokes, shift, live }}
+          />
+        )}
         <p id="pt-nb-note-help" className="pt-sr-only">
           Arrow keys move it, with Shift further. Enter edits it. Delete removes it.
         </p>

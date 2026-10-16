@@ -1,10 +1,10 @@
 'use client';
 
 /**
- * The notebook's floating tool bar (S5c, #208, frame 05). It holds only the tools this slice makes
- * work: Shapes, Text and Sticky note, then Undo and Redo. The pen, highlighter, eraser, lasso, nibs and
- * colours are S5d's (#209) and arrive through `inkTools`, a named slot that renders nothing until
- * S5d fills it, so no control is ever shown that does nothing.
+ * The notebook's floating tool bar (S5c, #208, frame 05): the ink tools, Shapes, Text and Sticky
+ * note, the nibs and colours, then Undo and Redo. The ink controls are S5d's (#209) and arrive
+ * through two named slots, `inkTools` and `inkOptions`, so the bar reads in the frame's order and
+ * no control is ever shown that does nothing.
  */
 import { ToolbarButton } from '@papertree/ui';
 import { Circle, MoveRight, Redo2, Shapes, Square, StickyNote, Type, Undo2 } from 'lucide-react';
@@ -31,8 +31,10 @@ export interface NotebookToolbarProps {
   readonly onRedo: () => void;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
-  /** S5d's slot: the ink tools group (pen, highlighter, eraser, lasso, nibs, colours). */
+  /** S5d's first slot: the ink tools (pen, highlighter, eraser, lasso). */
   readonly inkTools?: ReactNode;
+  /** S5d's second slot, after Sticky note: the nibs and the colours. */
+  readonly inkOptions?: ReactNode;
 }
 
 /** The Shapes tool: a button that opens the three shapes; Escape or a press elsewhere closes it. */
@@ -107,6 +109,7 @@ export function NotebookToolbar(props: NotebookToolbarProps): ReactNode {
         iconOnly
         onClick={props.onSticky}
       />
+      {props.inkOptions}
       <span className="pt-nb-tools__rule" aria-hidden="true" />
       <ToolbarButton
         label="Undo"

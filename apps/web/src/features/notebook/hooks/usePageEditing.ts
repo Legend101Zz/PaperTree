@@ -13,12 +13,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { newClientId } from '../api/notebookApi';
 import { focusItem } from './focus';
+import { removalCommands } from '../model/history';
 import { neighbourOf, placeNewItem } from '../model/layout';
 import { STICKY_COLOUR } from '../model/wire';
 
 import type { NotebookPageModel } from './useNotebookPage';
 import type { Box, Command } from '../model/history';
 import type { Item, ShapeItem, StickyItem, TextItem } from '../model/page';
+import type { Stroke } from '../model/stroke';
 
 /** What `usePageEditing` returns: the session state, and actions whose identity never changes. */
 export interface PageEditing extends Actions {
@@ -37,6 +39,10 @@ interface Actions {
   readonly remove: (id: string) => void;
   readonly undo: () => void;
   readonly redo: () => void;
+  /** A pen-up's stroke joins the page (S5d, #209). */
+  readonly draw: (stroke: Stroke) => void;
+  /** One eraser gesture takes these strokes away, as one command. */
+  readonly erase: (ids: readonly string[]) => void;
 }
 
 const NEW_SIZE = {
@@ -53,7 +59,7 @@ const NEW_SIZE = {
  * @param target - The event's target.
  * @returns Whether it is inside a text field.
  */
-function inField(target: EventTarget | null): boolean {
+export function inField(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLElement && target.closest('textarea, input, [contenteditable]') !== null
   );
@@ -149,6 +155,11 @@ export function usePageEditing(model: NotebookPageModel): PageEditing {
       model.redo();
       if (next !== undefined) focusItem(next);
     },
+    draw: (stroke) => run({ type: 'add-strokes', strokes: [stroke] }),
+    erase: (ids) => {
+      const state = model.step?.state;
+      if (state !== undefined) for (const cmd of removalCommands(state, ids, [])) run(cmd);
+    },
   };
   // Stable identities for the page's memoised items: each wrapper calls this render's action.
   const latest = useRef(actions);
@@ -164,6 +175,8 @@ export function usePageEditing(model: NotebookPageModel): PageEditing {
       remove: (id) => latest.current.remove(id),
       undo: () => latest.current.undo(),
       redo: () => latest.current.redo(),
+      draw: (stroke) => latest.current.draw(stroke),
+      erase: (ids) => latest.current.erase(ids),
     }),
     [],
   );

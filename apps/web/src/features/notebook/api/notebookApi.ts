@@ -55,6 +55,9 @@ export interface NotebookStrokeWire {
   readonly created_at: string;
 }
 
+/** One stroke of `POST /notebook/pages/{id}/strokes` (S5d, #209): the wire without its date. */
+export type NotebookStrokeIn = Omit<NotebookStrokeWire, 'page_id' | 'created_at'>;
+
 /** `GET /notebook/pages/{id}`. */
 export interface NotebookPageView {
   readonly page: NotebookPageWire;
@@ -186,6 +189,33 @@ export const notebookApi = {
       `/notebook/pages/${seg(pageId)}/items/${seg(itemId)}${version === undefined ? '' : `?version=${String(version)}`}`,
       { ...init, method: 'DELETE' },
     ),
+  /**
+   * One pen-up batch of 1 to 200 strokes, all or none; idempotent on `stroke_id` (a retry is safe).
+   *
+   * @param pageId - The page.
+   * @param strokes - The strokes, in paint order.
+   * @param init - Per-request options (`keepalive`).
+   * @returns How many were new.
+   */
+  addStrokes: (pageId: string, strokes: readonly NotebookStrokeIn[], init: SendInit = {}) =>
+    request<{ added: number }>(`/notebook/pages/${seg(pageId)}/strokes`, {
+      ...init,
+      method: 'POST',
+      body: JSON.stringify(strokes),
+    }),
+  /**
+   * The eraser: deletes one stroke (404 when it is already gone).
+   *
+   * @param pageId - The page.
+   * @param strokeId - The stroke.
+   * @param init - Per-request options (`keepalive`).
+   * @returns Nothing (204).
+   */
+  deleteStroke: (pageId: string, strokeId: string, init: SendInit = {}) =>
+    request<void>(`/notebook/pages/${seg(pageId)}/strokes/${seg(strokeId)}`, {
+      ...init,
+      method: 'DELETE',
+    }),
 };
 
 /**
