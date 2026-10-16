@@ -221,7 +221,13 @@ def test_papers_without_references_or_titles_yield_nothing_and_no_error() -> Non
 def test_links_scale(tmp_path: Path) -> None:
     """400 papers x 60 entries, realistic: 350 long titles that mostly share first words, 50 short
     titles, entries in author-block / title / venue form. The matching is timed alone, and the DB
-    query (400 stored papers through `put_paper`) separately."""
+    query (400 stored papers through `put_paper`) separately.
+
+    The target is matching under 1 s (measured 0.48 s at low load, 0.84 s under heavy load). The
+    assertion is 3 s on purpose: it is loose so machine load cannot fail it (the `test_30k_*`
+    timing tests flake that way, #80); it still catches an O(entries x papers) regression, which
+    took tens of seconds. The measured times are printed.
+    """
     openers = ("Deep", "Learning", "Neural", "Attention", "Efficient")
 
     def title(k: int) -> str:
@@ -245,7 +251,7 @@ def test_links_scale(tmp_path: Path) -> None:
     links = find_links(sources)
     matching = time.monotonic() - started
     assert len(links) == 398  # 400 ring links minus the two self-references (k = 0, 200)
-    assert matching < 1.0, matching
+    assert matching < 3.0, matching
 
     with harness(tmp_path) as h:
         token = register(h.client, "scale@example.com")
