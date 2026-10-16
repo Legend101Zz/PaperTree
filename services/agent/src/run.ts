@@ -30,6 +30,13 @@
  * (`services/api/.../test_agent_contracts.py`) and the one the API and the UI are built against. A
  * message that cites and THEN asks for a tool therefore keeps its text (the reader already has it)
  * and the answer continues in the next message, joined with a blank line.
+ *
+ * A DIAGRAM run (v0.2 S7a) is the same loop with three differences: its answer is NDJSON lines, so
+ * a message proves to be the answer by holding one complete valid line (not a `[bN]` marker);
+ * every line of the text sent is also read by diagram.ts's `PlateReader`, which emits `plate`,
+ * `part` and `link` (or a `status` for a line it skips) beside the `text` deltas, so `final_text`
+ * still equals the deltas; and only `get_passage` / `get_section` run (another tool is refused,
+ * not counted, with no `status`).
  */
 import type { AssistantMessage, Model } from '@earendil-works/pi-ai';
 import type {
@@ -54,6 +61,7 @@ import {
   SDK_LABEL,
   TOOL_NAMES,
 } from './contract.ts';
+import { DIAGRAM_TOOLS, holdsDiagramLine, PlateReader } from './diagram.ts';
 import type { FauxBrain, FauxModel } from './faux.ts';
 import type { ModelChoice } from './models.ts';
 import type { Logger } from './log.ts';
@@ -117,6 +125,9 @@ export const BUDGET_TURN_TEXT =
   'The tool budget for this task is used up, so no tool can be used any more. Write the final ' +
   'answer now, in the format you were asked for, from the passages you already have. Cite only ' +
   'handles you have seen, and leave out anything you did not get to read.';
+/** What a diagram run's model is told when it calls a tool a plate may not use. */
+export const DIAGRAM_TOOLS_TEXT =
+  'A diagram reads only passages and sections: use get_passage or get_section, or draw from what you have.';
 /** The tool result of a call made in that final turn (the run ends at the call). */
 export const BUDGET_CLOSED_TEXT = 'Tool budget exhausted; answer from what you have.';
 /** `max_turns` leaves this many more turns for the answer turn itself (a tool-free reply is 1). */
@@ -200,6 +211,10 @@ class Run {
   private readonly callIndex = new Map<string, number>();
   /** Tool calls made after the first text was sent: refused, not run, not counted. */
   private readonly refused = new Set<string>();
+  /** A diagram run's calls to a tool a plate may not use: refused, not run, not counted. */
+  private readonly refusedKind = new Set<string>();
+  /** A diagram run's line reader; null for every other kind. */
+  private readonly plate: PlateReader | null;
   private toolCalls = 0;
   /** The cap was hit: the session is being stopped so the final, answer-only turn can follow. */
   private budgetTurnPending = false;
@@ -248,6 +263,10 @@ class Run {
     this.clientGone = clientGone;
     this.sessionId = request.history?.session_id ?? request.run_id;
     this.earlierHandles = historyHandles(request.history?.entries ?? []);
+    this.plate =
+      request.kind === 'diagram'
+        ? new PlateReader((event) => this.sse.event(event.name, { ...event.data }))
+        : null;
     for (const passage of request.seed?.passages ?? []) {
       if (!this.seedHandles.includes(passage.handle)) this.seedHandles.push(passage.handle);
       this.info.set(passage.handle, parseLabel(passage.label));
@@ -322,6 +341,12 @@ class Run {
     if (this.firstTextMs === null) this.firstTextMs = this.now();
     this.finalText += delta;
     this.sse.event('text', { delta });
+    this.plate?.push(delta);
+  }
+
+  /** Whether a held message's text proves it is the answer (see "Text" above). */
+  private provesAnswer(text: string): boolean {
+    return this.plate === null ? hasMarker(text) : holdsDiagramLine(text);
   }
 
   private commit(state: MessageState): void {
@@ -391,7 +416,8 @@ class Run {
 
   private thinkingLabel(): string | undefined {
     if (this.agentStarts !== 1 || this.request.history !== null) return undefined;
-    if (this.request.kind === 'explain') return 'Reading the selected passage';
+    if (this.request.kind === 'explain' || this.request.kind === 'diagram')
+      return 'Reading the selected passage';
     if (this.request.kind === 'summary') return "Reading the paper's key passages";
     return undefined;
   }
@@ -439,7 +465,7 @@ class Run {
         state.deltas.push(inner.delta);
         state.text += inner.delta;
         if (state.committed) this.sendText(inner.delta);
-        else if (hasMarker(state.text)) this.commit(state);
+        else if (this.provesAnswer(state.text)) this.commit(state);
         break;
       }
       case 'message_end': {
@@ -498,6 +524,17 @@ class Run {
             request_id: this.request.request_id,
             name: event.toolName,
             status: 'refused_after_text',
+            ms: 0,
+          });
+          break;
+        }
+        if (this.plate !== null && !DIAGRAM_TOOLS.includes(event.toolName)) {
+          this.refusedKind.add(event.toolCallId);
+          this.deps.log.info('agent.tool', {
+            run_id: this.request.run_id,
+            request_id: this.request.request_id,
+            name: event.toolName,
+            status: 'refused_for_kind',
             ms: 0,
           });
           break;
@@ -577,11 +614,13 @@ class Run {
         onFatal: () => this.hostAbort('tool_failed'),
         budgetNote: (id) => this.budgetNote(id),
         closed: (id) =>
-          this.refused.has(id)
-            ? this.budgetTurnGiven && this.finalText.length === 0
-              ? BUDGET_CLOSED_TEXT
-              : TOOLS_CLOSED_TEXT
-            : undefined,
+          this.refusedKind.has(id)
+            ? DIAGRAM_TOOLS_TEXT
+            : this.refused.has(id)
+              ? this.budgetTurnGiven && this.finalText.length === 0
+                ? BUDGET_CLOSED_TEXT
+                : TOOLS_CLOSED_TEXT
+              : undefined,
       });
       if (deps.faux) deps.faux.model.load(this.sessionId, deps.faux.brain(request));
       this.paper = await createPaperSession({
@@ -634,6 +673,9 @@ class Run {
       clearInterval(ping);
       stop?.removeEventListener('abort', onStop);
     }
+    // A last line with no newline after it, once the answer ended on its own (an aborted run's
+    // last line was cut, not written badly).
+    if (this.hostReason === null) this.plate?.flush();
     const done = this.done(promptError);
     this.sse.event('done', { ...done });
     this.sse.end();
@@ -655,6 +697,7 @@ class Run {
       tool_calls: done.tool_calls,
       turns: done.turns,
       markers: done.markers,
+      ...(this.plate === null ? {} : { parts: this.plate.parts }),
       unseen_markers: parseMarkers(done.final_text).filter((m) => !done.handles_seen.includes(m)),
       first_text_ms: done.first_text_ms,
       first_token_ms: this.firstTokenMs,

@@ -87,7 +87,7 @@ def _db_for(h: AiHarness, token: str) -> tuple[PaperTreeDb, Any, str]:
 
 
 def test_a_diagram_thread_starts_like_an_explain_with_its_own_question(tmp_path: Path) -> None:
-    with ai_harness(tmp_path, Script("explain-ok")) as h:
+    with ai_harness(tmp_path, Script("diagram-ok")) as h:
         token, paper_id = _alice(h)
         frames, _ = read_sse(_diagram(h, token, paper_id))
         run = events(frames, "run")[0]
@@ -107,8 +107,7 @@ def test_a_diagram_thread_starts_like_an_explain_with_its_own_question(tmp_path:
         asked, answer = detail["messages"]
         assert asked["content"] == "Explain with a diagram." and "diagram" not in asked
         assert "coverage" not in answer, "a plate has no prose paragraphs to count"
-        # The replayed prose draws no part: the plate reads as an error, never an empty plate.
-        assert answer["diagram"] == {"title": None, "status": "error", "parts": [], "links": []}
+        assert answer["diagram"]["status"] == "complete" and len(answer["diagram"]["parts"]) == 6
         usage = h.client.get("/usage", headers=auth(token)).json()
         assert usage["by_kind"]["diagram"]["runs"] == 1 and usage["by_kind"]["explain"]["runs"] == 0
 
@@ -119,6 +118,9 @@ def test_the_plate_reads_back_cited_not_verified_and_inferred_parts(tmp_path: Pa
         anchor = _anchor()
         run = events(read_sse(_diagram(h, token, paper_id, anchor))[0], "run")[0]
         db, owner, user_id = _db_for(h, token)
+        # The replayed prose drew no part (an error); the parts below are written by hand, as the
+        # broker writes them, and the answer is marked complete so only the read path is tested.
+        db.update_message(owner, run["message_id"], status="complete")
         try:
             document = DocumentCache().get(db, owner, user_id, paper_id, 1)
             assert document is not None

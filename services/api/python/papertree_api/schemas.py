@@ -948,6 +948,13 @@ class SseCitations(Wire):
     items: list[Citation]
 
 
+class SsePlate(Wire):
+    """A diagram run's plate title (v0.2 S7a); its parts follow as `part` (a `DiagramPart`, the
+    quote already resolved) and its feedback edges as `link` (a `DiagramLink`)."""
+
+    title: str
+
+
 class SseDone(Wire):
     status: DoneStatus
     error: MessageError | None
@@ -960,6 +967,9 @@ BROWSER_EVENTS: Final[dict[str, type[Wire]]] = {
     "status": SseStatus,
     "text": SseText,
     "citations": SseCitations,
+    "plate": SsePlate,
+    "part": DiagramPart,
+    "link": DiagramLink,
     "usage": RunSummary,
     "done": SseDone,
 }
@@ -1529,6 +1539,41 @@ class AgentText(Wire):
     delta: str
 
 
+class AgentPlate(Wire):
+    """A diagram run's first line (`run-events.schema.json` `$defs.plate`, v0.2 S7a)."""
+
+    title: str = Field(min_length=1, max_length=60)
+
+
+class AgentCite(Wire):
+    """The model's quote for a part, before the API looked for it in the paper."""
+
+    quote: str = Field(min_length=8, max_length=240)
+    #: A hint only; the resolver never trusts it.
+    page: Positive | None = omittable()
+
+
+class AgentPart(Wire):
+    """One part as the agent checked it (`$defs.part`): its letter by arrival, `after` from
+    earlier letters only, one `edge` label (or null) per `after` entry."""
+
+    letter: Letter
+    label: str = Field(min_length=1, max_length=28)
+    text: str = Field(max_length=110)
+    kind: DiagramPartKind
+    after: list[Letter] = Field(max_length=3)
+    edge: list[Annotated[str, Field(max_length=18)] | None] = Field(max_length=3)
+    cite: AgentCite | None
+
+
+class AgentLink(Wire):
+    """A feedback edge between two placed parts (`$defs.link`)."""
+
+    source: Letter
+    target: Letter
+    label: Annotated[str, Field(max_length=18)] | None
+
+
 class AgentUsage(Wire):
     """Per assistant message (`usage`) and summed over the run (`done.usage_totals`).
     `reasoning` is null when the provider does not report it (Pi leaves it undefined)."""
@@ -1583,6 +1628,9 @@ AGENT_EVENTS: Final[dict[str, type[Wire]]] = {
     "run": AgentRun,
     "status": AgentStatus,
     "text": AgentText,
+    "plate": AgentPlate,
+    "part": AgentPart,
+    "link": AgentLink,
     "usage": AgentUsage,
     "done": AgentDone,
 }

@@ -78,8 +78,8 @@ function conditionalFields(schemaPath: string): string[] {
   return Object.keys(then?.properties ?? {});
 }
 
-export type Kind = 'explain' | 'ask' | 'summary';
-export type PromptVersion = 'explain-v1' | 'ask-v1' | 'summary-v1';
+export type Kind = 'explain' | 'ask' | 'summary' | 'diagram';
+export type PromptVersion = 'explain-v1' | 'ask-v1' | 'summary-v1' | 'diagram-v1';
 
 export interface SeedPassage {
   readonly handle: string;
@@ -125,6 +125,7 @@ export const PROMPT_FOR_KIND: Readonly<Record<Kind, PromptVersion>> = {
   explain: 'explain-v1',
   ask: 'ask-v1',
   summary: 'summary-v1',
+  diagram: 'diagram-v1',
 };
 
 /**

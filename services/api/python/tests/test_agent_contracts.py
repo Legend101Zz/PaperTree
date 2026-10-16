@@ -41,8 +41,10 @@ EVENTS_SCHEMA: dict[str, Any] = json.loads((AGENT / "run-events.schema.json").re
 REQUEST_SCHEMA: dict[str, Any] = json.loads((AGENT / "run-request.schema.json").read_text("utf-8"))
 TOOLS_SCHEMA: dict[str, Any] = json.loads((AGENT / "internal-tools.schema.json").read_text("utf-8"))
 
-#: contracts.md §0: the eight recorded streams.
+#: contracts.md §0: the eight recorded streams, and (v0.2 S7a) the diagram stream the agent emits
+#: under its faux `[faux:diagram]` brain (NOT a live model's: S7b records the live smoke).
 NAMES = {
+    "diagram-ok",
     "explain-ok",
     "followup-ok",
     "summary-ok",
@@ -54,6 +56,7 @@ NAMES = {
 }
 #: fixture -> (done.status, done.error.code or None).
 OUTCOME = {
+    "diagram-ok": ("complete", None),
     "explain-ok": ("complete", None),
     "followup-ok": ("complete", None),
     "summary-ok": ("complete", None),
@@ -96,7 +99,7 @@ def read_frames(path: Path) -> tuple[list[Frame], int]:
     return frames, pings
 
 
-def test_the_eight_fixtures_exist() -> None:
+def test_the_nine_fixtures_exist() -> None:
     assert {path.stem for path in FIXTURES} == NAMES
 
 
@@ -181,6 +184,22 @@ def test_the_retry_fixture_retries_before_any_text() -> None:
     assert events.index(("status", "retrying")) < events.index(("text", None))
 
 
+def test_the_diagram_fixture_draws_six_parts_from_its_own_lines() -> None:
+    """Each `part` is a line of `final_text`, lettered by arrival, with arrows from earlier
+    letters only; the inferred part is an explicit null, and no line was skipped."""
+    frames, _ = read_frames(AGENT / "fixtures" / "diagram-ok.sse")
+    parts = [f.data for f in frames if f.event == "part"]
+    assert [p["letter"] for p in parts] == list("ABCDEF")
+    assert all(a < p["letter"] for p in parts for a in p["after"])
+    assert [p["cite"] is None for p in parts] == [False] * 5 + [True]
+    lines = [json.loads(line) for line in frames[-1].data["final_text"].split("\n")]
+    assert [line["label"] for line in lines if line["t"] == "part"] == [p["label"] for p in parts]
+    assert [f.data["title"] for f in frames if f.event == "plate"] == [lines[0]["title"]]
+    assert lines[-1] == {"t": "end"}
+    labels = [f.data.get("label") for f in frames if f.event == "status"]
+    assert not [label for label in labels if label and label.startswith("Skipped")]
+
+
 def test_a_broken_frame_fails_both_checkers() -> None:
     """Non-vacuity: the two checkers above refuse what they should."""
     frames, _ = read_frames(AGENT / "fixtures" / "explain-ok.sse")
@@ -207,6 +226,15 @@ def test_a_broken_frame_fails_both_checkers() -> None:
 
 
 _RUN = {"run_id": "run_01K62ZX4Y6C0G6Y7T3N2E6Q9VB", "model": "minimax/MiniMax-M3"}
+_PART: dict[str, Any] = {
+    "letter": "B",
+    "label": "MatMul",
+    "text": "",
+    "kind": "step",
+    "after": ["A"],
+    "edge": [None],
+    "cite": {"quote": "We compute the dot products"},
+}
 _USAGE = {"input": 1, "output": 1, "cache_read": 0, "cache_write": 0, "cost_usd_est": 0.0}
 
 #: Frames on the edge of §3.2, valid and not. The lesson of S0 review M1: two checkers that
@@ -235,6 +263,26 @@ EDGE_FRAMES: list[tuple[str, dict[str, Any]]] = [
     ("run", {**_RUN, "sdk": "pi-coding-agent@0.87.1"}),
     ("run", {**_RUN, "sdk": "pi-coding-agent"}),
     ("run", {**_RUN, "run_id": "run_short", "sdk": "pi-coding-agent@0.87.1"}),
+    # v0.2 S7a: the diagram events.
+    ("plate", {"title": "Scaled dot-product attention"}),
+    ("plate", {"title": ""}),
+    ("plate", {"title": "x" * 61}),
+    ("part", _PART),
+    ("part", {**_PART, "cite": None}),
+    ("part", {**_PART, "cite": {"quote": "a quote of words", "page": 4}}),
+    ("part", {**_PART, "cite": {"quote": "short"}}),
+    ("part", {**_PART, "cite": {"quote": "a quote of words", "page": 0}}),
+    ("part", {**_PART, "cite": {"quote": "a quote of words", "page": None}}),
+    ("part", {**_PART, "letter": "M"}),
+    ("part", {**_PART, "label": "x" * 29}),
+    ("part", {**_PART, "kind": "box"}),
+    ("part", {**_PART, "after": ["A", "B", "C", "D"], "edge": [None] * 4}),
+    ("part", {**_PART, "edge": ["x" * 19]}),
+    ("part", {k: v for k, v in _PART.items() if k != "cite"}),
+    ("link", {"source": "A", "target": "B", "label": None}),
+    ("link", {"source": "A", "target": "B", "label": "feeds"}),
+    ("link", {"source": "A", "target": "B"}),
+    ("link", {"source": "a", "target": "B", "label": None}),
 ]
 
 
@@ -253,7 +301,7 @@ def test_the_model_and_the_hand_schema_give_one_answer_frame_by_frame(
     assert by_model == by_schema, f"model {by_model}, schema {by_schema}: {event} {data}"
 
 
-@pytest.mark.parametrize("name", ["explain", "followup", "summary"])
+@pytest.mark.parametrize("name", ["explain", "followup", "summary", "diagram"])
 def test_the_run_request_examples(name: str) -> None:
     body = json.loads((AGENT / "examples" / f"run-request-{name}.json").read_text("utf-8"))
     assert not validate(body, REQUEST_SCHEMA)
@@ -280,7 +328,9 @@ def test_the_followup_resumes_the_explain_turn() -> None:
 def test_the_request_rules_are_in_both_checkers() -> None:
     summary = json.loads((AGENT / "examples" / "run-request-summary.json").read_text("utf-8"))
     explain = json.loads((AGENT / "examples" / "run-request-explain.json").read_text("utf-8"))
+    diagram = json.loads((AGENT / "examples" / "run-request-diagram.json").read_text("utf-8"))
     for bad in (
+        {**diagram, "seed": None},  # a plate is drawn from a selection (v0.2 S7a)
         {**summary, "seed": None},  # a summary run needs its digest (S5F)
         {**explain, "seed": None},  # an explain run needs one
         {**explain, "datamark": "^XYZ"},

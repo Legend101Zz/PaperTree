@@ -48,7 +48,7 @@ def _scripts(route: str) -> list[Script]:
         "ask": [*first, Script("explain-ok")],
         "followup": [*first, Script("followup-ok")],
         "summary": [*first, Script("summary-ok")],
-        "diagram": [*first, Script("explain-ok")],
+        "diagram": [*first, Script("diagram-ok")],
     }[route]
 
 
