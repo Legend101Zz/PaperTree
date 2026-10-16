@@ -70,7 +70,7 @@ const KIND_WORDS: Readonly<Record<CanvasNode['kind'], readonly [string, string]>
   question: ['Question', 'a question'],
   notebook: ['Notebook page', 'a notebook page'],
   diagram: ['Diagram', 'a diagram'],
-  group: ['Group', 'a group'],
+  group: ['Frame', 'a frame'],
 };
 
 /**
@@ -110,8 +110,10 @@ export function toFlowNode(node: CanvasNode, paperId: string, selected = false):
     position: { x: node.x, y: node.y },
     width: node.w,
     height: node.h,
-    // Groups sit under the cards they hold; everything else sits above by its own `z`.
+    // Frames sit under the cards they hold; everything else sits above by its own `z`.
     zIndex: node.kind === 'group' ? 0 : 10 + node.z,
+    // A frame is moved by its paper tag only, so a press inside it reaches the board (#214).
+    ...(node.kind === 'group' ? { dragHandle: '.pt-frame__tag' } : {}),
     selected,
     ariaLabel: nodeLabel(node),
     data: { node, paperId },

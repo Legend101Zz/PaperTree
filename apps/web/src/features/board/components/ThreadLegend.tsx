@@ -10,30 +10,17 @@
  * and the summary is not drawn. It follows the screen as it turns.
  */
 import { THREAD_KINDS, ThreadSwatch } from '@papertree/ui';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
+import { useWide } from '../hooks/useWide';
 import { PIN_NAMES, type Port } from '../model/pins';
 
 const PINS: readonly Port[] = ['evidence_in', 'question_in', 'claim_out', 'answer_out'];
 
-/** A screen wide enough for the strip to stay open: the phone breakpoint, 640 px. */
-const WIDE = '(min-width: 640px)';
-
-/** True when the screen is wide (and on the server, where there is no screen to fold for). */
-function wide(): boolean {
-  return typeof window === 'undefined' || window.matchMedia(WIDE).matches;
-}
-
 /** The legend of threads and pins. */
 export function ThreadLegend(): ReactNode {
-  const [isWide, setWide] = useState(wide);
+  const isWide = useWide();
   const [open, setOpen] = useState(false);
-  useEffect(() => {
-    const query = window.matchMedia(WIDE);
-    const follow = (): void => setWide(query.matches);
-    query.addEventListener('change', follow);
-    return () => query.removeEventListener('change', follow);
-  }, []);
   return (
     <section className="pt-legend" aria-label="Legend">
       <details

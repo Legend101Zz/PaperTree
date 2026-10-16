@@ -7,7 +7,7 @@
   position: absolute;
   z-index: 5;
   inset-block-end: 12px;
-  inset-inline: 72px 16px;
+  inset-inline: 24px 176px; /* the minimap's column (144 + 2 × 16) stays clear (#214) */
   max-inline-size: 1216px;
   padding: 10px 20px;
   color: var(--pt-ink);
@@ -80,8 +80,8 @@
 
 @media (max-width: 639px) {
   .pt-legend {
-    inset-inline: 64px auto;
-    max-inline-size: calc(100% - 72px);
+    inset-inline: 16px auto;
+    max-inline-size: calc(100% - 32px);
     padding: 8px 12px;
     font-size: 13px;
   }
@@ -103,7 +103,17 @@
   }
 }
 
-/* The Undo offer sits above the strip, never over it. */
+/* The Undo offer sits above the strip, never over it, and left of the minimap's column. */
+.pt-cv .pt-toast--lift {
+  inset-inline: 24px 176px;
+}
+
 .pt-cv:has(.pt-legend) .pt-toast--lift {
   inset-block-end: calc(104px + env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 639px) {
+  .pt-cv .pt-toast--lift {
+    inset-inline: 16px;
+  }
 }

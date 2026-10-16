@@ -15,7 +15,7 @@ board, the Board wording), S6e (#215, undo and 500 cards).
 | `question`    | call slip alone, "question" tag                            | you                            |
 | `notebook`    | miniature of the page's items, counts, Open page           | none (a pointer to a page)     |
 | `diagram`     | AI slip with an empty plate and the title until S7 lands   | ai                             |
-| `group`       | the v0.1 dashed frame (S6d redraws it)                     | none                           |
+| `group`       | a frame: dashed outline, paper tag with its name (S6d)     | you (the name)                 |
 
 Every number a card prints is read from the API: the page tab from `source_anchor`, the notebook
 counts from the board read's `counts`, the explanation footer from the message's `coverage` and
@@ -89,6 +89,32 @@ xyflow. Each thing is said once: focus says the card's name; the live region say
 A numbered marker opens `/paper/<id>/read?focus=<card>&cite=<citation>`; the reader's
 `useFocusFromCanvas` reads the citation's anchor from the thread and flashes the passage.
 
+## Around the cards: header, tools, frames, minimap, empty board (S6d, #214)
+
+The header says "Board _paper title_ · 11 cards · 7 threads · 2 frames" (`model/chrome`'s
+`countsLine`: cards always, threads and frames once there are some; the title is one
+`GET /papers/{id}`). The tools are frame 06's: Select (area selection), Add note, Add frame (an empty
+frame centred on the view, its name selected for typing), Thread (L) (one selected card starts
+the keyboard walk from its brass pin, as L does; two are linked first to second, v0.1's Link; a
+thread being drawn is put away), Fit all and the zoom (− 100% +, off at 20 % and 200 %). "More
+board tools" keeps v0.1's Frame selected cards (Group), Remove frame (Ungroup) and Delete. Under
+1100 px the tools are icons with their names kept; on a phone Select and the zoom move into More so
+the bar is one row beside "Board".
+
+A frame is the wire's `group`. It is moved by its paper tag only (`dragHandle`); a press inside the
+outline reaches the board. The cards it holds follow it (the controller carries them). Which frame
+holds a card is `model/frames`' rule: the smallest frame holding the card's centre, and a card
+stays in its frame while that frame still holds it. It is applied when a card is dropped (its
+`group_id` rides in the PATCH of the move) and when a frame is resized (cards it now holds join,
+members it no longer holds leave); a new frame stays empty until something is dropped in it.
+
+The minimap (`BoardMinimap`) is xyflow's `MiniMap` in board stock: cards ruled, AI cards slip,
+frames dashed, the view a navy box, every edge 3:1 on its ground (`pins-contrast.spec`); captioned
+"Map · 100%" or "Map · empty", bottom-right, with the legend and the Undo toast kept left of its
+column. On a phone it folds behind a "Map" button at the top right. The empty board (`EmptyBoard`,
+06b) is a ruled card on a brass pin with the sprout, how cards arrive, Back to the paper and two
+hints. Everything sits in the `main` landmark under the header.
+
 ## Data flow
 
 UI (`BoardView`, the cards) → `useBoardController` (local first, then one request per explicit
@@ -99,7 +125,10 @@ per set of cards.
 
 ## Key files
 
-- `components/BoardView.tsx`: the page: header, toolbar, the xyflow board, the empty state.
+- `components/BoardView.tsx`: the page: header, the xyflow board, the notices and the Undo toast.
+- `components/BoardHeader.tsx`, `BoardToolbar.tsx` (and `hooks/useBoardTools.ts`, what each tool
+  does now), `BoardIcon.tsx`, `BoardMinimap.tsx`, `EmptyBoard.tsx`, `chrome.css`; `model/chrome.ts`
+  (counts, zoom readout, Thread's rule) and `model/frames.ts` (which frame holds a card).
 - `components/CardPins.tsx`, `ThreadEdge.tsx`, `ThreadLegend.tsx`: pins, threads, legend;
   `hooks/useThreadDrawing.ts`: drawing a thread (validity, lit pins, refusal, the pending thread).
 - `components/LinkAsPicker.tsx`, `LinkAsLayer.tsx` (placement, focus back), `ThreadPreview.tsx`,
@@ -118,4 +147,5 @@ per set of cards.
   threads, the legend, the picker, from `--pt-*` tokens.
 
 The reader-side helpers (`components/canvas/sendToCanvas.ts`, `toast.tsx`, `duplicate.ts`,
-`useFocusFromCanvas.ts`) stay where the reader imports them until the Board wording sweep (S6d).
+`useFocusFromCanvas.ts`) stay where the reader imports them until the Board wording sweep (S6d,
+second branch).

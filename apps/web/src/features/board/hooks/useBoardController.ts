@@ -5,7 +5,7 @@
  *
  * THE RULE (contracts.md §2.7): the client writes only on explicit gestures — drag END (one PATCH
  * per node that moved), an edit commit, connect, group, delete, and pan/zoom END for the viewport.
- * A settled canvas makes no request at all: there is no polling, no refetch on focus, no autosave
+ * A settled board makes no request at all: there is no polling, no refetch on focus, no autosave
  * timer. The only timer is the 400 ms debounce that turns a run of arrow-key nudges into one PATCH.
  *
  * LOCAL FIRST, THEN THE SERVER. A change is applied to the screen at once and sent after; if the
@@ -39,6 +39,7 @@ import {
 } from '@/lib/api/types';
 
 import { cardName, toFlowEdge, toFlowNode, type PtEdge, type PtNode } from '../model/flow';
+import { cardBoxes, frameBoxes, regroup, regroupAround } from '../model/frames';
 import { newEdgeId, newNodeId } from '../model/ids';
 import { linkedSentence } from '../model/linkAs';
 import { DEFAULT_SIZE, boundsOf, freeSpot } from '../model/placement';
@@ -85,6 +86,8 @@ export interface BoardController {
   readonly onEdgesChange: (changes: EdgeChange<PtEdge>[]) => void;
   readonly onNodeDragStop: () => void;
   readonly addNote: (near?: { x: number; y: number }) => Promise<void>;
+  /** An empty frame centred on `centre` (the middle of the view), its name ready to type (#214). */
+  readonly addFrame: (centre: { x: number; y: number }) => Promise<void>;
   readonly commitBody: (id: string, body: string) => void;
   readonly commitTitle: (id: string, title: string) => void;
   readonly commitSize: (id: string, rect: { x: number; y: number; w: number; h: number }) => void;
@@ -207,7 +210,7 @@ export function useBoardController(paperId: string): BoardController {
     } catch (error) {
       if (!aliveRef.current) return;
       setNotice(
-        sentence(error, "Couldn't load your canvas. Check your connection, then try again."),
+        sentence(error, "Couldn't load your board. Check your connection, then try again."),
       );
       setStatus((s) => (s === 'loading' ? 'error' : s));
     }
@@ -290,7 +293,7 @@ export function useBoardController(paperId: string): BoardController {
         } catch (error) {
           failed(
             error,
-            "Couldn't save that change. The canvas was reloaded from your last saved version.",
+            "Couldn't save that change. The board was reloaded from your last saved version.",
             id,
           );
         }
@@ -300,17 +303,30 @@ export function useBoardController(paperId: string): BoardController {
     [clearStale, failed, mergeData],
   );
 
+  /**
+   * The nodes that moved since they were last sent, one PATCH each. A card dropped into a frame (or
+   * out of one) carries its new `group_id` in that same PATCH (`model/frames`' rule, #214).
+   */
   const flushPositions = useCallback(
     (ids: Iterable<string>) => {
-      for (const id of ids) {
-        const node = nodesRef.current.find((n) => n.id === id);
-        if (node === undefined) continue;
-        const sent = sentRef.current.get(id);
+      const wanted = new Set(ids);
+      const moved = nodesRef.current.filter((n) => {
+        const sent = sentRef.current.get(n.id);
+        return (
+          wanted.has(n.id) &&
+          (sent === undefined || sent.x !== n.position.x || sent.y !== n.position.y)
+        );
+      });
+      const frames = frameBoxes(nodesRef.current);
+      const joins = new Map(regroup(cardBoxes(moved), frames).map((c) => [c.id, c.groupId]));
+      for (const node of moved) {
         const { x, y } = node.position;
-        if (sent !== undefined && sent.x === x && sent.y === y) continue;
-        sentRef.current.set(id, { x, y });
-        mergeData(id, { x, y });
-        patchNode(id, { x, y });
+        const fields = joins.has(node.id)
+          ? { x, y, group_id: joins.get(node.id) ?? null }
+          : { x, y };
+        sentRef.current.set(node.id, { x, y });
+        mergeData(node.id, fields);
+        patchNode(node.id, fields);
       }
     },
     [mergeData, patchNode],
@@ -406,6 +422,18 @@ export function useBoardController(paperId: string): BoardController {
       sentRef.current.set(id, { x: rect.x, y: rect.y });
       mergeData(id, rect);
       patchNode(id, rect);
+      if (nodesRef.current.find((n) => n.id === id)?.data.node.kind !== 'group') return;
+      // A resized frame takes in the cards it now holds and lets go of the ones it no longer does,
+      // measured at the size it was given (whatever xyflow's copy of the node says).
+      const nodes = nodesRef.current.map((n) =>
+        n.id === id
+          ? { ...n, position: { x: rect.x, y: rect.y }, width: rect.w, height: rect.h }
+          : n,
+      );
+      for (const change of regroupAround(id, cardBoxes(nodes), frameBoxes(nodes))) {
+        mergeData(change.id, { group_id: change.groupId });
+        patchNode(change.id, { group_id: change.groupId });
+      }
     },
     [mergeData, patchNode],
   );
@@ -456,6 +484,21 @@ export function useBoardController(paperId: string): BoardController {
         setEditingId(node.node_id);
       } catch (error) {
         setNotice(sentence(error, "Couldn't add a note. Check your connection and try again."));
+      }
+    },
+    [addNode],
+  );
+
+  const addFrame = useCallback(
+    async (centre: { x: number; y: number }) => {
+      // Empty on purpose: a card joins a frame when it is dropped in it, never by lying under it.
+      const size = DEFAULT_SIZE.group;
+      const at = { x: Math.round(centre.x - size.w / 2), y: Math.round(centre.y - size.h / 2) };
+      try {
+        const node = await addNode('group', at, size, { title: 'New frame' });
+        setEditingId(node.node_id);
+      } catch (error) {
+        setNotice(sentence(error, "Couldn't add a frame. Check your connection and try again."));
       }
     },
     [addNode],
@@ -539,7 +582,7 @@ export function useBoardController(paperId: string): BoardController {
             if (error instanceof ApiError && error.status === 404) return;
             failed(
               error,
-              "Couldn't delete that. The canvas was reloaded from your last saved version.",
+              "Couldn't delete that. The board was reloaded from your last saved version.",
             );
           }
         });
@@ -554,7 +597,7 @@ export function useBoardController(paperId: string): BoardController {
             if (error instanceof ApiError && error.status === 404) return;
             failed(
               error,
-              "Couldn't delete that link. The canvas was reloaded from your last saved version.",
+              "Couldn't delete that link. The board was reloaded from your last saved version.",
             );
           }),
         );
@@ -644,7 +687,7 @@ export function useBoardController(paperId: string): BoardController {
           setNotice(
             sentence(
               error,
-              "Couldn't bring that back. The canvas was reloaded from your last saved version.",
+              "Couldn't bring that back. The board was reloaded from your last saved version.",
             ),
           );
           void reload();
@@ -694,7 +737,7 @@ export function useBoardController(paperId: string): BoardController {
           await boardsApi.deleteEdge(boardId, edge.edge_id).catch((error: unknown) => {
             failed(
               error,
-              "Couldn't take that thread back. The canvas was reloaded from your last saved version.",
+              "Couldn't take that thread back. The board was reloaded from your last saved version.",
             );
           });
         });
@@ -721,7 +764,7 @@ export function useBoardController(paperId: string): BoardController {
       boardsApi.patchEdge(boardId, id, fields).catch((error: unknown) => {
         failed(
           error,
-          "Couldn't save that link. The canvas was reloaded from your last saved version.",
+          "Couldn't save that link. The board was reloaded from your last saved version.",
         );
       });
     },
@@ -747,14 +790,14 @@ export function useBoardController(paperId: string): BoardController {
           'group',
           { x: box.x, y: box.y },
           { w: box.w, h: box.h },
-          { title: 'Group' },
+          { title: 'Frame' },
         );
         for (const member of members) {
           mergeData(member.id, { group_id: group.node_id });
           patchNode(member.id, { group_id: group.node_id });
         }
       } catch (error) {
-        setNotice(sentence(error, "Couldn't group those cards. Try again."));
+        setNotice(sentence(error, "Couldn't frame those cards. Try again."));
       }
     },
     [addNode, mergeData, patchNode],
@@ -799,6 +842,7 @@ export function useBoardController(paperId: string): BoardController {
       onEdgesChange,
       onNodeDragStop,
       addNote,
+      addFrame,
       commitBody,
       commitTitle,
       commitSize,
@@ -826,6 +870,7 @@ export function useBoardController(paperId: string): BoardController {
       onEdgesChange,
       onNodeDragStop,
       addNote,
+      addFrame,
       commitBody,
       commitTitle,
       commitSize,

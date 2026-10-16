@@ -83,6 +83,10 @@ function Board({ ctl, nodes, onCardKey }: BoardProps): ReactNode {
   return (
     <>
       <button type="button">Add note</button>
+      {/* The toolbar's Thread with one card selected (#214). */}
+      <button type="button" onClick={() => link.keyboard.start('cn_a')}>
+        Thread
+      </button>
       <input aria-label="Search the library" />
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the test's stage */}
       <div ref={stage} onKeyDown={link.keyboard.onKeyDown} data-walking={link.keyboard.walking}>
@@ -182,6 +186,19 @@ describe('linking by keyboard, and the picker on the board', () => {
     expect(status()).not.toContain('Linked');
     expect(document.activeElement).toBe(card('cn_a'));
     expect(picker()).toBeNull();
+  });
+
+  it('the toolbar’s Thread starts the same walk from the selected card, and Escape returns to it (#214)', () => {
+    const { card } = mount([A, B]);
+    const thread = screen.getByRole('button', { name: 'Thread' });
+    thread.focus();
+    fireEvent.click(thread);
+    expect(walking()).toBe('true');
+    expect(status()).toMatch(/^Linking from Note ‘Depth is the question.’ Target 1 of 1/);
+    expect(document.activeElement).toBe(card('cn_b'));
+    press('Escape');
+    expect(walking()).toBe('false');
+    expect(document.activeElement).toBe(thread);
   });
 
   it('walks a card once per pin, so a claim can reach a question card’s “question in”', async () => {
