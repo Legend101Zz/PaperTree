@@ -190,7 +190,15 @@ export function ReadingNowRow({
       <span className="pt-readnow__page">
         p. {page} of {pageCount}
       </span>
-      <Button variant="outline" size={size} trailingIcon={arrow} onClick={onContinue}>
+      {/* The name carries the title (WCAG 2.5.3: it still contains the visible "Continue"), so two
+          rows on a shelf are not two identical "Continue" buttons. */}
+      <Button
+        variant="outline"
+        size={size}
+        trailingIcon={arrow}
+        onClick={onContinue}
+        aria-label={`Continue reading ${title}`}
+      >
         Continue
       </Button>
     </div>

@@ -58,7 +58,7 @@ describe('ReadingNowRow', () => {
     render(<ReadingNowRow title="Attention" page={4} pageCount={15} onContinue={onContinue} />);
     expect(screen.getByText('p. 4 of 15')).toBeTruthy();
     expect(screen.queryByRole('progressbar')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue reading Attention' }));
     expect(onContinue).toHaveBeenCalledTimes(1);
   });
 
@@ -66,9 +66,23 @@ describe('ReadingNowRow', () => {
     render(
       <ReadingNowRow title="A" page={1} pageCount={2} onContinue={() => undefined} size="touch" />,
     );
-    expect(screen.getByRole('button', { name: 'Continue' }).style.minHeight).toBe('44px');
+    expect(screen.getByRole('button', { name: 'Continue reading A' }).style.minHeight).toBe('44px');
     expect(readingFraction(4, 15)).toBeCloseTo(0.2667, 3);
     expect(readingFraction(20, 15)).toBe(1);
     expect(readingFraction(1, 0)).toBe(0);
+  });
+});
+
+describe('ReadingNowRow names', () => {
+  it('gives each Continue a distinct name that still contains the visible word', () => {
+    render(
+      <>
+        <ReadingNowRow title="Attention" page={4} pageCount={15} onContinue={() => undefined} />
+        <ReadingNowRow title="BERT" page={2} pageCount={9} onContinue={() => undefined} />
+      </>,
+    );
+    const names = screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'));
+    expect(names).toEqual(['Continue reading Attention', 'Continue reading BERT']);
+    for (const b of screen.getAllByRole('button')) expect(b.textContent).toContain('Continue');
   });
 });

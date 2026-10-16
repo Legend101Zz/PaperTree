@@ -3434,6 +3434,13 @@ span.pt-paper .pt-paper__cite {
   flex: none;
 }
 
+/* Holder lighting: the brass frame's cast shadow and the card's recessed inset, both schemes. */
+:root {
+  --pt-holder-shadow-1: rgb(0 0 0 / 35%);
+  --pt-holder-shadow-2: rgb(0 0 0 / 25%);
+  --pt-holder-inset: rgb(60 40 20 / 25%);
+}
+
 /* The shelf label holder: a brass frame around a paper card that stays paper in both schemes. */
 .pt-holder {
   display: inline-block;
@@ -3446,8 +3453,8 @@ span.pt-paper .pt-paper__cite {
   border: 0;
   border-radius: 2px;
   box-shadow:
-    0 1px 1px rgb(0 0 0 / 35%),
-    1px 2px 3px rgb(0 0 0 / 25%);
+    0 1px 1px var(--pt-holder-shadow-1),
+    1px 2px 3px var(--pt-holder-shadow-2);
 }
 
 button.pt-holder {
@@ -3466,7 +3473,7 @@ button.pt-holder {
   gap: 8px;
   padding: 2px 12px;
   background: var(--pt-paper-label);
-  box-shadow: inset 0 1px 2px rgb(60 40 20 / 25%);
+  box-shadow: inset 0 1px 2px var(--pt-holder-inset);
 }
 
 .pt-holder__name {
