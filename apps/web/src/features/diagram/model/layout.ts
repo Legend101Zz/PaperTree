@@ -21,11 +21,13 @@ export const GRID = {
   /** An output box is this much wider on each side, and 6 taller (the frame's double-ruled F). */
   outGrow: 8,
   circleX: 22,
-  /** The first lane for arrows that skip rows; feedback links use lanes from the right edge in. */
+  /**
+   * The first lane, right of the boxes. Arrows that skip rows take the even lanes, feedback links
+   * the odd ones, so neither bank ever moves the other; the drawing widens past `width` rather
+   * than let two arrows share a lane.
+   */
   laneX: 222,
   laneGap: 10,
-  /** Lanes per bank; past it a route shares the last lane rather than leave the plate. */
-  lanes: 4,
 } as const;
 
 /** What the layout needs of a part. */
@@ -100,18 +102,24 @@ export function slotOf(letter: string, kind: Slot['kind']): Slot {
 const cy = (s: Slot): number => s.y + s.h / 2;
 
 /**
- * First-fit lane for a row span; a lane holds spans that do not touch.
+ * First-fit lane for a row span among a bank's lanes (`first`, `first + 2`, …). A lane holds spans
+ * that do not touch, and a bank never runs out (#217 review S4: two arrows on one lane read as one
+ * arrow with two ends), so the drawing widens instead.
  *
  * @param bank The spans each lane holds so far (mutated: the span is added to its lane).
  * @param lo The span's first row.
  * @param hi The span's last row.
- * @returns The lane's index in the bank.
+ * @param first The bank's first lane: 0 for arrows, 1 for feedback links.
+ * @returns The lane's index.
  */
-function takeLane(bank: [number, number][][], lo: number, hi: number): number {
-  let lane = bank.findIndex((spans) => spans.every(([a, b]) => hi < a || b < lo));
-  if (lane < 0) lane = bank.length < GRID.lanes ? bank.length : GRID.lanes - 1;
-  (bank[lane] ??= []).push([lo, hi]);
-  return lane;
+function takeLane(bank: Map<number, [number, number][]>, lo: number, hi: number, first: number) {
+  for (let lane = first; ; lane += 2) {
+    const spans = bank.get(lane) ?? [];
+    if (spans.every(([a, b]) => hi < a || b < lo)) {
+      bank.set(lane, [...spans, [lo, hi]]);
+      return lane;
+    }
+  }
 }
 
 /**
@@ -122,7 +130,7 @@ function takeLane(bank: [number, number][][], lo: number, hi: number): number {
  * @returns The arrows.
  */
 function afterRoutes(placed: readonly LayoutPart[], slots: ReadonlyMap<string, Slot>): Route[] {
-  const bank: [number, number][][] = [];
+  const bank = new Map<number, [number, number][]>();
   const routes: Route[] = [];
   for (const part of placed) {
     const to = slots.get(part.letter);
@@ -153,7 +161,7 @@ function afterRoutes(placed: readonly LayoutPart[], slots: ReadonlyMap<string, S
         });
         return;
       }
-      const x = GRID.laneX + takeLane(bank, from.row, to.row) * GRID.laneGap;
+      const x = GRID.laneX + takeLane(bank, from.row, to.row, 0) * GRID.laneGap;
       const [y0, y1] = [cy(from), cy(to)];
       routes.push({
         key,
@@ -175,14 +183,14 @@ function afterRoutes(placed: readonly LayoutPart[], slots: ReadonlyMap<string, S
 }
 
 /**
- * Feedback links, on their own lanes from the right edge in, so they never move an arrow.
+ * Feedback links, on the odd lanes, so they never move an arrow and an arrow never moves them.
  *
  * @param links The links, in arrival order.
  * @param slots Each placed letter's slot.
  * @returns The link routes.
  */
 function linkRoutes(links: readonly DiagramLink[], slots: ReadonlyMap<string, Slot>): Route[] {
-  const bank: [number, number][][] = [];
+  const bank = new Map<number, [number, number][]>();
   const routes: Route[] = [];
   const seen = new Set<string>();
   for (const link of links) {
@@ -190,8 +198,8 @@ function linkRoutes(links: readonly DiagramLink[], slots: ReadonlyMap<string, Sl
     const key = `${link.source}~${link.target}`;
     if (from === undefined || to === undefined || from === to || seen.has(key)) continue;
     seen.add(key);
-    const lane = takeLane(bank, Math.min(from.row, to.row), Math.max(from.row, to.row));
-    const x = GRID.width - 6 - lane * GRID.laneGap;
+    const lane = takeLane(bank, Math.min(from.row, to.row), Math.max(from.row, to.row), 1);
+    const x = GRID.laneX + lane * GRID.laneGap;
     // 8 below the centre line, so a link never shares a segment with an `after` lane arrow.
     const [y0, y1] = [cy(from) + 8, cy(to) + 8];
     routes.push({
@@ -206,7 +214,7 @@ function linkRoutes(links: readonly DiagramLink[], slots: ReadonlyMap<string, Sl
         [x, y1],
         [to.x + to.w, y1],
       ],
-      labelAt: [x - 4, (y0 + y1) / 2],
+      labelAt: [x + 5, (y0 + y1) / 2],
     });
   }
   return routes;
@@ -244,12 +252,15 @@ export function layoutPlate(
   const ghost = arriving && next !== undefined ? slotOf(next, 'ghost') : null;
   const rows = Math.max(1, last + 1 + (ghost === null ? 0 : 1));
   const outputLast = placed.some((p) => p.kind === 'output' && rowOf(p.letter) === rows - 1);
+  const routes = [...afterRoutes(placed, slots), ...linkRoutes(links, slots)];
+  // Wider only when the lanes need it; every x already drawn stays where it is.
+  const widest = Math.max(GRID.width, ...routes.map((r) => (r.points[1]?.[0] ?? 0) + 8));
   return {
     slots: placed.map((p) => slots.get(p.letter) as Slot),
     gaps,
     ghost,
-    routes: [...afterRoutes(placed, slots), ...linkRoutes(links, slots)],
-    width: GRID.width,
+    routes,
+    width: widest,
     height: GRID.top + (rows - 1) * GRID.row + GRID.boxH + GRID.bottom + (outputLast ? 3 : 0),
   };
 }

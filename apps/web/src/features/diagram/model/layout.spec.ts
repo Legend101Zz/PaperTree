@@ -36,9 +36,9 @@ describe('layoutPlate: streaming', () => {
     const ae = layout.routes.find((r) => r.key === 'A>E');
     expect(ae?.points[1]?.[0]).toBe(GRID.laneX);
     expect(ae?.label).toBe('V');
-    // D>F skips E's row, so it takes a lane too: a second one, since A>E holds the first there.
+    // D>F skips E's row, so it takes a lane too: the next arrow lane, since A>E holds the first.
     const df = layout.routes.find((r) => r.key === 'D>F');
-    expect(df?.points[1]?.[0]).toBe(GRID.laneX + GRID.laneGap);
+    expect(df?.points[1]?.[0]).toBe(GRID.laneX + 2 * GRID.laneGap);
   });
 
   it('never moves a slot or a route once drawn, and grows downward', () => {
@@ -62,7 +62,7 @@ describe('layoutPlate: streaming', () => {
     const route = (l: ReturnType<typeof layoutPlate>, key: string) =>
       l.routes.find((r) => r.key === key);
     expect(route(after, 'C~A')).toEqual(route(before, 'C~A'));
-    expect(route(after, 'C~A')?.points[1]?.[0]).toBe(GRID.width - 6);
+    expect(route(after, 'C~A')?.points[1]?.[0]).toBe(GRID.laneX + GRID.laneGap);
     expect(route(after, 'C~A')?.feedback).toBe(true);
     // And the `after` arrows are the same with or without the link.
     expect(after.routes.filter((r) => !r.feedback)).toEqual(
@@ -104,6 +104,43 @@ describe('layoutPlate: honesty and determinism', () => {
     const shuffled = [...RECORDED].reverse();
     expect(layoutPlate(shuffled, [], false)).toEqual(layoutPlate(RECORDED, [], false));
     expect(layoutPlate(RECORDED, [], false)).toEqual(layoutPlate(RECORDED, [], false));
+  });
+
+  it('never puts two arrows on one lane: more skips widen the drawing (review S4)', () => {
+    // The reviewer's 12-part plate: A and B both skip far down, with many skips between.
+    const twelve = [
+      part('A'),
+      part('B', ['A']),
+      part('C', ['B']),
+      part('D', ['C', 'A']),
+      part('E', ['D', 'B']),
+      part('F', ['E', 'A']),
+      part('G', ['F', 'B']),
+      part('H', ['G', 'C']),
+      part('I', ['H', 'B']),
+      part('J', ['I', 'A']),
+      part('K', ['J', 'C']),
+      part('L', ['K', 'D']),
+    ];
+    const layout = layoutPlate(twelve, [{ source: 'L', target: 'B', label: 'again' }], false);
+    const lanes = layout.routes.filter((r) => r.points.length === 4);
+    const x = (key: string) => lanes.find((r) => r.key === key)?.points[1]?.[0];
+    expect(x('A>J')).not.toBe(x('B>I'));
+    // Any two lane routes whose rows overlap stand on different lanes.
+    const rowSpan = (r: (typeof lanes)[number]) =>
+      [r.from, r.to].map((l) => rowOf(l)).sort((a, b) => a - b) as [number, number];
+    for (const a of lanes) {
+      for (const b of lanes) {
+        if (a === b) continue;
+        const [a0, a1] = rowSpan(a);
+        const [b0, b1] = rowSpan(b);
+        if (a0 <= b1 && b0 <= a1) expect(a.points[1]?.[0]).not.toBe(b.points[1]?.[0]);
+      }
+    }
+    expect(layout.width).toBeGreaterThan(GRID.width);
+    // Widening moves nothing already drawn: the first eleven parts' arrows keep their lanes.
+    const before = layoutPlate(twelve.slice(0, 11), [], false);
+    for (const r of before.routes) expect(layout.routes.find((q) => q.key === r.key)).toEqual(r);
   });
 
   it('places a slot by its letter alone, an output a size larger', () => {

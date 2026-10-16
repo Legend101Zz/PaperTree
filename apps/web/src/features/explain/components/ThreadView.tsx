@@ -75,12 +75,16 @@ export function ThreadView({
     () => numberPassages(state.messages.filter((m) => m.role === 'assistant')),
     [state.messages],
   );
-  // A diagram thread's plates (#217): numbered 1, 2…, one set of passage numbers for the thread.
+  // A diagram thread's plates (#217): numbered 1, 2… among the plates drawn or drawing (one that
+  // ended with no part is never "Plate 1", review N4), one set of passage numbers for the thread.
   const plates = useMemo(() => {
     let n = 0;
-    const plateNo = new Map<string, number>();
+    const plateNo = new Map<string, number | null>();
     exchanges.forEach((e) => {
-      if (e.answer?.diagram != null) plateNo.set(e.key, (n += 1));
+      const answer = e.answer;
+      if (answer?.diagram == null) return;
+      const drawn = answer.status === 'streaming' || answer.diagram.parts.length > 0;
+      plateNo.set(e.key, drawn ? (n += 1) : null);
     });
     const parts = exchanges.flatMap((e) =>
       e.answer?.diagram == null ? [] : [e.answer.diagram.parts],
@@ -92,7 +96,8 @@ export function ThreadView({
     summary !== null && (state.summary.phase === 'ready' || state.summary.phase === 'partial');
 
   const last = state.messages[state.messages.length - 1];
-  const growth = `${String(state.messages.length)}:${String(last?.text.length ?? 0)}:${last?.status ?? ''}:${String(last?.stopped ?? false)}:${String(last?.citations.length ?? 0)}`;
+  // A plate grows by parts, not text (#217 review N5): its part count follows it down too.
+  const growth = `${String(state.messages.length)}:${String(last?.text.length ?? 0)}:${last?.status ?? ''}:${String(last?.stopped ?? false)}:${String(last?.citations.length ?? 0)}:${String(last?.diagram?.parts.length ?? 0)}`;
   useEffect(() => {
     stick.current = false;
     if (scroller.current !== null) scroller.current.scrollTop = 0;

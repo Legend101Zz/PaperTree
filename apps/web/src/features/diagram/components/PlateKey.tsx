@@ -15,7 +15,7 @@ import { cleanQuote } from '@/features/explain/model/anchor';
 import { INFERRED_WORDS, tabOf, verdictOf } from '../model/plate';
 
 import type { DiagramPart } from '@/lib/api/types';
-import type { Slot } from '../model/layout';
+import type { Route, Slot } from '../model/layout';
 
 /** Props for `PlateKey`. */
 export interface PlateKeyProps {
@@ -24,34 +24,42 @@ export interface PlateKeyProps {
   /** The letter still arriving while the plate draws, or null. */
   readonly ghost: string | null;
   readonly numberOf: (part: DiagramPart) => number | null;
+  /** The drawn arrows and links, said in each row's words. */
+  readonly routes: readonly Route[];
   readonly lit: string | null;
   readonly onLight: (letter: string | null) => void;
   readonly onPart: (letter: string) => void;
 }
 
+const edgeWords = (letter: string, label: string | null): string =>
+  label === null ? letter : `${letter} (${label})`;
+
+const listed = (words: readonly string[]): string =>
+  words.length < 2 ? words.join('') : `${words.slice(0, -1).join(', ')} and ${words.at(-1) ?? ''}`;
+
 /**
- * A part's accessible name: its letter, label and where it stands (or that it stands nowhere).
+ * What the drawing says about a part that the key must say too (#217 review S2): the arrows into
+ * it, with their labels, and the feedback links out of it, in words. The key is the plate's only
+ * text alternative, so a diagram never reaches a screen reader as a list of boxes.
  *
- * @param part The part.
- * @param n Its passage number, or null.
- * @returns e.g. "Part C, Scale ÷ √dk, passage 1, p. 4 ¶1: show in paper".
+ * @param letter The part's letter.
+ * @param routes The layout's routes (what is drawn, so the words never claim an arrow the drawing
+ *   dropped).
+ * @returns e.g. "Arrows in from D and A (V).", or null when nothing points at or from it.
  */
-export function partName(part: DiagramPart, n: number | null): string {
-  const verdict = verdictOf(part);
-  const head = `Part ${part.letter}, ${part.label}`;
-  if (verdict === 'inferred') return `${head}, inferred, no passage`;
-  const tab = tabOf(part.cite);
-  const where =
-    tab === null
-      ? ''
-      : `, p. ${String(tab.page)}${tab.para === null ? '' : ` ¶${String(tab.para)}`}`;
-  const passage = n === null ? '' : `, passage ${String(n)}`;
-  if (verdict === 'not-verified') {
-    return tab === null
-      ? `${head}, not verified, its quote was not found in the paper`
-      : `${head}${passage}${where}, not verified: show in paper`;
+export function structureOf(letter: string, routes: readonly Route[]): string | null {
+  const into = routes.filter((r) => !r.feedback && r.to === letter);
+  const back = routes.filter((r) => r.feedback && r.from === letter);
+  const words: string[] = [];
+  if (into.length > 0) {
+    const from = listed(into.map((r) => edgeWords(r.from, r.label)));
+    words.push(`${into.length === 1 ? 'Arrow' : 'Arrows'} in from ${from}.`);
   }
-  return `${head}${passage}${where}: show in paper`;
+  if (back.length > 0) {
+    const to = listed(back.map((r) => edgeWords(r.to, r.label)));
+    words.push(`${back.length === 1 ? 'Link' : 'Links'} back to ${to}.`);
+  }
+  return words.length === 0 ? null : words.join(' ');
 }
 
 function Evidence({ part }: { part: DiagramPart }): ReactNode {
@@ -61,6 +69,7 @@ function Evidence({ part }: { part: DiagramPart }): ReactNode {
     return (
       <>
         <span className="pt-plate-key__caption">{INFERRED_WORDS}</span>
+        <span className="pt-sr-only">. The AI&apos;s own line: </span>
         <span className="pt-plate-key__ai" data-voice="ai">
           {part.text}
         </span>
@@ -78,11 +87,15 @@ function Evidence({ part }: { part: DiagramPart }): ReactNode {
   // Not word for word in the paper: the AI's quote, never shown in the paper's voice.
   return (
     <>
+      <span className="pt-sr-only">The AI&apos;s quote: </span>
       <span className="pt-plate-key__ai pt-plate-key__ai-quote" data-voice="ai">
         {quote}
       </span>
       {tabOf(cite) === null ? (
-        <span className="pt-plate-key__caption">not verified · not found in the paper</span>
+        <>
+          <span className="pt-sr-only">. </span>
+          <span className="pt-plate-key__caption">not verified · not found in the paper</span>
+        </>
       ) : null}
     </>
   );
@@ -94,14 +107,18 @@ function KeyRow({
   lit,
   onLight,
   onPart,
+  structure,
 }: Pick<PlateKeyProps, 'onLight' | 'onPart'> & {
   part: DiagramPart;
   n: number | null;
   lit: boolean;
+  structure: string | null;
 }): ReactNode {
   const verdict = verdictOf(part);
   const tab = tabOf(part.cite);
   const status = verdict === 'cited' ? 'cited' : 'not-verified';
+  // No aria-label: the row's own words (with the hidden ones) name the button, so a screen reader
+  // hears the quote, the AI's line and the arrows too, in reading order (review S2).
   return (
     <li
       className="pt-plate-key__row"
@@ -112,7 +129,6 @@ function KeyRow({
       <button
         type="button"
         className="pt-plate-key__part"
-        aria-label={partName(part, n)}
         onClick={() => onPart(part.letter)}
         onMouseEnter={() => onLight(part.letter)}
         onMouseLeave={() => onLight(null)}
@@ -122,11 +138,13 @@ function KeyRow({
         <span className="pt-plate-key__letter" aria-hidden="true">
           {part.letter}
         </span>
+        <span className="pt-sr-only">Part {part.letter}: </span>
         <span className="pt-plate-key__body">
           <span className="pt-plate-key__head">
             <span className="pt-plate-key__label" data-voice="ai">
               {part.label}
             </span>
+            {n === null ? null : <span className="pt-sr-only">. Passage {n}, </span>}
             {n === null ? null : (
               <span
                 className={`pt-marker pt-marker--static${status === 'cited' ? '' : ' pt-marker--not-verified'}${lit ? ' is-lit' : ''}`}
@@ -139,7 +157,10 @@ function KeyRow({
               <PageTab page={tab.page} para={tab.para} status={status} lit={lit} />
             )}
           </span>
+          <span className="pt-sr-only">. </span>
           <Evidence part={part} />
+          {structure === null ? null : <span className="pt-sr-only"> {structure}</span>}
+          {tab === null ? null : <span className="pt-sr-only"> Show in paper.</span>}
         </span>
       </button>
     </li>
@@ -152,6 +173,7 @@ export function PlateKey({
   gaps,
   ghost,
   numberOf,
+  routes,
   lit,
   onLight,
   onPart,
@@ -168,8 +190,10 @@ export function PlateKey({
             <span className="pt-plate-key__letter" aria-hidden="true">
               {letter}
             </span>
+            {/* The API leaves a part out for an unreadable line or one the table refused: the
+                browser knows only that it is missing (review N6). */}
             <span className="pt-plate-key__body pt-plate-key__caption">
-              Part {letter} not drawn: its line could not be read
+              Part {letter} was left out of the plate.
             </span>
           </li>
         ) : (
@@ -177,6 +201,7 @@ export function PlateKey({
             key={letter}
             part={part}
             n={numberOf(part)}
+            structure={structureOf(letter, routes)}
             lit={lit === letter}
             onLight={onLight}
             onPart={onPart}

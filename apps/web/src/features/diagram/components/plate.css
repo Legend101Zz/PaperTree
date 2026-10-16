@@ -27,24 +27,9 @@
   color: var(--pt-ink-2);
 }
 
-.pt-plate-answer__line .pt-explain__status {
-  margin: 0;
-  font-size: 13.5px;
-  color: var(--pt-ai-tab-ink);
-}
-
-.pt-plate-answer__stop {
-  position: absolute;
-  inset-block-start: -24px;
-  inset-inline-end: 0;
-  padding-inline: 12px;
-  font-size: 14px;
-}
-
-.pt-plate-answer__stop-mark {
-  inline-size: 9px;
-  block-size: 9px;
-  background: currentColor;
+/* S4d's sticky Stop row sits on the plate's tab row, as on an answer's. */
+.pt-plate-answer > .pt-exchange__stop-row .pt-exchange__stop {
+  inset-block-start: -28px;
 }
 
 /* The plate itself: the slip with a double rule, light from the top left. */
@@ -84,7 +69,8 @@
 
 .pt-plate__body {
   display: grid;
-  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+  /* The drawing keeps its own width (wider only when its lanes need it), so it never rescales. */
+  grid-template-columns: auto minmax(0, 1fr);
   gap: var(--pt-space-3);
   align-items: start;
   margin-block-start: 6px;
@@ -188,6 +174,12 @@
   stroke-dasharray: 5 3;
 }
 
+/* Not verified: a dotted edge and a "?" or dashed marker, never the inferred dash (S3). */
+.pt-plate__part[data-verdict='not-verified'] .pt-plate__box {
+  stroke-width: 1.5;
+  stroke-dasharray: 1.5 2.5;
+}
+
 .pt-plate__rule {
   fill: none;
   stroke: var(--pt-ink);
@@ -233,11 +225,15 @@
   fill: var(--pt-nv-ink);
 }
 
-/* Lit (from the key, or tapped): navy ring and the amber wash, the letter filled navy. */
+/* Lit (from the key, or tapped): navy ring and the lit wash, the letter filled navy. */
 .pt-plate__part[data-lit='true'] .pt-plate__box {
-  fill: color-mix(in srgb, var(--pt-page), rgb(240 190 70) 22%);
   stroke: var(--pt-focus);
   stroke-width: 2.5;
+}
+
+.pt-plate__wash {
+  fill: var(--pt-lit-wash);
+  pointer-events: none;
 }
 
 .pt-plate__part[data-lit='true'] .pt-plate__mark rect,

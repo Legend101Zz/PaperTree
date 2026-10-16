@@ -39,11 +39,7 @@ function Arrow({ route }: { route: Route }): ReactNode {
       <polyline points={route.points.map((p) => p.join(',')).join(' ')} />
       <path d="M0,0 L-8,-4.5 L-8,4.5 Z" transform={`translate(${x2},${y2}) rotate(${angle})`} />
       {route.label === null ? null : (
-        <text
-          x={route.labelAt[0]}
-          y={route.labelAt[1] + 5}
-          textAnchor={route.feedback ? 'end' : 'start'}
-        >
+        <text x={route.labelAt[0]} y={route.labelAt[1] + 5} textAnchor="start">
           {route.label}
         </text>
       )}
@@ -73,9 +69,32 @@ interface PartBoxProps {
   readonly onPart: (letter: string) => void;
 }
 
+/** The caption a box carries under its label when it is not grounded word for word. */
+const CAPTION: Partial<Record<ReturnType<typeof verdictOf>, string>> = {
+  inferred: 'inferred, no passage',
+  'not-verified': 'not verified',
+};
+
+/**
+ * A part's marker: the passage number on a solid square when cited, on a dashed open one when
+ * not verified, and "?" there when the quote was found nowhere; none for an inferred part.
+ */
+function Mark({ x, y, n, verdict }: { x: number; y: number; n: number | null; verdict: string }) {
+  if (verdict === 'inferred' || (verdict === 'cited' && n === null)) return null;
+  return (
+    <g className="pt-plate__mark" data-not-verified={verdict === 'not-verified'}>
+      <rect x={x - 8} y={y - 8} width={16} height={16} rx={2} />
+      <text x={x} y={y + 4} textAnchor="middle">
+        {n ?? '?'}
+      </text>
+    </g>
+  );
+}
+
 function PartBox({ slot, part, n, lit, hatch, onPart }: PartBoxProps): ReactNode {
   const verdict = verdictOf(part);
-  const inferred = verdict === 'inferred';
+  // Only a cited part stands on the page: the others are drawn lighter, never more solid (S3).
+  const caption = CAPTION[verdict];
   const { x, y, w, h } = slot;
   return (
     <g
@@ -86,7 +105,9 @@ function PartBox({ slot, part, n, lit, hatch, onPart }: PartBoxProps): ReactNode
       data-lit={lit}
       onClick={() => onPart(part.letter)}
     >
-      {inferred ? null : <rect x={x + 5} y={y + 5} width={w} height={h} fill={`url(#${hatch})`} />}
+      {caption === undefined ? (
+        <rect x={x + 5} y={y + 5} width={w} height={h} fill={`url(#${hatch})`} />
+      ) : null}
       <rect
         className="pt-plate__box"
         x={x}
@@ -95,30 +116,24 @@ function PartBox({ slot, part, n, lit, hatch, onPart }: PartBoxProps): ReactNode
         height={h}
         rx={part.kind === 'concept' ? 10 : 0}
       />
+      {lit ? <rect className="pt-plate__wash" x={x} y={y} width={w} height={h} /> : null}
       {part.kind === 'output' ? (
         <rect className="pt-plate__rule" x={x + 3} y={y + 3} width={w - 6} height={h - 6} />
       ) : null}
       <text
         className="pt-plate__label"
         x={x + w / 2}
-        y={inferred ? y + 19 : y + h / 2 + 5}
+        y={caption === undefined ? y + h / 2 + 5 : y + 19}
         textAnchor="middle"
       >
         {fit(part.label, w)}
       </text>
-      {inferred ? (
+      {caption === undefined ? null : (
         <text className="pt-plate__caption" x={x + w / 2} y={y + 36} textAnchor="middle">
-          inferred, no passage
+          {caption}
         </text>
-      ) : null}
-      {n === null ? null : (
-        <g className="pt-plate__mark" data-not-verified={verdict === 'not-verified'}>
-          <rect x={x + w - 8} y={y - 8} width={16} height={16} rx={2} />
-          <text x={x + w} y={y + 4} textAnchor="middle">
-            {n}
-          </text>
-        </g>
       )}
+      <Mark x={x + w} y={y} n={n} verdict={verdict} />
       <Letter slot={slot} />
     </g>
   );

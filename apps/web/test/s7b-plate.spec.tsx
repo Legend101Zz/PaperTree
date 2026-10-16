@@ -5,100 +5,23 @@
  * cited passage, an inferred or not-verified part says so in words, and a refused plate is said.
  */
 import axe from 'axe-core';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { useMemo, type ReactNode } from 'react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useExplainActions } from '@/components/explain';
-import { ReaderActionsProvider, type ReaderActions } from '@/components/reader/actions';
-
-import { HeaderAndPanel } from './explain-toggle';
-import storedThread from './fixtures/diagram-thread.json';
 import { plateFrames } from './fixtures/diagram-plate';
-import { TestQueryProvider } from './query-client';
 import { stubDesktop } from './s6-harness';
+import { installFetch, jsonResponse, sseResponse, type SseHandle } from './s6-support';
 import {
-  anchorFixture,
-  installFetch,
-  jsonResponse,
-  sseResponse,
-  type SseHandle,
-} from './s6-support';
-
-const PAPER = 'ppr_G9AYN750E5MG1NRBMGSQJ4N5JM';
-const THREAD = 'thr_01M536X6ADZ62TFKAZWW548BN8';
-const RUN = 'run_01M536X6ADDT1C3RNGGY9WBWHM';
-const focusAnchor = vi.fn();
-
-function Reader(): ReactNode {
-  const explain = useExplainActions({ paperId: PAPER });
-  const actions = useMemo<ReaderActions>(
-    () => ({
-      openExplain: explain.openExplain,
-      explainWithDiagram: explain.openDiagram,
-      sendToCanvas: async () => undefined,
-      focusAnchor: (anchor, opts) => focusAnchor(anchor, opts),
-    }),
-    [explain.openExplain, explain.openDiagram],
-  );
-  return (
-    <ReaderActionsProvider value={actions}>
-      <button
-        type="button"
-        onClick={() =>
-          actions.explainWithDiagram?.({
-            anchor: anchorFixture('sel'),
-            quote: 'We call our particular attention "Scaled Dot-Product Attention" (Figure 2).',
-          })
-        }
-      >
-        draw
-      </button>
-      <HeaderAndPanel explain={explain} />
-    </ReaderActionsProvider>
-  );
-}
-
-function mount(): void {
-  render(
-    <TestQueryProvider>
-      <Reader />
-    </TestQueryProvider>,
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'draw' }));
-}
-
-/** The stored read after a Stop at three parts: what the server keeps (status `aborted`). */
-interface StoredRead {
-  readonly thread: unknown;
-  readonly messages: { status: string; diagram?: { status: string; parts: unknown[] } }[];
-}
-function stoppedAtThree(): StoredRead {
-  const copy = structuredClone(storedThread) as StoredRead;
-  const answer = copy.messages[1];
-  if (answer?.diagram === undefined) throw new Error('the recorded thread has no plate');
-  answer.status = 'aborted';
-  answer.diagram.status = 'stopped';
-  answer.diagram.parts = answer.diagram.parts.slice(0, 3);
-  return copy;
-}
-
-/** The panel's routes: the diagram stream (held, or whole), the cancel, the reads. */
-function routes(
-  stream: (signal: AbortSignal | null) => Response,
-  stored: StoredRead = storedThread,
-) {
-  return installFetch({
-    [`POST /papers/${PAPER}/threads`]: (_call, signal) => stream(signal),
-    [`POST /runs/${RUN}/cancel`]: () => jsonResponse(202, {}),
-    [`GET /papers/${PAPER}/threads`]: () => jsonResponse(200, [stored.thread]),
-    [`GET /papers/${PAPER}/threads/${THREAD}`]: () => jsonResponse(200, stored),
-  });
-}
-
-const keyRows = (): HTMLElement[] => Array.from(document.querySelectorAll('[data-letter]'));
-const box = (letter: string) =>
-  document.querySelector(`[data-part="${letter}"] .pt-plate__box`)?.getAttribute('y');
+  box,
+  focusAnchor,
+  keyRows,
+  mount,
+  PAPER,
+  routes,
+  RUN,
+  stoppedAtThree,
+  THREAD,
+} from './s7b-support';
 
 beforeEach(() => {
   stubDesktop();
@@ -202,7 +125,7 @@ describe('a finished plate', () => {
   it('flashes a part’s passage from its key row and from the drawing', async () => {
     const panel = await finished();
     fireEvent.click(
-      within(panel).getByRole('button', { name: /^Part C, Scale ÷ √dk, passage 1, p\. 4 ¶1/ }),
+      within(panel).getByRole('button', { name: /^Part C: Scale ÷ √dk\s*\. Passage 1, p\. 4 ¶1/ }),
     );
     expect(focusAnchor).toHaveBeenCalledTimes(1);
     const [anchor, opts] = focusAnchor.mock.calls[0] as [{ id: string }, unknown];

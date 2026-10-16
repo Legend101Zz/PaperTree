@@ -5,7 +5,9 @@
  * readout "6 parts · 6 cited · drawn by AI from p. 4". Pure; the plate components draw it.
  */
 import { selectorOf } from '@/features/explain/model/anchor';
+import { wasStopped } from '@/features/explain/model/states';
 
+import type { ThreadMessage } from '@/features/explain/model/messages';
 import type { DiagramCite, DiagramPart, MessageDiagram, SseEvent } from '@/lib/api/types';
 
 /** The plate plus what the run said while drawing (a skipped line, a dropped arrow): live only. */
@@ -63,20 +65,34 @@ export type PlatePhase = 'thinking' | 'drawing' | 'complete' | 'stopped' | 'cut'
 /**
  * The plate's phase from its message.
  *
- * @param answer The message's status and whether the reader pressed Stop.
+ * @param answer The message's status, whether the reader pressed Stop, and its failure.
  * @param plate The plate.
- * @returns `thinking` before the first part, `drawing` while parts arrive; once settled, `failed`
- *   for a plate with no part (never an empty plate), `stopped` for the reader's Stop, `complete`,
- *   or `cut` (it ended early; the parts that came are kept).
+ * @returns `thinking` before the first part, `drawing` while parts arrive; once settled, `stopped`
+ *   for the reader's Stop (in this session, or a stored `aborted`) with or without parts, then
+ *   `failed` for a plate with no part (never an empty plate), `complete`, or `cut` (it ended early;
+ *   the parts that came are kept). Stop is read first: a Stop before the first part is the
+ *   reader's, never a failure (#217 review B2).
  */
 export function platePhase(
-  answer: { readonly status: string; readonly stopped: boolean },
+  answer: Pick<ThreadMessage, 'status' | 'stopped' | 'failure'>,
   plate: Pick<MessageDiagram, 'parts'>,
 ): PlatePhase {
   if (answer.status === 'streaming') return plate.parts.length === 0 ? 'thinking' : 'drawing';
+  if (wasStopped(answer)) return 'stopped';
   if (plate.parts.length === 0) return 'failed';
-  if (answer.stopped || answer.status === 'aborted') return 'stopped';
   return answer.status === 'complete' ? 'complete' : 'cut';
+}
+
+/**
+ * The note after Stop: it never says "kept" when nothing arrived.
+ *
+ * @param parts How many parts the plate has.
+ * @returns The sentence.
+ */
+export function stoppedPlateNote(parts: number): string {
+  return parts > 0
+    ? 'Stopped. The parts that arrived are kept.'
+    : 'Stopped before any part arrived.';
 }
 
 /** A part's honest label: its quote is word for word in a passage, or it is not, or it has none. */
@@ -187,8 +203,9 @@ export function pagesLine(parts: readonly DiagramPart[]): string | null {
 
 /**
  * The readout under a plate: "3 parts so far · 3 cited" while it draws, "6 parts · 6 cited · drawn
- * by AI from pp. 3–4" once settled. A not-verified part is counted in words; an inferred one is
- * the difference between the two counts, as the design words it ("7 parts · 6 cited").
+ * by AI from pp. 3–4" once settled ("drawn by AI" alone when no part is cited). A not-verified part
+ * is counted in words; an inferred one is the difference between the two counts, as the design
+ * words it ("7 parts · 6 cited").
  *
  * @param parts The parts.
  * @param live True while the run is still drawing.
@@ -203,6 +220,6 @@ export function plateReadout(parts: readonly DiagramPart[], live: boolean): stri
   ];
   if (c.notVerified > 0) words.push(`${String(c.notVerified)} not verified`);
   const pages = pagesLine(parts);
-  if (!live && pages !== null) words.push(`drawn by AI from ${pages}`);
+  if (!live) words.push(pages === null ? 'drawn by AI' : `drawn by AI from ${pages}`);
   return words.join(' · ');
 }

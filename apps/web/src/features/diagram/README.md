@@ -18,17 +18,24 @@ plate once it settles (`features/explain/model/messages.mergeStored`), keyed by 
 
 - **Slots never move.** A part's slot is a function of its letter alone (`model/layout.slotOf`): row A, B, … L
   in one column, so the plate only grows downward. An arrow runs straight down when no part stands between its
-  ends, else along a lane to the right; feedback `link`s use their own lanes from the right edge in, so a link
-  never moves an arrow and a later part never moves a link. Lanes are assigned first-fit in row order, so a new
-  part never reroutes an old arrow. Arrows come only from earlier, placed letters.
-- **A dropped letter keeps its row.** The API keeps the agent's letters; a part it dropped leaves an empty row
-  ("Part C not drawn: its line could not be read"), never renumbered.
+  ends, else along a lane to the right. Arrows take the even lanes and feedback `link`s the odd ones, so neither
+  moves the other; lanes are assigned first-fit in row order, so a new part never reroutes an old arrow; and two
+  arrows never share a lane: past the plate's width the drawing widens (nothing drawn moves). Arrows come only
+  from earlier, placed letters.
+- **A dropped letter keeps its row.** The API keeps the agent's letters; a part it dropped (an unreadable line, or
+  one the table refused) leaves an empty row ("Part C was left out of the plate."), never renumbered. A dropped
+  LAST letter leaves no row: nothing after it shows that it was ever there.
 - **Every part says where it stands** (DESIGN.md §4): **cited** (the quote is word for word in the passage:
   marker, solid tab, the quote in the paper's voice), **not verified** (near a passage: dashed marker and tab;
   or found nowhere: no marker, "not verified · not found in the paper"; either way the quote is the AI's, never
   shown in the paper's voice), or **inferred** (no quote: a dashed box, "Inferred, no passage", the AI's own
-  line). The readout counts them from the data: "6 parts · 5 cited · drawn by AI from p. 4" ("so far" while it
-  draws; a not-verified part is counted in words).
+  line). In the drawing only a cited part has a hatched shadow; a not-verified one is dotted, captioned "not
+  verified", with a dashed marker (or "?" when its quote was found nowhere); an inferred one is dashed and
+  captioned. The readout counts them from the data: "6 parts · 5 cited · drawn by AI from p. 4" ("so far" while
+  it draws; a not-verified part is counted in words; "drawn by AI" alone when nothing is cited).
+- **The key is the plate's text alternative.** The drawing is `aria-hidden`; each key row is a button named by its
+  own words (no `aria-label`), with hidden words for what only the drawing shows: "Part E: … Passage 2, p. 4
+  ¶2. “…” Arrows in from D and A (V). Show in paper." and "Link back to B (again)." for a feedback link.
 - **Passage numbers** are the thread's (`model/plate.numberPlatePassages`): 1..k in the order the plates first
   stand on a passage (keyed by the Anchor's block), so two parts on one paragraph share a marker and a Redraw's
   plate keeps the same numbers.
@@ -37,9 +44,14 @@ plate once it settles (`features/explain/model/messages.mergeStored`), keyed by 
   polite live region instead.
 - **What the run left out** (the API's writing-phase `status` labels: a skipped line, a dropped arrow) is listed
   under the plate. It is live only: a stored read does not carry it.
-- **Stop** freezes the plate: the run is cancelled, the parts that arrived stay ("Stopped. The parts that arrived
-  are kept."), nothing is "arriving…" any more. A plate that ended with no part is never drawn empty: the
-  exchange shows the failure (or the daily-cap card) with Try again.
+- **Stop** (S4d's, on the tab row) freezes the plate: the run is cancelled, the parts that arrived stay
+  ("Stopped. The parts that arrived are kept."), nothing is "arriving…" any more. Stop is read before anything
+  else: a Stop before the first part (or switching threads, or closing the panel, mid-draw) says "Stopped before
+  any part arrived." and draws no plate, never a server failure. The note is a status, and a keyboard Stop hands
+  focus to its Retry. A plate that ended with no part is never drawn empty: the exchange shows the failure (or
+  S4d's daily-cap card) with Retry; a Retry refused before the stream shows that refusal, and an ask refused
+  before the stream is stamped "not sent".
+- Plates are numbered among those drawn or drawing: one that ended with no part never takes "Plate 1".
 - A diagram thread has no composer: its only next turn is a Redraw (the API answers 422 to a typed follow-up).
 
 ## On screen

@@ -15,6 +15,7 @@ import {
   pagesLine,
   platePhase,
   plateReadout,
+  stoppedPlateNote,
   tabOf,
   verdictOf,
   withNote,
@@ -89,6 +90,9 @@ describe('verdicts, never silently uncited', () => {
       cite: { ...byLetter(GOOD, 'A').cite!, supported: false },
     };
     expect(verdictOf(near)).toBe('not-verified');
+    // "Supported" with no Anchor is not cited either: there is no passage to show (review S1).
+    const nowhere = { ...near, cite: { ...near.cite!, supported: true, anchor: null } };
+    expect(verdictOf(nowhere)).toBe('not-verified');
     expect(INFERRED_WORDS).toBe('Inferred, no passage');
   });
 
@@ -100,6 +104,9 @@ describe('verdicts, never silently uncited', () => {
       '3 parts · 2 cited · 1 not verified · drawn by AI from p. 4',
     );
     expect(plateReadout([], true)).toBeNull();
+    // With nothing cited the readout still says who drew it (review N1).
+    const inferred = GOOD.parts.filter((p) => p.cite === null);
+    expect(plateReadout(inferred, false)).toBe('1 part · 0 cited · drawn by AI');
   });
 
   it('spans the pages the cited parts stand on', () => {
@@ -135,15 +142,32 @@ describe('passage numbers and tabs', () => {
 });
 
 describe('platePhase', () => {
-  const live = { status: 'streaming', stopped: false };
-  it('thinks, then draws, then settles', () => {
-    expect(platePhase(live, EMPTY_PLATE)).toBe('thinking');
-    expect(platePhase(live, GOOD)).toBe('drawing');
-    expect(platePhase({ status: 'complete', stopped: false }, GOOD)).toBe('complete');
+  type A = Parameters<typeof platePhase>[0];
+  const msg = (status: A['status'], stopped = false, failure: A['failure'] = null): A => ({
+    status,
+    stopped,
+    failure,
   });
-  it('keeps a stopped or cut plate, and never shows an empty one', () => {
-    expect(platePhase({ status: 'aborted', stopped: true }, GOOD)).toBe('stopped');
-    expect(platePhase({ status: 'partial', stopped: false }, GOOD)).toBe('cut');
-    expect(platePhase({ status: 'complete', stopped: false }, EMPTY_PLATE)).toBe('failed');
+  it('thinks, then draws, then settles', () => {
+    expect(platePhase(msg('streaming'), EMPTY_PLATE)).toBe('thinking');
+    expect(platePhase(msg('streaming'), GOOD)).toBe('drawing');
+    expect(platePhase(msg('complete'), GOOD)).toBe('complete');
+  });
+  it('keeps a stopped or cut plate, and never shows an empty one as drawn', () => {
+    expect(platePhase(msg('aborted', true), GOOD)).toBe('stopped');
+    expect(platePhase(msg('partial'), GOOD)).toBe('cut');
+    expect(platePhase(msg('complete'), EMPTY_PLATE)).toBe('failed');
+    expect(platePhase(msg('error', false, { code: 'timeout', retryable: true }), EMPTY_PLATE)).toBe(
+      'failed',
+    );
+  });
+  it('reads Stop before the empty check: a Stop at no part is the reader’s, not a failure (B2)', () => {
+    // Stop while "Thinking…" (live: stopped, no failure) and its stored copy (`aborted`, no part).
+    expect(platePhase(msg('aborted', true), EMPTY_PLATE)).toBe('stopped');
+    expect(
+      platePhase(msg('aborted', false, { code: 'aborted', retryable: true }), EMPTY_PLATE),
+    ).toBe('stopped');
+    expect(stoppedPlateNote(0)).toBe('Stopped before any part arrived.');
+    expect(stoppedPlateNote(3)).toBe('Stopped. The parts that arrived are kept.');
   });
 });
