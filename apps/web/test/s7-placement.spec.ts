@@ -10,7 +10,7 @@ import {
   freeSpot,
   overlaps,
   type Rect,
-} from '@/components/canvas/placement';
+} from '@/features/board/model/placement';
 
 describe('freeSpot', () => {
   it('starts at the origin on an empty board', () => {

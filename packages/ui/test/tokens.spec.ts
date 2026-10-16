@@ -97,6 +97,8 @@ const PAIRS: readonly (readonly [string, string, number])[] = [
   ['--pt-wire-references', '--pt-linen', 3],
   ['--pt-wire-plain', '--pt-linen', 3],
   ['--pt-frame-outline', '--pt-linen', 3],
+  // Every port pin on the board is edged in this token: the open pins' ring, the brass pins' rim.
+  ['--pt-pin-ring', '--pt-linen', 3],
   // v0.2 interface components (#189)
   ['--pt-ink-2', '--pt-ground', 4.5],
   ['--pt-ink', '--pt-e2-fill', 4.5],

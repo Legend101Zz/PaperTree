@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * canvas/useBoardController — the one place the canvas talks to the API.
+ * board/hooks/useBoardController — the one place the board talks to the API.
  *
  * THE RULE (contracts.md §2.7): the client writes only on explicit gestures — drag END (one PATCH
  * per node that moved), an edit commit, connect, group, delete, and pan/zoom END for the viewport.
@@ -34,11 +34,13 @@ import {
   type CanvasEdge,
   type CanvasNode,
   type EdgeKind,
+  type FromPort,
+  type ToPort,
 } from '@/lib/api/types';
 
-import { newEdgeId, newNodeId } from './ids';
-import { cardName, toFlowEdge, toFlowNode, type PtEdge, type PtNode } from './model';
-import { DEFAULT_SIZE, boundsOf, freeSpot } from './placement';
+import { cardName, toFlowEdge, toFlowNode, type PtEdge, type PtNode } from '../model/flow';
+import { newEdgeId, newNodeId } from '../model/ids';
+import { DEFAULT_SIZE, boundsOf, freeSpot } from '../model/placement';
 
 export const NUDGE_DEBOUNCE_MS = 400;
 /** How long the Undo offer after a delete stays on screen. */
@@ -52,8 +54,16 @@ export interface UndoOffer {
   readonly message: string;
 }
 
+/** The pins a thread was drawn between. */
+export interface ThreadPorts {
+  readonly from_port: FromPort | null;
+  readonly to_port: ToPort | null;
+}
+
+/** Where the board's first read stands. */
 export type Status = 'loading' | 'ready' | 'error';
 
+/** Everything `BoardView` needs: the state and every gesture that writes. */
 export interface BoardController {
   readonly status: Status;
   readonly board: Board | null;
@@ -79,11 +89,13 @@ export interface BoardController {
   readonly commitSize: (id: string, rect: { x: number; y: number; w: number; h: number }) => void;
   readonly deleteNodes: (ids: readonly string[]) => void;
   readonly deleteEdges: (ids: readonly string[]) => void;
+  /** A thread between two cards; `ports` are the pins it was drawn between (none from the keyboard). */
   readonly connect: (
     from: string,
     to: string,
     kind: EdgeKind,
     label: string | null,
+    ports?: ThreadPorts,
   ) => Promise<void>;
   readonly patchEdge: (id: string, fields: { kind?: EdgeKind; label?: string | null }) => void;
   readonly groupNodes: (ids: readonly string[]) => Promise<void>;
@@ -91,7 +103,12 @@ export interface BoardController {
   readonly initialViewport: Viewport | null;
 }
 
-/** "The card “first words”", "A passage" ... the start of the stale-version sentence. */
+/**
+ * "The card “first words”", "A passage" ... the start of the stale-version sentence.
+ *
+ * @param card The card's `cardName`, or undefined when it is gone.
+ * @returns The sentence's subject.
+ */
 export function staleSubject(card: string | undefined): string {
   if (card === undefined) return 'A card';
   return card.startsWith('\u201c')
@@ -106,6 +123,12 @@ function sentence(error: unknown, fallback: string): string {
   return fallback;
 }
 
+/**
+ * The board's state and its writes, for one paper.
+ *
+ * @param paperId The paper whose board this is.
+ * @returns The controller.
+ */
 export function useBoardController(paperId: string): BoardController {
   const [status, setStatus] = useState<Status>('loading');
   const [board, setBoard] = useState<Board | null>(null);
@@ -147,13 +170,24 @@ export function useBoardController(paperId: string): BoardController {
     setBoard(next);
   }, []);
 
+  /** A stored thread as xyflow draws it, its missing pins resolved from the cards' kinds. */
+  const threadOf = useCallback((edge: CanvasEdge): PtEdge => {
+    const kind = (id: string) => nodesRef.current.find((n) => n.id === id)?.data.node.kind;
+    return toFlowEdge(edge, { from: kind(edge.from_node_id), to: kind(edge.to_node_id) });
+  }, []);
+
   const adopt = useCallback(
     (view: { board: Board | null; nodes: CanvasNode[]; edges: CanvasEdge[] }) => {
       sentRef.current = new Map(view.nodes.map((n) => [n.node_id, { x: n.x, y: n.y }]));
       versionRef.current = new Map(view.nodes.map((n) => [n.node_id, n.version]));
       setBoardBoth(view.board);
       setNodes(view.nodes.map((n) => toFlowNode(n, paperId)));
-      setEdges(view.edges.map(toFlowEdge));
+      const kinds = new Map(view.nodes.map((n) => [n.node_id, n.kind] as const));
+      setEdges(
+        view.edges.map((e) =>
+          toFlowEdge(e, { from: kinds.get(e.from_node_id), to: kinds.get(e.to_node_id) }),
+        ),
+      );
     },
     [paperId, setBoardBoth, setEdges, setNodes],
   );
@@ -562,6 +596,11 @@ export function useBoardController(paperId: string): BoardController {
               ...(snap.source_message_id === null
                 ? {}
                 : { source_message_id: snap.source_message_id }),
+              // A notebook or diagram card is refused without the thing it shows (S6a).
+              ...(snap.source_page_id === null ? {} : { source_page_id: snap.source_page_id }),
+              ...(snap.source_diagram_id === null
+                ? {}
+                : { source_diagram_id: snap.source_diagram_id }),
               group_id: groupId,
             });
             restored.add(snap.node_id);
@@ -591,8 +630,11 @@ export function useBoardController(paperId: string): BoardController {
               to_node_id: edge.to_node_id,
               kind: edge.kind,
               label: edge.label,
+              // The thread comes back on the pins it was drawn between (a keyboard link has none).
+              ...(edge.from_port === null ? {} : { from_port: edge.from_port }),
+              ...(edge.to_port === null ? {} : { to_port: edge.to_port }),
             });
-            setEdges([...edgesRef.current, toFlowEdge(saved)]);
+            setEdges([...edgesRef.current, threadOf(saved)]);
           }
         } catch (error) {
           setNotice(
@@ -605,7 +647,7 @@ export function useBoardController(paperId: string): BoardController {
         }
       });
     },
-    [failed, mergeData, offerUndo, paperId, patchNode, reload, setEdges, setNodes],
+    [failed, mergeData, offerUndo, paperId, patchNode, reload, setEdges, setNodes, threadOf],
   );
 
   const deleteNodes = useCallback(
@@ -629,7 +671,7 @@ export function useBoardController(paperId: string): BoardController {
   }, [dismissUndo]);
 
   const connect = useCallback(
-    async (from: string, to: string, kind: EdgeKind, label: string | null) => {
+    async (from: string, to: string, kind: EdgeKind, label: string | null, ports?: ThreadPorts) => {
       const boardId = boardRef.current?.board_id;
       if (boardId === undefined || from === to) return;
       try {
@@ -639,14 +681,15 @@ export function useBoardController(paperId: string): BoardController {
           to_node_id: to,
           kind,
           label,
+          ...ports,
         });
-        setEdges([...edgesRef.current, toFlowEdge(edge)]);
+        setEdges([...edgesRef.current, threadOf(edge)]);
         clearStale();
       } catch (error) {
         setNotice(sentence(error, "Couldn't connect those two cards. Try again."));
       }
     },
-    [clearStale, setEdges],
+    [clearStale, setEdges, threadOf],
   );
 
   const patchEdge = useCallback(
@@ -657,7 +700,7 @@ export function useBoardController(paperId: string): BoardController {
       const merged = { ...current.data.edge, ...fields };
       setEdges(
         edgesRef.current.map((e) =>
-          e.id === id ? { ...toFlowEdge(merged), selected: e.selected } : e,
+          e.id === id ? { ...threadOf(merged), selected: e.selected } : e,
         ),
       );
       boardsApi.patchEdge(boardId, id, fields).catch((error: unknown) => {
@@ -667,7 +710,7 @@ export function useBoardController(paperId: string): BoardController {
         );
       });
     },
-    [failed, setEdges],
+    [failed, setEdges, threadOf],
   );
 
   const groupNodes = useCallback(

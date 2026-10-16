@@ -33,8 +33,8 @@ export interface CallSlipProps {
   };
   /** The ask, in the person's own words. */
   readonly ask: string;
-  /** When it was asked, e.g. `"2:14 pm"`. */
-  readonly time: string;
+  /** When it was asked, e.g. `"2:14 pm"`. Omitted where the time is not shown (a board card). */
+  readonly time?: string;
   /** Machine-readable time for `<time dateTime>`, e.g. an ISO string. Omitted when unknown. */
   readonly dateTime?: string;
   /**
@@ -69,9 +69,11 @@ export function CallSlip({
         )}
         <YouText className="pt-call-slip__ask">{ask}</YouText>
       </div>
-      <time className="pt-call-slip__time" {...(dateTime === undefined ? {} : { dateTime })}>
-        {time}
-      </time>
+      {time === undefined ? null : (
+        <time className="pt-call-slip__time" {...(dateTime === undefined ? {} : { dateTime })}>
+          {time}
+        </time>
+      )}
     </div>
   );
 }
@@ -109,10 +111,13 @@ export function AiParagraph({ children, aside }: AiParagraphProps): ReactNode {
 
 /** Props for `AiSlip`. */
 export interface AiSlipProps {
-  /** The model, e.g. `"M3.1 Flash"`. */
-  readonly model: string;
-  /** What it read, e.g. `"from the paper"`. */
-  readonly source: string;
+  /**
+   * The model, e.g. `"M3.1 Flash"`. Omitted where the slip is too small for the line beside its
+   * tab (a board card): then no source line is drawn and the label names no model.
+   */
+  readonly model?: string;
+  /** What it read, e.g. `"from the paper"`. Shown with `model` only. */
+  readonly source?: string;
   /**
    * The answer: `AiParagraph`s for paragraphs with margin cells, or any other content (it spans
    * both grid columns).
@@ -147,12 +152,14 @@ export function AiSlip({
       className="pt-ai-slip"
       data-voice="ai"
       role="note"
-      aria-label={`${tabLabel} answer by ${model}, not the paper's words`}
+      aria-label={`${tabLabel} answer${model === undefined ? '' : ` by ${model}`}, not the paper's words`}
     >
       <span className="pt-ai-tab">{tabLabel}</span>
-      <p className="pt-ai-slip__source">
-        {model} · {source}
-      </p>
+      {model === undefined || source === undefined ? null : (
+        <p className="pt-ai-slip__source">
+          {model} · {source}
+        </p>
+      )}
       <div className="pt-ai-slip__grid">{children}</div>
       {uncited === undefined ? null : (
         <div className="pt-ai-slip__uncited">

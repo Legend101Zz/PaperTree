@@ -1,11 +1,13 @@
 'use client';
 
+/** board/components/KindPicker — v0.1's "How are these connected?" dialog, until S6c (#213). */
 import { useEffect, useRef, useState } from 'react';
+
+import { EDGE_KINDS } from '../model/flow';
 
 import type { EdgeKind } from '@/lib/api/types';
 
-import { EDGE_KINDS } from './model';
-
+/** Props for `KindPicker`. */
 export interface KindPickerProps {
   readonly fromLabel: string;
   readonly toLabel: string;
@@ -21,6 +23,8 @@ export function KindPicker({ fromLabel, toLabel, onPick, onCancel }: KindPickerP
     first.current?.focus();
   }, []);
   return (
+    // Escape anywhere in the dialog cancels; the v0.1 picker stays until S6c (#213) replaces it.
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div className="pt-cv-scrim" onKeyDown={(e) => e.key === 'Escape' && onCancel()}>
       <div
         className="pt-cv-dialog"

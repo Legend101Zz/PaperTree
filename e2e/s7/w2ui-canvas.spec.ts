@@ -190,7 +190,7 @@ test('a phone opens on the whole board; controls are tappable; the group name is
     const probes = await page.evaluate(() => {
       const out: { node: string; ok: boolean; missed: string[] }[] = [];
       for (const button of Array.from(
-        document.querySelectorAll<HTMLElement>('.react-flow__node .pt-cv-node__head .pt-btn'),
+        document.querySelectorAll<HTMLElement>('.react-flow__node .pt-bc__btn'),
       )) {
         const node = button.closest('.react-flow__node') as HTMLElement;
         const nb = node.getBoundingClientRect();

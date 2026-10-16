@@ -3242,28 +3242,11 @@ span.pt-paper .pt-paper__cite {
   max-block-size: 16px;
 }
 
-.pt-cv .react-flow__marker path,
-.pt-cv .react-flow__arrowhead polyline {
-  fill: var(--pt-ink-muted);
-  stroke: var(--pt-ink-muted);
-}
-
 .pt-cv .react-flow .react-flow__node:focus-visible,
 .pt-cv .react-flow .react-flow__node.selectable:focus-visible {
   outline: 2px solid var(--pt-focus);
   outline-offset: 2px;
   border-radius: var(--pt-radius-panel);
-}
-
-.pt-cv .react-flow .react-flow__edge:focus-visible .pt-cv-edge {
-  stroke: var(--pt-focus);
-  stroke-width: 3;
-}
-
-.pt-cv .react-flow__edge.selected .pt-cv-edge,
-.pt-cv .react-flow__edge:focus .pt-cv-edge {
-  stroke: var(--pt-accent);
-  stroke-width: 2.5;
 }
 
 .pt-cv-node {
@@ -3282,73 +3265,6 @@ span.pt-paper .pt-paper__cite {
 .pt-cv-node[data-selected='true'] {
   border-color: var(--pt-accent);
   box-shadow: 0 0 0 2px var(--pt-accent-soft);
-}
-
-.pt-cv-node__head {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-block-size: 48px;
-  padding: 4px 8px 4px 12px;
-  border-block-end: 1px solid var(--pt-rule);
-}
-
-.pt-cv-node__label {
-  min-inline-size: 0;
-  overflow: hidden;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--pt-ink-muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pt-cv-node__body {
-  flex: 1 1 auto;
-  min-block-size: 0;
-  padding: 12px;
-  overflow: auto;
-}
-
-.pt-cv-node--excerpt .pt-cv-node__body blockquote {
-  margin: 0;
-}
-
-.pt-cv-node--explanation {
-  background: var(--pt-derived-ground);
-}
-
-.pt-cv-pre {
-  margin: 0;
-  font-size: 0.9375rem;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.pt-cv-note[data-empty='true'] {
-  color: var(--pt-ink-muted);
-}
-
-.pt-cv-textarea {
-  inline-size: 100%;
-  min-block-size: 80px;
-  padding: 8px;
-  font: inherit;
-  font-size: 0.9375rem;
-  line-height: 1.5;
-  color: var(--pt-ink);
-  background: var(--pt-ground);
-  border: 1px solid var(--pt-rule);
-  border-radius: 8px;
-  resize: none;
-}
-
-.pt-cv-textarea:focus-visible {
-  outline: 2px solid var(--pt-focus);
-  outline-offset: 1px;
 }
 
 .pt-cv-node--group {
@@ -3382,20 +3298,6 @@ span.pt-paper .pt-paper__cite {
   outline: 2px solid var(--pt-focus);
 }
 
-/* Handles: a small visible dot with a 28 px hit area, so a finger can start a link. */
-.pt-cv .pt-cv-handle {
-  inline-size: 12px;
-  block-size: 12px;
-  border: 2px solid var(--pt-ground-raised);
-  background: var(--pt-accent);
-}
-
-.pt-cv .pt-cv-handle::after {
-  content: '';
-  position: absolute;
-  inset: -10px;
-}
-
 .pt-cv .pt-cv-resize {
   inline-size: 14px;
   block-size: 14px;
@@ -3409,30 +3311,9 @@ span.pt-paper .pt-paper__cite {
 }
 
 .pt-cv .react-flow__edgelabel-renderer {
-  z-index: 100;
-}
-
-.pt-cv-edge-label {
-  position: absolute;
-  max-inline-size: 14rem;
-  padding: 2px 8px;
-  overflow: hidden;
-  font-family: var(--pt-font-ui);
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--pt-ink);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  background: var(--pt-ground-raised);
-  border: 1px solid var(--pt-rule);
-  border-radius: 999px;
-  /* The label never covers a card's own buttons; the edge is selected on its line. */
-  pointer-events: none;
-}
-
-.pt-cv-edge-label[data-selected='true'] {
-  color: var(--pt-accent);
-  border-color: var(--pt-accent);
+  /* A thread's paper tag sits above frames (z 0) and below every card (z 10 and up), so it never
+     covers a card's words or buttons (#212 review N4). */
+  z-index: 5;
 }
 
 .pt-cv-scrim {
@@ -3553,22 +3434,12 @@ span.pt-paper .pt-paper__cite {
   max-inline-size: 100%;
 }
 
-/* In-card controls keep a 40 px tap target ON SCREEN at phone widths. xyflow scales a card by the
-   canvas zoom, so a 40 px button at 60 % is 24 px. The canvas publishes its zoom as `--pt-cv-zoom`;
-   each button grows an invisible hit area (its ::after) by the inverse, down to the canvas's 20 % minimum zoom, so
-   the pill stays the same size on the card and a finger still lands on it. The area is clipped to
-   the card, which is where a tap on a card should land anyway. The group name is an input (no
+/* In-card controls keep a tap target ON SCREEN at phone widths: xyflow scales a card by the canvas
+   zoom, which the canvas publishes as `--pt-cv-zoom`. The board's card buttons grow their hit area
+   in `apps/web/src/features/board/components/cards.css` (#212). The group name is an input (no
    pseudo-elements), so its box grows instead, down to a 30 % zoom (below that a group frame is a
    thumbnail: zoom in). Desktop cards are untouched. */
 @media (max-width: 639px) {
-  .pt-cv-node__head .pt-btn {
-    position: relative;
-  }
-  .pt-cv-node__head .pt-btn::after {
-    content: '';
-    position: absolute;
-    inset: min(0px, calc((40px - 40px / clamp(0.2, var(--pt-cv-zoom, 1), 1)) / 2));
-  }
   .pt-cv-group__title {
     min-block-size: calc(40px / clamp(0.3, var(--pt-cv-zoom, 1), 1));
   }

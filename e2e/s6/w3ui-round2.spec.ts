@@ -344,7 +344,10 @@ test.describe('W3UI round 2 (YOLO)', () => {
         const canvas = await ctx.newPage();
         await canvas.goto(`/paper/${paperId}/canvas`);
         await expect(canvas.locator('.react-flow__node-explanation')).toHaveCount(2);
-        await expect(canvas.locator('.pt-cite-label').first()).toBeVisible({ timeout: 30_000 });
+        // #212: a board card cites with the passage's numbered marker, not a "p. 4" label.
+        await expect(
+          canvas.locator('.react-flow__node-explanation .pt-marker').first(),
+        ).toBeVisible({ timeout: 30_000 });
         const body = (await canvas.locator('.react-flow__node-explanation').allInnerTexts()).join(
           ' ',
         );

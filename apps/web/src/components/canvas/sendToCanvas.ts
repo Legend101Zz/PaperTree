@@ -11,16 +11,17 @@
  * its toast keeps "canvas" until the whole Canvas → Board sweep (S6d). A failure throws (the reader shows its notice); an
  * explanation send also shows its own error toast, because the explain panel is another slice's.
  */
-import type { SendToCanvasInput } from '@/components/reader/actions';
 import { displayQuote } from '@/components/reader/quote';
 import { ApiError } from '@/lib/api/types';
 import { boardsApi } from '@/lib/api/boards';
 import { threadsApi } from '@/lib/api/threads';
+import { newNodeId } from '@/features/board/model/ids';
+import { DEFAULT_SIZE, freeSpot } from '@/features/board/model/placement';
 
 import { findExcerptFor } from './duplicate';
-import { newNodeId } from './ids';
-import { DEFAULT_SIZE, freeSpot } from './placement';
 import { showCanvasToast } from './toast';
+
+import type { SendToCanvasInput } from '@/components/reader/actions';
 
 const MAX_THREADS_SEARCHED = 6;
 /** The API's card limits (schemas.py), so a long answer is clipped instead of refused. */

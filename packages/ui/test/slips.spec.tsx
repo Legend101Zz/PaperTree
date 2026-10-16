@@ -71,6 +71,16 @@ describe('CallSlip', () => {
   });
 });
 
+describe('CallSlip without a time (the board card)', () => {
+  it('draws the stamp and the ask and no time', () => {
+    const { container } = render(<CallSlip ask="Explain this passage." />);
+    expect(screen.getByRole('group', { name: 'Your question' }).textContent).toContain(
+      'Explain this passage.',
+    );
+    expect(container.querySelector('time')).toBeNull();
+  });
+});
+
 describe('AiSlip', () => {
   it('shows the AI tab, model line, slots, and labels uncited text', () => {
     const { container } = render(
@@ -94,6 +104,17 @@ describe('AiSlip', () => {
     ).not.toBeNull();
     // The reserved marker is AiText's alone (provenance.spec); the slip must not emit it.
     expect(container.textContent).not.toContain('⊙');
+  });
+
+  it('without a model it draws no source line and names no model (the board card)', () => {
+    const { container } = render(
+      <AiSlip>
+        <p>Cited claim.</p>
+      </AiSlip>,
+    );
+    const slip = screen.getByRole('note', { name: "AI answer, not the paper's words" });
+    expect(slip.getAttribute('data-voice')).toBe('ai');
+    expect(container.querySelector('.pt-ai-slip__source')).toBeNull();
   });
 
   it('puts each paragraph and its margin cell on the same grid row', () => {

@@ -7,7 +7,7 @@
 import { cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { GAP } from '@/components/canvas/placement';
+import { GAP } from '@/features/board/model/placement';
 import { dismissCanvasToast } from '@/components/canvas/toast';
 import { sendToCanvas } from '@/components/canvas/sendToCanvas';
 import { boardsApi } from '@/lib/api/boards';

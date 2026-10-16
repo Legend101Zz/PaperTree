@@ -239,11 +239,16 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
 
       // the kind picker: pick two notes with the area tool, then Link
       if (vp.mobile) {
-        // Zoom out with the visible control (a 40 px button) so both notes are in reach.
-        for (let i = 0; i < 2; i += 1) {
-          await fullPage.locator('.react-flow__controls-zoomout').tap();
+        // Zoom out with the visible control (a 40 px button) so both notes are in reach, all the
+        // way to the 20 % floor: two taps reach it on one font stack and not on another, and the
+        // floor is where cards sit closest together (#212: Linux CI stopped there, macOS did not).
+        // The control turns itself off at the floor.
+        const zoomOut = fullPage.locator('.react-flow__controls-zoomout');
+        for (let i = 0; i < 8 && !(await zoomOut.isDisabled()); i += 1) {
+          await zoomOut.tap();
           await fullPage.waitForTimeout(300);
         }
+        expect(await scale(fullPage)).toBeCloseTo(0.2, 2);
       }
       await fullPage.getByRole('button', { name: 'Select area' }).click();
       const pair = await Promise.all(
@@ -257,6 +262,14 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
       const y0 = Math.min(p1!.y, p2!.y) - 10;
       const x1 = Math.max(p1!.x + p1!.width, p2!.x + p2!.width) + 10;
       const y1 = Math.max(p1!.y + p1!.height, p2!.y + p2!.height) + 10;
+      // The drag must start on the empty board, or it is a pan or a thread and selects nothing.
+      expect(
+        await fullPage.evaluate(
+          ([x, y]) => document.elementFromPoint(x!, y!)?.classList.contains('react-flow__pane'),
+          [x0, y0],
+        ),
+        'the Select-area drag starts on the empty board',
+      ).toBe(true);
       await fullPage.mouse.move(x0, y0);
       await fullPage.mouse.down();
       await fullPage.mouse.move((x0 + x1) / 2, (y0 + y1) / 2, { steps: 6 });

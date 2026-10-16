@@ -137,14 +137,14 @@ test.describe('Journey D: the canvas', () => {
     await expect(
       page.locator(`.react-flow__node[data-id="${excerpt.node_id}"] blockquote`),
     ).toContainText('Deeper neural networks');
-    // The model's words wear the AI register; the paper's words do not.
+    // The model's words wear the AI voice; the paper's words do not (#212: the AI slip card).
     await expect(
-      page.locator(`.react-flow__node[data-id="${explanationId}"] [data-register="ai"]`),
+      page.locator(`.react-flow__node[data-id="${explanationId}"] [data-voice="ai"]`),
     ).toBeVisible();
     await expect(
-      page.locator(`.react-flow__node[data-id="${excerpt.node_id}"] [data-register="paper"]`),
+      page.locator(`.react-flow__node[data-id="${excerpt.node_id}"] [data-voice="paper"]`),
     ).toBeVisible();
-    await expect(page.locator('.react-flow__node [data-register="ai"]')).toHaveCount(1);
+    await expect(page.locator('.react-flow__node [data-voice="ai"]')).toHaveCount(1);
     await page.screenshot({ path: shot('d02-canvas-two-nodes-1440.png') });
 
     // ── 4. drag a node: ONE PATCH ──
@@ -164,11 +164,12 @@ test.describe('Journey D: the canvas', () => {
 
     // ── 5. connect with "supports": the label is visible ──
     calls.length = 0;
+    // #212: the link handles are the brass pins; a thread runs from a claim-out to an evidence-in.
     const src = await page
-      .locator(`.react-flow__node[data-id="${excerpt.node_id}"] .react-flow__handle.source`)
+      .locator(`.react-flow__node[data-id="${excerpt.node_id}"] [data-handleid="claim_out"]`)
       .boundingBox();
     const dst = await page
-      .locator(`.react-flow__node[data-id="${explanationId}"] .react-flow__handle.target`)
+      .locator(`.react-flow__node[data-id="${explanationId}"] [data-handleid="evidence_in"]`)
       .boundingBox();
     expect(src && dst).toBeTruthy();
     await mouseDrag(
@@ -190,6 +191,8 @@ test.describe('Journey D: the canvas', () => {
       kind: 'supports',
       from_node_id: excerpt.node_id,
       to_node_id: explanationId,
+      from_port: 'claim_out',
+      to_port: 'evidence_in',
     });
 
     // ── 5b. the link is editable: kind and label are one PATCH each, and the new words are on the edge ──
@@ -311,7 +314,10 @@ test.describe('Journey D: the canvas', () => {
 
     // ── 10. delete a node: its edge goes with it, and stays gone after a reload ──
     calls.length = 0;
-    await page.locator(`.react-flow__node[data-id="${explanationId}"] .pt-cv-node__head`).click();
+    // #212: the card has no header bar any more; a click on its top edge selects it.
+    await page
+      .locator(`.react-flow__node[data-id="${explanationId}"]`)
+      .click({ position: { x: 24, y: 6 } });
     await page.keyboard.press('Delete');
     await expect(page.locator('.react-flow__node')).toHaveCount(3);
     await expect(page.getByTestId('edge-label')).toHaveCount(0);
