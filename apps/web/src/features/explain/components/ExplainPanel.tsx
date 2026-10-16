@@ -19,7 +19,6 @@ import { ThreadMenu } from './ThreadMenu';
 import { ThreadView } from './ThreadView';
 
 import type { ExplainController } from '@/components/explain/useExplainActions';
-import type { Citation } from '@/lib/api/types';
 import type { PassageMarker } from '../model/exchange';
 
 /** Props for `ExplainPanel`. */
@@ -69,13 +68,6 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
   const busy = state.messages.some((m) => m.status === 'streaming');
 
   // On a phone the sheet covers the page: lower it so the flashed passage is in view.
-  const onCite = useCallback(
-    (citation: Citation) => {
-      if (!desktop) setDetent('peek');
-      actions.focusAnchor(citation.anchor, { flash: true });
-    },
-    [actions, desktop, setDetent],
-  );
   const onShow = useCallback(
     (marker: PassageMarker) => {
       if (!desktop) setDetent('peek');
@@ -113,13 +105,7 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
     </div>
   );
   const body = (
-    <ThreadView
-      controller={controller}
-      threads={threads}
-      initial={initial}
-      onShow={onShow}
-      onCite={onCite}
-    />
+    <ThreadView controller={controller} threads={threads} initial={initial} onShow={onShow} />
   );
 
   if (!desktop) {
@@ -146,7 +132,13 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
       className="pt-explain"
     >
       <header className="pt-explain__header">
-        <h2 className="pt-explain__title">Explain</h2>
+        <h2 className="pt-explain__title">
+          {inSummary ? 'Summary' : 'Explain'}
+          {inSummary && state.summary.cached ? ' ' : null}
+          {inSummary && state.summary.cached ? (
+            <span className="pt-explain__badge">cached</span>
+          ) : null}
+        </h2>
         {tools}
         <button
           type="button"

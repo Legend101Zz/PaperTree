@@ -2,7 +2,7 @@
 
 /**
  * The explain panel's body (#202): the thread as exchanges (ask → answer → trace), or the paper
- * summary, above the composer. It follows a growing answer only after the reader has asked
+ * summary as an exchange of its own (#204, numbered with the thread's passages), above the composer. It follows a growing answer only after the reader has asked
  * something of their own, so a new thread opens at its call slip, not at the end.
  */
 import { PaperText } from '@papertree/ui';
@@ -14,13 +14,14 @@ import { useReaderActions } from '@/components/reader/actions';
 import { cleanQuote, selectorOf } from '../model/anchor';
 import { buildExchanges } from '../model/exchange';
 import { isStored } from '../model/messages';
+import { numberPassages } from '../model/passages';
 import { opensFolded } from '../model/states';
 import { Composer } from './Composer';
 import { Exchange } from './Exchange';
+import { SummaryExchange } from './SummaryExchange';
 import { ThreadReadFailure } from './ThreadReadFailure';
 
 import type { ExplainController, ExplainRequest } from '@/components/explain/useExplainActions';
-import type { Citation } from '@/lib/api/types';
 import type { ThreadsState } from '../hooks/useThreads';
 import type { PassageMarker } from '../model/exchange';
 
@@ -31,10 +32,8 @@ export interface ThreadViewProps {
   readonly threads: Pick<ThreadsState, 'failure' | 'retry'>;
   /** The account's initial for the call slips. */
   readonly initial: string;
-  /** Flash an exchange's passage (markers and trace rows). */
+  /** Flash a passage (an exchange's or the summary's markers and trace rows). */
   readonly onShow: (marker: PassageMarker) => void;
-  /** Flash a summary bullet's citation. */
-  readonly onCite: (citation: Citation) => void;
 }
 
 /** The passage alone, for a sample paper that has no server to ask. */
@@ -50,13 +49,7 @@ function SelectedPassage({ request }: { request: ExplainRequest }): ReactNode {
 }
 
 /** The thread (or summary) and the composer. */
-export function ThreadView({
-  controller,
-  threads,
-  initial,
-  onShow,
-  onCite,
-}: ThreadViewProps): ReactNode {
+export function ThreadView({ controller, threads, initial, onShow }: ThreadViewProps): ReactNode {
   const actions = useReaderActions();
   const { state, paperId } = controller;
   const scroller = useRef<HTMLDivElement | null>(null);
@@ -67,6 +60,13 @@ export function ThreadView({
     () => buildExchanges(state.messages, state.request),
     [state.messages, state.request],
   );
+  const numbers = useMemo(
+    () => numberPassages(state.messages.filter((m) => m.role === 'assistant')),
+    [state.messages],
+  );
+  const summary = state.summary.summary;
+  const summaryShown =
+    summary !== null && (state.summary.phase === 'ready' || state.summary.phase === 'partial');
 
   const last = state.messages[state.messages.length - 1];
   const growth = `${String(state.messages.length)}:${String(last?.text.length ?? 0)}:${last?.status ?? ''}:${String(last?.stopped ?? false)}:${String(last?.citations.length ?? 0)}`;
@@ -100,12 +100,20 @@ export function ThreadView({
           stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
         }}
       >
-        {state.view === 'summary' ? (
+        {state.view === 'summary' && summaryShown ? (
+          <SummaryExchange
+            summary={summary}
+            state={state.summary}
+            numbers={state.messages.length === 0 ? null : numbers}
+            initial={initial}
+            onShow={onShow}
+            onRegenerate={() => controller.summarize({ regenerate: true })}
+          />
+        ) : state.view === 'summary' ? (
           <SummaryView
             state={state.summary}
-            onCite={onCite}
-            onRetry={() => controller.summarize()}
-            onRegenerate={() => controller.summarize({ regenerate: true })}
+            // A failed "Summarise again" retries the new run, never the cached copy (review 2.2).
+            onRetry={() => controller.summarize({ regenerate: state.summary.regenerate })}
             onStop={controller.stopSummary}
           />
         ) : (

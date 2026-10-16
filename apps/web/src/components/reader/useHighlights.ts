@@ -109,6 +109,12 @@ export interface UseHighlights {
   ) => Promise<void>;
   readonly remove: (highlightId: string) => Promise<void>;
   readonly retry: (highlightId: string) => Promise<void>;
+  /** The highlight deleted last, while its Undo is offered (#177); null otherwise. */
+  readonly removed: ReaderHighlight | null;
+  /** Undo the last delete: the same id, colour, note and Anchors (so the same quads) come back. */
+  readonly restore: () => Promise<void>;
+  /** The Undo is no longer offered (its toast left). */
+  readonly forgetRemoved: () => void;
 }
 
 export interface UseHighlightsOptions {
@@ -325,6 +331,7 @@ export function useHighlights({ paper, doc, onNotice }: UseHighlightsOptions): U
   const pendingBodies = useRef(new Map<string, CreateHighlightBody>());
   /** Deleted while its create was in flight: delete it again once the create answers. */
   const abandoned = useRef(new Set<string>());
+  const [removed, setRemoved] = useState<ReaderHighlight | null>(null);
 
   const paperId = paper.kind === 'api' ? paper.paperId : null;
   const generation = doc === null ? null : documentGeneration(doc);
@@ -554,7 +561,10 @@ export function useHighlights({ paper, doc, onNotice }: UseHighlightsOptions): U
       const target = before.find((h) => h.highlightId === highlightId);
       if (target === undefined) return;
       replace(highlightId, null);
-      if (paperId === null || target.status === 'session') return;
+      if (paperId === null || target.status === 'session') {
+        setRemoved(target);
+        return;
+      }
       if (pendingBodies.current.has(highlightId) && target.status === 'saving') {
         // Its create is in flight: deleting now could reach the server first. `send` deletes it
         // when the create answers.
@@ -575,9 +585,62 @@ export function useHighlights({ paper, doc, onNotice }: UseHighlightsOptions): U
         // 404: already gone, or never stored.
       }
       pendingBodies.current.delete(highlightId);
+      setRemoved(target);
     },
     [paperId, replace],
   );
 
-  return { highlights, load, loadError, unavailableReason, reload, create, update, remove, retry };
+  // Undo re-creates the row the delete removed (the API deletes for real, and an id is free again
+  // once its row is gone), from what the page still holds: the same id, colour, note and stored
+  // Anchors, so it paints from the same quads. A failed restore stays on the page "not saved" with
+  // Retry, like any create (#177). The server gives the row a new `created_at`, so it keeps its id,
+  // colour, note and Anchors but moves to the end of the creation order.
+  const restore = useCallback(async () => {
+    const gone = removed;
+    if (gone === null) return;
+    setRemoved(null);
+    const local = paperId === null || gone.status === 'session';
+    // Unreachable today (a parse with no generation lists no highlights), but never painted back
+    // as saved when nothing could be sent.
+    const stuck: Partial<ReaderHighlight> = {
+      status: 'unsaved',
+      error: "Couldn't put this highlight back: this parse has no generation number.",
+      retryable: false,
+    };
+    const back = local ? {} : generation === null ? stuck : { status: 'saving' as const };
+    setHighlights((current) =>
+      current.some((h) => h.highlightId === gone.highlightId)
+        ? current
+        : [...current, { ...gone, ...back }],
+    );
+    if (local || generation === null) return;
+    pendingBodies.current.set(gone.highlightId, {
+      highlight_id: gone.highlightId,
+      color: gone.color,
+      note: gone.note,
+      anchors: gone.anchors.map(({ anchor }) => ({ anchor: wireAnchor(anchor) })),
+      resolutions: gone.anchors.map(({ anchor, resolution }) => ({
+        anchor_id: anchor.id,
+        ...resolutionWire(resolution, generation),
+      })),
+    });
+    await send(gone.highlightId);
+  }, [removed, paperId, generation, send]);
+
+  const forgetRemoved = useCallback(() => setRemoved(null), []);
+
+  return {
+    highlights,
+    load,
+    loadError,
+    unavailableReason,
+    reload,
+    create,
+    update,
+    remove,
+    retry,
+    removed,
+    restore,
+    forgetRemoved,
+  };
 }

@@ -1,0 +1,1090 @@
+{
+  "_source": "GET /papers/ppr_G9AYN750E5MG1NRBMGSQJ4N5JM/summary on a copy of the v0.2 demo data root (PaperTree-scratch/v02-data), read 2026-10-16 by the S4d slice (#204): the cached summary of \"Attention Is All You Need\" that frame 04d draws.",
+  "state": "ready",
+  "summary": {
+    "generation": 1,
+    "model": "MiniMax-M3",
+    "prompt_version": "summary-v1",
+    "created_at": "2026-10-15T17:14:41.624Z",
+    "status": "complete",
+    "bullets": [
+      {
+        "text": "Existing sequence transduction models rely on complex recurrent or convolutional encoder–decoder networks, with attention only as an auxiliary connection between encoder and decoder [b1].",
+        "citations": [
+          {
+            "citation_id": "cit_01M508Y5JDKWKW05QX43887119",
+            "ordinal": 0,
+            "marker": "b1",
+            "page_index": 0,
+            "anchor": {
+              "anchorVersion": 1,
+              "offsetUnit": "unicode",
+              "id": "cit_01M508Y5JDKWKW05QX43887119",
+              "doc": {
+                "paperId": "ppr_G9AYN750E5MG1NRBMGSQJ4N5JM",
+                "pdfSha256": "sha256:bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+                "parserVersion": "1.0.0",
+                "textStreamId": "api/ppr_G9AYN750E5MG1NRBMGSQJ4N5JM/g1/1.0.0"
+              },
+              "targetKind": "citation",
+              "provenanceClass": "source",
+              "selectors": [
+                {
+                  "type": "BlockSelector",
+                  "blockId": "blk_tutvxcaxihp3krt6",
+                  "blockTextHash": "sha256:bfcd91c5476445be82474921ecbac95d5219e1488d5885566de38aabb0dcbc64"
+                },
+                {
+                  "type": "PageSelector",
+                  "index": 0
+                },
+                {
+                  "type": "TextPositionSelector",
+                  "start": 599,
+                  "end": 1739
+                },
+                {
+                  "type": "TextQuoteSelector",
+                  "exact": "The dominant sequence transduction models are based on complex recurrent or\nconvolutional neural networks that include an encoder and a decoder. The best\nperforming models also connect the encoder and decoder through an attention\nmechanism. We propose a new simple network architecture, the Transformer,\nbased solely on attention mechanisms, dispensing with recurrence and convolutions\nentirely. Experiments on two machine translation tasks show these models to\nbe superior in quality while being more parallelizable and requiring significantly\nless time to train. Our model achieves 28.4 BLEU on the WMT 2014 English-\nto-German translation task, improving over the existing best results, including\nensembles, by over 2 BLEU. On the WMT 2014 English-to-French translation task,\nour model establishes a new single-model state-of-the-art BLEU score of 41.8 after\ntraining for 3.5 days on eight GPUs, a small fraction of the training costs of the\nbest models from the literature. We show that the Transformer generalizes well to\nother tasks by applying it successfully to English constituency parsing both with\nlarge and limited training data.",
+                  "prefix": "aidan@cs.toronto.edu\nIllia Polosukhin∗‡\nillia.polosukhin@gmail.com\nAbstract\n",
+                  "suffix": "\n∗Equal contribution. Listing order is random. Jakob proposed replacing",
+                  "exactNormalised": "thedominantsequencetransductionmodelsarebasedoncomplexrecurrentorconvolutionalneuralnetworksthatincludeanencoderandadecoder.thebestperformingmodelsalsoconnecttheencoderanddecoderthroughanattentionmechanism.weproposeanewsimplenetworkarchitecture,thetransformer,basedsolelyonattentionmechanisms,dispensingwithrecurrenceandconvolutionsentirely.experimentsontwomachinetranslationtasksshowthesemodelstobesuperiorinqualitywhilebeingmoreparallelizableandrequiringsignificantlylesstimetotrain.ourmodelachieves28.4bleuonthewmt2014englishto-germantranslationtask,improvingovertheexistingbestresults,includingensembles,byover2bleu.onthewmt2014english-to-frenchtranslationtask,ourmodelestablishesanewsingle-modelstate-of-the-artbleuscoreof41.8aftertrainingfor3.5daysoneightgpus,asmallfractionofthetrainingcostsofthebestmodelsfromtheliterature.weshowthatthetransformergeneralizeswelltoothertasksbyapplyingitsuccessfullytoenglishconstituencyparsingbothwithlargeandlimitedtrainingdata.",
+                  "prefixNormalised": "aidan@cs.toronto.eduilliapolosukhin∗‡illia.polosukhin@gmail.comabstract",
+                  "suffixNormalised": "∗equalcontribution.listingorderisrandom.jakobproposedreplacing"
+                },
+                {
+                  "type": "ShapeSelector",
+                  "pageIndex": 0,
+                  "quads": [
+                    [143.5570068359375, 414.143142112473, 469.78717041015625, 575.8439382043174]
+                  ],
+                  "polygons": [
+                    [
+                      [468.2994384765625, 414.143142112473],
+                      [468.2994384765625, 424.0952346319395],
+                      [468.13092041015625, 424.0952346319395],
+                      [468.13092041015625, 435.00423121397074],
+                      [468.1309509277344, 435.00423121397074],
+                      [468.1309509277344, 445.913227796002],
+                      [469.3807373046875, 445.913227796002],
+                      [469.3807373046875, 456.88978933871357],
+                      [468.13616943359375, 456.88978933871357],
+                      [468.13616943359375, 467.7097312172272],
+                      [468.1307678222656, 467.7097312172272],
+                      [468.1307678222656, 478.65365060126027],
+                      [468.4808349609375, 478.65365060126027],
+                      [468.4808349609375, 489.5449748051686],
+                      [469.78717041015625, 489.5449748051686],
+                      [469.78717041015625, 500.4587447637754],
+                      [468.13079833984375, 500.4587447637754],
+                      [468.13079833984375, 511.43577932894794],
+                      [469.37615966796875, 511.43577932894794],
+                      [469.37615966796875, 522.3232709093529],
+                      [468.3020935058594, 522.3232709093529],
+                      [468.3020935058594, 533.1647177894929],
+                      [468.1309509277344, 533.1647177894929],
+                      [468.1309509277344, 544.1356019647155],
+                      [468.1313781738281, 544.1356019647155],
+                      [468.1313781738281, 554.9997717873813],
+                      [468.13916015625, 554.9997717873813],
+                      [468.13916015625, 565.9441975516893],
+                      [266.2665100097656, 565.9441975516893],
+                      [266.2665100097656, 575.8439382043174],
+                      [143.86599731445312, 575.8439382043174],
+                      [143.86599731445312, 424.0952346319395],
+                      [143.5570068359375, 424.0952346319395],
+                      [143.5570068359375, 414.143142112473]
+                    ]
+                  ],
+                  "pageWidth": 612.0,
+                  "pageHeight": 792.0,
+                  "rotation": 0,
+                  "userUnit": 1.0,
+                  "cropBox": [0.0, 0.0, 612.0, 792.0]
+                },
+                {
+                  "type": "SectionPathSelector",
+                  "path": ["Abstract"],
+                  "headingText": "Abstract",
+                  "paraIndexInSection": 0,
+                  "charOffsetInPara": 0
+                }
+              ],
+              "created": {
+                "mode": "source",
+                "at": "2026-10-15T17:14:41.613Z",
+                "client": "papertree-api/citations"
+              }
+            },
+            "supported": true
+          }
+        ],
+        "supported": true
+      },
+      {
+        "text": "The paper introduces the Transformer, a new architecture built solely on attention mechanisms and dispensing with recurrence and convolutions entirely [b1].",
+        "citations": [
+          {
+            "citation_id": "cit_01M508Y5JERRX6055PBJZ50E97",
+            "ordinal": 1,
+            "marker": "b1",
+            "page_index": 0,
+            "anchor": {
+              "anchorVersion": 1,
+              "offsetUnit": "unicode",
+              "id": "cit_01M508Y5JERRX6055PBJZ50E97",
+              "doc": {
+                "paperId": "ppr_G9AYN750E5MG1NRBMGSQJ4N5JM",
+                "pdfSha256": "sha256:bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+                "parserVersion": "1.0.0",
+                "textStreamId": "api/ppr_G9AYN750E5MG1NRBMGSQJ4N5JM/g1/1.0.0"
+              },
+              "targetKind": "citation",
+              "provenanceClass": "source",
+              "selectors": [
+                {
+                  "type": "BlockSelector",
+                  "blockId": "blk_tutvxcaxihp3krt6",
+                  "blockTextHash": "sha256:bfcd91c5476445be82474921ecbac95d5219e1488d5885566de38aabb0dcbc64"
+                },
+                {
+                  "type": "PageSelector",
+                  "index": 0
+                },
+                {
+                  "type": "TextPositionSelector",
+                  "start": 599,
+                  "end": 1739
+                },
+                {
+                  "type": "TextQuoteSelector",
+                  "exact": "The dominant sequence transduction models are based on complex recurrent or\nconvolutional neural networks that include an encoder and a decoder. The best\nperforming models also connect the encoder and decoder through an attention\nmechanism. We propose a new simple network architecture, the Transformer,\nbased solely on attention mechanisms, dispensing with recurrence and convolutions\nentirely. Experiments on two machine translation tasks show these models to\nbe superior in quality while being more parallelizable and requiring significantly\nless time to train. Our model achieves 28.4 BLEU on the WMT 2014 English-\nto-German translation task, improving over the existing best results, including\nensembles, by over 2 BLEU. On the WMT 2014 English-to-French translation task,\nour model establishes a new single-model state-of-the-art BLEU score of 41.8 after\ntraining for 3.5 days on eight GPUs, a small fraction of the training costs of the\nbest models from the literature. We show that the Transformer generalizes well to\nother tasks by applying it successfully to English constituency parsing both with\nlarge and limited training data.",
+                  "prefix": "aidan@cs.toronto.edu\nIllia Polosukhin∗‡\nillia.polosukhin@gmail.com\nAbstract\n",
+                  "suffix": "\n∗Equal contribution. Listing order is random. Jakob proposed replacing",
+                  "exactNormalised": "thedominantsequencetransductionmodelsarebasedoncomplexrecurrentorconvolutionalneuralnetworksthatincludeanencoderandadecoder.thebestperformingmodelsalsoconnecttheencoderanddecoderthroughanattentionmechanism.weproposeanewsimplenetworkarchitecture,thetransformer,basedsolelyonattentionmechanisms,dispensingwithrecurrenceandconvolutionsentirely.experimentsontwomachinetranslationtasksshowthesemodelstobesuperiorinqualitywhilebeingmoreparallelizableandrequiringsignificantlylesstimetotrain.ourmodelachieves28.4bleuonthewmt2014englishto-germantranslationtask,improvingovertheexistingbestresults,includingensembles,byover2bleu.onthewmt2014english-to-frenchtranslationtask,ourmodelestablishesanewsingle-modelstate-of-the-artbleuscoreof41.8aftertrainingfor3.5daysoneightgpus,asmallfractionofthetrainingcostsofthebestmodelsfromtheliterature.weshowthatthetransformergeneralizeswelltoothertasksbyapplyingitsuccessfullytoenglishconstituencyparsingbothwithlargeandlimitedtrainingdata.",
+                  "prefixNormalised": "aidan@cs.toronto.eduilliapolosukhin∗‡illia.polosukhin@gmail.comabstract",
+                  "suffixNormalised": "∗equalcontribution.listingorderisrandom.jakobproposedreplacing"
+                },
+                {
+                  "type": "ShapeSelector",
+                  "pageIndex": 0,
+                  "quads": [
+                    [143.5570068359375, 414.143142112473, 469.78717041015625, 575.8439382043174]
+                  ],
+                  "polygons": [
+                    [
+                      [468.2994384765625, 414.143142112473],
+                      [468.2994384765625, 424.0952346319395],
+                      [468.13092041015625, 424.0952346319395],
+                      [468.13092041015625, 435.00423121397074],
+                      [468.1309509277344, 435.00423121397074],
+                      [468.1309509277344, 445.913227796002],
+                      [469.3807373046875, 445.913227796002],
+                      [469.3807373046875, 456.88978933871357],
+                      [468.13616943359375, 456.88978933871357],
+                      [468.13616943359375, 467.7097312172272],
+                      [468.1307678222656, 467.7097312172272],
+                      [468.1307678222656, 478.65365060126027],
+                      [468.4808349609375, 478.65365060126027],
+                      [468.4808349609375, 489.5449748051686],
+                      [469.78717041015625, 489.5449748051686],
+                      [469.78717041015625, 500.4587447637754],
+                      [468.13079833984375, 500.4587447637754],
+                      [468.13079833984375, 511.43577932894794],
+                      [469.37615966796875, 511.43577932894794],
+                      [469.37615966796875, 522.3232709093529],
+                      [468.3020935058594, 522.3232709093529],
+                      [468.3020935058594, 533.1647177894929],
+                      [468.1309509277344, 533.1647177894929],
+                      [468.1309509277344, 544.1356019647155],
+                      [468.1313781738281, 544.1356019647155],
+                      [468.1313781738281, 554.9997717873813],
+                      [468.13916015625, 554.9997717873813],
+                      [468.13916015625, 565.9441975516893],
+                      [266.2665100097656, 565.9441975516893],
+                      [266.2665100097656, 575.8439382043174],
+                      [143.86599731445312, 575.8439382043174],
+                      [143.86599731445312, 424.0952346319395],
+                      [143.5570068359375, 424.0952346319395],
+                      [143.5570068359375, 414.143142112473]
+                    ]
+                  ],
+                  "pageWidth": 612.0,
+                  "pageHeight": 792.0,
+                  "rotation": 0,
+                  "userUnit": 1.0,
+                  "cropBox": [0.0, 0.0, 612.0, 792.0]
+                },
+                {
+                  "type": "SectionPathSelector",
+                  "path": ["Abstract"],
+                  "headingText": "Abstract",
+                  "paraIndexInSection": 0,
+                  "charOffsetInPara": 0
+                }
+              ],
+              "created": {
+                "mode": "source",
+                "at": "2026-10-15T17:14:41.614Z",
+                "client": "papertree-api/citations"
+              }
+            },
+            "supported": true
+          }
+        ],
+        "supported": true
+      },
+      {
+        "text": "Prior CNN-based models such as ByteNet and ConvS2S reduced sequential computation but still required a number of operations between distant positions that grew linearly (ConvS2S) or logarithmically (ByteNet) with distance [b3].",
+        "citations": [
+          {
+            "citation_id": "cit_01M508Y5JGB3WZ5JH4S4K2ENTY",
+            "ordinal": 2,
+            "marker": "b3",
+            "page_index": 1,
+            "anchor": {
+              "anchorVersion": 1,
+              "offsetUnit": "unicode",
+              "id": "cit_01M508Y5JGB3WZ5JH4S4K2ENTY",
+              "doc": {
+                "paperId": "ppr_G9AYN750E5MG1NRBMGSQJ4N5JM",
+                "pdfSha256": "sha256:bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+                "parserVersion": "1.0.0",
+                "textStreamId": "api/ppr_G9AYN750E5MG1NRBMGSQJ4N5JM/g1/1.0.0"
+              },
+              "targetKind": "citation",
+              "provenanceClass": "source",
+              "selectors": [
+                {
+                  "type": "BlockSelector",
+                  "blockId": "blk_7yzmxavdpzpf2n7m",
+                  "blockTextHash": "sha256:1b38a988279fc586161070ed4bc7267597ed4735524f6d52c7b66f06a4764ed3"
+                },
+                {
+                  "type": "PageSelector",
+                  "index": 1
+                },
+                {
+                  "type": "TextPositionSelector",
+                  "start": 4788,
+                  "end": 5613
+                },
+                {
+                  "type": "TextQuoteSelector",
+                  "exact": "The goal of reducing sequential computation also forms the foundation of the Extended Neural GPU\n[16], ByteNet [18] and ConvS2S [9], all of which use convolutional neural networks as basic building\nblock, computing hidden representations in parallel for all input and output positions. In these models,\nthe number of operations required to relate signals from two arbitrary input or output positions grows\nin the distance between positions, linearly for ConvS2S and logarithmically for ByteNet. This makes\nit more difficult to learn dependencies between distant positions [12]. In the Transformer this is\nreduced to a constant number of operations, albeit at the cost of reduced effective resolution due\nto averaging attention-weighted positions, an effect we counteract with Multi-Head Attention as\ndescribed in section 3.2.",
+                  "prefix": "trained for as little as twelve hours on eight P100 GPUs.\nBackground\n",
+                  "suffix": "\nSelf-attention, sometimes called intra-attention is an attention",
+                  "exactNormalised": "thegoalofreducingsequentialcomputationalsoformsthefoundationoftheextendedneuralgpu[16],bytenet[18]andconvs2s[9],allofwhichuseconvolutionalneuralnetworksasbasicbuildingblock,computinghiddenrepresentationsinparallelforallinputandoutputpositions.inthesemodels,thenumberofoperationsrequiredtorelatesignalsfromtwoarbitraryinputoroutputpositionsgrowsinthedistancebetweenpositions,linearlyforconvs2sandlogarithmicallyforbytenet.thismakesitmoredifficulttolearndependenciesbetweendistantpositions[12].inthetransformerthisisreducedtoaconstantnumberofoperations,albeitatthecostofreducedeffectiveresolutionduetoaveragingattention-weightedpositions,aneffectwecounteractwithmulti-headattentionasdescribedinsection3.2.",
+                  "prefixNormalised": "trainedforaslittleastwelvehoursoneightp100gpus.background",
+                  "suffixNormalised": "self-attention,sometimescalledintra-attentionisanattention"
+                },
+                {
+                  "type": "ShapeSelector",
+                  "pageIndex": 1,
+                  "quads": [
+                    [107.69100189208984, 390.24502306487466, 505.2414245605469, 486.3839162316611]
+                  ],
+                  "polygons": [
+                    [
+                      [504.0014343261719, 390.24502306487466],
+                      [504.0014343261719, 400.10567749363463],
+                      [504.0029296875, 400.10567749363463],
+                      [504.0029296875, 411.05509315618485],
+                      [505.2414245605469, 411.05509315618485],
+                      [505.2414245605469, 421.9537793322044],
+                      [504.00146484375, 421.9537793322044],
+                      [504.00146484375, 432.8581658880775],
+                      [503.999267578125, 432.8581658880775],
+                      [503.999267578125, 443.70635543525657],
+                      [503.99755859375, 443.70635543525657],
+                      [503.99755859375, 454.63524317686137],
+                      [503.99737548828125, 454.63524317686137],
+                      [503.99737548828125, 465.5442397588926],
+                      [503.9972839355469, 465.5442397588926],
+                      [503.9972839355469, 476.4868422699287],
+                      [204.5674591064453, 476.4868422699287],
+                      [204.5674591064453, 486.3839162316611],
+                      [108.0, 486.3839162316611],
+                      [108.0, 400.10567749363463],
+                      [107.69100189208984, 400.10567749363463],
+                      [107.69100189208984, 390.24502306487466]
+                    ]
+                  ],
+                  "pageWidth": 612.0,
+                  "pageHeight": 792.0,
+                  "rotation": 0,
+                  "userUnit": 1.0,
+                  "cropBox": [0.0, 0.0, 612.0, 792.0]
+                },
+                {
+                  "type": "SectionPathSelector",
+                  "path": ["Background"],
+                  "headingText": "Background",
+                  "paraIndexInSection": 0,
+                  "charOffsetInPara": 0
+                }
+              ],
+              "created": {
+                "mode": "source",
+                "at": "2026-10-15T17:14:41.616Z",
+                "client": "papertree-api/citations"
+              }
+            },
+            "supported": true
+          }
+        ],
+        "supported": true
+      },
+      {
+        "text": "The decoder mirrors the encoder's two sub-layers but adds a third sub-layer performing multi-head attention over the encoder stack, and masks its self-attention so positions cannot see future tokens, preserving autoregressive generation [b4].",
+        "citations": [
+          {
+            "citation_id": "cit_01M508Y5JHZPGP0F23HNFWV3NQ",
+            "ordinal": 3,
+            "marker": "b4",
+            "page_index": 2,
+            "anchor": {
+              "anchorVersion": 1,
+              "offsetUnit": "unicode",
+              "id": "cit_01M508Y5JHZPGP0F23HNFWV3NQ",
+              "doc": {
+                "paperId": "ppr_G9AYN750E5MG1NRBMGSQJ4N5JM",
+                "pdfSha256": "sha256:bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+                "parserVersion": "1.0.0",
+                "textStreamId": "api/ppr_G9AYN750E5MG1NRBMGSQJ4N5JM/g1/1.0.0"
+              },
+              "targetKind": "citation",
+              "provenanceClass": "source",
+              "selectors": [
+                {
+                  "type": "BlockSelector",
+                  "blockId": "blk_elrjeh2r7qzafowe",
+                  "blockTextHash": "sha256:2abf26a0f8ff8adc63913abf4c2f1fb29f879fddaa5aa25b5697efd94179b6cb"
+                },
+                {
+                  "type": "PageSelector",
+                  "index": 2
+                },
+                {
+                  "type": "TextPositionSelector",
+                  "start": 8138,
+                  "end": 8724
+                },
+                {
+                  "type": "TextQuoteSelector",
+                  "exact": "sub-layers in each encoder layer, the decoder inserts a third sub-layer, which performs multi-head\nattention over the output of the encoder stack. Similar to the encoder, we employ residual connections\naround each of the sub-layers, followed by layer normalization. We also modify the self-attention\nsub-layer in the decoder stack to prevent positions from attending to subsequent positions. This\nmasking, combined with fact that the output embeddings are offset by one position, ensures that the\npredictions for position i can depend only on the known outputs at positions less than i.",
+                  "prefix": "stack of N = 6 identical layers. In addition to the two\nDecoder:\n",
+                  "suffix": "\n3.2\nAttention\nAn attention function can be described as mapping",
+                  "exactNormalised": "sub-layersineachencoderlayer,thedecoderinsertsathirdsub-layer,whichperformsmulti-headattentionovertheoutputoftheencoderstack.similartotheencoder,weemployresidualconnectionsaroundeachofthesub-layers,followedbylayernormalization.wealsomodifytheself-attentionsub-layerinthedecoderstacktopreventpositionsfromattendingtosubsequentpositions.thismasking,combinedwithfactthattheoutputembeddingsareoffsetbyoneposition,ensuresthatthepredictionsforpositionicandependonlyontheknownoutputsatpositionslessthani.",
+                  "prefixNormalised": "stackofn=6identicallayers.inadditiontothetwodecoder:",
+                  "suffixNormalised": "3.2attentionanattentionfunctioncanbedescribedasmapping"
+                },
+                {
+                  "type": "ShapeSelector",
+                  "pageIndex": 2,
+                  "quads": [[108.0, 603.2791589581761, 504.00146484375, 666.7979176965049]],
+                  "polygons": [
+                    [
+                      [503.9974670410156, 603.2791589581761],
+                      [503.9974670410156, 613.2988011795339],
+                      [504.00146484375, 613.2988011795339],
+                      [504.00146484375, 624.1187277992585],
+                      [503.9974060058594, 624.1187277992585],
+                      [503.9974060058594, 635.0492446417052],
+                      [503.9973449707031, 635.0492446417052],
+                      [503.9973449707031, 645.9952262381489],
+                      [503.9971618652344, 645.9952262381489],
+                      [503.9971618652344, 656.8093599379997],
+                      [456.649658203125, 656.8093599379997],
+                      [456.649658203125, 666.7979176965049],
+                      [108.0, 666.7979176965049],
+                      [108.0, 603.2791589581761]
+                    ]
+                  ],
+                  "pageWidth": 612.0,
+                  "pageHeight": 792.0,
+                  "rotation": 0,
+                  "userUnit": 1.0,
+                  "cropBox": [0.0, 0.0, 612.0, 792.0]
+                },
+                {
+                  "type": "SectionPathSelector",
+                  "path": ["Decoder:"],
+                  "headingText": "Decoder:",
+                  "paraIndexInSection": 0,
+                  "charOffsetInPara": 0
+                }
+              ],
+              "created": {
+                "mode": "source",
+                "at": "2026-10-15T17:14:41.617Z",
+                "client": "papertree-api/citations"
+              }
+            },
+            "supported": false
+          }
+        ],
+        "supported": false
+      },
+      {
+        "text": "Experiments use the standard WMT 2014 English–German corpus (~4.5M sentence pairs, ~37k BPE tokens) and the much larger WMT 2014 English–French corpus (36M sentences, 32k word-piece vocabulary), with sentence pairs batched by approximate sequence length [b5].",
+        "citations": [
+          {
+            "citation_id": "cit_01M508Y5JJ0VF7V5B0CPYFKRB3",
+            "ordinal": 4,
+            "marker": "b5",
+            "page_index": 6,
+            "anchor": {
+              "anchorVersion": 1,
+              "offsetUnit": "unicode",
+              "id": "cit_01M508Y5JJ0VF7V5B0CPYFKRB3",
+              "doc": {
+                "paperId": "ppr_G9AYN750E5MG1NRBMGSQJ4N5JM",
+                "pdfSha256": "sha256:bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+                "parserVersion": "1.0.0",
+                "textStreamId": "api/ppr_G9AYN750E5MG1NRBMGSQJ4N5JM/g1/1.0.0"
+              },
+              "targetKind": "citation",
+              "provenanceClass": "source",
+              "selectors": [
+                {
+                  "type": "BlockSelector",
+                  "blockId": "blk_gembqbtdyk6kdmxk",
+                  "blockTextHash": "sha256:36ed0eaf879c9a149c869832eecfe617fa34b1bc595c76ec64afdca89ed1d25d"
+                },
+                {
+                  "type": "PageSelector",
+                  "index": 6
+                },
+                {
+                  "type": "TextPositionSelector",
+                  "start": 19886,
+                  "end": 20477
+                },
+                {
+                  "type": "TextQuoteSelector",
+                  "exact": "We trained on the standard WMT 2014 English-German dataset consisting of about 4.5 million\nsentence pairs. Sentences were encoded using byte-pair encoding [3], which has a shared source-\ntarget vocabulary of about 37000 tokens. For English-French, we used the significantly larger WMT\n2014 English-French dataset consisting of 36M sentences and split tokens into a 32000 word-piece\nvocabulary [38]. Sentence pairs were batched together by approximate sequence length. Each training\nbatch contained a set of sentence pairs containing approximately 25000 source tokens and 25000\ntarget tokens.",
+                  "prefix": " training regime for our models.\n5.1\nTraining Data and Batching\n",
+                  "suffix": "\n5.2\nHardware and Schedule\nWe trained our models on one machine ",
+                  "exactNormalised": "wetrainedonthestandardwmt2014english-germandatasetconsistingofabout4.5millionsentencepairs.sentenceswereencodedusingbyte-pairencoding[3],whichhasasharedsourcetargetvocabularyofabout37000tokens.forenglish-french,weusedthesignificantlylargerwmt2014english-frenchdatasetconsistingof36msentencesandsplittokensintoa32000word-piecevocabulary[38].sentencepairswerebatchedtogetherbyapproximatesequencelength.eachtrainingbatchcontainedasetofsentencepairscontainingapproximately25000sourcetokensand25000targettokens.",
+                  "prefixNormalised": "trainingregimeforourmodels.5.1trainingdataandbatching",
+                  "suffixNormalised": "5.2hardwareandschedulewetrainedourmodelsononemachine"
+                },
+                {
+                  "type": "ShapeSelector",
+                  "pageIndex": 6,
+                  "quads": [
+                    [107.53199768066406, 374.455153831223, 505.654541015625, 448.8839162316611]
+                  ],
+                  "polygons": [
+                    [
+                      [503.9968566894531, 374.455153831223],
+                      [503.9968566894531, 384.4072463506895],
+                      [505.654541015625, 384.4072463506895],
+                      [505.654541015625, 395.36338557097787],
+                      [504.30413818359375, 395.36338557097787],
+                      [504.30413818359375, 406.2358972472882],
+                      [504.0009765625, 406.2358972472882],
+                      [504.0009765625, 417.1608293607851],
+                      [504.0002746582031, 417.1608293607851],
+                      [504.0002746582031, 428.03353344452796],
+                      [503.99749755859375, 428.03353344452796],
+                      [503.99749755859375, 438.9868422699287],
+                      [161.39952087402344, 438.9868422699287],
+                      [161.39952087402344, 448.8839162316611],
+                      [108.0, 448.8839162316611],
+                      [108.0, 428.03353344452796],
+                      [107.7509994506836, 428.03353344452796],
+                      [107.7509994506836, 417.1608293607851],
+                      [108.0, 417.1608293607851],
+                      [108.0, 384.4072463506895],
+                      [107.53199768066406, 384.4072463506895],
+                      [107.53199768066406, 374.455153831223]
+                    ]
+                  ],
+                  "pageWidth": 612.0,
+                  "pageHeight": 792.0,
+                  "rotation": 0,
+                  "userUnit": 1.0,
+                  "cropBox": [0.0, 0.0, 612.0, 792.0]
+                },
+                {
+                  "type": "SectionPathSelector",
+                  "path": ["Training", "5.1\nTraining Data and Batching"],
+                  "headingText": "5.1\nTraining Data and Batching",
+                  "paraIndexInSection": 0,
+                  "charOffsetInPara": 0
+                }
+              ],
+              "created": {
+                "mode": "source",
+                "at": "2026-10-15T17:14:41.618Z",
+                "client": "papertree-api/citations"
+              }
+            },
+            "supported": false
+          }
+        ],
+        "supported": false
+      },
+      {
+        "text": "On WMT 2014 English-to-German the big model reaches 28.4 BLEU, outperforming all previously reported models and ensembles by more than 2.0 BLEU after3.5 days of training on 8 P100 GPUs; the base model alone already surpasses all previously published models and ensembles [b1, b6].",
+        "citations": [
+          {
+            "citation_id": "cit_01M508Y5JKACGMRYXZQDX8VX83",
+            "ordinal": 5,
+            "marker": "b1",
+            "page_index": 0,
+            "anchor": {
+              "anchorVersion": 1,
+              "offsetUnit": "unicode",
+              "id": "cit_01M508Y5JKACGMRYXZQDX8VX83",
+              "doc": {
+                "paperId": "ppr_G9AYN750E5MG1NRBMGSQJ4N5JM",
+                "pdfSha256": "sha256:bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+                "parserVersion": "1.0.0",
+                "textStreamId": "api/ppr_G9AYN750E5MG1NRBMGSQJ4N5JM/g1/1.0.0"
+              },
+              "targetKind": "citation",
+              "provenanceClass": "source",
+              "selectors": [
+                {
+                  "type": "BlockSelector",
+                  "blockId": "blk_tutvxcaxihp3krt6",
+                  "blockTextHash": "sha256:bfcd91c5476445be82474921ecbac95d5219e1488d5885566de38aabb0dcbc64"
+                },
+                {
+                  "type": "PageSelector",
+                  "index": 0
+                },
+                {
+                  "type": "TextPositionSelector",
+                  "start": 599,
+                  "end": 1739
+                },
+                {
+                  "type": "TextQuoteSelector",
+                  "exact": "The dominant sequence transduction models are based on complex recurrent or\nconvolutional neural networks that include an encoder and a decoder. The best\nperforming models also connect the encoder and decoder through an attention\nmechanism. We propose a new simple network architecture, the Transformer,\nbased solely on attention mechanisms, dispensing with recurrence and convolutions\nentirely. Experiments on two machine translation tasks show these models to\nbe superior in quality while being more parallelizable and requiring significantly\nless time to train. Our model achieves 28.4 BLEU on the WMT 2014 English-\nto-German translation task, improving over the existing best results, including\nensembles, by over 2 BLEU. On the WMT 2014 English-to-French translation task,\nour model establishes a new single-model state-of-the-art BLEU score of 41.8 after\ntraining for 3.5 days on eight GPUs, a small fraction of the training costs of the\nbest models from the literature. We show that the Transformer generalizes well to\nother tasks by applying it successfully to English constituency parsing both with\nlarge and limited training data.",
+                  "prefix": "aidan@cs.toronto.edu\nIllia Polosukhin∗‡\nillia.polosukhin@gmail.com\nAbstract\n",
+                  "suffix": "\n∗Equal contribution. Listing order is random. Jakob proposed replacing",
+                  "exactNormalised": "thedominantsequencetransductionmodelsarebasedoncomplexrecurrentorconvolutionalneuralnetworksthatincludeanencoderandadecoder.thebestperformingmodelsalsoconnecttheencoderanddecoderthroughanattentionmechanism.weproposeanewsimplenetworkarchitecture,thetransformer,basedsolelyonattentionmechanisms,dispensingwithrecurrenceandconvolutionsentirely.experimentsontwomachinetranslationtasksshowthesemodelstobesuperiorinqualitywhilebeingmoreparallelizableandrequiringsignificantlylesstimetotrain.ourmodelachieves28.4bleuonthewmt2014englishto-germantranslationtask,improvingovertheexistingbestresults,includingensembles,byover2bleu.onthewmt2014english-to-frenchtranslationtask,ourmodelestablishesanewsingle-modelstate-of-the-artbleuscoreof41.8aftertrainingfor3.5daysoneightgpus,asmallfractionofthetrainingcostsofthebestmodelsfromtheliterature.weshowthatthetransformergeneralizeswelltoothertasksbyapplyingitsuccessfullytoenglishconstituencyparsingbothwithlargeandlimitedtrainingdata.",
+                  "prefixNormalised": "aidan@cs.toronto.eduilliapolosukhin∗‡illia.polosukhin@gmail.comabstract",
+                  "suffixNormalised": "∗equalcontribution.listingorderisrandom.jakobproposedreplacing"
+                },
+                {
+                  "type": "ShapeSelector",
+                  "pageIndex": 0,
+                  "quads": [
+                    [143.5570068359375, 414.143142112473, 469.78717041015625, 575.8439382043174]
+                  ],
+                  "polygons": [
+                    [
+                      [468.2994384765625, 414.143142112473],
+                      [468.2994384765625, 424.0952346319395],
+                      [468.13092041015625, 424.0952346319395],
+                      [468.13092041015625, 435.00423121397074],
+                      [468.1309509277344, 435.00423121397074],
+                      [468.1309509277344, 445.913227796002],
+                      [469.3807373046875, 445.913227796002],
+                      [469.3807373046875, 456.88978933871357],
+                      [468.13616943359375, 456.88978933871357],
+                      [468.13616943359375, 467.7097312172272],
+                      [468.1307678222656, 467.7097312172272],
+                      [468.1307678222656, 478.65365060126027],
+                      [468.4808349609375, 478.65365060126027],
+                      [468.4808349609375, 489.5449748051686],
+                      [469.78717041015625, 489.5449748051686],
+                      [469.78717041015625, 500.4587447637754],
+                      [468.13079833984375, 500.4587447637754],
+                      [468.13079833984375, 511.43577932894794],
+                      [469.37615966796875, 511.43577932894794],
+                      [469.37615966796875, 522.3232709093529],
+                      [468.3020935058594, 522.3232709093529],
+                      [468.3020935058594, 533.1647177894929],
+                      [468.1309509277344, 533.1647177894929],
+                      [468.1309509277344, 544.1356019647155],
+                      [468.1313781738281, 544.1356019647155],
+                      [468.1313781738281, 554.9997717873813],
+                      [468.13916015625, 554.9997717873813],
+                      [468.13916015625, 565.9441975516893],
+                      [266.2665100097656, 565.9441975516893],
+                      [266.2665100097656, 575.8439382043174],
+                      [143.86599731445312, 575.8439382043174],
+                      [143.86599731445312, 424.0952346319395],
+                      [143.5570068359375, 424.0952346319395],
+                      [143.5570068359375, 414.143142112473]
+                    ]
+                  ],
+                  "pageWidth": 612.0,
+                  "pageHeight": 792.0,
+                  "rotation": 0,
+                  "userUnit": 1.0,
+                  "cropBox": [0.0, 0.0, 612.0, 792.0]
+                },
+                {
+                  "type": "SectionPathSelector",
+                  "path": ["Abstract"],
+                  "headingText": "Abstract",
+                  "paraIndexInSection": 0,
+                  "charOffsetInPara": 0
+                }
+              ],
+              "created": {
+                "mode": "source",
+                "at": "2026-10-15T17:14:41.619Z",
+                "client": "papertree-api/citations"
+              }
+            },
+            "supported": true
+          },
+          {
+            "citation_id": "cit_01M508Y5JM7GEK48AGE5BY6K09",
+            "ordinal": 6,
+            "marker": "b6",
+            "page_index": 7,
+            "anchor": {
+              "anchorVersion": 1,
+              "offsetUnit": "unicode",
+              "id": "cit_01M508Y5JM7GEK48AGE5BY6K09",
+              "doc": {
+                "paperId": "ppr_G9AYN750E5MG1NRBMGSQJ4N5JM",
+                "pdfSha256": "sha256:bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+                "parserVersion": "1.0.0",
+                "textStreamId": "api/ppr_G9AYN750E5MG1NRBMGSQJ4N5JM/g1/1.0.0"
+              },
+              "targetKind": "citation",
+              "provenanceClass": "source",
+              "selectors": [
+                {
+                  "type": "BlockSelector",
+                  "blockId": "blk_aljxhauqsxllrl5n",
+                  "blockTextHash": "sha256:0083a98bd5eb9a340395ee5a28111f2b035eda346564e6088e0660b69f762887"
+                },
+                {
+                  "type": "PageSelector",
+                  "index": 7
+                },
+                {
+                  "type": "TextPositionSelector",
+                  "start": 22675,
+                  "end": 23190
+                },
+                {
+                  "type": "TextQuoteSelector",
+                  "exact": "On the WMT 2014 English-to-German translation task, the big transformer model (Transformer (big)\nin Table 2) outperforms the best previously reported models (including ensembles) by more than 2.0\nBLEU, establishing a new state-of-the-art BLEU score of 28.4. The configuration of this model is\nlisted in the bottom line of Table 3. Training took 3.5 days on 8 P100 GPUs. Even our base model\nsurpasses all previously published models and ensembles, at a fraction of the training cost of any of\nthe competitive models.",
+                  "prefix": "improves accuracy and BLEU score.\nResults\n6.1\nMachine Translation\n",
+                  "suffix": "\nOn the WMT 2014 English-to-French translation task, our big model",
+                  "exactNormalised": "onthewmt2014english-to-germantranslationtask,thebigtransformermodel(transformer(big)intable2)outperformsthebestpreviouslyreportedmodels(includingensembles)bymorethan2.0bleu,establishinganewstate-of-the-artbleuscoreof28.4.theconfigurationofthismodelislistedinthebottomlineoftable3.trainingtook3.5dayson8p100gpus.evenourbasemodelsurpassesallpreviouslypublishedmodelsandensembles,atafractionofthetrainingcostofanyofthecompetitivemodels.",
+                  "prefixNormalised": "improvesaccuracyandbleuscore.results6.1machinetranslation",
+                  "suffixNormalised": "onthewmt2014english-to-frenchtranslationtask,ourbigmodel"
+                },
+                {
+                  "type": "ShapeSelector",
+                  "pageIndex": 7,
+                  "quads": [[108.0, 419.0942510377399, 504.6652526855469, 482.4789174523642]],
+                  "polygons": [
+                    [
+                      [504.6652526855469, 419.0942510377399],
+                      [504.6652526855469, 428.8436288624603],
+                      [504.2492980957031, 428.8436288624603],
+                      [504.2492980957031, 439.7580460645968],
+                      [503.9992370605469, 439.7580460645968],
+                      [503.9992370605469, 450.6820764757533],
+                      [503.997802734375, 450.6820764757533],
+                      [503.997802734375, 461.6686390990693],
+                      [504.0032653808594, 461.6686390990693],
+                      [504.0032653808594, 472.5706336362281],
+                      [203.0730743408203, 472.5706336362281],
+                      [203.0730743408203, 482.4789174523642],
+                      [108.0, 482.4789174523642],
+                      [108.0, 419.0942510377399]
+                    ]
+                  ],
+                  "pageWidth": 612.0,
+                  "pageHeight": 792.0,
+                  "rotation": 0,
+                  "userUnit": 1.0,
+                  "cropBox": [0.0, 0.0, 612.0, 792.0]
+                },
+                {
+                  "type": "SectionPathSelector",
+                  "path": ["Results", "6.1\nMachine Translation"],
+                  "headingText": "6.1\nMachine Translation",
+                  "paraIndexInSection": 0,
+                  "charOffsetInPara": 0
+                }
+              ],
+              "created": {
+                "mode": "source",
+                "at": "2026-10-15T17:14:41.620Z",
+                "client": "papertree-api/citations"
+              }
+            },
+            "supported": true
+          }
+        ],
+        "supported": true
+      },
+      {
+        "text": "On WMT 2014 English-to-French the Transformer sets a new single-model state-of-the-art of 41.8 BLEU in 3.5 days on 8 GPUs, a small fraction of prior best models' training cost [b1, b8].",
+        "citations": [
+          {
+            "citation_id": "cit_01M508Y5JNKBSCJRPMM4HR4ZM4",
+            "ordinal": 7,
+            "marker": "b1",
+            "page_index": 0,
+            "anchor": {
+              "anchorVersion": 1,
+              "offsetUnit": "unicode",
+              "id": "cit_01M508Y5JNKBSCJRPMM4HR4ZM4",
+              "doc": {
+                "paperId": "ppr_G9AYN750E5MG1NRBMGSQJ4N5JM",
+                "pdfSha256": "sha256:bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+                "parserVersion": "1.0.0",
+                "textStreamId": "api/ppr_G9AYN750E5MG1NRBMGSQJ4N5JM/g1/1.0.0"
+              },
+              "targetKind": "citation",
+              "provenanceClass": "source",
+              "selectors": [
+                {
+                  "type": "BlockSelector",
+                  "blockId": "blk_tutvxcaxihp3krt6",
+                  "blockTextHash": "sha256:bfcd91c5476445be82474921ecbac95d5219e1488d5885566de38aabb0dcbc64"
+                },
+                {
+                  "type": "PageSelector",
+                  "index": 0
+                },
+                {
+                  "type": "TextPositionSelector",
+                  "start": 599,
+                  "end": 1739
+                },
+                {
+                  "type": "TextQuoteSelector",
+                  "exact": "The dominant sequence transduction models are based on complex recurrent or\nconvolutional neural networks that include an encoder and a decoder. The best\nperforming models also connect the encoder and decoder through an attention\nmechanism. We propose a new simple network architecture, the Transformer,\nbased solely on attention mechanisms, dispensing with recurrence and convolutions\nentirely. Experiments on two machine translation tasks show these models to\nbe superior in quality while being more parallelizable and requiring significantly\nless time to train. Our model achieves 28.4 BLEU on the WMT 2014 English-\nto-German translation task, improving over the existing best results, including\nensembles, by over 2 BLEU. On the WMT 2014 English-to-French translation task,\nour model establishes a new single-model state-of-the-art BLEU score of 41.8 after\ntraining for 3.5 days on eight GPUs, a small fraction of the training costs of the\nbest models from the literature. We show that the Transformer generalizes well to\nother tasks by applying it successfully to English constituency parsing both with\nlarge and limited training data.",
+                  "prefix": "aidan@cs.toronto.edu\nIllia Polosukhin∗‡\nillia.polosukhin@gmail.com\nAbstract\n",
+                  "suffix": "\n∗Equal contribution. Listing order is random. Jakob proposed replacing",
+                  "exactNormalised": "thedominantsequencetransductionmodelsarebasedoncomplexrecurrentorconvolutionalneuralnetworksthatincludeanencoderandadecoder.thebestperformingmodelsalsoconnecttheencoderanddecoderthroughanattentionmechanism.weproposeanewsimplenetworkarchitecture,thetransformer,basedsolelyonattentionmechanisms,dispensingwithrecurrenceandconvolutionsentirely.experimentsontwomachinetranslationtasksshowthesemodelstobesuperiorinqualitywhilebeingmoreparallelizableandrequiringsignificantlylesstimetotrain.ourmodelachieves28.4bleuonthewmt2014englishto-germantranslationtask,improvingovertheexistingbestresults,includingensembles,byover2bleu.onthewmt2014english-to-frenchtranslationtask,ourmodelestablishesanewsingle-modelstate-of-the-artbleuscoreof41.8aftertrainingfor3.5daysoneightgpus,asmallfractionofthetrainingcostsofthebestmodelsfromtheliterature.weshowthatthetransformergeneralizeswelltoothertasksbyapplyingitsuccessfullytoenglishconstituencyparsingbothwithlargeandlimitedtrainingdata.",
+                  "prefixNormalised": "aidan@cs.toronto.eduilliapolosukhin∗‡illia.polosukhin@gmail.comabstract",
+                  "suffixNormalised": "∗equalcontribution.listingorderisrandom.jakobproposedreplacing"
+                },
+                {
+                  "type": "ShapeSelector",
+                  "pageIndex": 0,
+                  "quads": [
+                    [143.5570068359375, 414.143142112473, 469.78717041015625, 575.8439382043174]
+                  ],
+                  "polygons": [
+                    [
+                      [468.2994384765625, 414.143142112473],
+                      [468.2994384765625, 424.0952346319395],
+                      [468.13092041015625, 424.0952346319395],
+                      [468.13092041015625, 435.00423121397074],
+                      [468.1309509277344, 435.00423121397074],
+                      [468.1309509277344, 445.913227796002],
+                      [469.3807373046875, 445.913227796002],
+                      [469.3807373046875, 456.88978933871357],
+                      [468.13616943359375, 456.88978933871357],
+                      [468.13616943359375, 467.7097312172272],
+                      [468.1307678222656, 467.7097312172272],
+                      [468.1307678222656, 478.65365060126027],
+                      [468.4808349609375, 478.65365060126027],
+                      [468.4808349609375, 489.5449748051686],
+                      [469.78717041015625, 489.5449748051686],
+                      [469.78717041015625, 500.4587447637754],
+                      [468.13079833984375, 500.4587447637754],
+                      [468.13079833984375, 511.43577932894794],
+                      [469.37615966796875, 511.43577932894794],
+                      [469.37615966796875, 522.3232709093529],
+                      [468.3020935058594, 522.3232709093529],
+                      [468.3020935058594, 533.1647177894929],
+                      [468.1309509277344, 533.1647177894929],
+                      [468.1309509277344, 544.1356019647155],
+                      [468.1313781738281, 544.1356019647155],
+                      [468.1313781738281, 554.9997717873813],
+                      [468.13916015625, 554.9997717873813],
+                      [468.13916015625, 565.9441975516893],
+                      [266.2665100097656, 565.9441975516893],
+                      [266.2665100097656, 575.8439382043174],
+                      [143.86599731445312, 575.8439382043174],
+                      [143.86599731445312, 424.0952346319395],
+                      [143.5570068359375, 424.0952346319395],
+                      [143.5570068359375, 414.143142112473]
+                    ]
+                  ],
+                  "pageWidth": 612.0,
+                  "pageHeight": 792.0,
+                  "rotation": 0,
+                  "userUnit": 1.0,
+                  "cropBox": [0.0, 0.0, 612.0, 792.0]
+                },
+                {
+                  "type": "SectionPathSelector",
+                  "path": ["Abstract"],
+                  "headingText": "Abstract",
+                  "paraIndexInSection": 0,
+                  "charOffsetInPara": 0
+                }
+              ],
+              "created": {
+                "mode": "source",
+                "at": "2026-10-15T17:14:41.621Z",
+                "client": "papertree-api/citations"
+              }
+            },
+            "supported": false
+          },
+          {
+            "citation_id": "cit_01M508Y5JPQE7H440682YZ23S1",
+            "ordinal": 8,
+            "marker": "b8",
+            "page_index": 9,
+            "anchor": {
+              "anchorVersion": 1,
+              "offsetUnit": "unicode",
+              "id": "cit_01M508Y5JPQE7H440682YZ23S1",
+              "doc": {
+                "paperId": "ppr_G9AYN750E5MG1NRBMGSQJ4N5JM",
+                "pdfSha256": "sha256:bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+                "parserVersion": "1.0.0",
+                "textStreamId": "api/ppr_G9AYN750E5MG1NRBMGSQJ4N5JM/g1/1.0.0"
+              },
+              "targetKind": "citation",
+              "provenanceClass": "source",
+              "selectors": [
+                {
+                  "type": "BlockSelector",
+                  "blockId": "blk_rsh2ozeq7a43ndfb",
+                  "blockTextHash": "sha256:02cb4105e20c357b4edb1622ed7fdde105d8633f47adf2e2d1900b16a54438b7"
+                },
+                {
+                  "type": "PageSelector",
+                  "index": 9
+                },
+                {
+                  "type": "TextPositionSelector",
+                  "start": 29249,
+                  "end": 29592
+                },
+                {
+                  "type": "TextQuoteSelector",
+                  "exact": "For translation tasks, the Transformer can be trained significantly faster than architectures based\non recurrent or convolutional layers. On both WMT 2014 English-to-German and WMT 2014\nEnglish-to-French translation tasks, we achieve a new state of the art. In the former task our best\nmodel outperforms even all previously reported ensembles.",
+                  "prefix": "encoder-decoder architectures with\nmulti-headed self-attention.\n",
+                  "suffix": "\nWe are excited about the future of attention-based models and plan",
+                  "exactNormalised": "fortranslationtasks,thetransformercanbetrainedsignificantlyfasterthanarchitecturesbasedonrecurrentorconvolutionallayers.onbothwmt2014english-to-germanandwmt2014english-to-frenchtranslationtasks,weachieveanewstateoftheart.intheformertaskourbestmodeloutperformsevenallpreviouslyreportedensembles.",
+                  "prefixNormalised": "encoder-decoderarchitectureswithmulti-headedself-attention.",
+                  "suffixNormalised": "weareexcitedaboutthefutureofattention-basedmodelsandplan"
+                },
+                {
+                  "type": "ShapeSelector",
+                  "pageIndex": 9,
+                  "quads": [[108.0, 428.04713381169177, 503.99761962890625, 469.7479299035361]],
+                  "polygons": [
+                    [
+                      [503.9974365234375, 428.04713381169177],
+                      [503.9974365234375, 437.9992415899473],
+                      [503.9973449707031, 437.9992415899473],
+                      [503.9973449707031, 448.9082534307676],
+                      [503.99761962890625, 448.9082534307676],
+                      [503.99761962890625, 459.8508559418037],
+                      [343.92431640625, 459.8508559418037],
+                      [343.92431640625, 469.7479299035361],
+                      [108.0, 469.7479299035361],
+                      [108.0, 428.04713381169177]
+                    ]
+                  ],
+                  "pageWidth": 612.0,
+                  "pageHeight": 792.0,
+                  "rotation": 0,
+                  "userUnit": 1.0,
+                  "cropBox": [0.0, 0.0, 612.0, 792.0]
+                },
+                {
+                  "type": "SectionPathSelector",
+                  "path": ["Conclusion"],
+                  "headingText": "Conclusion",
+                  "paraIndexInSection": 1,
+                  "charOffsetInPara": 0
+                }
+              ],
+              "created": {
+                "mode": "source",
+                "at": "2026-10-15T17:14:41.622Z",
+                "client": "papertree-api/citations"
+              }
+            },
+            "supported": false
+          }
+        ],
+        "supported": false
+      },
+      {
+        "text": "The paper presents the Transformer as the first sequence transduction model based entirely on attention, replacing recurrent layers with multi-headed self-attention and training significantly faster than recurrent or convolutional alternatives [b7, b8]; the provided passages do not state specific limitations of the work.",
+        "citations": [
+          {
+            "citation_id": "cit_01M508Y5JQDP955KEX0BP1YXSC",
+            "ordinal": 9,
+            "marker": "b7",
+            "page_index": 9,
+            "anchor": {
+              "anchorVersion": 1,
+              "offsetUnit": "unicode",
+              "id": "cit_01M508Y5JQDP955KEX0BP1YXSC",
+              "doc": {
+                "paperId": "ppr_G9AYN750E5MG1NRBMGSQJ4N5JM",
+                "pdfSha256": "sha256:bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+                "parserVersion": "1.0.0",
+                "textStreamId": "api/ppr_G9AYN750E5MG1NRBMGSQJ4N5JM/g1/1.0.0"
+              },
+              "targetKind": "citation",
+              "provenanceClass": "source",
+              "selectors": [
+                {
+                  "type": "BlockSelector",
+                  "blockId": "blk_fgss553cabaymbiz",
+                  "blockTextHash": "sha256:15e4441de2c8c71dcef6361a520aba9543ffbb69fbe73309a5132cc720c92bdf"
+                },
+                {
+                  "type": "PageSelector",
+                  "index": 9
+                },
+                {
+                  "type": "TextPositionSelector",
+                  "start": 29021,
+                  "end": 29248
+                },
+                {
+                  "type": "TextQuoteSelector",
+                  "exact": "In this work, we presented the Transformer, the first sequence transduction model based entirely on\nattention, replacing the recurrent layers most commonly used in encoder-decoder architectures with\nmulti-headed self-attention.",
+                  "prefix": "training only on the WSJ training set of 40K sentences.\nConclusion\n",
+                  "suffix": "\nFor translation tasks, the Transformer can be trained significantly",
+                  "exactNormalised": "inthiswork,wepresentedthetransformer,thefirstsequencetransductionmodelbasedentirelyonattention,replacingtherecurrentlayersmostcommonlyusedinencoder-decoderarchitectureswithmulti-headedself-attention.",
+                  "prefixNormalised": "trainingonlyonthewsjtrainingsetof40ksentences.conclusion",
+                  "suffixNormalised": "fortranslationtasks,thetransformercanbetrainedsignificantly"
+                },
+                {
+                  "type": "ShapeSelector",
+                  "pageIndex": 9,
+                  "quads": [[108.0, 389.9005938789669, 503.99725341796875, 420.63193258908296]],
+                  "polygons": [
+                    [
+                      [503.99725341796875, 389.9005938789669],
+                      [503.99725341796875, 399.81790475816825],
+                      [503.995849609375, 399.81790475816825],
+                      [503.995849609375, 410.7236142575521],
+                      [218.12660217285156, 410.7236142575521],
+                      [218.12660217285156, 420.63193258908296],
+                      [108.0, 420.63193258908296],
+                      [108.0, 389.9005938789669]
+                    ]
+                  ],
+                  "pageWidth": 612.0,
+                  "pageHeight": 792.0,
+                  "rotation": 0,
+                  "userUnit": 1.0,
+                  "cropBox": [0.0, 0.0, 612.0, 792.0]
+                },
+                {
+                  "type": "SectionPathSelector",
+                  "path": ["Conclusion"],
+                  "headingText": "Conclusion",
+                  "paraIndexInSection": 0,
+                  "charOffsetInPara": 0
+                }
+              ],
+              "created": {
+                "mode": "source",
+                "at": "2026-10-15T17:14:41.623Z",
+                "client": "papertree-api/citations"
+              }
+            },
+            "supported": true
+          },
+          {
+            "citation_id": "cit_01M508Y5JQE3YQXYF2DF4GBTM0",
+            "ordinal": 10,
+            "marker": "b8",
+            "page_index": 9,
+            "anchor": {
+              "anchorVersion": 1,
+              "offsetUnit": "unicode",
+              "id": "cit_01M508Y5JQE3YQXYF2DF4GBTM0",
+              "doc": {
+                "paperId": "ppr_G9AYN750E5MG1NRBMGSQJ4N5JM",
+                "pdfSha256": "sha256:bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+                "parserVersion": "1.0.0",
+                "textStreamId": "api/ppr_G9AYN750E5MG1NRBMGSQJ4N5JM/g1/1.0.0"
+              },
+              "targetKind": "citation",
+              "provenanceClass": "source",
+              "selectors": [
+                {
+                  "type": "BlockSelector",
+                  "blockId": "blk_rsh2ozeq7a43ndfb",
+                  "blockTextHash": "sha256:02cb4105e20c357b4edb1622ed7fdde105d8633f47adf2e2d1900b16a54438b7"
+                },
+                {
+                  "type": "PageSelector",
+                  "index": 9
+                },
+                {
+                  "type": "TextPositionSelector",
+                  "start": 29249,
+                  "end": 29592
+                },
+                {
+                  "type": "TextQuoteSelector",
+                  "exact": "For translation tasks, the Transformer can be trained significantly faster than architectures based\non recurrent or convolutional layers. On both WMT 2014 English-to-German and WMT 2014\nEnglish-to-French translation tasks, we achieve a new state of the art. In the former task our best\nmodel outperforms even all previously reported ensembles.",
+                  "prefix": "encoder-decoder architectures with\nmulti-headed self-attention.\n",
+                  "suffix": "\nWe are excited about the future of attention-based models and plan",
+                  "exactNormalised": "fortranslationtasks,thetransformercanbetrainedsignificantlyfasterthanarchitecturesbasedonrecurrentorconvolutionallayers.onbothwmt2014english-to-germanandwmt2014english-to-frenchtranslationtasks,weachieveanewstateoftheart.intheformertaskourbestmodeloutperformsevenallpreviouslyreportedensembles.",
+                  "prefixNormalised": "encoder-decoderarchitectureswithmulti-headedself-attention.",
+                  "suffixNormalised": "weareexcitedaboutthefutureofattention-basedmodelsandplan"
+                },
+                {
+                  "type": "ShapeSelector",
+                  "pageIndex": 9,
+                  "quads": [[108.0, 428.04713381169177, 503.99761962890625, 469.7479299035361]],
+                  "polygons": [
+                    [
+                      [503.9974365234375, 428.04713381169177],
+                      [503.9974365234375, 437.9992415899473],
+                      [503.9973449707031, 437.9992415899473],
+                      [503.9973449707031, 448.9082534307676],
+                      [503.99761962890625, 448.9082534307676],
+                      [503.99761962890625, 459.8508559418037],
+                      [343.92431640625, 459.8508559418037],
+                      [343.92431640625, 469.7479299035361],
+                      [108.0, 469.7479299035361],
+                      [108.0, 428.04713381169177]
+                    ]
+                  ],
+                  "pageWidth": 612.0,
+                  "pageHeight": 792.0,
+                  "rotation": 0,
+                  "userUnit": 1.0,
+                  "cropBox": [0.0, 0.0, 612.0, 792.0]
+                },
+                {
+                  "type": "SectionPathSelector",
+                  "path": ["Conclusion"],
+                  "headingText": "Conclusion",
+                  "paraIndexInSection": 1,
+                  "charOffsetInPara": 0
+                }
+              ],
+              "created": {
+                "mode": "source",
+                "at": "2026-10-15T17:14:41.623Z",
+                "client": "papertree-api/citations"
+              }
+            },
+            "supported": true
+          }
+        ],
+        "supported": true
+      }
+    ]
+  }
+}

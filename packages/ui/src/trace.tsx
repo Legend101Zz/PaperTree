@@ -29,6 +29,8 @@ export interface TraceRowData {
   /** The paper's words, verbatim, without quotation marks. */
   readonly quote: string;
   readonly status: 'cited' | 'not-verified';
+  /** Said after the count, e.g. `1 not verified` for a passage cited elsewhere too (frame 04d). */
+  readonly note?: string;
 }
 
 /** Props for `TraceRow`. */
@@ -69,6 +71,7 @@ export function TraceRow(props: TraceRowProps): ReactNode {
     citedCount,
     quote,
     status,
+    note,
     lit = false,
     layout = 'desktop',
     showLabel = 'Show in paper',
@@ -85,6 +88,7 @@ export function TraceRow(props: TraceRowProps): ReactNode {
   const whereLine = (
     <span className="pt-trace-row__where">
       {where} · {formatCitedCount(citedCount)}
+      {note === undefined ? null : ` · ${note}`}
     </span>
   );
 

@@ -14,6 +14,7 @@ import { AiSlip } from '@papertree/ui';
 import { useRef, type ReactNode } from 'react';
 
 import { foldedPreview, wasStopped, type RefusalKind } from '../model/states';
+import { shortModelName } from '../model/summary';
 import {
   FoldRow,
   SendToCanvas,
@@ -47,15 +48,6 @@ export interface AnswerSlipProps extends Pick<MarkerHandlers, 'lit' | 'onLight' 
   readonly notSent: RefusalKind;
   /** Present when the answer opened folded (an earlier exchange of a reopened thread). */
   readonly fold?: AnswerFold | undefined;
-}
-
-/** `MiniMax-M3.1-Flash-Preview` → `M3.1 Flash`, the design's short name; the vendor is implied. */
-function modelLabel(model: string | undefined): string {
-  if (model === undefined || model === '') return 'AI model';
-  return model
-    .replace(/^MiniMax-/i, '')
-    .replace(/-Preview$/i, '')
-    .replace(/-/g, ' ');
 }
 
 const UNCITED = "no citation · the AI's own reading";
@@ -125,7 +117,7 @@ export function AnswerSlip({
       {canSend ? <SendToCanvas onSend={() => onSendToCanvas(messageId)} /> : null}
     </>
   );
-  const name = modelLabel(answer.usage?.model);
+  const name = shortModelName(answer.usage?.model);
   const uncited = folded ? [] : (model?.uncited ?? []);
   const body =
     model === null ? (
