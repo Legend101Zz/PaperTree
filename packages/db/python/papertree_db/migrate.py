@@ -12,6 +12,11 @@ database is copied with the SQLite backup API to ``<db>.pre-NNNN.bak`` first. A 
 (nothing applied yet) and an in-memory one are not backed up — there is nothing to lose, and
 nowhere beside ``:memory:`` to put it.
 
+Every version in the set gets its OWN copy: 0005 and 0008 (the canvas rebuild) are both in it, so
+a database at version 4 or older gets ``.pre-0005.bak`` and ``.pre-0008.bak`` in one run. Both are
+the same state, from before the run began (so the ``.pre-0008.bak`` holds a pre-0005 schema); a
+database at 5, the normal v0.1 case, gets one copy.
+
 TWO PROCESSES MIGRATE THE SAME FILE. The API and the worker both call ``migrate()`` at start. So the
 decision "0005 is pending, back up" and the copy are made while this runner holds the database's
 write lock (``BEGIN IMMEDIATE`` on a second connection: SQLite's backup API hangs when run on the

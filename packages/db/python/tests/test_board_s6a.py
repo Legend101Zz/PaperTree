@@ -20,17 +20,30 @@ from papertree_db import (
     OwnerId,
     PaperId,
     PaperTreeDb,
+    check_ports,
     generation,
     open_database,
 )
 
-from .saved_shapes import load_fixture_paper, migrations_through
+from .saved_shapes import load_capture_anchor, load_fixture_paper, migrations_through
 
+#: What reference/06-board-1440.png draws, card by card, written out by hand and NOT derived from
+#: PIN_TABLE: (pins out, pins in). The first six are drawn on the frame; the rest are marked.
+FRAME: dict[str, tuple[set[str], set[str]]] = {
+    "excerpt": ({"claim_out"}, {"evidence_in"}),  # ring left, brass dot right
+    "explanation": ({"claim_out", "answer_out"}, {"evidence_in", "question_in"}),
+    "note": ({"claim_out"}, {"evidence_in"}),
+    "question": (set(), {"question_in", "evidence_in"}),
+    "notebook": ({"claim_out"}, {"evidence_in"}),
+    "diagram": ({"claim_out"}, {"evidence_in"}),
+    "group": (set(), set()),
+}
+#: Allowed although the frame does not draw them (DESIGN.md section 5 / the brief), so a test
+#: failing on one of these is a deliberate decision, not a mistake.
+NOT_DRAWN = {("explanation", "question_in"), ("question", "evidence_in"), ("notebook", "claim_out")}
 KINDS = ("excerpt", "explanation", "note", "group", "question", "notebook", "diagram")
-NODES_SQL = "SELECT node_id, kind, group_id, x, w, source_anchor_json FROM canvas_nodes ORDER BY 1"
-EDGES_SQL = (
-    "SELECT edge_id, from_node_id, to_node_id, label, created_at FROM canvas_edges ORDER BY 1"
-)
+NODES_SQL = "SELECT * FROM canvas_nodes ORDER BY node_id"
+EDGES_SQL = "SELECT * FROM canvas_edges ORDER BY edge_id"
 REFUSED = "that pin does not take that thread"
 
 
@@ -60,14 +73,14 @@ def _node(node_id: str, kind: str = "note", **fields: Any) -> dict[str, Any]:
     return {"node_id": node_id, "kind": kind, "x": 1, "y": 2, "w": 240, "h": 120, **fields}
 
 
-def test_the_pin_table_is_the_designs(env: Env) -> None:
-    outs = {k: sorted(p.out) for k, p in PIN_TABLE.items() if p.out}
-    ins = {k: sorted(p.into) for k, p in PIN_TABLE.items() if p.into}
-    assert set(outs) == {"excerpt", "note", "explanation", "notebook", "diagram"}
-    assert [k for k, v in outs.items() if "answer_out" in v] == ["explanation"]
-    assert set(ins) == {"explanation", "note", "question", "notebook", "diagram"}
-    assert {k for k, v in ins.items() if "question_in" in v} == {"question", "explanation"}
-    assert PIN_TABLE["group"].out == PIN_TABLE["group"].into == frozenset()
+def test_the_pin_table_is_the_frames(env: Env) -> None:
+    assert {k: (set(p.out), set(p.into)) for k, p in PIN_TABLE.items()} == FRAME
+    for kind, pin in NOT_DRAWN:  # the frame-silent allowances stay explicit and deliberate
+        assert pin in FRAME[kind][0] | FRAME[kind][1]
+    # The thread the frame itself draws: the diagram's brass pin onto the passage's ring.
+    check_ports("diagram", "excerpt", "claim_out", "evidence_in")
+    # ... and answer_out onto a question's open diamond.
+    check_ports("explanation", "question", "answer_out", "question_in")
 
 
 def test_every_new_kind_round_trips(env: Env) -> None:
@@ -150,35 +163,69 @@ def _edge(edge_id: str, a: str, b: str, **ports: Any) -> dict[str, Any]:
     return {"edge_id": edge_id, "from_node_id": a, "to_node_id": b, "kind": "supports", **ports}
 
 
-def test_ports_follow_the_table(env: Env) -> None:
-    """Every allowed (source, out-pin, target, in-pin) passes; every other combination of the
-    cards that can be built without an AI thread is 422 with the pin sentence."""
-    kinds = ("note", "question", "notebook", "diagram", "group")
-    ids = {k: f"cn_{k}" for k in kinds}
-    for kind in kinds:
-        extra = {"source_page_id": "pg_x"} if kind == "notebook" else {}
-        extra |= {"source_diagram_id": "dg_x"} if kind == "diagram" else {}
-        env.db.create_node(env.owner, env.paper_id, _node(ids[kind], kind, **extra))
+def _make(env: Env, kind: str) -> str:
+    """Creates one card of ``kind`` on the board and returns its id."""
+    node_id = f"cn_{kind}"
+    extra: dict[str, Any] = {}
+    if kind == "excerpt":
+        anchor = load_capture_anchor()
+        anchor["doc"]["paperId"] = env.paper_id
+        extra["source_anchor"] = anchor
+    elif kind == "explanation":
+        env.db.create_thread(
+            env.owner, env.paper_id, thread_id="thr_pins_0001", kind="explain", title="T",
+            origin_anchor=None,
+        )  # fmt: skip
+        env.db.append_message(
+            env.owner, "thr_pins_0001", message_id="msg_pins_0001", role="assistant",
+            generation=1, content="text", status="complete",
+        )  # fmt: skip
+        extra["source_message_id"] = "msg_pins_0001"
+    elif kind == "notebook":
+        extra["source_page_id"] = "pg_x"
+    elif kind == "diagram":
+        extra["source_diagram_id"] = "dg_x"
+    env.db.create_node(env.owner, env.paper_id, _node(node_id, kind, **extra))
+    return node_id
+
+
+def test_ports_follow_the_frame(env: Env) -> None:
+    """Every (source kind, out-pin, target kind, in-pin) over ALL seven kinds: the answer comes from
+    the hand-written FRAME table, never from PIN_TABLE."""
+    ids = {kind: _make(env, kind) for kind in FRAME}
     board_id = env.db.get_board(env.owner, env.paper_id).board.board_id  # type: ignore[union-attr]
     n = 0
-    for a in kinds:
-        for b in kinds:
-            if a == b:
-                continue
-            for out in (None, "claim_out", "answer_out"):
-                for into in (None, "evidence_in", "question_in"):
-                    n += 1
-                    edge = _edge(f"ce_{n}", ids[a], ids[b], from_port=out, to_port=into)
-                    allowed = (out is None or out in PIN_TABLE[a].out) and (
-                        into is None or into in PIN_TABLE[b].into
-                    )
-                    if allowed:
-                        stored = env.db.create_edge(env.owner, board_id, edge)
-                        assert (stored.from_port, stored.to_port) == (out, into)
-                    else:
-                        with pytest.raises(CanvasRejected, match=REFUSED):
-                            env.db.create_edge(env.owner, board_id, edge)
-    assert n == 20 * 9
+    for a, b in ((a, b) for a in FRAME for b in FRAME if a != b):
+        for out in (None, "claim_out", "answer_out"):
+            for into in (None, "evidence_in", "question_in"):
+                n += 1
+                edge = _edge(f"ce_{n}", ids[a], ids[b], from_port=out, to_port=into)
+                if (out is None or out in FRAME[a][0]) and (into is None or into in FRAME[b][1]):
+                    stored = env.db.create_edge(env.owner, board_id, edge)
+                    assert (stored.from_port, stored.to_port) == (out, into)
+                else:
+                    with pytest.raises(CanvasRejected, match=REFUSED):
+                        env.db.create_edge(env.owner, board_id, edge)
+    assert n == 42 * 9
+
+
+def test_a_question_card_may_point_at_a_user_message_only(env: Env) -> None:
+    env.db.create_thread(
+        env.owner, env.paper_id, thread_id="thr_q_0001", kind="ask", title="Q", origin_anchor=None
+    )
+    for role, msg in (("user", "msg_q_user01"), ("assistant", "msg_q_asst01")):
+        env.db.append_message(
+            env.owner, "thr_q_0001", message_id=msg, role=role, generation=1, content="t",
+            status="complete",
+        )  # fmt: skip
+    ok = env.db.create_node(
+        env.owner, env.paper_id, _node("cn_q1", "question", source_message_id="msg_q_user01")
+    )
+    assert ok.source_message_id == "msg_q_user01"
+    with pytest.raises(CanvasRejected, match="source_message_id"):
+        env.db.create_node(
+            env.owner, env.paper_id, _node("cn_q2", "question", source_message_id="msg_q_asst01")
+        )
 
 
 def test_a_v01_edge_has_no_ports_and_patches(env: Env) -> None:
@@ -252,30 +299,30 @@ def test_0008_carries_every_row_fk_and_the_trigger(tmp_path: Path) -> None:
             (edge_id, owner_id, a, b, now, now),
         )
     conn.commit()
-    before_nodes = _rows(
-        conn,
-        NODES_SQL,
+    # Fill the columns a bare insert leaves at their defaults, so a dropped one would show.
+    conn.execute(
+        "UPDATE canvas_nodes SET title = 'T\u00e9', body = 'b\u00f8dy', z = 3, version = 4, "
+        "source_message_id = 'msg_x', updated_at = '2026-10-02T00:00:00+00:00'"
+        " WHERE node_id IN ('cn_n', 'cn_m')"
     )
-    before_edges = _rows(
-        conn,
-        EDGES_SQL,
-    )
+    conn.commit()
+    before_nodes = _rows(conn, NODES_SQL)
+    before_edges = _rows(conn, EDGES_SQL)
     conn.close()
 
     with open_database(file) as db:
         result = db.migrate()
-        assert result.applied[-1] == 8 and result.backups
+        assert 8 in result.applied and result.backups
     conn = sqlite3.connect(file)
     conn.execute("PRAGMA foreign_keys = ON")
     try:
-        assert before_nodes == _rows(
-            conn,
-            NODES_SQL,
-        )
-        assert before_edges == _rows(
-            conn,
-            EDGES_SQL,
-        )
+        # EVERY old column of every row, byte for byte; the four new columns are appended and NULL.
+        after_nodes = _rows(conn, NODES_SQL)
+        after_edges = _rows(conn, EDGES_SQL)
+        assert before_nodes == [r[: len(before_nodes[0])] for r in after_nodes]
+        assert before_edges == [r[: len(before_edges[0])] for r in after_edges]
+        assert all(r[len(before_nodes[0]) :] == (None, None) for r in after_nodes)
+        assert [r[len(before_edges[0]) :] for r in after_edges] == [(None, None)] * 2
         assert _rows(conn, "SELECT from_port, to_port FROM canvas_edges") == [(None, None)] * 2
         assert _rows(conn, "PRAGMA foreign_key_check") == []
         assert _rows(conn, "PRAGMA integrity_check") == [("ok",)]
@@ -303,4 +350,12 @@ def test_0008_carries_every_row_fk_and_the_trigger(tmp_path: Path) -> None:
 def test_0008_on_a_fresh_database(tmp_path: Path) -> None:
     with open_database(tmp_path / "fresh.sqlite") as db:
         result = db.migrate()
-        assert result.applied[-1] == 8 and result.backups == ()
+        assert 8 in result.applied and result.backups == ()
+
+
+def test_a_source_pointer_cannot_be_cleared_or_set_on_the_wrong_kind(env: Env) -> None:
+    note = env.db.create_node(env.owner, env.paper_id, _node("cn_plain"))
+    for fields in ({"source_page_id": None}, {"source_page_id": "pg_1"}):
+        with pytest.raises(CanvasRejected) as raised:
+            env.db.patch_node(env.owner, note.board_id, "cn_plain", 1, fields)
+        assert raised.value.code == "validation_failed"

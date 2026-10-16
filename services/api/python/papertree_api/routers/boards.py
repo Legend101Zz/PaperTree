@@ -196,7 +196,14 @@ async def patch_node(call: CallerDep, board_id: str, node_id: str, request: Requ
         raise ApiError(
             "stale_version",
             "This note changed somewhere else. The latest version is shown; try again.",
-            extra={"current": _node_wire(result.current)},
+            extra={
+                "current": _node_wire(
+                    result.current,
+                    call.db.notebook_counts(call.db_owner, (result.current,)).get(
+                        result.current.node_id
+                    ),
+                )
+            },
         )
     counts = call.db.notebook_counts(call.db_owner, (result,)).get(result.node_id)
     return JSONResponse(_node_wire(result, counts))

@@ -66,6 +66,8 @@ from .saved_shapes import (
 SHAPES = sorted(BUILDERS)
 #: Every migration on disk, so a later migration (0006+) does not break these checks.
 HEAD = tuple(int(p.name[:4]) for p in sorted(MIGRATIONS_DIR.glob("*.sql")))
+#: What a database at 0004 applies: every migration from 0005 on, whatever lands after 0008.
+SINCE_0005 = tuple(v for v in HEAD if v >= 5)
 #: The runner MODULE: ``papertree_db.migrate`` the attribute is the function, which shadows it.
 migrate_module = importlib.import_module("papertree_db.migrate")
 #: The versions that get a pre-migration copy (0005, 0008, ...), in the order they are written.

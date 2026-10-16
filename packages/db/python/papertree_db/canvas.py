@@ -130,12 +130,19 @@ class Pins:
 #: Which card kind offers which pins (frame 06, DESIGN.md section 5). The one table the API
 #: checks a threaded edge against; a ``group`` (frame) offers none. An edge without ports is
 #: always legal (keyboard linking, and every v0.1 edge).
-#:   claim_out (brass dot): passage, note, explanation, notebook, diagram
-#:   answer_out (brass diamond): explanation
-#:   evidence_in (ring): explanation, note, question, notebook, diagram
-#:   question_in (diamond): question, explanation
+#: Re-derived from reference/06-board-1440.png, card by card. What the frame DRAWS:
+#:   passage (excerpt): ring (evidence in) on the left, brass dot (claim out) on the right
+#:   explanation: ring left, brass dot right, brass diamond (answer out) on the bottom edge
+#:   note: ring left, brass dot right
+#:   question: open diamond (question in) on the top edge
+#:   notebook page: ring left
+#:   diagram: ring left, brass dot right
+#: Pins the frame does NOT draw but the design text (DESIGN.md section 5, the brief) allows, kept
+#: so a legal thread is never refused for want of a drawing: question_in on an explanation,
+#: evidence_in on a question, claim_out on a notebook page. The thread the frame's own picker
+#: shows (diagram claim_out -> passage evidence_in) is why a passage takes an in-pin.
 PIN_TABLE: Final[Mapping[str, Pins]] = {
-    "excerpt": Pins(out=frozenset({"claim_out"})),
+    "excerpt": Pins(out=frozenset({"claim_out"}), into=frozenset({"evidence_in"})),
     "note": Pins(out=frozenset({"claim_out"}), into=frozenset({"evidence_in"})),
     "explanation": Pins(
         out=frozenset({"claim_out", "answer_out"}),
@@ -581,8 +588,9 @@ class CanvasMixin(_Base):
                 if name in fields:
                     # Same rule as create: only its own kind carries one, and never cleared.
                     value = _source_ref(name, fields[name], current["kind"], owner_kind)
+                    if value is None:
+                        raise _bad(f"{name}: a card's source cannot be cleared")
                     if name == "source_page_id":
-                        assert value is not None
                         paper = self._one(
                             "SELECT paper_id FROM canvas_boards "
                             "WHERE owner_id = ? AND board_id = ?",

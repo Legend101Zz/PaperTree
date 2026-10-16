@@ -128,3 +128,20 @@ def test_a_500_card_board_answers_in_one_request(tmp_path: Path) -> None:
         print(f"500-card board GET: {elapsed_ms:.0f} ms; {load.strip()}")
         assert board.status_code == 200 and len(board.json()["nodes"]) == 500
         assert elapsed_ms < 1000
+
+
+def test_a_stale_version_409_carries_the_notebook_counts(tmp_path: Path) -> None:
+    with harness(tmp_path) as h:
+        token = register(h.client, "alice@example.com")
+        paper_id = seed_paper(h.settings, h.client, token, SLUG)
+        made = _send(h, token, paper_id, _node("cn_notebk02", "notebook", source_page_id="pg_1"))
+        board_id = made.json()["board"]["board_id"]
+        url = f"/boards/{board_id}/nodes/cn_notebk02"
+        assert (
+            h.client.patch(url, headers=auth(token), json={"version": 1, "x": 5}).status_code == 200
+        )
+        stale = h.client.patch(url, headers=auth(token), json={"version": 1, "x": 6})
+        assert stale.status_code == 409 and stale.json()["code"] == "stale_version"
+        assert stale.json()["current"]["counts"] == {
+            "quotes": 0, "stickies": 0, "text": 0, "shapes": 0, "strokes": 0,
+        }  # fmt: skip
