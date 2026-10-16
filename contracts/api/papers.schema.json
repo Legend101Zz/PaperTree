@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "PaperTree API contract: papers",
-  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: LibraryPaper, JobSummary, UploadAccepted, JobAccepted, JobStatus, ReparseRequest, ReadingStateUpdate.",
+  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: LibraryPaper, JobSummary, UploadAccepted, JobAccepted, JobStatus, ReparseRequest, ReadingStateUpdate, LibraryLinks, LibraryLink, LibraryReference.",
   "$defs": {
     "JobAccepted": {
       "additionalProperties": false,
@@ -221,6 +221,47 @@
       "title": "JobSummary",
       "type": "object"
     },
+    "LibraryLink": {
+      "additionalProperties": false,
+      "description": "One real link between two of the caller's papers (``GET /library/links``, #194).\n\n``via`` is only ``\"citation\"``: ``\"board\"`` joins the enum when a board can hold a second\npaper. ``matched_by`` is what actually matched, so the UI words it from the field.",
+      "properties": {
+        "from_paper_id": {
+          "type": "string"
+        },
+        "to_paper_id": {
+          "type": "string"
+        },
+        "via": {
+          "const": "citation",
+          "type": "string"
+        },
+        "matched_by": {
+          "enum": ["arxiv_id", "title"],
+          "type": "string"
+        },
+        "reference": {
+          "$ref": "#/$defs/LibraryReference"
+        }
+      },
+      "required": ["from_paper_id", "to_paper_id", "via", "matched_by", "reference"],
+      "title": "LibraryLink",
+      "type": "object"
+    },
+    "LibraryLinks": {
+      "additionalProperties": false,
+      "description": "``GET /library/links``.",
+      "properties": {
+        "links": {
+          "items": {
+            "$ref": "#/$defs/LibraryLink"
+          },
+          "type": "array"
+        }
+      },
+      "required": ["links"],
+      "title": "LibraryLinks",
+      "type": "object"
+    },
     "LibraryPaper": {
       "additionalProperties": false,
       "description": "The row shape used everywhere a paper is listed (§2.2).",
@@ -382,6 +423,23 @@
         "has_summary"
       ],
       "title": "LibraryPaper",
+      "type": "object"
+    },
+    "LibraryReference": {
+      "additionalProperties": false,
+      "description": "The bibliography entry that made a library link: its position and its text.",
+      "properties": {
+        "index": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": ["index", "text"],
+      "title": "LibraryReference",
       "type": "object"
     },
     "ReadingProgress": {

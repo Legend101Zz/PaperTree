@@ -47,6 +47,9 @@ GROUPS: Final[dict[str, tuple[tuple[type[BaseModel], Mode], ...]]] = {
         (s.JobStatus, OUT),
         (s.ReparseRequest, IN),
         (s.ReadingStateUpdate, IN),
+        (s.LibraryLinks, OUT),
+        (s.LibraryLink, OUT),
+        (s.LibraryReference, OUT),
     ),
     "highlights": (
         (s.Highlight, OUT),

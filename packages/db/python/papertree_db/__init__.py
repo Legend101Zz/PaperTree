@@ -73,7 +73,7 @@ from .ids import (
     mint_owner,
     new_id,
 )
-from .library import DISPLAY_NAME_MAX, LibraryRow
+from .library import DISPLAY_NAME_MAX, LibraryRow, LinkReference, LinkSource
 from .migrate import (
     AppliedMigration,
     Migration,
@@ -113,6 +113,8 @@ __all__ = [
     "HighlightRow",
     "HighlightWithAnchors",
     "LibraryRow",
+    "LinkReference",
+    "LinkSource",
     "Migration",
     "MigrationError",
     "MigrationResult",

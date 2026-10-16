@@ -128,6 +128,30 @@ export interface LibraryPaper {
   has_summary: boolean;
 }
 
+/** The bibliography entry behind a library link; `index` is zero-based. */
+export interface LibraryReference {
+  index: number;
+  text: string;
+}
+
+/**
+ * One real link between two of the caller's papers (`GET /library/links`, #194). Citation links
+ * only: `via` gains `'board'` when a board can hold a second paper. Word the label from
+ * `matched_by` ("cites it (matched by title)"), never assume it.
+ */
+export interface LibraryLink {
+  from_paper_id: string;
+  to_paper_id: string;
+  via: 'citation';
+  matched_by: 'arxiv_id' | 'title';
+  reference: LibraryReference;
+}
+
+/** `GET /library/links`. */
+export interface LibraryLinks {
+  links: LibraryLink[];
+}
+
 export interface ResolutionWire {
   generation: number;
   tier: 0 | 1 | 2 | 3 | 4 | 5 | 6;
