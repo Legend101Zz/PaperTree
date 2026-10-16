@@ -130,7 +130,9 @@ git commit --no-verify ...
    must go through the provenance primitives (`PaperText`, `AiText`, …) so the three voices stay apart.
 5. Test behaviour with Testing Library (roles, names, keyboard), not snapshots. Add an axe check for any
    new interactive surface.
-6. Add a dependency only with a line in the PR (or the ADR) saying why it beats writing it.
+6. Check a new component on `/design-system` (`next dev`; a production build needs
+   `NEXT_PUBLIC_PAPERTREE_DESIGN_SYSTEM=on`): add it there in its states.
+7. Add a dependency only with a line in the PR (or the ADR) saying why it beats writing it.
 
 ### Comments
 
