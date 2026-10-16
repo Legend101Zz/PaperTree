@@ -82,5 +82,5 @@ laid lines, the call slip's ruling: `cards.css`'s dark block). `lamplit.spec.ts`
   fainter in the screenshot, behind the board's own scale.
 - The 500-card grid's 40 px gap is narrower than a thread tag, so at 100 % the tag of a short thread hides under
   the next card ("suppor…"): the layout of the seeded data, not of a person's board.
-- `--pt-call-slip-rule` is lit for the board only (inside `.pt-cv`); the shared token in `@papertree/ui` keeps one
-  value for both schemes (its comment says so), so call slips elsewhere are unchanged.
+- Fixed after the review: `--pt-call-slip-rule` is lit in `@papertree/ui`'s dark blocks, so call slips by lamplight
+  read the same on the board, in the reader and in the notebook (it was lit on the board only).

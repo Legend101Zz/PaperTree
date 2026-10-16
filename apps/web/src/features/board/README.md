@@ -194,17 +194,25 @@ has focus (`useUndoKeys`), so a note keeps the browser's own undo of its text.
   position every frame) do not redraw it. A thread is memoised and works out its curve, its marks
   and its head only when an end or the kind moves.
 - **On a big board a card out of view is out of the page**: it is reached by panning, or by Fit
-  all, which shows the whole board again (as glances); Tab walks the cards in view.
+  all, which shows the whole board again (as glances); Tab walks the cards in view. The keyboard
+  thread walk (L) centres the board on a target that is out of the page before focus moves to it,
+  so its name is said and its ring is seen (`useKeyboardLink`). Below the switch the legend's hint
+  is "Zoom in to draw a thread, or press L on a card." (a glance's pins are not targets). While the
+  first fit (or Fit all) is on its way a big board draws glances, so it never draws 500 full cards
+  for a frame first.
 - **The zoom the stylesheet reads** (`--pt-cv-zoom`, the phone's tap targets and the frame's band)
   is published in 0.05 steps inside 20–100 % (`publishedZoom`), since each write restyles every
   card under the stage.
 - **A settled 500-card board makes 0 requests** (nothing above polls or saves on a timer;
   `e2e/v02/board-scale.spec.ts`).
 - **Lamp-lit (09c).** Every colour is a token; the board's own tints (the linen's threads, the
-  index card's red rule and blue ruling, the header's laid lines, the call slip's ruling) are lit
-  by lamplight in `cards.css`'s dark block (09c-board-other.dc.html's values), which follows the
-  three mechanisms of `styles.css`. `lamplit.spec.ts` holds every thread colour and pin to 3:1 and
-  the words on cards, glances, tags and the legend to 4.5:1, in both schemes.
+  index card's red rule and blue ruling, the header's laid lines) are lit by lamplight in
+  `cards.css`'s dark block (09c-board-other.dc.html's values), which follows the three mechanisms
+  of `styles.css`; the call slip's ruling (`--pt-call-slip-rule`) is lit in `@papertree/ui`'s own
+  dark blocks, so a call slip reads the same on the board, in the reader and in the notebook. A
+  glance draws its own edge (`--pt-frame-outline`: by day `--pt-card-edge` is transparent).
+  `lamplit.spec.ts` holds every thread colour, pin and glance edge to 3:1 and the words on cards,
+  glances, tags and the legend to 4.5:1, in both schemes.
 
 ## Data flow
 

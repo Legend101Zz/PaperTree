@@ -44,6 +44,13 @@ describe('the low-zoom switch', () => {
     expect(glanceAt(0.2, false, true)).toBe(true);
   });
 
+  it('draws a big board as glances while its first fit is on its way (review N9)', () => {
+    // Before the fit the zoom is xyflow's default 1: the cards would be drawn in full for nothing.
+    expect(glanceAt(1, false, true, true)).toBe(true);
+    expect(glanceAt(1, false, false, true)).toBe(false);
+    expect(glanceAt(1, true, true, false)).toBe(false);
+  });
+
   it('gives the stylesheet the zoom in 0.05 steps, floored, inside 20–100 %', () => {
     expect(publishedZoom(0.1)).toBe(0.2);
     expect(publishedZoom(0.2)).toBe(0.2);

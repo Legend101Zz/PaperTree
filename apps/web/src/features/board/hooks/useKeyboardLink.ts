@@ -12,7 +12,12 @@
  * THE WALK IS SCOPED TO THE BOARD: it takes keys only from inside the stage and never from a text
  * field, and it ends (saving nothing) when focus leaves the stage, on a press anywhere but a pin
  * (a pin may still finish it by pointer), or when another thread starts.
+ *
+ * On a big board a card out of view is not in the page (`bigBoard`, #215): the walk centres the
+ * board on its target first and moves focus once xyflow has drawn it, so focus, and the name it
+ * announces, always land on a card the reader can see (#215 review S6).
  */
+import { useReactFlow } from '@xyflow/react';
 import {
   useCallback,
   useEffect,
@@ -117,9 +122,31 @@ export function useKeyboardLink(
   const target = walk === null ? null : (walk.targets[walk.index] ?? null);
 
   // Focus follows the highlight, so xyflow pans the board to it and its ring shows.
+  const flow = useReactFlow();
   useEffect(() => {
-    if (target !== null) cardElement(target.id)?.focus();
-  }, [target]);
+    if (target === null) return undefined;
+    const shown = cardElement(target.id);
+    if (shown !== null) {
+      shown.focus();
+      return undefined;
+    }
+    const node = latest.current.nodes.find((n) => n.id === target.id);
+    if (node === undefined) return undefined;
+    const w = node.measured?.width ?? node.width ?? node.data.node.w;
+    const h = node.measured?.height ?? node.height ?? node.data.node.h;
+    void flow.setCenter(node.position.x + w / 2, node.position.y + h / 2, {
+      zoom: flow.getZoom(),
+    });
+    let frame = 0;
+    let tries = 0;
+    const focusWhenDrawn = (): void => {
+      const drawn = cardElement(target.id);
+      if (drawn !== null) drawn.focus();
+      else if ((tries += 1) < 30) frame = requestAnimationFrame(focusWhenDrawn);
+    };
+    frame = requestAnimationFrame(focusWhenDrawn);
+    return () => cancelAnimationFrame(frame);
+  }, [target, flow]);
 
   useEffect(() => {
     const board = stage.current;

@@ -126,7 +126,9 @@ function ZoomVar() {
  */
 function useGlanceZoom(big: boolean): boolean {
   const was = useRef(false);
-  const glance = useStore((state) => glanceAt(state.transform[2], was.current, big));
+  const glance = useStore((state) =>
+    glanceAt(state.transform[2], was.current, big, state.fitViewQueued),
+  );
   was.current = glance;
   return glance;
 }
@@ -321,7 +323,7 @@ function Board({ paperId }: { readonly paperId: string }) {
                     </ReactFlow>
                   </GlanceProvider>
                 </LinkingProvider>
-                {empty ? <EmptyBoard paperId={paperId} /> : <ThreadLegend />}
+                {empty ? <EmptyBoard paperId={paperId} /> : <ThreadLegend glance={glance} />}
                 {link.request === null ? null : (
                   <LinkAsLayer
                     request={link.request}

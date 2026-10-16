@@ -17,8 +17,17 @@ import { PIN_NAMES, type Port } from '../model/pins';
 
 const PINS: readonly Port[] = ['evidence_in', 'question_in', 'claim_out', 'answer_out'];
 
-/** The legend of threads and pins. */
-export function ThreadLegend(): ReactNode {
+/** The hint under the pins, and the one a glance's pins need (they are not targets, #215). */
+export const PIN_HINT = 'Drag from a brass pin to make a thread.';
+export const GLANCE_PIN_HINT = 'Zoom in to draw a thread, or press L on a card.';
+
+/**
+ * The legend of threads and pins.
+ *
+ * @example
+ * <ThreadLegend glance={glance} />
+ */
+export function ThreadLegend({ glance = false }: { readonly glance?: boolean }): ReactNode {
   const isWide = useWide();
   const [open, setOpen] = useState(false);
   return (
@@ -51,7 +60,7 @@ export function ThreadLegend(): ReactNode {
               </li>
             ))}
           </ul>
-          <p className="pt-legend__hint">Drag from a brass pin to make a thread.</p>
+          <p className="pt-legend__hint">{glance ? GLANCE_PIN_HINT : PIN_HINT}</p>
         </div>
       </details>
     </section>

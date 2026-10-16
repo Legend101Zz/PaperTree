@@ -12,6 +12,7 @@ import { toFlowNode, type PtNode } from '../model/flow';
 import { cardRow } from '../model/test-data';
 import { CanvasActionsProvider, GlanceProvider, type CanvasActions } from './BoardContext';
 import { nodeTypes, withGlance } from './cards';
+import { GLANCE_PIN_HINT, PIN_HINT, ThreadLegend } from './ThreadLegend';
 
 import type { ReactNode } from 'react';
 
@@ -82,6 +83,14 @@ describe('cards at low zoom (#215)', () => {
     );
     expect(container.querySelector('[data-glance]')).toBeNull();
     expect(screen.getByRole('button', { name: 'Edit' })).toBeTruthy();
+  });
+
+  it('the legend says how to draw a thread when the pins are not targets (review N7)', () => {
+    const { rerender } = render(<ThreadLegend />);
+    expect(screen.getByText(PIN_HINT)).toBeTruthy();
+    rerender(<ThreadLegend glance />);
+    expect(screen.getByText(GLANCE_PIN_HINT)).toBeTruthy();
+    expect(screen.queryByText(PIN_HINT)).toBeNull();
   });
 
   it('is not drawn again for the moves of its own drag, only for its row or selection', () => {

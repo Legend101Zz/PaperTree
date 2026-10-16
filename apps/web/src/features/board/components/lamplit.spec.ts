@@ -59,6 +59,7 @@ const TEXT: readonly [string, string, string][] = [
   ['--pt-ai-tab-ink', '--pt-ai-slip', 'the AI tab'],
 ];
 const MARKS: readonly [string, string, string][] = [
+  ['--pt-frame-outline', '--pt-linen', 'a glance’s edge'],
   ['--pt-pin-ring', '--pt-call-slip', 'a pin on an index card'],
   ['--pt-pin-ring', '--pt-ai-slip', 'a pin on an AI card'],
   ['--pt-card-edge', '--pt-linen', 'a card’s edge'],
@@ -105,5 +106,7 @@ describe('the lamp-lit board reads (09c, #215)', () => {
     expect(norm(media)).toContain('--pt-bc-linen-h: rgb(255 230 190 / 7%)');
     // The linen's threads are drawn from those tints, never from a fixed colour.
     expect(CARDS).toMatch(/repeating-linear-gradient\(0deg, var\(--pt-bc-linen-h\)/);
+    // A glance draws its own edge (by day the card edge token is transparent, review N8).
+    expect(CARDS).toMatch(/\.pt-bc--glance \{[^}]*inset 0 0 0 2px var\(--pt-frame-outline\)/);
   });
 });

@@ -39,11 +39,13 @@ export function bigBoard(nodes: number): boolean {
  * @param zoom The board's zoom.
  * @param was Whether they were glances before (the band between the two lines keeps it).
  * @param big Whether the board is drawn for scale (`bigBoard`); a smaller one never glances.
+ * @param fitting Whether a fit of the whole board is on its way (the first view, Fit all): its
+ *   zoom is not known yet, and drawing 500 full cards for one frame first is the cost to avoid.
  * @returns True below `GLANCE_BELOW`, false above `FULL_ABOVE`, `was` between.
  */
-export function glanceAt(zoom: number, was: boolean, big = true): boolean {
+export function glanceAt(zoom: number, was: boolean, big = true, fitting = false): boolean {
   if (!big) return false;
-  if (zoom < GLANCE_BELOW) return true;
+  if (fitting || zoom < GLANCE_BELOW) return true;
   if (zoom > FULL_ABOVE) return false;
   return was;
 }

@@ -5,13 +5,15 @@
  * the reader's whole-block source anchor minted by `papertree_anchoring.capture_anchor` over it) in
  * GAP-A3 §4.1's 25 × 20 grid at a 300 × 200 pitch, and 167 `supports` threads. Asserted: the first
  * view draws the cards as glances (kind and words, below the low-zoom switch); a settled 500-card
- * board makes 0 requests in 15 s; dragging one card keeps a frame budget with a LOOSE bound (p95
- * under 250 ms: this box is shared and loaded, #259/#270, so the numbers are logged, not raced).
+ * board makes 0 requests in 15 s; dragging one card moves it (the server agrees) and keeps a frame
+ * budget with a LOOSE bound (p95 under 250 ms: this box is shared and loaded, #259/#270, so the
+ * numbers are logged, not raced); at about 100 %, where only the cards in view are in the page, the
+ * keyboard thread walk keeps focus on a card in view at every step (#215 review S6).
  */
 import { execSync } from 'node:child_process';
 
 import { expect, test } from '../harness/test';
-import { api, python, seedPaper, tokenInit, userId } from '../s7/support';
+import { api, boardTool, getBoard, python, seedPaper, tokenInit, userId } from '../s7/support';
 
 import type { Page } from '@playwright/test';
 
@@ -153,5 +155,44 @@ test('a settled 500-card board makes 0 requests, and one card drags inside a fra
   test.info().annotations.push({ type: 'drag frames (ms)', description: JSON.stringify(drag) });
   expect(drag.frames).toBeGreaterThan(5);
   expect(drag.p95).toBeLessThan(250);
+  // The drag reached the card: the server has it somewhere else now (it started at 3600, 2000).
+  const moved = async () =>
+    (await getBoard(stack.apiUrl, token, paperId)).nodes.find((n) => n.node_id === ids[262]);
+  await expect.poll(async () => (await moved())?.x).toBeGreaterThan(3600);
+
+  // ── at about 100 %: the keyboard thread walk never leaves focus on a card out of view ──
+  for (let i = 0; i < 9; i += 1) await (await boardTool(page, 'Zoom in')).click();
+  await page.waitForTimeout(800);
+  const from = await page.evaluate(() => {
+    const stage = document.querySelector('[data-testid="canvas-stage"]')!.getBoundingClientRect();
+    const inside = Array.from(document.querySelectorAll<HTMLElement>('.react-flow__node')).find(
+      (n) => {
+        const r = n.getBoundingClientRect();
+        return (
+          r.left > stage.left &&
+          r.right < stage.right &&
+          r.top > stage.top + 60 &&
+          r.bottom < stage.bottom - 120
+        );
+      },
+    );
+    return inside?.getAttribute('data-id') ?? null;
+  });
+  expect(from, 'a card fully in view at about 100 %').not.toBeNull();
+  await page.locator(`.react-flow__node[data-id="${from!}"]`).focus();
+  await page.keyboard.press('l');
+  const focusIs = () =>
+    page.evaluate(() => {
+      const el = document.activeElement;
+      if (el === null || !el.classList.contains('react-flow__node')) return 'not a card';
+      const r = el.getBoundingClientRect();
+      const seen = r.right > 0 && r.left < innerWidth && r.bottom > 0 && r.top < innerHeight;
+      return seen ? 'a card in view' : 'a card out of view';
+    });
+  for (let i = 0; i < 8; i += 1) {
+    await page.keyboard.press('Tab');
+    await expect.poll(focusIs, { message: `walk step ${String(i + 1)}` }).toBe('a card in view');
+  }
+  await page.keyboard.press('Escape');
   await context.close();
 });
