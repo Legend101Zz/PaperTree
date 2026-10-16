@@ -1,8 +1,8 @@
 /**
  * A thread's messages as the panel holds them, and the merge of the live stream with the stored
  * thread (#202). While an answer streams, the live state is the truth; once it settles, the stored
- * detail (with locators and coverage) replaces it under the SAME key, so nothing remounts, flickers
- * or appears twice. Pure; the controller (`useExplainActions`) owns the state, `useThreads` the reads.
+ * detail (coverage, usage, times, the verdicts) replaces it under the SAME key, so nothing remounts,
+ * flickers or appears twice; the markers keep the live citations they were drawn from (#252). Pure; the controller (`useExplainActions`) owns the state, `useThreads` the reads.
  */
 import type { Failure } from '@/components/explain/errors';
 import type { Citation, Message, MessageCoverage, RunSummary } from '@/lib/api/types';
@@ -111,17 +111,52 @@ function shownStored(stored: readonly Message[]): ThreadMessage[] {
 /**
  * The live message or its stored copy, whichever is the truth now. Live while either side is
  * still streaming (a detail fetched mid-stream is stale); stored once both have settled, under the
- * live key, keeping the live-only facts (Stop was pressed; the question it answers).
+ * live key, keeping the live-only facts (Stop was pressed; the question it answers; the citations
+ * the markers on screen were drawn from).
  *
  * @param live The message on screen.
  * @param stored The same message from the server.
  * @returns The message to keep.
  */
+/**
+ * The citations a settled answer keeps. The markers on screen were drawn from the live ones: keep
+ * those objects, so no marker, number or tab changes under the reader (#252), but take each one's
+ * verdict (`supported`) from the stored record, matched by `citation_id`, so a "not verified" is
+ * never lost (it may appear after `done`: that is the honest direction). The stored locators (a
+ * finer "¶") show the next time the thread is opened. An answer with no live citations (stopped
+ * before they came) takes the stored ones.
+ *
+ * @param live The citations the markers were drawn from.
+ * @param stored The stored copy's citations.
+ * @returns The citations to keep.
+ */
+function shownCitations(
+  live: readonly Citation[],
+  stored: readonly Citation[],
+): readonly Citation[] {
+  if (live.length === 0) return stored;
+  const byId = new Map(stored.map((c) => [c.citation_id, c] as const));
+  const same = byId.size === live.length && live.every((c) => byId.has(c.citation_id));
+  if (!same && process.env.NODE_ENV === 'development') {
+    // Unreachable on today's write path (the API persists, then sends, the same rows); say so if
+    // it ever happens, since the readout (stored coverage) and the markers (live) would disagree.
+    console.warn('explain: the live and stored citations of an answer differ', {
+      live: live.map((c) => c.citation_id),
+      stored: stored.map((c) => c.citation_id),
+    });
+  }
+  return live.map((c) => {
+    const verdict = byId.get(c.citation_id)?.supported;
+    return verdict === undefined || verdict === c.supported ? c : { ...c, supported: verdict };
+  });
+}
+
 function settle(live: ThreadMessage, stored: ThreadMessage): ThreadMessage {
   if (live.status === 'streaming' || stored.status === 'streaming') return live;
   return {
     ...stored,
     key: live.key,
+    citations: shownCitations(live.citations, stored.citations),
     stopped: live.stopped,
     question: live.role === 'assistant' && live.question !== '' ? live.question : stored.question,
   };

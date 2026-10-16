@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import { buildExchanges } from './exchange';
 import { fromStored, mergeStored, type ThreadMessage } from './messages';
 import { GOLDEN } from '../../../../test/fixtures/attention-thread';
 
@@ -22,12 +23,60 @@ function live(message: Message, over: Partial<ThreadMessage> = {}): ThreadMessag
 
 describe('mergeStored: the live stream and the stored thread', () => {
   it('a settled first answer takes the stored copy under its live key; the stored ask appears', () => {
-    const merged = mergeStored([live(answer1)], [ask1, answer1]);
+    const shown = live(answer1);
+    const merged = mergeStored([shown], [ask1, answer1]);
     expect(merged.map((m) => m.key)).toEqual([`s:${ask1.message_id}`, 'live-1']);
     expect(merged[0]?.text).toBe('Explain this passage.');
-    expect(merged[1]?.citations[0]?.locator?.para_index).toBe(1);
     expect(merged[1]?.coverage?.citations).toBe(11);
     expect(merged[1]?.createdAt).toBe(answer1.created_at);
+    // The markers on screen were drawn from the live citations: they are kept, so no tab changes
+    // under the reader (#252); the stored locators show the next time the thread is opened.
+    expect(merged[1]?.citations).toHaveLength(shown.citations.length);
+    merged[1]?.citations.forEach((c, i) => expect(c).toBe(shown.citations[i]));
+  });
+
+  it('the stored verdict reaches the live markers: "not verified" is never lost (#252)', () => {
+    const shown = live(answer1); // the live citations say supported: true
+    const verdicts = {
+      ...answer1,
+      citations: answer1.citations.map((c) => ({ ...c, supported: false })),
+    };
+    const merged = mergeStored([shown], [ask1, verdicts]);
+    // Same objects where nothing changed is not required; same passages, numbers and tabs are.
+    expect(merged[1]?.citations.map((c) => [c.citation_id, c.supported, c.locator])).toEqual(
+      shown.citations.map((c) => [c.citation_id, false, undefined]),
+    );
+    const before = buildExchanges([fromStored(ask1, ''), shown], null)[0]?.model;
+    const after = buildExchanges(merged, null)[0]?.model;
+    expect(before?.trace.map((r) => r.status)).toEqual(['cited', 'cited', 'cited', 'cited']);
+    expect(after?.trace.map((r) => [r.n, r.page, r.para, r.status])).toEqual(
+      before?.trace.map((r) => [r.n, r.page, r.para, 'not-verified']),
+    );
+    expect([...(after?.markers.values() ?? [])].every((m) => m.notVerified)).toBe(true);
+  });
+
+  it('warns in development, and only there, when the live and stored citations differ', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const shown = live(answer1);
+    const fewer = { ...answer1, citations: answer1.citations.slice(0, 2) };
+    mergeStored([shown], [ask1, fewer]);
+    expect(warn).not.toHaveBeenCalled();
+    vi.stubEnv('NODE_ENV', 'development');
+    const merged = mergeStored([shown], [ask1, fewer]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    // The markers on screen still do not move.
+    expect(merged[1]?.citations.map((c) => c.citation_id)).toEqual(
+      shown.citations.map((c) => c.citation_id),
+    );
+    vi.unstubAllEnvs();
+    warn.mockRestore();
+  });
+
+  it('a settled answer that showed no citations live takes the stored ones (#252)', () => {
+    const stopped = live(answer1, { citations: [], stopped: true, status: 'aborted' });
+    const merged = mergeStored([stopped], [ask1, { ...answer1, status: 'aborted' }]);
+    expect(merged[1]?.citations[0]?.locator?.para_index).toBe(1);
+    expect(merged[1]?.stopped).toBe(true);
   });
 
   it('keeps the live message while either copy is still streaming', () => {

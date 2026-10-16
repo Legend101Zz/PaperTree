@@ -193,9 +193,8 @@ describe('review fixes (#202 review 1.1, 1.3, 1.6, 1.8)', () => {
   it('a follow-up’s live citations borrow the tabs the thread already placed: no swap', () => {
     const [first, ask2, second] = goldenMessages().slice(1) as ThreadMessage[];
     const live = { ...unlocated(second as ThreadMessage), coverage: null };
-    const model = buildExchanges([first as ThreadMessage, ask2 as ThreadMessage, live], null, {
-      settling: true,
-    })[1]?.model;
+    const model = buildExchanges([first as ThreadMessage, ask2 as ThreadMessage, live], null)[1]
+      ?.model;
     expect(model?.live).toBe(false);
     expect(model?.trace.map((r) => [r.n, r.page, r.para, r.where])).toEqual([
       [1, 1, 1, 'Abstract'],
@@ -204,16 +203,12 @@ describe('review fixes (#202 review 1.1, 1.3, 1.6, 1.8)', () => {
     ]);
   });
 
-  it('a passage placed nowhere yet is held while its stored read is on the way, then final', () => {
+  it('a settled live answer shows its markers at once, with the page alone where nothing placed it', () => {
+    // Nothing is held (#252): a marker shown at `done` is never hidden again.
     const fresh = { ...unlocated(answer), coverage: null };
-    const held = buildExchanges([fresh], null, { settling: true });
-    expect(held[0]?.model?.live).toBe(true);
-    expect(held[0]?.model?.trace).toEqual([]);
-    expect(held[0]?.model?.handleNumbers.size).toBe(0);
-    expect(held[0]?.model?.uncited).toEqual([]);
-    // The read failed or the passage has no locator at all: show what is known, once.
-    const shown = buildExchanges([fresh], null, { settling: false })[0]?.model;
+    const shown = buildExchanges([fresh], null)[0]?.model;
     expect(shown?.live).toBe(false);
+    expect(shown?.handleNumbers.size).toBe(4);
     expect(shown?.trace.map((r) => [r.page, r.para])).toEqual([
       [1, null],
       [2, null],

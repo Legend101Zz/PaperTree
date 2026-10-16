@@ -86,7 +86,6 @@ export function AnswerSlip({
   ...lights
 }: AnswerSlipProps): ReactNode {
   const streaming = answer.status === 'streaming';
-  // A held answer (`AnswerModel.live`) has no markers in its model: nothing to hold back here.
   const ctx: MarkerHandlers = {
     ...lights,
     handleNumbers: model?.handleNumbers ?? new Map(),
