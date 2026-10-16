@@ -85,6 +85,54 @@ export function canConnect(from: PinEnd, to: PinEnd): boolean {
 }
 
 /**
+ * Hidden handles every card and frame carries, so a stored thread whose pins cannot be named (one
+ * that leaves a question card, or touches a frame, saved before pins existed) is still drawn and
+ * stays selectable. Never offered for a new thread.
+ */
+export const FALLBACK_OUT = 'any_out';
+/** The hidden in-handle (see `FALLBACK_OUT`). */
+export const FALLBACK_IN = 'any_in';
+
+/**
+ * The pins a thread made without any (the toolbar's Link) runs between: the source kind's first
+ * out-pin and the target kind's first in-pin.
+ *
+ * @param fromKind The source card's kind.
+ * @param toKind The target card's kind.
+ * @returns The two pins, or null when the cards offer no such pair (the server's refusal).
+ */
+export function resolvePorts(
+  fromKind: CanvasNode['kind'],
+  toKind: CanvasNode['kind'],
+): { readonly from_port: FromPort; readonly to_port: ToPort } | null {
+  const from = PIN_TABLE[fromKind].out[0];
+  const to = PIN_TABLE[toKind].into[0];
+  return from === undefined || to === undefined ? null : { from_port: from, to_port: to };
+}
+
+/**
+ * The handles a stored thread is drawn between: its own pins, else the pins `resolvePorts` would
+ * pick, else the hidden fallback handles, so every stored thread draws.
+ *
+ * @param edge The thread's stored pins.
+ * @param fromKind The source card's kind, when known.
+ * @param toKind The target card's kind, when known.
+ * @returns The source and target handle ids.
+ */
+export function edgeHandles(
+  edge: { readonly from_port: FromPort | null; readonly to_port: ToPort | null },
+  fromKind?: CanvasNode['kind'],
+  toKind?: CanvasNode['kind'],
+): { readonly sourceHandle: string; readonly targetHandle: string } {
+  const from = fromKind === undefined ? undefined : PIN_TABLE[fromKind].out[0];
+  const to = toKind === undefined ? undefined : PIN_TABLE[toKind].into[0];
+  return {
+    sourceHandle: edge.from_port ?? from ?? FALLBACK_OUT,
+    targetHandle: edge.to_port ?? to ?? FALLBACK_IN,
+  };
+}
+
+/**
  * The refusal as a sentence for the notice line.
  *
  * @returns "That pin does not take that thread."

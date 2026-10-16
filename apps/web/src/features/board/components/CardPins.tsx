@@ -12,8 +12,17 @@
  */
 import { Handle, Position } from '@xyflow/react';
 
-import { PIN_NAMES, PIN_SIDE, PIN_TABLE, canConnect, isOutPort, type Port } from '../model/pins';
-import { useCanvasActions } from './BoardContext';
+import {
+  FALLBACK_IN,
+  FALLBACK_OUT,
+  PIN_NAMES,
+  PIN_SIDE,
+  PIN_TABLE,
+  canConnect,
+  isOutPort,
+  type Port,
+} from '../model/pins';
+import { useLinking } from './BoardContext';
 
 import type { KeyboardEvent, ReactNode } from 'react';
 import type { CanvasNode } from '@/lib/api/types';
@@ -39,15 +48,41 @@ export interface CardPinsProps {
   readonly kind: CanvasNode['kind'];
 }
 
-/** Every pin a card kind offers, on the side it sits. */
+/**
+ * The two hidden handles every card and frame carries, so a stored thread whose pins cannot be
+ * named still draws (`edgeHandles`). Not connectable, not focusable, not announced.
+ */
+export function FallbackHandles(): ReactNode {
+  return (
+    <>
+      <Handle
+        id={FALLBACK_OUT}
+        type="source"
+        position={Position.Right}
+        isConnectable={false}
+        className="pt-pin-fallback"
+        aria-hidden="true"
+      />
+      <Handle
+        id={FALLBACK_IN}
+        type="target"
+        position={Position.Left}
+        isConnectable={false}
+        className="pt-pin-fallback"
+        aria-hidden="true"
+      />
+    </>
+  );
+}
+
+/** Every pin a card kind offers, on the side it sits, and the hidden fallback handles. */
 export function CardPins({ nodeId, kind }: CardPinsProps): ReactNode {
-  const { linking } = useCanvasActions();
+  const linking = useLinking();
   const pins: readonly Port[] = [...PIN_TABLE[kind].into, ...PIN_TABLE[kind].out];
-  return pins.map((port) => {
+  const drawn = pins.map((port) => {
     const out = isOutPort(port);
     const lit =
       linking !== null &&
-      linking !== undefined &&
       linking.nodeId !== nodeId &&
       canConnect({ kind: linking.kind, port: linking.port }, { kind, port });
     return (
@@ -68,4 +103,10 @@ export function CardPins({ nodeId, kind }: CardPinsProps): ReactNode {
       />
     );
   });
+  return (
+    <>
+      {drawn}
+      <FallbackHandles />
+    </>
+  );
 }

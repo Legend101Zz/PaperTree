@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { expect, test } from '../harness/test';
-import { api, getBoard, recordApi, seedPaper, shotPath, tokenInit } from '../s7/support';
+import { api, clickEdge, getBoard, recordApi, seedPaper, shotPath, tokenInit } from '../s7/support';
 
 import type { Page } from '@playwright/test';
 
@@ -134,5 +134,14 @@ test('cards, pins and a thread that persists with its ports', async ({ browser, 
   const edge = page.locator('.react-flow__edge');
   await expect(edge).toHaveAttribute('data-id', /^ce_/);
   await page.screenshot({ path: shot('b02-thread-after-reload-1440.png') });
+
+  // The legend is a key, not a control: a click on it reaches the board and deselects.
+  await clickEdge(page);
+  const linkBar = page.getByRole('group', { name: 'Selected link' });
+  await expect(linkBar).toBeVisible();
+  const legend = await page.getByRole('region', { name: 'Legend' }).boundingBox();
+  expect(legend).not.toBeNull();
+  await page.mouse.click(legend!.x + legend!.width - 40, legend!.y + legend!.height / 2);
+  await expect(linkBar).toBeHidden();
   await context.close();
 });

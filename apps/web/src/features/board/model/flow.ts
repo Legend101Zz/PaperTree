@@ -7,6 +7,7 @@
  */
 import { type Edge, type Node } from '@xyflow/react';
 
+import { edgeHandles } from './pins';
 import { threadInfo } from './threads';
 
 import type { CanvasEdge, CanvasNode, EdgeKind } from '@/lib/api/types';
@@ -149,20 +150,24 @@ export function withPageTitles(
 }
 
 /**
- * A wire link as an xyflow edge, drawn between the pins it was made on. A link with no pins (a
- * keyboard link, every v0.1 link) joins each card's first out-pin and first in-pin.
+ * A wire link as an xyflow edge, drawn between the pins it was made on. A link with no pins (every
+ * v0.1 link) joins each card's first out-pin and first in-pin, or the hidden fallback handles
+ * where a card has none (`edgeHandles`), so every stored thread is drawn.
  *
  * @param edge The server row.
+ * @param kinds The kinds of the two cards, when known.
  * @returns The xyflow edge.
  */
-export function toFlowEdge(edge: CanvasEdge): PtEdge {
+export function toFlowEdge(
+  edge: CanvasEdge,
+  kinds: { readonly from?: CanvasNode['kind']; readonly to?: CanvasNode['kind'] } = {},
+): PtEdge {
   return {
     id: edge.edge_id,
     type: 'thread',
     source: edge.from_node_id,
     target: edge.to_node_id,
-    sourceHandle: edge.from_port,
-    targetHandle: edge.to_port,
+    ...edgeHandles(edge, kinds.from, kinds.to),
     ariaLabel: `${edgeText(edge)} thread`,
     data: { edge },
   };

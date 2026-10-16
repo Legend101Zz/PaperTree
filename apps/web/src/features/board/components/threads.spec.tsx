@@ -7,18 +7,30 @@ import {
   screen,
   within,
 } from '@testing-library/react';
-import { Position, ReactFlowProvider, type EdgeProps, type NodeProps } from '@xyflow/react';
+import {
+  Position,
+  ReactFlowProvider,
+  useStoreApi,
+  type EdgeProps,
+  type NodeProps,
+} from '@xyflow/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useThreadDrawing } from '../hooks/useThreadDrawing';
 import { EDGE_KINDS, toFlowEdge, toFlowNode, type PtEdge, type PtNode } from '../model/flow';
 import { cardRow } from '../model/test-data';
-import { CanvasActionsProvider, type CanvasActions } from './BoardContext';
+import {
+  CanvasActionsProvider,
+  LinkingProvider,
+  type CanvasActions,
+  type LinkStart,
+} from './BoardContext';
 import { PassageCard } from './cards/PassageCard';
 import { ThreadEdge } from './ThreadEdge';
 import { ThreadLegend } from './ThreadLegend';
 
 import type { CanvasEdge, EdgeKind } from '@/lib/api/types';
+import type { ReactNode } from 'react';
 
 // The tag is portalled into xyflow's label layer, which only a mounted <ReactFlow> has.
 vi.mock('@xyflow/react', async (original) => ({
@@ -69,8 +81,7 @@ function cueSignature(root: Element): string {
   return JSON.stringify({
     dash: line.style.strokeDasharray,
     width: line.style.strokeWidth,
-    marks: root.querySelectorAll('.pt-thread__mark').length > 0,
-    chevron: root.querySelector('.pt-thread__mark')?.getAttribute('d'),
+    mark: root.querySelector('.pt-thread__mark')?.getAttribute('d') ?? null,
     doubled: root.querySelector('.pt-thread__inner') !== null,
     arrow: root.querySelector('.pt-thread__head') !== null,
   });
@@ -118,37 +129,42 @@ describe('the seven threads', () => {
 });
 
 describe('the brass port pins', () => {
-  const actions = (linking: CanvasActions['linking'] = null): CanvasActions => ({
+  const ctx: CanvasActions = {
     editingId: null,
     setEditingId: vi.fn(),
     commitBody: vi.fn(),
     commitTitle: vi.fn(),
     commitSize: vi.fn(),
-    linking,
-  });
-  const mountPassage = (ctx: CanvasActions) => {
+  };
+  const mountPassage = (linking: LinkStart | null = null) => {
     const node = toFlowNode(cardRow('excerpt', { body: 'A passage.' }), 'ppr_1');
     return render(
       <ReactFlowProvider>
         <CanvasActionsProvider value={ctx}>
-          <PassageCard {...(node as unknown as NodeProps<PtNode>)} />
+          <LinkingProvider value={linking}>
+            <PassageCard {...(node as unknown as NodeProps<PtNode>)} />
+          </LinkingProvider>
         </CanvasActionsProvider>
       </ReactFlowProvider>,
     );
   };
 
   it('are named buttons with the pin ids the server knows', () => {
-    mountPassage(actions());
+    const { container } = mountPassage();
     const out = screen.getByRole('button', { name: 'claim out' });
     const into = screen.getByRole('button', { name: 'evidence in' });
     expect(out.getAttribute('data-handleid')).toBe('claim_out');
     expect(into.getAttribute('data-handleid')).toBe('evidence_in');
     expect(out.getAttribute('tabindex')).toBe('0');
     expect(screen.queryByRole('button', { name: 'answer out' })).toBeNull();
+    // The hidden fallback handles that keep a pinless stored thread drawn: never a control.
+    const fallback = [...container.querySelectorAll('.pt-pin-fallback')];
+    expect(fallback.map((h) => h.getAttribute('data-handleid'))).toEqual(['any_out', 'any_in']);
+    for (const h of fallback) expect(h.getAttribute('aria-hidden')).toBe('true');
   });
 
   it('light the open pins a thread being drawn from another card can land on', () => {
-    mountPassage(actions({ nodeId: 'cn_other', kind: 'explanation', port: 'answer_out' }));
+    mountPassage({ nodeId: 'cn_other', kind: 'explanation', port: 'answer_out' });
     expect(screen.getByRole('button', { name: 'evidence in' }).getAttribute('data-lit')).toBe(
       'true',
     );
@@ -158,14 +174,14 @@ describe('the brass port pins', () => {
   });
 
   it('do not light on the card the thread leaves from', () => {
-    mountPassage(actions({ nodeId: 'cn_excerpt', kind: 'excerpt', port: 'claim_out' }));
+    mountPassage({ nodeId: 'cn_excerpt', kind: 'excerpt', port: 'claim_out' });
     expect(screen.getByRole('button', { name: 'evidence in' }).getAttribute('data-lit')).toBe(
       'false',
     );
   });
 
   it('press like a click on Enter (xyflow’s click-to-connect)', () => {
-    mountPassage(actions());
+    mountPassage();
     const pin = screen.getByRole('button', { name: 'claim out' });
     const click = vi.fn();
     pin.addEventListener('click', click);
@@ -179,9 +195,19 @@ describe('drawing a thread', () => {
     toFlowNode(cardRow('excerpt', { node_id: 'cn_p' }), 'ppr_1'),
     toFlowNode(cardRow('question', { node_id: 'cn_q' }), 'ppr_1'),
   ];
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <ReactFlowProvider>{children}</ReactFlowProvider>
+  );
+  const drawing = () =>
+    renderHook(() => ({ d: useThreadDrawing(nodes), store: useStoreApi() }), { wrapper });
 
   it('refuses a pin that does not take the thread, with the server’s sentence', () => {
-    const { result } = renderHook(() => useThreadDrawing(nodes));
+    const { result: hook } = drawing();
+    const result = {
+      get current() {
+        return hook.current.d;
+      },
+    };
     const bad = {
       source: 'cn_q',
       target: 'cn_p',
@@ -205,7 +231,12 @@ describe('drawing a thread', () => {
   });
 
   it('takes a good drop and remembers both pins for the save', () => {
-    const { result } = renderHook(() => useThreadDrawing(nodes));
+    const { result: hook } = drawing();
+    const result = {
+      get current() {
+        return hook.current.d;
+      },
+    };
     const good = {
       source: 'cn_p',
       target: 'cn_q',
@@ -220,6 +251,79 @@ describe('drawing a thread', () => {
       fromPort: 'claim_out',
       toPort: 'question_in',
     });
+  });
+});
+
+describe('click-to-connect and the toolbar Link', () => {
+  const nodes = [
+    toFlowNode(cardRow('excerpt', { node_id: 'cn_p' }), 'ppr_1'),
+    toFlowNode(cardRow('question', { node_id: 'cn_q' }), 'ppr_1'),
+  ];
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <ReactFlowProvider>{children}</ReactFlowProvider>
+  );
+  const drawing = () =>
+    renderHook(() => ({ d: useThreadDrawing(nodes), store: useStoreApi() }), { wrapper });
+  const pin = (nodeId: string, port: string) => {
+    const el = document.createElement('div');
+    el.className = 'react-flow__handle';
+    el.setAttribute('data-nodeid', nodeId);
+    el.setAttribute('data-handleid', port);
+    return { target: el };
+  };
+  const start = { nodeId: 'cn_p', handleId: 'claim_out', handleType: 'source' as const };
+
+  it('Escape cancels a started click-to-connect and puts the pins out', () => {
+    const { result } = drawing();
+    act(() => {
+      result.current.store.setState({
+        connectionClickStartHandle: { nodeId: 'cn_p', type: 'source', id: 'claim_out' },
+      });
+      result.current.d.flowProps.onClickConnectStart(null, start);
+    });
+    expect(result.current.d.linking).not.toBeNull();
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(result.current.d.linking).toBeNull();
+    expect(result.current.store.getState().connectionClickStartHandle).toBeNull();
+  });
+
+  it('a click on the empty board cancels it too', () => {
+    const { result } = drawing();
+    act(() => result.current.d.flowProps.onClickConnectStart(null, start));
+    act(() => result.current.d.flowProps.onPaneClick());
+    expect(result.current.d.linking).toBeNull();
+  });
+
+  it('a refused keyboard link says so, a good one does not', () => {
+    const { result } = drawing();
+    act(() => result.current.d.flowProps.onClickConnectStart(null, start));
+    act(() =>
+      result.current.d.flowProps.onClickConnectEnd(pin('cn_p', 'evidence_in'), {} as never),
+    );
+    expect(result.current.d.refusal).toBe('That pin does not take that thread.');
+    act(() => result.current.d.dismissRefusal());
+    act(() => result.current.d.flowProps.onClickConnectStart(null, start));
+    act(() =>
+      result.current.d.flowProps.onClickConnectEnd(pin('cn_q', 'question_in'), {} as never),
+    );
+    expect(result.current.d.refusal).toBeNull();
+  });
+
+  it('Link takes its pins from the table, and refuses a card with no out-pin', () => {
+    const { result } = drawing();
+    act(() => result.current.d.link('cn_p', 'cn_q'));
+    expect(result.current.d.pending).toEqual({
+      from: 'cn_p',
+      to: 'cn_q',
+      fromPort: 'claim_out',
+      toPort: 'evidence_in',
+    });
+    act(() => result.current.d.setPending(null));
+    act(() => result.current.d.link('cn_q', 'cn_p'));
+    expect(result.current.d.pending).toBeNull();
+    expect(result.current.d.refusal).toBe('That pin does not take that thread.');
   });
 });
 

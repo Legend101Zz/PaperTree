@@ -3058,28 +3058,11 @@ span.pt-paper .pt-paper__cite {
   max-block-size: 16px;
 }
 
-.pt-cv .react-flow__marker path,
-.pt-cv .react-flow__arrowhead polyline {
-  fill: var(--pt-ink-muted);
-  stroke: var(--pt-ink-muted);
-}
-
 .pt-cv .react-flow .react-flow__node:focus-visible,
 .pt-cv .react-flow .react-flow__node.selectable:focus-visible {
   outline: 2px solid var(--pt-focus);
   outline-offset: 2px;
   border-radius: var(--pt-radius-panel);
-}
-
-.pt-cv .react-flow .react-flow__edge:focus-visible .pt-cv-edge {
-  stroke: var(--pt-focus);
-  stroke-width: 3;
-}
-
-.pt-cv .react-flow__edge.selected .pt-cv-edge,
-.pt-cv .react-flow__edge:focus .pt-cv-edge {
-  stroke: var(--pt-accent);
-  stroke-width: 2.5;
 }
 
 .pt-cv-node {
@@ -3131,20 +3114,6 @@ span.pt-paper .pt-paper__cite {
   outline: 2px solid var(--pt-focus);
 }
 
-/* Handles: a small visible dot with a 28 px hit area, so a finger can start a link. */
-.pt-cv .pt-cv-handle {
-  inline-size: 12px;
-  block-size: 12px;
-  border: 2px solid var(--pt-ground-raised);
-  background: var(--pt-accent);
-}
-
-.pt-cv .pt-cv-handle::after {
-  content: '';
-  position: absolute;
-  inset: -10px;
-}
-
 .pt-cv .pt-cv-resize {
   inline-size: 14px;
   block-size: 14px;
@@ -3159,29 +3128,6 @@ span.pt-paper .pt-paper__cite {
 
 .pt-cv .react-flow__edgelabel-renderer {
   z-index: 100;
-}
-
-.pt-cv-edge-label {
-  position: absolute;
-  max-inline-size: 14rem;
-  padding: 2px 8px;
-  overflow: hidden;
-  font-family: var(--pt-font-ui);
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--pt-ink);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  background: var(--pt-ground-raised);
-  border: 1px solid var(--pt-rule);
-  border-radius: 999px;
-  /* The label never covers a card's own buttons; the edge is selected on its line. */
-  pointer-events: none;
-}
-
-.pt-cv-edge-label[data-selected='true'] {
-  color: var(--pt-accent);
-  border-color: var(--pt-accent);
 }
 
 .pt-cv-scrim {

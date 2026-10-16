@@ -125,30 +125,50 @@ export function pointAt(c: ThreadCurve, t: number): Point & { readonly angle: nu
   };
 }
 
-/**
- * Where the cue marks go: about every `spacing` px along the curve, clear of both pins.
- *
- * @param c The curve.
- * @param spacing The distance between marks, in board px.
- * @returns The `t` of each mark, in order.
- */
-export function marksAlong(c: ThreadCurve, spacing: number): number[] {
-  const steps = 48;
+/** The curve's arc length, sampled: cumulative px at each of `STEPS` equal steps of `t`. */
+const STEPS = 48;
+function arcTable(c: ThreadCurve): number[] {
   const lengths = [0];
   let prev = pointAt(c, 0);
-  for (let i = 1; i <= steps; i += 1) {
-    const next = pointAt(c, i / steps);
+  for (let i = 1; i <= STEPS; i += 1) {
+    const next = pointAt(c, i / STEPS);
     lengths.push(lengths[i - 1]! + Math.hypot(next.x - prev.x, next.y - prev.y));
     prev = next;
   }
-  const total = lengths[steps]!;
-  const out: number[] = [];
-  for (let s = spacing; s < total - spacing / 2; s += spacing) {
-    const i = lengths.findIndex((l) => l >= s);
-    const t = i / steps;
-    if (t > 0.08 && t < 0.92) out.push(t);
-  }
-  return out;
+  return lengths;
+}
+
+/**
+ * The curve's length in px (sampled; close enough to place marks).
+ *
+ * @param c The curve.
+ * @returns Its length.
+ */
+export function curveLength(c: ThreadCurve): number {
+  return arcTable(c)[STEPS]!;
+}
+
+/**
+ * Where marks placed at fractions of the curve's LENGTH fall in `t`, interpolated within each
+ * sampled step so two marks never collapse onto one point on a long thread.
+ *
+ * @param c The curve.
+ * @param fractions Fractions of the length, from `markPositions`.
+ * @returns The `t` of each mark, in order.
+ */
+export function tAtFractions(c: ThreadCurve, fractions: readonly number[]): number[] {
+  const lengths = arcTable(c);
+  const total = lengths[STEPS]!;
+  return fractions.map((f) => {
+    const s = f * total;
+    const i = Math.max(
+      1,
+      lengths.findIndex((l) => l >= s),
+    );
+    const a = lengths[i - 1]!;
+    const b = lengths[i]!;
+    return (i - 1 + (b > a ? (s - a) / (b - a) : 0)) / STEPS;
+  });
 }
 
 /**

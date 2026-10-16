@@ -1,11 +1,12 @@
-import { THREAD_KINDS } from '@papertree/ui';
+import { THREAD_KINDS, THREAD_LINES, markPositions } from '@papertree/ui';
 import { describe, expect, it } from 'vitest';
 
 import { EDGE_KINDS } from './flow';
 import {
+  curveLength,
   curvePath,
-  marksAlong,
   pointAt,
+  tAtFractions,
   tagTransform,
   threadCurve,
   threadInfo,
@@ -39,11 +40,23 @@ describe('the curve between two pins', () => {
     expect(tagTransform(curve)).toMatch(/^translate\(-50%, 0\)/);
   });
 
-  it('spaces cue marks along the thread, clear of both pins', () => {
-    const marks = marksAlong(curve, 28);
-    expect(marks.length).toBeGreaterThanOrEqual(6);
-    expect(Math.min(...marks)).toBeGreaterThan(0.08);
-    expect(Math.max(...marks)).toBeLessThan(0.92);
-    expect(marks).toEqual([...marks].sort((a, b) => a - b));
+  it('spaces cue marks evenly by length, never two at one point, even on a long thread', () => {
+    const long = threadCurve({ x: 0, y: 0 }, 'right', { x: 1600, y: 0 }, 'left');
+    const length = curveLength(long);
+    const ts = tAtFractions(long, markPositions(THREAD_LINES.contradicts, length));
+    const xs = ts.map((t) => pointAt(long, t).x);
+    expect(xs.length).toBeGreaterThan(50);
+    expect(new Set(xs.map((x) => Math.round(x))).size).toBe(xs.length);
+    const gaps = xs.slice(1).map((x, i) => x - xs[i]!);
+    for (const gap of gaps) expect(gap).toBeGreaterThan(20);
+    expect(Math.min(...ts)).toBeGreaterThan(0);
+    expect(Math.max(...ts)).toBeLessThan(1);
+  });
+
+  it('puts the supports plus and the derives chevrons mid-thread, as the legend does', () => {
+    const length = curveLength(curve);
+    const [plus] = tAtFractions(curve, markPositions(THREAD_LINES.supports, length));
+    expect(pointAt(curve, plus!).x).toBeCloseTo(100, 0);
+    expect(markPositions(THREAD_LINES.derives, length)).toEqual([0.5]);
   });
 });

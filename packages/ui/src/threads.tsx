@@ -31,9 +31,20 @@ export const THREAD_KINDS: readonly ThreadKindInfo[] = [
   { kind: 'plain', label: 'plain link', glyph: '—', cue: 'fine line' },
 ];
 
+/** A mark drawn on a thread: its shape, and where (fixed fractions, or every so many px). */
+export interface ThreadMark {
+  readonly shape: 'plus' | 'cross' | 'chevron';
+  /** Fractions of the line's length, e.g. `[0.5]`; used when `every` is absent. */
+  readonly at?: readonly number[];
+  /** Spacing in px along the line: marks repeat the whole length (at least one is drawn). */
+  readonly every?: number;
+  /** Stroke width of the mark, when heavier than the line's. */
+  readonly weight?: number;
+}
+
 /**
- * How a kind's line is drawn: its second cue as data, so the swatch, the legend and the board's
- * real threads draw the same thing (DESIGN.md §5).
+ * How a kind's line is drawn: its second cue as data. The design-system strip, the board legend
+ * and the board's real threads all draw from this one table (DESIGN.md §5).
  */
 export interface ThreadLine {
   /** Stroke width of the line. */
@@ -41,7 +52,7 @@ export interface ThreadLine {
   /** `stroke-dasharray` when the line is not solid. */
   readonly dash?: string;
   /** Marks drawn on the line. */
-  readonly marks?: 'plus' | 'cross' | 'chevron';
+  readonly marks?: ThreadMark;
   /** Two parallel lines. */
   readonly doubled?: boolean;
   /** A filled arrowhead at the far end. */
@@ -50,26 +61,41 @@ export interface ThreadLine {
 
 /** The cue of each kind. */
 export const THREAD_LINES: Readonly<Record<ThreadKind, ThreadLine>> = {
-  supports: { width: 2.25, marks: 'plus' },
-  contradicts: { width: 2.25, dash: '7 5', marks: 'cross' },
-  derives: { width: 2.25, marks: 'chevron' },
+  supports: { width: 2.25, marks: { shape: 'plus', at: [0.5], weight: 3 } },
+  contradicts: { width: 2.25, dash: '7 5', marks: { shape: 'cross', every: 28 } },
+  derives: { width: 2.25, marks: { shape: 'chevron', at: [0.5] } },
   answers: { width: 2.25, arrow: true },
   compares: { width: 2.25, doubled: true },
   references: { width: 3, dash: '0.5 5' },
   plain: { width: 1 },
 };
 
-const MID = 8;
+/** Each mark's shape, centred on (0, 0) and pointing along +x (the way the thread runs). */
+export const THREAD_MARK_PATHS: Readonly<Record<ThreadMark['shape'], string>> = {
+  plus: 'M-4 0h8M0 -4v8',
+  cross: 'M-3 -3l6 6M3 -3l-6 6',
+  chevron: 'M-3 -4l4 4l-4 4M1 -4l4 4l-4 4',
+};
 
-/** A small × centred at x. */
-const cross = (x: number): string =>
-  `M${String(x - 3)} ${String(MID - 3)}l6 6M${String(x + 3)} ${String(MID - 3)}l-6 6`;
-/** A small » chevron centred at x. */
-const chevron = (x: number): string =>
-  `M${String(x - 3)} ${String(MID - 4)}l4 4l-4 4M${String(x + 1)} ${String(MID - 4)}l4 4l-4 4`;
-/** A + centred at x, drawn heavier than the line. */
-const plus = (x: number): string =>
-  `M${String(x - 4)} ${String(MID)}h8M${String(x)} ${String(MID - 4)}v8`;
+/**
+ * Where a line's marks go, as fractions of its length.
+ *
+ * @param line The kind's line.
+ * @param length The line's length in px.
+ * @returns The fractions, in order (empty when the kind has no marks).
+ * @example
+ * markPositions(THREAD_LINES.contradicts, 116); // [28, 56, 84] / 116
+ */
+export function markPositions(line: ThreadLine, length: number): number[] {
+  const marks = line.marks;
+  if (marks === undefined) return [];
+  if (marks.every === undefined) return [...(marks.at ?? [0.5])];
+  const out: number[] = [];
+  for (let s = marks.every; s <= length - marks.every / 2; s += marks.every) out.push(s / length);
+  return out.length === 0 ? [0.5] : out;
+}
+
+const MID = 8;
 
 /** The SVG shapes of one kind `w` wide, all stroked with `currentColor` (the kind's wire token). */
 function Shapes({ kind, w }: { readonly kind: ThreadKind; readonly w: number }): ReactNode {
@@ -87,7 +113,7 @@ function Shapes({ kind, w }: { readonly kind: ThreadKind; readonly w: number }):
       {...(spec.width === 2.25 ? {} : { strokeWidth: spec.width })}
     />
   );
-  const at = [0.2, 0.5, 0.8].map((f) => Math.round(w * f));
+  const marks = spec.marks;
   return (
     <>
       {spec.doubled === true ? (
@@ -98,9 +124,16 @@ function Shapes({ kind, w }: { readonly kind: ThreadKind; readonly w: number }):
       ) : (
         line(MID)
       )}
-      {spec.marks === 'plus' ? <path d={plus(w / 2)} strokeWidth="3" /> : null}
-      {spec.marks === 'cross' ? <path d={at.map(cross).join('')} /> : null}
-      {spec.marks === 'chevron' ? <path d={at.map(chevron).join('')} /> : null}
+      {marks === undefined
+        ? null
+        : markPositions(spec, w - 4).map((f, i) => (
+            <path
+              key={i}
+              d={THREAD_MARK_PATHS[marks.shape]}
+              transform={`translate(${String(2 + f * (w - 4))} ${String(MID)})`}
+              {...(marks.weight === undefined ? {} : { strokeWidth: marks.weight })}
+            />
+          ))}
       {spec.arrow === true ? (
         <path
           d={`M${String(w - 12)} ${String(MID - 5)}L${String(w - 2)} ${String(MID)}L${String(w - 12)} ${String(MID + 5)}z`}

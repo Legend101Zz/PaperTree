@@ -7,6 +7,7 @@
 import { NodeResizer, type NodeProps } from '@xyflow/react';
 
 import { useCanvasActions } from '../BoardContext';
+import { FallbackHandles } from '../CardPins';
 
 import type { ReactNode } from 'react';
 import type { PtNode } from '../../model/flow';
@@ -40,6 +41,7 @@ export function FrameNode({ id, data, selected }: NodeProps<PtNode>): ReactNode 
         }}
         onBlur={(e) => ctx.commitTitle(id, e.target.value)}
       />
+      <FallbackHandles />
     </div>
   );
 }

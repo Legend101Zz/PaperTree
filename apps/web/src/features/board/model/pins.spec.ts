@@ -9,7 +9,17 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { PIN_REFUSED, PIN_TABLE, canConnect, pinRefusal, type Port } from './pins';
+import {
+  FALLBACK_IN,
+  FALLBACK_OUT,
+  PIN_REFUSED,
+  PIN_TABLE,
+  canConnect,
+  edgeHandles,
+  pinRefusal,
+  resolvePorts,
+  type Port,
+} from './pins';
 
 const CANVAS_PY = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -90,5 +100,51 @@ describe('canConnect, every kind × every pin, as the server checks it', () => {
     expect(canConnect({ kind: 'note', port: null }, { kind: 'note', port: 'evidence_in' })).toBe(
       false,
     );
+  });
+});
+
+describe('a thread with no pins (the toolbar Link, every v0.1 link)', () => {
+  const kinds = Object.keys(PIN_TABLE) as (keyof typeof PIN_TABLE)[];
+  const handlesOf = (kind: keyof typeof PIN_TABLE) => ({
+    out: [...PIN_TABLE[kind].out, FALLBACK_OUT] as string[],
+    into: [...PIN_TABLE[kind].into, FALLBACK_IN] as string[],
+  });
+
+  it('always resolves to handles both cards carry, for every pair of kinds', () => {
+    for (const from of kinds)
+      for (const to of kinds) {
+        const { sourceHandle, targetHandle } = edgeHandles(
+          { from_port: null, to_port: null },
+          from,
+          to,
+        );
+        expect(handlesOf(from).out, `${from} → ${to}`).toContain(sourceHandle);
+        expect(handlesOf(to).into, `${from} → ${to}`).toContain(targetHandle);
+      }
+  });
+
+  it('keeps the pins a thread was saved with', () => {
+    expect(
+      edgeHandles({ from_port: 'answer_out', to_port: 'question_in' }, 'explanation', 'question'),
+    ).toEqual({ sourceHandle: 'answer_out', targetHandle: 'question_in' });
+  });
+
+  it('picks real pins for Link when the cards offer them, and nothing a server would refuse', () => {
+    for (const from of kinds)
+      for (const to of kinds) {
+        const ports = resolvePorts(from, to);
+        if (ports === null) {
+          expect(PIN_TABLE[from].out.length * PIN_TABLE[to].into.length).toBe(0);
+        } else {
+          expect(
+            canConnect({ kind: from, port: ports.from_port }, { kind: to, port: ports.to_port }),
+          ).toBe(true);
+        }
+      }
+    expect(resolvePorts('question', 'note')).toBeNull();
+    expect(resolvePorts('note', 'question')).toEqual({
+      from_port: 'claim_out',
+      to_port: 'evidence_in',
+    });
   });
 });

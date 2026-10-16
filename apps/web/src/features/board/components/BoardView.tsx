@@ -21,12 +21,14 @@ import { useBoardController } from '../hooks/useBoardController';
 import { useCardSources } from '../hooks/useCardSources';
 import { useThreadDrawing } from '../hooks/useThreadDrawing';
 import { EDGE_KINDS, withPageTitles, type PtEdge, type PtNode } from '../model/flow';
-import { CanvasActionsProvider } from './BoardContext';
+import { CanvasActionsProvider, LinkingProvider } from './BoardContext';
 import { nodeTypes } from './cards';
 import { KindPicker } from './KindPicker';
 import { edgeTypes } from './ThreadEdge';
 import { ThreadLegend } from './ThreadLegend';
 import './cards.css';
+import './threads.css';
+import './legend.css';
 
 import type { EdgeKind } from '@/lib/api/types';
 
@@ -183,7 +185,6 @@ function Canvas({ paperId }: { readonly paperId: string }) {
       openCitation: (nodeId: string, citationId: string, threadId?: string) =>
         window.location.assign(citationHref(paperId, nodeId, citationId, threadId)),
       sources,
-      linking: drawing.linking,
     }),
     [
       ctl.editingId,
@@ -193,7 +194,6 @@ function Canvas({ paperId }: { readonly paperId: string }) {
       ctl.commitSize,
       paperId,
       sources,
-      drawing.linking,
     ],
   );
 
@@ -249,8 +249,7 @@ function Canvas({ paperId }: { readonly paperId: string }) {
               disabled={selection.nodes.length !== 2}
               onClick={() => {
                 const [from, to] = selection.nodes;
-                if (from !== undefined && to !== undefined)
-                  setPicking({ from, to, fromPort: null, toPort: null });
+                if (from !== undefined && to !== undefined) drawing.link(from, to);
               }}
             >
               Link
@@ -350,65 +349,67 @@ function Canvas({ paperId }: { readonly paperId: string }) {
             </div>
           ) : (
             <>
-              <ReactFlow<PtNode, PtEdge>
-                nodes={nodes}
-                edges={ctl.edges}
-                nodeTypes={nodeTypes}
-                edgeTypes={edgeTypes}
-                onNodesChange={ctl.onNodesChange}
-                onEdgesChange={ctl.onEdgesChange}
-                onNodeDragStop={ctl.onNodeDragStop}
-                {...drawing.flowProps}
-                onNodesDelete={(ns) =>
-                  queueDelete(
-                    ns.map((n) => n.id),
-                    [],
-                  )
-                }
-                onEdgesDelete={(es) =>
-                  queueDelete(
-                    [],
-                    es.map((e) => e.id),
-                  )
-                }
-                onSelectionChange={onSelectionChange}
-                onMoveEnd={(event, viewport) => {
-                  // Programmatic moves (the first fit) have no event; only the reader's pan/zoom END is saved.
-                  if (event !== null) ctl.saveViewport(viewport);
-                }}
-                onDoubleClick={(event) => {
-                  const target = event.target as HTMLElement;
-                  if (!target.classList.contains('react-flow__pane')) return;
-                  void ctl.addNote(
-                    flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }),
-                  );
-                }}
-                defaultViewport={ctl.initialViewport ?? undefined}
-                fitView={ctl.initialViewport === null}
-                fitViewOptions={fitOptions}
-                minZoom={0.2}
-                maxZoom={2}
-                zoomOnDoubleClick={false}
-                // Delete only: Backspace is a typing key and one stray press must not remove a card.
-                deleteKeyCode={['Delete']}
-                // S9: Shift, Ctrl and Cmd all ADD to the selection (React Flow's own default is
-                // Meta/Ctrl only). Shift-drag on the empty canvas still draws a selection box.
-                multiSelectionKeyCode={MULTI_SELECT_KEYS}
-                selectionOnDrag={areaMode}
-                panOnDrag={!areaMode}
-                elevateNodesOnSelect={false}
-                nodesFocusable
-                edgesFocusable
-                aria-label="Canvas of passages, explanations and notes"
-              >
-                <ZoomVar />
-                <Background gap={24} size={1} />
-                <Controls
-                  showInteractive={false}
-                  position="bottom-left"
+              <LinkingProvider value={drawing.linking}>
+                <ReactFlow<PtNode, PtEdge>
+                  nodes={nodes}
+                  edges={ctl.edges}
+                  nodeTypes={nodeTypes}
+                  edgeTypes={edgeTypes}
+                  onNodesChange={ctl.onNodesChange}
+                  onEdgesChange={ctl.onEdgesChange}
+                  onNodeDragStop={ctl.onNodeDragStop}
+                  {...drawing.flowProps}
+                  onNodesDelete={(ns) =>
+                    queueDelete(
+                      ns.map((n) => n.id),
+                      [],
+                    )
+                  }
+                  onEdgesDelete={(es) =>
+                    queueDelete(
+                      [],
+                      es.map((e) => e.id),
+                    )
+                  }
+                  onSelectionChange={onSelectionChange}
+                  onMoveEnd={(event, viewport) => {
+                    // Programmatic moves (the first fit) have no event; only the reader's pan/zoom END is saved.
+                    if (event !== null) ctl.saveViewport(viewport);
+                  }}
+                  onDoubleClick={(event) => {
+                    const target = event.target as HTMLElement;
+                    if (!target.classList.contains('react-flow__pane')) return;
+                    void ctl.addNote(
+                      flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }),
+                    );
+                  }}
+                  defaultViewport={ctl.initialViewport ?? undefined}
+                  fitView={ctl.initialViewport === null}
                   fitViewOptions={fitOptions}
-                />
-              </ReactFlow>
+                  minZoom={0.2}
+                  maxZoom={2}
+                  zoomOnDoubleClick={false}
+                  // Delete only: Backspace is a typing key and one stray press must not remove a card.
+                  deleteKeyCode={['Delete']}
+                  // S9: Shift, Ctrl and Cmd all ADD to the selection (React Flow's own default is
+                  // Meta/Ctrl only). Shift-drag on the empty canvas still draws a selection box.
+                  multiSelectionKeyCode={MULTI_SELECT_KEYS}
+                  selectionOnDrag={areaMode}
+                  panOnDrag={!areaMode}
+                  elevateNodesOnSelect={false}
+                  nodesFocusable
+                  edgesFocusable
+                  aria-label="Canvas of passages, explanations and notes"
+                >
+                  <ZoomVar />
+                  <Background gap={24} size={1} />
+                  <Controls
+                    showInteractive={false}
+                    position="bottom-left"
+                    fitViewOptions={fitOptions}
+                  />
+                </ReactFlow>
+              </LinkingProvider>
               {empty ? <EmptyState paperId={paperId} /> : <ThreadLegend />}
             </>
           )}
