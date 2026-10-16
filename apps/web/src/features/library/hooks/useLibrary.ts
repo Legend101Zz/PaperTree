@@ -51,7 +51,13 @@ export function libraryBookFromWire(row: ApiLibraryPaper): LibraryBook {
     topic:
       row.topic === null || row.topic === undefined
         ? null
-        : { id: row.topic.topic_id, name: row.topic.name, cloth: row.topic.cloth },
+        : {
+            id: row.topic.topic_id,
+            name: row.topic.name,
+            cloth: row.topic.cloth,
+            source: row.topic.source,
+            sourceDetail: row.topic.source_detail,
+          },
   };
 }
 
