@@ -75,6 +75,32 @@ export function FallbackHandles(): ReactNode {
   );
 }
 
+/**
+ * A glance's pins (#215): drawn where the card's pins are, so its threads stay attached, but not
+ * targets: below the low-zoom switch a pin is a few pixels on screen, and the board's rule is to
+ * zoom in to draw a thread (threads.css). L on a focused card still starts one by keyboard.
+ */
+export function GlancePins({ kind }: { readonly kind: CanvasNode['kind'] }): ReactNode {
+  const pins: readonly Port[] = [...PIN_TABLE[kind].into, ...PIN_TABLE[kind].out];
+  return (
+    <>
+      {pins.map((port) => (
+        <Handle
+          key={port}
+          id={port}
+          type={isOutPort(port) ? 'source' : 'target'}
+          position={POSITION[PIN_SIDE[port]]}
+          isConnectable={false}
+          className={`pt-pin pt-pin--${port}`}
+          data-port={port}
+          aria-hidden="true"
+        />
+      ))}
+      <FallbackHandles />
+    </>
+  );
+}
+
 /** Every pin a card kind offers, on the side it sits, and the hidden fallback handles. */
 export function CardPins({ nodeId, kind }: CardPinsProps): ReactNode {
   const linking = useLinking();
