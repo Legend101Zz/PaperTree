@@ -118,6 +118,9 @@ export interface PendingSelection {
   readonly pageTextRanges: readonly PageTextRange[];
   /** The selection's geometry on `pageIndex`, IR space. Position the toolbar from THIS. */
   readonly irExtent: BBox | null;
+  /** The selected lines on `pageIndex` and on `endPageIndex`, IR space: what the toolbar must not cover (#203). */
+  readonly irQuads: readonly BBox[];
+  readonly endQuads: readonly BBox[];
   /**
    * The page the selection ENDS on and its geometry there. A selection across pages was dragged
    * (the page auto-scrolling) to its end, so its start is usually off screen by the time the
@@ -755,6 +758,8 @@ export function useSelectionCapture(
       quadsByBlock,
       pageTextRanges: pageTextRuns,
       irExtent: extent(onFirstPage),
+      irQuads: onFirstPage,
+      endQuads: onLastPage,
       endPageIndex: lastPageIndex,
       endExtent: extent(onLastPage),
       irPolygons: unionOfLineRects(onFirstPage),
@@ -792,6 +797,24 @@ export function useSelectionCapture(
     };
     const onPointerDown = (event: PointerEvent): void => {
       held = event.pointerType !== 'touch' && event.button === 0;
+      // A new press in the paper starts a new selection or ends this one, so this one's toolbar
+      // goes now, not when the drag ends. Left up, it sat in the page margin (#203) exactly where
+      // a drag into blank space ends, and that drag selected the toolbar's own labels (e2e rfix R1
+      // A2 and R1b C). A press on the toolbar itself keeps the selection it acts on.
+      const target = event.target instanceof Element ? event.target : null;
+      if (
+        held &&
+        signatureRef.current !== '' &&
+        target !== null &&
+        rootRef.current?.contains(target) === true &&
+        target.closest('[role="toolbar"]') === null
+      ) {
+        if (timerRef.current !== null) clearTimeout(timerRef.current);
+        timerRef.current = null;
+        signatureRef.current = '';
+        setSelection(null);
+        notifyRef.current?.(null);
+      }
     };
     // Every pointer device that HAS an up event: reconcile at once. Registered on the document
     // because a drag frequently ends outside the page element.

@@ -596,10 +596,11 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   // S7: the canvas's "Open source" lands here as `?focus=<node_id>`.
   useFocusFromCanvas(paper.kind === 'api' ? paper.paperId : null, doc !== null, focusAnchor);
 
-  /** The colour a new highlight gets: the last one the reader picked, amber at first. */
+  /** The colour a new highlight gets: the wash pressed, else the last one picked (amber at first). */
   const lastColor = useRef<HighlightColor>('amber');
   const onCreateHighlight = useCallback(
-    (captured: SelectionCapture) => {
+    (captured: SelectionCapture, color?: HighlightColor) => {
+      if (color !== undefined) lastColor.current = color;
       void highlights.create(captured.anchors, lastColor.current);
     },
     [highlights],
@@ -826,7 +827,7 @@ function ReaderActionsMount({
 }) {
   const paperId = paper.kind === 'api' ? paper.paperId : null;
   const explain = useExplainActions({ paperId });
-  const { openExplain, openPanel, closeExplain } = explain;
+  const { openExplain, askAbout, openPanel, closeExplain } = explain;
   const explainOpen = explain.state.open;
   const toggleRef = useRef<HTMLButtonElement>(null);
   const toggle = useMemo<ExplainToggle | null>(
@@ -843,10 +844,11 @@ function ReaderActionsMount({
   const actions = useMemo<ReaderActions>(
     () => ({
       openExplain,
+      askAbout,
       sendToCanvas: (input) => sendToCanvas(paperId, input),
       focusAnchor: (anchor, opts) => onFocusAnchor(anchor, opts),
     }),
-    [openExplain, paperId, onFocusAnchor],
+    [openExplain, askAbout, paperId, onFocusAnchor],
   );
 
   return (
@@ -875,7 +877,7 @@ interface ViewProps {
   readonly navigatorOpen: boolean;
   readonly onNavigatorToggle: () => void;
   readonly highlights: UseHighlights;
-  readonly onCreateHighlight: (captured: SelectionCapture) => void;
+  readonly onCreateHighlight: (captured: SelectionCapture, color?: HighlightColor) => void;
   readonly onActivateHighlight: (highlightId: string, at: CardAt | null) => void;
   readonly activeHighlightId: string | null;
   readonly flash: FlashPaint | null;

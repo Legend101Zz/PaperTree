@@ -38,6 +38,11 @@ export type SendToCanvasInput =
 
 export type ReaderActions = {
   openExplain(input: { anchor: Anchor; quote: string }): void;
+  /**
+   * The selection toolbar's Ask (#203): the panel opens on the passage, waiting for the reader's
+   * own question. Optional: a reader without it draws no Ask button (never an inert one).
+   */
+  askAbout?(input: { anchor: Anchor; quote: string }): void;
   sendToCanvas(input: SendToCanvasInput): Promise<void>;
   focusAnchor(anchor: Anchor, opts?: { flash?: boolean; from?: FlashSource }): void;
 };

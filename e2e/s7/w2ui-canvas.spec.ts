@@ -92,19 +92,19 @@ test('the same passage twice is one card and a toast says so', async ({
     const points = await pointsFor(page, 'Deeper neural networks', 'substantially deeper');
     await drag(page, points.from, points.to);
     expect((await selectionRects(page)).text).toContain('Deeper neural networks');
-    await page.getByRole('button', { name: 'Send to canvas' }).click();
+    await page.getByRole('button', { name: 'Send to board' }).click(); // #203's wording
   };
   await send();
   const toast = page.getByTestId('canvas-toast');
-  await expect(toast).toContainText('Passage added to your canvas');
+  await expect(toast).toContainText('Passage added to your board'); // #203: the toolbar's wording
   await expect
     .poll(async () => (await getBoard(stack.apiUrl, token, paperId)).nodes.length)
     .toBe(1);
   // The first toast stays up for 8 s; wait it out so the second message is the one asserted.
   await expect(toast).toBeHidden({ timeout: 15_000 });
   await send();
-  await expect(toast).toContainText('Already on your canvas');
-  await expect(toast.getByRole('link', { name: 'Open canvas' })).toBeVisible();
+  await expect(toast).toContainText('Already on your board');
+  await expect(toast.getByRole('link', { name: 'Open board' })).toBeVisible();
   await page.screenshot({ path: shot('w2-07-already-on-canvas-1440.png') });
   await page.waitForTimeout(800);
   expect((await getBoard(stack.apiUrl, token, paperId)).nodes).toHaveLength(1);

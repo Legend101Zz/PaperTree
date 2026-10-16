@@ -124,10 +124,18 @@ export function ThreadView({
                   : {})}
               />
             ) : exchanges.length === 0 && state.threadId === null ? (
-              <p className="pt-explain__empty">
-                Select a passage in the paper and press Ask, or type a question about the whole
-                paper below.
-              </p>
+              state.request !== null && state.messages.length === 0 ? (
+                // The toolbar's Ask (#203): the passage waits for the reader's own question.
+                <>
+                  <SelectedPassage request={state.request} />
+                  <p className="pt-explain__empty">Type your question about this passage below.</p>
+                </>
+              ) : (
+                <p className="pt-explain__empty">
+                  Select a passage in the paper and press Ask, or type a question about the whole
+                  paper below.
+                </p>
+              )
             ) : null}
             {exchanges.map((exchange) => (
               <Exchange
@@ -143,7 +151,19 @@ export function ThreadView({
         )}
       </div>
       {state.view === 'summary' ? null : (
-        <Composer busy={busy} disabled={offline} onSend={controller.ask} onStop={controller.stop} />
+        <Composer
+          busy={busy}
+          disabled={offline}
+          onSend={controller.ask}
+          onStop={controller.stop}
+          focusKey={
+            // Only the toolbar's Ask leaves a passage with no thread and nothing sent (#203); a
+            // stored thread being opened has its id already, and Explain sends at once.
+            state.request !== null && state.threadId === null && state.messages.length === 0
+              ? state.epoch
+              : null
+          }
+        />
       )}
     </div>
   );
