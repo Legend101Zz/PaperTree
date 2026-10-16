@@ -52,6 +52,7 @@ import type { ReactNode } from 'react';
  */
 export const DERIVED_MARKER = '⊙';
 
+/** Props for `DerivedBlock`. */
 export interface DerivedBlockProps {
   /**
    * The PaperIR block ids this content was derived from. REQUIRED and non-empty — a derived block
@@ -155,6 +156,7 @@ export interface EquationViewProps {
   readonly onShowSource: (blockIds: readonly string[]) => void;
 }
 
+/** An equation: the paper's own crop first, with any LaTeX or MathML offered as our transcription. */
 export function EquationView({
   blockId,
   imageSrc,
@@ -214,6 +216,7 @@ export interface TableViewProps {
   readonly onShowSource: (blockIds: readonly string[]) => void;
 }
 
+/** A table: cells from the PDF text layer, with any parser HTML offered as our reading. */
 export function TableView({
   blockId,
   rows,
@@ -268,6 +271,7 @@ export interface FigureViewProps {
   readonly caption?: string;
 }
 
+/** A figure: the paper's own crop and caption, never a drawing of it. */
 export function FigureView({ blockId, imageSrc, imageAlt, caption }: FigureViewProps): ReactNode {
   return (
     <figure className="pt-figure" data-block-id={blockId}>
@@ -287,6 +291,7 @@ function classes(base: string, extra: string | undefined): string {
   return extra === undefined ? base : `${base} ${extra}`;
 }
 
+/** Props for `PaperText`. */
 export interface PaperTextProps {
   /** The paper's words, verbatim. Never a paraphrase: a paraphrase is `AiText`. */
   readonly children: ReactNode;
@@ -315,6 +320,7 @@ export function PaperText({
 /** The marker `ReflowedText` carries. Exported so a test or a legend can name it exactly. */
 export const REFLOWED_LABEL = 'Reflowed from the PDF';
 
+/** Props for `ReflowedText`. */
 export interface ReflowedTextProps {
   /** The PaperIR blocks whose text this is, published as `data-block-ids`. */
   readonly blockIds: readonly string[];
@@ -384,6 +390,7 @@ export function ReflowedText({
   );
 }
 
+/** Props for `AiText`. */
 export interface AiTextProps {
   /** What the model wrote. Citation chips go inside, next to the claims they support. */
   readonly children: ReactNode;
