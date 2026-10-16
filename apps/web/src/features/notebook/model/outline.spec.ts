@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { outlineToPath, strokeOptions, strokeToPath } from './outline';
+import { dotOutline, outlineToPath, strokeOutline, strokeOptions, strokeToPath } from './outline';
 import { stroke } from './test-helpers';
 
 describe('outline', () => {
@@ -49,5 +49,36 @@ describe('outline', () => {
     );
     const hl = strokeOptions(stroke('h', [[0, 0]], { tool: 'highlighter', hasPressure: false }));
     expect(hl).toMatchObject({ simulatePressure: false, thinning: 0 });
+  });
+
+  it('draws outlines whose box matches the stroke plus about half a nib', () => {
+    const pts = Array.from({ length: 40 }, (_, i): [number, number] => [100 + i * 2, 50 + i]);
+    const nib = 4; // pen M
+    const xs = strokeOutline(stroke('s', pts, { nib: 'M' })).map((p) => p[0]!);
+    const ys = strokeOutline(stroke('s', pts, { nib: 'M' })).map((p) => p[1]!);
+    expect(Math.min(...xs)).toBeGreaterThan(100 - nib * 2);
+    expect(Math.max(...xs)).toBeLessThan(178 + nib * 2);
+    expect(Math.min(...ys)).toBeGreaterThan(50 - nib * 2);
+    expect(Math.max(...ys)).toBeLessThan(89 + nib * 2);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(70);
+  });
+
+  it('draws a single-point dot about one nib across, as a smooth many-vertex outline', () => {
+    const o = strokeOutline(stroke('s', [[200, 300]], { nib: 'M', tool: 'highlighter' }));
+    const xs = o.map((p) => p[0]!);
+    expect(o.length).toBeGreaterThan(8);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(22 * 0.5);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeLessThan(22 * 1.5);
+  });
+
+  it('falls back to a nib-sized diamond when the library has nothing to draw', () => {
+    const d = dotOutline(stroke('s', [[10, 10]], { nib: 'M' }));
+    expect(d).toEqual([
+      [8, 10],
+      [10, 8],
+      [12, 10],
+      [10, 12],
+    ]);
+    expect(outlineToPath(d).endsWith('Z')).toBe(true);
   });
 });

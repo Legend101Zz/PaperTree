@@ -1,7 +1,8 @@
 /**
  * The ink `Stroke` type and its compact binary form (S5b, #207). We store the pen's centreline
  * points, never the outline, so a stroke re-renders identically under any later look, nib or
- * library version (RESEARCH-R2 section 6). About 3.4 bytes per point against 76 for raw JSON.
+ * library version (RESEARCH-R2 section 6). Versioning: a layout change bumps `FORMAT_VERSION`; a
+ * new flag bit may be added only because old readers reject unknown flags. About 3.4 bytes per point against 76 for raw JSON.
  */
 
 /** One sample: x and y in page units, pressure 0..1. */
@@ -38,6 +39,12 @@ export interface Stroke extends StrokeGeometry {
 /** Highest point count a stroke may have; longer scribbles should be split by the caller. */
 export const MAX_STROKE_POINTS = 20_000;
 
+/**
+ * Largest |x| or |y| (page units) a stroke may have. A page is 960 wide, so this is generous; the
+ * bound keeps quantised values exact in a double and every blob we write decodable.
+ */
+export const MAX_COORDINATE = 1e6;
+
 /** Layout version written as the first byte. */
 const FORMAT_VERSION = 1;
 /** 1/16 page unit: far below a pixel even at 4x zoom. */
@@ -56,6 +63,19 @@ export class StrokeTooLongError extends Error {
   constructor(count: number) {
     super(`stroke has ${count} points; the limit is ${MAX_STROKE_POINTS}`);
     this.name = 'StrokeTooLongError';
+  }
+}
+
+/** Thrown by `encodeStroke` for a non-finite coordinate or pressure, or one beyond `MAX_COORDINATE`. */
+export class StrokeRangeError extends RangeError {
+  /**
+   * Builds the error.
+   *
+   * @param what - Which value was wrong.
+   */
+  constructor(what: string) {
+    super(`stroke value out of range: ${what}`);
+    this.name = 'StrokeRangeError';
   }
 }
 
@@ -115,7 +135,7 @@ function pushVarint(out: number[], n: number): void {
  * @param stroke - The geometry to encode (a full `Stroke` is fine).
  * @returns The compact bytes.
  * @throws StrokeTooLongError above `MAX_STROKE_POINTS` points.
- * @throws RangeError for a non-finite coordinate.
+ * @throws StrokeRangeError for a non-finite value, or a coordinate beyond `MAX_COORDINATE`.
  */
 export function encodeStroke(stroke: StrokeGeometry): Uint8Array {
   const { points, hasPressure } = stroke;
@@ -125,7 +145,15 @@ export function encodeStroke(stroke: StrokeGeometry): Uint8Array {
   let px = 0;
   let py = 0;
   for (const [x, y, p] of points) {
-    if (!Number.isFinite(x) || !Number.isFinite(y)) throw new RangeError('non-finite coordinate');
+    if (
+      !Number.isFinite(x) ||
+      !Number.isFinite(y) ||
+      Math.abs(x) > MAX_COORDINATE ||
+      Math.abs(y) > MAX_COORDINATE
+    ) {
+      throw new StrokeRangeError(`coordinate (${x}, ${y})`);
+    }
+    if (hasPressure && !Number.isFinite(p)) throw new StrokeRangeError(`pressure ${p}`);
     const qx = Math.round(x * QUANT);
     const qy = Math.round(y * QUANT);
     pushVarint(out, zigzag(qx - px));
@@ -142,7 +170,8 @@ export function encodeStroke(stroke: StrokeGeometry): Uint8Array {
  *
  * @param bytes - The blob.
  * @returns Points in page units and the pressure flag. Without pressure every point reads 0.5.
- * @throws StrokeDecodeError for a truncated blob, an unknown version, or a count above the cap.
+ * @throws StrokeDecodeError for a truncated blob, an unknown version or flag, trailing bytes, or a
+ *   count above the cap.
  */
 export function decodeStroke(bytes: Uint8Array): StrokeGeometry {
   let o = 0;
@@ -163,7 +192,11 @@ export function decodeStroke(bytes: Uint8Array): StrokeGeometry {
   };
   const version = next();
   if (version !== FORMAT_VERSION) throw new StrokeDecodeError(`unknown version ${version}`);
-  const hasPressure = (next() & FLAG_PRESSURE) !== 0;
+  const flags = next();
+  // A later flag may add bytes per point; a v1 reader must fail loudly rather than misparse.
+  if ((flags & ~FLAG_PRESSURE) !== 0)
+    throw new StrokeDecodeError(`unknown flags 0x${flags.toString(16)}`);
+  const hasPressure = (flags & FLAG_PRESSURE) !== 0;
   const n = varint();
   if (n > MAX_STROKE_POINTS) throw new StrokeDecodeError(`point count ${n} above the cap`);
   const points: StrokePoint[] = [];
@@ -175,5 +208,6 @@ export function decodeStroke(bytes: Uint8Array): StrokeGeometry {
     const p = hasPressure ? next() / 255 : DEFAULT_PRESSURE;
     points.push([qx / QUANT, qy / QUANT, p]);
   }
+  if (o !== bytes.length) throw new StrokeDecodeError('trailing bytes');
   return { points, hasPressure };
 }

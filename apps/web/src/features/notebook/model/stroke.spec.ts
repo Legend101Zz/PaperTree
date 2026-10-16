@@ -4,7 +4,9 @@ import {
   decodeStroke,
   encodeStroke,
   MAX_STROKE_POINTS,
+  MAX_COORDINATE,
   StrokeDecodeError,
+  StrokeRangeError,
   StrokeTooLongError,
   type StrokePoint,
 } from './stroke';
@@ -72,5 +74,34 @@ describe('stroke binary format', () => {
 
   it('encodes an empty stroke', () => {
     expect(decodeStroke(encodeStroke({ points: [], hasPressure: true })).points).toEqual([]);
+  });
+
+  it('refuses values it could not decode again', () => {
+    const enc =
+      (x: number, y = 0, p = 0.5) =>
+      () =>
+        encodeStroke({ points: [[x, y, p]], hasPressure: true });
+    expect(enc(MAX_COORDINATE)).not.toThrow();
+    for (const bad of [MAX_COORDINATE + 1, -1e9, 1e20, NaN, Infinity]) {
+      expect(enc(bad)).toThrow(StrokeRangeError);
+      expect(enc(0, bad)).toThrow(StrokeRangeError);
+    }
+    expect(enc(0, 0, NaN)).toThrow(StrokeRangeError);
+    const big = encodeStroke({
+      points: [
+        [MAX_COORDINATE, -MAX_COORDINATE, 1],
+        [-MAX_COORDINATE, MAX_COORDINATE, 0],
+      ],
+      hasPressure: true,
+    });
+    expect(decodeStroke(big).points[1]).toEqual([-MAX_COORDINATE, MAX_COORDINATE, 0]);
+  });
+
+  it('rejects unknown flag bits and trailing bytes', () => {
+    const ok = encodeStroke({ points: [[1, 1, 0.5]], hasPressure: true });
+    const flagged = Uint8Array.from(ok);
+    flagged[1] = 0x03;
+    expect(() => decodeStroke(flagged)).toThrow(/unknown flags/);
+    expect(() => decodeStroke(Uint8Array.from([...ok, 9]))).toThrow(/trailing/);
   });
 });

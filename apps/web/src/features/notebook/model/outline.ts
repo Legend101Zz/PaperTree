@@ -40,8 +40,18 @@ export function strokeOutline(stroke: Stroke, live = false): number[][] {
     stroke.points.map((p) => [p[0], p[1], p[2]]),
     strokeOptions(stroke, live),
   );
-  if (outline.length >= 3) return outline;
-  // Defensive: a degenerate input yields a dot the size of the nib rather than nothing.
+  return outline.length >= 3 ? outline : dotOutline(stroke);
+}
+
+/**
+ * A diamond the size of the nib at the stroke's first point: what we draw if the library ever
+ * returns fewer than 3 vertices, so a stroke is never invisible. Not reached today (every probe
+ * gives 40+ vertices), so it is exported to be tested directly.
+ *
+ * @param stroke - A stroke with at least one point.
+ * @returns Four vertices.
+ */
+export function dotOutline(stroke: Stroke): number[][] {
   const [x, y] = stroke.points[0]!;
   const r = NIB_DIAMETER[stroke.tool][stroke.nib] / 2;
   return [
@@ -57,7 +67,26 @@ export function strokeOutline(stroke: Stroke, live = false): number[][] {
  * midpoints of consecutive vertices.
  *
  * Adapted from the `getSvgPathFromStroke` example in the perfect-freehand README.
- * MIT License, Copyright (c) 2021 Stephen Ruiz Ltd.
+ *
+ * MIT License
+ *
+ * Copyright (c) 2021 Stephen Ruiz Ltd
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+ * and associated documentation files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use, copy, modify, merge, publish,
+ * distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all copies or
+ * substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+ * BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *
  *
  * @param outline - Polygon vertices.
  * @returns A path `d` string ending in `Z`, or `''` for fewer than 3 vertices.

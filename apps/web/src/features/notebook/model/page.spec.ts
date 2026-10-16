@@ -17,14 +17,17 @@ describe('page coordinates', () => {
     expect(py).toBeCloseTo(700, 9);
   });
 
-  it('keeps ink beside a block when the container resizes', () => {
-    const block = 300;
-    const ink = 330;
-    for (const w of [390, 1180, 1440]) {
-      const v = { containerWidth: w, scrollX: 0, scrollY: 0 };
-      const ratio = pageToScreen([ink, 0], v)[0] / pageToScreen([block, 0], v)[0];
-      expect(ratio).toBeCloseTo(ink / block, 9);
-    }
+  it('maps to known pixels, with scroll in the container frame', () => {
+    // width 480 -> scale 0.5; page x 300 -> 150 px; scrolled 20 px right -> 130.
+    expect(pageToScreen([300, 700], { containerWidth: 480, scrollX: 0, scrollY: 0 })).toEqual([
+      150, 350,
+    ]);
+    expect(pageToScreen([300, 700], { containerWidth: 480, scrollX: 20, scrollY: 50 })).toEqual([
+      130, 300,
+    ]);
+    expect(screenToPage([130, 300], { containerWidth: 480, scrollX: 20, scrollY: 50 })).toEqual([
+      300, 700,
+    ]);
   });
 
   it('has spacing for all five templates', () => {

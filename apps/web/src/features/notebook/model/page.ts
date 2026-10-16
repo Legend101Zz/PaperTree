@@ -110,7 +110,7 @@ export function pageScale(containerWidth: number): number {
 }
 
 /**
- * Converts a page-unit point to screen px, relative to the page element's top-left.
+ * Converts a page-unit point to screen px, in the scroll container's viewport frame (origin at the container's top-left, after scrolling; use `clientX - containerRect.left`, never a scrolled page element's rect).
  *
  * @param p - Point in page units.
  * @param view - The current viewport.
@@ -122,7 +122,7 @@ export function pageToScreen(p: Vec2, view: Viewport): Vec2 {
 }
 
 /**
- * Converts a screen point (relative to the page element's top-left) to page units.
+ * Converts a screen point (in the scroll container's viewport frame, see `pageToScreen`) to page units.
  *
  * @param p - Point in screen px.
  * @param view - The current viewport.
