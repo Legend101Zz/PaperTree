@@ -28,3 +28,7 @@
 export * from './provenance.js';
 export * from './primitives.js';
 export * from './fixtureUri.js';
+
+// v0.2 interface components (#189)
+export * from './controls.js';
+export * from './toast.js';

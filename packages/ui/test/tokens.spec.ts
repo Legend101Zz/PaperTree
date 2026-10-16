@@ -97,6 +97,12 @@ const PAIRS: readonly (readonly [string, string, number])[] = [
   ['--pt-wire-references', '--pt-linen', 3],
   ['--pt-wire-plain', '--pt-linen', 3],
   ['--pt-frame-outline', '--pt-linen', 3],
+  // v0.2 interface components (#189)
+  ['--pt-ink-2', '--pt-ground', 4.5],
+  ['--pt-ink', '--pt-e2-fill', 4.5],
+  ['--pt-ink', '--pt-e3-fill', 4.5],
+  ['--pt-gilt-solid', '--pt-primary-fill', 3],
+  ['--pt-danger', '--pt-e2-fill', 4.5],
 ];
 
 describe('Ex Libris tokens', () => {
