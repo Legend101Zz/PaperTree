@@ -207,11 +207,18 @@ describe('the daily cap (#204, frame 04c)', () => {
     });
     expect(
       usageRows({
-        by_kind: { explain: bucket(3, 0.31), ask: bucket(0, 0), summary: bucket(1, 0.6) },
+        by_kind: {
+          explain: bucket(3, 0.31),
+          ask: bucket(0, 0),
+          summary: bucket(1, 0.6),
+          diagram: bucket(2, 0.004),
+          topic: bucket(0, 0),
+        },
       }),
     ).toEqual([
       { kind: 'Explain', line: '3 runs · 12,345 tokens · ≈ $0.31 (estimate)' },
       { kind: 'Summaries', line: '1 run · 12,345 tokens · ≈ $0.60 (estimate)' },
+      { kind: 'Diagrams', line: '2 runs · 12,345 tokens · ≈ $0.0040 (estimate)' },
     ]);
     expect(usageRows({ by_kind: {} as never })).toEqual([]);
   });

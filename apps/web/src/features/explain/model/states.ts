@@ -134,6 +134,8 @@ const KINDS: readonly (readonly [keyof UsageTotals['by_kind'], string])[] = [
   ['explain', 'Explain'],
   ['ask', 'Questions'],
   ['summary', 'Summaries'],
+  ['diagram', 'Diagrams'],
+  ['topic', 'Topic suggestions'],
 ];
 
 /**
