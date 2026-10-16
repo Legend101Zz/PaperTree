@@ -3668,6 +3668,13 @@ button.pt-holder {
    are ported from the design's tokens.css onto --pt-* tokens; contrast pairs are the ones
    test/tokens.spec.ts already covers (ink / pen / tab / nv-ink on page, AI slip and call slip). */
 
+/* The two translucent colours this section needs, named once so no rgb() literal sits in a rule.
+   Both are tints that read on every ground in both schemes, so they are not redefined for dark. */
+:root {
+  --pt-call-slip-rule: rgb(60 96 130 / 13%); /* the 24 px blue ruling on a call slip */
+  --pt-lit-ring: rgb(160 120 40 / 25%); /* the faint inset ring around a lit trace row */
+}
+
 .pt-you {
   font: var(--pt-t-you) / var(--pt-lh-you) var(--pt-font-you);
   color: var(--pt-pen);
@@ -3695,7 +3702,7 @@ button.pt-holder {
 }
 
 .pt-marker.is-lit,
-.pt-marker[aria-current='true'] {
+.pt-marker[data-lit='true'] {
   background: var(--pt-focus);
   outline: var(--pt-focus-width) solid var(--pt-focus);
   outline-offset: 1px;

@@ -16,7 +16,10 @@ import type { ReactNode } from 'react';
 export interface NumberedMarkerProps {
   /** The passage number shown in the square. */
   readonly n: number;
-  /** Where the passage is, e.g. `"p. 2 ¶2"`. The accessible name is `Passage {n}, {label}`. */
+  /**
+   * Where the passage is, e.g. `"p. 2 ¶2"`. The accessible name is `Passage {n}, {label}`, with
+   * `, not verified` added when `notVerified` (the dashed outline alone is not announced).
+   */
   readonly label: string;
   /** True while the matching trace row (or claim) is lit. */
   readonly lit?: boolean;
@@ -53,8 +56,10 @@ export function NumberedMarker({
     <button
       type="button"
       className={`pt-marker${size === 'touch' ? ' pt-marker--touch' : ''}${notVerified ? ' pt-marker--not-verified' : ''}${lit ? ' is-lit' : ''}`}
-      aria-label={`Passage ${String(n)}, ${label}`}
-      {...(lit ? { 'aria-current': 'true' as const, 'data-lit': 'true' } : {})}
+      aria-label={`Passage ${String(n)}, ${label}${notVerified ? ', not verified' : ''}`}
+      // `lit` is a hover/focus echo between a marker and its trace row, so it is visual and a test
+      // hook only: `aria-current` would announce "current" on every hover (review #230/2).
+      {...(lit ? { 'data-lit': 'true' } : {})}
       onClick={onFlash}
       onKeyDown={(event) => {
         if (event.key !== 'Enter') return;

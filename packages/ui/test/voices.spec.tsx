@@ -54,7 +54,14 @@ describe('NumberedMarker', () => {
     const button = screen.getByRole('button', { name: 'Passage 2, p. 2 ¶2' });
     fireEvent.click(button);
     expect(onFlash).toHaveBeenCalledTimes(1);
-    fireEvent.keyDown(button, { key: 'Enter' });
+    // Enter flashes once: the handler runs on keydown AND cancels the native Enter-click that
+    // would follow in a browser. happy-dom sends no follow-up click, so "once" is proved by the
+    // cancelled default: `fireEvent` returns false when `preventDefault` was called.
+    const notCancelled = fireEvent.keyDown(button, { key: 'Enter' });
+    expect(onFlash).toHaveBeenCalledTimes(2);
+    expect(notCancelled, 'Enter must cancel the native click or it flashes twice').toBe(false);
+    // Other keys do nothing (Space reaches `onFlash` through the native click on keyup).
+    expect(fireEvent.keyDown(button, { key: 'a' })).toBe(true);
     expect(onFlash).toHaveBeenCalledTimes(2);
   });
 
@@ -64,7 +71,7 @@ describe('NumberedMarker', () => {
       <NumberedMarker n={1} label="p. 1" onFlash={() => undefined} onLight={onLight} />,
     );
     const button = screen.getByRole('button');
-    expect(button.getAttribute('aria-current')).toBeNull();
+    expect(button.getAttribute('data-lit')).toBeNull();
     fireEvent.mouseEnter(button);
     fireEvent.mouseLeave(button);
     fireEvent.focus(button);
@@ -72,8 +79,14 @@ describe('NumberedMarker', () => {
     expect(onLight.mock.calls.map((c) => c[0])).toEqual([true, false, true, false]);
 
     rerender(<NumberedMarker n={1} label="p. 1" lit onFlash={() => undefined} />);
-    expect(screen.getByRole('button').getAttribute('aria-current')).toBe('true');
+    // Lighting is a visual echo, never `aria-current` (it would be announced on every hover).
+    expect(screen.getByRole('button').getAttribute('aria-current')).toBeNull();
     expect(screen.getByRole('button').getAttribute('data-lit')).toBe('true');
+  });
+
+  it('says "not verified" in its accessible name when it is', () => {
+    render(<NumberedMarker n={2} label="p. 2 ¶2" notVerified onFlash={() => undefined} />);
+    expect(screen.getByRole('button', { name: 'Passage 2, p. 2 ¶2, not verified' })).not.toBeNull();
   });
 
   it('has a touch size and a not-verified variant', () => {
