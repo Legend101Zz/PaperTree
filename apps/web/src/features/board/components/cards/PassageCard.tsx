@@ -9,7 +9,8 @@ import { PageTab, PaperText } from '@papertree/ui';
 import { type NodeProps } from '@xyflow/react';
 
 import { anchorPageIndex } from '../../model/cards';
-import { CardShell, ClipBody } from './CardShell';
+import { CardShell } from './CardShell';
+import { ClipBody } from './ClipBody';
 
 import type { ReactNode } from 'react';
 import type { PtNode } from '../../model/flow';

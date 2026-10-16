@@ -20,12 +20,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 
 import { useBoardController } from '../hooks/useBoardController';
 import { useCardSources } from '../hooks/useCardSources';
-import { EDGE_KINDS, nodeLabel, type PtEdge, type PtNode } from '../model/flow';
+import { EDGE_KINDS, withPageTitles, type PtEdge, type PtNode } from '../model/flow';
 import { CanvasActionsProvider } from './BoardContext';
 import { nodeTypes } from './cards';
 import { KindPicker } from './KindPicker';
 import { edgeTypes } from './LabeledEdge';
-import './board.css';
+import './cards.css';
 
 import type { EdgeKind } from '@/lib/api/types';
 
@@ -35,10 +35,17 @@ import type { EdgeKind } from '@/lib/api/types';
  * @param paperId The paper.
  * @param nodeId The AI card the marker is on.
  * @param citationId The citation behind the marker.
- * @returns `/paper/<id>/read?focus=<card>&cite=<citation>`.
+ * @param threadId The thread the answer is in, so the reader reads that one thread only.
+ * @returns `/paper/<id>/read?focus=<card>&cite=<citation>[&thread=<thread>]`.
  */
-export function citationHref(paperId: string, nodeId: string, citationId: string): string {
+export function citationHref(
+  paperId: string,
+  nodeId: string,
+  citationId: string,
+  threadId?: string,
+): string {
   const q = new URLSearchParams({ focus: nodeId, cite: citationId });
+  if (threadId !== undefined) q.set('thread', threadId);
   return `/paper/${encodeURIComponent(paperId)}/read?${q.toString()}`;
 }
 
@@ -139,12 +146,14 @@ function Canvas({ paperId }: { readonly paperId: string }) {
     [],
   );
 
+  const sources = useCardSources(paperId, ctl.nodes);
+  const nodes = useMemo(
+    () => withPageTitles(ctl.nodes, (pageId) => sources.pages.get(pageId)?.page.title),
+    [ctl.nodes, sources.pages],
+  );
   const labelOf = useCallback(
-    (id: string) => {
-      const n = ctl.nodes.find((x) => x.id === id);
-      return n === undefined ? 'Card' : nodeLabel(n.data.node);
-    },
-    [ctl.nodes],
+    (id: string) => nodes.find((x) => x.id === id)?.ariaLabel ?? 'Card',
+    [nodes],
   );
 
   const onConnect = useCallback((c: Connection) => {
@@ -165,7 +174,6 @@ function Canvas({ paperId }: { readonly paperId: string }) {
     ctl.deleteSelection(selection.nodes, selection.edges);
   };
 
-  const sources = useCardSources(paperId, ctl.nodes);
   const actions = useMemo(
     () => ({
       editingId: ctl.editingId,
@@ -173,8 +181,8 @@ function Canvas({ paperId }: { readonly paperId: string }) {
       commitBody: ctl.commitBody,
       commitTitle: ctl.commitTitle,
       commitSize: ctl.commitSize,
-      openCitation: (nodeId: string, citationId: string) =>
-        window.location.assign(citationHref(paperId, nodeId, citationId)),
+      openCitation: (nodeId: string, citationId: string, threadId?: string) =>
+        window.location.assign(citationHref(paperId, nodeId, citationId, threadId)),
       sources,
     }),
     [
@@ -334,7 +342,7 @@ function Canvas({ paperId }: { readonly paperId: string }) {
           ) : (
             <>
               <ReactFlow<PtNode, PtEdge>
-                nodes={ctl.nodes}
+                nodes={nodes}
                 edges={ctl.edges}
                 nodeTypes={nodeTypes}
                 edgeTypes={edgeTypes}

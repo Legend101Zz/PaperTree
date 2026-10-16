@@ -33,8 +33,8 @@ export interface CallSlipProps {
   };
   /** The ask, in the person's own words. */
   readonly ask: string;
-  /** When it was asked, e.g. `"2:14 pm"`. */
-  readonly time: string;
+  /** When it was asked, e.g. `"2:14 pm"`. Omitted where the time is not shown (a board card). */
+  readonly time?: string;
   /** Machine-readable time for `<time dateTime>`, e.g. an ISO string. Omitted when unknown. */
   readonly dateTime?: string;
   /**
@@ -69,9 +69,11 @@ export function CallSlip({
         )}
         <YouText className="pt-call-slip__ask">{ask}</YouText>
       </div>
-      <time className="pt-call-slip__time" {...(dateTime === undefined ? {} : { dateTime })}>
-        {time}
-      </time>
+      {time === undefined ? null : (
+        <time className="pt-call-slip__time" {...(dateTime === undefined ? {} : { dateTime })}>
+          {time}
+        </time>
+      )}
     </div>
   );
 }

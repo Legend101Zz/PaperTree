@@ -1,6 +1,8 @@
-/* board.css — the board's cards on linen (frame 06; lamp-lit 09c follows the tokens). Measurements
-   are the mock-up's (06-board-1440.dc.html); every colour is a --pt-* token, so both schemes come
-   from styles.css. The v0.1 `pt-cv` chrome (toolbar, picker, frames) is restyled by S6c/S6d. */
+/* cards.css — the board's cards on linen (frame 06; lamp-lit 09c follows the tokens). Measurements
+   are the mock-up's (06-board-1440.dc.html). Colours are --pt-* tokens, except the translucent
+   rules, dots and texture tints named once at the top, which read the same in both schemes. The
+   shared slips (CallSlip, AiSlip) bring their own stock; this file only sizes them for a card.
+   The v0.1 `pt-cv` chrome (toolbar, picker, frames) is restyled by S6c/S6d. */
 
 .pt-cv {
   --pt-bc-red-rule: rgb(176 74 64 / 55%); /* the index card's top rule, both schemes */
@@ -86,16 +88,11 @@
   color: var(--pt-ink-2);
 }
 
-.pt-bc__stamp {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+/* The call slip's own stamp (`.pt-call-slip__stamp`), at the card's size. */
+.pt-bc .pt-call-slip__stamp {
   inline-size: 20px;
   block-size: 20px;
-  border: 1.25px solid var(--pt-pen);
-  border-radius: var(--pt-radius-round);
-  color: var(--pt-pen);
+  border-width: 1.25px;
   background: var(--pt-call-slip);
   font: 11px / 1 var(--pt-font-paper);
 }
@@ -227,27 +224,22 @@
 
 /* ── the AI-slip cards: explanation and diagram ───────────────────────────────────────── */
 
-.pt-bc__call {
-  position: relative;
+/* The shared call slip, at a card's size: the ask in 13 px pen, no perforation room. */
+.pt-bc .pt-call-slip {
   z-index: 1;
-  display: flex;
   flex: none;
-  align-items: flex-start;
   gap: var(--pt-space-2);
   padding: 8px 12px;
-  background-color: var(--pt-call-slip);
-  background-image: repeating-linear-gradient(
-    180deg,
-    transparent 0 23px,
-    var(--pt-call-slip-rule) 23px 24px
-  );
   box-shadow:
     inset 0 0 0 1px var(--pt-card-edge),
     var(--pt-e1);
 }
 
-.pt-bc .pt-bc__ask {
-  margin: 0;
+.pt-bc .pt-call-slip::before {
+  content: none;
+}
+
+.pt-bc .pt-call-slip__ask {
   padding-block-start: 1px;
   font-size: 13px;
   line-height: 18px;
@@ -290,18 +282,30 @@
   padding-inline-start: 18px;
 }
 
+.pt-bc .pt-ai-slip__aside {
+  display: none; /* no margin column on a card: the markers are inline */
+}
+
+.pt-bc .pt-ai-slip__uncited {
+  margin-block-start: 4px;
+  padding-block-start: 6px;
+}
+
 .pt-bc .pt-ai-slip__footer {
   flex: none;
   margin-block-start: 6px;
 }
 
-.pt-bc__usage {
-  display: flex;
-  flex-direction: column;
+.pt-bc__usage,
+.pt-bc__usage .pt-explain__usage {
   margin: 0;
   font: 12.5px / 18px var(--pt-font-you);
   font-variant-numeric: lining-nums tabular-nums;
   color: var(--pt-ink-2);
+}
+
+.pt-bc__usage p {
+  margin: 0;
 }
 
 .pt-bc__plate {

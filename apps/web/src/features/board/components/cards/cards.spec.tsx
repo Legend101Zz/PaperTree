@@ -71,7 +71,7 @@ describe('explanation card', () => {
   });
 
   it('asks in your voice and answers in the AI voice, with numbered markers and its footer', () => {
-    const source = explanationSource(THREAD, 'msg_a1')!;
+    const source = explanationSource('thr_1', THREAD, 'msg_a1')!;
     const ctx = actions({ sources: sources(new Map([['msg_a1', source]])) });
     const { container } = mount(ExplanationCard, row, ctx);
     expect(container.querySelector('[data-voice="you"]')?.textContent).toBe(
@@ -90,7 +90,7 @@ describe('explanation card', () => {
     expect(within(slip).getByText('4 passages · 11 citations')).not.toBeNull();
     expect(within(slip).getByText('6,776 tokens · ≈ $0.0027 (estimate)')).not.toBeNull();
     fireEvent.click(markers[1]!);
-    expect(ctx.openCitation).toHaveBeenCalledWith('cn_explanation', 'cit_b6_1');
+    expect(ctx.openCitation).toHaveBeenCalledWith('cn_explanation', 'cit_b6_1', 'thr_1');
   });
 
   it('before its thread is read: the words only, no handles, no markers, no footer', () => {
@@ -100,6 +100,34 @@ describe('explanation card', () => {
     expect(slip.textContent).toContain('The Transformer drops recurrence.');
     expect(slip.textContent).not.toMatch(/\[b\d|passages|estimate/);
     expect(within(slip).queryAllByRole('button', { name: /^Passage/ })).toHaveLength(0);
+  });
+
+  it('never shows the unterminated handle run a stopped answer ends with (S9-4)', () => {
+    const stopped = cardRow('explanation', {
+      body: 'The grid predicts boxes [b1]. Each cell predicts from fragments [b42, b43, b44, b4',
+      source_message_id: 'msg_a1',
+    });
+    const source = explanationSource('thr_1', THREAD, 'msg_a1')!;
+    mount(ExplanationCard, stopped, actions({ sources: sources(new Map([['msg_a1', source]])) }));
+    const slip = screen.getByRole('note', { name: "AI answer, not the paper's words" });
+    expect(slip.textContent).toContain('Each cell predicts from fragments');
+    expect(slip.textContent).not.toMatch(/\[|\bb\d{1,2}\b/);
+  });
+
+  it('unfolds when the keyboard reaches a marker below the fold', () => {
+    const height = (name: 'scrollHeight' | 'clientHeight', value: number) =>
+      vi.spyOn(HTMLElement.prototype, name, 'get').mockReturnValue(value);
+    const spies = [height('scrollHeight', 480), height('clientHeight', 120)];
+    const source = explanationSource('thr_1', THREAD, 'msg_a1')!;
+    const { container } = mount(
+      ExplanationCard,
+      row,
+      actions({ sources: sources(new Map([['msg_a1', source]])) }),
+    );
+    expect(container.querySelector('[data-expanded="false"]')).not.toBeNull();
+    fireEvent.focus(screen.getAllByRole('button', { name: /^Passage 4/ })[0]!);
+    expect(container.querySelector('[data-expanded="true"]')).not.toBeNull();
+    spies.forEach((spy) => spy.mockRestore());
   });
 });
 

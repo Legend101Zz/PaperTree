@@ -16,7 +16,7 @@ export interface CanvasActions {
   readonly commitTitle: (id: string, title: string) => void;
   readonly commitSize: (id: string, rect: { x: number; y: number; w: number; h: number }) => void;
   /** Open the reader on a cited passage and flash it (a numbered marker on an AI card). */
-  readonly openCitation?: (nodeId: string, citationId: string) => void;
+  readonly openCitation?: (nodeId: string, citationId: string, threadId?: string) => void;
   /** Thread and notebook reads behind the cards; absent until read, then empty if unavailable. */
   readonly sources?: CardSources;
 }

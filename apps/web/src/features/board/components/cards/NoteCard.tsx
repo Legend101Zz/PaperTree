@@ -11,7 +11,8 @@ import { type NodeProps } from '@xyflow/react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { useCanvasActions } from '../BoardContext';
-import { CardShell, ClipBody, Stamp } from './CardShell';
+import { CardShell, Stamp } from './CardShell';
+import { ClipBody } from './ClipBody';
 
 import type { PtNode } from '../../model/flow';
 
@@ -58,6 +59,7 @@ export function NoteCard({ id, data, selected }: NodeProps<PtNode>): ReactNode {
         <textarea
           ref={area}
           className="pt-bc__textarea pt-you nodrag nowheel"
+          data-voice="you"
           aria-label="Note text"
           value={draft}
           maxLength={NOTE_BODY_MAX}

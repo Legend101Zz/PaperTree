@@ -6,11 +6,11 @@
  * An explanation card holds the answer's TEXT (with the model's `[bN]` handles) and the id of the
  * message it came from; the question, citations, coverage and usage live on the thread
  * (GET /papers/{id}/threads/{tid}). A notebook card holds a page id; its miniature needs the page's
- * items (GET /notebook/pages/{pid}). Both are read once per set of cards, at load, never polled, so
- * a settled board still makes no request. A read that fails leaves the card without the extra (it
+ * items (GET /notebook/pages/{pid}). Each is read once, when its card first appears, never polled,
+ * so a settled board makes no request and a delete or an Undo makes none either. A read that fails leaves the card without the extra (it
  * shows its own words, its counts and its title), never with invented numbers.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { threadsApi } from '@/lib/api/threads';
 
@@ -18,7 +18,6 @@ import { notebookPagesApi, type NotebookPageRead } from '../api/notebook';
 import { explanationSource, type ExplanationSource } from '../model/cards';
 
 import type { PtNode } from '../model/flow';
-import type { Citation } from '@/lib/api/types';
 
 const MAX_THREADS = 20;
 
@@ -68,7 +67,7 @@ async function readExplanations(
     if (found.size === wanted.length) break;
     const { messages } = await threadsApi.get(paperId, thread.thread_id);
     for (const id of wanted) {
-      const source = found.has(id) ? null : explanationSource(messages, id);
+      const source = found.has(id) ? null : explanationSource(thread.thread_id, messages, id);
       if (source !== null) found.set(id, source);
     }
   }
@@ -92,6 +91,50 @@ async function readPages(wanted: readonly string[]): Promise<Map<string, Noteboo
 }
 
 /**
+ * Reads what a set of ids needs, once per id: an id read before (or being read) is not read again,
+ * so deleting a card, or bringing it back with Undo, sends no request. A read that fails is
+ * forgotten, so the next change to the set tries it again.
+ *
+ * @param key The wanted ids, joined: what changes when the set of cards changes.
+ * @param wanted The ids the cards need.
+ * @param read Reads the missing ids.
+ * @returns Id → what was read so far.
+ */
+function useReadOnce<V>(
+  key: string,
+  wanted: readonly string[],
+  read: (missing: readonly string[]) => Promise<Map<string, V>>,
+): ReadonlyMap<string, V> {
+  const [found, setFound] = useState<ReadonlyMap<string, V>>(new Map());
+  const asked = useRef(new Set<string>());
+  useEffect(() => {
+    const missing = wanted.filter((id) => !asked.current.has(id));
+    if (missing.length === 0) return undefined;
+    missing.forEach((id) => asked.current.add(id));
+    let live = true;
+    let done = false;
+    const forget = (): void => missing.forEach((id) => asked.current.delete(id));
+    read(missing).then(
+      (more) => {
+        done = true;
+        if (live) setFound((prev) => new Map([...prev, ...more]));
+      },
+      () => {
+        done = true;
+        forget(); // no extras: the cards show their own words, counts and titles
+      },
+    );
+    return () => {
+      live = false;
+      if (!done) forget(); // unmounted mid-read (or React's dev re-run): read again next time
+    };
+    // The key says when the set changed; the array itself is new on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return found;
+}
+
+/**
  * The thread and notebook reads behind the board's cards, keyed by message id and page id.
  *
  * @param paperId The board's paper.
@@ -101,55 +144,9 @@ async function readPages(wanted: readonly string[]): Promise<Map<string, Noteboo
 export function useCardSources(paperId: string, nodes: readonly PtNode[]): CardSources {
   const messages = wantedIds(nodes, 'explanation', (n) => n.source_message_id);
   const pages = wantedIds(nodes, 'notebook', (n) => n.source_page_id);
-  const messageKey = messages.join('|');
-  const pageKey = pages.join('|');
-  const [explanations, setExplanations] = useState<ReadonlyMap<string, ExplanationSource>>(
-    new Map(),
+  const explanations = useReadOnce(`${paperId}:${messages.join('|')}`, messages, (missing) =>
+    readExplanations(paperId, missing),
   );
-  const [pageReads, setPageReads] = useState<ReadonlyMap<string, NotebookPageRead>>(new Map());
-
-  useEffect(() => {
-    if (messages.length === 0) return undefined;
-    let live = true;
-    readExplanations(paperId, messages).then(
-      (found) => live && setExplanations(found),
-      () => undefined, // no extras: the cards show their own words without markers
-    );
-    return () => {
-      live = false;
-    };
-    // The key says when the set of cards changed; the array itself is new on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paperId, messageKey]);
-
-  useEffect(() => {
-    if (pages.length === 0) return undefined;
-    let live = true;
-    void readPages(pages).then((found) => live && setPageReads(found));
-    return () => {
-      live = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageKey]);
-
+  const pageReads = useReadOnce(pages.join('|'), pages, readPages);
   return useMemo(() => ({ explanations, pages: pageReads }), [explanations, pageReads]);
-}
-
-/**
- * The citations of the answers on the board, by message id (the v0.1 hook's shape, kept for its
- * callers).
- *
- * @param paperId The board's paper.
- * @param nodes The board's cards.
- * @returns Message id → its citations; no entry when it could not be read.
- */
-export function useExplanationCitations(
-  paperId: string,
-  nodes: readonly PtNode[],
-): ReadonlyMap<string, readonly Citation[]> {
-  const { explanations } = useCardSources(paperId, nodes);
-  return useMemo(
-    () => new Map([...explanations].map(([id, source]) => [id, source.citations] as const)),
-    [explanations],
-  );
 }

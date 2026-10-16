@@ -118,6 +118,33 @@ export function toFlowNode(node: CanvasNode, paperId: string, selected = false):
 }
 
 /**
+ * The cards with each notebook card named by its page's title (the row holds only the page id;
+ * the title arrives with the page read), so two notebook cards can be told apart by name.
+ *
+ * @param nodes The board's cards.
+ * @param titleOf The title of a page that has been read, by page id.
+ * @returns The same array when no name changes, else a copy with the renamed cards.
+ */
+export function withPageTitles(
+  nodes: PtNode[],
+  titleOf: (pageId: string) => string | undefined,
+): PtNode[] {
+  let changed = false;
+  const out = nodes.map((n) => {
+    const node = n.data.node;
+    const title =
+      node.kind === 'notebook' && node.source_page_id !== null
+        ? titleOf(node.source_page_id)
+        : undefined;
+    const label = title === undefined ? undefined : nodeLabel({ ...node, title });
+    if (label === undefined || n.ariaLabel === label) return n;
+    changed = true;
+    return { ...n, ariaLabel: label };
+  });
+  return changed ? out : nodes;
+}
+
+/**
  * A wire link as an xyflow edge.
  *
  * @param edge The server row.

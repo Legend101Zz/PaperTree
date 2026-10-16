@@ -4,14 +4,15 @@
  * Pure: no React, no fetch. Every number a card prints comes from a field the API returned (an
  * anchor's page, a notebook card's `counts`, a message's `coverage` and `run`); when the field is
  * absent the builder returns null and the card shows nothing in its place, never a made-up figure.
+ * An answer's markers come from the explain panel's model (`features/explain`), never a second one.
  */
-
+import { numberPassages, type PassageNumbers } from '@/features/explain/model/passages';
 import { PAGE_WIDTH } from '@/features/notebook';
-import { handlesInBlocks, parseMarkdown } from '@/lib/markdown';
 
 import type { Anchor } from '@papertree/anchoring';
 import type { NotebookItemBox } from '../api/notebook';
-import type { CanvasNode, Citation, Message, MessageCoverage, RunSummary } from '@/lib/api/types';
+import type { ExchangeMessage } from '@/features/explain/model/answer';
+import type { CanvasNode, Message, MessageCoverage, RunSummary } from '@/lib/api/types';
 
 /**
  * The 0-based page a stored anchor points at: its PageSelector, else its ShapeSelector.
@@ -65,55 +66,51 @@ export function coverageLine(coverage: MessageCoverage | null): string | null {
   return `${plural(coverage.passages, 'passage', 'passages')} · ${plural(coverage.citations, 'citation', 'citations')}`;
 }
 
-/**
- * The usage line under AI work: "6,861 tokens · ≈ $0.0023 (estimate)". It always ends in
- * "(estimate)" (DESIGN.md §4.8), also when only the tokens are known.
- *
- * @param run The run that wrote the answer, or null.
- * @returns The line, or null when the run reports nothing.
- */
-export function usageLine(run: RunSummary | null): string | null {
-  if (run === null) return null;
-  const parts: string[] = [];
-  if (run.input_tokens !== null || run.output_tokens !== null) {
-    parts.push(plural((run.input_tokens ?? 0) + (run.output_tokens ?? 0), 'token', 'tokens'));
-  }
-  if (run.cost_usd_est !== null) parts.push(`≈ $${run.cost_usd_est.toFixed(4)}`);
-  return parts.length === 0 ? null : `${parts.join(' · ')} (estimate)`;
-}
-
-/**
- * The passage a citation points at: the server's locator key, else a key of its own.
- *
- * @param citation The citation.
- * @param messageId The answer it belongs to (keeps two answers' bare handles apart).
- * @returns The passage key.
- */
-export function passageKey(citation: Citation, messageId: string): string {
-  return citation.locator?.passage_key ?? `${messageId}:${citation.marker}`;
-}
-
 /** What an explanation card needs from its thread. */
 export interface ExplanationSource {
+  /** The thread the answer is in (the reader's `&cite=` link reads only that one). */
+  readonly threadId: string;
   /** The ask that came before the answer, in the person's words; null when there is none. */
   readonly question: string | null;
-  readonly citations: readonly Citation[];
-  readonly coverage: MessageCoverage | null;
+  /** The stored answer as the explain panel models it (its citations, coverage, generation). */
+  readonly answer: ExchangeMessage;
+  /** The thread's passage numbering (S4b's), so marker 2 is the same passage as in the panel. */
+  readonly numbers: PassageNumbers;
   readonly run: RunSummary | null;
-  /** Passage key → its number. Thread-wide, so marker 2 is the same passage on every card. */
-  readonly numbers: ReadonlyMap<string, number>;
 }
 
 /**
- * The card's view of one stored answer. Passage numbers run 1..k in the order the THREAD first
- * cites each passage (answers by ordinal, handles in reading order), as the explain panel numbers
- * them, so a marker on the board and in the reader say the same number.
+ * A stored message in the explain panel's shape (`ExchangeMessage`).
  *
+ * @param message The stored message.
+ * @param question The ask it answers ("" for a user turn).
+ * @returns The panel's message.
+ */
+function exchangeOf(message: Message, question: string): ExchangeMessage {
+  return {
+    key: message.message_id,
+    role: message.role,
+    text: message.content ?? '',
+    status: message.status ?? 'complete',
+    citations: message.citations ?? [],
+    question,
+    createdAt: message.created_at ?? null,
+    coverage: message.coverage ?? null,
+    generation: message.generation ?? null,
+  };
+}
+
+/**
+ * The card's view of one stored answer, numbered by the explain panel's own rule
+ * (`numberPassages`: 1..k in the order the thread first cites each passage).
+ *
+ * @param threadId The thread the messages came from.
  * @param messages The thread's messages.
  * @param messageId The answer on the card.
  * @returns Its source, or null when the thread does not hold it.
  */
 export function explanationSource(
+  threadId: string,
   messages: readonly Message[],
   messageId: string,
 ): ExplanationSource | null {
@@ -121,24 +118,16 @@ export function explanationSource(
   const at = ordered.findIndex((m) => m.message_id === messageId);
   const answer = ordered[at];
   if (answer === undefined) return null;
-  const numbers = new Map<string, number>();
-  for (const message of ordered) {
-    if (message.role !== 'assistant') continue;
-    const byMarker = new Map(message.citations.map((c) => [c.marker, c] as const));
-    for (const handle of handlesInBlocks(parseMarkdown(message.content))) {
-      const citation = byMarker.get(handle);
-      if (citation === undefined) continue;
-      const key = passageKey(citation, message.message_id);
-      if (!numbers.has(key)) numbers.set(key, numbers.size + 1);
-    }
-  }
   const asked = ordered.slice(0, at).findLast((m) => m.role === 'user');
+  const question = asked === undefined ? '' : asked.content.trim();
   return {
-    question: asked === undefined || asked.content.trim() === '' ? null : asked.content.trim(),
-    citations: answer.citations,
-    coverage: answer.coverage ?? null,
+    threadId,
+    question: question === '' ? null : question,
+    answer: exchangeOf(answer, question),
+    numbers: numberPassages(
+      ordered.filter((m) => m.role === 'assistant').map((m) => exchangeOf(m, '')),
+    ),
     run: answer.run ?? null,
-    numbers,
   };
 }
 

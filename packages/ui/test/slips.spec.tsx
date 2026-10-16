@@ -71,6 +71,16 @@ describe('CallSlip', () => {
   });
 });
 
+describe('CallSlip without a time (the board card)', () => {
+  it('draws the stamp and the ask and no time', () => {
+    const { container } = render(<CallSlip ask="Explain this passage." />);
+    expect(screen.getByRole('group', { name: 'Your question' }).textContent).toContain(
+      'Explain this passage.',
+    );
+    expect(container.querySelector('time')).toBeNull();
+  });
+});
+
 describe('AiSlip', () => {
   it('shows the AI tab, model line, slots, and labels uncited text', () => {
     const { container } = render(

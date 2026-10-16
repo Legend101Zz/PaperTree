@@ -6,7 +6,7 @@
 export { BoardView, citationHref } from './components/BoardView';
 export { nodeTypes } from './components/cards';
 export { useBoardController, staleSubject } from './hooks/useBoardController';
-export { useCardSources, useExplanationCitations } from './hooks/useCardSources';
+export { useCardSources } from './hooks/useCardSources';
 export * from './model/flow';
 export { newEdgeId, newNodeId } from './model/ids';
 export * from './model/placement';

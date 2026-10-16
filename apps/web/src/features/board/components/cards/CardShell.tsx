@@ -2,15 +2,14 @@
 
 /**
  * board/cards/CardShell — what every card shares: the stock it is cut from (index card, call slip,
- * or bare for the slip cards), the resize handles, the link handles, select-on-click, and the
- * clipped body with its fade and "more" (GAP-A3 §7). Each card kind fills it with its own voice.
+ * or bare for the slip cards), the resize handles, the link handles and select-on-click; and the
+ * person's stamp. Each card kind fills it with its own voice; long bodies go in a `ClipBody`.
  *
  * No hover-only actions: every action is a visible button.
  */
 import { Handle, NodeResizer, Position, useStoreApi } from '@xyflow/react';
-import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { type MouseEvent, type ReactNode } from 'react';
 
-import { clipState } from '../../model/clip';
 import { useCanvasActions } from '../BoardContext';
 
 /** Props for `CardShell`. */
@@ -55,7 +54,7 @@ export function CardShell({ id, selected, kind, stock, children }: CardShellProp
       <NodeResizer
         isVisible={selected}
         minWidth={120}
-        minHeight={80}
+        minHeight={100}
         handleClassName="pt-cv-resize"
         lineClassName="pt-cv-resize-line"
         onResizeEnd={(_, p) => ctx.commitSize(id, { x: p.x, y: p.y, w: p.width, h: p.height })}
@@ -67,72 +66,16 @@ export function CardShell({ id, selected, kind, stock, children }: CardShellProp
   );
 }
 
-/** Props for `ClipBody`. */
-export interface ClipBodyProps {
-  readonly children: ReactNode;
-  readonly className?: string;
-}
-
-/**
- * A card body that never cuts text off silently: when its words do not fit, a fade and a "more"
- * button show; "more" expands the body in place (the card grows over the board, its saved size is
- * unchanged) and "less" folds it back.
- */
-export function ClipBody({ children, className }: ClipBodyProps): ReactNode {
-  const body = useRef<HTMLDivElement>(null);
-  const [expanded, setExpanded] = useState(false);
-  const [size, setSize] = useState({ content: 0, box: 0 });
-
-  useEffect(() => {
-    const el = body.current;
-    if (el === null) return undefined;
-    const measure = (): void =>
-      setSize((s) =>
-        s.content === el.scrollHeight && s.box === el.clientHeight
-          ? s
-          : { content: el.scrollHeight, box: el.clientHeight },
-      );
-    measure();
-    if (typeof ResizeObserver === 'undefined') return undefined;
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [expanded]);
-
-  const state = clipState(size.content, size.box, expanded);
-  return (
-    <div
-      className={`pt-bc__clip${className === undefined ? '' : ` ${className}`}`}
-      data-clipped={state.clipped}
-      data-expanded={expanded}
-    >
-      <div ref={body} className="pt-bc__clip-body nowheel">
-        {children}
-      </div>
-      {state.control === null ? null : (
-        <button
-          type="button"
-          className="pt-bc__more nodrag"
-          aria-expanded={expanded}
-          onClick={() => setExpanded((v) => !v)}
-        >
-          {state.control}
-        </button>
-      )}
-    </div>
-  );
-}
-
 /** Props for `Stamp`. */
 export interface StampProps {
   /** The account's initial. Default `M`. */
   readonly initial?: string;
 }
 
-/** The person's stamp on their own cards (call slip, question, note). Decorative. */
+/** The person's stamp on their own cards (question, note): the call slip's own. Decorative. */
 export function Stamp({ initial = 'M' }: StampProps): ReactNode {
   return (
-    <span className="pt-bc__stamp" aria-hidden="true">
+    <span className="pt-call-slip__stamp pt-bc__stamp" aria-hidden="true">
       {initial}
     </span>
   );

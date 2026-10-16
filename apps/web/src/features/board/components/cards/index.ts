@@ -19,5 +19,5 @@ export const nodeTypes = {
   frame: FrameNode,
 };
 
-export { AnswerText } from './ExplanationCard';
-export { CardShell, ClipBody } from './CardShell';
+export { CardShell } from './CardShell';
+export { ClipBody } from './ClipBody';
