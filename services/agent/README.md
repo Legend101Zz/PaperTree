@@ -129,7 +129,8 @@ and no socket. By default it answers from what the run gave it: an explain/ask w
 quotes the first passages and cites them; a summary calls `get_outline` and writes one bullet per
 outline handle; an ask without a seed calls `search_passages`. A question containing
 `[faux:<name>]` selects a scripted failure for e2e error paths: `auth-error`, `upstream-503`,
-`stall`, `slow`, `tool-loop`. The tests replay the eight `contracts/agent/fixtures/*.sse` recordings
+`stall`, `slow`, `tool-loop`; `paragraphs` answers from the seed in three paragraphs (the phone's
+"Read the whole answer", #205). The tests replay the eight `contracts/agent/fixtures/*.sse` recordings
 as faux scripts and assert the agent emits them (`test/fixtures.test.ts`).
 
 ## Tests

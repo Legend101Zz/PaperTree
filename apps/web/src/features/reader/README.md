@@ -17,6 +17,10 @@ calls no API. The page count comes from pdf.js (`usePdfDocument`) or, before the
   closes. From 768 px the drawer opens under the 56 px header, which stays the full window width.
 - **Board** is a link to `/paper/<id>/board` (#214; the v0.1 `/paper/<id>/canvas` redirects there).
 - **Zoom** is − / select / +; "Fit width" is one of the select's options, as frame 04 draws it.
+- **Below 768 px (#205, frame 08b)** the header is one 56 px row: back, the title, "p. 2" (no count), Explain and a
+  44 px menu button (`ReaderMenu`, a disclosure: Esc or a press outside closes it and focus goes back to the button)
+  holding Contents, the reading mode, zoom and Board. `hooks/usePhone` is the explain sheet's breakpoint. A zoom
+  picked there survives a reload (measured at 390, `e2e/v02/phone-reader.spec.ts`).
 
 ## The lamp-lit page (#205, frame 09b)
 
@@ -27,7 +31,7 @@ focus blue would be 1.6:1 there), the selection is `--pt-pdf-selection`, the out
 `--pt-flash-rest` (0.6 by day, 0.7 lamp-lit: 3.1:1 and 3.5:1, the phone's only lasting cue), and the highlight washes are `--pt-pdf-hl-*` (raised in the
 dark so each stands off the ivory at least as far as off white by day; Guided's dark page keeps the plain
 `--pt-hl-*`). `packages/ui/test/tokens.spec.ts` recomputes all of it from the stylesheet. The blend's scroll cost at
-300 % zoom: none the 60 Hz cadence shows (frame interval mean 16.5 ms in both schemes, 1440 × 900, headless Chromium).
+300 % zoom was measured at none the 60 Hz cadence shows (`research/build/v0.2-ui/shots/S4e/README.md`).
 
 ## The selection toolbar (#203)
 
@@ -89,7 +93,7 @@ selects.
 
 ## Key files
 
-- `components/ReaderHeader.tsx`: the bar. Below 640 px it takes two rows (`styles.css`, "H390").
+- `components/ReaderHeader.tsx`: the bar; below 768 px the phone row and `components/ReaderMenu.tsx`.
 - `model/pageCounter.ts`: "p. 2 of 15", pure.
 - `model/toolbarPlacement.ts`, `model/highlightClick.ts`, `model/contents.ts`: the rules above, pure and
   tested beside them; `hooks/useSelectionToolbar.tsx` and `hooks/useHighlightClick.ts`: their wiring.

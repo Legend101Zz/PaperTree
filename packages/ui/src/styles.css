@@ -1233,29 +1233,6 @@ span.pt-paper .pt-paper__cite {
   }
 }
 
-/* Below 640 px the controls take a row of their own, full width, the mode switch first. */
-@media (max-width: 639px) {
-  .pt-reader__bar {
-    padding: 8px 16px;
-  }
-  .pt-reader__rule {
-    display: none;
-  }
-  .pt-reader__controls {
-    flex: 1 1 100%;
-    justify-content: space-between;
-    min-inline-size: 0;
-  }
-  .pt-reader__controls .pt-segmented {
-    flex: 1 1 auto;
-    min-inline-size: 0;
-  }
-  .pt-reader__controls .pt-segmented__option {
-    flex: 1 1 0;
-    padding-inline: 8px;
-  }
-}
-
 /* The selected text reads through a blue-grey wash (frame 04), not the browser's bright blue. */
 .pt-reader .papertree-text-layer ::selection {
   background: var(--pt-pdf-selection);
@@ -2801,11 +2778,12 @@ span.pt-paper .pt-paper__cite {
   resize: none;
 }
 
-/* A phone sheet at the half detent is short. It opens a little taller than half, and the composer
-   gives its height back to the answer. The sheet sets its height inline, hence !important. */
+/* A phone sheet opens over a peek of the page under the 56 px header (frame 08b: its top at 140 px),
+   and the composer gives its height back to the answer. The sheet sets its height inline, hence
+   !important. */
 @media (max-width: 767px) {
   .pt-explain-sheet[data-detent='half'] {
-    height: 64% !important;
+    height: calc(100% - 140px) !important;
   }
 
   .pt-explain__input {
@@ -3729,59 +3707,6 @@ html:has(.pt-notice--undo) .pt-toast {
 @media (max-width: 639px) {
   .pt-cv-group__title {
     min-block-size: calc(40px / clamp(0.3, var(--pt-cv-zoom, 1), 1));
-  }
-}
-
-/* ── RFIX2 (additive) ──────────────────────────────────────────────────────────────────────────
-   H390: the reader header at phone width. Row one is Back, Contents, the title on ONE line with an
-   ellipsis, Board and Explain (#203); row two is the reading-mode switch and ONE compact zoom control
-   (the select: the platform picker on touch). The step buttons are wide-screen shortcuts; pinch
-   zooms on a phone. Every control keeps its 40 px target. */
-
-@media (max-width: 639px) {
-  .pt-reader__bar {
-    flex-wrap: wrap;
-    row-gap: 8px;
-  }
-  /* The controls group dissolves into the bar so Board and Explain join row one, the rest row two. */
-  .pt-reader__bar > .pt-reader__controls {
-    display: contents;
-  }
-  .pt-reader__bar > .pt-reader__title {
-    flex: 1 1 0;
-    min-inline-size: 0;
-    order: 1;
-  }
-  .pt-reader__controls > .pt-reader__board,
-  .pt-reader__controls > .pt-reader__explain {
-    flex: 0 0 auto;
-    order: 2;
-  }
-  /* The line break between the two rows. */
-  .pt-reader__bar::after {
-    content: '';
-    flex: 1 0 100%;
-    block-size: 0;
-    order: 3;
-  }
-  .pt-reader__controls > :not(.pt-reader__board, .pt-reader__explain) {
-    order: 4;
-  }
-  .pt-reader__controls > div:first-child {
-    flex: 1 1 auto;
-    min-inline-size: 0;
-  }
-  .pt-reader__controls .pt-zoom {
-    flex: 0 0 auto;
-  }
-  .pt-reader__controls .pt-zoom__step {
-    display: none;
-  }
-  /* "Fit width" in Courier Prime needs 7 rem to show whole (#203) */
-  .pt-reader__controls .pt-zoom__select {
-    flex: none;
-    inline-size: 7rem;
-    max-inline-size: 7rem;
   }
 }
 
@@ -4755,10 +4680,73 @@ button.pt-holder {
   font-family: var(--pt-font-you);
 }
 
-/* ── S4e: the phone explain sheet (frame 08b) (#205) ─────────────────────────────────────────
-   Below 768 px the explain sheet carries its thread menu in its own header, answers open on their
-   first paragraph, markers and trace rows are 44 px targets, and the last answer's usage and actions
-   are pinned above the follow-up box, outside the scroll, so they never cover the answer. Tokens only. */
+/* ── S4e: the phone reader (frame 08b) (#205) ──────────────────────────────────────────────────
+   Below 768 px the header is one 56 px row (back, the title, "p. 2", Explain and the menu), the
+   explain sheet carries its thread menu in its own header, answers open on their first paragraph,
+   markers and trace rows are 44 px targets, and the last answer's usage and actions are pinned above
+   the follow-up box, outside the scroll, so they never cover the answer. Tokens only. */
+
+.pt-reader__bar--phone {
+  flex-wrap: nowrap;
+  gap: 2px;
+  box-sizing: border-box;
+  block-size: var(--pt-reader-bar-h);
+  padding: 0 4px;
+}
+
+.pt-reader__bar--phone .pt-reader__title {
+  flex: 1 1 0;
+  font-size: 15px;
+}
+
+.pt-reader__bar--phone .pt-reader__page {
+  display: inline;
+  margin-inline: 0 4px;
+}
+
+.pt-reader__bar--phone .pt-toolbtn {
+  min-block-size: var(--pt-target-touch);
+  min-inline-size: var(--pt-target-touch);
+  padding-inline: 10px;
+}
+
+.pt-reader__menu-button {
+  padding: 0;
+}
+
+.pt-reader-menu {
+  position: absolute;
+  inset-block-start: calc(100% + 4px);
+  inset-inline: 8px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--pt-space-3);
+  padding: var(--pt-space-3);
+  background: var(--pt-e2-fill);
+  border: 1px solid var(--pt-rule);
+  border-radius: var(--pt-radius-menu);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+}
+
+.pt-reader-menu .pt-toolbtn {
+  justify-content: flex-start;
+}
+
+/* Inside the menu the words show again (the narrow bar draws Contents and Board as icons). */
+.pt-reader-menu .pt-toolbtn__label {
+  position: static;
+  inline-size: auto;
+  block-size: auto;
+  clip-path: none;
+}
+
+.pt-reader-menu .pt-zoom__step,
+.pt-reader-menu .pt-zoom__select,
+.pt-reader-menu .pt-segmented__option {
+  min-block-size: var(--pt-target-touch);
+}
 
 .pt-explain-sheet .pt-sheet__header {
   gap: 6px;

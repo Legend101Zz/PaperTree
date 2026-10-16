@@ -418,7 +418,10 @@ function GuidedTable({
   }, [block.id, doc, rawCells]);
 
   return (
-    <div className="my-6 overflow-x-auto">
+    // A table wider than a phone scrolls sideways: the region takes focus so a keyboard can scroll
+    // it too (axe `scrollable-region-focusable`, found at 390 px in #205).
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a scroller must be focusable
+    <div className="my-6 overflow-x-auto" tabIndex={0}>
       <TableView
         blockId={block.id}
         rows={rows}

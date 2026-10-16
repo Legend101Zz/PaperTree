@@ -607,6 +607,18 @@ function scenario(name: string, request: RunRequest): readonly FauxStep[] | null
       return [(context) => diagramTurn(context, ATTENTION_PLATE)];
     case 'diagram-bad':
       return [(context) => diagramTurn(context, BAD_PLATE)];
+    case 'paragraphs':
+      // Three paragraphs for the phone sheet's "Read the whole answer" (e2e, #205): the seed
+      // answer, a second cited paragraph, and an uncited reading.
+      return [
+        (context) => {
+          const first = answerFromSeed(request);
+          const turn = typeof first === 'function' ? first(context) : first;
+          const handle = seedPassages(context.systemPrompt)[0]?.handle ?? 'b1';
+          const text = `${(turn.text ?? []).join('')}\n\nIt comes back to the selection [${handle}].\n\nThis is my reading, not the paper's claim. (Faux.)`;
+          return { ...turn, text: chunks(text), usage: estimate(context, text) };
+        },
+      ];
     case 'tool-loop':
       return Array.from({ length: 12 }, () => ({
         toolCalls: [{ name: 'search_passages', arguments: { query: 'method' } }],
