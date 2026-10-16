@@ -203,6 +203,34 @@
   background: var(--pt-page);
   border: 1px solid var(--pt-control-border);
 }
+.ds-row {
+  margin-block: var(--pt-space-5);
+}
+.ds-cells {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pt-space-5);
+  align-items: flex-start;
+}
+.ds-cell {
+  display: grid;
+  gap: var(--pt-space-2);
+  justify-items: start;
+}
+.ds-cell__items {
+  display: flex;
+  gap: var(--pt-space-3);
+  align-items: center;
+}
+.ds-caption {
+  color: var(--pt-ink-muted);
+  font-size: var(--pt-t-num-s);
+}
+/* A toast is fixed to the viewport in the app; on this board it sits in the flow to be inspected. */
+.ds-toast.pt-notice {
+  position: static;
+  margin-inline: 0;
+}
 @media (max-width: 720px) {
   .ds-type__row {
     grid-template-columns: 1fr;

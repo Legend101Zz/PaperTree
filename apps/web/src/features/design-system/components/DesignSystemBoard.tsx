@@ -11,7 +11,9 @@ import { ThemeSwitch, useTheme } from '@/features/settings';
 
 import './design-system.css';
 import { ColourRoles } from './ColourRoles';
+import { ControlStates } from './ControlStates';
 import { Furniture, TypeVoices } from './FurnitureTypeVoices';
+import { ReaderStates } from './ReaderStates';
 import { SpacingMotion } from './SpacingMotion';
 
 import type { ReactNode } from 'react';
@@ -37,6 +39,16 @@ export function DesignSystemBoard(): ReactNode {
       <Furniture />
       <TypeVoices />
       <SpacingMotion />
+      <section className="ds-section" aria-labelledby="ds-components">
+        <h2 id="ds-components" className="ds-h2">
+          Components
+        </h2>
+        <p className="ds-lede">
+          Core controls in their states, then the reader parts. Switch the scheme above to see both.
+        </p>
+        <ControlStates />
+        <ReaderStates />
+      </section>
     </main>
   );
 }

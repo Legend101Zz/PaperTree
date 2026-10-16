@@ -3274,7 +3274,8 @@ span.pt-paper .pt-paper__cite {
     var(--pt-e1);
 }
 
-.pt-button--primary:hover {
+.pt-button--primary:hover,
+.pt-button--primary[data-state='hover'] {
   background: var(--pt-primary-hover);
 }
 
@@ -3285,7 +3286,9 @@ span.pt-paper .pt-paper__cite {
 
 .pt-button--secondary:hover,
 .pt-button--ghost:hover,
-.pt-toolbtn:hover {
+.pt-toolbtn:hover,
+.pt-button--secondary[data-state='hover'],
+.pt-button--ghost[data-state='hover'] {
   background: color-mix(in srgb, var(--pt-ink) 7%, var(--pt-page));
 }
 
@@ -3294,7 +3297,8 @@ span.pt-paper .pt-paper__cite {
   border-color: var(--pt-primary);
 }
 
-.pt-button--outline:hover {
+.pt-button--outline:hover,
+.pt-button--outline[data-state='hover'] {
   background: color-mix(in srgb, var(--pt-primary) 9%, var(--pt-page));
 }
 
@@ -3304,7 +3308,8 @@ span.pt-paper .pt-paper__cite {
   border-color: var(--pt-danger);
 }
 
-.pt-button--danger:hover {
+.pt-button--danger:hover,
+.pt-button--danger[data-state='hover'] {
   background: color-mix(in srgb, var(--pt-danger) 9%, var(--pt-page));
 }
 
@@ -3320,7 +3325,10 @@ span.pt-paper .pt-paper__cite {
 
 .pt-button:focus-visible,
 .pt-toolbtn:focus-visible,
-.pt-textfield__control:focus-visible {
+.pt-textfield__control:focus-visible,
+/* forced focus for /design-system, which cannot hold a real one still */
+.pt-button[data-state='focus'],
+.pt-textfield__control[data-state='focus'] {
   outline: var(--pt-focus-width) solid var(--pt-focus);
   outline-offset: var(--pt-focus-offset);
 }
