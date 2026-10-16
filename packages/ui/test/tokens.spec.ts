@@ -158,3 +158,25 @@ describe('Ex Libris tokens', () => {
     }
   });
 });
+
+describe('SegmentedControl current segment', () => {
+  it('no rule paints the checked option with accent or primary text (it sits on --pt-ink)', () => {
+    const clean = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+    const offenders: string[] = [];
+    for (const m of clean.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      const selector = m[1]!.trim();
+      if (!selector.includes("pt-segmented__option[aria-checked='true']")) continue;
+      const colour = /(?:^|[;\s])color\s*:\s*([^;]+)/.exec(m[2]!)?.[1]?.trim() ?? '';
+      if (/--pt-(accent|primary)\b/.test(colour))
+        offenders.push(`${selector} { color: ${colour} }`);
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('TextField on touch', () => {
+  it('uses 16px type under a coarse pointer so iOS does not zoom on focus', () => {
+    const block = /@media \(pointer: coarse\) \{\s*\.pt-textfield__control \{([^}]*)\}/.exec(CSS);
+    expect(block?.[1]).toMatch(/font-size:\s*16px/);
+  });
+});

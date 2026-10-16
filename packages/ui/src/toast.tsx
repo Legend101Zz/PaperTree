@@ -15,6 +15,9 @@ import { Button, joinClasses } from './controls.js';
 /** Default time on screen before auto-dismiss, in ms. */
 export const TOAST_DURATION_MS = 6000;
 
+/** How long after mount the message is put into the (already present) live region, in ms. */
+const ANNOUNCE_DELAY_MS = 50;
+
 /** Gap kept between a toast and the inset it must not cover, in CSS px. */
 export const TOAST_GAP_PX = 12;
 
@@ -53,6 +56,17 @@ export function Toast({
   const dismissRef = useRef(onDismiss);
   dismissRef.current = onDismiss;
   const paused = hover || focus;
+  // The live region must exist EMPTY before its text arrives: VoiceOver+Safari and NVDA+Firefox
+  // skip text that is already present when a region is inserted. So the message is set after mount.
+  const [announced, setAnnounced] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setAnnounced(message);
+    }, ANNOUNCE_DELAY_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [message]);
 
   useEffect(() => {
     if (duration <= 0 || paused) return undefined;
@@ -68,8 +82,6 @@ export function Toast({
     <div
       className={joinClasses('pt-notice', className)}
       style={{ insetBlockEnd: bottomInset + TOAST_GAP_PX }}
-      role="status"
-      aria-live="polite"
       onPointerEnter={() => {
         setHover(true);
       }}
@@ -83,7 +95,9 @@ export function Toast({
         setFocus(false);
       }}
     >
-      <span className="pt-notice__message">{message}</span>
+      <span className="pt-notice__message" role="status" aria-live="polite">
+        {announced}
+      </span>
       {onUndo === undefined ? null : (
         <Button variant="ghost" onClick={onUndo}>
           Undo

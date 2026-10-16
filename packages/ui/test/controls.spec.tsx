@@ -45,19 +45,20 @@ describe('Button', () => {
     expect(onClick).not.toHaveBeenCalled();
   });
 
-  it('md is 36 px and touch is 44 px, inline', () => {
+  it('md is 40 px and touch is 44 px, inline', () => {
     render(
       <>
         <Button>Desk</Button>
         <Button size="touch">Phone</Button>
       </>,
     );
-    expect(screen.getByRole('button', { name: 'Desk' }).style.minHeight).toBe('36px');
+    expect(screen.getByRole('button', { name: 'Desk' }).style.minHeight).toBe('40px');
     expect(screen.getByRole('button', { name: 'Phone' }).style.minHeight).toBe('44px');
   });
 
   it('hides icons from the accessible name', () => {
-    render(<Button trailingIcon={<svg data-testid="arrow" />}>Continue</Button>);
+    render(<Button trailingIcon={<span>ARROWTEXT</span>}>Continue</Button>);
+    // An icon with text content would pollute the name unless its wrapper is aria-hidden.
     expect(screen.getByRole('button', { name: 'Continue' })).toBeTruthy();
   });
 });

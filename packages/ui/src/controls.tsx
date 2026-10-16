@@ -8,7 +8,7 @@
  *
  * Disabled controls use `aria-disabled`, never the `disabled` attribute: a disabled button leaves
  * the tab order, and the person who most needs to learn why is the one who can no longer reach it.
- * The 36/44 px sizes are inline styles for the reason `primitives.tsx` gives (no CSS in happy-dom,
+ * The 40/44 px sizes are inline styles for the reason `primitives.tsx` gives (no CSS in happy-dom,
  * and this package is outside Tailwind's content globs).
  */
 
@@ -29,11 +29,11 @@ export function joinClasses(...parts: readonly (string | false | undefined)[]): 
 /** The button flavours of DESIGN.md §3 item 1. */
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost';
 
-/** `md` is the 36 px desktop target; `touch` is the 44 px phone target. */
+/** `md` is the 40 px desktop target; `touch` is the 44 px phone target. */
 export type ControlSize = 'md' | 'touch';
 
 /** Minimum control heights in CSS px, by size. Inline so a missing stylesheet cannot shrink them. */
-export const CONTROL_MIN_HEIGHT_PX: Readonly<Record<ControlSize, number>> = { md: 36, touch: 44 };
+export const CONTROL_MIN_HEIGHT_PX: Readonly<Record<ControlSize, number>> = { md: 40, touch: 44 };
 
 type ButtonDomProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'disabled' | 'type'>;
 

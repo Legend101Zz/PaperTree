@@ -19,7 +19,10 @@ describe('Toast', () => {
     render(<Toast message="Highlight removed" onUndo={onUndo} onDismiss={() => undefined} />);
     const region = screen.getByRole('status');
     expect(region.getAttribute('aria-live')).toBe('polite');
-    expect(region.textContent).toContain('Highlight removed');
+    // Mounted empty, filled on a later tick, so assistive tech announces it.
+    expect(region.textContent).toBe('');
+    act(() => vi.advanceTimersByTime(60));
+    expect(screen.getByRole('status').textContent).toBe('Highlight removed');
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(onUndo).toHaveBeenCalledTimes(1);
   });
@@ -44,7 +47,7 @@ describe('Toast', () => {
   it('holds while hovered or focused, then counts again', () => {
     const onDismiss = vi.fn();
     render(<Toast message="Saved" onDismiss={onDismiss} duration={1000} />);
-    const region = screen.getByRole('status');
+    const region = screen.getByRole('status').parentElement!;
     fireEvent.pointerEnter(region);
     act(() => vi.advanceTimersByTime(5000));
     expect(onDismiss).not.toHaveBeenCalled();
@@ -59,6 +62,6 @@ describe('Toast', () => {
 
   it('stays above the bottom inset it is given', () => {
     render(<Toast message="Saved" onDismiss={() => undefined} bottomInset={88} />);
-    expect(screen.getByRole('status').style.insetBlockEnd).toBe('100px');
+    expect(screen.getByRole('status').parentElement!.style.insetBlockEnd).toBe('100px');
   });
 });

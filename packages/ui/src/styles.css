@@ -1199,7 +1199,8 @@ span.pt-paper .pt-paper__cite {
 }
 
 .pt-reader .pt-segmented__option[aria-checked='true'] {
-  color: var(--pt-accent);
+  /* the current segment is ink-filled (v0.2); accent text on it was ~1.5:1 */
+  color: var(--pt-page);
 }
 
 .pt-zoom {
@@ -3432,7 +3433,6 @@ span.pt-paper .pt-paper__cite {
 /* SegmentedControl restyle (no prop changes): the Source · Guided · Split switch, ink current. */
 .pt-segmented {
   padding: 0;
-  overflow: hidden;
   background: var(--pt-page);
   border-color: var(--pt-control-border);
   border-radius: var(--pt-radius-control);
@@ -3442,6 +3442,17 @@ span.pt-paper .pt-paper__cite {
   font-size: 15px;
   color: var(--pt-ink);
   border-radius: 0;
+}
+
+/* no overflow clip on the container (it would cut the focus ring), so round the end segments */
+.pt-segmented__option:first-child {
+  border-start-start-radius: calc(var(--pt-radius-control) - 1px);
+  border-end-start-radius: calc(var(--pt-radius-control) - 1px);
+}
+
+.pt-segmented__option:last-child {
+  border-start-end-radius: calc(var(--pt-radius-control) - 1px);
+  border-end-end-radius: calc(var(--pt-radius-control) - 1px);
 }
 
 .pt-segmented__option + .pt-segmented__option {
@@ -3474,4 +3485,27 @@ span.pt-paper .pt-paper__cite {
   .pt-sheet {
     transition: none;
   }
+}
+
+/* iOS Safari zooms the page when a field under 16 px takes focus (the composer case, #178). */
+@media (pointer: coarse) {
+  .pt-textfield__control {
+    min-block-size: 44px;
+    font-size: 16px;
+  }
+}
+
+/* A disabled button does not answer hover. */
+.pt-button[aria-disabled='true']:hover,
+.pt-toolbtn[aria-disabled='true']:hover {
+  background: transparent;
+}
+
+.pt-button--secondary[aria-disabled='true']:hover,
+.pt-button--danger[aria-disabled='true']:hover {
+  background: var(--pt-page);
+}
+
+.pt-button--primary[aria-disabled='true']:hover {
+  background: var(--pt-ground);
 }
