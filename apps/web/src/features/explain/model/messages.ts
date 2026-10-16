@@ -35,6 +35,18 @@ export interface ThreadMessage {
   readonly coverage: MessageCoverage | null;
   /** The parse generation of the run (the `run` event's, or the stored message's); null until known. */
   readonly generation: number | null;
+  /**
+   * A Retry of this answer was refused before it was sent (the daily cap, #204): the answer it
+   * would have replaced stays as it was, with this beneath it, until the reader's next ask or retry.
+   * Live only; a stored read never clears it.
+   */
+  readonly refusal?: Failure | null;
+  /**
+   * Stopped in this session and its stored copy (with the citations the server minted for what
+   * arrived) has not landed yet: drawn as while streaming, so nothing is classed uncited and then
+   * moved (#204).
+   */
+  readonly awaitingStored?: boolean;
 }
 
 const STORED = 's:';
@@ -112,7 +124,7 @@ function shownStored(stored: readonly Message[]): ThreadMessage[] {
  * The live message or its stored copy, whichever is the truth now. Live while either side is
  * still streaming (a detail fetched mid-stream is stale); stored once both have settled, under the
  * live key, keeping the live-only facts (Stop was pressed; the question it answers; the citations
- * the markers on screen were drawn from).
+ * the markers on screen were drawn from; a refused Retry). Its landing ends `awaitingStored`.
  *
  * @param live The message on screen.
  * @param stored The same message from the server.
@@ -158,6 +170,8 @@ function settle(live: ThreadMessage, stored: ThreadMessage): ThreadMessage {
     key: live.key,
     citations: shownCitations(live.citations, stored.citations),
     stopped: live.stopped,
+    refusal: live.refusal ?? null,
+    awaitingStored: false,
     question: live.role === 'assistant' && live.question !== '' ? live.question : stored.question,
   };
 }

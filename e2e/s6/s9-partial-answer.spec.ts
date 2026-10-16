@@ -76,7 +76,7 @@ test.describe('S9-4: a stopped answer never shows raw citation markers', () => {
     await expect(slow).toContainText('This answer streams slowly', { timeout: 60_000 });
     await panel.getByRole('button', { name: 'Stop' }).click();
     const stopped = panel.locator('[data-message-status]').last();
-    await expect(stopped).toContainText('Stopped. The partial answer is kept above.', {
+    await expect(stopped).toContainText('Stopped. The part that arrived is kept.', {
       timeout: 30_000,
     });
     expect((await stopped.innerText()).replace(/\s+/g, ' ')).not.toMatch(/\[|\bb\d+\b/);

@@ -37,6 +37,8 @@ export interface Exchange<M extends ExchangeMessage = ExchangeMessage> {
   readonly askedAt: string | null;
   /** The selected passage: the first exchange of a thread opened from a selection only. */
   readonly quote: SlipQuote | null;
+  /** The ask is a turn of its own (typed in the composer), not the panel's default Explain ask. */
+  readonly typed: boolean;
   readonly answer: M | null;
   /** Null until the answer has any text. */
   readonly model: AnswerModel | null;
@@ -117,6 +119,7 @@ function exchangeFrom<M extends ExchangeMessage>(
     ask: ask?.text ?? answer?.question ?? '',
     askedAt: ask?.createdAt ?? answer?.createdAt ?? null,
     quote: null,
+    typed: ask !== null,
     answer,
     model: hasText ? buildAnswer(answer, numbers) : null,
   };

@@ -129,7 +129,7 @@ describe('the paper summary', () => {
     });
     render(<Harness />);
     await open();
-    expect((await screen.findByRole('alert')).textContent).toContain("today's AI budget");
+    expect((await screen.findByRole('alert')).textContent).toContain('Daily spend cap reached');
   });
 
   it('a cached PARTIAL summary can be regenerated: Regenerate POSTs {regenerate: true} and shows the new one', async () => {

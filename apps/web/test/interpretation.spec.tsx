@@ -58,6 +58,7 @@ const view = (m: ViewMessage) => {
       exchange={exchange as ExchangeModel<ViewMessage>}
       initial="M"
       onShow={noop}
+      onStop={noop}
       onRetry={noop}
       onSendToCanvas={async () => undefined}
     />,

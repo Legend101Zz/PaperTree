@@ -3,7 +3,8 @@
 /**
  * One answer paragraph on the AI slip (#202): the safe Markdown subset of `lib/markdown`, with each
  * `[bN]` handle drawn as the numbered marker of its PASSAGE (`[b1, b8]` → markers 1 and 4), and the
- * margin cell that repeats marker + page tab level with the claim. The v0.1 per-citation chips
+ * margin cell that repeats marker + page tab level with the claim. While the answer streams, a
+ * handle draws its marker as soon as it resolves (#204) and nothing before. The v0.1 per-citation chips
  * ("p. 3 p. 3 p. 3") are gone. Every string is a React text child; nothing is injected as HTML.
  */
 import { AiParagraph, NumberedMarker, PageTab, formatPageLabel } from '@papertree/ui';
@@ -29,10 +30,12 @@ export interface MarkerHandlers {
 /** Props for `AnswerText`. */
 export interface AnswerTextProps extends MarkerHandlers {
   readonly paragraph: AnswerParagraph;
-  /** While the answer streams its citations have not arrived: handles draw nothing yet. */
+  /** The answer is still arriving: an unclosed Markdown mark at the end is dropped. */
   readonly streaming: boolean;
   /** Draw the margin cell (the cited body); off for the uncited block. */
   readonly withMargin: boolean;
+  /** The typed caret at the end of a streaming answer (frame 04b); decoration, hidden from AT. */
+  readonly caret?: boolean;
 }
 
 function Marker({ marker, ctx }: { marker: PassageMarker; ctx: MarkerHandlers }): ReactNode {
@@ -133,17 +136,27 @@ export function AnswerText({
   paragraph,
   streaming,
   withMargin,
+  caret = false,
   ...ctx
 }: AnswerTextProps): ReactNode {
   const blocks = parseMarkdown(dehyphenate(paragraph.text), { streaming });
   const aside = withMargin ? <MarginCell paragraph={paragraph} ctx={ctx} /> : undefined;
+  const end = caret ? <span className="pt-exchange__caret" aria-hidden="true" /> : null;
   if (blocks.every((b) => b.k === 'p' || b.k === 'h')) {
-    return <AiParagraph aside={aside}>{blocks.map((b, i) => renderBlock(b, i, ctx))}</AiParagraph>;
+    return (
+      <AiParagraph aside={aside}>
+        {blocks.map((b, i) => renderBlock(b, i, ctx))}
+        {end}
+      </AiParagraph>
+    );
   }
   // AiParagraph is a <p>, which cannot hold a list: a list paragraph uses the same grid row.
   return (
     <div className="pt-ai-slip__row">
-      <div className="pt-ai-slip__text">{blocks.map((b, i) => renderBlock(b, i, ctx))}</div>
+      <div className="pt-ai-slip__text">
+        {blocks.map((b, i) => renderBlock(b, i, ctx))}
+        {end}
+      </div>
       <div className="pt-ai-slip__aside">{aside}</div>
     </div>
   );

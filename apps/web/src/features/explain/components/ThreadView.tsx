@@ -14,6 +14,7 @@ import { useReaderActions } from '@/components/reader/actions';
 import { cleanQuote, selectorOf } from '../model/anchor';
 import { buildExchanges } from '../model/exchange';
 import { isStored } from '../model/messages';
+import { opensFolded } from '../model/states';
 import { Composer } from './Composer';
 import { Exchange } from './Exchange';
 import { ThreadReadFailure } from './ThreadReadFailure';
@@ -61,6 +62,7 @@ export function ThreadView({
   const scroller = useRef<HTMLDivElement | null>(null);
   const stick = useRef(true);
   const busy = state.messages.some((m) => m.status === 'streaming');
+  const draft = state.draft.trim();
   const exchanges = useMemo(
     () => buildExchanges(state.messages, state.request),
     [state.messages, state.request],
@@ -137,14 +139,18 @@ export function ThreadView({
                 </p>
               )
             ) : null}
-            {exchanges.map((exchange) => (
+            {exchanges.map((exchange, index) => (
               <Exchange
                 key={exchange.key}
                 exchange={exchange}
                 initial={initial}
                 onShow={onShow}
                 onRetry={controller.retry}
+                onStop={controller.stop}
                 onSendToCanvas={sendToCanvas}
+                // Read once, at mount (`useState`): an exchange never folds under the reader.
+                startsFolded={opensFolded(index, exchanges.length)}
+                askInBox={draft !== '' && draft === exchange.ask.trim()}
               />
             ))}
           </>
@@ -154,8 +160,9 @@ export function ThreadView({
         <Composer
           busy={busy}
           disabled={offline}
+          value={state.draft}
+          onChange={controller.setDraft}
           onSend={controller.ask}
-          onStop={controller.stop}
           focusKey={
             // Only the toolbar's Ask leaves a passage with no thread and nothing sent (#203); a
             // stored thread being opened has its id already, and Explain sends at once.

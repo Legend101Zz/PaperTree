@@ -550,6 +550,7 @@ describe('honest, stable answers (review 1.1, 1.3)', () => {
         initial="M"
         onShow={() => undefined}
         onRetry={() => undefined}
+        onStop={() => undefined}
         onSendToCanvas={async () => undefined}
       />,
     );

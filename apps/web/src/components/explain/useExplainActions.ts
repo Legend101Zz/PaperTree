@@ -27,10 +27,18 @@ import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import type { Anchor } from '@papertree/anchoring';
 
 import { mergeStored, type ThreadMessage } from '@/features/explain/model/messages';
+import { refusedBeforeStream } from '@/features/explain/model/states';
 import { originOf } from '@/features/explain/model/threads';
 import { summaryApi } from '@/lib/api/summary';
 import { threadsApi, type CreateThreadBody } from '@/lib/api/threads';
-import type { Message, RunSummary, SseEvent, Summary, Thread } from '@/lib/api/types';
+import {
+  ApiError,
+  type Message,
+  type RunSummary,
+  type SseEvent,
+  type Summary,
+  type Thread,
+} from '@/lib/api/types';
 
 import { failureOf, type Failure } from './errors';
 
@@ -72,6 +80,11 @@ export interface ExplainState {
    * opening on the newest stored thread, and that question starts a new thread.
    */
   readonly fresh: boolean;
+  /**
+   * The composer's text, held here so it outlives the composer (the summary view and a closed
+   * panel unmount it): a question refused before it was sent comes back into it (#204).
+   */
+  readonly draft: string;
 }
 
 const IDLE_SUMMARY: SummaryView = {
@@ -92,6 +105,7 @@ const INITIAL: ExplainState = {
   messages: [],
   summary: IDLE_SUMMARY,
   fresh: false,
+  draft: '',
 };
 
 type Action =
@@ -105,7 +119,11 @@ type Action =
   | { type: 'add'; epoch: number; message: ViewMessage }
   | { type: 'patch'; epoch: number; key: string; patch: Partial<ViewMessage> }
   | { type: 'append'; epoch: number; key: string; delta: string }
-  | { type: 'summary'; patch: Partial<SummaryView> };
+  | { type: 'summary'; patch: Partial<SummaryView> }
+  /** `restore`: a refused question returns only to an empty box, never over words typed since. */
+  | { type: 'draft'; text: string; restore?: boolean }
+  /** A new ask or retry: earlier refused Retries have been answered by the reader's next action. */
+  | { type: 'clearRefusals'; epoch: number };
 
 export function explainReducer(state: ExplainState, action: Action): ExplainState {
   switch (action.type) {
@@ -175,6 +193,15 @@ export function explainReducer(state: ExplainState, action: Action): ExplainStat
             ),
           }
         : state;
+    case 'draft':
+      return action.restore === true && state.draft.trim() !== ''
+        ? state
+        : { ...state, draft: action.text };
+    case 'clearRefusals':
+      return action.epoch === state.epoch &&
+        state.messages.some((m) => m.refusal !== undefined && m.refusal !== null)
+        ? { ...state, messages: state.messages.map((m) => ({ ...m, refusal: null })) }
+        : state;
     case 'summary':
       return { ...state, summary: { ...state.summary, ...action.patch } };
   }
@@ -196,8 +223,11 @@ export interface ExplainController {
   readonly openPanel: () => void;
   readonly closeExplain: () => void;
   readonly setView: (view: PanelView) => void;
-  /** A question typed in the panel: a follow-up when a thread exists, else a free `ask`. */
-  readonly ask: (question: string) => void;
+  /**
+   * A question typed in the panel: a follow-up when a thread exists, else a free `ask`. Resolves
+   * `not-sent` when the server refused it before the stream (the composer then keeps the text).
+   */
+  readonly ask: (question: string) => Promise<AskOutcome>;
   /** Stop the answer that is streaming; its partial text stays. */
   readonly stop: () => void;
   /** Re-run a failed, stopped or partial answer. */
@@ -217,7 +247,12 @@ export interface ExplainController {
    * stored copy (locators, coverage) once settled, under the same keys. Other threads are ignored.
    */
   readonly hydrateThread: (threadId: string, messages: readonly Message[]) => void;
+  /** The composer's text changed (the composer is controlled by `state.draft`). */
+  readonly setDraft: (text: string) => void;
 }
+
+/** Whether an ask reached the AI: `not-sent` only for a refusal before the stream (#204). */
+export type AskOutcome = 'sent' | 'not-sent';
 
 const DEFAULT_EXPLAIN_QUESTION = 'Explain this passage.';
 
@@ -271,6 +306,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
         patch: {
           status: 'aborted',
           stopped: markStopped,
+          awaitingStored: markStopped,
           label: null,
           failure: markStopped ? null : { code: 'aborted', retryable: true },
         },
@@ -286,17 +322,20 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       key: string,
       open: (signal: AbortSignal) => AsyncGenerator<SseEvent>,
       userKey: string | null,
-    ): Promise<void> => {
+      before: ViewMessage | null,
+    ): Promise<AskOutcome> => {
       const controller = new AbortController();
       threadAbort.current = controller;
       const patch = (p: Partial<ViewMessage>): void =>
         dispatch({ type: 'patch', epoch, key, patch: p });
       let finished = false;
+      let accepted = false;
       try {
         for await (const event of open(controller.signal)) {
-          if (epochRef.current !== epoch) return;
+          if (epochRef.current !== epoch) return 'sent';
           switch (event.event) {
             case 'run':
+              accepted = true;
               patch({
                 runId: event.data.run_id,
                 messageId: event.data.message_id,
@@ -358,11 +397,24 @@ export function useExplainActions(options: { readonly paperId: string | null }):
           });
         }
       } catch (error) {
-        if (controller.signal.aborted || epochRef.current !== epoch) return;
-        patch({ status: 'error', label: null, failure: failureOf(error) });
+        if (controller.signal.aborted || epochRef.current !== epoch) return 'sent';
+        const failure = failureOf(error);
+        // A documented refusal before the stream wrote nothing: the AI never saw the question.
+        const refused =
+          !accepted && error instanceof ApiError && refusedBeforeStream(error.status, error.code);
+        if (!refused) {
+          patch({ status: 'error', label: null, failure });
+          return 'sent';
+        }
+        // A refused Retry leaves the answer it would have replaced as it was, the refusal beneath
+        // it; a refused new ask is the ask that was not sent.
+        if (before !== null) patch({ ...before, refusal: failure });
+        else patch({ status: 'error', label: null, failure: { ...failure, notSent: true } });
+        return 'not-sent';
       } finally {
         if (threadAbort.current === controller) threadAbort.current = null;
       }
+      return 'sent';
     },
     [],
   );
@@ -374,7 +426,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       show: boolean,
       open: (signal: AbortSignal) => AsyncGenerator<SseEvent>,
       reuse?: string,
-    ): void => {
+    ): Promise<AskOutcome> => {
       const userKey = show ? nextKey() : null;
       if (userKey !== null) {
         dispatch({
@@ -389,6 +441,11 @@ export function useExplainActions(options: { readonly paperId: string | null }):
           },
         });
       }
+      dispatch({ type: 'clearRefusals', epoch });
+      const before =
+        reuse === undefined
+          ? null
+          : (stateRef.current.messages.find((m) => m.key === reuse) ?? null);
       let key = reuse;
       if (key === undefined) {
         const assistant = blankAssistant(question);
@@ -407,10 +464,12 @@ export function useExplainActions(options: { readonly paperId: string | null }):
             label: null,
             citations: [],
             usage: null,
+            awaitingStored: false,
+            refusal: null,
           },
         });
       }
-      void consume(epoch, key, open, userKey);
+      return consume(epoch, key, open, userKey, before);
     },
     [consume],
   );
@@ -421,8 +480,8 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       request: ExplainRequest | null,
       question: string | undefined,
       show: boolean,
-    ) => {
-      if (paperId === null) return;
+    ): Promise<AskOutcome> => {
+      if (paperId === null) return Promise.resolve('sent');
       const body: CreateThreadBody =
         request === null
           ? { kind: 'ask', question: question ?? '' }
@@ -432,7 +491,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
               ...(question === undefined ? {} : { question }),
             };
       const shown = question ?? DEFAULT_EXPLAIN_QUESTION;
-      startTurn(epoch, shown, show, (signal) => threadsApi.create(paperId, body, signal));
+      return startTurn(epoch, shown, show, (signal) => threadsApi.create(paperId, body, signal));
     },
     [paperId, startTurn],
   );
@@ -443,7 +502,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       const epoch = (epochRef.current += 1);
       dispatch({ type: 'open', epoch, request: input, view: 'thread' });
       stateRef.current = { ...stateRef.current, epoch, messages: [], threadId: null };
-      sendCreate(epoch, input, undefined, false);
+      void sendCreate(epoch, input, undefined, false);
     },
     [halt, sendCreate],
   );
@@ -478,24 +537,45 @@ export function useExplainActions(options: { readonly paperId: string | null }):
     dispatch({ type: 'close' });
   }, [halt]);
 
-  const ask = useCallback(
-    (raw: string): void => {
-      const question = raw.trim();
+  const send = useCallback(
+    (question: string): Promise<AskOutcome> => {
       const current = stateRef.current;
-      if (paperId === null || question.length === 0) return;
-      if (current.messages.some((m) => m.status === 'streaming')) return;
+      if (paperId === null || question.length === 0) return Promise.resolve('not-sent');
+      if (current.messages.some((m) => m.status === 'streaming')) {
+        return Promise.resolve('not-sent');
+      }
       const epoch = current.epoch;
       if (current.threadId !== null) {
         const threadId = current.threadId;
-        startTurn(epoch, question, true, (signal) =>
+        return startTurn(epoch, question, true, (signal) =>
           threadsApi.followUp(paperId, threadId, { question }, signal),
         );
-      } else {
-        sendCreate(epoch, current.messages.length === 0 ? current.request : null, question, true);
       }
+      return sendCreate(
+        epoch,
+        current.messages.length === 0 ? current.request : null,
+        question,
+        true,
+      );
     },
     [paperId, sendCreate, startTurn],
   );
+
+  const ask = useCallback(
+    (raw: string): Promise<AskOutcome> => {
+      const question = raw.trim();
+      return send(question).then((outcome) => {
+        // Not sent: the words go back into the box, unless the reader has typed since.
+        if (outcome === 'not-sent' && question.length > 0) {
+          dispatch({ type: 'draft', text: question, restore: true });
+        }
+        return outcome;
+      });
+    },
+    [send],
+  );
+
+  const setDraft = useCallback((text: string): void => dispatch({ type: 'draft', text }), []);
 
   // The server keeps the partial text it had; `useThreads` reads the thread again once the run
   // has settled (one path for done, Stop and failures), so the stored copy replaces this one.
@@ -511,7 +591,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       if (current.threadId !== null) {
         const threadId = current.threadId;
         const retryOf = message.messageId;
-        startTurn(
+        void startTurn(
           epoch,
           question,
           false,
@@ -528,7 +608,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
         // The first turn never reached a thread (it failed before the stream): send it again.
         const first = current.messages[0];
         const asExplain = current.request !== null && first === message;
-        startTurn(
+        void startTurn(
           epoch,
           question,
           false,
@@ -719,6 +799,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       selectThread,
       startFresh,
       hydrateThread,
+      setDraft,
     }),
     [
       paperId,
@@ -736,6 +817,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       selectThread,
       startFresh,
       hydrateThread,
+      setDraft,
     ],
   );
 }

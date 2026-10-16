@@ -9,8 +9,9 @@
  *   resolved draws no marker, so its paragraph is the AI's own reading and the readout counts it
  *   (§4.6: every claim on screen carries a marker, or says it has none). The server's
  *   `uncited_paragraphs` counts any handle, so it is not used for this.
- * - Markers and tabs never change under the reader (review 1.3, #252). They appear when the answer
- *   settles, with the locator the thread already knows for the passage (else the page alone), and
+ * - Markers and tabs never change under the reader (review 1.3, #252). They appear as soon as a
+ *   handle resolves (live, for a passage the thread already cited; else when the answer settles),
+ *   with the locator the thread already knows for the passage (else the page alone), and
  *   `mergeStored` keeps the citations they were drawn from when the stored copy lands, so the same
  *   marker stays, same number, same node, same tab. Nothing is hidden once shown.
  */
@@ -36,6 +37,11 @@ export interface ExchangeMessage {
   readonly coverage?: MessageCoverage | null;
   /** The parse generation of the run, when known (the passage key needs it). */
   readonly generation?: number | null;
+  /**
+   * Stopped, and its stored copy (with the citations minted for it) has not landed yet: drawn as
+   * while streaming (#204).
+   */
+  readonly awaitingStored?: boolean;
 }
 
 /** One numbered marker: a passage of this answer, where it is, and the citation it flashes. */
@@ -74,7 +80,7 @@ export interface AnswerModel {
   readonly body: readonly AnswerParagraph[];
   /** The trailing uncited paragraphs: "no citation · the AI's own reading". Empty while streaming. */
   readonly uncited: readonly AnswerParagraph[];
-  /** Handle → passage number in this answer, for the inline markers. Empty while streaming. */
+  /** Handle → passage number in this answer, for the inline markers (live: the resolved ones). */
   readonly handleNumbers: ReadonlyMap<string, number>;
   /** Passage number → its marker (page, ¶, the citation to flash). */
   readonly markers: ReadonlyMap<number, PassageMarker>;
@@ -83,7 +89,7 @@ export interface AnswerModel {
   readonly coverage: Coverage;
   /** Handles the AI wrote that resolved to no passage (`[b9]`); none of them draws a marker. */
   readonly unresolvedMarkers: number;
-  /** Still streaming: drawn without markers or trace, nothing classed uncited yet. */
+  /** Still streaming: no trace and nothing classed uncited yet; only resolved handles draw markers. */
   readonly live: boolean;
 }
 
@@ -118,14 +124,17 @@ function markerOf(n: number, citations: readonly Citation[], locator: PassageLoc
   };
 }
 
-// Every passage of an answer: its marker, cited count, and handle → number.
-function answerPassages(answer: ExchangeMessage, numbers: PassageNumbers) {
+// Every passage of an answer: its marker, cited count, and handle → number. While it streams (and
+// after Stop, until the stored copy lands with its own), a handle the thread already resolved draws its
+// marker at once (#204); its verdict is this claim's, not the earlier one's, so none is borrowed
+// (`supported: null` until this answer's own citations arrive).
+function answerPassages(answer: ExchangeMessage, numbers: PassageNumbers, live: boolean) {
   const use = citationUse(answer);
   const byNumber = new Map<number, { cs: Citation[]; locator: PassageLocator | null }>();
   const counts = new Map<number, number>();
   const handleNumbers = new Map<string, number>();
-  const visit = (citation: Citation, occurrence: boolean): void => {
-    const key = passageKeyOf(citation, numbers.keyOfHandle, answer.generation);
+  const visit = (citation: Citation, occurrence: boolean, known?: string): void => {
+    const key = known ?? passageKeyOf(citation, numbers.keyOfHandle, answer.generation);
     const n = numbers.byKey.get(key);
     if (n === undefined) return;
     handleNumbers.set(citation.marker, n);
@@ -137,11 +146,19 @@ function answerPassages(answer: ExchangeMessage, numbers: PassageNumbers) {
   };
   use.occurrences.forEach((c) => visit(c, true));
   use.loose.forEach((c) => visit(c, false));
+  if (live) {
+    const own = new Set(answer.citations.map((c) => c.marker));
+    for (const handle of handleRuns(answer.text).flat()) {
+      const known = own.has(handle) ? undefined : numbers.handleCitations.get(handle);
+      if (known !== undefined) visit({ ...known.citation, supported: null }, true, known.key);
+    }
+  }
   const markers = new Map(
     [...byNumber.entries()].map(([n, e]) => [n, markerOf(n, e.cs, e.locator)] as const),
   );
   const handles = handleRuns(answer.text).flat().length;
-  return { markers, counts, handleNumbers, occurrences: use.occurrences.length, handles };
+  const occurrences = [...counts.values()].reduce((sum, c) => sum + c, 0);
+  return { markers, counts, handleNumbers, occurrences, handles };
 }
 
 function whereOf(marker: PassageMarker): string {
@@ -179,12 +196,17 @@ function traceOf(
  * @returns The paragraphs, markers, trace and coverage.
  */
 export function buildAnswer(answer: ExchangeMessage, numbers: PassageNumbers): AnswerModel {
-  const streaming = answer.status === 'streaming';
-  const text = streaming ? answer.text.replace(PARTIAL_TAIL, '') : answer.text;
-  const passages = answerPassages(answer, numbers);
+  // Stopped and waiting for the stored copy counts as live: a paragraph whose handle the thread has
+  // not seen yet is held as cited, not shown "uncited" and then moved when the copy lands (#204).
+  const streaming = answer.status === 'streaming' || answer.awaitingStored === true;
+  // A cut-off answer (streaming, stopped, failed) can end inside a handle run (S9-4): drop it.
+  const text = answer.status === 'complete' ? answer.text : answer.text.replace(PARTIAL_TAIL, '');
+  const passages = answerPassages(answer, numbers, streaming);
   const paragraphs = answerParagraphs(text).map((paragraph, index) => {
     const ns = streaming
-      ? []
+      ? handleRuns(paragraph)
+          .flat()
+          .flatMap((h) => passages.handleNumbers.get(h) ?? [])
       : handleRuns(paragraph).flatMap((run) => runNumbers(run, answer, numbers));
     const markers = [...new Set(ns)].flatMap((n) => passages.markers.get(n) ?? []);
     return { index, text: paragraph, markers, cited: streaming || markers.length > 0 };
@@ -197,7 +219,7 @@ export function buildAnswer(answer: ExchangeMessage, numbers: PassageNumbers): A
   return {
     body: paragraphs.slice(0, tail),
     uncited: paragraphs.slice(tail),
-    handleNumbers: streaming ? new Map() : passages.handleNumbers,
+    handleNumbers: passages.handleNumbers,
     markers: passages.markers,
     trace,
     coverage: {

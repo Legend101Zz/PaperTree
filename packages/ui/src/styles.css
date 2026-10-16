@@ -3021,7 +3021,8 @@ span.pt-paper .pt-paper__cite {
 }
 
 .pt-exchange__answer {
-  margin-block-start: var(--pt-space-6); /* room for the standing AI tab above the slip */
+  position: relative;
+  margin-block-start: var(--pt-space-7); /* room for the AI tab and Stop above the slip (04b) */
 }
 
 .pt-exchange__answer > .pt-ai-slip {
@@ -3118,6 +3119,233 @@ span.pt-paper .pt-paper__cite {
 @keyframes pt-flash-tab-in {
   from {
     opacity: 0;
+  }
+}
+
+/* ── S4d: streaming, Stop, the daily cap, folded answers (#204) ────────────────────────────────
+   Frames 04b and 04c: the working label and Stop on the AI tab row, the typed caret, the note after
+   Stop on the slip's footer, the "not sent" stamp, the daily-cap card and a folded earlier answer.
+   Under reduced motion the dots and the caret hold still. */
+
+/* Stop's row takes no space and sticks to the top of the panel's scroll while its answer is in
+   view, so a long answer never scrolls Stop away; at rest the button sits on the tab row. */
+.pt-exchange__stop-row {
+  position: sticky;
+  inset-block-start: 48px;
+  z-index: 2;
+  block-size: 0;
+}
+
+.pt-exchange__answer > .pt-exchange__stop-row + * {
+  margin-block-start: 0;
+}
+
+.pt-exchange__stop {
+  position: absolute;
+  inset-block-start: -40px;
+  inset-inline-end: 0;
+  block-size: 32px;
+  min-block-size: 32px;
+  padding: 0 var(--pt-space-3);
+  font-size: 14px;
+  background: var(--pt-page);
+  box-shadow: var(--pt-e1);
+}
+
+.pt-working {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--pt-ai-tab-ink);
+}
+
+.pt-working__dots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.pt-working__dots > span {
+  inline-size: 5px;
+  block-size: 5px;
+  border-radius: 50%;
+  background: var(--pt-pen);
+  animation: pt-working-dot 1200ms ease-in-out infinite;
+}
+
+.pt-working__dots > span:nth-child(2) {
+  opacity: 0.6;
+  animation-delay: 200ms;
+}
+
+.pt-working__dots > span:nth-child(3) {
+  opacity: 0.3;
+  animation-delay: 400ms;
+}
+
+@keyframes pt-working-dot {
+  50% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
+}
+
+.pt-exchange__caret {
+  display: inline-block;
+  inline-size: 2px;
+  block-size: 16px;
+  margin-inline-start: 2px;
+  vertical-align: -3px;
+  background: var(--pt-pen);
+  animation: pt-caret 1000ms steps(1) infinite;
+}
+
+@keyframes pt-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+.pt-exchange__stopped {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pt-space-3);
+}
+
+.pt-exchange__stopped-note {
+  margin: 0;
+  font: 600 15px / 22px var(--pt-font-ai);
+  color: var(--pt-ink);
+}
+
+.pt-exchange__ask {
+  position: relative;
+}
+
+.pt-exchange__not-sent {
+  /* Struck across the slip's bottom edge, below the time, as a stamp lands (04c). */
+  position: absolute;
+  inset-block-end: -10px;
+  inset-inline-end: 16px;
+  padding: 1px 8px;
+  font: 700 11px / 16px var(--pt-font-you);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pt-danger);
+  background: var(--pt-call-slip);
+  border: 1.5px solid var(--pt-danger);
+  border-radius: var(--pt-radius-paper);
+  transform: rotate(-4deg);
+}
+
+.pt-budget-card {
+  margin-block-start: var(--pt-space-5);
+  padding: 20px 24px;
+  font: var(--pt-t-ai-panel) / 22px var(--pt-font-ai);
+  color: var(--pt-ink);
+  background: var(--pt-page);
+  border-block-start: 3px solid var(--pt-danger);
+  border-radius: var(--pt-radius-paper);
+  box-shadow: var(--pt-e1);
+}
+
+.pt-budget-card p {
+  margin: 0 0 var(--pt-space-2);
+}
+
+.pt-budget-card__title {
+  display: flex;
+  align-items: center;
+  gap: var(--pt-space-2);
+  font: 700 16px / 22px var(--pt-font-ai);
+}
+
+.pt-budget-card__title .pt-icon {
+  color: var(--pt-danger);
+}
+
+.pt-budget-card__figures {
+  font: 15px / 22px var(--pt-font-you);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.pt-budget-card__note {
+  font-size: 13px;
+  color: var(--pt-ink-muted);
+}
+
+.pt-budget-card__usage {
+  min-block-size: 24px;
+  padding: 0;
+  font: inherit;
+  color: var(--pt-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.pt-budget-card__rows {
+  margin: var(--pt-space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font: var(--pt-t-num) / 20px var(--pt-font-you);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.pt-budget-card__kind {
+  font-weight: 700;
+}
+
+.pt-exchange__preview {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.pt-exchange__answer > .pt-ai-slip + .pt-exchange__fold {
+  margin-block-start: 0;
+}
+
+.pt-exchange__fold {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pt-space-3);
+  padding: var(--pt-space-2) 20px var(--pt-space-3);
+  font: 13px / 20px var(--pt-font-ai);
+  color: var(--pt-ink-2);
+  background: var(--pt-ai-slip);
+  box-shadow: var(--pt-e1);
+}
+
+.pt-exchange__fold-toggle {
+  margin-inline-start: auto;
+  min-block-size: 24px;
+  padding: 0 var(--pt-space-1);
+  font: inherit;
+  color: var(--pt-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.pt-exchange__fold-toggle:focus-visible,
+.pt-budget-card__usage:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-working__dots > span,
+  .pt-exchange__caret {
+    animation: none;
   }
 }
 

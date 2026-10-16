@@ -6,11 +6,13 @@
  * the margin), the `CoverageReadout` and the `TraceList`. It is the ONE layout component behind
  * `ExchangeProps`, so frame 13's sidenote or claim → evidence options could replace it later
  * without touching the panel. A marker and its trace row light each other; either one flashes.
+ * An ask the server refused before the stream is stamped "not sent" (#204, frame 04c).
  */
 import { CallSlip, CoverageReadout, TraceList } from '@papertree/ui';
 import { useCallback, useState, type ReactNode } from 'react';
 
 import { formatAskTime } from '../model/exchange';
+import { wasNotSent, type RefusalKind } from '../model/states';
 import { AnswerSlip } from './AnswerSlip';
 
 import type { ViewMessage } from '@/components/explain/useExplainActions';
@@ -31,7 +33,13 @@ export interface ExchangeProps {
   /** The citation flash for a passage: scroll to it in the paper and flash it. */
   readonly onShow: (marker: PassageMarker) => void;
   readonly onRetry: (key: string) => void;
+  /** Stop the answer that is streaming (Stop on its tab row). */
+  readonly onStop: () => void;
   readonly onSendToCanvas: (messageId: string) => Promise<void>;
+  /** Open folded: two lines and the counts, with Show (an earlier exchange of a reopened thread). */
+  readonly startsFolded?: boolean;
+  /** The composer holds this exchange's ask now, so a refusal may say "your text is kept". */
+  readonly askInBox?: boolean;
 }
 
 /**
@@ -45,12 +53,28 @@ export function Exchange({
   initial,
   onShow,
   onRetry,
+  onStop,
   onSendToCanvas,
+  startsFolded = false,
+  askInBox = false,
 }: ExchangeProps): ReactNode {
   const [lit, setLit] = useState<number | null>(null);
+  // Read once, at mount: an exchange never gains or loses its fold as the thread grows.
+  const [foldable] = useState(startsFolded);
+  const [folded, setFolded] = useState(startsFolded);
   const model = exchange.model;
   const answer = exchange.answer;
   const settled = answer !== null && answer.status !== 'streaming';
+  const notSent = wasNotSent(answer);
+  const kept: RefusalKind = exchange.typed ? (askInBox ? 'kept' : 'question') : 'nothing';
+  // A Retry streams in the open, never inside the folded two-line preview.
+  const retry = useCallback(
+    (key: string) => {
+      setFolded(false);
+      onRetry(key);
+    },
+    [onRetry],
+  );
   const showRow = useCallback(
     (n: number) => {
       const marker = model?.markers.get(n);
@@ -76,7 +100,13 @@ export function Exchange({
       aria-label={exchange.ask}
       data-exchange={exchange.key}
     >
-      {exchange.quote === null ? slip : <div data-explain-quote>{slip}</div>}
+      <div
+        className="pt-exchange__ask"
+        {...(exchange.quote === null ? {} : { 'data-explain-quote': '' })}
+      >
+        {slip}
+        {notSent ? <span className="pt-exchange__not-sent">not sent</span> : null}
+      </div>
       {answer === null ? null : (
         <AnswerSlip
           answer={answer}
@@ -84,11 +114,14 @@ export function Exchange({
           lit={lit}
           onLight={setLit}
           onShow={onShow}
-          onRetry={onRetry}
+          onRetry={retry}
+          onStop={onStop}
           onSendToCanvas={onSendToCanvas}
+          notSent={kept}
+          fold={foldable ? { folded, toggle: () => setFolded((was) => !was) } : undefined}
         />
       )}
-      {settled && model !== null && !model.live ? (
+      {settled && model !== null && !model.live && !folded ? (
         <div className="pt-exchange__trace">
           <CoverageReadout {...model.coverage} />
           {model.unresolvedMarkers > 0 ? (
