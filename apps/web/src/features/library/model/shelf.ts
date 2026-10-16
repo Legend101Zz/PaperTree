@@ -164,6 +164,18 @@ export function readingPage(paper: ShelfPaper): { page: number; of: number } | n
   return of > 0 ? { page: Math.min(reading.last_page + 1, of), of } : null;
 }
 
+/**
+ * Whether a paper is "reading now": the person has a place in it, has not finished it, and it
+ * shows a ribbon (a paper we are still reading wears kraft instead). The Reading now strip and the
+ * stats line both count this one set.
+ *
+ * @param paper - The paper.
+ * @returns True when it belongs in Reading now.
+ */
+export function isReadingNow(paper: ShelfPaper): boolean {
+  return spineState(paper) === 'reading' && readingPage(paper) !== null;
+}
+
 // What each state adds to the spine's accessible name.
 function stateWords(paper: ShelfPaper): string {
   switch (spineState(paper)) {
@@ -419,7 +431,7 @@ export function libraryStats(papers: readonly ShelfPaper[]): LibraryStats {
   return {
     papers: papers.length,
     topics: topics.size,
-    readingNow: papers.filter((p) => spineState(p) === 'reading').length,
+    readingNow: papers.filter(isReadingNow).length,
     pages: papers.reduce((sum, p) => sum + (p.pageCount > 0 ? p.pageCount : 0), 0),
     needALook: papers.filter(needsALook).length,
   };

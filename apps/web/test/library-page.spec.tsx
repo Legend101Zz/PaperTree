@@ -474,7 +474,7 @@ describe('focus never falls to the page (review S4)', () => {
     const card = await screen.findByRole('region', { name: 'Attention Is All You Need' });
     fireEvent.click(within(card).getByRole('button', { name: /^Delete Attention/ }));
     fireEvent.click(within(card).getByRole('button', { name: 'Delete paper' }));
-    await screen.findByRole('heading', { name: 'Add your first paper' });
+    await screen.findByRole('heading', { name: 'Drop PDFs here or choose files' });
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Add papers' }));
   });
 

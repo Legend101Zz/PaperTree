@@ -1,8 +1,9 @@
 /**
- * LibraryView: the signed-in library (#195, frame 01). The compact header (search, Add papers,
- * Aa, account), "Your library" with its stats and "N need a look", the view row with Arrange by,
- * then the shelf with its catalogue card in the band above and the hint row under the plank.
- * PDFs drop anywhere on the page.
+ * LibraryView: the signed-in library (#195, #196; frames 01, 01b). The compact header (search,
+ * Add papers, Aa, account), "Your library" with its stats and "N need a look", the view row with
+ * Arrange by, Reading now with Continue, then the shelf with its catalogue card in the band above
+ * and the hint row under the plank; an empty library shows the accession slip. PDFs drop anywhere
+ * on the page.
  *
  * The data layer is `useLibrary` (polling only while a row is unfinished, Retry, Delete) and the
  * uploads are `useUploadQueue`, both unchanged in behaviour from v0.1. Read goes to
@@ -16,10 +17,11 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { SessionBanner } from '@/components/auth/SessionBanner';
-import { EmptyLibrary, OfflineState } from '@/components/library/SystemStates';
+import { OfflineState } from '@/components/library/SystemStates';
 import { describeError } from '@/components/ui/errors';
 import { useAuthStore } from '@/store/authStore';
 
+import { useContinue } from '../hooks/useContinue';
 import { useLibrary, useOnline } from '../hooks/useLibrary';
 import { useUploadQueue } from '../hooks/useUploadQueue';
 import {
@@ -29,10 +31,13 @@ import {
   needsALook,
   type Arrangement,
 } from '../model/shelf';
+import { readingNow } from '../model/states';
 import './library.css';
+import { AccessionSlip } from './AccessionSlip';
 import { DropAnywhere } from './AddPapers';
 import { LibraryHeader } from './LibraryHeader';
 import { LibraryTitle } from './LibraryTitle';
+import { ReadingNow } from './ReadingNow';
 import { ShelfSection } from './ShelfSection';
 import { UploadRow } from './UploadRow';
 
@@ -80,6 +85,7 @@ export function LibraryView(): ReactNode {
   const filtered = needALookOnly && stats !== null && stats.needALook > 0;
   const shelved = useMemo(() => (filtered ? books.filter(needsALook) : books), [books, filtered]);
   const matches = useMemo(() => matchPapers(shelved, search), [shelved, search]);
+  const reading = useMemo(() => readingNow(books), [books]);
 
   // The filter ends when nothing needs a look any more, so a later upload cannot switch it back
   // on by itself; and a card whose book has left the shelf closes rather than waiting to return.
@@ -91,6 +97,7 @@ export function LibraryView(): ReactNode {
   }, [openId, shelved]);
 
   const read = useCallback((paperId: string) => router.push(`/paper/${paperId}/read`), [router]);
+  const resume = useContinue(read);
   const takeFirstMatch = useCallback(() => {
     const first = arrangeShelf(shelved, arrangement)
       .flatMap((group) => group.papers)
@@ -161,22 +168,22 @@ export function LibraryView(): ReactNode {
             </div>
           </div>
         ) : books.length === 0 ? (
-          <>
-            <EmptyLibrary onAddPaper={chooseFiles} />
-            <p className="pt-hints pt-hints--empty">Drop PDFs anywhere to add them</p>
-          </>
+          <AccessionSlip onChooseFiles={chooseFiles} />
         ) : (
-          <ShelfSection
-            books={shelved}
-            arrangement={arrangement}
-            search={search}
-            matches={matches}
-            openId={openId}
-            setOpenId={setOpenId}
-            onRead={read}
-            onRetry={retry}
-            onDelete={remove}
-          />
+          <>
+            <ReadingNow papers={reading} onContinue={resume} />
+            <ShelfSection
+              books={shelved}
+              arrangement={arrangement}
+              search={search}
+              matches={matches}
+              openId={openId}
+              setOpenId={setOpenId}
+              onRead={read}
+              onRetry={retry}
+              onDelete={remove}
+            />
+          </>
         )}
       </main>
     </div>

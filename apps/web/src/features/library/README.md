@@ -1,8 +1,18 @@
 # library
 
-The signed-in library at `/dashboard` (#195, frames 00 and 01): the papers stand as cloth spines on one walnut
-plank, a row per group, each row under a brass label holder. A spine shows its state: a red ribbon while you are
-reading it, a kraft wrap while we read it, a torn red label when we could not.
+The signed-in library at `/dashboard` (#195, #196; frames 00, 01, 01b): the papers stand as cloth spines on
+one walnut plank, a row per group, each row under a brass label holder. A spine shows its state: a red ribbon
+while you are reading it, a kraft wrap while we read it, a torn red label when we could not.
+
+- **Reading now** (above the spines; the owner's default, which may become a book stand): the papers you have a
+  place in and have not finished, most recently opened first, at most three, each with its cloth, ribbon,
+  "p. 4 of 15", the rule and **Continue**. "N reading now" in the stats line counts the same set
+  (`isReadingNow`). Continue writes the server's page into the reader's own place
+  (`papertree/reader/<paper_id>`, contracts.md §5) and opens the reader, so a place read on another device is
+  honoured; a place already on that page keeps its exact line.
+- **Empty** (01b): "No papers yet" in the stats slot, the view tabs (no Arrange by), and an empty plank with the
+  accession slip: "Drop PDFs here or choose files" (the header's picker; drops land in the page-wide target)
+  and what happens next.
 
 - **Header:** the sprout and name; the search ("/" focuses it, Esc clears it, "2 of 24" inside the field, Enter
   takes down the first match); Add papers; Aa (the theme switch from `features/settings`); the account (its
@@ -53,10 +63,13 @@ ribbon, no year means no year on the spine.
 - `model/shelf.ts`: arrangements, spine width, height, title, author line, state, name, cloth, search
   matching, the arrow-key step (pure; tested in `model/shelf.spec.ts`).
 - `model/shelf.ts` also: the stats line, "need a look", where the catalogue card goes (`placeCard`).
+- `model/states.ts`: who is reading now and Continue's reader place (pure; tested in
+  `model/states.spec.ts`). `hooks/useContinue.ts` stores that place and opens the reader.
 - `hooks/useLibrary.ts`: the data layer (query, polling, upload, cancel's re-read, retry, delete);
   `hooks/useUploadQueue.ts`: the upload queue (progress, Cancel, refusals); `hooks/useCardPlacement.ts`.
 - `components/LibraryView.tsx`: the page; `LibraryHeader.tsx` (with `SearchField.tsx`, `AddPapers.tsx`),
   `UploadRow.tsx`, `LibraryTitle.tsx`, `ShelfSection.tsx` (with `Shelf.tsx`, `Spine.tsx`, `ShelfPlank.tsx`,
-  `CatalogueCard.tsx`, `ShelfHints.tsx`); `library.css`: their styles, from the tokens.
-- Tests: `apps/web/test/library-shelf.spec.tsx`, `library-page.spec.tsx`, `s3-library-states.spec.tsx`,
-  `w2ui-library.spec.tsx`; e2e `e2e/s2d/shelf.spec.ts` and `e2e/s3/*`.
+  `CatalogueCard.tsx`, `ShelfHints.tsx`), `ReadingNow.tsx`, `AccessionSlip.tsx`; `library.css`: their styles, from the tokens.
+- Tests: `apps/web/test/library-shelf.spec.tsx`, `library-page.spec.tsx`, `library-states.spec.tsx` (with
+  the corpus rows in `library-corpus.ts`), `s3-library-states.spec.tsx`, `w2ui-library.spec.tsx`; e2e
+  `e2e/s2d/shelf.spec.ts` and `e2e/s3/*`.
