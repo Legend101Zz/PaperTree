@@ -134,8 +134,10 @@ export async function clickEdge(page: Page): Promise<void> {
     const m = path?.getScreenCTM() ?? null;
     if (path === null || m === null) return null;
     const total = path.getTotalLength();
-    for (let f = 0.05; f < 1; f += 0.05) {
-      const p = path.getPointAtLength(total * f);
+    // Every 1 % of its length: at a phone's 20 % zoom a thread's open stretches between cards
+    // are a few pixels long, shorter than 5 % of the line.
+    for (let k = 1; k < 100; k += 1) {
+      const p = path.getPointAtLength((total * k) / 100);
       const x = p.x * m.a + p.y * m.c + m.e;
       const y = p.x * m.b + p.y * m.d + m.f;
       if (x < 4 || y < 140 || x > window.innerWidth - 4 || y > window.innerHeight - 4) continue;

@@ -194,21 +194,33 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
       expect((await getBoard(stack.apiUrl, empty.token, empty.paperId)).board).toBeNull();
 
       // ── the loading skeleton and the failure state ──
+      // Only the API's board read (`GET {api}/papers/<id>/board`): since #214 the page is
+      // /paper/<id>/board too, and a bare '**/board' would also hold or abort its navigation.
+      const apiOrigin = new URL(stack.apiUrl).origin;
+      const boardRead = (url: URL) => url.origin === apiOrigin && url.pathname.endsWith('/board');
       const slow = await context.newPage();
       await tokenInit(slow, full.token);
-      await slow.route('**/board', async (route) => {
+      let held = 0;
+      await slow.route(boardRead, async (route) => {
+        held += 1;
         await new Promise((done) => setTimeout(done, 2500));
         await route.continue();
       });
       await slow.goto(`/paper/${full.paperId}/board`);
       await expect(slow.getByRole('status', { name: 'Loading your board' })).toBeVisible();
+      expect(held, 'the board read was the request held').toBeGreaterThan(0);
       await slow.screenshot({ path: shot(`s02-loading-${tag}.png`) });
       await slow.close();
       const broken = await context.newPage();
       await tokenInit(broken, full.token);
-      await broken.route('**/board', (route) => route.abort());
+      let aborted = 0;
+      await broken.route(boardRead, (route) => {
+        aborted += 1;
+        return route.abort();
+      });
       await broken.goto(`/paper/${full.paperId}/board`);
       await expect(broken.getByRole('heading', { name: /didn.t load/ })).toBeVisible();
+      expect(aborted, 'the board read was the request aborted').toBeGreaterThan(0);
       await expect(broken.getByRole('button', { name: 'Try again' })).toBeVisible();
       expect(await broken.locator('body').innerText()).not.toMatch(/\{|ppr_|brd_|NetworkError/);
       await broken.screenshot({ path: shot(`s03-error-${tag}.png`) });
@@ -320,7 +332,20 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
       await expect(fullPage.getByTestId('edge-label')).toHaveCount(1);
       await (await boardTool(fullPage, 'Select')).click();
 
-      // a selected edge shows its editor
+      // a selected edge shows its editor. First clear the two cards picked above on the empty
+      // board: xyflow's selection rectangle over them, with a phone's grown in-card targets at the
+      // 20 % floor, covers every point of the thread's line otherwise (#214).
+      const stageBox = (await fullPage.getByTestId('canvas-stage').boundingBox())!;
+      const blank = { x: stageBox.x + 12, y: stageBox.y + 12 };
+      expect(
+        await fullPage.evaluate(
+          ([x, y]) => document.elementFromPoint(x!, y!)?.classList.contains('react-flow__pane'),
+          [blank.x, blank.y],
+        ),
+        'the deselecting click lands on the empty board',
+      ).toBe(true);
+      await fullPage.mouse.click(blank.x, blank.y);
+      await expect(fullPage.locator('.react-flow__node.selected')).toHaveCount(0);
       await clickEdge(fullPage);
       await expect(fullPage.getByRole('group', { name: 'Selected link' })).toBeVisible();
       await fullPage.screenshot({ path: shot(`s06-selected-${tag}.png`) });
