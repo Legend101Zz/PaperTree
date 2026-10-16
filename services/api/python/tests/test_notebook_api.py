@@ -1,14 +1,16 @@
-"""v0.2 S5a (#206): the notebook page and item routes, with "Dive in" on a REAL parse.
+"""v0.2 S5a (#206): the notebook routes on the real app, with "Dive in" on a REAL parse.
 
 What each group proves beyond status codes (AGENTS.md section 2): "Dive in" is held against the
 citations the run stored (same anchors, same first-use order, counts agree with the list endpoint),
-and isolation is checked from a second user's token on every route. Ink strokes and search have
-their tests with their routes (#240).
+the stroke blob is checked on its real header bytes, and isolation is checked from a second user's
+token on every route.
 """
 
 from __future__ import annotations
 
+import base64
 import json
+import math
 import sqlite3
 import uuid
 from pathlib import Path
@@ -30,7 +32,9 @@ from papertree_api.schemas import (
 )
 from papertree_api.settings import Settings
 from papertree_api.worker import run as run_worker
+from papertree_db.notebook import MAX_STROKE_BYTES
 from pydantic import BaseModel
+from stroke_codec import encode_stroke
 
 CORPUS = Path(__file__).resolve().parents[4] / "research" / "benchmarks" / "corpus"
 ATTENTION = CORPUS / "attention-is-all-you-need.pdf"
@@ -39,6 +43,9 @@ requires_corpus = pytest.mark.skipif(
     reason=f"corpus PDF {ATTENTION.name} is absent (fetched, not committed): run "
     "./research/benchmarks/fetch_corpus.sh to test Dive in on a real parse.",
 )
+
+#: A valid stroke blob: version 1, no pressure flag, 2 points (0,0) and (1,1) at 1/16 unit.
+STROKE = bytes([1, 0, 2, 0, 0, 32, 32])
 
 
 def _valid(model: type[BaseModel], value: Any) -> None:
@@ -54,6 +61,10 @@ def _stale(response: httpx.Response) -> dict[str, Any]:
         set(body) == {"detail", "code", "retryable", "current"} and body["code"] == "stale_version"
     )
     return body
+
+
+def b64(blob: bytes) -> str:
+    return base64.b64encode(blob).decode("ascii")
 
 
 def _page_id() -> str:
@@ -303,13 +314,17 @@ def test_page_lifecycle_counts_and_stale_version(tmp_path: Path) -> None:
             r = c.post(f"/notebook/pages/{pid}/items", json=body, headers=hdr)
             assert r.status_code == 201, r.text
             _valid(NotebookItem, r.json())
+        assert c.post(f"/notebook/pages/{pid}/strokes", headers=hdr, json=[
+            {"stroke_id": "sk_0000000001", "tool": "pen", "nib": "F", "colour": "pen",
+             "points_b64": b64(STROKE)}
+        ]).json() == {"added": 1}  # fmt: skip
         listing = c.get(f"/papers/{paper_id}/notebook/pages", headers=hdr).json()
         assert listing[0]["counts"] == {
-            "quotes": 1, "stickies": 1, "text": 1, "shapes": 0, "strokes": 0
+            "quotes": 1, "stickies": 1, "text": 1, "shapes": 0, "strokes": 1
         }  # fmt: skip
         view = c.get(f"/notebook/pages/{pid}", headers=hdr).json()
         _valid(NotebookPageView, view)
-        assert view["strokes"] == []
+        assert base64.b64decode(view["strokes"][0]["points_b64"]) == STROKE
         assert next(i for i in view["items"] if i["kind"] == "quote")["anchor"] == anchor
 
         # Page patch: good, then stale (the old version) with the current page in the 409.
@@ -334,7 +349,13 @@ def test_page_lifecycle_counts_and_stale_version(tmp_path: Path) -> None:
         assert c.delete(item_url, headers=hdr).status_code == 204
         assert_envelope(c.delete(item_url, headers=hdr), 404, "not_found")
 
-        # The page itself (cascade).
+        # The eraser, then the page itself (cascade).
+        assert (
+            c.delete(f"/notebook/pages/{pid}/strokes/sk_0000000001", headers=hdr).status_code == 204
+        )
+        assert_envelope(
+            c.delete(f"/notebook/pages/{pid}/strokes/sk_0000000001", headers=hdr), 404, "not_found"
+        )
         assert c.delete(f"/notebook/pages/{pid}", headers=hdr).status_code == 204
         assert h.count("notebook_items") == h.count("notebook_strokes") == 0
         assert_envelope(c.get(f"/notebook/pages/{pid}", headers=hdr), 404, "not_found")
@@ -375,6 +396,176 @@ def test_a_quote_needs_a_whole_anchor_on_this_papers(tmp_path: Path) -> None:
             conn.close()
 
 
+def _posting(c: TestClient, hdr: dict[str, str], pid: str) -> Any:
+    def post(sid: str, blob: bytes, **over: Any) -> Any:
+        stroke = {"stroke_id": sid, "tool": "pen", "nib": "M", "colour": "pen",
+                  "points_b64": b64(blob), **over}  # fmt: skip
+        return c.post(f"/notebook/pages/{pid}/strokes", json=[stroke], headers=hdr)
+
+    return post
+
+
+def test_stroke_blobs_are_checked_on_their_header_and_size(tmp_path: Path) -> None:
+    with ai_harness(tmp_path, Script("explain-ok")) as h:
+        token, paper_id = alice_with_paper(h)
+        c, hdr = h.client, auth(token)
+        pid = _make_page(c, token, paper_id)["page"]["page_id"]
+        url = f"/notebook/pages/{pid}/strokes"
+        post = _posting(c, hdr, pid)
+
+        assert post("sk_goodstroke1", STROKE).status_code == 201
+        assert post("sk_goodstroke1", STROKE).json() == {"added": 0}  # idempotent retry
+        assert_envelope(post("sk_badversion1", bytes([2, 0, 0])), 422, "validation_failed")
+        assert_envelope(post("sk_badflags001", bytes([1, 6, 0])), 422, "validation_failed")
+        assert_envelope(post("sk_truncated01", bytes([1])), 422, "validation_failed")
+        too_many = bytes([1, 0]) + bytes([0xA1, 0x9C, 0x01])  # a varint count of 20,001
+        assert_envelope(post("sk_toomany0001", too_many), 422, "validation_failed")
+        assert_envelope(
+            post("sk_bigstroke01", bytes([1, 0, 0]) + b"\0" * MAX_STROKE_BYTES),
+            413,
+            "payload_too_large",
+        )
+        assert_envelope(post("sk_badtool0001", STROKE, tool="brush"), 422, "validation_failed")
+        assert_envelope(post("sk_hexcolour01", STROKE, colour="#ff0000"), 422, "validation_failed")
+        assert_envelope(
+            c.post(url, json=[{"stroke_id": "sk_notbase641", "tool": "pen", "nib": "F",
+                               "colour": "pen", "points_b64": "!!!"}], headers=hdr),
+            422, "validation_failed",
+        )  # fmt: skip
+        # 201 strokes in one request is over the batch limit; none are stored.
+        many = [{"stroke_id": f"sk_batch{n:06d}", "tool": "pen", "nib": "F", "colour": "pen",
+                 "points_b64": b64(STROKE)} for n in range(201)]  # fmt: skip
+        assert_envelope(c.post(url, json=many, headers=hdr), 422, "validation_failed")
+        assert h.count("notebook_strokes") == 1
+        # A batch of 200 is fine; the batch byte cap answers 413 and stores nothing: twelve
+        # worst-case strokes (each legal on its own) are over 2 MiB together.
+        assert c.post(url, json=many[:200], headers=hdr).json() == {"added": 200}
+        big = encode_stroke(_zigzag_points(20_000, 1e6), has_pressure=True)
+        batch = [{"stroke_id": f"sk_bigbatch{n:03d}", "tool": "pen", "nib": "F", "colour": "pen",
+                  "points_b64": b64(big)} for n in range(12)]  # fmt: skip
+        assert_envelope(c.post(url, json=batch, headers=hdr), 413, "payload_too_large")
+        assert h.count("notebook_strokes") == 201
+
+
+def _zigzag_points(n: int, extent: float) -> list[tuple[float, float, float]]:
+    """Alternating between the two coordinate extremes: the largest blob the encoder can write."""
+    return [(extent if i % 2 else -extent, extent if i % 2 else -extent, 1.0) for i in range(n)]
+
+
+def _fixture_blobs() -> dict[str, bytes]:
+    raw = json.loads((Path(__file__).parent / "fixtures" / "stroke_blobs.json").read_text())
+    return {name: base64.b64decode(blob) for name, blob in raw["blobs"].items()}
+
+
+def test_the_python_encoder_twin_reproduces_the_real_encoders_bytes() -> None:
+    blobs = _fixture_blobs()
+    assert encode_stroke([], has_pressure=True) == blobs["empty"]
+    assert encode_stroke([(10.3, 20.7, 0.4)], has_pressure=True) == blobs["one_point"]
+    negative = [(-i * 1000.0, -i * 500.0, 1.0) for i in range(5)]
+    assert encode_stroke(negative, has_pressure=True) == blobs["negative_5"]
+    assert encode_stroke(_zigzag_points(8, 1e6), has_pressure=True) == blobs["extreme_8"]
+
+
+def test_every_blob_the_real_encoder_wrote_is_accepted_and_read_back_identical(
+    tmp_path: Path,
+) -> None:
+    with ai_harness(tmp_path, Script("explain-ok")) as h:
+        token, paper_id = alice_with_paper(h)
+        c, hdr = h.client, auth(token)
+        pid = _make_page(c, token, paper_id)["page"]["page_id"]
+        post = _posting(c, hdr, pid)
+        blobs = _fixture_blobs()
+        for n, (name, blob) in enumerate(blobs.items()):
+            assert post(f"sk_real{n:08d}", blob).status_code == 201, name
+        stored = c.get(f"/notebook/pages/{pid}", headers=hdr).json()["strokes"]
+        assert [base64.b64decode(s["points_b64"]) for s in stored] == list(blobs.values())
+
+
+def test_the_stroke_cap_is_the_encoders_worst_case_and_the_point_cap_still_holds(
+    tmp_path: Path,
+) -> None:
+    worst = encode_stroke(_zigzag_points(20_000, 1e6), has_pressure=True)
+    # 2 header bytes + 3 for the count + 20,000 points of 4 + 4 + 1 bytes.
+    assert len(worst) == 5 + 20_000 * 9 == 180_005 < MAX_STROKE_BYTES
+    with ai_harness(tmp_path, Script("explain-ok")) as h:
+        token, paper_id = alice_with_paper(h)
+        c, hdr = h.client, auth(token)
+        pid = _make_page(c, token, paper_id)["page"]["page_id"]
+        post = _posting(c, hdr, pid)
+        assert post("sk_worstcase01", worst).status_code == 201
+        smooth = [(i % 900 + 20.0, 100 + math.sin(i / 50) * 40, 0.6) for i in range(20_000)]
+        assert post("sk_smooth20k01", encode_stroke(smooth, has_pressure=True)).status_code == 201
+        over = encode_stroke(_zigzag_points(20_001, 1e6), has_pressure=True)
+        assert_envelope(post("sk_20001point", over), 422, "validation_failed")
+        stored = c.get(f"/notebook/pages/{pid}", headers=hdr).json()["strokes"]
+        assert len(stored) == 2
+
+
+def test_a_blob_is_walked_to_the_end_like_the_webs_decoder_does(tmp_path: Path) -> None:
+    with ai_harness(tmp_path, Script("explain-ok")) as h:
+        token, paper_id = alice_with_paper(h)
+        c, hdr = h.client, auth(token)
+        pid = _make_page(c, token, paper_id)["page"]["page_id"]
+        post = _posting(c, hdr, pid)
+        bad = {
+            "claims_points_has_none": bytes([1, 0, 2]),
+            "trailing_bytes": STROKE + b"\x09",
+            "junk_after_a_zero_count": bytes([1, 0, 0, 9, 9]),
+            "a_long_junk_tail": bytes([1, 0, 0]) + b"\xff" * 50_000,
+            "truncated_mid_point": STROKE[:-1],
+            "pressure_flag_without_the_pressure_byte": bytes([1, 1, 1, 0, 0]),
+            "a_varint_that_never_ends": bytes([1, 0, 1]) + b"\x80" * 9,
+        }
+        for n, (name, blob) in enumerate(bad.items()):
+            assert_envelope(post(f"sk_junk{n:07d}", blob), 422, "validation_failed")
+            assert name  # the name is the failure message when an assert above trips
+        assert h.count("notebook_strokes") == 0
+        good = {"one point, pressure": bytes([1, 1, 1, 0, 0, 255]), "no points": bytes([1, 0, 0])}
+        for n, blob in enumerate(good.values()):
+            assert post(f"sk_fine{n:07d}", blob).status_code == 201
+
+
+def test_search_finds_text_and_the_ai_slip_but_never_ink(tmp_path: Path) -> None:
+    with ai_harness(tmp_path, Script("explain-ok")) as h:
+        token, paper_id = alice_with_paper(h)
+        c, hdr = h.client, auth(token)
+        message = _answer(c, token, paper_id, paragraph_anchor())
+        dived = _make_page(c, token, paper_id, from_message_id=message["message_id"])
+        plain = _make_page(c, token, paper_id, title="Plain")["page"]["page_id"]
+        c.post(f"/notebook/pages/{plain}/items", headers=hdr,
+               json=_note("ni_searchtxt1", "text", body="Marginal 100% sure_thing"))  # fmt: skip
+        c.post(f"/notebook/pages/{plain}/items", headers=hdr,
+               json=_note("ni_searchstk1", body="remember the Residual stream"))  # fmt: skip
+        c.post(f"/notebook/pages/{plain}/strokes", headers=hdr, json=[
+            {"stroke_id": "sk_searchink1", "tool": "pen", "nib": "F", "colour": "pen",
+             "points_b64": b64(STROKE)}])  # fmt: skip
+
+        def hits(q: str) -> list[dict[str, Any]]:
+            r = c.get(f"/papers/{paper_id}/notebook/search", params={"q": q}, headers=hdr)
+            assert r.status_code == 200, r.text
+            out: list[dict[str, Any]] = r.json()
+            return out
+
+        assert [x["item_id"] for x in hits("residual")] == ["ni_searchstk1"]
+        assert hits("100%")[0]["kind"] == "text"  # % is literal, not a wildcard
+        assert hits("%") != [] and all("%" in x["snippet"] for x in hits("%"))
+        assert hits("sure_thing") != [] and hits("sure.thing") == []
+        words = json.loads(dived["items"][0]["body"])["ai"]["content"].split()[3]
+        found = hits(words)
+        assert any(
+            x["kind"] == "exchange" and x["page_id"] == dived["page"]["page_id"] for x in found
+        )
+        assert all(x["kind"] != "stroke" for x in found) and hits("sk_searchink1") == []
+        assert_envelope(
+            c.get(f"/papers/{paper_id}/notebook/search", headers=hdr), 422, "validation_failed"
+        )
+        assert_envelope(
+            c.get(f"/papers/{paper_id}/notebook/search?q=" + "a" * 201, headers=hdr),
+            422,
+            "validation_failed",
+        )
+
+
 def test_another_user_sees_and_changes_nothing(tmp_path: Path) -> None:
     with ai_harness(tmp_path, Script("explain-ok")) as h:
         token, paper_id = alice_with_paper(h)
@@ -383,6 +574,9 @@ def test_another_user_sees_and_changes_nothing(tmp_path: Path) -> None:
         c.post(
             f"/notebook/pages/{pid}/items", headers=hdr, json=_note("ni_alicenote1", body="secret")
         )
+        c.post(f"/notebook/pages/{pid}/strokes", headers=hdr, json=[
+            {"stroke_id": "sk_aliceink01", "tool": "pen", "nib": "F", "colour": "pen",
+             "points_b64": b64(STROKE)}])  # fmt: skip
         bob = auth(register(c, "bob@example.com"))
         base = f"/notebook/pages/{pid}"
         for r in (
@@ -392,14 +586,33 @@ def test_another_user_sees_and_changes_nothing(tmp_path: Path) -> None:
             c.post(f"{base}/items", json=_note("ni_bobsnote01"), headers=bob),
             c.patch(f"{base}/items/ni_alicenote1", json={"version": 1, "x": 5}, headers=bob),
             c.delete(f"{base}/items/ni_alicenote1", headers=bob),
+            c.delete(f"{base}/strokes/sk_aliceink01", headers=bob),
+            c.post(
+                f"{base}/strokes",
+                headers=bob,
+                json=[
+                    {
+                        "stroke_id": "sk_bobsink001",
+                        "tool": "pen",
+                        "nib": "F",
+                        "colour": "pen",
+                        "points_b64": b64(STROKE),
+                    }
+                ],
+            ),  # fmt: skip
             c.get(f"/papers/{paper_id}/notebook/pages", headers=bob),
+            c.get(f"/papers/{paper_id}/notebook/search?q=secret", headers=bob),
             c.post(f"/papers/{paper_id}/notebook/pages", json={"page_id": _page_id()}, headers=bob),
         ):
             assert_envelope(r, 404, "not_found")
         # Reusing alice's page id as bob (on his own paper) is refused, not leaked or overwritten.
         # Nothing of alice's changed.
         view = c.get(base, headers=hdr).json()
-        assert view["page"]["title"] != "mine" and len(view["items"]) == 1
+        assert (
+            view["page"]["title"] != "mine"
+            and len(view["items"]) == 1
+            and len(view["strokes"]) == 1
+        )
         # And no response anywhere carries an owner handle.
         assert "owner" not in json.dumps(view)
 
@@ -487,3 +700,40 @@ def test_dive_in_mints_fresh_item_ids_for_pages_that_share_a_suffix_and_for_two_
         ids = [i["item_id"] for page in made for i in page["items"]]
         assert len(made) == 4 and len(ids) == len(set(ids)) == h.count("notebook_items")
         assert all(len(page["items"]) >= 2 for page in made)
+
+
+def test_a_stored_exchange_body_that_is_not_json_cannot_break_search(tmp_path: Path) -> None:
+    with ai_harness(tmp_path, Script("explain-ok")) as h:
+        token, paper_id = alice_with_paper(h)
+        c, hdr = h.client, auth(token)
+        pid = _make_page(c, token, paper_id)["page"]["page_id"]
+        url = f"/notebook/pages/{pid}/items"
+        good = json.dumps({"call": {"text": "q"}, "ai": {"content": "needle in the slip"}})
+        for item_id in ("ni_exchange01", "ni_exchange02", "ni_exchange03"):
+            assert (
+                c.post(url, json=_note(item_id, "exchange", body=good), headers=hdr).status_code
+                == 201
+            )
+        c.post(url, json=_note("ni_sticky0001", body="needle on a sticky"), headers=hdr)
+        # What a bad client or an older build could have stored: not JSON; JSON that is not an
+        # object; an object whose text is not a string. Written under the API on purpose.
+        conn = sqlite3.connect(h.settings.database_file)
+        try:
+            for item_id, body in (
+                ("ni_exchange01", "needle{ not json"),
+                ("ni_exchange02", "[1, 2]"),
+                ("ni_exchange03", '{"ai": {"content": 7}, "call": {"text": 8}}'),
+            ):
+                conn.execute(
+                    "UPDATE notebook_items SET body = ? WHERE item_id = ?", (body, item_id)
+                )
+            conn.commit()
+        finally:
+            conn.close()
+        r = c.get(f"/papers/{paper_id}/notebook/search", params={"q": "needle"}, headers=hdr)
+        assert r.status_code == 200, r.text
+        assert [x["item_id"] for x in r.json()] == ["ni_sticky0001"]
+        assert (
+            c.get(f"/papers/{paper_id}/notebook/search", params={"q": "7"}, headers=hdr).status_code
+            == 200
+        )

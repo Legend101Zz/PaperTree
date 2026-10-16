@@ -1,16 +1,18 @@
-"""v0.2 S5a (#206): the notebook. Pages, items and "Dive in".
+"""v0.2 S5a (#206): the notebook. Pages, items, ink strokes, "Dive in", and search.
 
     POST   /papers/{id}/notebook/pages              NotebookPageCreate -> 201 {page, items}
     GET    /papers/{id}/notebook/pages                                 -> [NotebookPageSummary]
+    GET    /papers/{id}/notebook/search?q=                             -> [NotebookHit]
     GET    /notebook/pages/{pid}                                       -> {page, items, strokes}
     PATCH  /notebook/pages/{pid}                    NotebookPagePatch  -> page | 409 stale_version
     DELETE /notebook/pages/{pid}                                       -> 204
     POST   /notebook/pages/{pid}/items              NotebookItemCreate -> 201 item
     PATCH  /notebook/pages/{pid}/items/{iid}        NotebookItemPatch  -> item | 409 stale_version
     DELETE /notebook/pages/{pid}/items/{iid}                           -> 204
+    POST   /notebook/pages/{pid}/strokes            [NotebookStrokeIn] -> 201 {added}
+    DELETE /notebook/pages/{pid}/strokes/{sid}                         -> 204   (the eraser)
 
-Ink strokes (POST/DELETE .../strokes) and search come in #240 (S5a2). All SQL is
-`papertree_db.notebook`; this module is the transport. Bodies are built field by field
+All SQL is `papertree_db.notebook`; this module is the transport. Bodies are built field by field
 like the canvas routes, so `owner_id` cannot leak and a stored Anchor leaves as it arrived. A page
 that is not the caller's is a 404, never a 403 (no existence oracle).
 """
@@ -18,6 +20,7 @@ that is not the caller's is a 404, never a 403 (no existence oracle).
 from __future__ import annotations
 
 import base64
+import binascii
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -29,6 +32,7 @@ from .. import evidence
 from ..deps import CallerDep
 from ..errors import ApiError
 from ..schemas import (
+    NotebookHit,
     NotebookItem,
     NotebookItemCreate,
     NotebookItemPatch,
@@ -40,11 +44,16 @@ from ..schemas import (
     NotebookPageStale,
     NotebookPageSummary,
     NotebookPageView,
+    NotebookStrokeBatch,
+    NotebookStrokesAdded,
 )
 from ..wiretime import wire_time
 from ._shared import read_json
 
 router = APIRouter()
+
+#: Longest search query; a notebook search is a few words.
+SEARCH_QUERY_MAX = 200
 
 
 def _passage_key(generation: int, anchor: Mapping[str, Any], marker: str) -> str:
@@ -131,6 +140,17 @@ async def list_pages(call: CallerDep, paper_id: str) -> Response:
     return JSONResponse([_time(r, "updated_at") for r in rows])
 
 
+@router.get("/papers/{paper_id}/notebook/search", response_model=list[NotebookHit])
+async def search(call: CallerDep, paper_id: str, request: Request) -> Response:
+    """Typed text, sticky text, quote text and the AI slip's words; never ink."""
+    q = request.query_params.get("q", "").strip()
+    if not q or len(q) > SEARCH_QUERY_MAX:
+        raise ApiError("validation_failed", f"q: 1 to {SEARCH_QUERY_MAX} characters")
+    if call.db.owned_paper(call.db_owner, PaperId(paper_id)) is None:
+        raise ApiError("not_found", "no such paper")
+    return JSONResponse(call.db.search_notebook(call.db_owner, PaperId(paper_id), q))
+
+
 @router.get("/notebook/pages/{page_id}", response_model=NotebookPageView)
 async def get_page(call: CallerDep, page_id: str) -> Response:
     """The page with its items and its strokes (points as base64)."""
@@ -214,4 +234,40 @@ async def delete_item(call: CallerDep, page_id: str, item_id: str) -> Response:
     """Deletes one item."""
     if call.db.delete_notebook_item(call.db_owner, page_id, item_id) == 0:
         raise ApiError("not_found", "no such item on this page")
+    return Response(status_code=204)
+
+
+# ── strokes ──────────────────────────────────────────────────────────────────────────────────
+
+
+@router.post(
+    "/notebook/pages/{page_id}/strokes", response_model=NotebookStrokesAdded, status_code=201
+)
+async def add_strokes(call: CallerDep, page_id: str, request: Request) -> Response:
+    """One pen-up batch. 413 over the per-stroke or per-batch byte cap, 422 for a bad blob."""
+    body, _ = await read_json(request, NotebookStrokeBatch)
+    strokes: list[dict[str, Any]] = []
+    for n, s in enumerate(body.root):
+        try:
+            points = base64.b64decode(s.points_b64, validate=True)
+        except binascii.Error as exc:
+            raise ApiError("validation_failed", f"strokes.{n}.points_b64: not base64") from exc
+        strokes.append(
+            {
+                "stroke_id": s.stroke_id,
+                "tool": s.tool,
+                "nib": s.nib,
+                "colour": s.colour,
+                "points": points,
+            }
+        )
+    added = _guard(lambda: call.db.add_notebook_strokes(call.db_owner, page_id, strokes))
+    return JSONResponse({"added": added}, status_code=201)
+
+
+@router.delete("/notebook/pages/{page_id}/strokes/{stroke_id}", status_code=204)
+async def delete_stroke(call: CallerDep, page_id: str, stroke_id: str) -> Response:
+    """The eraser."""
+    if call.db.delete_notebook_stroke(call.db_owner, page_id, stroke_id) == 0:
+        raise ApiError("not_found", "no such stroke on this page")
     return Response(status_code=204)

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "PaperTree API contract: notebooks",
-  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: NotebookPage, NotebookItem, NotebookStroke, NotebookPageSummary, NotebookPageView, NotebookPageCreated, NotebookPageStale, NotebookItemStale, NotebookPageCreate, NotebookPagePatch, NotebookItemCreate, NotebookItemPatch.",
+  "description": "GENERATED from services/api/python/papertree_api/schemas.py by `uv run python -m papertree_api.contracts export` (contracts.md §0). Do not edit: change the model and re-export. Models: NotebookPage, NotebookItem, NotebookStroke, NotebookPageSummary, NotebookPageView, NotebookPageCreated, NotebookStrokesAdded, NotebookHit, NotebookPageStale, NotebookItemStale, NotebookPageCreate, NotebookPagePatch, NotebookItemCreate, NotebookItemPatch, NotebookStrokeBatch.",
   "$defs": {
     "AnchorCreated": {
       "additionalProperties": false,
@@ -285,6 +285,30 @@
       },
       "required": ["quotes", "stickies", "text", "shapes", "strokes"],
       "title": "NotebookCounts",
+      "type": "object"
+    },
+    "NotebookHit": {
+      "additionalProperties": false,
+      "properties": {
+        "page_id": {
+          "type": "string"
+        },
+        "page_title": {
+          "type": "string"
+        },
+        "item_id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": ["exchange", "text", "sticky", "quote", "shape"],
+          "type": "string"
+        },
+        "snippet": {
+          "type": "string"
+        }
+      },
+      "required": ["page_id", "page_title", "item_id", "kind", "snippet"],
+      "title": "NotebookHit",
       "type": "object"
     },
     "NotebookItem": {
@@ -718,6 +742,57 @@
       },
       "required": ["stroke_id", "page_id", "tool", "nib", "colour", "points_b64", "created_at"],
       "title": "NotebookStroke",
+      "type": "object"
+    },
+    "NotebookStrokeBatch": {
+      "description": "`POST /notebook/pages/{id}/strokes`: a bare JSON array, one pen-up batch of 1 to 200.",
+      "items": {
+        "$ref": "#/$defs/NotebookStrokeIn"
+      },
+      "maxItems": 200,
+      "minItems": 1,
+      "title": "NotebookStrokeBatch",
+      "type": "array"
+    },
+    "NotebookStrokeIn": {
+      "additionalProperties": false,
+      "properties": {
+        "stroke_id": {
+          "pattern": "^[a-z]{2,4}_[0-9A-Za-z-]{8,64}$",
+          "type": "string"
+        },
+        "tool": {
+          "enum": ["pen", "highlighter"],
+          "type": "string"
+        },
+        "nib": {
+          "enum": ["EF", "F", "M"],
+          "type": "string"
+        },
+        "colour": {
+          "pattern": "^[a-z][a-z0-9-]{0,31}$",
+          "type": "string"
+        },
+        "points_b64": {
+          "maxLength": 8000000,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["stroke_id", "tool", "nib", "colour", "points_b64"],
+      "title": "NotebookStrokeIn",
+      "type": "object"
+    },
+    "NotebookStrokesAdded": {
+      "additionalProperties": false,
+      "properties": {
+        "added": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["added"],
+      "title": "NotebookStrokesAdded",
       "type": "object"
     },
     "PageSelector": {

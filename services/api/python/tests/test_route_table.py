@@ -85,12 +85,15 @@ ADDED: frozenset[tuple[str, str]] = frozenset(
         # v0.2 S5a (#206): the notebook
         ("POST", "/papers/{paper_id}/notebook/pages"),
         ("GET", "/papers/{paper_id}/notebook/pages"),
+        ("GET", "/papers/{paper_id}/notebook/search"),
         ("GET", "/notebook/pages/{page_id}"),
         ("PATCH", "/notebook/pages/{page_id}"),
         ("DELETE", "/notebook/pages/{page_id}"),
         ("POST", "/notebook/pages/{page_id}/items"),
         ("PATCH", "/notebook/pages/{page_id}/items/{item_id}"),
         ("DELETE", "/notebook/pages/{page_id}/items/{item_id}"),
+        ("POST", "/notebook/pages/{page_id}/strokes"),
+        ("DELETE", "/notebook/pages/{page_id}/strokes/{stroke_id}"),
         # §4 (S5)
         ("GET", "/internal/agent/runs/{run_id}/outline"),
         ("GET", "/internal/agent/runs/{run_id}/sections/{handle}"),
