@@ -27,8 +27,10 @@ already declare them (the 501 stubs, `routers/*.py`).
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Annotated, Any, Final, Literal, Self
 
 from papertree_db import SQLITE_INTEGER_MAX
@@ -1539,16 +1541,38 @@ class AgentText(Wire):
     delta: str
 
 
+def _agent_event_defs() -> dict[str, Any]:
+    """`$defs` of the committed `contracts/agent/run-events.schema.json`, found by walking up from
+    this file (the agent finds the same file the same way, `contract.ts`)."""
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / "contracts" / "agent" / "run-events.schema.json"
+        if candidate.is_file():
+            defs: dict[str, Any] = json.loads(candidate.read_text(encoding="utf-8"))["$defs"]
+            return defs
+    raise RuntimeError("contracts/agent/run-events.schema.json not found above papertree_api")
+
+
+def _text(node: dict[str, Any]) -> Any:
+    """A `str` field bounded exactly as the schema node says. pydantic counts code points, as JSON
+    Schema does (and as the agent's zod does, `text.ts`), so the two sides agree on every bound."""
+    return Field(min_length=node.get("minLength"), max_length=node["maxLength"])
+
+
+#: The ONE place a diagram line's text limits are written (S7a review): the agent contract.
+_EVENT_DEFS: Final = _agent_event_defs()
+_PART: Final = _EVENT_DEFS["part"]["properties"]
+
+
 class AgentPlate(Wire):
     """A diagram run's first line (`run-events.schema.json` `$defs.plate`, v0.2 S7a)."""
 
-    title: str = Field(min_length=1, max_length=60)
+    title: str = _text(_EVENT_DEFS["plate"]["properties"]["title"])
 
 
 class AgentCite(Wire):
     """The model's quote for a part, before the API looked for it in the paper."""
 
-    quote: str = Field(min_length=8, max_length=240)
+    quote: str = _text(_EVENT_DEFS["PartCite"]["properties"]["quote"])
     #: A hint only; the resolver never trusts it.
     page: Positive | None = omittable()
 
@@ -1558,11 +1582,13 @@ class AgentPart(Wire):
     earlier letters only, one `edge` label (or null) per `after` entry."""
 
     letter: Letter
-    label: str = Field(min_length=1, max_length=28)
-    text: str = Field(max_length=110)
+    label: str = _text(_PART["label"])
+    text: str = _text(_PART["text"])
     kind: DiagramPartKind
-    after: list[Letter] = Field(max_length=3)
-    edge: list[Annotated[str, Field(max_length=18)] | None] = Field(max_length=3)
+    after: list[Letter] = Field(max_length=_PART["after"]["maxItems"])
+    edge: list[Annotated[str, _text(_PART["edge"]["items"]["anyOf"][0])] | None] = Field(
+        max_length=_PART["edge"]["maxItems"]
+    )
     cite: AgentCite | None
 
 
@@ -1571,7 +1597,7 @@ class AgentLink(Wire):
 
     source: Letter
     target: Letter
-    label: Annotated[str, Field(max_length=18)] | None
+    label: Annotated[str, _text(_EVENT_DEFS["link"]["properties"]["label"]["anyOf"][0])] | None
 
 
 class AgentUsage(Wire):

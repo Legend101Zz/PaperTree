@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 
-import type { RunRequest } from '../src/contract.ts';
+import { DIAGRAM_LIMITS, type RunRequest } from '../src/contract.ts';
 import {
   type DiagramEvent,
   holdsDiagramLine,
@@ -52,6 +52,13 @@ const part = (extra: Json = {}): Json => ({
 });
 const names = (events: DiagramEvent[]): string[] =>
   events.map((e) => (e.name === 'part' ? `part ${e.data.letter}` : e.name));
+/** `[letter, label, after]` of every part, for the letter-mapping tests. */
+const placed = (events: DiagramEvent[]) =>
+  events.flatMap((e) => (e.name === 'part' ? [[e.data.letter, e.data.label, e.data.after]] : []));
+const math7 = '𝑄𝐾𝑉𝑄𝐾𝑉𝑄';
+/** No lone surrogate: what a JSON parser on the API side would refuse. */
+const wellFormed = (text: string): boolean =>
+  !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(text);
 const statuses = (events: DiagramEvent[]): string[] =>
   events.flatMap((e) => (e.name === 'status' ? [e.data.label] : []));
 
@@ -112,10 +119,50 @@ describe('PlateReader: one line at a time, never a crash', () => {
         ['C', ['B'], ['kept']],
       ],
     );
-    assert.deepEqual(statuses(events), [
-      'Part B: dropped an arrow from a part that comes after it',
-      'Part C: dropped an arrow from a part that comes after it',
+    assert.deepEqual(statuses(events), [`Part B: ${SKIPPED.ahead}`, `Part C: ${SKIPPED.ahead}`]);
+  });
+
+  // S7a review B1: the model letters its parts by the lines it WROTE; the plate by those it placed.
+  const skipped = '{"t":"part","label":"B, cut off",';
+
+  test('a chain across a skipped part line keeps every arrow on the part it was drawn from', () => {
+    const events = read([
+      lines(
+        part({ label: 'A' }),
+        skipped,
+        part({ label: 'C', after: ['B'] }),
+        part({ label: 'D', after: ['C'] }),
+        part({ label: 'E', after: ['D', 'A'] }),
+      ),
     ]);
+    assert.deepEqual(placed(events), [
+      ['A', 'A', []],
+      ['B', 'C', []],
+      ['C', 'D', ['B']],
+      ['D', 'E', ['C', 'A']],
+    ]);
+    assert.deepEqual(statuses(events), [SKIPPED.unreadable, `Part B: ${SKIPPED.missing}`]);
+  });
+
+  test('an arrow from a part that was not drawn is dropped and said so, never moved to the next part', () => {
+    const events = read([
+      lines(
+        part({ label: 'A' }),
+        { t: 'part', label: 'B', kind: 'box', after: ['A'], cite: null },
+        part({ label: 'C', after: ['A'] }),
+        part({ label: 'D', after: ['B'] }),
+        { t: 'link', from: 'D', to: 'B', label: 'back' },
+        { t: 'link', from: 'D', to: 'A', label: 'back' },
+      ),
+    ]);
+    assert.deepEqual(placed(events), [
+      ['A', 'A', []],
+      ['B', 'C', ['A']],
+      ['C', 'D', []],
+    ]);
+    assert.deepEqual(statuses(events), [SKIPPED.shape, `Part C: ${SKIPPED.missing}`, SKIPPED.link]);
+    const link = events.find((e) => e.name === 'link');
+    assert.deepEqual(link?.data, { source: 'C', target: 'A', label: 'back' }, "the model's D is C");
   });
 
   test(`more than ${String(MAX_PARTS)} parts: the first ${String(MAX_PARTS)} are placed, the rest left out, said once`, () => {
@@ -153,6 +200,39 @@ describe('PlateReader: one line at a time, never a crash', () => {
     assert.deepEqual(names(events), ['plate', 'part A', 'part B', 'link', 'status', 'status']);
     assert.deepEqual(events[3]!.data, { source: 'B', target: 'A', label: 'back' });
     assert.deepEqual(statuses(events), [SKIPPED.link, SKIPPED.after]);
+  });
+
+  test('lengths are code points, as the contract and the API count them, and a cut never splits a character', () => {
+    const math = '𝑄'; // U+1D444: one code point, two UTF-16 units
+    const [label] = read([lines(part({ label: math.repeat(28) }))]);
+    assert.ok(label?.name === 'part');
+    assert.equal(label.data.label, math.repeat(28), '28 code points fit, though .length is 56');
+    const [cut] = read([lines(part({ label: `xx${math.repeat(40)}` }))]);
+    assert.ok(cut?.name === 'part');
+    assert.equal([...cut.data.label].length, 28);
+    assert.ok(wellFormed(cut.data.label), 'no lone surrogate');
+    assert.equal(cut.data.label, `xx${math.repeat(25)}…`);
+    const family = '👩‍👩‍👧'; // one grapheme, five code points
+    const [emoji] = read([lines(part({ label: `${'a'.repeat(25)}${family}` }))]);
+    assert.ok(emoji?.name === 'part');
+    assert.equal(emoji.data.label, `${'a'.repeat(25)}…`, 'the emoji is kept whole or left out');
+    const [title] = read([lines({ t: 'plate', title: `${'∑'.repeat(30)} ${math.repeat(40)}` })]);
+    assert.ok(title?.name === 'plate' && [...title.data.title].length <= 60);
+  });
+
+  test('a long quote whose first word is short is cut at a character, never below the minimum', () => {
+    const quote = `abcdefg ${'x'.repeat(300)}`;
+    const [event] = read([lines(part({ cite: { quote } }))]);
+    assert.ok(event?.name === 'part');
+    const got = event.data.cite!.quote;
+    assert.equal([...got].length, 240);
+    assert.ok(quote.startsWith(got), 'still a verbatim prefix');
+    const astral = `𝑄 𝐾 ${'𝑉'.repeat(400)}`;
+    const [wide] = read([lines(part({ cite: { quote: astral } }))]);
+    assert.ok(wide?.name === 'part' && [...wide.data.cite!.quote].length === 240);
+    assert.ok(wellFormed(wide.data.cite!.quote));
+    // Too short in code points (7) although its .length is 14: the line is skipped, told.
+    assert.deepEqual(statuses(read([lines(part({ cite: { quote: math7 } }))])), [SKIPPED.shape]);
   });
 
   test('display text is clipped and a long quote is cut at a word, never given an ellipsis', () => {
@@ -248,18 +328,21 @@ describe('a diagram run through the service (faux brain)', () => {
     );
     assert.deepEqual(semanticProblems(result.events), []);
     const parts = eventsNamed(result.events, 'part');
+    // "Learned weights" was written with an arrow from the model's B, the broken line: the arrow
+    // is dropped (not moved to MatMul, the plate's B), and the reader is told.
     assert.deepEqual(
-      parts.map((p) => [p['letter'], p['after']]),
+      parts.map((p) => [p['letter'], p['label'], p['after']]),
       [
-        ['A', []],
-        ['B', ['A']],
-        ['C', ['B']],
+        ['A', 'Q, K, V', []],
+        ['B', 'MatMul (Q · Kᵀ)', ['A']],
+        ['C', 'Learned weights', []],
       ],
     );
     assert.match(String(parts[2]!['cite']['quote']), /gradient descent/);
     const labels = eventsNamed(result.events, 'status').map((s) => s['label']);
     assert.ok(labels.includes(SKIPPED.unreadable), JSON.stringify(labels));
-    assert.ok(labels.includes('Part B: dropped an arrow from a part that comes after it'));
+    assert.ok(labels.includes(`Part B: ${SKIPPED.ahead}`), JSON.stringify(labels));
+    assert.ok(labels.includes(`Part C: ${SKIPPED.missing}`), JSON.stringify(labels));
     assert.equal(result.events.at(-1)!.data['status'], 'complete');
     assert.equal(result.events.at(-1)!.data['final_text'], lines(...BAD_PLATE));
   });
@@ -297,6 +380,27 @@ describe('a diagram run through the service (faux brain)', () => {
     assert.equal(eventsNamed(result.events, 'part').length, 1);
   });
 
+  test('every part a plate of math, emoji and long quotes emits is within the contract (ajv counts code points)', async () => {
+    const result = await postRun(
+      agent.url,
+      diagramRequest('Explain with a diagram.', [
+        {
+          text: [
+            lines(
+              { t: 'plate', title: `${'𝑄'.repeat(70)}` },
+              part({ label: `xx${'𝑄'.repeat(40)}`, cite: { quote: `abcdefg ${'x'.repeat(300)}` } }),
+              part({ label: `${'a'.repeat(25)}👩‍👩‍👧`, after: ['A'], edge: ['𝐾'.repeat(30)] }),
+              part({ label: '𝑄 𝐾 𝑉', cite: { quote: `𝑄 𝐾 ${'𝑉'.repeat(400)}` } }),
+              { t: 'end' },
+            ),
+          ],
+        },
+      ]),
+    );
+    assert.deepEqual(semanticProblems(result.events), [], 'every frame validates (ajv)');
+    assert.equal(eventsNamed(result.events, 'part').length, 3);
+  });
+
   test('with no scenario the faux brain draws from the seed: quotes of its words, one inferred', async () => {
     const result = await postRun(agent.url, diagramRequest('Explain with a diagram.'));
     const parts = eventsNamed(result.events, 'part');
@@ -319,6 +423,12 @@ describe('the diagram-v1 prompt', () => {
     assert.match(prompt, /"cite":null/);
     assert.match(prompt, /\{"t":"end"\}/);
     assert.doesNotMatch(prompt, /SQUARE brackets/, 'a plate cites by quote, not by [bN] marker');
+    // The limits it states are the contract's, read from run-events.schema.json (one place).
+    const { title, label, quote } = DIAGRAM_LIMITS;
+    assert.ok(prompt.includes(`at most ${String(title.max)} characters`), 'title');
+    assert.ok(prompt.includes(`"<at most ${String(label.max)} characters>"`), 'label');
+    assert.ok(prompt.includes(`${String(quote.min)} to ${String(quote.max)} characters`), 'quote');
+    assert.deepEqual([title.max, label.max, quote.min, quote.max], [60, 28, 8, 240]);
   });
 
   test('keeps the datamark out of quotes, the paper text as data, and the tools to two', () => {

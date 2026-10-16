@@ -33,7 +33,7 @@ from fake_agent import FakeAgent, Script
 from fake_agent import load_fixture as load_agent_fixture
 from fastapi.testclient import TestClient
 from papertree_anchoring import normalise_for_match
-from papertree_api import create_app
+from papertree_api import create_app, evidence
 from papertree_api.evidence import DocumentCache
 from papertree_api.schemas import BROWSER_EVENTS, ThreadDetail
 from papertree_api.settings import Settings
@@ -60,6 +60,11 @@ QUOTES = {
 }
 NOWHERE = "the attention weights are learned end to end by gradient descent"
 NEAR = "We compute the dot product of each query with all of the keys"
+#: A near copy of the run's b6 (S7a review S2): the long selection, b1, also "supports" it.
+NEAR_B6 = "the two most common attention functions are additive attention and dot-product attention"
+B6 = "The two most commonly used attention functions"
+#: Word for word on p. 1 (the abstract), a passage this run never reads (review S3).
+UNREAD = "The dominant sequence transduction models are based on complex recurrent"
 CORPUS_PDF = Path(__file__).resolve().parents[4] / "research/benchmarks/corpus" / f"{ATTENTION}.pdf"
 
 
@@ -192,6 +197,76 @@ def test_a_quote_with_differences_is_anchored_not_verified_and_one_found_nowhere
             ("B", 0, 0),
             ("C", 0, 1),
         ]
+
+
+def _run_texts(h: AiHarness, token: str, paper_id: str) -> dict[str, str]:
+    """``block_id -> text`` of the blocks the (only) run read: its handles."""
+    user_id = h.client.get("/auth/me", headers=auth(token)).json()["user_id"]
+    db = PaperTreeDb(h.settings.database_file)
+    try:
+        owner = db.owner_for(user_id)
+        (run,) = h.rows("SELECT run_id FROM ai_runs")
+        blocks = db.run_handles(owner, run["run_id"]).values()
+    finally:
+        db.close()
+    passages = _passages(h, token, paper_id)
+    return {block: passages[block] for block in blocks}
+
+
+def test_a_near_quote_anchors_to_the_passage_it_is_closest_to_not_the_first_that_passes(
+    tmp_path: Path,
+) -> None:
+    with ai_harness(
+        tmp_path, Script("diagram-ok", part_patch={"B": {"cite": {"quote": NEAR_B6}}})
+    ) as h:
+        token, paper_id = _alice(h)
+        frames, _ = read_sse(_draw(h, token, paper_id))
+        a, b = events(frames, "part")[:2]
+        read = _run_texts(h, token, paper_id)
+        b6 = next(block for block, text in read.items() if text.startswith(B6))
+        selection = _block(a["cite"]["anchor"])
+        # The trap is real: the selection (handle b1) passes the claim check for this quote too.
+        assert evidence.claim_verdict(NEAR_B6, [selection], read) == "supported"
+        assert b["cite"]["supported"] is False and _block(b["cite"]["anchor"]) == b6
+
+
+@pytest.mark.parametrize(
+    ("quote", "why"),
+    [
+        ("the query", "two words"),
+        ("with all keys", "one content word"),
+        (UNREAD, "a passage the run never read"),
+    ],
+)
+def test_a_short_phrase_or_an_unread_passage_is_never_shown_as_cited(
+    tmp_path: Path, quote: str, why: str
+) -> None:
+    with ai_harness(
+        tmp_path, Script("diagram-ok", part_patch={"B": {"cite": {"quote": quote}}})
+    ) as h:
+        token, paper_id = _alice(h)
+        frames, _ = read_sse(_draw(h, token, paper_id))
+        b = events(frames, "part")[1]
+        passages = _passages(h, token, paper_id)
+        folded = normalise_for_match(quote).text
+        holders = [k for k, text in passages.items() if folded in normalise_for_match(text).text]
+        assert holders, f"precondition: the paper holds {quote!r} word for word"
+        if why == "a passage the run never read":
+            assert not set(holders) & set(_run_texts(h, token, paper_id)), "precondition: unread"
+        assert b["cite"]["anchor"] is None and b["cite"]["supported"] is False, why
+
+
+def test_a_part_frame_off_the_contract_is_dropped_and_the_plate_goes_on(tmp_path: Path) -> None:
+    """S7a review S1: one bad frame costs that part, never the run (no `internal`)."""
+    with ai_harness(tmp_path, Script("diagram-ok", part_patch={"B": {"label": "x" * 29}})) as h:
+        token, paper_id = _alice(h)
+        frames, _ = read_sse(_draw(h, token, paper_id))
+        _assert_browser_stream(frames)
+        assert events(frames, "done")[0]["status"] == "complete"
+        parts = events(frames, "part")
+        assert [p["letter"] for p in parts] == ["A", "C", "D", "E", "F"]
+        assert parts[1]["after"] == [], "C's arrow came from the dropped B: left out, not moved"
+        assert [r["letter"] for r in h.rows("SELECT letter FROM ai_diagram_parts")] == list("ACDEF")
 
 
 def test_stop_keeps_the_parts_that_arrived_and_the_plate_reads_stopped(tmp_path: Path) -> None:

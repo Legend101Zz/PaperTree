@@ -519,7 +519,11 @@ export const ATTENTION_PLATE: ReadonlyArray<Record<string, unknown>> = [
   { t: 'end' },
 ];
 
-/** `[faux:diagram-bad]`: one broken line, one arrow from a later part, one quote found nowhere. */
+/**
+ * `[faux:diagram-bad]`: one broken part line, then an arrow from a later part, an arrow from the
+ * broken (never drawn) part, and a quote the paper does not hold. Letters are the model's count of
+ * the lines it wrote, so "Learned weights" `after: ['B']` names the broken line.
+ */
 export const BAD_PLATE: ReadonlyArray<Record<string, unknown> | string> = [
   { t: 'plate', title: 'Scaled dot-product attention' },
   ATTENTION_PLATE[1]!,

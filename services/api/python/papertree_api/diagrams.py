@@ -1,36 +1,28 @@
-"""A diagram answer (v0.2 S7a, #216): quotes found, parts stored as they stream, the plate read.
+"""A diagram answer (v0.2 S7a, #216): parts stored as they stream, and the plate read back.
 
 A diagram run's message keeps the model's raw lines in ``content``; what the reader is shown comes
 from the rows stored as each part arrived (``ai_diagram_parts``) and the plate's title and links
-(``ai_messages.diagram_json``). DESIGN.md §4: a part is CITED (its quote is in the paper word for
-word: an Anchor, ``supported``), NOT VERIFIED (the quote is there with differences: an Anchor,
-not supported; or found nowhere: no Anchor) or INFERRED (no quote), never silently uncited. The
-locator of a cited part is derived from the parse, never stored.
+(``ai_messages.diagram_json``). DESIGN.md §4: a part is CITED (its quote is word for word in a
+passage the run read: an Anchor, ``supported``), NOT VERIFIED (near a passage: an Anchor, not
+supported; or found nowhere: no Anchor) or INFERRED (no quote), never silently uncited. Where a
+quote is found is ``quotes.py``'s; the locator of a cited part is derived from the parse, never
+stored.
 """
 
 from __future__ import annotations
 
-import json
-import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final
 
-from papertree_agent_tools import PaperVocabulary
-from papertree_anchoring import IndexedDocument, capture_citation, normalise_for_match
+from papertree_anchoring import IndexedDocument
 from papertree_db import OwnerId, PaperTreeDb
 from papertree_db.ai import DiagramPartIn
-from papertree_prompts import DATAMARK_SHAPE
-from pydantic import ValidationError
 
 from . import evidence
 from .logging import log_event
-from .schemas import AgentLink, AgentPart, AnchorV1
-from .wiretime import now_wire
-
-#: Shorter than this, a quote is not evidence of anything (R3 Q1: `quote` is 8-240 characters).
-MIN_QUOTE_CHARS: Final = 8
-_SPACE: Final = re.compile(r"\s+")
+from .quotes import QuoteResolver, clean_quote
+from .schemas import AgentLink, AgentPart
 
 #: A message's status -> its plate's (``schemas.DiagramStatus``): the reader's Stop is `stopped`.
 _PLATE_STATUS: Final[dict[str, str]] = {
@@ -122,96 +114,6 @@ def diagram_wire(
     }
 
 
-# ── finding a quote ──────────────────────────────────────────────────────────────────────────
-
-
-@dataclass(frozen=True, slots=True)
-class Found:
-    """Where a quote was found: the block, and whether word for word."""
-
-    block_id: str | None
-    verbatim: bool
-
-
-class QuoteResolver:
-    """Looks for a part's quote in the paper, the run's own passages first.
-
-    VERBATIM: the quote, with any datamark the model copied removed, is a substring of a block's
-    text once both are folded the way an Anchor's quote is matched (``normalise_for_match``: line
-    hyphens joined, whitespace collapsed, the identity fold). The run's blocks (the seed and its
-    tool reads) are searched first, then every block in reading order: a quote the paper says word
-    for word is cited wherever it is. WITH DIFFERENCES: no block holds it verbatim, but the lexical
-    checker the answers use (``evidence.claim_verdict``) finds it ``supported`` by one of the run's
-    own blocks. Otherwise it is found nowhere. A quote that spans two blocks (a paragraph the parser
-    split) is not verbatim in either: it can only be "with differences".
-    """
-
-    def __init__(
-        self,
-        document: IndexedDocument | None,
-        run_blocks: Sequence[str],
-        texts: Mapping[str, str],
-        paper: PaperVocabulary | None,
-    ) -> None:
-        """Builds the resolver for one run.
-
-        Args:
-            document: The anchoring document of the run's generation; None when it cannot be
-                loaded (then nothing is found).
-            run_blocks: The block ids the run was shown, in handle order.
-            texts: ``block_id -> text`` of those blocks, for the lexical check.
-            paper: The whole paper's vocabulary (``evidence.vocabulary_of``), or None.
-        """
-        self._document = document
-        self._run_blocks = [b for b in dict.fromkeys(run_blocks) if b in texts]
-        self._texts = texts
-        self._paper = paper
-        self._folded: dict[str, str] = {}
-
-    @staticmethod
-    def clean(quote: str) -> str:
-        """The quote without datamark look-alikes, whitespace collapsed (what is stored and shown).
-
-        Args:
-            quote: The model's quote.
-
-        Returns:
-            The cleaned quote.
-        """
-        return _SPACE.sub(" ", DATAMARK_SHAPE.sub(" ", quote)).strip()
-
-    def _fold(self, block_id: str) -> str:
-        folded = self._folded.get(block_id)
-        if folded is None and self._document is not None:
-            indexed = self._document.by_id.get(block_id)
-            folded = normalise_for_match(indexed.text).text if indexed is not None else ""
-            self._folded[block_id] = folded
-        return folded or ""
-
-    def find(self, quote: str) -> Found:
-        """Where ``quote`` is in the paper.
-
-        Args:
-            quote: The model's quote (cleaned or not).
-
-        Returns:
-            ``Found(block, True)`` for a verbatim match, ``Found(block, False)`` for one with
-            differences, ``Found(None, False)`` when it is nowhere.
-        """
-        clean = self.clean(quote)
-        needle = normalise_for_match(clean).text
-        if self._document is None or len(needle) < MIN_QUOTE_CHARS:
-            return Found(None, False)
-        everything = [b.block.block_id for b in self._document.blocks]
-        for block_id in dict.fromkeys([*self._run_blocks, *everything]):
-            if needle in self._fold(block_id):
-                return Found(block_id, True)
-        for block_id in self._run_blocks:
-            if evidence.claim_verdict(clean, [block_id], self._texts, self._paper) == "supported":
-                return Found(block_id, False)
-        return Found(None, False)
-
-
 # ── a plate as it streams ────────────────────────────────────────────────────────────────────
 
 
@@ -243,9 +145,11 @@ class PlateBuilder:
     """One diagram run's plate as its events arrive (the broker's, ``agent_client.RunBroker``).
 
     Each part is resolved and STORED at once, so a Stop, a timeout or a lost agent keeps the parts
-    that came; the title and links are written to the message as they come too. A part the agent
-    should never have sent (a letter out of order, a thirteenth part, an arrow from a later part)
-    is logged and left out, never stored half-right.
+    that came; the title and links are written to the message as they come too. Parts keep the
+    AGENT's letters: they rise, but may skip one when a frame was dropped on the way (logged by
+    ``agent_client.AgentStream``), and an arrow or link from a letter that was never stored is
+    left out. A part the agent should never have sent (a letter out of order, a part the table
+    refuses) is logged and left out, never stored half-right.
     """
 
     db: PaperTreeDb
@@ -259,7 +163,13 @@ class PlateBuilder:
     new_id: Callable[[str], str]
     title: str | None = None
     links: list[dict[str, Any]] = field(default_factory=list)
-    count: int = 0
+    #: The letters stored, in order.
+    stored: list[str] = field(default_factory=list)
+
+    @property
+    def count(self) -> int:
+        """How many parts are on the plate."""
+        return len(self.stored)
 
     def plate(self) -> dict[str, Any]:
         """``ai_messages.diagram_json``: ``{title, links}``."""
@@ -290,7 +200,7 @@ class PlateBuilder:
         Returns:
             The browser's ``link`` event data, or None when it is left out.
         """
-        placed = {chr(ord("A") + i) for i in range(self.count)}
+        placed = set(self.stored)
         if link.source not in placed or link.target not in placed or link.source == link.target:
             self._refuse("link_unplaced")
             return None
@@ -309,13 +219,18 @@ class PlateBuilder:
             The browser's ``part`` event data (``schemas.DiagramPart``), or None when it is left
             out.
         """
-        expected = chr(ord("A") + self.count)
-        if part.letter != expected:
+        if self.stored and part.letter <= self.stored[-1]:
             self._refuse("letter_out_of_order")
             return None
+        after: list[str] = []
+        edge: list[str | None] = []
+        for letter, label in zip(part.after, part.edge, strict=False):
+            if letter in self.stored and letter not in after:
+                after.append(letter)
+                edge.append(label)
         quote = block_id = anchor = page_index = supported = None
         if part.cite is not None:
-            quote = QuoteResolver.clean(part.cite.quote)
+            quote = clean_quote(part.cite.quote)
             found = self.resolver.find(quote)
             supported = found.verbatim
             anchor = self._anchor(found.block_id)
@@ -326,12 +241,12 @@ class PlateBuilder:
                 supported = False  # an Anchor that could not be minted is not "cited"
         row = DiagramPartIn(
             part_id=self.new_id("dpt"),
-            ordinal=self.count,
+            ordinal=ord(part.letter) - ord("A"),
             label=part.label,
             text=part.text,
             kind=part.kind,
-            after=list(part.after),
-            edge=list(part.edge),
+            after=after,
+            edge=edge,
             quote=quote,
             anchor=anchor,
             supported=supported,
@@ -344,26 +259,24 @@ class PlateBuilder:
         except ValueError:
             self._refuse("part_invalid")
             return None
-        self.count += 1
+        self.stored.append(part.letter)
         return part_wire(stored_shape(row), self.locators)
 
     def _anchor(self, block_id: str | None) -> dict[str, Any] | None:
-        """A whole-block citation Anchor over ``block_id``, or None.
+        """``evidence.mint_block_anchor`` over ``block_id``, or None.
 
-        The record is refused when the contract would refuse it (the same check
-        ``evidence.CitationMinter`` makes).
+        On None the part is kept as not verified: an Anchor the contract refuses is never stored.
         """
         if block_id is None or self.document is None or block_id not in self.document.by_id:
             return None
-        citation_id = self.new_id("cit")
-        anchor: dict[str, Any] = dict(
-            capture_citation(self.document, block_id, citation_id=citation_id, at=now_wire())
-        )
-        try:
-            AnchorV1.model_validate_json(json.dumps(anchor))
-        except ValidationError:
-            self._refuse("anchor_invalid")
-            return None
+        anchor = evidence.mint_block_anchor(self.document, block_id, self.new_id("cit"))
+        if anchor is None:
+            log_event(
+                "run.diagram_anchor_invalid",
+                level="error",
+                run_id=self.run_id,
+                error_code="anchor_invalid",
+            )
         return anchor
 
     def _refuse(self, code: str) -> None:

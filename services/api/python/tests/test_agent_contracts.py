@@ -283,6 +283,13 @@ EDGE_FRAMES: list[tuple[str, dict[str, Any]]] = [
     ("link", {"source": "A", "target": "B", "label": "feeds"}),
     ("link", {"source": "A", "target": "B"}),
     ("link", {"source": "a", "target": "B", "label": None}),
+    # S7a review: both sides count CODE POINTS (`𝑄` is one, though two UTF-16 units).
+    ("part", {**_PART, "label": "𝑄" * 28}),
+    ("part", {**_PART, "label": "𝑄" * 29}),
+    ("part", {**_PART, "cite": {"quote": "𝑄𝐾𝑉𝑄𝐾𝑉𝑄"}}),
+    ("part", {**_PART, "cite": {"quote": "𝑄𝐾𝑉𝑄𝐾𝑉𝑄𝐾"}}),
+    ("plate", {"title": "∑" * 60}),
+    ("plate", {"title": "👩‍👩‍👧" * 12}),
 ]
 
 

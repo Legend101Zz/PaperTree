@@ -59,6 +59,7 @@ from . import diagrams, evidence
 from .errors import ApiError, ErrorCode, RunErrorCode
 from .logging import log_event, user_ref
 from .middleware import REQUEST_ID_HEADER
+from .quotes import QuoteResolver
 from .schemas import (
     AgentDone,
     AgentLimits,
@@ -89,6 +90,8 @@ TOKEN_GRACE_SECONDS: Final = 30
 #: The one API-level retry's pause (the agent's own retry pauses are its own).
 RETRY_DELAY_SECONDS: Final = 1.0
 MAX_STATUS_LABEL: Final = 120
+#: The events only a diagram run sends; one off the contract is dropped, not fatal.
+DIAGRAM_EVENTS: Final = frozenset({"plate", "part", "link"})
 
 PROVIDER: Final = "minimax"
 MODEL: Final = "MiniMax-M3"
@@ -237,19 +240,39 @@ class AgentProtocolError(Exception):
 class AgentStream:
     client: httpx.AsyncClient
     response: httpx.Response
+    #: For the log line of a dropped diagram frame.
+    run_id: str = ""
 
     async def frames(self) -> AsyncIterator[tuple[str, Wire | None]]:
         """``(event, model)`` per frame, and ``("ping", None)`` per ``: ping`` comment: a
-        heartbeat is activity, and the broker's idle timer must see it."""
+        heartbeat is activity, and the broker's idle timer must see it.
+
+        A ``plate`` / ``part`` / ``link`` frame that is not the contract is DROPPED (logged, and
+        yielded as activity), never a protocol error: one bad line of a plate costs that line,
+        not the run (S7a review S1). Any other frame off the contract ends the run as before."""
         event: str | None = None
         data: list[str] = []
         async for line in self.response.aiter_lines():
             if line == "":
                 if event is not None:
+                    parsed: Wire | None
                     try:
-                        yield event, parse_agent_event(event, "\n".join(data))
-                    except (KeyError, ValidationError) as exc:
+                        parsed = parse_agent_event(event, "\n".join(data))
+                    except ValidationError as exc:
+                        if event not in DIAGRAM_EVENTS:
+                            raise AgentProtocolError(
+                                f"a {event!r} frame is not the contract"
+                            ) from exc
+                        log_event(
+                            "run.diagram_dropped",
+                            level="warning",
+                            run_id=self.run_id,
+                            error_code=f"{event}_invalid",
+                        )
+                        event, parsed = "ping", None
+                    except KeyError as exc:
                         raise AgentProtocolError(f"a {event!r} frame is not the contract") from exc
+                    yield event, parsed
                 event, data = None, []
                 continue
             if line.startswith(":"):
@@ -307,7 +330,7 @@ class AgentClient:
                 "agent_unavailable", "The AI service is not reachable. Try again in a moment."
             ) from exc
         if response.status_code == 200:
-            return AgentStream(client, response)
+            return AgentStream(client, response, run_id=body.run_id)
         status = response.status_code
         await response.aclose()
         await client.aclose()
@@ -683,7 +706,7 @@ class RunBroker:
             run_id=spec.run_id,
             message_id=spec.message_id,
             generation=spec.generation,
-            resolver=diagrams.QuoteResolver(document, list(handles.values()), texts, vocabulary),
+            resolver=QuoteResolver(document, list(handles.values()), texts, vocabulary),
             document=document,
             locators=locators,
             new_id=new_id,
@@ -799,6 +822,10 @@ class RunBroker:
             citations = []  # a plate's evidence is its parts' Anchors, not `[bN]` markers
             if status in ("complete", "partial") and (self.plate is None or not self.plate.count):
                 # R3 Q1: a stream with no valid part is the error state, never an empty plate.
+                # Logged on its own, so S7b can count how often the lines fail as a whole.
+                log_event(
+                    "run.diagram_empty", level="warning", run_id=spec.run_id, error_code="no_part"
+                )
                 status, error_code = "error", error_code or "internal"
         else:
             citations = evidence.cite_answer(final_text, minter) if final_text else []

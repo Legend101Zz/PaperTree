@@ -7,7 +7,12 @@
  * conversation and not a stale copy of any run's passages or datamark (fixtures `explain-ok` /
  * `followup-ok`: the user message is `question + "\n\n" + quote`).
  */
-import type { PromptVersion, RunRequest, SeedPassage } from './contract.ts';
+import {
+  DIAGRAM_LIMITS,
+  type PromptVersion,
+  type RunRequest,
+  type SeedPassage,
+} from './contract.ts';
 
 /** C0/C1 controls (tab, newline and the rest), DEL, and the Unicode line/paragraph separators. */
 function isControl(code: number): boolean {
@@ -71,24 +76,29 @@ const TASK: Record<PromptVersion, string> = {
  * The example is from another paper on purpose: its words must not be quoted back.
  */
 function diagramRules(request: RunRequest): string {
+  // The limits are the contract's (run-events.schema.json, `DIAGRAM_LIMITS`): one place, never a
+  // second copy here that could drift from what the reader and the API enforce.
+  const { title, label, text, quote } = DIAGRAM_LIMITS;
   return [
     'How to draw it:',
     '- Ground every part ONLY in the passages in this prompt and in the results of your tools. ' +
       'Your memory of this paper or of any other paper is not a source.',
     '- Write the diagram as lines of JSON, one object per line, and nothing else: no prose, no ' +
       'Markdown, no code fence, no line breaks inside an object.',
-    '- First line: {"t":"plate","title":"<the figure\'s name, at most 60 characters>"}',
+    `- First line: {"t":"plate","title":"<the figure's name, at most ${String(title.max)} characters>"}`,
     '- Then one line per part, at most 12, in the order a reader should follow them: ' +
-      '{"t":"part","label":"<at most 28 characters>","text":"<one short line, at most 110 ' +
-      'characters>","kind":"input|step|output|concept","after":["A"],"cite":{"quote":"<words ' +
-      'copied from one passage>"}}',
+      `{"t":"part","label":"<at most ${String(label.max)} characters>","text":"<one short line, at ` +
+      `most ${String(text.max)} characters>","kind":"input|step|output|concept","after":["A"],` +
+      '"cite":{"quote":"<words copied from one passage>"}}',
     '- The parts are lettered by their order: the first part line is A, the second B, and so on ' +
       'up to L. Do not write the letter; count.',
     '- "after" lists the parts with an arrow INTO this one, by letter, and names only EARLIER ' +
       'parts (at most 3; [] for none). An optional "edge" gives one short label per "after" entry.',
-    '- "cite" is required. Copy the quote word for word from ONE passage, 8 to 240 characters, ' +
+    '- "cite" is required. Copy the quote word for word from ONE passage you were given here or ' +
+      `read with a tool: at least three words, ${String(quote.min)} to ${String(quote.max)} characters, ` +
       `without the marker ${request.datamark}, with no ellipsis and no paraphrase: the reader is ` +
-      'shown where it comes from. When no passage says what a part shows, write "cite":null and ' +
+      'shown where it comes from (a quote of a passage you did not read here is shown as not ' +
+      'verified). When no passage says what a part shows, write "cite":null and ' +
       'the reader is told the part is inferred. Never invent a quote.',
     '- An arrow "after" cannot draw (back to an earlier part): {"t":"link","from":"D","to":"B",' +
       '"label":"<short>"}, only between parts already written.',

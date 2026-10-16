@@ -2,10 +2,15 @@
  * A diagram run's answer, line by line (v0.2 S7a, #216; ADR-004 §2.9; RESEARCH-R3 Q1's schema).
  * The model writes NDJSON (`plate`, `part`, `link`, `end`); `PlateReader` turns every complete line
  * into a `plate`, `part` or `link` event, or skips it with a `status` frame, and never throws: one
- * bad line costs one line, not the plate. Validation is zod, here on the server only. The API then
- * resolves each part's quote to an Anchor; this module never sees the paper.
+ * bad line costs one line, not the plate. Validation is zod, here on the server only, with the text
+ * limits of the committed run-events schema (`DIAGRAM_LIMITS`, the API's are the same file),
+ * counted in code points. The API then resolves each part's quote to an Anchor; this module never
+ * sees the paper.
  */
 import { z } from 'zod';
+
+import { DIAGRAM_LIMITS, type TextBound } from './contract.ts';
+import { clip, codePoints, collapse, cutQuote } from './text.ts';
 
 /** A plate holds at most twelve parts, lettered A-L in arrival order. */
 export const MAX_PARTS = 12;
@@ -15,30 +20,34 @@ export const LETTERS = 'ABCDEFGHIJKL';
 /** The tools a diagram run may use (a plate reads passages, it does not search the paper). */
 export const DIAGRAM_TOOLS: readonly string[] = ['get_passage', 'get_section'];
 
-/** Display text is clipped, not refused: a 30-character label still names its part. */
-function clipped(max: number) {
+/** Display text is clipped, not refused: a 30-character label still names its part. The minimum
+ * is checked after the cut, in the same unit. */
+function clipped(bound: TextBound) {
   return z
     .string()
-    .transform((value) => value.replace(/\s+/g, ' ').trim())
-    .transform((value) => (value.length <= max ? value : `${value.slice(0, max - 1)}…`));
+    .transform((value) => clip(collapse(value), bound.max, true))
+    .refine((value) => codePoints(value) >= bound.min, `at least ${String(bound.min)} characters`);
 }
 
-/** A quote must stay verbatim, so a long one is cut at a word, never given an ellipsis. */
+/** A quote must stay verbatim: cut without an ellipsis (text.ts `cutQuote`), its minimum checked
+ * after the cut, so a long quote is never cut below it. */
 const Quote = z
   .string()
-  .transform((value) => value.replace(/\s+/g, ' ').trim())
-  .refine((value) => value.length >= 8, 'a quote of at least 8 characters')
-  .transform((value) => (value.length <= 240 ? value : value.slice(0, 240).replace(/\s\S*$/, '')));
+  .transform((value) => cutQuote(value, DIAGRAM_LIMITS.quote.min, DIAGRAM_LIMITS.quote.max))
+  .refine(
+    (value) => codePoints(value) >= DIAGRAM_LIMITS.quote.min,
+    `a quote of at least ${String(DIAGRAM_LIMITS.quote.min)} characters`,
+  );
 
 const Letter = z.string().regex(/^[A-L]$/);
 
 const PartLine = z.object({
   t: z.literal('part'),
-  label: clipped(28).refine((value) => value.length > 0, 'a label'),
-  text: clipped(110).default(''),
+  label: clipped(DIAGRAM_LIMITS.label),
+  text: clipped(DIAGRAM_LIMITS.text).default(''),
   kind: z.enum(['input', 'step', 'output', 'concept']).default('step'),
   after: z.array(Letter).max(3).default([]),
-  edge: z.array(clipped(18).nullable()).max(3).optional(),
+  edge: z.array(clipped(DIAGRAM_LIMITS.edge).nullable()).max(3).optional(),
   // Required and nullable: "no passage says this" is an explicit null, never an omission.
   cite: z.object({ quote: Quote, page: z.number().int().positive().optional() }).nullable(),
 });
@@ -47,12 +56,12 @@ const LinkLine = z.object({
   t: z.literal('link'),
   from: Letter,
   to: Letter,
-  label: clipped(18).optional(),
+  label: clipped(DIAGRAM_LIMITS.link).optional(),
 });
 
 /** One NDJSON line of a `diagram-v1` answer. Unknown keys (a `letter` the model counted) are dropped. */
 export const DiagramLine = z.discriminatedUnion('t', [
-  z.object({ t: z.literal('plate'), title: clipped(60).refine((v) => v.length > 0, 'a title') }),
+  z.object({ t: z.literal('plate'), title: clipped(DIAGRAM_LIMITS.title) }),
   PartLine,
   LinkLine,
   z.object({ t: z.literal('end') }),
@@ -102,6 +111,8 @@ export const SKIPPED = {
   title: 'Kept the first title of the plate',
   full: `The plate holds ${String(MAX_PARTS)} parts; the rest were left out`,
   link: 'Skipped an arrow between parts that are not on the plate',
+  missing: 'dropped an arrow from a part that was not drawn',
+  ahead: 'dropped an arrow from a part that does not come before it',
   after: 'Skipped what came after the end of the plate',
 } as const;
 
@@ -122,11 +133,22 @@ export function holdsDiagramLine(text: string): boolean {
   return end !== -1 && text.slice(0, end).split('\n').some(isDiagramLine);
 }
 
+/** A line that was meant as a part, readable or not: it takes one of the model's letters. */
+const PART_ATTEMPT = /"t"\s*:\s*"part"/;
+
+function isPartAttempt(json: unknown): boolean {
+  return typeof json === 'object' && json !== null && (json as { t?: unknown }).t === 'part';
+}
+
 /**
- * Reads one diagram answer's text as it streams. Letters are assigned by arrival: the Nth valid
- * part is the Nth letter, whatever the model counted. An `after` that names a part not yet placed
- * (a later letter, or the part itself) is TRIMMED: the part is kept and that one arrow dropped,
- * so the graph is acyclic by construction (ADR-004 §2.9) and a miscount costs an arrow, not a part.
+ * Reads one diagram answer's text as it streams. TWO COUNTS, kept apart (S7a review B1): the model
+ * letters its parts by every part line it WROTE (the prompt: "the first part line is A … count"),
+ * the plate letters the parts it PLACED. Once a part line is skipped the two differ for the rest of
+ * the plate, so every `after` and `link` letter is the model's and is translated through the map
+ * of placed parts: an arrow from a part that was not drawn is dropped and said so, never moved to
+ * the next part; an arrow from a part that does not come before this one (a later letter, or the
+ * part itself) is TRIMMED: the part is kept and that one arrow dropped, so the graph is acyclic by
+ * construction (ADR-004 §2.9) and a miscount costs an arrow, not a part.
  *
  * @example
  * const reader = new PlateReader((event) => sse.event(event.name, { ...event.data }));
@@ -136,7 +158,11 @@ export function holdsDiagramLine(text: string): boolean {
  */
 export class PlateReader {
   private pending = '';
+  /** Part lines the model wrote, readable or not: the index of its next letter. */
+  private written = 0;
   private placed = 0;
+  /** The model's letter -> the plate's, for every part placed. */
+  private readonly drawn = new Map<string, string>();
   private links = 0;
   private titled = false;
   private ended = false;
@@ -187,10 +213,14 @@ export class PlateReader {
     try {
       json = JSON.parse(text);
     } catch {
+      if (PART_ATTEMPT.test(text)) this.written++;
       return this.status(SKIPPED.unreadable);
     }
     const parsed = DiagramLine.safeParse(json);
-    if (!parsed.success) return this.status(SKIPPED.shape);
+    if (!parsed.success) {
+      if (isPartAttempt(json)) this.written++;
+      return this.status(SKIPPED.shape);
+    }
     const line = parsed.data;
     switch (line.t) {
       case 'plate':
@@ -208,21 +238,25 @@ export class PlateReader {
   }
 
   private part(line: z.infer<typeof PartLine>): void {
+    const index = this.written++; // this line's place in the model's count
     if (this.placed >= MAX_PARTS) return this.status(SKIPPED.full, true);
     const letter = LETTERS.charAt(this.placed);
     const after: string[] = [];
     const edge: Array<string | null> = [];
-    let trimmed = false;
+    const dropped = new Set<string>();
     line.after.forEach((from, i) => {
-      if (from >= letter || after.includes(from)) {
-        trimmed = trimmed || from >= letter;
-        return;
+      const mapped = this.drawn.get(from);
+      if (LETTERS.indexOf(from) >= index) dropped.add(SKIPPED.ahead);
+      else if (mapped === undefined) dropped.add(SKIPPED.missing);
+      else if (!after.includes(mapped)) {
+        after.push(mapped);
+        edge.push(line.edge?.[i] ?? null);
       }
-      after.push(from);
-      edge.push(line.edge?.[i] ?? null);
     });
     this.placed++;
-    if (trimmed) this.status(`Part ${letter}: dropped an arrow from a part that comes after it`);
+    const own = LETTERS.charAt(index);
+    if (own !== '') this.drawn.set(own, letter);
+    for (const why of dropped) this.status(`Part ${letter}: ${why}`);
     this.emit({
       name: 'part',
       data: {
@@ -243,19 +277,12 @@ export class PlateReader {
   }
 
   private link(line: z.infer<typeof LinkLine>): void {
-    const placed = new Set(LETTERS.slice(0, this.placed));
-    if (
-      this.links >= MAX_LINKS ||
-      line.from === line.to ||
-      !placed.has(line.from) ||
-      !placed.has(line.to)
-    ) {
+    const source = this.drawn.get(line.from);
+    const target = this.drawn.get(line.to);
+    if (this.links >= MAX_LINKS || !source || !target || source === target) {
       return this.status(SKIPPED.link);
     }
     this.links++;
-    this.emit({
-      name: 'link',
-      data: { source: line.from, target: line.to, label: line.label ?? null },
-    });
+    this.emit({ name: 'link', data: { source, target, label: line.label ?? null } });
   }
 }
