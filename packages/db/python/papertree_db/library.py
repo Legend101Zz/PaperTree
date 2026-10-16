@@ -21,6 +21,7 @@ job (if any) is LEFT JOINed, and neither is required.
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
@@ -34,6 +35,8 @@ if TYPE_CHECKING:
     from .database import DatabaseCore as _Base
 else:
     _Base = object
+
+_log = logging.getLogger(__name__)
 
 #: SQLite's INTEGER range; `highlights.SQLITE_INTEGER_MAX` is the exported name, restated here
 #: only because importing it from `highlights` would couple two slices' modules.
@@ -100,6 +103,50 @@ class LibraryRow:
     thread_count: int
     has_summary: bool
 
+
+@dataclass(frozen=True, slots=True)
+class LinkReference:
+    """One bibliography entry of a paper, as ``GET /library/links`` matches against it."""
+
+    #: Zero-based position in ``papers.references_json`` (document order).
+    index: int
+    #: The entry's text, ``blocks.text`` of its ``reference_entry`` block (may be empty).
+    text: str
+    #: The arXiv id the parser found in the entry (``references.py``), or None.
+    arxiv_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class LinkSource:
+    """What the library-links matcher needs from one promoted paper: its identity and its
+    bibliography. Derived on read; nothing here is stored."""
+
+    paper_id: str
+    #: ``metadata.title.value`` of the promoted generation (never the filename), or None.
+    title: str | None
+    arxiv_id: str | None
+    references: tuple[LinkReference, ...]
+
+
+_LINKS_SQL: Final = """
+SELECT po.paper_id, p.metadata, je.key AS ref_index,
+       -- A references_json that is not a JSON array is read as "no references" (and logged), never
+       -- allowed to fail the whole library: json_each raises on malformed text.
+       (json_valid(p.references_json) AND json_type(p.references_json) = 'array') AS refs_ok,
+       json_extract(je.value, '$.arxiv_id') AS ref_arxiv, b.text AS ref_text
+  FROM paper_owners po
+  JOIN paper_promotions pp ON pp.owner_id = po.owner_id AND pp.paper_id = po.paper_id
+  JOIN papers p
+    ON p.owner_id = pp.owner_id AND p.paper_id = pp.paper_id AND p.generation = pp.generation
+  LEFT JOIN json_each(CASE WHEN json_valid(p.references_json)
+                            AND json_type(p.references_json) = 'array'
+                           THEN p.references_json ELSE '[]' END) je
+  LEFT JOIN blocks b
+    ON b.owner_id = pp.owner_id AND b.paper_id = pp.paper_id AND b.generation = pp.generation
+   AND b.block_id = json_extract(je.value, '$.reference_entry_block_id')
+ WHERE po.owner_id = ?
+ ORDER BY po.created_at DESC, po.paper_id DESC, je.key
+"""
 
 _ROW_SQL: Final = f"""
 SELECT po.paper_id, po.source_hash, po.original_filename, po.byte_size, po.created_at,
@@ -452,6 +499,58 @@ class LibraryMixin(_Base):
         no job at all."""
         owner_id = self._resolve(owner)
         return [_library_row(row) for row in self._conn.execute(_ROW_SQL + _ORDER, (owner_id,))]
+
+    def library_link_sources(self, owner: OwnerId) -> list[LinkSource]:
+        """Every promoted paper of the owner with its bibliography, in ONE query (newest paper
+        first, entries in document order). The input of ``GET /library/links``.
+
+        A paper with no promoted generation (still parsing, failed) is absent: it has no
+        references yet and no parsed title to be matched by.
+
+        Args:
+            owner: The caller's owner handle.
+
+        Returns:
+            One ``LinkSource`` per promoted paper; ``references`` is empty when the parse found
+            no bibliography.
+        """
+        owner_id = self._resolve(owner)
+        order: list[str] = []
+        meta: dict[str, dict[str, Any]] = {}
+        refs: dict[str, list[LinkReference]] = {}
+        for row in self._conn.execute(_LINKS_SQL, (owner_id,)):
+            paper_id = row["paper_id"]
+            if paper_id not in meta:
+                if not row["refs_ok"]:
+                    _log.warning("references_json of paper %s is not an array; none read", paper_id)
+                order.append(paper_id)
+                meta[paper_id] = _metadata_object(row["metadata"])
+                refs[paper_id] = []
+            if row["ref_index"] is not None:
+                arxiv = row["ref_arxiv"]
+                refs[paper_id].append(
+                    LinkReference(
+                        index=int(row["ref_index"]),
+                        text=row["ref_text"] or "",
+                        arxiv_id=arxiv if isinstance(arxiv, str) and arxiv else None,
+                    )
+                )
+        sources: list[LinkSource] = []
+        for paper_id in order:
+            data = meta[paper_id]
+            title_value = _metadata_value(data, "title")
+            arxiv_value = _metadata_value(data, "arxiv_id")
+            sources.append(
+                LinkSource(
+                    paper_id=paper_id,
+                    title=title_value
+                    if isinstance(title_value, str) and title_value.strip()
+                    else None,
+                    arxiv_id=arxiv_value if isinstance(arxiv_value, str) and arxiv_value else None,
+                    references=tuple(refs[paper_id]),
+                )
+            )
+        return sources
 
     def library_row(self, owner: OwnerId, paper_id: PaperId) -> LibraryRow | None:
         """``list_library``'s row for one paper, or None when it is not this owner's."""

@@ -488,6 +488,34 @@ class JobAccepted(Wire):
     generation: Generation
 
 
+class LibraryReference(Wire):
+    """The bibliography entry that made a library link: its position and its text."""
+
+    #: Zero-based position in the citing paper's bibliography (document order).
+    index: int = Field(ge=0, le=SQLITE_INTEGER_MAX)
+    text: str
+
+
+class LibraryLink(Wire):
+    """One real link between two of the caller's papers (``GET /library/links``, #194).
+
+    ``via`` is only ``"citation"``: ``"board"`` joins the enum when a board can hold a second
+    paper. ``matched_by`` is what actually matched, so the UI words it from the field.
+    """
+
+    from_paper_id: str
+    to_paper_id: str
+    via: Literal["citation"]
+    matched_by: Literal["arxiv_id", "title"]
+    reference: LibraryReference
+
+
+class LibraryLinks(Wire):
+    """``GET /library/links``."""
+
+    links: list[LibraryLink]
+
+
 class ReparseRequest(Wire):
     reason: str | None = omittable(max_length=500)
 
