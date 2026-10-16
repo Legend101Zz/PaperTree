@@ -23,6 +23,12 @@ export interface LassoSelection {
   readonly itemIds: readonly string[];
 }
 
+/** Largest lasso thinning tolerance, in page units (about 2 px on a desktop page). */
+export const MAX_LASSO_EPSILON = 2;
+
+/** Segments shorter than this (page units) with both ends on one side of the lasso are not cut. */
+const SHORT_SEGMENT = 4;
+
 /** Strokes are immutable, so their padded bounds are computed once. */
 const boundsCache = new WeakMap<Stroke, Bounds>();
 
@@ -148,7 +154,80 @@ export function simplify(pts: readonly Vec2[], epsilon: number): Vec2[] {
 }
 
 /**
- * Which strokes a lasso picks: those with at least half their points inside.
+ * Parameters (0..1) along segment a-b where it crosses an edge of the polygon, sorted, with the
+ * ends included.
+ *
+ * @param a - Segment start.
+ * @param b - Segment end.
+ * @param poly - Polygon vertices; implicitly closed.
+ * @returns Sorted parameters, always starting with 0 and ending with 1.
+ */
+function crossings(a: Vec2, b: Vec2, poly: readonly Vec2[]): number[] {
+  const ts = [0, 1];
+  const rx = b[0] - a[0];
+  const ry = b[1] - a[1];
+  for (let i = 0, n = poly.length; i < n; i++) {
+    const c = poly[i]!;
+    const d = poly[(i + 1) % n]!;
+    const sx = d[0] - c[0];
+    const sy = d[1] - c[1];
+    const denom = rx * sy - ry * sx;
+    if (denom === 0) continue; // parallel
+    const t = ((c[0] - a[0]) * sy - (c[1] - a[1]) * sx) / denom;
+    const u = ((c[0] - a[0]) * ry - (c[1] - a[1]) * rx) / denom;
+    if (t > 0 && t < 1 && u >= 0 && u <= 1) ts.push(t);
+  }
+  return ts.sort((p, q) => p - q);
+}
+
+/**
+ * How much of a stroke's polyline lies inside the lasso, as inside length and total length.
+ * Each segment is cut where it crosses the lasso, and each piece is judged by its midpoint, so a
+ * sparse stroke (a fast straight line of two points) is judged by its ink, not its samples.
+ *
+ * @param pts - The stroke's points.
+ * @param lasso - Lasso polygon.
+ * @returns `[inside, total]` lengths in page units.
+ */
+function lengthInside(pts: Stroke['points'], lasso: readonly Vec2[]): [number, number] {
+  const lb = boundsOf(lasso);
+  let inside = 0;
+  let total = 0;
+  let prevIn = pts.length > 0 && pointInPolygon([pts[0]![0], pts[0]![1]], lasso);
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a: Vec2 = [pts[i]![0], pts[i]![1]];
+    const b: Vec2 = [pts[i + 1]![0], pts[i + 1]![1]];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const nextIn = pointInPolygon(b, lasso);
+    total += len;
+    if (len < SHORT_SEGMENT && prevIn === nextIn) {
+      // Pen samples are a few units apart: a hop with both ends on one side stays on it. (A lasso
+      // notch narrower than SHORT_SEGMENT is not something a hand draws.)
+      if (nextIn) inside += len;
+    } else if (
+      Math.max(a[0], b[0]) >= lb.x0 &&
+      Math.min(a[0], b[0]) <= lb.x1 &&
+      Math.max(a[1], b[1]) >= lb.y0 &&
+      Math.min(a[1], b[1]) <= lb.y1
+    ) {
+      const ts = crossings(a, b, lasso);
+      for (let k = 0; k < ts.length - 1; k++) {
+        const m = (ts[k]! + ts[k + 1]!) / 2;
+        if (pointInPolygon([a[0] + (b[0] - a[0]) * m, a[1] + (b[1] - a[1]) * m], lasso)) {
+          inside += len * (ts[k + 1]! - ts[k]!);
+        }
+      }
+    }
+    prevIn = nextIn;
+  }
+  return [inside, total];
+}
+
+/**
+ * Which strokes a lasso picks: those with at least half their LENGTH inside (so a two-point line
+ * that crosses the loop with both ends outside is judged by the part that is in). A stroke of
+ * zero length, such as a dot, is judged by its point. Edges are half-open, so a stroke lying
+ * exactly on the lasso's border may or may not be taken.
  *
  * @param strokes - Candidate strokes.
  * @param lasso - Lasso polygon (already simplified, at least 3 vertices).
@@ -160,9 +239,12 @@ export function lassoStrokes(strokes: readonly Stroke[], lasso: readonly Vec2[])
   const out: string[] = [];
   for (const s of strokes) {
     if (!boundsIntersect(lb, strokeBounds(s))) continue;
-    let inside = 0;
-    for (const p of s.points) if (pointInPolygon([p[0], p[1]], lasso)) inside++;
-    if (inside * 2 >= s.points.length) out.push(s.id);
+    const [inside, total] = lengthInside(s.points, lasso);
+    const picked =
+      total === 0
+        ? s.points.length > 0 && pointInPolygon([s.points[0]![0], s.points[0]![1]], lasso)
+        : inside * 2 >= total;
+    if (picked) out.push(s.id);
   }
   return out;
 }
@@ -188,7 +270,8 @@ export function lassoItems(items: readonly Item[], lasso: readonly Vec2[]): stri
  * @param strokes - All strokes on the page.
  * @param items - All items on the page.
  * @param rawLasso - The points of the drag, as captured.
- * @param epsilon - Thinning tolerance in page units; the UI passes `2 / scale`.
+ * @param epsilon - Thinning tolerance in page units; the UI passes `2 / scale`. Clamped to
+ *   `MAX_LASSO_EPSILON` so a phone's large page-unit tolerance cannot flatten a small deliberate loop.
  * @returns The ids picked up.
  */
 export function lassoSelect(
@@ -197,7 +280,9 @@ export function lassoSelect(
   rawLasso: readonly Vec2[],
   epsilon = 2,
 ): LassoSelection {
-  const lasso = simplify(rawLasso, epsilon);
+  const thinned = simplify(rawLasso, Math.min(epsilon, MAX_LASSO_EPSILON));
+  // A tiny closed loop can thin to two vertices; keep the raw path rather than selecting nothing.
+  const lasso = thinned.length >= 3 ? thinned : rawLasso;
   return { strokeIds: lassoStrokes(strokes, lasso), itemIds: lassoItems(items, lasso) };
 }
 

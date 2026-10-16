@@ -47,25 +47,94 @@ describe('lasso', () => {
     expect(pointInPolygon([5, 1], bow)).toBe(false);
   });
 
-  it('selects a stroke with half its points inside, not fewer', () => {
+  it('selects a stroke with at least half its length inside, not less', () => {
     const lasso = square(0, 0, 10, 10);
     const half = stroke('half', [
-      [2, 2],
-      [4, 4],
-      [20, 4],
-      [30, 4],
-    ]);
-    const fewer = stroke('fewer', [
-      [2, 2],
-      [20, 4],
-      [30, 4],
-      [40, 4],
-    ]);
+      [2, 5],
+      [10, 5],
+      [18, 5],
+    ]); // 8 of 16 units in
+    const less = stroke('less', [
+      [2, 5],
+      [10, 5],
+      [26, 5],
+    ]); // 8 of 24
     const far = stroke('far', [
       [100, 100],
       [101, 101],
     ]);
-    expect(lassoStrokes([half, fewer, far], lasso)).toEqual(['half']);
+    expect(lassoStrokes([half, less, far], lasso)).toEqual(['half']);
+  });
+
+  it('selects a two-point line that crosses the lasso with both ends outside', () => {
+    const through = stroke('through', [
+      [-50, 5],
+      [60, 5],
+    ]);
+    const missing = stroke('missing', [
+      [-50, 50],
+      [60, 50],
+    ]);
+    const grazing = stroke('graze', [
+      [-50, 5],
+      [-1, 5],
+      [5, 5],
+      [5, 9],
+    ]);
+    expect(lassoStrokes([through, missing], square(0, 0, 10, 10))).toEqual([]); // only 10 of 110 units in
+    expect(
+      lassoStrokes(
+        [
+          stroke('wide', [
+            [-2, 5],
+            [12, 5],
+          ]),
+          missing,
+        ],
+        square(0, 0, 10, 10),
+      ),
+    ).toEqual(['wide']);
+    expect(lassoStrokes([grazing], square(0, 0, 10, 10))).toEqual([]);
+  });
+
+  it('judges a dot by its point and a stroke on the border without throwing', () => {
+    const lasso = square(0, 0, 10, 10);
+    expect(lassoStrokes([stroke('in', [[5, 5]]), stroke('out', [[50, 5]])], lasso)).toEqual(['in']);
+    expect(
+      lassoStrokes(
+        [
+          stroke('edge', [
+            [0, 2],
+            [0, 8],
+          ]),
+        ],
+        lasso,
+      ),
+    ).toEqual(['edge']); // left edge is inside
+    expect(
+      lassoStrokes(
+        [
+          stroke('edge', [
+            [10, 2],
+            [10, 8],
+          ]),
+        ],
+        lasso,
+      ),
+    ).toEqual([]); // right edge is outside
+  });
+
+  it('keeps a small deliberate circle even with a phone-sized tolerance', () => {
+    const circle: Vec2[] = Array.from({ length: 13 }, (_, i) => [
+      100 + Math.cos((i / 12) * Math.PI * 2) * 6,
+      100 + Math.sin((i / 12) * Math.PI * 2) * 6,
+    ]);
+    const word = stroke('word', [
+      [98, 100],
+      [102, 100],
+    ]);
+    expect(lassoSelect([word], [], circle, 5).strokeIds).toEqual(['word']);
+    expect(lassoSelect([word], [], circle.slice(0, 2), 5).strokeIds).toEqual([]); // 2 vertices: still nothing
   });
 
   it('decides a block on its centre; an edge centre belongs to exactly one neighbour', () => {
