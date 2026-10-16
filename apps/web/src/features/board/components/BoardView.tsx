@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * canvas/CanvasView — the page body: header with the toolbar, the board, the empty state.
+ * board/components/BoardView — the page body: header with the toolbar, the board, the empty state.
  *
  * Nothing here talks to the API directly; every gesture goes through `useBoardController`, which is
  * the only module that sends a request (and only on the gestures contracts.md §2.7 lists).
@@ -16,17 +16,31 @@ import {
   type Connection,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+
+import { useBoardController } from '../hooks/useBoardController';
+import { useCardSources } from '../hooks/useCardSources';
+import { EDGE_KINDS, nodeLabel, type PtEdge, type PtNode } from '../model/flow';
+import { CanvasActionsProvider } from './BoardContext';
+import { nodeTypes } from './cards';
+import { KindPicker } from './KindPicker';
+import { edgeTypes } from './LabeledEdge';
+import './board.css';
 
 import type { EdgeKind } from '@/lib/api/types';
 
-import { CanvasActionsProvider } from './CanvasContext';
-import { KindPicker } from './KindPicker';
-import { edgeTypes } from './LabeledEdge';
-import { EDGE_KINDS, nodeLabel, type PtEdge, type PtNode } from './model';
-import { nodeTypes } from './nodes';
-import { useBoardController } from './useBoardController';
-import { useExplanationCitations } from './useExplanationCitations';
+/**
+ * The reader URL that opens a card's cited passage and flashes it (`useFocusFromCanvas`).
+ *
+ * @param paperId The paper.
+ * @param nodeId The AI card the marker is on.
+ * @param citationId The citation behind the marker.
+ * @returns `/paper/<id>/read?focus=<card>&cite=<citation>`.
+ */
+export function citationHref(paperId: string, nodeId: string, citationId: string): string {
+  const q = new URLSearchParams({ focus: nodeId, cite: citationId });
+  return `/paper/${encodeURIComponent(paperId)}/read?${q.toString()}`;
+}
 
 interface Selection {
   readonly nodes: readonly string[];
@@ -37,7 +51,13 @@ const NONE: Selection = { nodes: [], edges: [] };
 /** Shift as well as Ctrl/Cmd adds to the selection (S9). */
 const MULTI_SELECT_KEYS = ['Shift', 'Meta', 'Control'];
 
-export function CanvasView({ paperId }: { readonly paperId: string }) {
+/**
+ * The board page for one paper.
+ *
+ * @example
+ * <BoardView paperId="ppr_…" />
+ */
+export function BoardView({ paperId }: { readonly paperId: string }): ReactNode {
   return (
     <ReactFlowProvider>
       <Canvas paperId={paperId} />
@@ -145,7 +165,7 @@ function Canvas({ paperId }: { readonly paperId: string }) {
     ctl.deleteSelection(selection.nodes, selection.edges);
   };
 
-  const citations = useExplanationCitations(paperId, ctl.nodes);
+  const sources = useCardSources(paperId, ctl.nodes);
   const actions = useMemo(
     () => ({
       editingId: ctl.editingId,
@@ -153,9 +173,19 @@ function Canvas({ paperId }: { readonly paperId: string }) {
       commitBody: ctl.commitBody,
       commitTitle: ctl.commitTitle,
       commitSize: ctl.commitSize,
-      citations,
+      openCitation: (nodeId: string, citationId: string) =>
+        window.location.assign(citationHref(paperId, nodeId, citationId)),
+      sources,
     }),
-    [ctl.editingId, ctl.setEditingId, ctl.commitBody, ctl.commitTitle, ctl.commitSize, citations],
+    [
+      ctl.editingId,
+      ctl.setEditingId,
+      ctl.commitBody,
+      ctl.commitTitle,
+      ctl.commitSize,
+      paperId,
+      sources,
+    ],
   );
 
   const empty = ctl.status === 'ready' && ctl.nodes.length === 0;

@@ -2,7 +2,7 @@
 
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from '@xyflow/react';
 
-import { edgeText, type PtEdge } from './model';
+import { edgeText, type PtEdge } from '../model/flow';
 
 /** A bezier edge whose words are always on it: the reader's label, or the kind it was given. */
 export function LabeledEdge(props: EdgeProps<PtEdge>) {

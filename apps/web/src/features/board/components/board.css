@@ -1,0 +1,386 @@
+/* board.css — the board's cards on linen (frame 06; lamp-lit 09c follows the tokens). Measurements
+   are the mock-up's (06-board-1440.dc.html); every colour is a --pt-* token, so both schemes come
+   from styles.css. The v0.1 `pt-cv` chrome (toolbar, picker, frames) is restyled by S6c/S6d. */
+
+.pt-cv {
+  --pt-bc-red-rule: rgb(176 74 64 / 55%); /* the index card's top rule, both schemes */
+  --pt-bc-blue-rule: rgb(60 96 130 / 12%);
+  --pt-bc-mini-dot: rgb(140 120 90 / 55%);
+}
+
+.pt-cv .react-flow {
+  --xy-background-color: var(--pt-linen);
+  --xy-background-pattern-color: transparent; /* linen, not v0.1's dot grid */
+  background-image:
+    repeating-linear-gradient(0deg, rgb(90 70 40 / 7%) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgb(90 70 40 / 6%) 0 1px, transparent 1px 3px);
+}
+
+/* ── the card ─────────────────────────────────────────────────────────────────────────── */
+
+.pt-bc {
+  --pt-bc-stock: var(--pt-call-slip);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  inline-size: 100%;
+  block-size: 100%;
+  color: var(--pt-ink);
+  font: 13px / 19px var(--pt-font-ai);
+  border-radius: var(--pt-radius-paper);
+}
+
+.pt-bc--card {
+  padding: 6px 12px 10px;
+  background-color: var(--pt-call-slip);
+  background-image:
+    linear-gradient(transparent 31px, var(--pt-bc-red-rule) 31px 32px, transparent 32px),
+    repeating-linear-gradient(transparent 0 19px, var(--pt-bc-blue-rule) 19px 20px);
+  background-position:
+    0 0,
+    0 32px;
+  box-shadow:
+    inset 0 0 0 1px var(--pt-card-edge),
+    var(--pt-e1);
+}
+
+.pt-bc--call {
+  padding: 10px 14px;
+  background-color: var(--pt-call-slip);
+  background-image: repeating-linear-gradient(
+    180deg,
+    transparent 0 23px,
+    var(--pt-call-slip-rule) 23px 24px
+  );
+  box-shadow:
+    inset 0 0 0 1px var(--pt-card-edge),
+    var(--pt-e1);
+}
+
+.pt-bc[data-selected='true'] {
+  outline: 3px solid color-mix(in srgb, var(--pt-focus) 40%, transparent);
+}
+
+/* "more" grows the card in place over its neighbours; its saved size does not change. */
+.pt-bc:has(> .pt-bc__clip[data-expanded='true']),
+.pt-bc:has(.pt-ai-slip .pt-bc__clip[data-expanded='true']) {
+  block-size: auto;
+  min-block-size: 100%;
+}
+
+.react-flow__node:has(.pt-bc__clip[data-expanded='true']) {
+  z-index: 2000 !important; /* over xyflow's inline z-index while expanded */
+}
+
+.pt-bc__tabs {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--pt-space-2);
+  min-block-size: 24px;
+}
+
+.pt-bc__tag {
+  font: 500 12.5px / 1 var(--pt-font-label);
+  letter-spacing: var(--pt-ls-label);
+  color: var(--pt-ink-2);
+}
+
+.pt-bc__stamp {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 20px;
+  block-size: 20px;
+  border: 1.25px solid var(--pt-pen);
+  border-radius: var(--pt-radius-round);
+  color: var(--pt-pen);
+  background: var(--pt-call-slip);
+  font: 11px / 1 var(--pt-font-paper);
+}
+
+.pt-bc .pt-bc__quote {
+  margin: 8px 0 0;
+  padding: 0;
+  border: 0;
+  font: var(--pt-t-paper-card) / 17px var(--pt-font-paper);
+  font-variant-numeric: oldstyle-nums proportional-nums;
+  text-indent: -0.42em; /* the opening quotation mark hangs */
+}
+
+.pt-bc .pt-bc__typed {
+  margin: 8px 0 0;
+  font-size: 13.5px;
+  line-height: 19px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pt-bc__empty {
+  margin: 8px 0 0;
+  color: var(--pt-ink-muted);
+  font-style: italic;
+}
+
+.pt-bc .pt-bc__btn {
+  align-self: flex-start;
+  flex: none;
+  min-block-size: 28px;
+  block-size: 28px;
+  min-inline-size: 0;
+  margin-block-start: 6px;
+  padding: 0 8px;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--pt-ink);
+  text-decoration: none;
+  background: var(--pt-page);
+  border-color: var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-bc .pt-bc__edit {
+  min-block-size: 24px;
+  block-size: 24px;
+  margin: 0 0 0 auto;
+}
+
+.pt-bc__textarea {
+  flex: 1 1 auto;
+  inline-size: 100%;
+  min-block-size: 60px;
+  margin-block-start: 8px;
+  padding: 4px;
+  font-size: 13.5px;
+  line-height: 19px;
+  background: transparent;
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+  resize: none;
+}
+
+.pt-bc__textarea:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: 1px;
+}
+
+/* ── the clip: a fade and "more", never a silent cut (GAP-A3 §7) ───────────────────────── */
+
+.pt-bc__clip {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-block-size: 0;
+}
+
+.pt-bc__clip-body {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  /* Reach 6 px into the card's padding so a hung opening quote mark is not clipped. */
+  margin-inline: -6px;
+  padding-inline: 6px;
+  overflow: hidden;
+}
+
+.pt-bc__clip[data-expanded='true'] .pt-bc__clip-body {
+  flex: none;
+  overflow: visible;
+}
+
+.pt-bc__clip[data-expanded='true'] .pt-bc__more {
+  position: relative;
+  align-self: flex-end;
+}
+
+.pt-bc__clip[data-clipped='true']::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  block-size: 36px;
+  background: linear-gradient(transparent, var(--pt-bc-stock));
+  pointer-events: none;
+}
+
+.pt-bc__more {
+  position: absolute;
+  z-index: 1; /* on the fade, so "more" costs the card no line */
+  inset-block-end: 0;
+  inset-inline-end: 0;
+  block-size: 20px;
+  padding: 0 4px 0 10px;
+  color: var(--pt-primary);
+  font: 500 13px / 20px var(--pt-font-ai);
+  text-decoration: underline;
+  background: linear-gradient(90deg, transparent, var(--pt-bc-stock) 8px);
+  border: 0;
+  cursor: pointer;
+}
+
+.pt-bc__more:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: 1px;
+}
+
+/* ── the AI-slip cards: explanation and diagram ───────────────────────────────────────── */
+
+.pt-bc__call {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  gap: var(--pt-space-2);
+  padding: 8px 12px;
+  background-color: var(--pt-call-slip);
+  background-image: repeating-linear-gradient(
+    180deg,
+    transparent 0 23px,
+    var(--pt-call-slip-rule) 23px 24px
+  );
+  box-shadow:
+    inset 0 0 0 1px var(--pt-card-edge),
+    var(--pt-e1);
+}
+
+.pt-bc .pt-bc__ask {
+  margin: 0;
+  padding-block-start: 1px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.pt-bc .pt-ai-slip {
+  --pt-bc-stock: var(--pt-ai-slip);
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-block-size: 0;
+  margin-block-start: 30px;
+  padding: 10px 14px;
+  font: 13px / 19px var(--pt-font-ai);
+}
+
+.pt-bc .pt-ai-tab {
+  inset-inline-start: 12px;
+  inset-block-start: -18px;
+  block-size: 18px;
+  padding-block-start: 2px;
+  font-size: 11.5px;
+}
+
+.pt-bc .pt-ai-slip__grid {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-block-size: 0;
+}
+
+.pt-bc__answer p,
+.pt-bc__answer ul,
+.pt-bc__answer ol {
+  margin: 0 0 8px;
+}
+
+.pt-bc__answer ul,
+.pt-bc__answer ol {
+  padding-inline-start: 18px;
+}
+
+.pt-bc .pt-ai-slip__footer {
+  flex: none;
+  margin-block-start: 6px;
+}
+
+.pt-bc__usage {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  font: 12.5px / 18px var(--pt-font-you);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--pt-ink-2);
+}
+
+.pt-bc__plate {
+  flex: none;
+  block-size: 110px;
+  background: var(--pt-page);
+  border: 1px solid var(--pt-ink);
+  box-shadow:
+    inset 0 0 0 3px var(--pt-page),
+    inset 0 0 0 3.6px var(--pt-ink);
+}
+
+/* ── the notebook-page card ───────────────────────────────────────────────────────────── */
+
+.pt-bc__mini {
+  position: relative;
+  flex: none;
+  inline-size: 200px;
+  max-inline-size: 100%;
+  block-size: 96px;
+  margin-block-start: 2px;
+  overflow: hidden;
+  background-color: var(--pt-page);
+  background-image: radial-gradient(circle, var(--pt-bc-mini-dot) 0.8px, transparent 1.2px);
+  background-size: 8px 8px;
+  border: 1px solid var(--pt-rule);
+}
+
+.pt-bc__mini-item {
+  position: absolute;
+  background: var(--pt-call-slip);
+  box-shadow: 0 0 0 1px var(--pt-rule);
+}
+
+.pt-bc__mini-item[data-kind='exchange'] {
+  background: var(--pt-ai-slip);
+}
+
+.pt-bc__mini-item[data-kind='sticky'] {
+  background: var(--pt-sticky);
+  box-shadow: none;
+}
+
+.pt-bc__mini-item[data-kind='shape'] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--pt-ink-muted);
+}
+
+.pt-bc__title {
+  display: -webkit-box;
+  margin: 8px 0 0;
+  overflow: hidden;
+  font: 700 13px / 17px var(--pt-font-paper);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.pt-bc__meta {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--pt-ink-2);
+}
+
+.pt-bc[data-kind='notebook'] .pt-bc__btn {
+  margin-block-start: auto;
+}
+
+/* Phone: in-card buttons keep a 44 px target ON SCREEN whatever the board zoom (W2UI #141). */
+@media (max-width: 639px) {
+  .pt-bc .pt-bc__btn {
+    position: relative;
+    z-index: 2; /* its grown hit area paints over the clipped body below it */
+  }
+
+  .pt-bc .pt-bc__btn::after,
+  .pt-bc__more::after {
+    content: '';
+    position: absolute;
+    inset: min(-8px, calc((28px - 44px / clamp(0.2, var(--pt-cv-zoom, 1), 1)) / 2));
+  }
+}

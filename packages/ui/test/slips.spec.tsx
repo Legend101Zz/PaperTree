@@ -96,6 +96,17 @@ describe('AiSlip', () => {
     expect(container.textContent).not.toContain('⊙');
   });
 
+  it('without a model it draws no source line and names no model (the board card)', () => {
+    const { container } = render(
+      <AiSlip>
+        <p>Cited claim.</p>
+      </AiSlip>,
+    );
+    const slip = screen.getByRole('note', { name: "AI answer, not the paper's words" });
+    expect(slip.getAttribute('data-voice')).toBe('ai');
+    expect(container.querySelector('.pt-ai-slip__source')).toBeNull();
+  });
+
   it('puts each paragraph and its margin cell on the same grid row', () => {
     const { container } = render(
       <AiSlip model="m" source="s">

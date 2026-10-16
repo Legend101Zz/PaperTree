@@ -6,7 +6,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { NUDGE_DEBOUNCE_MS, useBoardController } from '@/components/canvas/useBoardController';
+import { NUDGE_DEBOUNCE_MS, useBoardController } from '@/features/board/hooks/useBoardController';
 import { boardsApi } from '@/lib/api/boards';
 import { ApiError, type Board, type CanvasNode } from '@/lib/api/types';
 

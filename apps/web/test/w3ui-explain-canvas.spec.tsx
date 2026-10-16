@@ -25,9 +25,9 @@ vi.mock('@/lib/api/threads', () => ({
 }));
 
 import { dismissCanvasToast, showCanvasToast } from '@/components/canvas/toast';
-import { useBoardController } from '@/components/canvas/useBoardController';
-import { useExplanationCitations } from '@/components/canvas/useExplanationCitations';
-import { toFlowNode } from '@/components/canvas/model';
+import { useBoardController } from '@/features/board/hooks/useBoardController';
+import { useExplanationCitations } from '@/features/board/hooks/useCardSources';
+import { toFlowNode } from '@/features/board/model/flow';
 import { boardsApi } from '@/lib/api/boards';
 import { threadsApi } from '@/lib/api/threads';
 import { ApiError, type CanvasNode } from '@/lib/api/types';

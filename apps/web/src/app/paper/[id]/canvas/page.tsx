@@ -8,7 +8,7 @@
 import { useParams } from 'next/navigation';
 
 import { AuthGuard } from '@/components/auth/AuthGuard';
-import { CanvasView } from '@/components/canvas/CanvasView';
+import { BoardView } from '@/features/board';
 
 export default function CanvasPage() {
   const params = useParams();
@@ -18,7 +18,7 @@ export default function CanvasPage() {
   return (
     <AuthGuard>
       {typeof id === 'string' && id.length > 0 ? (
-        <CanvasView paperId={id} />
+        <BoardView paperId={id} />
       ) : (
         <div className="pt-reader">
           <div className="pt-state" role="alert">

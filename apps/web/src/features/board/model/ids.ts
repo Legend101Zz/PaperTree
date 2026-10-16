@@ -1,5 +1,5 @@
 /**
- * canvas/ids — client-minted ids (contracts.md §0): `cn_` + uuid for nodes, `ce_` + uuid for edges.
+ * board/model/ids — client-minted ids (contracts.md §0): `cn_` + uuid for nodes, `ce_` + uuid for edges.
  * A repeat send carries the same id, so the server answers with the node it already has.
  */
 function uuid(): string {
@@ -15,5 +15,15 @@ function uuid(): string {
   });
 }
 
+/**
+ * A new card id.
+ *
+ * @returns `cn_` + a uuid.
+ */
 export const newNodeId = (): string => `cn_${uuid()}`;
+/**
+ * A new link id.
+ *
+ * @returns `ce_` + a uuid.
+ */
 export const newEdgeId = (): string => `ce_${uuid()}`;

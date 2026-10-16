@@ -1,10 +1,11 @@
 /**
- * canvas/placement — where a new node goes so that it never lands on top of another one.
+ * board/model/placement — where a new node goes so that it never lands on top of another one.
  *
  * Pure and deterministic: the same board and the same size give the same spot, so a send is
  * predictable and testable. Nodes are laid out on a grid of columns and rows, row by row, and the
  * first free cell wins. A node is "in the way" when it is closer than `GAP` to the candidate.
  */
+/** A card's box in board units. */
 export interface Rect {
   readonly x: number;
   readonly y: number;
@@ -23,12 +24,28 @@ export const DEFAULT_SIZE = {
   group: { w: 400, h: 300 },
 } as const;
 
+/**
+ * Whether two boxes are closer than `gap`.
+ *
+ * @param a One box.
+ * @param b The other box.
+ * @param gap The clearance they need.
+ * @returns True when they are in each other's way.
+ */
 export function overlaps(a: Rect, b: Rect, gap = GAP): boolean {
   return (
     a.x < b.x + b.w + gap && b.x < a.x + a.w + gap && a.y < b.y + b.h + gap && b.y < a.y + a.h + gap
   );
 }
 
+/**
+ * The first free cell for a new card, row by row from `near` (or the origin).
+ *
+ * @param existing The cards already on the board.
+ * @param size The new card's size.
+ * @param near Where the reader asked for it, when they did.
+ * @returns The top-left corner to put it at.
+ */
 export function freeSpot(
   existing: readonly Rect[],
   size: { readonly w: number; readonly h: number },
@@ -54,7 +71,13 @@ export function freeSpot(
   return { x: originX, y: bottom + GAP };
 }
 
-/** The box that contains every rect, grown by `pad`. */
+/**
+ * The box that contains every rect, grown by `pad` (and a title strip on top).
+ *
+ * @param rects The boxes.
+ * @param pad The margin around them.
+ * @returns The enclosing box.
+ */
 export function boundsOf(rects: readonly Rect[], pad = 24): Rect {
   const minX = Math.min(...rects.map((r) => r.x));
   const minY = Math.min(...rects.map((r) => r.y));

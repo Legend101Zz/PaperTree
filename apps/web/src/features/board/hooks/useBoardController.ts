@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * canvas/useBoardController — the one place the canvas talks to the API.
+ * board/hooks/useBoardController — the one place the board talks to the API.
  *
  * THE RULE (contracts.md §2.7): the client writes only on explicit gestures — drag END (one PATCH
  * per node that moved), an edit commit, connect, group, delete, and pan/zoom END for the viewport.
@@ -36,9 +36,9 @@ import {
   type EdgeKind,
 } from '@/lib/api/types';
 
-import { newEdgeId, newNodeId } from './ids';
-import { cardName, toFlowEdge, toFlowNode, type PtEdge, type PtNode } from './model';
-import { DEFAULT_SIZE, boundsOf, freeSpot } from './placement';
+import { cardName, toFlowEdge, toFlowNode, type PtEdge, type PtNode } from '../model/flow';
+import { newEdgeId, newNodeId } from '../model/ids';
+import { DEFAULT_SIZE, boundsOf, freeSpot } from '../model/placement';
 
 export const NUDGE_DEBOUNCE_MS = 400;
 /** How long the Undo offer after a delete stays on screen. */
@@ -52,8 +52,10 @@ export interface UndoOffer {
   readonly message: string;
 }
 
+/** Where the board's first read stands. */
 export type Status = 'loading' | 'ready' | 'error';
 
+/** Everything `BoardView` needs: the state and every gesture that writes. */
 export interface BoardController {
   readonly status: Status;
   readonly board: Board | null;
@@ -91,7 +93,12 @@ export interface BoardController {
   readonly initialViewport: Viewport | null;
 }
 
-/** "The card “first words”", "A passage" ... the start of the stale-version sentence. */
+/**
+ * "The card “first words”", "A passage" ... the start of the stale-version sentence.
+ *
+ * @param card The card's `cardName`, or undefined when it is gone.
+ * @returns The sentence's subject.
+ */
 export function staleSubject(card: string | undefined): string {
   if (card === undefined) return 'A card';
   return card.startsWith('\u201c')
@@ -106,6 +113,12 @@ function sentence(error: unknown, fallback: string): string {
   return fallback;
 }
 
+/**
+ * The board's state and its writes, for one paper.
+ *
+ * @param paperId The paper whose board this is.
+ * @returns The controller.
+ */
 export function useBoardController(paperId: string): BoardController {
   const [status, setStatus] = useState<Status>('loading');
   const [board, setBoard] = useState<Board | null>(null);
@@ -562,6 +575,11 @@ export function useBoardController(paperId: string): BoardController {
               ...(snap.source_message_id === null
                 ? {}
                 : { source_message_id: snap.source_message_id }),
+              // A notebook or diagram card is refused without the thing it shows (S6a).
+              ...(snap.source_page_id === null ? {} : { source_page_id: snap.source_page_id }),
+              ...(snap.source_diagram_id === null
+                ? {}
+                : { source_diagram_id: snap.source_diagram_id }),
               group_id: groupId,
             });
             restored.add(snap.node_id);
