@@ -3,9 +3,10 @@ import { useMemo, type ReactNode } from 'react';
 
 import type { Anchor } from '@papertree/anchoring';
 
-import { ExplainPanel, useExplainActions } from '@/components/explain';
+import { useExplainActions } from '@/components/explain';
 import { ReaderActionsProvider, type ReaderActions } from '@/components/reader/actions';
 
+import { HeaderAndPanel } from './explain-toggle';
 import { TestQueryProvider } from './query-client';
 import { anchorFixture, PAPER } from './s6-support';
 
@@ -26,7 +27,7 @@ export function QuoteProbe({ quote }: { readonly quote: string }): ReactNode {
         <button type="button" onClick={() => openExplain({ anchor: anchorFixture('q'), quote })}>
           open
         </button>
-        <ExplainPanel controller={explain} />
+        <HeaderAndPanel explain={explain} />
       </ReaderActionsProvider>
     </TestQueryProvider>
   );

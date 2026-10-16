@@ -26,8 +26,8 @@ import type { PassageMarker } from '../model/exchange';
 /** Props for `ThreadView`. */
 export interface ThreadViewProps {
   readonly controller: ExplainController;
-  /** The stored threads' state (`useThreads`): settling, and a read that failed. */
-  readonly threads: Pick<ThreadsState, 'settling' | 'failure' | 'retry'>;
+  /** The stored threads' state (`useThreads`): a read that failed, and its retry. */
+  readonly threads: Pick<ThreadsState, 'failure' | 'retry'>;
   /** The account's initial for the call slips. */
   readonly initial: string;
   /** Flash an exchange's passage (markers and trace rows). */
@@ -61,10 +61,9 @@ export function ThreadView({
   const scroller = useRef<HTMLDivElement | null>(null);
   const stick = useRef(true);
   const busy = state.messages.some((m) => m.status === 'streaming');
-  const settling = threads.settling;
   const exchanges = useMemo(
-    () => buildExchanges(state.messages, state.request, { settling }),
-    [state.messages, state.request, settling],
+    () => buildExchanges(state.messages, state.request),
+    [state.messages, state.request],
   );
 
   const last = state.messages[state.messages.length - 1];
@@ -125,10 +124,18 @@ export function ThreadView({
                   : {})}
               />
             ) : exchanges.length === 0 && state.threadId === null ? (
-              <p className="pt-explain__empty">
-                Select a passage in the paper and press Ask, or type a question about the whole
-                paper below.
-              </p>
+              state.request !== null && state.messages.length === 0 ? (
+                // The toolbar's Ask (#203): the passage waits for the reader's own question.
+                <>
+                  <SelectedPassage request={state.request} />
+                  <p className="pt-explain__empty">Type your question about this passage below.</p>
+                </>
+              ) : (
+                <p className="pt-explain__empty">
+                  Select a passage in the paper and press Ask, or type a question about the whole
+                  paper below.
+                </p>
+              )
             ) : null}
             {exchanges.map((exchange) => (
               <Exchange
@@ -144,7 +151,19 @@ export function ThreadView({
         )}
       </div>
       {state.view === 'summary' ? null : (
-        <Composer busy={busy} disabled={offline} onSend={controller.ask} onStop={controller.stop} />
+        <Composer
+          busy={busy}
+          disabled={offline}
+          onSend={controller.ask}
+          onStop={controller.stop}
+          focusKey={
+            // Only the toolbar's Ask leaves a passage with no thread and nothing sent (#203); a
+            // stored thread being opened has its id already, and Explain sends at once.
+            state.request !== null && state.threadId === null && state.messages.length === 0
+              ? state.epoch
+              : null
+          }
+        />
       )}
     </div>
   );

@@ -55,8 +55,10 @@ def test_the_error_enum_is_the_contracts_enum_plus_one_addition() -> None:
     assert set(ERROR_STATUS) == codes
     # The ONE addition to §2.9, and it is reported as a contract addition (S0 report): the 501
     # of a route whose slice has not built it yet.
-    assert codes - set(CONTRACT_CODES) == {"not_implemented"}
+    # The second is #193's: a topic name the person already uses (409).
+    assert codes - set(CONTRACT_CODES) == {"not_implemented", "topic_exists"}
     assert ERROR_STATUS["not_implemented"] == 501
+    assert ERROR_STATUS["topic_exists"] == 409
 
 
 def test_auth_errors_are_envelopes(tmp_path: Path) -> None:

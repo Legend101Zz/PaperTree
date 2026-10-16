@@ -1,6 +1,7 @@
 /**
  * S7: `sendToCanvas` creates the excerpt / explanation node (with the Anchor, never a bare block id),
- * places it clear of the existing nodes, and shows a toast with an "Open canvas" link. A failure
+ * places it clear of the existing nodes, and shows a toast with a link to the board ("Open board" for
+ * a passage, #203; "Open canvas" for an answer until the S6d sweep). A failure
  * rejects. The API module is the only stub.
  */
 import { cleanup } from '@testing-library/react';
@@ -66,7 +67,7 @@ afterEach(() => {
 });
 
 describe('sendToCanvas', () => {
-  it('sends a passage as an excerpt node holding the Anchor, and toasts with an Open canvas link', async () => {
+  it('sends a passage as an excerpt node holding the Anchor, and toasts with an Open board link', async () => {
     await sendToCanvas(PAPER, { kind: 'excerpt', anchor: ANCHOR });
 
     expect(createNode).toHaveBeenCalledTimes(1);
@@ -81,7 +82,8 @@ describe('sendToCanvas', () => {
       expect(document.querySelector('[data-testid="canvas-toast"]')).not.toBeNull(),
     );
     const link = document.querySelector<HTMLAnchorElement>('[data-testid="canvas-toast"] a');
-    expect(link?.textContent).toBe('Open canvas');
+    // #203: the toolbar says "Send to board", and its toast agrees.
+    expect(link?.textContent).toBe('Open board');
     expect(link?.getAttribute('href')).toBe(`/paper/${PAPER}/canvas`);
   });
 
@@ -175,7 +177,7 @@ describe('sendToCanvas', () => {
       source_anchor: anchor as never,
     });
 
-    it('creates nothing and says "Already on your canvas" with an Open canvas link', async () => {
+    it('creates nothing and says "Already on your board" with an Open board link', async () => {
       get.mockResolvedValue({
         board: {} as never,
         nodes: [onBoard(withPage(2, 'Residual learning\nframework'))],
@@ -191,9 +193,9 @@ describe('sendToCanvas', () => {
         expect(document.querySelector('[data-testid="canvas-toast"]')).not.toBeNull(),
       );
       const toast = document.querySelector('[data-testid="canvas-toast"]')!;
-      expect(toast.textContent).toContain('Already on your canvas');
+      expect(toast.textContent).toContain('Already on your board');
       expect(toast.querySelector('a')?.getAttribute('href')).toBe(`/paper/${PAPER}/canvas`);
-      expect(toast.querySelector('a')?.textContent).toBe('Open canvas');
+      expect(toast.querySelector('a')?.textContent).toBe('Open board');
     });
 
     it('still adds the same words on another page, and other words on the same page', async () => {

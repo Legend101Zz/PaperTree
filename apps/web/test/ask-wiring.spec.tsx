@@ -70,6 +70,13 @@ describe('Ask: a streamed answer with markers, a usage line and nothing raw', ()
     expect(post?.body).toMatchObject({ kind: 'explain', anchor: { id: 'anchor-sel1' } });
     expect((post?.body as Record<string, unknown>)['question']).toBeUndefined();
 
+    // Deterministic (#252): wait until the answer has settled and its stored re-read has been
+    // asked for (a 404 here), so the click below lands on the markers that stay.
+    await waitFor(() =>
+      expect(
+        calls.some((c) => c.method === 'GET' && c.path === `/papers/${PAPER}/threads/thr_1`),
+      ).toBe(true),
+    );
     // Both passages arrive with the citations event as numbered markers (#202); the second is
     // not verified, in words.
     const markers = await waitFor(() => {

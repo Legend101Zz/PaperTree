@@ -77,19 +77,16 @@ function slipQuote(origin: ThreadOrigin, answers: readonly ExchangeMessage[]): S
  *
  * @param messages The thread's messages, oldest first (live ones already merged in).
  * @param origin The selection the thread was opened on, or null for a free question.
- * @param options `settling`: a settled answer's stored read is on the way (`useThreads`), so a
- *   passage not placed yet is held rather than shown with a tab that would change.
  * @returns The exchanges, oldest first.
  */
 export function buildExchanges<M extends ExchangeMessage>(
   messages: readonly M[],
   origin: ThreadOrigin | null,
-  options: { readonly settling?: boolean } = {},
 ): Exchange<M>[] {
   const answers = messages.filter((m) => m.role === 'assistant');
   const numbers = numberPassages(answers);
   const exchangeOf = (ask: M | null, answer: M | null): Exchange<M> =>
-    exchangeFrom(ask, answer, numbers, options.settling === true);
+    exchangeFrom(ask, answer, numbers);
   const out: Exchange<M>[] = [];
   let open: { ask: M } | null = null;
   for (const message of messages) {
@@ -113,7 +110,6 @@ function exchangeFrom<M extends ExchangeMessage>(
   ask: M | null,
   answer: M | null,
   numbers: PassageNumbers,
-  settling: boolean,
 ): Exchange<M> {
   const hasText = answer !== null && answer.text.trim().length > 0;
   return {
@@ -122,7 +118,7 @@ function exchangeFrom<M extends ExchangeMessage>(
     askedAt: ask?.createdAt ?? answer?.createdAt ?? null,
     quote: null,
     answer,
-    model: hasText ? buildAnswer(answer, numbers, { settling }) : null,
+    model: hasText ? buildAnswer(answer, numbers) : null,
   };
 }
 

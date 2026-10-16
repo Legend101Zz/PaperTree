@@ -267,8 +267,10 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
     selectWithin(span);
     const toolbar = await screen.findByRole('toolbar', { name: 'Selection actions' });
     // NOT inside the page's overlay slot (pointer-events: none, overflow clipped): the baseline bug.
+    // It is in the floating layer (the page margin) or the column's dock (#203); happy-dom lays
+    // nothing out, so here no margin is wide enough and it docks.
     expect(toolbar.closest('[data-papertree-overlay-slot]')).toBeNull();
-    expect(toolbar.closest('[data-papertree-floating]')).not.toBeNull();
+    expect(toolbar.closest('[data-papertree-floating], [data-seltool-dock]')).not.toBeNull();
   });
 
   it('reports the scroller box upward, so a fit-zoom mode has something to resolve against', async () => {
@@ -352,12 +354,13 @@ describe('reader/capture-wire.spec — a DOM selection becomes an anchor', () =>
     expect(new Set(captured[0]?.anchors.map((a) => a.id)).size).toBe(captured[0]?.anchors.length);
   });
 
-  it('Ask sends the captured anchor and the quote to openExplain', async () => {
+  it('Explain sends the captured anchor and the quote to openExplain', async () => {
+    // #203: v0.1's "Ask" (explain now) is the toolbar's Explain; Ask now waits for a question.
     const asked: { anchor: Anchor; quote: string }[] = [];
     renderPane(doc, { actions: { openExplain: (input) => asked.push(input) } });
     const span = await stampedSpan(target);
     selectWithin(span);
-    fireEvent.click(await screen.findByRole('button', { name: 'Ask about this passage' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Explain this passage' }));
     await waitFor(() => expect(asked).toHaveLength(1));
     expect(asked[0]?.quote).toBe(span.textContent);
     expect(JSON.stringify(asked[0]?.anchor)).toContain(target.id);

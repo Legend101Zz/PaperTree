@@ -52,6 +52,7 @@ function row(title: string, overrides: Partial<LibraryPaper> = {}): LibraryPaper
     arxiv_category: 'cs.CL',
     thread_count: 0,
     has_summary: false,
+    topic: null,
     ...overrides,
   };
 }

@@ -18,13 +18,22 @@ derived on read from the parse, never stored).
   `created_at` ascending (`sortThreads`), because the API lists newest first and a follow-up must never
   renumber a thread.
 - While an answer streams, the controller's live message is the truth. When it settles, `useThreads` reads
-  the thread again and `mergeStored` replaces the live copy with the stored one (locators, coverage) under
-  the same key: no duplicate, no remount. A live citation has no locator yet; its handle finds its passage
-  through the thread's other citations, so numbers never shift.
-- **Tabs never change under the reader.** A live citation (the SSE `citations` event has no locator) borrows the
-  locator the thread already knows for its passage (`PassageNumbers.locatorOfKey`). A passage placed nowhere
-  yet is held, drawn as while streaming (no markers, no trace), until the stored read after `done` lands
-  (`useThreads().settling`); then its markers and tabs appear once, in their final form.
+  the thread again and `mergeStored` replaces the live copy with the stored one (coverage, usage, times) under
+  the same key: no duplicate, no remount. A live citation has no locator yet; its passage key mirrors the
+  server's (`g{generation}:{block_id}`) or its handle finds it through the thread's other citations, so numbers
+  never shift.
+- **Markers and tabs never change under the reader (#252).** Markers appear when the answer settles (`done`),
+  each with the locator the thread already knows for its passage (`PassageNumbers.locatorOfKey`), else the page
+  alone ("p. 4"). From then on they stay: when the stored copy lands, `mergeStored` keeps the live citations
+  the markers were drawn from, so no marker is hidden, renumbered, remounted or re-tabbed, and a click at any
+  moment reaches it. **The stored copy does not refine a tab that is already shown**: a finer "p. 4 ¶2" appears
+  the next time the thread is opened (a fresh read). The same holds for this session's follow-ups: a passage
+  first placed by an answer of this session shows the page and section ("p. 2", "Introduction") in every
+  later exchange until the thread is reopened; only passages that stored (older) answers placed carry their
+  "¶" at once. The stored copy does bring each citation's verdict: a citation it says is unsupported turns
+  its marker and trace row to "not verified" (the honest direction; nothing else moves). An answer that showed
+  no citations live (stopped before they arrived) takes the stored ones, shown once, in final form. Nothing is
+  held. If the live and stored citation sets ever differ, a development build warns in the console.
 - **A claim with no resolved citation is the AI's own reading.** A paragraph is cited only when one of its
   handles resolves; a `[b9]` the run never resolved draws no marker, so its paragraph goes under "no citation
   · the AI's own reading" and the readout counts it (DESIGN §4.6). The server's `uncited_paragraphs` counts

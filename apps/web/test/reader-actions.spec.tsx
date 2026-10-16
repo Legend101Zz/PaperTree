@@ -57,6 +57,8 @@ vi.mock('@/components/reader/VirtualPageList', () => ({
       return <div data-testid="scroller" />;
     },
   ),
+  // The header's page counter reads the pages on screen (#203); a stub scroller shows none.
+  useVisiblePages: () => ({ pages: [], current: -1 }),
 }));
 
 vi.mock('@/components/reader/PdfDocumentProvider', () => ({
@@ -259,7 +261,8 @@ describe('the mount site itself', () => {
       'utf8',
     );
     expect(source).toContain('<ReaderActionsProvider value={actions}>');
-    expect(source).toContain('<ExplainPanel controller={explain} />');
+    // #203: mounted with the header's Explain toggle, which replaced its floating launcher.
+    expect(source).toContain('<ExplainPanel controller={explain} toggleRef={toggleRef} />');
     expect(source).toContain('sendToCanvas: (input) => sendToCanvas(paperId, input)');
   });
 });

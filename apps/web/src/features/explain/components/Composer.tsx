@@ -5,7 +5,7 @@
  * any question about the paper", Enter to send, Shift+Enter for a new line, and Stop in place of
  * Ask while an answer streams.
  */
-import { useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 
 /** Props for `Composer`. */
 export interface ComposerProps {
@@ -15,11 +15,18 @@ export interface ComposerProps {
   readonly disabled: boolean;
   readonly onSend: (question: string) => void;
   readonly onStop: () => void;
+  /** Focus the box when this changes to a number (the toolbar's Ask opened the panel, #203). */
+  readonly focusKey?: number | null;
 }
 
 /** The question box at the foot of the panel. */
-export function Composer({ busy, disabled, onSend, onStop }: ComposerProps): ReactNode {
+export function Composer({ busy, disabled, onSend, onStop, focusKey }: ComposerProps): ReactNode {
   const [value, setValue] = useState('');
+  const box = useRef<HTMLTextAreaElement>(null);
+  // Runs before the drawer's own focus effect (children first), which then leaves focus here.
+  useEffect(() => {
+    if (focusKey !== null && focusKey !== undefined) box.current?.focus({ preventScroll: true });
+  }, [focusKey]);
   const submit = (): void => {
     const question = value.trim();
     if (question.length === 0 || busy || disabled) return;
@@ -44,6 +51,7 @@ export function Composer({ busy, disabled, onSend, onStop }: ComposerProps): Rea
         Ask a question about this paper
       </label>
       <textarea
+        ref={box}
         id="pt-explain-question"
         className="pt-field pt-explain__input"
         rows={1}

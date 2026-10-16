@@ -332,6 +332,11 @@ export interface FloatingGeometry {
   irScale(pageIndex: number): number;
   /** The content column's width, px. */
   readonly contentWidth: number;
+  /**
+   * The part of the content box on screen, content px (#203: the selection toolbar is placed in
+   * it). Wider than the content column when the scroller is wider than the pages.
+   */
+  readonly viewport: { left: number; top: number; right: number; bottom: number };
 }
 
 /* ────────────────────────────── visible-page publication ────────────────────────────── */
@@ -493,7 +498,9 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
     const store = useContext(VisiblePagesContext);
 
     const [scrollTop, setScrollTop] = useState(0);
+    const [scrollLeft, setScrollLeft] = useState(0);
     const [viewportHeight, setViewportHeight] = useState(0);
+    const [viewportWidth, setViewportWidth] = useState(0);
 
     const units = useMemo<UnitSize[]>(() => {
       const out: UnitSize[] = [];
@@ -569,6 +576,7 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
         const el = scrollRef.current;
         if (el === null) return;
         setScrollTop(el.scrollTop);
+        setScrollLeft(el.scrollLeft);
         const current = layoutRef.current;
         if (current === null) return;
         const position = positionAt(current, el.scrollTop - CONTENT_PAD_TOP, irScaleOfRef.current);
@@ -597,12 +605,14 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
       const el = scrollRef.current;
       if (el === null) return;
       setViewportHeight(el.clientHeight);
+      setViewportWidth(el.clientWidth);
       onViewportResizeRef.current?.({ width: el.clientWidth, height: el.clientHeight });
       if (typeof ResizeObserver === 'undefined') return;
       const observer = new ResizeObserver((entries) => {
         const entry = entries[0];
         if (entry === undefined) return;
         setViewportHeight(entry.contentRect.height);
+        setViewportWidth(entry.contentRect.width);
         onViewportResizeRef.current?.({
           width: entry.contentRect.width,
           height: entry.contentRect.height,
@@ -774,6 +784,7 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
                 },
                 irScale: irScaleFor,
                 contentWidth: layout.maxWidth,
+                viewport: visibleBox(scrollTop, scrollLeft, viewportWidth, viewportHeight, layout),
               })}
             </div>
           )}
@@ -782,6 +793,19 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
     );
   },
 );
+
+/** The visible part of the content box, in its own px: it is centred when narrower (`margin: auto`). */
+function visibleBox(
+  scrollTop: number,
+  scrollLeft: number,
+  width: number,
+  height: number,
+  layout: PageLayout,
+): FloatingGeometry['viewport'] {
+  const left = scrollLeft - Math.max(0, (width - layout.maxWidth) / 2);
+  const top = scrollTop - CONTENT_PAD_TOP;
+  return { left, top, right: left + width, bottom: top + height };
+}
 
 function joinClasses(...values: readonly (string | undefined)[]): string {
   return values.filter((v): v is string => typeof v === 'string' && v.length > 0).join(' ');
