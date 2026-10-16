@@ -19,7 +19,9 @@ import { ThreadMenu } from './ThreadMenu';
 import { ThreadView } from './ThreadView';
 
 import type { ExplainController } from '@/components/explain/useExplainActions';
+import type { FlashSource } from '@/components/reader/actions';
 import type { PassageMarker } from '../model/exchange';
+import type { Anchor } from '@papertree/anchoring';
 
 /** Props for `ExplainPanel`. */
 export interface ExplainPanelProps {
@@ -80,6 +82,15 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
     [actions, desktop, setDetent],
   );
 
+  // A diagram part's flash (#217): the margin tab names the part it came from.
+  const onFlash = useCallback(
+    (anchor: Anchor, from: FlashSource) => {
+      if (!desktop) setDetent('peek');
+      actions.focusAnchor(anchor, { flash: true, from });
+    },
+    [actions, desktop, setDetent],
+  );
+
   const inSummary = state.view === 'summary';
   // ONE button that swaps its words: the same element stays focused across the swap, so Esc
   // still closes the drawer from it (a remounted button would drop focus to <body>).
@@ -105,7 +116,13 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
     </div>
   );
   const body = (
-    <ThreadView controller={controller} threads={threads} initial={initial} onShow={onShow} />
+    <ThreadView
+      controller={controller}
+      threads={threads}
+      initial={initial}
+      onShow={onShow}
+      onFlash={onFlash}
+    />
   );
 
   if (!desktop) {

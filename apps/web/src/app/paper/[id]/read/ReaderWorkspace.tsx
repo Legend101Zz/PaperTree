@@ -833,7 +833,7 @@ function ReaderActionsMount({
 }) {
   const paperId = paper.kind === 'api' ? paper.paperId : null;
   const explain = useExplainActions({ paperId });
-  const { openExplain, askAbout, openPanel, closeExplain } = explain;
+  const { openExplain, openDiagram, askAbout, openPanel, closeExplain } = explain;
   const explainOpen = explain.state.open;
   const toggleRef = useRef<HTMLButtonElement>(null);
   const toggle = useMemo<ExplainToggle | null>(
@@ -851,10 +851,12 @@ function ReaderActionsMount({
     () => ({
       openExplain,
       askAbout,
+      // A sample paper has no server to draw a plate: no button rather than an inert one.
+      ...(paperId === null ? {} : { explainWithDiagram: openDiagram }),
       sendToCanvas: (input) => sendToCanvas(paperId, input),
       focusAnchor: (anchor, opts) => onFocusAnchor(anchor, opts),
     }),
-    [openExplain, askAbout, paperId, onFocusAnchor],
+    [openExplain, openDiagram, askAbout, paperId, onFocusAnchor],
   );
 
   return (

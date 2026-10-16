@@ -26,6 +26,13 @@ import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 
 import type { Anchor } from '@papertree/anchoring';
 
+import {
+  applyPlateEvent,
+  EMPTY_PLATE,
+  withNote,
+  type PlateEvent,
+  type PlateView,
+} from '@/features/diagram';
 import { mergeStored, type ThreadMessage } from '@/features/explain/model/messages';
 import { refusedBeforeStream } from '@/features/explain/model/states';
 import { originOf } from '@/features/explain/model/threads';
@@ -89,6 +96,8 @@ export interface ExplainState {
    * panel unmount it): a question refused before it was sent comes back into it (#204).
    */
   readonly draft: string;
+  /** The thread is a diagram's (#217): its only next turn is a Redraw, never a typed question. */
+  readonly diagram: boolean;
 }
 
 const IDLE_SUMMARY: SummaryView = {
@@ -112,19 +121,34 @@ const INITIAL: ExplainState = {
   summary: IDLE_SUMMARY,
   fresh: false,
   draft: '',
+  diagram: false,
 };
 
 type Action =
-  | { type: 'open'; epoch: number; request: ExplainRequest | null; view: PanelView }
+  | {
+      type: 'open';
+      epoch: number;
+      request: ExplainRequest | null;
+      view: PanelView;
+      diagram?: boolean;
+    }
   | { type: 'close' }
   | { type: 'view'; view: PanelView }
   | { type: 'thread'; epoch: number; threadId: string }
-  | { type: 'select'; epoch: number; threadId: string; request: ExplainRequest | null }
+  | {
+      type: 'select';
+      epoch: number;
+      threadId: string;
+      request: ExplainRequest | null;
+      diagram: boolean;
+    }
   | { type: 'fresh'; epoch: number }
   | { type: 'hydrate'; threadId: string; messages: readonly Message[] }
   | { type: 'add'; epoch: number; message: ViewMessage }
   | { type: 'patch'; epoch: number; key: string; patch: Partial<ViewMessage> }
   | { type: 'append'; epoch: number; key: string; delta: string }
+  /** A diagram answer's plate grows by one event (or one note), #217. */
+  | { type: 'plate'; epoch: number; key: string; update: (plate: PlateView) => PlateView }
   | { type: 'summary'; patch: Partial<SummaryView> }
   /** `restore`: a refused question returns only to an empty box, never over words typed since. */
   | { type: 'draft'; text: string; restore?: boolean }
@@ -143,6 +167,7 @@ export function explainReducer(state: ExplainState, action: Action): ExplainStat
         threadId: null,
         messages: [],
         fresh: false,
+        diagram: action.diagram === true,
       };
     case 'fresh':
       return {
@@ -154,6 +179,7 @@ export function explainReducer(state: ExplainState, action: Action): ExplainStat
         threadId: null,
         messages: [],
         fresh: true,
+        diagram: false,
       };
     case 'close':
       return { ...state, open: false };
@@ -171,6 +197,7 @@ export function explainReducer(state: ExplainState, action: Action): ExplainStat
         threadId: action.threadId,
         messages: [],
         fresh: false,
+        diagram: action.diagram,
       };
     case 'hydrate':
       // A detail read for a thread the panel has left (the menu moved on) is dropped.
@@ -199,6 +226,15 @@ export function explainReducer(state: ExplainState, action: Action): ExplainStat
             ),
           }
         : state;
+    case 'plate':
+      return action.epoch === state.epoch
+        ? {
+            ...state,
+            messages: state.messages.map((m) =>
+              m.key === action.key ? { ...m, diagram: action.update(m.diagram ?? EMPTY_PLATE) } : m,
+            ),
+          }
+        : state;
     case 'draft':
       return action.restore === true && state.draft.trim() !== ''
         ? state
@@ -220,6 +256,13 @@ export interface ExplainController {
   /** What the panel is open on; `null` when it was opened without a selection (or is closed). */
   readonly request: ExplainRequest | null;
   readonly openExplain: (input: ExplainRequest) => void;
+  /** The selection toolbar's "Explain with a diagram" (#217): a new diagram thread on the passage. */
+  readonly openDiagram: (input: ExplainRequest) => void;
+  /**
+   * Redraw a plate (#217): a new plate under a new ask in the same thread (`redraw_of`). On a plate
+   * that never arrived (refused or failed before it was written) it asks for that plate again.
+   */
+  readonly redraw: (key: string) => void;
   /**
    * The selection toolbar's Ask (#203): open the panel on this passage with nothing sent, so the
    * reader's own question (`ask`) starts the thread about it.
@@ -261,12 +304,17 @@ export interface ExplainController {
 export type AskOutcome = 'sent' | 'not-sent';
 
 const DEFAULT_EXPLAIN_QUESTION = 'Explain this passage.';
+/** The server's default ask of a diagram thread (`schemas.DIAGRAM_QUESTION`). */
+const DIAGRAM_QUESTION = 'Explain with a diagram.';
+/** A Redraw's ask: it names the exchange it opens in the thread menu (#217). */
+const REDRAW_QUESTION = 'Redraw the diagram.';
 
 let counter = 0;
 const nextKey = (): string => `m${String((counter += 1))}`;
 
-function blankAssistant(question: string): ViewMessage {
+function blankAssistant(question: string, diagram = false): ViewMessage {
   return {
+    ...(diagram ? { diagram: EMPTY_PLATE } : {}),
     key: nextKey(),
     role: 'assistant',
     text: '',
@@ -329,6 +377,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       open: (signal: AbortSignal) => AsyncGenerator<SseEvent>,
       userKey: string | null,
       before: ViewMessage | null,
+      diagram = false,
     ): Promise<AskOutcome> => {
       const controller = new AbortController();
       threadAbort.current = controller;
@@ -361,8 +410,27 @@ export function useExplainActions(options: { readonly paperId: string | null }):
               }
               break;
             case 'status':
-              patch({ label: statusLabel(event.data) });
+              // A diagram's writing-phase labels say what was left out (a skipped line, a dropped
+              // arrow): kept under the plate, not flashed past as a working label.
+              if (diagram && event.data.phase === 'writing' && event.data.label) {
+                const note = event.data.label;
+                dispatch({ type: 'plate', epoch, key, update: (p) => withNote(p, note) });
+              } else {
+                patch({ label: statusLabel(event.data) });
+              }
               break;
+            case 'plate':
+            case 'part':
+            case 'link': {
+              const plateEvent: PlateEvent = event;
+              dispatch({
+                type: 'plate',
+                epoch,
+                key,
+                update: (p) => applyPlateEvent(p, plateEvent),
+              });
+              break;
+            }
             case 'text':
               dispatch({ type: 'append', epoch, key, delta: event.data.delta });
               patch({ label: null });
@@ -432,7 +500,10 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       show: boolean,
       open: (signal: AbortSignal) => AsyncGenerator<SseEvent>,
       reuse?: string,
+      diagramTurn?: Partial<ViewMessage>,
     ): Promise<AskOutcome> => {
+      // A diagram turn (#217) carries its plate from the start, and any live facts it is given.
+      const diagram = diagramTurn !== undefined;
       const userKey = show ? nextKey() : null;
       if (userKey !== null) {
         dispatch({
@@ -454,7 +525,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
           : (stateRef.current.messages.find((m) => m.key === reuse) ?? null);
       let key = reuse;
       if (key === undefined) {
-        const assistant = blankAssistant(question);
+        const assistant = { ...blankAssistant(question, diagram), ...diagramTurn };
         key = assistant.key;
         dispatch({ type: 'add', epoch, message: assistant });
       } else {
@@ -472,10 +543,11 @@ export function useExplainActions(options: { readonly paperId: string | null }):
             usage: null,
             awaitingStored: false,
             refusal: null,
+            ...(diagram ? { diagram: EMPTY_PLATE } : {}),
           },
         });
       }
-      return consume(epoch, key, open, userKey, before);
+      return consume(epoch, key, open, userKey, before, diagram);
     },
     [consume],
   );
@@ -511,6 +583,54 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       void sendCreate(epoch, input, undefined, false);
     },
     [halt, sendCreate],
+  );
+
+  const openDiagram = useCallback(
+    (input: ExplainRequest): void => {
+      halt(false);
+      const epoch = (epochRef.current += 1);
+      dispatch({ type: 'open', epoch, request: input, view: 'thread', diagram: true });
+      stateRef.current = {
+        ...stateRef.current,
+        epoch,
+        messages: [],
+        threadId: null,
+        diagram: true,
+      };
+      if (paperId === null) return;
+      const body: CreateThreadBody = { kind: 'diagram', anchor: input.anchor };
+      const open = (signal: AbortSignal) => threadsApi.create(paperId, body, signal);
+      void startTurn(epoch, DIAGRAM_QUESTION, false, open, undefined, {});
+    },
+    [halt, paperId, startTurn],
+  );
+
+  const redraw = useCallback(
+    (key: string): void => {
+      const current = stateRef.current;
+      const target = current.messages.find((m) => m.key === key);
+      if (paperId === null || target === undefined || current.messages.some(isStreaming)) return;
+      const { epoch, threadId, request } = current;
+      if (threadId === null) {
+        // The first plate never reached a thread (refused or failed before its `run`): ask again.
+        if (request === null) return;
+        const body: CreateThreadBody = { kind: 'diagram', anchor: request.anchor };
+        const open = (signal: AbortSignal) => threadsApi.create(paperId, body, signal);
+        void startTurn(epoch, target.question, false, open, key, {});
+        return;
+      }
+      // A Redraw that never arrived (refused before the stream) is sent again as the same Redraw,
+      // in place; a plate that has an id gets a new plate under a new ask.
+      const again = target.messageId === null;
+      const of = again ? (target.redrawOf ?? newestPlate(current.messages)) : target.messageId;
+      if (of === null) return;
+      const body = { question: REDRAW_QUESTION, redraw_of: of };
+      const open = (signal: AbortSignal) => threadsApi.followUp(paperId, threadId, body, signal);
+      void startTurn(epoch, REDRAW_QUESTION, !again, open, again ? key : undefined, {
+        redrawOf: of,
+      });
+    },
+    [paperId, startTurn],
   );
 
   const askAbout = useCallback(
@@ -750,13 +870,15 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       halt(true);
       const epoch = (epochRef.current += 1);
       const request = originOf(thread);
-      dispatch({ type: 'select', epoch, threadId: thread.thread_id, request });
+      const diagram = thread.kind === 'diagram';
+      dispatch({ type: 'select', epoch, threadId: thread.thread_id, request, diagram });
       stateRef.current = {
         ...stateRef.current,
         epoch,
         request,
         threadId: thread.thread_id,
         messages: [],
+        diagram,
       };
     },
     [halt],
@@ -797,6 +919,8 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       state,
       request: state.open ? state.request : null,
       openExplain,
+      openDiagram,
+      redraw,
       askAbout,
       openPanel,
       closeExplain,
@@ -815,6 +939,8 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       paperId,
       state,
       openExplain,
+      openDiagram,
+      redraw,
       askAbout,
       openPanel,
       closeExplain,
@@ -830,6 +956,15 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       setDraft,
     ],
   );
+}
+
+function isStreaming(message: ViewMessage): boolean {
+  return message.status === 'streaming';
+}
+
+/** The newest plate of the thread that has a server id: what a Redraw with nothing else redraws. */
+function newestPlate(messages: readonly ViewMessage[]): string | null {
+  return messages.findLast((m) => m.diagram != null && m.messageId !== null)?.messageId ?? null;
 }
 
 function statusLabel(status: {

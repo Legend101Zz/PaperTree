@@ -31,6 +31,8 @@ export interface FlashSource {
   readonly page: number;
   readonly para: number | null;
   readonly notVerified: boolean;
+  /** A diagram part's flash (#217): the tab says "from part C, Scale" instead of the marker. */
+  readonly part?: { readonly letter: string; readonly label: string };
 }
 
 export type SendToCanvasInput =
@@ -43,6 +45,11 @@ export type ReaderActions = {
    * own question. Optional: a reader without it draws no Ask button (never an inert one).
    */
   askAbout?(input: { anchor: Anchor; quote: string }): void;
+  /**
+   * The selection toolbar's "Explain with a diagram" (#217): a diagram thread on the passage.
+   * Optional like `askAbout`: a reader without it draws no such button.
+   */
+  explainWithDiagram?(input: { anchor: Anchor; quote: string }): void;
   sendToCanvas(input: SendToCanvasInput): Promise<void>;
   focusAnchor(anchor: Anchor, opts?: { flash?: boolean; from?: FlashSource }): void;
 };

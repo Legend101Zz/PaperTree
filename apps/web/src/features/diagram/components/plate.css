@@ -1,0 +1,403 @@
+/*
+ * The engraved plate (frames 07a–07c, DESIGN.md §1 "Diagrams"): AI-slip stock in a double ruled
+ * frame, hairline boxes with hatched shadows, the key beside the drawing. Tokens only, so the
+ * lamp-lit scheme is the same plate at night. Parts settle in (DESIGN.md §6: paper settles, nothing
+ * bounces); with reduced motion they simply appear.
+ */
+
+.pt-plate-answer {
+  position: relative;
+  margin-block-start: 28px;
+  padding-block-start: 20px;
+}
+
+.pt-plate-answer > .pt-ai-tab {
+  inset-block-start: 0;
+}
+
+.pt-plate-answer__line {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 62px 96px;
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font: var(--pt-t-label-s) / 20px var(--pt-font-ai);
+  color: var(--pt-ink-2);
+}
+
+.pt-plate-answer__line .pt-explain__status {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--pt-ai-tab-ink);
+}
+
+.pt-plate-answer__stop {
+  position: absolute;
+  inset-block-start: -24px;
+  inset-inline-end: 0;
+  padding-inline: 12px;
+  font-size: 14px;
+}
+
+.pt-plate-answer__stop-mark {
+  inline-size: 9px;
+  block-size: 9px;
+  background: currentColor;
+}
+
+/* The plate itself: the slip with a double rule, light from the top left. */
+.pt-plate {
+  padding: 14px 16px 12px;
+  background: var(--pt-ai-slip);
+  color: var(--pt-ink);
+  border: 1.5px solid var(--pt-ink);
+  box-shadow:
+    inset 0 0 0 5px var(--pt-ai-slip),
+    inset 0 0 0 5.8px var(--pt-ink),
+    var(--pt-e1);
+  container-type: inline-size;
+}
+
+.pt-plate__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--pt-space-4);
+  padding: 4px 4px 8px;
+  border-block-end: 1px solid var(--pt-ink);
+}
+
+.pt-plate__no {
+  margin: 0;
+  font: 700 14px / 1 var(--pt-font-label);
+  letter-spacing: 0.24em;
+  text-transform: lowercase; /* the small-caps face draws lowercase as small capitals */
+}
+
+.pt-plate__title {
+  margin: 0;
+  font: 700 16px / 1.3 var(--pt-font-paper);
+  text-align: end;
+}
+
+.pt-plate__body {
+  display: grid;
+  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+  gap: var(--pt-space-3);
+  align-items: start;
+  margin-block-start: 6px;
+}
+
+@container (max-width: 520px) {
+  .pt-plate__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.pt-plate__drawing {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+}
+
+.pt-plate__readout {
+  margin: 8px 4px 0;
+  font: var(--pt-t-num) / 1.5 var(--pt-font-you);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* 07a: the empty plate, before the first part. */
+.pt-plate--empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--pt-space-3);
+  min-block-size: 300px;
+  padding: var(--pt-space-6);
+  border: 1px dashed var(--pt-ink);
+  box-shadow: none;
+  text-align: center;
+  font: 15px / 23px var(--pt-font-ai);
+}
+
+.pt-plate--empty > p {
+  margin: 0;
+}
+
+/* ── the drawing ───────────────────────────────────────────────────────────────────────── */
+
+.pt-plate__route polyline {
+  fill: none;
+  stroke: var(--pt-ink);
+  stroke-width: 1.4;
+}
+
+.pt-plate__route path {
+  fill: var(--pt-ink);
+}
+
+.pt-plate__route text,
+.pt-plate__gap text {
+  font: italic 14px var(--pt-font-paper);
+  fill: var(--pt-ink);
+}
+
+.pt-plate__letter line {
+  stroke: var(--pt-ink);
+  stroke-width: 1.4;
+  opacity: 0.5;
+}
+
+.pt-plate__letter circle {
+  fill: var(--pt-page);
+  stroke: var(--pt-ink);
+}
+
+.pt-plate__letter text {
+  font: italic 15px var(--pt-font-paper);
+  fill: var(--pt-ink);
+}
+
+.pt-plate__letter[data-faint='true'],
+.pt-plate__gap text {
+  opacity: 0.55;
+}
+
+.pt-plate__part {
+  cursor: pointer;
+  animation: pt-plate-settle 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes pt-plate-settle {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.pt-plate__box {
+  fill: var(--pt-page);
+  stroke: var(--pt-ink);
+}
+
+.pt-plate__part[data-verdict='inferred'] .pt-plate__box {
+  stroke-width: 1.5;
+  stroke-dasharray: 5 3;
+}
+
+.pt-plate__rule {
+  fill: none;
+  stroke: var(--pt-ink);
+  stroke-width: 0.8;
+}
+
+.pt-plate__hatch {
+  stroke: var(--pt-ink);
+  opacity: 0.55;
+}
+
+.pt-plate__label {
+  font: 700 15px var(--pt-font-paper);
+  fill: var(--pt-ink);
+}
+
+.pt-plate__part[data-kind='input'] .pt-plate__label {
+  font-style: italic;
+}
+
+.pt-plate__caption {
+  font: 700 12.5px var(--pt-font-label);
+  letter-spacing: 0.06em;
+  fill: var(--pt-ink);
+}
+
+.pt-plate__mark rect {
+  fill: var(--pt-tab);
+}
+
+.pt-plate__mark text {
+  font: 700 11px var(--pt-font-you);
+  fill: var(--pt-on-tab);
+}
+
+.pt-plate__mark[data-not-verified='true'] rect {
+  fill: var(--pt-ai-slip);
+  stroke: var(--pt-tab);
+  stroke-dasharray: 2 2;
+}
+
+.pt-plate__mark[data-not-verified='true'] text {
+  fill: var(--pt-nv-ink);
+}
+
+/* Lit (from the key, or tapped): navy ring and the amber wash, the letter filled navy. */
+.pt-plate__part[data-lit='true'] .pt-plate__box {
+  fill: color-mix(in srgb, var(--pt-page), rgb(240 190 70) 22%);
+  stroke: var(--pt-focus);
+  stroke-width: 2.5;
+}
+
+.pt-plate__part[data-lit='true'] .pt-plate__mark rect,
+.pt-plate__part[data-lit='true'] .pt-plate__letter circle {
+  fill: var(--pt-focus);
+  stroke: var(--pt-focus);
+}
+
+.pt-plate__part[data-lit='true'] .pt-plate__letter text,
+.pt-plate__part[data-lit='true'] .pt-plate__mark text {
+  fill: var(--pt-page);
+}
+
+.pt-plate__ghost rect {
+  fill: none;
+  stroke: var(--pt-ink);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 3;
+  opacity: 0.55;
+}
+
+.pt-plate__ghost > text {
+  font: 13.5px var(--pt-font-ai);
+  fill: var(--pt-ink-2);
+}
+
+/* ── the key ───────────────────────────────────────────────────────────────────────────── */
+
+.pt-plate-key {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pt-plate-key__row {
+  border-block-end: 1px solid color-mix(in srgb, var(--pt-ink) 22%, transparent);
+  animation: pt-plate-settle 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.pt-plate-key__part,
+.pt-plate-key__row[data-gap],
+.pt-plate-key__row[data-ghost] {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  column-gap: 10px;
+  inline-size: 100%;
+  padding: 8px 6px 9px 4px;
+  text-align: start;
+  color: inherit;
+  font: inherit;
+  background: transparent;
+  border: 0;
+}
+
+.pt-plate-key__part {
+  cursor: pointer;
+}
+
+.pt-plate-key__row[data-lit='true'] .pt-plate-key__part,
+.pt-plate-key__part:hover {
+  background: color-mix(in srgb, var(--pt-focus) 10%, transparent);
+}
+
+.pt-plate-key__part:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: -2px;
+}
+
+.pt-plate-key__letter {
+  font: italic 16px / 22px var(--pt-font-paper);
+}
+
+.pt-plate-key__body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-inline-size: 0;
+}
+
+.pt-plate-key__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  font: 13.5px / 20px var(--pt-font-ai);
+  color: var(--pt-ink-2);
+}
+
+.pt-plate-key__label {
+  margin-inline-end: auto;
+  font: 700 14.5px / 20px var(--pt-font-ai);
+  color: var(--pt-ink);
+}
+
+.pt-plate-key__quote,
+.pt-plate-key__ai {
+  /* No hung quotation mark here: the two-line clamp would clip it. */
+  text-indent: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font: italic 13px / 18px var(--pt-font-paper);
+  color: var(--pt-ink);
+}
+
+.pt-plate-key__ai {
+  font: 13.5px / 19px var(--pt-font-ai);
+  color: var(--pt-ink-2);
+}
+
+.pt-plate-key__caption {
+  font: 700 12.5px / 18px var(--pt-font-label);
+  letter-spacing: 0.04em;
+  color: var(--pt-ink);
+}
+
+.pt-plate-key__row[data-ghost] {
+  opacity: 0.75;
+}
+
+.pt-plate-key__bar {
+  inline-size: 70%;
+  block-size: 8px;
+  margin-block-start: 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--pt-ink) 12%, transparent);
+}
+
+/* ── the lines under the plate ─────────────────────────────────────────────────────────── */
+
+.pt-plate-answer__said,
+.pt-plate-answer__notes {
+  margin: 10px 0 0;
+  font: 14px / 21px var(--pt-font-ai);
+  color: var(--pt-ink);
+}
+
+.pt-plate-answer__said:empty {
+  margin: 0;
+}
+
+.pt-plate-answer__notes p,
+.pt-plate-answer__notes ul {
+  margin: 0;
+}
+
+.pt-plate-answer__notes ul {
+  padding-inline-start: 18px;
+  color: var(--pt-ink-2);
+}
+
+.pt-exchange--diagram .pt-explain__usage,
+.pt-exchange--diagram .pt-explain__note {
+  margin-block-start: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-plate__part,
+  .pt-plate-key__row {
+    animation: none;
+  }
+}

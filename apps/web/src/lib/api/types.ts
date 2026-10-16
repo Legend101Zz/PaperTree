@@ -343,6 +343,11 @@ export type SseEvent =
     }
   | { event: 'text'; data: { delta: string } }
   | { event: 'citations'; data: { items: Citation[] } }
+  // A diagram run (v0.2 S7a/S7b): its title, then each part with its quote already resolved, and
+  // the feedback edges `after` cannot say. No `text` and no `citations` come on such a run.
+  | { event: 'plate'; data: { title: string } }
+  | { event: 'part'; data: DiagramPart }
+  | { event: 'link'; data: DiagramLink }
   | { event: 'usage'; data: RunSummary }
   | {
       event: 'done';

@@ -1,0 +1,633 @@
+{
+  "_source": "GET /papers/ppr_G9AYN750E5MG1NRBMGSQJ4N5JM/threads/thr_01M536X6ADZ62TFKAZWW548BN8 on the S7a API (v02/s7b-plate at b0ea483) on a COPY of the demo data root, 2026-10-17, right after the recorded diagram-plate.sse run (FAUX agent, [faux:diagram]). Verbatim.",
+  "thread": {
+    "thread_id": "thr_01M536X6ADZ62TFKAZWW548BN8",
+    "kind": "diagram",
+    "title": "We call our particular attention \"Scaled Dot-Product Attention\" (Figure 2). The…",
+    "origin_anchor": {
+      "anchorVersion": 1,
+      "offsetUnit": "unicode",
+      "id": "02e8ab49-7f45-4fce-8eb2-5f69ee4eff1f",
+      "doc": {
+        "paperId": "ppr_G9AYN750E5MG1NRBMGSQJ4N5JM",
+        "pdfSha256": "sha256:bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+        "parserVersion": "1.0.0",
+        "textStreamId": "api/ppr_G9AYN750E5MG1NRBMGSQJ4N5JM/g1/1.0.0"
+      },
+      "targetKind": "text",
+      "provenanceClass": "source",
+      "selectors": [
+        {
+          "type": "BlockSelector",
+          "blockId": "blk_bpxexqwrbbgi5ca3",
+          "blockTextHash": "sha256:76aa2febf6ee3abc266c15918b0d5cd20f4cd8b8a201eedaaae4c35482388196"
+        },
+        {
+          "type": "PageSelector",
+          "index": 3
+        },
+        {
+          "type": "TextPositionSelector",
+          "start": 9299,
+          "end": 9600
+        },
+        {
+          "type": "TextQuoteSelector",
+          "exact": "We call our particular attention \"Scaled Dot-Product Attention\" (Figure 2). The input consists of\nqueries and keys of dimension dk, and values of dimension dv. We compute the dot products of the\nquery with all keys, divide each by √dk, and apply a softmax function to obtain the weights on the\nvalues.",
+          "prefix": " with the corresponding key.\n3.2.1\nScaled Dot-Product Attention\n",
+          "suffix": "\nIn practice, we compute the attention function on a set of queries",
+          "exactNormalised": "wecallourparticularattention\"scaleddot-productattention\"(figure2).theinputconsistsofqueriesandkeysofdimensiondk,andvaluesofdimensiondv.wecomputethedotproductsofthequerywithallkeys,divideeachby√dk,andapplyasoftmaxfunctiontoobtaintheweightsonthevalues.",
+          "prefixNormalised": "withthecorrespondingkey.3.2.1scaleddot-productattention",
+          "suffixNormalised": "inpractice,wecomputetheattentionfunctiononasetofqueries"
+        },
+        {
+          "type": "ShapeSelector",
+          "pageIndex": 3,
+          "quads": [[107.53199768066406, 370.5111535870824, 504.0005187988281, 412.2119191613486]],
+          "polygons": [
+            [
+              [503.9967346191406, 370.5111535870824],
+              [503.9967346191406, 380.4171510760007],
+              [504.0005187988281, 380.4171510760007],
+              [504.0005187988281, 402.65163074006824],
+              [135.44703674316406, 402.65163074006824],
+              [135.44703674316406, 412.2119191613486],
+              [107.7509994506836, 412.2119191613486],
+              [107.7509994506836, 402.65163074006824],
+              [108.0, 402.65163074006824],
+              [108.0, 380.4171510760007],
+              [107.53199768066406, 380.4171510760007],
+              [107.53199768066406, 370.5111535870824]
+            ]
+          ],
+          "pageWidth": 612.0,
+          "pageHeight": 792.0,
+          "rotation": 0,
+          "userUnit": 1.0,
+          "cropBox": [0.0, 0.0, 612.0, 792.0]
+        },
+        {
+          "type": "SectionPathSelector",
+          "path": ["Decoder:", "3.2\nAttention", "3.2.1\nScaled Dot-Product Attention"],
+          "headingText": "3.2.1\nScaled Dot-Product Attention",
+          "paraIndexInSection": 0,
+          "charOffsetInPara": 0
+        }
+      ],
+      "created": {
+        "mode": "source",
+        "at": "2026-10-16T20:36:49.116Z",
+        "client": "papertree-api/citations"
+      }
+    },
+    "created_at": "2026-10-16T20:36:55.757Z",
+    "updated_at": "2026-10-16T20:36:55.910Z",
+    "message_count": 2,
+    "ask": "[faux:diagram] Explain with a diagram.",
+    "last_status": "complete"
+  },
+  "messages": [
+    {
+      "message_id": "msg_01M536X6AD9DKXH4FS0J8V53EF",
+      "thread_id": "thr_01M536X6ADZ62TFKAZWW548BN8",
+      "ordinal": 0,
+      "role": "user",
+      "content": "[faux:diagram] Explain with a diagram.",
+      "status": "complete",
+      "error": null,
+      "generation": 1,
+      "run": null,
+      "citations": [],
+      "created_at": "2026-10-16T20:36:55.757Z",
+      "completed_at": "2026-10-16T20:36:55.757Z"
+    },
+    {
+      "message_id": "msg_01M536X6ADDW22T669B1QXQM1E",
+      "thread_id": "thr_01M536X6ADZ62TFKAZWW548BN8",
+      "ordinal": 1,
+      "role": "assistant",
+      "content": "{\"t\":\"plate\",\"title\":\"Scaled dot-product attention\"}\n{\"t\":\"part\",\"label\":\"Q, K, V\",\"text\":\"queries and keys of dimension dk, values of dimension dv\",\"kind\":\"input\",\"after\":[],\"cite\":{\"quote\":\"queries and keys of dimension dk, and values of dimension dv\",\"page\":4}}\n{\"t\":\"part\",\"label\":\"MatMul (Q · Kᵀ)\",\"text\":\"one dot product of the query with each key\",\"kind\":\"step\",\"after\":[\"A\"],\"cite\":{\"quote\":\"We compute the dot products of the query with all keys\",\"page\":4}}\n{\"t\":\"part\",\"label\":\"Scale ÷ √dk\",\"text\":\"each dot product divided by √dk\",\"kind\":\"step\",\"after\":[\"B\"],\"cite\":{\"quote\":\"divide each by √dk\",\"page\":4}}\n{\"t\":\"part\",\"label\":\"Softmax\",\"text\":\"turns the scaled scores into weights on the values\",\"kind\":\"step\",\"after\":[\"C\"],\"cite\":{\"quote\":\"apply a softmax function to obtain the weights on the values\",\"page\":4}}\n{\"t\":\"part\",\"label\":\"MatMul with V\",\"text\":\"the weights applied to the values give the output\",\"kind\":\"output\",\"after\":[\"D\",\"A\"],\"edge\":[null,\"V\"],\"cite\":{\"quote\":\"We compute the matrix of outputs as\",\"page\":4}}\n{\"t\":\"part\",\"label\":\"Weights sum to 1\",\"text\":\"each query's weights over the keys add up to one\",\"kind\":\"concept\",\"after\":[\"D\"],\"cite\":null}\n{\"t\":\"end\"}",
+      "status": "complete",
+      "error": null,
+      "generation": 1,
+      "run": {
+        "run_id": "run_01M536X6ADDT1C3RNGGY9WBWHM",
+        "model": "MiniMax-M3",
+        "provider": "minimax",
+        "agent_sdk": "pi-coding-agent@0.87.1",
+        "input_tokens": 5330,
+        "output_tokens": 298,
+        "cache_read_tokens": 0,
+        "reasoning_tokens": 0,
+        "cost_usd_est": 0.0019566,
+        "first_text_ms": 165,
+        "latency_ms": 177,
+        "retries": 0,
+        "tool_calls": 0
+      },
+      "citations": [],
+      "created_at": "2026-10-16T20:36:55.757Z",
+      "completed_at": "2026-10-16T20:36:55.910Z",
+      "diagram": {
+        "title": "Scaled dot-product attention",
+        "status": "complete",
+        "parts": [
+          {
+            "letter": "A",
+            "label": "Q, K, V",
+            "text": "queries and keys of dimension dk, values of dimension dv",
+            "kind": "input",
+            "after": [],
+            "edge": [],
+            "cite": {
+              "citation_id": "cit_01M536X6EV2K1PPPA7VG91H5RW",
+              "quote": "queries and keys of dimension dk, and values of dimension dv",
+              "anchor": {
+                "anchorVersion": 1,
+                "offsetUnit": "unicode",
+                "id": "cit_01M536X6EV2K1PPPA7VG91H5RW",
+                "doc": {
+                  "paperId": "ppr_G9AYN750E5MG1NRBMGSQJ4N5JM",
+                  "pdfSha256": "sha256:bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+                  "parserVersion": "1.0.0",
+                  "textStreamId": "api/ppr_G9AYN750E5MG1NRBMGSQJ4N5JM/g1/1.0.0"
+                },
+                "targetKind": "citation",
+                "provenanceClass": "source",
+                "selectors": [
+                  {
+                    "type": "BlockSelector",
+                    "blockId": "blk_bpxexqwrbbgi5ca3",
+                    "blockTextHash": "sha256:76aa2febf6ee3abc266c15918b0d5cd20f4cd8b8a201eedaaae4c35482388196"
+                  },
+                  {
+                    "type": "PageSelector",
+                    "index": 3
+                  },
+                  {
+                    "type": "TextPositionSelector",
+                    "start": 9299,
+                    "end": 9600
+                  },
+                  {
+                    "type": "TextQuoteSelector",
+                    "exact": "We call our particular attention \"Scaled Dot-Product Attention\" (Figure 2). The input consists of\nqueries and keys of dimension dk, and values of dimension dv. We compute the dot products of the\nquery with all keys, divide each by √dk, and apply a softmax function to obtain the weights on the\nvalues.",
+                    "prefix": " with the corresponding key.\n3.2.1\nScaled Dot-Product Attention\n",
+                    "suffix": "\nIn practice, we compute the attention function on a set of queries",
+                    "exactNormalised": "wecallourparticularattention\"scaleddot-productattention\"(figure2).theinputconsistsofqueriesandkeysofdimensiondk,andvaluesofdimensiondv.wecomputethedotproductsofthequerywithallkeys,divideeachby√dk,andapplyasoftmaxfunctiontoobtaintheweightsonthevalues.",
+                    "prefixNormalised": "withthecorrespondingkey.3.2.1scaleddot-productattention",
+                    "suffixNormalised": "inpractice,wecomputetheattentionfunctiononasetofqueries"
+                  },
+                  {
+                    "type": "ShapeSelector",
+                    "pageIndex": 3,
+                    "quads": [
+                      [107.53199768066406, 370.5111535870824, 504.0005187988281, 412.2119191613486]
+                    ],
+                    "polygons": [
+                      [
+                        [503.9967346191406, 370.5111535870824],
+                        [503.9967346191406, 380.4171510760007],
+                        [504.0005187988281, 380.4171510760007],
+                        [504.0005187988281, 402.65163074006824],
+                        [135.44703674316406, 402.65163074006824],
+                        [135.44703674316406, 412.2119191613486],
+                        [107.7509994506836, 412.2119191613486],
+                        [107.7509994506836, 402.65163074006824],
+                        [108.0, 402.65163074006824],
+                        [108.0, 380.4171510760007],
+                        [107.53199768066406, 380.4171510760007],
+                        [107.53199768066406, 370.5111535870824]
+                      ]
+                    ],
+                    "pageWidth": 612.0,
+                    "pageHeight": 792.0,
+                    "rotation": 0,
+                    "userUnit": 1.0,
+                    "cropBox": [0.0, 0.0, 612.0, 792.0]
+                  },
+                  {
+                    "type": "SectionPathSelector",
+                    "path": ["Decoder:", "3.2\nAttention", "3.2.1\nScaled Dot-Product Attention"],
+                    "headingText": "3.2.1\nScaled Dot-Product Attention",
+                    "paraIndexInSection": 0,
+                    "charOffsetInPara": 0
+                  }
+                ],
+                "created": {
+                  "mode": "source",
+                  "at": "2026-10-16T20:36:55.899Z",
+                  "client": "papertree-api/citations"
+                }
+              },
+              "locator": {
+                "passage_key": "g1:blk_bpxexqwrbbgi5ca3",
+                "page_index": 3,
+                "para_index": 1,
+                "section_heading": "Scaled Dot-Product Attention"
+              },
+              "page_index": 3,
+              "supported": true
+            }
+          },
+          {
+            "letter": "B",
+            "label": "MatMul (Q · Kᵀ)",
+            "text": "one dot product of the query with each key",
+            "kind": "step",
+            "after": ["A"],
+            "edge": [null],
+            "cite": {
+              "citation_id": "cit_01M536X6EXEN0HTWMHCXJEPZRR",
+              "quote": "We compute the dot products of the query with all keys",
+              "anchor": {
+                "anchorVersion": 1,
+                "offsetUnit": "unicode",
+                "id": "cit_01M536X6EXEN0HTWMHCXJEPZRR",
+                "doc": {
+                  "paperId": "ppr_G9AYN750E5MG1NRBMGSQJ4N5JM",
+                  "pdfSha256": "sha256:bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+                  "parserVersion": "1.0.0",
+                  "textStreamId": "api/ppr_G9AYN750E5MG1NRBMGSQJ4N5JM/g1/1.0.0"
+                },
+                "targetKind": "citation",
+                "provenanceClass": "source",
+                "selectors": [
+                  {
+                    "type": "BlockSelector",
+                    "blockId": "blk_bpxexqwrbbgi5ca3",
+                    "blockTextHash": "sha256:76aa2febf6ee3abc266c15918b0d5cd20f4cd8b8a201eedaaae4c35482388196"
+                  },
+                  {
+                    "type": "PageSelector",
+                    "index": 3
+                  },
+                  {
+                    "type": "TextPositionSelector",
+                    "start": 9299,
+                    "end": 9600
+                  },
+                  {
+                    "type": "TextQuoteSelector",
+                    "exact": "We call our particular attention \"Scaled Dot-Product Attention\" (Figure 2). The input consists of\nqueries and keys of dimension dk, and values of dimension dv. We compute the dot products of the\nquery with all keys, divide each by √dk, and apply a softmax function to obtain the weights on the\nvalues.",
+                    "prefix": " with the corresponding key.\n3.2.1\nScaled Dot-Product Attention\n",
+                    "suffix": "\nIn practice, we compute the attention function on a set of queries",
+                    "exactNormalised": "wecallourparticularattention\"scaleddot-productattention\"(figure2).theinputconsistsofqueriesandkeysofdimensiondk,andvaluesofdimensiondv.wecomputethedotproductsofthequerywithallkeys,divideeachby√dk,andapplyasoftmaxfunctiontoobtaintheweightsonthevalues.",
+                    "prefixNormalised": "withthecorrespondingkey.3.2.1scaleddot-productattention",
+                    "suffixNormalised": "inpractice,wecomputetheattentionfunctiononasetofqueries"
+                  },
+                  {
+                    "type": "ShapeSelector",
+                    "pageIndex": 3,
+                    "quads": [
+                      [107.53199768066406, 370.5111535870824, 504.0005187988281, 412.2119191613486]
+                    ],
+                    "polygons": [
+                      [
+                        [503.9967346191406, 370.5111535870824],
+                        [503.9967346191406, 380.4171510760007],
+                        [504.0005187988281, 380.4171510760007],
+                        [504.0005187988281, 402.65163074006824],
+                        [135.44703674316406, 402.65163074006824],
+                        [135.44703674316406, 412.2119191613486],
+                        [107.7509994506836, 412.2119191613486],
+                        [107.7509994506836, 402.65163074006824],
+                        [108.0, 402.65163074006824],
+                        [108.0, 380.4171510760007],
+                        [107.53199768066406, 380.4171510760007],
+                        [107.53199768066406, 370.5111535870824]
+                      ]
+                    ],
+                    "pageWidth": 612.0,
+                    "pageHeight": 792.0,
+                    "rotation": 0,
+                    "userUnit": 1.0,
+                    "cropBox": [0.0, 0.0, 612.0, 792.0]
+                  },
+                  {
+                    "type": "SectionPathSelector",
+                    "path": ["Decoder:", "3.2\nAttention", "3.2.1\nScaled Dot-Product Attention"],
+                    "headingText": "3.2.1\nScaled Dot-Product Attention",
+                    "paraIndexInSection": 0,
+                    "charOffsetInPara": 0
+                  }
+                ],
+                "created": {
+                  "mode": "source",
+                  "at": "2026-10-16T20:36:55.901Z",
+                  "client": "papertree-api/citations"
+                }
+              },
+              "locator": {
+                "passage_key": "g1:blk_bpxexqwrbbgi5ca3",
+                "page_index": 3,
+                "para_index": 1,
+                "section_heading": "Scaled Dot-Product Attention"
+              },
+              "page_index": 3,
+              "supported": true
+            }
+          },
+          {
+            "letter": "C",
+            "label": "Scale ÷ √dk",
+            "text": "each dot product divided by √dk",
+            "kind": "step",
+            "after": ["B"],
+            "edge": [null],
+            "cite": {
+              "citation_id": "cit_01M536X6EYYJHTBQSEZCX0E9CY",
+              "quote": "divide each by √dk",
+              "anchor": {
+                "anchorVersion": 1,
+                "offsetUnit": "unicode",
+                "id": "cit_01M536X6EYYJHTBQSEZCX0E9CY",
+                "doc": {
+                  "paperId": "ppr_G9AYN750E5MG1NRBMGSQJ4N5JM",
+                  "pdfSha256": "sha256:bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+                  "parserVersion": "1.0.0",
+                  "textStreamId": "api/ppr_G9AYN750E5MG1NRBMGSQJ4N5JM/g1/1.0.0"
+                },
+                "targetKind": "citation",
+                "provenanceClass": "source",
+                "selectors": [
+                  {
+                    "type": "BlockSelector",
+                    "blockId": "blk_bpxexqwrbbgi5ca3",
+                    "blockTextHash": "sha256:76aa2febf6ee3abc266c15918b0d5cd20f4cd8b8a201eedaaae4c35482388196"
+                  },
+                  {
+                    "type": "PageSelector",
+                    "index": 3
+                  },
+                  {
+                    "type": "TextPositionSelector",
+                    "start": 9299,
+                    "end": 9600
+                  },
+                  {
+                    "type": "TextQuoteSelector",
+                    "exact": "We call our particular attention \"Scaled Dot-Product Attention\" (Figure 2). The input consists of\nqueries and keys of dimension dk, and values of dimension dv. We compute the dot products of the\nquery with all keys, divide each by √dk, and apply a softmax function to obtain the weights on the\nvalues.",
+                    "prefix": " with the corresponding key.\n3.2.1\nScaled Dot-Product Attention\n",
+                    "suffix": "\nIn practice, we compute the attention function on a set of queries",
+                    "exactNormalised": "wecallourparticularattention\"scaleddot-productattention\"(figure2).theinputconsistsofqueriesandkeysofdimensiondk,andvaluesofdimensiondv.wecomputethedotproductsofthequerywithallkeys,divideeachby√dk,andapplyasoftmaxfunctiontoobtaintheweightsonthevalues.",
+                    "prefixNormalised": "withthecorrespondingkey.3.2.1scaleddot-productattention",
+                    "suffixNormalised": "inpractice,wecomputetheattentionfunctiononasetofqueries"
+                  },
+                  {
+                    "type": "ShapeSelector",
+                    "pageIndex": 3,
+                    "quads": [
+                      [107.53199768066406, 370.5111535870824, 504.0005187988281, 412.2119191613486]
+                    ],
+                    "polygons": [
+                      [
+                        [503.9967346191406, 370.5111535870824],
+                        [503.9967346191406, 380.4171510760007],
+                        [504.0005187988281, 380.4171510760007],
+                        [504.0005187988281, 402.65163074006824],
+                        [135.44703674316406, 402.65163074006824],
+                        [135.44703674316406, 412.2119191613486],
+                        [107.7509994506836, 412.2119191613486],
+                        [107.7509994506836, 402.65163074006824],
+                        [108.0, 402.65163074006824],
+                        [108.0, 380.4171510760007],
+                        [107.53199768066406, 380.4171510760007],
+                        [107.53199768066406, 370.5111535870824]
+                      ]
+                    ],
+                    "pageWidth": 612.0,
+                    "pageHeight": 792.0,
+                    "rotation": 0,
+                    "userUnit": 1.0,
+                    "cropBox": [0.0, 0.0, 612.0, 792.0]
+                  },
+                  {
+                    "type": "SectionPathSelector",
+                    "path": ["Decoder:", "3.2\nAttention", "3.2.1\nScaled Dot-Product Attention"],
+                    "headingText": "3.2.1\nScaled Dot-Product Attention",
+                    "paraIndexInSection": 0,
+                    "charOffsetInPara": 0
+                  }
+                ],
+                "created": {
+                  "mode": "source",
+                  "at": "2026-10-16T20:36:55.902Z",
+                  "client": "papertree-api/citations"
+                }
+              },
+              "locator": {
+                "passage_key": "g1:blk_bpxexqwrbbgi5ca3",
+                "page_index": 3,
+                "para_index": 1,
+                "section_heading": "Scaled Dot-Product Attention"
+              },
+              "page_index": 3,
+              "supported": true
+            }
+          },
+          {
+            "letter": "D",
+            "label": "Softmax",
+            "text": "turns the scaled scores into weights on the values",
+            "kind": "step",
+            "after": ["C"],
+            "edge": [null],
+            "cite": {
+              "citation_id": "cit_01M536X6EZ2178D496NTZTTJX7",
+              "quote": "apply a softmax function to obtain the weights on the values",
+              "anchor": {
+                "anchorVersion": 1,
+                "offsetUnit": "unicode",
+                "id": "cit_01M536X6EZ2178D496NTZTTJX7",
+                "doc": {
+                  "paperId": "ppr_G9AYN750E5MG1NRBMGSQJ4N5JM",
+                  "pdfSha256": "sha256:bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+                  "parserVersion": "1.0.0",
+                  "textStreamId": "api/ppr_G9AYN750E5MG1NRBMGSQJ4N5JM/g1/1.0.0"
+                },
+                "targetKind": "citation",
+                "provenanceClass": "source",
+                "selectors": [
+                  {
+                    "type": "BlockSelector",
+                    "blockId": "blk_bpxexqwrbbgi5ca3",
+                    "blockTextHash": "sha256:76aa2febf6ee3abc266c15918b0d5cd20f4cd8b8a201eedaaae4c35482388196"
+                  },
+                  {
+                    "type": "PageSelector",
+                    "index": 3
+                  },
+                  {
+                    "type": "TextPositionSelector",
+                    "start": 9299,
+                    "end": 9600
+                  },
+                  {
+                    "type": "TextQuoteSelector",
+                    "exact": "We call our particular attention \"Scaled Dot-Product Attention\" (Figure 2). The input consists of\nqueries and keys of dimension dk, and values of dimension dv. We compute the dot products of the\nquery with all keys, divide each by √dk, and apply a softmax function to obtain the weights on the\nvalues.",
+                    "prefix": " with the corresponding key.\n3.2.1\nScaled Dot-Product Attention\n",
+                    "suffix": "\nIn practice, we compute the attention function on a set of queries",
+                    "exactNormalised": "wecallourparticularattention\"scaleddot-productattention\"(figure2).theinputconsistsofqueriesandkeysofdimensiondk,andvaluesofdimensiondv.wecomputethedotproductsofthequerywithallkeys,divideeachby√dk,andapplyasoftmaxfunctiontoobtaintheweightsonthevalues.",
+                    "prefixNormalised": "withthecorrespondingkey.3.2.1scaleddot-productattention",
+                    "suffixNormalised": "inpractice,wecomputetheattentionfunctiononasetofqueries"
+                  },
+                  {
+                    "type": "ShapeSelector",
+                    "pageIndex": 3,
+                    "quads": [
+                      [107.53199768066406, 370.5111535870824, 504.0005187988281, 412.2119191613486]
+                    ],
+                    "polygons": [
+                      [
+                        [503.9967346191406, 370.5111535870824],
+                        [503.9967346191406, 380.4171510760007],
+                        [504.0005187988281, 380.4171510760007],
+                        [504.0005187988281, 402.65163074006824],
+                        [135.44703674316406, 402.65163074006824],
+                        [135.44703674316406, 412.2119191613486],
+                        [107.7509994506836, 412.2119191613486],
+                        [107.7509994506836, 402.65163074006824],
+                        [108.0, 402.65163074006824],
+                        [108.0, 380.4171510760007],
+                        [107.53199768066406, 380.4171510760007],
+                        [107.53199768066406, 370.5111535870824]
+                      ]
+                    ],
+                    "pageWidth": 612.0,
+                    "pageHeight": 792.0,
+                    "rotation": 0,
+                    "userUnit": 1.0,
+                    "cropBox": [0.0, 0.0, 612.0, 792.0]
+                  },
+                  {
+                    "type": "SectionPathSelector",
+                    "path": ["Decoder:", "3.2\nAttention", "3.2.1\nScaled Dot-Product Attention"],
+                    "headingText": "3.2.1\nScaled Dot-Product Attention",
+                    "paraIndexInSection": 0,
+                    "charOffsetInPara": 0
+                  }
+                ],
+                "created": {
+                  "mode": "source",
+                  "at": "2026-10-16T20:36:55.903Z",
+                  "client": "papertree-api/citations"
+                }
+              },
+              "locator": {
+                "passage_key": "g1:blk_bpxexqwrbbgi5ca3",
+                "page_index": 3,
+                "para_index": 1,
+                "section_heading": "Scaled Dot-Product Attention"
+              },
+              "page_index": 3,
+              "supported": true
+            }
+          },
+          {
+            "letter": "E",
+            "label": "MatMul with V",
+            "text": "the weights applied to the values give the output",
+            "kind": "output",
+            "after": ["D", "A"],
+            "edge": [null, "V"],
+            "cite": {
+              "citation_id": "cit_01M536X6F4WW81PAVFKXG6NVNF",
+              "quote": "We compute the matrix of outputs as",
+              "anchor": {
+                "anchorVersion": 1,
+                "offsetUnit": "unicode",
+                "id": "cit_01M536X6F4WW81PAVFKXG6NVNF",
+                "doc": {
+                  "paperId": "ppr_G9AYN750E5MG1NRBMGSQJ4N5JM",
+                  "pdfSha256": "sha256:bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+                  "parserVersion": "1.0.0",
+                  "textStreamId": "api/ppr_G9AYN750E5MG1NRBMGSQJ4N5JM/g1/1.0.0"
+                },
+                "targetKind": "citation",
+                "provenanceClass": "source",
+                "selectors": [
+                  {
+                    "type": "BlockSelector",
+                    "blockId": "blk_jwm6mbugprndavgx",
+                    "blockTextHash": "sha256:4657a8f23443a6572c735f03528f1c29a8e9c0c557d400bb1facc039b41c9b64"
+                  },
+                  {
+                    "type": "PageSelector",
+                    "index": 3
+                  },
+                  {
+                    "type": "TextPositionSelector",
+                    "start": 9601,
+                    "end": 9822
+                  },
+                  {
+                    "type": "TextQuoteSelector",
+                    "exact": "In practice, we compute the attention function on a set of queries simultaneously, packed together\ninto a matrix Q. The keys and values are also packed together into matrices K and V . We compute\nthe matrix of outputs as:",
+                    "prefix": "and apply a softmax function to obtain the weights on the\nvalues.\n",
+                    "suffix": "\nAttention(Q, K, V ) = softmax(QKT\n√dk\n)V\n(1)\nThe two most commonly",
+                    "exactNormalised": "inpractice,wecomputetheattentionfunctiononasetofqueriessimultaneously,packedtogetherintoamatrixq.thekeysandvaluesarealsopackedtogetherintomatriceskandv.wecomputethematrixofoutputsas:",
+                    "prefixNormalised": "andapplyasoftmaxfunctiontoobtaintheweightsonthevalues.",
+                    "suffixNormalised": "attention(q,k,v)=softmax(qkt√dk)v(1)thetwomostcommonly"
+                  },
+                  {
+                    "type": "ShapeSelector",
+                    "pageIndex": 3,
+                    "quads": [[108.0, 419.6271509015355, 504.170166015625, 450.41891989377046]],
+                    "polygons": [
+                      [
+                        [504.170166015625, 419.6271509015355],
+                        [504.170166015625, 429.53314839045385],
+                        [503.998291015625, 429.53314839045385],
+                        [503.998291015625, 440.51275234201944],
+                        [204.8563995361328, 440.51275234201944],
+                        [204.8563995361328, 450.41891989377046],
+                        [108.0, 450.41891989377046],
+                        [108.0, 419.6271509015355]
+                      ]
+                    ],
+                    "pageWidth": 612.0,
+                    "pageHeight": 792.0,
+                    "rotation": 0,
+                    "userUnit": 1.0,
+                    "cropBox": [0.0, 0.0, 612.0, 792.0]
+                  },
+                  {
+                    "type": "SectionPathSelector",
+                    "path": ["Decoder:", "3.2\nAttention", "3.2.1\nScaled Dot-Product Attention"],
+                    "headingText": "3.2.1\nScaled Dot-Product Attention",
+                    "paraIndexInSection": 1,
+                    "charOffsetInPara": 0
+                  }
+                ],
+                "created": {
+                  "mode": "source",
+                  "at": "2026-10-16T20:36:55.908Z",
+                  "client": "papertree-api/citations"
+                }
+              },
+              "locator": {
+                "passage_key": "g1:blk_jwm6mbugprndavgx",
+                "page_index": 3,
+                "para_index": 2,
+                "section_heading": "Scaled Dot-Product Attention"
+              },
+              "page_index": 3,
+              "supported": true
+            }
+          },
+          {
+            "letter": "F",
+            "label": "Weights sum to 1",
+            "text": "each query's weights over the keys add up to one",
+            "kind": "concept",
+            "after": ["D"],
+            "edge": [null],
+            "cite": null
+          }
+        ],
+        "links": []
+      }
+    }
+  ]
+}
