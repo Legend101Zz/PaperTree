@@ -12,6 +12,7 @@
 import { expect, test } from '../harness/test';
 import {
   api,
+  boardTool,
   clickEdge,
   drag,
   getBoard,
@@ -239,8 +240,9 @@ test.describe('Journey D: the canvas', () => {
     expect(note.body).toBe('Residual blocks are the whole idea.');
     expect(note.version).toBe(2);
 
-    // ── 7. group two nodes (the passage and the explanation) with Select area ──
-    await page.getByRole('button', { name: 'Select area' }).click();
+    // ── 7. frame two nodes (the passage and the explanation) with Select (#214: v0.1's Group is
+    //       "Frame selected cards" in More) ──
+    await (await boardTool(page, 'Select')).click();
     const a = await nodeBox(page, excerpt.node_id);
     const b = await nodeBox(page, explanationId);
     const minX = Math.min(a.x, b.x) - 12;
@@ -249,9 +251,10 @@ test.describe('Journey D: the canvas', () => {
     const maxY = Math.max(a.y + a.height, b.y + b.height) + 12;
     // Start on empty pane: the top-left corner is outside every node.
     await mouseDrag(page, { x: minX, y: minY }, { x: maxX, y: maxY });
-    await expect(page.getByRole('button', { name: 'Group', exact: true })).toBeEnabled();
+    const frameThem = await boardTool(page, 'Frame selected cards');
+    await expect(frameThem).toBeEnabled();
     calls.length = 0;
-    await page.getByRole('button', { name: 'Group', exact: true }).click();
+    await frameThem.click();
     await expect
       .poll(
         async () =>
@@ -259,7 +262,7 @@ test.describe('Journey D: the canvas', () => {
             .length,
       )
       .toBe(2);
-    await page.getByRole('button', { name: 'Select area' }).click(); // back to panning
+    await (await boardTool(page, 'Select')).click(); // back to panning
     const grouped = await getBoard(stack.apiUrl, token, paperId);
     const group = grouped.nodes.find((n) => n.kind === 'group')!;
     expect(

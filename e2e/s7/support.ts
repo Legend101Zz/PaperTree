@@ -4,7 +4,7 @@
  */
 import { join } from 'node:path';
 
-import type { Page, Request } from '@playwright/test';
+import type { Locator, Page, Request } from '@playwright/test';
 
 import { register, upload, waitParsed } from '../s4/support';
 
@@ -42,6 +42,7 @@ export interface WireNode {
   readonly y: number;
   readonly w: number;
   readonly h: number;
+  readonly title: string | null;
   readonly body: string;
   readonly version: number;
   readonly source_anchor: { readonly id: string } | null;
@@ -97,6 +98,20 @@ export function recordApi(page: Page, apiUrl: string): string[] {
     }
   });
   return seen;
+}
+
+/**
+ * A board tool by name (#214): from the bar when it is there, else from "More board tools", which
+ * holds Frame selected cards, Remove frame and Delete everywhere, and Select and the zoom on a phone.
+ */
+export async function boardTool(page: Page, name: string): Promise<Locator> {
+  const bar = page.getByRole('toolbar', { name: 'Board tools' });
+  const direct = bar.getByRole('button', { name, exact: true });
+  if ((await direct.count()) > 0) return direct.first();
+  await bar.getByRole('button', { name: 'More board tools' }).click();
+  return page
+    .getByRole('group', { name: 'More board tools' })
+    .getByRole('button', { name, exact: true });
 }
 
 export async function tokenInit(page: Page, token: string): Promise<void> {

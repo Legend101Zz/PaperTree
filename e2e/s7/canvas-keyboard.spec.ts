@@ -1,6 +1,6 @@
 /**
  * Keyboard: nodes are focusable with a visible ring, Enter selects, arrows nudge (ONE PATCH after
- * the debounce, however many presses), Delete removes. And "Back to paper" is the way out.
+ * the debounce, however many presses), Delete removes. And "Back to the paper" is the way out.
  */
 import { expect, test } from '../harness/test';
 import { api, getBoard, recordApi, seedPaper, tokenInit } from './support';
@@ -87,7 +87,7 @@ test('canvas by keyboard', async ({ browser, stack }) => {
   expect(restored).toEqual([...ids].sort());
 
   // The way out.
-  await page.getByRole('link', { name: 'Back to paper' }).focus();
+  await page.getByRole('link', { name: 'Back to the paper' }).focus();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/read`));
   await context.close();

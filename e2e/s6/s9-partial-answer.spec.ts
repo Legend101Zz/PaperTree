@@ -3,7 +3,7 @@
  * marker run. Neither the panel after a real Stop nor a stored partial text may show raw `[b42, ...`.
  */
 import { expect, test } from '../harness/test';
-import { api } from '../s7/support';
+import { api, boardTool } from '../s7/support';
 import {
   drag,
   pointsFor,
@@ -119,6 +119,6 @@ test.describe('S9-4: a stopped answer never shows raw citation markers', () => {
     // S9 canvas nit: a click on the BODY text of an explanation card selects it (Delete turns on).
     await node.getByText('Each cell predicts boxes').click();
     await expect(node).toHaveClass(/selected/);
-    await expect(page.getByRole('button', { name: 'Delete', exact: true })).toBeEnabled();
+    await expect(await boardTool(page, 'Delete')).toBeEnabled(); // #214: in "More board tools"
   });
 });

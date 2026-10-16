@@ -12,7 +12,16 @@ import { join } from 'node:path';
 import type { BrowserContext, Page } from '@playwright/test';
 
 import { expect, test } from '../harness/test';
-import { api, clickEdge, getBoard, recordApi, seedPaper, shotPath, tokenInit } from './support';
+import {
+  api,
+  boardTool,
+  clickEdge,
+  getBoard,
+  recordApi,
+  seedPaper,
+  shotPath,
+  tokenInit,
+} from './support';
 
 const VIEWPORTS = [
   { name: '1440', width: 1440, height: 900, mobile: false },
@@ -177,7 +186,7 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
       const emptyCalls = recordApi(page, stack.apiUrl);
       await page.goto(`/paper/${empty.paperId}/canvas`);
       await expect(page.getByTestId('canvas-empty')).toBeVisible();
-      await expect(page.getByTestId('canvas-empty')).toContainText('Send to canvas');
+      await expect(page.getByTestId('canvas-empty')).toContainText('Send to board');
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(vp.width);
       await page.screenshot({ path: shot(`s01-empty-${tag}.png`) });
       // Reads only (`next dev` runs effects twice, so a read can repeat); not one write.
@@ -192,7 +201,7 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
         await route.continue();
       });
       await slow.goto(`/paper/${full.paperId}/canvas`);
-      await expect(slow.getByRole('status', { name: 'Loading your canvas' })).toBeVisible();
+      await expect(slow.getByRole('status', { name: 'Loading your board' })).toBeVisible();
       await slow.screenshot({ path: shot(`s02-loading-${tag}.png`) });
       await slow.close();
       const broken = await context.newPage();
@@ -215,42 +224,49 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
       await fullPage.waitForTimeout(600);
       await fullPage.screenshot({ path: shot(`s04-board-${tag}.png`) });
 
-      // the toolbar fits, every control is a >= 40 px target, and nothing overlaps it
-      const tools = await fullPage
-        .getByRole('toolbar', { name: 'Canvas tools' })
-        .locator('button')
-        .evaluateAll((els) =>
+      // the toolbar fits on one row, every control is a >= 40 px target, and nothing overlaps it
+      const bar = fullPage.getByRole('toolbar', { name: 'Board tools' });
+      const boxes = (root: typeof bar) =>
+        root.locator('button').evaluateAll((els) =>
           els.map((e) => {
             const r = e.getBoundingClientRect();
-            return { w: r.width, h: r.height, right: r.right, left: r.left };
+            return { w: r.width, h: r.height, right: r.right, left: r.left, top: r.top };
           }),
         );
-      expect(tools).toHaveLength(7); // Add note, Select area, Group, Ungroup, Link, Delete, Fit all
+      const tools = await boxes(bar);
+      // #214: Select, Add note, Add frame, Thread, Fit all, Zoom out, Zoom in, More board tools; on
+      // a phone Select and the zoom are in More, so the bar is one row beside "Board".
+      expect(tools).toHaveLength(vp.mobile ? 5 : 8);
       for (const t of tools) {
         expect(t.h).toBeGreaterThanOrEqual(40);
         expect(t.w).toBeGreaterThanOrEqual(40);
         expect(t.right).toBeLessThanOrEqual(vp.width);
         expect(t.left).toBeGreaterThanOrEqual(0);
+        expect(t.top).toBe(tools[0]!.top);
       }
-      const controls = await fullPage
-        .locator('.react-flow__controls-button')
-        .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
-      for (const h of controls) expect(h).toBeGreaterThanOrEqual(40);
+      // v0.1's controls (the zoom, Group, Ungroup, Delete) are still >= 40 px targets, in More.
+      await bar.getByRole('button', { name: 'More board tools' }).click();
+      const menu = await boxes(fullPage.getByRole('group', { name: 'More board tools' }));
+      expect(menu).toHaveLength(vp.mobile ? 6 : 3);
+      for (const m of menu) expect(m.h).toBeGreaterThanOrEqual(40);
+      await fullPage.keyboard.press('Escape');
 
       // the kind picker: pick two notes with the area tool, then Link
       if (vp.mobile) {
         // Zoom out with the visible control (a 40 px button) so both notes are in reach, all the
         // way to the 20 % floor: two taps reach it on one font stack and not on another, and the
         // floor is where cards sit closest together (#212: Linux CI stopped there, macOS did not).
-        // The control turns itself off at the floor.
-        const zoomOut = fullPage.locator('.react-flow__controls-zoomout');
-        for (let i = 0; i < 8 && !(await zoomOut.isDisabled()); i += 1) {
+        // The control turns itself off at the floor (#214: in More on a phone).
+        for (let i = 0; i < 8; i += 1) {
+          const zoomOut = await boardTool(fullPage, 'Zoom out');
+          if ((await zoomOut.getAttribute('aria-disabled')) === 'true') break;
           await zoomOut.tap();
           await fullPage.waitForTimeout(300);
         }
+        await fullPage.keyboard.press('Escape');
         expect(await scale(fullPage)).toBeCloseTo(0.2, 2);
       }
-      await fullPage.getByRole('button', { name: 'Select area' }).click();
+      await (await boardTool(fullPage, 'Select')).click();
       const pair = await Promise.all(
         [explanationId, ids[2]!].map((id) =>
           fullPage.locator(`.react-flow__node[data-id="${id}"]`).boundingBox(),
@@ -275,8 +291,9 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
       await fullPage.mouse.move((x0 + x1) / 2, (y0 + y1) / 2, { steps: 6 });
       await fullPage.mouse.move(x1, y1, { steps: 6 });
       await fullPage.mouse.up();
-      await expect(fullPage.getByRole('button', { name: 'Link' })).toBeEnabled();
-      await fullPage.getByRole('button', { name: 'Link' }).click();
+      // #214: Thread (L) with two cards selected links the first to the second (v0.1's Link).
+      await expect(fullPage.getByRole('button', { name: 'Thread', exact: true })).toBeEnabled();
+      await fullPage.getByRole('button', { name: 'Thread', exact: true }).click();
       // #213: the "Link as" picker (no longer a modal dialog).
       const dialog = fullPage.getByRole('group', { name: /link as/i });
       await expect(dialog).toBeVisible();
@@ -301,7 +318,7 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
       await undoLink.getByRole('button', { name: 'Undo' }).click();
       await expect.poll(plainLink).toBeUndefined();
       await expect(fullPage.getByTestId('edge-label')).toHaveCount(1);
-      await fullPage.getByRole('button', { name: 'Select area' }).click();
+      await (await boardTool(fullPage, 'Select')).click();
 
       // a selected edge shows its editor
       await clickEdge(fullPage);
@@ -316,7 +333,7 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
         const calls = recordApi(fullPage, stack.apiUrl);
         // Two fingers must land on empty pane: zoom out with the visible controls first.
         for (let i = 0; i < 2; i += 1) {
-          await fullPage.locator('.react-flow__controls-zoomout').tap();
+          await (await boardTool(fullPage, 'Zoom out')).tap();
           await fullPage.waitForTimeout(300);
         }
         const s0 = await scale(fullPage);
