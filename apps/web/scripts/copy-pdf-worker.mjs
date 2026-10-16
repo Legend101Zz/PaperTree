@@ -62,4 +62,6 @@ copyFileSync(found, target);
 
 const { version } = require('pdfjs-dist/package.json');
 const kb = Math.round(statSync(target).size / 1024);
-console.log(`[copy-pdf-worker] pdfjs-dist@${version}: ${found.slice(pkgDir.length + 1)} -> public/pdf.worker.min.mjs (${kb} kB)`);
+console.log(
+  `[copy-pdf-worker] pdfjs-dist@${version}: ${found.slice(pkgDir.length + 1)} -> public/pdf.worker.min.mjs (${kb} kB)`,
+);

@@ -73,7 +73,11 @@ interface GuidedMarks {
   readonly text: ReadonlyMap<string, readonly Mark[]>;
   /** Blocks marked as a whole (a cell, a figure, a claimed caption): element id → colour. */
   readonly elements: ReadonlyMap<string, HighlightColor>;
-  readonly unavailable: readonly { readonly highlightId: string; readonly quote: string; readonly message: string }[];
+  readonly unavailable: readonly {
+    readonly highlightId: string;
+    readonly quote: string;
+    readonly message: string;
+  }[];
 }
 
 function quoteOf(highlight: ReaderHighlight): string {
@@ -138,7 +142,11 @@ function withMarks(text: string, marks: readonly Mark[] | undefined): ReactNode 
     if (start > cursor) out.push(points.slice(cursor, start).join(''));
     if (end > start) {
       out.push(
-        <mark key={`m${String(index)}`} data-color={mark.color} data-highlight-id={mark.highlightId}>
+        <mark
+          key={`m${String(index)}`}
+          data-color={mark.color}
+          data-highlight-id={mark.highlightId}
+        >
           {points.slice(start, end).join('')}
         </mark>,
       );
@@ -181,7 +189,12 @@ export function planGuidedReading(doc: IndexedDocument): {
   }
   const figures = planFigures(all);
   const rendered = all.filter((block) => !figures.redirect.has(block.id));
-  return { rendered, furnitureCount: view.furnitureCount, redirect: figures.redirect, captionOf: figures.caption };
+  return {
+    rendered,
+    furnitureCount: view.furnitureCount,
+    redirect: figures.redirect,
+    captionOf: figures.caption,
+  };
 }
 
 /** The full text of a block, following any continuation chain, plus every contributing id. */
@@ -252,7 +265,11 @@ function GuidedText({
 
 function CropMissing({ what }: { readonly what: string }): JSX.Element {
   return (
-    <div className="pt-crop-missing" role="img" aria-label={`${what}: the image is not available yet`}>
+    <div
+      className="pt-crop-missing"
+      role="img"
+      aria-label={`${what}: the image is not available yet`}
+    >
       {what} — the image from the PDF is not available yet. It is on its page in Source.
     </div>
   );
@@ -422,7 +439,8 @@ function elementFor(
   let cursor: string | undefined = blockId;
   while (cursor !== undefined && !seen.has(cursor)) {
     seen.add(cursor);
-    const escaped = typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(cursor) : cursor;
+    const escaped =
+      typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(cursor) : cursor;
     const direct = root.querySelector<HTMLElement>(`[data-block-id="${escaped}"]`);
     if (direct !== null) return direct;
     // A panel of a figure is carried by the whole crop's card (RFIX2 R9).
@@ -491,7 +509,10 @@ export function GuidedView({
 }: GuidedViewProps) {
   const projection = useMemo(() => guidedProjectionFor(doc), [doc]);
   const plan = useMemo(() => planGuidedReading(doc), [doc]);
-  const marks = useMemo(() => guidedMarks(doc, projection, highlights), [doc, projection, highlights]);
+  const marks = useMemo(
+    () => guidedMarks(doc, projection, highlights),
+    [doc, projection, highlights],
+  );
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const drivenUntil = useRef(0);
   const lastTop = useRef<string | null>(null);
@@ -621,7 +642,10 @@ export function GuidedView({
       >
         <article className="pt-guided__sheet">
           {marks.unavailable.length === 0 ? null : (
-            <aside className="pt-banner mb-6 mt-0 flex-col items-start" aria-label="Highlights not shown here">
+            <aside
+              className="pt-banner mb-6 mt-0 flex-col items-start"
+              aria-label="Highlights not shown here"
+            >
               {marks.unavailable.map((item) => (
                 <p key={item.highlightId} className="m-0 text-[0.8125rem]">
                   {item.quote === '' ? (
@@ -641,7 +665,11 @@ export function GuidedView({
             let body: ReactNode;
             if (block.type === 'equation') {
               body = (
-                <GuidedEquation block={block} onShowSource={onShowSource} resolveAssetSrc={resolveAssetSrc} />
+                <GuidedEquation
+                  block={block}
+                  onShowSource={onShowSource}
+                  resolveAssetSrc={resolveAssetSrc}
+                />
               );
             } else if (block.type === 'figure') {
               body = (
@@ -674,8 +702,9 @@ export function GuidedView({
           {plan.furnitureCount === 0 ? null : (
             <p className="mt-8 border-t border-[--pt-rule] pt-3 text-[0.8125rem] text-[--pt-ink-muted]">
               {plan.furnitureCount} page-furniture block{plan.furnitureCount === 1 ? '' : 's'} (page
-              numbers, running footers, the arXiv stamp, hairline rules) {plan.furnitureCount === 1 ? 'is' : 'are'}{' '}
-              left out of this reading. {plan.furnitureCount === 1 ? 'It is' : 'They are'} still in Source.
+              numbers, running footers, the arXiv stamp, hairline rules){' '}
+              {plan.furnitureCount === 1 ? 'is' : 'are'} left out of this reading.{' '}
+              {plan.furnitureCount === 1 ? 'It is' : 'They are'} still in Source.
             </p>
           )}
         </article>

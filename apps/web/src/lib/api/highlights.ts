@@ -5,7 +5,13 @@
  * highlight routes on these paths, so nothing calls this module in S0.
  */
 import { request } from './client';
-import type { Anchor, AnchorFailureReason, Highlight, HighlightColor, ResolutionWire } from './types';
+import type {
+  Anchor,
+  AnchorFailureReason,
+  Highlight,
+  HighlightColor,
+  ResolutionWire,
+} from './types';
 
 const seg = encodeURIComponent;
 

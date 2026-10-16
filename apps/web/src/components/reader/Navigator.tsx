@@ -360,7 +360,16 @@ interface RowProps {
   readonly width?: string;
 }
 
-function Row({ onPress, children, className, style, current, expanded, label, width = 'w-full' }: RowProps): ReactNode {
+function Row({
+  onPress,
+  children,
+  className,
+  style,
+  current,
+  expanded,
+  label,
+  width = 'w-full',
+}: RowProps): ReactNode {
   const press = usePressRow(onPress);
   return (
     <button
@@ -535,7 +544,9 @@ function EmptyState({ title, body }: { readonly title: string; readonly body: st
   return (
     <div className="px-3 py-10 text-center">
       <p className="text-sm font-medium text-[--pt-ink]">{title}</p>
-      <p className="mx-auto mt-2 max-w-[34ch] text-[13px] leading-6 text-[--pt-ink-muted]">{body}</p>
+      <p className="mx-auto mt-2 max-w-[34ch] text-[13px] leading-6 text-[--pt-ink-muted]">
+        {body}
+      </p>
     </div>
   );
 }
@@ -825,10 +836,11 @@ function PageThumb({
       >
         <span className="pt-thumb__sheet" style={{ paddingTop: `${String(aspect)}%` }}>
           <span className="absolute inset-0 block">
-            {thumbnail ?? (src === null ? null : (
-              // eslint-disable-next-line @next/next/no-img-element -- a resolved fixture or signed URI
-              <img src={src} alt="" className="h-full w-full object-contain" loading="lazy" />
-            ))}
+            {thumbnail ??
+              (src === null ? null : (
+                // eslint-disable-next-line @next/next/no-img-element -- a resolved fixture or signed URI
+                <img src={src} alt="" className="h-full w-full object-contain" loading="lazy" />
+              ))}
           </span>
           {named ? (
             <span
@@ -900,7 +912,11 @@ function HighlightsTab({
       }));
     if (unsectioned.length > 0) {
       // Front matter, and anything the parse did not put in a section: kept, never dropped.
-      sections.unshift({ key: '__front__', title: 'Outside any section', items: unsectioned.sort(byPage) });
+      sections.unshift({
+        key: '__front__',
+        title: 'Outside any section',
+        items: unsectioned.sort(byPage),
+      });
     }
     return { unplaced: notPlaced, groups: sections };
   }, [highlights, outline, doc]);
@@ -982,7 +998,8 @@ function HighlightRow({
     else if (target !== undefined) onNavigateToBlock(target);
   }, [onSelectHighlight, onNavigateToBlock, highlight.id, target]);
   const status = highlight.status === undefined ? null : STATUS_TEXT[highlight.status];
-  const where = highlight.pageIndex === null ? 'Page unknown' : `Page ${String(highlight.pageIndex + 1)}`;
+  const where =
+    highlight.pageIndex === null ? 'Page unknown' : `Page ${String(highlight.pageIndex + 1)}`;
 
   return (
     <li className="flex items-start gap-1" data-highlight-row={highlight.id}>
@@ -994,7 +1011,9 @@ function HighlightRow({
         />
         <span className="min-w-0 flex-1">
           <span className="pt-hlrow__quote">{highlight.quote}</span>
-          {highlight.note === null || highlight.note === undefined || highlight.note === '' ? null : (
+          {highlight.note === null ||
+          highlight.note === undefined ||
+          highlight.note === '' ? null : (
             <span className="pt-hlrow__note">{highlight.note}</span>
           )}
           <span className="pt-hlrow__meta pt-num">

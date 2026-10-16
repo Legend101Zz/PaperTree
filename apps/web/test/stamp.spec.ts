@@ -46,7 +46,11 @@ import { fileURLToPath } from 'node:url';
 import { indexDocument, type PaperSource } from '@papertree/anchoring';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { stampTextLayer, alignedItems, type TextItemLike } from '@/components/reader/stampTextLayer';
+import {
+  stampTextLayer,
+  alignedItems,
+  type TextItemLike,
+} from '@/components/reader/stampTextLayer';
 
 /**
  * The `legacy` build, because the default one is an ES module targeting browsers and reaches for
@@ -169,7 +173,11 @@ async function runFixture(slug: string): Promise<PageRun[]> {
     const stamped = stampTextLayer({
       divs,
       items,
-      page: { view: page.view as [number, number, number, number], rotate: page.rotate, userUnit: irPage.user_unit },
+      page: {
+        view: page.view as [number, number, number, number],
+        rotate: page.rotate,
+        userUnit: irPage.user_unit,
+      },
       blocks,
     });
 
@@ -185,100 +193,112 @@ async function runFixture(slug: string): Promise<PageRun[]> {
   return runs;
 }
 
-describe.skipIf(!CORPUS_PRESENT)('reader/stamp.spec — pdf.js text items carry the IR block and offset', () => {
-  for (const slug of FIXTURES) {
-    describe(slug, () => {
-      let runs: PageRun[];
+describe.skipIf(!CORPUS_PRESENT)(
+  'reader/stamp.spec — pdf.js text items carry the IR block and offset',
+  () => {
+    for (const slug of FIXTURES) {
+      describe(slug, () => {
+        let runs: PageRun[];
 
-      beforeAll(async () => {
-        runs = await runFixture(slug);
-      }, 120_000);
+        beforeAll(async () => {
+          runs = await runFixture(slug);
+        }, 120_000);
 
-      it('every stamped offset names the text the div actually renders', () => {
-        // THE assertion. Everything else in this file is a coverage number; this is correctness.
-        let checked = 0;
-        const wrong: string[] = [];
+        it('every stamped offset names the text the div actually renders', () => {
+          // THE assertion. Everything else in this file is a coverage number; this is correctness.
+          let checked = 0;
+          const wrong: string[] = [];
 
-        for (const run of runs) {
-          for (let i = 0; i < run.divs.length; i += 1) {
-            const div = run.divs[i] as HTMLElement;
-            const blockId = div.getAttribute('data-block-id');
-            const cpStart = div.getAttribute('data-cp-start');
-            if (blockId === null || cpStart === null) continue;
+          for (const run of runs) {
+            for (let i = 0; i < run.divs.length; i += 1) {
+              const div = run.divs[i] as HTMLElement;
+              const blockId = div.getAttribute('data-block-id');
+              const cpStart = div.getAttribute('data-cp-start');
+              if (blockId === null || cpStart === null) continue;
 
-            const block = run.blocksById.get(blockId);
-            expect(block, `${run.slug} p${String(run.pageIndex)}: unknown block ${blockId}`).toBeDefined();
-            if (block === undefined) continue;
+              const block = run.blocksById.get(blockId);
+              expect(
+                block,
+                `${run.slug} p${String(run.pageIndex)}: unknown block ${blockId}`,
+              ).toBeDefined();
+              if (block === undefined) continue;
 
-            const needle = collapse((run.items[i] as TextItemLike).str).trim();
-            const chars = Array.from(block.text);
-            const at = Number(cpStart);
+              const needle = collapse((run.items[i] as TextItemLike).str).trim();
+              const chars = Array.from(block.text);
+              const at = Number(cpStart);
 
-            // Slice by CODE POINTS from the stamped offset, collapse, and compare. The stored
-            // offset indexes `block.text`, so this is the exact read a resolver performs.
-            const slice = collapse(chars.slice(at, at + Array.from(needle).length + 4).join(''));
-            checked += 1;
-            if (!slice.startsWith(needle)) {
-              wrong.push(
-                `${run.slug} p${String(run.pageIndex)} ${blockId}@${cpStart}: ` +
-                  `expected ${JSON.stringify(needle)}, text has ${JSON.stringify(slice.slice(0, 40))}`,
-              );
+              // Slice by CODE POINTS from the stamped offset, collapse, and compare. The stored
+              // offset indexes `block.text`, so this is the exact read a resolver performs.
+              const slice = collapse(chars.slice(at, at + Array.from(needle).length + 4).join(''));
+              checked += 1;
+              if (!slice.startsWith(needle)) {
+                wrong.push(
+                  `${run.slug} p${String(run.pageIndex)} ${blockId}@${cpStart}: ` +
+                    `expected ${JSON.stringify(needle)}, text has ${JSON.stringify(slice.slice(0, 40))}`,
+                );
+              }
             }
           }
-        }
 
-        expect(checked).toBeGreaterThan(100);
-        expect(wrong.slice(0, 5)).toEqual([]);
-      });
+          expect(checked).toBeGreaterThan(100);
+          expect(wrong.slice(0, 5)).toEqual([]);
+        });
 
-      it('coverage stays above the floor, and the floor is not zero', () => {
-        const total = runs.reduce((n, r) => n + r.stamped.items, 0);
-        const textual = runs.reduce((n, r) => n + r.stamped.textual, 0);
-        const matched = runs.reduce((n, r) => n + r.stamped.matched, 0);
-        const offset = runs.reduce((n, r) => n + r.stamped.offset, 0);
-        const floor = FLOORS[slug];
+        it('coverage stays above the floor, and the floor is not zero', () => {
+          const total = runs.reduce((n, r) => n + r.stamped.items, 0);
+          const textual = runs.reduce((n, r) => n + r.stamped.textual, 0);
+          const matched = runs.reduce((n, r) => n + r.stamped.matched, 0);
+          const offset = runs.reduce((n, r) => n + r.stamped.offset, 0);
+          const floor = FLOORS[slug];
 
-        // eslint-disable-next-line no-console
-        console.log(
-          `\n  ${slug}: ${String(total)} items (${String(textual)} textual), ` +
-            `${String(matched)} matched (${((matched / total) * 100).toFixed(1)}%), ` +
-            `${String(offset)} with an offset (${((offset / textual) * 100).toFixed(1)}% of textual)`,
-        );
+          // eslint-disable-next-line no-console
+          console.log(
+            `\n  ${slug}: ${String(total)} items (${String(textual)} textual), ` +
+              `${String(matched)} matched (${((matched / total) * 100).toFixed(1)}%), ` +
+              `${String(offset)} with an offset (${((offset / textual) * 100).toFixed(1)}% of textual)`,
+          );
 
-        expect(total).toBeGreaterThan(100);
-        expect(matched / total).toBeGreaterThanOrEqual(floor.matched);
-        // Denominator is TEXTUAL, not total. See `StampResult.textual`.
-        expect(offset / textual).toBeGreaterThanOrEqual(floor.offset);
-      });
+          expect(total).toBeGreaterThan(100);
+          expect(matched / total).toBeGreaterThanOrEqual(floor.matched);
+          // Denominator is TEXTUAL, not total. See `StampResult.textual`.
+          expect(offset / textual).toBeGreaterThanOrEqual(floor.offset);
+        });
 
-      it('a stamped item is stamped with a block that is really on its page', () => {
-        // Catches the class of bug where the page loop and the block lookup drift apart — every
-        // offset would still be self-consistent and every highlight would land on the wrong page.
-        for (const run of runs) {
-          for (const div of run.divs) {
-            const blockId = div.getAttribute('data-block-id');
-            if (blockId === null) continue;
-            expect(
-              run.blocksById.has(blockId),
-              `${run.slug} p${String(run.pageIndex)}: ${blockId} is not on this page`,
-            ).toBe(true);
+        it('a stamped item is stamped with a block that is really on its page', () => {
+          // Catches the class of bug where the page loop and the block lookup drift apart — every
+          // offset would still be self-consistent and every highlight would land on the wrong page.
+          for (const run of runs) {
+            for (const div of run.divs) {
+              const blockId = div.getAttribute('data-block-id');
+              if (blockId === null) continue;
+              expect(
+                run.blocksById.has(blockId),
+                `${run.slug} p${String(run.pageIndex)}: ${blockId} is not on this page`,
+              ).toBe(true);
+            }
           }
-        }
+        });
       });
-    });
-  }
+    }
 
-  it('re-stamping is idempotent — a zoom change rebuilds the layer and must not drift', async () => {
-    const runs = await runFixture('attention-is-all-you-need');
-    const first = runs.map((r) =>
-      r.divs.map((d) => `${d.getAttribute('data-block-id') ?? '-'}@${d.getAttribute('data-cp-start') ?? '-'}`),
-    );
+    it('re-stamping is idempotent — a zoom change rebuilds the layer and must not drift', async () => {
+      const runs = await runFixture('attention-is-all-you-need');
+      const first = runs.map((r) =>
+        r.divs.map(
+          (d) =>
+            `${d.getAttribute('data-block-id') ?? '-'}@${d.getAttribute('data-cp-start') ?? '-'}`,
+        ),
+      );
 
-    const again = await runFixture('attention-is-all-you-need');
-    const second = again.map((r) =>
-      r.divs.map((d) => `${d.getAttribute('data-block-id') ?? '-'}@${d.getAttribute('data-cp-start') ?? '-'}`),
-    );
+      const again = await runFixture('attention-is-all-you-need');
+      const second = again.map((r) =>
+        r.divs.map(
+          (d) =>
+            `${d.getAttribute('data-block-id') ?? '-'}@${d.getAttribute('data-cp-start') ?? '-'}`,
+        ),
+      );
 
-    expect(second).toEqual(first);
-  }, 120_000);
-});
+      expect(second).toEqual(first);
+    }, 120_000);
+  },
+);

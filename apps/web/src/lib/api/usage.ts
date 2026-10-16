@@ -28,5 +28,7 @@ export interface UsageTotals extends UsageBucket {
 
 export const usageApi = {
   get: (since?: string) =>
-    request<UsageTotals>(`/usage${since === undefined ? '' : `?since=${encodeURIComponent(since)}`}`),
+    request<UsageTotals>(
+      `/usage${since === undefined ? '' : `?since=${encodeURIComponent(since)}`}`,
+    ),
 };

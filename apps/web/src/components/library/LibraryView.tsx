@@ -35,12 +35,7 @@ import { PaperGrid } from './PaperGrid';
 import { PaperList } from './PaperList';
 import { pointerActivate } from './primitives';
 import { EmptyLibrary, OfflineState } from './SystemStates';
-import {
-  isNonTerminal,
-  libraryPaperFromWire,
-  visibleSamples,
-  type LibraryPaper,
-} from './types';
+import { isNonTerminal, libraryPaperFromWire, visibleSamples, type LibraryPaper } from './types';
 import { UploadDropzone, type CancelOutcome, type UploadContext } from './UploadDropzone';
 
 type LibraryLayout = 'grid' | 'list';
@@ -182,9 +177,7 @@ export function LibraryView() {
           queryFn: (): Promise<readonly ApiLibraryPaper[]> => papersApi.list(),
           staleTime: 0,
         });
-        return fresh.some(
-          (row) => !before.has(row.paper_id) && row.original_filename === file.name,
-        )
+        return fresh.some((row) => !before.has(row.paper_id) && row.original_filename === file.name)
           ? 'in-library'
           : 'not-added';
       } catch {
@@ -242,7 +235,10 @@ export function LibraryView() {
         >
           <span className="pt-s3-brand">PaperTree</span>
           <div className="flex min-w-0 items-center gap-2">
-            <span className="pt-s3-muted pt-s3-small hidden truncate sm:inline" style={{ maxWidth: 240 }}>
+            <span
+              className="pt-s3-muted pt-s3-small hidden truncate sm:inline"
+              style={{ maxWidth: 240 }}
+            >
               {user?.email}
             </span>
             <button

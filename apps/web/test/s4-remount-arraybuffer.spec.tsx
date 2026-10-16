@@ -25,7 +25,10 @@ import { indexDocument, type PaperSource } from '@papertree/anchoring';
 
 import { PdfDocumentProvider, usePdfDocument } from '@/components/reader/PdfDocumentProvider';
 
-const FIXTURE = join(process.cwd(), '../../packages/document-ir/fixtures/resnet-cvpr-2col.paperir.json');
+const FIXTURE = join(
+  process.cwd(),
+  '../../packages/document-ir/fixtures/resnet-cvpr-2col.paperir.json',
+);
 const paper = JSON.parse(readFileSync(FIXTURE, 'utf8')) as PaperSource & { ir_version?: string };
 const doc = indexDocument(paper, `api/${paper.paper_id}/g1/0.1.0`);
 
@@ -67,7 +70,10 @@ vi.mock('@/lib/pdf/worker', () => ({
         const buffer = bufferOf(input);
         if (buffer !== null && buffer.byteLength === 0) {
           pdf.refused += 1;
-          return { promise: Promise.reject(new Error('Invalid PDF structure: the buffer is detached')), destroy: () => Promise.resolve() };
+          return {
+            promise: Promise.reject(new Error('Invalid PDF structure: the buffer is detached')),
+            destroy: () => Promise.resolve(),
+          };
         }
         // What the worker transfer does to the caller's buffer.
         if (buffer !== null) (buffer as ArrayBuffer & { transfer(): ArrayBuffer }).transfer();
@@ -80,10 +86,24 @@ vi.mock('@/lib/pdf/worker', () => ({
                 rotate: 0,
                 userUnit: 1,
                 view: [0, 0, 612, 792],
-                getViewport: ({ scale }: { scale: number }) => ({ width: 612 * scale, height: 792 * scale, scale }),
+                getViewport: ({ scale }: { scale: number }) => ({
+                  width: 612 * scale,
+                  height: 792 * scale,
+                  scale,
+                }),
                 render: () => ({ promise: Promise.resolve(), cancel: () => undefined }),
                 getTextContent: () =>
-                  Promise.resolve({ items: [{ str: 'Deep Residual Learning', transform: [10, 0, 0, 10, 72, 700], width: 120, height: 10 }], styles: {} }),
+                  Promise.resolve({
+                    items: [
+                      {
+                        str: 'Deep Residual Learning',
+                        transform: [10, 0, 0, 10, 72, 700],
+                        width: 120,
+                        height: 10,
+                      },
+                    ],
+                    styles: {},
+                  }),
               }),
             destroy: () => Promise.resolve(),
           }),
@@ -106,7 +126,8 @@ vi.mock('@/lib/paperSource', async (importOriginal) => {
 beforeEach(() => {
   pdf.opens = 0;
   pdf.refused = 0;
-  pdf.bytes = new TextEncoder().encode('%PDF-1.7 fake bytes for the transfer').buffer as ArrayBuffer;
+  pdf.bytes = new TextEncoder().encode('%PDF-1.7 fake bytes for the transfer')
+    .buffer as ArrayBuffer;
   // happy-dom lays nothing out; give the scroller a size so pages mount.
   vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(900);
   vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1000);
@@ -119,7 +140,15 @@ afterEach(() => {
 
 function Probe() {
   const value = usePdfDocument();
-  return <p data-testid="probe">{value.error !== null ? `error: ${value.error.message}` : value.pdf === null ? 'loading' : `open ${String(value.numPages)}`}</p>;
+  return (
+    <p data-testid="probe">
+      {value.error !== null
+        ? `error: ${value.error.message}`
+        : value.pdf === null
+          ? 'loading'
+          : `open ${String(value.numPages)}`}
+    </p>
+  );
 }
 
 describe('s4: the PDF bytes survive a remount', () => {
@@ -150,7 +179,13 @@ describe('s4: the PDF bytes survive a remount', () => {
     const { ReaderActionsProvider } = await import('@/components/reader/actions');
     render(
       <PdfDocumentProvider src={new ArrayBuffer(0)}>
-        <ReaderActionsProvider value={{ openExplain: () => undefined, sendToCanvas: async () => undefined, focusAnchor: () => undefined }}>
+        <ReaderActionsProvider
+          value={{
+            openExplain: () => undefined,
+            sendToCanvas: async () => undefined,
+            focusAnchor: () => undefined,
+          }}
+        >
           <SourcePane
             doc={doc}
             zoom={1}
@@ -194,9 +229,13 @@ describe('s4: the PDF bytes survive a remount', () => {
     await switchTo('Source');
     await waitFor(() => expect(pages()).toBeGreaterThan(0), { timeout: 5000 });
     await switchTo('Split');
-    await waitFor(() => expect(document.querySelector('[data-split-pane="source"] .papertree-page')).not.toBeNull(), {
-      timeout: 5000,
-    });
+    await waitFor(
+      () =>
+        expect(document.querySelector('[data-split-pane="source"] .papertree-page')).not.toBeNull(),
+      {
+        timeout: 5000,
+      },
+    );
     await switchTo('Source');
     await waitFor(() => expect(pages()).toBeGreaterThan(0), { timeout: 5000 });
 

@@ -20,7 +20,11 @@ export interface PtEdgeData extends Record<string, unknown> {
 export type PtNode = Node<PtNodeData, 'excerpt' | 'explanation' | 'note' | 'frame'>;
 export type PtEdge = Edge<PtEdgeData, 'labeled'>;
 
-export const EDGE_KINDS: readonly { readonly kind: EdgeKind; readonly label: string; readonly hint: string }[] = [
+export const EDGE_KINDS: readonly {
+  readonly kind: EdgeKind;
+  readonly label: string;
+  readonly hint: string;
+}[] = [
   { kind: 'supports', label: 'supports', hint: 'This backs up that' },
   { kind: 'contradicts', label: 'contradicts', hint: 'This disagrees with that' },
   { kind: 'derives_from', label: 'derives from', hint: 'This follows from that' },

@@ -248,13 +248,7 @@ export interface CanvasNode {
 }
 
 export type EdgeKind =
-  | 'supports'
-  | 'contradicts'
-  | 'derives_from'
-  | 'answers'
-  | 'compares'
-  | 'references'
-  | 'relates';
+  'supports' | 'contradicts' | 'derives_from' | 'answers' | 'compares' | 'references' | 'relates';
 
 export interface CanvasEdge {
   edge_id: string;

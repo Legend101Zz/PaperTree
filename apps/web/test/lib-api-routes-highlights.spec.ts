@@ -69,7 +69,13 @@ const RESOLUTIONS = {
 describe('highlightsApi — contracts §2.4 routes', () => {
   const rows: readonly [string, () => Promise<unknown>, string, string, unknown][] = [
     ['list', () => highlightsApi.list(P), 'GET', `/papers/${P}/highlights`, undefined],
-    ['list ?gen=', () => highlightsApi.list(P, 2), 'GET', `/papers/${P}/highlights?gen=2`, undefined],
+    [
+      'list ?gen=',
+      () => highlightsApi.list(P, 2),
+      'GET',
+      `/papers/${P}/highlights?gen=2`,
+      undefined,
+    ],
     ['create', () => highlightsApi.create(P, CREATE), 'POST', `/papers/${P}/highlights`, CREATE],
     [
       'update',
@@ -78,7 +84,13 @@ describe('highlightsApi — contracts §2.4 routes', () => {
       `/papers/${P}/highlights/${H}`,
       { color: 'green', note: 'n' },
     ],
-    ['remove', () => highlightsApi.remove(P, H), 'DELETE', `/papers/${P}/highlights/${H}`, undefined],
+    [
+      'remove',
+      () => highlightsApi.remove(P, H),
+      'DELETE',
+      `/papers/${P}/highlights/${H}`,
+      undefined,
+    ],
     [
       'putResolutions',
       () => highlightsApi.putResolutions(P, RESOLUTIONS),

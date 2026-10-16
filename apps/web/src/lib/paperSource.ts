@@ -104,7 +104,9 @@ export function readerStorageKey(ref: PaperRef): string {
  */
 export function apiTextStreamId(paper: PaperSource & { generation?: unknown }): string {
   const generation =
-    typeof paper.generation === 'number' && Number.isInteger(paper.generation) && paper.generation >= 1
+    typeof paper.generation === 'number' &&
+    Number.isInteger(paper.generation) &&
+    paper.generation >= 1
       ? `g${String(paper.generation)}`
       : 'g?';
   return `api/${paper.paper_id}/${generation}/${paper.parser?.version ?? 'unknown'}`;

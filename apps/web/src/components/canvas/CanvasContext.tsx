@@ -21,6 +21,7 @@ export const CanvasActionsProvider = Context.Provider;
 
 export function useCanvasActions(): CanvasActions {
   const value = useContext(Context);
-  if (value === null) throw new Error('useCanvasActions() was called outside <CanvasActionsProvider>.');
+  if (value === null)
+    throw new Error('useCanvasActions() was called outside <CanvasActionsProvider>.');
   return value;
 }

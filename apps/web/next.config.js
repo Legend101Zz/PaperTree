@@ -3,11 +3,7 @@ const nextConfig = {
   // The workspace packages export RAW TYPESCRIPT (`"exports": { ".": "./src/index.ts" }`), so Next
   // has to compile them rather than treat them as prebuilt deps. Without this the build fails on
   // the first `.ts` file it meets inside node_modules.
-  transpilePackages: [
-    "@papertree/document-ir",
-    "@papertree/anchoring",
-    "@papertree/ui",
-  ],
+  transpilePackages: ['@papertree/document-ir', '@papertree/anchoring', '@papertree/ui'],
 
   webpack: (config) => {
     // `canvas` is pdf.js's OPTIONAL Node-side renderer. PDFs are rendered in the BROWSER here, and
@@ -38,12 +34,12 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: "/:path*",
+        source: '/:path*',
         headers: [
           // `credentialless` rather than `require-corp`: the worker is same-origin now
           // (public/pdf.worker.min.mjs), so nothing here needs to opt a third party in.
-          { key: "Cross-Origin-Embedder-Policy", value: "credentialless" },
-          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+          { key: 'Cross-Origin-Embedder-Policy', value: 'credentialless' },
+          { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
         ],
       },
     ];

@@ -17,7 +17,13 @@ export function LabeledEdge(props: EdgeProps<PtEdge>) {
   const edge = props.data?.edge;
   return (
     <>
-      <BaseEdge id={props.id} path={path} markerEnd={props.markerEnd} className="pt-cv-edge" interactionWidth={28} />
+      <BaseEdge
+        id={props.id}
+        path={path}
+        markerEnd={props.markerEnd}
+        className="pt-cv-edge"
+        interactionWidth={28}
+      />
       {edge === undefined ? null : (
         <EdgeLabelRenderer>
           <div
@@ -25,7 +31,9 @@ export function LabeledEdge(props: EdgeProps<PtEdge>) {
             data-testid="edge-label"
             data-selected={props.selected}
             data-kind={edge.kind}
-            style={{ transform: `translate(-50%, -50%) translate(${String(labelX)}px, ${String(labelY)}px)` }}
+            style={{
+              transform: `translate(-50%, -50%) translate(${String(labelX)}px, ${String(labelY)}px)`,
+            }}
           >
             {edgeText(edge)}
           </div>

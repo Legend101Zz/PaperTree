@@ -62,13 +62,13 @@ export function PaperRow({ paper, onOpen, onRetry, onDelete }: PaperRowProps) {
       <div className="flex w-full shrink-0 flex-wrap items-center gap-x-3 gap-y-2 sm:w-auto">
         {paper.highlightCount > 0 ? <HighlightCountBadge count={paper.highlightCount} /> : null}
         <ProcessingBadge
-            state={paper.processing}
-            reasonShown={
-              (paper.processing === 'failed' && paper.failureReason !== undefined) ||
-              (paper.processing === 'partial' && paper.partialReason !== undefined)
-            }
-            {...(label === undefined ? {} : { label })}
-          />
+          state={paper.processing}
+          reasonShown={
+            (paper.processing === 'failed' && paper.failureReason !== undefined) ||
+            (paper.processing === 'partial' && paper.partialReason !== undefined)
+          }
+          {...(label === undefined ? {} : { label })}
+        />
         <PaperActions
           paper={paper}
           {...(onRetry === undefined ? {} : { onRetry })}

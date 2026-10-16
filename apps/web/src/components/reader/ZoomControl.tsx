@@ -39,7 +39,9 @@ export type ZoomMode =
  * 150 %, and — worse — lost the reader's place doing it; the place is now kept by
  * `VirtualPageList`'s reading position).
  */
-export const ZOOM_PRESETS: readonly number[] = [0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 3, 4];
+export const ZOOM_PRESETS: readonly number[] = [
+  0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 3, 4,
+];
 export const MIN_ZOOM = 0.25;
 export const MAX_ZOOM = 6;
 
@@ -244,7 +246,12 @@ export interface ZoomControlProps {
   readonly className?: string;
 }
 
-export function ZoomControl({ mode, zoom, onModeChange, className }: ZoomControlProps): JSX.Element {
+export function ZoomControl({
+  mode,
+  zoom,
+  onModeChange,
+  className,
+}: ZoomControlProps): JSX.Element {
   const percent = Math.round(zoom * 100);
 
   const setScale = useCallback(
@@ -252,7 +259,10 @@ export function ZoomControl({ mode, zoom, onModeChange, className }: ZoomControl
     [onModeChange],
   );
 
-  const zoomOut = useMemo(() => pressHandlers(() => setScale(nextZoomDown(zoom))), [setScale, zoom]);
+  const zoomOut = useMemo(
+    () => pressHandlers(() => setScale(nextZoomDown(zoom))),
+    [setScale, zoom],
+  );
   const zoomIn = useMemo(() => pressHandlers(() => setScale(nextZoomUp(zoom))), [setScale, zoom]);
   const fitWidth = useMemo(() => pressHandlers(() => onModeChange(FIT_WIDTH)), [onModeChange]);
 

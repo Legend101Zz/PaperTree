@@ -144,17 +144,27 @@ describe('a failed card says one sentence (item 2)', () => {
       row({
         processing: 'failed',
         job: {
-          job_id: 'j', kind: 'parse', state: 'dead_letter', step: 'parse', done: 0, total: 3,
-          attempt: 3, max_attempts: 3, error_code: 'pdf_unreadable',
+          job_id: 'j',
+          kind: 'parse',
+          state: 'dead_letter',
+          step: 'parse',
+          done: 0,
+          total: 3,
+          attempt: 3,
+          max_attempts: 3,
+          error_code: 'pdf_unreadable',
         } as never,
       }),
     ]);
     renderLibrary();
     const card = await screen.findByRole('article');
-    const reason = 'This file could not be read as a PDF. It may be damaged, scanned without text or password protected. Retry, or upload a different copy.';
+    const reason =
+      'This file could not be read as a PDF. It may be damaged, scanned without text or password protected. Retry, or upload a different copy.';
     expect(card.textContent).toContain(reason);
     // The whole card text, screen-reader-only text included.
-    expect(card.textContent).not.toContain('We could not read this paper. Retry, or open the original PDF.');
+    expect(card.textContent).not.toContain(
+      'We could not read this paper. Retry, or open the original PDF.',
+    );
     expect(card.querySelectorAll('[data-failure-reason]')).toHaveLength(1);
     expect(within(card).getByRole('button', { name: /Retry/ })).toBeTruthy();
   });
@@ -165,7 +175,10 @@ describe('the transient upload row (item 3)', () => {
     useAuthStore.setState({ sessionUnverified: false });
     api.list.mockResolvedValue([]);
     api.uploadWithProgress.mockResolvedValue({
-      paper_id: 'ppr_NEW', job_id: 'j', created: true, paper: row({ paper_id: 'ppr_NEW' }),
+      paper_id: 'ppr_NEW',
+      job_id: 'j',
+      created: true,
+      paper: row({ paper_id: 'ppr_NEW' }),
     });
     renderLibrary();
     await screen.findByText('My papers');
@@ -187,11 +200,15 @@ describe('cancelling an upload (item 4)', () => {
         }),
     );
   }
-  const cancel = () => fireEvent.click(screen.getByRole('button', { name: /Cancel/ }), { detail: 0 });
+  const cancel = () =>
+    fireEvent.click(screen.getByRole('button', { name: /Cancel/ }), { detail: 0 });
 
   it.each([
     ['not-added', CANCEL_COPY['not-added']],
-    ['in-library', 'It had already uploaded; it is in your library. Delete it if you did not mean to add it.'],
+    [
+      'in-library',
+      'It had already uploaded; it is in your library. Delete it if you did not mean to add it.',
+    ],
     ['unknown', CANCEL_COPY.unknown],
   ] as const)('the row says the truth when the re-read finds: %s', async (outcome, sentence) => {
     const onCancelled = vi.fn().mockResolvedValue(outcome);
@@ -199,7 +216,9 @@ describe('cancelling an upload (item 4)', () => {
     pick(pdf('paper.pdf'));
     await screen.findByRole('button', { name: /Cancel/ });
     cancel();
-    await waitFor(() => expect(document.querySelector('[data-upload-state]')?.textContent).toContain(sentence));
+    await waitFor(() =>
+      expect(document.querySelector('[data-upload-state]')?.textContent).toContain(sentence),
+    );
     expect(onCancelled).toHaveBeenCalledTimes(1);
     expect(onCancelled.mock.calls[0]![0].name).toBe('paper.pdf');
   });
@@ -228,10 +247,15 @@ describe('cancelling an upload (item 4)', () => {
     pick(pdf('late.pdf'));
     await screen.findByRole('button', { name: /Cancel/ });
     // The server had the whole body before the abort landed: the paper is in the list now.
-    api.list.mockResolvedValue([row({ paper_id: 'ppr_LATE', original_filename: 'late.pdf', title: 'late' })]);
+    api.list.mockResolvedValue([
+      row({ paper_id: 'ppr_LATE', original_filename: 'late.pdf', title: 'late' }),
+    ]);
     cancel();
     await waitFor(
-      () => expect(document.querySelector('[data-upload-state="cancelled"]')?.textContent).toContain('It had already uploaded'),
+      () =>
+        expect(document.querySelector('[data-upload-state="cancelled"]')?.textContent).toContain(
+          'It had already uploaded',
+        ),
       { timeout: 4000 },
     );
     // ...and it is in the library, so the sentence is true.
@@ -253,7 +277,10 @@ describe('cancelling an upload (item 4)', () => {
     await screen.findByRole('button', { name: /Cancel/ });
     cancel();
     await waitFor(
-      () => expect(document.querySelector('[data-upload-state="cancelled"]')?.textContent).toContain('Nothing was added to your library.'),
+      () =>
+        expect(document.querySelector('[data-upload-state="cancelled"]')?.textContent).toContain(
+          'Nothing was added to your library.',
+        ),
       { timeout: 4000 },
     );
   });

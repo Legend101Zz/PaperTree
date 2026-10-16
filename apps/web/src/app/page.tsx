@@ -12,7 +12,11 @@ export default function Home() {
   }, [router]);
 
   return (
-    <div className="pt-s3-page flex items-center justify-center" role="status" aria-label="Loading PaperTree">
+    <div
+      className="pt-s3-page flex items-center justify-center"
+      role="status"
+      aria-label="Loading PaperTree"
+    >
       <div className="pt-s3-skeleton" style={{ width: 160, minHeight: 8, height: 8 }} />
     </div>
   );

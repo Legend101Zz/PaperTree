@@ -22,8 +22,7 @@ import { createContext, createElement, useContext, type ReactNode } from 'react'
 import type { Anchor } from '@papertree/anchoring';
 
 export type SendToCanvasInput =
-  | { kind: 'excerpt'; anchor: Anchor }
-  | { kind: 'explanation'; messageId: string };
+  { kind: 'excerpt'; anchor: Anchor } | { kind: 'explanation'; messageId: string };
 
 export type ReaderActions = {
   openExplain(input: { anchor: Anchor; quote: string }): void;

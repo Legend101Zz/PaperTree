@@ -54,7 +54,9 @@ function ZoomVar() {
   const zoom = useStore((state) => state.transform[2]);
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
-    ref.current?.closest<HTMLElement>('.pt-cv__stage')?.style.setProperty('--pt-cv-zoom', String(zoom));
+    ref.current
+      ?.closest<HTMLElement>('.pt-cv__stage')
+      ?.style.setProperty('--pt-cv-zoom', String(zoom));
   }, [zoom]);
   return <span ref={ref} hidden />;
 }
@@ -73,7 +75,11 @@ function Canvas({ paperId }: { readonly paperId: string }) {
 
   // xyflow reports the cards and the links of one Delete press in two separate callbacks; they are
   // joined here so one key press is one delete and one Undo.
-  const queued = useRef<{ nodes: Set<string>; edges: Set<string>; timer: ReturnType<typeof setTimeout> | null }>({
+  const queued = useRef<{
+    nodes: Set<string>;
+    edges: Set<string>;
+    timer: ReturnType<typeof setTimeout> | null;
+  }>({
     nodes: new Set(),
     edges: new Set(),
     timer: null,
@@ -95,15 +101,23 @@ function Canvas({ paperId }: { readonly paperId: string }) {
     [ctl],
   );
 
-  const onSelectionChange = useCallback(({ nodes, edges }: { nodes: { id: string }[]; edges: { id: string }[] }) => {
-    const ids = nodes.map((n) => n.id);
-    // Remember the order cards were picked in: a link goes from the first to the second.
-    order.current = [...order.current.filter((id) => ids.includes(id)), ...ids.filter((id) => !order.current.includes(id))];
-    const next: Selection = { nodes: [...order.current], edges: edges.map((e) => e.id) };
-    setSelection((prev) =>
-      prev.nodes.join() === next.nodes.join() && prev.edges.join() === next.edges.join() ? prev : next,
-    );
-  }, []);
+  const onSelectionChange = useCallback(
+    ({ nodes, edges }: { nodes: { id: string }[]; edges: { id: string }[] }) => {
+      const ids = nodes.map((n) => n.id);
+      // Remember the order cards were picked in: a link goes from the first to the second.
+      order.current = [
+        ...order.current.filter((id) => ids.includes(id)),
+        ...ids.filter((id) => !order.current.includes(id)),
+      ];
+      const next: Selection = { nodes: [...order.current], edges: edges.map((e) => e.id) };
+      setSelection((prev) =>
+        prev.nodes.join() === next.nodes.join() && prev.edges.join() === next.edges.join()
+          ? prev
+          : next,
+      );
+    },
+    [],
+  );
 
   const labelOf = useCallback(
     (id: string) => {
@@ -156,7 +170,12 @@ function Canvas({ paperId }: { readonly paperId: string }) {
           </a>
           <h1 className="pt-reader__title">Canvas</h1>
           <div className="pt-cv__tools" role="toolbar" aria-label="Canvas tools">
-            <button type="button" className="pt-btn pt-btn--outline" onClick={() => void ctl.addNote()} disabled={ctl.status !== 'ready'}>
+            <button
+              type="button"
+              className="pt-btn pt-btn--outline"
+              onClick={() => void ctl.addNote()}
+              disabled={ctl.status !== 'ready'}
+            >
               Add note
             </button>
             <button
@@ -196,7 +215,12 @@ function Canvas({ paperId }: { readonly paperId: string }) {
             >
               Link
             </button>
-            <button type="button" className="pt-btn pt-btn--outline pt-btn--danger" disabled={!anySelected} onClick={doDelete}>
+            <button
+              type="button"
+              className="pt-btn pt-btn--outline pt-btn--danger"
+              disabled={!anySelected}
+              onClick={doDelete}
+            >
               Delete
             </button>
             <button
@@ -229,7 +253,9 @@ function Canvas({ paperId }: { readonly paperId: string }) {
                 <select
                   className="pt-field"
                   value={selectedEdge.data.edge.kind}
-                  onChange={(e) => ctl.patchEdge(selectedEdge.id, { kind: e.target.value as EdgeKind })}
+                  onChange={(e) =>
+                    ctl.patchEdge(selectedEdge.id, { kind: e.target.value as EdgeKind })
+                  }
                 >
                   {EDGE_KINDS.map((k) => (
                     <option key={k.kind} value={k.kind}>
@@ -249,7 +275,8 @@ function Canvas({ paperId }: { readonly paperId: string }) {
                   onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
                   onBlur={(e) => {
                     const next = e.target.value.trim() === '' ? null : e.target.value.trim();
-                    if (next !== selectedEdge.data?.edge.label) ctl.patchEdge(selectedEdge.id, { label: next });
+                    if (next !== selectedEdge.data?.edge.label)
+                      ctl.patchEdge(selectedEdge.id, { label: next });
                   }}
                 />
               </label>
@@ -263,8 +290,14 @@ function Canvas({ paperId }: { readonly paperId: string }) {
           ) : ctl.status === 'error' ? (
             <div className="pt-state" role="alert">
               <h2 className="pt-state__title">Your canvas didn&apos;t load</h2>
-              <p className="pt-state__body">{ctl.notice ?? 'Check your connection, then try again.'}</p>
-              <button type="button" className="pt-btn pt-btn--primary" onClick={() => void ctl.reload()}>
+              <p className="pt-state__body">
+                {ctl.notice ?? 'Check your connection, then try again.'}
+              </p>
+              <button
+                type="button"
+                className="pt-btn pt-btn--primary"
+                onClick={() => void ctl.reload()}
+              >
                 Try again
               </button>
             </div>
@@ -279,8 +312,18 @@ function Canvas({ paperId }: { readonly paperId: string }) {
                 onEdgesChange={ctl.onEdgesChange}
                 onNodeDragStop={ctl.onNodeDragStop}
                 onConnect={onConnect}
-                onNodesDelete={(ns) => queueDelete(ns.map((n) => n.id), [])}
-                onEdgesDelete={(es) => queueDelete([], es.map((e) => e.id))}
+                onNodesDelete={(ns) =>
+                  queueDelete(
+                    ns.map((n) => n.id),
+                    [],
+                  )
+                }
+                onEdgesDelete={(es) =>
+                  queueDelete(
+                    [],
+                    es.map((e) => e.id),
+                  )
+                }
                 onSelectionChange={onSelectionChange}
                 onMoveEnd={(event, viewport) => {
                   // Programmatic moves (the first fit) have no event; only the reader's pan/zoom END is saved.
@@ -289,7 +332,9 @@ function Canvas({ paperId }: { readonly paperId: string }) {
                 onDoubleClick={(event) => {
                   const target = event.target as HTMLElement;
                   if (!target.classList.contains('react-flow__pane')) return;
-                  void ctl.addNote(flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }));
+                  void ctl.addNote(
+                    flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }),
+                  );
                 }}
                 defaultViewport={ctl.initialViewport ?? undefined}
                 fitView={ctl.initialViewport === null}
@@ -311,7 +356,11 @@ function Canvas({ paperId }: { readonly paperId: string }) {
               >
                 <ZoomVar />
                 <Background gap={24} size={1} />
-                <Controls showInteractive={false} position="bottom-left" fitViewOptions={fitOptions} />
+                <Controls
+                  showInteractive={false}
+                  position="bottom-left"
+                  fitViewOptions={fitOptions}
+                />
               </ReactFlow>
               {empty ? <EmptyState paperId={paperId} /> : null}
             </>
@@ -319,13 +368,27 @@ function Canvas({ paperId }: { readonly paperId: string }) {
         </div>
 
         {ctl.undo === null ? null : (
-          <div className="pt-toast pt-toast--lift" role="status" aria-live="polite" data-testid="undo-toast">
+          <div
+            className="pt-toast pt-toast--lift"
+            role="status"
+            aria-live="polite"
+            data-testid="undo-toast"
+          >
             <div className="pt-toast__body">
               <span>{ctl.undo.message}</span>
-              <button type="button" className="pt-btn pt-btn--outline" onClick={() => void ctl.runUndo()}>
+              <button
+                type="button"
+                className="pt-btn pt-btn--outline"
+                onClick={() => void ctl.runUndo()}
+              >
                 Undo
               </button>
-              <button type="button" className="pt-btn" aria-label="Dismiss" onClick={ctl.dismissUndo}>
+              <button
+                type="button"
+                className="pt-btn"
+                aria-label="Dismiss"
+                onClick={ctl.dismissUndo}
+              >
                 Dismiss
               </button>
             </div>
@@ -355,8 +418,8 @@ function EmptyState({ paperId }: { readonly paperId: string }) {
       <div className="pt-cv__empty-card">
         <h2 className="pt-state__title">Nothing on your canvas yet</h2>
         <p className="pt-state__body">
-          The canvas holds only what you put on it. Select a passage in the paper and choose Send to canvas, or
-          open an explanation and send it here. You can also add a note of your own.
+          The canvas holds only what you put on it. Select a passage in the paper and choose Send to
+          canvas, or open an explanation and send it here. You can also add a note of your own.
         </p>
         <a className="pt-btn pt-btn--primary" href={`/paper/${encodeURIComponent(paperId)}/read`}>
           Open the paper

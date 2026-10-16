@@ -25,7 +25,11 @@ export function stubDesktop(desktop = true): void {
   }));
 }
 
-export function Harness({ paperId = 'ppr_s6test' }: { readonly paperId?: string | null }): ReactNode {
+export function Harness({
+  paperId = 'ppr_s6test',
+}: {
+  readonly paperId?: string | null;
+}): ReactNode {
   const explain = useExplainActions({ paperId });
   const { openExplain } = explain;
   const actions = useMemo<ReaderActions>(
@@ -40,13 +44,23 @@ export function Harness({ paperId = 'ppr_s6test' }: { readonly paperId?: string 
     <ReaderActionsProvider value={actions}>
       <button
         type="button"
-        onClick={() => openExplain({ anchor: anchorFixture('sel1'), quote: 'We reframe object detection as a single regression problem.' })}
+        onClick={() =>
+          openExplain({
+            anchor: anchorFixture('sel1'),
+            quote: 'We reframe object detection as a single regression problem.',
+          })
+        }
       >
         ask one
       </button>
       <button
         type="button"
-        onClick={() => openExplain({ anchor: anchorFixture('sel2'), quote: 'Our system divides the input image into an S x S grid.' })}
+        onClick={() =>
+          openExplain({
+            anchor: anchorFixture('sel2'),
+            quote: 'Our system divides the input image into an S x S grid.',
+          })
+        }
       >
         ask two
       </button>

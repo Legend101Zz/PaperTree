@@ -1,4 +1,9 @@
-apps/
+# apps/web is formatted like everything else since v0.2 (#187); its generated and copied files stay out.
+apps/web/public/pdf.worker.min.mjs
+apps/web/public/fixtures/
+apps/web/.next/
+apps/web/next-env.d.ts
+apps/web/package-lock.json
 archive/
 node_modules/
 dist/

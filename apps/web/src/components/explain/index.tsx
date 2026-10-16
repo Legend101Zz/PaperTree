@@ -62,7 +62,13 @@ function quotePage(anchor: unknown): string | undefined {
 
 const QUOTE_FOLD = 320;
 
-function Quote({ quote: raw, anchor }: { readonly quote: string; readonly anchor: unknown }): ReactNode {
+function Quote({
+  quote: raw,
+  anchor,
+}: {
+  readonly quote: string;
+  readonly anchor: unknown;
+}): ReactNode {
   const [expanded, setExpanded] = useState(false);
   // Display only: the selection keeps the PDF's line-end hyphens ("sin- gle"); the stored
   // Anchor's TextQuote is untouched.

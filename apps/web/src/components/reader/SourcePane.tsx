@@ -68,7 +68,12 @@ export interface SourcePaneProps {
   /** A painted highlight was clicked (or Enter was pressed on it). */
   readonly onActivateHighlight: (
     highlightId: string,
-    at: { readonly clientX: number; readonly clientY: number; readonly top?: number; readonly bottom?: number } | null,
+    at: {
+      readonly clientX: number;
+      readonly clientY: number;
+      readonly top?: number;
+      readonly bottom?: number;
+    } | null,
   ) => void;
   readonly activeHighlightId: string | null;
   /** `focusAnchor`'s 1.2 s flash, when it is on a page. */
@@ -109,7 +114,10 @@ function quoteOf(anchor: Anchor): string {
 export function paintItemsOf(
   doc: IndexedDocument | null,
   highlights: readonly ReaderHighlight[],
-): { readonly items: PaintItem[]; readonly unplaced: { anchor: Anchor; resolution: Resolution; highlightId: string }[] } {
+): {
+  readonly items: PaintItem[];
+  readonly unplaced: { anchor: Anchor; resolution: Resolution; highlightId: string }[];
+} {
   const items: PaintItem[] = [];
   const unplaced: { anchor: Anchor; resolution: Resolution; highlightId: string }[] = [];
   if (doc === null) return { items, unplaced };
@@ -183,7 +191,9 @@ export function SourcePane(props: SourcePaneProps) {
             ...(style?.ascent === undefined ? {} : { ascent: style.ascent }),
             ...(style?.descent === undefined ? {} : { descent: style.descent }),
             // The family the text layer sets this span in: the capture measures glyph advances in it.
-            ...(typeof style?.fontFamily === 'string' && style.fontFamily !== '' ? { fontFamily: style.fontFamily } : {}),
+            ...(typeof style?.fontFamily === 'string' && style.fontFamily !== ''
+              ? { fontFamily: style.fontFamily }
+              : {}),
           };
         }),
       });
@@ -308,7 +318,12 @@ export function SourcePane(props: SourcePaneProps) {
         .flatMap((item) => item.quads);
       const top = rect.top + Math.min(...quads.map((q) => q[1])) * scale;
       const bottom = rect.top + Math.max(...quads.map((q) => q[3])) * scale;
-      onActivateHighlight(hit.highlightId, { clientX: event.clientX, clientY: event.clientY, top, bottom });
+      onActivateHighlight(hit.highlightId, {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        top,
+        bottom,
+      });
     };
     root.addEventListener('click', onClick);
     return () => root.removeEventListener('click', onClick);
@@ -360,7 +375,11 @@ export function SourcePane(props: SourcePaneProps) {
   return (
     <div className="relative h-full">
       {ready ? null : (
-        <div className="pt-skeleton absolute inset-0 overflow-hidden" role="status" aria-live="polite">
+        <div
+          className="pt-skeleton absolute inset-0 overflow-hidden"
+          role="status"
+          aria-live="polite"
+        >
           <span className="pt-sr-only">Opening the PDF…</span>
           <div className="pt-skeleton__page" />
           <div className="pt-skeleton__page" />
@@ -397,7 +416,8 @@ export function SourcePane(props: SourcePaneProps) {
           if (props.narrow || selection === null) return null;
           // Across pages, the bar goes by the selection's END, below it: that is where the pointer
           // was released (the page auto-scrolled there), while the start is off screen above.
-          const acrossPages = selection.endPageIndex !== selection.pageIndex && selection.endExtent !== null;
+          const acrossPages =
+            selection.endPageIndex !== selection.pageIndex && selection.endExtent !== null;
           const pageIndex = acrossPages ? selection.endPageIndex : selection.pageIndex;
           const at = acrossPages ? selection.endExtent : selection.irExtent;
           if (at === null) return null;

@@ -23,11 +23,16 @@ describe('markdown subset', () => {
     const { container } = render(
       <RichText
         citations={[]}
-        text={'**Lead-in.** It is *where* the _box_ goes, in `code`.\n\n- one\n- two\n\n1. first\n2. second'}
+        text={
+          '**Lead-in.** It is *where* the _box_ goes, in `code`.\n\n- one\n- two\n\n1. first\n2. second'
+        }
       />,
     );
     expect(container.querySelector('strong')?.textContent).toBe('Lead-in.');
-    expect(Array.from(container.querySelectorAll('em')).map((e) => e.textContent)).toEqual(['where', 'box']);
+    expect(Array.from(container.querySelectorAll('em')).map((e) => e.textContent)).toEqual([
+      'where',
+      'box',
+    ]);
     expect(container.querySelector('code')?.textContent).toBe('code');
     expect(container.querySelectorAll('ul > li')).toHaveLength(2);
     expect(container.querySelectorAll('ol > li')).toHaveLength(2);
@@ -77,7 +82,9 @@ describe('markdown subset', () => {
   });
 
   it('glues the full stop to the chip in one unbreakable run', () => {
-    const { container } = render(<RichText citations={[cite(1)]} text="uses specialized sensors [b1]." />);
+    const { container } = render(
+      <RichText citations={[cite(1)]} text="uses specialized sensors [b1]." />,
+    );
     const run = container.querySelector('.pt-cite-run');
     expect(run?.textContent).toBe('p. 1.');
     expect(run?.querySelector('.pt-chip')).not.toBeNull();
@@ -86,7 +93,11 @@ describe('markdown subset', () => {
 
   it('shows a canvas citation as a page label, never as [bN]', () => {
     const { container } = render(
-      <RichText citeAs="label" citations={[cite(1, 0)]} text="Classes [b1], names [b9] too [b1, b9]." />,
+      <RichText
+        citeAs="label"
+        citations={[cite(1, 0)]}
+        text="Classes [b1], names [b9] too [b1, b9]."
+      />,
     );
     expect(container.querySelectorAll('.pt-cite-label')).toHaveLength(2);
     expect(container.querySelector('button')).toBeNull();
@@ -94,7 +105,9 @@ describe('markdown subset', () => {
   });
 
   it('strips handles when the message has no citations', () => {
-    const { container } = render(<RichText citeAs="label" citations={[]} text="Classes [b1], names." />);
+    const { container } = render(
+      <RichText citeAs="label" citations={[]} text="Classes [b1], names." />,
+    );
     expect(container.textContent).toBe('Classes, names.');
   });
 
@@ -146,7 +159,9 @@ describe('underscore identifiers and answer hyphens', () => {
   });
 
   it('joins PDF hyphen breaks inside an answer body', () => {
-    const { container } = render(<RichText citations={[]} text="Models per- form well and re- gression works." />);
+    const { container } = render(
+      <RichText citations={[]} text="Models per- form well and re- gression works." />,
+    );
     expect(container.textContent).toBe('Models perform well and regression works.');
   });
 });
@@ -163,7 +178,8 @@ describe('compounds broken at a line end keep their hyphen', () => {
 
 describe('truncateAtWord', () => {
   it('cuts at a word boundary with an ellipsis', () => {
-    const text = 'This unified model has several benefits over traditional methods of object detection';
+    const text =
+      'This unified model has several benefits over traditional methods of object detection';
     const out = truncateAtWord(text, 30);
     expect(out.endsWith('…')).toBe(true);
     const kept = out.slice(0, -1);

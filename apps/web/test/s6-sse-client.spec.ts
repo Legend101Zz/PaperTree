@@ -15,7 +15,10 @@ import { done, frame, installFetch, jsonResponse, run, text } from './s6-support
 
 afterEach(() => vi.unstubAllGlobals());
 
-function bodyOf(chunks: readonly string[], opts: { hold?: boolean; signal?: AbortSignal | null } = {}): Response {
+function bodyOf(
+  chunks: readonly string[],
+  opts: { hold?: boolean; signal?: AbortSignal | null } = {},
+): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     start(c) {
@@ -44,14 +47,30 @@ async function collect(gen: AsyncGenerator<SseEvent>): Promise<SseEvent[]> {
 
 describe('streamSse as the explain panel uses it', () => {
   it('frames events in order, with LF and CRLF line ends', async () => {
-    installFetch({ 'POST /x': () => bodyOf([run(), text('a'), frame('done', { status: 'complete', error: null, message_id: 'm' }).replace(/\n/g, '\r\n')]) });
+    installFetch({
+      'POST /x': () =>
+        bodyOf([
+          run(),
+          text('a'),
+          frame('done', { status: 'complete', error: null, message_id: 'm' }).replace(
+            /\n/g,
+            '\r\n',
+          ),
+        ]),
+    });
     const events = await collect(streamSse('/x', {}));
     expect(events.map((e) => e.event)).toEqual(['run', 'text', 'done']);
   });
 
   it('drops ": ping" comments, between frames and inside one', async () => {
     installFetch({
-      'POST /x': () => bodyOf([': ping\n\n', 'event: text\n: ping\ndata: {"delta":"hi"}\n\n', ': ping\n\n', done()]),
+      'POST /x': () =>
+        bodyOf([
+          ': ping\n\n',
+          'event: text\n: ping\ndata: {"delta":"hi"}\n\n',
+          ': ping\n\n',
+          done(),
+        ]),
     });
     const events = await collect(streamSse('/x', {}));
     expect(events.map((e) => e.event)).toEqual(['text', 'done']);
@@ -78,7 +97,17 @@ describe('streamSse as the explain panel uses it', () => {
         c.close();
       },
     });
-    installFetch({ 'POST /x': () => ({ ok: true, status: 200, statusText: '', headers: new Headers(), body: stream, text: async () => '' }) as unknown as Response });
+    installFetch({
+      'POST /x': () =>
+        ({
+          ok: true,
+          status: 200,
+          statusText: '',
+          headers: new Headers(),
+          body: stream,
+          text: async () => '',
+        }) as unknown as Response,
+    });
     const events = await collect(streamSse('/x', {}));
     expect((events[0] as Extract<SseEvent, { event: 'text' }>).data.delta).toBe('日本語');
   });
@@ -96,9 +125,13 @@ describe('streamSse as the explain panel uses it', () => {
 
   it('a pre-stream JSON error throws from the first next(), as an ApiError', async () => {
     installFetch({
-      'POST /x': () => jsonResponse(429, { detail: 'over', code: 'budget_exhausted', retryable: false }),
+      'POST /x': () =>
+        jsonResponse(429, { detail: 'over', code: 'budget_exhausted', retryable: false }),
     });
-    await expect(collect(streamSse('/x', {}))).rejects.toMatchObject({ code: 'budget_exhausted', status: 429 });
+    await expect(collect(streamSse('/x', {}))).rejects.toMatchObject({
+      code: 'budget_exhausted',
+      status: 429,
+    });
   });
 
   it('aborting the signal stops the read and surfaces an AbortError', async () => {

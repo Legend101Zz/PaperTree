@@ -22,7 +22,12 @@ export function KindPicker({ fromLabel, toLabel, onPick, onCancel }: KindPickerP
   }, []);
   return (
     <div className="pt-cv-scrim" onKeyDown={(e) => e.key === 'Escape' && onCancel()}>
-      <div className="pt-cv-dialog" role="dialog" aria-modal="true" aria-labelledby="pt-cv-kind-title">
+      <div
+        className="pt-cv-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pt-cv-kind-title"
+      >
         <h2 id="pt-cv-kind-title" className="pt-cv-dialog__title">
           How are these connected?
         </h2>

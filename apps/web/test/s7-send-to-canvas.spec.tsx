@@ -22,14 +22,29 @@ const PAPER = 'ppr_TESTTESTTEST';
 const ANCHOR = {
   id: 'a1',
   doc: { paperId: PAPER },
-  selectors: [{ type: 'TextQuoteSelector', exact: 'Residual learning\nframework', prefix: '', suffix: '' }],
+  selectors: [
+    { type: 'TextQuoteSelector', exact: 'Residual learning\nframework', prefix: '', suffix: '' },
+  ],
 } as unknown as Anchor;
 
 function existing(x: number, y: number): CanvasNode {
   return {
-    node_id: 'cn_existing0001', board_id: 'brd_1', kind: 'note', group_id: null, x, y, w: 260, h: 150,
-    z: 0, title: null, body: '', source_anchor: null, source_message_id: null, version: 1,
-    created_at: '', updated_at: '',
+    node_id: 'cn_existing0001',
+    board_id: 'brd_1',
+    kind: 'note',
+    group_id: null,
+    x,
+    y,
+    w: 260,
+    h: 150,
+    z: 0,
+    title: null,
+    body: '',
+    source_anchor: null,
+    source_message_id: null,
+    version: 1,
+    created_at: '',
+    updated_at: '',
   };
 }
 
@@ -59,7 +74,9 @@ describe('sendToCanvas', () => {
     expect(body.node_id).toMatch(/^cn_[0-9a-f-]{36}$/);
     expect(body.body).toBe('Residual learning framework');
 
-    await vi.waitFor(() => expect(document.querySelector('[data-testid="canvas-toast"]')).not.toBeNull());
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-testid="canvas-toast"]')).not.toBeNull(),
+    );
     const link = document.querySelector<HTMLAnchorElement>('[data-testid="canvas-toast"] a');
     expect(link?.textContent).toBe('Open canvas');
     expect(link?.getAttribute('href')).toBe(`/paper/${PAPER}/canvas`);
@@ -70,14 +87,21 @@ describe('sendToCanvas', () => {
     await sendToCanvas(PAPER, { kind: 'excerpt', anchor: ANCHOR });
     const body = createNode.mock.calls[0]![1];
     const clear =
-      body.x >= 260 + GAP || body.y >= 150 + GAP || body.x + body.w <= -GAP || body.y + body.h <= -GAP;
+      body.x >= 260 + GAP ||
+      body.y >= 150 + GAP ||
+      body.x + body.w <= -GAP ||
+      body.y + body.h <= -GAP;
     expect(clear).toBe(true);
   });
 
   it('sends an explanation with the answer text and its message id, found in the newest thread', async () => {
     vi.mocked(threadsApi.list).mockResolvedValue([
       { thread_id: 'thr_old', title: 'Old', updated_at: '2026-01-01T00:00:00Z' } as never,
-      { thread_id: 'thr_new', title: 'Explain: residuals', updated_at: '2026-02-01T00:00:00Z' } as never,
+      {
+        thread_id: 'thr_new',
+        title: 'Explain: residuals',
+        updated_at: '2026-02-01T00:00:00Z',
+      } as never,
     ]);
     vi.mocked(threadsApi.get).mockResolvedValue({
       thread: {} as never,
@@ -97,17 +121,35 @@ describe('sendToCanvas', () => {
   });
 
   it('rejects, and says so on screen for an explanation, when the node cannot be created', async () => {
-    createNode.mockRejectedValue(new ApiError(422, 'validation_failed', 'source_message_id: no such answer on this paper', false));
-    vi.mocked(threadsApi.list).mockResolvedValue([{ thread_id: 't', title: 'T', updated_at: '' } as never]);
-    vi.mocked(threadsApi.get).mockResolvedValue({ thread: {} as never, messages: [{ message_id: 'm1', content: 'x' } as never] });
-    await expect(sendToCanvas(PAPER, { kind: 'explanation', messageId: 'm1' })).rejects.toBeInstanceOf(ApiError);
+    createNode.mockRejectedValue(
+      new ApiError(
+        422,
+        'validation_failed',
+        'source_message_id: no such answer on this paper',
+        false,
+      ),
+    );
+    vi.mocked(threadsApi.list).mockResolvedValue([
+      { thread_id: 't', title: 'T', updated_at: '' } as never,
+    ]);
+    vi.mocked(threadsApi.get).mockResolvedValue({
+      thread: {} as never,
+      messages: [{ message_id: 'm1', content: 'x' } as never],
+    });
+    await expect(
+      sendToCanvas(PAPER, { kind: 'explanation', messageId: 'm1' }),
+    ).rejects.toBeInstanceOf(ApiError);
     await vi.waitFor(() =>
-      expect(document.querySelector('[data-testid="canvas-toast"]')?.textContent).toContain('no such answer'),
+      expect(document.querySelector('[data-testid="canvas-toast"]')?.textContent).toContain(
+        'no such answer',
+      ),
     );
   });
 
   it('makes no request for a fixture paper', async () => {
-    await expect(sendToCanvas(null, { kind: 'excerpt', anchor: ANCHOR })).rejects.toThrow(/not in your library/);
+    await expect(sendToCanvas(null, { kind: 'excerpt', anchor: ANCHOR })).rejects.toThrow(
+      /not in your library/,
+    );
     expect(get).not.toHaveBeenCalled();
     expect(createNode).not.toHaveBeenCalled();
   });
@@ -131,11 +173,20 @@ describe('sendToCanvas', () => {
     });
 
     it('creates nothing and says "Already on your canvas" with an Open canvas link', async () => {
-      get.mockResolvedValue({ board: {} as never, nodes: [onBoard(withPage(2, 'Residual learning\nframework'))], edges: [] });
+      get.mockResolvedValue({
+        board: {} as never,
+        nodes: [onBoard(withPage(2, 'Residual learning\nframework'))],
+        edges: [],
+      });
       // Same page, same words (a different line break and case: the same passage to a reader).
-      await sendToCanvas(PAPER, { kind: 'excerpt', anchor: withPage(2, 'residual   learning framework') });
+      await sendToCanvas(PAPER, {
+        kind: 'excerpt',
+        anchor: withPage(2, 'residual   learning framework'),
+      });
       expect(createNode).not.toHaveBeenCalled();
-      await vi.waitFor(() => expect(document.querySelector('[data-testid="canvas-toast"]')).not.toBeNull());
+      await vi.waitFor(() =>
+        expect(document.querySelector('[data-testid="canvas-toast"]')).not.toBeNull(),
+      );
       const toast = document.querySelector('[data-testid="canvas-toast"]')!;
       expect(toast.textContent).toContain('Already on your canvas');
       expect(toast.querySelector('a')?.getAttribute('href')).toBe(`/paper/${PAPER}/canvas`);
@@ -143,14 +194,25 @@ describe('sendToCanvas', () => {
     });
 
     it('still adds the same words on another page, and other words on the same page', async () => {
-      get.mockResolvedValue({ board: {} as never, nodes: [onBoard(withPage(2, 'Residual learning framework'))], edges: [] });
-      await sendToCanvas(PAPER, { kind: 'excerpt', anchor: withPage(3, 'Residual learning framework') });
+      get.mockResolvedValue({
+        board: {} as never,
+        nodes: [onBoard(withPage(2, 'Residual learning framework'))],
+        edges: [],
+      });
+      await sendToCanvas(PAPER, {
+        kind: 'excerpt',
+        anchor: withPage(3, 'Residual learning framework'),
+      });
       await sendToCanvas(PAPER, { kind: 'excerpt', anchor: withPage(2, 'A different sentence') });
       expect(createNode).toHaveBeenCalledTimes(2);
     });
 
     it('an anchor with no quote is never treated as a duplicate', async () => {
-      const bare = { id: 'b', doc: { paperId: PAPER }, selectors: [{ type: 'PageSelector', index: 0 }] } as unknown as Anchor;
+      const bare = {
+        id: 'b',
+        doc: { paperId: PAPER },
+        selectors: [{ type: 'PageSelector', index: 0 }],
+      } as unknown as Anchor;
       get.mockResolvedValue({ board: {} as never, nodes: [onBoard(bare)], edges: [] });
       await sendToCanvas(PAPER, { kind: 'excerpt', anchor: bare });
       expect(createNode).toHaveBeenCalledTimes(1);

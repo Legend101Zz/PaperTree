@@ -47,12 +47,22 @@ function Frame({
   // click is React Flow's own multi-select, and an already-selected card is left alone.
   const selectOnClick = (event: MouseEvent<HTMLDivElement>): void => {
     if (selected || event.shiftKey || event.metaKey || event.ctrlKey) return;
-    if ((event.target as HTMLElement).closest('a, button, input, textarea, select, [contenteditable="true"]') !== null) return;
+    if (
+      (event.target as HTMLElement).closest(
+        'a, button, input, textarea, select, [contenteditable="true"]',
+      ) !== null
+    )
+      return;
     store.getState().addSelectedNodes([id]);
   };
   return (
     // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
-    <div className={`pt-cv-node pt-cv-node--${kind}`} data-kind={kind} data-selected={selected} onClick={selectOnClick}>
+    <div
+      className={`pt-cv-node pt-cv-node--${kind}`}
+      data-kind={kind}
+      data-selected={selected}
+      onClick={selectOnClick}
+    >
       <NodeResizer
         isVisible={selected}
         minWidth={200}
@@ -89,7 +99,9 @@ export function ExcerptNode({ id, data, selected }: NodeProps<PtNode>) {
         </a>
       }
     >
-      <PaperText as="blockquote">{node.body === '' ? 'No text was captured for this passage.' : node.body}</PaperText>
+      <PaperText as="blockquote">
+        {node.body === '' ? 'No text was captured for this passage.' : node.body}
+      </PaperText>
     </Frame>
   );
 }
@@ -97,7 +109,9 @@ export function ExcerptNode({ id, data, selected }: NodeProps<PtNode>) {
 export function ExplanationNode({ id, data, selected }: NodeProps<PtNode>) {
   const ctx = useCanvasActions();
   const node = data.node;
-  const citations = (node.source_message_id === null ? undefined : ctx.citations?.get(node.source_message_id)) ?? [];
+  const citations =
+    (node.source_message_id === null ? undefined : ctx.citations?.get(node.source_message_id)) ??
+    [];
   return (
     <Frame id={id} selected={selected} kind="explanation" label={node.title ?? 'Explanation'}>
       <AiText>
@@ -136,7 +150,11 @@ export function NoteNode({ id, data, selected }: NodeProps<PtNode>) {
       label="Note"
       actions={
         editing ? null : (
-          <button type="button" className="pt-btn pt-btn--outline nodrag" onClick={() => ctx.setEditingId(id)}>
+          <button
+            type="button"
+            className="pt-btn pt-btn--outline nodrag"
+            onClick={() => ctx.setEditingId(id)}
+          >
             Edit
           </button>
         )

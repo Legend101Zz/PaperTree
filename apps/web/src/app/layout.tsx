@@ -23,20 +23,16 @@ import { Providers } from './providers';
 // `@papertree/ui/styles.css` (`--pt-font-body`, `--pt-font-derived`), so no register changes.
 
 export const metadata: Metadata = {
-    title: 'PaperTree - Research Paper Reader',
-    description: 'Read research papers with AI-powered explanations',
+  title: 'PaperTree - Research Paper Reader',
+  description: 'Read research papers with AI-powered explanations',
 };
 
-export default function RootLayout({
-    children,
-}: {
-    children: React.ReactNode;
-}) {
-    return (
-        <html lang="en" suppressHydrationWarning>
-            <body className="font-sans antialiased">
-                <Providers>{children}</Providers>
-            </body>
-        </html>
-    );
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body className="font-sans antialiased">
+        <Providers>{children}</Providers>
+      </body>
+    </html>
+  );
 }
