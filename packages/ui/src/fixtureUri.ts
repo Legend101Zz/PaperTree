@@ -38,6 +38,7 @@ export const FIXTURE_SCHEME = 'fixture://';
 /** The path prefix every resolved fixture asset is served under. */
 export const FIXTURE_URL_PREFIX = '/fixtures';
 
+/** A fixture URI split into its parts by `parseFixtureUri`. */
 export interface ParsedFixtureUri {
   /** The paper slug — `attention-is-all-you-need`, `neural-odes-mathheavy`, `resnet-cvpr-2col`. */
   readonly slug: string;
@@ -60,6 +61,7 @@ function fail(uri: string, why: string): never {
   throw new Error(`Malformed fixture URI ${JSON.stringify(uri)}: ${why}`);
 }
 
+/** Whether `uri` uses the `fixture://` scheme (and so must go through `resolveFixtureUri`). */
 export function isFixtureUri(uri: string): boolean {
   return uri.startsWith(FIXTURE_SCHEME);
 }

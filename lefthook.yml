@@ -1,0 +1,41 @@
+# Pre-commit checks on STAGED files only (v0.2 S0). `pnpm install` installs the hook (root `prepare`).
+#
+# This is a fast courtesy, not the gate: CI still runs every check on every file, uncached
+# (AGENTS.md §1), so a hook that is skipped or bypassed cannot let anything through.
+#
+# Emergency bypass (say why in the commit or PR): `LEFTHOOK=0 git commit ...` or `git commit --no-verify`.
+# Paths contain a space ("/Volumes/Mrigesh SSD/..."), so every {staged_files} is passed quoted by lefthook.
+# doublestar: `**` matches zero or more directories (the default matcher needs at least one).
+glob_matcher: doublestar
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: prettier
+      glob: '**/*.{js,mjs,cjs,ts,tsx,json,md,css,yml,yaml}'
+      run: pnpm exec prettier --write --ignore-unknown {staged_files}
+      stage_fixed: true
+
+    - name: web-eslint
+      root: 'apps/web/'
+      glob: 'apps/web/**/*.{ts,tsx}'
+      # eslint with apps/web/.eslintrc.cjs: the same rules `next lint` runs in CI.
+      run: pnpm exec eslint {staged_files}
+
+    - name: oxlint
+      glob: 'packages/*/src/**/*.{ts,tsx}'
+      run: pnpm exec oxlint {staged_files}
+
+    - name: ui-docs
+      root: 'packages/ui/'
+      glob: 'packages/ui/src/**/*.{ts,tsx}'
+      run: pnpm exec eslint {staged_files}
+
+    - name: ruff
+      # Only what CI lints (`ruff check packages services`); scripts/ and research/ are not linted there.
+      glob: '{packages,services}/**/*.py'
+      run: uv run ruff check {staged_files} && uv run ruff format --check {staged_files}
+
+    - name: docstrings
+      glob: '{packages,services}/**/*.py'
+      run: tools/check-docstrings.sh {staged_files}

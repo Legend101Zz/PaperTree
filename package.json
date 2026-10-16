@@ -47,11 +47,14 @@
     "py:test": "uv run pytest",
     "py:lint": "uv run ruff check packages services",
     "py:format:check": "uv run ruff format --check packages services",
-    "py:typecheck": "uv run mypy packages/*/python services/*/python"
+    "py:typecheck": "uv run mypy packages/*/python services/*/python",
+    "py:docstrings": "tools/check-docstrings.sh",
+    "prepare": "lefthook install || true"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
     "@types/node": "^22.10.2",
+    "lefthook": "2.2.2",
     "oxlint": "^1.5.0",
     "prettier": "^3.4.2",
     "tsx": "^4.19.2",
