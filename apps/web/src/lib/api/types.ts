@@ -110,7 +110,6 @@ interface LibraryTopic {
   topic_id: string;
   name: string;
   cloth: 'transformers' | 'vision' | 'generative' | 'optimization' | 'language' | 'rl' | null;
-  status: 'accepted';
   source: 'arxiv_category' | 'manual' | 'model';
   /** `cs.CL` for `arxiv_category`, the model id for `model`, else null. */
   source_detail: string | null;

@@ -475,10 +475,6 @@
             }
           ]
         },
-        "status": {
-          "const": "accepted",
-          "type": "string"
-        },
         "source": {
           "enum": ["arxiv_category", "manual", "model"],
           "type": "string"
@@ -494,7 +490,7 @@
           ]
         }
       },
-      "required": ["topic_id", "name", "cloth", "status", "source", "source_detail"],
+      "required": ["topic_id", "name", "cloth", "source", "source_detail"],
       "title": "LibraryTopic",
       "type": "object"
     },

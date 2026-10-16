@@ -59,7 +59,6 @@ class ShelfTopic:
     topic_id: str
     name: str
     cloth: str | None
-    status: str
     source: str
     source_detail: str | None
 
@@ -197,7 +196,7 @@ SELECT po.paper_id, po.source_hash, po.original_filename, po.byte_size, po.creat
        rs.opened_at AS rs_opened_at, rs.updated_at AS rs_updated_at,
        rs.finished_at AS rs_finished_at,
        tp.topic_id AS tp_topic_id, tp.name AS tp_name, tp.cloth AS tp_cloth,
-       pt.status AS tp_status, pt.source AS tp_source, pt.source_detail AS tp_source_detail
+       pt.source AS tp_source, pt.source_detail AS tp_source_detail
   FROM paper_owners po
   LEFT JOIN reading_state rs
          ON rs.owner_id = po.owner_id AND rs.paper_id = po.paper_id
@@ -365,6 +364,23 @@ def _payload_int(payload: Any, key: str) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
+def category_from(metadata: Any, stamp_text: str | None) -> str | None:
+    """The primary arXiv category of a paper from its stored metadata and its margin stamp.
+
+    The same derivation ``LibraryRow.arxiv_category`` uses, for queries that need only the
+    category and not the whole library row.
+
+    Args:
+        metadata: ``papers.metadata`` (JSON text or parsed), or None.
+        stamp_text: The text of the block the parser cites for the arXiv id, or None.
+
+    Returns:
+        The category (``cs.CL``), or None.
+    """
+    value = _metadata_value(_metadata_object(metadata), "arxiv_id")
+    return stamp_category(stamp_text, value if isinstance(value, str) and value else None)
+
+
 def _library_row(row: Row) -> LibraryRow:
     title, authors = _metadata_strings(row["metadata"])
     data = _metadata_object(row["metadata"])
@@ -414,7 +430,6 @@ def _library_row(row: Row) -> LibraryRow:
                 topic_id=row["tp_topic_id"],
                 name=row["tp_name"],
                 cloth=row["tp_cloth"],
-                status=row["tp_status"],
                 source=row["tp_source"],
                 source_detail=row["tp_source_detail"],
             )

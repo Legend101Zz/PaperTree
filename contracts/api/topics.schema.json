@@ -25,10 +25,6 @@
             }
           ]
         },
-        "status": {
-          "const": "accepted",
-          "type": "string"
-        },
         "source": {
           "enum": ["arxiv_category", "manual", "model"],
           "type": "string"
@@ -44,7 +40,7 @@
           ]
         }
       },
-      "required": ["topic_id", "name", "cloth", "status", "source", "source_detail"],
+      "required": ["topic_id", "name", "cloth", "source", "source_detail"],
       "title": "LibraryTopic",
       "type": "object"
     },
@@ -213,7 +209,7 @@
     },
     "TopicPatch": {
       "additionalProperties": false,
-      "description": "`PATCH /topics/{topic_id}`: only what is sent changes.",
+      "description": "`PATCH /topics/{topic_id}`: only what is sent changes (`cloth: null` clears the colour).",
       "properties": {
         "name": {
           "maxLength": 60,
@@ -221,8 +217,16 @@
           "type": "string"
         },
         "cloth": {
-          "enum": ["transformers", "vision", "generative", "optimization", "language", "rl"],
-          "type": "string"
+          "anyOf": [
+            {
+              "enum": ["transformers", "vision", "generative", "optimization", "language", "rl"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "sort_order": {
           "maximum": 9223372036854775807,

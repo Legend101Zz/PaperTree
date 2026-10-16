@@ -160,7 +160,6 @@ def library_topic(row: LibraryRow) -> LibraryTopic | None:
         topic_id=shelf.topic_id,
         name=shelf.name,
         cloth=cast(Cloth | None, shelf.cloth),
-        status="accepted",
         source=cast(TopicSource, shelf.source),
         source_detail=shelf.source_detail,
     )

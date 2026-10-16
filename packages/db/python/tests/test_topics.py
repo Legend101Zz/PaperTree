@@ -121,11 +121,12 @@ def test_the_schema_refuses_what_the_api_never_sends(db: PaperTreeDb, tmp_path: 
         # An unknown cloth, and a name that differs from another only in letter case.
         with pytest.raises(sqlite3.IntegrityError, match="CHECK"):
             conn.execute(
-                "INSERT INTO topics VALUES ('top_1', ?, 'X', 'magenta', 0, 't')", (owner_id,)
+                "INSERT INTO topics VALUES ('top_1', ?, 'X', 'x', 'magenta', 0, 't')", (owner_id,)
             )
         with pytest.raises(sqlite3.IntegrityError, match="UNIQUE"):
             conn.execute(
-                "INSERT INTO topics VALUES ('top_2', ?, 'VISION', NULL, 0, 't')", (owner_id,)
+                "INSERT INTO topics VALUES ('top_2', ?, 'vision', 'vision', NULL, 0, 't')",
+                (owner_id,),
             )
         # An accepted row with no topic; an unknown status.
         with pytest.raises(sqlite3.IntegrityError, match="CHECK"):
@@ -253,11 +254,7 @@ def test_a_paper_starts_unshelved_and_accepting_shelves_it(db: PaperTreeDb) -> N
     assert (got.status, got.source, got.source_detail) == ("accepted", "manual", None)
     assert got.topic is not None and got.topic.name == "Vision" and got.decided_at is not None
     shelf = db.library_row(owner, paper).topic  # type: ignore[union-attr]
-    assert shelf is not None and (shelf.name, shelf.status, shelf.source) == (
-        "Vision",
-        "accepted",
-        "manual",
-    )
+    assert shelf is not None and (shelf.name, shelf.source) == ("Vision", "manual")
     held = db.get_topic(owner, topic.topic_id)
     assert held is not None and (held.paper_count, held.page_count) == (1, 12)
     assert [row.topic.name if row.topic else None for row in db.list_library(owner)] == ["Vision"]
@@ -321,28 +318,51 @@ def test_a_new_topic_name_creates_the_topic_or_reuses_the_existing_one(db: Paper
         db.accept_topic(owner, two, topic_id=got.topic.topic_id, new_topic_name="x")
 
 
-def test_reject_and_unshelve(db: PaperTreeDb) -> None:
+def test_reject_and_unshelve_keep_the_decision(db: PaperTreeDb) -> None:
     owner = db.create_user("a@b.test").owner
     paper = _paper(db, owner)
     topic = db.create_topic(owner, "Vision")
-    db.record_suggestion(
-        owner, paper, TopicSuggestion(topic.topic_id, None, "arxiv_category", "cs.CV")
-    )
+    offer = TopicSuggestion(topic.topic_id, None, "arxiv_category", "cs.CV")
+    db.record_suggestion(owner, paper, offer)
     rejected = db.reject_topic(owner, paper)
     assert rejected.status == "rejected" and rejected.decided_at is not None
-    assert rejected.topic is not None  # what was turned down is remembered
-    assert (
-        db.record_suggestion(
-            owner, paper, TopicSuggestion(topic.topic_id, None, "arxiv_category", "cs.CV")
-        ).status
-        == "rejected"
-    )
+    assert rejected.topic is None  # the topic it remembers is not shown
+    assert db.record_suggestion(owner, paper, offer).status == "rejected"  # never re-offered
+    assert db.clear_topic(owner, paper).status == "rejected"  # unshelving keeps the no
+    assert db.reject_topic(owner, paper).status == "rejected"
 
-    db.accept_topic(owner, paper, topic_id=topic.topic_id)
-    cleared = db.clear_topic(owner, paper)
-    assert (cleared.status, cleared.topic, cleared.source) == ("none", None, None)
-    assert db.library_row(owner, paper).topic is None  # type: ignore[union-attr]
-    assert db.reject_topic(owner, paper).source == "manual"  # a bare no, with no offer on file
+    # An ACCEPTED paper: unshelve and reject are both remove-and-reject.
+    for leave in (db.clear_topic, db.reject_topic):
+        accepted = db.accept_topic(owner, paper, topic_id=topic.topic_id)
+        assert accepted.status == "accepted" and accepted.topic is not None
+        left = leave(owner, paper)
+        assert (left.status, left.topic) == ("rejected", None)
+        assert db.library_row(owner, paper).topic is None  # type: ignore[union-attr]
+        held = db.get_topic(owner, topic.topic_id)
+        assert held is not None and held.paper_count == 0
+
+    # No row at all: unshelving is a no-op, rejecting is a bare no.
+    other = _paper(db, owner, 1)
+    assert db.clear_topic(owner, other).status == "none"
+    bare = db.reject_topic(owner, other)
+    assert (bare.status, bare.source, bare.topic) == ("rejected", "manual", None)
+
+
+def test_unicode_names_collide_by_casefold_and_cloth_can_be_cleared(db: PaperTreeDb) -> None:
+    owner = db.create_user("a@b.test").owner
+    first = db.create_topic(owner, "ÀB straße", "rl")
+    with pytest.raises(TopicExists):
+        db.create_topic(owner, "àb STRASSE")  # not ASCII-only: casefold("ß") is "ss"
+    other = db.create_topic(owner, "Other")
+    with pytest.raises(TopicExists):
+        db.update_topic(owner, other.topic_id, name="àb strasse")
+    assert db.update_topic(owner, first.topic_id, name="àb STRASSE").name == "àb STRASSE"
+    assert db.update_topic(owner, first.topic_id, name="Renamed").cloth == "rl"  # UNSET keeps it
+    assert db.update_topic(owner, first.topic_id, cloth=None).cloth is None  # None clears it
+    # Accepting by a new name reuses the topic the same rule finds.
+    paper = _paper(db, owner)
+    got = db.accept_topic(owner, paper, new_topic_name="RENAMED")
+    assert got.topic is not None and got.topic.topic_id == first.topic_id
 
 
 def test_deleting_a_topic_unshelves_its_papers_and_keeps_their_history(db: PaperTreeDb) -> None:

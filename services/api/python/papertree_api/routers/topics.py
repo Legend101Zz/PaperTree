@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, Response, status
-from papertree_db import PaperId, PaperTopicRow, TopicExists, TopicRow
+from papertree_db import UNSET, PaperId, PaperTopicRow, TopicExists, TopicRow
 
 from ..deps import CallerDep
 from ..errors import ApiError
@@ -102,7 +102,8 @@ async def patch_topic(
                 call.db_owner,
                 topic_id,
                 name=body.name,
-                cloth=body.cloth,
+                # Sent as null clears the colour; left out keeps it.
+                cloth=body.cloth if "cloth" in body.model_fields_set else UNSET,
                 sort_order=body.sort_order,
             )
         )

@@ -479,10 +479,11 @@ class TopicCreate(Wire):
 
 
 class TopicPatch(Wire):
-    """`PATCH /topics/{topic_id}`: only what is sent changes."""
+    """`PATCH /topics/{topic_id}`: only what is sent changes (`cloth: null` clears the colour)."""
 
     name: TopicName | None = omittable()
-    cloth: Cloth | None = omittable()
+    #: Sent as `null` it CLEARS the colour (the design's "no cloth"); left out it is kept.
+    cloth: Cloth | None = None
     sort_order: PageIndex | None = omittable()
 
 
@@ -490,7 +491,6 @@ class LibraryTopic(TopicRef):
     """`LibraryPaper.topic`: the topic the caller ACCEPTED for the paper. A mere offer is not
     here (`GET /papers/{id}/topic` has it): an unaccepted suggestion must not group the shelf."""
 
-    status: Literal["accepted"]
     source: TopicSource
     #: `cs.CL` for `arxiv_category`, the model id for `model`, else null.
     source_detail: str | None

@@ -21,10 +21,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final, Literal
 
-from ._support import now_iso
+from ._support import Row, now_iso
 from .errors import PaperNotFound, TopicExists, TopicNotFound
 from .ids import OwnerId, PaperId, new_id
-from .library import LibraryMixin
+from .library import LibraryMixin, category_from
 
 #: The six cloth colours of the design (``topics.cloth``).
 CLOTHS: Final = ("transformers", "vision", "generative", "optimization", "language", "rl")
@@ -33,6 +33,36 @@ CLOTHS: Final = ("transformers", "vision", "generative", "optimization", "langua
 TOPIC_NAME_MAX: Final = 60
 
 _SQLITE_INTEGER_MAX: Final = 2**63 - 1
+
+
+class _Unset:
+    """The type of ``UNSET``: "leave this argument alone", as opposed to None ("clear it")."""
+
+
+#: Passed for an argument that must stay as it is (``cloth=None`` CLEARS the cloth).
+UNSET: Final = _Unset()
+
+#: One accepted placement with the facts the counts and the rule need, in ONE query: the paper's
+#: page count and its arXiv category are derived from the same stored metadata and margin stamp
+#: as ``LibraryRow``'s, without reading the rest of the library row (jobs, threads, highlights).
+_HELD_SQL: Final = """
+SELECT pt.topic_id, pt.decided_at,
+       COALESCE(po.page_count,
+                NULLIF((SELECT COUNT(*) FROM pages pg
+                         WHERE pg.owner_id = po.owner_id AND pg.paper_id = po.paper_id
+                           AND pg.generation = pp.generation), 0)) AS page_count,
+       p.metadata,
+       (SELECT b.text FROM blocks b
+         WHERE b.owner_id = pp.owner_id AND b.paper_id = pp.paper_id
+           AND b.generation = pp.generation
+           AND b.block_id = json_extract(p.metadata, '$.arxiv_id.source_block_id')) AS stamp_text
+  FROM paper_topics pt
+  JOIN paper_owners po ON po.owner_id = pt.owner_id AND po.paper_id = pt.paper_id
+  LEFT JOIN paper_promotions pp ON pp.owner_id = po.owner_id AND pp.paper_id = po.paper_id
+  LEFT JOIN papers p
+         ON p.owner_id = pp.owner_id AND p.paper_id = pp.paper_id AND p.generation = pp.generation
+ WHERE pt.owner_id = ? AND pt.status = 'accepted'
+"""
 
 TopicSource = Literal["arxiv_category", "manual", "model"]
 PaperTopicStatus = Literal["none", "suggested", "accepted", "rejected"]
@@ -175,31 +205,25 @@ class TopicsMixin(LibraryMixin):
             ACCEPTED papers only.
         """
         owner_id = self._resolve(owner)
+        return self._topic_rows(owner_id, None)
+
+    def _topic_rows(self, owner_id: str, only: str | None) -> list[TopicRow]:
+        """The topics (all, or just ``only``) with counts from ONE query over accepted papers."""
+        where = "" if only is None else " AND topic_id = ?"
         topics = self._all(
-            "SELECT topic_id, name, cloth, sort_order, created_at FROM topics WHERE owner_id = ? "
-            "ORDER BY sort_order, created_at, topic_id",
-            (owner_id,),
+            "SELECT topic_id, name, cloth, sort_order, created_at FROM topics WHERE owner_id = ?"
+            + where
+            + " ORDER BY sort_order, created_at, topic_id",
+            (owner_id,) if only is None else (owner_id, only),
         )
-        held = self._all(
-            "SELECT paper_id, topic_id FROM paper_topics "
-            "WHERE owner_id = ? AND status = 'accepted'",
-            (owner_id,),
-        )
-        facts = (
-            {row.paper_id: row for row in self.list_library(owner)} if held else {}
-        )  # one pass over the library, not one query per paper
         papers: dict[str, int] = defaultdict(int)
         pages: dict[str, int] = defaultdict(int)
         categories: dict[str, set[str]] = defaultdict(set)
-        for placement in held:
-            topic_id = placement["topic_id"]
-            paper = facts.get(placement["paper_id"])
-            papers[topic_id] += 1
-            if paper is None:
-                continue
-            pages[topic_id] += paper.page_count or 0
-            if paper.arxiv_category is not None:
-                categories[topic_id].add(paper.arxiv_category)
+        for held in self._held(owner_id, only):
+            papers[held["topic_id"]] += 1
+            pages[held["topic_id"]] += held["page_count"] or 0
+            if held["category"] is not None:
+                categories[held["topic_id"]].add(held["category"])
         return [
             TopicRow(
                 topic_id=t["topic_id"],
@@ -214,9 +238,20 @@ class TopicsMixin(LibraryMixin):
             for t in topics
         ]
 
+    def _held(self, owner_id: str, only: str | None) -> list[Row]:
+        """Accepted placements (of one topic, or all) with ``category`` and ``page_count``."""
+        rows = self._all(
+            _HELD_SQL + ("" if only is None else " AND pt.topic_id = ?"),
+            (owner_id,) if only is None else (owner_id, only),
+        )
+        return [
+            {**row, "category": category_from(row["metadata"], row["stamp_text"])} for row in rows
+        ]
+
     def get_topic(self, owner: OwnerId, topic_id: str) -> TopicRow | None:
         """One topic with its counts, or None when it is not this owner's."""
-        return next((t for t in self.list_topics(owner) if t.topic_id == topic_id), None)
+        rows = self._topic_rows(self._resolve(owner), topic_id)
+        return rows[0] if rows else None
 
     def create_topic(self, owner: OwnerId, name: str, cloth: str | None = None) -> TopicRow:
         """Adds a topic at the end of the shelf order.
@@ -246,9 +281,9 @@ class TopicsMixin(LibraryMixin):
             order = 0 if top is None or top["top"] is None else min(int(top["top"]) + 1, 2**31)
             try:
                 self._conn.execute(
-                    "INSERT INTO topics (topic_id, owner_id, name, cloth, sort_order, created_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?)",
-                    (topic_id, owner_id, name, cloth, order, now_iso()),
+                    "INSERT INTO topics (topic_id, owner_id, name, name_key, cloth, sort_order, "
+                    "created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (topic_id, owner_id, name, name.casefold(), cloth, order, now_iso()),
                 )
             except sqlite3.IntegrityError as exc:  # a concurrent create won the unique index
                 raise TopicExists(f"you already have a topic called {name!r}") from exc
@@ -262,10 +297,13 @@ class TopicsMixin(LibraryMixin):
         topic_id: str,
         *,
         name: str | None = None,
-        cloth: str | None = None,
+        cloth: str | None | _Unset = UNSET,
         sort_order: int | None = None,
     ) -> TopicRow:
-        """Renames, recolours or reorders a topic; an argument left None is left alone.
+        """Renames, recolours or reorders a topic.
+
+        ``name`` and ``sort_order`` left None are left alone. ``cloth`` left ``UNSET`` is left
+        alone; ``cloth=None`` CLEARS the topic's colour.
 
         Raises:
             TopicNotFound: The topic is not this owner's.
@@ -275,7 +313,8 @@ class TopicsMixin(LibraryMixin):
         owner_id = self._resolve(owner)
         if name is not None:
             name = clean_topic_name(name)
-        _check_cloth(cloth)
+        if not isinstance(cloth, _Unset):
+            _check_cloth(cloth)
         if sort_order is not None and (
             isinstance(sort_order, bool) or not 0 <= sort_order <= _SQLITE_INTEGER_MAX
         ):
@@ -294,9 +333,18 @@ class TopicsMixin(LibraryMixin):
                 if clash is not None and clash != topic_id:
                     raise TopicExists(f"you already have a topic called {name!r}")
             self._conn.execute(
-                "UPDATE topics SET name = COALESCE(?, name), cloth = COALESCE(?, cloth), "
+                "UPDATE topics SET name = COALESCE(?, name), name_key = COALESCE(?, name_key), "
+                "cloth = CASE WHEN ? THEN ? ELSE cloth END, "
                 "sort_order = COALESCE(?, sort_order) WHERE owner_id = ? AND topic_id = ?",
-                (name, cloth, sort_order, owner_id, topic_id),
+                (
+                    name,
+                    None if name is None else name.casefold(),
+                    not isinstance(cloth, _Unset),
+                    None if isinstance(cloth, _Unset) else cloth,
+                    sort_order,
+                    owner_id,
+                    topic_id,
+                ),
             )
         updated = self.get_topic(owner, topic_id)
         assert updated is not None
@@ -323,6 +371,8 @@ class TopicsMixin(LibraryMixin):
     def get_paper_topic(self, owner: OwnerId, paper_id: PaperId) -> PaperTopicRow:
         """The paper's relationship to the topics; status ``none`` when there is no row.
 
+        A ``rejected`` row reports no topic (the topic it remembers is internal).
+
         Raises:
             PaperNotFound: The paper is not this owner's.
         """
@@ -342,9 +392,10 @@ class TopicsMixin(LibraryMixin):
             return PaperTopicRow(
                 paper_id, "none", None, None, None, None, None, library.arxiv_category
             )
+        # A rejected row keeps its topic_id only as "never offer this again"; it is not shown.
         topic = (
             None
-            if row["topic_id"] is None
+            if row["topic_id"] is None or row["status"] == "rejected"
             else TopicRef(row["topic_id"], row["name"], row["cloth"])
         )
         return PaperTopicRow(
@@ -372,14 +423,9 @@ class TopicsMixin(LibraryMixin):
             raise PaperNotFound(f"no paper {paper_id} for this owner")
         if library.arxiv_category is None:
             return None
-        categories = {row.paper_id: row.arxiv_category for row in self.list_library(owner)}
         holdings = [
-            Holding(r["topic_id"], categories.get(r["paper_id"]), r["decided_at"])
-            for r in self._all(
-                "SELECT paper_id, topic_id, decided_at FROM paper_topics "
-                "WHERE owner_id = ? AND status = 'accepted'",
-                (owner_id,),
-            )
+            Holding(r["topic_id"], r["category"], r["decided_at"])
+            for r in self._held(owner_id, None)
         ]
         return suggest_by_category(library.arxiv_category, holdings)
 
@@ -495,31 +541,37 @@ class TopicsMixin(LibraryMixin):
         return self.get_paper_topic(owner, paper_id)
 
     def reject_topic(self, owner: OwnerId, paper_id: PaperId) -> PaperTopicRow:
-        """Records the person's no, so the same offer is not made again.
+        """Records the person's no, so the same topic is never offered for this paper again.
 
-        With no offer on file the row is a bare rejection (``source='manual'``); an offer keeps
-        its source.
+        An offer becomes ``rejected`` and remembers the topic it named. On an ACCEPTED paper this
+        is a real "remove and reject" (the same as ``clear_topic``): the paper leaves the shelf,
+        the row turns ``rejected`` and keeps the topic only as the one turned down. With no row it
+        is a bare rejection (``source='manual'``). Already ``rejected``: unchanged. Whatever the
+        route, a rejected row shows NO topic.
 
         Raises:
             PaperNotFound: The paper is not this owner's.
         """
         owner_id = self._resolve(owner)
-        stamp = now_iso()
         with self.transaction():
             self._require_paper(owner_id, paper_id)
+            stamp = now_iso()
             self._conn.execute(
                 "INSERT INTO paper_topics (owner_id, paper_id, topic_id, status, source, "
                 "decided_at, created_at) VALUES (?, ?, NULL, 'rejected', 'manual', ?, ?) "
-                "ON CONFLICT (owner_id, paper_id) DO UPDATE SET status = 'rejected', "
-                "decided_at = excluded.decided_at",
+                "ON CONFLICT (owner_id, paper_id) DO NOTHING",
                 (owner_id, paper_id, stamp, stamp),
             )
+            self._decline(owner_id, paper_id, stamp)
         return self.get_paper_topic(owner, paper_id)
 
     def clear_topic(self, owner: OwnerId, paper_id: PaperId) -> PaperTopicRow:
-        """Unshelves the paper: the row goes and the status is ``none``.
+        """Unshelves the paper without losing the decision.
 
-        The deterministic offer may be made again on the next read; it is only ever an offer.
+        An accepted paper (or a pending offer) turns ``rejected`` with the topic it left kept as
+        the one never to offer again; ``rejected`` stays ``rejected``; a paper with no row stays
+        ``none``. So reject -> unshelve -> read, and unshelve -> read, never offer the same topic
+        straight back. Choosing a topic again (``accept_topic``) is always possible.
 
         Raises:
             PaperNotFound: The paper is not this owner's.
@@ -527,18 +579,24 @@ class TopicsMixin(LibraryMixin):
         owner_id = self._resolve(owner)
         with self.transaction():
             self._require_paper(owner_id, paper_id)
-            self._conn.execute(
-                "DELETE FROM paper_topics WHERE owner_id = ? AND paper_id = ?",
-                (owner_id, paper_id),
-            )
+            self._decline(owner_id, paper_id, now_iso())
         return self.get_paper_topic(owner, paper_id)
+
+    def _decline(self, owner_id: str, paper_id: str, stamp: str) -> None:
+        """Turns a ``suggested`` or ``accepted`` row into ``rejected`` (topic_id kept)."""
+        self._conn.execute(
+            "UPDATE paper_topics SET status = 'rejected', decided_at = ? "
+            "WHERE owner_id = ? AND paper_id = ? AND status IN ('suggested', 'accepted')",
+            (stamp, owner_id, paper_id),
+        )
 
     # ── internals ─────────────────────────────────────────────────────────────────────
 
     def _by_name(self, owner_id: str, name: str) -> str | None:
-        """The id of the owner's topic called ``name`` (the column is NOCASE), or None."""
+        """The id of the owner's topic called ``name`` (compared by ``casefold``), or None."""
         row = self._one(
-            "SELECT topic_id FROM topics WHERE owner_id = ? AND name = ?", (owner_id, name)
+            "SELECT topic_id FROM topics WHERE owner_id = ? AND name_key = ?",
+            (owner_id, name.casefold()),
         )
         return None if row is None else str(row["topic_id"])
 

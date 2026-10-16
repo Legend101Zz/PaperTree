@@ -48,7 +48,7 @@ CASES: Final[dict[str, tuple[dict[str, Any], tuple[str, ...]]]] = {
     "ReparseRequest": ({}, ("reason",)),
     "ReadingStateUpdate": ({"last_page": 0}, ("mode",)),
     "TopicCreate": ({"name": "Vision"}, ("cloth",)),
-    "TopicPatch": ({}, ("name", "cloth", "sort_order")),
+    "TopicPatch": ({}, ("name", "sort_order")),
     # "Exactly one of topic_id / new_topic_name" is the route's rule (422), not the model's.
     "PaperTopicPut": ({}, ("topic_id", "new_topic_name", "cloth")),
     "HighlightPatch": ({}, ("color",)),

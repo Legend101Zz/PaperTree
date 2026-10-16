@@ -95,7 +95,6 @@ def test_a_new_cs_cl_paper_is_suggested_into_the_topic_holding_cs_cl_papers(tmp_
             "topic_id": topic_id,
             "name": "Transformers & attention",
             "cloth": "transformers",
-            "status": "accepted",
             "source": "arxiv_category",
             "source_detail": "cs.CL",
         }
@@ -114,18 +113,48 @@ def test_a_new_cs_cl_paper_is_suggested_into_the_topic_holding_cs_cl_papers(tmp_
         none = h.client.get(f"/papers/{ddpm}/topic", headers=auth(token)).json()
         assert (none["status"], none["topic"], none["arxiv_category"]) == ("none", None, "cs.LG")
 
-        # Reject BERT's sibling offer, then unshelve the accepted one.
-        gone = h.client.delete(f"/papers/{bert}/topic", headers=auth(token))
-        assert gone.status_code == 200 and gone.json()["status"] == "none"
-        assert h.client.get(f"/papers/{bert}", headers=auth(token)).json()["topic"] is None
-        offered_again = h.client.get(f"/papers/{bert}/topic", headers=auth(token)).json()
-        assert offered_again["status"] == "suggested"
-        rejected = h.client.post(f"/papers/{bert}/topic/reject", headers=auth(token))
-        assert rejected.status_code == 200 and rejected.json()["status"] == "rejected"
+
+def test_a_decision_sticks(tmp_path: Path) -> None:
+    """Reject -> unshelve -> read, and unshelve -> read, never offer the same topic back."""
+    with harness(tmp_path) as h:
+        token = register(h.client, "reader@example.com")
+        attention = _upload_and_parse(h, token, ATTENTION)
+        bert = _upload_and_parse(h, token, BERT)
+        topic_id = h.client.post(
+            "/topics", json={"name": "Transformers"}, headers=auth(token)
+        ).json()["topic_id"]
+        h.client.put(f"/papers/{attention}/topic", json={"topic_id": topic_id}, headers=auth(token))
+
+        def topic(paper: str) -> dict[str, object]:
+            return h.client.get(f"/papers/{paper}/topic", headers=auth(token)).json()  # type: ignore[no-any-return]
+
+        assert topic(bert)["status"] == "suggested"
+        # Sequence 1: reject the offer, unshelve, read.
         assert (
-            h.client.get(f"/papers/{bert}/topic", headers=auth(token)).json()["status"]
+            h.client.post(f"/papers/{bert}/topic/reject", headers=auth(token)).json()["status"]
             == "rejected"
         )
+        again = h.client.delete(f"/papers/{bert}/topic", headers=auth(token)).json()
+        assert (again["status"], again["topic"]) == ("rejected", None)
+        assert (topic(bert)["status"], topic(bert)["topic"]) == ("rejected", None)
+
+        # Choosing is still possible; then sequence 2: unshelve an accepted paper, read.
+        put = h.client.put(
+            f"/papers/{bert}/topic", json={"topic_id": topic_id}, headers=auth(token)
+        )
+        assert put.json()["status"] == "accepted" and put.json()["source"] == "manual"
+        left = h.client.delete(f"/papers/{bert}/topic", headers=auth(token)).json()
+        assert (left["status"], left["topic"]) == ("rejected", None)
+        assert (topic(bert)["status"], topic(bert)["topic"]) == ("rejected", None)
+        assert h.client.get(f"/papers/{bert}", headers=auth(token)).json()["topic"] is None
+
+        # "Reject" on an accepted paper is a real remove-and-reject: no topic on the wire anywhere.
+        h.client.put(f"/papers/{bert}/topic", json={"topic_id": topic_id}, headers=auth(token))
+        rejected = h.client.post(f"/papers/{bert}/topic/reject", headers=auth(token)).json()
+        assert (rejected["status"], rejected["topic"]) == ("rejected", None)
+        assert h.client.get(f"/papers/{bert}", headers=auth(token)).json()["topic"] is None
+        counts = h.client.get("/topics", headers=auth(token)).json()
+        assert [t["paper_count"] for t in counts] == [1]  # only Attention is left on the shelf
 
 
 def test_topic_crud_and_errors(tmp_path: Path) -> None:
@@ -178,6 +207,9 @@ def test_topic_crud_and_errors(tmp_path: Path) -> None:
             "vision",
             7,
         )
+        cleared = h.client.patch(url, json={"cloth": None}, headers=auth(token))
+        assert cleared.status_code == 200 and cleared.json()["cloth"] is None
+        assert cleared.json()["name"] == "Seeing"  # only what is sent changes
         assert_envelope(
             h.client.patch(url, json={"name": "X" * 60}, headers=auth(token)), 409, "topic_exists"
         )

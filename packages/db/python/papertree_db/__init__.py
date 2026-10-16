@@ -92,6 +92,7 @@ from .reading import ProgressState, ReadingState, progress_state, reached_last_p
 from .topics import (
     CLOTHS,
     TOPIC_NAME_MAX,
+    UNSET,
     Holding,
     PaperTopicRow,
     TopicRef,
@@ -102,6 +103,7 @@ from .topics import (
 )
 
 __all__ = [
+    "UNSET",
     "CLOTHS",
     "TOPIC_NAME_MAX",
     "Holding",

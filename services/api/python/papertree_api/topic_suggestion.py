@@ -10,17 +10,22 @@ never shelves a paper.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from papertree_db import LibraryRow, PaperId, PaperTopicRow, TopicRow, TopicSuggestion
 
 from .deps import Caller
 
 
-def model_suggestion(row: LibraryRow, topics: list[TopicRow]) -> TopicSuggestion | None:
+def model_suggestion(
+    row: LibraryRow, topics: Callable[[], list[TopicRow]]
+) -> TopicSuggestion | None:
     """THE SEAM for part 2 (#242): a model's offer when the deterministic rule has none.
 
     Args:
         row: The paper (title, authors, category: what the model may be shown).
-        topics: The person's topics, to choose from or to name a new one beside.
+        topics: LAZY. Call it to read the person's topics (one query) only if the model run
+            actually happens; part 1 never calls it, so a first read pays nothing for it.
 
     Returns:
         A suggestion with `source='model'`, or None. Part 1 has no model call: always None.
@@ -51,7 +56,7 @@ def offer_topic(call: Caller, paper_id: str) -> PaperTopicRow:
     if offer is None:
         row = call.db.library_row(call.db_owner, pid)
         if row is not None:
-            offer = model_suggestion(row, call.db.list_topics(call.db_owner))
+            offer = model_suggestion(row, lambda: call.db.list_topics(call.db_owner))
     if offer is None:
         return current
     return call.db.record_suggestion(call.db_owner, pid, offer)

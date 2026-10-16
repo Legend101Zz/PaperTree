@@ -12,20 +12,25 @@
 --   suggested  an offer (never shelved until accepted); topic_id names an existing topic, or
 --              suggested_name proposes a NEW one that does not exist yet
 --   accepted   the paper is shelved under topic_id; decided_at is when the person said yes
---   rejected   the person said no; the row stays so the same offer is not made again
+--   rejected   the person said no, or took the paper off a shelf; the row stays (topic_id = the
+--              topic turned down or left) so that topic is never offered again. The API shows
+--              no topic for it.
 -- A paper with no row is "unshelved". The row dies with its paper (CASCADE through paper_owners).
 -- Every FK between owned tables carries owner_id (0001 rule).
 
 CREATE TABLE topics (
   topic_id   TEXT    NOT NULL PRIMARY KEY,
   owner_id   TEXT    NOT NULL REFERENCES users (user_id) ON DELETE CASCADE,
-  name       TEXT    NOT NULL COLLATE NOCASE,
+  name       TEXT    NOT NULL,
+  -- name.casefold(), written by papertree_db.topics: ONE Unicode-aware rule for "same name"
+  -- (NOCASE would fold ASCII only: "ÀB" and "àb" would both be accepted).
+  name_key   TEXT    NOT NULL,
   -- Length (1-60 characters) is enforced by the API, not a CHECK, so relaxing it needs no rebuild.
   cloth      TEXT    CHECK (cloth IS NULL OR cloth IN
                        ('transformers', 'vision', 'generative', 'optimization', 'language', 'rl')),
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT    NOT NULL,
-  UNIQUE (owner_id, name),
+  UNIQUE (owner_id, name_key),
   -- The target of paper_topics' composite FK: it must carry owner_id too.
   UNIQUE (owner_id, topic_id)
 ) STRICT;
