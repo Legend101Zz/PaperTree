@@ -100,7 +100,9 @@ export const NoteItem = memo(function NoteItem(props: NoteItemProps): ReactNode 
           role="button"
           tabIndex={0}
           aria-roledescription={noun}
-          aria-label={`${noun[0]?.toUpperCase() ?? ''}${noun.slice(1)}: ${item.text}`}
+          // The search's light is visual; the name says it too, so a screen reader hears which
+          // note matched.
+          aria-label={`${noun[0]?.toUpperCase() ?? ''}${noun.slice(1)}: ${item.text}${props.matched === true ? ' (matches your search)' : ''}`}
           aria-describedby="pt-nb-note-help"
           {...drag}
           onDoubleClick={() => props.onEdit(item.id)}

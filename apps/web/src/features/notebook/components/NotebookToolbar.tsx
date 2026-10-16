@@ -8,7 +8,7 @@
  */
 import { ToolbarButton } from '@papertree/ui';
 import { Circle, MoveRight, Redo2, Shapes, Square, StickyNote, Type, Undo2 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { ShapeItem } from '../model/page';
 import type { ReactNode } from 'react';
@@ -35,7 +35,7 @@ export interface NotebookToolbarProps {
   readonly inkTools?: ReactNode;
 }
 
-/** The Shapes tool: a button that opens the three shapes; Escape closes it. */
+/** The Shapes tool: a button that opens the three shapes; Escape or a press elsewhere closes it. */
 function ShapesTool({ onShape }: { onShape: NotebookToolbarProps['onShape'] }): ReactNode {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLSpanElement>(null);
@@ -43,6 +43,19 @@ function ShapesTool({ onShape }: { onShape: NotebookToolbarProps['onShape'] }): 
     setOpen(false);
     trigger.current?.querySelector('button')?.focus();
   };
+  const escape = (e: { key: string }): void => {
+    if (e.key === 'Escape') close();
+  };
+  useEffect(() => {
+    if (!open) return undefined;
+    const outside = (e: PointerEvent): void => {
+      if (!(e.target instanceof Node) || trigger.current?.contains(e.target) !== true) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', outside);
+    return () => document.removeEventListener('pointerdown', outside);
+  }, [open]);
   return (
     <span className="pt-nb-tools__shapes" ref={trigger}>
       <ToolbarButton
@@ -52,9 +65,11 @@ function ShapesTool({ onShape }: { onShape: NotebookToolbarProps['onShape'] }): 
         aria-expanded={open}
         aria-controls="pt-nb-shape-menu"
         onClick={() => setOpen(!open)}
+        onKeyDown={escape}
       />
       {open ? (
-        // A group of three buttons, not a menu: Tab reaches them, Escape on any of them closes.
+        // A group of three buttons, not a menu: Tab reaches them; Escape on them or on the Shapes
+        // button closes it.
         <span id="pt-nb-shape-menu" className="pt-nb-tools__pop" role="group" aria-label="Shapes">
           {SHAPES.map((s) => (
             <ToolbarButton
@@ -66,9 +81,7 @@ function ShapesTool({ onShape }: { onShape: NotebookToolbarProps['onShape'] }): 
                 setOpen(false);
                 onShape(s.shape);
               }}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') close();
-              }}
+              onKeyDown={escape}
             />
           ))}
         </span>

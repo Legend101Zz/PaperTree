@@ -34,6 +34,7 @@ import { parseExchangeBody } from '../model/wire';
 import './notebook.css';
 
 import type { SendResult } from '../hooks/useBoardCard';
+import type { SaveStatus } from '../hooks/useItemSaver';
 import type { Anchor } from '@papertree/anchoring';
 import type { ReactNode } from 'react';
 
@@ -45,9 +46,8 @@ export interface NotebookViewProps {
 
 const NO_MATCHES: ReadonlySet<string> = new Set();
 
-const SENT: Readonly<Record<SendResult, string>> = {
+const SENT: Readonly<Record<Exclude<SendResult, 'already'>, string>> = {
   sent: 'The page is on the board now, as one card.',
-  already: 'This page is already on the board.',
   failed: 'The page could not be sent to the board. Try again.',
 };
 
@@ -77,7 +77,7 @@ export function NotebookView({ paperId, pageId }: NotebookViewProps): ReactNode 
   const scale = usePageScale(desk);
   const router = useRouter();
   const [matches, setMatches] = useState<ReadonlySet<string>>(NO_MATCHES);
-  const [sent, setSent] = useState<SendResult | null>(null);
+  const [sent, setSent] = useState<Exclude<SendResult, 'already'> | null>(null);
   const [dismissed, setDismissed] = useState<string | null>(null);
   const items = model.step?.state.items ?? [];
 
@@ -107,11 +107,29 @@ export function NotebookView({ paperId, pageId }: NotebookViewProps): ReactNode 
   const latestToReader = useRef(toReader);
   latestToReader.current = toReader;
   const focusAnchor = useCallback((anchor: Anchor) => latestToReader.current(anchor), []);
+  // One card per page: a page already on the board opens the board instead of sending again.
   const send = (): void => {
+    if (board.card !== null && board.card !== undefined) {
+      router.push(boardHref(paperId));
+      return;
+    }
     void board.send().then((result) => {
+      if (result === 'already') return;
       setSent(result);
       setDismissed(null);
     });
+  };
+  // The items and the template save separately and are reported as one: one conflict bar, one
+  // count of what is not saved, one Try again that re-sends both.
+  const saving: SaveStatus = {
+    ...model.save,
+    conflict: model.save.conflict || template.save.conflict,
+    failed: model.save.failed + (template.save.failed ? 1 : 0),
+    failure: model.save.failure + template.save.failure,
+  };
+  const retry = (): void => {
+    model.retry();
+    template.retry();
   };
 
   const notice =
@@ -138,7 +156,11 @@ export function NotebookView({ paperId, pageId }: NotebookViewProps): ReactNode 
           )}
         </Link>
         <span className="pt-nb__actions">
-          <Button leadingIcon={<Pin size={18} />} onClick={send} disabled={page === null}>
+          <Button
+            leadingIcon={<Pin size={18} />}
+            onClick={send}
+            disabled={page === null || board.sending || board.card === undefined}
+          >
             Send page to board
           </Button>
           <Link className="pt-button pt-button--secondary pt-button--md" href={boardHref(paperId)}>
@@ -213,17 +235,20 @@ export function NotebookView({ paperId, pageId }: NotebookViewProps): ReactNode 
           counts={pages.data?.find((p) => p.page_id === pageId)?.counts ?? null}
           hasQuestion={exchangeId !== null}
           citations={exchange.answer?.coverage?.citations ?? null}
+          passages={exchange.answer?.coverage?.passages ?? null}
           card={board.card}
+          boardUnreadable={board.unreadable}
+          sending={board.sending}
           items={items}
           onSend={send}
           onMatches={setMatches}
         />
       )}
       <SaveNotice
-        status={model.save}
-        unsaved={unsavedPhrase(model.unsaved)}
+        status={saving}
+        unsaved={unsavedPhrase(model.unsaved, template.unsaved)}
         unsavedText={model.unsavedText}
-        onRetry={model.retry}
+        onRetry={retry}
         onReload={() => window.location.reload()}
       />
       {notice === null || dismissed === notice.key ? null : (

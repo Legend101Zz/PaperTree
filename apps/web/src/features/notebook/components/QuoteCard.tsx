@@ -53,7 +53,7 @@ export const QuoteCard = memo(function QuoteCard(props: QuoteCardProps): ReactNo
   const { item, passage, tilt = 0, matched = false, onFocusAnchor } = props;
   const focus = (): void => onFocusAnchor(item.anchor);
   const where = passage === null ? null : formatPageLabel(passage.page, passage.para);
-  const name = passage === null ? 'Quoted passage' : `Passage ${String(passage.n)}, ${where ?? ''}`;
+  const name = `${passage === null ? 'Quoted passage' : `Passage ${String(passage.n)}, ${where ?? ''}`}${matched ? ' (matches your search)' : ''}`;
   return (
     <article
       className="pt-nb-quote"

@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { notebookApi, notebookKeys } from '../api/notebookApi';
 import { notebookHref } from '../model/links';
 
+import type { NotebookItemKind } from '../api/notebookApi';
 import type { ReactNode } from 'react';
 
 /** Props for `NotebookSearch`. */
@@ -21,6 +22,16 @@ export interface NotebookSearchProps {
   /** The ids of this page's items that match, or an empty set when there is no query. */
   readonly onMatches: (ids: ReadonlySet<string>) => void;
 }
+
+/**
+ * Whose words a hit's snippet is. An exchange hit can be the question or the answer, so it is left
+ * unmarked rather than marked wrongly.
+ */
+const VOICE: Readonly<Partial<Record<NotebookItemKind, 'you' | 'paper'>>> = {
+  text: 'you',
+  sticky: 'you',
+  quote: 'paper',
+};
 
 /** Waits this long after the last keystroke before asking the server. */
 const DEBOUNCE_MS = 250;
@@ -71,7 +82,9 @@ export function NotebookSearch({ paperId, pageId, onMatches }: NotebookSearchPro
           {elsewhere.slice(0, 5).map((h) => (
             <li key={h.item_id}>
               <Link href={notebookHref(paperId, h.page_id)}>{h.page_title}</Link>
-              <span>{h.snippet}</span>
+              <span {...(VOICE[h.kind] === undefined ? {} : { 'data-voice': VOICE[h.kind] })}>
+                {h.snippet}
+              </span>
             </li>
           ))}
         </ul>

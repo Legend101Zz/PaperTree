@@ -1,0 +1,215 @@
+/* The notebook's side panel (S5c, #208, frame 05): the Paper picker, the search box, the counts
+   and the board card. Tokens only; the page itself is styled in notebook.css. */
+
+.pt-nb-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  overflow: auto;
+  padding: 24px;
+  background: var(--pt-ground);
+  border-inline-start: 1px solid var(--pt-rule);
+  font-size: 15px;
+}
+
+.pt-nb-panel section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pt-nb-panel section + section {
+  padding-block-start: 20px;
+  border-block-start: 1px solid var(--pt-rule);
+}
+
+.pt-nb-panel h2 {
+  margin: 0;
+  font: 700 14px var(--pt-font-label);
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--pt-ls-label);
+  color: var(--pt-ink-2);
+}
+
+.pt-nb-panel p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--pt-ink-2);
+}
+
+/* Links in running text are underlined, never told apart by colour alone (axe link-in-text-block). */
+.pt-nb-panel a {
+  color: var(--pt-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.pt-nb-panel__counts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pt-nb-panel__counts li {
+  display: flex;
+  justify-content: space-between;
+}
+
+.pt-nb-panel__n {
+  font: 13px var(--pt-font-you);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--pt-ink-2);
+}
+
+.pt-nb-templates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.pt-nb-templates__tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+  background: var(--pt-page);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.pt-nb-templates__tile[data-checked='true'] {
+  padding: 5px;
+  border: 2px solid var(--pt-primary);
+  font-weight: 700;
+}
+
+.pt-nb-templates__tile:focus-within {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+/* The radio covers its tile, so a press anywhere on the tile is a press on the radio. */
+.pt-nb-templates__tile input {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  inline-size: 100%;
+  block-size: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.pt-nb-templates__swatch {
+  display: block;
+  block-size: 56px;
+  border: 1px solid var(--pt-rule);
+  background-color: var(--pt-page);
+}
+
+/* Frame 05's swatches: the page's papers at swatch scale (9 px cells). */
+.pt-nb-templates__swatch[data-template='dot'] {
+  background-image: radial-gradient(circle, var(--pt-nb-dot) 1px, transparent 1.3px);
+  background-size: 9px 9px;
+}
+
+.pt-nb-templates__swatch[data-template='lined'],
+.pt-nb-templates__swatch[data-template='cornell'] {
+  background-image: repeating-linear-gradient(transparent 0 8px, var(--pt-nb-rule) 8px 9px);
+}
+
+.pt-nb-templates__swatch[data-template='cornell'] {
+  background-image:
+    linear-gradient(90deg, transparent 25%, var(--pt-nb-margin) 25% calc(25% + 1px), transparent 0),
+    linear-gradient(transparent 76%, var(--pt-nb-margin) 76% calc(76% + 1px), transparent 0),
+    repeating-linear-gradient(transparent 0 8px, var(--pt-nb-rule) 8px 9px);
+}
+
+.pt-nb-templates__swatch[data-template='derivation'] {
+  background-image:
+    linear-gradient(90deg, transparent 10%, var(--pt-nb-margin) 10% calc(10% + 1px), transparent 0),
+    repeating-linear-gradient(0deg, var(--pt-nb-rule) 0 1px, transparent 1px 6px),
+    repeating-linear-gradient(90deg, var(--pt-nb-rule) 0 1px, transparent 1px 6px);
+}
+
+.pt-nb-templates__name {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.pt-nb-templates__in-use {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--pt-primary);
+}
+
+.pt-nb-search input {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-block-size: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+  background: var(--pt-page);
+  color: var(--pt-ink);
+  font: 15px var(--pt-font-ai);
+}
+
+.pt-nb-search__result {
+  margin-block-start: 6px;
+}
+
+.pt-nb-search__elsewhere {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13.5px;
+}
+
+.pt-nb-search__elsewhere span {
+  display: block;
+  color: var(--pt-ink-muted);
+}
+
+.pt-nb-card {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  background: var(--pt-call-slip);
+  box-shadow: var(--pt-e1), var(--pt-e1-edge);
+  font-size: 13.5px;
+  line-height: 1.3;
+}
+
+.pt-nb-card b {
+  display: -webkit-box;
+  overflow: hidden;
+  font: 700 13px var(--pt-font-paper);
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.pt-nb-card span > span {
+  display: block;
+  margin-block-start: 3px;
+  color: var(--pt-ink-2);
+}
+
+.pt-nb-mini {
+  flex: none;
+  inline-size: 58px;
+  border: 1px solid var(--pt-rule);
+  background: var(--pt-page);
+}

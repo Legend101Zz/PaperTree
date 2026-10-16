@@ -15,6 +15,8 @@ import { TemplatePicker } from './TemplatePicker';
 import { boardHref } from '../model/links';
 import { PAGE_WIDTH } from '../model/page';
 
+import './panel.css';
+
 import type { NotebookCounts } from '../api/notebookApi';
 import type { Item, PageTemplate } from '../model/page';
 import type { CanvasNode } from '@/lib/api/types';
@@ -33,11 +35,27 @@ export interface NotebookPanelProps {
   readonly hasQuestion: boolean;
   /** Citation markers in the answer (its coverage), when the thread was read. */
   readonly citations: number | null;
+  /** Distinct passages the answer stands on (its coverage), when the thread was read. */
+  readonly passages: number | null;
   /** The page's card on the board: undefined while loading, null when it is not there. */
   readonly card: CanvasNode | null | undefined;
+  /** True when the board could not be read; nothing can be sent until it can. */
+  readonly boardUnreadable: boolean;
+  /** True while a send is in flight. */
+  readonly sending: boolean;
   readonly items: readonly Item[];
   readonly onSend: () => void;
   readonly onMatches: (ids: ReadonlySet<string>) => void;
+}
+
+/**
+ * "1 citation" or "11 citations": the answer's markers, in words.
+ *
+ * @param n - How many citation markers the answer has.
+ * @returns The phrase.
+ */
+export function citationsPhrase(n: number): string {
+  return n === 1 ? '1 citation' : `${String(n)} citations`;
 }
 
 /**
@@ -103,9 +121,15 @@ export function NotebookPanel(props: NotebookPanelProps): ReactNode {
           <ul className="pt-nb-panel__counts">
             <Row label="Your question" value={props.hasQuestion ? 1 : 0} />
             {props.citations === null ? null : (
-              <Row label="The AI’s answer" value={`${String(props.citations)} citations`} />
+              <Row label="The AI’s answer" value={citationsPhrase(props.citations)} />
             )}
-            <Row label="Passages it stands on" value={counts.quotes} />
+            {/* The answer's own count; the cards on the page are only the same number until a
+                quote is added from elsewhere, so without the answer they are called what they are. */}
+            {props.passages === null ? (
+              <Row label="Quote cards" value={counts.quotes} />
+            ) : (
+              <Row label="Passages it stands on" value={props.passages} />
+            )}
             <Row label="Typed notes" value={counts.text} />
             <Row label="Sticky notes" value={counts.stickies} />
             <Row label="Ink" value={counts.strokes > 0 ? 'yours' : 'none yet'} />
@@ -115,10 +139,14 @@ export function NotebookPanel(props: NotebookPanelProps): ReactNode {
       </section>
       <section aria-labelledby="pt-nb-panel-board">
         <h2 id="pt-nb-panel-board">On the board</h2>
-        {card === undefined ? null : card === null ? (
+        {card === undefined ? (
+          props.boardUnreadable ? (
+            <p role="status">The board could not be read, so the page cannot be sent yet.</p>
+          ) : null
+        ) : card === null ? (
           <>
             <p>This page is not on the board yet. Sending it puts one card there that opens it.</p>
-            <Button leadingIcon={<Pin size={18} />} onClick={props.onSend}>
+            <Button leadingIcon={<Pin size={18} />} onClick={props.onSend} disabled={props.sending}>
               Send page to board
             </Button>
           </>

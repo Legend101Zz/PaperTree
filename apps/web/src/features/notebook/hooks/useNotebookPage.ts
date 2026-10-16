@@ -8,6 +8,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { boardKey } from './useBoardCard';
 import { useItemSaver } from './useItemSaver';
 import { notebookApi, notebookKeys } from '../api/notebookApi';
 import { createHistory, execute, redo, undo } from '../model/history';
@@ -90,8 +91,12 @@ export function useNotebookPage(paperId: string, pageId: string): NotebookPageMo
   const saver = useItemSaver(pageId, {
     items: () => stepRef.current?.state.items ?? [],
     body: (item) => bodyOf(item, bodies.current),
-    // The page list's counts are the server's; re-read them once a burst has landed.
-    onSettled: () => void client.invalidateQueries({ queryKey: notebookKeys.pages(paperId) }),
+    // The panel's counts and the board card's are the server's; re-read both once a burst has
+    // landed, so neither goes stale after an edit.
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: notebookKeys.pages(paperId) });
+      void client.invalidateQueries({ queryKey: boardKey(paperId) });
+    },
   });
   const { seed, sync } = saver;
 

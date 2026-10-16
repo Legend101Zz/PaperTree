@@ -3,7 +3,9 @@
 /**
  * usePageTemplate — the page's paper, switched from the side panel and saved with the page's
  * `version` (S5c, #208). Saves run one at a time and send the latest choice, so arrowing through
- * the five templates is never a race on `version`; a 409 is a conflict and is never retried.
+ * the five templates is never a race on `version`; a 409 is a conflict and is never retried. A
+ * failure stays failed until a save succeeds, counts in the page's "Not saved" notice, and is sent
+ * again by that notice's Try again (`retry`).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -12,28 +14,42 @@ import { isStaleVersion, notebookApi } from '../api/notebookApi';
 import type { NotebookPageWire } from '../api/notebookApi';
 import type { PageTemplate } from '../model/page';
 
+/** Where the template's saving stands, in the same terms as the items' `SaveStatus`. */
+export interface TemplateSave {
+  readonly conflict: boolean;
+  /** True while the latest choice failed to save. */
+  readonly failed: boolean;
+  /** Bumped by every failure, so a dismissed notice comes back for the next one. */
+  readonly failure: number;
+}
+
 /** What `usePageTemplate` returns. */
 export interface PageTemplateModel {
   /** The template on screen; null until the page has loaded. */
   readonly template: PageTemplate | null;
-  readonly save: 'idle' | 'conflict' | 'failed';
+  readonly save: TemplateSave;
+  /** True while the screen shows a template the server does not have. */
+  readonly unsaved: boolean;
   readonly choose: (template: PageTemplate) => void;
+  /** Send the latest choice again (after a failure). */
+  readonly retry: () => void;
 }
 
 /**
  * The page's template, with saving.
  *
  * @param page - The page as loaded, or null while it loads.
- * @returns The current template, how saving stands, and `choose`.
+ * @returns The current template, how saving stands, `choose` and `retry`.
  */
 export function usePageTemplate(page: NotebookPageWire | null): PageTemplateModel {
   const [template, setTemplate] = useState<PageTemplate | null>(null);
-  const [save, setSave] = useState<PageTemplateModel['save']>('idle');
+  const [save, setSave] = useState<TemplateSave>({ conflict: false, failed: false, failure: 0 });
   const version = useRef<number | null>(null);
   const saved = useRef<PageTemplate | null>(null);
   const wanted = useRef<PageTemplate | null>(null);
   const chain = useRef<Promise<void>>(Promise.resolve());
   const stopped = useRef(false);
+  const pageId = page?.page_id ?? null;
 
   useEffect(() => {
     if (page === null || version.current !== null) return;
@@ -43,32 +59,46 @@ export function usePageTemplate(page: NotebookPageWire | null): PageTemplateMode
     setTemplate(page.template);
   }, [page]);
 
-  const push = useCallback(async (pageId: string): Promise<void> => {
+  const push = useCallback(async (id: string): Promise<void> => {
     const target = wanted.current;
     if (stopped.current || target === null || target === saved.current) return;
     try {
-      const next = await notebookApi.patchPage(pageId, {
+      const next = await notebookApi.patchPage(id, {
         version: version.current ?? 0,
         template: target,
       });
       version.current = next.version;
       saved.current = next.template;
-      setSave('idle');
+      setSave((s) => ({ ...s, failed: false }));
     } catch (error) {
-      if (isStaleVersion(error)) stopped.current = true;
-      setSave(isStaleVersion(error) ? 'conflict' : 'failed');
+      if (isStaleVersion(error)) {
+        stopped.current = true;
+        setSave((s) => ({ ...s, conflict: true }));
+      } else {
+        setSave((s) => ({ ...s, failed: true, failure: s.failure + 1 }));
+      }
     }
   }, []);
 
+  const send = useCallback(() => {
+    if (pageId === null) return;
+    chain.current = chain.current.then(() => push(pageId));
+  }, [pageId, push]);
+
   const choose = useCallback(
     (next: PageTemplate) => {
-      if (page === null) return;
       wanted.current = next;
       setTemplate(next);
-      chain.current = chain.current.then(() => push(page.page_id));
+      send();
     },
-    [page, push],
+    [send],
   );
 
-  return { template, save, choose };
+  return {
+    template,
+    save,
+    unsaved: template !== null && template !== saved.current,
+    choose,
+    retry: send,
+  };
 }

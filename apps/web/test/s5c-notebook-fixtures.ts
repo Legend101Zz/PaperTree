@@ -228,11 +228,12 @@ export interface Call {
 /**
  * Stubs `fetch` with the routes the notebook page calls. Item writes echo back with the version
  * bumped; `onWrite` may answer instead (a 409, say), or hold the request (a promise) to keep it in
- * flight.
+ * flight; `boardFails` makes the board unreadable.
  */
 export function stubApi(
   view: NotebookPageView,
   onWrite?: (call: Call) => Response | null | Promise<Response | null>,
+  options: { readonly boardFails?: boolean } = {},
 ): Call[] {
   const calls: Call[] = [];
   const server = new Map(view.items.map((i) => [i.item_id, i]));
@@ -260,15 +261,15 @@ export function stubApi(
       if (method === 'GET' && path === '/papers') {
         return json(200, [{ paper_id: PAPER, title: 'Attention Is All You Need' }]);
       }
+      const on = (kind: string) => [...server.values()].filter((i) => i.kind === kind).length;
+      const counts = {
+        quotes: on('quote'),
+        stickies: on('sticky'),
+        text: on('text'),
+        shapes: on('shape'),
+        strokes: view.strokes.length,
+      };
       if (method === 'GET' && path === `/papers/${PAPER}/notebook/pages`) {
-        const on = (kind: string) => [...server.values()].filter((i) => i.kind === kind).length;
-        const counts = {
-          quotes: on('quote'),
-          stickies: on('sticky'),
-          text: on('text'),
-          shapes: on('shape'),
-          strokes: view.strokes.length,
-        };
         return json(200, [
           {
             page_id: PAGE,
@@ -280,7 +281,11 @@ export function stubApi(
           },
         ]);
       }
-      if (method === 'GET' && path === `/papers/${PAPER}/board`) return json(200, board);
+      if (method === 'GET' && path === `/papers/${PAPER}/board`) {
+        if (options.boardFails === true) return json(500, { detail: 'down', code: 'internal' });
+        // A notebook card's counts are computed on read, from the page as it is now (S6a).
+        return json(200, { ...board, nodes: board.nodes.map((n) => ({ ...n, counts })) });
+      }
       if (method === 'GET' && path.startsWith(`/papers/${PAPER}/notebook/search?`)) {
         const q = new URLSearchParams(path.split('?')[1]).get('q') ?? '';
         const hits = [...server.values()].filter(
@@ -305,12 +310,7 @@ export function stubApi(
         return json(200, page);
       }
       if (method === 'POST' && path === `/papers/${PAPER}/board/nodes`) {
-        const node = {
-          ...body,
-          board_id: 'brd_1',
-          counts: { quotes: 4, stickies: 1, text: 0, shapes: 0, strokes: 0 },
-          version: 1,
-        };
+        const node = { ...body, board_id: 'brd_1', counts, version: 1 };
         board = { ...board, nodes: [...board.nodes, node] };
         return json(201, { board: { board_id: 'brd_1' }, node });
       }

@@ -9,6 +9,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NotebookView } from '@/features/notebook';
+import { citationsPhrase } from '@/features/notebook/components/NotebookPanel';
 
 import { PAGE, PAPER, pageView, stubApi, wireItem } from './s5c-notebook-fixtures';
 
@@ -103,15 +104,12 @@ describe('Send page to board', () => {
         body: expect.objectContaining({ kind: 'notebook', source_page_id: PAGE }),
       }),
     ]);
-    await within(panel).findByText('4 quotes · 1 sticky');
+    await within(panel).findByText('4 quotes');
     expect(within(panel).getByRole('link', { name: 'Open it there' }).getAttribute('href')).toBe(
       `/paper/${PAPER}/canvas`,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Open board' }));
     expect(push).toHaveBeenCalledWith(`/paper/${PAPER}/canvas`);
-    fireEvent.click(headerSend());
-    await screen.findByText('This page is already on the board.');
-    expect(writes(calls)).toHaveLength(1);
   });
 });
 
@@ -164,5 +162,95 @@ describe('search', () => {
     await screen.findByText('1 on this page');
     const lit = document.querySelectorAll('[data-match="true"]');
     expect([...lit].map((el) => el.getAttribute('data-item-id'))).toEqual(['ni_sticky0001']);
+  });
+});
+
+describe('Send page to board, once', () => {
+  it('sends one card for a double click, and opens the board once the page is on it', async () => {
+    const calls = stubApi(pageView());
+    mount();
+    await screen.findByText(/not on the board yet/);
+    fireEvent.click(headerSend());
+    fireEvent.click(headerSend());
+    await screen.findByText('The page is on the board now, as one card.');
+    const posts = writes(calls).filter((c) => c.path === `/papers/${PAPER}/board/nodes`);
+    expect(posts).toHaveLength(1);
+    fireEvent.click(headerSend());
+    await waitFor(() => expect(push).toHaveBeenCalledWith(`/paper/${PAPER}/canvas`));
+    expect(writes(calls).filter((c) => c.path === `/papers/${PAPER}/board/nodes`)).toHaveLength(1);
+  });
+
+  it('sends nothing while the board cannot be read, and says so', async () => {
+    const calls = stubApi(pageView(), undefined, { boardFails: true });
+    mount();
+    await screen.findByText('The board could not be read, so the page cannot be sent yet.');
+    const send = headerSend();
+    expect(send.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(send);
+    await settle();
+    expect(writes(calls)).toHaveLength(0);
+  });
+
+  it('keeps the card’s counts current as the page changes', async () => {
+    stubApi(pageView([STICKY]));
+    mount();
+    await screen.findByText(/not on the board yet/);
+    fireEvent.click(headerSend());
+    const panel = screen.getByRole('complementary', { name: 'Page' });
+    await within(panel).findByText('4 quotes · 1 sticky');
+    fireEvent.click(screen.getByRole('button', { name: 'Sticky note' }));
+    const editor = screen.getByRole('textbox', { name: 'Sticky note' });
+    fireEvent.change(editor, { target: { value: 'one more' } });
+    fireEvent.blur(editor);
+    await within(panel).findByText('4 quotes · 2 stickies');
+  });
+});
+
+describe('the template’s saving', () => {
+  it('a failed template save is in the notice, and Try again sends it again', async () => {
+    let failing = true;
+    const calls = stubApi(pageView(), (c) =>
+      c.method === 'PATCH' && c.path === `/notebook/pages/${PAGE}` && failing
+        ? new Response(
+            JSON.stringify({ detail: 'down', code: 'agent_unavailable', retryable: true }),
+            {
+              status: 503,
+            },
+          )
+        : null,
+    );
+    mount();
+    fireEvent.click(await screen.findByRole('radio', { name: 'Lined' }));
+    await screen.findByText(/Not saved yet: 1 edit could not be sent/);
+    failing = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(screen.queryByText(/Not saved/)).toBeNull());
+    const sends = writes(calls).filter((c) => c.path === `/notebook/pages/${PAGE}`);
+    expect(sends.map((c) => c.body)).toEqual([
+      { version: 1, template: 'lined' },
+      { version: 1, template: 'lined' },
+    ]);
+  });
+});
+
+describe('the Shapes menu', () => {
+  it('closes on Escape from its button and on a press outside it', async () => {
+    stubApi(pageView());
+    mount();
+    const shapes = await screen.findByRole('button', { name: 'Shapes' });
+    fireEvent.click(shapes);
+    expect(screen.getByRole('group', { name: 'Shapes' })).toBeTruthy();
+    fireEvent.keyDown(shapes, { key: 'Escape' });
+    expect(screen.queryByRole('group', { name: 'Shapes' })).toBeNull();
+    fireEvent.click(shapes);
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole('group', { name: 'Shapes' })).toBeNull();
+  });
+});
+
+describe('the counts’ words', () => {
+  it('says "1 citation", and counts passages from the answer, not from the cards', () => {
+    expect(citationsPhrase(1)).toBe('1 citation');
+    expect(citationsPhrase(11)).toBe('11 citations');
   });
 });

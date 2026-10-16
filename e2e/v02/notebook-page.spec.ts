@@ -198,6 +198,7 @@ test.describe('S5c — the notebook page (faux agent)', () => {
     expect(cards).toHaveLength(1);
     expect(cards[0]).toMatchObject({ source_page_id: pageId, counts: { quotes: 4 } });
     await expect(page.getByRole('complementary', { name: 'Page' })).toContainText('4 quotes');
+    expect(await axeSerious(page), 'with the board card in the panel').toEqual([]);
     await page.getByRole('button', { name: 'Open board' }).click();
     await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/canvas$`));
     await expect(page.locator('.react-flow__node')).toHaveCount(1);
