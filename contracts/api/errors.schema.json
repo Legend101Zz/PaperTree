@@ -183,7 +183,7 @@
           "type": "string"
         },
         "kind": {
-          "enum": ["excerpt", "explanation", "note", "group"],
+          "enum": ["excerpt", "explanation", "note", "group", "question", "notebook", "diagram"],
           "type": "string"
         },
         "group_id": {
@@ -250,6 +250,36 @@
             }
           ]
         },
+        "source_page_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_diagram_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "counts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NotebookCardCounts"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "version": {
           "maximum": 9223372036854775807,
           "minimum": 1,
@@ -278,6 +308,9 @@
         "body",
         "source_anchor",
         "source_message_id",
+        "source_page_id",
+        "source_diagram_id",
+        "counts",
         "version",
         "created_at",
         "updated_at"
@@ -323,6 +356,35 @@
       },
       "required": ["detail", "code", "retryable"],
       "title": "ErrorEnvelope",
+      "type": "object"
+    },
+    "NotebookCardCounts": {
+      "additionalProperties": false,
+      "description": "What a notebook card says about its page (\"4 quotes · 1 sticky\"), counted on read.",
+      "properties": {
+        "quotes": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stickies": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "shapes": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "strokes": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["quotes", "stickies", "text", "shapes", "strokes"],
+      "title": "NotebookCardCounts",
       "type": "object"
     },
     "PageSelector": {

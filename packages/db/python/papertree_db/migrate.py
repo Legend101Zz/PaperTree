@@ -41,7 +41,7 @@ MIGRATION_FILENAME = re.compile(r"^(\d{4})_([a-z0-9_]+)\.sql$")
 STATEMENT_SEPARATOR = re.compile(r"^\s*--;;\s*$", re.MULTILINE)
 
 #: Versions that rebuild user-owned tables, and so are preceded by a backup of the whole file.
-BACKUP_BEFORE_VERSIONS: Final = frozenset({5})
+BACKUP_BEFORE_VERSIONS: Final = frozenset({5, 8})
 
 #: How long a starting runner waits for the write lock while ANOTHER runner backs up or migrates
 #: the same file. SQLite's default (5 s) is shorter than copying a large database can take, and a

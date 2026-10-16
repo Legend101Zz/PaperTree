@@ -293,7 +293,8 @@ export interface Board {
 export interface CanvasNode {
   node_id: string;
   board_id: string;
-  kind: 'excerpt' | 'explanation' | 'note' | 'group';
+  /** `group` is the design's "frame". */
+  kind: CanvasNodeKind;
   group_id: string | null;
   x: number;
   y: number;
@@ -304,10 +305,31 @@ export interface CanvasNode {
   body: string;
   source_anchor: Anchor | null;
   source_message_id: string | null;
+  /** Notebook card: the notebook page it shows. */
+  source_page_id: string | null;
+  /** Diagram card: the diagram it shows. */
+  source_diagram_id: string | null;
+  /** A notebook card's page counts, computed on read; null on every other kind. */
+  counts: NotebookCardCounts | null;
   version: number;
   created_at: string;
   updated_at: string;
 }
+
+type CanvasNodeKind =
+  'excerpt' | 'explanation' | 'note' | 'group' | 'question' | 'notebook' | 'diagram';
+
+interface NotebookCardCounts {
+  quotes: number;
+  stickies: number;
+  text: number;
+  shapes: number;
+  strokes: number;
+}
+
+/** The typed pins (DESIGN.md section 5): brass out-pins and open in-pins. */
+export type FromPort = 'claim_out' | 'answer_out';
+export type ToPort = 'evidence_in' | 'question_in';
 
 export type EdgeKind =
   'supports' | 'contradicts' | 'derives_from' | 'answers' | 'compares' | 'references' | 'relates';
@@ -319,4 +341,8 @@ export interface CanvasEdge {
   to_node_id: string;
   kind: EdgeKind;
   label: string | null;
+  /** The pins the thread was drawn between; null on a keyboard link and every v0.1 edge. */
+  from_port: FromPort | null;
+  to_port: ToPort | null;
+  created_at: string;
 }
