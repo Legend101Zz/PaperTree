@@ -30,7 +30,8 @@ the note by the same distance (`e2e/v02/board-chrome.spec.ts` asserts the same).
 - **Thread (L) is off until a card is selected** (it says why on hover and stays focusable); with
   one card it starts the keyboard walk from its brass pin (as L does), with two it links them.
 - **A frame's tag paints under a card that overlaps it**: frames sit below every card (S6b's
-  rule), so a card dragged over a tag hides it until it is moved off.
+  rule), so a card dragged over a tag hides it. The frame stays reachable: a 16 px band along its
+  dashed outline selects and moves it (review S1), and Add frame never drops a frame on cards.
 - **Under 1100 px the tools are icons** (names kept); on a phone Select and the zoom live in More
   and the minimap folds behind a "Map" button at the top right, clear of the legend and the toast.
 

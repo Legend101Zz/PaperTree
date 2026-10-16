@@ -42,7 +42,7 @@ import { cardName, toFlowEdge, toFlowNode, type PtEdge, type PtNode } from '../m
 import { cardBoxes, frameBoxes, regroup, regroupAround } from '../model/frames';
 import { newEdgeId, newNodeId } from '../model/ids';
 import { linkedSentence } from '../model/linkAs';
-import { DEFAULT_SIZE, boundsOf, freeSpot } from '../model/placement';
+import { DEFAULT_SIZE, boundsOf, freeSpot, spotNear } from '../model/placement';
 
 export const NUDGE_DEBOUNCE_MS = 400;
 /** How long the Undo offer after a delete stays on screen. */
@@ -86,7 +86,7 @@ export interface BoardController {
   readonly onEdgesChange: (changes: EdgeChange<PtEdge>[]) => void;
   readonly onNodeDragStop: () => void;
   readonly addNote: (near?: { x: number; y: number }) => Promise<void>;
-  /** An empty frame centred on `centre` (the middle of the view), its name ready to type (#214). */
+  /** An empty frame in clear space nearest `centre` (the view's middle), its name ready to type. */
   readonly addFrame: (centre: { x: number; y: number }) => Promise<void>;
   readonly commitBody: (id: string, body: string) => void;
   readonly commitTitle: (id: string, title: string) => void;
@@ -338,30 +338,35 @@ export function useBoardController(paperId: string): BoardController {
       const touched = new Set(
         incoming.filter((c) => c.type === 'position').map((c) => (c as { id: string }).id),
       );
+      // A NodeResizer step batches the moved corner (left or top edge) with a `resizing` size
+      // change. That position belongs to the resize: the frame's cards stay where they are, and
+      // nothing is sent until `commitSize` at the resize's end (#214 review B2).
+      const resizing = new Set(
+        incoming.flatMap((c) => (c.type === 'dimensions' && c.resizing === true ? [c.id] : [])),
+      );
       for (const change of incoming) {
         // Deleting goes through `deleteNodes` (API first-class), never through xyflow's own removal.
         if (change.type === 'remove') continue;
         changes.push(change);
-        if (change.type === 'position' && change.position !== undefined) {
-          const moved = nodesRef.current.find((n) => n.id === change.id);
-          if (moved?.data.node.kind === 'group') {
-            const dx = change.position.x - moved.position.x;
-            const dy = change.position.y - moved.position.y;
-            for (const member of nodesRef.current) {
-              if (member.data.node.group_id !== moved.id || touched.has(member.id)) continue;
-              changes.push({
-                type: 'position',
-                id: member.id,
-                position: { x: member.position.x + dx, y: member.position.y + dy },
-                dragging: change.dragging,
-              });
-              touched.add(member.id);
-            }
-          }
-        }
+        if (change.type !== 'position' || resizing.has(change.id)) continue;
         // A position change that is not a drag in progress is a keyboard nudge: send it once, later.
-        if (change.type === 'position' && change.dragging !== true) {
-          nudgeIds.current.add(change.id);
+        const nudge = change.dragging !== true;
+        if (nudge) nudgeIds.current.add(change.id);
+        const moved = nodesRef.current.find((n) => n.id === change.id);
+        if (change.position === undefined || moved?.data.node.kind !== 'group') continue;
+        // A frame carries its cards; on a nudge they are queued with it, so each is saved too.
+        const dx = change.position.x - moved.position.x;
+        const dy = change.position.y - moved.position.y;
+        for (const member of nodesRef.current) {
+          if (member.data.node.group_id !== moved.id || touched.has(member.id)) continue;
+          changes.push({
+            type: 'position',
+            id: member.id,
+            position: { x: member.position.x + dx, y: member.position.y + dy },
+            dragging: change.dragging,
+          });
+          touched.add(member.id);
+          if (nudge) nudgeIds.current.add(member.id);
         }
       }
       if (changes.length > 0) setNodes(applyNodeChanges(changes, nodesRef.current));
@@ -491,9 +496,16 @@ export function useBoardController(paperId: string): BoardController {
 
   const addFrame = useCallback(
     async (centre: { x: number; y: number }) => {
-      // Empty on purpose: a card joins a frame when it is dropped in it, never by lying under it.
+      // In clear space nearest the middle of the view, never on top of cards (#214 review S1); and
+      // empty on purpose: a card joins a frame when it is dropped in it.
       const size = DEFAULT_SIZE.group;
-      const at = { x: Math.round(centre.x - size.w / 2), y: Math.round(centre.y - size.h / 2) };
+      const taken = nodesRef.current.map((n) => ({
+        x: n.position.x,
+        y: n.position.y,
+        w: n.width ?? n.data.node.w,
+        h: n.height ?? n.data.node.h,
+      }));
+      const at = spotNear(taken, size, centre);
       try {
         const node = await addNode('group', at, size, { title: 'New frame' });
         setEditingId(node.node_id);

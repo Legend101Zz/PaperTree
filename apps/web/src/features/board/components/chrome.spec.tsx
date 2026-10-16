@@ -6,7 +6,7 @@ import { boardsApi } from '@/lib/api/boards';
 import { request } from '@/lib/api/client';
 
 import { threadTool } from '../model/chrome';
-import { toFlowNode, type PtNode } from '../model/flow';
+import { FRAME_HANDLES, toFlowNode, type PtNode } from '../model/flow';
 import { cardRow } from '../model/test-data';
 import { CanvasActionsProvider, type CanvasActions } from './BoardContext';
 import { BoardHeader } from './BoardHeader';
@@ -225,13 +225,25 @@ describe('a frame’s paper tag', () => {
     expect(ctx.setEditingId).toHaveBeenCalledWith(null);
   });
 
-  it('moves by its tag only: the drag handle is the tag, and the name is typed, not dragged', () => {
+  it('moves by its tag or its outline (so a card over the tag does not hide it), not by its name', () => {
     frame({});
-    expect(toFlowNode(cardRow('group'), 'p').dragHandle).toBe('.pt-frame__tag');
+    const handle = toFlowNode(cardRow('group'), 'p').dragHandle!;
+    expect(handle).toBe(FRAME_HANDLES);
     expect(toFlowNode(cardRow('note'), 'p').dragHandle).toBeUndefined();
-    expect(screen.getByRole('textbox', { name: 'Frame name' }).classList.contains('nodrag')).toBe(
-      true,
-    );
+    // xyflow starts a drag where `element.matches(dragHandle)`: the tag and all four edge bands.
+    const bands = Array.from(document.querySelectorAll('.pt-frame__edge'));
+    expect(bands.map((b) => b.className.replace('pt-frame__edge pt-frame__edge--', ''))).toEqual([
+      'top',
+      'right',
+      'bottom',
+      'left',
+    ]);
+    for (const band of [...bands, document.querySelector('.pt-frame__tag')!]) {
+      expect(band.matches(handle)).toBe(true);
+    }
+    const name = screen.getByRole('textbox', { name: 'Frame name' });
+    expect(name.matches(handle)).toBe(false);
+    expect(name.classList.contains('nodrag')).toBe(true);
     expect(document.activeElement).toBe(document.body);
   });
 });

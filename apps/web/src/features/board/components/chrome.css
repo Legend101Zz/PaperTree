@@ -214,15 +214,53 @@
 
 /* ── frames (the wire's groups) ──────────────────────────────────────────────────────────── */
 
-/* A press inside a frame reaches the board (pan, area select); only the tag and the resize
-   handles take the pointer. xyflow sets `pointer-events: all` inline, hence !important. */
+/* A press inside a frame reaches the board (pan, area select); only the tag, the band along the
+   outline and the resize handles take the pointer. xyflow sets `pointer-events: all` inline,
+   hence !important. */
 .pt-cv .react-flow__node-frame {
   pointer-events: none !important;
 }
 
 .pt-cv .react-flow__node-frame .pt-frame__tag,
+.pt-cv .react-flow__node-frame .pt-frame__edge,
 .pt-cv .react-flow__node-frame .react-flow__resize-control {
   pointer-events: auto;
+}
+
+/* The band: 16 px on screen down to 30 % zoom, half inside and half outside the dashed line, so
+   a frame whose tag lies under a card can still be selected, moved and removed (#214 review S1). */
+.pt-frame__edge {
+  --pt-frame-band: calc(16px / clamp(0.3, var(--pt-cv-zoom, 1), 1));
+  position: absolute;
+  cursor: grab;
+}
+
+.pt-frame__edge--top,
+.pt-frame__edge--bottom {
+  inset-inline: calc(var(--pt-frame-band) / -2);
+  block-size: var(--pt-frame-band);
+}
+
+.pt-frame__edge--left,
+.pt-frame__edge--right {
+  inset-block: calc(var(--pt-frame-band) / -2);
+  inline-size: var(--pt-frame-band);
+}
+
+.pt-frame__edge--top {
+  inset-block-start: calc(var(--pt-frame-band) / -2);
+}
+
+.pt-frame__edge--bottom {
+  inset-block-end: calc(var(--pt-frame-band) / -2);
+}
+
+.pt-frame__edge--left {
+  inset-inline-start: calc(var(--pt-frame-band) / -2);
+}
+
+.pt-frame__edge--right {
+  inset-inline-end: calc(var(--pt-frame-band) / -2);
 }
 
 .pt-frame {

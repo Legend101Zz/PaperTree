@@ -305,7 +305,8 @@ function Board({ paperId }: { readonly paperId: string }) {
               </>
             )}
           </div>
-          <p className="pt-sr-only" role="status" aria-live="polite">
+          {/* The board's spoken line (linking by keyboard, S6c); inside `main`, beside the board. */}
+          <p className="pt-sr-only" role="status" aria-live="polite" data-testid="board-said">
             {link.said}
           </p>
 

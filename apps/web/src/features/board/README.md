@@ -101,12 +101,17 @@ board tools" keeps v0.1's Frame selected cards (Group), Remove frame (Ungroup) a
 1100 px the tools are icons with their names kept; on a phone Select and the zoom move into More so
 the bar is one row beside "Board".
 
-A frame is the wire's `group`. It is moved by its paper tag only (`dragHandle`); a press inside the
-outline reaches the board. The cards it holds follow it (the controller carries them). Which frame
+A frame is the wire's `group`. It is selected and moved by its paper tag or by a band along its
+outline (`FRAME_HANDLES`), so a frame whose tag lies under a card stays reachable; a press anywhere
+else inside the outline reaches the board. By keyboard a frame is a node like any card: Tab, arrows
+to move (its cards move and are saved with it), Delete, and its name field. The cards it holds follow it (the controller carries them). Which frame
 holds a card is `model/frames`' rule: the smallest frame holding the card's centre, and a card
 stays in its frame while that frame still holds it. It is applied when a card is dropped (its
 `group_id` rides in the PATCH of the move) and when a frame is resized (cards it now holds join,
-members it no longer holds leave); a new frame stays empty until something is dropped in it.
+members it no longer holds leave), at the resize's end only: a resize from the left or top edge
+does not move the cards. Add frame puts an empty frame in the clear spot nearest the middle of the
+view (`spotNear`); it stays empty until something is dropped in it or it is resized over cards.
+Frames never hold frames: a frame inside another one stays where it is when the outer one moves.
 
 The minimap (`BoardMinimap`) is xyflow's `MiniMap` in board stock: cards ruled, AI cards slip,
 frames dashed, the view a navy box, every edge 3:1 on its ground (`pins-contrast.spec`); captioned

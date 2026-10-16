@@ -71,6 +71,55 @@ export function freeSpot(
   return { x: originX, y: bottom + GAP };
 }
 
+/** How far a new frame keeps from what is on the board (its paper tag stands 15 units above it). */
+export const FRAME_GAP = 32;
+
+/** The search grid for `spotNear`, in board units, and how many steps out it looks. */
+const NEAR_STEP = 32;
+const NEAR_REACH = 60;
+
+/** Grid offsets around the centre, nearest first; ties go down, then right. Built once. */
+let nearOffsets: readonly (readonly [number, number])[] | null = null;
+function offsets(): readonly (readonly [number, number])[] {
+  if (nearOffsets !== null) return nearOffsets;
+  const cells: [number, number][] = [];
+  for (let i = -NEAR_REACH; i <= NEAR_REACH; i += 1) {
+    for (let j = -NEAR_REACH; j <= NEAR_REACH; j += 1) cells.push([i, j]);
+  }
+  cells.sort(
+    (a, b) => a[0] ** 2 + a[1] ** 2 - (b[0] ** 2 + b[1] ** 2) || b[1] - a[1] || b[0] - a[0],
+  );
+  nearOffsets = cells;
+  return cells;
+}
+
+/**
+ * The clear spot nearest `centre` for a new box (Add frame, #214): the box centred on `centre` when
+ * nothing is within `gap` of it, else the nearest free cell of a 32-unit grid around it.
+ *
+ * @param existing What is on the board (cards and frames).
+ * @param size The new box's size.
+ * @param centre Where it should be centred (the middle of the view).
+ * @param gap The clearance it keeps.
+ * @returns Its top-left corner.
+ * @example
+ * spotNear([], { w: 400, h: 300 }, { x: 500, y: 400 }); // { x: 300, y: 250 }
+ */
+export function spotNear(
+  existing: readonly Rect[],
+  size: { readonly w: number; readonly h: number },
+  centre: { readonly x: number; readonly y: number },
+  gap = FRAME_GAP,
+): { x: number; y: number } {
+  const base = { x: Math.round(centre.x - size.w / 2), y: Math.round(centre.y - size.h / 2) };
+  for (const [i, j] of offsets()) {
+    const spot = { x: base.x + i * NEAR_STEP, y: base.y + j * NEAR_STEP };
+    if (!existing.some((r) => overlaps({ ...spot, ...size }, r, gap))) return spot;
+  }
+  // Nothing free within reach: the row-by-row search, from the centre.
+  return freeSpot(existing, size, base);
+}
+
 /**
  * The box that contains every rect, grown by `pad` (and a title strip on top).
  *

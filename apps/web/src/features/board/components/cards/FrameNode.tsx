@@ -2,10 +2,12 @@
 
 /**
  * board/cards/FrameNode — a frame (the wire's `group`, frame 06): a dashed outline behind the cards
- * it holds, with a paper tag that names it. The tag is the frame's handle: a drag on it moves the
- * frame, and the controller carries its cards along; a press anywhere inside the outline reaches
- * the board, so cards in a frame are panned past and area-selected as anywhere else. The name is
- * typed in place on the tag; a new frame (Add frame) opens with its name selected (#214).
+ * it holds, with a paper tag that names it. The tag and a band along the outline are the frame's
+ * handles: a press there selects it, a drag moves it, and the controller carries its cards along.
+ * The band keeps a frame reachable when a card lies over its tag (frames paint under cards). A press
+ * anywhere else inside the outline reaches the board, so cards in a frame are panned past and
+ * area-selected as anywhere else. The name is typed in place on the tag; a new frame (Add frame)
+ * opens with its name selected (#214).
  */
 import { NodeResizer, type NodeProps } from '@xyflow/react';
 import { useEffect, useRef, type ReactNode } from 'react';
@@ -17,6 +19,9 @@ import type { PtNode } from '../../model/flow';
 
 /** The API's limit on a frame name (schemas.py). */
 const FRAME_NAME_MAX = 200;
+
+/** The four sides of the outline, each a band that takes the pointer (`chrome.css`). */
+const EDGES = ['top', 'right', 'bottom', 'left'] as const;
 
 /** A frame around cards. */
 export function FrameNode({ id, data, selected }: NodeProps<PtNode>): ReactNode {
@@ -38,6 +43,15 @@ export function FrameNode({ id, data, selected }: NodeProps<PtNode>): ReactNode 
 
   return (
     <div className="pt-frame" data-kind="group" data-selected={selected}>
+      {/* Before the resizer, so its lines (shown while the frame is selected) sit on top. */}
+      {EDGES.map((side) => (
+        <span
+          key={side}
+          className={`pt-frame__edge pt-frame__edge--${side}`}
+          title="Drag the edge to move the frame and its cards."
+          aria-hidden="true"
+        />
+      ))}
       <NodeResizer
         isVisible={selected}
         minWidth={200}

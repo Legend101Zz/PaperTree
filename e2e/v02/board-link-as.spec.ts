@@ -74,7 +74,10 @@ test('Link as: drag then key 2, and a keyboard-only supports', async ({ browser,
   await page.goto(`/paper/${paperId}/canvas`);
   await expect(page.locator('.react-flow__node')).toHaveCount(3);
   await page.waitForTimeout(1000);
-  const live = page.locator('.pt-cv > p[role="status"]');
+  // The board's live region (#214 moved it into the page's `main`; the test id follows it).
+  const live = page.getByTestId('board-said');
+  await expect(live).toHaveAttribute('role', 'status');
+  await expect(live).toHaveAttribute('aria-live', 'polite');
 
   // ── 1. drag pin to pin → the picker → 2 ──
   const claimOut = `.react-flow__node[data-id="${noteA}"] [data-handleid="claim_out"]`;

@@ -44,7 +44,10 @@ export function BoardHeader({
           {paperTitle === null ? null : (
             <>
               {' '}
-              <cite className="pt-boardbar__paper">{paperTitle}</cite>
+              {/* The full title on hover, where a narrow bar cuts it short. */}
+              <cite className="pt-boardbar__paper" title={paperTitle}>
+                {paperTitle}
+              </cite>
             </>
           )}
         </h1>
