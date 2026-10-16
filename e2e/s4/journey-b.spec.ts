@@ -288,7 +288,7 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
       await expect(page.locator(`[data-highlight-row="${id}"]`)).toHaveCount(1);
     await page.keyboard.press('Escape');
 
-    // ── focusAnchor: a Navigator row scrolls to the passage and flashes it 1.2 s ──
+    // ── focusAnchor: a Navigator row scrolls to the passage and runs the citation flash ──
     await page.getByRole('button', { name: /^Contents/ }).click();
     await page.getByRole('tab', { name: /Highlights/ }).click();
     await page.locator(`[data-highlight-row="${b}"] .pt-hlrow`).click();
@@ -312,8 +312,13 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
       .evaluate((g) => g.closest('.papertree-page')?.getAttribute('data-page-index') ?? 'none');
     expect(underFlash).toBe(paintedOn);
     await page.screenshot({ path: shot('b06b-focus-flash-1440.png') });
+    // #202: the ring and wash end within the flash's timeline (in 180 + hold 900 + out 600); a
+    // faint outline (`data-flash="linger"`) then marks the passage until the reader's next action.
     await expect(flash).toHaveCount(0, { timeout: 5_000 });
+    const linger = page.locator('svg [data-flash="linger"] polygon');
+    await expect(linger.first()).toBeVisible();
     await page.keyboard.press('Escape');
+    await expect(linger).toHaveCount(0);
 
     // ── the keyboard reaches a highlight: focus it, Enter opens its card ──
     await page.locator(`svg .pt-hl[data-highlight-id="${b}"]`).focus();

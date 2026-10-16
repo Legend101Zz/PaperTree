@@ -46,6 +46,8 @@ const OLDER: Thread = {
   ask: 'An older question',
 };
 const LIST = `GET /papers/${PAPER}/threads`;
+/** The asks on screen: each exchange's call slip, in the person's voice. */
+const ASKS = '.pt-call-slip [data-voice="you"]';
 const gets = (calls: readonly Call[], path: string): number =>
   calls.filter((c) => c.method === 'GET' && c.path === path).length;
 
@@ -66,7 +68,7 @@ describe('the panel reads the stored threads', () => {
     expect(document.querySelector('[data-explain-quote]')?.textContent).toMatch(
       /We propose a new simple network architecture/,
     );
-    const asks = Array.from(document.querySelectorAll('[data-user-message]'), (n) => n.textContent);
+    const asks = Array.from(document.querySelectorAll(ASKS), (n) => n.textContent);
     expect(asks).toEqual([
       'Explain this passage.',
       'Why does dropping recurrence make training faster?',
@@ -124,7 +126,7 @@ describe('the panel reads the stored threads', () => {
     await waitFor(() =>
       expect(document.querySelectorAll('[data-message-status="complete"]')).toHaveLength(3),
     );
-    expect(document.querySelectorAll('[data-user-message]')).toHaveLength(3);
+    expect(document.querySelectorAll(ASKS)).toHaveLength(3);
     expect(screen.getAllByText('And the cost?')).toHaveLength(1);
     const posts = calls.filter((c) => c.method === 'POST').map((c) => c.path);
     expect(posts).toEqual([`/papers/${PAPER}/threads/thr_new/messages`]);
@@ -165,15 +167,13 @@ describe('the panel reads the stored threads', () => {
     handle?.push(done());
     handle?.close();
     await waitFor(() => expect(reads).toBeGreaterThanOrEqual(2));
-    await waitFor(() => expect(document.querySelector('[data-user-message]')).not.toBeNull());
+    await waitFor(() => expect(document.querySelector(ASKS)).not.toBeNull());
 
     const answers = document.querySelectorAll('[data-message-status]');
     expect(answers).toHaveLength(1);
     expect(answers[0]).toBe(live);
     expect(answers[0]?.getAttribute('data-message-status')).toBe('complete');
-    expect(document.querySelector('[data-user-message]')?.textContent).toBe(
-      'Explain this passage.',
-    );
+    expect(document.querySelector(ASKS)?.textContent).toBe('Explain this passage.');
   });
 
   it('a thread that is gone says so; New thread empties the panel and a question starts anew', async () => {

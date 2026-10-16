@@ -1381,26 +1381,45 @@ span.pt-paper .pt-paper__cite {
   vector-effect: non-scaling-stroke;
 }
 
+/* The citation flash (DESIGN.md §6, #202; phases in apps/web `reader/flash`): painted once the
+   scroll is over, the wash and ring come in 180, hold 900 and go out 600 to a faint outline; then
+   `--linger` keeps that outline, without animation, until the reader's next action. */
 .pt-flash {
-  fill: var(--pt-accent-soft);
-  stroke: var(--pt-accent);
+  fill: var(--pt-lit-wash);
+  stroke: var(--pt-focus);
   stroke-width: 2px;
   vector-effect: non-scaling-stroke;
-  animation: pt-flash 1200ms ease-out forwards;
+  fill-opacity: 0;
+  stroke-opacity: 0.35;
+  animation:
+    pt-flash-in var(--pt-dur-flash-in) var(--pt-ease-out) both,
+    pt-flash-out var(--pt-dur-flash-out) var(--pt-ease-out)
+      calc(var(--pt-dur-flash-in) + var(--pt-dur-flash-hold)) forwards;
 }
 
-@keyframes pt-flash {
-  0% {
-    opacity: 0;
+.pt-flash--linger {
+  animation: none;
+}
+
+@keyframes pt-flash-in {
+  from {
+    fill-opacity: 0;
+    stroke-opacity: 0;
   }
-  12% {
-    opacity: 1;
+  to {
+    fill-opacity: 1;
+    stroke-opacity: 1;
   }
-  70% {
-    opacity: 1;
+}
+
+@keyframes pt-flash-out {
+  from {
+    fill-opacity: 1;
+    stroke-opacity: 1;
   }
-  100% {
-    opacity: 0;
+  to {
+    fill-opacity: 0;
+    stroke-opacity: 0.35;
   }
 }
 
@@ -1908,19 +1927,12 @@ span.pt-paper .pt-paper__cite {
   .pt-skeleton__page {
     animation: none;
   }
-  /* The flash still happens — it is information, not decoration — but as a steady outline. */
+  /* The flash still happens (it is information, not decoration): the ring and wash simply appear,
+     and clear on the next action. */
   .pt-flash {
-    animation: pt-flash-steady 1200ms linear forwards;
-  }
-}
-
-@keyframes pt-flash-steady {
-  0%,
-  99% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
+    animation: none;
+    fill-opacity: 1;
+    stroke-opacity: 1;
   }
 }
 
@@ -2306,7 +2318,7 @@ span.pt-paper .pt-paper__cite {
   z-index: 30;
   display: flex;
   flex-direction: column;
-  inline-size: min(420px, 100vw);
+  inline-size: var(--pt-explain-width);
   color: var(--pt-ink);
   background: var(--pt-panel-ground);
   border-inline-start: 1px solid var(--pt-rule);
@@ -2315,9 +2327,14 @@ span.pt-paper .pt-paper__cite {
   animation: pt-explain-in 180ms ease-out;
 }
 
+:root {
+  /* 640 at 1440 (frame 04), never narrower than v0.1's 420 */
+  --pt-explain-width: min(100vw, clamp(420px, 44.5vw, 640px));
+}
+
 @media (min-width: 768px) {
   html[data-pt-explain='open'] body {
-    padding-inline-end: min(420px, 100vw);
+    padding-inline-end: var(--pt-explain-width);
   }
 }
 
@@ -2505,7 +2522,9 @@ span.pt-paper .pt-paper__cite {
 }
 
 .pt-explain__usage {
-  font-variant-numeric: tabular-nums;
+  /* Numbers and usage are Courier, lining and tabular (DESIGN.md §2, §4.8). */
+  font: var(--pt-t-num) / 1.5 var(--pt-font-you); /* 13 px: the muted ink's smallest size */
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .pt-explain__warn {
@@ -2656,6 +2675,265 @@ span.pt-paper .pt-paper__cite {
   }
   .pt-explain__pulse {
     animation: none;
+  }
+}
+
+/* ── S4b: the exchange in the explain panel (#202) ───────────────────────────────────────────────
+   Ask → answer → trace in the panel (frame 04): the header with the thread menu, the exchanges,
+   the margin sidenotes, the marker ↔ trace lighting (120 ms) and the margin tab beside a flashed
+   passage. Colours are tokens only; the slips, markers, tabs and trace come from #190 above. */
+
+.pt-explain__header {
+  gap: var(--pt-space-3);
+  padding: var(--pt-space-3) var(--pt-space-3) var(--pt-space-3) var(--pt-space-5);
+}
+
+.pt-explain__title {
+  font: 400 20px / 1.2 var(--pt-font-display);
+  padding-inline-end: var(--pt-space-3);
+  border-inline-end: 1px solid var(--pt-rule);
+}
+
+.pt-explain__tools {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--pt-space-2);
+  min-inline-size: 0;
+}
+
+.pt-explain__summary-toggle {
+  margin-inline-start: auto;
+}
+
+.pt-explain__close,
+.pt-thread-menu__step {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  inline-size: 36px;
+  block-size: 36px;
+  padding: 0;
+  color: var(--pt-ink);
+  background: transparent;
+  border: 0;
+  border-radius: var(--pt-radius-control);
+  cursor: pointer;
+}
+
+.pt-thread-menu__step {
+  inline-size: 32px;
+  block-size: 32px;
+}
+
+.pt-explain__close:hover,
+.pt-thread-menu__step:hover:not(:disabled) {
+  background: var(--pt-ai-slip);
+}
+
+.pt-thread-menu__step:disabled {
+  color: var(--pt-ink-muted);
+  cursor: default;
+}
+
+.pt-explain__close:focus-visible,
+.pt-thread-menu__step:focus-visible,
+.pt-thread-menu__trigger:focus-visible,
+.pt-thread-menu__list:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+.pt-thread-menu {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--pt-space-1);
+  min-inline-size: 0;
+}
+
+.pt-thread-menu__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pt-space-1);
+  block-size: 36px;
+  padding: 0 var(--pt-space-2) 0 10px;
+  font: 15px / 1 var(--pt-font-ui);
+  font-variant-numeric: lining-nums;
+  color: var(--pt-ink);
+  white-space: nowrap;
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+  cursor: pointer;
+}
+
+.pt-thread-menu__trigger:disabled {
+  color: var(--pt-ink-muted);
+  cursor: default;
+}
+
+.pt-thread-menu__list {
+  position: absolute;
+  inset-block-start: calc(100% + 4px);
+  inset-inline-start: 0;
+  z-index: 5;
+  inline-size: min(360px, 80vw);
+  max-block-size: 320px;
+  margin: 0;
+  padding: var(--pt-space-1);
+  overflow-y: auto;
+  list-style: none;
+  background: var(--pt-page);
+  border: 1px solid var(--pt-rule);
+  border-radius: var(--pt-radius-menu);
+  box-shadow: var(--pt-e2);
+}
+
+.pt-thread-menu__option {
+  display: flex;
+  align-items: baseline;
+  gap: var(--pt-space-2);
+  min-block-size: 36px;
+  padding: var(--pt-space-2);
+  border-radius: var(--pt-radius-control);
+  cursor: pointer;
+}
+
+.pt-thread-menu__option[data-active='true'] {
+  background: var(--pt-ai-slip);
+  box-shadow: inset 0 0 0 1px var(--pt-control-border);
+}
+
+.pt-thread-menu__option[aria-selected='true'] .pt-thread-menu__ask {
+  font-weight: 700;
+}
+
+.pt-thread-menu__n {
+  flex: none;
+  font: var(--pt-t-num-s) / 1.4 var(--pt-font-you);
+  color: var(--pt-ink-muted);
+}
+
+.pt-thread-menu__ask {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pt-explain__scroll {
+  padding: var(--pt-space-5) var(--pt-space-5) var(--pt-space-6);
+}
+
+.pt-explain__scroll > .pt-exchange + .pt-exchange {
+  margin-block-start: var(--pt-space-6);
+}
+
+@media (max-width: 767px) {
+  .pt-explain__scroll {
+    padding: var(--pt-space-4);
+  }
+}
+
+.pt-exchange__answer {
+  margin-block-start: var(--pt-space-6); /* room for the standing AI tab above the slip */
+}
+
+.pt-exchange__answer > .pt-ai-slip {
+  margin-block-start: 0;
+}
+
+.pt-exchange__answer > * + * {
+  margin-block-start: var(--pt-space-2);
+}
+
+/* The usage line and actions continue the AI slip's stock, outside its voice. */
+.pt-exchange__answer > .pt-ai-slip + .pt-exchange__footer {
+  margin-block-start: 0;
+}
+
+.pt-exchange__footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pt-space-3);
+  padding: var(--pt-space-3) 20px var(--pt-space-4);
+  background: var(--pt-ai-slip);
+  border-block-start: 1px solid var(--pt-rule);
+  box-shadow: var(--pt-e1);
+}
+
+.pt-exchange .pt-ai-slip__aside {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: var(--pt-space-1);
+  min-inline-size: 96px;
+}
+
+.pt-exchange__sidenote {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pt-space-1);
+}
+
+.pt-exchange__inline-marker .pt-marker {
+  margin-inline-start: 2px;
+}
+
+/* A marker and the punctuation after it are one unbreakable box: "…output 4." never leaves its
+   full stop on the next line (R4), and the run is one line box however it is measured. */
+.pt-exchange .pt-cite-run {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+/* Marker ↔ trace light each other: 120 ms in and out, colour only (unchanged under reduced
+   motion, DESIGN.md §6). */
+.pt-exchange .pt-marker,
+.pt-exchange .pt-tab,
+.pt-exchange .pt-trace-row {
+  transition:
+    background-color var(--pt-dur-quick) var(--pt-ease-out),
+    box-shadow var(--pt-dur-quick) var(--pt-ease-out),
+    outline-color var(--pt-dur-quick) var(--pt-ease-out);
+}
+
+.pt-exchange__trace {
+  margin-block-start: var(--pt-space-5);
+}
+
+.pt-exchange__trace .pt-coverage {
+  margin-block-end: var(--pt-space-2);
+  font-size: 15px;
+  color: var(--pt-ink);
+}
+
+/* "from marker 2 in the answer": in the page margin beside the flashed passage (frame 04). */
+.pt-flash-tab {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--pt-space-1);
+  max-inline-size: 112px;
+  padding: 2px var(--pt-space-1);
+  font: 13px / 1.3 var(--pt-font-ai);
+  color: var(--pt-ink-2);
+  text-align: end;
+  background: var(--pt-page); /* its own paper: it reads on the PDF page and on the desk */
+  border-radius: var(--pt-radius-paper);
+  animation: pt-flash-tab-in var(--pt-dur-flash-in) var(--pt-ease-out) both;
+}
+
+.pt-flash-tab__ribbon {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pt-space-1);
+}
+
+@keyframes pt-flash-tab-in {
+  from {
+    opacity: 0;
   }
 }
 

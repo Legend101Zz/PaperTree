@@ -10,7 +10,7 @@ import type { ReactNode } from 'react';
 
 import type { Citation } from '@/lib/api/types';
 
-import { FailureNote, StatusLine, UsageLine } from './AnswerView';
+import { FailureNote, StatusLine, UsageLine } from '@/features/explain/components/AnswerStates';
 import { RichText } from './RichText';
 import type { SummaryView as SummaryState } from './useExplainActions';
 

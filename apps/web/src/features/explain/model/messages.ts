@@ -37,6 +37,19 @@ export interface ThreadMessage {
   readonly generation: number | null;
 }
 
+const STORED = 's:';
+
+/**
+ * Whether a message came from a stored read rather than this session's live stream (a stored
+ * message is keyed by its server id; a live one keeps its live key even after the merge).
+ *
+ * @param message A panel message.
+ * @returns True for a message first seen in a stored read.
+ */
+export function isStored(message: Pick<ThreadMessage, 'key'>): boolean {
+  return message.key.startsWith(STORED);
+}
+
 function failureOfStored(message: Message): Failure | null {
   if (message.error !== null) {
     return { code: message.error.code, retryable: message.error.retryable };
@@ -53,7 +66,7 @@ function failureOfStored(message: Message): Failure | null {
  */
 export function fromStored(message: Message, question: string): ThreadMessage {
   return {
-    key: `s:${message.message_id}`,
+    key: `${STORED}${message.message_id}`,
     role: message.role,
     text: message.content,
     messageId: message.message_id,

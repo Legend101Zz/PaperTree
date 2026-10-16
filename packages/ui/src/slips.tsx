@@ -27,7 +27,8 @@ export interface CallSlipProps {
   /** The passage the person selected, quoted from the paper. */
   readonly quote?: {
     readonly text: string;
-    readonly page: number;
+    /** 1-based; null when the passage's page is not known, and then no tab is drawn. */
+    readonly page: number | null;
     readonly para?: number | null;
   };
   /** The ask, in the person's own words. */
@@ -63,7 +64,7 @@ export function CallSlip({
             <PaperText as="span" className="pt-paper-quote pt-call-slip__quote-text">
               {`“${quote.text}”`}
             </PaperText>
-            <PageTab page={quote.page} para={quote.para ?? null} />
+            {quote.page === null ? null : <PageTab page={quote.page} para={quote.para ?? null} />}
           </div>
         )}
         <YouText className="pt-call-slip__ask">{ask}</YouText>
