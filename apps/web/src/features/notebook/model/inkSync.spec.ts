@@ -28,6 +28,13 @@ describe('strokeWrites', () => {
   it('never sends a refused stroke again', () => {
     expect(strokeWrites(new Set(), [a, b], new Set([a.id])).add).toEqual([b]);
   });
+
+  it('sends a stroke whose POST may have landed again while it is on the page, else DELETEs it', () => {
+    const maybe = new Set([a.id]);
+    expect(strokeWrites(new Set(), [a], new Set(), maybe)).toEqual({ add: [a], remove: [] });
+    // Undone or erased after a failed POST that may have reached the server: it must not return.
+    expect(strokeWrites(new Set(), [b], new Set(), maybe)).toEqual({ add: [b], remove: [a.id] });
+  });
 });
 
 describe('the batching rule', () => {

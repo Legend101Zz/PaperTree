@@ -20,17 +20,21 @@ export interface StrokeWrites {
  * @param server - Stroke ids the server confirmed (plus those a write in flight will add).
  * @param local - The strokes on the page now.
  * @param refused - Ids the server refused (422/413): sending them again cannot help.
+ * @param uncertain - Ids whose POST failed but may have reached the server (no answer, a 5xx):
+ *   POSTed again while on the page, DELETEd once they are not, so an erased stroke never returns.
  * @returns What to add and what to remove.
  */
 export function strokeWrites(
   server: ReadonlySet<string>,
   local: readonly Stroke[],
   refused: ReadonlySet<string> = new Set(),
+  uncertain: ReadonlySet<string> = new Set(),
 ): StrokeWrites {
   const here = new Set(local.map((s) => s.id));
+  const elsewhere = new Set([...server, ...uncertain]);
   return {
     add: local.filter((s) => !server.has(s.id) && !refused.has(s.id)),
-    remove: [...server].filter((id) => !here.has(id)),
+    remove: [...elsewhere].filter((id) => !here.has(id)),
   };
 }
 

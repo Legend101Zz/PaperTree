@@ -2,32 +2,41 @@
 
 /**
  * useStrokeSaver — saves a notebook page's ink in the background (S5d, #209) by the item saver's
- * rules (`useItemSaver`): nothing stops silently. Strokes carry no version (they are immutable and
- * their create is idempotent on `stroke_id`), so the saver compares ids (`model/inkSync.ts`): a
- * pen-up's stroke goes out at once, strokes drawn while a batch is in flight join the next one,
- * erased or undone strokes are DELETEd. A failure keeps them owed and counted until a send
- * succeeds (Try again, or the next stroke); a 422/413 is said once and that stroke is never sent
- * again; a POST answered 404 is the page deleted elsewhere. While the tab is hidden, and on
- * `pagehide`, batches are cut to the shared keepalive budget (`api/keepalive`) and sent with
- * keepalive; `beforeunload` warns while a stroke too big for any keepalive request is owed.
+ * rules (`useItemSaver`): nothing stops silently, and nothing erased comes back. Strokes carry no
+ * version (they are immutable and their create is idempotent on `stroke_id`), so the saver keeps a
+ * ledger of ids (`model/inkLedger`): a pen-up's stroke goes out at once, strokes drawn while a batch
+ * is in flight join the next one, erased or undone strokes are DELETEd, and so is one whose failed
+ * POST may have reached the server. A failure is counted while its stroke is still owed (undoing the
+ * stroke clears it); a 422/413 is said once and the stroke is never sent again; a POST answered 404
+ * is the page deleted elsewhere (`api/pushStrokes`). Leaving (`useInkLeave`): while the tab is
+ * hidden batches use keepalive within what is left of the shared budget (`api/keepalive`); on
+ * `pagehide` every request starts at once, with keepalive for what fits; `beforeunload` warns when
+ * what the page's savers owe together cannot all go.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { ApiError } from '@/lib/api/types';
-
-import { releaseKeepalive, reserveKeepalive } from '../api/keepalive';
-import { notebookApi } from '../api/notebookApi';
-import { MAX_BATCH_BYTES, batches, strokeWrites } from '../model/inkSync';
+import {
+  isLeaving,
+  keepaliveLeft,
+  leavingWouldLose,
+  owesOnLeave,
+  releaseKeepalive,
+  reserveKeepalive,
+  setLeaving,
+} from '../api/keepalive';
+import { bodyBytes, deleteOne, postBatch } from '../api/pushStrokes';
+import { InkLedger } from '../model/inkLedger';
+import { MAX_BATCH_BYTES, MAX_BATCH_STROKES, batches } from '../model/inkSync';
 import { KEEPALIVE_CAP } from '../model/leave';
 import { strokeToWire } from '../model/wire';
 
 import type { NotebookStrokeIn } from '../api/notebookApi';
-import type { StrokeWrites } from '../model/inkSync';
+import type { Sized, StrokeWrites } from '../model/inkSync';
 import type { Stroke } from '../model/stroke';
 
 /** Where saving the ink stands; merged into the page's one `SaveNotice`. */
 export interface InkSaveStatus {
-  /** Strokes whose last send failed; they are still owed. */
+  /** Strokes whose last send failed and that are still owed. */
   readonly failed: number;
   /** Bumped by every new failure, so a dismissed notice comes back for the next one. */
   readonly failure: number;
@@ -48,16 +57,40 @@ export interface StrokeSaver {
   readonly unsaved: () => number;
 }
 
-/** What `beforeunload` says while a stroke too big for keepalive is owed. */
-export const LONG_STROKE_WARNING = 'A long stroke has not been saved yet';
+/** What `beforeunload` says while some ink could not go with the page. */
+export const LONG_STROKE_WARNING = 'Some ink has not been saved yet';
 
 const CLEAN: InkSaveStatus = { failed: 0, failure: 0, rejected: [], pageGone: false };
 
-const bytesOf = (w: NotebookStrokeIn): number => JSON.stringify(w).length + 1;
-const sized = (s: Stroke) => {
+/**
+ * A stroke as sent, with what it adds to a POST's body: its JSON and a comma.
+ *
+ * @param s - The stroke.
+ * @returns Its wire row and that size in bytes.
+ */
+const sized = (s: Stroke): Sized<NotebookStrokeIn> => {
   const value = strokeToWire(s);
-  return { value, bytes: bytesOf(value) };
+  return { value, bytes: bodyBytes([value]) - 1 };
 };
+
+/**
+ * Splits the strokes owed at `pagehide` into what fits the keepalive budget left, in order, and
+ * the rest.
+ *
+ * @param owed - The strokes, sized.
+ * @param room - Bytes of keepalive budget left.
+ * @returns The strokes that fit (each batch's brackets counted) and those that do not.
+ */
+function fitBudget(owed: readonly Sized<NotebookStrokeIn>[], room: number) {
+  let [left, n] = [room, 0];
+  for (const s of owed) {
+    const cost = s.bytes + (n % MAX_BATCH_STROKES === 0 ? 1 : 0);
+    if (cost > left) break;
+    left -= cost;
+    n += 1;
+  }
+  return { fit: owed.slice(0, n), rest: owed.slice(n) };
+}
 
 /**
  * The background saver of one page's strokes.
@@ -74,97 +107,68 @@ export function useStrokeSaver(
 ): StrokeSaver {
   const [status, setStatus] = useState<InkSaveStatus>(CLEAN);
   const [, setAnswers] = useState(0);
-  const server = useRef(new Set<string>());
-  const refused = useRef(new Set<string>());
-  const failed = useRef(new Set<string>());
-  const running = useRef(false);
-  const again = useRef(false);
-  const stopped = useRef(false);
-  const hidden = useRef(false);
+  const ledger = useRef(new InkLedger());
+  const flags = useRef({ running: false, again: false, stopped: false, hidden: false });
   const latest = useRef({ strokes, onSettled });
   latest.current = { strokes, onSettled };
 
-  const fail = useCallback((ids: readonly string[]) => {
-    for (const id of ids) failed.current.add(id);
-    setStatus((s) => ({ ...s, failed: failed.current.size, failure: s.failure + 1 }));
-  }, []);
-  const landed = useCallback((ids: readonly string[], kept: boolean) => {
-    for (const id of ids) {
-      if (kept) server.current.add(id);
-      else server.current.delete(id);
-      failed.current.delete(id);
-    }
+  const writes = useCallback(() => ledger.current.writes(latest.current.strokes()), []);
+  const report = useCallback((bump: boolean, rejected: readonly string[] = []) => {
+    const failed = ledger.current.failed;
     setStatus((s) =>
-      s.failed === failed.current.size ? s : { ...s, failed: failed.current.size },
+      !bump && rejected.length === 0 && s.failed === failed
+        ? s
+        : {
+            ...s,
+            failed,
+            failure: s.failure + (bump ? 1 : 0),
+            rejected: [...s.rejected, ...rejected],
+          },
     );
   }, []);
 
-  /** One POST; a refused batch of several is sent again one by one, so only the bad one is lost. */
   const post = useCallback(
-    (batch: readonly NotebookStrokeIn[], keep: boolean): Promise<boolean> => {
-      const attempt = async (b: readonly NotebookStrokeIn[]): Promise<boolean> => {
-        const ids = b.map((w) => w.stroke_id);
-        const bytes = b.reduce((n, w) => n + bytesOf(w), 0);
-        const keepalive = keep && reserveKeepalive(bytes);
-        try {
-          await notebookApi.addStrokes(pageId, b, { keepalive });
-          landed(ids, true);
-          return true;
-        } catch (error) {
-          const code = error instanceof ApiError ? error.status : 0;
-          if (code === 404) {
-            stopped.current = true;
-            setStatus((s) => ({ ...s, pageGone: true }));
-            return false;
-          }
-          if ((code === 422 || code === 413) && b.length > 1) {
-            const each = [];
-            for (const w of b) each.push(await attempt([w]));
-            return each.every(Boolean);
-          }
-          if (code === 422 || code === 413) {
-            for (const id of ids) refused.current.add(id);
-            landed(ids, false);
-            setStatus((s) => ({ ...s, rejected: [...s.rejected, (error as ApiError).detail] }));
-            return true;
-          }
-          fail(ids);
-          return false;
-        } finally {
-          if (keepalive) releaseKeepalive(bytes);
-        }
-      };
-      return attempt(batch);
+    async (batch: readonly NotebookStrokeIn[], keep: boolean): Promise<boolean> => {
+      const bytes = bodyBytes(batch);
+      const keepalive = keep && reserveKeepalive(bytes);
+      try {
+        const o = await postBatch(pageId, batch, keepalive);
+        ledger.current.posted(o);
+        if (o.pageGone) {
+          flags.current.stopped = true;
+          setStatus((s) => ({ ...s, pageGone: true }));
+        } else
+          report(
+            o.failed.length > 0,
+            o.refused.map((r) => r.detail),
+          );
+        return o.failed.length === 0;
+      } finally {
+        if (keepalive) releaseKeepalive(bytes);
+      }
     },
-    [pageId, landed, fail],
+    [pageId, report],
   );
-
   const remove = useCallback(
     async (id: string, keep: boolean): Promise<boolean> => {
-      try {
-        await notebookApi.deleteStroke(pageId, id, { keepalive: keep });
-      } catch (error) {
-        // Already gone is the state the person asked for.
-        if (!(error instanceof ApiError && error.status === 404)) {
-          fail([id]);
-          return false;
-        }
-      }
-      landed([id], false);
-      return true;
+      const gone = await deleteOne(pageId, id, keep);
+      ledger.current.deleted(id, gone);
+      report(!gone);
+      return gone;
     },
-    [pageId, landed, fail],
+    [pageId, report],
   );
 
   /** Sends one round of writes; true when every one landed. */
   const send = useCallback(
     async (w: StrokeWrites, keep: boolean): Promise<boolean> => {
-      const cut = batches(w.add.map(sized), keep ? KEEPALIVE_CAP : MAX_BATCH_BYTES);
       const removals = Promise.all(w.remove.map((id) => remove(id, keep)));
+      // While hidden, batches are cut to what the shared budget has left (`api/keepalive`).
+      const cap = keep ? Math.min(KEEPALIVE_CAP, Math.max(1, keepaliveLeft())) : MAX_BATCH_BYTES;
       let ok = true;
-      for (const batch of cut) {
+      for (const batch of batches(w.add.map(sized), cap)) {
         if (!(await post(batch, keep))) ok = false;
-        if (stopped.current) break;
+        if (flags.current.stopped) break;
       }
       return (await removals).every(Boolean) && ok;
     },
@@ -172,68 +176,104 @@ export function useStrokeSaver(
   );
 
   const sync = useCallback(() => {
-    if (running.current) {
-      again.current = true;
+    const f = flags.current;
+    if (isLeaving()) return; // `pagehide` sends everything owed at once (`flush`)
+    if (f.running) {
+      f.again = true;
       return;
     }
-    running.current = true;
+    f.running = true;
     void (async () => {
       let sent = false;
       try {
         for (;;) {
-          again.current = false;
-          const w = strokeWrites(server.current, latest.current.strokes(), refused.current);
-          if (stopped.current || w.add.length + w.remove.length === 0) break;
+          f.again = false;
+          const w = writes();
+          ledger.current.prune(w); // an undone stroke that never landed is no longer a failure
+          report(false);
+          if (f.stopped || w.add.length + w.remove.length === 0) break;
           sent = true;
-          const ok = await send(w, hidden.current).catch(() => {
-            fail(w.add.map((s) => s.id)); // a stroke the encoder refuses: owed, and said so
+          const ok = await send(w, f.hidden).catch(() => {
+            ledger.current.posted({ ...NOTHING, failed: w.add.map((s) => s.id) }); // encoder refused
+            report(true);
             return false;
           });
           setAnswers((n) => n + 1);
-          if (!ok && !again.current) break;
+          if (!ok && !f.again) break;
         }
       } finally {
-        running.current = false;
+        f.running = false;
         if (sent) latest.current.onSettled?.();
       }
     })();
-  }, [send, fail]);
+  }, [writes, send, report]);
 
+  /** `pagehide`: every request starts now, inside the event; none waits on another. */
+  const flush = useCallback(() => {
+    if (flags.current.stopped) return;
+    const w = writes();
+    for (const id of w.remove) void remove(id, true); // a DELETE has no body: no budget
+    const { fit, rest } = fitBudget(w.add.map(sized), keepaliveLeft());
+    for (const batch of batches(fit, KEEPALIVE_CAP)) void post(batch, true);
+    // More than the budget has left: best effort, and `beforeunload` warned about it.
+    for (const batch of batches(rest, MAX_BATCH_BYTES)) void post(batch, false);
+  }, [writes, remove, post]);
+
+  const owedBytes = useCallback((): number => {
+    const add = writes().add.map(sized);
+    return add.length === 0 ? 0 : add.reduce((n, s) => n + s.bytes, 1);
+  }, [writes]);
+  useInkLeave({ flags, sync, flush, owedBytes });
+
+  const seed = useCallback((ids: readonly string[]) => ledger.current.seed(ids), []);
+  const unsaved = useCallback(() => ledger.current.unsaved(latest.current.strokes()), []);
+  return { status, seed, sync, unsaved };
+}
+
+const NOTHING = { saved: [], refused: [], failed: [], uncertain: [], pageGone: false };
+
+/**
+ * The ink's page-lifecycle listeners: a hidden tab sends with keepalive; `pagehide` marks the page
+ * as leaving (a last command's sync then waits for the flush) and flushes; `pageshow` (back from
+ * the cache) resumes; `beforeunload` warns when what the savers owe together cannot all go.
+ *
+ * @param refs - The saver's flags, its `sync`, `flush` and owed body bytes.
+ */
+function useInkLeave(refs: {
+  flags: { current: { hidden: boolean } };
+  sync: () => void;
+  flush: () => void;
+  owedBytes: () => number;
+}): void {
+  const latest = useRef(refs);
+  latest.current = refs;
   useEffect(() => {
+    setLeaving(false); // a page that mounts is not being left
+    const unregister = owesOnLeave(() => latest.current.owedBytes());
     const visibility = (): void => {
-      hidden.current = document.visibilityState === 'hidden';
-      if (hidden.current) sync();
+      latest.current.flags.current.hidden = document.visibilityState === 'hidden';
+      if (latest.current.flags.current.hidden) latest.current.sync();
     };
-    // Closing: everything owed goes now, with keepalive; a duplicate of a POST in flight is
-    // harmless (idempotent on stroke_id) and a DELETE of a stroke already gone answers 404.
     const pagehide = (): void => {
-      if (!stopped.current) {
-        void send(strokeWrites(server.current, latest.current.strokes(), refused.current), true);
-      }
+      setLeaving(true);
+      latest.current.flush();
     };
+    const pageshow = (): void => setLeaving(false);
     const beforeunload = (e: BeforeUnloadEvent): void => {
-      const { add } = strokeWrites(server.current, latest.current.strokes(), refused.current);
-      if (!add.some((s) => sized(s).bytes > KEEPALIVE_CAP)) return;
+      if (latest.current.owedBytes() === 0 || !leavingWouldLose()) return;
       e.preventDefault();
       e.returnValue = LONG_STROKE_WARNING;
     };
     document.addEventListener('visibilitychange', visibility);
     window.addEventListener('pagehide', pagehide);
+    window.addEventListener('pageshow', pageshow);
     window.addEventListener('beforeunload', beforeunload);
     return () => {
+      unregister();
       document.removeEventListener('visibilitychange', visibility);
       window.removeEventListener('pagehide', pagehide);
+      window.removeEventListener('pageshow', pageshow);
       window.removeEventListener('beforeunload', beforeunload);
     };
-  }, [sync, send]);
-
-  const seed = useCallback((ids: readonly string[]) => {
-    server.current = new Set(ids);
   }, []);
-  const unsaved = useCallback(() => {
-    const w = strokeWrites(server.current, latest.current.strokes());
-    return w.add.length + w.remove.length;
-  }, []);
-
-  return { status, seed, sync, unsaved };
 }
