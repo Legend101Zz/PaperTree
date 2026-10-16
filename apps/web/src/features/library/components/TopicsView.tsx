@@ -44,7 +44,8 @@ export function TopicsView({ books, matches, onShowOnShelf }: TopicsViewProps): 
   const unshelved = useMemo(
     () =>
       books
-        .filter((book) => !book.topic)
+        // A sample paper (fixtures on) is not the person's: it cannot take a topic.
+        .filter((book) => !book.topic && book.isSample !== true)
         .sort((a, b) => a.addedAt.localeCompare(b.addedAt) || a.id.localeCompare(b.id)),
     [books],
   );
