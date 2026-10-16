@@ -39,10 +39,10 @@ per set of cards.
 - `components/cards/`: one file per card family, `CardShell` (stock, handles, the clip) and
   `index.ts` (`nodeTypes`).
 - `hooks/useBoardController.ts`: the only module that writes.
-- `hooks/useCardSources.ts`: the thread and notebook reads behind the cards.
+- `hooks/useCardSources.ts`: the thread and notebook reads behind the cards, once per id.
 - `model/flow.ts`: wire rows ↔ xyflow nodes and edges, names. `model/cards.ts`: what each card
   shows (pure). `model/clip.ts`: the fade and "more" rule.
-- `components/board.css`: the cards' stock and type, from `--pt-*` tokens.
+- `components/cards.css`: the cards' stock and type, from `--pt-*` tokens.
 
 The reader-side helpers (`components/canvas/sendToCanvas.ts`, `toast.tsx`, `duplicate.ts`,
 `useFocusFromCanvas.ts`) stay where the reader imports them until the Board wording sweep (S6d).
