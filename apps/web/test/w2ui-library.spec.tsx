@@ -8,8 +8,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SESSION_RETRY_DELAYS_MS, SessionBanner } from '@/components/auth/SessionBanner';
-import { LibraryView } from '@/components/library/LibraryView';
 import { CANCEL_COPY, UploadDropzone } from '@/components/library/UploadDropzone';
+import { LibraryView } from '@/features/library';
 import { NetworkError } from '@/lib/api/client';
 import { authApi } from '@/lib/api/papers';
 import type { LibraryPaper } from '@/lib/api/types';
@@ -157,7 +157,13 @@ describe('a failed card says one sentence (item 2)', () => {
       }),
     ]);
     renderLibrary();
-    const card = await screen.findByRole('article');
+    // #195: the failed paper is a spine; its catalogue card holds the sentence and Retry.
+    fireEvent.click(await screen.findByRole('button', { name: /garbage, could not read/ }));
+    const card = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>('[data-card-paper-id]');
+      if (found === null) throw new Error('no catalogue card');
+      return found;
+    });
     const reason =
       'This file could not be read as a PDF. It may be damaged, scanned without text or password protected. Retry, or upload a different copy.';
     expect(card.textContent).toContain(reason);
@@ -184,10 +190,10 @@ describe('the transient upload row (item 3)', () => {
     await screen.findByText('My papers');
     api.list.mockResolvedValue([row({ paper_id: 'ppr_NEW', processing: 'failed' })]);
     pick(pdf());
-    await screen.findByRole('article');
+    await screen.findByRole('button', { name: /^garbage,/ });
     expect(document.querySelector('[data-upload-state]')).toBeNull();
     expect(document.body.textContent).not.toMatch(/Uploaded - queued for reading/);
-    expect(document.querySelectorAll('article')).toHaveLength(1);
+    expect(document.querySelectorAll('[data-paper-id]')).toHaveLength(1);
   });
 });
 
@@ -259,7 +265,7 @@ describe('cancelling an upload (item 4)', () => {
       { timeout: 4000 },
     );
     // ...and it is in the library, so the sentence is true.
-    expect(await screen.findByRole('article', { name: /late/ })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /^late,/ })).toBeTruthy();
   });
 
   it('in the library: a paper that did not land reads "Nothing was added"', async () => {
