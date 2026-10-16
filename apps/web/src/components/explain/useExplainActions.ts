@@ -30,7 +30,14 @@ import { mergeStored, type ThreadMessage } from '@/features/explain/model/messag
 import { originOf } from '@/features/explain/model/threads';
 import { summaryApi } from '@/lib/api/summary';
 import { threadsApi, type CreateThreadBody } from '@/lib/api/threads';
-import type { Message, RunSummary, SseEvent, Summary, Thread } from '@/lib/api/types';
+import {
+  ApiError,
+  type Message,
+  type RunSummary,
+  type SseEvent,
+  type Summary,
+  type Thread,
+} from '@/lib/api/types';
 
 import { failureOf, type Failure } from './errors';
 
@@ -196,8 +203,11 @@ export interface ExplainController {
   readonly openPanel: () => void;
   readonly closeExplain: () => void;
   readonly setView: (view: PanelView) => void;
-  /** A question typed in the panel: a follow-up when a thread exists, else a free `ask`. */
-  readonly ask: (question: string) => void;
+  /**
+   * A question typed in the panel: a follow-up when a thread exists, else a free `ask`. Resolves
+   * `not-sent` when the server refused it before the stream (the composer then keeps the text).
+   */
+  readonly ask: (question: string) => Promise<AskOutcome>;
   /** Stop the answer that is streaming; its partial text stays. */
   readonly stop: () => void;
   /** Re-run a failed, stopped or partial answer. */
@@ -218,6 +228,9 @@ export interface ExplainController {
    */
   readonly hydrateThread: (threadId: string, messages: readonly Message[]) => void;
 }
+
+/** Whether an ask reached the AI: `not-sent` only for a refusal before the stream (#204). */
+export type AskOutcome = 'sent' | 'not-sent';
 
 const DEFAULT_EXPLAIN_QUESTION = 'Explain this passage.';
 
@@ -286,17 +299,19 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       key: string,
       open: (signal: AbortSignal) => AsyncGenerator<SseEvent>,
       userKey: string | null,
-    ): Promise<void> => {
+    ): Promise<AskOutcome> => {
       const controller = new AbortController();
       threadAbort.current = controller;
       const patch = (p: Partial<ViewMessage>): void =>
         dispatch({ type: 'patch', epoch, key, patch: p });
       let finished = false;
+      let accepted = false;
       try {
         for await (const event of open(controller.signal)) {
-          if (epochRef.current !== epoch) return;
+          if (epochRef.current !== epoch) return 'sent';
           switch (event.event) {
             case 'run':
+              accepted = true;
               patch({
                 runId: event.data.run_id,
                 messageId: event.data.message_id,
@@ -358,11 +373,19 @@ export function useExplainActions(options: { readonly paperId: string | null }):
           });
         }
       } catch (error) {
-        if (controller.signal.aborted || epochRef.current !== epoch) return;
-        patch({ status: 'error', label: null, failure: failureOf(error) });
+        if (controller.signal.aborted || epochRef.current !== epoch) return 'sent';
+        // A JSON refusal before the stream wrote nothing: the AI never saw the question.
+        const notSent = !accepted && error instanceof ApiError;
+        patch({
+          status: 'error',
+          label: null,
+          failure: notSent ? { ...failureOf(error), notSent } : failureOf(error),
+        });
+        return notSent ? 'not-sent' : 'sent';
       } finally {
         if (threadAbort.current === controller) threadAbort.current = null;
       }
+      return 'sent';
     },
     [],
   );
@@ -374,7 +397,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       show: boolean,
       open: (signal: AbortSignal) => AsyncGenerator<SseEvent>,
       reuse?: string,
-    ): void => {
+    ): Promise<AskOutcome> => {
       const userKey = show ? nextKey() : null;
       if (userKey !== null) {
         dispatch({
@@ -410,7 +433,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
           },
         });
       }
-      void consume(epoch, key, open, userKey);
+      return consume(epoch, key, open, userKey);
     },
     [consume],
   );
@@ -421,8 +444,8 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       request: ExplainRequest | null,
       question: string | undefined,
       show: boolean,
-    ) => {
-      if (paperId === null) return;
+    ): Promise<AskOutcome> => {
+      if (paperId === null) return Promise.resolve('sent');
       const body: CreateThreadBody =
         request === null
           ? { kind: 'ask', question: question ?? '' }
@@ -432,7 +455,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
               ...(question === undefined ? {} : { question }),
             };
       const shown = question ?? DEFAULT_EXPLAIN_QUESTION;
-      startTurn(epoch, shown, show, (signal) => threadsApi.create(paperId, body, signal));
+      return startTurn(epoch, shown, show, (signal) => threadsApi.create(paperId, body, signal));
     },
     [paperId, startTurn],
   );
@@ -443,7 +466,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       const epoch = (epochRef.current += 1);
       dispatch({ type: 'open', epoch, request: input, view: 'thread' });
       stateRef.current = { ...stateRef.current, epoch, messages: [], threadId: null };
-      sendCreate(epoch, input, undefined, false);
+      void sendCreate(epoch, input, undefined, false);
     },
     [halt, sendCreate],
   );
@@ -479,20 +502,27 @@ export function useExplainActions(options: { readonly paperId: string | null }):
   }, [halt]);
 
   const ask = useCallback(
-    (raw: string): void => {
+    (raw: string): Promise<AskOutcome> => {
       const question = raw.trim();
       const current = stateRef.current;
-      if (paperId === null || question.length === 0) return;
-      if (current.messages.some((m) => m.status === 'streaming')) return;
+      // Nothing left the panel: say so, and the composer keeps the words.
+      if (paperId === null || question.length === 0) return Promise.resolve('not-sent');
+      if (current.messages.some((m) => m.status === 'streaming')) {
+        return Promise.resolve('not-sent');
+      }
       const epoch = current.epoch;
       if (current.threadId !== null) {
         const threadId = current.threadId;
-        startTurn(epoch, question, true, (signal) =>
+        return startTurn(epoch, question, true, (signal) =>
           threadsApi.followUp(paperId, threadId, { question }, signal),
         );
-      } else {
-        sendCreate(epoch, current.messages.length === 0 ? current.request : null, question, true);
       }
+      return sendCreate(
+        epoch,
+        current.messages.length === 0 ? current.request : null,
+        question,
+        true,
+      );
     },
     [paperId, sendCreate, startTurn],
   );
@@ -511,7 +541,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       if (current.threadId !== null) {
         const threadId = current.threadId;
         const retryOf = message.messageId;
-        startTurn(
+        void startTurn(
           epoch,
           question,
           false,
@@ -528,7 +558,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
         // The first turn never reached a thread (it failed before the stream): send it again.
         const first = current.messages[0];
         const asExplain = current.request !== null && first === message;
-        startTurn(
+        void startTurn(
           epoch,
           question,
           false,

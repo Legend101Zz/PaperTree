@@ -5,12 +5,12 @@
  * #202): the status label while it works, a designed failure with its next step, and the usage
  * line, which always says "(estimate)". None of them is the AI's voice, so none sits in its words.
  */
-import { useEffect, useState, type ReactNode } from 'react';
-
 import { describeFailure, type Failure } from '@/components/explain/errors';
-import { usageApi } from '@/lib/api/usage';
+
+import { BudgetCard } from './BudgetCard';
 
 import type { RunSummary } from '@/lib/api/types';
+import type { ReactNode } from 'react';
 
 /**
  * A run's usage in words: `6,776 tokens · ≈ $0.0027 (estimate)`.
@@ -62,26 +62,28 @@ export function StatusLine({ label }: StatusLineProps): ReactNode {
   );
 }
 
-/** "≈ $0.97 of $1.00 used in the last 24 hours (estimate)": the numbers behind a budget refusal. */
-function BudgetDetail(): ReactNode {
-  const [line, setLine] = useState<string | null>(null);
-  useEffect(() => {
-    let live = true;
-    usageApi.get().then(
-      (usage) => {
-        if (live) {
-          setLine(
-            `≈ $${usage.cost_usd_est.toFixed(2)} of $${usage.budget_usd.toFixed(2)} used in the last 24 hours (estimate).`,
-          );
-        }
-      },
-      () => undefined,
-    );
-    return () => {
-      live = false;
-    };
-  }, []);
-  return line === null ? null : <p data-budget-detail>{line}</p>;
+/** Props for `WorkingLabel`. */
+export interface WorkingLabelProps {
+  /** What the AI is doing ("Reading the paper"); never a tool name or an id. */
+  readonly label: string;
+}
+
+/**
+ * The working label on the AI tab row while an answer streams (frame 04b): three dots that pulse
+ * (still under reduced motion) and the label, announced politely. Inline: it sits in the slip's
+ * source line.
+ */
+export function WorkingLabel({ label }: WorkingLabelProps): ReactNode {
+  return (
+    <span className="pt-working" role="status" data-status-label>
+      <span className="pt-working__dots" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </span>
+      {label}…
+    </span>
+  );
 }
 
 /** Props for `FailureNote`. */
@@ -89,16 +91,18 @@ export interface FailureNoteProps {
   readonly failure: Failure;
   /** Omitted when a retry cannot help. */
   readonly onRetry?: (() => void) | undefined;
+  /** The question was typed in the composer, which kept it (the daily-cap card says so). */
+  readonly kept?: boolean;
 }
 
 /** A failure as a sentence and a next step, with Retry when a retry can help. */
-export function FailureNote({ failure, onRetry }: FailureNoteProps): ReactNode {
+export function FailureNote({ failure, onRetry, kept = false }: FailureNoteProps): ReactNode {
+  if (failure.code === 'budget_exhausted') return <BudgetCard kept={kept} />;
   const copy = describeFailure(failure);
   return (
     <div className="pt-explain__error" role="alert" data-error-code={failure.code}>
       <p className="pt-explain__error-title">{copy.sentence}</p>
       <p>{copy.next}</p>
-      {failure.code === 'budget_exhausted' ? <BudgetDetail /> : null}
       {copy.canRetry && onRetry !== undefined ? (
         <button type="button" className="pt-btn pt-btn--outline" onClick={onRetry}>
           Retry

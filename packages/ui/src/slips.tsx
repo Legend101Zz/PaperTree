@@ -133,6 +133,12 @@ export interface AiSlipProps {
   readonly uncitedHeading?: string;
   /** Its heading level, to fit the page outline. Default 4. */
   readonly headingLevel?: 2 | 3 | 4 | 5 | 6;
+  /**
+   * Replaces the `{model} · {source}` line beside the tab while the answer is not simply done: the
+   * working label as it streams, `Stopped · M3.1 Flash` after Stop. Inline content only (it sits
+   * in a `<p>`). The slip's accessible name still names the model.
+   */
+  readonly meta?: ReactNode;
 }
 
 /** The AI's answer on AI-slip stock under a standing "AI" tab. */
@@ -145,6 +151,7 @@ export function AiSlip({
   tabLabel = 'AI',
   uncitedHeading = "no citation · the AI's own reading",
   headingLevel = 4,
+  meta,
 }: AiSlipProps): ReactNode {
   const Heading = (['h2', 'h3', 'h4', 'h5', 'h6'] as const)[headingLevel - 2] ?? 'h4';
   return (
@@ -155,7 +162,9 @@ export function AiSlip({
       aria-label={`${tabLabel} answer${model === undefined ? '' : ` by ${model}`}, not the paper's words`}
     >
       <span className="pt-ai-tab">{tabLabel}</span>
-      {model === undefined || source === undefined ? null : (
+      {meta !== undefined ? (
+        <p className="pt-ai-slip__source">{meta}</p>
+      ) : model === undefined || source === undefined ? null : (
         <p className="pt-ai-slip__source">
           {model} · {source}
         </p>

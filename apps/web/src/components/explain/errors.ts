@@ -11,6 +11,11 @@ export type FailureCode = RunErrorCode | ErrorCode | 'network';
 export interface Failure {
   readonly code: FailureCode;
   readonly retryable: boolean;
+  /**
+   * The server refused the question with a JSON answer before the stream, so nothing was written
+   * and the AI never saw it (#204: the ask is stamped "not sent" and the composer keeps its text).
+   */
+  readonly notSent?: boolean;
 }
 
 export interface FailureCopy {
@@ -30,8 +35,8 @@ const UNAVAILABLE: FailureCopy = {
 
 const COPY: Readonly<Partial<Record<FailureCode, FailureCopy>>> = {
   budget_exhausted: {
-    sentence: "You've used today's AI budget.",
-    next: 'The budget is counted over a rolling 24 hours, so questions work again as older ones age out. Reading, highlighting and the canvas are not affected.',
+    sentence: 'Daily spend cap reached',
+    next: 'The cap counts the last 24 hours, so questions work again as older ones age out. Reading, highlights, the board and cached summaries still work.',
     canRetry: false,
   },
   agent_unavailable: UNAVAILABLE,
@@ -117,7 +122,7 @@ const COPY: Readonly<Partial<Record<FailureCode, FailureCopy>>> = {
   },
   aborted: {
     sentence: 'The answer stopped before it finished.',
-    next: 'What arrived is kept above. Retry to get the full answer.',
+    next: 'Retry to get the full answer.',
     canRetry: true,
   },
   network: {
