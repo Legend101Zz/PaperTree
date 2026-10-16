@@ -217,6 +217,15 @@ function contrast(a: [number, number, number], b: [number, number, number]): num
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
 
+/** A token's contrast against an already composited ground (a wash over the page, say). */
+function ratioOn(
+  scheme: Map<string, string>,
+  fg: string,
+  ground: [number, number, number],
+): number {
+  return contrast(colour(scheme, fg), ground);
+}
+
 const WASHES = ['amber', 'green', 'blue', 'pink', 'purple'] as const;
 /** pdf.js paints black type; lamp-lit multiplies the canvas onto the page, so it stays black. */
 const PDF_TYPE: [number, number, number] = [0, 0, 0];
@@ -251,12 +260,17 @@ describe('the PDF page, which stays paper in both schemes (#205, frame 09b)', ()
     });
   }
 
-  it('lamp-lit: the outline a flash leaves behind (data-flash="linger") keeps 3:1', () => {
-    const page = colour(DARK, '--pt-pdf-page');
-    const rest = Number(DARK.get('--pt-flash-rest'));
-    const outline = over({ rgb: colour(DARK, '--pt-pdf-ring'), alpha: rest }, page);
-    expect(contrast(outline, page)).toBeGreaterThanOrEqual(3);
-  });
+  for (const [name, scheme] of [
+    ['daylight', LIGHT],
+    ['lamp-lit', DARK],
+  ] as const) {
+    it(`${name}: the outline a flash leaves behind (data-flash="linger") keeps 3:1`, () => {
+      const page = colour(scheme, '--pt-pdf-page');
+      const rest = Number(scheme.get('--pt-flash-rest'));
+      const outline = over({ rgb: colour(scheme, '--pt-pdf-ring'), alpha: rest }, page);
+      expect(contrast(outline, page)).toBeGreaterThanOrEqual(3);
+    });
+  }
 
   it('lamp-lit: each wash stands off the dimmed page at least as far as off white by day', () => {
     const [day, night] = [colour(LIGHT, '--pt-pdf-page'), colour(DARK, '--pt-pdf-page')];
@@ -275,11 +289,3 @@ describe('the PDF page, which stays paper in both schemes (#205, frame 09b)', ()
     }
   });
 });
-
-function ratioOn(
-  scheme: Map<string, string>,
-  fg: string,
-  ground: [number, number, number],
-): number {
-  return contrast(colour(scheme, fg), ground);
-}

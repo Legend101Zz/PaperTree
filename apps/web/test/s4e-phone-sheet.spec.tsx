@@ -15,12 +15,13 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { hitOutset, TOUCH_MARKER_PX, TOUCH_TARGET_PX } from '@papertree/ui';
+import { hitOutset, SHEET_PEEK_PX, TOUCH_MARKER_PX, TOUCH_TARGET_PX } from '@papertree/ui';
 
 import { GOLDEN } from './fixtures/attention-thread';
 import { focusAnchor, Harness, sendToCanvas, stubDesktop } from './s6-harness';
 import { installFetch, jsonResponse, PAPER } from './s6-support';
 
+import { spanInView } from '@/components/reader/VirtualPageList';
 import type { Thread } from '@/lib/api/types';
 
 const NEWER: Thread = {
@@ -108,13 +109,33 @@ describe('the phone sheet (frame 08b)', () => {
     expect(rows[1]?.querySelector('button')?.textContent).toMatch(/^Show in paper: 2p\. 2/);
   });
 
+  it('splits the tap areas of a run "[1, 4]" between its two markers', async () => {
+    const sheet = await openGoldenOnPhone();
+    const second = sheet.querySelectorAll<HTMLElement>('[data-exchange]')[1] as HTMLElement;
+    fireEvent.click(within(second).getByRole('button', { name: 'Read the whole answer' }));
+    const run = Array.from(second.querySelectorAll('.pt-cite-run')).find(
+      (r) => r.querySelectorAll('.pt-exchange__inline-marker').length === 2,
+    );
+    const pair = Array.from(run?.querySelectorAll('.pt-exchange__inline-marker') ?? []);
+    expect(pair.map((m) => m.getAttribute('data-passage'))).toEqual(['1', '4']);
+    expect(pair.map((m) => m.getAttribute('data-run'))).toEqual(['next', 'prev']);
+    // A marker on its own has no neighbours to share with.
+    const alone = first(sheet).querySelector('[data-passage="1"]');
+    expect(alone?.hasAttribute('data-run')).toBe(false);
+  });
+
   it('a marker tap lowers the sheet to peek and flashes its passage; so does a trace row', async () => {
     const sheet = await openGoldenOnPhone();
     expect(sheet.getAttribute('data-detent')).toBe('half');
     fireEvent.click(first(sheet).querySelector('[data-passage="1"] button') as HTMLElement);
     await waitFor(() => expect(sheet.getAttribute('data-detent')).toBe('peek'));
     expect(focusAnchor).toHaveBeenCalledTimes(1);
-    expect(focusAnchor.mock.calls[0]?.[1]).toMatchObject({ flash: true, from: { n: 1 } });
+    // The peek still covers the window's foot: the reader counts a passage there as out of view.
+    expect(focusAnchor.mock.calls[0]?.[1]).toMatchObject({
+      flash: true,
+      from: { n: 1 },
+      bottomInset: SHEET_PEEK_PX,
+    });
     fireEvent.click(first(sheet).querySelectorAll('.pt-trace-row__touch')[1] as HTMLElement);
     expect(focusAnchor.mock.calls[1]?.[1]).toMatchObject({ flash: true, from: { n: 2 } });
   });
@@ -131,13 +152,27 @@ describe('the phone sheet (frame 08b)', () => {
     // The last answer's footer is pinned, not repeated in the scroll; the first keeps its own.
     const scroll = sheet.querySelector('.pt-explain__scroll') as HTMLElement;
     expect(scroll.querySelectorAll('[data-usage-line]')).toHaveLength(1);
-    fireEvent.click(within(pinned as HTMLElement).getByRole('button', { name: 'To board' }));
+    // Two answers: the pinned button says which one it sends (the first keeps its own To board).
+    fireEvent.click(
+      within(pinned as HTMLElement).getByRole('button', { name: 'Send answer 2 to board' }),
+    );
+    expect(within(scroll).getByRole('button', { name: 'To board' })).toBeTruthy();
     await waitFor(() =>
       expect(within(pinned as HTMLElement).getByText('Sent to board')).toBeTruthy(),
     );
     const last = GOLDEN.messages[GOLDEN.messages.length - 1];
     expect(sendToCanvas).toHaveBeenCalledWith({ kind: 'explanation', messageId: last?.message_id });
     expect(within(sheet).getByPlaceholderText('Ask a follow-up')).toBeTruthy();
+  });
+});
+
+describe('spanInView: what the reader counts as already on screen', () => {
+  it('is the scroller less what covers its foot (the phone sheet at peek)', () => {
+    // A passage at 600–640 in a 700 px view: on screen, but behind a 120 px peek sheet.
+    expect(spanInView(600, 640, 0, 700)).toBe(true);
+    expect(spanInView(600, 640, 0, 700, SHEET_PEEK_PX)).toBe(false);
+    expect(spanInView(400, 560, 0, 700, SHEET_PEEK_PX)).toBe(true);
+    expect(spanInView(-10, 40, 0, 700, SHEET_PEEK_PX)).toBe(false);
   });
 });
 

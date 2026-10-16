@@ -56,7 +56,7 @@ import { ExplainPanel } from '@/components/explain';
 import { useExplainActions } from '@/components/explain/useExplainActions';
 import {
   ReaderActionsProvider,
-  type FlashSource,
+  type FocusOptions,
   type ReaderActions,
 } from '@/components/reader/actions';
 import {
@@ -549,7 +549,7 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
    * it. An anchor painted nowhere still gets its page, and the tray says why.
    */
   const focusAnchor = useCallback(
-    (anchor: Anchor, opts?: { flash?: boolean; from?: FlashSource }) => {
+    (anchor: Anchor, opts?: FocusOptions) => {
       if (doc === null) return;
       const resolution = resolveAnchor(anchor, doc);
       const shouldFlash = opts?.flash !== false;
@@ -570,7 +570,12 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
       const scrollMs =
         extent === null
           ? 0
-          : requestScroll({ kind: 'rect', pageIndex: paint.pageIndex, bbox: extent });
+          : requestScroll({
+              kind: 'rect',
+              pageIndex: paint.pageIndex,
+              bbox: extent,
+              ...(opts?.bottomInset === undefined ? {} : { bottomInset: opts.bottomInset }),
+            });
       if (!shouldFlash) return;
       setFlash({
         key: `${anchor.id}:${String(Date.now())}`,
@@ -828,7 +833,7 @@ function ReaderActionsMount({
   children,
 }: {
   readonly paper: PaperRef;
-  readonly onFocusAnchor: (anchor: Anchor, opts?: { flash?: boolean; from?: FlashSource }) => void;
+  readonly onFocusAnchor: (anchor: Anchor, opts?: FocusOptions) => void;
   readonly children: React.ReactNode;
 }) {
   const paperId = paper.kind === 'api' ? paper.paperId : null;

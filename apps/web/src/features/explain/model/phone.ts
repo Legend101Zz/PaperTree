@@ -38,6 +38,21 @@ export function clipAnswer(
 }
 
 /**
+ * Which neighbours a marker has in a run of markers on one claim (`[b1, b8]` draws 1 and 4 side by
+ * side): its 44 px tap area stops halfway to each, so a tap on 1 never flashes 4 (#205).
+ *
+ * @param index The marker's place in the run, 0-based.
+ * @param count How many markers the run has.
+ * @returns `"next"`, `"prev"`, `"prev next"`, or null for a marker on its own.
+ * @example
+ * runSides(0, 2) // "next": marker 1 of "[1, 4]" stops short of 4
+ */
+export function runSides(index: number, count: number): string | null {
+  const sides = [index > 0 ? 'prev' : '', index < count - 1 ? 'next' : ''].filter(Boolean);
+  return sides.length === 0 ? null : sides.join(' ');
+}
+
+/**
  * The exchange whose usage line and actions the phone's pinned footer carries: the last one, once
  * its answer is complete (a streaming, stopped or failed answer keeps its own note in the slip).
  *

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildExchanges } from './exchange';
-import { clipAnswer, pinnedExchange } from './phone';
+import { clipAnswer, pinnedExchange, runSides } from './phone';
 import { originOf } from './threads';
 import { GOLDEN, goldenMessages } from '../../../../test/fixtures/attention-thread';
 
@@ -64,5 +64,13 @@ describe('pinnedExchange: whose usage and actions the phone pins', () => {
     expect(pinnedExchange(['complete', 'partial'])).toBe(-1);
     expect(pinnedExchange(['complete', null])).toBe(-1);
     expect(pinnedExchange([])).toBe(-1);
+  });
+});
+
+describe('runSides: where a marker in a run stops its tap area', () => {
+  it('marks each neighbour of a run, and nothing for a marker on its own', () => {
+    expect([0, 1].map((i) => runSides(i, 2))).toEqual(['next', 'prev']);
+    expect([0, 1, 2].map((i) => runSides(i, 3))).toEqual(['next', 'prev next', 'prev']);
+    expect(runSides(0, 1)).toBeNull();
   });
 });

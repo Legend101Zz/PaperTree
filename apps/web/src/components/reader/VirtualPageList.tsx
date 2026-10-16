@@ -414,6 +414,32 @@ export interface ScrollToOptions {
   readonly ifNeeded?: boolean;
   /** Tween the scroll over this many ms instead of `behavior` (`reader/flash`, #202). */
   readonly durationMs?: number;
+  /**
+   * CSS px at the bottom of the view that something covers (the phone's peek sheet, #205): the
+   * rectangle is in view only above it, and a scroll places it in what is left.
+   */
+  readonly bottomInset?: number;
+}
+
+/**
+ * Whether a span of the scroller's content is wholly on screen: below the scroll top and above
+ * the bottom of the view, less whatever covers its foot (the phone's peek sheet, #205).
+ *
+ * @param top - The span's top, in the scroller's content px.
+ * @param bottom - Its bottom.
+ * @param scrollTop - The scroller's `scrollTop`.
+ * @param clientHeight - The scroller's `clientHeight`.
+ * @param bottomInset - Px covered at the bottom of the view.
+ * @returns True when no scroll is needed to see all of it.
+ */
+export function spanInView(
+  top: number,
+  bottom: number,
+  scrollTop: number,
+  clientHeight: number,
+  bottomInset = 0,
+): boolean {
+  return top >= scrollTop && bottom <= scrollTop + clientHeight - Math.max(0, bottomInset);
 }
 
 export interface VirtualPageListHandle {
@@ -657,15 +683,16 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
         scrollToBlock(pageIndex, bbox, opts) {
           const el = scrollRef.current;
           if (el === null) return false;
+          const inset = Math.max(0, opts?.bottomInset ?? 0);
           if (opts?.ifNeeded === true) {
             const scale = irScaleFor(pageIndex);
             const top = CONTENT_PAD_TOP + offsetForPage(layout, pageIndex) + bbox[1] * scale;
             const bottom = top + (bbox[3] - bbox[1]) * scale;
-            if (top >= el.scrollTop && bottom <= el.scrollTop + el.clientHeight) return false;
+            if (spanInView(top, bottom, el.scrollTop, el.clientHeight, inset)) return false;
           }
           const target = offsetForBlock(layout, pageIndex, bbox, irScaleFor(pageIndex), {
             margin: opts?.margin ?? 24,
-            viewportHeight,
+            viewportHeight: Math.max(0, viewportHeight - inset),
           });
           // Horizontally only when the page is wider than the viewport: otherwise a column on the
           // right would drag a centred page sideways for nothing.

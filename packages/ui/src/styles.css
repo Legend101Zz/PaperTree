@@ -198,10 +198,11 @@
   --pt-highlight-orphan-stroke: var(--pt-danger);
   /* drawn ON the PDF page, which stays paper in both schemes (#205): the citation flash's ring and
    * a focused highlight in daylight navy (8.7 on white, 6.7 on the dimmed page; the lamp-lit focus
-   * blue would be 1.6), the selection's blue-grey wash, and the outline the flash leaves behind */
+   * blue would be 1.6), the selection's blue-grey wash, and the outline the flash leaves behind,
+   * which is the only lasting cue on a phone: 3.1:1 on white (WCAG 1.4.11; 0.35 was 1.8) */
   --pt-pdf-ring: #1f4e79;
   --pt-pdf-selection: rgb(31 78 121 / 24%);
-  --pt-flash-rest: 0.35;
+  --pt-flash-rest: 0.6;
   --pt-pdf-hl-amber: var(--pt-hl-amber);
   --pt-pdf-hl-green: var(--pt-hl-green);
   --pt-pdf-hl-blue: var(--pt-hl-blue);
@@ -3094,6 +3095,20 @@ span.pt-paper .pt-paper__cite {
   margin-inline-start: 2px;
 }
 
+/* In a run "[1, 4]" the two tap areas meet halfway across the 2 px between the squares and never
+   overlap, so a tap on 1 cannot flash 4 (#205). The grid keeps those layers to itself. */
+.pt-exchange__inline-marker[data-run~='next'] .pt-marker--touch::after {
+  inset-inline-end: -1px;
+}
+
+.pt-exchange__inline-marker[data-run~='prev'] .pt-marker--touch::after {
+  inset-inline-start: -1px;
+}
+
+.pt-ai-slip__grid {
+  isolation: isolate;
+}
+
 /* A marker and the punctuation after it are one unbreakable box: "…output 4." never leaves its
    full stop on the next line (R4), and the run is one line box however it is measured. */
 .pt-exchange .pt-cite-run {
@@ -4345,19 +4360,37 @@ button.pt-holder {
   background: var(--pt-focus);
 }
 
-/* Phone (frame 08b): small numerals in a 22 px square, so the line keeps its height, and a hit area
-   that reaches 44 px: `--pt-hit-outset` comes from `hitOutset` on the element (citations.tsx). */
+/* Phone (frame 08b): small numerals in a 22 px square, so the line keeps its height, and a tap area
+   under it that reaches 44 px (`--pt-hit-outset`, from `hitOutset` on the element, citations.tsx).
+   The square is a layer above every marker's tap area, so a marker always owns what it shows, even
+   where a neighbour's 44 px reaches over it (#205). */
 .pt-marker--touch {
   position: relative;
   min-inline-size: 22px;
   block-size: 22px;
+  padding: 0;
   font-size: var(--pt-t-label-s);
   vertical-align: 1px;
+}
+
+.pt-marker--touch .pt-marker__n {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-inline-size: 22px;
+  block-size: 22px;
+  padding: 0 3px;
+  background: inherit;
+  border-radius: inherit;
 }
 
 .pt-marker--touch::after {
   content: '';
   position: absolute;
+  z-index: 1;
   inset: calc(-1 * var(--pt-hit-outset, 11px));
 }
 
@@ -4799,4 +4832,20 @@ button.pt-holder {
 
 .pt-explain-sheet .pt-explain__input {
   min-block-size: var(--pt-target-touch);
+}
+
+/* A landscape phone (#205): the sheet opens to the full height under the reader's 56 px header and
+   the pinned footer folds onto one line, so the answer keeps a readable area and the follow-up box
+   stays on screen (at 667 × 375 the half detent left 32 px of answer and cut the box off). */
+@media (max-width: 767px) and (max-height: 500px) {
+  .pt-explain-sheet[data-detent='half'] {
+    height: calc(100% - var(--pt-reader-bar-h)) !important;
+  }
+
+  .pt-explain__pinned {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding-block-start: var(--pt-space-1);
+  }
 }

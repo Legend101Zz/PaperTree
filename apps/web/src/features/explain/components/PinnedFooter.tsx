@@ -19,6 +19,11 @@ export interface PinnedFooterProps {
   readonly messageId: string;
   readonly usage: RunSummary | null;
   readonly onSendToBoard: () => Promise<void>;
+  /**
+   * The answer's number when the thread has several: the button then says which one it sends
+   * ("Send answer 2 to board"), since earlier answers keep their own To board in the scroll.
+   */
+  readonly answer?: number;
 }
 
 /** The board pin of frame 08b's "To board". */
@@ -35,11 +40,22 @@ const PIN = (
  * @example
  * <PinnedFooter messageId="msg_1" usage={run} onSendToBoard={() => send('msg_1')} />
  */
-export function PinnedFooter({ messageId, usage, onSendToBoard }: PinnedFooterProps): ReactNode {
+export function PinnedFooter({
+  messageId,
+  usage,
+  onSendToBoard,
+  answer,
+}: PinnedFooterProps): ReactNode {
   return (
     <div className="pt-explain__pinned" data-pinned-footer>
       <UsageLine usage={usage} />
-      <SendToCanvas key={messageId} short icon={PIN} onSend={onSendToBoard} />
+      <SendToCanvas
+        key={messageId}
+        short
+        icon={PIN}
+        onSend={onSendToBoard}
+        {...(answer === undefined ? {} : { label: `Send answer ${String(answer)} to board` })}
+      />
     </div>
   );
 }

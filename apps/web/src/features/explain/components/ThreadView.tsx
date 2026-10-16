@@ -240,6 +240,7 @@ export function ThreadView({
           messageId={pinnedId}
           usage={pinnedUsage}
           onSendToBoard={() => sendToCanvas(pinnedId)}
+          {...(exchanges.length > 1 ? { answer: pin + 1 } : {})}
         />
       )}
       {/* A diagram thread is redrawn, never continued with a typed question (the API's 422). */}

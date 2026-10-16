@@ -8,7 +8,7 @@
  * as exchanges. Closed, it draws nothing: the reader header's Explain toggle (#203) is the entry for
  * a free question or the summary, and the panel hands focus back to it when it closes.
  */
-import { Sheet, type SheetDetent } from '@papertree/ui';
+import { SHEET_PEEK_PX, Sheet, type SheetDetent } from '@papertree/ui';
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 import { useReaderActions } from '@/components/reader/actions';
@@ -75,7 +75,8 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
   const { state } = controller;
   const busy = state.messages.some((m) => m.status === 'streaming');
 
-  // On a phone the sheet covers the page: lower it so the flashed passage is in view.
+  // On a phone the sheet covers the page: lower it so the flashed passage is in view, and tell the
+  // reader the peek still covers the window's foot, so a passage behind it scrolls up (#205).
   const onShow = useCallback(
     (marker: PassageMarker) => {
       if (!desktop) setDetent('peek');
@@ -83,6 +84,7 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
       actions.focusAnchor(marker.citation.anchor, {
         flash: true,
         from: { n, page, para, notVerified },
+        ...(desktop ? {} : { bottomInset: SHEET_PEEK_PX }),
       });
     },
     [actions, desktop, setDetent],
