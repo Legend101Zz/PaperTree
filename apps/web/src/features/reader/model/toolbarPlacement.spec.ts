@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   overlaps,
   placeToolbar,
+  selectionLines,
   typeAreaOf,
   type PlacementInput,
   type Rect,
@@ -157,5 +158,89 @@ describe('typeAreaOf', () => {
 
   it('is null for a page with no text blocks', () => {
     expect(typeAreaOf([{ type: 'margin_note', bbox: [11, 214, 38, 555] }])).toBeNull();
+  });
+});
+
+describe('the measured bar (review B1)', () => {
+  // The reviewer's case: drawer open, Split, Fit width: a narrow column where no margin fits and the
+  // docked bar wraps to 84 px. The selected line sits 62-68 px under the column top.
+  const narrow: PlacementInput = {
+    ...BASE,
+    typeArea: rect(20, 0, 380, 900),
+    selection: [rect(87, 62, 309, 68)],
+    viewport: rect(0, 0, 400, 800),
+  };
+
+  it('a one-row guess (52 px) would clear the line, so the bar stays at the top', () => {
+    expect(placeToolbar({ ...narrow, dockHeight: 52 })).toMatchObject({ edge: 'top' });
+  });
+
+  it('the measured 84 px bar would cover it, so the bar goes to the bottom', () => {
+    const placed = placeToolbar({ ...narrow, dockHeight: 84 });
+    expect(placed).toMatchObject({ kind: 'docked', edge: 'bottom' });
+    expect(overlaps(placed.rect, narrow.selection[0]!)).toBe(false);
+  });
+
+  it('a margin bar is clamped by its measured height', () => {
+    const tall = placeToolbar({
+      ...BASE,
+      selection: lines(135, 630, 800, 2),
+      toolbar: { width: 126, height: 400 },
+    });
+    expect(tall.rect.bottom).toBe(836);
+  });
+});
+
+describe('a selection across a page break (review B2)', () => {
+  const geometry = {
+    pageBox: (page: number) => ({ left: 0, top: page * 1000 }),
+    irScale: () => 1,
+  };
+  const across = {
+    pageIndex: 0,
+    irQuads: [[135, 978, 576, 992]],
+    irExtent: [135, 978, 576, 992],
+    endPageIndex: 1,
+    endQuads: [
+      [135, 80, 630, 94],
+      [135, 96, 630, 110],
+    ],
+    endExtent: [135, 80, 630, 110],
+  };
+
+  it("brings the first page's lines too, and goes by the last page", () => {
+    const got = selectionLines(across, geometry, () => [100, 50, 650, 950]);
+    expect(got?.lines).toHaveLength(3);
+    expect(got?.lines[0]).toEqual(rect(135, 978, 576, 992));
+    expect(got?.page).toBe(1);
+    expect(got?.levelWith).toBe(1080);
+    expect(got?.typeArea).toEqual(rect(100, 1050, 650, 1950));
+  });
+
+  it("the docked bar clears the first page's line under the column top", () => {
+    const got = selectionLines(across, geometry);
+    if (got === null) throw new Error('no lines');
+    const placed = placeToolbar({
+      typeArea: rect(20, 0, 380, 3000),
+      selection: got.lines,
+      levelWith: got.levelWith,
+      toolbar: { width: 130, height: 250 },
+      dockHeight: 52,
+      viewport: rect(0, 954, 400, 1754),
+    });
+    expect(placed.kind).toBe('docked');
+    for (const line of got.lines) expect(overlaps(placed.rect, line)).toBe(false);
+  });
+
+  it('one page: the first page alone, level with its first line', () => {
+    const one = {
+      ...across,
+      endPageIndex: 0,
+      endQuads: across.irQuads,
+      endExtent: across.irExtent,
+    };
+    const got = selectionLines(one, geometry);
+    expect(got?.lines).toHaveLength(1);
+    expect(got?.levelWith).toBe(978);
   });
 });

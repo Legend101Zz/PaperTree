@@ -49,7 +49,8 @@ import {
   frontMatterRows,
   headingDisplayTitle,
   isFragmentHeading,
-} from '@/features/reader/model/contents';
+  outsideLabel,
+} from '@/features/reader';
 
 import { assetSrc } from './assetSrc';
 
@@ -222,7 +223,7 @@ export function buildOutline(doc: IndexedDocument): Outline {
   // A fragment the parser took for a heading is not listed; its subsections take its place (#177).
   const unfragment = (nodes: readonly OutlineNode[]): OutlineNode[] =>
     nodes.flatMap((node) =>
-      isFragmentHeading(node.title)
+      isFragmentHeading(node.title, doc.byId.get(node.headingBlockId)?.type)
         ? unfragment(node.children)
         : [{ ...node, children: unfragment(node.children) }],
     );
@@ -568,12 +569,15 @@ function EmptyState({ title, body }: { readonly title: string; readonly body: st
   );
 }
 
-/** The document's title block as a front-matter row, wherever the parse filed it (#177). */
+/**
+ * The document's title block as a front-matter row, wherever the parse filed it (#177); null when a
+ * section is headed by it (the real ResNet parse), which already lists it (review S2).
+ */
 function titleOf(doc: IndexedDocument): OutlineLeaf | null {
   const block = doc.blocks.find((b) => b.type === 'title' && b.text.trim() !== '');
-  return block === undefined
-    ? null
-    : { blockId: block.id, type: 'title', label: firstLine(block.text) };
+  if (block === undefined) return null;
+  if (doc.sections.some((s) => s.heading_block_id === block.id)) return null;
+  return { blockId: block.id, type: 'title', label: firstLine(block.text) };
 }
 
 function OutlineTab({
@@ -626,7 +630,9 @@ function OutlineTab({
         note="Footnotes, page numbers and margin stamps the parse never assigned to a section. Listed so nothing is lost."
         group={{
           ...outline.outside,
-          leaves: outline.outside.leaves.filter((l) => l.type !== 'title'),
+          leaves: outline.outside.leaves
+            .filter((l) => l.type !== 'title')
+            .map((l) => ({ ...l, label: outsideLabel(l.type, l.label) })),
         }}
         activeBlockId={activeBlockId}
         onNavigateToBlock={onNavigateToBlock}

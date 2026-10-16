@@ -6,7 +6,9 @@
  *
  * A board is created ONLY here, by an explicit send: the first `createNode` creates it in the
  * same transaction (ADR-002 §3.7). The new node is placed where it overlaps no existing node, and
- * a toast says so with an "Open canvas" link. A failure throws (the reader shows its notice); an
+ * a toast says so with a link to it. A passage comes from the selection toolbar's "Send to board"
+ * (#203), so its toast says "board"; an answer comes from the explain panel's "Send to canvas", so
+ * its toast keeps "canvas" until the whole Canvas → Board sweep (S6d). A failure throws (the reader shows its notice); an
  * explanation send also shows its own error toast, because the explain panel is another slice's.
  */
 import type { SendToCanvasInput } from '@/components/reader/actions';
@@ -65,9 +67,9 @@ export async function sendToCanvas(
       // The same passage twice would be two identical cards: say so and point at the canvas.
       if (findExcerptFor(view.nodes, input.anchor) !== null) {
         showCanvasToast({
-          message: 'Already on your canvas',
+          message: 'Already on your board',
           href: `/paper/${encodeURIComponent(paperId)}/canvas`,
-          linkLabel: 'Open canvas',
+          linkLabel: 'Open board',
         });
         return;
       }
@@ -101,9 +103,9 @@ export async function sendToCanvas(
     }
     showCanvasToast({
       message:
-        input.kind === 'excerpt' ? 'Passage added to your canvas.' : 'Answer added to your canvas.',
+        input.kind === 'excerpt' ? 'Passage added to your board.' : 'Answer added to your canvas.',
       href: `/paper/${encodeURIComponent(paperId)}/canvas`,
-      linkLabel: 'Open canvas',
+      linkLabel: input.kind === 'excerpt' ? 'Open board' : 'Open canvas',
     });
   } catch (error) {
     if (input.kind === 'explanation') showCanvasToast({ message: sentence(error), tone: 'error' });

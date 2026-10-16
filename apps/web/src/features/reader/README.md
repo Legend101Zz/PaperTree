@@ -20,44 +20,69 @@ calls no API. The page count comes from pdf.js (`usePdfDocument`) or, before the
 
 ## The selection toolbar (#203)
 
-`components/reader/SourcePane` asks `model/toolbarPlacement.placeToolbar` where the toolbar goes, from the
-selection's line quads and the page's type area (both from the IR, scaled to the scroller's content px) and
-the visible column (`VirtualPageList`'s `FloatingGeometry.viewport`):
+`hooks/useSelectionToolbar` (used by `components/reader/SourcePane`) asks `model/toolbarPlacement.placeToolbar`
+where the toolbar goes. Its inputs are in the scroller's content px: every selected line of the selection's
+first and last page (`selectionLines`; a selection across a page break brings both, review B2), the page's
+type area from the IR, the visible column (`VirtualPageList`'s `FloatingGeometry.viewport`), and the bar's
+size **as drawn**: `SelectionToolbar` reports it before paint and on every resize, so a docked bar that wraps in
+a narrow column is placed by its real height (review B1).
 
-1. **In the page margin** beside the selection, level with its first line: the right margin, or the left
-   one when the selection sits clearly in the left part of the text (a left column). Only when the space
-   between the type area and the column's visible edge is at least the bar's width (126 px).
+1. **In the page margin** beside the selection, level with its first line (the last page's, across a page
+   break): the right margin, or the left one when the selection sits clearly in the left part of the text (a
+   left column). Only when the space between the type area and the column's visible edge fits the 130 px bar.
 2. **Docked** across the top of the column (frame 07a), in a host outside the scroller so it stays put;
    across the bottom when a selected line is under the top band.
 
-It never overlaps a selected line (a randomised test checks 2,000 layouts). Its items: **Explain** (runs now,
-"Explain this passage."), **Ask** (`ReaderActions.askAbout`: the panel opens on the passage with the question
-box focused; the reader's own words start the thread), **Highlight** in the last colour and the **five
-washes**, **Send to board**, **Copy**, and **Explain with a diagram** only when its handler is given (the
-diagram slice, #217; never an inert button). Below 640 px it is a bottom bar.
+It never covers a selected line: the pure function is checked on 2,000 random layouts, the hook with the bar's
+drawn size (`s4c-selection-toolbar.spec`), and the screen in a browser (`e2e/v02/s4c-toolbar-placement.spec`).
+A new mouse press in the paper drops the previous selection's bar at once (`useSelectionCapture`), and the
+bar's labels cannot be selected, so a drag that ends in the margin never picks up the bar's words (e2e rfix
+R1 A2 and R1b C).
+
+Items: **Explain** (runs now, "Explain this passage."), **Ask** (`ReaderActions.askAbout`: the panel opens on
+the passage with the question box focused; the reader's own words start the thread), **Highlight** in the last
+colour and the **five washes** (24 px targets, 40 px on the phone's bar), **Send to board** (its toast says
+"board"), **Copy**, and **Explain with a diagram** only when its handler is given (the diagram slice, #217;
+never an inert button). Every item is at least 40 px tall. Below 640 px it is a bottom bar.
 
 ## Opening a highlight by mouse (#176): the hit-testing rule
 
 The highlight layer is not a pointer target, so a drag that starts on highlighted words still selects them.
-`SourcePane` listens for clicks on the pages and opens a highlight's card when `model/highlightClick`'s
-`isHighlightClick` says the press was a click: a single, unshifted press that moved at most **5 px**
-(`CLICK_SLOP_PX`; a hand's jitter of 4 px selected "o" and swallowed the click before), and the point lies
-inside one of the highlight's stored quads (`hitsItem`, 1.5 pt slack). Whatever the jitter selected is
-cleared. A press that moved further is a drag and selects; a double or triple click selects a word or a line;
-Shift extends the selection. Enter on a focused highlight still opens it too.
+`hooks/useHighlightClick` listens for clicks on the pages and opens a highlight's card when
+`model/highlightClick.isHighlightClick` says the press was a click: a single, unshifted press that moved at
+most **5 px** (`CLICK_SLOP_PX`; a hand's jitter of 4 px selected "o" and swallowed the click before), and the
+point lies inside one of the highlight's stored quads (`hitsItem`, 1.5 pt slack). Whatever the jitter selected
+is cleared. A press that moved further is a drag and selects; a double or triple click selects a word or a
+line; Shift extends the selection. Enter on a focused highlight still opens it too.
+
+Two trade-offs (review N13): a one-letter word that starts on a highlight cannot be drag-selected (it needs more
+than 5 px of travel; a double click selects it), and a double click on highlighted text shows the card for one
+click interval before the second press closes it (as in v0.1). On touch a tap opens the card and a long press
+selects.
 
 ## Contents (#177)
 
-`model/contents`: the outline names each section by its heading with the number dropped (the explain panel's
-rule, `evidence.section_display_title`), and the front matter as the paper's title plus any heading left
-outside the section tree; never a parser type, and no "Belongs to no section" copy.
+`model/contents`, rendered by `components/reader/Navigator`:
+
+- Each section is named by its heading with the number dropped (the explain panel's rule,
+  `evidence.section_display_title`).
+- A section heading is not listed only when it is body text: its block is typed as running text, or it reads
+  as the tail of a sentence (ends with a full stop, fewer than three words, starts in lowercase, like the real
+  Attention parse's "scholarly works."). Its subsections take its place. "t-SNE background", "word2vec
+  embeddings" and a run-in "Background." stay.
+- Front matter is the paper's title, wherever the parse put it, plus any heading before the first section;
+  never an author or the arXiv banner, and nothing when there is neither. When a section is headed by the
+  title block (the real ResNet parse), the title is listed once, as that section.
+- Blocks outside the section tree read in plain words ("Page number 7", "Footnote: …"); no parser type name and
+  no "Belongs to no section" copy anywhere.
 
 ## Key files
 
 - `components/ReaderHeader.tsx`: the bar. Below 640 px it takes two rows (`styles.css`, "H390").
 - `model/pageCounter.ts`: "p. 2 of 15", pure.
 - `model/toolbarPlacement.ts`, `model/highlightClick.ts`, `model/contents.ts`: the rules above, pure and
-  tested beside them.
+  tested beside them; `hooks/useSelectionToolbar.tsx` and `hooks/useHighlightClick.ts`: their wiring.
+- `components/PageCounter.tsx`: "p. 2 of 15", subscribed to the page list on its own.
 - `packages/ui/src/styles.css`, "the reader (S4)": the header, the desk (`--pt-desk` with a laid pattern),
   the PDF page as a `--pt-pdf-page` sheet with e1 (lamp-lit: the canvas is multiplied onto the dimmed sheet),
   and the Guided page on `--pt-page`.

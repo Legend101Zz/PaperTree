@@ -6,12 +6,17 @@
  */
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useMemo, type ReactNode } from 'react';
+
+import type { PendingSelection } from '@/components/reader/useSelectionCapture';
+import type { FloatingGeometry } from '@/components/reader/VirtualPageList';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ExplainPanel, useExplainActions } from '@/components/explain';
+import { useExplainActions } from '@/components/explain';
 import { ReaderActionsProvider, type ReaderActions } from '@/components/reader/actions';
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar';
+import { useSelectionToolbar } from '@/features/reader';
 
+import { HeaderAndPanel } from './explain-toggle';
 import { TestQueryProvider } from './query-client';
 import { stubDesktop } from './s6-harness';
 import {
@@ -167,7 +172,7 @@ function AskHarness(): ReactNode {
       >
         ask about it
       </button>
-      <ExplainPanel controller={explain} />
+      <HeaderAndPanel explain={explain} />
     </ReaderActionsProvider>
   );
 }
@@ -204,5 +209,98 @@ describe('Ask: the panel waits for the reader’s own question about the passage
     expect(body.kind).toBe('explain');
     expect(body.question).toBe('Why a single regression?');
     expect(JSON.stringify(body.anchor)).toContain('sel1');
+  });
+});
+
+/** Stubs every element's drawn size, as a real browser would report the wrapped bar. */
+function stubDrawnSize(width: number, height: number): () => void {
+  const w = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
+  const h = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight');
+  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+    configurable: true,
+    get: () => width,
+  });
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+    configurable: true,
+    get: () => height,
+  });
+  return () => {
+    if (w !== undefined) Object.defineProperty(HTMLElement.prototype, 'offsetWidth', w);
+    if (h !== undefined) Object.defineProperty(HTMLElement.prototype, 'offsetHeight', h);
+  };
+}
+
+const NARROW: FloatingGeometry = {
+  pageBox: () => ({ left: 0, top: 0, width: 400, height: 1000 }),
+  irScale: () => 1,
+  contentWidth: 400,
+  viewport: { left: 0, top: 0, right: 400, bottom: 800 },
+};
+
+/** One selected line 62-68 px under the column top, in a column too narrow for a margin bar. */
+const LINE = {
+  pageIndex: 0,
+  irQuads: [[87, 62, 309, 68]],
+  irExtent: [87, 62, 309, 68],
+  endPageIndex: 0,
+  endQuads: [[87, 62, 309, 68]],
+  endExtent: [87, 62, 309, 68],
+} as unknown as PendingSelection;
+
+function PlacedBar(): ReactNode {
+  const toolbar = useSelectionToolbar({
+    selection: LINE,
+    doc: null,
+    narrow: false,
+    sheetOpen: false,
+    actions: { onHighlight: () => undefined, onCopy: () => undefined },
+  });
+  return (
+    <>
+      {toolbar.floating(NARROW)}
+      {toolbar.dock}
+    </>
+  );
+}
+
+describe('the placement uses the bar as drawn (review B1)', () => {
+  it('reports its drawn size', () => {
+    const restore = stubDrawnSize(752, 84);
+    const onMeasure = vi.fn();
+    try {
+      render(
+        <SelectionToolbar
+          placement={{ kind: 'docked', edge: 'top' }}
+          onHighlight={() => undefined}
+          onCopy={() => undefined}
+          onMeasure={onMeasure}
+        />,
+      );
+      expect(onMeasure).toHaveBeenCalledWith({ width: 752, height: 84 });
+    } finally {
+      restore();
+    }
+  });
+
+  it('a docked bar that wraps to 84 px moves to the bottom instead of covering the line', async () => {
+    const restore = stubDrawnSize(352, 84);
+    try {
+      render(<PlacedBar />);
+      const bar = await screen.findByRole('toolbar', { name: 'Selection actions' });
+      await waitFor(() => expect(bar.className).toContain('pt-seltool--bottom'));
+    } finally {
+      restore();
+    }
+  });
+
+  it('a one-row bar (52 px) clears that line and stays at the top', async () => {
+    const restore = stubDrawnSize(352, 52);
+    try {
+      render(<PlacedBar />);
+      const bar = await screen.findByRole('toolbar', { name: 'Selection actions' });
+      expect(bar.className).toContain('pt-seltool--top');
+    } finally {
+      restore();
+    }
   });
 });

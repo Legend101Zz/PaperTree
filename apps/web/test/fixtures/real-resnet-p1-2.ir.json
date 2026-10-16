@@ -1,0 +1,1673 @@
+{
+  "ir_version": "1.0.0",
+  "paper_id": "ppr_8BAMT16Q4ZP6H6ENYGMJMH1C1X",
+  "generation": 1,
+  "source_hash": "sha256:1e0651b6810ecba34a3dbc5b5b0209226f889004607c1f203540a48d64e5a93a",
+  "coordinate_space": "pdf_user_space_topleft",
+  "parser": {
+    "name": "papertree-document-worker",
+    "version": "1.0.0",
+    "config_hash": "sha256:c2958cf95b402f0bd03e7c38be6dee0a1af1f7b2e0dc884e575446e6de2b52dc",
+    "parsed_at": "2026-10-15T17:13:55.472Z"
+  },
+  "status": "complete",
+  "partial_reason": "Trimmed to pages 1-2 of the real parse for the Contents tests (#203).",
+  "metadata": {
+    "title": {
+      "value": "Deep Residual Learning for Image Recognition",
+      "source_block_id": "blk_3vrksodt7ivaylly",
+      "confidence": 0.9
+    },
+    "authors": [
+      {
+        "value": "Kaiming He",
+        "source_block_id": "blk_hxgun7k2irstdlea",
+        "confidence": 0.9
+      },
+      {
+        "value": "Xiangyu Zhang",
+        "source_block_id": "blk_6isf6gxscvhvvdz7",
+        "confidence": 0.9
+      },
+      {
+        "value": "Shaoqing Ren",
+        "source_block_id": "blk_4uqjxh27obp4tcbe",
+        "confidence": 0.9
+      },
+      {
+        "value": "Jian Sun",
+        "source_block_id": "blk_rgxmgatiseugrr4c",
+        "confidence": 0.9
+      }
+    ],
+    "abstract": {
+      "block_ids": ["blk_yaup3uye2fwqce6n", "blk_qz3gmdab3xixfhpn"],
+      "confidence": 0.9
+    },
+    "doi": null,
+    "arxiv_id": {
+      "value": "1512.03385",
+      "source_block_id": "blk_m3aqi67vaci7w3cs",
+      "confidence": 0.6
+    },
+    "venue": null,
+    "year": {
+      "value": 2015,
+      "source_block_id": "blk_m3aqi67vaci7w3cs",
+      "confidence": 0.6
+    }
+  },
+  "pages": [
+    {
+      "page_id": "pg_4ludathm4vlwnj42",
+      "index": 0,
+      "width": 612.0,
+      "height": 792.0,
+      "rotation": 0,
+      "user_unit": 1.0,
+      "crop_box": [0.0, 0.0, 612.0, 792.0],
+      "media_box": [0.0, 0.0, 612.0, 792.0],
+      "image": null,
+      "has_text_layer": true,
+      "is_scanned": false,
+      "confidence": 1.0,
+      "block_ids": [
+        "blk_3vrksodt7ivaylly",
+        "blk_hxgun7k2irstdlea",
+        "blk_6isf6gxscvhvvdz7",
+        "blk_wbrcfh35q3bc3kge",
+        "blk_wskifnpzhujatwy5",
+        "blk_2f6mrye67ufcrezm",
+        "blk_yaup3uye2fwqce6n",
+        "blk_qz3gmdab3xixfhpn",
+        "blk_7fllvxo7qzck5bff",
+        "blk_pbdlyzf24etbkqv4",
+        "blk_dkdro675a5h54y3o",
+        "blk_4uqjxh27obp4tcbe",
+        "blk_rgxmgatiseugrr4c",
+        "blk_3pzzcn4luvb5qmpc",
+        "blk_aj7ciwzwgwiqpmds",
+        "blk_bklz4zqlheid4r6d",
+        "blk_wjbhk5n5cinvdgma",
+        "blk_qkrfeampq5qx4a4b",
+        "blk_vq4jctderew6ix77",
+        "blk_a346fkm42dillmhx",
+        "blk_ubek4hjvz7disxqb",
+        "blk_biavgur7qu6g54k7",
+        "blk_ufuufci3pfc2t55r",
+        "blk_m3aqi67vaci7w3cs"
+      ],
+      "flows": {
+        "body": [
+          "blk_3vrksodt7ivaylly",
+          "blk_hxgun7k2irstdlea",
+          "blk_6isf6gxscvhvvdz7",
+          "blk_wbrcfh35q3bc3kge",
+          "blk_wskifnpzhujatwy5",
+          "blk_2f6mrye67ufcrezm",
+          "blk_yaup3uye2fwqce6n",
+          "blk_qz3gmdab3xixfhpn",
+          "blk_7fllvxo7qzck5bff",
+          "blk_pbdlyzf24etbkqv4",
+          "blk_dkdro675a5h54y3o",
+          "blk_4uqjxh27obp4tcbe",
+          "blk_rgxmgatiseugrr4c",
+          "blk_3pzzcn4luvb5qmpc",
+          "blk_aj7ciwzwgwiqpmds",
+          "blk_bklz4zqlheid4r6d",
+          "blk_wjbhk5n5cinvdgma",
+          "blk_qkrfeampq5qx4a4b",
+          "blk_vq4jctderew6ix77",
+          "blk_a346fkm42dillmhx",
+          "blk_ubek4hjvz7disxqb"
+        ],
+        "caption": [],
+        "footnote": ["blk_biavgur7qu6g54k7", "blk_ufuufci3pfc2t55r"],
+        "header": [],
+        "footer": [],
+        "margin": ["blk_m3aqi67vaci7w3cs"]
+      }
+    },
+    {
+      "page_id": "pg_udjaygeibaqhv4ql",
+      "index": 1,
+      "width": 612.0,
+      "height": 792.0,
+      "rotation": 0,
+      "user_unit": 1.0,
+      "crop_box": [0.0, 0.0, 612.0, 792.0],
+      "media_box": [0.0, 0.0, 612.0, 792.0],
+      "image": null,
+      "has_text_layer": true,
+      "is_scanned": false,
+      "confidence": 1.0,
+      "block_ids": [
+        "blk_ohm4akcmyaacroq7",
+        "blk_ipgdvgpgzdbyxen4",
+        "blk_wp3gjrsdsafkhtir",
+        "blk_sgqq65comko55xtz",
+        "blk_3jeyhtaccnl3azfz",
+        "blk_pqgykkhjzbaa5ydc",
+        "blk_pfqc4u4uxptpww4s",
+        "blk_vzys47cnikwnlw6r",
+        "blk_7qvf2ybocr37gwjf",
+        "blk_ygp2x36p62a564qt",
+        "blk_plmj3gphciyhanvp",
+        "blk_34ip7ssmywarukjm",
+        "blk_tuldchl43vmycrzo",
+        "blk_4of3uwsgij6ga5sr",
+        "blk_qcqt6fefo3nukdoe",
+        "blk_3nz3yqkaznxhazvo",
+        "blk_mkdbfksgxzgtjs2n",
+        "blk_avtbeqlxusqxa2om",
+        "blk_ajvftl57okjtyggv",
+        "blk_ocrsvsdwgr7td3jj",
+        "blk_6tf5whfoig4aqhts"
+      ],
+      "flows": {
+        "body": [
+          "blk_ohm4akcmyaacroq7",
+          "blk_ipgdvgpgzdbyxen4",
+          "blk_wp3gjrsdsafkhtir",
+          "blk_sgqq65comko55xtz",
+          "blk_3jeyhtaccnl3azfz",
+          "blk_pqgykkhjzbaa5ydc",
+          "blk_pfqc4u4uxptpww4s",
+          "blk_vzys47cnikwnlw6r",
+          "blk_7qvf2ybocr37gwjf",
+          "blk_ygp2x36p62a564qt",
+          "blk_plmj3gphciyhanvp",
+          "blk_34ip7ssmywarukjm",
+          "blk_tuldchl43vmycrzo",
+          "blk_4of3uwsgij6ga5sr",
+          "blk_qcqt6fefo3nukdoe",
+          "blk_3nz3yqkaznxhazvo",
+          "blk_mkdbfksgxzgtjs2n",
+          "blk_avtbeqlxusqxa2om",
+          "blk_ajvftl57okjtyggv",
+          "blk_ocrsvsdwgr7td3jj",
+          "blk_6tf5whfoig4aqhts"
+        ],
+        "caption": [],
+        "footnote": [],
+        "header": [],
+        "footer": [],
+        "margin": []
+      }
+    }
+  ],
+  "blocks": [
+    {
+      "block_id": "blk_3vrksodt7ivaylly",
+      "page_index": 0,
+      "type": "title",
+      "flow": "body",
+      "order": 0,
+      "doc_order": 0,
+      "polygon": [
+        [441.7780456542969, 107.0341054400115],
+        [441.7780456542969, 119.93133928684576],
+        [153.447998046875, 119.93133928684576],
+        [153.447998046875, 107.0341054400115]
+      ],
+      "bbox": [153.447998046875, 107.0341054400115, 441.7780456542969, 119.93133928684576],
+      "text": "Deep Residual Learning for Image Recognition",
+      "text_normalised": "deep residual learning for image recognition",
+      "content_hash": "sha256:697404a43beb20f7fff7d7cad129017d947ddc3f622768c25861d5bcd9ae9177",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_hxgun7k2irstdlea",
+      "page_index": 0,
+      "type": "author",
+      "flow": "body",
+      "order": 1,
+      "doc_order": 1,
+      "polygon": [
+        [195.16275024414062, 153.35036823916016],
+        [195.16275024414062, 164.03831696151428],
+        [136.3909912109375, 164.03831696151428],
+        [136.3909912109375, 153.35036823916016]
+      ],
+      "bbox": [136.3909912109375, 153.35036823916016, 195.16275024414062, 164.03831696151428],
+      "text": "Kaiming He",
+      "text_normalised": "kaiming he",
+      "content_hash": "sha256:72e957b2c03ca4665c483fa8a5135bfe493c30962ababd839a79299379009216",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_6isf6gxscvhvvdz7",
+      "page_index": 0,
+      "type": "author",
+      "flow": "body",
+      "order": 2,
+      "doc_order": 2,
+      "polygon": [
+        [296.7699890136719, 153.35036823916016],
+        [296.7699890136719, 164.03831696151428],
+        [222.06195068359375, 164.03831696151428],
+        [222.06195068359375, 153.35036823916016]
+      ],
+      "bbox": [222.06195068359375, 153.35036823916016, 296.7699890136719, 164.03831696151428],
+      "text": "Xiangyu Zhang",
+      "text_normalised": "xiangyu zhang",
+      "content_hash": "sha256:64c42de2f6d73084b1a5c7593bef734de8758fe674b077604da9bc508f2fa0b2",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_wbrcfh35q3bc3kge",
+      "page_index": 0,
+      "type": "affiliation",
+      "flow": "body",
+      "order": 3,
+      "doc_order": 3,
+      "polygon": [
+        [343.09588623046875, 170.0873677508789],
+        [343.09588623046875, 180.77531647323303],
+        [249.13998413085938, 180.77531647323303],
+        [249.13998413085938, 170.0873677508789]
+      ],
+      "bbox": [249.13998413085938, 170.0873677508789, 343.09588623046875, 180.77531647323303],
+      "text": "Microsoft Research",
+      "text_normalised": "microsoft research",
+      "content_hash": "sha256:a360549ab82d6b079c7dc2a98b44a7aa626c02cb2be48565df01f9b8a81fd2f3",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_wskifnpzhujatwy5",
+      "page_index": 0,
+      "type": "affiliation",
+      "flow": "body",
+      "order": 4,
+      "doc_order": 4,
+      "polygon": [
+        [399.7334289550781, 184.81798689276218],
+        [399.7334289550781, 202.1030970152297],
+        [195.49098205566406, 202.1030970152297],
+        [195.49098205566406, 184.81798689276218]
+      ],
+      "bbox": [195.49098205566406, 184.81798689276218, 399.7334289550781, 202.1030970152297],
+      "text": "{kahe, v-xiangz, v-shren, jiansun}@microsoft.com",
+      "text_normalised": "{kahe, v-xiangz, v-shren, jiansun}@microsoft.com",
+      "content_hash": "sha256:6b90d2b7a93be0575142b571ffa2e2004d0577f3057111873900f78a5a56344d",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_2f6mrye67ufcrezm",
+      "page_index": 0,
+      "type": "heading",
+      "flow": "body",
+      "order": 5,
+      "doc_order": 5,
+      "polygon": [
+        [190.4802703857422, 226.1729089640503],
+        [190.4802703857422, 236.92063398666687],
+        [145.99497985839844, 236.92063398666687],
+        [145.99497985839844, 226.1729089640503]
+      ],
+      "bbox": [145.99497985839844, 226.1729089640503, 190.4802703857422, 236.92063398666687],
+      "text": "Abstract",
+      "text_normalised": "abstract",
+      "content_hash": "sha256:c59ddd3f7ba697a4b82003cd37637cd7fc3aac92cb9c6e4b308809dd9409e65c",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_yaup3uye2fwqce6n",
+      "page_index": 0,
+      "type": "abstract",
+      "flow": "body",
+      "order": 6,
+      "doc_order": 6,
+      "polygon": [
+        [286.364990234375, 247.1130356065363],
+        [286.364990234375, 257.38442481125094],
+        [286.3650207519531, 257.38442481125094],
+        [286.3650207519531, 269.3394419010947],
+        [286.3651123046875, 269.3394419010947],
+        [286.3651123046875, 281.29494727218844],
+        [286.3650817871094, 281.29494727218844],
+        [286.3650817871094, 293.2504373844931],
+        [286.36505126953125, 293.2504373844931],
+        [286.36505126953125, 305.20542395675875],
+        [286.3650817871094, 305.20542395675875],
+        [286.3650817871094, 317.1604105290244],
+        [286.3650207519531, 317.1604105290244],
+        [286.3650207519531, 329.11539710129],
+        [286.36505126953125, 329.11539710129],
+        [286.36505126953125, 341.0708872135947],
+        [286.3650207519531, 341.0708872135947],
+        [286.3650207519531, 352.4983598049498],
+        [286.3638916015625, 352.4983598049498],
+        [286.3638916015625, 368.80202077865647],
+        [286.3650817871094, 368.80202077865647],
+        [286.3650817871094, 376.9363504704306],
+        [286.3651123046875, 376.9363504704306],
+        [286.3651123046875, 388.8465056240834],
+        [286.3637390136719, 388.8465056240834],
+        [286.3637390136719, 400.9608935216378],
+        [286.36505126953125, 400.9608935216378],
+        [286.36505126953125, 412.80181372726656],
+        [209.09506225585938, 412.80181372726656],
+        [209.09506225585938, 423.07369121323114],
+        [50.111961364746094, 423.07369121323114],
+        [50.111961364746094, 400.9608935216378],
+        [50.111968994140625, 400.9608935216378],
+        [50.111968994140625, 368.80202077865647],
+        [50.111976623535156, 368.80202077865647],
+        [50.111976623535156, 257.38442481125094],
+        [62.066978454589844, 257.38442481125094],
+        [62.066978454589844, 247.1130356065363]
+      ],
+      "bbox": [50.111961364746094, 247.1130356065363, 286.3651123046875, 423.07369121323114],
+      "text": "Deeper neural networks are more difﬁcult to train. We\npresent a residual learning framework to ease the training\nof networks that are substantially deeper than those used\npreviously. We explicitly reformulate the layers as learn-\ning residual functions with reference to the layer inputs, in-\nstead of learning unreferenced functions. We provide com-\nprehensive empirical evidence showing that these residual\nnetworks are easier to optimize, and can gain accuracy from\nconsiderably increased depth. On the ImageNet dataset we\nevaluate residual nets with a depth of up to 152 layers—8×\ndeeper than VGG nets [41] but still having lower complex-\nity. An ensemble of these residual nets achieves 3.57% error\non the ImageNet test set. This result won the 1st place on the\nILSVRC 2015 classiﬁcation task. We also present analysis\non CIFAR-10 with 100 and 1000 layers.",
+      "text_normalised": "deeper neural networks are more difficult to train. we present a residual learning framework to ease the training of networks that are substantially deeper than those used previously. we explicitly reformulate the layers as learn- ing residual functions with reference to the layer inputs, in- stead of learning unreferenced functions. we provide com- prehensive empirical evidence showing that these residual networks are easier to optimize, and can gain accuracy from considerably increased depth. on the imagenet dataset we evaluate residual nets with a depth of up to 152 layers—8× deeper than vgg nets [41] but still having lower complex- ity. an ensemble of these residual nets achieves 3.57% error on the imagenet test set. this result won the 1st place on the ilsvrc 2015 classification task. we also present analysis on cifar-10 with 100 and 1000 layers.",
+      "content_hash": "sha256:81ce50b0deb43afbd990744344bd3123d2852da75f7b3de9fc6ac822b6afaac6",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_qz3gmdab3xixfhpn",
+      "page_index": 0,
+      "type": "abstract",
+      "flow": "body",
+      "order": 7,
+      "doc_order": 7,
+      "polygon": [
+        [286.36492919921875, 426.8679184190363],
+        [286.36492919921875, 437.1392923649619],
+        [286.3650207519531, 437.1392923649619],
+        [286.3650207519531, 449.0942789372275],
+        [286.364990234375, 449.0942789372275],
+        [286.364990234375, 461.0492655094931],
+        [286.36505126953125, 461.0492655094931],
+        [286.36505126953125, 484.1201151332242],
+        [286.3619384765625, 484.1201151332242],
+        [286.3619384765625, 496.91472876632906],
+        [286.364990234375, 496.91472876632906],
+        [286.364990234375, 508.87021887863375],
+        [256.71630859375, 508.87021887863375],
+        [256.71630859375, 519.1415928245593],
+        [50.111961364746094, 519.1415928245593],
+        [50.111961364746094, 437.1392923649619],
+        [62.06696319580078, 437.1392923649619],
+        [62.06696319580078, 426.8679184190363]
+      ],
+      "bbox": [50.111961364746094, 426.8679184190363, 286.36505126953125, 519.1415928245593],
+      "text": "The depth of representations is of central importance\nfor many visual recognition tasks. Solely due to our ex-\ntremely deep representations, we obtain a 28% relative im-\nprovement on the COCO object detection dataset. Deep\nresidual nets are foundations of our submissions to ILSVRC\n& COCO 2015 competitions1, where we also won the 1st\nplaces on the tasks of ImageNet detection, ImageNet local-\nization, COCO detection, and COCO segmentation.",
+      "text_normalised": "the depth of representations is of central importance for many visual recognition tasks. solely due to our ex- tremely deep representations, we obtain a 28% relative im- provement on the coco object detection dataset. deep residual nets are foundations of our submissions to ilsvrc & coco 2015 competitions1, where we also won the 1st places on the tasks of imagenet detection, imagenet local- ization, coco detection, and coco segmentation.",
+      "content_hash": "sha256:2b586d651ef17cb9fec69a26b0aa7e164be05e221548a4c55ee6c9a974cb64a8",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_7fllvxo7qzck5bff",
+      "page_index": 0,
+      "type": "heading",
+      "flow": "body",
+      "order": 8,
+      "doc_order": 8,
+      "polygon": [
+        [126.94804382324219, 536.1527063273315],
+        [126.94804382324219, 546.9004313499481],
+        [50.111961364746094, 546.9004313499481],
+        [50.111961364746094, 536.1527063273315]
+      ],
+      "bbox": [50.111961364746094, 536.1527063273315, 126.94804382324219, 546.9004313499481],
+      "text": "1. Introduction",
+      "text_normalised": "1. introduction",
+      "content_hash": "sha256:2b6ed4d5e28e6afad34a382126076433d8fbc39da971ca1b40b3de28ba1a996a",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_pbdlyzf24etbkqv4",
+      "page_index": 0,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 9,
+      "doc_order": 9,
+      "polygon": [
+        [286.3648681640625, 557.003170132592],
+        [286.3648681640625, 567.4339606625954],
+        [286.36505126953125, 567.4339606625954],
+        [286.36505126953125, 579.3894660336891],
+        [286.3650207519531, 579.3894660336891],
+        [286.3650207519531, 591.3449408872048],
+        [286.36505126953125, 591.3449408872048],
+        [286.36505126953125, 603.2999274594704],
+        [286.3651123046875, 603.2999274594704],
+        [286.3651123046875, 615.2549445493141],
+        [286.3650817871094, 615.2549445493141],
+        [286.3650817871094, 627.2099616391579],
+        [286.36505126953125, 627.2099616391579],
+        [286.36505126953125, 639.1649787290016],
+        [286.3649597167969, 639.1649787290016],
+        [286.3649597167969, 651.1204535825173],
+        [286.3650817871094, 651.1204535825173],
+        [286.3650817871094, 663.0759284360329],
+        [286.3650207519531, 663.0759284360329],
+        [286.3650207519531, 675.0309455258766],
+        [286.3649597167969, 675.0309455258766],
+        [286.3649597167969, 685.4617360558799],
+        [50.111961364746094, 685.4617360558799],
+        [50.111961364746094, 567.4339606625954],
+        [62.06696319580078, 567.4339606625954],
+        [62.06696319580078, 557.003170132592]
+      ],
+      "bbox": [50.111961364746094, 557.003170132592, 286.3651123046875, 685.4617360558799],
+      "text": "Deep convolutional neural networks [22, 21] have led\nto a series of breakthroughs for image classiﬁcation [21,\n50, 40]. Deep networks naturally integrate low/mid/high-\nlevel features [50] and classiﬁers in an end-to-end multi-\nlayer fashion, and the “levels” of features can be enriched\nby the number of stacked layers (depth). Recent evidence\n[41, 44] reveals that network depth is of crucial importance,\nand the leading results [41, 44, 13, 16] on the challenging\nImageNet dataset [36] all exploit “very deep” [41] models,\nwith a depth of sixteen [41] to thirty [16]. Many other non-\ntrivial visual recognition tasks [8, 12, 7, 32, 27] have also",
+      "text_normalised": "deep convolutional neural networks [22, 21] have led to a series of breakthroughs for image classification [21, 50, 40]. deep networks naturally integrate low/mid/high- level features [50] and classifiers in an end-to-end multi- layer fashion, and the “levels” of features can be enriched by the number of stacked layers (depth). recent evidence [41, 44] reveals that network depth is of crucial importance, and the leading results [41, 44, 13, 16] on the challenging imagenet dataset [36] all exploit “very deep” [41] models, with a depth of sixteen [41] to thirty [16]. many other non- trivial visual recognition tasks [8, 12, 7, 32, 27] have also",
+      "content_hash": "sha256:523d62812dacc43cc77e80e0e051959cfbaf3a2ac0f59c5c9217ccc8642a0530",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_dkdro675a5h54y3o",
+      "page_index": 0,
+      "type": "unknown",
+      "flow": "body",
+      "order": 10,
+      "doc_order": 10,
+      "polygon": [
+        [300.102294921875, 734.1332360505608],
+        [300.102294921875, 743.0398000207236],
+        [295.1210021972656, 743.0398000207236],
+        [295.1210021972656, 734.1332360505608]
+      ],
+      "bbox": [295.1210021972656, 734.1332360505608, 300.102294921875, 743.0398000207236],
+      "text": "1",
+      "text_normalised": "1",
+      "content_hash": "sha256:6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+      "source": "pdf_text_layer",
+      "confidence": 0.3,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_4uqjxh27obp4tcbe",
+      "page_index": 0,
+      "type": "author",
+      "flow": "body",
+      "order": 11,
+      "doc_order": 11,
+      "polygon": [
+        [391.0845642089844, 153.35036823916016],
+        [391.0845642089844, 164.03831696151428],
+        [323.669189453125, 164.03831696151428],
+        [323.669189453125, 153.35036823916016]
+      ],
+      "bbox": [323.669189453125, 153.35036823916016, 391.0845642089844, 164.03831696151428],
+      "text": "Shaoqing Ren",
+      "text_normalised": "shaoqing ren",
+      "content_hash": "sha256:a707ee2a953b865e14a701d96d425f9514e28dc92194ca49b8081cc24fd0f3a6",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_rgxmgatiseugrr4c",
+      "page_index": 0,
+      "type": "author",
+      "flow": "body",
+      "order": 12,
+      "doc_order": 12,
+      "polygon": [
+        [458.8346862792969, 153.35036823916016],
+        [458.8346862792969, 164.03831696151428],
+        [417.9837646484375, 164.03831696151428],
+        [417.9837646484375, 153.35036823916016]
+      ],
+      "bbox": [417.9837646484375, 153.35036823916016, 458.8346862792969, 164.03831696151428],
+      "text": "Jian Sun",
+      "text_normalised": "jian sun",
+      "content_hash": "sha256:14b0f2646307d07fe503c7848a88fdf9cfa7ed4dbf56591d597a11c70b085244",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_3pzzcn4luvb5qmpc",
+      "page_index": 0,
+      "type": "figure",
+      "flow": "body",
+      "order": 13,
+      "doc_order": 13,
+      "polygon": [
+        [545.1431884765625, 224.38580322265625],
+        [545.1431884765625, 302.4001159667969],
+        [308.86199951171875, 302.4001159667969],
+        [308.86199951171875, 224.38580322265625]
+      ],
+      "bbox": [308.86199951171875, 224.38580322265625, 545.1431884765625, 302.4001159667969],
+      "payload": {
+        "is_vector": true,
+        "image": {
+          "uri": "http://127.0.0.1:18909/papers/ppr_8BAMT16Q4ZP6H6ENYGMJMH1C1X/assets/figures/blk_3pzzcn4luvb5qmpc?gen=1&exp=1792175418&sig=tons9LYdXxLJkVtzQ0mLk2K4h3cqAQdKFKLjdRYmfFM",
+          "scale": 3.0,
+          "dpi": 216.0,
+          "rendered_from": "vector"
+        },
+        "caption_block": "blk_aj7ciwzwgwiqpmds",
+        "referenced_by": ["blk_a346fkm42dillmhx", "blk_7hvp5zvqf4ugr57l"]
+      },
+      "source": "pdf_vector",
+      "confidence": 0.8,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "figures"
+      }
+    },
+    {
+      "block_id": "blk_aj7ciwzwgwiqpmds",
+      "page_index": 0,
+      "type": "caption",
+      "flow": "body",
+      "order": 14,
+      "doc_order": 14,
+      "polygon": [
+        [545.1085815429688, 305.60977630144043],
+        [545.1085815429688, 315.0972645186123],
+        [545.1087646484375, 315.0972645186123],
+        [545.1087646484375, 326.05626415240135],
+        [545.1085205078125, 326.05626415240135],
+        [545.1085205078125, 337.01524852740135],
+        [434.8757629394531, 337.01524852740135],
+        [434.8757629394531, 346.50272148578415],
+        [308.86199951171875, 346.50272148578415],
+        [308.86199951171875, 305.60977630144043]
+      ],
+      "bbox": [308.86199951171875, 305.60977630144043, 545.1087646484375, 346.50272148578415],
+      "text": "Figure 1. Training error (left) and test error (right) on CIFAR-10\nwith 20-layer and 56-layer “plain” networks. The deeper network\nhas higher training error, and thus test error. Similar phenomena\non ImageNet is presented in Fig. 4.",
+      "text_normalised": "figure 1. training error (left) and test error (right) on cifar-10 with 20-layer and 56-layer “plain” networks. the deeper network has higher training error, and thus test error. similar phenomena on imagenet is presented in fig. 4.",
+      "content_hash": "sha256:8c898d9c21c89fef2dafdc7c70af7cfd1d7509417a9298a32417e555ff5687a0",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_bklz4zqlheid4r6d",
+      "page_index": 0,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 15,
+      "doc_order": 15,
+      "polygon": [
+        [472.5076599121094, 363.60635006423263],
+        [472.5076599121094, 372.51291403439546],
+        [308.86199951171875, 372.51291403439546],
+        [308.86199951171875, 363.60635006423263]
+      ],
+      "bbox": [308.86199951171875, 363.60635006423263, 472.5076599121094, 372.51291403439546],
+      "text": "greatly beneﬁted from very deep models.",
+      "text_normalised": "greatly benefited from very deep models.",
+      "content_hash": "sha256:4da99f08e52c721acbd8d929c5e099754280a68e73a63d08289a4d3026fe3bb3",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_wjbhk5n5cinvdgma",
+      "page_index": 0,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 16,
+      "doc_order": 16,
+      "polygon": [
+        [545.1119995117188, 377.526363491967],
+        [545.1119995117188, 388.00197018179404],
+        [545.114990234375, 388.00197018179404],
+        [545.114990234375, 399.7975554287709],
+        [545.1150512695312, 399.7975554287709],
+        [545.1150512695312, 411.8676154477515],
+        [545.114990234375, 411.8676154477515],
+        [545.114990234375, 423.8231055600562],
+        [479.0829162597656, 423.8231055600562],
+        [479.0829162597656, 434.25388083127046],
+        [308.86199951171875, 434.25388083127046],
+        [308.86199951171875, 388.00197018179404],
+        [320.8169860839844, 388.00197018179404],
+        [320.8169860839844, 377.526363491967]
+      ],
+      "bbox": [308.86199951171875, 377.526363491967, 545.1150512695312, 434.25388083127046],
+      "text": "Driven by the signiﬁcance of depth, a question arises: Is\nlearning better networks as easy as stacking more layers?\nAn obstacle to answering this question was the notorious\nproblem of vanishing/exploding gradients [1, 9], which\nhamper convergence from the beginning.",
+      "text_normalised": "driven by the significance of depth, a question arises: is learning better networks as easy as stacking more layers? an obstacle to answering this question was the notorious problem of vanishing/exploding gradients [1, 9], which hamper convergence from the beginning.",
+      "content_hash": "sha256:55c952d24f9b6351f53165bcacc0a6e8ff9991042d7c81a596af004965307136",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_qkrfeampq5qx4a4b",
+      "page_index": 0,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 17,
+      "doc_order": 17,
+      "polygon": [
+        [545.1151123046875, 425.34731686110763],
+        [545.1151123046875, 435.77809213232183],
+        [545.1150512695312, 435.77809213232183],
+        [545.1150512695312, 447.73307870458746],
+        [545.114990234375, 447.73307870458746],
+        [545.114990234375, 459.6880652768531],
+        [545.1151123046875, 459.6880652768531],
+        [545.1151123046875, 471.64355538915777],
+        [545.114990234375, 471.64355538915777],
+        [545.114990234375, 483.59904550146246],
+        [377.9824523925781, 483.59904550146246],
+        [377.9824523925781, 494.0298207726767],
+        [308.86199951171875, 494.0298207726767],
+        [308.86199951171875, 435.77809213232183],
+        [487.4515075683594, 435.77809213232183],
+        [487.4515075683594, 425.34731686110763]
+      ],
+      "bbox": [308.86199951171875, 425.34731686110763, 545.1151123046875, 494.0298207726767],
+      "text": "This problem,\nhowever, has been largely addressed by normalized initial-\nization [23, 9, 37, 13] and intermediate normalization layers\n[16], which enable networks with tens of layers to start con-\nverging for stochastic gradient descent (SGD) with back-\npropagation [22].",
+      "text_normalised": "this problem, however, has been largely addressed by normalized initial- ization [23, 9, 37, 13] and intermediate normalization layers [16], which enable networks with tens of layers to start con- verging for stochastic gradient descent (sgd) with back- propagation [22].",
+      "content_hash": "sha256:1fceed3de388090f9aa398508bdc52cf430d0fd1c2c6e9bd144bacfeb65c980c",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_vq4jctderew6ix77",
+      "page_index": 0,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 18,
+      "doc_order": 18,
+      "polygon": [
+        [545.1149291992188, 499.04327023024825],
+        [545.1149291992188, 509.4740607602515],
+        [545.110595703125, 509.4740607602515],
+        [545.110595703125, 521.4290473325173],
+        [545.1150512695312, 521.4290473325173],
+        [545.1150512695312, 533.3840339047829],
+        [478.0666198730469, 533.3840339047829],
+        [478.0666198730469, 543.8148244347861],
+        [308.86199951171875, 543.8148244347861],
+        [308.86199951171875, 509.4740607602515],
+        [320.8169860839844, 509.4740607602515],
+        [320.8169860839844, 499.04327023024825]
+      ],
+      "bbox": [308.86199951171875, 499.04327023024825, 545.1150512695312, 543.8148244347861],
+      "text": "When deeper networks are able to start converging, a\ndegradation problem has been exposed: with the network\ndepth increasing, accuracy gets saturated (which might be\nunsurprising) and then degrades rapidly.",
+      "text_normalised": "when deeper networks are able to start converging, a degradation problem has been exposed: with the network depth increasing, accuracy gets saturated (which might be unsurprising) and then degrades rapidly.",
+      "content_hash": "sha256:64135b39468922a4ed9358e2485a3b07d2606e812b0672918ebb06fb26fb3fdc",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_a346fkm42dillmhx",
+      "page_index": 0,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 19,
+      "doc_order": 19,
+      "polygon": [
+        [545.1149291992188, 534.9082604646233],
+        [545.1149291992188, 545.3390509946266],
+        [545.107177734375, 545.3390509946266],
+        [545.107177734375, 557.2940375668923],
+        [545.115234375, 557.2940375668923],
+        [545.115234375, 569.2495124204079],
+        [545.1100463867188, 569.2495124204079],
+        [545.1100463867188, 581.2050177915016],
+        [504.2684631347656, 581.2050177915016],
+        [504.2684631347656, 591.6358083215049],
+        [308.86199951171875, 591.6358083215049],
+        [308.86199951171875, 545.3390509946266],
+        [488.0889892578125, 545.3390509946266],
+        [488.0889892578125, 534.9082604646233]
+      ],
+      "bbox": [308.86199951171875, 534.9082604646233, 545.115234375, 591.6358083215049],
+      "text": "Unexpectedly,\nsuch degradation is not caused by overﬁtting, and adding\nmore layers to a suitably deep model leads to higher train-\ning error, as reported in [11, 42] and thoroughly veriﬁed by\nour experiments. Fig. 1 shows a typical example.",
+      "text_normalised": "unexpectedly, such degradation is not caused by overfitting, and adding more layers to a suitably deep model leads to higher train- ing error, as reported in [11, 42] and thoroughly verified by our experiments. fig. 1 shows a typical example.",
+      "content_hash": "sha256:d5ebe2685014a802da3587e59af41be20801a6e155d4f39c9c28863cc05042ea",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_ubek4hjvz7disxqb",
+      "page_index": 0,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 20,
+      "doc_order": 20,
+      "polygon": [
+        [545.11474609375, 596.6492272614983],
+        [545.11474609375, 607.0800177915016],
+        [545.1150512695312, 607.0800177915016],
+        [545.1150512695312, 619.0350348813454],
+        [545.1149291992188, 619.0350348813454],
+        [545.1149291992188, 630.9900519711891],
+        [545.1167602539062, 630.9900519711891],
+        [545.1167602539062, 642.9450385434548],
+        [545.1118774414062, 642.9450385434548],
+        [545.1118774414062, 654.9000251157204],
+        [545.1151123046875, 654.9000251157204],
+        [545.1151123046875, 666.8555304868141],
+        [545.114990234375, 666.8555304868141],
+        [545.114990234375, 702.7210395200173],
+        [545.1149291992188, 702.7210395200173],
+        [545.1149291992188, 713.1517995324424],
+        [308.86199951171875, 713.1517995324424],
+        [308.86199951171875, 607.0800177915016],
+        [320.8169860839844, 607.0800177915016],
+        [320.8169860839844, 596.6492272614983]
+      ],
+      "bbox": [308.86199951171875, 596.6492272614983, 545.1167602539062, 713.1517995324424],
+      "text": "The degradation (of training accuracy) indicates that not\nall systems are similarly easy to optimize. Let us consider a\nshallower architecture and its deeper counterpart that adds\nmore layers onto it. There exists a solution by construction\nto the deeper model: the added layers are identity mapping,\nand the other layers are copied from the learned shallower\nmodel. The existence of this constructed solution indicates\nthat a deeper model should produce no higher training error\nthan its shallower counterpart. But experiments show that\nour current solvers on hand are unable to ﬁnd solutions that",
+      "text_normalised": "the degradation (of training accuracy) indicates that not all systems are similarly easy to optimize. let us consider a shallower architecture and its deeper counterpart that adds more layers onto it. there exists a solution by construction to the deeper model: the added layers are identity mapping, and the other layers are copied from the learned shallower model. the existence of this constructed solution indicates that a deeper model should produce no higher training error than its shallower counterpart. but experiments show that our current solvers on hand are unable to find solutions that",
+      "content_hash": "sha256:61c9f9030a2b523a96f6301a985f79bb7901ad49816437de42c999b931570be1",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_biavgur7qu6g54k7",
+      "page_index": 0,
+      "type": "footnote",
+      "flow": "footnote",
+      "order": 0,
+      "polygon": [
+        [260.3048400878906, 696.164167273877],
+        [260.3048400878906, 704.1430544901405],
+        [60.97100067138672, 704.1430544901405],
+        [60.97100067138672, 696.164167273877]
+      ],
+      "bbox": [60.97100067138672, 696.164167273877, 260.3048400878906, 704.1430544901405],
+      "text": "1http://image-net.org/challenges/LSVRC/2015/",
+      "text_normalised": "1http://image-net.org/challenges/lsvrc/2015/",
+      "content_hash": "sha256:f1fb43c8bec7a9836692379403671bf27c320991a015d634bd493e0c3923e7e2",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_ufuufci3pfc2t55r",
+      "page_index": 0,
+      "type": "footnote",
+      "flow": "footnote",
+      "order": 1,
+      "polygon": [
+        [286.36236572265625, 697.8964847259567],
+        [286.36236572265625, 705.2659751799049],
+        [284.1938781738281, 705.2659751799049],
+        [284.1938781738281, 712.6354656338531],
+        [50.11198425292969, 712.6354656338531],
+        [50.11198425292969, 705.2659751799049],
+        [275.4289855957031, 705.2659751799049],
+        [275.4289855957031, 697.8964847259567]
+      ],
+      "bbox": [50.11198425292969, 697.8964847259567, 286.36236572265625, 712.6354656338531],
+      "text": "and\nhttp://mscoco.org/dataset/#detections-challenge2015.",
+      "text_normalised": "and http://mscoco.org/dataset/#detections-challenge2015.",
+      "content_hash": "sha256:a803d967ba63b403e52cdcb07385ebbe85c49ece7bbe829e8e82e3cda7711598",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_m3aqi67vaci7w3cs",
+      "page_index": 0,
+      "type": "margin_note",
+      "flow": "margin",
+      "order": 0,
+      "polygon": [
+        [37.61999976634979, 208.94000244140625],
+        [37.61999976634979, 560.0],
+        [10.940000534057617, 560.0],
+        [10.940000534057617, 208.94000244140625]
+      ],
+      "bbox": [10.940000534057617, 208.94000244140625, 37.61999976634979, 560.0],
+      "text": "arXiv:1512.03385v1  [cs.CV]  10 Dec 2015",
+      "text_normalised": "arxiv:1512.03385v1 [cs.cv] 10 dec 2015",
+      "content_hash": "sha256:eead1b1a53faf926869d0f76e9a54f21732fbc64b71a850da084c3d4183fc0ef",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_ohm4akcmyaacroq7",
+      "page_index": 1,
+      "type": "unknown",
+      "flow": "body",
+      "order": 0,
+      "doc_order": 21,
+      "polygon": [
+        [148.5245819091797, 78.40191650390625],
+        [148.5245819091797, 87.64797973632812],
+        [142.9214630126953, 87.64797973632812],
+        [142.9214630126953, 78.40191650390625]
+      ],
+      "bbox": [142.9214630126953, 78.40191650390625, 148.5245819091797, 87.64797973632812],
+      "text": "x",
+      "text_normalised": "x",
+      "content_hash": "sha256:2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+      "source": "pdf_text_layer",
+      "confidence": 0.3,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_ipgdvgpgzdbyxen4",
+      "page_index": 1,
+      "type": "figure",
+      "flow": "body",
+      "order": 1,
+      "doc_order": 22,
+      "polygon": [
+        [204.34059143066406, 84.86445617675781],
+        [204.34059143066406, 154.36305236816406],
+        [128.95962524414062, 154.36305236816406],
+        [128.95962524414062, 84.86445617675781]
+      ],
+      "bbox": [128.95962524414062, 84.86445617675781, 204.34059143066406, 154.36305236816406],
+      "payload": {
+        "is_vector": true,
+        "image": {
+          "uri": "http://127.0.0.1:18909/papers/ppr_8BAMT16Q4ZP6H6ENYGMJMH1C1X/assets/figures/blk_ipgdvgpgzdbyxen4?gen=1&exp=1792175418&sig=gEY0B6GYzBYNJ6zg2PeR6Mkuf8tIdF3t1amHUnwcgUI",
+          "scale": 3.0,
+          "dpi": 216.0,
+          "rendered_from": "vector"
+        }
+      },
+      "source": "pdf_vector",
+      "confidence": 0.8,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "figures"
+      }
+    },
+    {
+      "block_id": "blk_wp3gjrsdsafkhtir",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 2,
+      "doc_order": 23,
+      "polygon": [
+        [117.70375061035156, 106.78085730662497],
+        [117.70375061035156, 122.8227765960346],
+        [98.27870178222656, 122.8227765960346],
+        [98.27870178222656, 106.78085730662497]
+      ],
+      "bbox": [98.27870178222656, 106.78085730662497, 117.70375061035156, 122.8227765960346],
+      "text": "F(x)",
+      "text_normalised": "f(x)",
+      "content_hash": "sha256:259072e6c653cc56ea0e6a6031c2bbb5dede2c4066d63855fd7690ee8bd61bbc",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_sgqq65comko55xtz",
+      "page_index": 1,
+      "type": "unknown",
+      "flow": "body",
+      "order": 3,
+      "doc_order": 24,
+      "polygon": [
+        [220.91110229492188, 111.80701446533203],
+        [220.91110229492188, 121.0530776977539],
+        [215.3079833984375, 121.0530776977539],
+        [215.3079833984375, 111.80701446533203]
+      ],
+      "bbox": [215.3079833984375, 111.80701446533203, 220.91110229492188, 121.0530776977539],
+      "text": "x",
+      "text_normalised": "x",
+      "content_hash": "sha256:2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+      "source": "pdf_text_layer",
+      "confidence": 0.3,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_3jeyhtaccnl3azfz",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 4,
+      "doc_order": 25,
+      "polygon": [
+        [143.3292236328125, 139.79577277293356],
+        [143.3292236328125, 157.35674504614963],
+        [249.85931396484375, 157.35674504614963],
+        [249.85931396484375, 166.89175957172165],
+        [86.61699676513672, 166.89175957172165],
+        [86.61699676513672, 157.35674504614963],
+        [106.92098999023438, 157.35674504614963],
+        [106.92098999023438, 139.79577277293356]
+      ],
+      "bbox": [86.61699676513672, 139.79577277293356, 249.85931396484375, 166.89175957172165],
+      "text": "identity\nF(x)\u0001+\u0001x\nFigure 2. Residual learning: a building block.",
+      "text_normalised": "identity f(x)\u0001+\u0001x figure 2. residual learning: a building block.",
+      "content_hash": "sha256:78d8d47125d77f3fd8734c1500800cd8d0e62378832e8610781d306ad611fe4b",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_pqgykkhjzbaa5ydc",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 5,
+      "doc_order": 26,
+      "polygon": [
+        [286.3650817871094, 182.95440304274825],
+        [286.3650817871094, 193.38519357275155],
+        [194.54978942871094, 193.38519357275155],
+        [194.54978942871094, 203.81598410275484],
+        [50.111995697021484, 203.81598410275484],
+        [50.111995697021484, 182.95440304274825]
+      ],
+      "bbox": [50.111995697021484, 182.95440304274825, 286.3650817871094, 203.81598410275484],
+      "text": "are comparably good or better than the constructed solution\n(or unable to do so in feasible time).",
+      "text_normalised": "are comparably good or better than the constructed solution (or unable to do so in feasible time).",
+      "content_hash": "sha256:eac6041b8522143216708738b7285be9f0149c9140ebe6aac8cff68aa14d9219",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_pfqc4u4uxptpww4s",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 6,
+      "doc_order": 27,
+      "polygon": [
+        [286.3649597167969, 208.30840694899825],
+        [286.3649597167969, 218.73919747900155],
+        [261.1488952636719, 218.73919747900155],
+        [261.1488952636719, 229.16998800900484],
+        [50.11199188232422, 229.16998800900484],
+        [50.11199188232422, 218.73919747900155],
+        [62.066993713378906, 218.73919747900155],
+        [62.066993713378906, 208.30840694899825]
+      ],
+      "bbox": [50.11199188232422, 208.30840694899825, 286.3649597167969, 229.16998800900484],
+      "text": "In this paper, we address the degradation problem by\nintroducing a deep residual learning framework.",
+      "text_normalised": "in this paper, we address the degradation problem by introducing a deep residual learning framework.",
+      "content_hash": "sha256:f4e6a7a56c0834ed3144847b1838dc72e80ff4196c8b9f4cc3cb98f0ea251c96",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_vzys47cnikwnlw6r",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 7,
+      "doc_order": 28,
+      "polygon": [
+        [286.36419677734375, 220.263424038842],
+        [286.36419677734375, 230.6942145688453],
+        [286.3651428222656, 230.6942145688453],
+        [286.3651428222656, 242.64971993993905],
+        [286.36505126953125, 242.64971993993905],
+        [286.36505126953125, 254.6052253110328],
+        [286.3650207519531, 254.6052253110328],
+        [286.3650207519531, 266.0770562985398],
+        [286.3664855957031, 266.0770562985398],
+        [286.3664855957031, 281.73814510341003],
+        [286.3647766113281, 281.73814510341003],
+        [286.3647766113281, 293.69313167567566],
+        [286.3581237792969, 293.69313167567566],
+        [286.3581237792969, 306.131304350278],
+        [286.3649597167969, 306.131304350278],
+        [286.3649597167969, 314.38070748876714],
+        [286.364990234375, 314.38070748876714],
+        [286.364990234375, 326.33619760107183],
+        [286.36505126953125, 326.33619760107183],
+        [286.36505126953125, 338.29118417333746],
+        [286.3650207519531, 338.29118417333746],
+        [286.3650207519531, 350.2461707456031],
+        [127.30213928222656, 350.2461707456031],
+        [127.30213928222656, 360.67694601681734],
+        [50.1119384765625, 360.67694601681734],
+        [50.1119384765625, 306.131304350278],
+        [50.11195373535156, 306.131304350278],
+        [50.11195373535156, 293.69313167567566],
+        [50.11198425292969, 293.69313167567566],
+        [50.11198425292969, 281.73814510341003],
+        [50.11199951171875, 281.73814510341003],
+        [50.11199951171875, 230.6942145688453],
+        [274.7478332519531, 230.6942145688453],
+        [274.7478332519531, 220.263424038842]
+      ],
+      "bbox": [50.1119384765625, 220.263424038842, 286.3664855957031, 360.67694601681734],
+      "text": "In-\nstead of hoping each few stacked layers directly ﬁt a\ndesired underlying mapping, we explicitly let these lay-\ners ﬁt a residual mapping. Formally, denoting the desired\nunderlying mapping as H(x), we let the stacked nonlinear\nlayers ﬁt another mapping of F(x) := H(x)−x. The orig-\ninal mapping is recast into F(x)+x. We hypothesize that it\nis easier to optimize the residual mapping than to optimize\nthe original, unreferenced mapping. To the extreme, if an\nidentity mapping were optimal, it would be easier to push\nthe residual to zero than to ﬁt an identity mapping by a stack\nof nonlinear layers.",
+      "text_normalised": "in- stead of hoping each few stacked layers directly fit a desired underlying mapping, we explicitly let these lay- ers fit a residual mapping. formally, denoting the desired underlying mapping as h(x), we let the stacked nonlinear layers fit another mapping of f(x) := h(x)−x. the orig- inal mapping is recast into f(x)+x. we hypothesize that it is easier to optimize the residual mapping than to optimize the original, unreferenced mapping. to the extreme, if an identity mapping were optimal, it would be easier to push the residual to zero than to fit an identity mapping by a stack of nonlinear layers.",
+      "content_hash": "sha256:19c02b88848d7575588e6ce91a230835322dded80ea2705858fdd8d0998590bd",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_7qvf2ybocr37gwjf",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 8,
+      "doc_order": 29,
+      "polygon": [
+        [286.3669738769531, 364.2029966583872],
+        [286.3669738769531, 379.3062311080905],
+        [286.3650207519531, 379.3062311080905],
+        [286.3650207519531, 387.5551307065406],
+        [286.36492919921875, 387.5551307065406],
+        [286.36492919921875, 399.51062081884527],
+        [286.3650207519531, 399.51062081884527],
+        [286.3650207519531, 411.46611093114996],
+        [286.3626403808594, 411.46611093114996],
+        [286.3626403808594, 423.4210975034156],
+        [286.3650207519531, 423.4210975034156],
+        [286.3650207519531, 435.3760840756812],
+        [286.3650817871094, 435.3760840756812],
+        [286.3650817871094, 447.33107064794683],
+        [286.3650207519531, 447.33107064794683],
+        [286.3650207519531, 471.24154733251714],
+        [286.3623962402344, 471.24154733251714],
+        [286.3623962402344, 483.19703744482183],
+        [172.2832794189453, 483.19703744482183],
+        [172.2832794189453, 493.6278127160361],
+        [50.1119384765625, 493.6278127160361],
+        [50.1119384765625, 483.19703744482183],
+        [50.11193084716797, 483.19703744482183],
+        [50.11193084716797, 423.4210975034156],
+        [50.11192321777344, 423.4210975034156],
+        [50.11192321777344, 379.3062311080905],
+        [62.06694030761719, 379.3062311080905],
+        [62.06694030761719, 364.2029966583872]
+      ],
+      "bbox": [50.11192321777344, 364.2029966583872, 286.3669738769531, 493.6278127160361],
+      "text": "The formulation of F(x)+x can be realized by feedfor-\nward neural networks with “shortcut connections” (Fig. 2).\nShortcut connections [2, 34, 49] are those skipping one or\nmore layers. In our case, the shortcut connections simply\nperform identity mapping, and their outputs are added to\nthe outputs of the stacked layers (Fig. 2). Identity short-\ncut connections add neither extra parameter nor computa-\ntional complexity. The entire network can still be trained\nend-to-end by SGD with backpropagation, and can be eas-\nily implemented using common libraries (e.g., Caffe [19])\nwithout modifying the solvers.",
+      "text_normalised": "the formulation of f(x)+x can be realized by feedfor- ward neural networks with “shortcut connections” (fig. 2). shortcut connections [2, 34, 49] are those skipping one or more layers. in our case, the shortcut connections simply perform identity mapping, and their outputs are added to the outputs of the stacked layers (fig. 2). identity short- cut connections add neither extra parameter nor computa- tional complexity. the entire network can still be trained end-to-end by sgd with backpropagation, and can be eas- ily implemented using common libraries (e.g., caffe [19]) without modifying the solvers.",
+      "content_hash": "sha256:92a65a5785c31bf45a565a8126d93b3909321ccbc5105e0585686fa52a6b058e",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_ygp2x36p62a564qt",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 9,
+      "doc_order": 30,
+      "polygon": [
+        [286.36492919921875, 498.1202355622795],
+        [286.36492919921875, 508.55099557470464],
+        [286.3650207519531, 508.55099557470464],
+        [286.3650207519531, 520.5059821469704],
+        [286.3650817871094, 520.5059821469704],
+        [286.3650817871094, 532.4609992368141],
+        [286.3650207519531, 532.4609992368141],
+        [286.3650207519531, 568.3269965512673],
+        [286.3649597167969, 568.3269965512673],
+        [286.3649597167969, 580.2819831235329],
+        [244.02395629882812, 580.2819831235329],
+        [244.02395629882812, 590.7127736535361],
+        [50.1119384765625, 590.7127736535361],
+        [50.1119384765625, 508.55099557470464],
+        [62.06694030761719, 508.55099557470464],
+        [62.06694030761719, 498.1202355622795]
+      ],
+      "bbox": [50.1119384765625, 498.1202355622795, 286.3650817871094, 590.7127736535361],
+      "text": "We present comprehensive experiments on ImageNet\n[36] to show the degradation problem and evaluate our\nmethod. We show that: 1) Our extremely deep residual nets\nare easy to optimize, but the counterpart “plain” nets (that\nsimply stack layers) exhibit higher training error when the\ndepth increases; 2) Our deep residual nets can easily enjoy\naccuracy gains from greatly increased depth, producing re-\nsults substantially better than previous networks.",
+      "text_normalised": "we present comprehensive experiments on imagenet [36] to show the degradation problem and evaluate our method. we show that: 1) our extremely deep residual nets are easy to optimize, but the counterpart “plain” nets (that simply stack layers) exhibit higher training error when the depth increases; 2) our deep residual nets can easily enjoy accuracy gains from greatly increased depth, producing re- sults substantially better than previous networks.",
+      "content_hash": "sha256:03ddd2d9ea527ec08b816b2a1cfe5286737b92a3a3c8adfd95e4f13ce84417e1",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_plmj3gphciyhanvp",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 10,
+      "doc_order": 31,
+      "polygon": [
+        [286.3648376464844, 595.2051964997795],
+        [286.3648376464844, 605.6359870297829],
+        [286.36505126953125, 605.6359870297829],
+        [286.36505126953125, 629.5459906918923],
+        [286.3650207519531, 629.5459906918923],
+        [286.3650207519531, 641.501496062986],
+        [285.378662109375, 641.501496062986],
+        [285.378662109375, 651.9328053918174],
+        [50.1119384765625, 651.9328053918174],
+        [50.1119384765625, 605.6359870297829],
+        [62.06694030761719, 605.6359870297829],
+        [62.06694030761719, 595.2051964997795]
+      ],
+      "bbox": [50.1119384765625, 595.2051964997795, 286.36505126953125, 651.9328053918174],
+      "text": "Similar phenomena are also shown on the CIFAR-10 set\n[20], suggesting that the optimization difﬁculties and the\neffects of our method are not just akin to a particular dataset.\nWe present successfully trained models on this dataset with\nover 100 layers, and explore models with over 1000 layers.",
+      "text_normalised": "similar phenomena are also shown on the cifar-10 set [20], suggesting that the optimization difficulties and the effects of our method are not just akin to a particular dataset. we present successfully trained models on this dataset with over 100 layers, and explore models with over 1000 layers.",
+      "content_hash": "sha256:d8ef3bc360c83917b3e6c60a6a2008e72931091513ae14e0406be605a79b3f24",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_34ip7ssmywarukjm",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 11,
+      "doc_order": 32,
+      "polygon": [
+        [286.36492919921875, 656.4252282380608],
+        [286.36492919921875, 666.8560187680641],
+        [286.3650207519531, 666.8560187680641],
+        [286.3650207519531, 690.7659919125954],
+        [286.364990234375, 690.7659919125954],
+        [286.364990234375, 701.1967824425986],
+        [50.1119384765625, 701.1967824425986],
+        [50.1119384765625, 666.8560187680641],
+        [62.06694030761719, 666.8560187680641],
+        [62.06694030761719, 656.4252282380608]
+      ],
+      "bbox": [50.1119384765625, 656.4252282380608, 286.3650207519531, 701.1967824425986],
+      "text": "On the ImageNet classiﬁcation dataset [36], we obtain\nexcellent results by extremely deep residual nets. Our 152-\nlayer residual net is the deepest network ever presented on\nImageNet, while still having lower complexity than VGG",
+      "text_normalised": "on the imagenet classification dataset [36], we obtain excellent results by extremely deep residual nets. our 152- layer residual net is the deepest network ever presented on imagenet, while still having lower complexity than vgg",
+      "content_hash": "sha256:bf200a062b464bebb01c4af2c24abaaf40896c144be965907469f5510f1658eb",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_tuldchl43vmycrzo",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 12,
+      "doc_order": 33,
+      "polygon": [
+        [286.3608703613281, 704.1256841229501],
+        [286.3608703613281, 713.1517995324424],
+        [98.74934387207031, 713.1517995324424],
+        [98.74934387207031, 704.1256841229501]
+      ],
+      "bbox": [98.74934387207031, 704.1256841229501, 286.3608703613281, 713.1517995324424],
+      "text": "Our ensemble has 3.57% top-5 error on the\nnets [41].",
+      "text_normalised": "our ensemble has 3.57% top-5 error on the nets [41].",
+      "content_hash": "sha256:f1809b74839c9e5c5e84511462004ffc9655af1a928f887f25ce660f7d2d65bc",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_4of3uwsgij6ga5sr",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 13,
+      "doc_order": 34,
+      "polygon": [
+        [545.107666015625, 75.208248257592],
+        [545.107666015625, 85.6390387875953],
+        [545.1117553710938, 85.6390387875953],
+        [545.1117553710938, 97.59405587743905],
+        [545.1149291992188, 97.59405587743905],
+        [545.1149291992188, 109.5490729672828],
+        [545.112548828125, 109.5490729672828],
+        [545.112548828125, 121.54940975698932],
+        [545.1148681640625, 121.54940975698932],
+        [545.1148681640625, 133.3455138027944],
+        [545.114013671875, 133.3455138027944],
+        [545.114013671875, 145.41510079931405],
+        [545.1148681640625, 145.41510079931405],
+        [545.1148681640625, 157.3701178891578],
+        [545.1149291992188, 157.3701178891578],
+        [545.1149291992188, 169.32513497900155],
+        [531.0775756835938, 169.32513497900155],
+        [531.0775756835938, 179.75592550900484],
+        [308.8619384765625, 179.75592550900484],
+        [308.8619384765625, 75.208248257592]
+      ],
+      "bbox": [308.8619384765625, 75.208248257592, 545.1149291992188, 179.75592550900484],
+      "text": "ImageNet test set, and won the 1st place in the ILSVRC\n2015 classiﬁcation competition. The extremely deep rep-\nresentations also have excellent generalization performance\non other recognition tasks, and lead us to further win the\n1st places on: ImageNet detection, ImageNet localization,\nCOCO detection, and COCO segmentation in ILSVRC &\nCOCO 2015 competitions. This strong evidence shows that\nthe residual learning principle is generic, and we expect that\nit is applicable in other vision and non-vision problems.",
+      "text_normalised": "imagenet test set, and won the 1st place in the ilsvrc 2015 classification competition. the extremely deep rep- resentations also have excellent generalization performance on other recognition tasks, and lead us to further win the 1st places on: imagenet detection, imagenet localization, coco detection, and coco segmentation in ilsvrc & coco 2015 competitions. this strong evidence shows that the residual learning principle is generic, and we expect that it is applicable in other vision and non-vision problems.",
+      "content_hash": "sha256:f9c23980cd765ac4a51d01453618faa6a897bddb90c5aa7a88862728e77fe957",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_qcqt6fefo3nukdoe",
+      "page_index": 1,
+      "type": "heading",
+      "flow": "body",
+      "order": 14,
+      "doc_order": 35,
+      "polygon": [
+        [391.9744873046875, 195.99694460858154],
+        [391.9744873046875, 206.74466963119812],
+        [308.8619384765625, 206.74466963119812],
+        [308.8619384765625, 195.99694460858154]
+      ],
+      "bbox": [308.8619384765625, 195.99694460858154, 391.9744873046875, 206.74466963119812],
+      "text": "2. Related Work",
+      "text_normalised": "2. related work",
+      "content_hash": "sha256:10cbdeb24c844cd541ad2cd861e8b15461947ab648a09f663a2b0e8beffaaa22",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_3nz3yqkaznxhazvo",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 15,
+      "doc_order": 36,
+      "polygon": [
+        [545.1159057617188, 217.21082816591883],
+        [545.1159057617188, 227.76117013525155],
+        [545.1149291992188, 227.76117013525155],
+        [545.1149291992188, 239.7161872250953],
+        [545.1150512695312, 239.7161872250953],
+        [545.1150512695312, 251.67120431493905],
+        [545.1148681640625, 251.67120431493905],
+        [545.1148681640625, 263.62670968603277],
+        [545.114990234375, 263.62670968603277],
+        [545.114990234375, 299.4921729428687],
+        [449.1551818847656, 299.4921729428687],
+        [449.1551818847656, 309.92294821408296],
+        [308.8619384765625, 309.92294821408296],
+        [308.8619384765625, 217.21082816591883]
+      ],
+      "bbox": [308.8619384765625, 217.21082816591883, 545.1159057617188, 309.92294821408296],
+      "text": "Residual Representations. In image recognition, VLAD\n[18] is a representation that encodes by the residual vectors\nwith respect to a dictionary, and Fisher Vector [30] can be\nformulated as a probabilistic version [18] of VLAD. Both\nof them are powerful shallow representations for image re-\ntrieval and classiﬁcation [4, 48]. For vector quantization,\nencoding residual vectors [17] is shown to be more effec-\ntive than encoding original vectors.",
+      "text_normalised": "residual representations. in image recognition, vlad [18] is a representation that encodes by the residual vectors with respect to a dictionary, and fisher vector [30] can be formulated as a probabilistic version [18] of vlad. both of them are powerful shallow representations for image re- trieval and classification [4, 48]. for vector quantization, encoding residual vectors [17] is shown to be more effec- tive than encoding original vectors.",
+      "content_hash": "sha256:7b925eba0831628624f73f3a2d469470a8651716720962b2573a971e08297c76",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_mkdbfksgxzgtjs2n",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 16,
+      "doc_order": 37,
+      "polygon": [
+        [545.1148681640625, 313.88238155837325],
+        [545.1148681640625, 324.31315682958746],
+        [545.114990234375, 324.31315682958746],
+        [545.114990234375, 336.2681434018531],
+        [545.1151123046875, 336.2681434018531],
+        [545.1151123046875, 348.2231299741187],
+        [545.1151733398438, 348.2231299741187],
+        [545.1151733398438, 360.17811654638433],
+        [545.1149291992188, 360.17811654638433],
+        [545.1149291992188, 372.133606658689],
+        [545.1148681640625, 372.133606658689],
+        [545.1148681640625, 396.04408334325933],
+        [545.114990234375, 396.04408334325933],
+        [545.114990234375, 407.99906991552496],
+        [545.1149291992188, 407.99906991552496],
+        [545.1149291992188, 431.9090430600562],
+        [545.114990234375, 431.9090430600562],
+        [545.114990234375, 443.8645331723609],
+        [504.7862854003906, 443.8645331723609],
+        [504.7862854003906, 454.2958119836142],
+        [308.8619384765625, 454.2958119836142],
+        [308.8619384765625, 324.31315682958746],
+        [320.8169250488281, 324.31315682958746],
+        [320.8169250488281, 313.88238155837325]
+      ],
+      "bbox": [308.8619384765625, 313.88238155837325, 545.1151733398438, 454.2958119836142],
+      "text": "In low-level vision and computer graphics, for solv-\ning Partial Differential Equations (PDEs), the widely used\nMultigrid method [3] reformulates the system as subprob-\nlems at multiple scales, where each subproblem is respon-\nsible for the residual solution between a coarser and a ﬁner\nscale. An alternative to Multigrid is hierarchical basis pre-\nconditioning [45, 46], which relies on variables that repre-\nsent residual vectors between two scales. It has been shown\n[3, 45, 46] that these solvers converge much faster than stan-\ndard solvers that are unaware of the residual nature of the\nsolutions. These methods suggest that a good reformulation\nor preconditioning can simplify the optimization.",
+      "text_normalised": "in low-level vision and computer graphics, for solv- ing partial differential equations (pdes), the widely used multigrid method [3] reformulates the system as subprob- lems at multiple scales, where each subproblem is respon- sible for the residual solution between a coarser and a finer scale. an alternative to multigrid is hierarchical basis pre- conditioning [45, 46], which relies on variables that repre- sent residual vectors between two scales. it has been shown [3, 45, 46] that these solvers converge much faster than stan- dard solvers that are unaware of the residual nature of the solutions. these methods suggest that a good reformulation or preconditioning can simplify the optimization.",
+      "content_hash": "sha256:0c9ee9c96ecacac5a370bcdf58411d149a88fff766f589ead8e7ff56f3eceb32",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_avtbeqlxusqxa2om",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 17,
+      "doc_order": 38,
+      "polygon": [
+        [545.112060546875, 464.1126836346688],
+        [545.112060546875, 474.66301034521246],
+        [545.1149291992188, 474.66301034521246],
+        [545.1149291992188, 486.6179969174781],
+        [545.1148681640625, 486.6179969174781],
+        [545.1148681640625, 498.5729834897437],
+        [545.1150512695312, 498.5729834897437],
+        [545.1150512695312, 510.52797006200933],
+        [545.1149291992188, 510.52797006200933],
+        [545.1149291992188, 522.4834601743141],
+        [545.1148071289062, 522.4834601743141],
+        [545.1148071289062, 534.4389655454079],
+        [545.1148681640625, 534.4389655454079],
+        [545.1148681640625, 546.3939826352516],
+        [545.1149291992188, 546.3939826352516],
+        [545.1149291992188, 558.3489692075173],
+        [545.1150512695312, 558.3489692075173],
+        [545.1150512695312, 570.3039557797829],
+        [545.1148681640625, 570.3039557797829],
+        [545.1148681640625, 582.2589728696266],
+        [524.392822265625, 582.2589728696266],
+        [524.392822265625, 592.6897633996299],
+        [308.8619384765625, 592.6897633996299],
+        [308.8619384765625, 464.1126836346688]
+      ],
+      "bbox": [308.8619384765625, 464.1126836346688, 545.1150512695312, 592.6897633996299],
+      "text": "Shortcut Connections. Practices and theories that lead to\nshortcut connections [2, 34, 49] have been studied for a long\ntime. An early practice of training multi-layer perceptrons\n(MLPs) is to add a linear layer connected from the network\ninput to the output [34, 49]. In [44, 24], a few interme-\ndiate layers are directly connected to auxiliary classiﬁers\nfor addressing vanishing/exploding gradients. The papers\nof [39, 38, 31, 47] propose methods for centering layer re-\nsponses, gradients, and propagated errors, implemented by\nshortcut connections. In [44], an “inception” layer is com-\nposed of a shortcut branch and a few deeper branches.",
+      "text_normalised": "shortcut connections. practices and theories that lead to shortcut connections [2, 34, 49] have been studied for a long time. an early practice of training multi-layer perceptrons (mlps) is to add a linear layer connected from the network input to the output [34, 49]. in [44, 24], a few interme- diate layers are directly connected to auxiliary classifiers for addressing vanishing/exploding gradients. the papers of [39, 38, 31, 47] propose methods for centering layer re- sponses, gradients, and propagated errors, implemented by shortcut connections. in [44], an “inception” layer is com- posed of a shortcut branch and a few deeper branches.",
+      "content_hash": "sha256:0a550fb37a1a6aa746c1b6391b26c9bd51364bc2a2bfa9ea396be48365c2bc26",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_ajvftl57okjtyggv",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 18,
+      "doc_order": 39,
+      "polygon": [
+        [545.1148071289062, 596.649166226342],
+        [545.1148071289062, 607.0799567563454],
+        [545.1149291992188, 607.0799567563454],
+        [545.1149291992188, 619.0349738461891],
+        [545.1150512695312, 619.0349738461891],
+        [545.1150512695312, 630.9899604184548],
+        [545.1148681640625, 630.9899604184548],
+        [545.1148681640625, 642.9454657895485],
+        [545.1150512695312, 642.9454657895485],
+        [545.1150512695312, 654.9009711606423],
+        [545.1121215820312, 654.9009711606423],
+        [545.1121215820312, 666.8559577329079],
+        [330.7298278808594, 666.8559577329079],
+        [330.7298278808594, 677.2867482629111],
+        [308.8619384765625, 677.2867482629111],
+        [308.8619384765625, 607.0799567563454],
+        [320.8169250488281, 607.0799567563454],
+        [320.8169250488281, 596.649166226342]
+      ],
+      "bbox": [308.8619384765625, 596.649166226342, 545.1150512695312, 677.2867482629111],
+      "text": "Concurrent with our work, “highway networks” [42, 43]\npresent shortcut connections with gating functions [15].\nThese gates are data-dependent and have parameters, in\ncontrast to our identity shortcuts that are parameter-free.\nWhen a gated shortcut is “closed” (approaching zero), the\nlayers in highway networks represent non-residual func-\ntions.",
+      "text_normalised": "concurrent with our work, “highway networks” [42, 43] present shortcut connections with gating functions [15]. these gates are data-dependent and have parameters, in contrast to our identity shortcuts that are parameter-free. when a gated shortcut is “closed” (approaching zero), the layers in highway networks represent non-residual func- tions.",
+      "content_hash": "sha256:e79de9f56dd91a239f14ffd20865a00cfdc5f16861d20f039146e3186403d559",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_ocrsvsdwgr7td3jj",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 19,
+      "doc_order": 40,
+      "polygon": [
+        [545.1148681640625, 668.3801842927483],
+        [545.1148681640625, 678.8109748227516],
+        [545.1149291992188, 678.8109748227516],
+        [545.1149291992188, 690.7659613950173],
+        [545.114990234375, 690.7659613950173],
+        [545.114990234375, 702.7209479672829],
+        [545.1149291992188, 702.7209479672829],
+        [545.1149291992188, 713.1517384972861],
+        [308.8619384765625, 713.1517384972861],
+        [308.8619384765625, 678.8109748227516],
+        [342.0473327636719, 678.8109748227516],
+        [342.0473327636719, 668.3801842927483]
+      ],
+      "bbox": [308.8619384765625, 668.3801842927483, 545.114990234375, 713.1517384972861],
+      "text": "On the contrary, our formulation always learns\nresidual functions; our identity shortcuts are never closed,\nand all information is always passed through, with addi-\ntional residual functions to be learned. In addition, high-",
+      "text_normalised": "on the contrary, our formulation always learns residual functions; our identity shortcuts are never closed, and all information is always passed through, with addi- tional residual functions to be learned. in addition, high-",
+      "content_hash": "sha256:40542260883be362295a4664d0354f2f793053a6c7f3f669a520d854523aae44",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_6tf5whfoig4aqhts",
+      "page_index": 1,
+      "type": "unknown",
+      "flow": "body",
+      "order": 20,
+      "doc_order": 41,
+      "polygon": [
+        [300.10223388671875, 734.1331750154045],
+        [300.10223388671875, 743.0397389855674],
+        [295.1209411621094, 743.0397389855674],
+        [295.1209411621094, 734.1331750154045]
+      ],
+      "bbox": [295.1209411621094, 734.1331750154045, 300.10223388671875, 743.0397389855674],
+      "text": "2",
+      "text_normalised": "2",
+      "content_hash": "sha256:d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35",
+      "source": "pdf_text_layer",
+      "confidence": 0.3,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    }
+  ],
+  "relations": [],
+  "sections": [
+    {
+      "heading_block_id": "blk_3vrksodt7ivaylly",
+      "level": 1,
+      "block_ids": [
+        "blk_hxgun7k2irstdlea",
+        "blk_6isf6gxscvhvvdz7",
+        "blk_wbrcfh35q3bc3kge",
+        "blk_wskifnpzhujatwy5"
+      ]
+    },
+    {
+      "heading_block_id": "blk_2f6mrye67ufcrezm",
+      "level": 1,
+      "block_ids": ["blk_yaup3uye2fwqce6n", "blk_qz3gmdab3xixfhpn"]
+    },
+    {
+      "heading_block_id": "blk_7fllvxo7qzck5bff",
+      "level": 1,
+      "block_ids": [
+        "blk_pbdlyzf24etbkqv4",
+        "blk_dkdro675a5h54y3o",
+        "blk_4uqjxh27obp4tcbe",
+        "blk_rgxmgatiseugrr4c",
+        "blk_aj7ciwzwgwiqpmds",
+        "blk_bklz4zqlheid4r6d",
+        "blk_wjbhk5n5cinvdgma",
+        "blk_qkrfeampq5qx4a4b",
+        "blk_vq4jctderew6ix77",
+        "blk_a346fkm42dillmhx",
+        "blk_ubek4hjvz7disxqb",
+        "blk_ohm4akcmyaacroq7",
+        "blk_wp3gjrsdsafkhtir",
+        "blk_sgqq65comko55xtz",
+        "blk_3jeyhtaccnl3azfz",
+        "blk_pqgykkhjzbaa5ydc",
+        "blk_pfqc4u4uxptpww4s",
+        "blk_vzys47cnikwnlw6r",
+        "blk_7qvf2ybocr37gwjf",
+        "blk_ygp2x36p62a564qt",
+        "blk_plmj3gphciyhanvp",
+        "blk_34ip7ssmywarukjm",
+        "blk_tuldchl43vmycrzo",
+        "blk_4of3uwsgij6ga5sr"
+      ]
+    },
+    {
+      "heading_block_id": "blk_qcqt6fefo3nukdoe",
+      "level": 1,
+      "block_ids": [
+        "blk_3nz3yqkaznxhazvo",
+        "blk_mkdbfksgxzgtjs2n",
+        "blk_avtbeqlxusqxa2om",
+        "blk_ajvftl57okjtyggv",
+        "blk_ocrsvsdwgr7td3jj",
+        "blk_6tf5whfoig4aqhts"
+      ]
+    }
+  ],
+  "references": [],
+  "confidence": {
+    "overall": 0.9989,
+    "by_page": [1.0, 1.0, 1.0, 1.0, 0.9868, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+    "weakest_pages": [],
+    "needs_review": false
+  }
+}

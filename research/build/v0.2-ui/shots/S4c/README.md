@@ -14,9 +14,12 @@ REAL stored Thread 1 (S4b's frame-04 exchange). Compare with `../../reference/04
 | `highlight-card-by-mouse-1440x900-light.png`, `-dark.png` | #176: the card opened by a mouse click that moved 4 px between press and release (before, that press selected "o" and showed the toolbar instead) |
 | `reader-selection-390x844-light.png`, `-dark.png` | the phone: the two-row header and the toolbar as a bottom bar (phone frames are S4e's) |
 
-axe-core 4.12.1 in every state above (selection with the panel open, Contents, the highlight card, the phone
-selection and Contents), 1440 and 390, light and dark: **0 serious or critical**. Moderate only: `region` on
-pdf.js's own `.hiddenCanvasElement`, and `landmark-unique` on S4b's AI-slip sections.
+axe-core 4.12.1 in every state above, all in **Source** mode (selection with the panel open, Contents, the
+highlight card, the phone selection and Contents), 1440 and 390, light and dark: **0 serious or critical**.
+Moderate only: `region` on pdf.js's own `.hiddenCanvasElement`, and `landmark-unique` on S4b's AI-slip sections
+(with the phone sheet open, also the `Sheet`'s own banner). Not covered: in Split and Guided, axe reports one
+serious `scrollable-region-focusable` on Guided's horizontally scrolling math blocks (`GuidedView`, unchanged
+by this slice; review N16).
 
 ## What matches frame 04
 
@@ -30,8 +33,9 @@ Ask, Highlight, the five washes, Send to board. Lamp-lit: the dark desk, the PDF
 
 ## Remaining differences, and why
 
-1. **The toolbar is 126 px wide, the design's 106.** The washes are 20 px targets 4 px apart (WCAG 2.5.8's
-   spacing rule); the design's 14 px dots are under the minimum target. Items are 36 px tall (34 in the mock).
+1. **The toolbar is 130 px wide, the design's 106.** Each wash is an 18 px chip inside a 24 px target (WCAG
+   2.5.8's minimum; 40 px on the phone's bar); the design's 14 px dots are under the minimum target. Items are
+   40 px tall (34 in the mock), v0.1's floor.
 2. **Copy stays** at the end of the toolbar: a v0.1 behaviour the e2e suite checks; the design has no Copy.
 3. **Icons are lucide's** (message, T, highlighter, pin, copy, workflow, align-left, arrow) at stroke 1.5, close
    to the design's glyphs but not its exact paths.
@@ -48,8 +52,16 @@ Ask, Highlight, the five washes, Send to board. Lamp-lit: the dark desk, the PDF
    "Fit width" gives about 752 px.
 10. **The PDF is pdf.js's real rendering**; the mock sets the page in Tinos.
 11. **The selection wash is 24 % navy** where the mock uses 22 %, to read on the dimmed lamp-lit page too.
-12. **Phone**: the toolbar bar wraps to two rows and the header is v0.1's two-row bar restyled; frames 08b and
-    09b's phone reader are S4e's (#205).
+12. **Phone**: the toolbar bar wraps to three rows (40 px washes) and the header is v0.1's two-row bar
+    restyled, Contents drawn as its icon below 1100 px; frames 08b and 09b's phone reader are S4e's (#205).
 13. **Not in the design, added for the review:** when no margin is wide enough the toolbar docks at the top of
     the column, and at the bottom when the selection sits under the top band (so it never covers the selected
     lines); "Explain with a diagram" is drawn only once the diagram slice wires it.
+14. **The washes read slightly weaker by lamplight**: amber measures 1.10:1 against the dimmed page against
+    1.18:1 by day (review N7). The ink underline keeps every highlight visible; the overlay-colour pass the audit
+    asks for (GAP-A2 risk 9) is left to S4e's lamp-lit page.
+15. **No reserved AI marker on Explain and Ask** (v0.1's Ask carried it): frame 04 draws none, and the answer
+    itself is marked as the AI's (the slip, its "AI" tab). For the owner: the v0.1 rule "the bar says so before
+    the reader presses it" is dropped with the design (review N15).
+16. **Wording**: the toolbar's "Send to board" and its toast ("Passage added to your board", "Open board")
+    agree; the explain panel's "Send to canvas" and its toast keep "canvas" until the Canvas → Board sweep (S6d).

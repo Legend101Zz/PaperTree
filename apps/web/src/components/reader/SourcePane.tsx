@@ -25,7 +25,6 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
 
 import {
   frameForPdfPage,
@@ -37,18 +36,16 @@ import {
 } from '@papertree/anchoring';
 
 import { FlashMarginTab } from '@/features/explain/components/FlashMarginTab';
-import { isHighlightClick, placeToolbar, typeAreaOf, type Rect } from '@/features/reader';
+import { useHighlightClick, useSelectionToolbar } from '@/features/reader';
 import { MAX_ANCHORS_PER_HIGHLIGHT } from '@/lib/api/highlights';
-import type { HighlightColor } from '@/lib/api/types';
 
 import { useReaderActions } from './actions';
 import { type DocumentHandle, type DocumentRef } from './documentHandle';
 import { FLASH_SCROLL_MS, prefersReducedMotion } from './flash';
-import { HighlightOverlay, hitsItem, type FlashPaint, type PaintItem } from './HighlightOverlay';
+import { HighlightOverlay, type FlashPaint, type PaintItem } from './HighlightOverlay';
 import { usePdfDocument } from './PdfDocumentProvider';
 import { displayQuote } from './quote';
 import type { TextLayerInfo } from './PdfPage';
-import { SelectionToolbar } from './SelectionToolbar';
 import { holdScroll } from './scrollHold';
 import { stampTextLayer } from './stampTextLayer';
 import { tooLongSentence, type ReaderHighlight } from './useHighlights';
@@ -64,6 +61,8 @@ import {
   type ReadingPosition,
   type VirtualPageListHandle,
 } from './VirtualPageList';
+
+import type { HighlightColor } from '@/lib/api/types';
 
 export interface SourcePaneProps {
   /** The indexed parse, or null while the paper is still being read (Source still renders). */
@@ -119,10 +118,6 @@ export interface SourcePaneProps {
   readonly onNotice?: (message: string) => void;
 }
 
-/** The margin toolbar's width (`.pt-seltool--margin`) and the docked bar's height, CSS px. */
-const MARGIN_BAR_WIDTH = 126;
-const DOCK_BAR_HEIGHT = 52;
-
 function quoteOf(anchor: Anchor): string {
   return displayQuote([anchor]) || 'highlight';
 }
@@ -168,8 +163,6 @@ export function SourcePane(props: SourcePaneProps) {
   const listRef = useRef<VirtualPageListHandle | null>(null);
   // State, not a ref: the hook must re-bind when the scroller mounts.
   const [root, setRoot] = useState<HTMLElement | null>(null);
-  // Where a docked toolbar is drawn: over the column, outside the scroller, so it stays put.
-  const [dockHost, setDockHost] = useState<HTMLDivElement | null>(null);
 
   /** Each rendered page's pdf.js items, for the capture hook's item geometry. */
   const pages = useRef(new Map<number, PageTextSource>());
@@ -321,69 +314,30 @@ export function SourcePane(props: SourcePaneProps) {
     [doc],
   );
 
-  // A click (not a drag) on highlighted text opens that highlight. Hit-tested in IR space against
-  // the stored quads; the page's own box is the only thing read from the DOM, and only to turn a
-  // pointer's client position into a position on the page.
-  const itemsRef = useRef(items);
-  itemsRef.current = items;
-  const zoomRef = useRef(props.zoom);
-  zoomRef.current = props.zoom;
-  const pressRef = useRef<{ x: number; y: number } | null>(null);
-  useEffect(() => {
-    if (root === null) return undefined;
-    const onDown = (event: PointerEvent): void => {
-      pressRef.current = event.button === 0 ? { x: event.clientX, y: event.clientY } : null;
-    };
-    const onClick = (event: MouseEvent): void => {
-      const down = pressRef.current;
-      pressRef.current = null;
-      const up = { x: event.clientX, y: event.clientY };
-      if (!isHighlightClick({ down, up, detail: event.detail, shiftKey: event.shiftKey })) return;
-      const target = event.target instanceof Element ? event.target : null;
-      const page = target?.closest('.papertree-page[data-page-index]');
-      if (!(page instanceof HTMLElement)) return;
-      const pageIndex = Number(page.getAttribute('data-page-index'));
-      const userUnit = pdf.pageMeta?.get(pageIndex)?.userUnit ?? 1;
-      const scale = zoomRef.current * userUnit;
-      if (!(scale > 0)) return;
-      const rect = page.getBoundingClientRect();
-      const x = (event.clientX - rect.left) / scale;
-      const y = (event.clientY - rect.top) / scale;
-      const hit = [...itemsRef.current]
-        .reverse()
-        .find((item) => item.pageIndex === pageIndex && hitsItem(item, x, y));
-      if (hit === undefined) return;
-      // The characters the hand's jitter selected on the way are not a selection (#176).
-      window.getSelection()?.removeAllRanges();
-      // The passage's own top and bottom on screen, so its card opens beside it, not over it.
-      const quads = itemsRef.current
-        .filter((item) => item.highlightId === hit.highlightId && item.pageIndex === pageIndex)
-        .flatMap((item) => item.quads);
-      const top = rect.top + Math.min(...quads.map((q) => q[1])) * scale;
-      const bottom = rect.top + Math.max(...quads.map((q) => q[3])) * scale;
-      onActivateHighlight(hit.highlightId, {
-        clientX: event.clientX,
-        clientY: event.clientY,
-        top,
-        bottom,
-      });
-    };
-    root.addEventListener('pointerdown', onDown);
-    root.addEventListener('click', onClick);
-    return () => {
-      root.removeEventListener('pointerdown', onDown);
-      root.removeEventListener('click', onClick);
-    };
-  }, [root, onActivateHighlight, pdf.pageMeta]);
+  // A click (not a drag) on highlighted text opens that highlight (#176, `useHighlightClick`).
+  const pageMeta = pdf.pageMeta;
+  useHighlightClick({
+    root,
+    items,
+    zoom: props.zoom,
+    userUnitOf: (pageIndex) => pageMeta?.get(pageIndex)?.userUnit ?? 1,
+    onActivate: onActivateHighlight,
+  });
 
-  const toolbarProps = {
-    onHighlight,
-    onExplain,
-    ...(askAbout === undefined ? {} : { onAsk }),
-    onSendToBoard,
-    onCopy,
-    ...(unavailable === undefined ? {} : { highlightDisabledReason: unavailable }),
-  };
+  const toolbar = useSelectionToolbar({
+    selection,
+    doc,
+    narrow: props.narrow,
+    sheetOpen: props.sheetOpen === true,
+    actions: {
+      onHighlight,
+      onExplain,
+      ...(askAbout === undefined ? {} : { onAsk }),
+      onSendToBoard,
+      onCopy,
+      ...(unavailable === undefined ? {} : { highlightDisabledReason: unavailable }),
+    },
+  });
 
   if (pdf.error !== null && pdf.error !== undefined) {
     return (
@@ -435,48 +389,6 @@ export function SourcePane(props: SourcePaneProps) {
     );
   }
 
-  function floatingToolbar(geometry: FloatingGeometry): ReactNode {
-    if (props.narrow || selection === null) return null;
-    // Across pages, the bar goes by the selection's END: that is where the pointer was released
-    // (the page auto-scrolled there), while the start is off screen above.
-    const acrossPages =
-      selection.endPageIndex !== selection.pageIndex && selection.endExtent !== null;
-    const pageIndex = acrossPages ? selection.endPageIndex : selection.pageIndex;
-    const at = acrossPages ? selection.endExtent : selection.irExtent;
-    if (at === null) return null;
-    const box = geometry.pageBox(pageIndex);
-    if (box === null) return null;
-    const scale = geometry.irScale(pageIndex);
-    const toPx = (q: readonly number[]): Rect => ({
-      left: box.left + (q[0] ?? 0) * scale,
-      top: box.top + (q[1] ?? 0) * scale,
-      right: box.left + (q[2] ?? 0) * scale,
-      bottom: box.top + (q[3] ?? 0) * scale,
-    });
-    const quads = acrossPages ? selection.endQuads : selection.irQuads;
-    const area = typeAreaOf(doc?.byPage.get(pageIndex) ?? []);
-    const placed = placeToolbar({
-      typeArea: area === null ? null : toPx(area),
-      selection: (quads.length > 0 ? quads : [at]).map(toPx),
-      toolbar: { width: MARGIN_BAR_WIDTH, height: unavailable === undefined ? 300 : 380 },
-      dockHeight: DOCK_BAR_HEIGHT,
-      viewport: geometry.viewport,
-    });
-    if (placed.kind === 'margin') {
-      return (
-        <SelectionToolbar
-          placement={{ kind: 'margin', left: placed.rect.left, top: placed.rect.top }}
-          {...toolbarProps}
-        />
-      );
-    }
-    if (dockHost === null) return null;
-    return createPortal(
-      <SelectionToolbar placement={{ kind: 'docked', edge: placed.edge }} {...toolbarProps} />,
-      dockHost,
-    );
-  }
-
   const ready = pdf.pdf !== null && pdf.pdf !== undefined && (pdf.numPages ?? 0) > 0;
 
   return (
@@ -522,14 +434,12 @@ export function SourcePane(props: SourcePaneProps) {
         renderFloating={(geometry) => (
           <>
             {marginTab(geometry)}
-            {floatingToolbar(geometry)}
+            {toolbar.floating(geometry)}
           </>
         )}
       />
-      <div ref={setDockHost} className="pt-seltool-dock" data-seltool-dock="" />
-      {props.narrow && selection !== null && props.sheetOpen !== true ? (
-        <SelectionToolbar placement={{ kind: 'sheet' }} {...toolbarProps} />
-      ) : null}
+      {toolbar.dock}
+      {toolbar.sheet}
     </div>
   );
 }

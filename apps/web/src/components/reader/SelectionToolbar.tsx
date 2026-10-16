@@ -21,6 +21,7 @@
  */
 
 import { Copy, Highlighter, MessageSquare, Network, Pin, Type } from 'lucide-react';
+import { useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 import { HIGHLIGHT_COLORS } from './useHighlights';
@@ -52,18 +53,15 @@ export interface SelectionToolbarProps {
    * tooltip: a disabled button with no visible reason is a dead end.
    */
   readonly highlightDisabledReason?: string;
+  /**
+   * The bar's drawn size, on mount and whenever it changes (a docked bar wraps in a narrow column):
+   * the placement must use what is on screen, not a guess (review B1).
+   */
+  readonly onMeasure?: (size: { readonly width: number; readonly height: number }) => void;
 }
 
 const NOTE_ID = 'pt-seltool-note';
 const ICON = 18;
-
-const COLOR_NAME: Readonly<Record<HighlightColor, string>> = {
-  amber: 'amber',
-  green: 'green',
-  blue: 'blue',
-  pink: 'pink',
-  purple: 'purple',
-};
 
 function Item(props: {
   readonly label: string;
@@ -105,7 +103,7 @@ function Washes(props: SelectionToolbarProps): ReactNode {
           key={color}
           type="button"
           className="pt-seltool__wash"
-          aria-label={`Highlight in ${COLOR_NAME[color]}`}
+          aria-label={`Highlight in ${color}`}
           disabled={off}
           style={
             {
@@ -182,9 +180,23 @@ function Items(props: SelectionToolbarProps): ReactNode {
  * @returns The toolbar, or a portal of it (the phone's bottom bar).
  */
 export function SelectionToolbar(props: SelectionToolbarProps): ReactNode {
-  const { placement } = props;
+  const { placement, onMeasure } = props;
+  const ref = useRef<HTMLDivElement>(null);
+  // Before paint (a layout effect), so a corrected placement is what the reader first sees; then
+  // on every resize (a wrap, a font arriving, the column narrowing).
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el === null || onMeasure === undefined) return undefined;
+    const report = (): void => onMeasure({ width: el.offsetWidth, height: el.offsetHeight });
+    report();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(report);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [onMeasure, placement.kind]);
   const bar = (
     <div
+      ref={ref}
       role="toolbar"
       aria-label="Selection actions"
       aria-orientation={placement.kind === 'margin' ? 'vertical' : 'horizontal'}

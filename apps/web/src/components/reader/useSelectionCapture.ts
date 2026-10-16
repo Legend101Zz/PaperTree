@@ -797,6 +797,24 @@ export function useSelectionCapture(
     };
     const onPointerDown = (event: PointerEvent): void => {
       held = event.pointerType !== 'touch' && event.button === 0;
+      // A new press in the paper starts a new selection or ends this one, so this one's toolbar
+      // goes now, not when the drag ends. Left up, it sat in the page margin (#203) exactly where
+      // a drag into blank space ends, and that drag selected the toolbar's own labels (e2e rfix R1
+      // A2 and R1b C). A press on the toolbar itself keeps the selection it acts on.
+      const target = event.target instanceof Element ? event.target : null;
+      if (
+        held &&
+        signatureRef.current !== '' &&
+        target !== null &&
+        rootRef.current?.contains(target) === true &&
+        target.closest('[role="toolbar"]') === null
+      ) {
+        if (timerRef.current !== null) clearTimeout(timerRef.current);
+        timerRef.current = null;
+        signatureRef.current = '';
+        setSelection(null);
+        notifyRef.current?.(null);
+      }
     };
     // Every pointer device that HAS an up event: reconcile at once. Registered on the document
     // because a drag frequently ends outside the page element.

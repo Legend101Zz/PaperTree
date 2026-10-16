@@ -25,17 +25,50 @@ export function headingDisplayTitle(text: string): string {
   return stripped.length > 0 ? stripped : text.trim();
 }
 
+/** Block types that are running text: a section "headed" by one is the parser's mistake. */
+const BODY_TEXT_TYPES = new Set(['paragraph', 'list_item', 'caption', 'footnote']);
+
 /**
- * Is this "heading" a sentence fragment the parser mistook for one (it ends with a full stop or
- * starts in lowercase, like the "scholarly works." that closes Attention's attribution banner)? The
- * same rule as `evidence.section_display_title`; Contents lists such a section's children in its
- * place rather than the fragment.
+ * Is this section heading really a scrap of body text? Two signs, and only these (review S3):
+ * the parser typed its block as body text, or it reads as the tail of a sentence: it ends with a
+ * full stop, has fewer than three words and starts in lowercase, like the "scholarly works." that
+ * ends Attention's attribution banner. Real headings that start in lowercase ("t-SNE background",
+ * "word2vec embeddings") or end with a full stop ("Background.", a run-in heading) stay.
  *
  * @param title - The heading's display title.
- * @returns True for a fragment.
+ * @param blockType - The heading block's type in the parse.
+ * @returns True when Contents should not list it (its subsections take its place).
+ * @example
+ * isFragmentHeading('scholarly works.', 'heading') // true
+ * isFragmentHeading('t-SNE background', 'heading') // false
  */
-export function isFragmentHeading(title: string): boolean {
-  return title.endsWith('.') || /^\p{Ll}/u.test(title);
+export function isFragmentHeading(title: string, blockType = 'heading'): boolean {
+  if (BODY_TEXT_TYPES.has(blockType)) return true;
+  const text = title.trim();
+  const words = text.split(/\s+/).filter((w) => w.length > 0).length;
+  return text.endsWith('.') && words < 3 && /^\p{Ll}/u.test(text);
+}
+
+/** What an unsectioned block is, in a reader's words (never the parser's type name, #177). */
+const OUTSIDE_PREFIX: Readonly<Record<string, string>> = {
+  page_number: 'Page number',
+  footnote: 'Footnote:',
+  margin_note: 'Margin note:',
+  header: 'Running head:',
+  footer: 'Footer:',
+};
+
+/**
+ * The label of a block outside the section tree: its text, with what it is in plain words when
+ * the text alone would not say ("Page number 7", not a bare "7").
+ *
+ * @param type - The block's type in the parse.
+ * @param text - The block's first line.
+ * @returns The row's label.
+ */
+export function outsideLabel(type: string, text: string): string {
+  const prefix = OUTSIDE_PREFIX[type];
+  return prefix === undefined ? text : `${prefix} ${text}`;
 }
 
 /** A front-matter block as the outline sees it. */
@@ -48,11 +81,12 @@ export interface FrontMatterLeaf {
 /**
  * The front matter's rows: the paper's title (wherever the parse put it: the real Attention parse
  * files it under a misparsed heading) and any heading before the first section, by their text. The
- * authors, affiliations and the rest stay on the page and out of Contents. Without a title, the first
- * block stands in, so "Front matter" still goes somewhere.
+ * authors, affiliations and the rest stay on the page and out of Contents; without a title or a
+ * heading there are no rows, never an author or the arXiv banner in the title's place (review N8).
  *
  * @param leaves - The labelled blocks before the first section, in reading order.
- * @param title - The document's title block, or null when the parse found none.
+ * @param title - The document's title block, or null when the parse found none or Contents lists
+ *   it as a section already.
  * @returns The rows to list, labelled for a reader.
  */
 export function frontMatterRows(
@@ -62,11 +96,7 @@ export function frontMatterRows(
   const headings = leaves
     .filter((leaf) => leaf.type === 'heading')
     .map((leaf) => ({ ...leaf, label: headingDisplayTitle(leaf.label) }));
-  const kept = [
-    ...(title === null ? leaves.filter((leaf) => leaf.type === 'title').slice(0, 1) : [title]),
-    ...headings,
-  ];
-  if (kept.length > 0) return kept;
-  const first = leaves[0];
-  return first === undefined ? [] : [first];
+  const titles =
+    title === null ? leaves.filter((leaf) => leaf.type === 'title').slice(0, 1) : [title];
+  return [...titles, ...headings];
 }

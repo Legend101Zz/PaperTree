@@ -1,0 +1,1514 @@
+{
+  "ir_version": "1.0.0",
+  "paper_id": "ppr_G9AYN750E5MG1NRBMGSQJ4N5JM",
+  "generation": 1,
+  "source_hash": "sha256:bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+  "coordinate_space": "pdf_user_space_topleft",
+  "parser": {
+    "name": "papertree-document-worker",
+    "version": "1.0.0",
+    "config_hash": "sha256:c2958cf95b402f0bd03e7c38be6dee0a1af1f7b2e0dc884e575446e6de2b52dc",
+    "parsed_at": "2026-10-15T17:14:03.575Z"
+  },
+  "status": "complete",
+  "partial_reason": "Trimmed to pages 1-2 of the real parse for the Contents tests (#203).",
+  "metadata": {
+    "title": {
+      "value": "Attention Is All You Need",
+      "source_block_id": "blk_dhel6d57xcrwxxiq",
+      "confidence": 0.9
+    },
+    "authors": [
+      {
+        "value": "Ashish Vaswani",
+        "source_block_id": "blk_4zrfp7b4rg2ey2dl",
+        "confidence": 0.9
+      },
+      {
+        "value": "Noam Shazeer",
+        "source_block_id": "blk_wskq3qeyocv55mzr",
+        "confidence": 0.9
+      },
+      {
+        "value": "Niki Parmar",
+        "source_block_id": "blk_7siawkp2lk4zifbb",
+        "confidence": 0.9
+      },
+      {
+        "value": "Jakob Uszkoreit",
+        "source_block_id": "blk_3wjs5gdr2hw7fxly",
+        "confidence": 0.9
+      },
+      {
+        "value": "Llion Jones",
+        "source_block_id": "blk_3sk6ou4rtlk7zwwg",
+        "confidence": 0.9
+      },
+      {
+        "value": "Aidan N. Gomez",
+        "source_block_id": "blk_voqwimrz6utjpxtj",
+        "confidence": 0.9
+      },
+      {
+        "value": "Illia Polosukhin",
+        "source_block_id": "blk_ny7sw3a553jsia6w",
+        "confidence": 0.9
+      }
+    ],
+    "abstract": {
+      "block_ids": ["blk_tutvxcaxihp3krt6"],
+      "confidence": 0.9
+    },
+    "doi": null,
+    "arxiv_id": {
+      "value": "1706.03762",
+      "source_block_id": "blk_464nph6sx2bt77oe",
+      "confidence": 0.6
+    },
+    "venue": null,
+    "year": {
+      "value": 2023,
+      "source_block_id": "blk_464nph6sx2bt77oe",
+      "confidence": 0.6
+    }
+  },
+  "pages": [
+    {
+      "page_id": "pg_ecffvusrlccmartc",
+      "index": 0,
+      "width": 612.0,
+      "height": 792.0,
+      "rotation": 0,
+      "user_unit": 1.0,
+      "crop_box": [0.0, 0.0, 612.0, 792.0],
+      "media_box": [0.0, 0.0, 612.0, 792.0],
+      "image": null,
+      "has_text_layer": true,
+      "is_scanned": false,
+      "confidence": 1.0,
+      "block_ids": [
+        "blk_rrjdi5wqd2fj7u53",
+        "blk_t6z3qhndfcebxak4",
+        "blk_dhel6d57xcrwxxiq",
+        "blk_4zrfp7b4rg2ey2dl",
+        "blk_wskq3qeyocv55mzr",
+        "blk_7siawkp2lk4zifbb",
+        "blk_3wjs5gdr2hw7fxly",
+        "blk_7tu4ctu3bjx5nkgx",
+        "blk_n3ojsz32j5j6caho",
+        "blk_c7mqp2iti3lzonx2",
+        "blk_hsu44u6sc3pk53rq",
+        "blk_h4kdmgr4qyd3jbin",
+        "blk_ceojrm2yiuucow5i",
+        "blk_asp7yealh6c2gr7r",
+        "blk_3sk6ou4rtlk7zwwg",
+        "blk_voqwimrz6utjpxtj",
+        "blk_lm6ffv3dkxzlscsv",
+        "blk_5nfkxnkgmhuj2ehu",
+        "blk_27pcegsk4zafjn3e",
+        "blk_4soh5urhxwj5udkg",
+        "blk_64yjmycfxgsclyzv",
+        "blk_ny7sw3a553jsia6w",
+        "blk_ubib7puof7qlqk3s",
+        "blk_ioyldcme3qvfxvom",
+        "blk_tutvxcaxihp3krt6",
+        "blk_2lig7nkhe4uw6nxe",
+        "blk_gvfiv4jrof3svcki",
+        "blk_mke3unatfadzebtm",
+        "blk_fjdqcqnl2luvcgnh",
+        "blk_464nph6sx2bt77oe"
+      ],
+      "flows": {
+        "body": [
+          "blk_rrjdi5wqd2fj7u53",
+          "blk_t6z3qhndfcebxak4",
+          "blk_dhel6d57xcrwxxiq",
+          "blk_4zrfp7b4rg2ey2dl",
+          "blk_wskq3qeyocv55mzr",
+          "blk_7siawkp2lk4zifbb",
+          "blk_3wjs5gdr2hw7fxly",
+          "blk_7tu4ctu3bjx5nkgx",
+          "blk_n3ojsz32j5j6caho",
+          "blk_c7mqp2iti3lzonx2",
+          "blk_hsu44u6sc3pk53rq",
+          "blk_h4kdmgr4qyd3jbin",
+          "blk_ceojrm2yiuucow5i",
+          "blk_asp7yealh6c2gr7r",
+          "blk_3sk6ou4rtlk7zwwg",
+          "blk_voqwimrz6utjpxtj",
+          "blk_lm6ffv3dkxzlscsv",
+          "blk_5nfkxnkgmhuj2ehu",
+          "blk_27pcegsk4zafjn3e",
+          "blk_4soh5urhxwj5udkg",
+          "blk_64yjmycfxgsclyzv",
+          "blk_ny7sw3a553jsia6w",
+          "blk_ubib7puof7qlqk3s",
+          "blk_ioyldcme3qvfxvom",
+          "blk_tutvxcaxihp3krt6"
+        ],
+        "caption": [],
+        "footnote": [
+          "blk_2lig7nkhe4uw6nxe",
+          "blk_gvfiv4jrof3svcki",
+          "blk_mke3unatfadzebtm",
+          "blk_fjdqcqnl2luvcgnh"
+        ],
+        "header": [],
+        "footer": [],
+        "margin": ["blk_464nph6sx2bt77oe"]
+      }
+    },
+    {
+      "page_id": "pg_x4a77gffj57cf6qz",
+      "index": 1,
+      "width": 612.0,
+      "height": 792.0,
+      "rotation": 0,
+      "user_unit": 1.0,
+      "crop_box": [0.0, 0.0, 612.0, 792.0],
+      "media_box": [0.0, 0.0, 612.0, 792.0],
+      "image": null,
+      "has_text_layer": true,
+      "is_scanned": false,
+      "confidence": 1.0,
+      "block_ids": [
+        "blk_o4iqjydqo6kr6bcu",
+        "blk_btm442il53kyf7wg",
+        "blk_p5c47m5apz2jj3x4",
+        "blk_poxmdnipnwgirpwh",
+        "blk_jyinmieamvqrzmap",
+        "blk_r4fafec5wfmmzuno",
+        "blk_7yzmxavdpzpf2n7m",
+        "blk_2cmjlkjranm72zrd",
+        "blk_tno4z2od4pepobev",
+        "blk_zijfznfjoujx2rnx",
+        "blk_eumr65vrg3xfbpht",
+        "blk_pkx56w26ixifhqbr",
+        "blk_yf4mbcznsijvrqj4",
+        "blk_zuz34fh3blg2zm56",
+        "blk_qwdi5it6tz7rra75",
+        "blk_ho7cyvjgvxxhckhe"
+      ],
+      "flows": {
+        "body": [
+          "blk_o4iqjydqo6kr6bcu",
+          "blk_btm442il53kyf7wg",
+          "blk_p5c47m5apz2jj3x4",
+          "blk_poxmdnipnwgirpwh",
+          "blk_jyinmieamvqrzmap",
+          "blk_r4fafec5wfmmzuno",
+          "blk_7yzmxavdpzpf2n7m",
+          "blk_2cmjlkjranm72zrd",
+          "blk_tno4z2od4pepobev",
+          "blk_zijfznfjoujx2rnx",
+          "blk_eumr65vrg3xfbpht",
+          "blk_pkx56w26ixifhqbr"
+        ],
+        "caption": [],
+        "footnote": [],
+        "header": ["blk_qwdi5it6tz7rra75", "blk_ho7cyvjgvxxhckhe"],
+        "footer": ["blk_yf4mbcznsijvrqj4", "blk_zuz34fh3blg2zm56"],
+        "margin": []
+      }
+    }
+  ],
+  "blocks": [
+    {
+      "block_id": "blk_rrjdi5wqd2fj7u53",
+      "page_index": 0,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 0,
+      "doc_order": 0,
+      "polygon": [
+        [487.3389587402344, 73.85738728212891],
+        [487.3389587402344, 86.17487238549347],
+        [487.8945007324219, 86.17487238549347],
+        [487.8945007324219, 98.49235748885803],
+        [124.31300354003906, 98.49235748885803],
+        [124.31300354003906, 86.17487238549347],
+        [124.66600036621094, 86.17487238549347],
+        [124.66600036621094, 73.85738728212891]
+      ],
+      "bbox": [124.31300354003906, 73.85738728212891, 487.8945007324219, 98.49235748885803],
+      "text": "Provided proper attribution is provided, Google hereby grants permission to\nreproduce the tables and figures in this paper solely for use in journalistic or",
+      "text_normalised": "provided proper attribution is provided, google hereby grants permission to reproduce the tables and figures in this paper solely for use in journalistic or",
+      "content_hash": "sha256:53079a514ec7520af84aba25d4c773f492f119fe11e645d6391d460137ba8a76",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_t6z3qhndfcebxak4",
+      "page_index": 0,
+      "type": "heading",
+      "flow": "body",
+      "order": 1,
+      "doc_order": 1,
+      "polygon": [
+        [346.4983215332031, 101.75240681337891],
+        [346.4983215332031, 112.44035553573303],
+        [267.593994140625, 112.44035553573303],
+        [267.593994140625, 101.75240681337891]
+      ],
+      "bbox": [267.593994140625, 101.75240681337891, 346.4983215332031, 112.44035553573303],
+      "text": "scholarly works.",
+      "text_normalised": "scholarly works.",
+      "content_hash": "sha256:8a92062c1aa5d6b673f09302d53ab2bb547e43df4069ba408cc17802596a2667",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_dhel6d57xcrwxxiq",
+      "page_index": 0,
+      "type": "title",
+      "flow": "body",
+      "order": 2,
+      "doc_order": 2,
+      "polygon": [
+        [399.89349365234375, 150.16440334609842],
+        [399.89349365234375, 165.6410486393471],
+        [211.48800659179688, 165.6410486393471],
+        [211.48800659179688, 150.16440334609842]
+      ],
+      "bbox": [211.48800659179688, 150.16440334609842, 399.89349365234375, 165.6410486393471],
+      "text": "Attention Is All You Need",
+      "text_normalised": "attention is all you need",
+      "content_hash": "sha256:4a1c934d3d98f3cefede93ebb74d0c4c2bac7ac9cc4f467d253ef8f87a2d6aad",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_4zrfp7b4rg2ey2dl",
+      "page_index": 0,
+      "type": "author",
+      "flow": "body",
+      "order": 3,
+      "doc_order": 3,
+      "polygon": [
+        [203.8866729736328, 233.84966695308685],
+        [203.8866729736328, 244.7771907358191],
+        [132.9080047607422, 244.7771907358191],
+        [132.9080047607422, 233.84966695308685]
+      ],
+      "bbox": [132.9080047607422, 233.84966695308685, 203.8866729736328, 244.7771907358191],
+      "text": "Ashish Vaswani∗",
+      "text_normalised": "ashish vaswani∗",
+      "content_hash": "sha256:4078dbc6a8fda57b3f6d0ae0173134428c75e23ec310444ddfe755d5120a4936",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_wskq3qeyocv55mzr",
+      "page_index": 0,
+      "type": "author",
+      "flow": "body",
+      "order": 4,
+      "doc_order": 4,
+      "polygon": [
+        [304.8396911621094, 233.84966695308685],
+        [304.8396911621094, 244.7771907358191],
+        [239.06199645996094, 244.7771907358191],
+        [239.06199645996094, 233.84966695308685]
+      ],
+      "bbox": [239.06199645996094, 233.84966695308685, 304.8396911621094, 244.7771907358191],
+      "text": "Noam Shazeer∗",
+      "text_normalised": "noam shazeer∗",
+      "content_hash": "sha256:84126b6acbbab8ad263c765a69354b1557280cbadb5b66d76e828fa9ccac76d5",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_7siawkp2lk4zifbb",
+      "page_index": 0,
+      "type": "author",
+      "flow": "body",
+      "order": 5,
+      "doc_order": 5,
+      "polygon": [
+        [396.6286926269531, 233.84966695308685],
+        [396.6286926269531, 244.7771907358191],
+        [338.6920166015625, 244.7771907358191],
+        [338.6920166015625, 233.84966695308685]
+      ],
+      "bbox": [338.6920166015625, 233.84966695308685, 396.6286926269531, 244.7771907358191],
+      "text": "Niki Parmar∗",
+      "text_normalised": "niki parmar∗",
+      "content_hash": "sha256:d39b11ad7f1a643f1f110e97fbc4627a86b114ab1f8d2255a39be16fb48207d3",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_3wjs5gdr2hw7fxly",
+      "page_index": 0,
+      "type": "author",
+      "flow": "body",
+      "order": 6,
+      "doc_order": 6,
+      "polygon": [
+        [497.210693359375, 233.84966695308685],
+        [497.210693359375, 244.7771907358191],
+        [424.3000183105469, 244.7771907358191],
+        [424.3000183105469, 233.84966695308685]
+      ],
+      "bbox": [424.3000183105469, 233.84966695308685, 497.210693359375, 244.7771907358191],
+      "text": "Jakob Uszkoreit∗",
+      "text_normalised": "jakob uszkoreit∗",
+      "content_hash": "sha256:04b0e0f6b4c5553735d063b58315b8b9a6f797743798a021d9df81d60874345e",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_7tu4ctu3bjx5nkgx",
+      "page_index": 0,
+      "type": "affiliation",
+      "flow": "body",
+      "order": 7,
+      "doc_order": 7,
+      "polygon": [
+        [216.05787658691406, 258.42585202413187],
+        [216.05787658691406, 266.7246976622465],
+        [116.68099975585938, 266.7246976622465],
+        [116.68099975585938, 258.42585202413187]
+      ],
+      "bbox": [116.68099975585938, 258.42585202413187, 216.05787658691406, 266.7246976622465],
+      "text": "Google Research\navaswani@google.com",
+      "text_normalised": "google research avaswani@google.com",
+      "content_hash": "sha256:644c9d32bf65ec60a3fd368f3bdd51200ab608eee0f88c3f15506e079bdd7b87",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_n3ojsz32j5j6caho",
+      "page_index": 0,
+      "type": "affiliation",
+      "flow": "body",
+      "order": 8,
+      "doc_order": 8,
+      "polygon": [
+        [193.33642578125, 246.849361538842],
+        [193.33642578125, 255.75592550900484],
+        [139.37899780273438, 255.75592550900484],
+        [139.37899780273438, 246.849361538842]
+      ],
+      "bbox": [139.37899780273438, 246.849361538842, 193.33642578125, 255.75592550900484],
+      "text": "Google Brain",
+      "text_normalised": "google brain",
+      "content_hash": "sha256:c6b205e3c66249825506b801f5af828da58ca1b0414117b185b3dd1a62cb24c6",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_c7mqp2iti3lzonx2",
+      "page_index": 0,
+      "type": "affiliation",
+      "flow": "body",
+      "order": 9,
+      "doc_order": 9,
+      "polygon": [
+        [296.889404296875, 246.849361538842],
+        [296.889404296875, 255.75592550900484],
+        [242.9320068359375, 255.75592550900484],
+        [242.9320068359375, 246.849361538842]
+      ],
+      "bbox": [242.9320068359375, 246.849361538842, 296.889404296875, 255.75592550900484],
+      "text": "Google Brain",
+      "text_normalised": "google brain",
+      "content_hash": "sha256:c6b205e3c66249825506b801f5af828da58ca1b0414117b185b3dd1a62cb24c6",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_hsu44u6sc3pk53rq",
+      "page_index": 0,
+      "type": "affiliation",
+      "flow": "body",
+      "order": 10,
+      "doc_order": 10,
+      "polygon": [
+        [399.7874755859375, 246.849361538842],
+        [399.7874755859375, 255.75592550900484],
+        [331.4540100097656, 255.75592550900484],
+        [331.4540100097656, 246.849361538842]
+      ],
+      "bbox": [331.4540100097656, 246.849361538842, 399.7874755859375, 255.75592550900484],
+      "text": "Google Research",
+      "text_normalised": "google research",
+      "content_hash": "sha256:35e36dc1a5213fa37380d0e366ae92e8d0cd02dc09f878f55bf2f8a479dda3f4",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_h4kdmgr4qyd3jbin",
+      "page_index": 0,
+      "type": "affiliation",
+      "flow": "body",
+      "order": 11,
+      "doc_order": 11,
+      "polygon": [
+        [309.1475830078125, 258.42585202413187],
+        [309.1475830078125, 266.7246976622465],
+        [230.69200134277344, 266.7246976622465],
+        [230.69200134277344, 258.42585202413187]
+      ],
+      "bbox": [230.69200134277344, 258.42585202413187, 309.1475830078125, 266.7246976622465],
+      "text": "noam@google.com",
+      "text_normalised": "noam@google.com",
+      "content_hash": "sha256:df3925c3b100ebb09f7a9b16f4857d306091ffdf3f90580de5259a7605b39b3c",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_ceojrm2yiuucow5i",
+      "page_index": 0,
+      "type": "affiliation",
+      "flow": "body",
+      "order": 12,
+      "doc_order": 12,
+      "polygon": [
+        [407.4730529785156, 258.42585202413187],
+        [407.4730529785156, 266.7246976622465],
+        [323.7870178222656, 266.7246976622465],
+        [323.7870178222656, 258.42585202413187]
+      ],
+      "bbox": [323.7870178222656, 258.42585202413187, 407.4730529785156, 266.7246976622465],
+      "text": "nikip@google.com",
+      "text_normalised": "nikip@google.com",
+      "content_hash": "sha256:7146c13573b9625683c84f0a6d1bf5b0d3e943dce6b9225f360043e935b1dd62",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_asp7yealh6c2gr7r",
+      "page_index": 0,
+      "type": "affiliation",
+      "flow": "body",
+      "order": 13,
+      "doc_order": 13,
+      "polygon": [
+        [495.3372802734375, 258.42585202413187],
+        [495.3372802734375, 266.7246976622465],
+        [422.11199951171875, 266.7246976622465],
+        [422.11199951171875, 258.42585202413187]
+      ],
+      "bbox": [422.11199951171875, 258.42585202413187, 495.3372802734375, 266.7246976622465],
+      "text": "usz@google.com",
+      "text_normalised": "usz@google.com",
+      "content_hash": "sha256:cb53a13f58658bb63a8b3ddda7ed3b1ed6f55f68ab6682879649643f29cfeefa",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_3sk6ou4rtlk7zwwg",
+      "page_index": 0,
+      "type": "author",
+      "flow": "body",
+      "order": 14,
+      "doc_order": 14,
+      "polygon": [
+        [197.21766662597656, 283.8466762304306],
+        [197.21766662597656, 294.77420001316284],
+        [144.2919921875, 294.77420001316284],
+        [144.2919921875, 283.8466762304306]
+      ],
+      "bbox": [144.2919921875, 283.8466762304306, 197.21766662597656, 294.77420001316284],
+      "text": "Llion Jones∗",
+      "text_normalised": "llion jones∗",
+      "content_hash": "sha256:a7e988c3f4b2c01db20b5609fb20186bdc18b28ebd2d8836d4c7cccab75f0b3b",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_voqwimrz6utjpxtj",
+      "page_index": 0,
+      "type": "author",
+      "flow": "body",
+      "order": 15,
+      "doc_order": 15,
+      "polygon": [
+        [330.288818359375, 283.8466762304306],
+        [330.288818359375, 294.77420001316284],
+        [248.76100158691406, 294.77420001316284],
+        [248.76100158691406, 283.8466762304306]
+      ],
+      "bbox": [248.76100158691406, 283.8466762304306, 330.288818359375, 294.77420001316284],
+      "text": "Aidan N. Gomez∗†",
+      "text_normalised": "aidan n. gomez∗†",
+      "content_hash": "sha256:c97301d3581dfe2555647aa9f4e147a161b43b3f5bc70922d0bcff524d85abe3",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_lm6ffv3dkxzlscsv",
+      "page_index": 0,
+      "type": "author",
+      "flow": "body",
+      "order": 16,
+      "doc_order": 16,
+      "polygon": [
+        [459.92169189453125, 283.8466762304306],
+        [459.92169189453125, 294.77420001316284],
+        [394.125, 294.77420001316284],
+        [394.125, 283.8466762304306]
+      ],
+      "bbox": [394.125, 283.8466762304306, 459.92169189453125, 294.77420001316284],
+      "text": "Łukasz Kaiser∗",
+      "text_normalised": "łukasz kaiser∗",
+      "content_hash": "sha256:c7ab7877cf58eb6271584017342d9ec4f14e1c4d63111469a5d9cd2c28bbceb8",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_5nfkxnkgmhuj2ehu",
+      "page_index": 0,
+      "type": "affiliation",
+      "flow": "body",
+      "order": 17,
+      "doc_order": 17,
+      "polygon": [
+        [451.96240234375, 296.84637081618575],
+        [451.96240234375, 307.0878980439121],
+        [485.1377258300781, 307.0878980439121],
+        [485.1377258300781, 316.72170693959026],
+        [364.8489990234375, 316.72170693959026],
+        [364.8489990234375, 307.0878980439121],
+        [398.0050048828125, 307.0878980439121],
+        [398.0050048828125, 296.84637081618575]
+      ],
+      "bbox": [364.8489990234375, 296.84637081618575, 485.1377258300781, 316.72170693959026],
+      "text": "Google Brain\nlukaszkaiser@google.com\nllion@google.com",
+      "text_normalised": "google brain lukaszkaiser@google.com llion@google.com",
+      "content_hash": "sha256:f6de6121909057c841e743efde03f12680a491d0467f6c8f111479bcb3e65a35",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_27pcegsk4zafjn3e",
+      "page_index": 0,
+      "type": "affiliation",
+      "flow": "body",
+      "order": 18,
+      "doc_order": 18,
+      "polygon": [
+        [202.88148498535156, 296.84637081618575],
+        [202.88148498535156, 305.7529347863486],
+        [134.54800415039062, 305.7529347863486],
+        [134.54800415039062, 296.84637081618575]
+      ],
+      "bbox": [134.54800415039062, 296.84637081618575, 202.88148498535156, 305.7529347863486],
+      "text": "Google Research",
+      "text_normalised": "google research",
+      "content_hash": "sha256:35e36dc1a5213fa37380d0e366ae92e8d0cd02dc09f878f55bf2f8a479dda3f4",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_4soh5urhxwj5udkg",
+      "page_index": 0,
+      "type": "affiliation",
+      "flow": "body",
+      "order": 19,
+      "doc_order": 19,
+      "polygon": [
+        [330.8211364746094, 296.84637081618575],
+        [330.8211364746094, 305.7529347863486],
+        [244.57498168945312, 305.7529347863486],
+        [244.57498168945312, 296.84637081618575]
+      ],
+      "bbox": [244.57498168945312, 296.84637081618575, 330.8211364746094, 305.7529347863486],
+      "text": "University of Toronto",
+      "text_normalised": "university of toronto",
+      "content_hash": "sha256:6a892bbe4ee5712254e8c3e71e10802452f25f4d2959222085028b0c6d3946f9",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_64yjmycfxgsclyzv",
+      "page_index": 0,
+      "type": "affiliation",
+      "flow": "body",
+      "order": 20,
+      "doc_order": 20,
+      "polygon": [
+        [340.01446533203125, 308.42386838155375],
+        [340.01446533203125, 316.7227140196684],
+        [235.406982421875, 316.7227140196684],
+        [235.406982421875, 308.42386838155375]
+      ],
+      "bbox": [235.406982421875, 308.42386838155375, 340.01446533203125, 316.7227140196684],
+      "text": "aidan@cs.toronto.edu",
+      "text_normalised": "aidan@cs.toronto.edu",
+      "content_hash": "sha256:e2c3fc6c15322770df275c21a4627bb543336d70505a505b60bc166336f6a992",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_ny7sw3a553jsia6w",
+      "page_index": 0,
+      "type": "author",
+      "flow": "body",
+      "order": 21,
+      "doc_order": 21,
+      "polygon": [
+        [346.8468322753906, 333.8436549901962],
+        [346.8468322753906, 344.7721858530066],
+        [268.8070068359375, 344.7721858530066],
+        [268.8070068359375, 333.8436549901962]
+      ],
+      "bbox": [268.8070068359375, 333.8436549901962, 346.8468322753906, 344.7721858530066],
+      "text": "Illia Polosukhin∗‡",
+      "text_normalised": "illia polosukhin∗‡",
+      "content_hash": "sha256:8ad5d637ff4d40dc26986faca86ddb81e336335d20aaf1610ab452d5f27d78da",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_ubib7puof7qlqk3s",
+      "page_index": 0,
+      "type": "affiliation",
+      "flow": "body",
+      "order": 22,
+      "doc_order": 22,
+      "polygon": [
+        [374.0018005371094, 347.5118505592881],
+        [374.0018005371094, 355.81069619740276],
+        [238.02200317382812, 355.81069619740276],
+        [238.02200317382812, 347.5118505592881]
+      ],
+      "bbox": [238.02200317382812, 347.5118505592881, 374.0018005371094, 355.81069619740276],
+      "text": "illia.polosukhin@gmail.com",
+      "text_normalised": "illia.polosukhin@gmail.com",
+      "content_hash": "sha256:f2b4a94ae86d87ed314a584f6806547b2b3cd0d2d9d375293780d508b40b44ee",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_ioyldcme3qvfxvom",
+      "page_index": 0,
+      "type": "heading",
+      "flow": "body",
+      "order": 23,
+      "doc_order": 23,
+      "polygon": [
+        [328.2432861328125, 386.5319177531128],
+        [328.2432861328125, 397.27964277572937],
+        [283.75799560546875, 397.27964277572937],
+        [283.75799560546875, 386.5319177531128]
+      ],
+      "bbox": [283.75799560546875, 386.5319177531128, 328.2432861328125, 397.27964277572937],
+      "text": "Abstract",
+      "text_normalised": "abstract",
+      "content_hash": "sha256:c59ddd3f7ba697a4b82003cd37637cd7fc3aac92cb9c6e4b308809dd9409e65c",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_tutvxcaxihp3krt6",
+      "page_index": 0,
+      "type": "abstract",
+      "flow": "body",
+      "order": 24,
+      "doc_order": 24,
+      "polygon": [
+        [468.2994384765625, 414.143142112473],
+        [468.2994384765625, 424.0952346319395],
+        [468.13092041015625, 424.0952346319395],
+        [468.13092041015625, 435.00423121397074],
+        [468.1309509277344, 435.00423121397074],
+        [468.1309509277344, 445.913227796002],
+        [469.3807373046875, 445.913227796002],
+        [469.3807373046875, 456.88978933871357],
+        [468.13616943359375, 456.88978933871357],
+        [468.13616943359375, 467.7097312172272],
+        [468.1307678222656, 467.7097312172272],
+        [468.1307678222656, 478.65365060126027],
+        [468.4808349609375, 478.65365060126027],
+        [468.4808349609375, 489.5449748051686],
+        [469.78717041015625, 489.5449748051686],
+        [469.78717041015625, 500.4587447637754],
+        [468.13079833984375, 500.4587447637754],
+        [468.13079833984375, 511.43577932894794],
+        [469.37615966796875, 511.43577932894794],
+        [469.37615966796875, 522.3232709093529],
+        [468.3020935058594, 522.3232709093529],
+        [468.3020935058594, 533.1647177894929],
+        [468.1309509277344, 533.1647177894929],
+        [468.1309509277344, 544.1356019647155],
+        [468.1313781738281, 544.1356019647155],
+        [468.1313781738281, 554.9997717873813],
+        [468.13916015625, 554.9997717873813],
+        [468.13916015625, 565.9441975516893],
+        [266.2665100097656, 565.9441975516893],
+        [266.2665100097656, 575.8439382043174],
+        [143.86599731445312, 575.8439382043174],
+        [143.86599731445312, 424.0952346319395],
+        [143.5570068359375, 424.0952346319395],
+        [143.5570068359375, 414.143142112473]
+      ],
+      "bbox": [143.5570068359375, 414.143142112473, 469.78717041015625, 575.8439382043174],
+      "text": "The dominant sequence transduction models are based on complex recurrent or\nconvolutional neural networks that include an encoder and a decoder. The best\nperforming models also connect the encoder and decoder through an attention\nmechanism. We propose a new simple network architecture, the Transformer,\nbased solely on attention mechanisms, dispensing with recurrence and convolutions\nentirely. Experiments on two machine translation tasks show these models to\nbe superior in quality while being more parallelizable and requiring significantly\nless time to train. Our model achieves 28.4 BLEU on the WMT 2014 English-\nto-German translation task, improving over the existing best results, including\nensembles, by over 2 BLEU. On the WMT 2014 English-to-French translation task,\nour model establishes a new single-model state-of-the-art BLEU score of 41.8 after\ntraining for 3.5 days on eight GPUs, a small fraction of the training costs of the\nbest models from the literature. We show that the Transformer generalizes well to\nother tasks by applying it successfully to English constituency parsing both with\nlarge and limited training data.",
+      "text_normalised": "the dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder. the best performing models also connect the encoder and decoder through an attention mechanism. we propose a new simple network architecture, the transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely. experiments on two machine translation tasks show these models to be superior in quality while being more parallelizable and requiring significantly less time to train. our model achieves 28.4 bleu on the wmt 2014 english- to-german translation task, improving over the existing best results, including ensembles, by over 2 bleu. on the wmt 2014 english-to-french translation task, our model establishes a new single-model state-of-the-art bleu score of 41.8 after training for 3.5 days on eight gpus, a small fraction of the training costs of the best models from the literature. we show that the transformer generalizes well to other tasks by applying it successfully to english constituency parsing both with large and limited training data.",
+      "content_hash": "sha256:bfcd91c5476445be82474921ecbac95d5219e1488d5885566de38aabb0dcbc64",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_2lig7nkhe4uw6nxe",
+      "page_index": 0,
+      "type": "footnote",
+      "flow": "footnote",
+      "order": 0,
+      "polygon": [
+        [503.9970703125, 597.5628204345703],
+        [503.9970703125, 607.7732356378315],
+        [119.8219985961914, 607.7732356378315],
+        [119.8219985961914, 597.5628204345703]
+      ],
+      "bbox": [119.8219985961914, 597.5628204345703, 503.9970703125, 607.7732356378315],
+      "text": "∗Equal contribution. Listing order is random. Jakob proposed replacing RNNs with self-attention and started",
+      "text_normalised": "∗equal contribution. listing order is random. jakob proposed replacing rnns with self-attention and started",
+      "content_hash": "sha256:92da90c84838d1a8cbabc9b1f35efa0e0946b526ae5b9e4dc8695e2161adb4f7",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_gvfiv4jrof3svcki",
+      "page_index": 0,
+      "type": "footnote",
+      "flow": "footnote",
+      "order": 1,
+      "polygon": [
+        [503.9971618652344, 609.7135290356268],
+        [503.9971618652344, 618.7616999327773],
+        [503.998046875, 618.7616999327773],
+        [503.998046875, 628.6638622258113],
+        [504.31378173828125, 628.6638622258113],
+        [504.31378173828125, 638.6611134194252],
+        [503.9964294433594, 638.6611134194252],
+        [503.9964294433594, 648.6264684871092],
+        [503.9991455078125, 648.6264684871092],
+        [503.9991455078125, 658.6049050717365],
+        [503.9978942871094, 658.6049050717365],
+        [503.9978942871094, 668.5615781329557],
+        [503.9980773925781, 668.5615781329557],
+        [503.9980773925781, 678.4935530544317],
+        [154.302490234375, 678.4935530544317],
+        [154.302490234375, 687.4927727553154],
+        [108.0, 687.4927727553154],
+        [108.0, 609.7135290356268]
+      ],
+      "bbox": [108.0, 609.7135290356268, 504.31378173828125, 687.4927727553154],
+      "text": "the effort to evaluate this idea. Ashish, with Illia, designed and implemented the first Transformer models and\nhas been crucially involved in every aspect of this work. Noam proposed scaled dot-product attention, multi-head\nattention and the parameter-free position representation and became the other person involved in nearly every\ndetail. Niki designed, implemented, tuned and evaluated countless model variants in our original codebase and\ntensor2tensor. Llion also experimented with novel model variants, was responsible for our initial codebase, and\nefficient inference and visualizations. Lukasz and Aidan spent countless long days designing various parts of and\nimplementing tensor2tensor, replacing our earlier codebase, greatly improving results and massively accelerating\nour research.",
+      "text_normalised": "the effort to evaluate this idea. ashish, with illia, designed and implemented the first transformer models and has been crucially involved in every aspect of this work. noam proposed scaled dot-product attention, multi-head attention and the parameter-free position representation and became the other person involved in nearly every detail. niki designed, implemented, tuned and evaluated countless model variants in our original codebase and tensor2tensor. llion also experimented with novel model variants, was responsible for our initial codebase, and efficient inference and visualizations. lukasz and aidan spent countless long days designing various parts of and implementing tensor2tensor, replacing our earlier codebase, greatly improving results and massively accelerating our research.",
+      "content_hash": "sha256:f7f2ee82349af43824a21cb748771da9c51d218d68d341e9271527f89489a1ef",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_mke3unatfadzebtm",
+      "page_index": 0,
+      "type": "footnote",
+      "flow": "footnote",
+      "order": 2,
+      "polygon": [
+        [267.3513488769531, 688.2127838134766],
+        [267.3513488769531, 698.8017834113491],
+        [280.2898864746094, 698.8017834113491],
+        [280.2898864746094, 709.3907219740654],
+        [120.20999908447266, 709.3907219740654],
+        [120.20999908447266, 688.2127838134766]
+      ],
+      "bbox": [120.20999908447266, 688.2127838134766, 280.2898864746094, 709.3907219740654],
+      "text": "†Work performed while at Google Brain.\n‡Work performed while at Google Research.",
+      "text_normalised": "†work performed while at google brain. ‡work performed while at google research.",
+      "content_hash": "sha256:e5868b8da1756b264d0e4ee46911f1e8d5ac1ed6f96f0d47b05ec739147ddb5c",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_fjdqcqnl2luvcgnh",
+      "page_index": 0,
+      "type": "footnote",
+      "flow": "footnote",
+      "order": 3,
+      "polygon": [
+        [460.1375732421875, 733.7977951002686],
+        [460.1375732421875, 741.8137566420341],
+        [108.0, 741.8137566420341],
+        [108.0, 733.7977951002686]
+      ],
+      "bbox": [108.0, 733.7977951002686, 460.1375732421875, 741.8137566420341],
+      "text": "31st Conference on Neural Information Processing Systems (NIPS 2017), Long Beach, CA, USA.",
+      "text_normalised": "31st conference on neural information processing systems (nips 2017), long beach, ca, usa.",
+      "content_hash": "sha256:9ec29e3e910fe498e4ce192948714be1ecbd50ada46029087167f2a53d97f844",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_464nph6sx2bt77oe",
+      "page_index": 0,
+      "type": "margin_note",
+      "flow": "margin",
+      "order": 0,
+      "polygon": [
+        [37.61999976634979, 213.91998291015625],
+        [37.61999976634979, 555.0],
+        [10.940000534057617, 555.0],
+        [10.940000534057617, 213.91998291015625]
+      ],
+      "bbox": [10.940000534057617, 213.91998291015625, 37.61999976634979, 555.0],
+      "text": "arXiv:1706.03762v7  [cs.CL]  2 Aug 2023",
+      "text_normalised": "arxiv:1706.03762v7 [cs.cl] 2 aug 2023",
+      "content_hash": "sha256:d4c0eff61ed40884f1f2d9467c96464bbbd3b18e8a07c2832b8b96c6cb37d5cc",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_o4iqjydqo6kr6bcu",
+      "page_index": 1,
+      "type": "heading",
+      "flow": "body",
+      "order": 0,
+      "doc_order": 25,
+      "polygon": [
+        [190.8136749267578, 73.7139245890503],
+        [190.8136749267578, 84.46164961166687],
+        [125.93280029296875, 84.46164961166687],
+        [125.93280029296875, 73.7139245890503]
+      ],
+      "bbox": [125.93280029296875, 73.7139245890503, 190.8136749267578, 84.46164961166687],
+      "text": "Introduction",
+      "text_normalised": "introduction",
+      "content_hash": "sha256:d3db5338aae140c5cc04ac37690aa4f98041e14a042bc6473d54ecda8d95f93e",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_btm442il53kyf7wg",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 1,
+      "doc_order": 26,
+      "polygon": [
+        [503.9986572265625, 99.82414186833239],
+        [503.9986572265625, 109.78125419827774],
+        [503.9976501464844, 109.78125419827774],
+        [503.9976501464844, 120.68363173806867],
+        [504.0025634765625, 120.68363173806867],
+        [504.0025634765625, 131.66177725375263],
+        [504.1676330566406, 131.66177725375263],
+        [504.1676330566406, 142.51530980248202],
+        [210.3656768798828, 142.51530980248202],
+        [210.3656768798828, 152.43390402462984],
+        [108.0, 152.43390402462984],
+        [108.0, 99.82414186833239]
+      ],
+      "bbox": [108.0, 99.82414186833239, 504.1676330566406, 152.43390402462984],
+      "text": "Recurrent neural networks, long short-term memory [13] and gated recurrent [7] neural networks\nin particular, have been firmly established as state of the art approaches in sequence modeling and\ntransduction problems such as language modeling and machine translation [35, 2, 5]. Numerous\nefforts have since continued to push the boundaries of recurrent language models and encoder-decoder\narchitectures [38, 24, 15].",
+      "text_normalised": "recurrent neural networks, long short-term memory [13] and gated recurrent [7] neural networks in particular, have been firmly established as state of the art approaches in sequence modeling and transduction problems such as language modeling and machine translation [35, 2, 5]. numerous efforts have since continued to push the boundaries of recurrent language models and encoder-decoder architectures [38, 24, 15].",
+      "content_hash": "sha256:1324046baac8097b10e2c07c385a05840a344bc2a32cfd703b6740562c89684d",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_p5c47m5apz2jj3x4",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 2,
+      "doc_order": 27,
+      "polygon": [
+        [503.997314453125, 159.8491662823949],
+        [503.997314453125, 169.82811690550938],
+        [503.9969482421875, 169.82811690550938],
+        [503.9969482421875, 180.65560378879147],
+        [504.35089111328125, 180.65560378879147],
+        [504.35089111328125, 192.4177113048487],
+        [504.1674499511719, 192.4177113048487],
+        [504.1674499511719, 202.54540413783837],
+        [503.9975891113281, 202.54540413783837],
+        [503.9975891113281, 213.45852954835664],
+        [503.9971923828125, 213.45852954835664],
+        [503.9971923828125, 224.3388808603203],
+        [503.99945068359375, 224.3388808603203],
+        [503.99945068359375, 235.2877784118688],
+        [330.5246887207031, 235.2877784118688],
+        [330.5246887207031, 245.1859181847861],
+        [108.0, 245.1859181847861],
+        [108.0, 159.8491662823949]
+      ],
+      "bbox": [108.0, 159.8491662823949, 504.35089111328125, 245.1859181847861],
+      "text": "Recurrent models typically factor computation along the symbol positions of the input and output\nsequences. Aligning the positions to steps in computation time, they generate a sequence of hidden\nstates ht, as a function of the previous hidden state ht−1 and the input for position t. This inherently\nsequential nature precludes parallelization within training examples, which becomes critical at longer\nsequence lengths, as memory constraints limit batching across examples. Recent work has achieved\nsignificant improvements in computational efficiency through factorization tricks [21] and conditional\ncomputation [32], while also improving model performance in case of the latter. The fundamental\nconstraint of sequential computation, however, remains.",
+      "text_normalised": "recurrent models typically factor computation along the symbol positions of the input and output sequences. aligning the positions to steps in computation time, they generate a sequence of hidden states ht, as a function of the previous hidden state ht−1 and the input for position t. this inherently sequential nature precludes parallelization within training examples, which becomes critical at longer sequence lengths, as memory constraints limit batching across examples. recent work has achieved significant improvements in computational efficiency through factorization tricks [21] and conditional computation [32], while also improving model performance in case of the latter. the fundamental constraint of sequential computation, however, remains.",
+      "content_hash": "sha256:2f4c1110f20abdf9148f00d6862bfb9f8da038db7c64932e8e3e5fd65f945ce4",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_poxmdnipnwgirpwh",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 3,
+      "doc_order": 28,
+      "polygon": [
+        [505.65545654296875, 252.68862582217662],
+        [505.65545654296875, 262.5661309546779],
+        [503.9970703125, 262.5661309546779],
+        [503.9970703125, 273.4872731321335],
+        [503.999267578125, 273.4872731321335],
+        [503.999267578125, 284.39413522314214],
+        [303.7849426269531, 284.39413522314214],
+        [303.7849426269531, 294.3019154992392],
+        [108.0, 294.3019154992392],
+        [108.0, 262.5661309546779],
+        [107.64099884033203, 262.5661309546779],
+        [107.64099884033203, 252.68862582217662]
+      ],
+      "bbox": [107.64099884033203, 252.68862582217662, 505.65545654296875, 294.3019154992392],
+      "text": "Attention mechanisms have become an integral part of compelling sequence modeling and transduc-\ntion models in various tasks, allowing modeling of dependencies without regard to their distance in\nthe input or output sequences [2, 19]. In all but a few cases [27], however, such attention mechanisms\nare used in conjunction with a recurrent network.",
+      "text_normalised": "attention mechanisms have become an integral part of compelling sequence modeling and transduc- tion models in various tasks, allowing modeling of dependencies without regard to their distance in the input or output sequences [2, 19]. in all but a few cases [27], however, such attention mechanisms are used in conjunction with a recurrent network.",
+      "content_hash": "sha256:4d14af337dbd8569214e1a621fb955b0903ad19c931e3bc060bfc2cc5daa3218",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_jyinmieamvqrzmap",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 4,
+      "doc_order": 29,
+      "polygon": [
+        [503.9975280761719, 301.71714723942614],
+        [503.9975280761719, 311.6792864923531],
+        [505.73870849609375, 311.6792864923531],
+        [505.73870849609375, 322.60864154047556],
+        [504.00311279296875, 322.60864154047556],
+        [504.00311279296875, 333.51013253759527],
+        [452.35723876953125, 333.51013253759527],
+        [452.35723876953125, 343.41791281369234],
+        [108.0, 343.41791281369234],
+        [108.0, 333.51013253759527],
+        [107.69100189208984, 333.51013253759527],
+        [107.69100189208984, 322.60864154047556],
+        [108.0, 322.60864154047556],
+        [108.0, 301.71714723942614]
+      ],
+      "bbox": [107.69100189208984, 301.71714723942614, 505.73870849609375, 343.41791281369234],
+      "text": "In this work we propose the Transformer, a model architecture eschewing recurrence and instead\nrelying entirely on an attention mechanism to draw global dependencies between input and output.\nThe Transformer allows for significantly more parallelization and can reach a new state of the art in\ntranslation quality after being trained for as little as twelve hours on eight P100 GPUs.",
+      "text_normalised": "in this work we propose the transformer, a model architecture eschewing recurrence and instead relying entirely on an attention mechanism to draw global dependencies between input and output. the transformer allows for significantly more parallelization and can reach a new state of the art in translation quality after being trained for as little as twelve hours on eight p100 gpus.",
+      "content_hash": "sha256:68541b58a2b4c97b4cf4c3cb562b8551897e68921eb5fafc135a397dfda07e54",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_r4fafec5wfmmzuno",
+      "page_index": 1,
+      "type": "heading",
+      "flow": "body",
+      "order": 5,
+      "doc_order": 30,
+      "polygon": [
+        [188.82911682128906, 364.0269128703003],
+        [188.82911682128906, 374.77463789291687],
+        [125.93280029296875, 374.77463789291687],
+        [125.93280029296875, 364.0269128703003]
+      ],
+      "bbox": [125.93280029296875, 364.0269128703003, 188.82911682128906, 374.77463789291687],
+      "text": "Background",
+      "text_normalised": "background",
+      "content_hash": "sha256:89b91df19d9d75d4cf36d9033d0789e7ecae0c233160c3be0d56e81027ab965a",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_7yzmxavdpzpf2n7m",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 6,
+      "doc_order": 31,
+      "polygon": [
+        [504.0014343261719, 390.24502306487466],
+        [504.0014343261719, 400.10567749363463],
+        [504.0029296875, 400.10567749363463],
+        [504.0029296875, 411.05509315618485],
+        [505.2414245605469, 411.05509315618485],
+        [505.2414245605469, 421.9537793322044],
+        [504.00146484375, 421.9537793322044],
+        [504.00146484375, 432.8581658880775],
+        [503.999267578125, 432.8581658880775],
+        [503.999267578125, 443.70635543525657],
+        [503.99755859375, 443.70635543525657],
+        [503.99755859375, 454.63524317686137],
+        [503.99737548828125, 454.63524317686137],
+        [503.99737548828125, 465.5442397588926],
+        [503.9972839355469, 465.5442397588926],
+        [503.9972839355469, 476.4868422699287],
+        [204.5674591064453, 476.4868422699287],
+        [204.5674591064453, 486.3839162316611],
+        [108.0, 486.3839162316611],
+        [108.0, 400.10567749363463],
+        [107.69100189208984, 400.10567749363463],
+        [107.69100189208984, 390.24502306487466]
+      ],
+      "bbox": [107.69100189208984, 390.24502306487466, 505.2414245605469, 486.3839162316611],
+      "text": "The goal of reducing sequential computation also forms the foundation of the Extended Neural GPU\n[16], ByteNet [18] and ConvS2S [9], all of which use convolutional neural networks as basic building\nblock, computing hidden representations in parallel for all input and output positions. In these models,\nthe number of operations required to relate signals from two arbitrary input or output positions grows\nin the distance between positions, linearly for ConvS2S and logarithmically for ByteNet. This makes\nit more difficult to learn dependencies between distant positions [12]. In the Transformer this is\nreduced to a constant number of operations, albeit at the cost of reduced effective resolution due\nto averaging attention-weighted positions, an effect we counteract with Multi-Head Attention as\ndescribed in section 3.2.",
+      "text_normalised": "the goal of reducing sequential computation also forms the foundation of the extended neural gpu [16], bytenet [18] and convs2s [9], all of which use convolutional neural networks as basic building block, computing hidden representations in parallel for all input and output positions. in these models, the number of operations required to relate signals from two arbitrary input or output positions grows in the distance between positions, linearly for convs2s and logarithmically for bytenet. this makes it more difficult to learn dependencies between distant positions [12]. in the transformer this is reduced to a constant number of operations, albeit at the cost of reduced effective resolution due to averaging attention-weighted positions, an effect we counteract with multi-head attention as described in section 3.2.",
+      "content_hash": "sha256:1b38a988279fc586161070ed4bc7267597ed4735524f6d52c7b66f06a4764ed3",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_2cmjlkjranm72zrd",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 7,
+      "doc_order": 32,
+      "polygon": [
+        [503.99993896484375, 493.9138092756207],
+        [503.99993896484375, 503.73297585766204],
+        [503.99749755859375, 503.73297585766204],
+        [503.99749755859375, 514.6955166396742],
+        [505.2498779296875, 514.6955166396742],
+        [505.2498779296875, 525.5915952145833],
+        [463.11688232421875, 525.5915952145833],
+        [463.11688232421875, 535.4999440636924],
+        [108.0, 535.4999440636924],
+        [108.0, 493.9138092756207]
+      ],
+      "bbox": [108.0, 493.9138092756207, 505.2498779296875, 535.4999440636924],
+      "text": "Self-attention, sometimes called intra-attention is an attention mechanism relating different positions\nof a single sequence in order to compute a representation of the sequence. Self-attention has been\nused successfully in a variety of tasks including reading comprehension, abstractive summarization,\ntextual entailment and learning task-independent sentence representations [4, 27, 28, 22].",
+      "text_normalised": "self-attention, sometimes called intra-attention is an attention mechanism relating different positions of a single sequence in order to compute a representation of the sequence. self-attention has been used successfully in a variety of tasks including reading comprehension, abstractive summarization, textual entailment and learning task-independent sentence representations [4, 27, 28, 22].",
+      "content_hash": "sha256:ede393fc011318bd8efc0780a830a3c1d422d057d17f579b1cf57b82318e5b60",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_tno4z2od4pepobev",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 8,
+      "doc_order": 33,
+      "polygon": [
+        [505.6537780761719, 542.9141076886449],
+        [505.6537780761719, 552.9320750433935],
+        [503.99517822265625, 552.9320750433935],
+        [503.99517822265625, 563.7883750834104],
+        [228.0891571044922, 563.7883750834104],
+        [228.0891571044922, 573.7069142785361],
+        [108.0, 573.7069142785361],
+        [108.0, 542.9141076886449]
+      ],
+      "bbox": [108.0, 542.9141076886449, 505.6537780761719, 573.7069142785361],
+      "text": "End-to-end memory networks are based on a recurrent attention mechanism instead of sequence-\naligned recurrence and have been shown to perform well on simple-language question answering and\nlanguage modeling tasks [34].",
+      "text_normalised": "end-to-end memory networks are based on a recurrent attention mechanism instead of sequence- aligned recurrence and have been shown to perform well on simple-language question answering and language modeling tasks [34].",
+      "content_hash": "sha256:d9e157d167662077675c2969924d25583577874c80dfc2234a1e6752f3914df7",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_zijfznfjoujx2rnx",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 9,
+      "doc_order": 34,
+      "polygon": [
+        [504.0034484863281, 581.1211389386449],
+        [504.0034484863281, 591.1068373871162],
+        [505.656982421875, 591.1068373871162],
+        [505.656982421875, 602.0101975760767],
+        [503.9974670410156, 602.0101975760767],
+        [503.9974670410156, 612.9125090405441],
+        [417.3487243652344, 612.9125090405441],
+        [417.3487243652344, 622.8219045129111],
+        [108.0, 622.8219045129111],
+        [108.0, 591.1068373871162],
+        [107.69100189208984, 591.1068373871162],
+        [107.69100189208984, 581.1211389386449]
+      ],
+      "bbox": [107.69100189208984, 581.1211389386449, 505.656982421875, 622.8219045129111],
+      "text": "To the best of our knowledge, however, the Transformer is the first transduction model relying\nentirely on self-attention to compute representations of its input and output without using sequence-\naligned RNNs or convolution. In the following sections, we will describe the Transformer, motivate\nself-attention and discuss its advantages over models such as [17, 18] and [9].",
+      "text_normalised": "to the best of our knowledge, however, the transformer is the first transduction model relying entirely on self-attention to compute representations of its input and output without using sequence- aligned rnns or convolution. in the following sections, we will describe the transformer, motivate self-attention and discuss its advantages over models such as [17, 18] and [9].",
+      "content_hash": "sha256:741cd67e091f8becfa520c48dfc1b87b332aef65e2468b7fd7d9c39c9b02cb9a",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_eumr65vrg3xfbpht",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 10,
+      "doc_order": 35,
+      "polygon": [
+        [226.09344482421875, 643.430904569519],
+        [226.09344482421875, 654.1786295921356],
+        [125.93280029296875, 654.1786295921356],
+        [125.93280029296875, 643.430904569519]
+      ],
+      "bbox": [125.93280029296875, 643.430904569519, 226.09344482421875, 654.1786295921356],
+      "text": "Model Architecture",
+      "text_normalised": "model architecture",
+      "content_hash": "sha256:993e1929cd6650b86a6a63d43f7501ff85654ca3de5e8e6887fc6f8657280a9d",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_pkx56w26ixifhqbr",
+      "page_index": 1,
+      "type": "paragraph",
+      "flow": "body",
+      "order": 11,
+      "doc_order": 36,
+      "polygon": [
+        [505.7431640625, 669.609371304467],
+        [505.7431640625, 679.4374506210111],
+        [504.00286865234375, 679.4374506210111],
+        [504.00286865234375, 690.6939543166482],
+        [504.00054931640625, 690.6939543166482],
+        [504.00054931640625, 701.6029508986794],
+        [504.0027770996094, 701.6029508986794],
+        [504.0027770996094, 712.5916484402635],
+        [490.5636901855469, 712.5916484402635],
+        [490.5636901855469, 722.1519216027549],
+        [108.0, 722.1519216027549],
+        [108.0, 669.609371304467]
+      ],
+      "bbox": [108.0, 669.609371304467, 505.7431640625, 722.1519216027549],
+      "text": "Most competitive neural sequence transduction models have an encoder-decoder structure [5, 2, 35].\nHere, the encoder maps an input sequence of symbol representations (x1, ..., xn) to a sequence\nof continuous representations z = (z1, ..., zn). Given z, the decoder then generates an output\nsequence (y1, ..., ym) of symbols one element at a time. At each step the model is auto-regressive\n[10], consuming the previously generated symbols as additional input when generating the next.",
+      "text_normalised": "most competitive neural sequence transduction models have an encoder-decoder structure [5, 2, 35]. here, the encoder maps an input sequence of symbol representations (x1, ..., xn) to a sequence of continuous representations z = (z1, ..., zn). given z, the decoder then generates an output sequence (y1, ..., ym) of symbols one element at a time. at each step the model is auto-regressive [10], consuming the previously generated symbols as additional input when generating the next.",
+      "content_hash": "sha256:cff52e8c344cb7ca1ba7542d5737ffae468c0af3723e681a41fd34c9c4eac41c",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_yf4mbcznsijvrqj4",
+      "page_index": 1,
+      "type": "page_number",
+      "flow": "footer",
+      "order": 0,
+      "polygon": [
+        [113.97760009765625, 643.430904569519],
+        [113.97760009765625, 654.1786295921356],
+        [108.0, 654.1786295921356],
+        [108.0, 643.430904569519]
+      ],
+      "bbox": [108.0, 643.430904569519, 113.97760009765625, 654.1786295921356],
+      "text": "3",
+      "text_normalised": "3",
+      "content_hash": "sha256:4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_zuz34fh3blg2zm56",
+      "page_index": 1,
+      "type": "page_number",
+      "flow": "footer",
+      "order": 1,
+      "polygon": [
+        [308.49029541015625, 743.1333581208733],
+        [308.49029541015625, 752.0399220910361],
+        [303.5090026855469, 752.0399220910361],
+        [303.5090026855469, 743.1333581208733]
+      ],
+      "bbox": [303.5090026855469, 743.1333581208733, 308.49029541015625, 752.0399220910361],
+      "text": "2",
+      "text_normalised": "2",
+      "content_hash": "sha256:d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_qwdi5it6tz7rra75",
+      "page_index": 1,
+      "type": "page_number",
+      "flow": "header",
+      "order": 0,
+      "polygon": [
+        [113.97760009765625, 73.7139245890503],
+        [113.97760009765625, 84.46164961166687],
+        [108.0, 84.46164961166687],
+        [108.0, 73.7139245890503]
+      ],
+      "bbox": [108.0, 73.7139245890503, 113.97760009765625, 84.46164961166687],
+      "text": "1",
+      "text_normalised": "1",
+      "content_hash": "sha256:6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    },
+    {
+      "block_id": "blk_ho7cyvjgvxxhckhe",
+      "page_index": 1,
+      "type": "page_number",
+      "flow": "header",
+      "order": 1,
+      "polygon": [
+        [113.97760009765625, 364.0269128703003],
+        [113.97760009765625, 374.77463789291687],
+        [108.0, 374.77463789291687],
+        [108.0, 364.0269128703003]
+      ],
+      "bbox": [108.0, 364.0269128703003, 113.97760009765625, 374.77463789291687],
+      "text": "2",
+      "text_normalised": "2",
+      "content_hash": "sha256:d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35",
+      "source": "pdf_text_layer",
+      "confidence": 1.0,
+      "provenance": {
+        "parser": "papertree-document-worker",
+        "stage": "layout"
+      }
+    }
+  ],
+  "relations": [],
+  "sections": [
+    {
+      "heading_block_id": "blk_t6z3qhndfcebxak4",
+      "level": 1,
+      "block_ids": [
+        "blk_dhel6d57xcrwxxiq",
+        "blk_4zrfp7b4rg2ey2dl",
+        "blk_wskq3qeyocv55mzr",
+        "blk_7siawkp2lk4zifbb",
+        "blk_3wjs5gdr2hw7fxly",
+        "blk_7tu4ctu3bjx5nkgx",
+        "blk_n3ojsz32j5j6caho",
+        "blk_c7mqp2iti3lzonx2",
+        "blk_hsu44u6sc3pk53rq",
+        "blk_h4kdmgr4qyd3jbin",
+        "blk_ceojrm2yiuucow5i",
+        "blk_asp7yealh6c2gr7r",
+        "blk_3sk6ou4rtlk7zwwg",
+        "blk_voqwimrz6utjpxtj",
+        "blk_lm6ffv3dkxzlscsv",
+        "blk_5nfkxnkgmhuj2ehu",
+        "blk_27pcegsk4zafjn3e",
+        "blk_4soh5urhxwj5udkg",
+        "blk_64yjmycfxgsclyzv",
+        "blk_ny7sw3a553jsia6w",
+        "blk_ubib7puof7qlqk3s"
+      ]
+    },
+    {
+      "heading_block_id": "blk_ioyldcme3qvfxvom",
+      "level": 1,
+      "block_ids": ["blk_tutvxcaxihp3krt6"]
+    },
+    {
+      "heading_block_id": "blk_o4iqjydqo6kr6bcu",
+      "level": 1,
+      "block_ids": [
+        "blk_btm442il53kyf7wg",
+        "blk_p5c47m5apz2jj3x4",
+        "blk_poxmdnipnwgirpwh",
+        "blk_jyinmieamvqrzmap"
+      ]
+    },
+    {
+      "heading_block_id": "blk_r4fafec5wfmmzuno",
+      "level": 1,
+      "block_ids": [
+        "blk_7yzmxavdpzpf2n7m",
+        "blk_2cmjlkjranm72zrd",
+        "blk_tno4z2od4pepobev",
+        "blk_zijfznfjoujx2rnx",
+        "blk_eumr65vrg3xfbpht",
+        "blk_pkx56w26ixifhqbr"
+      ]
+    }
+  ],
+  "references": [],
+  "confidence": {
+    "overall": 1.0,
+    "by_page": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+    "weakest_pages": [],
+    "needs_review": false
+  }
+}
