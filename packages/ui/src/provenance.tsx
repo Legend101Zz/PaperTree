@@ -310,7 +310,7 @@ export function PaperText({
   className,
 }: PaperTextProps): ReactNode {
   return (
-    <Element className={classes('pt-paper', className)} data-register="paper">
+    <Element className={classes('pt-paper', className)} data-register="paper" data-voice="paper">
       <span className="pt-paper__text">{children}</span>
       {pageLabel === undefined ? null : <cite className="pt-paper__cite">{pageLabel}</cite>}
     </Element>
@@ -362,6 +362,7 @@ export function ReflowedText({
     <Element
       className={classes('pt-paper pt-reflowed', className)}
       data-register="reflowed"
+      data-voice="paper"
       data-block-ids={blockIds.join(' ')}
       {...(dataBlockId === undefined ? {} : { 'data-block-id': dataBlockId })}
     >
@@ -416,6 +417,7 @@ export function AiText({
     <Element
       className={classes('pt-ai', className)}
       data-register="ai"
+      data-voice="ai"
       role="note"
       aria-label={`AI-generated${model === undefined ? '' : ` by ${model}`}, not the paper's words`}
     >
@@ -428,6 +430,33 @@ export function AiText({
         </span>
       </div>
       <div className="pt-ai__body">{children}</div>
+    </Element>
+  );
+}
+
+/** Props for `YouText`. */
+export interface YouTextProps {
+  /** The person's own words: an ask, a note, a margin comment. */
+  readonly children: ReactNode;
+  /** The element to render. Default `p`. */
+  readonly as?: 'p' | 'div' | 'span';
+  readonly className?: string;
+}
+
+/**
+ * The person's own words, in the third voice: Courier Prime in pen colour (#190, DESIGN.md §3).
+ *
+ * It carries no marker and no announcement: these are the reader's words, and the typeface and ink
+ * are what set them apart from the paper's serif and the AI's sans. `data-voice="you"` is the hook
+ * for tests and for the board and notebook, which render the same words.
+ *
+ * @example
+ * <YouText>What does the residual connection add?</YouText>
+ */
+export function YouText({ children, as: Element = 'p', className }: YouTextProps): ReactNode {
+  return (
+    <Element className={classes('pt-you', className)} data-voice="you">
+      {children}
     </Element>
   );
 }
