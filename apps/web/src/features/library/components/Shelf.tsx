@@ -7,13 +7,14 @@
 'use client';
 
 import { paperCountLabel } from '@papertree/ui';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 
-import { arrangeShelf, shelfStep, type Arrangement, type ShelfPaper } from '../model/shelf';
+import { useRovingShelf, type LiftedFocus } from '../hooks/useRovingShelf';
+import { arrangeShelf, type Arrangement, type ShelfPaper } from '../model/shelf';
 import { ShelfPlank, PlankHolder } from './ShelfPlank';
 import { Spine } from './Spine';
 
-import type { KeyboardEvent, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 /** Props for `Shelf`. */
 export interface ShelfProps {
@@ -29,6 +30,8 @@ export interface ShelfProps {
   readonly onActivate: (paperId: string) => void;
   /** Esc on the shelf while a card is open: put the book back. */
   readonly onPutBack?: () => void;
+  /** The section's tab stop, so it survives a change of layout (#196). */
+  readonly focus?: LiftedFocus;
 }
 
 /**
@@ -46,34 +49,11 @@ export function Shelf({
   cardId,
   onActivate,
   onPutBack,
+  focus,
 }: ShelfProps): ReactNode {
-  const toolbar = useRef<HTMLDivElement>(null);
-  const [focusedId, setFocusedId] = useState<string | null>(null);
   const groups = useMemo(() => arrangeShelf(papers, arrangement), [papers, arrangement]);
   const order = useMemo(() => groups.flatMap((g) => g.papers.map((p) => p.id)), [groups]);
-  // The tab stop: the spine that last had focus, else the open one, else the first. A deleted
-  // paper's id falls through to the next rule, so the shelf never loses its tab stop.
-  const stop =
-    [focusedId, openId].find((id): id is string => id !== null && order.includes(id)) ??
-    order[0] ??
-    null;
-
-  const onKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLDivElement>) => {
-      if (event.key === 'Escape' && openId !== null && onPutBack !== undefined) {
-        event.preventDefault();
-        onPutBack();
-        return;
-      }
-      const next = shelfStep(stop === null ? 0 : order.indexOf(stop), event.key, order.length);
-      const id = next === null ? undefined : order[next];
-      if (id === undefined) return;
-      event.preventDefault();
-      setFocusedId(id);
-      toolbar.current?.querySelector<HTMLElement>(`[data-paper-id="${CSS.escape(id)}"]`)?.focus();
-    },
-    [order, stop, openId, onPutBack],
-  );
+  const { toolbar, stop, onFocusBook, onKeyDown } = useRovingShelf(order, openId, onPutBack, focus);
 
   return (
     <ShelfPlank>
@@ -103,7 +83,7 @@ export function Shelf({
                   expanded={paper.id === openId}
                   cardId={cardId}
                   onActivate={onActivate}
-                  onFocusSpine={setFocusedId}
+                  onFocusSpine={onFocusBook}
                 />
               ))}
             </div>

@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isNonTerminal, libraryPaperFromWire, visibleSamples } from '@/components/library/types';
 import { papersApi } from '@/lib/api/papers';
 
+import type { ShelfTopic } from '../model/shelf';
 import type { CancelOutcome, UploadContext } from './useUploadQueue';
 import type { LibraryPaper } from '@/components/library/types';
 import type { LibraryPaper as ApiLibraryPaper } from '@/lib/api/types';
@@ -24,11 +25,13 @@ const PAPERS_KEY = ['papers'] as const;
 /** How long a cancelled upload waits before the library is re-read. */
 const CANCEL_SETTLE_MS = 700;
 
-/** A library row as the shelf reads it: the v0.1 view model plus S2a's facts (#192). */
+/** A library row as the shelf reads it: the v0.1 view model, S2a's facts (#192), S2b's topic. */
 export type LibraryBook = LibraryPaper & {
   readonly year: number | null;
   readonly reading: ApiLibraryPaper['reading'];
   readonly arxivCategory: string | null;
+  /** The accepted topic (#193), or null: the shelf's Topic rows and the cloth come from it. */
+  readonly topic?: ShelfTopic | null;
 };
 
 /**
@@ -44,6 +47,10 @@ export function libraryBookFromWire(row: ApiLibraryPaper): LibraryBook {
     year: row.year ?? null,
     reading: row.reading ?? null,
     arxivCategory: row.arxiv_category ?? null,
+    topic:
+      row.topic === null || row.topic === undefined
+        ? null
+        : { id: row.topic.topic_id, name: row.topic.name, cloth: row.topic.cloth },
   };
 }
 
@@ -105,7 +112,13 @@ export function useLibrary(online: boolean) {
   );
   const books = useMemo<readonly LibraryBook[]>(
     () => [
-      ...visibleSamples().map((s) => ({ ...s, year: null, reading: null, arxivCategory: null })),
+      ...visibleSamples().map((s) => ({
+        ...s,
+        year: null,
+        reading: null,
+        arxivCategory: null,
+        topic: null,
+      })),
       ...own,
     ],
     [own],

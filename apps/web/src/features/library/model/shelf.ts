@@ -164,6 +164,18 @@ export function readingPage(paper: ShelfPaper): { page: number; of: number } | n
   return of > 0 ? { page: Math.min(reading.last_page + 1, of), of } : null;
 }
 
+/**
+ * Whether a paper is "reading now": the person has a place in it, has not finished it, and it
+ * shows a ribbon (a paper we are still reading wears kraft instead). The Reading now strip and the
+ * stats line both count this one set.
+ *
+ * @param paper - The paper.
+ * @returns True when it belongs in Reading now.
+ */
+export function isReadingNow(paper: ShelfPaper): boolean {
+  return spineState(paper) === 'reading' && readingPage(paper) !== null;
+}
+
 // What each state adds to the spine's accessible name.
 function stateWords(paper: ShelfPaper): string {
   switch (spineState(paper)) {
@@ -255,11 +267,11 @@ const byAdded = (a: ShelfPaper, b: ShelfPaper): number =>
 const byTitle = (a: ShelfPaper, b: ShelfPaper): number =>
   compareText(spineTitle(a.title), spineTitle(b.title)) || a.id.localeCompare(b.id);
 
-// Rows by a key; `last` keys sort after the rest, the others by `order`.
+// Rows by a key; `last` keys sort after the rest, the others by `order` (given keys and labels).
 function groupBy<P extends ShelfPaper>(
   papers: readonly P[],
   keyOf: (p: P) => { key: string; label: string; last?: boolean },
-  order: (a: string, b: string) => number,
+  order: (a: string, b: string, labelA: string, labelB: string) => number,
   within: (a: P, b: P) => number,
 ): ShelfGroup<P>[] {
   const rows = new Map<string, { label: string; last: boolean; papers: P[] }>();
@@ -270,7 +282,9 @@ function groupBy<P extends ShelfPaper>(
     rows.set(key, row);
   }
   return [...rows.entries()]
-    .sort(([a, ra], [b, rb]) => Number(ra.last) - Number(rb.last) || order(a, b))
+    .sort(
+      ([a, ra], [b, rb]) => Number(ra.last) - Number(rb.last) || order(a, b, ra.label, rb.label),
+    )
     .map(([key, row]) => ({ key, label: row.label, papers: [...row.papers].sort(within) }));
 }
 
@@ -321,7 +335,8 @@ export function arrangeShelf<P extends ShelfPaper>(
           p.topic === null || p.topic === undefined
             ? { key: 'unshelved', label: 'Unshelved', last: true }
             : { key: `topic:${p.topic.id}`, label: p.topic.name },
-        (a, b) => compareText(a, b),
+        // By the topic's name (keyed by id, which says nothing to a person), as documented above.
+        (a, b, labelA, labelB) => compareText(labelA, labelB) || compareText(a, b),
         byAdded,
       );
   }
@@ -419,7 +434,7 @@ export function libraryStats(papers: readonly ShelfPaper[]): LibraryStats {
   return {
     papers: papers.length,
     topics: topics.size,
-    readingNow: papers.filter((p) => spineState(p) === 'reading').length,
+    readingNow: papers.filter(isReadingNow).length,
     pages: papers.reduce((sum, p) => sum + (p.pageCount > 0 ? p.pageCount : 0), 0),
     needALook: papers.filter(needsALook).length,
   };

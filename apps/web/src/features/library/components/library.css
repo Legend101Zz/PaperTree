@@ -128,7 +128,8 @@
 
 /* ── a spine ───────────────────────────────────────────────────────────────────────────── */
 
-.pt-spine {
+.pt-spine,
+.pt-cover {
   position: relative;
   flex: none;
   padding: 0;
@@ -167,17 +168,20 @@
   border-radius: 2px 2px 0 0;
 }
 
-.pt-spine:hover {
+.pt-spine:hover,
+.pt-cover:hover {
   transform: translateY(-4px);
 }
 
-.pt-spine:focus-visible {
+.pt-spine:focus-visible,
+.pt-cover:focus-visible {
   z-index: 2;
   outline: var(--pt-focus-width) solid var(--pt-focus);
   outline-offset: 3px;
 }
 
-.pt-spine[aria-expanded='true'] {
+.pt-spine[aria-expanded='true'],
+.pt-cover[aria-expanded='true'] {
   z-index: 2;
   transform: translateY(-14px);
 }
@@ -187,7 +191,8 @@
  * goes over the cloth, the gilt fades with it, and a paper label keeps 6:1 ink: the label is text
  * someone may still need to read, so it recedes without dropping under 4.5:1 (WCAG 1.4.3).
  */
-.pt-spine::after {
+.pt-spine::after,
+.pt-cover::after {
   position: absolute;
   inset: -3px 0 0;
   pointer-events: none;
@@ -197,11 +202,13 @@
   transition: opacity var(--pt-dur-quick) var(--pt-ease-out);
 }
 
-.pt-spine[data-match='false'] {
+.pt-spine[data-match='false'],
+.pt-cover[data-match='false'] {
   filter: saturate(0.45);
 }
 
-.pt-spine[data-match='false']::after {
+.pt-spine[data-match='false']::after,
+.pt-cover[data-match='false']::after {
   opacity: 0.68;
 }
 
@@ -212,7 +219,9 @@
 
 .pt-spine[data-match='false'] .pt-spine__face,
 .pt-spine[data-match='false'] .pt-spine__year,
-.pt-spine[data-match='false'] .pt-spine__ribbon {
+.pt-spine[data-match='false'] .pt-spine__ribbon,
+.pt-cover--gilt[data-match='false'] .pt-cover__inner,
+.pt-cover[data-match='false'] .pt-cover__ribbon {
   opacity: 0.5;
 }
 
@@ -226,7 +235,8 @@
   color: var(--pt-spine-dim-ink);
 }
 
-.pt-spine[data-match='true'] {
+.pt-spine[data-match='true'],
+.pt-cover[data-match='true'] {
   z-index: 1;
   box-shadow:
     inset 0 0 0 2px var(--pt-paper-label),
@@ -234,7 +244,8 @@
     8px 8px 14px -4px rgb(48 30 16 / 55%);
 }
 
-.pt-spine__inner {
+.pt-spine__inner,
+.pt-cover__inner {
   position: absolute;
   inset: 0;
   z-index: 1; /* above the search veil */
@@ -296,7 +307,8 @@
   text-transform: lowercase;
 }
 
-.pt-spine__year {
+.pt-spine__year,
+.pt-cover__year {
   margin-block-end: 6px;
   font-family: var(--pt-font-you);
   font-size: 11px;
@@ -305,7 +317,9 @@
 
 .pt-spine--gilt .pt-spine__title,
 .pt-spine--gilt .pt-spine__authors,
-.pt-spine--gilt .pt-spine__year {
+.pt-spine--gilt .pt-spine__year,
+.pt-cover--gilt :is(.pt-cover__title, .pt-cover__authors, .pt-cover__year),
+.pt-cover--torn :is(.pt-cover__title, .pt-cover__authors, .pt-cover__year) {
   color: transparent;
   background-image: var(--pt-spine-gilt);
   -webkit-background-clip: text;
@@ -326,7 +340,8 @@
     inset 0 0 0 2.6px rgb(122 90 34 / 50%);
 }
 
-.pt-spine__note {
+.pt-spine__note,
+.pt-cover__note {
   font-family: var(--pt-font-label);
   font-size: 12px;
   letter-spacing: 0.05em;
@@ -343,12 +358,14 @@
   clip-path: polygon(0 0, 100% 0, 100% 89%, 84% 93%, 70% 87%, 52% 96%, 36% 90%, 18% 97%, 0 91%);
 }
 
-.pt-spine__label--torn .pt-spine__note {
+.pt-spine__label--torn .pt-spine__note,
+.pt-cover--torn .pt-cover__note {
   font-weight: 700;
   color: var(--pt-spine-danger);
 }
 
-.pt-spine--kraft {
+.pt-spine--kraft,
+.pt-cover--kraft {
   background-color: var(--pt-kraft);
   background-image:
     linear-gradient(
@@ -384,7 +401,8 @@
   box-shadow: 0 6px 0 -0.5px var(--pt-spine-string);
 }
 
-.pt-spine__ribbon {
+.pt-spine__ribbon,
+.pt-cover__ribbon {
   position: absolute;
   bottom: -50px;
   left: calc(50% - 5px);
@@ -894,6 +912,349 @@
   margin-inline-start: auto;
 }
 
+/* ── Reading now (#196, frame 01): above the spines, one row per paper, at most three ───── */
+
+.pt-readingnow {
+  margin-block-start: 16px;
+}
+
+.pt-readingnow__heading {
+  margin: 0 0 10px;
+  font-family: var(--pt-font-label);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pt-ink-2);
+  text-transform: lowercase;
+}
+
+.pt-readingnow__list {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pt-readingnow__item {
+  flex: 1 1 0;
+  min-inline-size: 0;
+  padding-inline: 24px;
+}
+
+.pt-readingnow__item:first-child {
+  padding-inline-start: 0;
+}
+
+.pt-readingnow__item + .pt-readingnow__item {
+  border-inline-start: 1px solid var(--pt-rule);
+}
+
+/* The shared row as frame 01 sets it: a 12 × 48 cloth with the ribbon at its foot, the title
+   across the row, the page beside the rule under it. */
+.pt-readingnow .pt-readnow {
+  position: relative;
+  display: grid;
+  grid-template-areas: 'spine title title button' 'spine rule page button';
+  grid-template-columns: 18px minmax(0, 1fr) auto auto;
+  gap: 8px 10px;
+  padding: 0;
+}
+
+.pt-readingnow .pt-readnow__text {
+  display: contents; /* its title and rule take their own cells */
+}
+
+.pt-readingnow .pt-readnow__ribbon {
+  position: absolute;
+  top: 42px;
+  left: 3px;
+  inline-size: 7px;
+  block-size: 16px;
+  margin: 0;
+}
+
+.pt-readingnow .pt-readnow__spine {
+  grid-area: spine;
+  inline-size: 12px;
+  block-size: 48px;
+  box-shadow: 2px 1px 3px var(--pt-spine-cast);
+}
+
+.pt-readingnow .pt-readnow__title {
+  grid-area: title;
+  font-family: var(--pt-font-paper);
+  font-size: 16px;
+}
+
+.pt-readingnow .pt-button {
+  grid-area: button;
+  margin-inline-start: 6px;
+}
+
+.pt-readnow__page {
+  color: var(--pt-ink);
+}
+
+/* ── the empty library (#196, frame 01b): an empty plank and the accession slip ─────────── */
+
+.pt-emptyshelf__slot {
+  display: flex;
+  flex: 1 1 auto;
+  justify-content: center;
+  padding-block: 160px 58px; /* the slip stands on the plank (54 px) */
+}
+
+.pt-slip {
+  position: relative;
+  display: flex;
+  inline-size: min(560px, 100%);
+  min-block-size: 344px;
+  flex-direction: column;
+  gap: 16px;
+  padding: 32px 40px 28px 48px;
+  background: var(--pt-page);
+  box-shadow: var(--pt-e1);
+  transform: rotate(-1.6deg);
+  transform-origin: bottom left;
+}
+
+/* Torn off a pad: a perforated left edge in the ground's colour. */
+.pt-slip::before {
+  position: absolute;
+  inset-block: 10px;
+  left: -1px;
+  inline-size: 6px;
+  content: '';
+  background: radial-gradient(circle at 0 50%, var(--pt-ground) 2.4px, transparent 3px) 0 0 / 6px
+    12px;
+}
+
+.pt-slip__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-block-end: 20px;
+  font-family: var(--pt-font-you);
+  font-size: 14px;
+  border-block-end: 1.5px solid var(--pt-ink);
+}
+
+.pt-slip__name {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font: 700 15px var(--pt-font-label);
+  letter-spacing: 0.14em;
+  text-transform: lowercase;
+}
+
+.pt-slip__call {
+  margin: 12px 0 0;
+  font: 400 26px/1.3 var(--pt-font-paper);
+}
+
+.pt-slip__choose {
+  padding: 0;
+  font: inherit;
+  color: var(--pt-primary);
+  text-decoration: underline 1.5px;
+  text-underline-offset: 5px;
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+.pt-slip__note {
+  max-inline-size: 440px;
+  margin: 0;
+  line-height: 1.55;
+}
+
+.pt-slip__foot {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: auto 0 0;
+  font-size: 14px;
+  color: var(--pt-ink-2);
+}
+
+/* ── face-out covers (#196, frame 01c): a short library stands its books face-out ───────── */
+
+/* 01c's covers start 64 px under the view row; the card's band grows when a book comes down. */
+.pt-shelfband--faceout .pt-shelfband__band {
+  min-block-size: 56px;
+}
+
+.pt-covers__shelf + .pt-covers__shelf {
+  margin-block-start: 48px;
+}
+
+/* Covers and captions share columns: the captions are inset by the plank's ends
+   (`PLANK_ENDS` in model/states.ts) and both rows space their items evenly. */
+.pt-covers__row,
+.pt-covers__captions {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 36px;
+  justify-content: space-evenly;
+}
+
+.pt-covers__captions {
+  padding: 22px 28px 0;
+}
+
+/* 264 px columns that may shrink, so a 320 px window does not scroll sideways (WCAG 1.4.10). */
+.pt-covers__slot,
+.pt-covercap {
+  flex: 0 1 264px;
+  min-inline-size: 0;
+}
+
+.pt-covers__slot {
+  padding: 16px 0 54px 8px; /* room for a lifted cover above; the plank below */
+}
+
+.pt-cover {
+  inline-size: 224px;
+  block-size: 304px;
+  text-align: start;
+  border-radius: 2px 4px 4px 2px;
+  /* The spine's light budget (sheen peak + weave), so its gilt keeps the tested 4.5:1. */
+  background-image:
+    linear-gradient(135deg, rgb(255 255 255 / var(--pt-spine-sheen-peak)), transparent 45%),
+    repeating-linear-gradient(
+      45deg,
+      rgb(255 255 255 / var(--pt-spine-weave-light)) 0 1px,
+      transparent 1px 3px
+    ),
+    repeating-linear-gradient(-45deg, rgb(0 0 0 / 9%) 0 1px, transparent 1px 3px);
+  box-shadow:
+    inset 6px 0 0 rgb(0 0 0 / 18%),
+    12px 6px 18px -6px var(--pt-spine-cast),
+    3px 0 0 -1px #e9e2d3,
+    4px 1px 0 -1px #cfc4b0;
+}
+
+.pt-cover__inner {
+  align-items: flex-start;
+  padding: 34px 26px 22px 34px;
+}
+
+.pt-cover__frame {
+  position: absolute;
+  inset: 12px 12px 12px 18px;
+  border: 1px solid rgb(232 212 160 / 75%);
+  box-shadow: inset 0 0 0 4px rgb(232 212 160 / 45%);
+}
+
+.pt-cover__title {
+  display: -webkit-box;
+  overflow: hidden;
+  font: 28px/1.05 var(--pt-font-display);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+}
+
+.pt-cover__rule {
+  flex: none;
+  inline-size: 44px;
+  block-size: 1px;
+  margin-block: 16px 12px;
+  background: var(--pt-spine-gilt);
+}
+
+.pt-cover__authors {
+  font: 14px var(--pt-font-label);
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+}
+
+.pt-cover__year {
+  margin-block: auto 0;
+  font-size: 13px;
+}
+
+/* Gilt cannot be read on the Language cloth or on kraft: ink on a paper label instead. */
+.pt-cover--label .pt-cover__inner,
+.pt-cover--kraft .pt-cover__inner {
+  inset: 22px 16px 22px 24px;
+  padding: 18px 16px 14px;
+  background: var(--pt-paper-label);
+  border: 1px solid var(--pt-spine-label-edge);
+}
+
+.pt-cover--label .pt-cover__frame,
+.pt-cover--kraft .pt-cover__frame {
+  display: none;
+}
+
+.pt-cover--torn .pt-cover__note {
+  align-self: flex-start;
+  margin-block-start: 12px;
+  padding: 6px 10px 14px;
+  background: var(--pt-paper-label);
+  clip-path: polygon(0 0, 100% 0, 100% 82%, 80% 92%, 58% 80%, 36% 94%, 16% 84%, 0 92%);
+}
+
+.pt-cover__ribbon {
+  bottom: -56px;
+  left: 150px;
+  block-size: 56px;
+}
+
+.pt-covercap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: 14px;
+  font-variant-numeric: lining-nums;
+  color: var(--pt-ink-2);
+}
+
+/* Zero specificity, so the state line's own margin wins. */
+:where(.pt-covercap) p {
+  margin: 0;
+}
+
+.pt-covercap__title {
+  font: 700 15px/1.35 var(--pt-font-paper);
+  color: var(--pt-ink);
+}
+
+.pt-covercap__meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.pt-covercap__swatch {
+  inline-size: 7px;
+  block-size: 14px;
+}
+
+.pt-covercap__state {
+  margin-block-start: 6px;
+  font-size: 15px;
+  color: var(--pt-ink);
+}
+
+.pt-covercap__progress {
+  display: flex;
+  align-self: stretch;
+  gap: 10px;
+  align-items: center;
+  margin-block: 6px 8px;
+}
+
+.pt-covercap__progress .pt-readnow__rule {
+  flex: 1 1 auto;
+}
+
+.pt-covercap__state + .pt-button {
+  margin-block-start: 8px;
+}
+
 @media (max-width: 900px) {
   .pt-libhead {
     display: flex;
@@ -919,6 +1280,29 @@
   .pt-libtitle__h1 {
     font-size: var(--pt-t-display-l);
   }
+
+  .pt-readingnow__list {
+    flex-direction: column;
+  }
+
+  .pt-readingnow__item {
+    padding: 10px 0;
+  }
+
+  .pt-readingnow__item + .pt-readingnow__item {
+    border-block-start: 1px solid var(--pt-rule);
+    border-inline-start: 0;
+  }
+
+  .pt-emptyshelf__slot {
+    padding-block-start: 32px;
+  }
+
+  .pt-slip {
+    min-block-size: 0;
+    padding: 24px 20px 20px 28px;
+    transform: none;
+  }
 }
 
 @media (max-width: 560px) {
@@ -928,6 +1312,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .pt-cover,
+  .pt-cover::after,
   .pt-spine,
   .pt-spine::after,
   .pt-spine__face,

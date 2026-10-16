@@ -12,6 +12,8 @@ import { LibraryView } from '@/features/library';
 import type { LibraryPaper } from '@/lib/api/types';
 import { useAuthStore } from '@/store/authStore';
 
+import { corpusRows } from './library-corpus';
+
 const push = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push, replace: vi.fn() }),
@@ -101,10 +103,13 @@ async function renderLibrary() {
   return screen.findByRole('toolbar', { name: 'Shelf' });
 }
 
+// The books only: since #196 a short shelf stands face-out, with Continue and Open under each
+// cover inside the same toolbar.
 const spineOrder = (shelf: HTMLElement) =>
   within(shelf)
     .getAllByRole('button')
-    .map((spine) => spine.dataset['paperId']);
+    .filter((book) => book.dataset['paperId'] !== undefined)
+    .map((book) => book.dataset['paperId']);
 
 beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
@@ -258,6 +263,12 @@ describe('the title block', () => {
   });
 
   it('Arrange by Year regroups the shelf; the other views say they are coming', async () => {
+    // Thirteen papers: past the face-out threshold (#196), so the shelf has its labelled rows.
+    // The nine added are corpus papers, dated 2015 here so the row counts are easy to read.
+    const more = corpusRows(13)
+      .slice(4)
+      .map((paper) => ({ ...paper, year: 2015 }));
+    api.list.mockResolvedValue([...ROWS(), ...more]);
     await renderLibrary();
     fireEvent.change(screen.getByRole('combobox', { name: 'Arrange by' }), {
       target: { value: 'year' },
@@ -266,7 +277,7 @@ describe('the title block', () => {
       .getAllByRole('group', { name: /papers?$/ })
       .map((g) => g.getAttribute('aria-label'));
     expect(groups).toEqual([
-      '2015, 1 paper',
+      '2015, 10 papers',
       '2017, 1 paper',
       '2022, 1 paper',
       'Year unknown, 1 paper',
@@ -277,6 +288,16 @@ describe('the title block', () => {
     expect(document.getElementById(table.getAttribute('aria-describedby') ?? '')?.textContent).toBe(
       'Coming in this release',
     );
+  });
+});
+
+describe('Arrange by on a face-out shelf (#196)', () => {
+  it('orders the covers by year, oldest first, unknown last', async () => {
+    const shelf = await renderLibrary();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Arrange by' }), {
+      target: { value: 'year' },
+    });
+    expect(spineOrder(shelf)).toEqual(['ppr_3', 'ppr_1', 'ppr_2', 'ppr_4']);
   });
 });
 
@@ -474,7 +495,7 @@ describe('focus never falls to the page (review S4)', () => {
     const card = await screen.findByRole('region', { name: 'Attention Is All You Need' });
     fireEvent.click(within(card).getByRole('button', { name: /^Delete Attention/ }));
     fireEvent.click(within(card).getByRole('button', { name: 'Delete paper' }));
-    await screen.findByRole('heading', { name: 'Add your first paper' });
+    await screen.findByRole('heading', { name: 'Drop PDFs here or choose files' });
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Add papers' }));
   });
 

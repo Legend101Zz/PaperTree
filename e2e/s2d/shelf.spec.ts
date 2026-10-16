@@ -3,6 +3,10 @@
  * reorders, Esc clears), the keyboard walks the shelf (one tab stop, ←/→), Enter takes a book down
  * into its catalogue card with focus on Read, Esc puts it back with focus on its spine, and a PDF
  * dropped anywhere on the page is uploaded. Shots go to the test's output folder.
+ *
+ * Since #196 a shelf of up to twelve papers stands face-out: the books are covers with Continue or
+ * Open under each, inside the same toolbar, so the books are counted by `data-paper-id`. The
+ * keyboard model and every assertion below are unchanged.
  */
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -41,7 +45,7 @@ test('search lights the shelf, the keyboard walks it, a drop anywhere uploads', 
   await page.goto('/dashboard');
   await expect(page.getByRole('heading', { name: 'Your library' })).toBeVisible();
   const shelf = page.getByRole('toolbar', { name: 'Shelf' });
-  const spines = shelf.getByRole('button');
+  const spines = shelf.locator('button[data-paper-id]');
   await expect(spines.nth(PAPERS.length - 1)).toBeVisible({ timeout: 30_000 });
   const ids = () => spines.evaluateAll((all) => all.map((el) => el.getAttribute('data-paper-id')));
   const order = await ids();
@@ -69,8 +73,10 @@ test('search lights the shelf, the keyboard walks it, a drop anywhere uploads', 
   await expect(search).toHaveValue('');
   await expect(shelf.locator('[data-match]')).toHaveCount(0);
 
-  // One tab stop; ← → along the shelf; Enter takes it down; Esc puts it back.
-  await expect(shelf.locator('[tabindex="0"]')).toHaveCount(1);
+  // The books are one tab stop (the rest are -1); ← → along the shelf; Enter takes it down; Esc
+  // puts it back. A face-out shelf's caption buttons (Open, Continue) are their own tab stops.
+  await expect(spines.and(page.locator('[tabindex="0"]'))).toHaveCount(1);
+  await expect(spines.and(page.locator('[tabindex="-1"]'))).toHaveCount(total - 1);
   await spines.first().focus();
   await page.keyboard.press('ArrowRight');
   const second = spines.nth(1);

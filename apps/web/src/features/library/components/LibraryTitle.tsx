@@ -64,7 +64,10 @@ export function LibraryTitle({
     <>
       <div className="pt-libtitle">
         <h1 className="pt-libtitle__h1">Your library</h1>
-        {stats === null ? null : (
+        {stats === null ? null : stats.papers === 0 ? (
+          // Frame 01b: an empty library says so in the stats slot rather than "0 papers".
+          <p className="pt-libtitle__stats">No papers yet</p>
+        ) : (
           <p className="pt-libtitle__stats">
             {statsParts(stats).map(([count, noun], index) => (
               <span key={noun}>
@@ -117,24 +120,27 @@ export function LibraryTitle({
             Coming in this release
           </span>
         </div>
-        <label className="pt-libviews__arrange" htmlFor={arrangeId}>
-          Arrange by
-          <span className="pt-libviews__select">
-            <select
-              id={arrangeId}
-              className={target}
-              value={arrangement}
-              onChange={(event) => onArrange(event.target.value as Arrangement)}
-            >
-              {ARRANGEMENTS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={16} strokeWidth={1.5} aria-hidden="true" />
-          </span>
-        </label>
+        {/* Nothing to arrange on an empty shelf (01b keeps the view tabs, not Arrange by). */}
+        {stats !== null && stats.papers === 0 ? null : (
+          <label className="pt-libviews__arrange" htmlFor={arrangeId}>
+            Arrange by
+            <span className="pt-libviews__select">
+              <select
+                id={arrangeId}
+                className={target}
+                value={arrangement}
+                onChange={(event) => onArrange(event.target.value as Arrangement)}
+              >
+                {ARRANGEMENTS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={16} strokeWidth={1.5} aria-hidden="true" />
+            </span>
+          </label>
+        )}
       </div>
     </>
   );

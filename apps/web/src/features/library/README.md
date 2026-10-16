@@ -1,8 +1,32 @@
 # library
 
-The signed-in library at `/dashboard` (#195, frames 00 and 01): the papers stand as cloth spines on one walnut
-plank, a row per group, each row under a brass label holder. A spine shows its state: a red ribbon while you are
-reading it, a kraft wrap while we read it, a torn red label when we could not.
+The signed-in library at `/dashboard` (#195, #196; frames 00, 01, 01b, 01c): the papers stand as cloth spines on
+one walnut plank, a row per group, each row under a brass label holder. A spine shows its state: a red ribbon
+while you are reading it, a kraft wrap while we read it, a torn red label when we could not.
+
+- **Reading now** (above the spines; the owner's default, which may become a book stand): the papers you have a
+  place in and have not finished, most recently opened first, at most three, each with its cloth, ribbon,
+  "p. 4 of 15", the rule and **Continue**. "N reading now" in the stats line counts the same set
+  (`isReadingNow`). Continue writes the server's page into the reader's own place
+  (`papertree/reader/<paper_id>`, contracts.md §5) and opens the reader, so a place read on another device is
+  honoured; a place already on that page keeps its exact line; a LATER place in this browser than on the server
+  (its write was lost: `readingStateSync` never retries) is kept and sent to the server again
+  (`planContinue`). The library checks a stored place exactly as the reader does (`readerPlace`, held to the
+  reader's `readSavedReaderState` by `test/library-reader-place.spec.ts`).
+- **Empty** (01b): "No papers yet" in the stats slot, the view tabs (no Arrange by), and an empty plank with the
+  accession slip: "Drop PDFs here or choose files" (the header's picker; drops land in the page-wide target)
+  and what happens next.
+- **Few** (01c): at **12 papers or fewer** (`FACE_OUT_MAX`, owner may change) the books stand face-out as
+  typographic covers in their cloth, as many to a plank as fit (four at 1440 px), each with its caption under
+  the plank: title, authors · year · pages, the topic once topics exist, then Continue with the rule while you
+  read it, or the state ("Read", "Not started", "Queued"…) and Open. The covers keep the spines' keyboard
+  model (`useRovingShelf`); the caption's buttons are ordinary tab stops. A face-out library carries Continue
+  itself, so Reading now is not shown above it (01c draws no strip); the strip is decided from the whole
+  library, so the "need a look" filter never hides it.
+- **Focus across layouts:** the shelf swaps components at its thresholds, so the roving tab stop lives in the
+  section (`useShelfFocus`), keyed by paper id. When a commit removes the focused book (Delete, an upload
+  crossing a threshold, a poll) and focus fell to the page, it goes back to the same paper's book, or Delete's
+  neighbour; focus the person moved elsewhere is left alone.
 
 - **Header:** the sprout and name; the search ("/" focuses it, Esc clears it, "2 of 24" inside the field, Enter
   takes down the first match); Add papers; Aa (the theme switch from `features/settings`); the account (its
@@ -53,10 +77,16 @@ ribbon, no year means no year on the spine.
 - `model/shelf.ts`: arrangements, spine width, height, title, author line, state, name, cloth, search
   matching, the arrow-key step (pure; tested in `model/shelf.spec.ts`).
 - `model/shelf.ts` also: the stats line, "need a look", where the catalogue card goes (`placeCard`).
+- `model/states.ts`: who is reading now, the face-out threshold, covers per plank, Continue's reader place
+  (pure; tested in `model/states.spec.ts`). `hooks/useContinue.ts` stores that place and opens the reader;
+  `hooks/useRovingShelf.ts` is the one-tab-stop keyboard model for spines and covers;
+  `hooks/useElementWidth.ts` measures the plank for `coversPerRow`.
 - `hooks/useLibrary.ts`: the data layer (query, polling, upload, cancel's re-read, retry, delete);
   `hooks/useUploadQueue.ts`: the upload queue (progress, Cancel, refusals); `hooks/useCardPlacement.ts`.
 - `components/LibraryView.tsx`: the page; `LibraryHeader.tsx` (with `SearchField.tsx`, `AddPapers.tsx`),
   `UploadRow.tsx`, `LibraryTitle.tsx`, `ShelfSection.tsx` (with `Shelf.tsx`, `Spine.tsx`, `ShelfPlank.tsx`,
-  `CatalogueCard.tsx`, `ShelfHints.tsx`); `library.css`: their styles, from the tokens.
-- Tests: `apps/web/test/library-shelf.spec.tsx`, `library-page.spec.tsx`, `s3-library-states.spec.tsx`,
-  `w2ui-library.spec.tsx`; e2e `e2e/s2d/shelf.spec.ts` and `e2e/s3/*`.
+  `CatalogueCard.tsx`, `ShelfHints.tsx`), `ReadingNow.tsx`, `AccessionSlip.tsx`, `CoverShelf.tsx` (with
+  `Cover.tsx`, `CoverCaption.tsx`); `library.css`: their styles, from the tokens.
+- Tests: `apps/web/test/library-shelf.spec.tsx`, `library-page.spec.tsx`, `library-states.spec.tsx` (with
+  the corpus rows in `library-corpus.ts`), `s3-library-states.spec.tsx`, `w2ui-library.spec.tsx`; e2e
+  `e2e/s2d/shelf.spec.ts`, `e2e/v02/library-states.spec.ts` and `e2e/s3/*`.
