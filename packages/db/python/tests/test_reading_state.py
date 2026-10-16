@@ -30,7 +30,7 @@ from papertree_db import (
 from papertree_db.library import arxiv_year, stamp_category
 
 from .fixtures import block_id_for, make_paper
-from .saved_shapes import migrations_through, raw_connect
+from .saved_shapes import HEAD_VERSIONS, migrations_through, raw_connect
 
 HASH = "sha256:" + "a" * 64
 PAPER = PaperId("ppr_AAAAAAAAAAAAAAAAAAAAAAAAAA")
@@ -81,7 +81,7 @@ def test_0006_keeps_the_rows_of_a_saved_0005_database(tmp_path: Path) -> None:
             (HASH,),
         )
         result = migrate(conn, find_migrations_dir())
-        assert result.applied == (6,) and result.backups == ()
+        assert result.applied == tuple(v for v in HEAD_VERSIONS if v >= 6) and result.backups == ()
         assert conn.execute("SELECT email, display_name FROM users").fetchone()[:] == (
             "a@b.test",
             None,

@@ -1000,6 +1000,152 @@ class BoardPatch(Wire):
     viewport: Viewport | None = None
 
 
+# ── v0.2 notebook (S5a, #206) ───────────────────────────────────────────────────────────────
+
+PageTemplate = Literal["blank", "dot", "lined", "cornell", "derivation"]
+NotebookItemKind = Literal["exchange", "text", "sticky", "quote", "shape"]
+StrokeTool = Literal["pen", "highlighter"]
+StrokeNib = Literal["EF", "F", "M"]
+#: Page units (the web's PAGE_WIDTH is 960); same bounds as a canvas card.
+NOTEBOOK_BODY_MAX = 100_000
+NotebookTitle = Annotated[str, Field(min_length=1, max_length=200)]
+
+
+class NotebookPage(Wire):
+    page_id: str
+    paper_id: str
+    title: str
+    template: PageTemplate
+    source_thread_id: str | None
+    source_message_id: str | None
+    version: Version
+    created_at: WireTime
+    updated_at: WireTime
+
+
+class NotebookItem(Wire):
+    """`anchor` is the full Anchor of a quote (required for `quote`, null otherwise); `body` is the
+    typed text, the quote's display cache, or the JSON of an exchange / shape."""
+
+    item_id: str
+    page_id: str
+    kind: NotebookItemKind
+    x: float
+    y: float
+    w: Extent
+    h: Extent
+    z: SqlInt
+    body: str
+    anchor: AnchorV1 | None
+    version: Version
+    created_at: WireTime
+    updated_at: WireTime
+
+
+class NotebookStroke(Wire):
+    stroke_id: str
+    page_id: str
+    tool: StrokeTool
+    nib: StrokeNib
+    colour: str
+    points_b64: str
+    created_at: WireTime
+
+
+class NotebookCounts(Wire):
+    quotes: NonNegative
+    stickies: NonNegative
+    text: NonNegative
+    shapes: NonNegative
+    strokes: NonNegative
+
+
+class NotebookPageSummary(Wire):
+    page_id: str
+    title: str
+    template: PageTemplate
+    counts: NotebookCounts
+    version: Version
+    updated_at: WireTime
+
+
+class NotebookPageView(Wire):
+    """`GET /notebook/pages/{id}`."""
+
+    page: NotebookPage
+    items: list[NotebookItem]
+    strokes: list[NotebookStroke]
+
+
+class NotebookPageCreated(Wire):
+    """`POST /papers/{id}/notebook/pages` (201): the page and its seeded items."""
+
+    page: NotebookPage
+    items: list[NotebookItem]
+
+
+class NotebookPageCreate(Wire):
+    """`from_message_id` is "Dive in": an assistant message of this paper's threads."""
+
+    page_id: ClientId
+    title: NotebookTitle | None = omittable(max_length=200)
+    template: PageTemplate | None = omittable()
+    from_message_id: str | None = omittable(min_length=1, max_length=200)
+
+
+class NotebookPagePatch(Wire):
+    version: Version
+    title: NotebookTitle | None = omittable(max_length=200)
+    template: PageTemplate | None = omittable()
+
+
+class NotebookItemCreate(Wire):
+    item_id: ClientId
+    kind: NotebookItemKind
+    x: Coord
+    y: Coord
+    w: Extent
+    h: Extent
+    z: SqlInt = 0
+    body: Annotated[str, Field(max_length=NOTEBOOK_BODY_MAX)] = ""
+    anchor: AnchorV1In | None = omittable(validate_default=True)
+
+    @field_validator("anchor", mode="after")
+    @classmethod
+    def _quote_needs_an_anchor(cls, value: AnchorV1In | None, info: ValidationInfo) -> Any:
+        if value is None and info.data.get("kind") == "quote":
+            raise PydanticCustomError("missing", "Field required for a quote")
+        return value
+
+
+class NotebookItemPatch(Wire):
+    version: Version
+    x: Coord | None = omittable()
+    y: Coord | None = omittable()
+    w: Extent | None = omittable()
+    h: Extent | None = omittable()
+    z: SqlInt | None = omittable()
+    body: Annotated[str, Field(max_length=NOTEBOOK_BODY_MAX)] | None = omittable()
+
+
+class NotebookPageStale(Wire):
+    """`409 stale_version` on a page: the envelope plus the page as it now is."""
+
+    detail: str
+    code: Literal["stale_version"]
+    retryable: bool
+    current: NotebookPage
+
+
+class NotebookItemStale(Wire):
+    """`409 stale_version` on an item: the envelope plus the item as it now is."""
+
+    detail: str
+    code: Literal["stale_version"]
+    retryable: bool
+    current: NotebookItem
+
+
 # ── §2.8 health ──────────────────────────────────────────────────────────────────────────────
 
 

@@ -28,6 +28,7 @@ from .routers import (
     highlights,
     internal,
     jobs,
+    notebooks,
     papers,
     summary,
     threads,
@@ -119,5 +120,6 @@ def create_app(
     app.include_router(summary.router)
     app.include_router(usage.router)
     app.include_router(boards.router)
+    app.include_router(notebooks.router)
     app.include_router(internal.router)
     return app

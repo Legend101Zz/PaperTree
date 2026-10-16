@@ -74,6 +74,7 @@ from .migrate import (
     migrate,
     split_statements,
 )
+from .notebook import NotebookRejected, NotebookStale
 from .reading import ProgressState, ReadingState, progress_state, reached_last_page
 
 __all__ = [
@@ -105,6 +106,8 @@ __all__ = [
     "MigrationError",
     "MigrationResult",
     "NodeRow",
+    "NotebookRejected",
+    "NotebookStale",
     "OwnerId",
     "OwnershipError",
     "PageId",
