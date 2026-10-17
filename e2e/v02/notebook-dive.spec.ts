@@ -105,16 +105,22 @@ test.describe('S5e — Dive in, the tablet and phone notebook (faux agent)', () 
     await page.screenshot({ path: shot('s5e-dived-1440.png') });
 
     // ── 4. Back to the paper: the reader, with the panel on the thread the page came from ──
-    await page
-      .locator('.pt-nb__bar')
-      .getByRole('link', { name: /Back to the paper/ })
-      .click();
-    await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/read\\?.*thread=${threadId}`));
+    // The link names the thread; the reader consumes `?thread=` as soon as the panel opens on it (so a
+    // reload does not reopen it), so the URL holds it only for a moment. Check the link and the outcome,
+    // not that moment: polling for it raced the reader on CI (#335).
+    const back = page.locator('.pt-nb__bar').getByRole('link', { name: /Back to the paper/ });
+    await expect(back).toHaveAttribute(
+      'href',
+      new RegExp(`/paper/${paperId}/read\\?.*thread=${threadId}`),
+    );
+    await back.click();
+    await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/read(\\?|$)`));
     await expect(panel).toBeVisible();
     await expect(panel.locator('.pt-exchange')).toHaveCount(1);
     await expect(panel.locator('.pt-call-slip')).toContainText(
       "What is the paper's central proposal?",
     );
+    await expect(page).not.toHaveURL(/thread=/);
 
     // ── 5. a second Dive in opens the same page; the server holds one page for the answer ──
     await panel.getByRole('button', { name: 'Dive in' }).click();
