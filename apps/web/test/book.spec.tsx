@@ -52,6 +52,13 @@ vi.mock('@/lib/api/summary', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api/summary')>()),
   summaryApi: summary,
 }));
+// The library's topics (S2b): answered here, so no request leaves for the default API port (8000,
+// another app's on the maintainer's machine; #199 follow-up).
+const topics = vi.hoisted(() => ({ list: vi.fn(() => Promise.resolve([])), ofPaper: vi.fn() }));
+vi.mock('@/lib/api/topics', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api/topics')>()),
+  topicsApi: topics,
+}));
 
 const ID = 'ppr_G9AYN750E5MG1NRBMGSQJ4N5JM';
 const FIGURE_1_ANCHOR = { id: 'anc_figure1', targetKind: 'figure' };

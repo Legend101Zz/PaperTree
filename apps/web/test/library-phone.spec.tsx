@@ -380,6 +380,40 @@ describe('the phone library at 390', () => {
     expect(document.querySelector('[inert]')).toBeNull();
   });
 
+  it("sizes the spread's abstract tab and arXiv link for a finger, and drops its Esc key", async () => {
+    // ResNet's own arXiv id and abstract opening (its PDF), so the spread draws both links.
+    bookApi.abstract.mockResolvedValue({
+      text: 'Deeper neural networks are more difficult to train. We present a residual learning framework.',
+      page_index: 0,
+      anchor: { id: 'anc_abs' },
+    });
+    const rows = phoneLibrary().map((row) =>
+      row.paper_id === 'ppr_c3' ? { ...row, arxiv_id: '1512.03385' } : row,
+    );
+    await renderPhone(rows);
+    fireEvent.click(within(shelf()).getByRole('button', { name: /^Deep Residual/ }));
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: /^Open the book/ }),
+    );
+    const spread = await screen.findByRole('dialog', { name: /^Deep Residual/ });
+    const tab = await within(spread).findByRole('link', { name: /^p\. 1, Abstract/ });
+    // The link is not the clipped tab: it holds the tab's face, so its hit area is not clipped.
+    expect(tab.classList).not.toContain('pt-tab');
+    expect(tab.firstElementChild?.classList).toContain('pt-tab');
+    const arxiv = within(spread).getByRole('link', { name: /arxiv\.org\/abs\/1512\.03385/ });
+    // jsdom lays nothing out: the sizes are book.css's, under the phone's (or touch) query.
+    const touch = css('../../book/components/book.css').split(
+      `@media (max-width: ${String(PHONE_MAX_WIDTH)}px), (pointer: coarse) {`,
+    )[1];
+    // A 20 px face with 12 px above and below answers a 44 px tap.
+    expect(touch).toMatch(/^\s*\.pt-bookdetails__tablink::after \{[^}]*inset: -12px 0;/);
+    expect(touch).toMatch(/\.pt-bookdetails__arxiv \{[^}]*min-block-size: 44px;/);
+    expect(arxiv.classList).toContain('pt-bookdetails__arxiv');
+    const back = within(spread).getByRole('button', { name: /^Put it back/ });
+    expect(back.querySelector('kbd')).toBeNull();
+    expect(back.style.minHeight).toBe('44px');
+  });
+
   it('says Enter takes a book down on the stacks, with no Space line (no pull-out there)', async () => {
     await renderPhone();
     const hints = document.querySelector<HTMLElement>('.pt-hints')!;

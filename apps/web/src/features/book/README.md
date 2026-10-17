@@ -39,7 +39,10 @@ A book taken off the shelf and opened (#200; frames 02a, 02 and 11; DESIGN.md §
 - **Motion** (`model/motion.ts`, WAAPI over CSS 3D): pull out = lift 120 → turn 200 → settle 80 on the lift curve,
   starting at the spine's own box; open = the cover swings 480 while the spread comes up; put back 200; Read
   cross-fades 120. Reduced motion: every step is one 120 ms cross-fade with nothing moving (`data-motion`).
-- **Phone (390).** The spread stacks (bookplate, then the details) and the dialog scrolls.
+- **Phone (390).** The spread stacks (bookplate, then the details) and the dialog scrolls. A phone reaches it
+  from the library's bottom sheet ("Open the book", #199; no pull-out there). Below 900 px or on a touch
+  screen the "p. 1 · Abstract" tab answers a 44 px tap (its link holds the clipped face, and the link's hit
+  area reaches 12 px above and below), the arXiv link is 44 px tall, and "Put it back" draws no Esc key.
 
 ## Data flow
 
