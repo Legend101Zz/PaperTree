@@ -124,6 +124,27 @@ export function toFlowNode(node: CanvasNode, paperId: string, selected = false):
 }
 
 /**
+ * A card with some of its fields set, as an undo or redo puts them back: the row, and xyflow's own
+ * position and size when those are among the fields (a resize in progress is xyflow's alone).
+ *
+ * @param node The card as drawn.
+ * @param fields The fields to set.
+ * @returns The card with them.
+ */
+export function withFields(node: PtNode, fields: Partial<CanvasNode>): PtNode {
+  const row = { ...node.data.node, ...fields };
+  return {
+    ...node,
+    position:
+      fields.x === undefined && fields.y === undefined ? node.position : { x: row.x, y: row.y },
+    ...(fields.w === undefined ? {} : { width: row.w }),
+    ...(fields.h === undefined ? {} : { height: row.h }),
+    ...('title' in fields || 'body' in fields ? { ariaLabel: nodeLabel(row) } : {}),
+    data: { ...node.data, node: row },
+  };
+}
+
+/**
  * The cards with each notebook card named by its page's title (the row holds only the page id;
  * the title arrives with the page read), so two notebook cards can be told apart by name.
  *

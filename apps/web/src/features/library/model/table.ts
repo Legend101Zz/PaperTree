@@ -208,7 +208,8 @@ export function filterSummary(filter: TableFilter, topicName: string | null): st
 }
 
 /**
- * "Topic · arXiv cs.CL · accepted": where an accepted topic came from, said once.
+ * "Topic · arXiv cs.CL · accepted": where an accepted topic came from, said once. A model's offer
+ * says so ("suggested by the AI", #242, DESIGN.md §4), never as if the person or the paper chose it.
  *
  * @param topic - The paper's topic.
  * @returns The source line, or null for a paper without a topic or a server that did not say.
@@ -218,7 +219,7 @@ export function topicSource(topic: ShelfPaper['topic']): string | null {
   if (topic.source === 'arxiv_category') {
     return topic.sourceDetail ? `arXiv ${topic.sourceDetail} · accepted` : 'arXiv · accepted';
   }
-  if (topic.source === 'model') return 'suggested · accepted';
+  if (topic.source === 'model') return 'suggested by the AI · accepted';
   return topic.source === 'manual' ? 'chosen by you' : null;
 }
 

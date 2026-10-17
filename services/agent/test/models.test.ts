@@ -53,12 +53,13 @@ describe('readPolicy(): env -> which model answers which kind', () => {
       ask: M3_MODEL_ID,
       summary: M3_MODEL_ID,
       diagram: FLASH_MODEL_ID,
+      topic: FLASH_MODEL_ID,
     });
   });
 
   test('PAPERTREE_MODEL=MiniMax-M3 is the whole-service fallback', () => {
     const p = readPolicy({ PAPERTREE_MODEL: M3_MODEL_ID });
-    for (const kind of ['explain', 'ask', 'summary', 'diagram'] as const) {
+    for (const kind of ['explain', 'ask', 'summary', 'diagram', 'topic'] as const) {
       assert.equal(p[kind].id, M3_MODEL_ID);
       assert.equal(p[kind].effort, null);
     }
@@ -218,12 +219,14 @@ describe('Flash on the wire (mock Anthropic server)', () => {
       ask: `minimax/${M3_MODEL_ID}`,
       summary: `minimax/${FLASH_MODEL_ID}`,
       diagram: `minimax/${M3_MODEL_ID}`,
+      topic: `minimax/${M3_MODEL_ID}`,
     });
     assert.deepEqual(body['effort'], {
       explain: 'low',
       ask: null,
       summary: 'medium',
       diagram: null,
+      topic: null,
     });
     assert.equal(body['cost_basis'][FLASH_MODEL_ID], 'estimate on M3 rates');
     assert.equal(body['model'], `minimax/${FLASH_MODEL_ID}`);

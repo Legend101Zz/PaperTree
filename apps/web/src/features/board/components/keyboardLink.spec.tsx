@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { useRef, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -17,6 +17,7 @@ import type { PtEdge, PtNode } from '../model/flow';
 const flow = vi.hoisted(() => ({
   nodes: [] as { id: string; x: number; y: number; w: number }[],
   api: null as unknown,
+  setCenter: vi.fn(async () => true),
 }));
 vi.mock('@xyflow/react', async (original) => ({
   ...(await original<typeof import('@xyflow/react')>()),
@@ -36,6 +37,8 @@ vi.mock('@xyflow/react', async (original) => ({
         };
       },
       flowToScreenPosition: (p: { x: number; y: number }) => p,
+      setCenter: flow.setCenter,
+      getZoom: () => 1,
     }),
 }));
 
@@ -71,12 +74,14 @@ const THREAD = toFlowEdge({
 interface BoardProps {
   readonly ctl: BoardController;
   readonly nodes: PtNode[];
+  /** The cards in the page (a big board draws only those in view); all of them when absent. */
+  readonly shown?: readonly string[];
   /** What xyflow's own key handlers on a card would receive. */
   readonly onCardKey: (key: string) => void;
 }
 
 /** The board as `BoardView` wires it, with xyflow's cards and pins as plain elements. */
-function Board({ ctl, nodes, onCardKey }: BoardProps): ReactNode {
+function Board({ ctl, nodes, shown, onCardKey }: BoardProps): ReactNode {
   const drawing = useThreadDrawing(nodes);
   const stage = useRef<HTMLDivElement>(null);
   const link = useLinkAs(ctl, drawing, nodes, stage);
@@ -90,20 +95,22 @@ function Board({ ctl, nodes, onCardKey }: BoardProps): ReactNode {
       <input aria-label="Search the library" />
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the test's stage */}
       <div ref={stage} onKeyDown={link.keyboard.onKeyDown} data-walking={link.keyboard.walking}>
-        {nodes.map((n) => (
-          // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- xyflow's handler
-          <div
-            key={n.id}
-            className="react-flow__node"
-            data-id={n.id}
-            aria-label={n.ariaLabel}
-            // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- as xyflow renders it
-            tabIndex={0}
-            onKeyDown={(e) => onCardKey(e.key)}
-          >
-            <span className="react-flow__handle" data-handleid="evidence_in" />
-          </div>
-        ))}
+        {nodes
+          .filter((n) => shown === undefined || shown.includes(n.id))
+          .map((n) => (
+            // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- xyflow's handler
+            <div
+              key={n.id}
+              className="react-flow__node"
+              data-id={n.id}
+              aria-label={n.ariaLabel}
+              // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- as xyflow renders it
+              tabIndex={0}
+              onKeyDown={(e) => onCardKey(e.key)}
+            >
+              <span className="react-flow__handle" data-handleid="evidence_in" />
+            </div>
+          ))}
         <textarea aria-label="Note text" />
         <button type="button" onClick={(e) => link.changeKind('ce_1', e.currentTarget)}>
           Kind
@@ -137,13 +144,18 @@ describe('linking by keyboard, and the picker on the board', () => {
     ];
   });
 
-  function mount(nodes: PtNode[] = [A, B], edges: PtEdge[] = []) {
+  function mount(nodes: PtNode[] = [A, B], edges: PtEdge[] = [], inPage?: readonly string[]) {
     const connect = vi.fn(async () => true);
     const keys: string[] = [];
     const ctl = (list: PtEdge[]) => ({ edges: list, connect, patchEdge: vi.fn() }) as unknown;
-    const tree = (n: PtNode[], e: PtEdge[]) => (
+    const tree = (n: PtNode[], e: PtEdge[], shown = inPage) => (
       <ReactFlowProvider>
-        <Board ctl={ctl(e) as BoardController} nodes={n} onCardKey={(k) => keys.push(k)} />
+        <Board
+          ctl={ctl(e) as BoardController}
+          nodes={n}
+          shown={shown}
+          onCardKey={(k) => keys.push(k)}
+        />
       </ReactFlowProvider>
     );
     const view = render(tree(nodes, edges));
@@ -157,7 +169,8 @@ describe('linking by keyboard, and the picker on the board', () => {
       keys,
       card,
       start,
-      rerender: (n: PtNode[], e: PtEdge[]) => view.rerender(tree(n, e)),
+      rerender: (n: PtNode[], e: PtEdge[], shown?: readonly string[]) =>
+        view.rerender(tree(n, e, shown)),
     };
   }
   const status = () => screen.getByRole('status').textContent;
@@ -199,6 +212,23 @@ describe('linking by keyboard, and the picker on the board', () => {
     press('Escape');
     expect(walking()).toBe('false');
     expect(document.activeElement).toBe(thread);
+  });
+
+  it('on a big board a target out of the page is brought into view, then focused (#215 S6)', async () => {
+    flow.setCenter.mockClear();
+    const { card, start, rerender } = mount([A, B, C], [], ['cn_a', 'cn_b']);
+    start('cn_a');
+    expect(document.activeElement).toBe(card('cn_b'));
+    expect(flow.setCenter).not.toHaveBeenCalled();
+    press('Tab');
+    expect(status()).toBe('Target 2 of 2, evidence in.');
+    // The far corner card is not in the page: the board is centred on it (260 × 180 at 1200, 600).
+    expect(flow.setCenter).toHaveBeenCalledWith(1330, 690, { zoom: 1 });
+    expect(document.activeElement).toBe(card('cn_b'));
+    // xyflow draws it once it is in view, and focus (which says its name) lands on it.
+    rerender([A, B, C], [], ['cn_a', 'cn_b', 'cn_c']);
+    await waitFor(() => expect(document.activeElement).toBe(card('cn_c')));
+    expect(walking()).toBe('true');
   });
 
   it('walks a card once per pin, so a claim can reach a question card’s “question in”', async () => {

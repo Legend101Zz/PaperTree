@@ -26,6 +26,13 @@ export interface InkLayerProps {
    * page, so the ink is announced once. No count: like the panel's "Ink: yours", it says whose.
    */
   readonly labelled?: boolean;
+  /** Draw only this box of the page (the phone's view-only strip, S5e), in page units. */
+  readonly crop?: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  };
 }
 
 /** A token name is letters, digits and dashes; anything else falls back to the pen colour. */
@@ -61,6 +68,7 @@ export const InkLayer = memo(function InkLayer({
   height,
   width,
   labelled = true,
+  crop,
 }: InkLayerProps): ReactNode {
   const paths = useMemo(
     () =>
@@ -81,7 +89,11 @@ export const InkLayer = memo(function InkLayer({
       className="pt-nb-ink"
       width={width}
       height={height}
-      viewBox={`0 0 ${String(width)} ${String(height)}`}
+      viewBox={
+        crop === undefined
+          ? `0 0 ${String(width)} ${String(height)}`
+          : [crop.x, crop.y, crop.width, crop.height].map(String).join(' ')
+      }
       {...(labelled
         ? { role: 'img', 'aria-label': 'Your handwriting (not searchable)' }
         : { 'aria-hidden': true })}

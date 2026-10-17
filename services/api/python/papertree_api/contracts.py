@@ -50,6 +50,10 @@ GROUPS: Final[dict[str, tuple[tuple[type[BaseModel], Mode], ...]]] = {
         (s.LibraryLinks, OUT),
         (s.LibraryLink, OUT),
         (s.LibraryReference, OUT),
+        (s.LibraryPlate, OUT),
+        (s.PaperFigure, OUT),
+        (s.PaperAbstract, OUT),
+        (s.PlatePut, IN),
     ),
     "highlights": (
         (s.Highlight, OUT),

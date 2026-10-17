@@ -5,6 +5,8 @@
  * in your voice), the AI slip (the answer, its markers numbered as the quote cards below it), and
  * the coverage line. The three voices go through the shared slips, so `data-voice` is `you`,
  * `paper` (the quoted passage) and `ai`. Collapsed, the slip shows its first paragraph.
+ * On a phone (S5e, #210, frame 08c) "Read the whole answer" sits in the slip's foot with how many
+ * paragraphs it holds back, and the margin echoes are left out (the markers stay inline).
  */
 import { AiParagraph, AiSlip, CallSlip, CoverageReadout, PageTab } from '@papertree/ui';
 import { ChevronDown, ChevronUp } from 'lucide-react';
@@ -18,6 +20,16 @@ import type { ExchangeBody } from '../model/wire';
 import type { Anchor } from '@papertree/anchoring';
 import type { ReactNode } from 'react';
 
+/**
+ * "1 more paragraph" or "4 more paragraphs": what "Read the whole answer" holds back.
+ *
+ * @param n - Paragraphs not shown.
+ * @returns The phrase.
+ */
+export function moreParagraphs(n: number): string {
+  return `${String(n)} more paragraph${n === 1 ? '' : 's'}`;
+}
+
 /** Props for `ExchangeBlock`. */
 export interface ExchangeBlockProps {
   /** What Dive in stored on the page. */
@@ -28,6 +40,8 @@ export interface ExchangeBlockProps {
   readonly onFocusAnchor: (anchor: Anchor) => void;
   /** True when the notebook search matched it: lit on screen, and said. */
   readonly matched?: boolean;
+  /** The phone's stack (08c). */
+  readonly phone?: boolean;
 }
 
 function Margin({ numbers, exchange }: { numbers: number[]; exchange: Exchange }): ReactNode {
@@ -53,6 +67,7 @@ export const ExchangeBlock = memo(function ExchangeBlock({
   exchange,
   onFocusAnchor,
   matched = false,
+  phone = false,
 }: ExchangeBlockProps): ReactNode {
   const [open, setOpen] = useState(false);
   const { answer, question, layout } = exchange;
@@ -75,6 +90,7 @@ export const ExchangeBlock = memo(function ExchangeBlock({
         layout={layout}
         citations={citations}
         onFocusAnchor={onFocusAnchor}
+        touch={phone}
       />
     );
   const cited = shown.filter((p) => !uncited.has(p.i));
@@ -99,7 +115,7 @@ export const ExchangeBlock = memo(function ExchangeBlock({
           : { quote: { text: anchorQuote(origin), page: place.page, para: place.para } })}
       />
       <div className="pt-nb-exchange__answer" data-open={open ? 'true' : 'false'}>
-        {paragraphs.length > 1 ? (
+        {paragraphs.length > 1 && !phone ? (
           <button
             type="button"
             className="pt-nb-exchange__toggle"
@@ -117,15 +133,29 @@ export const ExchangeBlock = memo(function ExchangeBlock({
           {...(own.length === 0
             ? {}
             : { uncited: own.map((p) => <p key={p.i}>{prose(p.text)}</p>) })}
-          {...(usage === null
+          {...(usage === null && !(phone && paragraphs.length > 1)
             ? {}
-            : { footer: <span className="pt-nb-exchange__usage">{usage}</span> })}
+            : {
+                footer: (
+                  <>
+                    {phone && paragraphs.length > 1 ? (
+                      <span className="pt-nb-exchange__more">
+                        <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
+                          {open ? 'Show less' : 'Read the whole answer'}
+                        </button>
+                        {open ? null : <span>{moreParagraphs(paragraphs.length - 1)}</span>}
+                      </span>
+                    ) : null}
+                    {usage === null ? null : <span className="pt-nb-exchange__usage">{usage}</span>}
+                  </>
+                ),
+              })}
         >
           {cited.map((p) => (
             <AiParagraph
               key={p.i}
               aside={
-                layout === null ? null : (
+                layout === null || phone ? null : (
                   <Margin numbers={paragraphNumbers(p.text, layout)} exchange={exchange} />
                 )
               }

@@ -13,7 +13,7 @@ import type { Page } from '@playwright/test';
 
 import { expect, test } from '../harness/test';
 import { REPO } from '../s4/support';
-import { openReader, revealText, spanBoxAny, yolo } from './support';
+import { openReader, readingControls, revealText, spanBoxAny, yolo } from './support';
 
 const DDPM = join(REPO, 'research', 'benchmarks', 'fresh', 'pdfs', 'ddpm-2006.11239.pdf');
 const YOLO = yolo();
@@ -62,6 +62,18 @@ const CASES: readonly {
     top: 110,
   },
 ];
+
+/**
+ * The header height each width's `top` (window px) was written against: one 56 px row from 768 px,
+ * and below it S4c's two-row phone header, 119 px (the reader's scroller was 725 of 844 px in the
+ * S4d gate run). Since #205 the phone header is one 56 px row, so the same window px would put the
+ * needle 63 px deeper into the reading area than these cases were written for; in Guided's 390 px
+ * column that much PDF (an equation and a paragraph) reflows to ~800 px. So the needle is placed
+ * from the reading area's top, at the depth each case was measured at.
+ */
+function writtenUnder(width: number): number {
+  return width < 768 ? 119 : 56;
+}
 
 async function nudgeToTop(page: Page, needle: string, top: number, x: number): Promise<number> {
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -115,13 +127,26 @@ for (const size of [
           size.width < 600 ? 'fit-width' : '1.25',
         );
         await revealText(page, c.needle);
-        const placed = await nudgeToTop(page, c.needle, c.top, size.width / 2);
+        const readingTop = await page.evaluate(
+          () =>
+            (
+              document.querySelector('[data-papertree-scroller]') as HTMLElement
+            ).getBoundingClientRect().top,
+        );
+        const placed = await nudgeToTop(
+          page,
+          c.needle,
+          readingTop + c.top - writtenUnder(size.width),
+          size.width / 2,
+        );
         const sourceHeight = await page.evaluate(
           () => (document.querySelector('[data-papertree-scroller]') as HTMLElement).clientHeight,
         );
 
         // Source -> Guided, immediately after the reader's last wheel.
-        await page.getByRole('radio', { name: 'Guided' }).click();
+        await readingControls(page, (controls) =>
+          controls.getByRole('radio', { name: 'Guided' }).click(),
+        );
         await page.waitForTimeout(1500);
         const guided = await guidedOffset(page, c.guided);
         note(`${c.name}: Source top ${placed.toFixed(0)} px -> Guided ${JSON.stringify(guided)}`);
@@ -134,7 +159,9 @@ for (const size of [
         expect(g.top, 'paragraph is inside the Guided viewport').toBeLessThan(g.height * 0.9);
 
         // Guided -> Source: back where the reader was.
-        await page.getByRole('radio', { name: 'Source' }).click();
+        await readingControls(page, (controls) =>
+          controls.getByRole('radio', { name: 'Source' }).click(),
+        );
         await page.waitForTimeout(1500);
         const back = await spanBoxAny(page, c.needle);
         note(
@@ -184,7 +211,9 @@ test.describe('RFIX2 R8 - a saved position that names no block still opens Guide
           timeout: 180_000,
         })
         .toBeGreaterThan(20);
-      await page.getByRole('radio', { name: 'Guided' }).click();
+      await readingControls(page, (controls) =>
+        controls.getByRole('radio', { name: 'Guided' }).click(),
+      );
       await page.waitForTimeout(1500);
       const where = await page.evaluate(() => {
         const sc = document.querySelector('[data-guided-scroller]') as HTMLElement;
@@ -261,7 +290,9 @@ for (const size of [
             });
       });
       if (saved !== null && saved.blockId === undefined) marginHits += 1;
-      await page.getByRole('radio', { name: 'Guided' }).click();
+      await readingControls(page, (controls) =>
+        controls.getByRole('radio', { name: 'Guided' }).click(),
+      );
       await page.waitForTimeout(900);
       const guidedTop = await page.evaluate(
         () => (document.querySelector('[data-guided-scroller]') as HTMLElement).scrollTop,
@@ -271,7 +302,9 @@ for (const size of [
       );
       if (guidedTop < 200)
         bad.push(`step ${String(step)} ${JSON.stringify(saved)} -> ${guidedTop.toFixed(0)}`);
-      await page.getByRole('radio', { name: 'Source' }).click();
+      await readingControls(page, (controls) =>
+        controls.getByRole('radio', { name: 'Source' }).click(),
+      );
       await page.waitForTimeout(900);
       await page.mouse.move(size.width / 2, 450);
       await page.mouse.wheel(0, stepPx);

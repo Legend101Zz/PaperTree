@@ -13,17 +13,17 @@ pnpm --filter @papertree/agent test:mutants   # every mutant (M5, M6, G1–G13),
 
 ## Configuration (contracts.md §7, the agent's rows)
 
-| Variable                                                      | Default                 | Notes                                                                                  |
-| ------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------- |
-| `PAPERTREE_AGENT_SECRET`                                      | **required**            | shared with the API (`X-PaperTree-Agent-Secret`); boot refuses without it              |
-| `PAPERTREE_MINIMAX_API_KEY`                                   | **required**            | unless faux mode; read once, then removed from `process.env`; never `MINIMAX_API_KEY`  |
-| `PAPERTREE_AGENT_PORT`                                        | `8200`                  | binds `127.0.0.1` only                                                                 |
-| `PAPERTREE_API_INTERNAL_URL`                                  | `http://127.0.0.1:8000` | a run's `tool.base_url` must be on this origin, so a run token is never sent elsewhere |
-| `PAPERTREE_MODEL`                                             | see Model policy        | the model for every kind: `MiniMax-M3` or `MiniMax-M3.1-Flash-Preview`                 |
-| `PAPERTREE_MODEL_EXPLAIN` / `_ASK` / `_SUMMARY`               | `PAPERTREE_MODEL`       | the model for one kind                                                                 |
-| `PAPERTREE_MODEL_EFFORT` (+ `_EXPLAIN` / `_ASK` / `_SUMMARY`) | `low`                   | Flash only: `low`, `medium` or `high`; ignored for M3                                  |
-| `PAPERTREE_AGENT_FAUX`                                        | unset                   | `1` = the scripted test model (below); the key is not read                             |
-| `PAPERTREE_AGENT_LOG_LEVEL`                                   | `info`                  | `debug` adds raw provider error text (§3.3); keys and tokens are never logged          |
+| Variable                                                                | Default                 | Notes                                                                                  |
+| ----------------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------- |
+| `PAPERTREE_AGENT_SECRET`                                                | **required**            | shared with the API (`X-PaperTree-Agent-Secret`); boot refuses without it              |
+| `PAPERTREE_MINIMAX_API_KEY`                                             | **required**            | unless faux mode; read once, then removed from `process.env`; never `MINIMAX_API_KEY`  |
+| `PAPERTREE_AGENT_PORT`                                                  | `8200`                  | binds `127.0.0.1` only                                                                 |
+| `PAPERTREE_API_INTERNAL_URL`                                            | `http://127.0.0.1:8000` | a run's `tool.base_url` must be on this origin, so a run token is never sent elsewhere |
+| `PAPERTREE_MODEL`                                                       | see Model policy        | the model for every kind: `MiniMax-M3` or `MiniMax-M3.1-Flash-Preview`                 |
+| `PAPERTREE_MODEL_EXPLAIN` / `_ASK` / `_SUMMARY` / `_DIAGRAM` / `_TOPIC` | `PAPERTREE_MODEL`       | the model for one kind                                                                 |
+| `PAPERTREE_MODEL_EFFORT` (+ `_EXPLAIN` / `_ASK` / `_SUMMARY`)           | `low`                   | Flash only: `low`, `medium` or `high`; ignored for M3                                  |
+| `PAPERTREE_AGENT_FAUX`                                                  | unset                   | `1` = the scripted test model (below); the key is not read                             |
+| `PAPERTREE_AGENT_LOG_LEVEL`                                             | `info`                  | `debug` adds raw provider error text (§3.3); keys and tokens are never logged          |
 
 Set by the service itself before any Pi code runs: `PI_OFFLINE=1`, `PI_TELEMETRY=0`,
 `PI_CODING_AGENT_DIR` = a new empty directory it owns (mode 0700, removed at exit), and
@@ -129,7 +129,8 @@ and no socket. By default it answers from what the run gave it: an explain/ask w
 quotes the first passages and cites them; a summary calls `get_outline` and writes one bullet per
 outline handle; an ask without a seed calls `search_passages`. A question containing
 `[faux:<name>]` selects a scripted failure for e2e error paths: `auth-error`, `upstream-503`,
-`stall`, `slow`, `tool-loop`. The tests replay the eight `contracts/agent/fixtures/*.sse` recordings
+`stall`, `slow`, `tool-loop`; `paragraphs` answers from the seed in three paragraphs, the second citing both seed passages as one run (the phone's
+"Read the whole answer", #205). The tests replay the eight `contracts/agent/fixtures/*.sse` recordings
 as faux scripts and assert the agent emits them (`test/fixtures.test.ts`).
 
 ## Tests
@@ -178,9 +179,15 @@ scripts; nothing here needs them.
   follow-up (as the recordings have it). The seed passages and the datamark are in the SYSTEM prompt,
   rebuilt each run.
 - `kind` and `prompt_version` must pair (`explain`/`explain-v1`, `ask`/`ask-v1`,
-  `summary`/`summary-v1`), and `tool.base_url` must end with the run id; the schema allows both.
+  `summary`/`summary-v1`, `diagram`/`diagram-v1`, `topic`/`topic-v1`), and `tool.base_url` must end
+  with the run id; the schema allows both.
   `limits.deadline_ms` and `limits.idle_ms` must be at most 2,147,483,647 (Node's longest timer);
   the schema sets no maximum.
+- A `topic` run (v0.2 S2b2, #242) has no tools: `question` holds the `Category:` and `Existing topics:`
+  lines, `seed.quote` the abstract excerpt, and the answer is ONE JSON object `{topic_name, is_new,
+reason}` (`src/topic.ts`). An answer that does not fit ends the run `error` (`internal`) with the
+  text kept: a bad answer is "no suggestion", never a retry. Faux: `[faux:topic-existing]`,
+  `[faux:topic-new]`, `[faux:topic-bad]` on a line of the question.
 - Paper-derived text the API has not datamarked — the title and the selection's section name — is
   flattened to one line (no controls, no datamark look-alikes, ≤ 300 characters) and datamarked
   word by word in the system prompt; passage and page labels are flattened. The quote in the user

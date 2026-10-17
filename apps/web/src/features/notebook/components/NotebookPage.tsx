@@ -169,6 +169,8 @@ export function NotebookPage(props: NotebookPageProps): ReactNode {
   return (
     <div
       className="pt-nb-page"
+      // What Dive in slides in, carrying the panel's cards onto its own (S5e, `useDiveArrival`).
+      data-dive-page=""
       data-template={props.template}
       style={{ width: BINDING + PAGE_WIDTH * scale, height: height * scale }}
     >

@@ -12,7 +12,7 @@ import type { Page } from '@playwright/test';
 
 import { expect, test } from '../harness/test';
 import { REPO, shotPath } from '../s4/support';
-import { openReader, yolo } from './support';
+import { openReader, readingControls, yolo } from './support';
 
 const DDPM = join(REPO, 'research', 'benchmarks', 'fresh', 'pdfs', 'ddpm-2006.11239.pdf');
 const YOLO = yolo();
@@ -98,7 +98,9 @@ for (const size of [
           'the IR reports the figure and its panels as separate blocks',
         ).toBeGreaterThan(1);
 
-        await page.getByRole('radio', { name: 'Guided' }).click();
+        await readingControls(page, (controls) =>
+          controls.getByRole('radio', { name: 'Guided' }).click(),
+        );
         await page.waitForSelector('[data-guided-scroller]');
         await page.waitForTimeout(1500);
         const seen = await figureCards(page, figureIds, c.caption);

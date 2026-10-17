@@ -134,7 +134,8 @@ test.describe('v0.2 steps 6–8: select → Explain → marker 2 lights passage 
     await expect(linger.first()).toBeVisible();
     await page.waitForTimeout(400);
     const rest = await linger.first().evaluate((el) => getComputedStyle(el).strokeOpacity);
-    expect(Number(rest)).toBeCloseTo(0.35, 2);
+    // 0.6: the outline keeps 3:1 on the page (WCAG 1.4.11, #205); 0.35 was 1.8:1.
+    expect(Number(rest)).toBeCloseTo(0.6, 2);
     await expect(tab).toBeVisible();
     await page.mouse.click(5, 450);
     await expect(page.locator('svg [data-flash]')).toHaveCount(0);

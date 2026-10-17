@@ -101,15 +101,16 @@ KNOWN_MODELS: Final = ("MiniMax-M3", "MiniMax-M3.1-Flash-Preview")
 MODEL_PREFIX: Final = "minimax/"
 UNKNOWN_SDK: Final = "unknown"
 
-RunKind = Literal["explain", "ask", "summary", "diagram"]
+RunKind = Literal["explain", "ask", "summary", "diagram", "topic"]
 
 PROMPT_VERSIONS: Final[
-    dict[RunKind, Literal["explain-v1", "ask-v1", "summary-v1", "diagram-v1"]]
+    dict[RunKind, Literal["explain-v1", "ask-v1", "summary-v1", "diagram-v1", "topic-v1"]]
 ] = {
     "explain": "explain-v1",
     "ask": "ask-v1",
     "summary": "summary-v1",
     "diagram": "diagram-v1",
+    "topic": "topic-v1",
 }
 
 #: contracts.md §8 `ai_runs.code_path` literals.
@@ -118,6 +119,7 @@ CODE_PATHS: Final[dict[RunKind, str]] = {
     "ask": "api.threads.ask>agent.v1.runs>pi.createAgentSession>minimax.anthropic-messages",
     "summary": "api.summary>agent.v1.runs>pi.createAgentSession>minimax.anthropic-messages",
     "diagram": "api.threads.diagram>agent.v1.runs>pi.createAgentSession>minimax.anthropic-messages",
+    "topic": "api.topics>agent.v1.runs>pi.createAgentSession>minimax.anthropic-messages",
 }
 
 #: contracts.md §3.2 "Limits by kind".
@@ -160,6 +162,17 @@ LIMITS: Final[dict[RunKind, AgentLimits]] = {
         max_turns=4,
         max_output_tokens=2048,
         max_retries=1,
+    ),
+    # A topic suggestion (v0.2 S2b2, #242): one short JSON object, no tools. A short deadline (the
+    # upload must not wait on it: it is an offer, never a gate), a small output cap, and NO retry:
+    # a bad or failed answer is "no suggestion". 1,024 tokens leave Flash's adaptive thinking room.
+    "topic": AgentLimits(
+        deadline_ms=30_000,
+        idle_ms=20_000,
+        max_tool_calls=0,
+        max_turns=2,
+        max_output_tokens=1024,
+        max_retries=0,
     ),
 }
 
@@ -226,10 +239,13 @@ def token_expiry(kind: RunKind, *, now: datetime | None = None) -> str:
 class AgentUnavailable(Exception):
     """The agent could not be reached, or refused the run before streaming (pre-stream)."""
 
-    def __init__(self, code: ErrorCode, detail: str) -> None:
+    def __init__(self, code: ErrorCode, detail: str, *, permanent: bool = False) -> None:
         super().__init__(detail)
         self.code: ErrorCode = code
         self.detail = detail
+        #: The agent understood the request and REFUSED it (a 4xx other than auth/busy): asking
+        #: again with the same request cannot succeed (#242 review: it must not retry per read).
+        self.permanent = permanent
 
 
 class AgentProtocolError(Exception):
@@ -340,7 +356,11 @@ class AgentClient:
             )
         if status == 409:
             raise AgentUnavailable("busy", "This conversation is already answering.")
-        raise AgentUnavailable("agent_unavailable", "The AI service could not start this answer.")
+        raise AgentUnavailable(
+            "agent_unavailable",
+            "The AI service could not start this answer.",
+            permanent=400 <= status < 500,
+        )
 
     async def cancel(self, run_id: str, *, request_id: str | None) -> int | None:
         """``DELETE /v1/runs/{run_id}``; the status, or None when the agent is unreachable."""
@@ -997,8 +1017,8 @@ RUN_RESERVE_USD: Final[dict[str, float]] = {
     # Unmeasured until S7b's live smoke: a seed like an explain's and at most 2,048 output tokens
     # cost about $0.004 on M3 rates, so the ask's reserve errs on the side of waiting.
     "diagram": 0.02,
-    # The topic Flash run (#242) is not built; a row of it may already be recorded (0011 allows
-    # the kind), so it has a reserve now, the explain's, and never meets a missing key here.
+    # The topic Flash run (#242, topic_run.py): a few hundred input tokens and at most 1,024
+    # output, about $0.001 on M3 rates; the reserve is the explain's.
     "topic": 0.01,
 }
 

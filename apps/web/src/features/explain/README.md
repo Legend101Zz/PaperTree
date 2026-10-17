@@ -90,10 +90,26 @@ derived on read from the parse, never stored).
   `answer_paragraphs` rule), markers, trace rows ("where · cited n×", the paper's words, "not verified" when
   `supported === false`) and coverage.
 
+- **The phone sheet (#205, frame 08b), below 768 px.** The sheet's own header holds "Explain", the thread menu
+  ("Thread 1 of 2 ⌄", no step arrows) and Summary beside the ×. Each answer shows its first paragraph and "Read the
+  whole answer" (`model/phone.clipAnswer`; one button that becomes Show less, so focus stays on it). It holds while an
+  answer streams too: the first paragraph grows in view and the rest arrives behind the button, so nothing the
+  reader saw folds away. An answer of one paragraph has no button. Markers are 22 px squares whose hit area reaches
+  44 px (`hitOutset` in `@papertree/ui`; each square is drawn above every tap area, and in a run "[1, 4]" the two
+  areas meet halfway, `model/phone.runSides`); trace rows are one 44 px button each. The last complete answer's usage line
+  and To board are pinned above the follow-up box, outside the scroll (`PinnedFooter`, `model/phone.pinnedExchange`),
+  so they never cover the answer; earlier answers keep theirs in the scroll. Dive in (S5e, #293) sits before To board
+  there, 44 px, through the same one-request `useDiveIn` ("Dive in to answer 2" when the thread has several); the
+  footers in the scroll give it 44 px on the phone too. Diagram is not drawn there (#217's plate starts from the
+  selection toolbar, not from an answer): never a dead button. A marker or row tap lowers
+  the sheet to peek and runs the flash with `bottomInset` = the peek's height, so a passage behind the peek scrolls
+  up first; a passage already in view starts flashing while the sheet is still lowering. In a landscape phone
+  (max-height 500 px) the sheet opens full height under the header and the pinned footer takes one line.
+
 ## On screen
 
 - `components/ExplainPanel.tsx`: the drawer (≥ 768 px) or sheet; its header holds the thread menu, Summarize
-  and Close. `components/ThreadView.tsx`: the thread as exchanges (or the summary) above the `Composer`.
+  and Close. `components/PinnedFooter.tsx`: the phone sheet's pinned usage line and To board. `components/ThreadView.tsx`: the thread as exchanges (or the summary) above the `Composer`.
 - `components/Exchange.tsx`: THE layout of one exchange (frame 13 option 1, the owner's default; owner may
   change): `CallSlip` (stamped "not sent" when refused) → `AnswerSlip` (markers inline, marker + tab in the margin, the uncited run under "no
   citation · the AI's own reading") → `CoverageReadout` → `TraceList`. One component behind `ExchangeProps`,
@@ -102,6 +118,10 @@ derived on read from the parse, never stored).
 - A **diagram thread** (#217) is drawn by `features/diagram`: `ThreadView` gives each exchange whose answer
   carries a plate to `DiagramExchange` (plates numbered 1, 2…, one set of passage numbers per thread) and
   draws no composer (a plate is redrawn, never continued).
+- **Dive in** (S5e, #210): the answer's footer has Dive in (frame 04's oxblood outline) before Send to
+  board, on every complete stored answer; it is the notebook's `useDiveIn` (`features/notebook`), which
+  makes the answer's page once and opens it with the Dive-in motion. A sample paper (no server) has no
+  Dive in.
 - `components/ThreadMenu.tsx`: "‹ Thread 1 of 2 ›" and a listbox of the threads named by their asks, ending in
   "New thread" (owner may change). A switch keeps focus in the menu, never on the drawer.
 - The citation flash is the reader's (`components/reader/flash.ts`, `ReaderWorkspace.focusAnchor`, `.pt-flash`),
@@ -126,4 +146,6 @@ derived on read from the parse, never stored).
 - `model/summary.ts`: the summary's view model (numbers shared with the thread, the counting rule, the trace by
   page). Pure, tested on the real cached summary (`test/fixtures/attention-summary.json`).
 - `model/threads.ts`: menu order, position, a stored thread's origin, the thread an empty panel opens on.
+- `model/phone.ts`: the phone sheet's first-paragraph clip and which answer the footer pins. Pure, tested
+  (`phone.spec.ts`, on the golden thread).
 - `api/threads.ts`: query keys and fetchers. `hooks/useThreads.ts`: the reads, the open-on-newest, the merge.

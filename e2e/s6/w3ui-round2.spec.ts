@@ -208,6 +208,12 @@ test.describe('W3UI round 2 (YOLO)', () => {
 
         const answer = panel.locator('[data-message-status="complete"]').first();
         await expect(answer).toBeVisible({ timeout: 60_000 });
+        // Below 768 px the sheet opens on the answer's first paragraph (#205, frame 08b): read the
+        // whole answer before counting what it renders.
+        if (screen.width < 768) {
+          await answer.getByRole('button', { name: 'Read the whole answer' }).click();
+          await expect(answer.getByRole('button', { name: 'Show less' })).toBeVisible();
+        }
         // R10: rendered, not raw.
         const text = (await answer.innerText()).replace(/\s+/g, ' ');
         expect(text).not.toMatch(/\*|\[b\d|_where_|`/);

@@ -12,6 +12,8 @@ import { Fragment, type ReactNode } from 'react';
 
 import { dehyphenate, parseMarkdown, type Block, type Inline } from '@/lib/markdown';
 
+import { runSides } from '../model/phone';
+
 import type { AnswerParagraph, PassageMarker } from '../model/exchange';
 
 /** How markers behave in one exchange: which is lit, and what hovering or clicking one does. */
@@ -25,6 +27,8 @@ export interface MarkerHandlers {
   readonly onLight: (n: number | null) => void;
   /** The citation flash: scroll to the passage and flash it. */
   readonly onShow: (marker: PassageMarker) => void;
+  /** The phone sheet: each marker answers taps over 44 px (frame 08b). */
+  readonly touch?: boolean;
 }
 
 /** Props for `AnswerText`. */
@@ -45,6 +49,7 @@ function Marker({ marker, ctx }: { marker: PassageMarker; ctx: MarkerHandlers })
       label={formatPageLabel(marker.page, marker.para)}
       lit={ctx.lit === marker.n}
       notVerified={marker.notVerified}
+      size={ctx.touch === true ? 'touch' : 'compact'}
       onFlash={() => ctx.onShow(marker)}
       onLight={(on) => ctx.onLight(on ? marker.n : null)}
     />
@@ -69,12 +74,13 @@ function renderInline(nodes: readonly Inline[], ctx: MarkerHandlers): ReactNode 
     // The marker and the punctuation after it travel as one unbreakable run (`.pt-cite-run`).
     return (
       <span className="pt-cite-run" key={key}>
-        {numbers.map((marker) => (
+        {numbers.map((marker, index) => (
           <span
             key={marker.n}
             className="pt-exchange__inline-marker"
             data-passage={marker.n}
             data-citation-id={marker.citation.citation_id}
+            data-run={runSides(index, numbers.length) ?? undefined}
           >
             <Marker marker={marker} ctx={ctx} />
           </span>

@@ -115,6 +115,21 @@ interface LibraryTopic {
   source_detail: string | null;
 }
 
+/**
+ * The figure the caller chose as a paper's cover (#200), as it is in the promoted parse. The
+ * choice itself is stored as an Anchor; `block_id` only says which figure of `…/figures` it is.
+ */
+export interface LibraryPlate {
+  block_id: string;
+  page_index: number;
+  /** "Figure 1", read from the start of its caption; null when the parser attached none. */
+  label: string | null;
+  /** The caption as the paper has it, or null. */
+  caption_text: string | null;
+  /** The crop, signed for about an hour (one URL per ten minutes, so polling keeps it). */
+  asset_url: string;
+}
+
 export interface LibraryPaper {
   paper_id: string;
   title: string;
@@ -140,6 +155,10 @@ export interface LibraryPaper {
   has_summary: boolean;
   /** v0.2 (#193): the accepted topic, or null (unshelved, or only offered). */
   topic: LibraryTopic | null;
+  /** v0.2 (#200): the caller's notebook pages on this paper. */
+  notebook_count: number;
+  /** v0.2 (#200): the chosen cover figure, or null for the typographic cover. */
+  plate: LibraryPlate | null;
 }
 
 /** The bibliography entry behind a library link; `index` is zero-based. */

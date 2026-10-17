@@ -5,9 +5,9 @@
 import type { BrowserContext, Page } from '@playwright/test';
 
 import { expect } from '../harness/test';
-import { register, upload, waitParsed } from '../s4/support';
+import { readingControls, register, upload, waitParsed } from '../s4/support';
 
-export { register, upload, waitParsed };
+export { readingControls, register, upload, waitParsed };
 
 export { drag, SCROLLER, shotPath } from '../s4/support';
 export { reveal as revealText, yoloPdf as yolo } from '../s4/support';
@@ -67,7 +67,7 @@ export async function openReader(
     })
     .toBeGreaterThan(50);
   expect(await page.evaluate(() => document.visibilityState)).toBe('visible');
-  await page.getByLabel('Zoom level').selectOption(zoom);
+  await readingControls(page, (controls) => controls.getByLabel('Zoom level').selectOption(zoom));
   await page.waitForTimeout(1000);
   return { page, context, paperId, token };
 }

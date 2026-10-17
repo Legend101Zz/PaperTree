@@ -3,9 +3,11 @@
 /**
  * The small interface pieces around one AI answer (#204), split out of `AnswerSlip`: Stop on the
  * tab row (sticky, so a long answer never scrolls it away), the note after Stop with Retry, the fold
- * row, Send to board and the skeleton. Focus hands over Stop → Retry → Stop through `FocusHandoff`,
- * so a keyboard reader never falls back to `<body>`.
+ * row, Dive in (S5e, #210), Send to board and the skeleton. Focus hands over Stop → Retry → Stop
+ * through `FocusHandoff`, so a keyboard reader never falls back to `<body>`.
  */
+import { Button, type ControlSize } from '@papertree/ui';
+import { NotebookPen } from 'lucide-react';
 import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
 
 import { foldedCounts, stoppedNote } from '../model/states';
@@ -129,13 +131,24 @@ type SendState = 'idle' | 'sending' | 'sent' | 'failed';
 /** Props for `SendToCanvas`. */
 export interface SendToCanvasProps {
   readonly onSend: () => Promise<void>;
+  /** The phone footer's shorter words (frame 08b): "To board". */
+  readonly short?: boolean;
+  /** Drawn before the words (the phone footer's pin). */
+  readonly icon?: ReactNode;
+  /** The button's words before it is pressed, when the default would not say which answer. */
+  readonly label?: string;
 }
 
 /** Send to board, saying when it is sending, sent, or failed. */
-export function SendToCanvas({ onSend }: SendToCanvasProps): ReactNode {
+export function SendToCanvas({
+  onSend,
+  short = false,
+  icon,
+  label: idleLabel,
+}: SendToCanvasProps): ReactNode {
   const [send, setSend] = useState<SendState>('idle');
-  const label =
-    send === 'sending' ? 'Sending…' : send === 'sent' ? 'Sent to board' : 'Send to board';
+  const idle = idleLabel ?? (short ? 'To board' : 'Send to board');
+  const label = send === 'sending' ? 'Sending…' : send === 'sent' ? 'Sent to board' : idle;
   return (
     <div className="pt-explain__actions">
       <button
@@ -150,6 +163,7 @@ export function SendToCanvas({ onSend }: SendToCanvasProps): ReactNode {
           );
         }}
       >
+        {icon}
         {label}
       </button>
       {send === 'failed' ? (
@@ -158,6 +172,61 @@ export function SendToCanvas({ onSend }: SendToCanvasProps): ReactNode {
         </span>
       ) : null}
     </div>
+  );
+}
+
+/** Props for `DiveIn`. */
+export interface DiveInProps {
+  /** Opens the answer as a notebook page; given the exchange the button sits in, whose cards fly. */
+  readonly onDiveIn: (exchange: HTMLElement | null) => Promise<void>;
+  /** `touch` on the phone sheet: a 44 px target (DESIGN.md §10). */
+  readonly size?: ControlSize;
+  /** The words before it is pressed, when "Dive in" would not say which answer (pinned footer). */
+  readonly label?: string;
+}
+
+/** A Dive in whose route change did not take the reader away is pressable again after this. */
+const DIVE_SETTLE_MS = 1500;
+
+/**
+ * Dive in (frames 04 and 11): the answer opens as a notebook page, the same page every time. It
+ * waits while the page is being made, and says so when it could not be.
+ */
+export function DiveIn({ onDiveIn, size = 'md', label = 'Dive in' }: DiveInProps): ReactNode {
+  const [state, setState] = useState<'idle' | 'opening' | 'failed'>('idle');
+  const settle = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (settle.current !== null) clearTimeout(settle.current);
+    },
+    [],
+  );
+  return (
+    <>
+      <Button
+        variant="outline"
+        size={size}
+        leadingIcon={<NotebookPen size={18} />}
+        disabled={state === 'opening'}
+        onClick={(event) => {
+          setState('opening');
+          onDiveIn(event.currentTarget.closest<HTMLElement>('.pt-exchange')).then(
+            // The reader normally unmounts on the way to the page; if it is still here, it settles.
+            () => {
+              settle.current = setTimeout(() => setState('idle'), DIVE_SETTLE_MS);
+            },
+            () => setState('failed'),
+          );
+        }}
+      >
+        {state === 'opening' ? 'Opening the page…' : label}
+      </Button>
+      {state === 'failed' ? (
+        <span className="pt-explain__note" role="alert">
+          Couldn’t open a notebook page for this answer. Try again.
+        </span>
+      ) : null}
+    </>
   );
 }
 

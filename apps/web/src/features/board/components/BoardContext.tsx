@@ -55,6 +55,25 @@ export function useLinking(): LinkStart | null {
 }
 
 /**
+ * Whether the board is zoomed out past the point a card's words can be read (`model/glance`), so
+ * every card draws as a glance. One value for the whole board: it changes only when the zoom
+ * crosses the switch, never on a pan.
+ */
+const Glance = createContext(false);
+
+/** Tells the cards whether they are glances. */
+export const GlanceProvider = Glance.Provider;
+
+/**
+ * Whether this card should draw as a glance.
+ *
+ * @returns True below the low-zoom switch.
+ */
+export function useGlance(): boolean {
+  return useContext(Glance);
+}
+
+/**
  * The board's actions, inside a card.
  *
  * @returns The actions `BoardView` provides.

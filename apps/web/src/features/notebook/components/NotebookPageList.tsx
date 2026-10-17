@@ -40,6 +40,26 @@ export function countsPhrase(counts: NotebookCounts): string {
   return words.length === 0 ? 'Empty page' : words.join(' · ');
 }
 
+/**
+ * A page that could not be opened (deleted elsewhere, or no server), with the way back. The page
+ * screen shows it in place of its desk (S5e moved it here from `NotebookView`).
+ *
+ * @param props - The paper.
+ * @param props.paperId - Whose reader "Back to the paper" opens.
+ * @returns The designed failure.
+ */
+export function PageGone({ paperId }: { readonly paperId: string }): ReactNode {
+  return (
+    <div className="pt-state" role="alert">
+      <h1 className="pt-state__title">This page could not be opened</h1>
+      <p className="pt-state__body">It may have been deleted, or the server is not answering.</p>
+      <Link className="pt-btn pt-btn--primary" href={readerHref(paperId)}>
+        Back to the paper
+      </Link>
+    </div>
+  );
+}
+
 /** The list of a paper's notebook pages, or the honest empty state. */
 export function NotebookPageList({ paperId }: NotebookPageListProps): ReactNode {
   const query = useQuery({

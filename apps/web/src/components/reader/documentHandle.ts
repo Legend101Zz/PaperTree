@@ -50,8 +50,9 @@ export interface DocumentHandle {
    * the passage it is about to flash, which for a user highlight is its STORED quads, not a block.
    * Only when it is not already in view, over 240 ms (the citation flash, #202); returns how long
    * that scroll takes (0 when it did not scroll), so the flash starts when the passage arrives.
+   * `bottomInset` is the px something covers at the bottom of the view (the phone's peek sheet).
    */
-  scrollToRect(pageIndex: number, bbox: BBox): number;
+  scrollToRect(pageIndex: number, bbox: BBox, bottomInset?: number): number;
 }
 
 export type DocumentRef = MutableRefObject<DocumentHandle | null>;
@@ -60,7 +61,12 @@ export type DocumentRef = MutableRefObject<DocumentHandle | null>;
 export type PendingScroll =
   | { readonly kind: 'block'; readonly blockId: string }
   | { readonly kind: 'page'; readonly pageIndex: number }
-  | { readonly kind: 'rect'; readonly pageIndex: number; readonly bbox: BBox };
+  | {
+      readonly kind: 'rect';
+      readonly pageIndex: number;
+      readonly bbox: BBox;
+      readonly bottomInset?: number;
+    };
 
 /**
  * Run a scroll request against a handle.
@@ -70,7 +76,8 @@ export type PendingScroll =
  * commit, so there are necessarily two call sites for one behaviour.
  */
 export function applyScroll(handle: DocumentHandle, request: PendingScroll): number {
-  if (request.kind === 'rect') return handle.scrollToRect(request.pageIndex, request.bbox);
+  if (request.kind === 'rect')
+    return handle.scrollToRect(request.pageIndex, request.bbox, request.bottomInset);
   if (request.kind === 'block') handle.scrollToBlock(request.blockId);
   else handle.scrollToPage(request.pageIndex);
   return 0;

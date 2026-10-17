@@ -39,6 +39,7 @@ import type { HighlightColor } from '@/lib/api/types';
 import { assetSrc } from './assetSrc';
 import { FLASH_MS } from './flash';
 import { planFigures } from './guidedFigures';
+import { tableRegionName, useScrollsSideways } from './guidedTables';
 import { displayQuote } from './quote';
 import { joinContinuedBlocks, reflow, reflowPreservingLines } from './reflow';
 import type { ReaderHighlight } from './useHighlights';
@@ -416,9 +417,27 @@ function GuidedTable({
           })),
       }));
   }, [block.id, doc, rawCells]);
+  const scroller = useRef<HTMLDivElement>(null);
+  const scrolls = useScrollsSideways(scroller);
+  const header = rows.flatMap((row) => row.cells).find((cell) => cell.isHeader === true)?.text;
 
   return (
-    <div className="my-6 overflow-x-auto">
+    // Only a table wider than its column scrolls, so only then is it a named, focusable region
+    // (axe `scrollable-region-focusable`; a tab stop on a table that fits does nothing).
+    <div
+      ref={scroller}
+      className="pt-guided__table-scroller my-6 overflow-x-auto"
+      {...(scrolls
+        ? {
+            role: 'region',
+            'aria-label': tableRegionName(
+              caption === undefined ? undefined : reflow(caption),
+              header,
+            ),
+            tabIndex: 0,
+          }
+        : {})}
+    >
       <TableView
         blockId={block.id}
         rows={rows}

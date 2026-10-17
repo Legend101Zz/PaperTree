@@ -8,7 +8,7 @@
  * as exchanges. Closed, it draws nothing: the reader header's Explain toggle (#203) is the entry for
  * a free question or the summary, and the panel hands focus back to it when it closes.
  */
-import { Sheet, type SheetDetent } from '@papertree/ui';
+import { SHEET_PEEK_PX, Sheet, type SheetDetent } from '@papertree/ui';
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 import { useReaderActions } from '@/components/reader/actions';
@@ -47,6 +47,12 @@ function useMediaQuery(query: string): boolean {
   return matches;
 }
 
+/** The Summary toggle's words; the phone header has room for short ones only (frame 08b). */
+function summaryLabel(inSummary: boolean, desktop: boolean): string {
+  if (desktop) return inSummary ? 'Back to conversation' : 'Summarize paper';
+  return inSummary ? 'Back to thread' : 'Summary';
+}
+
 /** The call slip's stamp: the signed-in account's initial ("Y" for you, when it is unknown). */
 function useInitial(): string {
   const email = useAuthStore((s) => s.user?.email);
@@ -69,7 +75,8 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
   const { state } = controller;
   const busy = state.messages.some((m) => m.status === 'streaming');
 
-  // On a phone the sheet covers the page: lower it so the flashed passage is in view.
+  // On a phone the sheet covers the page: lower it so the flashed passage is in view, and tell the
+  // reader the peek still covers the window's foot, so a passage behind it scrolls up (#205).
   const onShow = useCallback(
     (marker: PassageMarker) => {
       if (!desktop) setDetent('peek');
@@ -77,16 +84,22 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
       actions.focusAnchor(marker.citation.anchor, {
         flash: true,
         from: { n, page, para, notVerified },
+        ...(desktop ? {} : { bottomInset: SHEET_PEEK_PX }),
       });
     },
     [actions, desktop, setDetent],
   );
 
-  // A diagram part's flash (#217): the margin tab names the part it came from.
+  // A diagram part's flash (#217): the margin tab names the part it came from. On a phone the
+  // peek covers the window's foot, as for a marker (#205).
   const onFlash = useCallback(
     (anchor: Anchor, from: FlashSource) => {
       if (!desktop) setDetent('peek');
-      actions.focusAnchor(anchor, { flash: true, from });
+      actions.focusAnchor(anchor, {
+        flash: true,
+        from,
+        ...(desktop ? {} : { bottomInset: SHEET_PEEK_PX }),
+      });
     },
     [actions, desktop, setDetent],
   );
@@ -111,7 +124,7 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
         disabled={!inSummary && controller.paperId === null}
         onClick={() => (inSummary ? controller.setView('thread') : controller.summarize())}
       >
-        {inSummary ? 'Back to conversation' : 'Summarize paper'}
+        {summaryLabel(inSummary, desktop)}
       </button>
     </div>
   );
@@ -122,20 +135,23 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
       initial={initial}
       onShow={onShow}
       onFlash={onFlash}
+      phone={!desktop}
     />
   );
 
   if (!desktop) {
+    // Frame 08b: the thread menu (and Summary) in the sheet's own header, beside its title.
     return (
       <Sheet
         open
-        title="Explain"
+        title={inSummary ? 'Summary' : 'Explain'}
         detent={detent}
         onDetentChange={setDetent}
         onDismiss={controller.closeExplain}
         className="pt-explain-sheet"
+        actions={tools}
+        closeLabel="Close explain panel"
       >
-        <div className="pt-explain__toolbar">{tools}</div>
         {body}
       </Sheet>
     );

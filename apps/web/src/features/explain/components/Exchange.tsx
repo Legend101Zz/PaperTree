@@ -36,17 +36,26 @@ export interface ExchangeProps {
   /** Stop the answer that is streaming (Stop on its tab row). */
   readonly onStop: () => void;
   readonly onSendToCanvas: (messageId: string) => Promise<void>;
+  /** Dive in: open the answer as a notebook page (S5e, #210); without it there is no Dive in. */
+  readonly onDiveIn?: (messageId: string, exchange: HTMLElement | null) => Promise<void>;
   /** Open folded: two lines and the counts, with Show (an earlier exchange of a reopened thread). */
   readonly startsFolded?: boolean;
   /** The composer holds this exchange's ask now, so a refusal may say "your text is kept". */
   readonly askInBox?: boolean;
+  /**
+   * The phone sheet (#205, frame 08b): 44 px markers and trace rows, and the answer shows its first
+   * paragraph with "Read the whole answer".
+   */
+  readonly phone?: boolean;
+  /** Its usage line and Send to board are in the sheet's pinned footer (the last exchange). */
+  readonly pinned?: boolean;
 }
 
 /**
  * An exchange, named by its ask (never "Turn 1").
  *
  * @example
- * <Exchange exchange={exchanges[0]} initial="M" onShow={flash} onRetry={retry} onSendToCanvas={send} />
+ * <Exchange exchange={exchanges[0]} initial="M" onShow={flash} onRetry={retry} onSendToCanvas={send} onDiveIn={dive} />
  */
 export function Exchange({
   exchange,
@@ -55,8 +64,11 @@ export function Exchange({
   onRetry,
   onStop,
   onSendToCanvas,
+  onDiveIn,
   startsFolded = false,
   askInBox = false,
+  phone = false,
+  pinned = false,
 }: ExchangeProps): ReactNode {
   const [lit, setLit] = useState<number | null>(null);
   // Read once, at mount: an exchange never gains or loses its fold as the thread grows.
@@ -65,12 +77,15 @@ export function Exchange({
   const model = exchange.model;
   const answer = exchange.answer;
   const settled = answer !== null && answer.status !== 'streaming';
+  // The phone's "Read the whole answer" (`clipAnswer`); only an answer's reader opens it.
+  const [expanded, setExpanded] = useState(false);
   const notSent = wasNotSent(answer);
   const kept: RefusalKind = exchange.typed ? (askInBox ? 'kept' : 'question') : 'nothing';
   // A Retry streams in the open, never inside the folded two-line preview.
   const retry = useCallback(
     (key: string) => {
       setFolded(false);
+      setExpanded(true);
       onRetry(key);
     },
     [onRetry],
@@ -117,8 +132,14 @@ export function Exchange({
           onRetry={retry}
           onStop={onStop}
           onSendToCanvas={onSendToCanvas}
+          {...(onDiveIn === undefined ? {} : { onDiveIn })}
           notSent={kept}
           fold={foldable ? { folded, toggle: () => setFolded((was) => !was) } : undefined}
+          clip={
+            phone && !foldable ? { expanded, toggle: () => setExpanded((was) => !was) } : undefined
+          }
+          touch={phone}
+          pinned={pinned}
         />
       )}
       {settled && model !== null && !model.live && !folded ? (
@@ -130,7 +151,13 @@ export function Exchange({
             </p>
           ) : null}
           {model.trace.length === 0 ? null : (
-            <TraceList rows={model.trace} lit={lit} onLight={setLit} onShowInPaper={showRow} />
+            <TraceList
+              rows={model.trace}
+              lit={lit}
+              onLight={setLit}
+              onShowInPaper={showRow}
+              layout={phone ? 'touch' : 'desktop'}
+            />
           )}
         </div>
       ) : null}

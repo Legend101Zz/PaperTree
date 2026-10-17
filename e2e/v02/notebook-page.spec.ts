@@ -181,7 +181,8 @@ test.describe('S5c — the notebook page (faux agent)', () => {
       for (const colorScheme of ['light', 'dark'] as const) {
         await page.setViewportSize({ width, height });
         await page.emulateMedia({ colorScheme });
-        await expect(page.locator('.pt-nb-quote')).toHaveCount(4);
+        // A phone reads the page as a stack (S5e, #210): the four passages are its trace rows.
+        await expect(page.locator(width < 768 ? '.pt-trace-row' : '.pt-nb-quote')).toHaveCount(4);
         expect(await axeSerious(page), `${String(width)} ${colorScheme}`).toEqual([]);
       }
     }

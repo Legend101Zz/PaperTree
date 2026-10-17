@@ -56,7 +56,7 @@ import { ExplainPanel } from '@/components/explain';
 import { useExplainActions } from '@/components/explain/useExplainActions';
 import {
   ReaderActionsProvider,
-  type FlashSource,
+  type FocusOptions,
   type ReaderActions,
 } from '@/components/reader/actions';
 import {
@@ -94,6 +94,7 @@ import {
 import { HighlightUndoToast } from '@/features/highlights';
 import { AskFromNotebook } from '@/features/notebook/components/AskFromNotebook';
 import { useFocusFromNotebook } from '@/features/notebook/hooks/useFocusFromNotebook';
+import { useThreadFromNotebook } from '@/features/notebook/hooks/useThreadFromNotebook';
 import { ReaderHeader, type ExplainToggle } from '@/features/reader';
 import { NetworkError } from '@/lib/api/client';
 import { papersApi } from '@/lib/api/papers';
@@ -549,7 +550,7 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
    * it. An anchor painted nowhere still gets its page, and the tray says why.
    */
   const focusAnchor = useCallback(
-    (anchor: Anchor, opts?: { flash?: boolean; from?: FlashSource }) => {
+    (anchor: Anchor, opts?: FocusOptions) => {
       if (doc === null) return;
       const resolution = resolveAnchor(anchor, doc);
       const shouldFlash = opts?.flash !== false;
@@ -570,7 +571,12 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
       const scrollMs =
         extent === null
           ? 0
-          : requestScroll({ kind: 'rect', pageIndex: paint.pageIndex, bbox: extent });
+          : requestScroll({
+              kind: 'rect',
+              pageIndex: paint.pageIndex,
+              bbox: extent,
+              ...(opts?.bottomInset === undefined ? {} : { bottomInset: opts.bottomInset }),
+            });
       if (!shouldFlash) return;
       setFlash({
         key: `${anchor.id}:${String(Date.now())}`,
@@ -828,13 +834,15 @@ function ReaderActionsMount({
   children,
 }: {
   readonly paper: PaperRef;
-  readonly onFocusAnchor: (anchor: Anchor, opts?: { flash?: boolean; from?: FlashSource }) => void;
+  readonly onFocusAnchor: (anchor: Anchor, opts?: FocusOptions) => void;
   readonly children: React.ReactNode;
 }) {
   const paperId = paper.kind === 'api' ? paper.paperId : null;
   const explain = useExplainActions({ paperId });
   const { openExplain, openDiagram, askAbout, openPanel, closeExplain } = explain;
   const explainOpen = explain.state.open;
+  // S5e: a dived page's Back to the paper (`?thread=`) reopens the panel on its thread.
+  useThreadFromNotebook(paperId, explain.selectThread);
   const toggleRef = useRef<HTMLButtonElement>(null);
   const toggle = useMemo<ExplainToggle | null>(
     () =>
