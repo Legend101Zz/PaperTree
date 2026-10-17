@@ -1,20 +1,22 @@
 /**
  * The phone library at 390 px (#199, frame 08a): the stacked order (search, title and stats, the
  * view tabs, Reading now, the flat stacks), Reading now on a short library too, the flat books with
- * their names, one tab stop and ↑/↓, the card as a bottom sheet with Put it back, the tabs, the Map's
- * list first, and axe. The width comes from a `matchMedia` stub that answers the 900 px phone query;
- * pixel sizes are read from `phone.css` itself, which jsdom does not lay out. Titles are the corpus
- * papers' own (`library-corpus.ts`).
+ * their names, one tab stop and ↑/↓, the card as a modal bottom sheet with Put it back, the tabs,
+ * the Map's list first, no key hint on touch, and axe; then crossing 900 px with a card open or with
+ * focus in the Map's list (review SF1, SF4). The width comes from a `matchMedia` stub that answers
+ * the 900 px phone query and can change; pixel sizes are read from the stylesheets, which jsdom does
+ * not lay out. Titles are the corpus papers' own (`library-corpus.ts`).
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import axe from 'axe-core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LibraryView } from '@/features/library';
+import { PHONE_MAX_WIDTH } from '@/features/library/model/phone';
 import type { LibraryPaper } from '@/lib/api/types';
 import { useAuthStore } from '@/store/authStore';
 
@@ -43,10 +45,19 @@ vi.mock('@/lib/api/topics', async (importOriginal) => ({
   topicsApi,
 }));
 
-const PHONE_CSS = readFileSync(
-  resolve(process.cwd(), 'src/features/library/components/phone.css'),
-  'utf8',
-);
+const css = (name: string) =>
+  readFileSync(resolve(process.cwd(), 'src/features/library/components', name), 'utf8');
+const PHONE_CSS = css('phone.css');
+
+/** The width the `matchMedia` stub answers for; `resizeTo` changes it and tells the listeners. */
+let wide = false;
+const listeners = new Set<() => void>();
+function resizeTo(width: 'phone' | 'desktop'): void {
+  wide = width === 'desktop';
+  act(() => {
+    for (const listener of listeners) listener();
+  });
+}
 
 const on = (id: string, name: string, cloth: 'transformers' | 'vision') => ({
   topic_id: id,
@@ -114,11 +125,15 @@ beforeEach(() => {
   topicsApi.list.mockResolvedValue([]);
   window.localStorage.clear();
   // A 390 px phone: the 900 px phone query (and the touch query, which includes it) match.
+  wide = false;
+  listeners.clear();
   vi.stubGlobal('matchMedia', (query: string) => ({
-    matches: query.includes('max-width: 900px'),
+    get matches() {
+      return !wide && query.includes('max-width: 900px');
+    },
     media: query,
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
+    addEventListener: (_: string, listener: () => void) => listeners.add(listener),
+    removeEventListener: (_: string, listener: () => void) => listeners.delete(listener),
   }));
   useAuthStore.setState({
     user: { id: 'u', email: 'mrigesh@example.test' },
@@ -131,6 +146,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe('the phone library at 390', () => {
@@ -218,25 +234,72 @@ describe('the phone library at 390', () => {
     expect(books().filter((b) => b.tabIndex === 0)).toEqual([all[all.length - 1]]);
   });
 
-  it('opens a book as a bottom sheet with Read focused; Put it back returns to the book', async () => {
+  it('opens a book as a modal bottom sheet: Read focused, the rest inert, Tab kept inside', async () => {
     await renderPhone();
     const resnet = within(shelf()).getByRole('button', { name: /^Deep Residual/ });
     fireEvent.click(resnet);
-    const sheet = document.querySelector<HTMLElement>('[data-card-paper-id="ppr_c3"]')!;
+    const sheet = screen.getByRole('dialog', { name: /^Deep Residual/ });
+    expect(sheet.getAttribute('aria-modal')).toBe('true');
     expect(sheet.classList).toContain('pt-catalogue--sheet');
     expect(sheet.style.marginInlineStart).toBe('');
     expect(sheet.querySelector('.pt-catalogue__pointer')).toBeNull();
     expect(resnet.getAttribute('aria-expanded')).toBe('true');
-    expect(document.activeElement).toBe(within(sheet).getByRole('button', { name: /^Read/ }));
+    const read = within(sheet).getByRole('button', { name: /^Read/ });
+    expect(document.activeElement).toBe(read);
+    // No book can take focus behind the sheet (review SF2): the stacks, the header and the rest
+    // of the page are inert; the sheet and its scrim are not.
+    for (const behind of [
+      shelf(),
+      screen.getByRole('searchbox'),
+      screen.getByRole('heading', { level: 1 }),
+    ]) {
+      expect(behind.closest('[inert]')).not.toBeNull();
+    }
+    expect(sheet.closest('[inert]')).toBeNull();
+    expect(document.querySelector('.pt-catalogue__scrim')?.closest('[inert]')).toBeNull();
+    // The arrows are not the shelf's in here, and Tab wraps at both ends.
+    fireEvent.keyDown(read, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(read);
     const back = within(sheet).getByRole('button', { name: 'Put it back' });
     expect(back.style.minHeight).toBe('44px');
-    fireEvent.click(back);
-    expect(document.querySelector('[data-card-paper-id]')).toBeNull();
-    expect(document.activeElement).toBe(resnet);
-    // Esc puts it back too, for a keyboard at phone width.
-    fireEvent.click(resnet);
-    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
-    expect(document.querySelector('[data-card-paper-id]')).toBeNull();
+    back.focus();
+    fireEvent.keyDown(back, { key: 'Tab' });
+    expect(document.activeElement).toBe(read);
+    fireEvent.keyDown(read, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(back);
+  });
+
+  it('puts the book back by Put it back, Esc or the scrim, lifting the inert first', async () => {
+    await renderPhone();
+    const resnet = within(shelf()).getByRole('button', { name: /^Deep Residual/ });
+    const closers: ((sheet: HTMLElement) => void)[] = [
+      (sheet) => fireEvent.click(within(sheet).getByRole('button', { name: 'Put it back' })),
+      (sheet) =>
+        fireEvent.keyDown(within(sheet).getByRole('button', { name: /^Read/ }), { key: 'Escape' }),
+      () => fireEvent.pointerUp(document.querySelector('.pt-catalogue__scrim')!),
+    ];
+    for (const close of closers) {
+      fireEvent.click(resnet);
+      close(screen.getByRole('dialog'));
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(document.querySelector('[inert]')).toBeNull();
+      expect(document.activeElement).toBe(resnet);
+    }
+  });
+
+  it('after a Delete from the sheet, focus goes to the next book, out of the inert', async () => {
+    papersApi.remove.mockResolvedValue(undefined);
+    await renderPhone();
+    fireEvent.click(within(shelf()).getByRole('button', { name: /^Deep Residual/ }));
+    const sheet = screen.getByRole('dialog');
+    fireEvent.click(within(sheet).getByRole('button', { name: /^Delete/ }));
+    papersApi.list.mockResolvedValue(phoneLibrary().filter((row) => row.paper_id !== 'ppr_c3'));
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Delete paper' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() =>
+      expect(document.activeElement?.getAttribute('aria-label')).toMatch(/^You Only Look Once/),
+    );
+    expect(document.querySelector('[inert]')).toBeNull();
   });
 
   it('lets "/" type into the search on a phone, and still focuses it from the page', async () => {
@@ -248,18 +311,98 @@ describe('the phone library at 390', () => {
     expect(fireEvent.keyDown(search, { key: '/' })).toBe(true);
   });
 
-  it('switches views from the tabs; the Map puts its list first, open', async () => {
-    topicsApi.list.mockResolvedValue([]);
+  it('switches views from the tabs; the Map opens its list, which phone.css puts first', async () => {
     await renderPhone();
     fireEvent.click(screen.getByRole('button', { name: 'Map' }));
     const map = await screen.findByRole('region', { name: 'Plan of the reading room' });
     const list = await within(map).findByText('The plan as a list');
-    const details = list.closest('details')!;
-    expect(details.open).toBe(true);
-    const host = map.querySelector('.pt-map__host')!;
-    expect(before(details, host)).toBe(true);
+    expect(list.closest('details')?.open).toBe(true);
+    // One element at every width; the phone moves the plan after it (a flex order, no remount).
+    expect(PHONE_CSS).toMatch(/\.pt-map \.pt-map__host \{\s*order: 1;/);
     fireEvent.click(screen.getByRole('button', { name: 'Table' }));
     expect((await screen.findByRole('table', { name: 'Papers' })).tagName).toBe('TABLE');
+  });
+
+  it('draws × to clear the search on a phone, never the "Esc" key (review SF5)', async () => {
+    await renderPhone();
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'atten' } });
+    const clear = screen.getByRole('button', { name: 'Clear the search' });
+    expect(clear.querySelector('kbd')).toBeNull();
+    expect(clear.querySelector('svg')).not.toBeNull();
+    expect(document.querySelectorAll('.pt-search kbd')).toHaveLength(0);
+  });
+
+  it('keeps every phone rule on the 900 px breakpoint, and the 44 px Map and Topics rules there', () => {
+    const widths = [...PHONE_CSS.matchAll(/max-width: (\d+)px/g)].map((m) => Number(m[1]));
+    // 560 px is the one narrower step: the tabs drop their icons (S2e's Add papers label too).
+    expect(new Set(widths)).toEqual(new Set([PHONE_MAX_WIDTH, 560]));
+    // Review SF3: 44 px across the whole phone range and on any touch screen, not only under 720.
+    const touch = `@media (max-width: ${String(PHONE_MAX_WIDTH)}px), (pointer: coarse) {`;
+    expect(css('map.css').split(touch)[1]).toMatch(
+      /^\s*\.pt-map__list summary \{\s*min-block-size: 44px;/,
+    );
+    expect(css('topics.css').split(touch)[1]).toMatch(
+      /^\s*\.pt-topicmenu \.pt-hmenu__button \{\s*inline-size: 44px;\s*block-size: 44px;/,
+    );
+  });
+
+  it('re-points an open card at its book after crossing 900 px both ways (review SF1)', async () => {
+    // jsdom lays nothing out: covers stand 100 px apart from x = 200, a flat book starts at 16.
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      const id = this.getAttribute('data-paper-id');
+      const left = this.classList.contains('pt-cover')
+        ? 200 + 100 * Number(id?.replace('ppr_c', ''))
+        : this.classList.contains('pt-flatbook')
+          ? 16
+          : 0;
+      const width = this.classList.contains('pt-shelfband__band') ? 1000 : 60;
+      return {
+        left,
+        width,
+        top: 0,
+        height: 44,
+        right: left + width,
+        bottom: 44,
+        x: left,
+        y: 0,
+      } as DOMRect;
+    });
+    wide = true;
+    await renderPhone();
+    fireEvent.click(document.querySelector<HTMLElement>('button[data-paper-id="ppr_c3"]')!);
+    const card = () => document.querySelector<HTMLElement>('[data-card-paper-id="ppr_c3"]')!;
+    // The cover's centre is 530: the card stands 42 px left of it (placeCard).
+    expect(card().style.marginInlineStart).toBe('488px');
+    resizeTo('phone');
+    expect(card().classList).toContain('pt-catalogue--sheet');
+    // The window's resize arrives while the flat books are drawn, as a real resize does.
+    act(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
+    resizeTo('desktop');
+    expect(card().classList).not.toContain('pt-catalogue--sheet');
+    expect(card().style.marginInlineStart).toBe('488px');
+  });
+
+  it('keeps focus and the open list in the Map when crossing 900 px (review SF4)', async () => {
+    wide = true;
+    await renderPhone();
+    fireEvent.click(screen.getByRole('button', { name: 'Map' }));
+    const map = await screen.findByRole('region', { name: 'Plan of the reading room' });
+    const details = (await within(map).findByText('The plan as a list')).closest('details')!;
+    expect(details.open).toBe(false);
+    details.open = true;
+    const link = within(details).getByRole('link', { name: 'Attention Is All You Need' });
+    link.focus();
+    resizeTo('phone');
+    expect(document.activeElement).toBe(link);
+    expect(link.isConnected && details.open).toBe(true);
+    resizeTo('desktop');
+    expect(document.activeElement).toBe(link);
+    // The person opened it; the width does not close it.
+    expect(details.open).toBe(true);
   });
 
   it('has no axe violations with a book taken down', async () => {

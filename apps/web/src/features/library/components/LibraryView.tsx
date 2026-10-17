@@ -39,6 +39,8 @@ import { libraryStats, matchPapers, type Arrangement } from '../model/shelf';
 import { readingNow, shelfLayout } from '../model/states';
 import { readerHref } from '../model/table';
 import './library.css';
+// The phone's page-wide rules too (header, tabs, hints, the Map's list), not only the stacks'.
+import './phone.css';
 import { AccessionSlip } from './AccessionSlip';
 import { DropAnywhere } from './AddPapers';
 import { LibraryHeader } from './LibraryHeader';

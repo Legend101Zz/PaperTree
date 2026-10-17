@@ -99,8 +99,11 @@
     repeating-linear-gradient(112deg, rgb(255 255 255 / 10%) 0 2px, transparent 2px 15px);
 }
 
-.pt-flatbook:hover {
-  transform: translateX(4px);
+/* Only where hovering is real: a phone keeps :hover after a tap, which would leave a book out. */
+@media (hover: hover) {
+  .pt-flatbook:hover {
+    transform: translateX(4px);
+  }
 }
 
 .pt-flatbook[aria-expanded='true'] {
@@ -307,13 +310,17 @@
   border-radius: 2px;
 }
 
-/* Room under the last stack while the sheet is up, and the open book scrolled clear of it. */
-.pt-shelfband--sheet {
-  padding-block-end: 300px;
+/* The sheet is modal (useModalSheet): a scrim over the inert page, a tap on it puts the book back. */
+.pt-catalogue__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 29;
+  background: var(--pt-spine-cast);
 }
 
-.pt-shelfband--sheet .pt-flatbook[aria-expanded='true'] {
-  scroll-margin-block-end: 320px;
+/* Room under the last stack while the sheet is up: its measured height (`--pt-sheet-room`). */
+.pt-shelfband--sheet {
+  padding-block-end: var(--pt-sheet-room, 300px);
 }
 
 /* ── the phone's page: tabs across the screen, no "/" hint, no keys for a finger ─────────── */
@@ -361,7 +368,24 @@
     display: none;
   }
 
-  /* The Map's list comes first on a phone: each paper in it is a 44 px target, not 24. */
+  /* The clear button's × (SearchField draws it instead of "Esc" here), centred in its 44 px. */
+  .pt-search .pt-search__clear {
+    justify-content: center;
+    color: var(--pt-ink-2);
+  }
+
+  /* The Map's list comes first on a phone, by CSS: it is one element at every width, so crossing
+     900 px never remounts it under the focus or closes it (review SF4). The plan holds no focus. */
+  .pt-map {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .pt-map .pt-map__host {
+    order: 1;
+  }
+
+  /* Each paper in the list is a 44 px target there, not 24. */
   .pt-map .pt-map__list a {
     display: inline-flex;
     min-block-size: 44px;

@@ -5,8 +5,8 @@
  * Read, so Enter again opens the reader; Esc puts the book back and returns focus to the spine.
  * It sits above the spines, so it never covers a neighbour. A book whose parse is in also offers
  * "Open the book" (#200): the opened spread, for the mouse (the keyboard's Enter on the spine).
- * On a phone (#199) it is a bottom sheet over the stacks, with a Put it back button, since a
- * finger has no Esc.
+ * On a phone (#199) it is a modal bottom sheet over the stacks (`useModalSheet`: the rest inert,
+ * Tab kept inside), with a scrim and a Put it back button, since a finger has no Esc.
  */
 'use client';
 
@@ -17,6 +17,7 @@ import { ProgressMeter, TOUCH_TARGET } from '@/components/library/primitives';
 import { canOpenBook } from '@/features/book/model/book';
 
 import { useBookActions } from '../hooks/useBookActions';
+import { useModalSheet } from '../hooks/useModalSheet';
 import { cardStateLine, metaLine } from '../model/catalogue';
 import { RemoveConfirm } from './RemoveConfirm';
 
@@ -119,6 +120,7 @@ export function CatalogueCard({
 }: CatalogueCardProps): ReactNode {
   const titleId = `${id}-title`;
   const card = useRef<HTMLElement>(null);
+  useModalSheet(card, sheet, book.id);
   // Taking a book down puts you on its Read, so Enter again opens it.
   useEffect(() => {
     card.current?.querySelector<HTMLElement>('[data-card-read]')?.focus({ preventScroll: true });
@@ -137,11 +139,12 @@ export function CatalogueCard({
     return () => node.removeEventListener('keydown', onKey);
   }, [onClose]);
   const meta = metaLine(book);
-  return (
+  const body = (
     <section
       ref={card}
       id={id}
       className={sheet ? 'pt-catalogue pt-catalogue--sheet' : 'pt-catalogue'}
+      {...(sheet ? { role: 'dialog', 'aria-modal': true } : {})}
       aria-labelledby={titleId}
       data-card-paper-id={book.id}
       data-processing-state={book.processing}
@@ -206,5 +209,19 @@ export function CatalogueCard({
         />
       )}
     </section>
+  );
+  if (!sheet) return body;
+  return (
+    <>
+      {/* The page behind is inert, so a tap on the scrim puts the book back (on pointer-up, as
+          the shared Sheet's scrim does: a finger that scrolls is cancelled, not released). */}
+      <div
+        className="pt-catalogue__scrim"
+        data-sheet-keep=""
+        aria-hidden="true"
+        onPointerUp={onClose}
+      />
+      {body}
+    </>
   );
 }

@@ -1,8 +1,9 @@
 /**
  * S2h (#199) on the real stack at 390 × 844, touch: the stacked phone library (search, title,
  * tabs, Reading now, the books lying flat) → Continue on a Reading-now row opens the reader at its
- * page → back → a flat book taken down opens its card as a bottom sheet (Read focused, Put it back)
- * → the Table tab scrolls sideways in its own region while the page never does.
+ * page → back → a flat book taken down opens its card as a modal bottom sheet (Read focused, the
+ * keys kept inside it at 320 px, its book clear above it, Put it back) → the Table tab scrolls
+ * sideways in its own region while the page never does.
  *
  * The brief names the demo account; the e2e stack has none (as for S2f), so a new account holds
  * two corpus PDFs (Attention, 15 pages, and ResNet, 12) and the server is told the person is on
@@ -127,7 +128,35 @@ test('390: stacked library → Continue opens p. 3 → back → a flat book open
   await page.screenshot({ path: shot('s2h-sheet-390.png') });
   await sheet.getByRole('button', { name: 'Put it back' }).tap();
   await expect(sheet).toHaveCount(0);
+  // The inert has lifted before the book took focus (a real browser refuses focus to inert).
   await expect(book).toBeFocused();
+
+  // ── 320 px with a keyboard: no key can put focus on a book behind the sheet (review SF2) ──
+  await page.setViewportSize({ width: 320, height: 700 });
+  // A tap opens it (Enter on a book becomes S3's pull-out once that lands); the keys come after.
+  await book.tap();
+  await expect(sheet).toHaveAttribute('aria-modal', 'true');
+  const sheetTop = (await sheet.boundingBox())?.y ?? 0;
+  expect(((await book.boundingBox())?.y ?? 0) + 44).toBeLessThanOrEqual(sheetTop);
+  for (const key of [
+    'ArrowDown',
+    'ArrowDown',
+    'ArrowUp',
+    'Tab',
+    'Tab',
+    'Tab',
+    'Tab',
+    'Shift+Tab',
+  ]) {
+    await page.keyboard.press(key);
+    expect(await sheet.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+  }
+  expect(await pageWidth(page)).toBe(320);
+  await page.screenshot({ path: shot('s2h-sheet-keys-320.png') });
+  await page.keyboard.press('Escape');
+  await expect(sheet).toHaveCount(0);
+  await expect(book).toBeFocused();
+  await page.setViewportSize({ width: 390, height: 844 });
 
   // ── the Table tab: its region scrolls sideways, the page does not ──
   await page.getByRole('button', { name: 'Table', exact: true }).tap();

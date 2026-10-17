@@ -58,7 +58,7 @@ const FLAT_DEFAULT_PAGES = 16;
 const FLAT_OFFSETS = [0, 4, 6, 10, 12] as const;
 
 /** One book lying flat, as the phone stack draws it. */
-export interface FlatBook {
+export interface FlatPicture {
   readonly face: BookFace;
   /** The short title (`spineTitle`), set across the book. */
   readonly title: string;
@@ -80,7 +80,7 @@ export interface FlatBook {
  * @param paper - The paper.
  * @returns Its face, words, ribbon, length and offset.
  */
-export function flatBook(paper: ShelfPaper): FlatBook {
+export function flatPicture(paper: ShelfPaper): FlatPicture {
   const face = bookFace(paper);
   const pages = paper.pageCount > 0 ? paper.pageCount : FLAT_DEFAULT_PAGES;
   const short = Math.round(Math.max(0, FLAT_SHORT_MAX - FLAT_PX_PER_PAGE * pages));

@@ -13,7 +13,6 @@ import { useRovingShelf } from '../hooks/useRovingShelf';
 import { flatStep } from '../model/phone';
 import { arrangeShelf } from '../model/shelf';
 import { FlatBook } from './FlatBook';
-import './phone.css';
 
 import type { ShelfProps } from './Shelf';
 import type { ReactNode } from 'react';

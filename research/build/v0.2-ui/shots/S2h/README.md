@@ -1,6 +1,6 @@
 # S2h shots (#199): the phone library (08a) and the lamp-lit library (09a)
 
-Taken at 390 × 844 and 320 × 700 (touch: `hasTouch`, `isMobile`, so `pointer: coarse`), and 1440 × 900, from the
+Taken at 390 × 844, 320 × 700 and 768 × 1024 (touch: `hasTouch`, `isMobile`, so `pointer: coarse`), and 1440 × 900, from the
 S2h branch, `next dev`, on S2h's own servers (web 18905, API 18906, the real worker) against a copy of the v0.2 data
 on the SSD. One account, built through the API: every corpus and fresh PDF (14), five topics made with
 `PUT /papers/{id}/topic` (Transformers & attention 5, Vision & detection 3, Generative models 2, Language &
@@ -17,9 +17,10 @@ for the capture and drops touch (the key hints then appear, as no phone shows th
 | --- | --- |
 | `08a-library-390-{light,dark}.png` | the first screen: header, search, title and stats, "1 need a look", the tabs, Reading now, the first stack |
 | `08a-library-390-{light,dark}-full.png` | the whole page: six stacks under their holders, the ribbons out of the fore-edge, the torn label |
-| `08a-sheet-390-{light,dark}.png`, `08a-sheet-320-dark.png` | a book taken down: its card as a bottom sheet (Read focused, Delete, Put it back), the book pulled out |
+| `08a-sheet-390-{light,dark}.png`, `08a-sheet-320-dark.png`, `08a-sheet-768-light.png` | after review: a book taken down, its card a modal bottom sheet over a scrim (Read focused, Delete, Put it back), the book pulled out and clear above it |
+| `08a-library-768-light.png` | after review: a 768 px tablet held upright is in the phone range: two stacks side by side |
 | `08a-library-320-light-full.png` | 320 px: the header on two rows, two-line titles cut with "…", nothing sideways |
-| `08a-search-390-light.png` | typing "atten": 5 of 15 lit (the topic's name matches too), the rest dimmed, nothing reordered |
+| `08a-search-390-light.png` | typing "atten": 5 of 15 lit (the topic's name matches too), the rest dimmed, nothing reordered; the clear button an × (after review) |
 | `08a-map-390-light.png` | the Map on a phone: "The plan as a list" first and open, its papers 44 px links, then the plan |
 | `09a-library-1440-dark.png` | the desktop in the lamp-lit scheme, unchanged by S2h |
 | `compare-08a-light.png`, `compare-08a-dark.png` | frame 08a (left) beside the build at 390 (right), light and lamp-lit |
@@ -32,9 +33,20 @@ the Table every visible control is at least 44 × 44 px (measured on every butto
 On Topics the topic names measure 29 px tall, but their `::after` covers the whole 358 × 340 card (a press on the
 banner hits the name: `elementFromPoint` checked on three cards), so the target is the card.
 
+**After the review** (`REVIEW.md` in the reviewer's scratch: SF1–SF5), on a fresh copy of the data and the same
+account rebuilt: axe, every rule, whole page, at 320, 390, 768 (touch) and 1440, light and dark, in the shelf, the
+sheet, a search, Topics, the Map and the Table: **0 violations in 32 runs**, no page wider than its viewport. At 768
+the Map's "The plan as a list" and the Topics "Manage …" buttons are 44 px now (they were 40); every visible
+control on the shelf, the sheet, the Map and the Table is 44 px or more at 320, 390 and 768. At 320 × 700 with the
+sheet up, ↓ ↓ ↓ ↑, Tab × 4 and Shift+Tab all leave focus in the sheet, and its book stands clear above it (book
+bottom 371, sheet top 481). Crossing 900 px in Chromium (1000 → 800 → 1000) with a card open: the pointer is back on
+its book (373/372, 763/762, 736/735 px; before the fix 689/372 and 261/1009), the sheet was modal at 800 with focus
+in it, and no `inert` is left; with focus on a paper in the Map's list, focus and the open list survive both ways.
+
 **The desktop does not change:** the shelf, a card open, Topics, the Map with its list open and the Table at
 1440 × 900, light and dark, were shot before (the branch's base, by `git stash`) and after: **0 pixels differ in all
-10.**
+10.** After the review, again (the base's `features/library` checked out on the dev server, 0 flat books served at
+390, then HEAD): 0 pixels differ in all 10.
 
 The e2e `e2e/v02/library-phone.spec.ts` was run against these servers with a scratch Playwright config (no
 `pnpm e2e`, no servers of its own, a fresh account, sample papers off): **1 passed** (47 s, and 1.1 min on the final code). Its first run failed
@@ -56,8 +68,6 @@ at the reader, honestly: the reader's `topLine` helper cannot find a line at 390
   e3 lift, a grip) and the card's own contents; at night only the room changes, as DESIGN.md §2 says of furniture.
 - **At scale** (past 40 papers) the phone draws every book in its stack, as the desktop draws every spine (nothing
   is virtualised); 120 papers make a long scroll. Search, "need a look" and the Table do the finding (DESIGN.md §9).
-- The search's clear button still shows "Esc" on a phone, where there is no Esc key (it is named "Clear the
-  search").
 
 ## Remaining differences from 09a
 

@@ -144,9 +144,14 @@ same papers as a ruled catalogue, Topics shows each topic as a card, and the Map
   spine's name, its short title across it (two lines at most), the year in gilt, the ribbon out of the
   fore-edge while you read it, kraft with "being read", a torn red label with "could not read". The stacks are
   the shelf's one tab stop: ↓/↑ (and →/←) walk every book in order, down a stack and into the next. A book
-  taken down opens its catalogue card as a **bottom sheet** (Read focused, Put it back, Esc), with room under
-  the stacks so the last book scrolls clear of it. The Map puts its list first, open, and its papers are 44 px
-  targets there. No page scrolls sideways at 320 or 390.
+  taken down opens its catalogue card as a **modal bottom sheet** (`useModalSheet`): Read focused, the rest of
+  the page `inert` behind a scrim (no key or tap can reach a book under it), Tab wrapping inside it, its book
+  scrolled clear above it and room under the stacks of the sheet's measured height; Esc, Put it back or a tap
+  on the scrim puts the book back and returns focus to it once the inert has lifted. Crossing 900 px with a
+  card open re-points it (band ↔ sheet). The Map's list comes first, by CSS (one element at every width, so
+  focus in it survives a resize), and opens; its summary, its papers and the Topics "…" are 44 px up to
+  900 px and on any coarse pointer. The search's clear button is an × there, not "Esc". No page scrolls
+  sideways at 320, 390 or 768.
 
 ## Data flow
 
@@ -218,9 +223,10 @@ ribbon, no year means no year on the spine.
   `UploadRow.tsx`, `LibraryTitle.tsx`, `ShelfSection.tsx` (with `Shelf.tsx`, `Spine.tsx`, `ShelfPlank.tsx`,
   `CatalogueCard.tsx`, `ShelfHints.tsx`), `ReadingNow.tsx`, `AccessionSlip.tsx`, `CoverShelf.tsx` (with
   `Cover.tsx`, `CoverCaption.tsx`), `ShelfRows.tsx` (with `ShelfRow.tsx`); `library.css`: their styles, from the tokens.
-- `model/phone.ts`: the phone rule (`libraryPlan`: what a phone draws instead), a flat book's picture (`flatBook`)
+- `model/phone.ts`: the phone rule (`libraryPlan`: what a phone draws instead), a flat book's picture (`flatPicture`)
   and the stack keys (`flatStep`), tested in `model/phone.spec.ts`; `hooks/usePhoneLayout.ts`;
-  `components/FlatShelf.tsx`, `FlatBook.tsx` and `phone.css`; tests in `apps/web/test/library-phone.spec.tsx`,
+  `hooks/useModalSheet.ts`; `components/FlatShelf.tsx`, `FlatBook.tsx` and `phone.css` (imported by the page:
+  it holds the phone's page-wide rules too); tests in `apps/web/test/library-phone.spec.tsx`,
   e2e `e2e/v02/library-phone.spec.ts`.
 - Tests: `apps/web/test/library-table.spec.tsx` (the Table through the page), `apps/web/test/library-shelf.spec.tsx`, `library-page.spec.tsx`, `library-states.spec.tsx` (with
   the corpus rows in `library-corpus.ts`), `s3-library-states.spec.tsx`, `w2ui-library.spec.tsx`; e2e

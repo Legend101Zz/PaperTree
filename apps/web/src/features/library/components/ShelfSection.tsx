@@ -98,22 +98,25 @@ export function ShelfSection({
     () => arrangeShelf(books, arrangement).flatMap((group) => group.papers.map((p) => p.id)),
     [books, arrangement],
   );
-  // Any change that can move a spine: the arrangement, the order of the ids, or the shelf coming
-  // back into view (hidden, every spine measures zero).
+  // Any change that can move a spine: the arrangement, the order of the ids, the shelf coming
+  // back into view (hidden, every spine measures zero), or the flat books giving way to spines
+  // across 900 px (review SF1). The sheet is not placed, so it is not measured on every scroll.
   const placement = useCardPlacement(
-    shownId,
+    sheet ? null : shownId,
     band,
-    `${String(shown)}|${arrangement}|${order.join(',')}`,
+    `${String(shown)}|${plan.shelf}|${arrangement}|${order.join(',')}`,
   );
   // A second activation of the open spine puts the book back.
   const takeDown = useCallback(
     (paperId: string) => setOpenId((current) => (current === paperId ? null : paperId)),
     [setOpenId],
   );
+  // A modal sheet keeps the stacks inert until it has gone, so its book takes focus after the commit.
+  const { focusAfterCommit } = focus;
   const putBack = useCallback(() => {
-    if (shownId !== null) focusBook(shownId);
+    if (shownId !== null) (sheet ? focusAfterCommit : focusBook)(shownId);
     setOpenId(null);
-  }, [shownId, setOpenId]);
+  }, [shownId, setOpenId, sheet, focusAfterCommit]);
   // The Retry button leaves with the failed state, so focus goes to Read, which stays.
   const retry = useCallback(
     async (paperId: string) => {
@@ -125,17 +128,20 @@ export function ShelfSection({
   // The deleted book's card and spine leave; focus stays on the shelf, next to where it stood.
   // After the commit, not now: losing a book can re-lay the shelf out (13 → 12 is face-out), and
   // a neighbour focused in the old layout would be unmounted with it (review B2).
-  const { focusAfterCommit } = focus;
   const remove = useCallback(
     async (paperId: string) => {
       const at = order.indexOf(paperId);
       const neighbour = order[at + 1] ?? order[at - 1];
       await onDelete(paperId);
       setOpenId(null);
+      const toAdd = (): void =>
+        document.querySelector<HTMLElement>('[data-add-papers] button')?.focus();
       if (neighbour !== undefined) focusAfterCommit(neighbour);
-      else document.querySelector<HTMLElement>('[data-add-papers] button')?.focus();
+      // The header is inert until the sheet has gone.
+      else if (sheet) window.requestAnimationFrame(toAdd);
+      else toAdd();
     },
-    [order, onDelete, setOpenId, focusAfterCommit],
+    [order, onDelete, setOpenId, focusAfterCommit, sheet],
   );
   const toShelf = useCallback(() => {
     document

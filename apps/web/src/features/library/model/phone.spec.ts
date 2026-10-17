@@ -9,7 +9,7 @@ import {
   FLAT_SHORT_MAX,
   PHONE_MAX_WIDTH,
   PHONE_QUERY,
-  flatBook,
+  flatPicture,
   flatStep,
   libraryPlan,
 } from './phone';
@@ -65,7 +65,7 @@ describe('the phone layout rule', () => {
 
 describe('a flat book', () => {
   it('is as long as frame 08a draws it on a 358 px stack (274 + 1.12 × pages)', () => {
-    const length = (pages: number) => 358 - flatBook(paper({ pageCount: pages })).short;
+    const length = (pages: number) => 358 - flatPicture(paper({ pageCount: pages })).short;
     // U-Net, YOLO, Attention, BERT, ViT, LoRA, FlashAttention, CLIP, GPT-3 as the frame draws them.
     const frame: [number, number][] = [
       [8, 282],
@@ -82,21 +82,23 @@ describe('a flat book', () => {
   });
 
   it('is never longer than the stack, and an uncounted book is drawn as 16 pages', () => {
-    expect(flatBook(paper({ pageCount: 400 })).short).toBe(0);
-    expect(flatBook(paper({ pageCount: 1 })).short).toBeLessThanOrEqual(FLAT_SHORT_MAX);
-    expect(flatBook(paper({ pageCount: 0 })).short).toBe(flatBook(paper({ pageCount: 16 })).short);
+    expect(flatPicture(paper({ pageCount: 400 })).short).toBe(0);
+    expect(flatPicture(paper({ pageCount: 1 })).short).toBeLessThanOrEqual(FLAT_SHORT_MAX);
+    expect(flatPicture(paper({ pageCount: 0 })).short).toBe(
+      flatPicture(paper({ pageCount: 16 })).short,
+    );
   });
 
   it('sits 0–12 px in from the stack edge, the same every time for the same paper', () => {
     const ids = Array.from({ length: 40 }, (_, i) => `ppr_${String(i)}`);
-    const offsets = ids.map((id) => flatBook(paper({ id })).offset);
+    const offsets = ids.map((id) => flatPicture(paper({ id })).offset);
     expect(new Set(offsets).size).toBeGreaterThan(2);
     for (const offset of offsets) expect([0, 4, 6, 10, 12]).toContain(offset);
-    expect(flatBook(paper({ id: 'ppr_7' })).offset).toBe(offsets[7]);
+    expect(flatPicture(paper({ id: 'ppr_7' })).offset).toBe(offsets[7]);
   });
 
   it('prints the short title and the year in gilt, and ties a ribbon on while you read it', () => {
-    const bert = flatBook(
+    const bert = flatPicture(
       paper({
         title: 'BERT: Pre-training of Deep Bidirectional Transformers',
         year: 2018,
@@ -110,21 +112,21 @@ describe('a flat book', () => {
       ribbon: true,
       note: null,
     });
-    expect(flatBook(paper({ year: null })).year).toBeNull();
-    expect(flatBook(paper()).ribbon).toBe(false);
+    expect(flatPicture(paper({ year: null })).year).toBeNull();
+    expect(flatPicture(paper()).ribbon).toBe(false);
   });
 
   it('wears kraft while we read it, a torn label when we could not, a label on Language cloth', () => {
-    const lora = flatBook(paper({ processing: 'parsing', reading: READING }));
+    const lora = flatPicture(paper({ processing: 'parsing', reading: READING }));
     // Processing wins over reading, as on the spines: no ribbon on kraft, no year on paper.
     expect(lora).toMatchObject({ face: 'kraft', note: 'being read', ribbon: false, year: null });
-    expect(flatBook(paper({ processing: 'pending' })).face).toBe('kraft');
-    expect(flatBook(paper({ processing: 'failed' }))).toMatchObject({
+    expect(flatPicture(paper({ processing: 'pending' })).face).toBe('kraft');
+    expect(flatPicture(paper({ processing: 'failed' }))).toMatchObject({
       face: 'torn',
       note: 'could not read',
       year: null,
     });
-    expect(flatBook(paper({ arxivCategory: 'cs.IR' }))).toMatchObject({
+    expect(flatPicture(paper({ arxivCategory: 'cs.IR' }))).toMatchObject({
       face: 'label',
       year: null,
     });

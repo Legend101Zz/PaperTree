@@ -8,7 +8,7 @@
 
 import { memo } from 'react';
 
-import { flatBook } from '../model/phone';
+import { flatPicture } from '../model/phone';
 import { clothFor, spineName, spineState, type ShelfPaper } from '../model/shelf';
 
 import type { CSSProperties, ReactNode } from 'react';
@@ -43,7 +43,7 @@ export const FlatBook = memo(function FlatBook({
   onActivate,
   onFocusBook,
 }: FlatBookProps): ReactNode {
-  const book = flatBook(paper);
+  const book = flatPicture(paper);
   const onPaper = book.face !== 'gilt';
   // Frame 08a writes "being read" on the kraft beside the label; red needs the paper under it.
   const note = book.note === null ? null : <span className="pt-flatbook__note">{book.note}</span>;
