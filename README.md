@@ -6,8 +6,9 @@
 
 <a href="docs/assets/readme/v0.2/papertree-v0.2.mp4"><img src="docs/assets/readme/v0.2/demo.gif" alt="A short loop from the PaperTree v0.2.0 product video" width="100%"/></a>
 
-<sub>A real session on v0.2.0 with the live model, made with HyperFrames.
-<a href="docs/assets/readme/v0.2/papertree-v0.2.mp4"><b>Watch the full product video (MP4)</b></a></sub>
+<sub>A real session on v0.2.0 with the live model: select a passage, Explain, and a marker flashes the
+passage it stands on. <a href="docs/assets/readme/v0.2/papertree-v0.2.mp4"><b>Watch the full 90-second product
+video (MP4)</b></a> · made with HyperFrames, narrated with Kokoro.</sub>
 
 <br/>
 
@@ -887,7 +888,10 @@ work.
 - The v0.2 typefaces are Libre Caslon Display and Text, Alegreya Sans and Alegreya Sans SC, and Courier
   Prime (SIL Open Font License 1.1), self-hosted from the [Fontsource](https://fontsource.org/) packages.
 - Product video made with [HyperFrames](https://github.com/heygen-com/hyperframes) (Apache-2.0); narration
-  voice [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache-2.0).
+  voice [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache-2.0), synthesized locally; caption
+  timings from [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (MIT); the click sound is HyperFrames'
+  bundled `click-soft.mp3` (Pixabay Content License). Full credits:
+  [`docs/assets/readme/v0.2/VIDEO-CREDITS.md`](docs/assets/readme/v0.2/VIDEO-CREDITS.md).
 - The screenshots and the product video show these papers, used as examples; they belong to their authors:
   - Vaswani et al., [_Attention Is All You Need_](https://arxiv.org/abs/1706.03762) (2017).
   - Redmon et al., [_You Only Look Once: Unified, Real-Time Object Detection_](https://arxiv.org/abs/1506.02640) (2016).
@@ -902,6 +906,7 @@ work.
   - He et al., [_Mask R-CNN_](https://arxiv.org/abs/1703.06870) (2017).
   - Reimers and Gurevych, [_Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks_](https://arxiv.org/abs/1908.10084) (2019).
   - Zhang et al., [_PDF-to-Tree: Parsing PDF Text Blocks into a Tree_](https://aclanthology.org/2024.findings-emnlp.628/) (2024).
+  - Mnih et al., [_Asynchronous Methods for Deep Reinforcement Learning_](https://arxiv.org/abs/1602.01783) (2016).
 
 ## License
 
