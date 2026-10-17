@@ -10,7 +10,7 @@
  * The card holds the page id, never a copy of the page; its counts are the server's, computed on
  * read.
  */
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 
 import { boardsApi } from '@/lib/api/boards';
@@ -62,6 +62,31 @@ export function cardOn(
   return board.nodes.find((n) => n.kind === 'notebook' && n.source_page_id === pageId) ?? null;
 }
 
+/**
+ * The board as it is now, for placing a new card below everything on it. The board this page read
+ * when it opened misses cards added since (another tab, the reader's Send to board), and a card
+ * placed from it landed on top of them (found by the prototype flow, #218). The read refreshes the
+ * page's cached board; if it fails, the board as last read is used (or none), so a passing network
+ * fault never stops a send. Between this read and the create another tab's card can still land:
+ * only placement on the server would close that window.
+ *
+ * @param client - The page's query client.
+ * @param paperId - The paper whose board it is.
+ * @returns The board now; else as last read; else undefined.
+ */
+export async function freshBoard(
+  client: QueryClient,
+  paperId: string,
+): Promise<BoardView | undefined> {
+  try {
+    const now = await boardsApi.get(paperId);
+    client.setQueryData(boardKey(paperId), now);
+    return now;
+  } catch {
+    return client.getQueryData<BoardView>(boardKey(paperId));
+  }
+}
+
 /** The API's client-id shape (contracts.md §0). */
 const CLIENT_ID = /^[a-z]{2,4}_[0-9A-Za-z-]{8,64}$/;
 
@@ -97,15 +122,9 @@ export function useBoardCard(paperId: string, pageId: string, title: string): Bo
 
   const create = async (): Promise<SendResult> => {
     try {
-      // Below everything on the board NOW, so the new card never covers another: the board read
-      // when the page opened misses cards added since (another tab, the reader's Send to board),
-      // and the card landed on top of them (found by the prototype flow, #218).
-      const now = await client.fetchQuery({
-        queryKey: boardKey(paperId),
-        queryFn: () => boardsApi.get(paperId),
-        staleTime: 0,
-      });
-      const y = now.nodes.reduce((max, n) => Math.max(max, n.y + n.h + 40), 0);
+      // Below everything on the board now, so the new card never covers another (#218).
+      const now = await freshBoard(client, paperId);
+      const y = (now?.nodes ?? []).reduce((max, n) => Math.max(max, n.y + n.h + 40), 0);
       await boardsApi.createNode(paperId, {
         node_id: nodeId,
         kind: 'notebook',
