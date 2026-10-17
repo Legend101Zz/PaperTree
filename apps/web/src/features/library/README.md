@@ -147,7 +147,11 @@ same papers as a ruled catalogue, Topics shows each topic as a card, and the Map
   taken down opens its catalogue card as a **modal bottom sheet** (`useModalSheet`): Read focused, the rest of
   the page `inert` behind a scrim (no key or tap can reach a book under it), Tab wrapping inside it, its book
   scrolled clear above it and room under the stacks of the sheet's measured height; Esc, Put it back or a tap
-  on the scrim puts the book back and returns focus to it once the inert has lifted. Crossing 900 px with a
+  on the scrim puts the book back and returns focus to it once the inert has lifted. On a phone Enter and
+  Space take a book down into the sheet, as a tap does: there is no pull-out (#200's 02a turns a standing
+  spine out of its row, a desktop moment; a book lying flat has no row to turn out of), and the hints say
+  "Enter take it down". The sheet's **Open the book** closes the sheet and opens #200's spread, which stacks
+  at 390; Esc puts it back on the flat book. Crossing 900 px with a
   card open re-points it (band ↔ sheet). The Map's list comes first, by CSS (one element at every width, so
   focus in it survives a resize), and opens; its summary, its papers and the Topics "…" are 44 px up to
   900 px and on any coarse pointer. The search's clear button is an × there, not "Esc". No page scrolls

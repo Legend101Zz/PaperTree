@@ -3,7 +3,8 @@
  * view tabs, Reading now, the flat stacks), Reading now on a short library too, the flat books with
  * their names, one tab stop and ↑/↓, the card as a modal bottom sheet with Put it back, the tabs,
  * the Map's list first, no key hint on touch, and axe; then crossing 900 px with a card open or with
- * focus in the Map's list (review SF1, SF4). The width comes from a `matchMedia` stub that answers
+ * focus in the Map's list (review SF1, SF4); and S3's book on a phone: Enter, Space and a tap open
+ * the sheet (no pull-out), whose "Open the book" opens the spread. The width comes from a `matchMedia` stub that answers
  * the 900 px phone query and can change; pixel sizes are read from the stylesheets, which jsdom does
  * not lay out. Titles are the corpus papers' own (`library-corpus.ts`).
  */
@@ -36,9 +37,26 @@ const papersApi = vi.hoisted(() => ({
   putReadingState: vi.fn(),
 }));
 const topicsApi = vi.hoisted(() => ({ list: vi.fn(), ofPaper: vi.fn() }));
-vi.mock('@/lib/api/papers', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/api/papers')>()),
-  papersApi,
+const auth = vi.hoisted(() => ({ me: vi.fn() }));
+vi.mock('@/lib/api/papers', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/lib/api/papers')>();
+  return { ...real, papersApi, authApi: { ...real.authApi, ...auth } };
+});
+// The opened book's reads (S3, #200): no figures, no abstract, no summary for these rows.
+const bookApi = vi.hoisted(() => ({
+  figures: vi.fn(),
+  abstract: vi.fn(),
+  setPlate: vi.fn(),
+  clearPlate: vi.fn(),
+}));
+vi.mock('@/features/book/api/bookApi', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/book/api/bookApi')>()),
+  bookApi,
+}));
+const summaryApi = vi.hoisted(() => ({ get: vi.fn(), generate: vi.fn() }));
+vi.mock('@/lib/api/summary', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api/summary')>()),
+  summaryApi,
 }));
 vi.mock('@/lib/api/topics', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api/topics')>()),
@@ -123,6 +141,19 @@ beforeEach(() => {
   push.mockReset();
   papersApi.links.mockResolvedValue({ links: [] });
   topicsApi.list.mockResolvedValue([]);
+  auth.me.mockResolvedValue({
+    user_id: 'usr_1',
+    email: 'mrigesh@example.test',
+    display_name: null,
+  });
+  bookApi.figures.mockResolvedValue([]);
+  bookApi.abstract.mockResolvedValue({ text: null, page_index: null, anchor: null });
+  summaryApi.get.mockResolvedValue({ state: 'none', summary: null });
+  // The book's motion is WAAPI; here every animation has already finished.
+  (Element.prototype as unknown as { animate: unknown }).animate = () => ({
+    finished: Promise.resolve(),
+    cancel: () => undefined,
+  });
   window.localStorage.clear();
   // A 390 px phone: the 900 px phone query (and the touch query, which includes it) match.
   wide = false;
@@ -147,6 +178,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  delete (Element.prototype as unknown as { animate?: unknown }).animate;
 });
 
 describe('the phone library at 390', () => {
@@ -321,6 +353,40 @@ describe('the phone library at 390', () => {
     expect(PHONE_CSS).toMatch(/\.pt-map \.pt-map__host \{\s*order: 1;/);
     fireEvent.click(screen.getByRole('button', { name: 'Table' }));
     expect((await screen.findByRole('table', { name: 'Papers' })).tagName).toBe('TABLE');
+  });
+
+  it('opens the sheet on Enter, Space or a tap, never the pull-out; "Open the book" opens the spread', async () => {
+    await renderPhone();
+    const resnet = within(shelf()).getByRole('button', { name: /^Deep Residual/ });
+    resnet.focus();
+    // Not cancelled, so the browser turns each into the click that takes the book down (#199).
+    expect(fireEvent.keyDown(resnet, { key: 'Enter' })).toBe(true);
+    expect(fireEvent.keyDown(resnet, { key: ' ' })).toBe(true);
+    expect(resnet.getAttribute('data-pulled')).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(resnet);
+    const sheet = screen.getByRole('dialog', { name: /^Deep Residual/ });
+    const open = within(sheet).getByRole('button', { name: /^Open the book/ });
+    expect(open.style.minHeight).toBe('44px');
+    fireEvent.click(open);
+    // The sheet goes first: one modal at a time, and the spread is the one now.
+    expect(sheet.isConnected).toBe(false);
+    const spread = await screen.findByRole('dialog', { name: /^Deep Residual/ });
+    expect(spread.closest('[inert]')).toBeNull();
+    expect(shelf().closest('[inert]')).not.toBeNull();
+    fireEvent.keyDown(document.activeElement ?? spread, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(resnet));
+    expect(document.querySelector('[inert]')).toBeNull();
+  });
+
+  it('says Enter takes a book down on the stacks, with no Space line (no pull-out there)', async () => {
+    await renderPhone();
+    const hints = document.querySelector<HTMLElement>('.pt-hints')!;
+    expect(hints.textContent).toContain('↑↓ along the shelf');
+    expect(hints.textContent).toContain('Enter take it down');
+    expect(hints.textContent).not.toContain('Space');
+    expect(hints.textContent).not.toContain('take it out');
   });
 
   it('draws × to clear the search on a phone, never the "Esc" key (review SF5)', async () => {

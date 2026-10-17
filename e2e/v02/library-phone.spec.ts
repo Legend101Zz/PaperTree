@@ -2,7 +2,8 @@
  * S2h (#199) on the real stack at 390 × 844, touch: the stacked phone library (search, title,
  * tabs, Reading now, the books lying flat) → Continue on a Reading-now row opens the reader at its
  * page → back → a flat book taken down opens its card as a modal bottom sheet (Read focused, the
- * keys kept inside it at 320 px, its book clear above it, Put it back) → the Table tab scrolls
+ * keys kept inside it at 320 px, its book clear above it, Put it back) → its "Open the book" opens
+ * S3's spread (no pull-out on a phone) and Esc puts it back on the flat book → the Table tab scrolls
  * sideways in its own region while the page never does.
  *
  * The brief names the demo account; the e2e stack has none (as for S2f), so a new account holds
@@ -157,6 +158,19 @@ test('390: stacked library → Continue opens p. 3 → back → a flat book open
   await expect(sheet).toHaveCount(0);
   await expect(book).toBeFocused();
   await page.setViewportSize({ width: 390, height: 844 });
+
+  // ── the sheet's "Open the book": S3's spread, the sheet gone first; Esc back to the flat book ──
+  await book.tap();
+  await sheet.getByRole('button', { name: /^Open the book/ }).tap();
+  await expect(sheet).toHaveCount(0);
+  const spread = page.getByRole('dialog', { name: /^Deep Residual Learning/ });
+  await expect(spread.getByRole('button', { name: /^Read / })).toBeVisible();
+  expect(await pageWidth(page)).toBe(390);
+  await page.screenshot({ path: shot('s2h-spread-390.png') });
+  await page.keyboard.press('Escape');
+  await expect(spread).toHaveCount(0);
+  await expect(book).toBeFocused();
+  expect(await page.locator('[inert]').count()).toBe(0);
 
   // ── the Table tab: its region scrolls sideways, the page does not ──
   await page.getByRole('button', { name: 'Table', exact: true }).tap();

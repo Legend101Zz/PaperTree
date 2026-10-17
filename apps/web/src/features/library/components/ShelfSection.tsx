@@ -8,7 +8,8 @@
  * dismissed (to the shelf), and when the layout changes under it (`useShelfFocus`). Enter on a
  * book that can be opened takes it OUT instead (#200, `features/book`: the pull-out, then the
  * spread); a click keeps the card, whose "Open the book" goes to the spread, so the card stays the
- * mouse's way and Space the keyboard's.
+ * mouse's way and Space the keyboard's. On a phone Enter, Space and a tap all open the sheet, and
+ * its "Open the book" opens the spread (#199): a book lying flat has no row to be turned out of.
  */
 'use client';
 
@@ -81,16 +82,22 @@ export function ShelfSection({
 }: ShelfSectionProps): ReactNode {
   const band = useRef<HTMLDivElement>(null);
   const focus = useShelfFocus();
-  const book = useBookOnShelf(books, onRead);
-  const { pull } = book;
-  const lifted = useMemo(
-    () => ({ focusedId: focus.focusedId, onFocusBook: focus.setFocusedId, onEnterBook: pull }),
-    [focus.focusedId, focus.setFocusedId, pull],
-  );
   const plan = libraryPlan(books.length, phone);
   const faceOut = plan.shelf === 'face-out';
   const OnPlanks = plan.shelf === 'flat' ? FlatShelf : plan.shelf === 'rows' ? ShelfRows : Shelf;
   const sheet = plan.card === 'sheet';
+  const book = useBookOnShelf(books, onRead);
+  const { pull, open } = book;
+  // The pull-out (02a) turns a standing spine out of its row, a desktop moment (DESIGN.md §1, §6);
+  // a phone's book lies flat in a stack (08a, §10), so there Enter clicks it into the sheet.
+  const lifted = useMemo(
+    () => ({
+      focusedId: focus.focusedId,
+      onFocusBook: focus.setFocusedId,
+      ...(sheet ? {} : { onEnterBook: pull }),
+    }),
+    [focus.focusedId, focus.setFocusedId, pull, sheet],
+  );
   const cardId = useId();
   const openBook = books.find((book) => book.id === openId) ?? null;
   const shownId = openBook === null ? null : openBook.id;
@@ -117,6 +124,15 @@ export function ShelfSection({
     if (shownId !== null) (sheet ? focusAfterCommit : focusBook)(shownId);
     setOpenId(null);
   }, [shownId, setOpenId, sheet, focusAfterCommit]);
+  // The sheet goes before the spread comes: one modal at a time, and the spread's put-back can
+  // focus the book (the sheet would still hold the stacks inert).
+  const openTheBook = useCallback(
+    (paperId: string) => {
+      if (sheet) setOpenId(null);
+      open(paperId);
+    },
+    [sheet, setOpenId, open],
+  );
   // The Retry button leaves with the failed state, so focus goes to Read, which stays.
   const retry = useCallback(
     async (paperId: string) => {
@@ -179,7 +195,7 @@ export function ShelfSection({
               onRetry={retry}
               onDelete={remove}
               onClose={putBack}
-              onOpenBook={book.open}
+              onOpenBook={openTheBook}
             />
           )}
         </div>
