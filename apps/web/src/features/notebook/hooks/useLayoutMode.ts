@@ -28,8 +28,12 @@ export function useLayoutMode(): LayoutMode {
     const follow = (): void => setMode(current());
     follow();
     for (const l of lists) l.addEventListener('change', follow);
+    // Also on resize: not every environment fires a media query's change (happy-dom does not),
+    // and an unchanged mode does not render again.
+    window.addEventListener('resize', follow);
     return () => {
       for (const l of lists) l.removeEventListener('change', follow);
+      window.removeEventListener('resize', follow);
     };
   }, []);
   return mode;

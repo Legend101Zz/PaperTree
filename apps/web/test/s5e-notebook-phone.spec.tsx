@@ -7,7 +7,7 @@
  * Switching the pen on shows the page and a stroke drawn there is saved. `fetch` plays the API.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { NotebookView } from '@/features/notebook';
@@ -103,8 +103,14 @@ describe('the stack (08c)', () => {
     const calls = await mountPhone();
     const ink = screen.getByRole('figure', { name: /Your ink · view only/ });
     expect(ink.querySelectorAll('[data-stroke-id]')).toHaveLength(1);
-    for (const key of ['e', 'l', 'p', 'h']) fireEvent.keyDown(window, { key });
-    // H is the highlighter, which the phone allows; E, L and P never pick anything up.
+    // E (eraser), L (lasso) and P (pen) pick nothing up on a phone: no surface, the stack stays.
+    for (const key of ['e', 'l', 'p']) {
+      fireEvent.keyDown(window, { key });
+      expect(document.querySelector('.pt-nb-surface'), key).toBeNull();
+      expect(document.querySelector('.pt-nb-stack'), key).not.toBeNull();
+    }
+    // H is the highlighter, which the phone allows.
+    fireEvent.keyDown(window, { key: 'h' });
     expect(
       within(bar()).getByRole('button', { name: 'Highlight' }).getAttribute('aria-pressed'),
     ).toBe('true');
@@ -150,6 +156,25 @@ describe('the stack (08c)', () => {
         ),
       ).toBe(true),
     );
+  });
+});
+
+describe('turning a tablet into a phone', () => {
+  it('puts down a tool the phone leaves out, and shows the stack', async () => {
+    viewport(1180, 820);
+    stubApi(pageView());
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <NotebookView paperId={PAPER} pageId={PAGE} />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Lasso' }));
+    expect(document.querySelector('.pt-nb-surface')).not.toBeNull();
+    act(() => viewport(390, 844));
+    await waitFor(() => expect(document.querySelector('.pt-nb-stack')).not.toBeNull());
+    expect(document.querySelector('.pt-nb-surface')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Lasso' })).toBeNull();
   });
 });
 
