@@ -45,8 +45,9 @@ mid-slide frame is the page's own Web Animations paused at half their duration.
   the page.
 - `motion-3-settled-{light,dark}.png`: settled.
 - `motion-1-lift-light-reduced.png`, `motion-2-fade-light-reduced.png`,
-  `motion-3-settled-light-reduced.png`: reduced motion: nothing lifts or travels; the notebook
-  replaces the reader with one `--pt-dur-quick` cross-fade (shot half way).
+  `motion-3-settled-light-reduced.png`: reduced motion: nothing lifts or travels; the notebook's
+  desk replaces the reader with one `--pt-dur-quick` cross-fade (shot half way, after review: the
+  bar and the panel never fade, so the header does not blink).
 
 What still differs from frame 11:
 
@@ -58,3 +59,11 @@ What still differs from frame 11:
 - **Back** returns to the reader with the explain panel on the thread and the passage flashed; it
   has no reverse page turn ("Back turns the page the other way" is not built).
 - **"then your pen is live"**: the pen is not put in the hand on arrival.
+
+## Dive in on the phone sheet (08b, #293)
+
+- `08b-pinned-dive-in-390-light.png`: the phone explain sheet (S4e) on the stored thread. The
+  pinned footer carries "Dive in to answer 2" before "Send answer 2 to board", 44 px each; the
+  first answer keeps its own Dive in and To board in the scroll, 44 px too. Still differing from
+  08b: the thread has two answers, so both pinned buttons name answer 2 and "Send answer 2 to
+  board" wraps to two lines at half the width.
