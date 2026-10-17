@@ -88,6 +88,16 @@ head, the local uncached gate, and a code review whose findings were fixed befor
 | agent heartbeat bound | (#182) | #289 | 0dd978e | frames every 30 ms, a 60 % floor; a 200 ms interval still fails it |
 | S7b-1 the engraved plate | #217 | #290 | 6959a97 | see part 2 |
 | S7b-2 plate actions, board card, 07d, live smoke | #217 | #291 | 508cd75 | full gate on fce062f: 10 of 11 (two pytest load timings, no Python touched); full e2e 68 passed, 1 failed (`s6/explain-faux` load; passed alone at load 19); live ≈ $0.0020 |
+| S4e-1 phone explain sheet (08b), lamp-lit page (09b) | #205 | #294 | fe7d048 | see part 2 |
+| S4e-2 phone header, 08b e2e, live explain smoke | #205 | #295 | 0c9ba3d | full gate on 3733800: 10 of 11 (two pytest load timings, no Python touched); full e2e 74 passed, 2 failed (`canvas-journey` load, passed alone; `guided-position` at 390 real, fixed in ff5ba73); then 26/26 on the affected specs; CI green; live ≈ $0.0017 |
+| S2g-1 Topics view | #198 | #296 | b640ba8 | see part 2 |
+| S2g-2 the Map (only real links) | #198 | #297 | 81af91a | full gate 9 of 11 (#80 30k timing; live ResNet table-cell timeout; no Python touched); full e2e 69 passed, 3 failed (reader specs at load ~57: two passed alone, `journey-b` the known timeout); CI green |
+| S3-1 the book's backend, migration 0010 | #200 | #301 | 3cfc29a | 0010 applies after 0011 (tested); gate with part 2 |
+| S2b-2 the Flash topic run | #242 | #303 | 127773c | full gate 11 of 11 on a650d7f (pytest 2,543); CI e2e found the faux agent's default answer racing S2g's spec, fixed in 57d8b38; CI green; live ≈ $0.0006 (2 calls) |
+| S5e-1 Dive in, its motion, the tablet (05b) | #210 | #304 | e6504f8 | CI e2e found S4e's spec asserting no Dive in on the phone sheet (#293 adds it): spec fixed in 37114fa; CI green |
+| S5e-2 the phone notebook (08c) | #210 | #305 | 5730edf | full gate 11 of 11 on a9c6030 (pytest 2,521); CI green (full e2e in GitHub Actions from here on, owner rule) |
+| S6e-1 board undo and redo | #215 | #306 | e76ef4d | see part 2 |
+| S6e-2 the 500-card board, lamp-lit board (09c) | #215 | #307 | 61e95ab | full gate 11 of 11 (pytest 2,521); CI e2e found spawnSync's 1 MiB buffer killing the 500-anchor helper, fixed in 7493786; CI green |
 
 ## Live AI spend (estimates)
 
