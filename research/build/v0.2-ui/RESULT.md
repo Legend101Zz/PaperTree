@@ -110,6 +110,7 @@ head, the local uncached gate, and a code review whose findings were fixed befor
 | 2026-10-17 02:09 IST | S4e #205 | explain, one live smoke at 390 ([shots/S4e/live-smoke.md](shots/S4e/live-smoke.md)) | MiniMax-M3.1-Flash-Preview, effort low | 4,004 in (plus 190 cache reads) / 394 out | ≈ $0.0017 (on M3 rates) |
 | 2026-10-17 02:45 IST | S7b #217 | diagram (the one live smoke, [shots/S7b/live-smoke.md](shots/S7b/live-smoke.md)) | MiniMax-M3.1-Flash-Preview, effort low | 4,487 in (4,416 cache reads) / 351 out | ≈ $0.0020 (on M3 rates) |
 | 2026-10-17 | S2b2 (#242) | topic (2 calls: the API run, and the same request again to capture the answer) | MiniMax-M3.1-Flash-Preview | 748 in / 67 out, then 699 in / 81 out | $0.0006 (see live-smokes/S2b2-topic.md) |
+| 2026-10-17 14:20 IST | README v0.2 (#182) | diagram, one run for the README's plate shot (Attention §3.2.1 ¶1; 5 parts, 5 cited; no retries; the agent was stopped right after) | MiniMax-M3.1-Flash-Preview, effort low | 4,048 in (plus 178 cache reads) / 270 out | ≈ $0.0015 (on M3 rates) |
 
 ## S8: the whole flow, reduced motion and the numbers at scale (#218), 2026-10-17
 
