@@ -63,6 +63,18 @@ const CASES: readonly {
   },
 ];
 
+/**
+ * The header height each width's `top` (window px) was written against: one 56 px row from 768 px,
+ * and below it S4c's two-row phone header, 119 px (the reader's scroller was 725 of 844 px in the
+ * S4d gate run). Since #205 the phone header is one 56 px row, so the same window px would put the
+ * needle 63 px deeper into the reading area than these cases were written for; in Guided's 390 px
+ * column that much PDF (an equation and a paragraph) reflows to ~800 px. So the needle is placed
+ * from the reading area's top, at the depth each case was measured at.
+ */
+function writtenUnder(width: number): number {
+  return width < 768 ? 119 : 56;
+}
+
 async function nudgeToTop(page: Page, needle: string, top: number, x: number): Promise<number> {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const now = (await spanBoxAny(page, needle)).top;
@@ -115,7 +127,18 @@ for (const size of [
           size.width < 600 ? 'fit-width' : '1.25',
         );
         await revealText(page, c.needle);
-        const placed = await nudgeToTop(page, c.needle, c.top, size.width / 2);
+        const readingTop = await page.evaluate(
+          () =>
+            (
+              document.querySelector('[data-papertree-scroller]') as HTMLElement
+            ).getBoundingClientRect().top,
+        );
+        const placed = await nudgeToTop(
+          page,
+          c.needle,
+          readingTop + c.top - writtenUnder(size.width),
+          size.width / 2,
+        );
         const sourceHeight = await page.evaluate(
           () => (document.querySelector('[data-papertree-scroller]') as HTMLElement).clientHeight,
         );
