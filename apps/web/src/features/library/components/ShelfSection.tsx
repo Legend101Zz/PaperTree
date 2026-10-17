@@ -1,13 +1,15 @@
 /**
  * ShelfSection: the shelf with its band above and its hints below (#195); spines, face-out covers
- * for a short library, or a plank per row at scale (#196). Owns taking a book down and putting
- * it back: the catalogue card stands in the band, pointing at the open book, and Esc (on the card
- * or the shelf) returns focus to it. It also decides where focus goes when the control that had
- * it disappears: after Retry (to Read), after Delete (to the next book, else the previous, else
- * Add papers), after the key hints are dismissed (to the shelf), and when the layout changes
- * under it (`useShelfFocus`). Enter on a book that can be opened takes it OUT instead (#200,
- * `features/book`: the pull-out, then the spread); a click keeps the card, whose "Open the book"
- * goes to the spread, so the card stays the mouse's way and Space the keyboard's.
+ * for a short library, a plank per row at scale (#196), or books lying flat on a phone (#199). Owns
+ * taking a book down and putting it back: the catalogue card stands in the band, pointing at the
+ * open book (on a phone it is a bottom sheet), and Esc (on the card or the shelf) returns focus.
+ * It also decides where focus goes when the control that had it disappears: after Retry (to Read),
+ * after Delete (to the next book, else the previous, else Add papers), after the key hints are
+ * dismissed (to the shelf), and when the layout changes under it (`useShelfFocus`). Enter on a
+ * book that can be opened takes it OUT instead (#200, `features/book`: the pull-out, then the
+ * spread); a click keeps the card, whose "Open the book" goes to the spread, so the card stays the
+ * mouse's way and Space the keyboard's. On a phone Enter, Space and a tap all open the sheet, and
+ * its "Open the book" opens the spread (#199): a book lying flat has no row to be turned out of.
  */
 'use client';
 
@@ -17,10 +19,11 @@ import { useBookOnShelf } from '@/features/book';
 
 import { useCardPlacement } from '../hooks/useCardPlacement';
 import { useShelfFocus } from '../hooks/useShelfFocus';
+import { libraryPlan } from '../model/phone';
 import { arrangeShelf } from '../model/shelf';
-import { shelfLayout } from '../model/states';
 import { CatalogueCard } from './CatalogueCard';
 import { CoverShelf } from './CoverShelf';
+import { FlatShelf } from './FlatShelf';
 import { Shelf } from './Shelf';
 import { ShelfRows } from './ShelfRows';
 import { ShelfHints } from './ShelfHints';
@@ -52,6 +55,8 @@ export interface ShelfSectionProps {
   readonly onContinue: (book: LibraryBook) => void;
   readonly onRetry: (paperId: string) => Promise<unknown>;
   readonly onDelete: (paperId: string) => Promise<unknown>;
+  /** Phone width (`usePhoneLayout`): the books lie flat and the card is a bottom sheet. */
+  readonly phone?: boolean;
 }
 
 /**
@@ -73,18 +78,26 @@ export function ShelfSection({
   onContinue,
   onRetry,
   onDelete,
+  phone = false,
 }: ShelfSectionProps): ReactNode {
   const band = useRef<HTMLDivElement>(null);
   const focus = useShelfFocus();
+  const plan = libraryPlan(books.length, phone);
+  const faceOut = plan.shelf === 'face-out';
+  const OnPlanks = plan.shelf === 'flat' ? FlatShelf : plan.shelf === 'rows' ? ShelfRows : Shelf;
+  const sheet = plan.card === 'sheet';
   const book = useBookOnShelf(books, onRead);
-  const { pull } = book;
+  const { pull, open } = book;
+  // The pull-out (02a) turns a standing spine out of its row, a desktop moment (DESIGN.md §1, §6);
+  // a phone's book lies flat in a stack (08a, §10), so there Enter clicks it into the sheet.
   const lifted = useMemo(
-    () => ({ focusedId: focus.focusedId, onFocusBook: focus.setFocusedId, onEnterBook: pull }),
-    [focus.focusedId, focus.setFocusedId, pull],
+    () => ({
+      focusedId: focus.focusedId,
+      onFocusBook: focus.setFocusedId,
+      ...(sheet ? {} : { onEnterBook: pull }),
+    }),
+    [focus.focusedId, focus.setFocusedId, pull, sheet],
   );
-  const layout = shelfLayout(books.length);
-  const faceOut = layout === 'face-out';
-  const OnPlanks = layout === 'rows' ? ShelfRows : Shelf;
   const cardId = useId();
   const openBook = books.find((book) => book.id === openId) ?? null;
   const shownId = openBook === null ? null : openBook.id;
@@ -92,22 +105,34 @@ export function ShelfSection({
     () => arrangeShelf(books, arrangement).flatMap((group) => group.papers.map((p) => p.id)),
     [books, arrangement],
   );
-  // Any change that can move a spine: the arrangement, the order of the ids, or the shelf coming
-  // back into view (hidden, every spine measures zero).
+  // Any change that can move a spine: the arrangement, the order of the ids, the shelf coming
+  // back into view (hidden, every spine measures zero), or the flat books giving way to spines
+  // across 900 px (review SF1). The sheet is not placed, so it is not measured on every scroll.
   const placement = useCardPlacement(
-    shownId,
+    sheet ? null : shownId,
     band,
-    `${String(shown)}|${arrangement}|${order.join(',')}`,
+    `${String(shown)}|${plan.shelf}|${arrangement}|${order.join(',')}`,
   );
   // A second activation of the open spine puts the book back.
   const takeDown = useCallback(
     (paperId: string) => setOpenId((current) => (current === paperId ? null : paperId)),
     [setOpenId],
   );
+  // A modal sheet keeps the stacks inert until it has gone, so its book takes focus after the commit.
+  const { focusAfterCommit } = focus;
   const putBack = useCallback(() => {
-    if (shownId !== null) focusBook(shownId);
+    if (shownId !== null) (sheet ? focusAfterCommit : focusBook)(shownId);
     setOpenId(null);
-  }, [shownId, setOpenId]);
+  }, [shownId, setOpenId, sheet, focusAfterCommit]);
+  // The sheet goes before the spread comes: one modal at a time, and the spread's put-back can
+  // focus the book (the sheet would still hold the stacks inert).
+  const openTheBook = useCallback(
+    (paperId: string) => {
+      if (sheet) setOpenId(null);
+      open(paperId);
+    },
+    [sheet, setOpenId, open],
+  );
   // The Retry button leaves with the failed state, so focus goes to Read, which stays.
   const retry = useCallback(
     async (paperId: string) => {
@@ -119,17 +144,20 @@ export function ShelfSection({
   // The deleted book's card and spine leave; focus stays on the shelf, next to where it stood.
   // After the commit, not now: losing a book can re-lay the shelf out (13 → 12 is face-out), and
   // a neighbour focused in the old layout would be unmounted with it (review B2).
-  const { focusAfterCommit } = focus;
   const remove = useCallback(
     async (paperId: string) => {
       const at = order.indexOf(paperId);
       const neighbour = order[at + 1] ?? order[at - 1];
       await onDelete(paperId);
       setOpenId(null);
+      const toAdd = (): void =>
+        document.querySelector<HTMLElement>('[data-add-papers] button')?.focus();
       if (neighbour !== undefined) focusAfterCommit(neighbour);
-      else document.querySelector<HTMLElement>('[data-add-papers] button')?.focus();
+      // The header is inert until the sheet has gone.
+      else if (sheet) window.requestAnimationFrame(toAdd);
+      else toAdd();
     },
-    [order, onDelete, setOpenId, focusAfterCommit],
+    [order, onDelete, setOpenId, focusAfterCommit, sheet],
   );
   const toShelf = useCallback(() => {
     document
@@ -142,7 +170,14 @@ export function ShelfSection({
     <>
       <section
         ref={focus.section}
-        className={`pt-shelfband${faceOut ? ' pt-shelfband--faceout' : ''}`}
+        className={[
+          'pt-shelfband',
+          faceOut ? 'pt-shelfband--faceout' : '',
+          plan.shelf === 'flat' ? 'pt-shelfband--flat' : '',
+          sheet && openBook !== null ? 'pt-shelfband--sheet' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
         aria-label="Your shelf"
         onFocus={focus.onFocus}
       >
@@ -154,12 +189,13 @@ export function ShelfSection({
               key={openBook.id}
               id={cardId}
               book={openBook}
-              placement={placement}
+              placement={sheet ? null : placement}
+              sheet={sheet}
               onRead={onRead}
               onRetry={retry}
               onDelete={remove}
               onClose={putBack}
-              onOpenBook={book.open}
+              onOpenBook={openTheBook}
             />
           )}
         </div>
@@ -195,6 +231,7 @@ export function ShelfSection({
           matched={matches?.size ?? 0}
           total={books.length}
           onKeysHidden={toShelf}
+          vertical={plan.shelf === 'flat'}
         />
       </section>
       {book.overlay}

@@ -1,10 +1,10 @@
 /**
  * MapList: the Map view in words (#198), for the keyboard and a screen reader: a disclosure after
- * the plan, reached by Tab, listing the topics (then Unshelved) with their papers (each a link to
- * the reader, with the state the plan shows: being read, could not read, reading now), then every
- * real link ("BERT cites Attention Is All You Need · matched by title"), then the board links, which
- * do not exist yet. It reads the same data the plan draws, and says so when the links are loading or
- * could not be read.
+ * the plan (before it and open on a phone, #199), reached by Tab, listing the topics (then
+ * Unshelved) with their papers (each a link to the reader, with the state the plan shows: being
+ * read, could not read, reading now), then every real link ("BERT cites Attention Is All You Need ·
+ * matched by title"), then the board links, which do not exist yet. It reads the same data the plan
+ * draws, and says so when the links are loading or could not be read.
  */
 'use client';
 
@@ -25,6 +25,8 @@ export interface MapListProps {
   readonly links: readonly LibraryLink[] | null;
   readonly linksState: MapLinksState;
   readonly books: readonly LibraryBook[];
+  /** Open when first drawn (the phone, where the list comes first); the person may close it. */
+  readonly open?: boolean;
 }
 
 /**
@@ -33,13 +35,19 @@ export interface MapListProps {
  * @example
  * <MapList groups={groups} links={links} linksState="ready" books={books} />
  */
-export function MapList({ groups, links, linksState, books }: MapListProps): ReactNode {
+export function MapList({
+  groups,
+  links,
+  linksState,
+  books,
+  open = false,
+}: MapListProps): ReactNode {
   const short = (id: string): string => {
     const book = books.find((b) => b.id === id);
     return book === undefined ? 'a paper' : spineTitle(book.title);
   };
   return (
-    <details className="pt-map__list">
+    <details className="pt-map__list" open={open}>
       <summary>The plan as a list</summary>
       <h3>Topics</h3>
       <ul>

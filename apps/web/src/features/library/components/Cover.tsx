@@ -10,12 +10,11 @@ import { memo } from 'react';
 
 import {
   authorLine,
+  bookFace,
   clothFor,
-  clothTakesLabel,
   spineName,
   spineState,
   type ShelfPaper,
-  type SpineState,
 } from '../model/shelf';
 
 import type { ReactNode } from 'react';
@@ -32,13 +31,6 @@ export interface CoverProps {
   readonly cardId?: string;
   readonly onActivate: (paperId: string) => void;
   readonly onFocusCover: (paperId: string) => void;
-}
-
-/** Gilt on cloth; ink on a paper label where gilt cannot be read (the Language cloth, kraft). */
-function faceOf(state: SpineState, paper: ShelfPaper): 'gilt' | 'label' | 'kraft' | 'torn' {
-  if (state === 'failed') return 'torn';
-  if (state === 'queued' || state === 'parsing') return 'kraft';
-  return clothTakesLabel(clothFor(paper)) ? 'label' : 'gilt';
 }
 
 /**
@@ -58,7 +50,7 @@ export const Cover = memo(function Cover({
   onFocusCover,
 }: CoverProps): ReactNode {
   const state = spineState(paper);
-  const face = faceOf(state, paper);
+  const face = bookFace(paper);
   const authors = authorLine(paper.authors);
   const note = face === 'torn' ? 'could not read' : face === 'kraft' ? 'being read' : null;
   const plate = face === 'gilt' || face === 'label' ? paper.plate : null;

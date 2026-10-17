@@ -3,7 +3,9 @@
  * from, "2017 · arXiv 1706.03762 · 15 pages", the figures the parser found, the title, the byline,
  * the abstract's first sentences under their "p. 1 · Abstract" tab (a link that flashes it in the
  * reader), where the person is with its rule, their counts, Read (oxblood cloth), Summary, the
- * arXiv link and "Put it back (Esc)". The abstract is the paper's words (`PaperText`).
+ * arXiv link and "Put it back (Esc)". The abstract is the paper's words (`PaperText`). On a phone
+ * (reached through the library's sheet, #199) the tab and the arXiv link answer 44 px taps and
+ * "Put it back" shows no key.
  */
 'use client';
 
@@ -12,6 +14,7 @@ import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
 import { cardStateLine } from '@/features/library/model/catalogue';
+import { useTouchTargets } from '@/features/library/hooks/useTouchTargets';
 import { topicSource } from '@/features/library/model/table';
 import { readingPage } from '@/features/library/model/shelf';
 
@@ -99,6 +102,7 @@ export function BookDetails({
   const excerpt = abstract === null ? null : abstractExcerpt(abstract.text);
   const source = topicSource(book.topic, 'book');
   const arxiv = arxivLink(book.arxivId);
+  const touch = useTouchTargets();
   return (
     <div className="pt-bookdetails">
       {book.topic === null || book.topic === undefined ? null : (
@@ -131,12 +135,16 @@ export function BookDetails({
       )}
       {excerpt === null || abstract === null ? null : (
         <div className="pt-bookdetails__abstract">
+          {/* The link holds the tab's clipped face: the tab's swallowtail would clip a hit area
+              drawn on itself, and the link's own is free to reach 44 px on a phone (book.css). */}
           <Link
-            className="pt-tab pt-bookdetails__tab"
+            className="pt-bookdetails__tablink"
             href={bookReaderHref(book.id, 'abstract')}
             aria-label={`p. ${String((abstract.pageIndex ?? 0) + 1)}, Abstract: show it in the paper`}
           >
-            {`p. ${String((abstract.pageIndex ?? 0) + 1)} · Abstract`}
+            <span className="pt-tab pt-bookdetails__tab">
+              {`p. ${String((abstract.pageIndex ?? 0) + 1)} · Abstract`}
+            </span>
           </Link>
           <PaperText as="blockquote" className="pt-bookdetails__excerpt">
             {`“${excerpt}”`}
@@ -170,7 +178,8 @@ export function BookDetails({
           </a>
         )}
         <Button variant="ghost" size="touch" onClick={onPutBack}>
-          Put it back <kbd className="pt-kbd">Esc</kbd>
+          {/* A finger has no Esc (#199): the key is drawn only for a fine pointer on a wide screen. */}
+          Put it back {touch ? null : <kbd className="pt-kbd">Esc</kbd>}
         </Button>
       </div>
     </div>

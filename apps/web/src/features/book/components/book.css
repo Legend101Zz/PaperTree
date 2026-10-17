@@ -591,11 +591,14 @@
   margin-block-start: 20px;
 }
 
-.pt-bookdetails__tab {
+/* The link around the tab's clipped face (#199): the same box as the tab, so nothing moves. */
+.pt-bookdetails__tablink {
+  position: relative;
+  display: inline-flex;
   text-decoration: none;
 }
 
-.pt-bookdetails__tab:focus-visible {
+.pt-bookdetails__tablink:focus-visible {
   outline: var(--pt-focus-width) solid var(--pt-focus);
   outline-offset: 2px;
 }
@@ -685,6 +688,24 @@
   font-family: var(--pt-font-you);
   font-size: 13.5px;
   color: var(--pt-ink-2);
+}
+
+/* ── a phone or a touch screen (#199: a phone reaches the spread through the library's sheet):
+   44 px taps. The tab keeps its 20 px face; its link's hit area reaches 12 px above and below,
+   over the byline's margin and the quote's gap, as the shared marker's does (`hitOutset`). ── */
+
+@media (max-width: 900px), (pointer: coarse) {
+  .pt-bookdetails__tablink::after {
+    position: absolute;
+    inset: -12px 0;
+    content: '';
+  }
+
+  .pt-bookdetails__arxiv {
+    display: inline-flex;
+    min-block-size: 44px;
+    align-items: center;
+  }
 }
 
 /* ── narrow: the spread stacks, the dialog scrolls (390) ──────────────────────────────────── */

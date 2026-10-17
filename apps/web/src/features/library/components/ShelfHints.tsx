@@ -26,6 +26,8 @@ export interface ShelfHintsProps {
   readonly total: number;
   /** Got it hides the key hints; focus goes here instead of falling to the page. */
   readonly onKeysHidden?: () => void;
+  /** The phone's flat stacks: ↑ and ↓, and Enter takes a book down into the sheet (#199). */
+  readonly vertical?: boolean;
 }
 
 /**
@@ -34,7 +36,13 @@ export interface ShelfHintsProps {
  * @example
  * <ShelfHints query="atten" matched={2} total={24} />
  */
-export function ShelfHints({ query, matched, total, onKeysHidden }: ShelfHintsProps): ReactNode {
+export function ShelfHints({
+  query,
+  matched,
+  total,
+  onKeysHidden,
+  vertical = false,
+}: ShelfHintsProps): ReactNode {
   const touch = useTouchTargets();
   // Shown until "Got it"; read after mount, because the server cannot see localStorage.
   const [keysHidden, setKeysHidden] = useState(false);
@@ -66,15 +74,24 @@ export function ShelfHints({ query, matched, total, onKeysHidden }: ShelfHintsPr
       {keysHidden ? null : (
         <>
           <span className="pt-hints__key">
-            <kbd className="pt-kbd">←</kbd>
-            <kbd className="pt-kbd">→</kbd> along the shelf
+            <kbd className="pt-kbd">{vertical ? '↑' : '←'}</kbd>
+            <kbd className="pt-kbd">{vertical ? '↓' : '→'}</kbd> along the shelf
           </span>
-          <span className="pt-hints__key">
-            <kbd className="pt-kbd">Enter</kbd> take it out
-          </span>
-          <span className="pt-hints__key">
-            <kbd className="pt-kbd">Space</kbd> its card
-          </span>
+          {vertical ? (
+            // The phone's stacks: Enter opens the sheet, as a tap does (#199); no pull-out there.
+            <span className="pt-hints__key">
+              <kbd className="pt-kbd">Enter</kbd> take it down
+            </span>
+          ) : (
+            <>
+              <span className="pt-hints__key">
+                <kbd className="pt-kbd">Enter</kbd> take it out
+              </span>
+              <span className="pt-hints__key">
+                <kbd className="pt-kbd">Space</kbd> its card
+              </span>
+            </>
+          )}
           <span className="pt-hints__key">
             <kbd className="pt-kbd">Esc</kbd> put it back
           </span>

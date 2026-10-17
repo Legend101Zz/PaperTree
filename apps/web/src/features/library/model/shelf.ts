@@ -103,8 +103,14 @@ export function spineWidth(pageCount: number): number {
   return Math.min(SPINE_MAX_WIDTH, Math.round(26 + 0.85 * pageCount));
 }
 
-// FNV-1a: a small, stable string hash for the decorations below (heights, the fallback cloth).
-function fnv1a(text: string): number {
+/**
+ * FNV-1a: a small, stable string hash for decorations (spine heights, the fallback cloth, a flat
+ * book's place in its stack). Never encodes anything about the paper.
+ *
+ * @param text - Any text, usually a paper id.
+ * @returns An unsigned 32-bit hash.
+ */
+export function fnv1a(text: string): number {
   let hash = 0x811c9dc5;
   for (let i = 0; i < text.length; i += 1) {
     hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193) >>> 0;
@@ -273,6 +279,23 @@ export function clothFor(paper: ShelfPaper): ClothId {
  */
 export function clothTakesLabel(cloth: ClothId): boolean {
   return cloth === 'language';
+}
+
+/** How a book's face is drawn: gilt on cloth, a paper label, a kraft wrap or a torn label. */
+export type BookFace = 'gilt' | 'label' | 'kraft' | 'torn';
+
+/**
+ * A book's face, the same for a spine, a cover and a flat book: torn when we could not read it,
+ * kraft while we read it, a paper label on a cloth gilt cannot be read on, else gilt.
+ *
+ * @param paper - The paper.
+ * @returns The face.
+ */
+export function bookFace(paper: ShelfPaper): BookFace {
+  const state = spineState(paper);
+  if (state === 'failed') return 'torn';
+  if (state === 'queued' || state === 'parsing') return 'kraft';
+  return clothTakesLabel(clothFor(paper)) ? 'label' : 'gilt';
 }
 
 const compareText = (a: string, b: string): number =>
