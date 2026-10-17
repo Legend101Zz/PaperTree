@@ -61,10 +61,11 @@ export const Cover = memo(function Cover({
   const face = faceOf(state, paper);
   const authors = authorLine(paper.authors);
   const note = face === 'torn' ? 'could not read' : face === 'kraft' ? 'being read' : null;
+  const plate = face === 'gilt' || face === 'label' ? paper.plate : null;
   return (
     <button
       type="button"
-      className={`pt-cover pt-cover--${face}`}
+      className={`pt-cover pt-cover--${face}${plate === null || plate === undefined ? '' : ' pt-cover--plate'}`}
       style={
         face === 'kraft' ? undefined : { backgroundColor: `var(--pt-cloth-${clothFor(paper)})` }
       }
@@ -82,8 +83,16 @@ export const Cover = memo(function Cover({
       <span className="pt-cover__inner" aria-hidden="true">
         <span className="pt-cover__frame" />
         <span className="pt-cover__title">{paper.title.trim()}</span>
-        <span className="pt-cover__rule" />
-        {authors === null ? null : <span className="pt-cover__authors">{authors}</span>}
+        {plate === null || plate === undefined ? (
+          <>
+            <span className="pt-cover__rule" />
+            {authors === null ? null : <span className="pt-cover__authors">{authors}</span>}
+          </>
+        ) : (
+          // The plate the person chose (#200): the paper's own figure, never generated art.
+          // eslint-disable-next-line @next/next/no-img-element -- a signed crop URL of the API
+          <img className="pt-cover__plate" src={plate.assetUrl} alt="" />
+        )}
         {note === null ? null : <span className="pt-cover__note">{note}</span>}
         {typeof paper.year === 'number' ? (
           <span className="pt-cover__year">{paper.year}</span>

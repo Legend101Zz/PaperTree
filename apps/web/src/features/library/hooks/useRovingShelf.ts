@@ -1,8 +1,9 @@
 /**
  * useRovingShelf: the shelf's one tab stop, shared by the spines (#195) and the face-out covers
  * (#196) so both keep the same keyboard model: ←/→ walk the books (no wrap), Home and End jump to
- * the ends, Esc puts an open book back. Keys pressed on a cover's caption controls (Continue,
- * Open) or a row's "+n more" bookend are theirs, not the shelf's.
+ * the ends, Esc puts an open book back, and Enter takes a book OUT when the section can open it
+ * (#200; Space and a click still take it down into the catalogue card). Keys pressed on a cover's
+ * caption controls (Continue, Open) or a row's "+n more" bookend are theirs, not the shelf's.
  */
 'use client';
 
@@ -26,6 +27,8 @@ export interface RovingShelf {
 export interface LiftedFocus {
   readonly focusedId: string | null;
   readonly onFocusBook: (paperId: string) => void;
+  /** Enter on a book: true when it was taken out (#200), false to let Enter click it as before. */
+  readonly onEnterBook?: (paperId: string) => boolean;
 }
 
 /**
@@ -63,6 +66,13 @@ export function useRovingShelf(
       }
       const own = '[data-cover-caption], [data-row-more]';
       if (event.target instanceof Element && event.target.closest(own)) return;
+      const book = event.target instanceof Element ? event.target.closest('[data-paper-id]') : null;
+      const bookId = book?.getAttribute('data-paper-id');
+      // Enter's own click is cancelled only when the book did come out (#200).
+      if (event.key === 'Enter' && bookId && lifted?.onEnterBook?.(bookId) === true) {
+        event.preventDefault();
+        return;
+      }
       const next = shelfStep(stop === null ? 0 : order.indexOf(stop), event.key, order.length);
       const id = next === null ? undefined : order[next];
       if (id === undefined) return;
@@ -70,7 +80,7 @@ export function useRovingShelf(
       setFocusedId(id);
       toolbar.current?.querySelector<HTMLElement>(`[data-paper-id="${CSS.escape(id)}"]`)?.focus();
     },
-    [order, stop, openId, onPutBack, setFocusedId],
+    [order, stop, openId, onPutBack, setFocusedId, lifted],
   );
   return { toolbar, stop, onFocusBook: setFocusedId, onKeyDown };
 }

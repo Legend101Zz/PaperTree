@@ -3,7 +3,8 @@
  * frame 01): the title, authors · year · pages, where the person is in it, and what can be done:
  * Read, Retry when we could not read it, Delete (danger, confirmed inline). It opens with focus on
  * Read, so Enter again opens the reader; Esc puts the book back and returns focus to the spine.
- * It sits above the spines, so it never covers a neighbour.
+ * It sits above the spines, so it never covers a neighbour. A book whose parse is in also offers
+ * "Open the book" (#200): the opened spread, for the mouse (the keyboard's Enter on the spine).
  */
 'use client';
 
@@ -11,6 +12,7 @@ import { Button } from '@papertree/ui';
 import { useEffect, useRef, type RefObject } from 'react';
 
 import { ProgressMeter, TOUCH_TARGET } from '@/components/library/primitives';
+import { canOpenBook } from '@/features/book/model/book';
 
 import { useBookActions } from '../hooks/useBookActions';
 import { cardStateLine, metaLine } from '../model/catalogue';
@@ -31,6 +33,8 @@ export interface CatalogueCardProps {
   readonly onDelete: (paperId: string) => Promise<unknown>;
   /** Esc: put the book back. */
   readonly onClose?: () => void;
+  /** "Open the book": the opened spread (#200); shown only for a book that can be opened. */
+  readonly onOpenBook?: (paperId: string) => void;
 }
 
 type ActionsProps = Pick<CatalogueCardProps, 'book' | 'onRetry' | 'onDelete'> & {
@@ -106,6 +110,7 @@ export function CatalogueCard({
   onRetry,
   onDelete,
   onClose,
+  onOpenBook,
 }: CatalogueCardProps): ReactNode {
   const titleId = `${id}-title`;
   const card = useRef<HTMLElement>(null);
@@ -170,6 +175,16 @@ export function CatalogueCard({
         >
           Read<span className="pt-sr-only">{` ${book.title}`}</span>
         </Button>
+        {onOpenBook === undefined || !canOpenBook(book) ? null : (
+          <Button
+            variant="outline"
+            size="touch"
+            className={TOUCH_TARGET}
+            onClick={() => onOpenBook(book.id)}
+          >
+            Open the book<span className="pt-sr-only">{` ${book.title}`}</span>
+          </Button>
+        )}
         <CardActions book={book} onRetry={onRetry} onDelete={onDelete} card={card} />
       </div>
       {placement === null ? null : (

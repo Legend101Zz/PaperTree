@@ -5,11 +5,15 @@
  * or the shelf) returns focus to it. It also decides where focus goes when the control that had
  * it disappears: after Retry (to Read), after Delete (to the next book, else the previous, else
  * Add papers), after the key hints are dismissed (to the shelf), and when the layout changes
- * under it (`useShelfFocus`).
+ * under it (`useShelfFocus`). Enter on a book that can be opened takes it OUT instead (#200,
+ * `features/book`: the pull-out, then the spread); a click keeps the card, whose "Open the book"
+ * goes to the spread, so the card stays the mouse's way and Space the keyboard's.
  */
 'use client';
 
 import { useCallback, useId, useMemo, useRef } from 'react';
+
+import { useBookOnShelf } from '@/features/book';
 
 import { useCardPlacement } from '../hooks/useCardPlacement';
 import { useShelfFocus } from '../hooks/useShelfFocus';
@@ -72,9 +76,11 @@ export function ShelfSection({
 }: ShelfSectionProps): ReactNode {
   const band = useRef<HTMLDivElement>(null);
   const focus = useShelfFocus();
+  const book = useBookOnShelf(books, onRead);
+  const { pull } = book;
   const lifted = useMemo(
-    () => ({ focusedId: focus.focusedId, onFocusBook: focus.setFocusedId }),
-    [focus.focusedId, focus.setFocusedId],
+    () => ({ focusedId: focus.focusedId, onFocusBook: focus.setFocusedId, onEnterBook: pull }),
+    [focus.focusedId, focus.setFocusedId, pull],
   );
   const layout = shelfLayout(books.length);
   const faceOut = layout === 'face-out';
@@ -150,9 +156,11 @@ export function ShelfSection({
             onRetry={retry}
             onDelete={remove}
             onClose={putBack}
+            onOpenBook={book.open}
           />
         )}
       </div>
+      {book.overlay}
       {/* Face-out below about 12 papers (DESIGN.md §9); the count is the shelf's, so a search,
           which dims in place, never re-lays it out. */}
       {faceOut ? (

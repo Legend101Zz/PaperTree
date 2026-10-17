@@ -120,9 +120,12 @@ same papers as a ruled catalogue, Topics shows each topic as a card, and the Map
   popover or menu is placed on the screen (upward on the last rows), so the region never clips it. A poll
   re-draws only the rows whose paper changed: `useLibrary` keeps an unchanged paper's object.
   Nothing is virtualised: 400 rows are measured in `research/build/v0.2-ui/shots/S2f/README.md`.
-- **The shelf** is one tab stop: ←/→ walk along it, Home and End jump to its ends. Enter or a click takes a
+- **The shelf** is one tab stop: ←/→ walk along it, Home and End jump to its ends. Enter on a book whose parse is
+  in takes it OUT and opens it (#200, `features/book`: the pull-out, then the spread). A click or Space takes a
   book down: its catalogue card opens in the band above, pointing at the spine, with focus on Read (Enter again
-  opens the reader), Retry for a paper we could not read, and Delete (danger, confirmed inline). Esc puts it
+  opens the reader), "Open the book" for a parsed paper, Retry for a paper we could not read, and Delete (danger,
+  confirmed inline). Enter on a paper that cannot be opened yet (queued, being read, failed, a sample) still opens
+  its card. Esc puts it
   back and returns focus to the spine. The card is keyed by paper (an armed Delete never follows it to
   the next book), sits in the band's flow (a taller card moves the shelf down rather than covering the view
   row) and re-points at its spine whenever the shelf re-lays itself out. Focus never falls to the page: after
