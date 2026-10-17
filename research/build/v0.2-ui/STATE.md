@@ -18,37 +18,38 @@ Read this first after a compaction, then `PLAN.md` and the open PRs (`gh pr list
   S7b diagram $0.0020 merged; S4e explain $0.0017 and S2b-2 topic ≈ $0.0006 on open branches; each logged in
   RESULT.md's "Live AI spend" table when its PR merges).
 
-## Done (merged into release/v0.2), as of 2026-10-17 ~07:00 IST
+## Done (merged into release/v0.2), as of 2026-10-17 ~12:40 IST (release `61e95ab`)
 - Phases 0–3 (#223), S0 #186, Prettier #220.
 - S1 complete: S1a #227, S1b #228/#229, S1c #230/#231, S1d #238/#239.
 - Backends: S2a #236 (0006), S5a #243/#244 (0007), S6a #241 (0008), S2b #251 (0009), S2c #254, S4a #235,
-  S5b #225/#232/#233, S7a #274/#275 (0011).
-- Library: S2d #249/#250, S2e #266/#267, S2f #287/#288.
-- Reader: S4b #247/#248 (+ #253), S4c #262/#263, S4d #271/#272.
-- Notebook: S5c #264/#265, S5d #285/#286.
-- Board: S6b #260/#261, S6c #273, S6d #280/#281.
-- Diagrams: S7b #290/#291 (live diagram smoke).
-- Fixes and bounds: #259 (lasso bench), #270 (links scale), #278 (usage fixture; release typecheck), #289 (heartbeat).
-- RESULT.md has a row per merged PR with its evidence.
+  S5b #225/#232/#233, S7a #274/#275 (0011), S3 part 1 #301 (0010), S2b-2 #303 (the Flash topic run).
+- Library: S2d #249/#250, S2e #266/#267, S2f #287/#288, S2g #296/#297.
+- Reader: S4b #247/#248 (+ #253), S4c #262/#263, S4d #271/#272, S4e #294/#295.
+- Notebook: S5c #264/#265, S5d #285/#286, S5e #304/#305.
+- Board: S6b #260/#261, S6c #273, S6d #280/#281, S6e #306/#307.
+- Diagrams: S7b #290/#291.
+- Fixes and bounds: #259, #270, #278, #289.
+- RESULT.md has a row per merged PR with its evidence. Live spend ≈ $0.0043 of $10 (three smokes).
 
 ## Open PRs
-- S4e #294 → #295 (phone explain sheet + lamp-lit page; phone header, live explain smoke). #295 CI green.
-- S2g #296 → #297 (Topics; the Map). S2h is stacked on #297's head.
+- S3 part 2 #302 (the book, 02a/02): rebased onto `61e95ab` as `effe78c`; gate 11/11; CI re-running.
+- Docs #299 (this file and RESULT.md): stays open to the end.
 
-## In progress (local branches, not pushed until gate + review are done)
-- S3 #200 (plate backend 0010 + the book): gate and full e2e queued.
-- S2b-2 #242 (Flash topic run, background task): review fixes done (`1edd39f`), gate queued.
-- S2h #199 (phone library): review fixes in progress. Conflicts with S3 in `CatalogueCard.tsx`,
-  `ShelfSection.tsx`, `useRovingShelf.ts`: merge order S2g → S3 → S2h (rebased onto both, checked at 390).
-- S5e #210 (Dive in, tablet, phone): review fixes in progress (blocker: hidden tappable delete on the phone;
-  internal Next router context → `useRouter`/callback). Filed #292 (pinch zoom), #293 (Dive in in S4e's footer).
-- S6e #215 (board undo and scale): review fixes in progress.
+## In progress
+- S2h #199 (phone library): rebasing onto S3's book (`origin/v02/s3-book`); then a PR.
 
 ## Next
-- S8 the whole flow (#218): the 14-step prototype flow as one e2e at 1440/390 × light/dark with axe,
-  reduced motion, the v0.1 e2e suite green, perf numbers, RESULT.md per frame.
-- Then: comments on #175/#182, the `release/v0.2` → `main` PR for the owner, all dev servers stopped by PID.
-- Follow-ups filed: #234 #245 #246 #255 #256 #257 #258 #268 #279 #292 #293 #298.
+- S8 the whole flow (#218): brief `PaperTree-scratch/v02/briefs/slice-S8.md`; starts once S3 and S2h merge.
+- Then (owner, 2026-10-17): update the README; RESULT per frame; comments on #175/#182; the
+  `release/v0.2` → `main` PR; remove all v02 worktrees and scratch data; leave the app running on release for
+  the owner to test locally.
+- Follow-ups filed: #234 #245 #246 #255 #256 #257 #258 #268 #276 #277 #279 #283 #292 #298 #300 #308 #309.
+
+## e2e runs in GitHub Actions (owner rule, 2026-10-17)
+- Never run the full `pnpm e2e` locally. CI's "E2E (Playwright, faux agent)" job runs it on every PR and
+  uploads traces on failure (`gh run view <id> --log-failed`; artifacts `e2e-failure-artifacts`).
+- The local gate (`run-gate.sh`: lint, typecheck, unit tests, prettier, ruff, mypy, web build, docstrings,
+  pytest) still runs once per slice head, one at a time.
 
 ## Load and flakes (the Mac runs at load 40–60, much of it its own Chrome helpers)
 - A full e2e takes 1–1.7 h at that load (20 min at load ~5). Triage: re-run failures alone in an idle tree.
