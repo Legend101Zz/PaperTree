@@ -271,6 +271,15 @@ export function SourcePane(props: SourcePaneProps) {
     clear();
   }, [askAbout, capture, clear]);
 
+  // #217: drawn only when the reader wires it, like Ask (never an inert button).
+  const explainWithDiagram = actions.explainWithDiagram;
+  const onExplainWithDiagram = useCallback(() => {
+    const captured = capture('text');
+    if (captured === null) return;
+    explainWithDiagram?.({ anchor: captured.anchor, quote: captured.selection.text });
+    clear();
+  }, [explainWithDiagram, capture, clear]);
+
   const onNotice = props.onNotice;
   const onSendToBoard = useCallback(() => {
     const captured = capture('text');
@@ -333,6 +342,7 @@ export function SourcePane(props: SourcePaneProps) {
       onHighlight,
       onExplain,
       ...(askAbout === undefined ? {} : { onAsk }),
+      ...(explainWithDiagram === undefined ? {} : { onExplainWithDiagram }),
       onSendToBoard,
       onCopy,
       ...(unavailable === undefined ? {} : { highlightDisabledReason: unavailable }),

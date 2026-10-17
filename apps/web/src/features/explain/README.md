@@ -99,6 +99,9 @@ derived on read from the parse, never stored).
   citation · the AI's own reading") → `CoverageReadout` → `TraceList`. One component behind `ExchangeProps`,
   so the sidenote or claim → evidence options of frame 13 could replace it. A marker and its trace row light
   each other on hover and focus (120 ms); either one runs the citation flash.
+- A **diagram thread** (#217) is drawn by `features/diagram`: `ThreadView` gives each exchange whose answer
+  carries a plate to `DiagramExchange` (plates numbered 1, 2…, one set of passage numbers per thread) and
+  draws no composer (a plate is redrawn, never continued).
 - `components/ThreadMenu.tsx`: "‹ Thread 1 of 2 ›" and a listbox of the threads named by their asks, ending in
   "New thread" (owner may change). A switch keeps focus in the menu, never on the drawer.
 - The citation flash is the reader's (`components/reader/flash.ts`, `ReaderWorkspace.focusAnchor`, `.pt-flash`),

@@ -17,7 +17,15 @@ import type { Coverage } from '@papertree/ui';
 /** Which control takes focus when it next appears: set when the control before it had focus. */
 export type FocusHandoff = MutableRefObject<'stop' | 'retry' | null>;
 
-function useTakeFocus(handoff: FocusHandoff, mine: 'stop' | 'retry') {
+/**
+ * A control that takes focus when it mounts, if the control before it had it (shared with the
+ * diagram plate's Retry and Redraw, #217).
+ *
+ * @param handoff The exchange's hand-off.
+ * @param mine Which control this is.
+ * @returns The ref to put on the control.
+ */
+export function useTakeFocus(handoff: FocusHandoff, mine: 'stop' | 'retry') {
   const ref = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
     if (handoff.current !== mine) return;

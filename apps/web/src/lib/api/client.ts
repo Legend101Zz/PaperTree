@@ -306,6 +306,10 @@ const SSE_EVENTS: ReadonlySet<string> = new Set([
   'citations',
   'usage',
   'done',
+  // A diagram run's plate, parts and feedback edges (v0.2 S7a, #216).
+  'plate',
+  'part',
+  'link',
 ]);
 
 /**

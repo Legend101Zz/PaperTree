@@ -5,6 +5,7 @@
  * flickers or appears twice; the markers keep the live citations they were drawn from (#252). Pure; the controller (`useExplainActions`) owns the state, `useThreads` the reads.
  */
 import type { Failure } from '@/components/explain/errors';
+import type { PlateView } from '@/features/diagram';
 import type { Citation, Message, MessageCoverage, RunSummary } from '@/lib/api/types';
 
 /** A message's lifecycle, as the wire spells it. */
@@ -47,6 +48,10 @@ export interface ThreadMessage {
    * moved (#204).
    */
   readonly awaitingStored?: boolean;
+  /** A diagram answer's plate (#217): built from its events, or read back; absent on any other. */
+  readonly diagram?: PlateView | null;
+  /** A Redraw's plate: the plate it redraws (`redraw_of`), so a refused Redraw is sent again as one. */
+  readonly redrawOf?: string | null;
 }
 
 const STORED = 's:';
@@ -93,6 +98,7 @@ export function fromStored(message: Message, question: string): ThreadMessage {
     createdAt: message.created_at,
     coverage: message.coverage ?? null,
     generation: message.generation,
+    diagram: message.diagram === undefined ? null : { ...message.diagram, notes: [] },
   };
 }
 
@@ -172,6 +178,11 @@ function settle(live: ThreadMessage, stored: ThreadMessage): ThreadMessage {
     stopped: live.stopped,
     refusal: live.refusal ?? null,
     awaitingStored: false,
+    // What the run said while drawing (a skipped line, a dropped arrow) is not stored: keep it.
+    diagram:
+      stored.diagram == null
+        ? live.diagram
+        : { ...stored.diagram, notes: live.diagram?.notes ?? [] },
     question: live.role === 'assistant' && live.question !== '' ? live.question : stored.question,
   };
 }

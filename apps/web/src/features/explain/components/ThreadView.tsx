@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
 
 import { SummaryView } from '@/components/explain/SummaryView';
 import { useReaderActions } from '@/components/reader/actions';
+import { DiagramExchange, numberPlatePassages } from '@/features/diagram';
 
 import { cleanQuote, selectorOf } from '../model/anchor';
 import { buildExchanges } from '../model/exchange';
@@ -22,8 +23,10 @@ import { SummaryExchange } from './SummaryExchange';
 import { ThreadReadFailure } from './ThreadReadFailure';
 
 import type { ExplainController, ExplainRequest } from '@/components/explain/useExplainActions';
+import type { FlashSource } from '@/components/reader/actions';
 import type { ThreadsState } from '../hooks/useThreads';
 import type { PassageMarker } from '../model/exchange';
+import type { Anchor } from '@papertree/anchoring';
 
 /** Props for `ThreadView`. */
 export interface ThreadViewProps {
@@ -34,6 +37,8 @@ export interface ThreadViewProps {
   readonly initial: string;
   /** Flash a passage (an exchange's or the summary's markers and trace rows). */
   readonly onShow: (marker: PassageMarker) => void;
+  /** Flash a diagram part's passage (#217). */
+  readonly onFlash: (anchor: Anchor, from: FlashSource) => void;
 }
 
 /** The passage alone, for a sample paper that has no server to ask. */
@@ -49,7 +54,13 @@ function SelectedPassage({ request }: { request: ExplainRequest }): ReactNode {
 }
 
 /** The thread (or summary) and the composer. */
-export function ThreadView({ controller, threads, initial, onShow }: ThreadViewProps): ReactNode {
+export function ThreadView({
+  controller,
+  threads,
+  initial,
+  onShow,
+  onFlash,
+}: ThreadViewProps): ReactNode {
   const actions = useReaderActions();
   const { state, paperId } = controller;
   const scroller = useRef<HTMLDivElement | null>(null);
@@ -64,12 +75,29 @@ export function ThreadView({ controller, threads, initial, onShow }: ThreadViewP
     () => numberPassages(state.messages.filter((m) => m.role === 'assistant')),
     [state.messages],
   );
+  // A diagram thread's plates (#217): numbered 1, 2… among the plates drawn or drawing (one that
+  // ended with no part is never "Plate 1", review N4), one set of passage numbers for the thread.
+  const plates = useMemo(() => {
+    let n = 0;
+    const plateNo = new Map<string, number | null>();
+    exchanges.forEach((e) => {
+      const answer = e.answer;
+      if (answer?.diagram == null) return;
+      const drawn = answer.status === 'streaming' || answer.diagram.parts.length > 0;
+      plateNo.set(e.key, drawn ? (n += 1) : null);
+    });
+    const parts = exchanges.flatMap((e) =>
+      e.answer?.diagram == null ? [] : [e.answer.diagram.parts],
+    );
+    return { plateNo, numbers: numberPlatePassages(parts) };
+  }, [exchanges]);
   const summary = state.summary.summary;
   const summaryShown =
     summary !== null && (state.summary.phase === 'ready' || state.summary.phase === 'partial');
 
   const last = state.messages[state.messages.length - 1];
-  const growth = `${String(state.messages.length)}:${String(last?.text.length ?? 0)}:${last?.status ?? ''}:${String(last?.stopped ?? false)}:${String(last?.citations.length ?? 0)}`;
+  // A plate grows by parts, not text (#217 review N5): its part count follows it down too.
+  const growth = `${String(state.messages.length)}:${String(last?.text.length ?? 0)}:${last?.status ?? ''}:${String(last?.stopped ?? false)}:${String(last?.citations.length ?? 0)}:${String(last?.diagram?.parts.length ?? 0)}`;
   useEffect(() => {
     stick.current = false;
     if (scroller.current !== null) scroller.current.scrollTop = 0;
@@ -147,24 +175,39 @@ export function ThreadView({ controller, threads, initial, onShow }: ThreadViewP
                 </p>
               )
             ) : null}
-            {exchanges.map((exchange, index) => (
-              <Exchange
-                key={exchange.key}
-                exchange={exchange}
-                initial={initial}
-                onShow={onShow}
-                onRetry={controller.retry}
-                onStop={controller.stop}
-                onSendToCanvas={sendToCanvas}
-                // Read once, at mount (`useState`): an exchange never folds under the reader.
-                startsFolded={opensFolded(index, exchanges.length)}
-                askInBox={draft !== '' && draft === exchange.ask.trim()}
-              />
-            ))}
+            {exchanges.map((exchange, index) => {
+              const plateNo = plates.plateNo.get(exchange.key);
+              return plateNo === undefined ? (
+                <Exchange
+                  key={exchange.key}
+                  exchange={exchange}
+                  initial={initial}
+                  onShow={onShow}
+                  onRetry={controller.retry}
+                  onStop={controller.stop}
+                  onSendToCanvas={sendToCanvas}
+                  // Read once, at mount (`useState`): an exchange never folds under the reader.
+                  startsFolded={opensFolded(index, exchanges.length)}
+                  askInBox={draft !== '' && draft === exchange.ask.trim()}
+                />
+              ) : (
+                <DiagramExchange
+                  key={exchange.key}
+                  exchange={exchange}
+                  initial={initial}
+                  plateNo={plateNo}
+                  numbers={plates.numbers}
+                  onFlash={onFlash}
+                  onStop={controller.stop}
+                  onRedraw={controller.redraw}
+                />
+              );
+            })}
           </>
         )}
       </div>
-      {state.view === 'summary' ? null : (
+      {/* A diagram thread is redrawn, never continued with a typed question (the API's 422). */}
+      {state.view === 'summary' || state.diagram ? null : (
         <Composer
           busy={busy}
           disabled={offline}
