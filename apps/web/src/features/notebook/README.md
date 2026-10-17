@@ -2,8 +2,8 @@
 
 The Dive-in notebook: a bound page that starts from the exchange it came from (frame 05). The pure
 model is slice S5b (#207); the page is slice S5c (#208); ink tools, lasso and the nib/colour bar
-are S5d (#209, through `NotebookToolbar`'s `inkTools` and `inkOptions` slots); the Dive-in motion
-and the tablet and phone layouts are S5e (#210).
+are S5d (#209, through `NotebookToolbar`'s `inkTools` and `inkOptions` slots); Dive in with its
+motion and the tablet and phone layouts are S5e (#210).
 
 ## What the page does (S5c)
 
@@ -135,6 +135,40 @@ and the tablet and phone layouts are S5e (#210).
   include; the numbers, load averages and what a real tablet still needs are in
   `research/build/v0.2-ui/shots/S5d/README.md`.
 
+## Dive in and the layouts (S5e)
+
+- **Dive in** (`hooks/useDiveIn.ts`, the panel's half; `hooks/useDiveArrival.ts`, the page's;
+  `model/diveIn.ts`, pure): the AI slip's footer has **Dive in** before Send to board
+  (`features/explain/components/AnswerParts.tsx`'s `DiveIn`). One press POSTs S5a's Dive-in route
+  under a page id DERIVED from the answer (`diveInPageId`: `np_` + the message id's suffix), so a
+  second press, a second tab or a Back-then-Dive-in sends the same id and the idempotent route
+  answers with the page already there: one answer, one page. A press while one is under way joins
+  it. Meanwhile the exchange lifts (`data-dive="lift"`, `--pt-dur-quick`); then the screen boxes of
+  its call slip, AI slip and trace rows go into a one-shot hand-off (`diveHandoff`, ten seconds
+  fresh) and the route changes. The page waits unseen (`data-dive="arriving"`) until it is drawn and
+  has stopped changing size, then slides in from the right for `--pt-dur-open` minus
+  `--pt-dur-quick` (120 → 360) while each card the panel showed flies to its place on the page
+  (FLIP, translate only: paper is not stretched; a card only flies when it was on screen in the
+  panel and lands on screen). Reduced motion: no lift, one `--pt-dur-quick` fade, nothing travels.
+  Durations are read from the live tokens at run time. A page opened from a link just appears.
+  Without a paper server or an app router (a sample paper, a test) the footer has no Dive in.
+- **Back to the paper** carries `?thread=<the page's source thread>` (`readerHref`); the reader's
+  `hooks/useThreadFromNotebook.ts` opens the explain panel on that thread, and `?nb=&item=` still
+  flashes the passage the question came from.
+- **Layouts** (`model/layoutMode.ts`, `hooks/useLayoutMode.ts`, `data-layout` on `.pt-nb`):
+  phone below 768 px (the explain panel's sheet breakpoint, so Dive in on a phone lands on the
+  phone notebook), tablet 768–1279 (frame 05b), desktop from 1280 (frame 05). `allows` says what
+  each may use: everything on the tablet and desktop; on the phone typed notes, stickies and the
+  highlighter, the pen only once switched on, never the eraser, lasso, shapes or templates.
+- **The tablet** (05b): the tool bar becomes a vertical rail on the left (`aria-orientation`), the
+  same tools in the same order; the nib and the colour are one button each showing what the drawing
+  tool holds, opening a flyout with S5d's choices (`components/RailInkOptions.tsx`; a choice,
+  Escape or a press elsewhere closes it, and Escape never puts the tool down). The bar names the
+  page and its controls are 44 px; the page is full-bleed (`usePageScale` with no gutter) and the
+  side panel follows it down the desk, as a region rather than a landmark beside it. Pen input is
+  S5d's (palm rejection; one finger scrolls the desk once a pen has touched it). **Pinch zoom is
+  not supported**: the page's scale follows the desk's width only (#292).
+
 ## Data flow
 
 UI gesture → one S5b history `Command` (`execute` / `undo` / `redo`) → local `NotebookState` →
@@ -171,6 +205,9 @@ the stored thread (`hooks/useExchange.ts`, `GET /papers/{id}/threads/{tid}`).
   Send page to board. `usePointerDrag`: drags in page units without a render per move.
   `useInkTools`, `useInkInput`, `useStrokeSaver`, `useLasso`: the tool in the hand, the pointer,
   the ink's saves, the lasso's menu. `useAskFromNotebook`: the reader's half of Ask about this.
+- S5e: `model/layoutMode.ts`, `model/diveIn.ts`; `hooks/useLayoutMode`, `useDiveIn`,
+  `useDiveArrival`, `useThreadFromNotebook`, `useSendPage` (Send page to board's toast, moved out
+  of the view); `components/RailInkOptions.tsx`.
 - `components/NotebookView.tsx` (the screen; `NotebookBar.tsx` its top bar, `SaveNotice.tsx`'s
   `PageSaveNotice` its one saving notice), `NotebookPage.tsx` (the bound page),
   `ExchangeBlock.tsx` + `AnswerProse.tsx`, `QuoteCard.tsx`, `NoteItem.tsx` + `NoteEditor.tsx`,

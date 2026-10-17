@@ -576,29 +576,158 @@
   gap: var(--pt-space-4);
 }
 
-/* Narrow windows: the panel goes under the page. The tablet and phone layouts proper are S5e's
-   (#210); this only keeps every control reachable until then. */
-@media (max-width: 900px) {
-  .pt-nb {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto auto;
-    block-size: auto;
-    min-block-size: 100dvh;
-  }
+/* ── The layouts (S5e, #210): `data-layout` is useLayoutMode's (model/layoutMode) ─────────── */
 
-  .pt-nb__bar {
-    flex-wrap: wrap;
-    padding-block: 8px;
-  }
+/* A page opened by Dive in waits unseen until it can slide in (hooks/useDiveArrival). */
+.pt-nb[data-dive='arriving'] .pt-nb__desk {
+  opacity: 0;
+}
 
-  .pt-nb-tools {
-    margin-inline-start: 0;
-  }
+/* The phone, until its stack (08c) is drawn: the panel goes under the page, every control kept. */
+.pt-nb[data-layout='phone'] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  block-size: auto;
+  min-block-size: 100dvh;
+}
 
-  .pt-nb-panel {
-    border-inline-start: 0;
-    border-block-start: 1px solid var(--pt-rule);
-  }
+.pt-nb[data-layout='phone'] .pt-nb__bar {
+  flex-wrap: wrap;
+  padding-block: 8px;
+}
+
+.pt-nb[data-layout='phone'] .pt-nb-tools {
+  margin-inline-start: 0;
+}
+
+.pt-nb[data-layout='phone'] .pt-nb-panel {
+  border-inline-start: 0;
+  border-block-start: 1px solid var(--pt-rule);
+}
+
+/* The tablet (05b, 1180 × 820): the bar names the page, the tools stand in a rail on the left,
+   the page runs full-bleed, and the side panel follows it down the desk. */
+.pt-nb[data-layout='tablet'] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.pt-nb[data-layout='tablet'] .pt-nb__bar {
+  padding: 0 16px;
+}
+
+.pt-nb[data-layout='tablet'] .pt-nb__back,
+.pt-nb[data-layout='tablet'] .pt-nb__actions .pt-button {
+  flex: none;
+  min-block-size: 44px;
+  white-space: nowrap;
+}
+
+.pt-nb[data-layout='tablet'] .pt-nb__actions {
+  flex: none;
+}
+
+.pt-nb__title {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  margin-inline-start: var(--pt-space-2);
+  overflow: hidden;
+  font: 16px/1.25 var(--pt-font-paper);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pt-nb[data-layout='tablet'] .pt-nb__desk {
+  padding: 12px 12px 64px 92px;
+}
+
+.pt-nb[data-layout='tablet'] .pt-nb-panel {
+  margin-block-start: 24px;
+  border: 1px solid var(--pt-rule);
+  border-radius: var(--pt-radius-paper);
+}
+
+.pt-nb-tools--rail {
+  position: fixed;
+  inset-block-start: 72px;
+  inset-inline-start: 12px;
+  flex-direction: column;
+  inline-size: 64px;
+  max-block-size: calc(100dvh - 84px);
+  margin: 0;
+  padding: 8px;
+  gap: 4px;
+  overflow-y: auto;
+  border-radius: 10px;
+}
+
+.pt-nb-tools--rail .pt-nb-tools__group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pt-nb-tools--rail .pt-toolbtn,
+.pt-nb-rail__pick {
+  inline-size: 48px;
+  block-size: 48px;
+}
+
+.pt-nb-tools--rail .pt-nb-tools__rule {
+  inline-size: 36px;
+  block-size: 1px;
+  margin: 4px 0;
+}
+
+/* Beside the rail at its button's height (a fixed box keeps its static top), and out of the
+   rail's own scroll, which would clip it. */
+.pt-nb-tools--rail .pt-nb-tools__pop {
+  position: fixed;
+  inset-block-start: auto;
+  inset-inline-start: 84px;
+}
+
+.pt-nb-rail__pick {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0;
+  color: var(--pt-ink);
+  font: 700 12px/1 var(--pt-font-you);
+  background: none;
+  border: 0;
+  border-radius: var(--pt-radius-menu);
+  cursor: pointer;
+}
+
+.pt-nb-rail__pick:hover {
+  background: color-mix(in srgb, var(--pt-ink) 7%, transparent);
+}
+
+.pt-nb-rail__pick:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+.pt-nb-rail__pick [data-nib-face]::before {
+  content: '';
+  display: block;
+  inline-size: 6px;
+  block-size: 6px;
+  margin: 0 auto 3px;
+  border-radius: 50%;
+  background: var(--pt-pen);
+}
+
+.pt-nb-rail__swatch {
+  inline-size: 24px;
+  block-size: 24px;
+  border-radius: 50%;
+  background: var(--pt-swatch);
+  box-shadow:
+    0 0 0 2px var(--pt-e2-fill),
+    0 0 0 3.5px var(--pt-swatch);
 }
 
 /* ── The ink tools (S5d, #209) ─────────────────────────────────────────────────────────────── */

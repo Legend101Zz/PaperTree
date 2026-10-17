@@ -46,6 +46,8 @@ export interface NotebookPanelProps {
   readonly items: readonly Item[];
   readonly onSend: () => void;
   readonly onMatches: (ids: ReadonlySet<string>) => void;
+  /** Under the page on the desk (the tablet, S5e): a region of the page, not a landmark beside it. */
+  readonly inline?: boolean;
 }
 
 /**
@@ -106,8 +108,9 @@ function Row({ label, value }: { label: string; value: ReactNode }): ReactNode {
 /** The side panel beside the page. */
 export function NotebookPanel(props: NotebookPanelProps): ReactNode {
   const { counts, card } = props;
+  const Root = props.inline === true ? 'section' : 'aside';
   return (
-    <aside className="pt-nb-panel" aria-label="Page">
+    <Root className="pt-nb-panel" aria-label="Page">
       <section aria-labelledby="pt-nb-panel-paper">
         <h2 id="pt-nb-panel-paper">Paper</h2>
         <TemplatePicker value={props.template} onChange={props.onTemplate} />
@@ -166,6 +169,6 @@ export function NotebookPanel(props: NotebookPanelProps): ReactNode {
           </>
         )}
       </section>
-    </aside>
+    </Root>
   );
 }

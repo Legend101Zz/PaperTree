@@ -12,17 +12,28 @@ import type { Item } from './page';
 import type { ExchangeBody } from './wire';
 import type { Anchor } from '@papertree/anchoring';
 
+/** The reader's query parameter naming the thread its explain panel opens on (S5e, #210). */
+export const THREAD_PARAM = 'thread';
+
 /**
- * The reader's URL, optionally aimed at a notebook item's passage.
+ * The reader's URL, optionally aimed at a notebook item's passage and at the thread a dived page
+ * came from (Back to the paper opens the explain panel on it, `useThreadFromNotebook`).
  *
  * @param paperId - The paper.
  * @param at - The page and the item whose stored Anchor the reader should flash.
- * @returns A path such as `/paper/ppr_1/read?nb=np_1&item=ni_2`.
+ * @param threadId - The thread the explain panel should open on.
+ * @returns A path such as `/paper/ppr_1/read?nb=np_1&item=ni_2&thread=thr_3`.
  */
-export function readerHref(paperId: string, at?: { pageId: string; itemId: string }): string {
+export function readerHref(
+  paperId: string,
+  at?: { pageId: string; itemId: string },
+  threadId?: string | null,
+): string {
   const base = `/paper/${encodeURIComponent(paperId)}/read`;
-  if (at === undefined) return base;
-  return `${base}?${new URLSearchParams({ nb: at.pageId, item: at.itemId }).toString()}`;
+  const query = new URLSearchParams(at === undefined ? {} : { nb: at.pageId, item: at.itemId });
+  if (typeof threadId === 'string') query.set(THREAD_PARAM, threadId);
+  const q = query.toString();
+  return q === '' ? base : `${base}?${q}`;
 }
 
 /**

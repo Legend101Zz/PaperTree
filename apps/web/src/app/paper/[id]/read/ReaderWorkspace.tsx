@@ -94,6 +94,7 @@ import {
 import { HighlightUndoToast } from '@/features/highlights';
 import { AskFromNotebook } from '@/features/notebook/components/AskFromNotebook';
 import { useFocusFromNotebook } from '@/features/notebook/hooks/useFocusFromNotebook';
+import { useThreadFromNotebook } from '@/features/notebook/hooks/useThreadFromNotebook';
 import { ReaderHeader, type ExplainToggle } from '@/features/reader';
 import { NetworkError } from '@/lib/api/client';
 import { papersApi } from '@/lib/api/papers';
@@ -840,6 +841,8 @@ function ReaderActionsMount({
   const explain = useExplainActions({ paperId });
   const { openExplain, openDiagram, askAbout, openPanel, closeExplain } = explain;
   const explainOpen = explain.state.open;
+  // S5e: a dived page's Back to the paper (`?thread=`) reopens the panel on its thread.
+  useThreadFromNotebook(paperId, explain.selectThread);
   const toggleRef = useRef<HTMLButtonElement>(null);
   const toggle = useMemo<ExplainToggle | null>(
     () =>

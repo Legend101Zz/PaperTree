@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { SummaryView } from '@/components/explain/SummaryView';
 import { useReaderActions } from '@/components/reader/actions';
 import { DiagramExchange, numberPlatePassages } from '@/features/diagram';
+import { useDiveIn } from '@/features/notebook/hooks/useDiveIn';
 
 import { cleanQuote, selectorOf } from '../model/anchor';
 import { buildExchanges } from '../model/exchange';
@@ -126,6 +127,7 @@ export function ThreadView({
       actions.sendToCanvas({ kind: 'diagram', messageId, title }),
     [actions],
   );
+  const { diveIn } = useDiveIn(paperId);
   const offline = paperId === null;
   // The phone pins the last complete answer's usage and actions above the follow-up box.
   const pinAt = phone
@@ -211,6 +213,7 @@ export function ThreadView({
                   onRetry={controller.retry}
                   onStop={controller.stop}
                   onSendToCanvas={sendToCanvas}
+                  {...(diveIn === null ? {} : { onDiveIn: diveIn })}
                   // Read once, at mount (`useState`): an exchange never folds under the reader.
                   startsFolded={opensFolded(index, exchanges.length)}
                   askInBox={draft !== '' && draft === exchange.ask.trim()}

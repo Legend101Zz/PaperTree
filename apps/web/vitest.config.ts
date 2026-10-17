@@ -15,6 +15,9 @@ export default defineConfig({
     // purity — `test/perf.spec.ts` — opt into the Node environment with a per-file
     // `@vitest-environment` pragma, which is the only way to prove a module never touches the DOM.
     environment: 'happy-dom',
+    // The desktop frame's size, so a mounted screen gets its desktop layout (the notebook's is
+    // 1280 px and up, S5e #210) unless a test narrows the window itself.
+    environmentOptions: { happyDOM: { width: 1440, height: 900 } },
     include: ['test/**/*.{spec,test}.{ts,tsx}', 'src/**/*.{spec,test}.{ts,tsx}'],
   },
 });

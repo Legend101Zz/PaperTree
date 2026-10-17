@@ -5,8 +5,8 @@
  * margin cells and the trailing uncited paragraphs under "no citation · the AI's own reading".
  * The interface's own words sit around the AI's: in the slip's source line on the tab row (the
  * model, the working label while it streams, "Stopped · M3" after Stop, as `AiSlip`'s model line
- * always has) and outside the slip: Stop (frame 04b), the typed caret, the usage line and Send to
- * board on a footer that continues the slip, the note after Stop with Retry (04c), a designed
+ * always has) and outside the slip: Stop (frame 04b), the typed caret, the usage line, Dive in and
+ * Send to board on a footer that continues the slip, the note after Stop with Retry (04c), a designed
  * failure (the daily-cap card among them), a refused Retry's note, and, for an answer that opened
  * folded, its two-line preview with Show.
  */
@@ -17,6 +17,7 @@ import { clipAnswer } from '../model/phone';
 import { foldedPreview, wasStopped, type RefusalKind } from '../model/states';
 import { shortModelName } from '../model/summary';
 import {
+  DiveIn,
   FoldRow,
   SendToCanvas,
   Skeleton,
@@ -54,6 +55,8 @@ export interface AnswerSlipProps extends Pick<
   /** Stop the answer while it streams. */
   readonly onStop: () => void;
   readonly onSendToCanvas: (messageId: string) => Promise<void>;
+  /** Dive in (S5e, #210): open the answer as a notebook page; absent, the footer has no Dive in. */
+  readonly onDiveIn?: (messageId: string, exchange: HTMLElement | null) => Promise<void>;
   /** What a refusal of this ask before the stream says was kept, true now (`refusalSentence`). */
   readonly notSent: RefusalKind;
   /** Present when the answer opened folded (an earlier exchange of a reopened thread). */
@@ -81,6 +84,7 @@ export function AnswerSlip({
   onRetry,
   onStop,
   onSendToCanvas,
+  onDiveIn,
   notSent,
   fold,
   clip,
@@ -131,7 +135,12 @@ export function AnswerSlip({
     <>
       <UsageLine usage={answer.usage} />
       {canSend ? (
-        <SendToCanvas onSend={() => onSendToCanvas(messageId)} short={lights.touch === true} />
+        <div className="pt-exchange__actions">
+          {onDiveIn === undefined ? null : (
+            <DiveIn onDiveIn={(exchange) => onDiveIn(messageId, exchange)} />
+          )}
+          <SendToCanvas onSend={() => onSendToCanvas(messageId)} short={lights.touch === true} />
+        </div>
       ) : null}
     </>
   );

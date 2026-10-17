@@ -35,6 +35,8 @@ export interface NotebookToolbarProps {
   readonly inkTools?: ReactNode;
   /** S5d's second slot, after Sticky note: the nibs and the colours. */
   readonly inkOptions?: ReactNode;
+  /** `vertical` is the tablet's left rail (frame 05b, S5e); the same tools in the same order. */
+  readonly orientation?: 'horizontal' | 'vertical';
 }
 
 /** The Shapes tool: a button that opens the three shapes; Escape or a press elsewhere closes it. */
@@ -98,7 +100,12 @@ function ShapesTool({ onShape }: { onShape: NotebookToolbarProps['onShape'] }): 
 /** The tool bar above the page. */
 export function NotebookToolbar(props: NotebookToolbarProps): ReactNode {
   return (
-    <div className="pt-nb-tools" role="toolbar" aria-label="Notebook tools">
+    <div
+      className={`pt-nb-tools${props.orientation === 'vertical' ? ' pt-nb-tools--rail' : ''}`}
+      role="toolbar"
+      aria-label="Notebook tools"
+      aria-orientation={props.orientation ?? 'horizontal'}
+    >
       {props.inkTools === undefined ? null : (
         <div className="pt-nb-tools__group" data-slot="ink-tools">
           {props.inkTools}
