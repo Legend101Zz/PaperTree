@@ -491,7 +491,8 @@ jobs:
   e2e:
     name: E2E (Playwright, faux agent)
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # 60, not 40 (S8, #218): the suite took 28 min on S3's PR, and S8's flow adds about 2 more.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
 
