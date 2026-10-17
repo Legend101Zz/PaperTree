@@ -98,6 +98,10 @@ head, the local uncached gate, and a code review whose findings were fixed befor
 | S5e-2 the phone notebook (08c) | #210 | #305 | 5730edf | full gate 11 of 11 on a9c6030 (pytest 2,521); CI green (full e2e in GitHub Actions from here on, owner rule) |
 | S6e-1 board undo and redo | #215 | #306 | e76ef4d | see part 2 |
 | S6e-2 the 500-card board, lamp-lit board (09c) | #215 | #307 | 61e95ab | full gate 11 of 11 (pytest 2,521); CI e2e found spawnSync's 1 MiB buffer killing the 500-anchor helper, fixed in 7493786; CI green |
+| S3-2 the pulled-out and opened book (02a, 02) | #200 | #302 | 5da0742 | full gate 11 of 11 (pytest 2,540); CI e2e found an axe contrast hit just after a scheme switch: the shared button rule eased its fill over 120 ms (not S3's colours, 11.96:1); buttons now ease only shadow and transform, guarded by a test; CI green (#308 for two more transitions) |
+| S2h the phone library (08a), lamp-lit (09a) | #199 | #311 | b10ce90 | full gate 11 of 11 (pytest 2,562); desktop 0 px against S3's head over 14 views; on a phone Enter/tap opens the sheet and "Open the book" the spread; CI green |
+| no-network guard for web unit tests | #310 | #312 | a8eb3e5 | 97 connection attempts to port 8000 in a full run → 0, measured by a counting stub and again by the reviewer; 8 specs given mocks; CI green |
+| S8 the whole flow, reduced motion, numbers, RESULT per frame | #218 | #320 | 91857a4 | full gate 11 of 11 (pytest 2,562); CI full e2e 88/88 in 30.1 min (job timeout raised to 60); the flow found a stale-board placement bug in Send page to board and the lasso's send, fixed with tests; 32 frames: 16 done, 16 partial (see below) |
 
 ## Live AI spend (estimates)
 

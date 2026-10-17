@@ -18,32 +18,34 @@ Read this first after a compaction, then `PLAN.md` and the open PRs (`gh pr list
   S7b diagram $0.0020 merged; S4e explain $0.0017 and S2b-2 topic ≈ $0.0006 on open branches; each logged in
   RESULT.md's "Live AI spend" table when its PR merges).
 
-## Done (merged into release/v0.2), as of 2026-10-17 ~12:40 IST (release `61e95ab`)
+## Done (merged into release/v0.2), as of 2026-10-17 ~15:30 IST (release `91857a4`): every slice
 - Phases 0–3 (#223), S0 #186, Prettier #220.
 - S1 complete: S1a #227, S1b #228/#229, S1c #230/#231, S1d #238/#239.
 - Backends: S2a #236 (0006), S5a #243/#244 (0007), S6a #241 (0008), S2b #251 (0009), S2c #254, S4a #235,
-  S5b #225/#232/#233, S7a #274/#275 (0011), S3 part 1 #301 (0010), S2b-2 #303 (the Flash topic run).
-- Library: S2d #249/#250, S2e #266/#267, S2f #287/#288, S2g #296/#297.
+  S5b #225/#232/#233, S7a #274/#275 (0011), S3 #301 (0010), S2b-2 #303 (the Flash topic run).
+- Library: S2d #249/#250, S2e #266/#267, S2f #287/#288, S2g #296/#297, S3 #302 (the book), S2h #311 (phone).
 - Reader: S4b #247/#248 (+ #253), S4c #262/#263, S4d #271/#272, S4e #294/#295.
 - Notebook: S5c #264/#265, S5d #285/#286, S5e #304/#305.
 - Board: S6b #260/#261, S6c #273, S6d #280/#281, S6e #306/#307.
 - Diagrams: S7b #290/#291.
-- Fixes and bounds: #259, #270, #278, #289.
-- RESULT.md has a row per merged PR with its evidence. Live spend ≈ $0.0043 of $10 (three smokes).
+- S8 #320: the 14-step flow at 1440/390 × light/dark with axe, reduced motion, numbers at scale, RESULT per frame
+  (16 done, 16 partial, each with its issue). CI full e2e 88/88.
+- Fixes and bounds: #259, #270, #278, #289, #312 (web unit tests never touch the network, #310).
+- Live spend ≈ $0.0058 of $10: four runs (S4e explain, S7b diagram, S2b-2 topic ×2, the README's diagram).
 
-## Open PRs
-- S3 part 2 #302 (the book, 02a/02): rebased onto `61e95ab` as `effe78c`; gate 11/11; CI re-running.
-- Docs #299 (this file and RESULT.md): stays open to the end.
+## Open PRs (the last two)
+- README #325 (v0.2 README, 13 real screenshots, metrics against v0.1).
+- Docs #299 (this file and RESULT.md).
+- Then the `release/v0.2` → `main` PR for the owner (the owner merges it; no tag or release from the build).
 
-## In progress
-- S2h #199 (phone library): rebasing onto S3's book (`origin/v02/s3-book`); then a PR.
-
-## Next
-- S8 the whole flow (#218): brief `PaperTree-scratch/v02/briefs/slice-S8.md`; starts once S3 and S2h merge.
-- Then (owner, 2026-10-17): update the README; RESULT per frame; comments on #175/#182; the
-  `release/v0.2` → `main` PR; remove all v02 worktrees and scratch data; leave the app running on release for
-  the owner to test locally.
-- Follow-ups filed: #234 #245 #246 #255 #256 #257 #258 #268 #276 #277 #279 #283 #292 #298 #300 #308 #309.
+## Wrap-up (owner, 2026-10-17)
+- Remove every worktree under `PaperTree-worktrees/` after checking each for uncommitted or unpushed work
+  (the v0.1 README demo recorder in `s9/e2e/readme-demo/` is copied to `PaperTree-evidence/v0.1/readme-demo/`
+  first), and the scratch data under `PaperTree-scratch/v02/` (gate logs, tmp) except what the app needs.
+- Leave the app running on `release/v0.2` for the owner to test locally (ports 18901/18902/18903; 3000, 3100,
+  8000, 8788 and 27018 are reserved for the owner's other apps).
+- Follow-ups filed: #234 #245 #246 #255 #256 #257 #258 #268 #276 #277 #279 #283 #292 #298 #300 #308 #309
+  #313–#319 #321–#324.
 
 ## e2e runs in GitHub Actions (owner rule, 2026-10-17)
 - Never run the full `pnpm e2e` locally. CI's "E2E (Playwright, faux agent)" job runs it on every PR and
@@ -67,6 +69,10 @@ Read this first after a compaction, then `PLAN.md` and the open PRs (`gh pr list
 ## Disk
 - The internal disk filled on 2026-10-17 (#268): the e2e harness leaves `$TMPDIR/papertree-e2e-*` (~1.1 GB a
   run). Every gate and e2e run now sets TMPDIR under `PaperTree-scratch/v02/tmp/` and removes it after.
+- The SSD returned read errors (EIO) from ~10:04 to ~10:16 IST on 2026-10-17, under heavy local e2e load;
+  git crashed in every worktree and one agent's edits were lost (restored from its backup). All local work
+  was stopped, every unpushed branch was pushed as a backup once reads recovered (`git fsck` clean), and e2e
+  moved to GitHub Actions.
 
 ## PIDs
 - The shared v0.1 dev stack (18901/18902/18903) was stopped by PGID on 2026-10-16 ~22:30 IST.
