@@ -1,7 +1,7 @@
 # library
 
-The signed-in library at `/dashboard` (#195–#198; frames 00, 01, 01b–01f, 03): the papers stand as cloth
-spines on one walnut plank, a row per group, each row under a brass label holder. A spine shows its state: a red ribbon
+The signed-in library at `/dashboard` (#195–#199; frames 00, 01, 01b–01f, 03, 08a): the papers stand as cloth
+spines on one walnut plank (on a phone they lie flat in stacks), a row per group, each row under a brass label holder. A spine shows its state: a red ribbon
 while you are reading it, a kraft wrap while we read it, a torn red label when we could not. The Table view lists the
 same papers as a ruled catalogue, Topics shows each topic as a card, and the Map is a plan of the reading room.
 
@@ -134,7 +134,19 @@ same papers as a ruled catalogue, Topics shows each topic as a card, and the Map
   row under the plank says what the keys do.
 - **Touch:** on a phone width or a coarse pointer every control in the header, title row and hints is 44 px
   (`useTouchTargets`); on a desktop they keep frame 01's 36–40 px. The spines keep their 26–48 px widths
-  (WCAG 2.5.8's 24 px holds; the phone shelf is S2h).
+  (WCAG 2.5.8's 24 px holds); a phone lays the books flat instead. A coarse pointer gets no key hints and no
+  "/" in the search (a finger has neither); a narrow window with a keyboard keeps the key hints.
+- **Phone** (08a, #199; at most 900 px wide, `PHONE_MAX_WIDTH`, the width at which the header goes compact and the
+  Table scrolls sideways; owner may change): search under the header, the stats, the four view tabs across the
+  screen, Reading now (always: flat books carry no Continue, so a short library shows it too), then the books
+  **lying flat**, a stack per row of the arrangement under its brass holder, on a strip of walnut
+  (`FlatShelf`, `FlatBook`; two stacks side by side where two fit). Each book is a 44 px button with the
+  spine's name, its short title across it (two lines at most), the year in gilt, the ribbon out of the
+  fore-edge while you read it, kraft with "being read", a torn red label with "could not read". The stacks are
+  the shelf's one tab stop: ↓/↑ (and →/←) walk every book in order, down a stack and into the next. A book
+  taken down opens its catalogue card as a **bottom sheet** (Read focused, Put it back, Esc), with room under
+  the stacks so the last book scrolls clear of it. The Map puts its list first, open, and its papers are 44 px
+  targets there. No page scrolls sideways at 320 or 390.
 
 ## Data flow
 
@@ -162,6 +174,9 @@ ribbon, no year means no year on the spine.
 - **Cloth without a topic** (`clothFor`): cs.CL → transformers, cs.CV → vision, cs.LG and stat.ML →
   generative, math.OC and cs.NE → optimization, cs.IR → language, cs.AI / cs.RO / cs.MA → reinforcement;
   another category takes a stable cloth by hash, no category the slate cloth.
+- **Flat book length** (phone): `274 + 1.12 × pages` px on frame 08a's 358 px stack, kept as how far it falls short
+  of the stack (0–84 px), so a 320 px phone draws the same stack narrower; each book sits 0–12 px in from the
+  stack's edge by a hash of its id.
 - **Spine width**: `26 + 0.85 × pages` px (fitted to frame 01), capped at 48; 40 while the page count is
   unknown or the paper is still being read, so the count arriving mid-parse does not reflow the shelf.
 - **Order within a row**: shelving order (when added) for Topic; Year rows by title; Title A–Z; Recently
@@ -203,6 +218,10 @@ ribbon, no year means no year on the spine.
   `UploadRow.tsx`, `LibraryTitle.tsx`, `ShelfSection.tsx` (with `Shelf.tsx`, `Spine.tsx`, `ShelfPlank.tsx`,
   `CatalogueCard.tsx`, `ShelfHints.tsx`), `ReadingNow.tsx`, `AccessionSlip.tsx`, `CoverShelf.tsx` (with
   `Cover.tsx`, `CoverCaption.tsx`), `ShelfRows.tsx` (with `ShelfRow.tsx`); `library.css`: their styles, from the tokens.
+- `model/phone.ts`: the phone rule (`libraryPlan`: what a phone draws instead), a flat book's picture (`flatBook`)
+  and the stack keys (`flatStep`), tested in `model/phone.spec.ts`; `hooks/usePhoneLayout.ts`;
+  `components/FlatShelf.tsx`, `FlatBook.tsx` and `phone.css`; tests in `apps/web/test/library-phone.spec.tsx`,
+  e2e `e2e/v02/library-phone.spec.ts`.
 - Tests: `apps/web/test/library-table.spec.tsx` (the Table through the page), `apps/web/test/library-shelf.spec.tsx`, `library-page.spec.tsx`, `library-states.spec.tsx` (with
   the corpus rows in `library-corpus.ts`), `s3-library-states.spec.tsx`, `w2ui-library.spec.tsx`; e2e
   `e2e/s2d/shelf.spec.ts`, `e2e/v02/library-states.spec.ts`, `e2e/v02/library-table.spec.ts` and `e2e/s3/*`.

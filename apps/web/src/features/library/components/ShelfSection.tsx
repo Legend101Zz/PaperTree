@@ -1,13 +1,14 @@
 /**
  * ShelfSection: the shelf with its band above and its hints below (#195); spines, face-out covers
- * for a short library, or a plank per row at scale (#196). Owns taking a book down and putting
- * it back: the catalogue card stands in the band, pointing at the open book, and Esc (on the card
- * or the shelf) returns focus to it. It also decides where focus goes when the control that had
- * it disappears: after Retry (to Read), after Delete (to the next book, else the previous, else
- * Add papers), after the key hints are dismissed (to the shelf), and when the layout changes
- * under it (`useShelfFocus`). Enter on a book that can be opened takes it OUT instead (#200,
- * `features/book`: the pull-out, then the spread); a click keeps the card, whose "Open the book"
- * goes to the spread, so the card stays the mouse's way and Space the keyboard's.
+ * for a short library, a plank per row at scale (#196), or books lying flat on a phone (#199). Owns
+ * taking a book down and putting it back: the catalogue card stands in the band, pointing at the
+ * open book (on a phone it is a bottom sheet), and Esc (on the card or the shelf) returns focus.
+ * It also decides where focus goes when the control that had it disappears: after Retry (to Read),
+ * after Delete (to the next book, else the previous, else Add papers), after the key hints are
+ * dismissed (to the shelf), and when the layout changes under it (`useShelfFocus`). Enter on a
+ * book that can be opened takes it OUT instead (#200, `features/book`: the pull-out, then the
+ * spread); a click keeps the card, whose "Open the book" goes to the spread, so the card stays the
+ * mouse's way and Space the keyboard's.
  */
 'use client';
 
@@ -17,10 +18,11 @@ import { useBookOnShelf } from '@/features/book';
 
 import { useCardPlacement } from '../hooks/useCardPlacement';
 import { useShelfFocus } from '../hooks/useShelfFocus';
+import { libraryPlan } from '../model/phone';
 import { arrangeShelf } from '../model/shelf';
-import { shelfLayout } from '../model/states';
 import { CatalogueCard } from './CatalogueCard';
 import { CoverShelf } from './CoverShelf';
+import { FlatShelf } from './FlatShelf';
 import { Shelf } from './Shelf';
 import { ShelfRows } from './ShelfRows';
 import { ShelfHints } from './ShelfHints';
@@ -52,6 +54,8 @@ export interface ShelfSectionProps {
   readonly onContinue: (book: LibraryBook) => void;
   readonly onRetry: (paperId: string) => Promise<unknown>;
   readonly onDelete: (paperId: string) => Promise<unknown>;
+  /** Phone width (`usePhoneLayout`): the books lie flat and the card is a bottom sheet. */
+  readonly phone?: boolean;
 }
 
 /**
@@ -73,6 +77,7 @@ export function ShelfSection({
   onContinue,
   onRetry,
   onDelete,
+  phone = false,
 }: ShelfSectionProps): ReactNode {
   const band = useRef<HTMLDivElement>(null);
   const focus = useShelfFocus();
@@ -82,9 +87,10 @@ export function ShelfSection({
     () => ({ focusedId: focus.focusedId, onFocusBook: focus.setFocusedId, onEnterBook: pull }),
     [focus.focusedId, focus.setFocusedId, pull],
   );
-  const layout = shelfLayout(books.length);
-  const faceOut = layout === 'face-out';
-  const OnPlanks = layout === 'rows' ? ShelfRows : Shelf;
+  const plan = libraryPlan(books.length, phone);
+  const faceOut = plan.shelf === 'face-out';
+  const OnPlanks = plan.shelf === 'flat' ? FlatShelf : plan.shelf === 'rows' ? ShelfRows : Shelf;
+  const sheet = plan.card === 'sheet';
   const cardId = useId();
   const openBook = books.find((book) => book.id === openId) ?? null;
   const shownId = openBook === null ? null : openBook.id;
@@ -142,7 +148,14 @@ export function ShelfSection({
     <>
       <section
         ref={focus.section}
-        className={`pt-shelfband${faceOut ? ' pt-shelfband--faceout' : ''}`}
+        className={[
+          'pt-shelfband',
+          faceOut ? 'pt-shelfband--faceout' : '',
+          plan.shelf === 'flat' ? 'pt-shelfband--flat' : '',
+          sheet && openBook !== null ? 'pt-shelfband--sheet' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
         aria-label="Your shelf"
         onFocus={focus.onFocus}
       >
@@ -154,7 +167,8 @@ export function ShelfSection({
               key={openBook.id}
               id={cardId}
               book={openBook}
-              placement={placement}
+              placement={sheet ? null : placement}
+              sheet={sheet}
               onRead={onRead}
               onRetry={retry}
               onDelete={remove}
@@ -195,6 +209,7 @@ export function ShelfSection({
           matched={matches?.size ?? 0}
           total={books.length}
           onKeysHidden={toShelf}
+          vertical={plan.shelf === 'flat'}
         />
       </section>
       {book.overlay}
