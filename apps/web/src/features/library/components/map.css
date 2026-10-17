@@ -1,0 +1,288 @@
+/*
+ * The Map view (#198), measured from frame 01e (`01e-map-1440.dc.html`): a ruled frame of page stock,
+ * the legend top left, islands hatched in ink with a double rule, cartouches with a double border,
+ * papers as small cloth spines with Caslon titles. Ink and page are tokens, so the plan reads the same
+ * by lamplight; a citation link is the "references" thread (dotted, an arrowhead, a paper tag).
+ */
+
+.pt-map {
+  margin-block-start: 24px;
+  padding: 28px 32px 32px;
+  background: var(--pt-e1-fill);
+  border: 1.5px solid var(--pt-ink);
+  box-shadow:
+    inset 0 0 0 6px var(--pt-e1-fill),
+    inset 0 0 0 6.8px var(--pt-ink),
+    var(--pt-e1);
+}
+
+.pt-map__legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-inline-size: 640px;
+}
+
+.pt-map__title {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 0;
+  font-family: var(--pt-font-paper);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.pt-map__keys {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+  list-style: none;
+}
+
+.pt-map__keys li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pt-map__key {
+  flex: none;
+  inline-size: 22px;
+}
+
+.pt-map__key--isle {
+  block-size: 14px;
+  border: 1px solid var(--pt-ink);
+  border-radius: 50%;
+  background-image: repeating-linear-gradient(
+    45deg,
+    color-mix(in srgb, var(--pt-ink) 15%, transparent) 0 1px,
+    transparent 1px 4px
+  );
+}
+
+.pt-map__key--cite {
+  border-block-start: 2px dotted var(--pt-wire-references);
+}
+
+.pt-map__key--board {
+  border-block-start: 2px solid var(--pt-ink);
+}
+
+.pt-map__key--ribbon {
+  inline-size: 7px;
+  block-size: 13px;
+  margin-inline: 7.5px;
+  background: var(--pt-ribbon);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%);
+}
+
+.pt-map__note {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.pt-map__failed {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--pt-danger);
+}
+
+.pt-map__retry {
+  min-block-size: 32px;
+  padding: 0 10px;
+  font: inherit;
+  color: var(--pt-ink);
+  cursor: pointer;
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-map__retry:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+.pt-map__host {
+  margin-block-start: 8px;
+}
+
+.pt-map__plan {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+  overflow: visible;
+}
+
+/* ── islands and cartouches ── */
+
+.pt-map__hatch {
+  stroke: color-mix(in srgb, var(--pt-ink) 7%, transparent);
+  stroke-width: 1;
+}
+
+.pt-map__isle {
+  stroke: var(--pt-ink);
+  stroke-width: 1;
+}
+
+.pt-map__island--unshelved .pt-map__isle {
+  fill: none;
+  stroke-dasharray: 6 5;
+}
+
+.pt-map__ring {
+  fill: none;
+  stroke: color-mix(in srgb, var(--pt-ink) 45%, transparent);
+  stroke-width: 0.6;
+}
+
+.pt-map__island--unshelved .pt-map__ring {
+  display: none;
+}
+
+.pt-map__cart {
+  fill: var(--pt-e1-fill);
+  stroke: var(--pt-ink);
+  stroke-width: 1;
+}
+
+.pt-map__cart-rule {
+  fill: none;
+  stroke: var(--pt-ink);
+  stroke-width: 0.6;
+}
+
+.pt-map__cart-name {
+  font-family: var(--pt-font-paper);
+  font-size: 14.5px;
+  font-weight: 700;
+  fill: var(--pt-ink);
+}
+
+.pt-map__cart-meta,
+.pt-map__more {
+  font-size: 13px;
+  fill: var(--pt-ink-2);
+}
+
+/* ── papers ── */
+
+.pt-map__spine {
+  filter: drop-shadow(2px 1px 1px var(--pt-spine-cast));
+}
+
+.pt-map__label {
+  font-family: var(--pt-font-paper);
+  font-size: 14px;
+  fill: var(--pt-ink);
+}
+
+.pt-map__state {
+  fill: var(--pt-ink-2);
+}
+
+.pt-map__state--failed {
+  font-family: var(--pt-font-ui);
+  font-weight: 700;
+  fill: var(--pt-danger);
+}
+
+.pt-map__ribbon {
+  fill: var(--pt-ribbon);
+}
+
+.pt-map__lit {
+  fill: none;
+  stroke: var(--pt-focus);
+  stroke-width: 2;
+}
+
+.pt-map__token[data-match='false'] {
+  opacity: 0.33;
+}
+
+/* ── links: the "references" thread ── */
+
+.pt-map__link path {
+  fill: none;
+  stroke: var(--pt-wire-references);
+  stroke-width: 2;
+  stroke-dasharray: 1 4;
+  stroke-linecap: round;
+}
+
+.pt-map__link .pt-map__arrowhead,
+.pt-map__arrowhead {
+  fill: var(--pt-wire-references);
+  stroke: none;
+}
+
+.pt-map__tag {
+  fill: var(--pt-paper-label);
+  stroke: var(--pt-wire-references);
+  stroke-width: 1;
+}
+
+.pt-map__tag-text {
+  font-size: 12.5px;
+  fill: var(--pt-paper-label-ink);
+}
+
+/* ── the plan as a list ── */
+
+.pt-map__list {
+  margin-block-start: 16px;
+  font-size: 15px;
+}
+
+.pt-map__list summary {
+  display: inline-flex;
+  min-block-size: 40px;
+  align-items: center;
+  color: var(--pt-primary);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.pt-map__list summary:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+.pt-map__list h3 {
+  margin: 12px 0 4px;
+  font-family: var(--pt-font-label);
+  font-size: var(--pt-t-label);
+  font-weight: 700;
+  letter-spacing: var(--pt-ls-label);
+}
+
+.pt-map__list :is(ul, p) {
+  margin: 0;
+}
+
+.pt-map__list a {
+  /* 24 px tall, so each paper in the list is a whole target (WCAG 2.5.8), not a line of text. */
+  display: inline-block;
+  min-block-size: 24px;
+  line-height: 24px;
+  color: var(--pt-primary);
+}
+
+@media (max-width: 720px) {
+  .pt-map {
+    padding: 20px 16px;
+  }
+
+  .pt-map__list summary {
+    min-block-size: 44px;
+  }
+}

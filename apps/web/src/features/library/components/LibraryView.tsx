@@ -1,10 +1,10 @@
 /**
- * LibraryView: the signed-in library (#195–#198; frames 01, 01b, 01c, 01d, 01f, 03). The compact
+ * LibraryView: the signed-in library (#195–#198; frames 01, 01b–01f, 03). The compact
  * header (search, Add papers, Aa, account), "Your library" with its stats and "N need a look"
  * (which opens the Table filtered to those papers), the view row with Arrange by, Reading now with
  * Continue, then the shelf (face-out covers when short, a plank per row at scale) with its card in
- * the band above and the hint row under the plank, or Topics, or the Table; an empty library shows
- * the accession slip. PDFs drop anywhere. The shelf stays mounted (hidden) under the other views,
+ * the band above and the hint row under the plank, or Topics, the Map or the Table; an empty library
+ * shows the accession slip. PDFs drop anywhere. The shelf stays mounted (hidden) under the others,
  * so its focus, open card and scroll survive a switch; `useViewNavigation` moves between them.
  *
  * The data layer is `useLibrary` (polling only while a row is unfinished, Retry, Delete) and the
@@ -38,6 +38,7 @@ import { AccessionSlip } from './AccessionSlip';
 import { DropAnywhere } from './AddPapers';
 import { LibraryHeader } from './LibraryHeader';
 import { LibraryTitle, type LibraryViewName } from './LibraryTitle';
+import { MapView } from './MapView';
 import { NewTopic } from './NewTopic';
 import { ReadingNow } from './ReadingNow';
 import { ShelfSection } from './ShelfSection';
@@ -110,17 +111,8 @@ export function LibraryView(): ReactNode {
   useEffect(() => {
     if (openId !== null && !books.some((book) => book.id === openId)) setOpenId(null);
   }, [openId, books]);
-  const navigation = {
-    view,
-    setView,
-    setArrangement,
-    books,
-    arrangement,
-    matches,
-    openId,
-    setOpenId,
-  };
-  const { showOnShelf, showTopicOnShelf, takeFirstMatch } = useViewNavigation(navigation);
+  const nav = { view, setView, setArrangement, books, arrangement, matches, openId, setOpenId };
+  const { showOnShelf, showTopicOnShelf, takeFirstMatch } = useViewNavigation(nav);
   const needALook = useCallback(
     (on: boolean) => {
       setChip(on ? 'look' : 'all');
@@ -180,9 +172,9 @@ export function LibraryView(): ReactNode {
                 onShown={table.setShown}
                 size={touch ? 'touch' : 'md'}
               />
-            ) : (
+            ) : view === 'topics' ? (
               <NewTopic />
-            )
+            ) : null
           }
           arrangement={arrangement}
           onArrange={setArrangement}
@@ -240,6 +232,7 @@ export function LibraryView(): ReactNode {
             {view === 'topics' ? (
               <TopicsView books={books} matches={matches} onShowOnShelf={showTopicOnShelf} />
             ) : null}
+            {view === 'map' ? <MapView books={books} matches={matches} /> : null}
           </>
         )}
       </main>

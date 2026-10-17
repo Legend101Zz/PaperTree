@@ -1,9 +1,9 @@
 # library
 
-The signed-in library at `/dashboard` (#195–#198; frames 00, 01, 01b, 01c, 01d, 01f, 03): the papers stand as cloth
+The signed-in library at `/dashboard` (#195–#198; frames 00, 01, 01b–01f, 03): the papers stand as cloth
 spines on one walnut plank, a row per group, each row under a brass label holder. A spine shows its state: a red ribbon
 while you are reading it, a kraft wrap while we read it, a torn red label when we could not. The Table view lists the
-same papers as a ruled catalogue, and Topics shows each topic as a card.
+same papers as a ruled catalogue, Topics shows each topic as a card, and the Map is a plan of the reading room.
 
 - **Reading now** (above the spines; the owner's default, which may become a book stand): the papers you have a
   place in and have not finished, most recently opened first, at most three, each with its cloth, ribbon,
@@ -48,8 +48,7 @@ same papers as a ruled catalogue, and Topics shows each topic as a card.
   `GET /topics`, an empty one too, once it is read), and "N need a look"
   (queued, being read or failed), which **opens the Table filtered to those papers** (#197, the owner's default,
   owner may change; before #197 it filtered the shelf) and switches itself off when nothing needs a look.
-- **Views:** Shelf, Topics and Table are live; Map is shown disabled with "Coming in this release" (S2g, second
-  half). Arrange by (Topic, Year, Title, Recently opened) stands at the right of the view row for the shelf, Columns
+- **Views:** Shelf, Topics, Map and Table, all live. Arrange by (Topic, Year, Title, Recently opened) stands at the right of the view row for the shelf, Columns
   for the Table, New topic for Topics. The shelf stays mounted, hidden, under the other views, so its roving focus,
   open card and sideways scroll survive a switch of view; the search is the page's and filters every view. Enter
   in the search acts on the view showing (the Table's first row, the first lit topic card, else a lit Unshelved
@@ -74,6 +73,28 @@ same papers as a ruled catalogue, and Topics shows each topic as a card.
   kept. A topic made without a cloth opens its form with none chosen, so a rename never colours it. The open card's
   "…" panel stands above every other card. Sample papers (fixtures on) are not the person's and take no topic; a line
   under Unshelved says so.
+- **Map** (01e, #198): "Plan of the reading room", one SVG laid out by `model/map.ts`. Each topic (in the topics'
+  order, an empty one too, and a paper's accepted topic even if `GET /topics` lacks it) is a hatched island in a
+  fixed cell of a grid (three to a row at 1440, one on a phone), sized by its papers' estimated label widths;
+  Unshelved is a dashed island after them. Its cartouche is at most its cell's width and stays on the plan: a long
+  name or line is cut with "…" (whole in the cartouche's `<title>` and in the list). Its papers stand inside as small
+  cloth spines with their short titles (cut to the room, "· being read" on kraft, "· could not read" in red, a ribbon
+  while reading); past the room, "+n more". A cell depends only on its index and its own papers, so papers arriving
+  in or leaving one topic never move or resize another. **Only real links:** the citation links `GET /library/links`
+  returned, dotted (the "references" thread) with an arrowhead at the cited paper and a paper tag "cites it /
+  matched by title" (worded from `matched_by`; the link's `<title>` says it too). A tag goes on or beside its curve,
+  searched from the middle outwards, to the first place that covers no paper, cartouche or other tag; a link with no
+  such place has no tag on the plan and is labelled in the list only, and the legend counts those ("15 (3 labelled
+  only in the list)", measured on the 14-paper corpus at 1440). Nothing is drawn for papers that are merely alike.
+  The legend counts the links ("· 3", "none yet", "loading", "could not be read") and says "Papers you linked on a
+  board · none yet": a board holds one paper (S2c). The plan is `role="img"` with a name that never claims a count it
+  does not have ("2 topics, 5 papers, 3 citation links", "citation links still loading", "the citation links could
+  not be read"). A failed links read, or a failed topics read (then a topic with no papers is missing, and the plan
+  says so instead of "No topics yet"), is an alert with Try again. **The plan as a list** after it (a disclosure, one
+  Tab stop; hidden while the topics load) lists the topics, their papers (links to the reader, with "· being read",
+  "· could not read", "· reading now") and every link in words ("BERT cites Attention Is All You Need · matched by
+  title"). A search dims the papers it does not match and rings the ones it does; Enter in it opens the list at the
+  first matching paper. Sample papers (fixtures on) are on neither Topics nor the Map, and the note says so.
 - **The Table** (01d) is a native `<table>`: Title (a link to the reader), Authors (first author "et al.";
   three or more open "Authors · full", a popover with every name), Year, Topic (its cloth, name and source line,
   "arXiv cs.CL · accepted", "chosen by you" or "suggested · accepted"; else "Unshelved"), Pages, State
@@ -122,12 +143,18 @@ key hints and the Table's hidden columns (localStorage, per browser). Topics: `T
 (keys `['topics']` and `['paper-topic', id, state]`) → `topicsApi` (`lib/api/topics.ts`) → `GET/POST /topics`,
 `PATCH/DELETE /topics/{id}`, `GET/PUT /papers/{id}/topic`, `POST /papers/{id}/topic/reject` (`routers/topics.py`)
 → SQLite (`topics`, `paper_topics`, migration 0009); a paper's accepted topic comes back on its `GET /papers` row.
+Map: `MapView` → `useTopics` and TanStack Query `['library-links']` → `papersApi.links` → `GET /library/links`
+(computed on read from the parses, nothing stored) → `model/map.ts` lays the plan out.
 The list is polled every 2 s only while a paper is queued or being read. Each row becomes a `LibraryBook`
 (the v0.1 view model plus S2a's `year`, `reading` and `arxivCategory`); `model/shelf.ts` turns books into
 rows and spines. Nothing is invented: no topic puts a paper under "Unshelved", no reading state means no
 ribbon, no year means no year on the spine.
 
 ## Choices the owner may change
+
+- **The Map's rows are all one height** (about 445 px at 1440): that is what keeps every island in place when
+  another grows, at the price of empty space under a row of small or empty topics (12 topics with 5 empty make a
+  plan about 1,570 px tall).
 
 - **Cloth without a topic** (`clothFor`): cs.CL → transformers, cs.CV → vision, cs.LG and stat.ML →
   generative, math.OC and cs.NE → optimization, cs.IR → language, cs.AI / cs.RO / cs.MA → reinforcement;
@@ -153,6 +180,10 @@ ribbon, no year means no year on the spine.
 - `components/TopicsView.tsx` with `TopicCard.tsx`, `TopicActions.tsx` (the "…" menu), `TopicForm.tsx` (name and
   cloth, shared with `NewTopic.tsx`), `UnshelvedCard.tsx` and `topics.css`; `hooks/useViewNavigation.ts` is "Show on
   the shelf", Enter on a topic card and Enter in the search; tests in `apps/web/test/library-topics.spec.tsx`.
+- `model/map.ts`: the Map's groups, the plan (`layoutMap`), the drawn links and their words (pure; tested in
+  `model/map.spec.ts`); `components/MapView.tsx` (legend, data) with `MapPlan.tsx` (the SVG), `MapList.tsx` (the
+  list alternative) and `map.css`; tests in `apps/web/test/library-map.spec.tsx`; e2e
+  `e2e/v02/library-topics-map.spec.ts`.
 - `model/table.ts`: the Table's State cell, chips and counts, the Filter model, the source line, the date and the
   "need a look" sentence; `model/tableSort.ts`: columns, the comparators (nulls last, ties by title), the caption,
   `tablePool` and `tableRows`, and the stored columns (pure; tested beside them). `hooks/useTableView.ts` holds
