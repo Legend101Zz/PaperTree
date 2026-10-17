@@ -26,13 +26,18 @@ import { CatalogueCard } from '@/features/library/components/CatalogueCard';
 import { LibraryHeader } from '@/features/library/components/LibraryHeader';
 import { LibraryTitle } from '@/features/library/components/LibraryTitle';
 import { ShelfHints } from '@/features/library/components/ShelfHints';
+import { TableView } from '@/features/library/components/TableView';
 import { UploadRow } from '@/features/library/components/UploadRow';
 import {
   useUploadQueue,
   type UploadQueue,
   type UploadQueueOptions,
 } from '@/features/library/hooks/useUploadQueue';
+import type { LibraryBook } from '@/features/library/hooks/useLibrary';
+import type { TableViewState } from '@/features/library/hooks/useTableView';
 import { TOUCH_QUERY } from '@/features/library/hooks/useTouchTargets';
+import { NO_FILTER } from '@/features/library/model/table';
+import { DEFAULT_SORT } from '@/features/library/model/tableSort';
 
 export const TOUCH_TARGET_MIN_PX = 44;
 
@@ -147,6 +152,58 @@ export function UploadHarness(props: UploadQueueOptions): ReactElement {
   );
 }
 
+/** The papers as the Table reads them (#197): one per state, one reading, one with a topic. */
+const BOOKS: readonly LibraryBook[] = PAPERS.map((paper, index) => ({
+  ...paper,
+  year: index === 0 ? null : 2015 + index,
+  arxivCategory: 'cs.CL',
+  topic:
+    index === 3
+      ? {
+          id: 't',
+          name: 'Transformers',
+          cloth: 'transformers',
+          source: 'arxiv_category',
+          sourceDetail: 'cs.CL',
+        }
+      : null,
+  reading:
+    index === 3
+      ? {
+          last_page: 3,
+          furthest_page: 3,
+          page_count: 9,
+          opened_at: '2026-10-16T10:00:00Z',
+          finished_at: null,
+          state: 'reading',
+        }
+      : null,
+}));
+
+const TABLE: TableViewState = {
+  chip: 'all',
+  setChip: noop,
+  filter: NO_FILTER,
+  setFilter: noop,
+  sort: DEFAULT_SORT,
+  setSort: noop,
+  hidden: new Set(),
+  setShown: noop,
+};
+
+const TABLE_VIEW = (
+  <TableView
+    books={BOOKS}
+    matches={null}
+    table={TABLE}
+    touch
+    onRetry={noopAsync}
+    onDelete={noopAsync}
+    onShowOnShelf={noop}
+    onRead={noop}
+  />
+);
+
 export interface LibraryCase {
   readonly name: string;
   readonly element: ReactElement;
@@ -229,12 +286,15 @@ export const CASES: readonly LibraryCase[] = [
         stats={{ papers: 4, topics: 0, readingNow: 1, pages: 36, needALook: 1 }}
         needALookOnly={false}
         onNeedALook={noop}
+        view="shelf"
+        onView={noop}
         arrangement="topic"
         onArrange={noop}
       />
     ),
   },
   { name: 'ShelfHints', element: <ShelfHints query="" matched={0} total={4} /> },
+  { name: 'TableView', element: TABLE_VIEW },
   {
     name: 'ParsingState',
     element: <ParsingState totalPages={6} parsedPages={[0, 1, 2]} onOpenPage={noop} />,

@@ -45,6 +45,19 @@ afterEach(cleanup);
  */
 const TOUCH_CASES: readonly LibraryCase[] = [
   ...CASES,
+  // #197: a row's "…" menu and its authors popover, open (closed, their items are not rendered).
+  {
+    ...(CASES.find((c) => c.name === 'TableView') as LibraryCase),
+    name: 'TableView (a row menu and the authors open)',
+    afterRender: (container) => {
+      const row = container.querySelector('tr[data-row-id="p-failed"]');
+      const menu = row?.querySelector<HTMLElement>('[aria-label^="More actions"]');
+      const authors = container.querySelector<HTMLElement>('.pt-trow__authors--more');
+      if (menu) fireEvent.click(menu);
+      if (authors) fireEvent.click(authors);
+      expect(container.querySelectorAll('[data-row-menu-item]').length).toBe(4);
+    },
+  },
   {
     ...(CASES.find((c) => c.name === 'UncertaintyState') as LibraryCase),
     name: 'UncertaintyState (expanded)',

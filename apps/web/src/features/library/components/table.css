@@ -1,0 +1,564 @@
+/*
+ * The library's Table view (#197), measured from frame 01d (`01d-table-1440.dc.html`): the chips
+ * row, the ruled table (column widths 372/168/60/214/62/160/84/92/68 px at 1280), its cells, the
+ * row's arrow and "…" menu, the authors popover and the Columns and Filter menus. Tokens only.
+ */
+.pt-libtable {
+  /* A flex item of the page's column: without this it grows to the table's width at 390 px and
+     the page, not the table's own region, scrolls sideways. */
+  min-inline-size: 0;
+  margin-block-start: 20px;
+  font-family: var(--pt-font-ui);
+}
+
+.pt-libtable__bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+}
+
+.pt-libtable__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pt-libtable__chip {
+  display: inline-flex;
+  block-size: 34px;
+  gap: 8px;
+  align-items: center;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 14.5px;
+  color: var(--pt-ink);
+  white-space: nowrap;
+  cursor: pointer;
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-radius: 17px;
+}
+
+.pt-libtable__chip[aria-pressed='true'] {
+  color: var(--pt-page);
+  background: var(--pt-ink);
+  border-color: var(--pt-ink);
+}
+
+.pt-libtable__chip[data-look] {
+  color: var(--pt-primary);
+  border-color: var(--pt-danger);
+}
+
+.pt-libtable__chip[data-look][aria-pressed='true'] {
+  color: var(--pt-on-primary);
+  background: var(--pt-primary-fill);
+  border-color: var(--pt-primary-fill);
+}
+
+.pt-libtable__chip:focus-visible,
+.pt-libtable__th button:focus-visible,
+.pt-trow a:focus-visible,
+.pt-trow button:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+.pt-libtable__count {
+  font-family: var(--pt-font-mono);
+  font-size: 13px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.pt-libtable__dot {
+  inline-size: 7px;
+  block-size: 7px;
+  background: var(--pt-danger);
+  border-radius: var(--pt-radius-round);
+}
+
+.pt-libtable__chip[data-look][aria-pressed='true'] .pt-libtable__dot {
+  background: var(--pt-on-primary);
+}
+
+.pt-libtable__why {
+  margin: 0 0 0 4px;
+  font-size: 14.5px;
+}
+
+.pt-libtable__tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-inline-start: auto;
+}
+
+.pt-libtable__tools .pt-button--md {
+  min-block-size: 36px !important;
+}
+
+.pt-libtable__sorted {
+  margin: 0;
+  font-size: 14px;
+  color: var(--pt-ink-2);
+}
+
+.pt-libtable__grid {
+  inline-size: 100%;
+  margin-block-start: 14px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.pt-libtable__th {
+  block-size: 44px;
+  padding: 0 12px;
+  text-align: start;
+  border-block-end: 1.5px solid var(--pt-ink);
+}
+
+.pt-libtable__th button {
+  display: inline-flex;
+  block-size: 36px;
+  gap: 6px;
+  align-items: center;
+  padding: 0;
+  font-family: var(--pt-font-label);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pt-ink);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+.pt-libtable__th[data-numeric] {
+  text-align: end;
+}
+
+.pt-libtable__th svg[data-up] {
+  transform: rotate(180deg);
+}
+
+/* Fixed widths from the frame; the Title takes what is left (372 px with every column shown). */
+.pt-libtable__th--authors {
+  inline-size: 168px;
+}
+
+/* Year and Pages take 14 px more than the frame's 60, so a sorted header's chevron fits. */
+.pt-libtable__th--year,
+.pt-libtable__th--pages {
+  inline-size: 76px;
+}
+
+.pt-libtable__th--topic {
+  inline-size: 214px;
+}
+
+.pt-libtable__th--state {
+  inline-size: 160px;
+}
+
+.pt-libtable__th--highlights,
+.pt-libtable__th--opened {
+  inline-size: 92px;
+}
+
+.pt-libtable__th--actions {
+  inline-size: 72px;
+}
+
+.pt-trow > * {
+  block-size: 60px;
+  padding: 8px 12px;
+  font-size: 14.5px;
+  line-height: 19px;
+  text-align: start;
+  vertical-align: middle;
+  border-block-end: 1px solid var(--pt-rule);
+}
+
+.pt-trow:hover > *,
+.pt-trow:focus-within > * {
+  background: color-mix(in srgb, var(--pt-rule) 45%, transparent);
+}
+
+.pt-trow:hover > :first-child,
+.pt-trow:focus-within > :first-child {
+  box-shadow: inset 3px 0 0 var(--pt-focus);
+}
+
+.pt-trow__title {
+  font-weight: 400;
+}
+
+.pt-trow__name,
+.pt-trow__authors {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* A flex box, so a one-line title sits on the row's middle line inside a 44 px target too. */
+.pt-trow__title a {
+  display: flex;
+  align-items: center;
+  font-family: var(--pt-font-paper);
+  font-size: 14px;
+  color: var(--pt-ink);
+  text-decoration: none;
+}
+
+.pt-trow__title a:hover {
+  text-decoration: underline;
+}
+
+.pt-trow__authors {
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  color: var(--pt-ink);
+  text-align: start;
+  background: none;
+  border: 0;
+}
+
+.pt-trow__authors--more {
+  cursor: pointer;
+  text-decoration: underline dotted var(--pt-control-border);
+  text-underline-offset: 3px;
+}
+
+.pt-trow__cell--pages,
+.pt-trow__cell--highlights {
+  text-align: end !important;
+}
+
+.pt-trow__cell--opened,
+.pt-trow__muted {
+  color: var(--pt-ink-2);
+}
+
+.pt-trow__topic,
+.pt-trow__state {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+
+.pt-trow__sub {
+  display: block;
+  margin-block-start: 1px;
+  font-size: 13px;
+  line-height: 17px;
+  color: var(--pt-ink-2);
+}
+
+.pt-trow__cloth {
+  flex: none;
+  inline-size: 7px;
+  block-size: 14px;
+}
+
+.pt-trow__state[data-state='not-started'] {
+  color: var(--pt-ink-2);
+}
+
+.pt-trow__state[data-state='failed'] {
+  font-weight: 700;
+  color: var(--pt-danger);
+}
+
+.pt-trow__glyph--reading-now {
+  flex: none;
+  inline-size: 7px;
+  block-size: 13px;
+  background: var(--pt-ribbon);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%);
+}
+
+.pt-trow__glyph--parsing {
+  flex: none;
+  inline-size: 10px;
+  block-size: 10px;
+  border: 2px solid var(--pt-ink-2);
+  border-inline-end-color: transparent;
+  border-radius: var(--pt-radius-round);
+}
+
+.pt-trow__link {
+  padding: 0;
+  font: inherit;
+  color: var(--pt-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+.pt-trow__danger {
+  color: var(--pt-danger) !important;
+}
+
+/* A Retry already running: said in grey, and a press does nothing. */
+.pt-trow__link[aria-disabled='true'],
+.pt-trow__menu > [aria-disabled='true'] {
+  color: var(--pt-ink-2);
+  cursor: default;
+}
+
+/* The row's arrow and "…": shown on hover or focus, always on touch (they stay in the tab order). */
+.pt-trow__actions > * {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+.pt-trow__actions {
+  text-align: end !important;
+  white-space: nowrap;
+}
+
+.pt-trow__icon {
+  display: inline-flex;
+  inline-size: 30px;
+  block-size: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--pt-ink);
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-trow__open {
+  margin-inline-end: 2px;
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+}
+
+.pt-trow:not(:hover, :focus-within) .pt-trow__actions > * {
+  opacity: 0;
+}
+
+.pt-trow--note > td {
+  block-size: auto;
+  padding-block: 4px 12px;
+}
+
+.pt-trow__pop {
+  position: relative;
+}
+
+.pt-trow__popover,
+.pt-trow__menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  z-index: 20;
+  padding: 9px 10px;
+  text-align: start;
+  white-space: normal;
+  background: var(--pt-e2-fill);
+  border: 1px solid var(--pt-rule);
+  border-radius: var(--pt-radius-menu);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+}
+
+.pt-trow__popover {
+  left: -2px;
+  inline-size: 180px;
+  font-size: 13.5px;
+  line-height: 1.42;
+}
+
+.pt-trow__popover p {
+  margin: 0;
+}
+
+.pt-trow__popover-head {
+  font-family: var(--pt-font-label);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pt-ink-2);
+  letter-spacing: 0.06em;
+}
+
+.pt-trow__menu {
+  right: 0;
+  display: flex;
+  min-inline-size: 180px;
+  flex-direction: column;
+  padding: 6px;
+}
+
+.pt-trow__menu > * {
+  display: flex;
+  min-block-size: 36px;
+  align-items: center;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 14.5px;
+  color: var(--pt-ink);
+  text-decoration: none;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-trow__menu > :hover {
+  background: var(--pt-accent-soft);
+}
+
+.pt-libtable__none {
+  padding: 24px 12px;
+  color: var(--pt-ink-2);
+}
+
+.pt-libviews__tools {
+  margin-inline-start: auto;
+}
+
+.pt-tmenu {
+  min-inline-size: 260px;
+  font-size: 15px;
+}
+
+.pt-tmenu__check,
+.pt-tmenu__field,
+.pt-tmenu__range label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pt-tmenu__field {
+  justify-content: space-between;
+}
+
+.pt-tmenu input[type='checkbox'] {
+  accent-color: var(--pt-primary);
+}
+
+.pt-tmenu__range {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.pt-tmenu__range legend {
+  float: left;
+  min-inline-size: 48px;
+}
+
+.pt-tmenu select,
+.pt-tmenu input[type='number'] {
+  block-size: 36px;
+  padding-inline: 8px;
+  font: inherit;
+  color: var(--pt-ink);
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-tmenu input[type='number'] {
+  inline-size: 80px;
+}
+
+/* Touch: 44 px targets, the actions always shown. Phone: the table scrolls sideways in its own
+   region (every column stays reachable) with the titles held at the left. */
+@media (pointer: coarse), (max-width: 900px) {
+  .pt-trow__actions > * {
+    opacity: 1 !important;
+  }
+
+  .pt-trow__icon,
+  .pt-trow__menu > *,
+  .pt-trow__link,
+  .pt-trow__authors--more {
+    min-block-size: 44px;
+    min-inline-size: 44px;
+  }
+
+  .pt-libtable__chip,
+  .pt-libtable__tools .pt-button--md,
+  .pt-tmenu select,
+  .pt-tmenu input[type='number'] {
+    min-block-size: 44px !important;
+  }
+
+  .pt-libtable__th--actions {
+    inline-size: 104px;
+  }
+
+  .pt-trow__title a {
+    line-height: 22px;
+  }
+}
+
+@media (max-width: 900px) {
+  .pt-libtable__tools {
+    flex-wrap: wrap;
+    margin-inline-start: 0;
+  }
+
+  /* The tools sit at the left here: the Filter panel opens rightward from its button, inside the
+     screen (a panel hanging left of x = 0 cannot be scrolled to). */
+  .pt-libtable__tools .pt-hmenu__panel {
+    right: auto;
+    left: 0;
+    inline-size: min(360px, calc(100vw - 32px));
+    min-inline-size: 0;
+  }
+
+  .pt-tmenu__range {
+    flex-wrap: wrap;
+  }
+
+  /* Positioned, so the screen-reader-only text (absolutely placed) scrolls inside it too. */
+  .pt-libtable__scroll {
+    position: relative;
+    overflow-x: auto;
+  }
+
+  /* Every column has its width here, the Title most of the screen, and the table is as wide as
+     their sum (a fixed table grows to its columns), whichever columns are shown. */
+  .pt-libtable__grid {
+    inline-size: 0;
+    min-inline-size: 100%;
+  }
+
+  .pt-libtable__th--title {
+    inline-size: clamp(180px, 58vw, 320px);
+  }
+
+  .pt-trow__name {
+    -webkit-line-clamp: 3;
+  }
+
+  .pt-trow__title,
+  .pt-libtable__th--title {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--pt-ground);
+  }
+
+  /* The row's wash, opaque on the pinned title: the cells scrolling under it must not show through
+     (a tap leaves :hover on, so this is the usual touch state). */
+  .pt-trow:hover > .pt-trow__title,
+  .pt-trow:focus-within > .pt-trow__title {
+    background: color-mix(in srgb, var(--pt-rule) 45%, var(--pt-ground));
+  }
+}

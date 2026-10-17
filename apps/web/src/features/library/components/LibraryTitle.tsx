@@ -1,7 +1,8 @@
 /**
  * LibraryTitle: "Your library" with its stats line and the one alert, "N need a look" (#195,
- * frame 01), then the view tabs and Arrange by. Only the Shelf view exists in this release so far;
- * Topics, Map and Table are shown, disabled, and say "Coming in this release" (S2f, S2g).
+ * frame 01), then the view tabs and, for the shelf, Arrange by (the Table puts its Columns menu
+ * there instead, frame 01d). Shelf and Table are live (#197); Topics and Map are shown, disabled,
+ * and say "Coming in this release" (S2g).
  */
 'use client';
 
@@ -17,24 +18,35 @@ import { statsLine } from '../model/states';
 
 import type { ReactNode } from 'react';
 
+/** The library's views that exist so far. */
+export type LibraryViewName = 'shelf' | 'table';
+
 /** Props for `LibraryTitle`. */
 export interface LibraryTitleProps {
   /** The counts, or null while the library has not loaded (no number is shown until then). */
   readonly stats: LibraryStats | null;
   /** The shelf is laid out in rows (a library at scale): the stats line drops the pages. */
   readonly atScale?: boolean;
-  /** The "need a look" filter is on. */
+  /** The Table is showing, filtered to the papers that need a look. */
   readonly needALookOnly: boolean;
+  /** Opens the Table filtered to them (owner default; it filtered the shelf before #197). */
   readonly onNeedALook: (on: boolean) => void;
+  readonly view: LibraryViewName;
+  readonly onView: (view: LibraryViewName) => void;
+  /** What stands at the right of the view row in the Table view (its Columns menu). */
+  readonly tableTools?: ReactNode;
   readonly arrangement: Arrangement;
   readonly onArrange: (next: Arrangement) => void;
 }
 
 const VIEWS = [
-  { label: 'Topics', icon: <LayoutGrid size={20} strokeWidth={1.5} /> },
-  { label: 'Map', icon: <Network size={20} strokeWidth={1.5} /> },
-  { label: 'Table', icon: <Table2 size={20} strokeWidth={1.5} /> },
+  { id: 'shelf', label: 'Shelf', icon: <Library size={20} strokeWidth={1.5} /> },
+  { id: 'topics', label: 'Topics', icon: <LayoutGrid size={20} strokeWidth={1.5} /> },
+  { id: 'map', label: 'Map', icon: <Network size={20} strokeWidth={1.5} /> },
+  { id: 'table', label: 'Table', icon: <Table2 size={20} strokeWidth={1.5} /> },
 ] as const;
+
+const isLive = (id: string): id is LibraryViewName => id === 'shelf' || id === 'table';
 
 /**
  * The title block and the view row.
@@ -47,6 +59,9 @@ export function LibraryTitle({
   atScale = false,
   needALookOnly,
   onNeedALook,
+  view,
+  onView,
+  tableTools,
   arrangement,
   onArrange,
 }: LibraryTitleProps): ReactNode {
@@ -77,7 +92,6 @@ export function LibraryTitle({
           </p>
         )}
         {stats !== null && stats.needALook > 0 ? (
-          // Filters the shelf to those papers for now; it will open the Table, filtered, in S2f.
           <button
             type="button"
             className={['pt-libtitle__alert', target].filter(Boolean).join(' ')}
@@ -91,32 +105,40 @@ export function LibraryTitle({
       </div>
       <div className="pt-libviews">
         <div role="group" aria-label="View" className="pt-libviews__tabs">
-          <ToolbarButton
-            label="Shelf"
-            icon={<Library size={20} strokeWidth={1.5} />}
-            pressed
-            size={size}
-            className={target}
-          />
-          {VIEWS.map((view) => (
-            <ToolbarButton
-              key={view.label}
-              size={size}
-              className={target}
-              label={view.label}
-              icon={view.icon}
-              pressed={false}
-              disabled
-              title="Coming in this release"
-              aria-describedby={soonId}
-            />
-          ))}
+          {VIEWS.map((tab) =>
+            isLive(tab.id) ? (
+              <ToolbarButton
+                key={tab.id}
+                size={size}
+                className={target}
+                label={tab.label}
+                icon={tab.icon}
+                pressed={view === tab.id}
+                data-view={tab.id}
+                onClick={() => onView(tab.id as LibraryViewName)}
+              />
+            ) : (
+              <ToolbarButton
+                key={tab.id}
+                size={size}
+                className={target}
+                label={tab.label}
+                icon={tab.icon}
+                pressed={false}
+                disabled
+                title="Coming in this release"
+                aria-describedby={soonId}
+              />
+            ),
+          )}
           <span id={soonId} className="pt-sr-only">
             Coming in this release
           </span>
         </div>
         {/* Nothing to arrange on an empty shelf (01b keeps the view tabs, not Arrange by). */}
-        {stats !== null && stats.papers === 0 ? null : (
+        {stats !== null && stats.papers === 0 ? null : view === 'table' ? (
+          <div className="pt-libviews__tools">{tableTools}</div>
+        ) : (
           <label className="pt-libviews__arrange" htmlFor={arrangeId}>
             Arrange by
             <span className="pt-libviews__select">

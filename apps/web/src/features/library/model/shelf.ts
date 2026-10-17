@@ -31,6 +31,10 @@ export interface ShelfTopic {
   readonly id: string;
   readonly name: string;
   readonly cloth: ClothId | null;
+  /** Where it came from (the Table's "arXiv cs.CL · accepted"); absent from older servers. */
+  readonly source?: 'arxiv_category' | 'manual' | 'model';
+  /** `cs.CL` for an arXiv-category topic, the model id for a model's, else null. */
+  readonly sourceDetail?: string | null;
 }
 
 /** The facts the shelf reads. The library's view model plus S2a's fields satisfies it. */
@@ -133,8 +137,13 @@ export function spineTitle(title: string): string {
   return head.length > 0 ? head : title.trim();
 }
 
-// "Ashish Vaswani∗" → "Vaswani": the last word, without footnote marks.
-function surname(name: string): string {
+/**
+ * "Ashish Vaswani∗" → "Vaswani": the last word, without footnote marks.
+ *
+ * @param name - An author as printed.
+ * @returns The surname.
+ */
+export function surname(name: string): string {
   const words = name
     .replace(/[^\p{L}\p{M}'’.-]+$/u, '')
     .trim()

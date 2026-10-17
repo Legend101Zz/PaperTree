@@ -32,8 +32,10 @@ function focusBook(paperId: string): void {
 
 /** Props for `ShelfSection`. */
 export interface ShelfSectionProps {
-  /** The books on the shelf (all of them, or those that need a look). */
+  /** The books on the shelf. */
   readonly books: readonly LibraryBook[];
+  /** False while another view is showing (the shelf stays mounted, hidden, to keep its state). */
+  readonly shown?: boolean;
   readonly arrangement: Arrangement;
   /** What the search typed, and which ids it matched (null: no search). */
   readonly search: string;
@@ -57,6 +59,7 @@ export interface ShelfSectionProps {
  */
 export function ShelfSection({
   books,
+  shown = true,
   arrangement,
   search,
   matches,
@@ -83,8 +86,13 @@ export function ShelfSection({
     () => arrangeShelf(books, arrangement).flatMap((group) => group.papers.map((p) => p.id)),
     [books, arrangement],
   );
-  // Any change that can move a spine: the arrangement or the order of the ids.
-  const placement = useCardPlacement(shownId, band, `${arrangement}|${order.join(',')}`);
+  // Any change that can move a spine: the arrangement, the order of the ids, or the shelf coming
+  // back into view (hidden, every spine measures zero).
+  const placement = useCardPlacement(
+    shownId,
+    band,
+    `${String(shown)}|${arrangement}|${order.join(',')}`,
+  );
   // A second activation of the open spine puts the book back.
   const takeDown = useCallback(
     (paperId: string) => setOpenId((current) => (current === paperId ? null : paperId)),
