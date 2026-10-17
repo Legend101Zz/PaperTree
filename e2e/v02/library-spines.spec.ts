@@ -67,7 +67,8 @@ test('thirteen books stand as spines; the keyboard walks them; Delete to twelve 
   await expect(books.and(page.locator('[tabindex="0"]'))).toHaveCount(1);
   await page.screenshot({ path: shot('s2e-spines-13-1440.png') });
 
-  // ── ← → Home End along the shelf; Enter takes a book down; Esc puts it back ──
+  // ── ← → Home End along the shelf; Space takes a book down into its card (Enter takes a parsed
+  // book OUT since #200, e2e/v02/book.spec.ts); Esc puts it back ──
   await books.first().focus();
   await page.keyboard.press('ArrowRight');
   await expect(books.nth(1)).toBeFocused();
@@ -82,7 +83,7 @@ test('thirteen books stand as spines; the keyboard walks them; Delete to twelve 
   for (let step = 0; step < target; step += 1) await page.keyboard.press('ArrowRight');
   const doomed = books.nth(target);
   await expect(doomed).toBeFocused();
-  await page.keyboard.press('Enter');
+  await page.keyboard.press('Space');
   const card = page.locator('[data-card-paper-id]');
   await expect(card.getByRole('button', { name: /^Read / })).toBeFocused();
   await page.keyboard.press('Escape');
@@ -90,7 +91,7 @@ test('thirteen books stand as spines; the keyboard walks them; Delete to twelve 
 
   // ── Delete by keyboard: thirteen → twelve stands face-out, focus on the next book ──
   const next = order[target + 1] ?? '';
-  await page.keyboard.press('Enter');
+  await page.keyboard.press('Space');
   await card.getByRole('button', { name: /^Delete / }).focus();
   await page.keyboard.press('Enter');
   const removed = page.waitForResponse((r) => r.request().method() === 'DELETE');
