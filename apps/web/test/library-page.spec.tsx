@@ -319,6 +319,26 @@ describe('the header menus', () => {
     expect(within(panel).getByText('mrigesh@example.test')).toBeTruthy();
     expect(within(panel).getByRole('button', { name: 'Sign out' })).toBeTruthy();
   });
+
+  it('a menu closes when focus leaves it, and stays open for a press on its own panel', async () => {
+    await renderLibrary();
+    const aa = screen.getByRole('button', { name: 'Reading settings' });
+    const account = screen.getByRole('button', { name: /^Account/ });
+    fireEvent.click(aa);
+    const scheme = screen.getByRole('radiogroup', { name: 'Colour scheme' });
+    const radio = within(scheme).getAllByRole('radio')[0] as HTMLElement;
+    // Focus moving inside the panel keeps it.
+    fireEvent.focusOut(aa, { relatedTarget: radio });
+    expect(aa.getAttribute('aria-expanded')).toBe('true');
+    // A press on the panel's background sends focus to the page (no relatedTarget): still open.
+    fireEvent.pointerDown(scheme);
+    fireEvent.focusOut(radio, { relatedTarget: null });
+    expect(aa.getAttribute('aria-expanded')).toBe('true');
+    // Tab past the panel: focus lands outside, and the menu closes.
+    fireEvent.focusOut(radio, { relatedTarget: account });
+    expect(aa.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('radiogroup', { name: 'Colour scheme' })).toBeNull();
+  });
 });
 
 describe('drop PDFs anywhere', () => {

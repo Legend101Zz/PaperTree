@@ -176,6 +176,41 @@ describe('library rows from the API (S1 shape)', () => {
     await waitFor(() => expect(api.retry).toHaveBeenCalledWith('ppr_FAILED'));
   });
 
+  it('a double press on Retry sends one request, and the button says it is busy meanwhile', async () => {
+    api.list.mockResolvedValue([row({ processing: 'failed', job: job({ state: 'dead_letter' }) })]);
+    let settle: (value: unknown) => void = () => undefined;
+    api.retry.mockReturnValue(new Promise((resolve) => (settle = resolve)));
+    renderLibrary();
+    const { card } = await openCard();
+    const retry = within(card).getByRole('button', { name: /Retry/ });
+    fireEvent.click(retry, { detail: 1 });
+    fireEvent.click(retry, { detail: 2 });
+    expect(api.retry).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(retry.getAttribute('aria-disabled')).toBe('true'));
+    await act(async () => settle({ job_id: 'job_2', generation: 2 }));
+    expect(api.retry).toHaveBeenCalledTimes(1);
+    expect(within(card).queryByRole('alert')).toBeNull();
+  });
+
+  it('a 409 "nothing to retry" (a retry got there first) is not an error: the list is asked again', async () => {
+    api.list.mockResolvedValue([row({ processing: 'failed', job: job({ state: 'dead_letter' }) })]);
+    api.retry.mockRejectedValue(
+      new ApiError(
+        409,
+        'not_failed',
+        "the paper's latest parse has not failed; nothing to retry",
+        false,
+      ),
+    );
+    renderLibrary();
+    const { card } = await openCard();
+    const asked = api.list.mock.calls.length;
+    fireEvent.click(within(card).getByRole('button', { name: /Retry/ }), { detail: 0 });
+    await waitFor(() => expect(api.list.mock.calls.length).toBeGreaterThan(asked));
+    expect(within(card).queryByRole('alert')).toBeNull();
+    expect(card.textContent).not.toMatch(/nothing to retry/);
+  });
+
   it('a failed Retry is a sentence, not raw JSON', async () => {
     api.list.mockResolvedValue([row({ processing: 'failed', job: job({ state: 'dead_letter' }) })]);
     api.retry.mockRejectedValue(new NetworkError('x'));
@@ -248,9 +283,14 @@ describe('library rows from the API (S1 shape)', () => {
     renderLibrary();
     const { card } = await openCard();
     fireEvent.click(within(card).getByRole('button', { name: /Delete/ }), { detail: 0 });
+    expect(document.activeElement?.textContent).toBe('Keep it');
     fireEvent.click(within(card).getByRole('button', { name: 'Keep it' }), { detail: 0 });
     expect(api.remove).not.toHaveBeenCalled();
     expect(within(card).queryByRole('group')).toBeNull();
+    // Focus goes back to the Delete that opened the confirmation, never to the page.
+    await waitFor(() =>
+      expect(document.activeElement).toBe(within(card).getByRole('button', { name: /^Delete/ })),
+    );
   });
 });
 

@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { isNonTerminal, libraryPaperFromWire, visibleSamples } from '@/components/library/types';
 import { papersApi } from '@/lib/api/papers';
+import { ApiError } from '@/lib/api/types';
 
 import type { ShelfTopic } from '../model/shelf';
 import type { CancelOutcome, UploadContext } from './useUploadQueue';
@@ -173,7 +174,13 @@ export function useLibrary(online: boolean) {
 
   const retry = useCallback(
     async (paperId: string) => {
-      await papersApi.retry(paperId);
+      try {
+        await papersApi.retry(paperId);
+      } catch (caught) {
+        // 409 not_failed: its latest parse is no longer failed (a retry from another tab or an
+        // earlier press got there first). What Retry asked for is under way, so it is not an error.
+        if (!(caught instanceof ApiError && caught.code === 'not_failed')) throw caught;
+      }
       await queryClient.invalidateQueries({ queryKey: PAPERS_KEY });
     },
     [queryClient],
