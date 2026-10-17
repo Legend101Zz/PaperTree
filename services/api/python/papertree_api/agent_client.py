@@ -239,10 +239,13 @@ def token_expiry(kind: RunKind, *, now: datetime | None = None) -> str:
 class AgentUnavailable(Exception):
     """The agent could not be reached, or refused the run before streaming (pre-stream)."""
 
-    def __init__(self, code: ErrorCode, detail: str) -> None:
+    def __init__(self, code: ErrorCode, detail: str, *, permanent: bool = False) -> None:
         super().__init__(detail)
         self.code: ErrorCode = code
         self.detail = detail
+        #: The agent understood the request and REFUSED it (a 4xx other than auth/busy): asking
+        #: again with the same request cannot succeed (#242 review: it must not retry per read).
+        self.permanent = permanent
 
 
 class AgentProtocolError(Exception):
@@ -353,7 +356,11 @@ class AgentClient:
             )
         if status == 409:
             raise AgentUnavailable("busy", "This conversation is already answering.")
-        raise AgentUnavailable("agent_unavailable", "The AI service could not start this answer.")
+        raise AgentUnavailable(
+            "agent_unavailable",
+            "The AI service could not start this answer.",
+            permanent=400 <= status < 500,
+        )
 
     async def cancel(self, run_id: str, *, request_id: str | None) -> int | None:
         """``DELETE /v1/runs/{run_id}``; the status, or None when the agent is unreachable."""

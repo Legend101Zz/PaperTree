@@ -21,7 +21,7 @@ from typing import Annotated, cast
 from fastapi import APIRouter, Depends, Response, status
 from papertree_db import UNSET, PaperId, PaperTopicRow, TopicExists, TopicRow
 
-from ..deps import AgentClientDep, CallerDep, IndexCacheDep, SettingsDep
+from ..deps import AgentClientDep, CallerDep, IndexCacheDep, SettingsDep, TopicTasksDep
 from ..errors import ApiError
 from ..schemas import (
     Cloth,
@@ -126,15 +126,17 @@ async def get_paper_topic(
     settings: SettingsDep,
     client: AgentClientDep,
     index_cache: IndexCacheDep,
+    tasks: TopicTasksDep,
 ) -> PaperTopic:
     """Where the paper sits.
 
     With no row yet, a first offer is computed and stored: the deterministic rule, else (once per
-    paper, never for one the person has decided about) the Flash `topic` run. A model offer says
-    `source: "model"` and `source_detail` is the model id. Reading again returns the same row.
+    paper, never for one the person has decided about) the Flash `topic` run, which starts in the
+    BACKGROUND: this read answers `status: "none"` at once and a later read returns the offer. A
+    model offer says `source: "model"` and `source_detail` is the model id.
     """
     return _paper_topic(
-        await offer_topic(call, paper_id, TopicRunDeps(settings, client, index_cache))
+        offer_topic(call, paper_id, TopicRunDeps(settings, client, index_cache, tasks))
     )
 
 
