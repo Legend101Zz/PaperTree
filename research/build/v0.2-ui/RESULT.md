@@ -64,6 +64,30 @@ head, the local uncached gate, and a code review whose findings were fixed befor
 | S2c library links (backend) | #194 | #254 | 83e65c7 | 3 real links on the corpus, all by title, 0 by arXiv id; full gate on 8d8c0e4 (pytest 2,386) |
 | S2b topics (backend, part 1) | #193 | #251 | da20ded | migration 0009; full gate on ccda80a (pytest 2,404); part 2 (Flash run) is #242 |
 | lasso benchmark bound | (#182) | #259 | 516897f | 50 ms target logged, 250 ms asserted: it failed two gates at load 25–50 |
+| S6b-1 board cards | #212 | #260 | fcbb27b | merged together with part 2 (part 1's CI fixes live in part 2) |
+| S6b-2 brass pins, seven threads, legend | #212 | #261 | 7cb3ade | full gate on c59378a: 9 of 11 (two timing flakes, pass alone); full e2e 61 passed, 1 failed (triage in the PR) |
+| S4c-1 reader header and desk (04) | #203 | #262 | 77dd5d8 | see part 2 |
+| S4c-2 selection toolbar, Contents, highlights | #203 | #263 | da7e9c6 | full gate on b9f11d9: 10 of 11; full e2e 62/62 |
+| S5c-1 the notebook page | #208 | #264 | 0dc1821 | three review rounds; ~3,990 lines (stated in the PR) |
+| S5c-2 side panel, Send page to board, shapes | #208 | #265 | d567b3b | full gate 11 of 11 (pytest 2,387); full e2e 62/62 |
+| S2e-1 Reading now, the empty library, covers | #196 | #266 | b4aa0ea | see part 2 |
+| S2e-2 the library at scale | #196 | #267 | bed7c47 | full gate 10 of 11 (#80 flake, passed 2/2 alone); full e2e 63/63 |
+| library links scale bound | (#182) | #270 | f53e9fd | 10 s bound; 3 s failed a gate at load |
+| S4d-1 explain states, Stop, daily cap | #204 | #271 | f516304 | see part 2 |
+| S4d-2 the summary as an exchange (04d) | #204 | #272 | 39c91e1 | full gate 11 of 11 (pytest 2,422); full e2e 62 passed, 1 failed (load; triage in the PR) |
+| S6c "Link as" | #213 | #273 | 43210eb | full gate 10 of 11 (pytest 2,369); full e2e 63/63 |
+| S7a-1 diagram threads, migration 0011 | #216 | #274 | e474bca | see part 2 |
+| S7a-2 diagram runs (agent, NDJSON parts) | #216 | #275 | 5e83853 | full gate 10 of 11 (pytest 2,518; #80 flake); full e2e 62/62; no live calls |
+| usage fixture for diagram/topic rows | (#182) | #278 | 2c87297 | release typecheck went red after #271/#272 and #274/#275 merged in one batch; since then release is typechecked after every batch |
+| S6d-1 board header, toolbar, frames, minimap | #214 | #280 | efd21f9 | merged together with part 2 |
+| S6d-2 "Board" everywhere, /board route | #214 | #281 | 06e9ed2 | full gate on eab4916: 9 of 11 (load flakes); full e2e 69 passed, 1 failed (triage in the PR) |
+| S5d-1 notebook ink | #209 | #285 | 84aafd7 | see part 2 |
+| S5d-2 the lasso and its menu | #209 | #286 | 1bf0bab | full gate on 24996a9: 9 of 11 (load flakes, no Python touched); full e2e 68 passed, 1 failed (`journey-b` load timeout; passed alone) |
+| S2f-1 shared library actions | #197 | #287 | 652813c | see part 2 |
+| S2f-2 the Table (01d) | #197 | #288 | 522d30a | full gate 10 of 11 (pytest 2,521; agent heartbeat flake → #289); full e2e 69/69 |
+| agent heartbeat bound | (#182) | #289 | 0dd978e | frames every 30 ms, a 60 % floor; a 200 ms interval still fails it |
+| S7b-1 the engraved plate | #217 | #290 | 6959a97 | see part 2 |
+| S7b-2 plate actions, board card, 07d, live smoke | #217 | #291 | 508cd75 | full gate on fce062f: 10 of 11 (two pytest load timings, no Python touched); full e2e 68 passed, 1 failed (`s6/explain-faux` load; passed alone at load 19); live ≈ $0.0020 |
 
 ## Live AI spend (estimates)
 
