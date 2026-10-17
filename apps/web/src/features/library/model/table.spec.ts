@@ -165,11 +165,21 @@ describe('the words around the cells', () => {
       'arXiv cs.CL · accepted',
     );
     expect(topicSource({ ...base, source: 'manual', sourceDetail: null })).toBe('chosen by you');
-    expect(topicSource({ ...base, source: 'model', sourceDetail: 'flash-1' })).toBe(
+    expect(topicSource({ ...base, source: 'model', sourceDetail: 'MiniMax-M3' })).toBe(
+      'suggested by the AI (MiniMax-M3) · accepted',
+    );
+    expect(topicSource({ ...base, source: 'model', sourceDetail: null })).toBe(
       'suggested by the AI · accepted',
     );
     expect(topicSource(base)).toBeNull();
     expect(topicSource(null)).toBeNull();
+    // The opened book's sentence, from the same rule (#200).
+    const arxiv = { ...base, source: 'arxiv_category' as const, sourceDetail: 'cs.CL' };
+    expect(topicSource(arxiv, 'book')).toBe('suggested from arXiv cs.CL · you accepted');
+    expect(topicSource({ ...base, source: 'model', sourceDetail: 'MiniMax-M3' }, 'book')).toBe(
+      'suggested by the AI (MiniMax-M3) · you accepted',
+    );
+    expect(topicSource({ ...base, source: 'manual' }, 'book')).toBe('chosen by you');
   });
 
   it('prints the last-opened date as the frame does, with the year only when it is not this one', () => {

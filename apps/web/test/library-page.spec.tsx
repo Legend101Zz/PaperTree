@@ -1,7 +1,7 @@
 /**
  * The library page (#195, part 2): the header search ("/" focuses it, Esc clears it, "2 of N",
- * Enter takes down the first match, nothing reorders), the catalogue card (Enter opens it with
- * focus on Read, Esc puts the book back and returns focus to its spine), the stats line and
+ * Enter takes down the first match, nothing reorders), the catalogue card (a click or Space
+ * opens it with focus on Read; Enter on a parsed book takes it out instead, test/book.spec.tsx; Esc puts the book back and returns focus to its spine), the stats line and
  * "need a look", Arrange by, the header menus and dropping PDFs anywhere.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -200,7 +200,7 @@ describe('the header search', () => {
 });
 
 describe('the catalogue card', () => {
-  it('opens on Enter with focus on Read, points at its spine, and Esc puts it back', async () => {
+  it('opens on a click (or Space) with focus on Read, points at its spine, and Esc puts it back', async () => {
     const shelf = await renderLibrary();
     const spine = within(shelf).getByRole('button', { name: /^Attention Is All You Need/ });
     spine.focus();

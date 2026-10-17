@@ -5,11 +5,15 @@
  * or the shelf) returns focus to it. It also decides where focus goes when the control that had
  * it disappears: after Retry (to Read), after Delete (to the next book, else the previous, else
  * Add papers), after the key hints are dismissed (to the shelf), and when the layout changes
- * under it (`useShelfFocus`).
+ * under it (`useShelfFocus`). Enter on a book that can be opened takes it OUT instead (#200,
+ * `features/book`: the pull-out, then the spread); a click keeps the card, whose "Open the book"
+ * goes to the spread, so the card stays the mouse's way and Space the keyboard's.
  */
 'use client';
 
 import { useCallback, useId, useMemo, useRef } from 'react';
+
+import { useBookOnShelf } from '@/features/book';
 
 import { useCardPlacement } from '../hooks/useCardPlacement';
 import { useShelfFocus } from '../hooks/useShelfFocus';
@@ -72,9 +76,11 @@ export function ShelfSection({
 }: ShelfSectionProps): ReactNode {
   const band = useRef<HTMLDivElement>(null);
   const focus = useShelfFocus();
+  const book = useBookOnShelf(books, onRead);
+  const { pull } = book;
   const lifted = useMemo(
-    () => ({ focusedId: focus.focusedId, onFocusBook: focus.setFocusedId }),
-    [focus.focusedId, focus.setFocusedId],
+    () => ({ focusedId: focus.focusedId, onFocusBook: focus.setFocusedId, onEnterBook: pull }),
+    [focus.focusedId, focus.setFocusedId, pull],
   );
   const layout = shelfLayout(books.length);
   const faceOut = layout === 'face-out';
@@ -130,62 +136,68 @@ export function ShelfSection({
       .querySelector<HTMLElement>('[role="toolbar"][aria-label="Shelf"] [tabindex="0"]')
       ?.focus();
   }, []);
+  // The opened book renders beside the section, not in it: its portal's React events would
+  // otherwise bubble into the section's focus keeper (`useShelfFocus`, review nit).
   return (
-    <section
-      ref={focus.section}
-      className={`pt-shelfband${faceOut ? ' pt-shelfband--faceout' : ''}`}
-      aria-label="Your shelf"
-      onFocus={focus.onFocus}
-    >
-      <div className="pt-shelfband__band" ref={band}>
-        {openBook === null ? null : (
-          // Keyed by paper: a half-armed Delete or a Retry error belongs to one book and must
-          // never open on the next one taken down.
-          <CatalogueCard
-            key={openBook.id}
-            id={cardId}
-            book={openBook}
-            placement={placement}
-            onRead={onRead}
-            onRetry={retry}
-            onDelete={remove}
-            onClose={putBack}
+    <>
+      <section
+        ref={focus.section}
+        className={`pt-shelfband${faceOut ? ' pt-shelfband--faceout' : ''}`}
+        aria-label="Your shelf"
+        onFocus={focus.onFocus}
+      >
+        <div className="pt-shelfband__band" ref={band}>
+          {openBook === null ? null : (
+            // Keyed by paper: a half-armed Delete or a Retry error belongs to one book and must
+            // never open on the next one taken down.
+            <CatalogueCard
+              key={openBook.id}
+              id={cardId}
+              book={openBook}
+              placement={placement}
+              onRead={onRead}
+              onRetry={retry}
+              onDelete={remove}
+              onClose={putBack}
+              onOpenBook={book.open}
+            />
+          )}
+        </div>
+        {/* Face-out below about 12 papers (DESIGN.md §9); the count is the shelf's, so a search,
+          which dims in place, never re-lays it out. */}
+        {faceOut ? (
+          <CoverShelf
+            papers={books}
+            arrangement={arrangement}
+            matches={matches}
+            openId={shownId}
+            cardId={cardId}
+            onActivate={takeDown}
+            onPutBack={putBack}
+            focus={lifted}
+            onOpen={onRead}
+            onContinue={onContinue}
+          />
+        ) : (
+          <OnPlanks
+            papers={books}
+            arrangement={arrangement}
+            matches={matches}
+            openId={shownId}
+            cardId={cardId}
+            onActivate={takeDown}
+            onPutBack={putBack}
+            focus={lifted}
           />
         )}
-      </div>
-      {/* Face-out below about 12 papers (DESIGN.md §9); the count is the shelf's, so a search,
-          which dims in place, never re-lays it out. */}
-      {faceOut ? (
-        <CoverShelf
-          papers={books}
-          arrangement={arrangement}
-          matches={matches}
-          openId={shownId}
-          cardId={cardId}
-          onActivate={takeDown}
-          onPutBack={putBack}
-          focus={lifted}
-          onOpen={onRead}
-          onContinue={onContinue}
+        <ShelfHints
+          query={search}
+          matched={matches?.size ?? 0}
+          total={books.length}
+          onKeysHidden={toShelf}
         />
-      ) : (
-        <OnPlanks
-          papers={books}
-          arrangement={arrangement}
-          matches={matches}
-          openId={shownId}
-          cardId={cardId}
-          onActivate={takeDown}
-          onPutBack={putBack}
-          focus={lifted}
-        />
-      )}
-      <ShelfHints
-        query={search}
-        matched={matches?.size ?? 0}
-        total={books.length}
-        onKeysHidden={toShelf}
-      />
-    </section>
+      </section>
+      {book.overlay}
+    </>
   );
 }

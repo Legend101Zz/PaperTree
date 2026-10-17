@@ -208,18 +208,29 @@ export function filterSummary(filter: TableFilter, topicName: string | null): st
 }
 
 /**
- * "Topic · arXiv cs.CL · accepted": where an accepted topic came from, said once. A model's offer
- * says so ("suggested by the AI", #242, DESIGN.md §4), never as if the person or the paper chose it.
+ * Where an accepted topic came from, said once: the ONE rule for the Table's cell ("arXiv cs.CL ·
+ * accepted") and the opened book's page ("suggested from arXiv cs.CL · you accepted"). A topic the
+ * AI proposed says so, with its model when the server names it (the three voices: AI origin is
+ * always marked); one from the arXiv category is a deterministic match, not the AI's.
  *
  * @param topic - The paper's topic.
+ * @param voice - `table` for the cell's short words, `book` for the opened book's sentence.
  * @returns The source line, or null for a paper without a topic or a server that did not say.
  */
-export function topicSource(topic: ShelfPaper['topic']): string | null {
+export function topicSource(
+  topic: ShelfPaper['topic'],
+  voice: 'table' | 'book' = 'table',
+): string | null {
   if (topic === null || topic === undefined) return null;
+  const accepted = voice === 'book' ? 'you accepted' : 'accepted';
   if (topic.source === 'arxiv_category') {
-    return topic.sourceDetail ? `arXiv ${topic.sourceDetail} · accepted` : 'arXiv · accepted';
+    const from = topic.sourceDetail ? `arXiv ${topic.sourceDetail}` : 'arXiv';
+    return voice === 'book' ? `suggested from ${from} · ${accepted}` : `${from} · ${accepted}`;
   }
-  if (topic.source === 'model') return 'suggested by the AI · accepted';
+  if (topic.source === 'model') {
+    const by = topic.sourceDetail ? `the AI (${topic.sourceDetail})` : 'the AI';
+    return `suggested by ${by} · ${accepted}`;
+  }
   return topic.source === 'manual' ? 'chosen by you' : null;
 }
 

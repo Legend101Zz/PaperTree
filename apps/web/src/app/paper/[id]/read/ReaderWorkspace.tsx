@@ -92,6 +92,7 @@ import {
   type PendingScroll,
 } from '@/components/reader/documentHandle';
 import { HighlightUndoToast } from '@/features/highlights';
+import { useFocusFromBook, useSummaryFromBook } from '@/features/book';
 import { AskFromNotebook } from '@/features/notebook/components/AskFromNotebook';
 import { useFocusFromNotebook } from '@/features/notebook/hooks/useFocusFromNotebook';
 import { useThreadFromNotebook } from '@/features/notebook/hooks/useThreadFromNotebook';
@@ -606,6 +607,8 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   useFocusFromCanvas(paper.kind === 'api' ? paper.paperId : null, doc !== null, focusAnchor);
   // S5c: the notebook's "Open source" lands here as `?nb=<page>&item=<item>`.
   useFocusFromNotebook(paper.kind === 'api' ? paper.paperId : null, doc !== null, focusAnchor);
+  // The opened book's "p. 1 · Abstract" tab (#200): flash the abstract once the parse is in.
+  useFocusFromBook(paper.kind === 'api' ? paper.paperId : null, doc !== null, focusAnchor);
 
   /** The colour a new highlight gets: the wash pressed, else the last one picked (amber at first). */
   const lastColor = useRef<HighlightColor>('amber');
@@ -839,10 +842,15 @@ function ReaderActionsMount({
 }) {
   const paperId = paper.kind === 'api' ? paper.paperId : null;
   const explain = useExplainActions({ paperId });
-  const { openExplain, openDiagram, askAbout, openPanel, closeExplain } = explain;
+  const { openExplain, openDiagram, askAbout, openPanel, closeExplain, summarize } = explain;
   const explainOpen = explain.state.open;
   // S5e: a dived page's Back to the paper (`?thread=`) reopens the panel on its thread.
   useThreadFromNotebook(paperId, explain.selectThread);
+  // The opened book's Summary (#200): the panel opens on the summary, the cached one first.
+  useSummaryFromBook(paperId, () => {
+    openPanel();
+    summarize();
+  });
   const toggleRef = useRef<HTMLButtonElement>(null);
   const toggle = useMemo<ExplainToggle | null>(
     () =>
