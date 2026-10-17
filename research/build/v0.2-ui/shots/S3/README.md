@@ -20,7 +20,7 @@ database's own (Attention has 1 highlight and 6 explanation threads in this data
 | `reader-abstract-flash-1440.png` | the "p. 1 · Abstract" tab followed: the reader flashes the abstract |
 | `compare-02a-light.png`, `compare-02-light.png` | frame (left) beside the build (right), half size |
 
-axe (every rule) on the whole page with the book open, pulled out and open, at 1440 and 390, light and dark, plus
+Re-taken after the review (the figures line, the summary's words, the header's initial). axe (every rule) on the whole page with the book open, pulled out and open, at 1440 and 390, light and dark, plus
 the open book with the plate at 1440 light: **0 serious or critical violations in 9 runs, and none of any
 impact**. The first run found two in the lamp-lit spread (the name field's label and "Not now" on the bookplate
 took the dark scheme's ink on the plate's paper); the bookplate now carries daylight's ink tokens, because it stays
@@ -38,10 +38,13 @@ opens, back on the book after Esc. Reduced motion (`reducedMotion: 'reduce'`): `
 - **Counts**: the frame's "3 highlights · 2 explanation threads · 1 notebook" is sample content; the build prints
   the row's real counts ("1 highlight · 6 explanation threads") and says "notebook page(s)", the unit
   `notebook_count` counts.
-- **Figures line**: identical text ("5 figures · found Figure 1 (p. 3), Figure 2 (p. 4)"); it is the captioned
-  figures, and says "found" on purpose (#103).
+- **Figures line**: "5 figures found · Figure 1 (p. 3), Figure 2 (p. 4)" where the frame says "5 figures ·
+  found …": the number is what the parser found, not the paper's count (after review: ResNet has 7 figures and
+  3 are found, #103).
+- **Summary's words** come from the summary route since the review ("Summary ready (cached)" here: Attention's
+  stored summary is complete; a partial one says "Summary cached (partial: …)").
 - **Read** carries the arrow; the frame's 48 px Read and Summary are 48 and 44 px here (Summary uses the touch
   size). The abstract's opening quotation mark hangs by `text-indent`, a little less than the frame's.
-- **The account initial** in the header still says "D" (the email's): the header does not read `display_name` yet
-  (S2d's note in `LibraryHeader.tsx`); the bookplate does.
+- **The account initial**: since the review it is the library's name once one is saved ("M" in
+  `shelf-plate-cover`), else the email's ("D" in the first shots, before the name was saved).
 - **Phone**: no frame draws the opened book at 390; the build stacks the two pages in a scrolling dialog.
