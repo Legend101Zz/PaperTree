@@ -18,8 +18,10 @@ export default defineConfig({
     // The desktop frame's size, so a mounted screen gets its desktop layout (the notebook's is
     // 1280 px and up, S5e #210) unless a test narrows the window itself.
     environmentOptions: { happyDOM: { width: 1440, height: 900 } },
-    // A default app router (`useRouter`) for every file; a file's own `vi.mock` replaces it.
-    setupFiles: ['./test/setup-navigation.ts'],
+    // No test touches the network (#310: port 8000, the default API port, is reserved on the
+    // maintainer's machine), and a default app router (`useRouter`) for every file; a file's own
+    // `vi.mock` replaces the router.
+    setupFiles: ['./test/setup-no-network.ts', './test/setup-navigation.ts'],
     include: ['test/**/*.{spec,test}.{ts,tsx}', 'src/**/*.{spec,test}.{ts,tsx}'],
   },
 });

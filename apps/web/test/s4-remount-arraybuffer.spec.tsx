@@ -123,6 +123,11 @@ vi.mock('@/lib/paperSource', async (importOriginal) => {
   };
 });
 
+// The reader reads the paper's highlights on open; this spec is not about them (#310).
+vi.mock('@/lib/api/highlights', async (importOriginal) =>
+  (await import('./api-stubs')).withNoHighlights(await importOriginal()),
+);
+
 beforeEach(() => {
   pdf.opens = 0;
   pdf.refused = 0;

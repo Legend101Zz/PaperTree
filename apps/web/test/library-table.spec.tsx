@@ -38,6 +38,10 @@ vi.mock('@/lib/api/papers', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api/papers')>()),
   papersApi: api,
 }));
+// The library reads `GET /topics` for its stats line; this spec is not about topics (#310).
+vi.mock('@/lib/api/topics', async (importOriginal) =>
+  (await import('./api-stubs')).withNoTopics(await importOriginal()),
+);
 
 beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
