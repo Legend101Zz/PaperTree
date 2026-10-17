@@ -78,11 +78,15 @@ finger), so "Your ink" holds eight strokes.
 - `08c-phone-notebook-390-vs-reference.png`: frame 08c beside the daylight 1380 shot.
 - `08c-phone-pen-on-390-light.png`: "Pen: on": the page itself, scaled to the screen's width, the
   pen in the hand and Undo in the bar; switching it off returns to the stack.
+- `08c-phone-note-editing-390-light.png` (after review): a typed note being edited, with the
+  editor's own 44 px "Delete note". A note in the stack has no × (a stray tap at its corner only
+  opens the editor), and a delete leaves a toast with Undo.
 
 What still differs from 08c:
 
 - **The header's three controls are 44 px icons** (Back, Send page to board, Open board, named by
-  their words for a screen reader), not the frame's "⋯" menu.
+  their words for a screen reader; Back keeps its 44 px beside a long title), not the frame's "⋯"
+  menu.
 - **The coverage line is one line** under the AI slip ("Stands on 4 passages · 11 citations · 1
   paragraph uncited (the AI's own reading)", S5c's `CoverageReadout`), not the frame's heading with
   a ¶ disc and a second line.
@@ -99,8 +103,8 @@ What still differs from 08c:
   does; the phone has no other highlight on the notebook.
 - **The page view with the pen on is small** (about 0.35 of the desktop page) and pinch zoom is
   not supported (#292).
-- **Dive in in S4e's pinned footer** (08b) is not here: that footer is not on `release/v0.2`
-  yet (#293); on a phone Dive in is in the answer's footer inside the sheet.
+- **Delete is in the editor**, 44 px, with an Undo toast after it: the frame draws no delete at
+  all on the phone.
 
 ## Checks behind these shots
 
