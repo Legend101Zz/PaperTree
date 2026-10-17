@@ -669,12 +669,13 @@ Each area is described in full under [Features](#features).
 | axe                  | 0 serious or critical in 12 combinations; canvas and explain panel not tested | **0 serious or critical** after each of the 14 steps of the prototype flow, at 1440 and 390 px, daylight and lamp-lit: library, book, reader, explain panel, notebook and board | v0.1: `docs/METRICS.md`; v0.2: S8's `e2e/v02/prototype-flow.spec.ts` (#320)                          |
 | Design frames        | none                                                                          | 32: 16 done, 16 partial (each with its issue)                                                                                                                                   | `RESULT.md`, "Frames"                                                                                |
 | 500 cards on a board | all 500 drawn; first view at the 0.2 zoom floor, unreadable; loaded in 553 ms | only the cards in view drawn; all 500 readable as glances at 20 %; first card 198–245 ms                                                                                        | v0.1: [`GAP-AUDIT.md`](research/build/v0.2-ui/GAP-AUDIT.md) on `79f637d`; v0.2: S8; different probes |
-| Live AI spend        | —                                                                             | 5 live calls during the build, ≈ $0.0058 in all (estimates)                                                                                                                     | `RESULT.md`, "Live AI spend"                                                                         |
+| Live AI spend        | —                                                                             | 11 live runs, ≈ $0.022 in all (estimates): 5 during the build, 2 for the product video, 4 in the release's live journey                                                         | `RESULT.md`, "Live AI spend"                                                                         |
 
 **Got worse:** the CI Python job went from 15 min 55 s to 18 min 44 s, and the E2E job from 19 min 33 s
 with 60 specs to 31 min 14 s with 88. Selecting text in Safari's Source mode is a new known break
-([#327](https://github.com/Legend101Zz/PaperTree/issues/327)). No live-journey run and no hands-on walk
-on the live model were made for v0.2.0. The rest, with sources, machine loads, the numbers at scale and
+([#327](https://github.com/Legend101Zz/PaperTree/issues/327)). The live journey (the real model:
+register, upload, explain, follow-up, summary, cancel) did not run during the build; it ran once at release,
+on this README's code, and passed (CI run 39037754641). The rest, with sources, machine loads, the numbers at scale and
 what was not measured, is in [`docs/METRICS.md`](docs/METRICS.md#v02-against-v01).
 
 Earlier releases: [v0.1.0](https://github.com/Legend101Zz/PaperTree/releases/tag/v0.1.0) · full history in [CHANGELOG.md](CHANGELOG.md) and [docs/METRICS.md](docs/METRICS.md).
