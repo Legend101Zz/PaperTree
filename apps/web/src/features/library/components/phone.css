@@ -130,12 +130,14 @@
   padding-inline-start: 12px;
 }
 
+/* Frame 08a's gilt tooling at the head end: a small ruled square, where a spine has its bands. */
 .pt-flatbook__band {
   position: absolute;
-  inset-block: 3px;
-  left: 8px;
-  inline-size: 5px;
-  border-inline: 1px solid var(--pt-spine-rule);
+  top: calc(50% - 3px);
+  left: 9px;
+  inline-size: 6px;
+  block-size: 6px;
+  border: 1px solid var(--pt-spine-rule);
 }
 
 .pt-flatbook__face {
