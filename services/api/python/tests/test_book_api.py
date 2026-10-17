@@ -102,6 +102,9 @@ def test_a_label_is_the_number_a_caption_starts_with() -> None:
     assert figure_label("Figure 1.1: Language model meta-learning.") == "Figure 1.1"  # GPT-3
     assert figure_label("Table 1: Maximum path lengths") is None
     assert figure_label("As Figure 1 shows, ...") is None  # a mention is not a label
+    assert figure_label("Figure 1 shows the model.") is None  # nor a body sentence opening on it
+    assert figure_label("Figure 1.2 illustrates the trend") is None
+    assert figure_label("Figure 3") == "Figure 3"  # a caption that is only its label
     assert figure_label(None) is None
 
 
@@ -243,6 +246,17 @@ def test_another_reader_cannot_see_or_touch_the_plate(library: Library) -> None:
     assert _row(library, b, library.b_attention)["plate"] is None
     assert _row(library, a, paper)["plate"]["label"] == "Figure 1"  # A's choice untouched
     assert client.delete(f"/papers/{paper}/plate", headers=auth(a)).status_code == 204
+
+
+@requires_corpus
+def test_a_valid_plate_on_a_paper_still_being_read_is_409(library: Library) -> None:
+    """The body is a real figure Anchor, so the route gets past validation to the parse check."""
+    client = library.h.client
+    reader = register(client, "c@example.com")
+    queued = _upload(library.h, reader, ATTENTION)  # uploaded, and the worker is not run again
+    anchor = _figure_1(_figures(library, library.a, library.attention))["anchor"]
+    response = client.put(f"/papers/{queued}/plate", json={"anchor": anchor}, headers=auth(reader))
+    assert_envelope(response, 409, "not_parsed")
 
 
 def test_a_paper_still_being_read_has_no_figures_yet(tmp_path: Path) -> None:

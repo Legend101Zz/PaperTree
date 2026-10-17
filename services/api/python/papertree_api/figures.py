@@ -40,8 +40,13 @@ FIGURES_CLIENT: Final = "papertree-api/figures"
 #: How long one signed URL is kept before the next is minted.
 URL_WINDOW_SECONDS: Final = 600
 
-#: "Figure 1", "FIG. 2", "Fig 3", "Figure 1.1" at the very start of a caption.
-_LABEL = re.compile(r"\s*(?:figure|fig\.?)\s*(\d+(?:\.\d+)*)", re.IGNORECASE)
+#: "Figure 1:", "FIG. 2.", "Fig 3 —", "Figure 1.1:" at the very start of a caption: the number
+#: must be followed by its delimiter (or end the text), so a body sentence the parser attached by
+#: mistake ("Figure 1 shows the model", "Figure 1.2 illustrates") is not a label.
+_LABEL = re.compile(
+    r"\s*(?:figure|fig\.?)\s*(\d+(?:\.\d+)*)(?=\s*(?:[:|\u2014\u2013-]|\.(?!\d)|$))",
+    re.IGNORECASE,
+)
 
 #: ``image uri -> signed URL`` for one paper, or None when the URI is not a crop of it.
 Signer = Callable[[str | None], str | None]

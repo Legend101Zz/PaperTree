@@ -41,13 +41,13 @@ def _owned(call: Caller, paper_id: str) -> Any:
     return row
 
 
-def _promoted(call: Caller, paper_id: str) -> int:
-    """The promoted generation of one of the caller's papers; 404, or 409 while it is read."""
-    _owned(call, paper_id)
+def _promoted(call: Caller, paper_id: str) -> tuple[Any, int]:
+    """The caller's paper row and its promoted generation; 404, or 409 while it is read."""
+    owned = _owned(call, paper_id)
     promoted = call.db.promoted_generation(call.db_owner, PaperId(paper_id))
     if promoted is None:
         raise ApiError("not_parsed", "this paper has not been parsed yet", retryable=True)
-    return promoted
+    return owned, promoted
 
 
 @router.get("/papers/{paper_id}/figures", response_model=list[PaperFigure])
@@ -59,7 +59,7 @@ async def figures(
     paper_id: str,
 ) -> list[PaperFigure]:
     """Every figure block of the promoted generation, in reading order (see ``PaperFigure``)."""
-    gen = _promoted(call, paper_id)
+    _, gen = _promoted(call, paper_id)
     document = documents.get(call.db, call.db_owner, call.user_id, paper_id, gen)
     if document is None:
         raise ApiError("not_found", "no such paper")
@@ -76,8 +76,7 @@ async def put_plate(
     body: Annotated[PlatePut, Depends(json_body(PlatePut))],
 ) -> Response:
     """Makes the figure ``body.anchor`` names the paper's cover (replacing any earlier choice)."""
-    owned = _owned(call, paper_id)
-    gen = _promoted(call, paper_id)
+    owned, gen = _promoted(call, paper_id)
     # The anchor as the client sent it (validated as `PlatePut` above), minus the T0 cache.
     raw = from_json(await request.body())
     anchor = {k: v for k, v in dict(raw["anchor"]).items() if k != "resolution"}
@@ -101,7 +100,7 @@ async def delete_plate(call: CallerDep, paper_id: str) -> Response:
 @router.get("/papers/{paper_id}/abstract", response_model=PaperAbstract)
 async def abstract(call: CallerDep, documents: DocumentsDep, paper_id: str) -> PaperAbstract:
     """The abstract the parser found in the promoted generation; all null when it found none."""
-    gen = _promoted(call, paper_id)
+    _, gen = _promoted(call, paper_id)
     document = documents.get(call.db, call.db_owner, call.user_id, paper_id, gen)
     paper = call.db.get_paper(call.db_owner, PaperId(paper_id), generation(gen))
     if document is None or paper is None:
