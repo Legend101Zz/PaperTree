@@ -54,6 +54,7 @@ import type {
 } from '@/lib/api/highlights';
 import type { SummaryStatus, summaryApi } from '@/lib/api/summary';
 import type { CreateThreadBody, FollowUpBody, threadsApi } from '@/lib/api/threads';
+import type { PaperAbstract, PaperFigure, PlatePut } from '@/features/book/api/bookApi';
 import type {
   AcceptTopicBody,
   CreateTopicBody,
@@ -585,6 +586,8 @@ const OPTIONAL = {
   'papers.JobSummary': [],
   'papers.LibraryPaper': [],
   'papers.LibraryPlate': [],
+  'papers.PaperFigure': [],
+  'papers.PaperAbstract': [],
   'papers.ReadingProgress': [],
   'papers.LibraryLink': [],
   'papers.LibraryReference': [],
@@ -698,6 +701,11 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<OptionalKeys<LibraryPaper>, Opt<'papers.LibraryPaper'>>,
   true satisfies Equal<keyof LibraryPlate, SchemaKeys<'papers', 'LibraryPlate'>>,
   true satisfies Equal<OptionalKeys<LibraryPlate>, Opt<'papers.LibraryPlate'>>,
+  true satisfies Equal<keyof PaperFigure, SchemaKeys<'papers', 'PaperFigure'>>,
+  true satisfies Equal<OptionalKeys<PaperFigure>, Opt<'papers.PaperFigure'>>,
+  true satisfies Equal<keyof PaperAbstract, SchemaKeys<'papers', 'PaperAbstract'>>,
+  true satisfies Equal<OptionalKeys<PaperAbstract>, Opt<'papers.PaperAbstract'>>,
+  true satisfies Equal<keyof PlatePut, SchemaKeys<'papers', 'PlatePut'>>,
   true satisfies Equal<keyof LibraryLink, SchemaKeys<'papers', 'LibraryLink'>>,
   true satisfies Equal<OptionalKeys<LibraryLink>, Opt<'papers.LibraryLink'>>,
   true satisfies Equal<keyof LibraryReference, SchemaKeys<'papers', 'LibraryReference'>>,
@@ -1111,6 +1119,37 @@ describe('contracts.spec — lib/api/types.ts against contracts/api (exported fr
       label: null,
       caption_text: null,
     } satisfies LibraryPlate);
+    // #200: the opened book's figures and abstract, and the plate's write.
+    const figure: PaperFigure = {
+      block_id: 'blk_dsibp5ju4rblkcpa',
+      page_index: 2,
+      bbox: [197, 72, 415, 394],
+      caption_text: 'Figure 1: The Transformer - model architecture.',
+      caption_block_id: 'blk_jlkncbwok3ehjqth',
+      label: 'Figure 1',
+      asset_url: plate.asset_url,
+      anchor: CITATION_ANCHOR,
+    };
+    expectValid('papers', 'PaperFigure', figure);
+    expectValid('papers', 'PaperFigure', {
+      ...figure,
+      caption_text: null,
+      caption_block_id: null,
+      label: null,
+      asset_url: null,
+      anchor: null,
+    } satisfies PaperFigure);
+    expectValid('papers', 'PaperAbstract', {
+      text: 'The dominant sequence transduction models are based on',
+      page_index: 0,
+      anchor: TEXT_ANCHOR,
+    } satisfies PaperAbstract);
+    expectValid('papers', 'PaperAbstract', {
+      text: null,
+      page_index: null,
+      anchor: null,
+    } satisfies PaperAbstract);
+    expectValid('papers', 'PlatePut', { anchor: CITATION_ANCHOR } satisfies PlatePut);
     expectValid('highlights', 'Highlight', HIGHLIGHT);
     expectValid('threads', 'RunSummary', RUN);
     expectValid('threads', 'Citation', CITATION);

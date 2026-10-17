@@ -51,6 +51,8 @@ export interface ShelfPaper {
   readonly reading?: ReadingProgress | null;
   readonly arxivCategory?: string | null;
   readonly topic?: ShelfTopic | null;
+  /** The figure chosen as the cover (#200): a face-out cover shows it; a spine does not. */
+  readonly plate?: { readonly assetUrl: string; readonly label: string | null } | null;
 }
 
 /** One row of the shelf: the papers under one label holder. */
