@@ -162,6 +162,33 @@ def test_a_replayed_create_is_idempotent(tmp_path: Path) -> None:
         assert _rows(h.settings) == {"highlights": 1, "anchors": 1, "anchor_resolutions": 1}
 
 
+def test_a_deleted_highlight_comes_back_with_the_same_id_and_anchor(tmp_path: Path) -> None:
+    """Undo of a delete (#177, #204) re-POSTs the deleted highlight's body: once its row is gone the
+    highlight and anchor ids are free again, so it is a fresh 201, and the Anchor comes back
+    verbatim, its quads included (the reader paints from them)."""
+    with harness(tmp_path) as h:
+        alice = register(h.client, "alice@example.com")
+        paper_id = seed_paper(h.settings, h.client, alice, SLUG)
+        first = _post(h.client, alice, paper_id, _body())
+        assert first.status_code == 201, first.text
+        path = f"/papers/{paper_id}/highlights/{HIGHLIGHT_ID}"
+        assert h.client.delete(path, headers=auth(alice)).status_code == 204
+        assert _rows(h.settings) == NO_ROWS
+
+        again = _post(h.client, alice, paper_id, _body())
+        assert again.status_code == 201, again.text
+        restored = again.json()
+        assert restored["highlight_id"] == HIGHLIGHT_ID
+        assert (restored["color"], restored["note"]) == ("amber", "residual learning")
+        [wire] = restored["anchors"]
+        assert wire["anchor"] == first.json()["anchors"][0]["anchor"] == _record()
+        quads = _selector(wire["anchor"], "ShapeSelector")["quads"]
+        assert quads and quads == _selector(_record(), "ShapeSelector")["quads"]
+        listed = h.client.get(f"/papers/{paper_id}/highlights", headers=auth(alice)).json()
+        assert [x["highlight_id"] for x in listed] == [HIGHLIGHT_ID]
+        assert _rows(h.settings) == {"highlights": 1, "anchors": 1, "anchor_resolutions": 1}
+
+
 def test_the_same_highlight_id_with_a_different_body_is_422(tmp_path: Path) -> None:
     with harness(tmp_path) as h:
         alice = register(h.client, "alice@example.com")

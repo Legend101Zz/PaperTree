@@ -31,6 +31,10 @@ export interface ShelfTopic {
   readonly id: string;
   readonly name: string;
   readonly cloth: ClothId | null;
+  /** Where it came from (the Table's "arXiv cs.CL · accepted"); absent from older servers. */
+  readonly source?: 'arxiv_category' | 'manual' | 'model';
+  /** `cs.CL` for an arXiv-category topic, the model id for a model's, else null. */
+  readonly sourceDetail?: string | null;
 }
 
 /** The facts the shelf reads. The library's view model plus S2a's fields satisfies it. */
@@ -64,9 +68,11 @@ export interface ShelfGroup<P extends ShelfPaper = ShelfPaper> {
 export const SPINE_MAX_WIDTH = 48;
 /** Used while the page count is unknown (see `spineWidth`). */
 export const SPINE_DEFAULT_WIDTH = 40;
-/** Frame 01's spine heights run 262–318 px; heights are decoration and carry no data. */
+/** Frame 01's spine heights run 262–318 px, 01f's shorter rows 150–179; decoration, not data. */
 const SPINE_HEIGHT_MIN = 262;
 const SPINE_HEIGHT_SPAN = 57;
+const COMPACT_HEIGHT_MIN = 150;
+const COMPACT_HEIGHT_SPAN = 30;
 
 /**
  * Which picture a spine shows. Processing wins over reading: a paper being read by the parser is
@@ -109,10 +115,14 @@ function fnv1a(text: string): number {
  * across reloads. A hash of the id; never encodes anything about the paper.
  *
  * @param id - The paper id.
- * @returns Height in CSS px, 262–318.
+ * @param compact - The shorter spines of a library at scale (frame 01f).
+ * @returns Height in CSS px, 262–318 (150–179 compact).
  */
-export function spineHeight(id: string): number {
-  return SPINE_HEIGHT_MIN + (fnv1a(id) % SPINE_HEIGHT_SPAN);
+export function spineHeight(id: string, compact = false): number {
+  const hash = fnv1a(id);
+  return compact
+    ? COMPACT_HEIGHT_MIN + (hash % COMPACT_HEIGHT_SPAN)
+    : SPINE_HEIGHT_MIN + (hash % SPINE_HEIGHT_SPAN);
 }
 
 /**
@@ -127,8 +137,13 @@ export function spineTitle(title: string): string {
   return head.length > 0 ? head : title.trim();
 }
 
-// "Ashish Vaswani∗" → "Vaswani": the last word, without footnote marks.
-function surname(name: string): string {
+/**
+ * "Ashish Vaswani∗" → "Vaswani": the last word, without footnote marks.
+ *
+ * @param name - An author as printed.
+ * @returns The surname.
+ */
+export function surname(name: string): string {
   const words = name
     .replace(/[^\p{L}\p{M}'’.-]+$/u, '')
     .trim()
@@ -162,6 +177,18 @@ export function readingPage(paper: ShelfPaper): { page: number; of: number } | n
   if (reading === null || reading === undefined || reading.state !== 'reading') return null;
   const of = reading.page_count ?? paper.pageCount;
   return of > 0 ? { page: Math.min(reading.last_page + 1, of), of } : null;
+}
+
+/**
+ * Whether a paper is "reading now": the person has a place in it, has not finished it, and it
+ * shows a ribbon (a paper we are still reading wears kraft instead). The Reading now strip and the
+ * stats line both count this one set.
+ *
+ * @param paper - The paper.
+ * @returns True when it belongs in Reading now.
+ */
+export function isReadingNow(paper: ShelfPaper): boolean {
+  return spineState(paper) === 'reading' && readingPage(paper) !== null;
 }
 
 // What each state adds to the spine's accessible name.
@@ -255,11 +282,11 @@ const byAdded = (a: ShelfPaper, b: ShelfPaper): number =>
 const byTitle = (a: ShelfPaper, b: ShelfPaper): number =>
   compareText(spineTitle(a.title), spineTitle(b.title)) || a.id.localeCompare(b.id);
 
-// Rows by a key; `last` keys sort after the rest, the others by `order`.
+// Rows by a key; `last` keys sort after the rest, the others by `order` (given keys and labels).
 function groupBy<P extends ShelfPaper>(
   papers: readonly P[],
   keyOf: (p: P) => { key: string; label: string; last?: boolean },
-  order: (a: string, b: string) => number,
+  order: (a: string, b: string, labelA: string, labelB: string) => number,
   within: (a: P, b: P) => number,
 ): ShelfGroup<P>[] {
   const rows = new Map<string, { label: string; last: boolean; papers: P[] }>();
@@ -270,7 +297,9 @@ function groupBy<P extends ShelfPaper>(
     rows.set(key, row);
   }
   return [...rows.entries()]
-    .sort(([a, ra], [b, rb]) => Number(ra.last) - Number(rb.last) || order(a, b))
+    .sort(
+      ([a, ra], [b, rb]) => Number(ra.last) - Number(rb.last) || order(a, b, ra.label, rb.label),
+    )
     .map(([key, row]) => ({ key, label: row.label, papers: [...row.papers].sort(within) }));
 }
 
@@ -321,7 +350,8 @@ export function arrangeShelf<P extends ShelfPaper>(
           p.topic === null || p.topic === undefined
             ? { key: 'unshelved', label: 'Unshelved', last: true }
             : { key: `topic:${p.topic.id}`, label: p.topic.name },
-        (a, b) => compareText(a, b),
+        // By the topic's name (keyed by id, which says nothing to a person), as documented above.
+        (a, b, labelA, labelB) => compareText(labelA, labelB) || compareText(a, b),
         byAdded,
       );
   }
@@ -419,7 +449,7 @@ export function libraryStats(papers: readonly ShelfPaper[]): LibraryStats {
   return {
     papers: papers.length,
     topics: topics.size,
-    readingNow: papers.filter((p) => spineState(p) === 'reading').length,
+    readingNow: papers.filter(isReadingNow).length,
     pages: papers.reduce((sum, p) => sum + (p.pageCount > 0 ? p.pageCount : 0), 0),
     needALook: papers.filter(needsALook).length,
   };

@@ -58,7 +58,7 @@ export interface CreateEdgeBody {
   readonly to_node_id: string;
   readonly kind: EdgeKind;
   readonly label?: string | null;
-  /** Both optional: a link made with the keyboard has no pins. */
+  /** Both optional: a v0.1 link has no pins (keyboard links carry both since #213). */
   readonly from_port?: FromPort | null;
   readonly to_port?: ToPort | null;
 }

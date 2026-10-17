@@ -27,8 +27,10 @@ already declare them (the 501 stubs, `routers/*.py`).
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Annotated, Any, Final, Literal, Self
 
 from papertree_db import SQLITE_INTEGER_MAX
@@ -715,8 +717,8 @@ class ResolutionsPut(Wire):
 # ── §2.5 AI threads, messages, citations, runs ───────────────────────────────────────────────
 
 MessageStatus = Literal["streaming", "complete", "partial", "error", "aborted"]
-ThreadKind = Literal["explain", "ask"]
-RunKind = Literal["explain", "ask", "summary"]
+ThreadKind = Literal["explain", "ask", "diagram"]
+RunKind = Literal["explain", "ask", "summary", "diagram"]
 DoneStatus = Literal["complete", "partial", "error", "aborted"]
 
 
@@ -775,6 +777,63 @@ class MessageCoverage(Wire):
     not_verified: NonNegative
 
 
+# ── a diagram answer (v0.2 S7a, #216; DESIGN.md §1 "Diagrams", §4) ─────────────────────────────
+
+#: How the plate draws a part: `input` (bare letters, Q K V), `step` (a ruled box), `output` (a
+#: double rule), `concept` (plain).
+DiagramPartKind = Literal["input", "step", "output", "concept"]
+#: A plate's state, from its message's: `stopped` is the reader's Stop (the parts that came are
+#: kept), `partial` a plate cut short by anything else.
+DiagramStatus = Literal["streaming", "complete", "partial", "stopped", "error"]
+#: A part's letter: the Nth part to arrive is the Nth letter, A to L (twelve parts at most).
+Letter = Annotated[str, Field(pattern=r"^[A-L]$")]
+
+
+class DiagramCite(Wire):
+    """Where a part's quote was found. `supported` true: verbatim in the Anchor's block ("cited");
+    false: there with differences, or nowhere at all (`anchor` null), "not verified"."""
+
+    #: The Anchor's id (`cit_…`); null when the quote was found nowhere.
+    citation_id: str | None
+    #: The quote as the model wrote it.
+    quote: str
+    anchor: AnchorV1 | None
+    #: Derived from the parse on read (never stored); null when it cannot be had.
+    locator: PassageLocator | None
+    page_index: PageIndex | None
+    supported: bool
+
+
+class DiagramPart(Wire):
+    letter: Letter
+    label: str
+    #: One short line for the plate's key.
+    text: str
+    kind: DiagramPartKind
+    #: Edges INTO this part, from earlier letters only (acyclic by construction).
+    after: list[Letter]
+    #: One label (or null) per `after` entry, same order.
+    edge: list[str | None]
+    #: Null: the part is inferred, with no passage behind it ("inferred, no passage").
+    cite: DiagramCite | None
+
+
+class DiagramLink(Wire):
+    """An edge `after` cannot say (a feedback edge), from one placed part to another."""
+
+    source: Letter
+    target: Letter
+    label: str | None
+
+
+class MessageDiagram(Wire):
+    #: The plate's title; null until the model wrote one.
+    title: str | None
+    status: DiagramStatus
+    parts: list[DiagramPart]
+    links: list[DiagramLink]
+
+
 class RunSummary(Wire):
     run_id: str
     model: str
@@ -802,8 +861,10 @@ class Message(Wire):
     generation: Generation
     run: RunSummary | None
     citations: list[Citation]
-    #: Only on an assistant message that is `complete` or `partial`.
+    #: Only on an assistant message that is `complete` or `partial` (and not a diagram).
     coverage: MessageCoverage | None = omittable()
+    #: Only on an assistant message of a `diagram` thread; `content` keeps the raw lines.
+    diagram: MessageDiagram | None = omittable()
     created_at: WireTime
     completed_at: WireTime | None
 
@@ -830,10 +891,13 @@ class ThreadDetail(Wire):
 
 
 DEFAULT_QUESTION: Final = "Explain this passage."
+#: A `diagram` thread's question when the client sends none.
+DIAGRAM_QUESTION: Final = "Explain with a diagram."
 
 
 class ThreadCreate(Wire):
-    """`POST /papers/{id}/threads`. `anchor` is required for `explain`."""
+    """`POST /papers/{id}/threads`. `anchor` is required for `explain` and `diagram`; a diagram's
+    default question is `DIAGRAM_QUESTION`."""
 
     kind: ThreadKind
     anchor: AnchorV1In | None = omittable(validate_default=True)
@@ -842,8 +906,10 @@ class ThreadCreate(Wire):
     @field_validator("anchor", mode="after")
     @classmethod
     def _explain_needs_an_anchor(cls, value: AnchorV1In | None, info: ValidationInfo) -> Any:
-        if value is None and info.data.get("kind") == "explain":
-            raise PydanticCustomError("missing", "Field required for an explain thread")
+        kind = info.data.get("kind")
+        if value is None and kind in ("explain", "diagram"):
+            article = "an" if kind == "explain" else "a"
+            raise PydanticCustomError("missing", f"Field required for {article} {kind} thread")
         return value
 
 
@@ -853,6 +919,9 @@ class FollowUp(Wire):
     question: str = Field(min_length=1, max_length=2000)
     #: Re-run a failed assistant message instead of appending a new user turn.
     retry_of: str | None = omittable(pattern=server_id("msg"))
+    #: Redraw: a diagram answer of this thread (finished, in any state) to draw again. Required on
+    #: a `diagram` thread, refused on any other; it appends a new turn, never replaces one.
+    redraw_of: str | None = omittable(pattern=server_id("msg"))
 
 
 # ── §2.6 browser-facing SSE events (the `data` of each `event:`) ─────────────────────────────
@@ -881,6 +950,13 @@ class SseCitations(Wire):
     items: list[Citation]
 
 
+class SsePlate(Wire):
+    """A diagram run's plate title (v0.2 S7a); its parts follow as `part` (a `DiagramPart`, the
+    quote already resolved) and its feedback edges as `link` (a `DiagramLink`)."""
+
+    title: str
+
+
 class SseDone(Wire):
     status: DoneStatus
     error: MessageError | None
@@ -893,6 +969,9 @@ BROWSER_EVENTS: Final[dict[str, type[Wire]]] = {
     "status": SseStatus,
     "text": SseText,
     "citations": SseCitations,
+    "plate": SsePlate,
+    "part": DiagramPart,
+    "link": DiagramLink,
     "usage": RunSummary,
     "done": SseDone,
 }
@@ -941,6 +1020,9 @@ class UsageByKind(Wire):
     explain: UsageBucket
     ask: UsageBucket
     summary: UsageBucket
+    diagram: UsageBucket
+    #: The topic run (#242) is not built yet; its bucket is 0 until it is.
+    topic: UsageBucket
 
 
 class UsageTotals(Wire):
@@ -1422,7 +1504,7 @@ class AgentRunRequest(Wire):
     run_id: str = Field(pattern=server_id("run"))
     request_id: str = Field(pattern=server_id("req"))
     kind: RunKind
-    prompt_version: Literal["explain-v1", "ask-v1", "summary-v1"]
+    prompt_version: Literal["explain-v1", "ask-v1", "summary-v1", "diagram-v1"]
     tool: AgentToolAccess
     datamark: str = Field(pattern=r"^\^[0-9a-f]{8}$")
     paper: AgentPaper
@@ -1435,7 +1517,7 @@ class AgentRunRequest(Wire):
     @classmethod
     def _seed_matches_kind(cls, value: AgentSeed | None, info: ValidationInfo) -> Any:
         kind = info.data.get("kind")
-        if kind in ("summary", "explain") and value is None:
+        if kind in ("summary", "explain", "diagram") and value is None:
             raise PydanticCustomError("missing", f"Field required for a {kind} run")
         return value
 
@@ -1457,6 +1539,65 @@ class AgentStatus(Wire):
 
 class AgentText(Wire):
     delta: str
+
+
+def _agent_event_defs() -> dict[str, Any]:
+    """`$defs` of the committed `contracts/agent/run-events.schema.json`, found by walking up from
+    this file (the agent finds the same file the same way, `contract.ts`)."""
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / "contracts" / "agent" / "run-events.schema.json"
+        if candidate.is_file():
+            defs: dict[str, Any] = json.loads(candidate.read_text(encoding="utf-8"))["$defs"]
+            return defs
+    raise RuntimeError("contracts/agent/run-events.schema.json not found above papertree_api")
+
+
+def _text(node: dict[str, Any]) -> Any:
+    """A `str` field bounded exactly as the schema node says. pydantic counts code points, as JSON
+    Schema does (and as the agent's zod does, `text.ts`), so the two sides agree on every bound."""
+    return Field(min_length=node.get("minLength"), max_length=node["maxLength"])
+
+
+#: The ONE place a diagram line's text limits are written (S7a review): the agent contract.
+_EVENT_DEFS: Final = _agent_event_defs()
+_PART: Final = _EVENT_DEFS["part"]["properties"]
+
+
+class AgentPlate(Wire):
+    """A diagram run's first line (`run-events.schema.json` `$defs.plate`, v0.2 S7a)."""
+
+    title: str = _text(_EVENT_DEFS["plate"]["properties"]["title"])
+
+
+class AgentCite(Wire):
+    """The model's quote for a part, before the API looked for it in the paper."""
+
+    quote: str = _text(_EVENT_DEFS["PartCite"]["properties"]["quote"])
+    #: A hint only; the resolver never trusts it.
+    page: Positive | None = omittable()
+
+
+class AgentPart(Wire):
+    """One part as the agent checked it (`$defs.part`): its letter by arrival, `after` from
+    earlier letters only, one `edge` label (or null) per `after` entry."""
+
+    letter: Letter
+    label: str = _text(_PART["label"])
+    text: str = _text(_PART["text"])
+    kind: DiagramPartKind
+    after: list[Letter] = Field(max_length=_PART["after"]["maxItems"])
+    edge: list[Annotated[str, _text(_PART["edge"]["items"]["anyOf"][0])] | None] = Field(
+        max_length=_PART["edge"]["maxItems"]
+    )
+    cite: AgentCite | None
+
+
+class AgentLink(Wire):
+    """A feedback edge between two placed parts (`$defs.link`)."""
+
+    source: Letter
+    target: Letter
+    label: Annotated[str, _text(_EVENT_DEFS["link"]["properties"]["label"]["anyOf"][0])] | None
 
 
 class AgentUsage(Wire):
@@ -1513,6 +1654,9 @@ AGENT_EVENTS: Final[dict[str, type[Wire]]] = {
     "run": AgentRun,
     "status": AgentStatus,
     "text": AgentText,
+    "plate": AgentPlate,
+    "part": AgentPart,
+    "link": AgentLink,
     "usage": AgentUsage,
     "done": AgentDone,
 }

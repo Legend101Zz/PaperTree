@@ -43,7 +43,30 @@ export type Command =
       readonly itemId: string;
       readonly before: string;
       readonly after: string;
+    }
+  | {
+      /** A shape's box changed from a resize handle or the keyboard (S5c, #208). */
+      readonly type: 'resize';
+      readonly itemId: string;
+      readonly before: Box;
+      readonly after: Box;
+    }
+  | {
+      /**
+       * Several commands as ONE undo step (S5d, #209: the lasso's Delete takes strokes and items,
+       * Make sticky takes notes away and adds a sticky). Run in order, undone in reverse.
+       */
+      readonly type: 'batch';
+      readonly commands: readonly Command[];
     };
+
+/** An item's rectangle in page units. */
+export interface Box {
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+}
 
 /** The undo and redo stacks. The newest command is last in each. */
 export interface History {
@@ -184,6 +207,13 @@ export function applyCommand(state: NotebookState, cmd: Command): NotebookState 
             : i,
         ),
       };
+    case 'resize':
+      return {
+        ...state,
+        items: state.items.map((i) => (i.id === cmd.itemId ? { ...i, ...cmd.after } : i)),
+      };
+    case 'batch':
+      return cmd.commands.reduce(applyCommand, state);
   }
 }
 
@@ -219,6 +249,10 @@ function revertCommand(state: NotebookState, cmd: Command): NotebookState {
     }
     case 'edit-text':
       return applyCommand(state, { ...cmd, before: cmd.after, after: cmd.before });
+    case 'resize':
+      return applyCommand(state, { ...cmd, before: cmd.after, after: cmd.before });
+    case 'batch':
+      return cmd.commands.reduceRight(revertCommand, state);
   }
 }
 
@@ -282,6 +316,24 @@ function prepare(state: NotebookState, cmd: Command): Command | null {
       const editable =
         item && (item.kind === 'text' || item.kind === 'sticky' || item.kind === 'quote');
       return editable && cmd.before !== cmd.after ? cmd : null;
+    }
+    case 'resize': {
+      const { before: b, after: a } = cmd;
+      const same = b.x === a.x && b.y === a.y && b.w === a.w && b.h === a.h;
+      const sized = a.w > 0 && a.h > 0;
+      return !same && sized && state.items.some((i) => i.id === cmd.itemId) ? cmd : null;
+    }
+    case 'batch': {
+      // Each part is prepared against the state the parts before it leave; empty parts drop out.
+      const parts: Command[] = [];
+      let at = state;
+      for (const part of cmd.commands) {
+        const ready = prepare(at, part);
+        if (ready === null) continue;
+        parts.push(ready);
+        at = applyCommand(at, ready);
+      }
+      return parts.length > 0 ? { type: 'batch', commands: parts } : null;
     }
   }
 }

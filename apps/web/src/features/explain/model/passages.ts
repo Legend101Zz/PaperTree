@@ -31,6 +31,18 @@ export interface PassageNumbers {
    * live citation of a passage the thread already placed shows its final tab at once (#202).
    */
   readonly locatorOfKey: ReadonlyMap<string, PassageLocator>;
+  /**
+   * Handle → its passage key and the first citation that resolved it, over the whole thread. The
+   * server keeps a thread's handles stable across its runs, so a streaming answer's `[b6]` finds
+   * its passage here before its own citations arrive (they come just before `done`, #204).
+   */
+  readonly handleCitations: ReadonlyMap<string, HandleCitation>;
+}
+
+/** A handle the thread has resolved: its passage key and the citation that resolved it. */
+export interface HandleCitation {
+  readonly key: string;
+  readonly citation: Citation;
 }
 
 /** Mirrors `MARKER_PATTERN` (agent contract) and `evidence.MARKER` (API): `[b3]`, `[b1, b8]`. */
@@ -110,7 +122,7 @@ export function citationUse(answer: CitedAnswer): CitationUse {
  * Number every passage a thread cites, 1..k in order of first use across its answers.
  *
  * @param answers The thread's answers, oldest first.
- * @returns The numbering (`byKey`) and the handle → key map it used.
+ * @returns The numbering (`byKey`), the handle → key map it used and each handle's citation.
  * @example
  * // the stored Attention thread: b1, b6, b7, b8 → 1, 2, 3, 4; the follow-up's b6 stays 2
  * numberPassages([first, followUp]).byKey.get(keyOfB6); // 2
@@ -126,14 +138,17 @@ export function numberPassages(answers: readonly CitedAnswer[]): PassageNumbers 
     }
   }
   const byKey = new Map<string, number>();
+  const handleCitations = new Map<string, HandleCitation>();
   for (const answer of answers) {
     const use = citationUse(answer);
     for (const citation of [...use.occurrences, ...use.loose]) {
       const key = passageKeyOf(citation, keyOfHandle, answer.generation);
       if (!byKey.has(key)) byKey.set(key, byKey.size + 1);
+      if (!handleCitations.has(citation.marker))
+        handleCitations.set(citation.marker, { key, citation });
     }
   }
-  return { byKey, keyOfHandle, locatorOfKey };
+  return { byKey, keyOfHandle, locatorOfKey, handleCitations };
 }
 
 /**

@@ -1,0 +1,83 @@
+{
+  "run_id": "run_01K63AE8M4Q2T7V9X3B5N6R0D1",
+  "request_id": "req_01K63AE8M4Q2T7V9X3B5N6R0D2",
+  "kind": "diagram",
+  "prompt_version": "diagram-v1",
+  "tool": {
+    "base_url": "http://127.0.0.1:8000/internal/agent/runs/run_01K63AE8M4Q2T7V9X3B5N6R0D1",
+    "token": "fixture_run_token_not_a_secret_000000000000"
+  },
+  "datamark": "^7f3a91c2",
+  "paper": {
+    "title": "Attention Is All You Need",
+    "page_count": 15,
+    "generation": 1
+  },
+  "seed": {
+    "quote": "We call our particular attention \"Scaled Dot-Product Attention\" (Figure 2). The input consists of\nqueries and keys of dimension dk, and values of dimension dv. We compute the dot products of the\nquery with all keys, divide each by √dk, and apply a softmax function to obtain the weights on the\nvalues.",
+    "page_label": "p. 4",
+    "section": "3.2.1 Scaled Dot-Product Attention",
+    "passages": [
+      {
+        "handle": "b1",
+        "label": "p. 4 · 3.2.1 Scaled Dot-Product Attention · paragraph",
+        "text": "^7f3a91c2 We ^7f3a91c2 call ^7f3a91c2 our ^7f3a91c2 particular ^7f3a91c2 attention ^7f3a91c2 \"Scaled ^7f3a91c2 Dot-Product ^7f3a91c2 Attention\" ^7f3a91c2 (Figure ^7f3a91c2 2). ^7f3a91c2 The ^7f3a91c2 input ^7f3a91c2 consists ^7f3a91c2 of ^7f3a91c2 queries ^7f3a91c2 and ^7f3a91c2 keys ^7f3a91c2 of ^7f3a91c2 dimension ^7f3a91c2 dk, ^7f3a91c2 and ^7f3a91c2 values ^7f3a91c2 of ^7f3a91c2 dimension ^7f3a91c2 dv. ^7f3a91c2 We ^7f3a91c2 compute ^7f3a91c2 the ^7f3a91c2 dot ^7f3a91c2 products ^7f3a91c2 of ^7f3a91c2 the ^7f3a91c2 query ^7f3a91c2 with ^7f3a91c2 all ^7f3a91c2 keys, ^7f3a91c2 divide ^7f3a91c2 each ^7f3a91c2 by ^7f3a91c2 √dk, ^7f3a91c2 and ^7f3a91c2 apply ^7f3a91c2 a ^7f3a91c2 softmax ^7f3a91c2 function ^7f3a91c2 to ^7f3a91c2 obtain ^7f3a91c2 the ^7f3a91c2 weights ^7f3a91c2 on ^7f3a91c2 the ^7f3a91c2 values. ^7f3a91c2"
+      },
+      {
+        "handle": "b2",
+        "label": "p. 2 · 3 Model Architecture · heading",
+        "text": "^7f3a91c2 3 ^7f3a91c2 Model ^7f3a91c2 Architecture ^7f3a91c2"
+      },
+      {
+        "handle": "b3",
+        "label": "p. 3 · 3 Model Architecture · heading",
+        "text": "^7f3a91c2 3.2 ^7f3a91c2 Attention ^7f3a91c2"
+      },
+      {
+        "handle": "b4",
+        "label": "p. 4 · 3.2 Attention · heading",
+        "text": "^7f3a91c2 3.2.1 ^7f3a91c2 Scaled ^7f3a91c2 Dot-Product ^7f3a91c2 Attention ^7f3a91c2"
+      },
+      {
+        "handle": "b5",
+        "label": "p. 4 · 3.2.1 Scaled Dot-Product Attention · inline_equation",
+        "text": "^7f3a91c2 √dk ^7f3a91c2"
+      },
+      {
+        "handle": "b6",
+        "label": "p. 4 · 3.2.1 Scaled Dot-Product Attention · paragraph",
+        "text": "^7f3a91c2 The ^7f3a91c2 two ^7f3a91c2 most ^7f3a91c2 commonly ^7f3a91c2 used ^7f3a91c2 attention ^7f3a91c2 functions ^7f3a91c2 are ^7f3a91c2 additive ^7f3a91c2 attention ^7f3a91c2 [2], ^7f3a91c2 and ^7f3a91c2 dot-product ^7f3a91c2 (multi- ^7f3a91c2 plicative) ^7f3a91c2 attention. ^7f3a91c2 Dot-product ^7f3a91c2 attention ^7f3a91c2 is ^7f3a91c2 identical ^7f3a91c2 to ^7f3a91c2 our ^7f3a91c2 algorithm, ^7f3a91c2 except ^7f3a91c2 for ^7f3a91c2 the ^7f3a91c2 scaling ^7f3a91c2 factor ^7f3a91c2 of ^7f3a91c2 1 ^7f3a91c2 √dk ^7f3a91c2 . ^7f3a91c2 Additive ^7f3a91c2 attention ^7f3a91c2 computes ^7f3a91c2 the ^7f3a91c2 compatibility ^7f3a91c2 function ^7f3a91c2 using ^7f3a91c2 a ^7f3a91c2 feed-forward ^7f3a91c2 network ^7f3a91c2 with ^7f3a91c2 a ^7f3a91c2 single ^7f3a91c2 hidden ^7f3a91c2 layer. ^7f3a91c2 While ^7f3a91c2 the ^7f3a91c2 two ^7f3a91c2 are ^7f3a91c2 similar ^7f3a91c2 in ^7f3a91c2 theoretical ^7f3a91c2 complexity, ^7f3a91c2 dot-product ^7f3a91c2 attention ^7f3a91c2 is ^7f3a91c2 much ^7f3a91c2 faster ^7f3a91c2 and ^7f3a91c2 more ^7f3a91c2 space-efficient ^7f3a91c2 in ^7f3a91c2 practice, ^7f3a91c2 since ^7f3a91c2 it ^7f3a91c2 can ^7f3a91c2 be ^7f3a91c2 implemented ^7f3a91c2 using ^7f3a91c2 highly ^7f3a91c2 optimized ^7f3a91c2 matrix ^7f3a91c2 multiplication ^7f3a91c2 code. ^7f3a91c2"
+      },
+      {
+        "handle": "b7",
+        "label": "p. 4 · 3.2.1 Scaled Dot-Product Attention · paragraph",
+        "text": "^7f3a91c2 While ^7f3a91c2 for ^7f3a91c2 small ^7f3a91c2 values ^7f3a91c2 of ^7f3a91c2 dk ^7f3a91c2 the ^7f3a91c2 two ^7f3a91c2 mechanisms ^7f3a91c2 perform ^7f3a91c2 similarly, ^7f3a91c2 additive ^7f3a91c2 attention ^7f3a91c2 outperforms ^7f3a91c2 dot ^7f3a91c2 product ^7f3a91c2 attention ^7f3a91c2 without ^7f3a91c2 scaling ^7f3a91c2 for ^7f3a91c2 larger ^7f3a91c2 values ^7f3a91c2 of ^7f3a91c2 dk ^7f3a91c2 [3]. ^7f3a91c2 We ^7f3a91c2 suspect ^7f3a91c2 that ^7f3a91c2 for ^7f3a91c2 large ^7f3a91c2 values ^7f3a91c2 of ^7f3a91c2 dk, ^7f3a91c2 the ^7f3a91c2 dot ^7f3a91c2 products ^7f3a91c2 grow ^7f3a91c2 large ^7f3a91c2 in ^7f3a91c2 magnitude, ^7f3a91c2 pushing ^7f3a91c2 the ^7f3a91c2 softmax ^7f3a91c2 function ^7f3a91c2 into ^7f3a91c2 regions ^7f3a91c2 where ^7f3a91c2 it ^7f3a91c2 has ^7f3a91c2 extremely ^7f3a91c2 small ^7f3a91c2 gradients ^7f3a91c2 4. ^7f3a91c2 To ^7f3a91c2 counteract ^7f3a91c2 this ^7f3a91c2 effect, ^7f3a91c2 we ^7f3a91c2 scale ^7f3a91c2 the ^7f3a91c2 dot ^7f3a91c2 products ^7f3a91c2 by ^7f3a91c2 1 ^7f3a91c2 √dk ^7f3a91c2 . ^7f3a91c2"
+      },
+      {
+        "handle": "b8",
+        "label": "p. 4 · 3.2.1 Scaled Dot-Product Attention · paragraph",
+        "text": "^7f3a91c2 In ^7f3a91c2 practice, ^7f3a91c2 we ^7f3a91c2 compute ^7f3a91c2 the ^7f3a91c2 attention ^7f3a91c2 function ^7f3a91c2 on ^7f3a91c2 a ^7f3a91c2 set ^7f3a91c2 of ^7f3a91c2 queries ^7f3a91c2 simultaneously, ^7f3a91c2 packed ^7f3a91c2 together ^7f3a91c2 into ^7f3a91c2 a ^7f3a91c2 matrix ^7f3a91c2 Q. ^7f3a91c2 The ^7f3a91c2 keys ^7f3a91c2 and ^7f3a91c2 values ^7f3a91c2 are ^7f3a91c2 also ^7f3a91c2 packed ^7f3a91c2 together ^7f3a91c2 into ^7f3a91c2 matrices ^7f3a91c2 K ^7f3a91c2 and ^7f3a91c2 V ^7f3a91c2 . ^7f3a91c2 We ^7f3a91c2 compute ^7f3a91c2 the ^7f3a91c2 matrix ^7f3a91c2 of ^7f3a91c2 outputs ^7f3a91c2 as: ^7f3a91c2"
+      },
+      {
+        "handle": "b9",
+        "label": "p. 4 · 3.2 Attention · paragraph",
+        "text": "^7f3a91c2 of ^7f3a91c2 the ^7f3a91c2 values, ^7f3a91c2 where ^7f3a91c2 the ^7f3a91c2 weight ^7f3a91c2 assigned ^7f3a91c2 to ^7f3a91c2 each ^7f3a91c2 value ^7f3a91c2 is ^7f3a91c2 computed ^7f3a91c2 by ^7f3a91c2 a ^7f3a91c2 compatibility ^7f3a91c2 function ^7f3a91c2 of ^7f3a91c2 the ^7f3a91c2 query ^7f3a91c2 with ^7f3a91c2 the ^7f3a91c2 corresponding ^7f3a91c2 key. ^7f3a91c2"
+      },
+      {
+        "handle": "b10",
+        "label": "p. 4 · 3.2.1 Scaled Dot-Product Attention · equation",
+        "text": "^7f3a91c2 Attention(Q, ^7f3a91c2 K, ^7f3a91c2 V ^7f3a91c2 ) ^7f3a91c2 = ^7f3a91c2 softmax(QKT ^7f3a91c2 √dk ^7f3a91c2 )V ^7f3a91c2 (1) ^7f3a91c2"
+      }
+    ]
+  },
+  "question": "Explain with a diagram. [faux:diagram]",
+  "history": null,
+  "limits": {
+    "deadline_ms": 90000,
+    "idle_ms": 30000,
+    "max_tool_calls": 4,
+    "max_turns": 4,
+    "max_output_tokens": 2048,
+    "max_retries": 1
+  }
+}

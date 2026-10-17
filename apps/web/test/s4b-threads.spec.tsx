@@ -62,7 +62,7 @@ describe('the panel reads the stored threads', () => {
       [`GET /papers/${PAPER}/threads/thr_new`]: () => jsonResponse(200, stored('thr_new')),
     });
     render(<Harness />);
-    fireEvent.click(screen.getByRole('button', { name: 'Ask AI' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Explain' }));
 
     await waitFor(() => expect(screen.getByText(/central proposal/)).toBeTruthy());
     expect(document.querySelector('[data-explain-quote]')?.textContent).toMatch(
@@ -114,7 +114,7 @@ describe('the panel reads the stored threads', () => {
         ),
     });
     render(<Harness />);
-    fireEvent.click(screen.getByRole('button', { name: 'Ask AI' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Explain' }));
     await waitFor(() => expect(screen.getByText(/central proposal/)).toBeTruthy());
 
     fireEvent.change(screen.getByLabelText('Ask a question about this paper'), {
@@ -191,7 +191,7 @@ describe('the panel reads the stored threads', () => {
         }),
     });
     render(<Harness />);
-    fireEvent.click(screen.getByRole('button', { name: 'Ask AI' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Explain' }));
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('This conversation is no longer here.');
     // The list is read again, so the menu stops offering the thread that is gone.
@@ -220,7 +220,7 @@ describe('the panel reads the stored threads', () => {
           : jsonResponse(200, stored('thr_new')),
     });
     render(<Harness />);
-    fireEvent.click(screen.getByRole('button', { name: 'Ask AI' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Explain' }));
     const alert = await screen.findByRole('alert', {}, { timeout: 5000 });
     expect(alert.textContent).toContain('This conversation could not be loaded.');
     fail = false;

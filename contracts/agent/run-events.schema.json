@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "PaperTree agent run events (POST /v1/runs, 200 text/event-stream)",
-  "description": "HAND-WRITTEN from contracts.md §3.2 (reader release S0). The agent streams `event: <name>\\ndata: <one-line JSON>\\n\\n` frames and a `: ping\\n\\n` comment every 5 s. Validate one parsed frame `{event, data}` against the root, or one event's `data` against `$defs[<event name>]`. The API's pydantic twin is `services/api/python/papertree_api/schemas.py` (`AGENT_EVENTS`); `contracts/agent/fixtures/*.sse` are validated against both (services/api tests/test_agent_contracts.py, apps/web test/contracts.spec.ts). `text` carries deltas of the FINAL assistant message only: the text of a message that ends `stopReason: toolUse` is dropped (spike §6).",
+  "description": "HAND-WRITTEN from contracts.md §3.2 (reader release S0). The agent streams `event: <name>\\ndata: <one-line JSON>\\n\\n` frames and a `: ping\\n\\n` comment every 5 s. Validate one parsed frame `{event, data}` against the root, or one event's `data` against `$defs[<event name>]`. The API's pydantic twin is `services/api/python/papertree_api/schemas.py` (`AGENT_EVENTS`); `contracts/agent/fixtures/*.sse` are validated against both (services/api tests/test_agent_contracts.py, apps/web test/contracts.spec.ts). `text` carries deltas of the FINAL assistant message only: the text of a message that ends `stopReason: toolUse` is dropped (spike §6). A diagram run (v0.2 S7a) streams its NDJSON lines as `text` like any answer and, as each line completes, a `plate`, `part` or `link` event (or a `status` with phase `writing` and a label for a line it skipped or trimmed); `final_text` is still exactly the deltas.",
   "type": "object",
   "required": ["event", "data"],
   "additionalProperties": false,
   "properties": {
-    "event": { "enum": ["run", "status", "text", "usage", "done"] },
+    "event": { "enum": ["run", "status", "text", "plate", "part", "link", "usage", "done"] },
     "data": { "type": "object" }
   },
   "allOf": [
@@ -21,6 +21,18 @@
     {
       "if": { "properties": { "event": { "const": "text" } } },
       "then": { "properties": { "data": { "$ref": "#/$defs/text" } } }
+    },
+    {
+      "if": { "properties": { "event": { "const": "plate" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/plate" } } }
+    },
+    {
+      "if": { "properties": { "event": { "const": "part" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/part" } } }
+    },
+    {
+      "if": { "properties": { "event": { "const": "link" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/link" } } }
     },
     {
       "if": { "properties": { "event": { "const": "usage" } } },
@@ -122,6 +134,58 @@
       "required": ["delta"],
       "additionalProperties": false,
       "properties": { "delta": { "type": "string" } }
+    },
+    "Letter": {
+      "description": "A diagram part's letter: the Nth valid part line is the Nth letter, assigned by the agent.",
+      "type": "string",
+      "pattern": "^[A-L]$"
+    },
+    "plate": {
+      "description": "A diagram run's first line: the figure's title (clipped to 60 characters).",
+      "type": "object",
+      "required": ["title"],
+      "additionalProperties": false,
+      "properties": { "title": { "type": "string", "minLength": 1, "maxLength": 60 } }
+    },
+    "PartCite": {
+      "description": "The model's quote for a part, verbatim (the API looks for it in the paper); `page` is a hint the resolver never trusts.",
+      "type": "object",
+      "required": ["quote"],
+      "additionalProperties": false,
+      "properties": {
+        "quote": { "type": "string", "minLength": 8, "maxLength": 240 },
+        "page": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "part": {
+      "description": "One part of a diagram, as the model wrote it and the agent checked it: `after` names only earlier letters (an arrow from a later one is dropped, with a status), `edge` has one label or null per `after` entry, and `cite` is the model's verbatim quote (the API resolves it to an Anchor) or null for a part no passage states.",
+      "type": "object",
+      "required": ["letter", "label", "text", "kind", "after", "edge", "cite"],
+      "additionalProperties": false,
+      "properties": {
+        "letter": { "$ref": "#/$defs/Letter" },
+        "label": { "type": "string", "minLength": 1, "maxLength": 28 },
+        "text": { "type": "string", "maxLength": 110 },
+        "kind": { "enum": ["input", "step", "output", "concept"] },
+        "after": { "type": "array", "items": { "$ref": "#/$defs/Letter" }, "maxItems": 3 },
+        "edge": {
+          "type": "array",
+          "items": { "anyOf": [{ "type": "string", "maxLength": 18 }, { "type": "null" }] },
+          "maxItems": 3
+        },
+        "cite": { "anyOf": [{ "$ref": "#/$defs/PartCite" }, { "type": "null" }] }
+      }
+    },
+    "link": {
+      "description": "An arrow `after` cannot draw (a feedback edge), between two parts already placed.",
+      "type": "object",
+      "required": ["source", "target", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "$ref": "#/$defs/Letter" },
+        "target": { "$ref": "#/$defs/Letter" },
+        "label": { "anyOf": [{ "type": "string", "maxLength": 18 }, { "type": "null" }] }
+      }
     },
     "usage": { "$ref": "#/$defs/Usage" },
     "done": {

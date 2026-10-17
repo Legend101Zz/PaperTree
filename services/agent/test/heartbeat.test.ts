@@ -38,13 +38,19 @@ describe('the heartbeat', () => {
   });
 
   test('one `: ping` per interval, between frames, as a bare comment', async () => {
-    const result = await slowRun(100, 12, 100);
+    // Frames every 30 ms against a 100 ms ping, so a ping per frame (3x too many) is told apart.
+    const result = await slowRun(100, 40, 30);
     const pings = result.frames.filter((f) => f.kind === 'ping');
     const done = result.events.at(-1)!.data;
     const latency = Number(done['latency_ms']);
     const expected = Math.floor(latency / 100);
+    // A busy machine fires a 100 ms timer late and merges ticks (setInterval never catches up), so
+    // fewer pings arrive than the wall clock allows: 12 for 1,596 ms (80 %) at a load average of
+    // ~45-90 failed the old +/-2 bound on several gates. So: never more than one per interval, and
+    // at least 60 % of them. That still fails no pings, a ping per frame (~3x) and a doubled
+    // interval (50 %), without failing on load.
     assert.ok(
-      Math.abs(pings.length - expected) <= 2,
+      pings.length <= expected + 1 && pings.length >= Math.max(1, Math.floor(expected * 0.6)),
       `${String(pings.length)} pings for ${String(latency)} ms`,
     );
     assert.equal(

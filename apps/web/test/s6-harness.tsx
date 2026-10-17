@@ -1,16 +1,17 @@
 /**
  * A tiny reader stand-in for the S6 specs: the REAL `useExplainActions` + `<ExplainPanel>`, inside
- * a real `ReaderActionsProvider`, with a button per thing the reader would call. Only `fetch` and
- * the three reader actions are fakes.
+ * a real `ReaderActionsProvider`, behind the real header's Explain toggle (#203), with a button per
+ * thing the reader would call. Only `fetch` and the three reader actions are fakes.
  */
 import { useMemo, type ReactNode } from 'react';
 import { vi } from 'vitest';
 
 import type { Anchor } from '@papertree/anchoring';
 
-import { ExplainPanel, useExplainActions } from '@/components/explain';
+import { useExplainActions } from '@/components/explain';
 import { ReaderActionsProvider, type ReaderActions } from '@/components/reader/actions';
 
+import { HeaderAndPanel } from './explain-toggle';
 import { TestQueryProvider } from './query-client';
 import { anchorFixture } from './s6-support';
 
@@ -69,7 +70,8 @@ function HarnessBody({ paperId = 'ppr_s6test' }: { readonly paperId?: string | n
       >
         ask two
       </button>
-      <ExplainPanel controller={explain} />
+      {/* #203: opened and closed through the header's Explain toggle, as in the reader. */}
+      <HeaderAndPanel explain={explain} />
     </ReaderActionsProvider>
   );
 }

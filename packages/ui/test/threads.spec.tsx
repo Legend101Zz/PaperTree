@@ -2,7 +2,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { THREAD_KINDS, ThreadSwatch } from '../src/threads.js';
+import { THREAD_KINDS, THREAD_LINES, ThreadSwatch, markPositions } from '../src/threads.js';
 
 afterEach(cleanup);
 
@@ -52,5 +52,25 @@ describe('ThreadSwatch', () => {
     cleanup();
     const answers = render(<ThreadSwatch kind="answers" />).container;
     expect(answers.querySelectorAll('[fill="currentColor"]').length).toBe(1);
+  });
+});
+
+describe('markPositions: one table for the strip, the legend and the board', () => {
+  it('repeats crosses along a long line, keeps one on a short one, and pins the rest', () => {
+    expect(markPositions(THREAD_LINES.contradicts, 116).map((f) => Math.round(f * 116))).toEqual([
+      28, 56, 84,
+    ]);
+    expect(markPositions(THREAD_LINES.contradicts, 30)).toEqual([0.5]);
+    expect(markPositions(THREAD_LINES.supports, 400)).toEqual([0.5]);
+    expect(markPositions(THREAD_LINES.derives, 400)).toEqual([0.5]);
+    expect(markPositions(THREAD_LINES.plain, 400)).toEqual([]);
+  });
+
+  it('draws the swatch’s marks from that table: a plus on supports, crosses on contradicts', () => {
+    const plus = render(<ThreadSwatch kind="supports" />).container.querySelectorAll('path');
+    expect(plus).toHaveLength(1);
+    cleanup();
+    const crosses = render(<ThreadSwatch kind="contradicts" />).container.querySelectorAll('path');
+    expect(crosses).toHaveLength(3);
   });
 });

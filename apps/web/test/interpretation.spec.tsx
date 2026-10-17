@@ -58,6 +58,7 @@ const view = (m: ViewMessage) => {
       exchange={exchange as ExchangeModel<ViewMessage>}
       initial="M"
       onShow={noop}
+      onStop={noop}
       onRetry={noop}
       onSendToCanvas={async () => undefined}
     />,
@@ -104,7 +105,7 @@ describe('the voices stay apart', () => {
     // The model's words never carry the paper's register, and the paper's never the AI's mark.
     expect(paper?.textContent).not.toContain(DERIVED_MARKER);
     // The status, error, usage and actions are the interface's own voice, outside the AI block.
-    expect(ai?.contains(screen.getByRole('button', { name: 'Send to canvas' }))).toBe(false);
+    expect(ai?.contains(screen.getByRole('button', { name: 'Send to board' }))).toBe(false);
   });
 });
 

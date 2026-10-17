@@ -8,13 +8,13 @@
 
 import { Button, SproutMark } from '@papertree/ui';
 import Link from 'next/link';
-import { useEffect, useId, useRef, useState } from 'react';
 
 import { TOUCH_TARGET } from '@/components/library/primitives';
 import { ThemeSwitch, useTheme } from '@/features/settings';
 
 import { useTouchTargets } from '../hooks/useTouchTargets';
 import { AddPapers } from './AddPapers';
+import { PopoverMenu } from './PopoverMenu';
 import { SearchField, type SearchFieldProps } from './SearchField';
 
 import type { ReactNode, RefObject } from 'react';
@@ -33,55 +33,15 @@ interface HeaderMenuProps {
 
 /** A header button that opens a small panel under it. */
 function HeaderMenu({ label, face, round = false, touch, children }: HeaderMenuProps): ReactNode {
-  const [open, setOpen] = useState(false);
-  const panelId = useId();
-  const wrapper = useRef<HTMLDivElement>(null);
-  const button = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    const node = wrapper.current;
-    if (!open || node === null) return undefined;
-    const outside = (event: PointerEvent): void => {
-      if (!node.contains(event.target as Node)) setOpen(false);
-    };
-    // Esc from the button or anything in the panel closes it and puts focus back on the button.
-    const escape = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return;
-      event.stopPropagation();
-      setOpen(false);
-      button.current?.focus();
-    };
-    document.addEventListener('pointerdown', outside);
-    node.addEventListener('keydown', escape);
-    return () => {
-      document.removeEventListener('pointerdown', outside);
-      node.removeEventListener('keydown', escape);
-    };
-  }, [open]);
+  const classes = [
+    'pt-hmenu__button',
+    round ? 'pt-hmenu__button--round' : '',
+    touch ? TOUCH_TARGET : '',
+  ];
   return (
-    <div ref={wrapper} className="pt-hmenu">
-      <button
-        ref={button}
-        type="button"
-        className={[
-          'pt-hmenu__button',
-          round ? 'pt-hmenu__button--round' : '',
-          touch ? TOUCH_TARGET : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-        aria-label={label}
-        aria-expanded={open}
-        aria-controls={open ? panelId : undefined}
-        onClick={() => setOpen((was) => !was)}
-      >
-        <span aria-hidden="true">{face}</span>
-      </button>
-      {open ? (
-        <div id={panelId} className="pt-hmenu__panel" role="group" aria-label={label}>
-          {children}
-        </div>
-      ) : null}
-    </div>
+    <PopoverMenu label={label} face={face} buttonClassName={classes.filter(Boolean).join(' ')}>
+      {children}
+    </PopoverMenu>
   );
 }
 

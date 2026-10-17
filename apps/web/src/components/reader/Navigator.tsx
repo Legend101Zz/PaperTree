@@ -23,6 +23,10 @@
  * `resolvedText(block).text`; see the header of `anchoring/document.ts`). Modelling a `title` here
  * would render an outline of empty strings against all three fixtures.
  *
+ * CONTENTS SHOWS HEADINGS (#177): each by its display text, its section number dropped as the explain
+ * panel's trace drops it (`features/reader/model/contents`); the front matter as the paper's title
+ * (and any heading the parse left outside the tree); never a parser type ("title", "author").
+ *
  * FRONT MATTER BELONGS TO NO SECTION — in all three fixtures, and by wildly different amounts: 24
  * unclaimed blocks in `attention`, 43 in `neural-odes`, 13 in `resnet`. The fixtures also DISAGREE
  * about whether the abstract is inside a section (`attention` and `resnet` make "Abstract" a
@@ -40,6 +44,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent, PointerEvent, ReactNode } from 'react';
 import { Panel, Tabs } from '@papertree/ui';
 import type { IndexedDocument } from '@papertree/anchoring';
+
+import {
+  frontMatterRows,
+  headingDisplayTitle,
+  isFragmentHeading,
+  outsideLabel,
+} from '@/features/reader';
 
 import { assetSrc } from './assetSrc';
 
@@ -195,7 +206,7 @@ export function buildOutline(doc: IndexedDocument): Outline {
     const section = bySectionId.get(headingId);
     if (section === undefined) return null;
     const heading = doc.byId.get(headingId);
-    const title = heading === undefined ? '' : firstLine(heading.text);
+    const title = heading === undefined ? '' : headingDisplayTitle(firstLine(heading.text));
     return {
       headingBlockId: headingId,
       level: section.level,
@@ -209,7 +220,14 @@ export function buildOutline(doc: IndexedDocument): Outline {
     };
   };
 
-  const roots = rootIds.map(build).filter((node): node is OutlineNode => node !== null);
+  // A fragment the parser took for a heading is not listed; its subsections take its place (#177).
+  const unfragment = (nodes: readonly OutlineNode[]): OutlineNode[] =>
+    nodes.flatMap((node) =>
+      isFragmentHeading(node.title, doc.byId.get(node.headingBlockId)?.type)
+        ? unfragment(node.children)
+        : [{ ...node, children: unfragment(node.children) }],
+    );
+  const roots = unfragment(rootIds.map(build).filter((node): node is OutlineNode => node !== null));
 
   // Where the section tree starts, in reading order. Unclaimed blocks before it are front matter;
   // unclaimed blocks after it are page furniture the tree never wanted.
@@ -551,6 +569,17 @@ function EmptyState({ title, body }: { readonly title: string; readonly body: st
   );
 }
 
+/**
+ * The document's title block as a front-matter row, wherever the parse filed it (#177); null when a
+ * section is headed by it (the real ResNet parse), which already lists it (review S2).
+ */
+function titleOf(doc: IndexedDocument): OutlineLeaf | null {
+  const block = doc.blocks.find((b) => b.type === 'title' && b.text.trim() !== '');
+  if (block === undefined) return null;
+  if (doc.sections.some((s) => s.heading_block_id === block.id)) return null;
+  return { blockId: block.id, type: 'title', label: firstLine(block.text) };
+}
+
 function OutlineTab({
   outline,
   doc,
@@ -578,8 +607,7 @@ function OutlineTab({
     <nav aria-label="Document outline">
       <OutlineGroupRows
         heading="Front matter"
-        note="Belongs to no section — the title, the authors and often the abstract sit outside the section tree."
-        group={outline.frontMatter}
+        group={{ leaves: frontMatterRows(outline.frontMatter.leaves, titleOf(doc)), unlabelled: 0 }}
         activeBlockId={activeBlockId}
         onNavigateToBlock={onNavigateToBlock}
       />
@@ -600,7 +628,12 @@ function OutlineTab({
       <OutlineGroupRows
         heading="Outside the section tree"
         note="Footnotes, page numbers and margin stamps the parse never assigned to a section. Listed so nothing is lost."
-        group={outline.outside}
+        group={{
+          ...outline.outside,
+          leaves: outline.outside.leaves
+            .filter((l) => l.type !== 'title')
+            .map((l) => ({ ...l, label: outsideLabel(l.type, l.label) })),
+        }}
         activeBlockId={activeBlockId}
         onNavigateToBlock={onNavigateToBlock}
         collapsedByDefault
@@ -618,7 +651,7 @@ function OutlineGroupRows({
   collapsedByDefault = false,
 }: {
   readonly heading: string;
-  readonly note: string;
+  readonly note?: string;
   readonly group: OutlineGroup;
   readonly activeBlockId: string | undefined;
   readonly onNavigateToBlock: (blockId: string) => void;
@@ -647,7 +680,9 @@ function OutlineGroupRows({
       </Row>
       {/* The explanation is TEXT, not a `title` attribute: a native tooltip is reachable by neither
           a finger nor a screen reader. */}
-      <p className="px-2 pb-1 text-[12px] leading-4 text-[--pt-ink-muted]">{note}</p>
+      {note === undefined ? null : (
+        <p className="px-2 pb-1 text-[12px] leading-4 text-[--pt-ink-muted]">{note}</p>
+      )}
       {expanded ? (
         <ul>
           {group.leaves.map((leaf) => (
@@ -659,9 +694,6 @@ function OutlineGroupRows({
                 current={leaf.blockId === activeBlockId}
                 className="pl-7"
               >
-                <span className="w-[72px] shrink-0 text-[11px] text-[--pt-ink-muted]">
-                  {leaf.type}
-                </span>
                 <span className="min-w-0 flex-1 truncate">{leaf.label}</span>
               </Row>
             </li>

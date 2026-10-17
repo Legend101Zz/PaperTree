@@ -3,7 +3,7 @@
  * reader sends a passage with the mouse, a faux-agent explanation is sent to the canvas, and every
  * gesture is checked against the REQUESTS it makes and the ROWS the API then holds.
  *
- * WHAT IS NOT DRIVEN THROUGH A BUTTON: the explanation's "Send to canvas" lives in the explain
+ * WHAT IS NOT DRIVEN THROUGH A BUTTON: the explanation's "Send to board" lives in the explain
  * panel, which is track S6's and is not in this branch. The explanation node is therefore created
  * through the real `POST /papers/{id}/board/nodes` with the id of a REAL assistant message that the
  * faux agent wrote through the real `POST /papers/{id}/threads`. `sendToCanvas`'s explanation path
@@ -12,6 +12,7 @@
 import { expect, test } from '../harness/test';
 import {
   api,
+  boardTool,
   clickEdge,
   drag,
   getBoard,
@@ -73,15 +74,16 @@ test.describe('Journey D: the canvas', () => {
       })
       .toBeGreaterThan(20);
     expect(await page.evaluate(() => document.visibilityState)).toBe('visible');
-    await expect(page.getByRole('link', { name: 'Canvas' })).toBeVisible();
+    // #203: the reader's header names the board "Board".
+    await expect(page.getByRole('link', { name: 'Board' })).toBeVisible();
     await reveal(page, 'Deeper neural networks');
     const points = await pointsFor(page, 'Deeper neural networks', 'substantially deeper');
     await drag(page, points.from, points.to);
     const selected = await selectionRects(page);
     expect(selected.text).toContain('Deeper neural networks');
-    await page.getByRole('button', { name: 'Send to canvas' }).click();
+    await page.getByRole('button', { name: 'Send to board' }).click(); // #203's wording
     const toast = page.getByTestId('canvas-toast');
-    await expect(toast).toContainText('Passage added to your canvas');
+    await expect(toast).toContainText('Passage added to your board'); // #203: the toolbar's wording
     await page.screenshot({ path: shot('d01-reader-toast-1440.png') });
     const afterFirst = await getBoard(stack.apiUrl, token, paperId);
     expect(afterFirst.board).not.toBeNull();
@@ -129,21 +131,21 @@ test.describe('Journey D: the canvas', () => {
     expect(created.status, JSON.stringify(created.json)).toBe(201);
 
     // ── 3. open the canvas from the toast's link: exactly 2 nodes ──
-    await page.getByRole('link', { name: 'Open canvas' }).click();
-    await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/canvas$`));
+    await page.getByRole('link', { name: 'Open board' }).click(); // the passage's toast (#203)
+    await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/board$`));
     await expect(page.locator('.react-flow__node')).toHaveCount(2);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1440);
     await expect(
       page.locator(`.react-flow__node[data-id="${excerpt.node_id}"] blockquote`),
     ).toContainText('Deeper neural networks');
-    // The model's words wear the AI register; the paper's words do not.
+    // The model's words wear the AI voice; the paper's words do not (#212: the AI slip card).
     await expect(
-      page.locator(`.react-flow__node[data-id="${explanationId}"] [data-register="ai"]`),
+      page.locator(`.react-flow__node[data-id="${explanationId}"] [data-voice="ai"]`),
     ).toBeVisible();
     await expect(
-      page.locator(`.react-flow__node[data-id="${excerpt.node_id}"] [data-register="paper"]`),
+      page.locator(`.react-flow__node[data-id="${excerpt.node_id}"] [data-voice="paper"]`),
     ).toBeVisible();
-    await expect(page.locator('.react-flow__node [data-register="ai"]')).toHaveCount(1);
+    await expect(page.locator('.react-flow__node [data-voice="ai"]')).toHaveCount(1);
     await page.screenshot({ path: shot('d02-canvas-two-nodes-1440.png') });
 
     // ── 4. drag a node: ONE PATCH ──
@@ -163,11 +165,12 @@ test.describe('Journey D: the canvas', () => {
 
     // ── 5. connect with "supports": the label is visible ──
     calls.length = 0;
+    // #212: the link handles are the brass pins; a thread runs from a claim-out to an evidence-in.
     const src = await page
-      .locator(`.react-flow__node[data-id="${excerpt.node_id}"] .react-flow__handle.source`)
+      .locator(`.react-flow__node[data-id="${excerpt.node_id}"] [data-handleid="claim_out"]`)
       .boundingBox();
     const dst = await page
-      .locator(`.react-flow__node[data-id="${explanationId}"] .react-flow__handle.target`)
+      .locator(`.react-flow__node[data-id="${explanationId}"] [data-handleid="evidence_in"]`)
       .boundingBox();
     expect(src && dst).toBeTruthy();
     await mouseDrag(
@@ -175,10 +178,11 @@ test.describe('Journey D: the canvas', () => {
       { x: src!.x + src!.width / 2, y: src!.y + src!.height / 2 },
       { x: dst!.x + dst!.width / 2, y: dst!.y + dst!.height / 2 },
     );
-    const dialog = page.getByRole('dialog', { name: 'How are these connected?' });
+    // #213: the "Link as" picker replaces v0.1's dialog; the same click chooses the kind.
+    const dialog = page.getByRole('group', { name: /link as/i });
     await expect(dialog).toBeVisible();
     await page.screenshot({ path: shot('d03-kind-picker-1440.png') });
-    await dialog.getByRole('button', { name: 'supports', exact: true }).click();
+    await dialog.getByRole('option', { name: 'supports', exact: true }).click();
     await expect(page.getByTestId('edge-label')).toHaveText('supports');
     expect(calls.filter((c) => c.startsWith('POST /boards/') && c.endsWith('/edges'))).toHaveLength(
       1,
@@ -189,6 +193,8 @@ test.describe('Journey D: the canvas', () => {
       kind: 'supports',
       from_node_id: excerpt.node_id,
       to_node_id: explanationId,
+      from_port: 'claim_out',
+      to_port: 'evidence_in',
     });
 
     // ── 5b. the link is editable: kind and label are one PATCH each, and the new words are on the edge ──
@@ -196,7 +202,10 @@ test.describe('Journey D: the canvas', () => {
     await clickEdge(page);
     const edgeBar = page.getByRole('group', { name: 'Selected link' });
     await expect(edgeBar).toBeVisible();
-    await edgeBar.getByLabel('Kind').selectOption('derives_from');
+    // #213: the kind changes through the same "Link as" picker (key 3 = derives from).
+    await edgeBar.getByRole('button', { name: 'Kind: supports' }).click();
+    await expect(page.getByRole('group', { name: /link as/i })).toBeVisible();
+    await page.keyboard.press('3');
     await expect(page.getByTestId('edge-label')).toHaveText('derives from');
     const labelInput = edgeBar.getByLabel('Label');
     await labelInput.fill('needs the passage');
@@ -231,8 +240,9 @@ test.describe('Journey D: the canvas', () => {
     expect(note.body).toBe('Residual blocks are the whole idea.');
     expect(note.version).toBe(2);
 
-    // ── 7. group two nodes (the passage and the explanation) with Select area ──
-    await page.getByRole('button', { name: 'Select area' }).click();
+    // ── 7. frame two nodes (the passage and the explanation) with Select (#214: v0.1's Group is
+    //       "Frame selected cards" in More) ──
+    await (await boardTool(page, 'Select')).click();
     const a = await nodeBox(page, excerpt.node_id);
     const b = await nodeBox(page, explanationId);
     const minX = Math.min(a.x, b.x) - 12;
@@ -241,9 +251,10 @@ test.describe('Journey D: the canvas', () => {
     const maxY = Math.max(a.y + a.height, b.y + b.height) + 12;
     // Start on empty pane: the top-left corner is outside every node.
     await mouseDrag(page, { x: minX, y: minY }, { x: maxX, y: maxY });
-    await expect(page.getByRole('button', { name: 'Group', exact: true })).toBeEnabled();
+    const frameThem = await boardTool(page, 'Frame selected cards');
+    await expect(frameThem).toBeEnabled();
     calls.length = 0;
-    await page.getByRole('button', { name: 'Group', exact: true }).click();
+    await frameThem.click();
     await expect
       .poll(
         async () =>
@@ -251,7 +262,7 @@ test.describe('Journey D: the canvas', () => {
             .length,
       )
       .toBe(2);
-    await page.getByRole('button', { name: 'Select area' }).click(); // back to panning
+    await (await boardTool(page, 'Select')).click(); // back to panning
     const grouped = await getBoard(stack.apiUrl, token, paperId);
     const group = grouped.nodes.find((n) => n.kind === 'group')!;
     expect(
@@ -310,7 +321,10 @@ test.describe('Journey D: the canvas', () => {
 
     // ── 10. delete a node: its edge goes with it, and stays gone after a reload ──
     calls.length = 0;
-    await page.locator(`.react-flow__node[data-id="${explanationId}"] .pt-cv-node__head`).click();
+    // #212: the card has no header bar any more; a click on its top edge selects it.
+    await page
+      .locator(`.react-flow__node[data-id="${explanationId}"]`)
+      .click({ position: { x: 24, y: 6 } });
     await page.keyboard.press('Delete');
     await expect(page.locator('.react-flow__node')).toHaveCount(3);
     await expect(page.getByTestId('edge-label')).toHaveCount(0);

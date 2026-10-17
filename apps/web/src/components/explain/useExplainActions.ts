@@ -26,11 +26,26 @@ import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 
 import type { Anchor } from '@papertree/anchoring';
 
+import {
+  applyPlateEvent,
+  EMPTY_PLATE,
+  withNote,
+  type PlateEvent,
+  type PlateView,
+} from '@/features/diagram';
 import { mergeStored, type ThreadMessage } from '@/features/explain/model/messages';
+import { refusedBeforeStream } from '@/features/explain/model/states';
 import { originOf } from '@/features/explain/model/threads';
 import { summaryApi } from '@/lib/api/summary';
 import { threadsApi, type CreateThreadBody } from '@/lib/api/threads';
-import type { Message, RunSummary, SseEvent, Summary, Thread } from '@/lib/api/types';
+import {
+  ApiError,
+  type Message,
+  type RunSummary,
+  type SseEvent,
+  type Summary,
+  type Thread,
+} from '@/lib/api/types';
 
 import { failureOf, type Failure } from './errors';
 
@@ -54,6 +69,10 @@ export interface SummaryView {
   readonly summary: Summary | null;
   readonly failure: Failure | null;
   readonly usage: RunSummary | null;
+  /** Shown from the stored derivation, so no tokens were spent on it now (#204's footer). */
+  readonly cached: boolean;
+  /** The last request skipped the cache ("Summarise again"): its Retry asks for a new run again. */
+  readonly regenerate: boolean;
 }
 
 export type PanelView = 'thread' | 'summary';
@@ -72,6 +91,13 @@ export interface ExplainState {
    * opening on the newest stored thread, and that question starts a new thread.
    */
   readonly fresh: boolean;
+  /**
+   * The composer's text, held here so it outlives the composer (the summary view and a closed
+   * panel unmount it): a question refused before it was sent comes back into it (#204).
+   */
+  readonly draft: string;
+  /** The thread is a diagram's (#217): its only next turn is a Redraw, never a typed question. */
+  readonly diagram: boolean;
 }
 
 const IDLE_SUMMARY: SummaryView = {
@@ -81,6 +107,8 @@ const IDLE_SUMMARY: SummaryView = {
   summary: null,
   failure: null,
   usage: null,
+  cached: false,
+  regenerate: false,
 };
 
 const INITIAL: ExplainState = {
@@ -92,20 +120,40 @@ const INITIAL: ExplainState = {
   messages: [],
   summary: IDLE_SUMMARY,
   fresh: false,
+  draft: '',
+  diagram: false,
 };
 
 type Action =
-  | { type: 'open'; epoch: number; request: ExplainRequest | null; view: PanelView }
+  | {
+      type: 'open';
+      epoch: number;
+      request: ExplainRequest | null;
+      view: PanelView;
+      diagram?: boolean;
+    }
   | { type: 'close' }
   | { type: 'view'; view: PanelView }
   | { type: 'thread'; epoch: number; threadId: string }
-  | { type: 'select'; epoch: number; threadId: string; request: ExplainRequest | null }
+  | {
+      type: 'select';
+      epoch: number;
+      threadId: string;
+      request: ExplainRequest | null;
+      diagram: boolean;
+    }
   | { type: 'fresh'; epoch: number }
   | { type: 'hydrate'; threadId: string; messages: readonly Message[] }
   | { type: 'add'; epoch: number; message: ViewMessage }
   | { type: 'patch'; epoch: number; key: string; patch: Partial<ViewMessage> }
   | { type: 'append'; epoch: number; key: string; delta: string }
-  | { type: 'summary'; patch: Partial<SummaryView> };
+  /** A diagram answer's plate grows by one event (or one note), #217. */
+  | { type: 'plate'; epoch: number; key: string; update: (plate: PlateView) => PlateView }
+  | { type: 'summary'; patch: Partial<SummaryView> }
+  /** `restore`: a refused question returns only to an empty box, never over words typed since. */
+  | { type: 'draft'; text: string; restore?: boolean }
+  /** A new ask or retry: earlier refused Retries have been answered by the reader's next action. */
+  | { type: 'clearRefusals'; epoch: number };
 
 export function explainReducer(state: ExplainState, action: Action): ExplainState {
   switch (action.type) {
@@ -119,6 +167,7 @@ export function explainReducer(state: ExplainState, action: Action): ExplainStat
         threadId: null,
         messages: [],
         fresh: false,
+        diagram: action.diagram === true,
       };
     case 'fresh':
       return {
@@ -130,6 +179,7 @@ export function explainReducer(state: ExplainState, action: Action): ExplainStat
         threadId: null,
         messages: [],
         fresh: true,
+        diagram: false,
       };
     case 'close':
       return { ...state, open: false };
@@ -147,6 +197,7 @@ export function explainReducer(state: ExplainState, action: Action): ExplainStat
         threadId: action.threadId,
         messages: [],
         fresh: false,
+        diagram: action.diagram,
       };
     case 'hydrate':
       // A detail read for a thread the panel has left (the menu moved on) is dropped.
@@ -175,6 +226,24 @@ export function explainReducer(state: ExplainState, action: Action): ExplainStat
             ),
           }
         : state;
+    case 'plate':
+      return action.epoch === state.epoch
+        ? {
+            ...state,
+            messages: state.messages.map((m) =>
+              m.key === action.key ? { ...m, diagram: action.update(m.diagram ?? EMPTY_PLATE) } : m,
+            ),
+          }
+        : state;
+    case 'draft':
+      return action.restore === true && state.draft.trim() !== ''
+        ? state
+        : { ...state, draft: action.text };
+    case 'clearRefusals':
+      return action.epoch === state.epoch &&
+        state.messages.some((m) => m.refusal !== undefined && m.refusal !== null)
+        ? { ...state, messages: state.messages.map((m) => ({ ...m, refusal: null })) }
+        : state;
     case 'summary':
       return { ...state, summary: { ...state.summary, ...action.patch } };
   }
@@ -187,12 +256,27 @@ export interface ExplainController {
   /** What the panel is open on; `null` when it was opened without a selection (or is closed). */
   readonly request: ExplainRequest | null;
   readonly openExplain: (input: ExplainRequest) => void;
+  /** The selection toolbar's "Explain with a diagram" (#217): a new diagram thread on the passage. */
+  readonly openDiagram: (input: ExplainRequest) => void;
+  /**
+   * Redraw a plate (#217): a new plate under a new ask in the same thread (`redraw_of`). On a plate
+   * that never arrived (refused or failed before it was written) it asks for that plate again.
+   */
+  readonly redraw: (key: string) => void;
+  /**
+   * The selection toolbar's Ask (#203): open the panel on this passage with nothing sent, so the
+   * reader's own question (`ask`) starts the thread about it.
+   */
+  readonly askAbout: (input: ExplainRequest) => void;
   /** Open the panel with no passage: the free-question and summary entry. */
   readonly openPanel: () => void;
   readonly closeExplain: () => void;
   readonly setView: (view: PanelView) => void;
-  /** A question typed in the panel: a follow-up when a thread exists, else a free `ask`. */
-  readonly ask: (question: string) => void;
+  /**
+   * A question typed in the panel: a follow-up when a thread exists, else a free `ask`. Resolves
+   * `not-sent` when the server refused it before the stream (the composer then keeps the text).
+   */
+  readonly ask: (question: string) => Promise<AskOutcome>;
   /** Stop the answer that is streaming; its partial text stays. */
   readonly stop: () => void;
   /** Re-run a failed, stopped or partial answer. */
@@ -212,15 +296,25 @@ export interface ExplainController {
    * stored copy (locators, coverage) once settled, under the same keys. Other threads are ignored.
    */
   readonly hydrateThread: (threadId: string, messages: readonly Message[]) => void;
+  /** The composer's text changed (the composer is controlled by `state.draft`). */
+  readonly setDraft: (text: string) => void;
 }
 
+/** Whether an ask reached the AI: `not-sent` only for a refusal before the stream (#204). */
+export type AskOutcome = 'sent' | 'not-sent';
+
 const DEFAULT_EXPLAIN_QUESTION = 'Explain this passage.';
+/** The server's default ask of a diagram thread (`schemas.DIAGRAM_QUESTION`). */
+const DIAGRAM_QUESTION = 'Explain with a diagram.';
+/** A Redraw's ask: it names the exchange it opens in the thread menu (#217). */
+const REDRAW_QUESTION = 'Redraw the diagram.';
 
 let counter = 0;
 const nextKey = (): string => `m${String((counter += 1))}`;
 
-function blankAssistant(question: string): ViewMessage {
+function blankAssistant(question: string, diagram = false): ViewMessage {
   return {
+    ...(diagram ? { diagram: EMPTY_PLATE } : {}),
     key: nextKey(),
     role: 'assistant',
     text: '',
@@ -266,6 +360,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
         patch: {
           status: 'aborted',
           stopped: markStopped,
+          awaitingStored: markStopped,
           label: null,
           failure: markStopped ? null : { code: 'aborted', retryable: true },
         },
@@ -281,17 +376,21 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       key: string,
       open: (signal: AbortSignal) => AsyncGenerator<SseEvent>,
       userKey: string | null,
-    ): Promise<void> => {
+      before: ViewMessage | null,
+      diagram = false,
+    ): Promise<AskOutcome> => {
       const controller = new AbortController();
       threadAbort.current = controller;
       const patch = (p: Partial<ViewMessage>): void =>
         dispatch({ type: 'patch', epoch, key, patch: p });
       let finished = false;
+      let accepted = false;
       try {
         for await (const event of open(controller.signal)) {
-          if (epochRef.current !== epoch) return;
+          if (epochRef.current !== epoch) return 'sent';
           switch (event.event) {
             case 'run':
+              accepted = true;
               patch({
                 runId: event.data.run_id,
                 messageId: event.data.message_id,
@@ -311,8 +410,27 @@ export function useExplainActions(options: { readonly paperId: string | null }):
               }
               break;
             case 'status':
-              patch({ label: statusLabel(event.data) });
+              // A diagram's writing-phase labels say what was left out (a skipped line, a dropped
+              // arrow): kept under the plate, not flashed past as a working label.
+              if (diagram && event.data.phase === 'writing' && event.data.label) {
+                const note = event.data.label;
+                dispatch({ type: 'plate', epoch, key, update: (p) => withNote(p, note) });
+              } else {
+                patch({ label: statusLabel(event.data) });
+              }
               break;
+            case 'plate':
+            case 'part':
+            case 'link': {
+              const plateEvent: PlateEvent = event;
+              dispatch({
+                type: 'plate',
+                epoch,
+                key,
+                update: (p) => applyPlateEvent(p, plateEvent),
+              });
+              break;
+            }
             case 'text':
               dispatch({ type: 'append', epoch, key, delta: event.data.delta });
               patch({ label: null });
@@ -353,11 +471,24 @@ export function useExplainActions(options: { readonly paperId: string | null }):
           });
         }
       } catch (error) {
-        if (controller.signal.aborted || epochRef.current !== epoch) return;
-        patch({ status: 'error', label: null, failure: failureOf(error) });
+        if (controller.signal.aborted || epochRef.current !== epoch) return 'sent';
+        const failure = failureOf(error);
+        // A documented refusal before the stream wrote nothing: the AI never saw the question.
+        const refused =
+          !accepted && error instanceof ApiError && refusedBeforeStream(error.status, error.code);
+        if (!refused) {
+          patch({ status: 'error', label: null, failure });
+          return 'sent';
+        }
+        // A refused Retry leaves the answer it would have replaced as it was, the refusal beneath
+        // it; a refused new ask is the ask that was not sent.
+        if (before !== null) patch({ ...before, refusal: failure });
+        else patch({ status: 'error', label: null, failure: { ...failure, notSent: true } });
+        return 'not-sent';
       } finally {
         if (threadAbort.current === controller) threadAbort.current = null;
       }
+      return 'sent';
     },
     [],
   );
@@ -369,7 +500,10 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       show: boolean,
       open: (signal: AbortSignal) => AsyncGenerator<SseEvent>,
       reuse?: string,
-    ): void => {
+      diagramTurn?: Partial<ViewMessage>,
+    ): Promise<AskOutcome> => {
+      // A diagram turn (#217) carries its plate from the start, and any live facts it is given.
+      const diagram = diagramTurn !== undefined;
       const userKey = show ? nextKey() : null;
       if (userKey !== null) {
         dispatch({
@@ -384,9 +518,14 @@ export function useExplainActions(options: { readonly paperId: string | null }):
           },
         });
       }
+      dispatch({ type: 'clearRefusals', epoch });
+      const before =
+        reuse === undefined
+          ? null
+          : (stateRef.current.messages.find((m) => m.key === reuse) ?? null);
       let key = reuse;
       if (key === undefined) {
-        const assistant = blankAssistant(question);
+        const assistant = { ...blankAssistant(question, diagram), ...diagramTurn };
         key = assistant.key;
         dispatch({ type: 'add', epoch, message: assistant });
       } else {
@@ -402,10 +541,13 @@ export function useExplainActions(options: { readonly paperId: string | null }):
             label: null,
             citations: [],
             usage: null,
+            awaitingStored: false,
+            refusal: null,
+            ...(diagram ? { diagram: EMPTY_PLATE } : {}),
           },
         });
       }
-      void consume(epoch, key, open, userKey);
+      return consume(epoch, key, open, userKey, before, diagram);
     },
     [consume],
   );
@@ -416,8 +558,8 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       request: ExplainRequest | null,
       question: string | undefined,
       show: boolean,
-    ) => {
-      if (paperId === null) return;
+    ): Promise<AskOutcome> => {
+      if (paperId === null) return Promise.resolve('sent');
       const body: CreateThreadBody =
         request === null
           ? { kind: 'ask', question: question ?? '' }
@@ -427,7 +569,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
               ...(question === undefined ? {} : { question }),
             };
       const shown = question ?? DEFAULT_EXPLAIN_QUESTION;
-      startTurn(epoch, shown, show, (signal) => threadsApi.create(paperId, body, signal));
+      return startTurn(epoch, shown, show, (signal) => threadsApi.create(paperId, body, signal));
     },
     [paperId, startTurn],
   );
@@ -438,9 +580,67 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       const epoch = (epochRef.current += 1);
       dispatch({ type: 'open', epoch, request: input, view: 'thread' });
       stateRef.current = { ...stateRef.current, epoch, messages: [], threadId: null };
-      sendCreate(epoch, input, undefined, false);
+      void sendCreate(epoch, input, undefined, false);
     },
     [halt, sendCreate],
+  );
+
+  const openDiagram = useCallback(
+    (input: ExplainRequest): void => {
+      halt(false);
+      const epoch = (epochRef.current += 1);
+      dispatch({ type: 'open', epoch, request: input, view: 'thread', diagram: true });
+      stateRef.current = {
+        ...stateRef.current,
+        epoch,
+        messages: [],
+        threadId: null,
+        diagram: true,
+      };
+      if (paperId === null) return;
+      const body: CreateThreadBody = { kind: 'diagram', anchor: input.anchor };
+      const open = (signal: AbortSignal) => threadsApi.create(paperId, body, signal);
+      void startTurn(epoch, DIAGRAM_QUESTION, false, open, undefined, {});
+    },
+    [halt, paperId, startTurn],
+  );
+
+  const redraw = useCallback(
+    (key: string): void => {
+      const current = stateRef.current;
+      const target = current.messages.find((m) => m.key === key);
+      if (paperId === null || target === undefined || current.messages.some(isStreaming)) return;
+      const { epoch, threadId, request } = current;
+      if (threadId === null) {
+        // The first plate never reached a thread (refused or failed before its `run`): ask again.
+        if (request === null) return;
+        const body: CreateThreadBody = { kind: 'diagram', anchor: request.anchor };
+        const open = (signal: AbortSignal) => threadsApi.create(paperId, body, signal);
+        void startTurn(epoch, target.question, false, open, key, {});
+        return;
+      }
+      // A Redraw that never arrived (refused before the stream) is sent again as the same Redraw,
+      // in place; a plate that has an id gets a new plate under a new ask.
+      const again = target.messageId === null;
+      const of = again ? (target.redrawOf ?? newestPlate(current.messages)) : target.messageId;
+      if (of === null) return;
+      const body = { question: REDRAW_QUESTION, redraw_of: of };
+      const open = (signal: AbortSignal) => threadsApi.followUp(paperId, threadId, body, signal);
+      void startTurn(epoch, REDRAW_QUESTION, !again, open, again ? key : undefined, {
+        redrawOf: of,
+      });
+    },
+    [paperId, startTurn],
+  );
+
+  const askAbout = useCallback(
+    (input: ExplainRequest): void => {
+      halt(false);
+      const epoch = (epochRef.current += 1);
+      dispatch({ type: 'open', epoch, request: input, view: 'thread' });
+      stateRef.current = { ...stateRef.current, epoch, messages: [], threadId: null };
+    },
+    [halt],
   );
 
   const openPanel = useCallback((): void => {
@@ -463,24 +663,45 @@ export function useExplainActions(options: { readonly paperId: string | null }):
     dispatch({ type: 'close' });
   }, [halt]);
 
-  const ask = useCallback(
-    (raw: string): void => {
-      const question = raw.trim();
+  const send = useCallback(
+    (question: string): Promise<AskOutcome> => {
       const current = stateRef.current;
-      if (paperId === null || question.length === 0) return;
-      if (current.messages.some((m) => m.status === 'streaming')) return;
+      if (paperId === null || question.length === 0) return Promise.resolve('not-sent');
+      if (current.messages.some((m) => m.status === 'streaming')) {
+        return Promise.resolve('not-sent');
+      }
       const epoch = current.epoch;
       if (current.threadId !== null) {
         const threadId = current.threadId;
-        startTurn(epoch, question, true, (signal) =>
+        return startTurn(epoch, question, true, (signal) =>
           threadsApi.followUp(paperId, threadId, { question }, signal),
         );
-      } else {
-        sendCreate(epoch, current.messages.length === 0 ? current.request : null, question, true);
       }
+      return sendCreate(
+        epoch,
+        current.messages.length === 0 ? current.request : null,
+        question,
+        true,
+      );
     },
     [paperId, sendCreate, startTurn],
   );
+
+  const ask = useCallback(
+    (raw: string): Promise<AskOutcome> => {
+      const question = raw.trim();
+      return send(question).then((outcome) => {
+        // Not sent: the words go back into the box, unless the reader has typed since.
+        if (outcome === 'not-sent' && question.length > 0) {
+          dispatch({ type: 'draft', text: question, restore: true });
+        }
+        return outcome;
+      });
+    },
+    [send],
+  );
+
+  const setDraft = useCallback((text: string): void => dispatch({ type: 'draft', text }), []);
 
   // The server keeps the partial text it had; `useThreads` reads the thread again once the run
   // has settled (one path for done, Stop and failures), so the stored copy replaces this one.
@@ -496,7 +717,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       if (current.threadId !== null) {
         const threadId = current.threadId;
         const retryOf = message.messageId;
-        startTurn(
+        void startTurn(
           epoch,
           question,
           false,
@@ -513,7 +734,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
         // The first turn never reached a thread (it failed before the stream): send it again.
         const first = current.messages[0];
         const asExplain = current.request !== null && first === message;
-        startTurn(
+        void startTurn(
           epoch,
           question,
           false,
@@ -554,7 +775,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       };
       const controller = new AbortController();
       summaryAbort.current = controller;
-      set({ phase: 'loading', failure: null, label: null, usage: null });
+      set({ phase: 'loading', failure: null, label: null, usage: null, cached: false, regenerate });
 
       const finish = async (): Promise<void> => {
         const status = await summaryApi.get(paperId);
@@ -578,7 +799,7 @@ export function useExplainActions(options: { readonly paperId: string | null }):
               cached.summary !== null &&
               (cached.state === 'ready' || cached.state === 'partial')
             ) {
-              set({ phase: cached.state, summary: cached.summary });
+              set({ phase: cached.state, summary: cached.summary, cached: true });
               return;
             }
           }
@@ -590,7 +811,11 @@ export function useExplainActions(options: { readonly paperId: string | null }):
           if (start.kind === 'cached') {
             const s = start.status;
             if (s.summary !== null)
-              set({ phase: s.state === 'partial' ? 'partial' : 'ready', summary: s.summary });
+              set({
+                phase: s.state === 'partial' ? 'partial' : 'ready',
+                summary: s.summary,
+                cached: true,
+              });
             return;
           }
           set({ phase: 'streaming', label: 'Starting' });
@@ -645,13 +870,15 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       halt(true);
       const epoch = (epochRef.current += 1);
       const request = originOf(thread);
-      dispatch({ type: 'select', epoch, threadId: thread.thread_id, request });
+      const diagram = thread.kind === 'diagram';
+      dispatch({ type: 'select', epoch, threadId: thread.thread_id, request, diagram });
       stateRef.current = {
         ...stateRef.current,
         epoch,
         request,
         threadId: thread.thread_id,
         messages: [],
+        diagram,
       };
     },
     [halt],
@@ -692,6 +919,9 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       state,
       request: state.open ? state.request : null,
       openExplain,
+      openDiagram,
+      redraw,
+      askAbout,
       openPanel,
       closeExplain,
       setView,
@@ -703,11 +933,15 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       selectThread,
       startFresh,
       hydrateThread,
+      setDraft,
     }),
     [
       paperId,
       state,
       openExplain,
+      openDiagram,
+      redraw,
+      askAbout,
       openPanel,
       closeExplain,
       setView,
@@ -719,8 +953,18 @@ export function useExplainActions(options: { readonly paperId: string | null }):
       selectThread,
       startFresh,
       hydrateThread,
+      setDraft,
     ],
   );
+}
+
+function isStreaming(message: ViewMessage): boolean {
+  return message.status === 'streaming';
+}
+
+/** The newest plate of the thread that has a server id: what a Redraw with nothing else redraws. */
+function newestPlate(messages: readonly ViewMessage[]): string | null {
+  return messages.findLast((m) => m.diagram != null && m.messageId !== null)?.messageId ?? null;
 }
 
 function statusLabel(status: {

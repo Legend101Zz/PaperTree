@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { answerParagraphs, buildExchanges, formatAskTime, type Exchange } from './exchange';
+import { fromStored, type ThreadMessage } from './messages';
 import { originOf } from './threads';
 import { GOLDEN, goldenMessages } from '../../../../test/fixtures/attention-thread';
+import DIAGRAM from '../../../../test/fixtures/diagram-thread.json';
 
-import type { ThreadMessage } from './messages';
+import type { ThreadDetail } from '../api/threads';
 import type { Anchor } from '@papertree/anchoring';
 import type { Citation } from '@/lib/api/types';
 
@@ -241,5 +243,18 @@ describe('review fixes (#202 review 1.1, 1.3, 1.6, 1.8)', () => {
     };
     const [first] = buildExchanges(goldenMessages(), { anchor: noPage, quote: 'We propose' });
     expect(first?.quote).toMatchObject({ page: null });
+  });
+});
+
+describe('a diagram thread (#217)', () => {
+  it('places the call slip’s ¶ from a plate part on the selected block (p. 4 ¶1)', () => {
+    const detail = DIAGRAM as unknown as ThreadDetail;
+    let ask = '';
+    const messages = detail.messages.map((m) => {
+      if (m.role === 'user') ask = m.content;
+      return fromStored(m, m.role === 'user' ? '' : ask);
+    });
+    const [first] = buildExchanges(messages, originOf(detail.thread));
+    expect(first?.quote).toMatchObject({ page: 4, para: 1 });
   });
 });

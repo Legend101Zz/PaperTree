@@ -1,8 +1,11 @@
 /**
- * LibraryView: the signed-in library (#195, frame 01). The compact header (search, Add papers,
- * Aa, account), "Your library" with its stats and "N need a look", the view row with Arrange by,
- * then the shelf with its catalogue card in the band above and the hint row under the plank.
- * PDFs drop anywhere on the page.
+ * LibraryView: the signed-in library (#195, #196, #197; frames 01, 01b, 01c, 01d, 01f). The compact
+ * header (search, Add papers, Aa, account), "Your library" with its stats and "N need a look"
+ * (which opens the Table filtered to those papers), the view row with Arrange by, Reading now with
+ * Continue, then the shelf (face-out covers for a short library, a plank per row at scale) with
+ * its catalogue card in the band above and the hint row under the plank, or the Table; an empty
+ * library shows the accession slip. PDFs drop anywhere on the page. The shelf stays mounted
+ * (hidden) under the Table, so its focus, open card and scroll survive a switch of view.
  *
  * The data layer is `useLibrary` (polling only while a row is unfinished, Retry, Delete) and the
  * uploads are `useUploadQueue`, both unchanged in behaviour from v0.1. Read goes to
@@ -13,27 +16,30 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { SessionBanner } from '@/components/auth/SessionBanner';
-import { EmptyLibrary, OfflineState } from '@/components/library/SystemStates';
+import { OfflineState } from '@/components/library/SystemStates';
 import { describeError } from '@/components/ui/errors';
 import { useAuthStore } from '@/store/authStore';
 
+import { useContinue } from '../hooks/useContinue';
 import { useLibrary, useOnline } from '../hooks/useLibrary';
+import { useTableView } from '../hooks/useTableView';
+import { useTouchTargets } from '../hooks/useTouchTargets';
 import { useUploadQueue } from '../hooks/useUploadQueue';
-import {
-  arrangeShelf,
-  libraryStats,
-  matchPapers,
-  needsALook,
-  type Arrangement,
-} from '../model/shelf';
+import { arrangeShelf, libraryStats, matchPapers, type Arrangement } from '../model/shelf';
+import { readingNow, shelfLayout } from '../model/states';
+import { readerHref } from '../model/table';
 import './library.css';
+import { AccessionSlip } from './AccessionSlip';
 import { DropAnywhere } from './AddPapers';
 import { LibraryHeader } from './LibraryHeader';
-import { LibraryTitle } from './LibraryTitle';
+import { LibraryTitle, type LibraryViewName } from './LibraryTitle';
+import { ReadingNow } from './ReadingNow';
 import { ShelfSection } from './ShelfSection';
+import { ColumnsMenu } from './TableMenus';
+import { TableView } from './TableView';
 import { UploadRow } from './UploadRow';
 
 import type { ReactNode } from 'react';
@@ -67,7 +73,9 @@ export function LibraryView(): ReactNode {
   const queue = useUploadQueue({ onUpload: upload, onCancelled: afterCancel });
   const [search, setSearch] = useState('');
   const [arrangement, setArrangement] = useState<Arrangement>('topic');
-  const [needALookOnly, setNeedALookOnly] = useState(false);
+  const [view, setView] = useState<LibraryViewName>('shelf');
+  const table = useTableView();
+  const touch = useTouchTargets();
   const [openId, setOpenId] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -77,29 +85,60 @@ export function LibraryView(): ReactNode {
   // be a fact the page does not have.
   const loaded = Array.isArray(query.data);
   const stats = useMemo(() => (loaded ? libraryStats(books) : null), [loaded, books]);
-  const filtered = needALookOnly && stats !== null && stats.needALook > 0;
-  const shelved = useMemo(() => (filtered ? books.filter(needsALook) : books), [books, filtered]);
-  const matches = useMemo(() => matchPapers(shelved, search), [shelved, search]);
+  const matches = useMemo(() => matchPapers(books, search), [books, search]);
+  // A short library stands face-out and carries Continue under each cover (frame 01c draws no
+  // strip), so the strip stands above a library of spines only.
+  const faceOut = shelfLayout(books.length) === 'face-out';
+  const reading = useMemo(() => (faceOut ? [] : readingNow(books)), [faceOut, books]);
 
-  // The filter ends when nothing needs a look any more, so a later upload cannot switch it back
+  // "Need a look" ends when nothing needs one any more, so a later upload cannot switch it back
   // on by itself; and a card whose book has left the shelf closes rather than waiting to return.
+  const { chip, setChip } = table;
   useEffect(() => {
-    if (needALookOnly && stats !== null && stats.needALook === 0) setNeedALookOnly(false);
-  }, [needALookOnly, stats]);
+    if (chip === 'look' && stats !== null && stats.needALook === 0) setChip('all');
+  }, [chip, setChip, stats]);
   useEffect(() => {
-    if (openId !== null && !shelved.some((book) => book.id === openId)) setOpenId(null);
-  }, [openId, shelved]);
+    if (openId !== null && !books.some((book) => book.id === openId)) setOpenId(null);
+  }, [openId, books]);
+  // "Show on the shelf": the Shelf tab, with that book's spine focused once it is shown.
+  const [shelfFocus, setShelfFocus] = useState<string | null>(null);
+  const showOnShelf = useCallback((paperId: string) => {
+    setView('shelf');
+    setShelfFocus(paperId);
+  }, []);
+  useLayoutEffect(() => {
+    if (shelfFocus === null || view !== 'shelf') return;
+    document
+      .querySelector<HTMLElement>(
+        `[aria-label="Your shelf"] [data-paper-id="${CSS.escape(shelfFocus)}"]`,
+      )
+      ?.focus();
+    setShelfFocus(null);
+  }, [shelfFocus, view]);
+  const needALook = useCallback(
+    (on: boolean) => {
+      setChip(on ? 'look' : 'all');
+      if (on) setView('table');
+    },
+    [setChip],
+  );
 
-  const read = useCallback((paperId: string) => router.push(`/paper/${paperId}/read`), [router]);
+  const read = useCallback((paperId: string) => router.push(readerHref(paperId)), [router]);
+  const resume = useContinue(read);
   const takeFirstMatch = useCallback(() => {
-    const first = arrangeShelf(shelved, arrangement)
+    // In the Table the rows are already the matches: Enter goes to the first one.
+    if (view === 'table') {
+      document.querySelector<HTMLElement>('.pt-libtable [data-row-title]')?.focus();
+      return;
+    }
+    const first = arrangeShelf(books, arrangement)
       .flatMap((group) => group.papers)
       .find((book) => matches?.has(book.id) === true);
     if (first === undefined) return;
     // Already down: Enter goes to its Read, as taking it down would have.
     if (first.id === openId) document.querySelector<HTMLElement>('[data-card-read]')?.focus();
     else setOpenId(first.id);
-  }, [shelved, arrangement, matches, openId]);
+  }, [view, books, arrangement, matches, openId]);
   const chooseFiles = useCallback(() => {
     document.querySelector<HTMLElement>('[data-add-papers] input[type="file"]')?.click();
   }, []);
@@ -118,7 +157,7 @@ export function LibraryView(): ReactNode {
           value: search,
           onChange: setSearch,
           matched: matches === null ? null : matches.size,
-          total: shelved.length,
+          total: books.length,
           onSubmit: takeFirstMatch,
         }}
         searchRef={searchRef}
@@ -137,8 +176,18 @@ export function LibraryView(): ReactNode {
         )}
         <LibraryTitle
           stats={stats}
-          needALookOnly={filtered}
-          onNeedALook={setNeedALookOnly}
+          atScale={shelfLayout(books.length) === 'rows'}
+          needALookOnly={view === 'table' && chip === 'look'}
+          onNeedALook={needALook}
+          view={view}
+          onView={setView}
+          tableTools={
+            <ColumnsMenu
+              hidden={table.hidden}
+              onShown={table.setShown}
+              size={touch ? 'touch' : 'md'}
+            />
+          }
           arrangement={arrangement}
           onArrange={setArrangement}
         />
@@ -161,22 +210,38 @@ export function LibraryView(): ReactNode {
             </div>
           </div>
         ) : books.length === 0 ? (
-          <>
-            <EmptyLibrary onAddPaper={chooseFiles} />
-            <p className="pt-hints pt-hints--empty">Drop PDFs anywhere to add them</p>
-          </>
+          <AccessionSlip onChooseFiles={chooseFiles} />
         ) : (
-          <ShelfSection
-            books={shelved}
-            arrangement={arrangement}
-            search={search}
-            matches={matches}
-            openId={openId}
-            setOpenId={setOpenId}
-            onRead={read}
-            onRetry={retry}
-            onDelete={remove}
-          />
+          <>
+            <div className="pt-library__shelf" hidden={view !== 'shelf'}>
+              <ReadingNow papers={reading} onContinue={resume} />
+              <ShelfSection
+                shown={view === 'shelf'}
+                books={books}
+                arrangement={arrangement}
+                search={search}
+                matches={matches}
+                openId={openId}
+                setOpenId={setOpenId}
+                onRead={read}
+                onContinue={resume}
+                onRetry={retry}
+                onDelete={remove}
+              />
+            </div>
+            {view === 'table' ? (
+              <TableView
+                books={books}
+                matches={matches}
+                table={table}
+                touch={touch}
+                onRetry={retry}
+                onDelete={remove}
+                onShowOnShelf={showOnShelf}
+                onRead={read}
+              />
+            ) : null}
+          </>
         )}
       </main>
     </div>

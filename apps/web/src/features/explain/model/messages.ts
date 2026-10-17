@@ -5,6 +5,7 @@
  * flickers or appears twice; the markers keep the live citations they were drawn from (#252). Pure; the controller (`useExplainActions`) owns the state, `useThreads` the reads.
  */
 import type { Failure } from '@/components/explain/errors';
+import type { PlateView } from '@/features/diagram';
 import type { Citation, Message, MessageCoverage, RunSummary } from '@/lib/api/types';
 
 /** A message's lifecycle, as the wire spells it. */
@@ -35,6 +36,22 @@ export interface ThreadMessage {
   readonly coverage: MessageCoverage | null;
   /** The parse generation of the run (the `run` event's, or the stored message's); null until known. */
   readonly generation: number | null;
+  /**
+   * A Retry of this answer was refused before it was sent (the daily cap, #204): the answer it
+   * would have replaced stays as it was, with this beneath it, until the reader's next ask or retry.
+   * Live only; a stored read never clears it.
+   */
+  readonly refusal?: Failure | null;
+  /**
+   * Stopped in this session and its stored copy (with the citations the server minted for what
+   * arrived) has not landed yet: drawn as while streaming, so nothing is classed uncited and then
+   * moved (#204).
+   */
+  readonly awaitingStored?: boolean;
+  /** A diagram answer's plate (#217): built from its events, or read back; absent on any other. */
+  readonly diagram?: PlateView | null;
+  /** A Redraw's plate: the plate it redraws (`redraw_of`), so a refused Redraw is sent again as one. */
+  readonly redrawOf?: string | null;
 }
 
 const STORED = 's:';
@@ -81,6 +98,7 @@ export function fromStored(message: Message, question: string): ThreadMessage {
     createdAt: message.created_at,
     coverage: message.coverage ?? null,
     generation: message.generation,
+    diagram: message.diagram === undefined ? null : { ...message.diagram, notes: [] },
   };
 }
 
@@ -112,7 +130,7 @@ function shownStored(stored: readonly Message[]): ThreadMessage[] {
  * The live message or its stored copy, whichever is the truth now. Live while either side is
  * still streaming (a detail fetched mid-stream is stale); stored once both have settled, under the
  * live key, keeping the live-only facts (Stop was pressed; the question it answers; the citations
- * the markers on screen were drawn from).
+ * the markers on screen were drawn from; a refused Retry). Its landing ends `awaitingStored`.
  *
  * @param live The message on screen.
  * @param stored The same message from the server.
@@ -158,6 +176,13 @@ function settle(live: ThreadMessage, stored: ThreadMessage): ThreadMessage {
     key: live.key,
     citations: shownCitations(live.citations, stored.citations),
     stopped: live.stopped,
+    refusal: live.refusal ?? null,
+    awaitingStored: false,
+    // What the run said while drawing (a skipped line, a dropped arrow) is not stored: keep it.
+    diagram:
+      stored.diagram == null
+        ? live.diagram
+        : { ...stored.diagram, notes: live.diagram?.notes ?? [] },
     question: live.role === 'assistant' && live.question !== '' ? live.question : stored.question,
   };
 }

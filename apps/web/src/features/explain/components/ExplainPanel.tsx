@@ -5,10 +5,11 @@
  * right drawer from 768 px up, a bottom `Sheet` below it, mounted once by `ReaderWorkspace` with
  * the controller as one prop; it reaches the reader only through `useReaderActions()`. Its header
  * holds the thread menu (threads named by their asks), Summarize and Close; its body is the thread
- * as exchanges. Closed, "Ask AI" is the entry for a free question or the summary.
+ * as exchanges. Closed, it draws nothing: the reader header's Explain toggle (#203) is the entry for
+ * a free question or the summary, and the panel hands focus back to it when it closes.
  */
 import { Sheet, type SheetDetent } from '@papertree/ui';
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 import { useReaderActions } from '@/components/reader/actions';
 import { useAuthStore } from '@/store/authStore';
@@ -18,12 +19,18 @@ import { ThreadMenu } from './ThreadMenu';
 import { ThreadView } from './ThreadView';
 
 import type { ExplainController } from '@/components/explain/useExplainActions';
-import type { Citation } from '@/lib/api/types';
+import type { FlashSource } from '@/components/reader/actions';
 import type { PassageMarker } from '../model/exchange';
+import type { Anchor } from '@papertree/anchoring';
 
 /** Props for `ExplainPanel`. */
 export interface ExplainPanelProps {
   readonly controller: ExplainController;
+  /**
+   * The reader header's Explain toggle (#203): focus goes back to it when the panel closes, and Esc
+   * on it closes the panel (a keyboard reader who opened the phone sheet from it is still there).
+   */
+  readonly toggleRef: RefObject<HTMLButtonElement>;
 }
 
 const DESKTOP = '(min-width: 768px)';
@@ -63,13 +70,6 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
   const busy = state.messages.some((m) => m.status === 'streaming');
 
   // On a phone the sheet covers the page: lower it so the flashed passage is in view.
-  const onCite = useCallback(
-    (citation: Citation) => {
-      if (!desktop) setDetent('peek');
-      actions.focusAnchor(citation.anchor, { flash: true });
-    },
-    [actions, desktop, setDetent],
-  );
   const onShow = useCallback(
     (marker: PassageMarker) => {
       if (!desktop) setDetent('peek');
@@ -78,6 +78,15 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
         flash: true,
         from: { n, page, para, notVerified },
       });
+    },
+    [actions, desktop, setDetent],
+  );
+
+  // A diagram part's flash (#217): the margin tab names the part it came from.
+  const onFlash = useCallback(
+    (anchor: Anchor, from: FlashSource) => {
+      if (!desktop) setDetent('peek');
+      actions.focusAnchor(anchor, { flash: true, from });
     },
     [actions, desktop, setDetent],
   );
@@ -112,7 +121,7 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
       threads={threads}
       initial={initial}
       onShow={onShow}
-      onCite={onCite}
+      onFlash={onFlash}
     />
   );
 
@@ -140,7 +149,13 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
       className="pt-explain"
     >
       <header className="pt-explain__header">
-        <h2 className="pt-explain__title">Explain</h2>
+        <h2 className="pt-explain__title">
+          {inSummary ? 'Summary' : 'Explain'}
+          {inSummary && state.summary.cached ? ' ' : null}
+          {inSummary && state.summary.cached ? (
+            <span className="pt-explain__badge">cached</span>
+          ) : null}
+        </h2>
         {tools}
         <button
           type="button"
@@ -158,21 +173,31 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
   );
 }
 
-/** The explain panel, or its "Ask AI" launcher while closed. */
-export function ExplainPanel({ controller }: ExplainPanelProps): ReactNode {
+/** The explain panel: a drawer or a sheet while open, nothing while closed. */
+export function ExplainPanel({ controller, toggleRef }: ExplainPanelProps): ReactNode {
   const desktop = useMediaQuery(DESKTOP);
   const [detent, setDetent] = useState<SheetDetent>('half');
   const asideRef = useRef<HTMLElement>(null);
-  const launcherRef = useRef<HTMLButtonElement | null>(null);
   const wasOpen = useRef(false);
   const { state, closeExplain } = controller;
 
-  // Closing hands focus back to "Ask AI"; otherwise it falls to <body> and a keyboard reader
+  // Closing hands focus back to the toggle; otherwise it falls to <body> and a keyboard reader
   // starts again from the top of the page.
   useEffect(() => {
-    if (wasOpen.current && !state.open) launcherRef.current?.focus({ preventScroll: true });
+    if (wasOpen.current && !state.open) toggleRef.current?.focus({ preventScroll: true });
     wasOpen.current = state.open;
-  }, [state.open]);
+  }, [state.open, toggleRef]);
+
+  // Esc on the toggle closes the panel too. On a phone, Enter on the toggle opens the sheet and
+  // leaves focus on the toggle, and the sheet hears Esc only from inside itself (review S1).
+  useEffect(() => {
+    if (!state.open) return undefined;
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape' && event.target === toggleRef.current) closeExplain();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [state.open, toggleRef, closeExplain]);
 
   // A new ask opens at the readable height, not wherever the last one was left.
   useEffect(() => {
@@ -203,20 +228,7 @@ export function ExplainPanel({ controller }: ExplainPanelProps): ReactNode {
     return () => root.removeAttribute('data-pt-explain');
   }, [state.open, desktop]);
 
-  if (!state.open) {
-    if (controller.paperId === null) return null;
-    return (
-      <button
-        ref={launcherRef}
-        type="button"
-        className="pt-explain__launch pt-btn pt-btn--primary"
-        data-explain-launch
-        onClick={controller.openPanel}
-      >
-        Ask AI
-      </button>
-    );
-  }
+  if (!state.open) return null;
   return (
     <OpenPanel
       controller={controller}

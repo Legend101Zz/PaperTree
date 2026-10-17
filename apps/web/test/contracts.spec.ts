@@ -61,6 +61,9 @@ import type {
   CanvasEdge,
   CanvasNode,
   Citation,
+  DiagramCite,
+  DiagramLink,
+  DiagramPart,
   ErrorCode,
   Highlight,
   JobSummary,
@@ -70,6 +73,7 @@ import type {
   ReadingProgress,
   Message,
   MessageCoverage,
+  MessageDiagram,
   PassageLocator,
   ResolutionWire,
   RunErrorCode,
@@ -293,6 +297,59 @@ const FAILED: Message = {
   completed_at: null,
 };
 
+// v0.2 S7a (#216): a diagram answer, one part in each of its three states.
+const DIAGRAM_CITE: DiagramCite = {
+  citation_id: CITATION.citation_id,
+  quote: 'queries and keys of dimension dk',
+  anchor: CITATION_ANCHOR,
+  locator: LOCATOR,
+  page_index: 3,
+  supported: true,
+};
+const CITED_PART: DiagramPart = {
+  letter: 'A',
+  label: 'Q, K, V',
+  text: 'queries, keys and values',
+  kind: 'input',
+  after: [],
+  edge: [],
+  cite: DIAGRAM_CITE,
+};
+const LINK: DiagramLink = { source: 'C', target: 'A', label: null };
+const PLATE: MessageDiagram = {
+  title: 'Scaled dot-product attention',
+  status: 'stopped',
+  parts: [
+    CITED_PART,
+    {
+      ...CITED_PART,
+      letter: 'B',
+      kind: 'step',
+      after: ['A'],
+      edge: ['scores'],
+      cite: {
+        ...DIAGRAM_CITE,
+        citation_id: null,
+        anchor: null,
+        locator: null,
+        page_index: null,
+        supported: false,
+      },
+    },
+    {
+      ...CITED_PART,
+      letter: 'C',
+      kind: 'concept',
+      after: ['A', 'B'],
+      edge: [null, null],
+      cite: null,
+    },
+  ],
+  links: [LINK],
+};
+const { coverage: _prose, ...WITHOUT_COVERAGE } = ANSWER;
+const DIAGRAM_ANSWER: Message = { ...WITHOUT_COVERAGE, diagram: PLATE };
+
 const QUESTION: Message = {
   ...ANSWER,
   message_id: 'msg_01K63A9W4XJ7Q2N8R5T0V3Y6ZH',
@@ -344,6 +401,9 @@ const EVENTS: SseEvent[] = [
   },
   { event: 'text', data: { delta: 'This sentence is ' } },
   { event: 'citations', data: { items: [CITATION] } },
+  { event: 'plate', data: { title: 'Scaled dot-product attention' } },
+  { event: 'part', data: CITED_PART },
+  { event: 'link', data: LINK },
   { event: 'usage', data: RUN },
   { event: 'done', data: { status: 'complete', error: null, message_id: ANSWER.message_id } },
   {
@@ -360,6 +420,9 @@ const SSE_MODEL: Record<SseEvent['event'], string> = {
   status: 'SseStatus',
   text: 'SseText',
   citations: 'SseCitations',
+  plate: 'SsePlate',
+  part: 'DiagramPart',
+  link: 'DiagramLink',
   usage: 'RunSummary',
   done: 'SseDone',
 };
@@ -516,13 +579,20 @@ const OPTIONAL = {
   'threads.Citation': ['locator'],
   'threads.RunSummary': [],
   'threads.MessageError': [],
-  'threads.Message': ['coverage'],
+  'threads.Message': ['coverage', 'diagram'],
   'threads.Thread': [],
   'threads.ThreadDetail': [],
+  'threads.MessageDiagram': [],
+  'threads.DiagramPart': [],
+  'threads.DiagramCite': [],
+  'threads.DiagramLink': [],
   'sse.SseRun': [],
   'sse.SseStatus': ['label', 'attempt', 'delay_ms'],
   'sse.SseText': [],
   'sse.SseCitations': [],
+  'sse.SsePlate': [],
+  'sse.DiagramPart': [],
+  'sse.DiagramLink': [],
   'sse.SseDone': [],
   'sse.MessageError': [],
   'summary.Summary': [],
@@ -546,7 +616,7 @@ const OPTIONAL = {
   'highlights.ResolutionsPut': [],
   'highlights.ResolutionPutItem': ['reason', 'upgraded_anchor'],
   'threads.ThreadCreate': ['anchor', 'question'],
-  'threads.FollowUp': ['retry_of'],
+  'threads.FollowUp': ['retry_of', 'redraw_of'],
   'summary.SummaryRequest': ['regenerate'],
   'boards.NodeCreate': [
     'title',
@@ -622,6 +692,14 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<OptionalKeys<MessageErrorT>, Opt<'threads.MessageError'>>,
   true satisfies Equal<keyof Message, SchemaKeys<'threads', 'Message'>>,
   true satisfies Equal<OptionalKeys<Message>, Opt<'threads.Message'>>,
+  true satisfies Equal<keyof MessageDiagram, SchemaKeys<'threads', 'MessageDiagram'>>,
+  true satisfies Equal<OptionalKeys<MessageDiagram>, Opt<'threads.MessageDiagram'>>,
+  true satisfies Equal<keyof DiagramPart, SchemaKeys<'threads', 'DiagramPart'>>,
+  true satisfies Equal<OptionalKeys<DiagramPart>, Opt<'threads.DiagramPart'>>,
+  true satisfies Equal<keyof DiagramCite, SchemaKeys<'threads', 'DiagramCite'>>,
+  true satisfies Equal<OptionalKeys<DiagramCite>, Opt<'threads.DiagramCite'>>,
+  true satisfies Equal<keyof DiagramLink, SchemaKeys<'threads', 'DiagramLink'>>,
+  true satisfies Equal<OptionalKeys<DiagramLink>, Opt<'threads.DiagramLink'>>,
   true satisfies Equal<keyof Thread, SchemaKeys<'threads', 'Thread'>>,
   true satisfies Equal<OptionalKeys<Thread>, Opt<'threads.Thread'>>,
   true satisfies Equal<keyof ThreadDetail, SchemaKeys<'threads', 'ThreadDetail'>>,
@@ -634,6 +712,12 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<OptionalKeys<SseData<'text'>>, Opt<'sse.SseText'>>,
   true satisfies Equal<keyof SseData<'citations'>, SchemaKeys<'sse', 'SseCitations'>>,
   true satisfies Equal<OptionalKeys<SseData<'citations'>>, Opt<'sse.SseCitations'>>,
+  true satisfies Equal<keyof SseData<'plate'>, SchemaKeys<'sse', 'SsePlate'>>,
+  true satisfies Equal<OptionalKeys<SseData<'plate'>>, Opt<'sse.SsePlate'>>,
+  true satisfies Equal<keyof SseData<'part'>, SchemaKeys<'sse', 'DiagramPart'>>,
+  true satisfies Equal<OptionalKeys<SseData<'part'>>, Opt<'sse.DiagramPart'>>,
+  true satisfies Equal<keyof SseData<'link'>, SchemaKeys<'sse', 'DiagramLink'>>,
+  true satisfies Equal<OptionalKeys<SseData<'link'>>, Opt<'sse.DiagramLink'>>,
   true satisfies Equal<keyof SseData<'usage'>, SchemaKeys<'sse', 'RunSummary'>>,
   true satisfies Equal<keyof SseData<'done'>, SchemaKeys<'sse', 'SseDone'>>,
   true satisfies Equal<OptionalKeys<SseData<'done'>>, Opt<'sse.SseDone'>>,
@@ -738,7 +822,9 @@ const ENUMS = {
   'Highlight.color': ['amber', 'green', 'blue', 'pink', 'purple'],
   'Message.role': ['user', 'assistant'],
   'Message.status': ['streaming', 'complete', 'partial', 'error', 'aborted'],
-  'Thread.kind': ['explain', 'ask'],
+  'Thread.kind': ['explain', 'ask', 'diagram'],
+  'MessageDiagram.status': ['streaming', 'complete', 'partial', 'stopped', 'error'],
+  'DiagramPart.kind': ['input', 'step', 'output', 'concept'],
   'Thread.last_status': ['streaming', 'complete', 'partial', 'error', 'aborted', null],
   'SseStatus.phase': ['thinking', 'tool', 'retrying', 'writing'],
   'SseDone.status': ['complete', 'partial', 'error', 'aborted'],
@@ -814,6 +900,8 @@ const ENUM_TYPES_ARE_EXACT: true[] = [
     keyof typeof CODES | keyof typeof RUN_CODES
   >,
   true satisfies Equal<Thread['kind'], Values<'Thread.kind'>>,
+  true satisfies Equal<MessageDiagram['status'], Values<'MessageDiagram.status'>>,
+  true satisfies Equal<DiagramPart['kind'], Values<'DiagramPart.kind'>>,
   true satisfies Equal<Thread['last_status'], Values<'Thread.last_status'>>,
   true satisfies Equal<SseData<'status'>['phase'], Values<'SseStatus.phase'>>,
   true satisfies Equal<SseData<'done'>['status'], Values<'SseDone.status'>>,
@@ -956,7 +1044,9 @@ describe('contracts.spec — lib/api/types.ts against contracts/api (exported fr
     expectValid('highlights', 'Highlight', HIGHLIGHT);
     expectValid('threads', 'RunSummary', RUN);
     expectValid('threads', 'Citation', CITATION);
-    for (const message of [ANSWER, FAILED, QUESTION]) expectValid('threads', 'Message', message);
+    for (const message of [ANSWER, FAILED, QUESTION, DIAGRAM_ANSWER]) {
+      expectValid('threads', 'Message', message);
+    }
     expectValid('threads', 'Thread', THREAD);
     expectValid('threads', 'Thread', {
       ...THREAD,
@@ -986,7 +1076,13 @@ describe('contracts.spec — lib/api/types.ts against contracts/api (exported fr
       since: T,
       ...bucket,
       budget_usd: 1,
-      by_kind: { explain: bucket, ask: { ...bucket, runs: 0 }, summary: bucket },
+      by_kind: {
+        explain: bucket,
+        ask: { ...bucket, runs: 0 },
+        summary: bucket,
+        diagram: bucket,
+        topic: bucket,
+      },
     };
     expectValid('usage', 'UsageTotals', usage);
   });
@@ -1152,11 +1248,12 @@ describe('contracts.spec — every key, its presence and every enum, against the
 describe('contracts.spec — the agent contract (hand-written) and its recorded streams', () => {
   const fixtures = readdirSync(`${REPO}contracts/agent/fixtures`).filter((f) => f.endsWith('.sse'));
 
-  it('there are the eight recorded streams', () => {
+  it('there are the eight recorded streams, and the diagram stream (v0.2 S7a, faux brain)', () => {
     expect(fixtures.sort()).toEqual(
       [
         'aborted-partial',
         'auth-error',
+        'diagram-ok',
         'explain-ok',
         'followup-ok',
         'stall-timeout',
@@ -1193,7 +1290,7 @@ describe('contracts.spec — the agent contract (hand-written) and its recorded 
 
   it('the run-request examples validate, and a summary without its digest seed does not', () => {
     const request = validator('run-request');
-    for (const name of ['explain', 'followup', 'summary']) {
+    for (const name of ['explain', 'followup', 'summary', 'diagram']) {
       const body = load(`contracts/agent/examples/run-request-${name}.json`);
       expect(request(body), `${name}: ${JSON.stringify(request.errors)}`).toBe(true);
     }

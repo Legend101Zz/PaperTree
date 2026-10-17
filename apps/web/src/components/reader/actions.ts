@@ -31,13 +31,28 @@ export interface FlashSource {
   readonly page: number;
   readonly para: number | null;
   readonly notVerified: boolean;
+  /** A diagram part's flash (#217): the tab says "from part C, Scale" instead of the marker. */
+  readonly part?: { readonly letter: string; readonly label: string };
 }
 
 export type SendToCanvasInput =
-  { kind: 'excerpt'; anchor: Anchor } | { kind: 'explanation'; messageId: string };
+  | { kind: 'excerpt'; anchor: Anchor }
+  | { kind: 'explanation'; messageId: string }
+  /** A diagram answer's plate (#217): the card keeps the message id and draws the stored parts. */
+  | { kind: 'diagram'; messageId: string; title: string };
 
 export type ReaderActions = {
   openExplain(input: { anchor: Anchor; quote: string }): void;
+  /**
+   * The selection toolbar's Ask (#203): the panel opens on the passage, waiting for the reader's
+   * own question. Optional: a reader without it draws no Ask button (never an inert one).
+   */
+  askAbout?(input: { anchor: Anchor; quote: string }): void;
+  /**
+   * The selection toolbar's "Explain with a diagram" (#217): a diagram thread on the passage.
+   * Optional like `askAbout`: a reader without it draws no such button.
+   */
+  explainWithDiagram?(input: { anchor: Anchor; quote: string }): void;
   sendToCanvas(input: SendToCanvasInput): Promise<void>;
   focusAnchor(anchor: Anchor, opts?: { flash?: boolean; from?: FlashSource }): void;
 };

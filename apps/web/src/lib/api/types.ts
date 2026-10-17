@@ -248,6 +248,46 @@ export interface RunSummary {
   tool_calls: number;
 }
 
+/** Where a diagram part's quote was found (v0.2 S7a, #216); `anchor` null: found nowhere. */
+export interface DiagramCite {
+  citation_id: string | null;
+  /** The quote as the model wrote it. */
+  quote: string;
+  anchor: Anchor | null;
+  locator: PassageLocator | null;
+  page_index: number | null;
+  /** true: verbatim ("cited"); false: with differences or not found ("not verified"). */
+  supported: boolean;
+}
+
+/** One lettered part of a diagram answer; `cite` null is "inferred, no passage". */
+export interface DiagramPart {
+  letter: string;
+  label: string;
+  text: string;
+  kind: 'input' | 'step' | 'output' | 'concept';
+  /** Earlier letters with an edge into this part. */
+  after: string[];
+  /** One label (or null) per `after` entry. */
+  edge: (string | null)[];
+  cite: DiagramCite | null;
+}
+
+/** An edge `after` cannot say (a feedback edge). */
+export interface DiagramLink {
+  source: string;
+  target: string;
+  label: string | null;
+}
+
+/** A diagram thread's answer as a plate; `stopped` is the reader's Stop. */
+export interface MessageDiagram {
+  title: string | null;
+  status: 'streaming' | 'complete' | 'partial' | 'stopped' | 'error';
+  parts: DiagramPart[];
+  links: DiagramLink[];
+}
+
 export interface Message {
   message_id: string;
   thread_id: string;
@@ -259,15 +299,17 @@ export interface Message {
   generation: number;
   run: RunSummary | null;
   citations: Citation[];
-  /** Only on an assistant message that is `complete` or `partial`. */
+  /** Only on an assistant message that is `complete` or `partial` (and not a diagram). */
   coverage?: MessageCoverage;
+  /** Only on an assistant message of a `diagram` thread. */
+  diagram?: MessageDiagram;
   created_at: string;
   completed_at: string | null;
 }
 
 export interface Thread {
   thread_id: string;
-  kind: 'explain' | 'ask';
+  kind: 'explain' | 'ask' | 'diagram';
   title: string;
   origin_anchor: Anchor | null;
   created_at: string;
@@ -301,6 +343,11 @@ export type SseEvent =
     }
   | { event: 'text'; data: { delta: string } }
   | { event: 'citations'; data: { items: Citation[] } }
+  // A diagram run (v0.2 S7a/S7b): its title, then each part with its quote already resolved, and
+  // the feedback edges `after` cannot say. No `text` and no `citations` come on such a run.
+  | { event: 'plate'; data: { title: string } }
+  | { event: 'part'; data: DiagramPart }
+  | { event: 'link'; data: DiagramLink }
   | { event: 'usage'; data: RunSummary }
   | {
       event: 'done';
@@ -380,7 +427,7 @@ export interface CanvasEdge {
   to_node_id: string;
   kind: EdgeKind;
   label: string | null;
-  /** The pins the thread was drawn between; null on a keyboard link and every v0.1 edge. */
+  /** The pins the thread was drawn between; null on every v0.1 edge. */
   from_port: FromPort | null;
   to_port: ToPort | null;
   created_at: string;

@@ -1,10 +1,11 @@
 /**
  * ui/toast — the Ex Libris toast (v0.2, #189).
  *
- * One message, an optional Undo, a Dismiss. It is a polite live region (it never interrupts a
- * screen reader), dismisses itself after `duration`, and holds still while the pointer or focus is
- * on it. `bottomInset` keeps it clear of whatever sits at the bottom edge: the v0.1 canvas toast
- * covered the composer at 390 px (#178), so the caller states the inset instead of hoping.
+ * One message, an optional Undo or other action, a Dismiss. It is a polite live region (it never
+ * interrupts a screen reader), dismisses itself after `duration`, and holds still while the pointer
+ * or focus is on it. Losing work is not a toast: say that with a `role="alert"` of its own.
+ * `bottomInset` keeps it clear of whatever sits at the bottom edge: the v0.1 canvas toast covered
+ * the composer at 390 px (#178), so the caller states the inset instead of hoping.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -27,6 +28,8 @@ export interface ToastProps {
   readonly message: string;
   /** Shown as an Undo button when present. */
   readonly onUndo?: () => void;
+  /** One more action, e.g. `{ label: 'Open board', onAction: open }`; shown before Dismiss. */
+  readonly action?: { readonly label: string; readonly onAction: () => void };
   /** Called on Dismiss and on auto-dismiss. */
   readonly onDismiss: () => void;
   /** Milliseconds before auto-dismiss; `0` keeps the toast until dismissed. */
@@ -46,6 +49,7 @@ export interface ToastProps {
 export function Toast({
   message,
   onUndo,
+  action,
   onDismiss,
   duration = TOAST_DURATION_MS,
   bottomInset = 0,
@@ -101,6 +105,11 @@ export function Toast({
       {onUndo === undefined ? null : (
         <Button variant="secondary" onClick={onUndo}>
           Undo
+        </Button>
+      )}
+      {action === undefined ? null : (
+        <Button variant="secondary" onClick={action.onAction}>
+          {action.label}
         </Button>
       )}
       <Button variant="secondary" onClick={onDismiss}>

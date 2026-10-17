@@ -6,7 +6,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { NUDGE_DEBOUNCE_MS, useBoardController } from '@/components/canvas/useBoardController';
+import { NUDGE_DEBOUNCE_MS, useBoardController } from '@/features/board/hooks/useBoardController';
 import { boardsApi } from '@/lib/api/boards';
 import { ApiError, type Board, type CanvasNode } from '@/lib/api/types';
 
@@ -189,5 +189,30 @@ describe('useBoardController', () => {
     });
     expect(api.patchBoard).toHaveBeenCalledTimes(1);
     expect(api.patchBoard).toHaveBeenCalledWith('brd_1', { viewport: { x: 1, y: 2, zoom: 1 } });
+  });
+
+  it('a new thread offers Undo ("Linked as …"), and Undo takes that thread back (#213)', async () => {
+    api.createEdge.mockImplementation(async (_board, body) => ({
+      ...body,
+      board_id: 'brd_1',
+      label: body.label ?? null,
+      from_port: body.from_port ?? null,
+      to_port: body.to_port ?? null,
+      created_at: '',
+    }));
+    api.deleteEdge.mockResolvedValue(undefined);
+    const { result } = await mount([node('cn_a'), node('cn_b')]);
+    const ports = { from_port: 'claim_out', to_port: 'evidence_in' } as const;
+    await act(async () => {
+      expect(await result.current.connect('cn_a', 'cn_b', 'relates', null, ports)).toBe(true);
+    });
+    expect(result.current.undo?.message).toBe('Linked as a plain link.');
+    const id = result.current.edges[0]!.id;
+    await act(async () => {
+      await result.current.runUndo();
+    });
+    expect(result.current.edges).toEqual([]);
+    expect(api.deleteEdge).toHaveBeenCalledWith('brd_1', id);
+    expect(result.current.undo).toBeNull();
   });
 });

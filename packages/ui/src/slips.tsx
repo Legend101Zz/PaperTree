@@ -33,8 +33,8 @@ export interface CallSlipProps {
   };
   /** The ask, in the person's own words. */
   readonly ask: string;
-  /** When it was asked, e.g. `"2:14 pm"`. */
-  readonly time: string;
+  /** When it was asked, e.g. `"2:14 pm"`. Omitted where the time is not shown (a board card). */
+  readonly time?: string;
   /** Machine-readable time for `<time dateTime>`, e.g. an ISO string. Omitted when unknown. */
   readonly dateTime?: string;
   /**
@@ -69,9 +69,11 @@ export function CallSlip({
         )}
         <YouText className="pt-call-slip__ask">{ask}</YouText>
       </div>
-      <time className="pt-call-slip__time" {...(dateTime === undefined ? {} : { dateTime })}>
-        {time}
-      </time>
+      {time === undefined ? null : (
+        <time className="pt-call-slip__time" {...(dateTime === undefined ? {} : { dateTime })}>
+          {time}
+        </time>
+      )}
     </div>
   );
 }
@@ -109,10 +111,13 @@ export function AiParagraph({ children, aside }: AiParagraphProps): ReactNode {
 
 /** Props for `AiSlip`. */
 export interface AiSlipProps {
-  /** The model, e.g. `"M3.1 Flash"`. */
-  readonly model: string;
-  /** What it read, e.g. `"from the paper"`. */
-  readonly source: string;
+  /**
+   * The model, e.g. `"M3.1 Flash"`. Omitted where the slip is too small for the line beside its
+   * tab (a board card): then no source line is drawn and the label names no model.
+   */
+  readonly model?: string;
+  /** What it read, e.g. `"from the paper"`. Shown with `model` only. */
+  readonly source?: string;
   /**
    * The answer: `AiParagraph`s for paragraphs with margin cells, or any other content (it spans
    * both grid columns).
@@ -128,6 +133,12 @@ export interface AiSlipProps {
   readonly uncitedHeading?: string;
   /** Its heading level, to fit the page outline. Default 4. */
   readonly headingLevel?: 2 | 3 | 4 | 5 | 6;
+  /**
+   * Replaces the `{model} · {source}` line beside the tab while the answer is not simply done: the
+   * working label as it streams, `Stopped · M3.1 Flash` after Stop. Inline content only (it sits
+   * in a `<p>`). The slip's accessible name still names the model.
+   */
+  readonly meta?: ReactNode;
 }
 
 /** The AI's answer on AI-slip stock under a standing "AI" tab. */
@@ -140,6 +151,7 @@ export function AiSlip({
   tabLabel = 'AI',
   uncitedHeading = "no citation · the AI's own reading",
   headingLevel = 4,
+  meta,
 }: AiSlipProps): ReactNode {
   const Heading = (['h2', 'h3', 'h4', 'h5', 'h6'] as const)[headingLevel - 2] ?? 'h4';
   return (
@@ -147,12 +159,16 @@ export function AiSlip({
       className="pt-ai-slip"
       data-voice="ai"
       role="note"
-      aria-label={`${tabLabel} answer by ${model}, not the paper's words`}
+      aria-label={`${tabLabel} answer${model === undefined ? '' : ` by ${model}`}, not the paper's words`}
     >
       <span className="pt-ai-tab">{tabLabel}</span>
-      <p className="pt-ai-slip__source">
-        {model} · {source}
-      </p>
+      {meta !== undefined ? (
+        <p className="pt-ai-slip__source">{meta}</p>
+      ) : model === undefined || source === undefined ? null : (
+        <p className="pt-ai-slip__source">
+          {model} · {source}
+        </p>
+      )}
       <div className="pt-ai-slip__grid">{children}</div>
       {uncited === undefined ? null : (
         <div className="pt-ai-slip__uncited">

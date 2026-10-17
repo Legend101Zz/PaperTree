@@ -6,8 +6,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { staleSubject, useBoardController } from '@/components/canvas/useBoardController';
-import { cardName } from '@/components/canvas/model';
+import { staleSubject, useBoardController } from '@/features/board/hooks/useBoardController';
+import { cardName } from '@/features/board/model/flow';
 import { boardsApi } from '@/lib/api/boards';
 import { ApiError, type Board, type CanvasEdge, type CanvasNode } from '@/lib/api/types';
 

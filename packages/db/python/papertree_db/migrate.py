@@ -12,10 +12,11 @@ database is copied with the SQLite backup API to ``<db>.pre-NNNN.bak`` first. A 
 (nothing applied yet) and an in-memory one are not backed up — there is nothing to lose, and
 nowhere beside ``:memory:`` to put it.
 
-Every version in the set gets its OWN copy: 0005 and 0008 (the canvas rebuild) are both in it, so
-a database at version 4 or older gets ``.pre-0005.bak`` and ``.pre-0008.bak`` in one run. Both are
-the same state, from before the run began (so the ``.pre-0008.bak`` holds a pre-0005 schema); a
-database at 5, the normal v0.1 case, gets one copy.
+Every version in the set gets its OWN copy: 0005, 0008 (the canvas rebuild) and 0011 (the AI
+threads/runs rebuild) are all in it, so a database at version 4 or older gets ``.pre-0005.bak``,
+``.pre-0008.bak`` and ``.pre-0011.bak`` in one run. All are the same state, from before the run
+began (so the ``.pre-0008.bak`` holds a pre-0005 schema); a database at 5, the normal v0.1 case,
+gets two copies.
 
 TWO PROCESSES MIGRATE THE SAME FILE. The API and the worker both call ``migrate()`` at start. So the
 decision "0005 is pending, back up" and the copy are made while this runner holds the database's
@@ -46,7 +47,7 @@ MIGRATION_FILENAME = re.compile(r"^(\d{4})_([a-z0-9_]+)\.sql$")
 STATEMENT_SEPARATOR = re.compile(r"^\s*--;;\s*$", re.MULTILINE)
 
 #: Versions that rebuild user-owned tables, and so are preceded by a backup of the whole file.
-BACKUP_BEFORE_VERSIONS: Final = frozenset({5, 8})
+BACKUP_BEFORE_VERSIONS: Final = frozenset({5, 8, 11})
 
 #: How long a starting runner waits for the write lock while ANOTHER runner backs up or migrates
 #: the same file. SQLite's default (5 s) is shorter than copying a large database can take, and a

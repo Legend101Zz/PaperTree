@@ -145,8 +145,8 @@ describe('library rows from the API (S1 shape)', () => {
   it('step 1 is "Reading the PDF - step 1 of 3"', async () => {
     api.list.mockResolvedValue([row({ processing: 'reading', job: job() })]);
     renderLibrary();
-    await openCard();
-    expect(await screen.findByText('Reading the PDF - step 1 of 3')).toBeTruthy();
+    const { card } = await openCard();
+    expect(await within(card).findByText('Reading the PDF - step 1 of 3')).toBeTruthy();
   });
 
   it('partial says plainly that some parts could not be read', async () => {
@@ -174,6 +174,41 @@ describe('library rows from the API (S1 shape)', () => {
     expect(card.textContent).not.toMatch(/pdf_unreadable|dead_letter/);
     fireEvent.click(within(card).getByRole('button', { name: /Retry/ }), { detail: 0 });
     await waitFor(() => expect(api.retry).toHaveBeenCalledWith('ppr_FAILED'));
+  });
+
+  it('a double press on Retry sends one request, and the button says it is busy meanwhile', async () => {
+    api.list.mockResolvedValue([row({ processing: 'failed', job: job({ state: 'dead_letter' }) })]);
+    let settle: (value: unknown) => void = () => undefined;
+    api.retry.mockReturnValue(new Promise((resolve) => (settle = resolve)));
+    renderLibrary();
+    const { card } = await openCard();
+    const retry = within(card).getByRole('button', { name: /Retry/ });
+    fireEvent.click(retry, { detail: 1 });
+    fireEvent.click(retry, { detail: 2 });
+    expect(api.retry).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(retry.getAttribute('aria-disabled')).toBe('true'));
+    await act(async () => settle({ job_id: 'job_2', generation: 2 }));
+    expect(api.retry).toHaveBeenCalledTimes(1);
+    expect(within(card).queryByRole('alert')).toBeNull();
+  });
+
+  it('a 409 "nothing to retry" (a retry got there first) is not an error: the list is asked again', async () => {
+    api.list.mockResolvedValue([row({ processing: 'failed', job: job({ state: 'dead_letter' }) })]);
+    api.retry.mockRejectedValue(
+      new ApiError(
+        409,
+        'not_failed',
+        "the paper's latest parse has not failed; nothing to retry",
+        false,
+      ),
+    );
+    renderLibrary();
+    const { card } = await openCard();
+    const asked = api.list.mock.calls.length;
+    fireEvent.click(within(card).getByRole('button', { name: /Retry/ }), { detail: 0 });
+    await waitFor(() => expect(api.list.mock.calls.length).toBeGreaterThan(asked));
+    expect(within(card).queryByRole('alert')).toBeNull();
+    expect(card.textContent).not.toMatch(/nothing to retry/);
   });
 
   it('a failed Retry is a sentence, not raw JSON', async () => {
@@ -248,9 +283,14 @@ describe('library rows from the API (S1 shape)', () => {
     renderLibrary();
     const { card } = await openCard();
     fireEvent.click(within(card).getByRole('button', { name: /Delete/ }), { detail: 0 });
+    expect(document.activeElement?.textContent).toBe('Keep it');
     fireEvent.click(within(card).getByRole('button', { name: 'Keep it' }), { detail: 0 });
     expect(api.remove).not.toHaveBeenCalled();
     expect(within(card).queryByRole('group')).toBeNull();
+    // Focus goes back to the Delete that opened the confirmation, never to the page.
+    await waitFor(() =>
+      expect(document.activeElement).toBe(within(card).getByRole('button', { name: /^Delete/ })),
+    );
   });
 });
 
@@ -258,9 +298,10 @@ describe("#137: nothing in the library is not the user's", () => {
   it('shows no sample cards and no audio claims by default, and an upload call to action when empty', async () => {
     api.list.mockResolvedValue([]);
     renderLibrary();
-    await screen.findByRole('heading', { name: 'Add your first paper' });
+    // Since #196 the call to action is the accession slip (frame 01b).
+    await screen.findByRole('heading', { name: 'Drop PDFs here or choose files' });
     expect(screen.getByRole('heading', { name: 'Your library' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Upload a PDF/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'choose files' })).toBeTruthy();
     expect(document.body.textContent).not.toMatch(
       /Attention Is All You Need|Deep Residual|Neural Ordinary/,
     );
@@ -288,13 +329,13 @@ describe('polling', () => {
     renderLibrary();
 
     // The open card follows its paper through every poll, as the spine does.
-    const { spine } = await openCard();
-    expect(await screen.findByText('Queued')).toBeTruthy();
+    const { spine, card } = await openCard();
+    expect(await within(card).findByText('Queued')).toBeTruthy();
     await act(() => vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS + 100));
-    expect(await screen.findByText('Reading the PDF - step 1 of 3')).toBeTruthy();
+    expect(await within(card).findByText('Reading the PDF - step 1 of 3')).toBeTruthy();
     expect(spine.getAttribute('data-spine-state')).toBe('parsing');
     await act(() => vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS + 100));
-    expect(await screen.findByText('Not started')).toBeTruthy();
+    expect(await within(card).findByText('Not started')).toBeTruthy();
     expect(spine.getAttribute('data-spine-state')).toBe('ready');
     expect(api.list).toHaveBeenCalledTimes(3);
   });

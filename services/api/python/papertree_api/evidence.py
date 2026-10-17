@@ -51,6 +51,7 @@ from dataclasses import dataclass, field
 from typing import Any, Final
 
 from papertree_agent_tools import (
+    ClaimAssessment,
     ClaimEvidence,
     PaperVocabulary,
     Verdict,
@@ -689,25 +690,40 @@ def split_bullets(text: str) -> list[str]:
     return bullets if bullets else lines
 
 
+def claim_assessment(
+    claim: str,
+    cited_blocks: Sequence[str],
+    texts: Mapping[str, str],
+    paper: PaperVocabulary | None = None,
+) -> ClaimAssessment | None:
+    """``assess_claim`` on one claim over its cited blocks (its verdict AND its coverage), or None
+    when there is nothing to assess: an empty claim, or no cited block in ``texts``. Markers are
+    stripped first: the handle ``b3`` is not a word of the paper and would count against the
+    claim's coverage."""
+    clean = _LIST_ORDINAL.sub("", strip_markers(claim), count=1)
+    bags = {
+        block: frozenset(content_tokens(texts[block])) for block in cited_blocks if block in texts
+    }
+    if not clean or not bags:
+        return None
+    refs = frozenset().union(*(structure_refs(texts[block]) for block in bags))
+    return assess_claim(clean, ClaimEvidence(bags, (), refs), paper=paper)
+
+
 def claim_verdict(
     claim: str,
     cited_blocks: Sequence[str],
     texts: Mapping[str, str],
     paper: PaperVocabulary | None = None,
 ) -> Verdict:
-    """``assess_claim`` on one claim over its cited blocks. Markers are stripped first: the
-    handle ``b3`` is not a word of the paper and would count against the claim's coverage. A claim
-    whose cited blocks are not in ``texts`` (a block the generation lacks) has no evidence, and no
-    evidence is ``neutral`` only when the claim is empty: a claim citing nothing real is not
-    supported."""
-    clean = _LIST_ORDINAL.sub("", strip_markers(claim), count=1)
-    bags = {
-        block: frozenset(content_tokens(texts[block])) for block in cited_blocks if block in texts
-    }
-    if not clean or not bags:
+    """:func:`claim_assessment`'s verdict. A claim whose cited blocks are not in ``texts`` (a block
+    the generation lacks) has no evidence, and no evidence is ``neutral`` only when the claim is
+    empty: a claim citing nothing real is not supported."""
+    assessed = claim_assessment(claim, cited_blocks, texts, paper)
+    if assessed is None:
+        clean = _LIST_ORDINAL.sub("", strip_markers(claim), count=1)
         return "unsupported" if clean else "neutral"
-    refs = frozenset().union(*(structure_refs(texts[block]) for block in bags))
-    return assess_claim(clean, ClaimEvidence(bags, (), refs), paper=paper).verdict
+    return assessed.verdict
 
 
 def claim_supported(
@@ -764,6 +780,27 @@ class MintedCitation:
         }
 
 
+def mint_block_anchor(
+    document: IndexedDocument, block_id: str, citation_id: str
+) -> dict[str, Any] | None:
+    """The whole-block citation Anchor over ``block_id`` (contracts.md §3.4, §6), or None when the
+    contract would refuse it: a record ``anchor-v1.schema.json`` / ``AnchorV1`` refuses is never
+    stored. Checked on its JSON, the wire form (strict pydantic takes a JSON array as a tuple, a
+    Python list not). Shared by an answer's citations and a diagram part's quote.
+
+    Raises:
+        KeyError: ``block_id`` is not in ``document`` (the caller checks first).
+    """
+    anchor: dict[str, Any] = dict(
+        capture_citation(document, block_id, citation_id=citation_id, at=now_wire())
+    )
+    try:
+        AnchorV1.model_validate_json(json.dumps(anchor))
+    except ValidationError:
+        return None
+    return anchor
+
+
 @dataclass
 class CitationMinter:
     """Mints citations for one run's answer. ``handles`` is the run's ``handle -> block_id``."""
@@ -800,14 +837,8 @@ class CitationMinter:
             )
             return None
         citation_id = self.new_id("cit")
-        anchor: dict[str, Any] = dict(
-            capture_citation(self.document, block_id, citation_id=citation_id, at=now_wire())
-        )
-        try:  # never store a record the contract refuses (anchor-v1.schema.json == AnchorV1),
-            # checked on its JSON: the wire form (strict pydantic takes a JSON array as a tuple,
-            # a Python list not)
-            AnchorV1.model_validate_json(json.dumps(anchor))
-        except ValidationError:
+        anchor = mint_block_anchor(self.document, block_id, citation_id)
+        if anchor is None:
             self.dropped.append(marker)
             log_event(
                 "run.citation_dropped",

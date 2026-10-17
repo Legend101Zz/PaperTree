@@ -72,7 +72,15 @@ test.describe('S4 toolbar hit test', () => {
     await drag(page, points.from, points.to);
     await expect(page.getByRole('toolbar', { name: 'Selection actions' })).toBeVisible();
 
-    for (const name of ['Highlight', 'Ask about this passage', 'Send to canvas', 'Copy']) {
+    // #203: the v0.2 items (Explain runs now, Ask waits for a question, "Board" wording).
+    for (const name of [
+      'Explain this passage',
+      'Ask about this passage',
+      'Highlight',
+      'Highlight in amber',
+      'Send to board',
+      'Copy',
+    ]) {
       const { hit } = await hitTest(page, name);
       console.log(`[e2e s4] elementFromPoint at the "${name}" button centre: ${hit}`);
       expect(hit, `the element at the "${name}" button's centre must be that button`).toBe(

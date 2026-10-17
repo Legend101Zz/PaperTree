@@ -1057,13 +1057,12 @@ span.pt-paper .pt-paper__cite {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────────────────────
- * the reader (S4) — a calm desk, the paper as the hero, the chrome receding
+ * the reader (S4; v0.2 chrome #203) — a calm desk, the paper as the hero, the chrome receding
  *
- * The page is the only bright thing on screen: a paper-white sheet on a warm stone desk
- * (`--pt-page-ground`). Chrome sits on `--pt-panel-ground` behind hairlines, in the UI sans;
- * anything that is the paper's own words is in the serif. Ink blue marks interactive state only.
- * Spacing is an 8 px grid; floating things get one soft shadow and 12 px radii; nothing else
- * casts one.
+ * The PDF page is a `--pt-pdf-page` sheet with e1 on the reader desk (`--pt-desk`, a laid pattern).
+ * The header is ivory `--pt-page` behind a rule, in Alegreya Sans; the paper's own words are in
+ * Caslon. Ink blue marks interactive state only. Floating things (the selection toolbar, menus)
+ * take e2 and the menu radius; nothing else casts a shadow.
  * ───────────────────────────────────────────────────────────────────────────────────────────── */
 
 .pt-reader {
@@ -1072,47 +1071,145 @@ span.pt-paper .pt-paper__cite {
   height: 100dvh;
   font-family: var(--pt-font-ui);
   color: var(--pt-ink);
-  background: var(--pt-page-ground);
+  /* the reader desk (frame 04): a fine laid pattern under the pages, both schemes */
+  background-color: var(--pt-desk);
+  background-image:
+    repeating-linear-gradient(0deg, rgb(90 70 40 / 4%) 0 1px, transparent 1px 5px),
+    repeating-linear-gradient(90deg, rgb(90 70 40 / 4%) 0 1px, transparent 1px 34px);
 }
 
+/* The PDF page is a sheet on the desk: `--pt-pdf-page`, e1, the paper radius. */
 .pt-reader .papertree-page {
-  box-shadow: var(--pt-sheet-shadow);
+  background-color: var(--pt-pdf-page);
+  border-radius: var(--pt-radius-paper);
+  box-shadow: var(--pt-e1);
 }
 
+/* The header (frame 04, #203): one 56 px ivory row from 768 px up, so the explain drawer can open
+   under it; the controls keep their 40-44 px targets inside it. */
 .pt-reader__bar {
+  position: relative;
+  z-index: 31;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: var(--pt-panel-ground);
+  gap: 4px;
+  padding: 6px 16px 6px 20px;
+  background: var(--pt-page);
   border-block-end: 1px solid var(--pt-rule);
 }
 
+@media (min-width: 768px) {
+  .pt-reader__bar {
+    flex-wrap: nowrap;
+    box-sizing: border-box;
+    block-size: var(--pt-reader-bar-h);
+  }
+}
+
+:root {
+  --pt-reader-bar-h: 56px;
+}
+
+/* A link styled as a toolbar button (Library, Board) keeps the 40 px target `ToolbarButton` sets inline. */
+.pt-reader__bar .pt-toolbtn {
+  min-block-size: 40px;
+  text-decoration: none;
+}
+
+.pt-reader__rule {
+  flex: none;
+  inline-size: 1px;
+  block-size: 24px;
+  margin-inline: 8px;
+  background: var(--pt-rule);
+}
+
 .pt-reader__title {
-  flex: 1 1 12rem;
+  flex: 0 1 auto;
   min-inline-size: 0;
   margin: 0;
   overflow: hidden;
-  font-family: var(--pt-font-body);
-  font-size: 1rem;
-  font-weight: 600;
+  font-family: var(--pt-font-paper);
+  font-size: 16px;
+  font-weight: 700;
   line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.pt-reader__page,
+.pt-reader__count {
+  flex: none;
+  font-family: var(--pt-font-you);
+  font-size: var(--pt-t-num);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--pt-ink-muted);
+}
+
+.pt-reader__page {
+  margin-inline: 8px 16px;
+  white-space: nowrap;
+}
+
 .pt-reader__controls {
   display: flex;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   align-items: center;
   gap: 8px;
+  margin-inline-start: auto;
+}
+
+/* Explain is a tab onto the drawer below it: the AI-slip fill and an oxblood underline (frame 04). */
+/* (two classes and the attribute: it must win over the shared `.pt-toolbtn[aria-pressed]`) */
+.pt-reader__bar .pt-reader__explain[aria-pressed='true'] {
+  color: var(--pt-ink);
+  background: var(--pt-ai-slip);
+  border-color: transparent;
+  border-radius: var(--pt-radius-control) var(--pt-radius-control) 0 0;
+  box-shadow: inset 0 -2px 0 var(--pt-primary);
+}
+
+/* The drawer opens under the header, which stays the full width (frame 04). */
+@media (min-width: 768px) {
+  html[data-pt-explain='open'] .pt-reader__bar {
+    margin-inline-end: calc(-1 * var(--pt-explain-width));
+  }
+  html:has(.pt-reader__bar) .pt-explain {
+    inset-block-start: var(--pt-reader-bar-h);
+  }
+}
+
+/* Narrower windows keep every name but draw Library, Contents and Board as their icons, and drop the
+   counter, so the title keeps some width at 768 px (review N2). */
+@media (max-width: 1099px) {
+  .pt-reader__back .pt-toolbtn__label,
+  .pt-reader__contents .pt-toolbtn__label,
+  .pt-reader__board .pt-toolbtn__label {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .pt-reader__back,
+  .pt-reader__contents,
+  .pt-reader__board {
+    padding-inline: 10px;
+  }
+  .pt-reader__page {
+    display: none;
+  }
 }
 
 /* Below 640 px the controls take a row of their own, full width, the mode switch first. */
 @media (max-width: 639px) {
   .pt-reader__bar {
     padding: 8px 16px;
+  }
+  .pt-reader__rule {
+    display: none;
   }
   .pt-reader__controls {
     flex: 1 1 100%;
@@ -1123,14 +1220,27 @@ span.pt-paper .pt-paper__cite {
     flex: 1 1 auto;
     min-inline-size: 0;
   }
-  /* The select says "Fit width (56%)"; on a phone it truncates rather than pushing "+" off-screen. */
-  .pt-zoom__select {
-    max-inline-size: 6.75rem;
-  }
   .pt-reader__controls .pt-segmented__option {
     flex: 1 1 0;
     padding-inline: 8px;
   }
+}
+
+/* The selected text reads through a blue-grey wash (frame 04), not the browser's bright blue. */
+.pt-reader .papertree-text-layer ::selection {
+  background: rgb(31 78 121 / 24%);
+}
+
+/* Lamp-lit: the PDF page stays paper, dimmed (DESIGN.md §2). pdf.js paints white, and multiply
+   turns that white into the sheet's own `--pt-pdf-page` while black type stays black. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-pt-theme='light']) .pt-reader .papertree-page canvas {
+    mix-blend-mode: multiply;
+  }
+}
+
+:root[data-pt-theme='dark'] .pt-reader .papertree-page canvas {
+  mix-blend-mode: multiply;
 }
 
 .pt-btn {
@@ -1213,19 +1323,19 @@ span.pt-paper .pt-paper__cite {
 
 .pt-zoom__select {
   flex: 0 1 auto;
-  /* Sized by its text, "Fit width" in Alegreya Sans measures 79 px on Linux (83 on macOS): under
-     the 80 px the RFIX2 screens test holds it to. A floor keeps it readable on every platform. */
+  /* A floor keeps "Fit width" whole in Courier Prime: the RFIX2 screens test holds the select to at
+     least 80 px. */
   min-inline-size: 5.5rem;
   max-inline-size: 11rem;
   min-block-size: 40px;
   padding-inline: 8px 4px;
-  font: inherit;
-  font-size: 0.875rem;
-  font-variant-numeric: tabular-nums;
+  font-family: var(--pt-font-you);
+  font-size: var(--pt-t-num);
+  font-variant-numeric: lining-nums tabular-nums;
   color: var(--pt-ink);
-  background: transparent;
-  border: 1px solid var(--pt-rule);
-  border-radius: 10px;
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
 }
 
 .pt-num {
@@ -1235,16 +1345,10 @@ span.pt-paper .pt-paper__cite {
 .pt-zoom__pct {
   min-inline-size: 3.25rem;
   padding-inline: 4px;
-  font-size: 0.8125rem;
+  font-family: var(--pt-font-you);
+  font-size: var(--pt-t-num);
   color: var(--pt-ink-muted);
   text-align: end;
-}
-
-/* The select already offers "Fit width"; the button is a shortcut for wide screens only. */
-@media (max-width: 1023px) {
-  .pt-zoom__fit {
-    display: none;
-  }
 }
 
 @media (max-width: 639px) {
@@ -1429,38 +1533,138 @@ span.pt-paper .pt-paper__cite {
   position: absolute;
   z-index: 40;
   display: flex;
-  align-items: center;
   gap: 2px;
-  padding: 4px;
+  padding: 6px;
   font-family: var(--pt-font-ui);
+  line-height: 1;
   color: var(--pt-ink);
-  background: var(--pt-ground-raised);
-  border-radius: var(--pt-radius-panel);
-  box-shadow: var(--pt-float-shadow);
+  background: var(--pt-e2-fill);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-menu);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
   pointer-events: auto;
+  /* Its labels are never part of a text selection, even when a drag ends over the bar (e2e rfix
+     R1 A2 / R1b C selected "Explain Ask" before the bar was dropped on a new press). */
+  user-select: none;
+  -webkit-user-select: none;
   animation: pt-rise 140ms ease-out;
+}
+
+/* In the page margin (frame 04): a column of buttons beside the selection, never over it (#203).
+   130 px holds five 24 px wash targets; `MARGIN_BAR_WIDTH` in apps/web says the same. */
+.pt-seltool--margin {
+  flex-direction: column;
+  inline-size: 130px;
+  padding: 4px;
+}
+
+/* (scoped: it must win over the shared `.pt-toolbtn`, which centres its content). 40 px: v0.1's floor
+   for the selection bar's buttons (review S4). */
+.pt-seltool .pt-seltool__item {
+  justify-content: flex-start;
+  min-block-size: 40px;
+  padding-inline: 8px;
+  white-space: nowrap;
+}
+
+.pt-seltool__item--primary {
+  font-weight: 700;
+}
+
+.pt-seltool__item[disabled] {
+  color: var(--pt-ink-muted);
+  cursor: not-allowed;
+}
+
+/* Docked across the column (frame 07a) when no margin is wide enough; outside the scroller. */
+.pt-seltool-dock {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+
+.pt-seltool--docked {
+  inset-inline: 24px;
+  flex-wrap: wrap;
+  align-items: center;
+  min-block-size: 52px;
+  padding-block: 4px;
+}
+
+.pt-seltool--top {
+  inset-block-start: 8px;
+}
+
+.pt-seltool--bottom {
+  inset-block-end: 8px;
 }
 
 .pt-seltool--sheet {
   position: fixed;
   inset-inline: 16px;
   inset-block-end: calc(16px + env(safe-area-inset-bottom, 0px));
-  justify-content: space-between;
-}
-
-/* Highlight is unavailable for this selection: the reason is a sentence under the buttons, in the
-   bar itself, never only a tooltip. The note takes the buttons' width and never sets it (its own
-   width is 0, its minimum the full line), so the buttons stay on one row. */
-.pt-seltool--noted {
   flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
 }
 
-/* Floating, the bar is as wide as its buttons whatever column it is positioned in (a page at 50 %
-   is narrower than the bar), so a note never wraps the buttons onto a second row. */
-.pt-seltool--noted:not(.pt-seltool--sheet) {
-  inline-size: max-content;
+/* The five washes: chips like the highlight card's, each drawn 18 px inside a 24 px target (WCAG
+   2.5.8's minimum), 40 px on the phone's bar where a finger presses them (review S4). */
+.pt-seltool__washes {
+  display: flex;
+  padding: 2px 0 4px;
 }
 
+.pt-seltool--docked .pt-seltool__washes {
+  padding: 0 8px;
+}
+
+.pt-seltool--sheet .pt-seltool__washes {
+  padding: 0 4px;
+}
+
+.pt-seltool__wash {
+  position: relative;
+  inline-size: 24px;
+  block-size: 24px;
+  padding: 0;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-radius: var(--pt-radius-round);
+}
+
+.pt-seltool__wash::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: var(--pt-radius-round);
+  background: var(--wash-fill);
+  box-shadow: inset 0 0 0 2px var(--wash-ink);
+}
+
+.pt-seltool--sheet .pt-seltool__wash {
+  inline-size: 40px;
+  block-size: 40px;
+}
+
+.pt-seltool--sheet .pt-seltool__wash::before {
+  inset: 10px;
+}
+
+.pt-seltool__wash:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+.pt-seltool__wash[disabled] {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* Highlight is unavailable for this selection: the reason is a sentence in the bar itself, never only
+   a tooltip, taking the bar's width and never setting it. */
 .pt-seltool__note {
   flex-basis: 100%;
   inline-size: 0;
@@ -1470,20 +1674,6 @@ span.pt-paper .pt-paper__cite {
   font-size: 0.8125rem;
   line-height: 1.4;
   color: var(--pt-ink-muted);
-}
-
-.pt-seltool__sep {
-  inline-size: 1px;
-  block-size: 24px;
-  margin-inline: 2px;
-  background: var(--pt-rule);
-}
-
-.pt-seltool__dot {
-  inline-size: 12px;
-  block-size: 12px;
-  border-radius: 50%;
-  background: var(--pt-hl-amber-ink);
 }
 
 @keyframes pt-rise {
@@ -1796,8 +1986,10 @@ span.pt-paper .pt-paper__cite {
   max-inline-size: 44rem;
   margin: 24px auto 48px;
   padding: 40px 48px;
-  background: var(--pt-ground-raised);
-  box-shadow: var(--pt-sheet-shadow);
+  /* the Guided page: ivory `--pt-page` on the desk, e1, the paper's words in Caslon (#203) */
+  background: var(--pt-page);
+  border-radius: var(--pt-radius-paper);
+  box-shadow: var(--pt-e1), var(--pt-e1-edge);
 }
 
 @media (max-width: 639px) {
@@ -2604,14 +2796,6 @@ span.pt-paper .pt-paper__cite {
   white-space: nowrap;
 }
 
-.pt-explain__launch {
-  position: fixed;
-  inset-block-end: 16px;
-  inset-inline-end: 16px;
-  z-index: 25;
-  box-shadow: var(--pt-float-shadow);
-}
-
 /* Chips stay inline, after the words they support, so a sentence is never broken in two. The pill
    is 28 px tall and its hit area is padded to 40 px (below). Two chips on CONSECUTIVE lines can
    overlap by a few px of padding; the 8 px gap between neighbours on one line does not. */
@@ -2837,7 +3021,8 @@ span.pt-paper .pt-paper__cite {
 }
 
 .pt-exchange__answer {
-  margin-block-start: var(--pt-space-6); /* room for the standing AI tab above the slip */
+  position: relative;
+  margin-block-start: var(--pt-space-7); /* room for the AI tab and Stop above the slip (04b) */
 }
 
 .pt-exchange__answer > .pt-ai-slip {
@@ -2935,6 +3120,305 @@ span.pt-paper .pt-paper__cite {
   from {
     opacity: 0;
   }
+}
+
+/* ── S4d: streaming, Stop, the daily cap, folded answers (#204) ────────────────────────────────
+   Frames 04b and 04c: the working label and Stop on the AI tab row, the typed caret, the note after
+   Stop on the slip's footer, the "not sent" stamp, the daily-cap card and a folded earlier answer.
+   Under reduced motion the dots and the caret hold still. */
+
+/* Stop's row takes no space and sticks to the top of the panel's scroll while its answer is in
+   view, so a long answer never scrolls Stop away; at rest the button sits on the tab row. */
+.pt-exchange__stop-row {
+  position: sticky;
+  inset-block-start: 48px;
+  z-index: 2;
+  block-size: 0;
+}
+
+.pt-exchange__answer > .pt-exchange__stop-row + * {
+  margin-block-start: 0;
+}
+
+.pt-exchange__stop {
+  position: absolute;
+  inset-block-start: -40px;
+  inset-inline-end: 0;
+  block-size: 32px;
+  min-block-size: 32px;
+  padding: 0 var(--pt-space-3);
+  font-size: 14px;
+  background: var(--pt-page);
+  box-shadow: var(--pt-e1);
+}
+
+.pt-working {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--pt-ai-tab-ink);
+}
+
+.pt-working__dots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.pt-working__dots > span {
+  inline-size: 5px;
+  block-size: 5px;
+  border-radius: 50%;
+  background: var(--pt-pen);
+  animation: pt-working-dot 1200ms ease-in-out infinite;
+}
+
+.pt-working__dots > span:nth-child(2) {
+  opacity: 0.6;
+  animation-delay: 200ms;
+}
+
+.pt-working__dots > span:nth-child(3) {
+  opacity: 0.3;
+  animation-delay: 400ms;
+}
+
+@keyframes pt-working-dot {
+  50% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
+}
+
+.pt-exchange__caret {
+  display: inline-block;
+  inline-size: 2px;
+  block-size: 16px;
+  margin-inline-start: 2px;
+  vertical-align: -3px;
+  background: var(--pt-pen);
+  animation: pt-caret 1000ms steps(1) infinite;
+}
+
+@keyframes pt-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+.pt-exchange__stopped {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pt-space-3);
+}
+
+.pt-exchange__stopped-note {
+  margin: 0;
+  font: 600 15px / 22px var(--pt-font-ai);
+  color: var(--pt-ink);
+}
+
+.pt-exchange__ask {
+  position: relative;
+}
+
+.pt-exchange__not-sent {
+  /* Struck across the slip's bottom edge, below the time, as a stamp lands (04c). */
+  position: absolute;
+  inset-block-end: -10px;
+  inset-inline-end: 16px;
+  padding: 1px 8px;
+  font: 700 11px / 16px var(--pt-font-you);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pt-danger);
+  background: var(--pt-call-slip);
+  border: 1.5px solid var(--pt-danger);
+  border-radius: var(--pt-radius-paper);
+  transform: rotate(-4deg);
+}
+
+.pt-budget-card {
+  margin-block-start: var(--pt-space-5);
+  padding: 20px 24px;
+  font: var(--pt-t-ai-panel) / 22px var(--pt-font-ai);
+  color: var(--pt-ink);
+  background: var(--pt-page);
+  border-block-start: 3px solid var(--pt-danger);
+  border-radius: var(--pt-radius-paper);
+  box-shadow: var(--pt-e1);
+}
+
+.pt-budget-card p {
+  margin: 0 0 var(--pt-space-2);
+}
+
+.pt-budget-card__title {
+  display: flex;
+  align-items: center;
+  gap: var(--pt-space-2);
+  font: 700 16px / 22px var(--pt-font-ai);
+}
+
+.pt-budget-card__title .pt-icon {
+  color: var(--pt-danger);
+}
+
+.pt-budget-card__figures {
+  font: 15px / 22px var(--pt-font-you);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.pt-budget-card__note {
+  font-size: 13px;
+  color: var(--pt-ink-muted);
+}
+
+.pt-budget-card__usage {
+  min-block-size: 24px;
+  padding: 0;
+  font: inherit;
+  color: var(--pt-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.pt-budget-card__rows {
+  margin: var(--pt-space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font: var(--pt-t-num) / 20px var(--pt-font-you);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.pt-budget-card__kind {
+  font-weight: 700;
+}
+
+.pt-exchange__preview {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.pt-exchange__answer > .pt-ai-slip + .pt-exchange__fold {
+  margin-block-start: 0;
+}
+
+.pt-exchange__fold {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pt-space-3);
+  padding: var(--pt-space-2) 20px var(--pt-space-3);
+  font: 13px / 20px var(--pt-font-ai);
+  color: var(--pt-ink-2);
+  background: var(--pt-ai-slip);
+  box-shadow: var(--pt-e1);
+}
+
+.pt-exchange__fold-toggle {
+  margin-inline-start: auto;
+  min-block-size: 24px;
+  padding: 0 var(--pt-space-1);
+  font: inherit;
+  color: var(--pt-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.pt-exchange__fold-toggle:focus-visible,
+.pt-budget-card__usage:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-working__dots > span,
+  .pt-exchange__caret {
+    animation: none;
+  }
+}
+
+/* Frame 04d: the summary's bullets on the AI slip, each a row with its margin cell, and the
+   header's "cached" label. */
+.pt-summary__bullets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pt-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pt-summary__bullet {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--pt-space-4);
+  padding-inline-start: 18px;
+}
+
+.pt-summary__bullet::before {
+  content: '•';
+  position: absolute;
+  inset-inline-start: 4px;
+}
+
+.pt-summary__bullet .pt-ai-slip__aside {
+  flex-direction: column;
+  gap: var(--pt-space-1);
+  min-inline-size: 96px;
+}
+
+.pt-summary__uncited {
+  grid-column: 1 / -1;
+  font: 700 var(--pt-t-label-s) / 1.3 var(--pt-font-label);
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--pt-ls-label);
+  color: var(--pt-nv-ink);
+}
+
+@media (max-width: 480px) {
+  .pt-summary__bullet {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The highlight Undo toast and the reader's notices stay clear of the explain drawer (centred over the
+   page beside it) and of each other: a notice lifts above a live Undo toast (#204 review 2.1). */
+.pt-notice-holder {
+  display: contents;
+}
+
+@media (min-width: 768px) {
+  html[data-pt-explain='open'] .pt-notice,
+  html[data-pt-explain='open'] .pt-toast {
+    inset-inline-end: calc(var(--pt-explain-width) + 16px);
+  }
+}
+
+html:has(.pt-notice--undo) .pt-toast {
+  inset-block-end: calc(88px + env(safe-area-inset-bottom, 0px));
+}
+
+.pt-explain__badge {
+  margin-inline-start: var(--pt-space-3);
+  padding: 1px 8px;
+  font: 13px / 18px var(--pt-font-ai);
+  color: var(--pt-ink-2);
+  vertical-align: 3px;
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-paper);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -3058,28 +3542,11 @@ span.pt-paper .pt-paper__cite {
   max-block-size: 16px;
 }
 
-.pt-cv .react-flow__marker path,
-.pt-cv .react-flow__arrowhead polyline {
-  fill: var(--pt-ink-muted);
-  stroke: var(--pt-ink-muted);
-}
-
 .pt-cv .react-flow .react-flow__node:focus-visible,
 .pt-cv .react-flow .react-flow__node.selectable:focus-visible {
   outline: 2px solid var(--pt-focus);
   outline-offset: 2px;
   border-radius: var(--pt-radius-panel);
-}
-
-.pt-cv .react-flow .react-flow__edge:focus-visible .pt-cv-edge {
-  stroke: var(--pt-focus);
-  stroke-width: 3;
-}
-
-.pt-cv .react-flow__edge.selected .pt-cv-edge,
-.pt-cv .react-flow__edge:focus .pt-cv-edge {
-  stroke: var(--pt-accent);
-  stroke-width: 2.5;
 }
 
 .pt-cv-node {
@@ -3098,73 +3565,6 @@ span.pt-paper .pt-paper__cite {
 .pt-cv-node[data-selected='true'] {
   border-color: var(--pt-accent);
   box-shadow: 0 0 0 2px var(--pt-accent-soft);
-}
-
-.pt-cv-node__head {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-block-size: 48px;
-  padding: 4px 8px 4px 12px;
-  border-block-end: 1px solid var(--pt-rule);
-}
-
-.pt-cv-node__label {
-  min-inline-size: 0;
-  overflow: hidden;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--pt-ink-muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pt-cv-node__body {
-  flex: 1 1 auto;
-  min-block-size: 0;
-  padding: 12px;
-  overflow: auto;
-}
-
-.pt-cv-node--excerpt .pt-cv-node__body blockquote {
-  margin: 0;
-}
-
-.pt-cv-node--explanation {
-  background: var(--pt-derived-ground);
-}
-
-.pt-cv-pre {
-  margin: 0;
-  font-size: 0.9375rem;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.pt-cv-note[data-empty='true'] {
-  color: var(--pt-ink-muted);
-}
-
-.pt-cv-textarea {
-  inline-size: 100%;
-  min-block-size: 80px;
-  padding: 8px;
-  font: inherit;
-  font-size: 0.9375rem;
-  line-height: 1.5;
-  color: var(--pt-ink);
-  background: var(--pt-ground);
-  border: 1px solid var(--pt-rule);
-  border-radius: 8px;
-  resize: none;
-}
-
-.pt-cv-textarea:focus-visible {
-  outline: 2px solid var(--pt-focus);
-  outline-offset: 1px;
 }
 
 .pt-cv-node--group {
@@ -3198,20 +3598,6 @@ span.pt-paper .pt-paper__cite {
   outline: 2px solid var(--pt-focus);
 }
 
-/* Handles: a small visible dot with a 28 px hit area, so a finger can start a link. */
-.pt-cv .pt-cv-handle {
-  inline-size: 12px;
-  block-size: 12px;
-  border: 2px solid var(--pt-ground-raised);
-  background: var(--pt-accent);
-}
-
-.pt-cv .pt-cv-handle::after {
-  content: '';
-  position: absolute;
-  inset: -10px;
-}
-
 .pt-cv .pt-cv-resize {
   inline-size: 14px;
   block-size: 14px;
@@ -3225,78 +3611,9 @@ span.pt-paper .pt-paper__cite {
 }
 
 .pt-cv .react-flow__edgelabel-renderer {
-  z-index: 100;
-}
-
-.pt-cv-edge-label {
-  position: absolute;
-  max-inline-size: 14rem;
-  padding: 2px 8px;
-  overflow: hidden;
-  font-family: var(--pt-font-ui);
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--pt-ink);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  background: var(--pt-ground-raised);
-  border: 1px solid var(--pt-rule);
-  border-radius: 999px;
-  /* The label never covers a card's own buttons; the edge is selected on its line. */
-  pointer-events: none;
-}
-
-.pt-cv-edge-label[data-selected='true'] {
-  color: var(--pt-accent);
-  border-color: var(--pt-accent);
-}
-
-.pt-cv-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  background: rgb(20 18 14 / 45%);
-}
-
-.pt-cv-dialog {
-  inline-size: min(100%, 26rem);
-  max-block-size: 100%;
-  padding: 20px;
-  overflow: auto;
-  color: var(--pt-ink);
-  background: var(--pt-ground-raised);
-  border-radius: var(--pt-radius-panel);
-  box-shadow: var(--pt-float-shadow);
-}
-
-.pt-cv-dialog__title {
-  margin: 0 0 4px;
-  font-family: var(--pt-font-body);
-  font-size: 1.125rem;
-  font-weight: 600;
-}
-
-.pt-cv-dialog__sub {
-  margin: 0 0 16px;
-  font-size: 0.875rem;
-  color: var(--pt-ink-muted);
-  overflow-wrap: anywhere;
-}
-
-.pt-cv-kinds {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-block-end: 16px;
-}
-
-.pt-cv-kind {
-  justify-content: flex-start;
-  min-block-size: 44px;
+  /* A thread's paper tag sits above frames (z 0) and below every card (z 10 and up), so it never
+     covers a card's words or buttons (#212 review N4). */
+  z-index: 5;
 }
 
 .pt-cv-field {
@@ -3324,12 +3641,6 @@ span.pt-paper .pt-paper__cite {
   border-radius: 8px;
 }
 
-.pt-cv-dialog__actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-block-start: 16px;
-}
-
 .pt-toast__body[data-tone='error'] {
   color: var(--pt-danger);
 }
@@ -3340,9 +3651,6 @@ span.pt-paper .pt-paper__cite {
   }
   .pt-cv__tools .pt-btn {
     flex: 1 1 auto;
-  }
-  .pt-cv-kinds {
-    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -3369,22 +3677,12 @@ span.pt-paper .pt-paper__cite {
   max-inline-size: 100%;
 }
 
-/* In-card controls keep a 40 px tap target ON SCREEN at phone widths. xyflow scales a card by the
-   canvas zoom, so a 40 px button at 60 % is 24 px. The canvas publishes its zoom as `--pt-cv-zoom`;
-   each button grows an invisible hit area (its ::after) by the inverse, down to the canvas's 20 % minimum zoom, so
-   the pill stays the same size on the card and a finger still lands on it. The area is clipped to
-   the card, which is where a tap on a card should land anyway. The group name is an input (no
+/* In-card controls keep a tap target ON SCREEN at phone widths: xyflow scales a card by the canvas
+   zoom, which the canvas publishes as `--pt-cv-zoom`. The board's card buttons grow their hit area
+   in `apps/web/src/features/board/components/cards.css` (#212). The group name is an input (no
    pseudo-elements), so its box grows instead, down to a 30 % zoom (below that a group frame is a
    thumbnail: zoom in). Desktop cards are untouched. */
 @media (max-width: 639px) {
-  .pt-cv-node__head .pt-btn {
-    position: relative;
-  }
-  .pt-cv-node__head .pt-btn::after {
-    content: '';
-    position: absolute;
-    inset: min(0px, calc((40px - 40px / clamp(0.2, var(--pt-cv-zoom, 1), 1)) / 2));
-  }
   .pt-cv-group__title {
     min-block-size: calc(40px / clamp(0.3, var(--pt-cv-zoom, 1), 1));
   }
@@ -3392,16 +3690,16 @@ span.pt-paper .pt-paper__cite {
 
 /* ── RFIX2 (additive) ──────────────────────────────────────────────────────────────────────────
    H390: the reader header at phone width. Row one is Back, Contents, the title on ONE line with an
-   ellipsis, and Canvas; row two is the reading-mode switch and ONE compact zoom control (the select:
-   the platform picker on touch). The step buttons and the "Fit width" shortcut are wide-screen
-   shortcuts; pinch zooms on a phone. Every control keeps its 40 px target. */
+   ellipsis, Board and Explain (#203); row two is the reading-mode switch and ONE compact zoom control
+   (the select: the platform picker on touch). The step buttons are wide-screen shortcuts; pinch
+   zooms on a phone. Every control keeps its 40 px target. */
 
 @media (max-width: 639px) {
   .pt-reader__bar {
     flex-wrap: wrap;
     row-gap: 8px;
   }
-  /* The controls group dissolves into the bar so Canvas can join row one and the rest row two. */
+  /* The controls group dissolves into the bar so Board and Explain join row one, the rest row two. */
   .pt-reader__bar > .pt-reader__controls {
     display: contents;
   }
@@ -3410,7 +3708,8 @@ span.pt-paper .pt-paper__cite {
     min-inline-size: 0;
     order: 1;
   }
-  .pt-reader__controls > a.pt-btn {
+  .pt-reader__controls > .pt-reader__board,
+  .pt-reader__controls > .pt-reader__explain {
     flex: 0 0 auto;
     order: 2;
   }
@@ -3421,7 +3720,7 @@ span.pt-paper .pt-paper__cite {
     block-size: 0;
     order: 3;
   }
-  .pt-reader__controls > :not(a) {
+  .pt-reader__controls > :not(.pt-reader__board, .pt-reader__explain) {
     order: 4;
   }
   .pt-reader__controls > div:first-child {
@@ -3431,14 +3730,14 @@ span.pt-paper .pt-paper__cite {
   .pt-reader__controls .pt-zoom {
     flex: 0 0 auto;
   }
-  .pt-reader__controls .pt-zoom__step,
-  .pt-reader__controls .pt-zoom__fit {
+  .pt-reader__controls .pt-zoom__step {
     display: none;
   }
+  /* "Fit width" in Courier Prime needs 7 rem to show whole (#203) */
   .pt-reader__controls .pt-zoom__select {
     flex: none;
-    inline-size: 6.25rem;
-    max-inline-size: 6.25rem;
+    inline-size: 7rem;
+    max-inline-size: 7rem;
   }
 }
 

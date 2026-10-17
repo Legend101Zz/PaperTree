@@ -8,7 +8,7 @@
     DELETE /notebook/pages/{pid}                                       -> 204
     POST   /notebook/pages/{pid}/items              NotebookItemCreate -> 201 item
     PATCH  /notebook/pages/{pid}/items/{iid}        NotebookItemPatch  -> item | 409 stale_version
-    DELETE /notebook/pages/{pid}/items/{iid}                           -> 204
+    DELETE /notebook/pages/{pid}/items/{iid}[?version=N]               -> 204 | 409 stale_version
     POST   /notebook/pages/{pid}/strokes            [NotebookStrokeIn] -> 201 {added}
     DELETE /notebook/pages/{pid}/strokes/{sid}                         -> 204   (the eraser)
 
@@ -22,11 +22,17 @@ from __future__ import annotations
 import base64
 import binascii
 from collections.abc import Callable, Mapping
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse, Response
-from papertree_db import NotebookRejected, NotebookStale, PaperId, PaperNotFound
+from papertree_db import (
+    SQLITE_INTEGER_MAX,
+    NotebookRejected,
+    NotebookStale,
+    PaperId,
+    PaperNotFound,
+)
 
 from .. import evidence
 from ..deps import CallerDep
@@ -229,10 +235,33 @@ async def patch_item(call: CallerDep, page_id: str, item_id: str, request: Reque
     return JSONResponse(_item_wire(result))
 
 
-@router.delete("/notebook/pages/{page_id}/items/{item_id}", status_code=204)
-async def delete_item(call: CallerDep, page_id: str, item_id: str) -> Response:
-    """Deletes one item."""
-    if call.db.delete_notebook_item(call.db_owner, page_id, item_id) == 0:
+@router.delete(
+    "/notebook/pages/{page_id}/items/{item_id}",
+    status_code=204,
+    responses={409: {"model": NotebookItemStale}},
+)
+async def delete_item(
+    call: CallerDep,
+    page_id: str,
+    item_id: str,
+    version: Annotated[
+        int | None,
+        Query(
+            ge=1,
+            le=SQLITE_INTEGER_MAX,
+            description="Delete only at this version (409 stale_version if it is not current).",
+        ),
+    ] = None,
+) -> Response:
+    """Deletes one item; with `?version=N` only at that version (409 `stale_version` if not).
+
+    The version is declared, so it is validated (any value that is not a positive integer in ASCII
+    digits is a 422) and listed in the OpenAPI document.
+    """
+    result = call.db.delete_notebook_item(call.db_owner, page_id, item_id, version)
+    if isinstance(result, NotebookStale):
+        raise _stale("item", _item_wire(result.current))
+    if result == 0:
         raise ApiError("not_found", "no such item on this page")
     return Response(status_code=204)
 

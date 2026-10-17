@@ -38,7 +38,11 @@ export function FlashMarginTab({ from, left, top }: FlashMarginTabProps): ReactN
           lit
         />
       </span>
-      <span className="pt-flash-tab__note">from marker {from.n} in the answer</span>
+      <span className="pt-flash-tab__note">
+        {from.part === undefined
+          ? `from marker ${String(from.n)} in the answer`
+          : `from part ${from.part.letter}, ${from.part.label}`}
+      </span>
     </div>
   );
 }

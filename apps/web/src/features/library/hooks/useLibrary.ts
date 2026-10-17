@@ -11,7 +11,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { isNonTerminal, libraryPaperFromWire, visibleSamples } from '@/components/library/types';
 import { papersApi } from '@/lib/api/papers';
+import { ApiError } from '@/lib/api/types';
 
+import type { ShelfTopic } from '../model/shelf';
 import type { CancelOutcome, UploadContext } from './useUploadQueue';
 import type { LibraryPaper } from '@/components/library/types';
 import type { LibraryPaper as ApiLibraryPaper } from '@/lib/api/types';
@@ -24,11 +26,13 @@ const PAPERS_KEY = ['papers'] as const;
 /** How long a cancelled upload waits before the library is re-read. */
 const CANCEL_SETTLE_MS = 700;
 
-/** A library row as the shelf reads it: the v0.1 view model plus S2a's facts (#192). */
+/** A library row as the shelf reads it: the v0.1 view model, S2a's facts (#192), S2b's topic. */
 export type LibraryBook = LibraryPaper & {
   readonly year: number | null;
   readonly reading: ApiLibraryPaper['reading'];
   readonly arxivCategory: string | null;
+  /** The accepted topic (#193), or null: the shelf's Topic rows and the cloth come from it. */
+  readonly topic?: ShelfTopic | null;
 };
 
 /**
@@ -44,7 +48,30 @@ export function libraryBookFromWire(row: ApiLibraryPaper): LibraryBook {
     year: row.year ?? null,
     reading: row.reading ?? null,
     arxivCategory: row.arxiv_category ?? null,
+    topic:
+      row.topic === null || row.topic === undefined
+        ? null
+        : {
+            id: row.topic.topic_id,
+            name: row.topic.name,
+            cloth: row.topic.cloth,
+            source: row.topic.source,
+            sourceDetail: row.topic.source_detail,
+          },
   };
+}
+
+// One book per wire row object. React Query keeps an unchanged row's object across polls
+// (structural sharing), so its book stays the same object too, and a memoised Table row or spine
+// whose paper did not change does not draw again.
+const BOOKS = new WeakMap<ApiLibraryPaper, LibraryBook>();
+function bookOf(row: ApiLibraryPaper): LibraryBook {
+  let book = BOOKS.get(row);
+  if (book === undefined) {
+    book = libraryBookFromWire(row);
+    BOOKS.set(row, book);
+  }
+  return book;
 }
 
 /**
@@ -100,16 +127,21 @@ export function useLibrary(online: boolean) {
   const rows = query.data;
 
   const own = useMemo<readonly LibraryBook[]>(
-    () => (Array.isArray(rows) ? rows : []).map((row) => libraryBookFromWire(row)),
+    () => (Array.isArray(rows) ? rows : []).map(bookOf),
     [rows],
   );
-  const books = useMemo<readonly LibraryBook[]>(
-    () => [
-      ...visibleSamples().map((s) => ({ ...s, year: null, reading: null, arxivCategory: null })),
-      ...own,
-    ],
-    [own],
+  const samples = useMemo<readonly LibraryBook[]>(
+    () =>
+      visibleSamples().map((s) => ({
+        ...s,
+        year: null,
+        reading: null,
+        arxivCategory: null,
+        topic: null,
+      })),
+    [],
   );
+  const books = useMemo<readonly LibraryBook[]>(() => [...samples, ...own], [samples, own]);
 
   const upload = useCallback(
     async (file: File, context: UploadContext) => {
@@ -160,7 +192,13 @@ export function useLibrary(online: boolean) {
 
   const retry = useCallback(
     async (paperId: string) => {
-      await papersApi.retry(paperId);
+      try {
+        await papersApi.retry(paperId);
+      } catch (caught) {
+        // 409 not_failed: its latest parse is no longer failed (a retry from another tab or an
+        // earlier press got there first). What Retry asked for is under way, so it is not an error.
+        if (!(caught instanceof ApiError && caught.code === 'not_failed')) throw caught;
+      }
       await queryClient.invalidateQueries({ queryKey: PAPERS_KEY });
     },
     [queryClient],

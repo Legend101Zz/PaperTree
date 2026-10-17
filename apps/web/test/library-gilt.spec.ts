@@ -1,5 +1,6 @@
 /**
- * Gilt titles on every cloth clear 4.5:1 (WCAG 1.4.3; titles are 12–17 px, the year 11 px).
+ * Gilt titles on every cloth clear 4.5:1 (WCAG 1.4.3; titles are 12–17 px, the year 11 px), on
+ * the spines and on the face-out covers (#196), whose shading keeps the spine's light budget.
  *
  * Recomputed from the real stylesheets, not from numbers copied here: the cloths from
  * `@papertree/ui/styles.css`, the spine's gilt, sheen and weave from `features/library`'s
@@ -59,15 +60,18 @@ const percent = (value: string) => Number(value.replace('%', '')) / 100;
 const CLOTHS = ['transformers', 'vision', 'generative', 'optimization', 'rl'] as const;
 
 describe('gilt on cloth', () => {
-  const spineRule = /\.pt-spine \{([^}]+)\}/.exec(library)?.[1] ?? '';
+  // The spine's rule is shared with the face-out cover (#196), which then draws its own shading.
+  const spineRule = /\.pt-spine,\s*\.pt-cover \{([^}]+)\}/.exec(library)?.[1] ?? '';
+  const coverRule = /\n\.pt-cover \{([^}]+)\}/.exec(library)?.[1] ?? '';
   // The shading under the title is the background; the 2 px inset top edge is not under any text.
   const shading = /background-image:([^;]+);/.exec(spineRule)?.[1] ?? '';
+  const coverShading = /background-image:([^;]+);/.exec(coverRule)?.[1] ?? '';
   const sheenPeak = percent(prop(library, '--pt-spine-sheen-peak'));
   const weave = percent(prop(library, '--pt-spine-weave-light'));
-  // Any literal white in the spine's shading counts too, in case someone adds a brighter stop.
-  const literalWhites = [...shading.matchAll(/rgb\(255 255 255 \/ (\d+(?:\.\d+)?)%\)/g)].map(
-    (m) => Number(m[1]) / 100,
-  );
+  // Any literal white in either shading counts too, in case someone adds a brighter stop.
+  const literalWhites = [
+    ...`${shading}${coverShading}`.matchAll(/rgb\(255 255 255 \/ (\d+(?:\.\d+)?)%\)/g),
+  ].map((m) => Number(m[1]) / 100);
   const light = Math.max(sheenPeak, ...literalWhites) + weave;
   const giltStops = [
     prop(library, '--pt-spine-gilt-low'),
@@ -76,8 +80,10 @@ describe('gilt on cloth', () => {
   const darkestGilt = giltStops.reduce((a, b) => (luminance(a) <= luminance(b) ? a : b));
 
   it('reads the real shading, gilt and cloths', () => {
-    expect(shading).toContain('var(--pt-spine-sheen-peak)');
-    expect(shading).toContain('var(--pt-spine-weave-light)');
+    for (const under of [shading, coverShading]) {
+      expect(under).toContain('var(--pt-spine-sheen-peak)');
+      expect(under).toContain('var(--pt-spine-weave-light)');
+    }
     expect(library).toMatch(/\.pt-spine--gilt \.pt-spine__title[^{]*\{[^}]*var\(--pt-spine-gilt\)/);
     expect(giltStops.length).toBeGreaterThanOrEqual(4);
     expect(light).toBeGreaterThan(0);

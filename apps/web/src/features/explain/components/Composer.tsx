@@ -2,29 +2,48 @@
 
 /**
  * The explain panel's composer (moved from `components/explain` with #202): "Ask a follow-up, or
- * any question about the paper", Enter to send, Shift+Enter for a new line, and Stop in place of
- * Ask while an answer streams.
+ * any question about the paper", Enter to send, Shift+Enter for a new line. Stop lives on the
+ * streaming answer's tab row (#204). Its text is the controller's (`state.draft`), so it outlives
+ * the composer, and a question the server refused before the stream comes back into it (04c).
  */
-import { useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
+
+import type { AskOutcome } from '@/components/explain/useExplainActions';
 
 /** Props for `Composer`. */
 export interface ComposerProps {
-  /** An answer is streaming: Ask becomes Stop. */
+  /** An answer is streaming: a new question waits for it (Stop is on the answer). */
   readonly busy: boolean;
   /** No server to ask (a sample paper). */
   readonly disabled: boolean;
-  readonly onSend: (question: string) => void;
-  readonly onStop: () => void;
+  /** The box's text (the controller's draft). */
+  readonly value: string;
+  readonly onChange: (text: string) => void;
+  /** Send the question; the controller puts a refused one back into the draft. */
+  readonly onSend: (question: string) => Promise<AskOutcome>;
+  /** Focus the box when this changes to a number (the toolbar's Ask opened the panel, #203). */
+  readonly focusKey?: number | null;
 }
 
 /** The question box at the foot of the panel. */
-export function Composer({ busy, disabled, onSend, onStop }: ComposerProps): ReactNode {
-  const [value, setValue] = useState('');
+export function Composer({
+  busy,
+  disabled,
+  value,
+  onChange,
+  onSend,
+  focusKey,
+}: ComposerProps): ReactNode {
+  const box = useRef<HTMLTextAreaElement>(null);
+  // Runs before the drawer's own focus effect (children first), which then leaves focus here.
+  useEffect(() => {
+    if (focusKey !== null && focusKey !== undefined) box.current?.focus({ preventScroll: true });
+  }, [focusKey]);
   const submit = (): void => {
     const question = value.trim();
     if (question.length === 0 || busy || disabled) return;
-    onSend(question);
-    setValue('');
+    onChange('');
+    void onSend(question);
   };
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -44,6 +63,7 @@ export function Composer({ busy, disabled, onSend, onStop }: ComposerProps): Rea
         Ask a question about this paper
       </label>
       <textarea
+        ref={box}
         id="pt-explain-question"
         className="pt-field pt-explain__input"
         rows={1}
@@ -51,22 +71,16 @@ export function Composer({ busy, disabled, onSend, onStop }: ComposerProps): Rea
         value={value}
         placeholder="Ask a follow-up, or any question about the paper"
         disabled={disabled}
-        onChange={(event) => setValue(event.target.value)}
+        onChange={(event) => onChange(event.target.value)}
         onKeyDown={onKeyDown}
       />
-      {busy ? (
-        <button type="button" className="pt-btn pt-btn--outline" onClick={onStop}>
-          Stop
-        </button>
-      ) : (
-        <button
-          type="submit"
-          className="pt-btn pt-btn--primary"
-          disabled={disabled || value.trim().length === 0}
-        >
-          Ask
-        </button>
-      )}
+      <button
+        type="submit"
+        className="pt-btn pt-btn--primary"
+        disabled={disabled || busy || value.trim().length === 0}
+      >
+        Ask
+      </button>
     </form>
   );
 }

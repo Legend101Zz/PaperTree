@@ -8,13 +8,13 @@
 'use client';
 
 import { Button } from '@papertree/ui';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 
 import { ProgressMeter, TOUCH_TARGET } from '@/components/library/primitives';
-import { PROCESSING_LABEL } from '@/components/library/types';
-import { describeError } from '@/components/ui/errors';
 
-import { readingPage } from '../model/shelf';
+import { useBookActions } from '../hooks/useBookActions';
+import { cardStateLine, metaLine } from '../model/catalogue';
+import { RemoveConfirm } from './RemoveConfirm';
 
 import type { LibraryBook } from '../hooks/useLibrary';
 import type { ReactNode } from 'react';
@@ -33,75 +33,26 @@ export interface CatalogueCardProps {
   readonly onClose?: () => void;
 }
 
-/**
- * The state line: "Reading now · p. 4 of 15", "Not started", "Read", or the processing state in
- * words while the paper is not ready ("Reading the PDF - step 1 of 3").
- *
- * @param book - The book.
- * @returns The line.
- */
-function cardStateLine(book: LibraryBook): string {
-  if (book.processing === 'parsing' && book.step !== undefined) {
-    return `${book.step.name} - step ${String(book.step.n)} of ${String(book.step.of)}`;
-  }
-  if (book.processing !== 'complete' && book.processing !== 'partial') {
-    return PROCESSING_LABEL[book.processing];
-  }
-  const at = readingPage(book);
-  if (at !== null) return `Reading now · p. ${String(at.page)} of ${String(at.of)}`;
-  if (book.reading?.state === 'finished') return 'Read';
-  return book.processing === 'partial' ? PROCESSING_LABEL.partial : 'Not started';
-}
-
-/**
- * "Ashish Vaswani et al. · 2017 · 15 pages": only what the server knows. Full first names on
- * purpose (frame 01's card), so not the spine's surname-only `authorLine`.
- */
-function metaLine(book: LibraryBook): string {
-  const [first, second] = book.authors;
-  const authors =
-    first === undefined
-      ? null
-      : book.authors.length === 1
-        ? first
-        : book.authors.length === 2
-          ? `${first} and ${second ?? ''}`
-          : `${first} et al.`;
-  const pages = book.pageCount > 0 ? `${String(book.pageCount)} pages` : null;
-  return [authors, book.year === null ? null : String(book.year), pages]
-    .filter((part): part is string => part !== null)
-    .join(' · ');
-}
-
-type ActionsProps = Pick<CatalogueCardProps, 'book' | 'onRetry' | 'onDelete'>;
+type ActionsProps = Pick<CatalogueCardProps, 'book' | 'onRetry' | 'onDelete'> & {
+  /** The card, to find Delete again after Keep it. */
+  readonly card: RefObject<HTMLElement>;
+};
 
 /** Retry (failed papers only) and Delete with its inline confirmation; failures as sentences. */
-function CardActions({ book, onRetry, onDelete }: ActionsProps): ReactNode {
-  const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const run = async (action: () => Promise<unknown>, fallback: string): Promise<void> => {
-    setBusy(true);
-    setError(null);
-    try {
-      await action();
-      setConfirming(false);
-    } catch (caught) {
-      setError(describeError(caught, fallback));
-    } finally {
-      setBusy(false);
-    }
-  };
-  const retry = (): void =>
-    void run(
-      () => onRetry(book.id),
-      'Could not start reading again. Check your connection and retry.',
-    );
-  const remove = (): void =>
-    void run(
-      () => onDelete(book.id),
-      'Could not delete this paper. Check your connection and try again.',
-    );
+function CardActions({ book, onRetry, onDelete, card }: ActionsProps): ReactNode {
+  const { confirming, setConfirming, busy, error, retry, remove } = useBookActions(
+    book.id,
+    onRetry,
+    onDelete,
+  );
+  // Keep it takes the confirmation (and the focused button) away: focus goes back to Delete, the
+  // button that opened it, once Delete is drawn again. `Button` does not forward refs.
+  const kept = useRef(false);
+  useEffect(() => {
+    if (confirming || !kept.current) return;
+    kept.current = false;
+    card.current?.querySelector<HTMLElement>('[data-card-delete]')?.focus({ preventScroll: true });
+  }, [confirming, card]);
   return (
     <>
       {book.processing === 'failed' ? (
@@ -110,37 +61,22 @@ function CardActions({ book, onRetry, onDelete }: ActionsProps): ReactNode {
         </Button>
       ) : null}
       {book.isSample === true ? null : confirming ? (
-        <div
-          role="group"
-          aria-label={`Confirm deleting ${book.title}`}
-          className="pt-catalogue__confirm"
-          data-delete-confirm=""
-        >
-          <p>Delete this paper and its highlights? This cannot be undone.</p>
-          <Button
-            variant="danger"
-            size="touch"
-            className={TOUCH_TARGET}
-            disabled={busy}
-            onClick={remove}
-          >
-            {busy ? 'Deleting' : 'Delete paper'}
-          </Button>
-          <Button
-            size="touch"
-            className={TOUCH_TARGET}
-            disabled={busy}
-            onClick={() => setConfirming(false)}
-          >
-            Keep it
-          </Button>
-        </div>
+        <RemoveConfirm
+          title={book.title}
+          busy={busy}
+          onConfirm={remove}
+          onKeep={() => {
+            kept.current = true;
+            setConfirming(false);
+          }}
+        />
       ) : (
         <Button
           variant="danger"
           size="touch"
           className={TOUCH_TARGET}
           aria-label={`Delete ${book.title}`}
+          data-card-delete=""
           onClick={() => setConfirming(true)}
         >
           Delete
@@ -234,7 +170,7 @@ export function CatalogueCard({
         >
           Read<span className="pt-sr-only">{` ${book.title}`}</span>
         </Button>
-        <CardActions book={book} onRetry={onRetry} onDelete={onDelete} />
+        <CardActions book={book} onRetry={onRetry} onDelete={onDelete} card={card} />
       </div>
       {placement === null ? null : (
         <span

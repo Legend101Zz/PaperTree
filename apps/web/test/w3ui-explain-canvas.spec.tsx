@@ -25,9 +25,9 @@ vi.mock('@/lib/api/threads', () => ({
 }));
 
 import { dismissCanvasToast, showCanvasToast } from '@/components/canvas/toast';
-import { useBoardController } from '@/components/canvas/useBoardController';
-import { useExplanationCitations } from '@/components/canvas/useExplanationCitations';
-import { toFlowNode } from '@/components/canvas/model';
+import { useBoardController } from '@/features/board/hooks/useBoardController';
+import { useCardSources } from '@/features/board/hooks/useCardSources';
+import { toFlowNode } from '@/features/board/model/flow';
 import { boardsApi } from '@/lib/api/boards';
 import { threadsApi } from '@/lib/api/threads';
 import { ApiError, type CanvasNode } from '@/lib/api/types';
@@ -85,15 +85,13 @@ describe('the canvas toast clock', () => {
         await new Promise<void>((r) => setImmediate(r));
       });
     };
-    act(() =>
-      showCanvasToast({ message: 'Passage added to your canvas.', href: '/paper/x/canvas' }),
-    );
+    act(() => showCanvasToast({ message: 'Passage added to your board.', href: '/paper/x/board' }));
     await tick(7500);
     expect(screen.getByTestId('canvas-toast')).toBeTruthy();
     await tick(700);
     expect(screen.queryByTestId('canvas-toast')).toBeNull();
 
-    act(() => showCanvasToast({ message: 'Again', href: '/paper/x/canvas' }));
+    act(() => showCanvasToast({ message: 'Again', href: '/paper/x/board' }));
     const toast = screen.getByTestId('canvas-toast');
     fireEvent.pointerEnter(toast);
     await tick(60_000);
@@ -101,8 +99,8 @@ describe('the canvas toast clock', () => {
     fireEvent.pointerLeave(toast);
     await tick(1000);
     expect(screen.getByTestId('canvas-toast')).toBeTruthy();
-    // Focus pauses as well, and "Open canvas" is a real link in the tab order.
-    const link = screen.getByRole('link', { name: 'Open canvas' });
+    // Focus pauses as well, and "Open board" is a real link in the tab order.
+    const link = screen.getByRole('link', { name: 'Open board' });
     expect(link.getAttribute('tabindex')).not.toBe('-1');
     act(() => link.focus());
     await tick(60_000);
@@ -117,18 +115,16 @@ describe('the canvas toast and the keyboard', () => {
     act(() => dismissCanvasToast());
   });
 
-  it('moves a keyboard user to Open canvas and Escape puts them back', async () => {
+  it('moves a keyboard user to Open board and Escape puts them back', async () => {
     const button = document.createElement('button');
-    button.textContent = 'Send to canvas';
+    button.textContent = 'Send to board';
     document.body.appendChild(button);
     button.focus();
     button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     // The button disables itself while it works and drops focus, as the real one does.
     button.blur();
-    act(() =>
-      showCanvasToast({ message: 'Answer added to your canvas.', href: '/paper/x/canvas' }),
-    );
-    const link = screen.getByRole('link', { name: 'Open canvas' });
+    act(() => showCanvasToast({ message: 'Answer added to your board.', href: '/paper/x/board' }));
+    const link = screen.getByRole('link', { name: 'Open board' });
     expect(document.activeElement).toBe(link);
     fireEvent.keyDown(link, { key: 'Escape' });
     expect(screen.queryByTestId('canvas-toast')).toBeNull();
@@ -141,10 +137,8 @@ describe('the canvas toast and the keyboard', () => {
     document.body.appendChild(button);
     button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     window.dispatchEvent(new Event('pointerdown'));
-    act(() =>
-      showCanvasToast({ message: 'Passage added to your canvas.', href: '/paper/x/canvas' }),
-    );
-    expect(document.activeElement).not.toBe(screen.getByRole('link', { name: 'Open canvas' }));
+    act(() => showCanvasToast({ message: 'Passage added to your board.', href: '/paper/x/board' }));
+    expect(document.activeElement).not.toBe(screen.getByRole('link', { name: 'Open board' }));
     button.remove();
   });
 });
@@ -186,16 +180,18 @@ describe('canvas citations', () => {
         : [message('msg_other', ['b1'])]) as never,
     }));
     const nodes = [toFlowNode(explanation('cn_1', 'msg_1'), 'ppr_1')];
-    const { result } = renderHook(() => useExplanationCitations('ppr_1', nodes));
-    await waitFor(() => expect(result.current.get('msg_1')).toHaveLength(2));
+    const { result } = renderHook(() => useCardSources('ppr_1', nodes));
+    await waitFor(() =>
+      expect(result.current.explanations.get('msg_1')?.answer.citations).toHaveLength(2),
+    );
   });
 
   it('gives no entry when the read fails', async () => {
     vi.mocked(threadsApi.list).mockRejectedValue(new Error('offline'));
     const nodes = [toFlowNode(explanation('cn_1', 'msg_1'), 'ppr_1')];
-    const { result } = renderHook(() => useExplanationCitations('ppr_1', nodes));
+    const { result } = renderHook(() => useCardSources('ppr_1', nodes));
     await new Promise((r) => setTimeout(r, 20));
-    expect(result.current.has('msg_1')).toBe(false);
+    expect(result.current.explanations.has('msg_1')).toBe(false);
   });
 });
 

@@ -1,0 +1,223 @@
+/* linkAs.css — the "Link as" picker (frame 06, DESIGN.md §3.9) and the dashed navy thread that
+   waits for its kind (§3.10). Sizes are the mock-up's (06-board-1440.dc.html); colours are --pt-*
+   tokens, so the lamp-lit study (09c) follows. Motion: settle in 240 ms (§6); none when reduced. */
+
+.pt-linkas {
+  position: absolute;
+  z-index: 8; /* over the cards, the legend (5) and the selected-thread bar (7) */
+  inline-size: min(672px, calc(100% - 32px));
+  padding: 12px 16px 14px;
+  color: var(--pt-ink);
+  font: 15px / 1.3 var(--pt-font-ai);
+  background: var(--pt-e2-fill);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-menu);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+  animation: pt-linkas-settle var(--pt-dur-sheet) var(--pt-ease-settle) both;
+}
+
+@keyframes pt-linkas-settle {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+.pt-linkas__head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-block-end: 12px;
+  white-space: nowrap;
+}
+
+.pt-linkas__title {
+  flex: none;
+  color: var(--pt-primary);
+  font: 700 13px / 1 var(--pt-font-label);
+  letter-spacing: 0.08em;
+}
+
+.pt-linkas__ends {
+  min-inline-size: 0;
+  overflow: hidden;
+  font-size: 14.5px;
+  text-overflow: ellipsis;
+}
+
+.pt-linkas__keys {
+  flex: none;
+  margin-inline-start: auto;
+  color: var(--pt-ink-muted);
+  font: 12px / 1 var(--pt-font-you);
+}
+
+.pt-linkas__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.pt-linkas__opt {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-block-size: 58px;
+  padding: 10px 12px 8px;
+  color: var(--pt-ink);
+  font: inherit;
+  text-align: start;
+  background: var(--pt-call-slip);
+  border: 1px solid var(--pt-rule);
+  border-radius: var(--pt-radius-control);
+  cursor: pointer;
+}
+
+.pt-linkas__opt:hover {
+  border-color: var(--pt-control-border);
+}
+
+.pt-linkas__opt[aria-selected='true'] {
+  background: var(--pt-ai-slip);
+  border-color: var(--pt-focus);
+  outline: 2px solid var(--pt-focus);
+  outline-offset: 1px;
+}
+
+.pt-linkas__opt[aria-disabled='true'] {
+  color: var(--pt-ink-muted);
+  border-style: dashed;
+  cursor: not-allowed;
+}
+
+.pt-linkas__opt[aria-disabled='true'] .pt-thread-swatch__line {
+  opacity: 0.4;
+}
+
+.pt-linkas .pt-thread-swatch {
+  display: flex;
+  gap: 8px;
+  font-size: 15px;
+}
+
+.pt-linkas .pt-thread-swatch__line {
+  display: block;
+  inline-size: 100%;
+  block-size: 14px;
+}
+
+.pt-linkas .pt-thread-swatch__tag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  color: inherit;
+  background: none;
+}
+
+.pt-linkas__opt[aria-selected='true'] .pt-thread-swatch__tag {
+  font-weight: 700;
+}
+
+.pt-linkas .pt-thread-swatch__glyph {
+  min-inline-size: 14px;
+  color: var(--pt-linkas-wire);
+  font: 700 18px / 1 var(--pt-font-you);
+  text-align: center;
+}
+
+.pt-linkas__key {
+  position: absolute;
+  inset-block-end: 9px;
+  inset-inline-end: 10px;
+  color: var(--pt-ink-2);
+  font: 12px / 1 var(--pt-font-you);
+}
+
+.pt-linkas__why {
+  margin: 10px 0 0;
+  color: var(--pt-ink-2);
+  font-size: 14px;
+}
+
+.pt-linkas__label {
+  margin-block-start: 10px;
+}
+
+.pt-linkas__add {
+  min-block-size: 32px;
+  padding: 0;
+  color: var(--pt-primary);
+  font: inherit;
+  font-size: 14px;
+  text-decoration: underline;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.pt-linkas__label .pt-field {
+  inline-size: 100%;
+  min-block-size: 40px;
+  padding-inline: 8px;
+  color: var(--pt-ink);
+  font: inherit;
+  background: var(--pt-call-slip);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-linkas :focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+.pt-linkas .pt-linkas__opt[aria-selected='true']:focus-visible {
+  outline-offset: 1px;
+}
+
+/* The thread waiting for its kind: dashed navy, as while it is dragged (useThreadDrawing). */
+.pt-thread-preview {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.pt-thread-preview path {
+  fill: none;
+  stroke: var(--pt-focus);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 7 5;
+}
+
+@media (max-width: 639px) {
+  .pt-linkas__head {
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+
+  .pt-linkas__ends {
+    flex-basis: 100%;
+    order: 3;
+  }
+
+  .pt-linkas__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pt-linkas__add {
+    min-block-size: var(--pt-target-touch);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-linkas {
+    animation: none;
+  }
+}
