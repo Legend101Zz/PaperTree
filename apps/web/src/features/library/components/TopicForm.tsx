@@ -1,8 +1,9 @@
 /**
  * TopicForm: a topic's name and its cloth (#198), the one form behind "New topic" and a card's
  * "Rename or recolour". The cloth is a native radio group (arrows move, one tab stop) of the six
- * cloths, each a swatch with its colour's name. The server's refusal (a name already used) is shown
- * beside the field and the typed name is kept.
+ * cloths, each a swatch with its colour's name; a topic without a cloth starts with none chosen, so
+ * a rename never colours it. A name already used is refused beside the field in our own words, and
+ * the typed name is kept.
  */
 'use client';
 
@@ -11,6 +12,7 @@ import { useId, useState } from 'react';
 
 import { TOUCH_TARGET } from '@/components/library/primitives';
 import { describeError } from '@/components/ui/errors';
+import { ApiError } from '@/lib/api/types';
 
 import { useTouchTargets } from '../hooks/useTouchTargets';
 import { CLOTHS } from '../model/topics';
@@ -21,11 +23,12 @@ import type { FormEvent, ReactNode } from 'react';
 /** Props for `TopicForm`. */
 export interface TopicFormProps {
   readonly initialName?: string;
-  readonly initialCloth: ClothId;
+  /** Null: no cloth chosen yet (a topic made without one); the form then sends none unless picked. */
+  readonly initialCloth: ClothId | null;
   /** The submit button's words ("Create topic", "Save"). */
   readonly submitLabel: string;
   /** Resolves when saved; a rejection is shown as the field's error. */
-  readonly onSubmit: (name: string, cloth: ClothId) => Promise<unknown>;
+  readonly onSubmit: (name: string, cloth: ClothId | null) => Promise<unknown>;
 }
 
 /**
@@ -41,7 +44,7 @@ export function TopicForm({
   onSubmit,
 }: TopicFormProps): ReactNode {
   const [name, setName] = useState(initialName);
-  const [cloth, setCloth] = useState<ClothId>(initialCloth);
+  const [cloth, setCloth] = useState<ClothId | null>(initialCloth);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const group = useId();
@@ -60,7 +63,12 @@ export function TopicForm({
       () => setBusy(false),
       (caught: unknown) => {
         setBusy(false);
-        setError(describeError(caught, 'The topic was not saved. Try again.'));
+        // The server's 409 sentence is a log line (lower case, Python quotes), not ours to show.
+        setError(
+          caught instanceof ApiError && caught.code === 'topic_exists'
+            ? `You already have a topic called “${trimmed}” (letter case aside). Choose another name.`
+            : describeError(caught, 'The topic was not saved. Try again.'),
+        );
       },
     );
   };

@@ -34,6 +34,18 @@
   flex-direction: column;
 }
 
+/* The card whose "…" is open stands above the others, so a later card's "…" never covers its panel
+   (every menu button has the same z-index). */
+.pt-topiccard:has(.pt-topicmenu__button[aria-expanded='true']) {
+  z-index: 4;
+}
+
+.pt-topics__samples {
+  margin: 16px 0 0;
+  font-size: 14px;
+  color: var(--pt-ink-2);
+}
+
 /* ── the banner: the cloth, its pattern, a gilt frame and the ornament ── */
 
 .pt-topicbanner {

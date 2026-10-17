@@ -52,7 +52,9 @@ export function NewTopic(): ReactNode {
           <TopicForm
             initialCloth={nextCloth(topics)}
             submitLabel="Create topic"
-            onSubmit={(name, cloth) => actions.create({ name, cloth }).then(() => menu.close())}
+            onSubmit={(name, cloth) =>
+              actions.create(cloth === null ? { name } : { name, cloth }).then(() => menu.close())
+            }
           />
         </div>
       ) : null}

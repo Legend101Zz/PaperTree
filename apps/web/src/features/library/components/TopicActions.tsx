@@ -12,7 +12,6 @@ import { useEffect, useRef, useState } from 'react';
 
 import { usePopover } from '../hooks/usePopover';
 import { useTouchTargets } from '../hooks/useTouchTargets';
-import { nextCloth } from '../model/topics';
 import { TopicForm } from './TopicForm';
 
 import type { TopicActions as Actions } from '../hooks/useTopics';
@@ -138,10 +137,12 @@ export function TopicActions({
         >
           <TopicForm
             initialName={topic.name}
-            initialCloth={topic.cloth ?? nextCloth([])}
+            initialCloth={topic.cloth}
             submitLabel="Save"
             onSubmit={(name, cloth) =>
-              actions.patch(topic.topic_id, { name, cloth }).then(() => menu.close())
+              actions
+                .patch(topic.topic_id, cloth === null ? { name } : { name, cloth })
+                .then(() => menu.close())
             }
           />
           <Button

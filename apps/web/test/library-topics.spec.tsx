@@ -34,6 +34,8 @@ const db = vi.hoisted(() => ({
   placed: new Map<string, Placement>(),
   rejected: new Set<string>(),
   next: 1,
+  /** More unshelved papers, for "Show all". */
+  more: [] as LibraryPaper[],
 }));
 
 const PAPERS: LibraryPaper[] = [
@@ -48,7 +50,8 @@ const PAPERS: LibraryPaper[] = [
   }),
 ];
 
-const category = (id: string) => PAPERS.find((p) => p.paper_id === id)?.arxiv_category ?? null;
+const all = () => [...PAPERS, ...db.more];
+const category = (id: string) => all().find((p) => p.paper_id === id)?.arxiv_category ?? null;
 const topicOf = (id: string) => db.topics.find((t) => t.topic_id === id);
 
 /** S2b's deterministic rule: the topic already holding a paper of the same category. */
@@ -113,7 +116,7 @@ vi.mock('@/lib/api/papers', async (importOriginal) => ({
 
 function wire(): void {
   papersApi.list.mockImplementation(async () =>
-    PAPERS.map((p) => {
+    all().map((p) => {
       const placed = db.placed.get(p.paper_id);
       const t = placed === undefined ? undefined : topicOf(placed.topic_id);
       return {
@@ -143,7 +146,8 @@ function wire(): void {
   );
   topicsApi.create.mockImplementation(async ({ name, cloth }: { name: string; cloth?: Cloth }) => {
     if (db.topics.some((t) => t.name.toLowerCase() === name.toLowerCase())) {
-      throw new ApiError(409, 'topic_exists', `You already have a topic called “${name}”.`, false);
+      // The real API's detail (papertree_db.topics): a log line, lower case, Python quotes.
+      throw new ApiError(409, 'topic_exists', `you already have a topic called '${name}'`, false);
     }
     const topic: Topic = {
       topic_id: `top_${String(db.next++)}`,
@@ -188,6 +192,7 @@ beforeEach(() => {
   db.placed = new Map();
   db.rejected = new Set();
   db.next = 1;
+  db.more = [];
   for (const fn of [...Object.values(topicsApi), ...Object.values(papersApi)]) fn.mockReset();
   wire();
   window.localStorage.clear();
@@ -255,7 +260,12 @@ describe('the Topics view (#198)', () => {
       target: { value: 'transformers & ATTENTION' },
     });
     fireEvent.click(within(form).getByRole('button', { name: 'Create topic' }));
-    expect(await within(form).findByText(/already have a topic/)).toBeTruthy();
+    expect(
+      await within(form).findByText(
+        'You already have a topic called “transformers & ATTENTION” (letter case aside). Choose another name.',
+      ),
+    ).toBeTruthy();
+    expect(within(form).queryByText(/you already have a topic called '/)).toBeNull();
     expect((within(form).getByLabelText('Name') as HTMLInputElement).value).toBe(
       'transformers & ATTENTION',
     );
@@ -439,6 +449,78 @@ describe('the Topics view (#198)', () => {
     expect(card('Vision').getAttribute('data-match')).toBe('false');
     expect(unshelvedRow('ppr_bert')?.getAttribute('data-match')).toBe('true');
     expect(unshelvedRow('ppr_att')?.getAttribute('data-match')).toBe('false');
+  });
+
+  it('the title counts every topic, an empty one too', async () => {
+    await openTopics();
+    await createTopic('Transformers');
+    await createTopic('Vision', 'Green');
+    await waitFor(() =>
+      expect(document.querySelector('.pt-libtitle__stats')?.textContent).toContain('2 topics'),
+    );
+  });
+
+  it('Enter in the search acts on Topics and never takes a book down on the hidden shelf', async () => {
+    await openTopics();
+    await createTopic('Transformers');
+    await waitFor(() => expect(unshelvedRow('ppr_att')?.querySelector('select')).toBeTruthy());
+    const att = unshelvedRow('ppr_att') as HTMLElement;
+    fireEvent.change(within(att).getByLabelText(/Choose a topic for Attention/), {
+      target: { value: 'top_1' },
+    });
+    fireEvent.click(within(att).getByRole('button', { name: /^Shelve Attention/ }));
+    await waitFor(() => expect(unshelvedRow('ppr_att')).toBeNull());
+    const search = screen.getByRole('searchbox');
+    fireEvent.change(search, { target: { value: 'attention' } });
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Transformers' }));
+    // A search that only an Unshelved paper matches goes to that row.
+    fireEvent.change(search, { target: { value: 'residual' } });
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(unshelvedRow('ppr_resnet')?.contains(document.activeElement)).toBe(true);
+    expect(document.querySelector('[data-card-paper-id]')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Shelf' }));
+    expect(document.querySelector('[data-card-paper-id]')).toBeNull();
+  });
+
+  it('"Show all" puts focus on the first paper it brings in', async () => {
+    db.more = Array.from({ length: 8 }, (_, i) =>
+      row(`ppr_x${String(i)}`, `Extra paper ${String(i)}`, {
+        created_at: `2026-10-0${String(4 + (i % 5))}T1${String(i)}:00:00+00:00`,
+      }),
+    );
+    await openTopics();
+    await createTopic('Transformers');
+    const show = await screen.findByRole('button', { name: 'Show all 11' });
+    const card = screen.getByRole('region', { name: 'Unshelved' });
+    expect(card.querySelectorAll('li[data-paper-id]')).toHaveLength(8);
+    fireEvent.click(show);
+    const rows = card.querySelectorAll('li[data-paper-id]');
+    expect(rows).toHaveLength(11);
+    expect(rows[8]?.contains(document.activeElement)).toBe(true);
+  });
+
+  it('a rename keeps a topic without a cloth without one', async () => {
+    db.topics.push({
+      topic_id: 'top_9',
+      name: 'Reading list',
+      cloth: null,
+      sort_order: 0,
+      paper_count: 0,
+      page_count: 0,
+      categories: [],
+    });
+    await openTopics();
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage Reading list' }));
+    const panel = screen.getByRole('group', { name: 'Manage Reading list' });
+    expect(
+      within(panel)
+        .getAllByRole('radio')
+        .some((r) => (r as HTMLInputElement).checked),
+    ).toBe(false);
+    fireEvent.change(within(panel).getByLabelText('Name'), { target: { value: 'To read' } });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(topicsApi.patch).toHaveBeenCalledWith('top_9', { name: 'To read' }));
   });
 
   it('has no axe violations at WCAG 2.2 AA, with a card menu open', async () => {

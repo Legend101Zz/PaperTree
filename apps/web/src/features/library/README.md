@@ -44,13 +44,16 @@ same papers as a ruled catalogue, and Topics shows each topic as a card.
   initial; a menu with the email and Sign out).
 - **Uploads** show as a quiet row under the header with Cancel; PDFs also drop anywhere on the page.
 - **Title block:** "Your library", the stats line computed from the papers ("24 papers · 6 topics · 3 reading
-  now · 484 pages", leaving out what is zero; nothing at all until the list has loaded), and "N need a look"
+  now · 484 pages", leaving out what is zero; nothing at all until the list has loaded; "N topics" is every topic in
+  `GET /topics`, an empty one too, once it is read), and "N need a look"
   (queued, being read or failed), which **opens the Table filtered to those papers** (#197, the owner's default,
   owner may change; before #197 it filtered the shelf) and switches itself off when nothing needs a look.
 - **Views:** Shelf, Topics and Table are live; Map is shown disabled with "Coming in this release" (S2g, second
   half). Arrange by (Topic, Year, Title, Recently opened) stands at the right of the view row for the shelf, Columns
   for the Table, New topic for Topics. The shelf stays mounted, hidden, under the other views, so its roving focus,
-  open card and sideways scroll survive a switch of view; the search is the page's and filters every view.
+  open card and sideways scroll survive a switch of view; the search is the page's and filters every view. Enter
+  in the search acts on the view showing (the Table's first row, the first lit topic card, else a lit Unshelved
+  row, the shelf's first match taken down) and never changes a hidden view (`hooks/useViewNavigation.ts`).
 - **Topics** (03, #198): one card per topic in the server's shelf order (`GET /topics`): a 120 px banner in the
   topic's cloth with that cloth's pattern, a gilt frame and the ornament (a plate figure needs S3's plate, so no
   card shows one and none is ever blank), the name, "2 papers · 31 pages · 1 reading now" (the third part is the
@@ -63,11 +66,14 @@ same papers as a ruled catalogue, and Topics shows each topic as a card.
   page). An empty topic's name is `aria-disabled` and opens nothing. "…" renames and recolours (the six cloths, by
   colour name) in one form, and deletes after an inline confirmation that says the papers go back to Unshelved and
   stay; focus then goes to the neighbouring card, or New topic. **Unshelved** lists the papers with no accepted topic
-  (shelving order, eight then "Show all"), each with its offer from `GET /papers/{id}/topic` ("Suggested: Vision &
+  (shelving order, eight then "Show all", which puts focus on the first paper it brings in), each with its offer from `GET /papers/{id}/topic` ("Suggested: Vision &
   detection · from arXiv cs.CL", or "No suggestion yet") and Accept, Not this, or a topic of the person's choosing
   (a select and Shelve). An offer never shelves anything; S2b offers only a topic that already holds a paper of the
   same arXiv category, so a new person's first paper on a topic is always their own choice. A name already used is
-  refused beside the field with the typed name kept.
+  refused beside the field in our words ("You already have a topic called “…” (letter case aside)"), the typed name
+  kept. A topic made without a cloth opens its form with none chosen, so a rename never colours it. The open card's
+  "…" panel stands above every other card. Sample papers (fixtures on) are not the person's and take no topic; a line
+  under Unshelved says so.
 - **The Table** (01d) is a native `<table>`: Title (a link to the reader), Authors (first author "et al.";
   three or more open "Authors · full", a popover with every name), Year, Topic (its cloth, name and source line,
   "arXiv cs.CL · accepted", "chosen by you" or "suggested · accepted"; else "Unshelved"), Pages, State
@@ -145,7 +151,8 @@ ribbon, no year means no year on the spine.
   arrow step (pure; tested in `model/topics.spec.ts`). `hooks/useTopics.ts` is `GET /topics`, every topic write
   (each re-reads topics, papers and offers) and the Unshelved offers (`lib/api/topics.ts`).
 - `components/TopicsView.tsx` with `TopicCard.tsx`, `TopicActions.tsx` (the "…" menu), `TopicForm.tsx` (name and
-  cloth, shared with `NewTopic.tsx`), `UnshelvedCard.tsx` and `topics.css`; tests in `apps/web/test/library-topics.spec.tsx`.
+  cloth, shared with `NewTopic.tsx`), `UnshelvedCard.tsx` and `topics.css`; `hooks/useViewNavigation.ts` is "Show on
+  the shelf", Enter on a topic card and Enter in the search; tests in `apps/web/test/library-topics.spec.tsx`.
 - `model/table.ts`: the Table's State cell, chips and counts, the Filter model, the source line, the date and the
   "need a look" sentence; `model/tableSort.ts`: columns, the comparators (nulls last, ties by title), the caption,
   `tablePool` and `tableRows`, and the stored columns (pure; tested beside them). `hooks/useTableView.ts` holds

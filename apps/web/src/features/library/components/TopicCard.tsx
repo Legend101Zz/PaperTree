@@ -36,6 +36,8 @@ export interface TopicCardProps {
   readonly onOpen: (topicId: string) => void;
   /** The grid's arrow keys, on the name button. */
   readonly onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
+  /** The id of the sentence saying what the arrow keys do, read with the name. */
+  readonly hintId?: string;
   readonly actions: Pick<Actions, 'patch' | 'remove'>;
   readonly onRemoved: (topicId: string) => void;
 }
@@ -72,7 +74,7 @@ function Skyline({ papers, matches }: Pick<TopicCardProps, 'papers' | 'matches'>
 }
 
 /**
- * One card. Memoised: a search keystroke redraws only the cards whose matches changed.
+ * One card. Memoised: moving the grid's focus redraws only the two cards whose tab stop moved.
  *
  * @example
  * <TopicCard topic={t} papers={ps} matches={null} active onFocusCard={set} onOpen={open} actions={a} onRemoved={r} />
@@ -85,6 +87,7 @@ export const TopicCard = memo(function TopicCard({
   onFocusCard,
   onOpen,
   onKeyDown,
+  hintId,
   actions,
   onRemoved,
 }: TopicCardProps): ReactNode {
@@ -115,7 +118,7 @@ export const TopicCard = memo(function TopicCard({
             type="button"
             className="pt-topiccard__open"
             tabIndex={active ? 0 : -1}
-            aria-describedby={`${statsId} ${sourceId}`}
+            aria-describedby={[statsId, sourceId, hintId].filter(Boolean).join(' ')}
             aria-disabled={empty ? true : undefined}
             data-topic-open=""
             onFocus={() => onFocusCard(topic.topic_id)}

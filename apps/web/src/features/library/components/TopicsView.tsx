@@ -53,6 +53,9 @@ export function TopicsView({ books, matches, onShowOnShelf }: TopicsViewProps): 
   const grid = useRef<HTMLUListElement>(null);
   const [focused, setFocused] = useState<string | null>(null);
   const stop = (focused !== null && order.includes(focused) ? focused : order[0]) ?? null;
+  // Read by the arrow keys through a ref, so a focus move does not hand every card a new handler.
+  const stopRef = useRef(stop);
+  stopRef.current = stop;
   const focusCard = useCallback((id: string) => {
     grid.current
       ?.querySelector<HTMLElement>(`[data-topic-id="${CSS.escape(id)}"] [data-topic-open]`)
@@ -81,24 +84,27 @@ export function TopicsView({ books, matches, onShowOnShelf }: TopicsViewProps): 
     },
     [shelves, onShowOnShelf],
   );
-  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>): void => {
-    const node = grid.current;
-    const columns =
-      node === null
-        ? 1
-        : getComputedStyle(node).gridTemplateColumns.split(' ').filter(Boolean).length;
-    const next = gridStep(
-      stop === null ? 0 : order.indexOf(stop),
-      event.key,
-      order.length,
-      columns || 1,
-    );
-    const id = next === null ? undefined : order[next];
-    if (id === undefined) return;
-    event.preventDefault();
-    setFocused(id);
-    focusCard(id);
-  };
+  const onKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLButtonElement>): void => {
+      const node = grid.current;
+      const columns =
+        node === null
+          ? 1
+          : getComputedStyle(node).gridTemplateColumns.split(' ').filter(Boolean).length;
+      const next = gridStep(
+        stopRef.current === null ? 0 : order.indexOf(stopRef.current),
+        event.key,
+        order.length,
+        columns || 1,
+      );
+      const id = next === null ? undefined : order[next];
+      if (id === undefined) return;
+      event.preventDefault();
+      setFocused(id);
+      focusCard(id);
+    },
+    [order, focusCard],
+  );
 
   if (query.isLoading) {
     return <div role="status" aria-label="Loading your topics" className="pt-s3-skeleton" />;
@@ -136,12 +142,7 @@ export function TopicsView({ books, matches, onShowOnShelf }: TopicsViewProps): 
           </p>
         </div>
       ) : (
-        <ul
-          ref={grid}
-          className="pt-topics__grid"
-          aria-label="Your topics"
-          aria-describedby={keysId}
-        >
+        <ul ref={grid} className="pt-topics__grid" aria-label="Your topics">
           {shelves.map((shelf) => (
             <TopicCard
               key={shelf.topic.topic_id}
@@ -152,6 +153,7 @@ export function TopicsView({ books, matches, onShowOnShelf }: TopicsViewProps): 
               onFocusCard={setFocused}
               onOpen={onOpen}
               onKeyDown={onKeyDown}
+              hintId={keysId}
               actions={actions}
               onRemoved={onRemoved}
             />
@@ -162,6 +164,11 @@ export function TopicsView({ books, matches, onShowOnShelf }: TopicsViewProps): 
         Arrow keys move between the topics; Enter shows a topic’s papers on the shelf.
       </p>
       <UnshelvedCard papers={unshelved} topics={topics} matches={matches} actions={actions} />
+      {books.some((book) => book.isSample === true) ? (
+        <p className="pt-topics__samples">
+          The sample papers are not yours, so they stay off topics.
+        </p>
+      ) : null}
     </section>
   );
 }

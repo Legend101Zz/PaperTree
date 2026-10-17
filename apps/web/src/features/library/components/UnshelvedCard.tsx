@@ -12,7 +12,7 @@ import { memo, useCallback, useId, useLayoutEffect, useRef, useState } from 'rea
 import { usePaperOffers } from '../hooks/useTopics';
 import { useTouchTargets } from '../hooks/useTouchTargets';
 import { clothFor, spineTitle } from '../model/shelf';
-import { offerLine } from '../model/topics';
+import { nextCloth, offerLine } from '../model/topics';
 
 import type { LibraryBook } from '../hooks/useLibrary';
 import type { TopicActions } from '../hooks/useTopics';
@@ -75,7 +75,8 @@ const UnshelvedRow = memo(function UnshelvedRow({
       paper.id,
       offer?.topic
         ? { topic_id: offer.topic.topic_id }
-        : { new_topic_name: offer?.suggested_name ?? '' },
+        : // A new name the model offered gets a cloth the person does not use yet.
+          { new_topic_name: offer?.suggested_name ?? '', cloth: nextCloth(topics) },
     );
   return (
     <li
@@ -165,6 +166,15 @@ export function UnshelvedCard({ papers, topics, matches, actions }: UnshelvedCar
   const list = useRef<HTMLUListElement>(null);
   const shown = all ? papers : papers.slice(0, SHOWN);
   const offers = usePaperOffers(shown);
+  // "Show all" leaves with the press: focus goes to the first row it brought in, not to the page.
+  const expanding = useRef(false);
+  useLayoutEffect(() => {
+    if (!all || !expanding.current) return;
+    expanding.current = false;
+    // A row with nothing to press yet (no topics, no offer) hands focus to the card's heading.
+    const control = list.current?.children[SHOWN]?.querySelector<HTMLElement>('button, select');
+    (control ?? document.getElementById(headingId))?.focus();
+  }, [all, headingId]);
   // Focus never falls to the page: after "Not this" it goes to the row's own topic picker; after a
   // paper is shelved (its row leaves), to the next row, else the previous, else the view's heading.
   const [done, setDone] = useState<{ id: string; leaves: boolean; next: string | null } | null>(
@@ -211,7 +221,13 @@ export function UnshelvedCard({ papers, topics, matches, actions }: UnshelvedCar
         ))}
       </ul>
       {shown.length < papers.length ? (
-        <Button variant="ghost" onClick={() => setAll(true)}>
+        <Button
+          variant="ghost"
+          onClick={() => {
+            expanding.current = true;
+            setAll(true);
+          }}
+        >
           Show all {papers.length}
         </Button>
       ) : null}
