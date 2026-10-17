@@ -1,6 +1,6 @@
 /**
  * #205 (frame 08b): the explain panel as the phone's bottom sheet, on the golden thread (frame 04's
- * real stored answers).
+ * real stored answers), and the phone header with its menu.
  *
  * - the sheet's header holds "Explain", the thread menu ("Thread 1 of 2") and the close button;
  * - the call slip keeps the selected passage (the two-line clamp is CSS: measured in
@@ -13,6 +13,7 @@
  * - a marker tap lowers the sheet to peek and flashes the passage.
  */
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { useState, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { hitOutset, SHEET_PEEK_PX, TOUCH_MARKER_PX, TOUCH_TARGET_PX } from '@papertree/ui';
@@ -21,7 +22,9 @@ import { GOLDEN } from './fixtures/attention-thread';
 import { focusAnchor, Harness, sendToCanvas, stubDesktop } from './s6-harness';
 import { installFetch, jsonResponse, PAPER } from './s6-support';
 
+import { tableRegionName } from '@/components/reader/guidedTables';
 import { spanInView } from '@/components/reader/VirtualPageList';
+import { ReaderHeader, type ReaderHeaderProps } from '@/features/reader';
 import type { Thread } from '@/lib/api/types';
 
 const NEWER: Thread = {
@@ -173,6 +176,129 @@ describe('spanInView: what the reader counts as already on screen', () => {
     expect(spanInView(600, 640, 0, 700, SHEET_PEEK_PX)).toBe(false);
     expect(spanInView(400, 560, 0, 700, SHEET_PEEK_PX)).toBe(true);
     expect(spanInView(-10, 40, 0, 700, SHEET_PEEK_PX)).toBe(false);
+  });
+});
+
+const BASE: ReaderHeaderProps = {
+  title: 'Attention Is All You Need',
+  page: 1,
+  pageCount: 15,
+  mode: 'source',
+  onModeChange: () => undefined,
+  guidedAvailable: true,
+  zoom: 1,
+  zoomMode: { kind: 'fit-width' },
+  onZoomChange: () => undefined,
+  navigatorOpen: false,
+  navigatorAvailable: true,
+  onNavigatorToggle: () => undefined,
+  highlightCount: 1,
+  boardHref: `/paper/${PAPER}/canvas`,
+  explain: { open: false, onToggle: () => undefined, ref: { current: null } },
+};
+
+describe('the phone header (frame 08b)', () => {
+  it('is one row: back, the title, "p. 2", Explain and the menu', () => {
+    render(<ReaderHeader {...BASE} />);
+    const bar = screen.getByRole('banner');
+    expect(within(bar).getByRole('link', { name: 'Library' })).toBeTruthy();
+    expect(within(bar).getByRole('heading', { level: 1 }).textContent).toBe(BASE.title);
+    expect(within(bar).getByText('p. 2')).toBeTruthy();
+    expect(within(bar).getByRole('button', { name: 'Explain' })).toBeTruthy();
+    const menu = within(bar).getByRole('button', { name: 'Reading options' });
+    expect(menu.getAttribute('aria-expanded')).toBe('false');
+    // The rest waits in the menu.
+    expect(within(bar).queryByRole('radiogroup', { name: 'Reading mode' })).toBeNull();
+    expect(within(bar).queryByLabelText('Zoom level')).toBeNull();
+    expect(within(bar).queryByRole('link', { name: 'Board' })).toBeNull();
+  });
+
+  it('opens Contents, the modes, zoom and Board; Esc closes it back onto its button', () => {
+    const contents = vi.fn();
+    render(<ReaderHeader {...BASE} onNavigatorToggle={contents} />);
+    const button = screen.getByRole('button', { name: 'Reading options' });
+    fireEvent.click(button);
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    const group = screen.getByRole('group', { name: 'Reading options' });
+    expect(within(group).getByRole('radiogroup', { name: 'Reading mode' })).toBeTruthy();
+    expect(within(group).getByLabelText('Zoom level')).toBeTruthy();
+    expect(within(group).getByRole('link', { name: 'Board' }).getAttribute('href')).toBe(
+      BASE.boardHref,
+    );
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('group', { name: 'Reading options' })).toBeNull();
+    expect(document.activeElement).toBe(button);
+
+    fireEvent.click(button);
+    fireEvent.click(screen.getByRole('button', { name: 'Contents, 1 highlight' }));
+    expect(contents).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('group', { name: 'Reading options' })).toBeNull();
+  });
+
+  it('closes on a press outside it, and when focus moves out of it', () => {
+    render(
+      <>
+        <ReaderHeader {...BASE} />
+        <button type="button">in the page</button>
+      </>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Reading options' }));
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole('group', { name: 'Reading options' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Reading options' }));
+    fireEvent.focusIn(screen.getByRole('button', { name: 'in the page' }));
+    expect(screen.queryByRole('group', { name: 'Reading options' })).toBeNull();
+  });
+
+  it('draws Explain as a 44 px target on the phone row', () => {
+    render(<ReaderHeader {...BASE} />);
+    expect(screen.getByRole('button', { name: 'Explain' }).style.minHeight).toBe('44px');
+  });
+
+  it('Contents from the menu hands focus into Contents, and back to the menu when it closes', () => {
+    render(<WithContents />);
+    const menu = screen.getByRole('button', { name: 'Reading options' });
+    fireEvent.click(menu);
+    fireEvent.click(screen.getByRole('button', { name: 'Contents, 1 highlight' }));
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Outline' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close Contents' }));
+    expect(document.activeElement).toBe(menu);
+  });
+});
+
+/** The phone header with a stand-in for the workspace's Contents panel (its tablist). */
+function WithContents(): ReactNode {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <ReaderHeader {...BASE} navigatorOpen={open} onNavigatorToggle={() => setOpen((v) => !v)} />
+      {open ? (
+        <div>
+          <div role="tablist" aria-label="Contents sections">
+            <button type="button" role="tab" aria-selected="true">
+              Outline
+            </button>
+          </div>
+          <button type="button" onClick={() => setOpen(false)}>
+            Close Contents
+          </button>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+describe('tableRegionName: a sideways-scrolling Guided table is named', () => {
+  it('by its caption, else its first header, else "Table"', () => {
+    expect(tableRegionName('Maximum path lengths per layer type')).toBe(
+      'Table: Maximum path lengths per layer type',
+    );
+    expect(tableRegionName('Table 2: The Transformer achieves better BLEU')).toBe(
+      'Table 2: The Transformer achieves better BLEU',
+    );
+    expect(tableRegionName(undefined, 'Layer Type')).toBe('Table: Layer Type');
+    expect(tableRegionName()).toBe('Table');
+    expect(tableRegionName('x'.repeat(200)).length).toBe(80);
   });
 });
 

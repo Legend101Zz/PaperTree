@@ -11,7 +11,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 export const REPO = join(__dirname, '..', '..');
 const PYTHON = process.env['PAPERTREE_E2E_PYTHON'] ?? join(REPO, '.venv', 'bin', 'python');
@@ -257,6 +257,27 @@ print(json.dumps({"generation": 2, "blocks": len(doc["blocks"]), "scaled": K, "m
 }
 
 // ── the browser, as a reader uses it ──────────────────────────────────────────────────────────
+
+/**
+ * Run `action` with the reader's reading controls in reach: Contents, Source · Guided · Split, the
+ * zoom select and steps, and Board. From 768 px they sit in the header; below it (#205, frame 08b)
+ * they live in the header's "Reading options" menu, which this opens first and, if the action left
+ * it open, closes after with Esc. `action` gets the scope that holds them (the header, or the menu).
+ */
+export async function readingControls<T>(
+  page: Page,
+  action: (controls: Locator) => Promise<T>,
+): Promise<T> {
+  const menu = page.getByRole('button', { name: 'Reading options' });
+  if (!(await menu.isVisible())) return action(page.getByRole('banner'));
+  const group = page.getByRole('group', { name: 'Reading options' });
+  if ((await menu.getAttribute('aria-expanded')) !== 'true') await menu.click();
+  await group.waitFor({ state: 'visible' });
+  const result = await action(group);
+  // Contents and Board close the menu as they act; a mode or a zoom leaves it open.
+  if (await group.isVisible()) await page.keyboard.press('Escape');
+  return result;
+}
 
 /** The scroller the reader reads in (Source's page list). */
 export const SCROLLER = '[data-papertree-scroller]';
