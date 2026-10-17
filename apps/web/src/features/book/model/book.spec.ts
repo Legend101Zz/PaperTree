@@ -17,7 +17,7 @@ import {
   metaLine,
   plateCaption,
   shelvedLine,
-  topicSourceLine,
+  summaryLine,
 } from './book';
 
 import type { BookFigure, BookPaper } from './types';
@@ -97,10 +97,24 @@ describe('the right page', () => {
 
   it('counts the figures found by their captions, not by their regions', () => {
     expect(figuresLine(ATTENTION_FIGURES)).toBe(
-      '5 figures · found Figure 1 (p. 3), Figure 2 (p. 4)',
+      '5 figures found · Figure 1 (p. 3), Figure 2 (p. 4)',
     );
+    // The real parses' labels: ResNet has 7 figures and 3 are found, YOLO 6 and 5. The line says
+    // what was found, never the paper's count.
+    const resnet = [
+      fig('Figure 1', 0),
+      fig(null, 1),
+      fig(null, 3),
+      fig('Figure 5', 5),
+      fig('Figure 6', 7),
+    ];
+    expect(figuresLine(resnet)).toBe('3 figures found · Figure 1 (p. 1), Figure 5 (p. 6)');
+    const yolo = ['Figure 1', 'Figure 2', 'Figure 3', 'Figure 4', 'Figure 5'].map((l, i) =>
+      fig(l, i),
+    );
+    expect(figuresLine([...yolo, fig(null, 7)])).toMatch(/^5 figures found · Figure 1 \(p\. 1\)/);
     expect(figuresLine([fig(null, 1), fig(null, 4)])).toBe('2 figures found, none with a caption');
-    expect(figuresLine([fig('Figure 2', 6)])).toBe('1 figure · found Figure 2 (p. 7)');
+    expect(figuresLine([fig('Figure 2', 6)])).toBe('1 figure found · Figure 2 (p. 7)');
     expect(figuresLine([])).toBeNull();
   });
 
@@ -124,15 +138,6 @@ describe('the right page', () => {
     );
   });
 
-  it('says where the topic came from once', () => {
-    expect(topicSourceLine(BOOK.topic)).toBe('suggested from arXiv cs.CL · you accepted');
-    expect(topicSourceLine({ name: 'Mine', cloth: null, source: 'manual' })).toBe('chosen by you');
-    expect(topicSourceLine({ name: 'M', cloth: null, source: 'model' })).toBe(
-      'suggested · you accepted',
-    );
-    expect(topicSourceLine(null)).toBeNull();
-  });
-
   it('quotes the abstract’s first whole sentences, hyphens joined', () => {
     const text =
       'The dominant sequence transduction models are based on complex recurrent or\n' +
@@ -149,6 +154,9 @@ describe('the right page', () => {
     expect(abstractExcerpt('We present a residual learn-\ning framework.')).toBe(
       'We present a residual learning framework.',
     );
+    // A stop inside "e.g.", "Fig. 3" or "28.4" does not end the excerpt mid-sentence.
+    const dotted = `${'x'.repeat(355)} as in e.g. the model of Fig. 3 at 28.4 BLEU. Then more.`;
+    expect(abstractExcerpt(dotted)).toBe(dotted.slice(0, dotted.indexOf(' Then')));
     expect(abstractExcerpt(null)).toBeNull();
     expect(abstractExcerpt('   ')).toBeNull();
   });
@@ -166,7 +174,18 @@ describe('the right page', () => {
         captionText: 'Figure 1: The Transformer - model archi-\ntecture.',
       }),
     ).toBe('Figure 1 (p. 3) · The Transformer - model architecture.');
-    expect(plateCaption({ label: null, pageIndex: 0, captionText: null })).toBe('Figure (p. 1)');
+    expect(plateCaption({ label: null, pageIndex: 0, captionText: null })).toBe('A figure (p. 1)');
+  });
+
+  it('says what the summary is, from the summary route, and claims nothing while it loads', () => {
+    expect(summaryLine('ready')).toEqual({ button: 'Summary', line: 'Summary ready (cached)' });
+    expect(summaryLine('partial').line).toBe(
+      'Summary cached (partial: some points have no passage)',
+    );
+    expect(summaryLine('none')).toEqual({ button: 'Summarize', line: 'No summary yet' });
+    expect(summaryLine('failed').button).toBe('Summarize');
+    expect(summaryLine('running').line).toBe('A summary is being written');
+    expect(summaryLine(null)).toEqual({ button: 'Summary', line: '' });
   });
 
   it('opens only a book whose parse is in, and never a sample', () => {

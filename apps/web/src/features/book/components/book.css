@@ -378,6 +378,31 @@
   color: var(--pt-paper-label-ink);
 }
 
+.pt-bookplate__owner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.pt-bookplate__owner:focus-visible,
+.pt-bookplate__reopen:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: 4px;
+}
+
+.pt-bookplate__reopen {
+  min-block-size: 44px;
+  margin-block-start: 20px;
+  padding: 0 8px;
+  font-size: 14px;
+  color: var(--pt-ink-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
 .pt-bookplate__ask {
   display: flex;
   flex-direction: column;

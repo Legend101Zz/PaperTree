@@ -3,7 +3,9 @@
  * book takes it out, Enter (a click on the focused cover: happy-dom does not turn Enter into a
  * click) opens the spread, Esc puts it back with focus on the book; the bookplate asks once for a
  * name and never makes one up from the email; "Use Figure 1 as the plate" stores the figure's
- * Anchor and the cover then shows the plate; reduced motion is a fade; axe finds nothing.
+ * Anchor and the cover then shows the plate; reduced motion is a fade; axe finds nothing. The race
+ * of review B1 (Esc during the opening swing) runs with animations that finish LATER, as a
+ * browser's do (`deferredAnimations`).
  * Titles, ids, figures and the abstract are Attention's own (its real parse), never invented.
  */
 import axe from 'axe-core';
@@ -44,6 +46,11 @@ const book = vi.hoisted(() => ({
 vi.mock('@/features/book/api/bookApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/book/api/bookApi')>()),
   bookApi: book,
+}));
+const summary = vi.hoisted(() => ({ get: vi.fn(), generate: vi.fn() }));
+vi.mock('@/lib/api/summary', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api/summary')>()),
+  summaryApi: summary,
 }));
 
 const ID = 'ppr_G9AYN750E5MG1NRBMGSQJ4N5JM';
@@ -128,7 +135,42 @@ function setReducedMotion(reduced: boolean): void {
   })) as unknown as typeof window.matchMedia;
 }
 
-const animate = vi.fn(() => ({ finished: Promise.resolve(), cancel: vi.fn() }));
+const animate = vi.fn((..._args: unknown[]): { finished: Promise<void>; cancel: () => void } => ({
+  finished: Promise.resolve(),
+  cancel: () => undefined,
+}));
+
+/**
+ * Animations that finish only when told to (or reject when cancelled), as a browser's do: the
+ * immediate mock above cannot show a handler that acts after its moment has passed.
+ */
+function deferredAnimations(): { finishAll: () => Promise<void> } {
+  const pending: { readonly ms: number; readonly finish: () => void }[] = [];
+  animate.mockImplementation((...args: unknown[]) => {
+    const options = args[1] as KeyframeAnimationOptions | undefined;
+    let finish = (): void => undefined;
+    let fail = (): void => undefined;
+    const finished = new Promise<void>((resolve, reject) => {
+      finish = resolve;
+      fail = () => reject(new DOMException('cancelled', 'AbortError'));
+    });
+    pending.push({ ms: Number(options?.duration ?? 0), finish });
+    return { finished, cancel: fail };
+  });
+  return {
+    // They all start within a few ms, so they end in the order of their durations: a 200 ms
+    // put-back before a 480 ms swing, as in the browser where the reviewer saw the race.
+    finishAll: async () => {
+      const due = pending.splice(0).sort((a, b) => a.ms - b.ms);
+      for (const { finish } of due) {
+        finish();
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+      }
+    },
+  };
+}
 
 beforeEach(() => {
   push.mockReset();
@@ -149,10 +191,13 @@ beforeEach(() => {
   });
   book.setPlate.mockResolvedValue(undefined);
   book.clearPlate.mockResolvedValue(undefined);
+  summary.get.mockResolvedValue({ state: 'ready', summary: null });
   setReducedMotion(false);
-  animate.mockClear();
+  animate.mockReset();
+  animate.mockImplementation(() => ({ finished: Promise.resolve(), cancel: () => undefined }));
   (Element.prototype as unknown as { animate: unknown }).animate = animate;
   window.localStorage.clear();
+  window.localStorage.setItem('papertree.session', 'tok_test'); // signed in: `useMe` asks
 });
 afterEach(() => {
   cleanup();
@@ -226,7 +271,7 @@ describe('pull out and open (02a → 02)', () => {
     await openSpread(dialog);
     await waitFor(() =>
       expect(dialog.querySelector('[data-book-figures]')?.textContent).toBe(
-        '2 figures · found Figure 1 (p. 3), Figure 2 (p. 4)',
+        '2 figures found · Figure 1 (p. 3), Figure 2 (p. 4)',
       ),
     );
     expect(dialog.querySelector('[data-book-meta]')?.textContent).toMatch(
@@ -245,7 +290,7 @@ describe('pull out and open (02a → 02)', () => {
     expect(
       within(dialog).getByText('3 highlights · 2 explanation threads · 1 notebook page'),
     ).toBeTruthy();
-    expect(within(dialog).getByText('Summary ready (cached)')).toBeTruthy();
+    expect(await within(dialog).findByText('Summary ready (cached)')).toBeTruthy();
     expect(
       within(dialog)
         .getByRole('link', { name: /arxiv\.org\/abs\/1706\.03762/ })
@@ -277,8 +322,34 @@ describe('pull out and open (02a → 02)', () => {
     await renderLibrary();
     const spine = theBook() as HTMLElement;
     spine.focus();
-    fireEvent.keyDown(spine, { key: 'Enter' });
+    // Not cancelled: the browser turns this Enter into the button's click, which opens the card.
+    expect(fireEvent.keyDown(spine, { key: 'Enter' })).toBe(true);
     expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(spine, { detail: 0 });
+    expect(
+      await waitFor(() => {
+        const card = document.querySelector(`[data-card-paper-id="${ID}"]`);
+        if (card === null) throw new Error('no card');
+        return card;
+      }),
+    ).toBeTruthy();
+  });
+
+  it('keeps Tab and Shift+Tab inside the open book', async () => {
+    await renderLibrary();
+    const dialog = await pullOut();
+    await openSpread(dialog);
+    await within(dialog).findByText('Summary ready (cached)');
+    const stops = Array.from(
+      dialog.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input'),
+    );
+    const first = stops[0] as HTMLElement;
+    const last = stops[stops.length - 1] as HTMLElement;
+    last.focus();
+    fireEvent.keyDown(last, { key: 'Tab' });
+    expect(document.activeElement).toBe(first);
+    fireEvent.keyDown(first, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(last);
   });
 });
 
@@ -362,6 +433,136 @@ describe('the plate', () => {
     await openSpread(dialog);
     await waitFor(() => expect(dialog.querySelector('[data-book-figures]')).not.toBeNull());
     expect(within(dialog).queryByRole('button', { name: /as the plate$/ })).toBeNull();
+  });
+});
+
+describe('the race of review B1: Esc while the book is moving', () => {
+  it('Esc during the opening swing puts the book back, and it stays back', async () => {
+    const motion = deferredAnimations();
+    await renderLibrary();
+    const dialog = await pullOut();
+    fireEvent.click(document.activeElement as HTMLElement); // Enter: the swing starts
+    fireEvent.click(document.activeElement as HTMLElement); // a second Enter starts nothing
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' });
+    await motion.finishAll(); // the swing (cancelled) and the put-back settle
+    await motion.finishAll();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(dialog.isConnected).toBe(false);
+    expect(document.activeElement).toBe(theBook());
+    expect(theBook()?.hasAttribute('data-pulled')).toBe(false);
+  });
+
+  it('Enter on the cover right after Esc does not bring the book back', async () => {
+    const motion = deferredAnimations();
+    await renderLibrary();
+    const dialog = await pullOut();
+    const cover = document.activeElement as HTMLElement;
+    fireEvent.keyDown(cover, { key: 'Escape' });
+    fireEvent.click(cover); // Enter 50 ms later, while the put-back is still running
+    await motion.finishAll();
+    await motion.finishAll();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(dialog.isConnected).toBe(false);
+    expect(document.activeElement).toBe(theBook());
+  });
+
+  it('still opens when nothing interrupts the swing', async () => {
+    const motion = deferredAnimations();
+    await renderLibrary();
+    const dialog = await pullOut();
+    fireEvent.click(document.activeElement as HTMLElement);
+    expect(dialog.getAttribute('data-book-stage')).toBe('pulled'); // not before the swing ends
+    await motion.finishAll();
+    expect(dialog.getAttribute('data-book-stage')).toBe('open');
+  });
+});
+
+describe('focus, the name and the summary', () => {
+  it('after Save, focus is on the new name inside the book', async () => {
+    auth.me.mockResolvedValue({ user_id: 'usr_1', email: 'demo@example.test', display_name: null });
+    await renderLibrary();
+    const dialog = await pullOut();
+    await openSpread(dialog);
+    const field = await within(dialog).findByLabelText('Whose library is this?');
+    fireEvent.change(field, { target: { value: 'Mrigesh' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect((document.activeElement as HTMLElement).hasAttribute('data-bookplate-owner')).toBe(
+        true,
+      ),
+    );
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement?.textContent).toMatch(/From the library of\s*Mrigesh/);
+  });
+
+  it('after Not now, focus is on "Name this library", which asks again', async () => {
+    auth.me.mockResolvedValue({ user_id: 'usr_1', email: 'demo@example.test', display_name: null });
+    await renderLibrary();
+    const dialog = await pullOut();
+    await openSpread(dialog);
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Not now' }));
+    const again = within(dialog).getByRole('button', { name: 'Name this library' });
+    await waitFor(() => expect(document.activeElement).toBe(again));
+    fireEvent.click(again);
+    const field = await within(dialog).findByLabelText('Whose library is this?');
+    await waitFor(() => expect(document.activeElement).toBe(field));
+  });
+
+  it('remembers Not now per account, so another account in this browser is still asked', async () => {
+    auth.me.mockResolvedValue({ user_id: 'usr_1', email: 'a@example.test', display_name: null });
+    const client = await renderLibrary();
+    const dialog = await pullOut();
+    await openSpread(dialog);
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Not now' }));
+    expect(window.localStorage.getItem('papertree/book/name-declined/usr_1')).toBe('yes');
+    auth.me.mockResolvedValue({ user_id: 'usr_2', email: 'b@example.test', display_name: null });
+    await act(() => client.refetchQueries({ queryKey: ['me'] }));
+    expect(await within(dialog).findByLabelText('Whose library is this?')).toBeTruthy();
+  });
+
+  it('a field with text takes the first Esc; the book stays open', async () => {
+    auth.me.mockResolvedValue({ user_id: 'usr_1', email: 'demo@example.test', display_name: null });
+    await renderLibrary();
+    const dialog = await pullOut();
+    await openSpread(dialog);
+    const field = (await within(dialog).findByLabelText(
+      'Whose library is this?',
+    )) as HTMLInputElement;
+    fireEvent.change(field, { target: { value: 'Mrig' } });
+    fireEvent.keyDown(field, { key: 'Escape' });
+    expect(field.value).toBe('');
+    expect(screen.getByRole('dialog')).toBe(dialog);
+  });
+
+  it('the header’s initial is the library’s name once there is one, else the email’s', async () => {
+    await renderLibrary();
+    const account = screen.getByRole('button', { name: /^Account/ });
+    await waitFor(() => expect(account.textContent?.trim()).toBe('M'));
+    cleanup();
+    auth.me.mockResolvedValue({ user_id: 'usr_1', email: 'demo@example.test', display_name: null });
+    await renderLibrary();
+    await waitFor(() => expect(auth.me).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: /^Account/ }).textContent?.trim()).not.toBe('M');
+  });
+
+  it('says what the summary is: partial is not "ready", and none offers to make one', async () => {
+    summary.get.mockResolvedValue({ state: 'partial', summary: null });
+    await renderLibrary();
+    let dialog = await pullOut();
+    await openSpread(dialog);
+    expect(
+      await within(dialog).findByText('Summary cached (partial: some points have no passage)'),
+    ).toBeTruthy();
+    expect(within(dialog).queryByText('Summary ready (cached)')).toBeNull();
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    cleanup();
+    summary.get.mockResolvedValue({ state: 'none', summary: null });
+    await renderLibrary();
+    dialog = await pullOut();
+    await openSpread(dialog);
+    expect(await within(dialog).findByText('No summary yet')).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Summarize' })).toBeTruthy();
   });
 });
 

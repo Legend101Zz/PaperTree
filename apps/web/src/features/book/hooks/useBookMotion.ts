@@ -14,19 +14,38 @@ import type { Motion } from '../model/motion';
 /**
  * Plays one motion on an element.
  *
+ * It settles when the animation finishes OR is cancelled, so a caller that acts afterwards must
+ * check that its moment is still current (#200 review B1: an opening swing cancelled by Esc).
+ *
  * @param element - The element, or null (nothing to animate).
  * @param motion - Its keyframes and timing.
+ * @param running - Where the running animation is kept while it plays, so it can be cancelled.
  * @returns A promise that settles when it has finished (or was cancelled).
  */
-export function play(element: Element | null, motion: Motion | null): Promise<void> {
+export function play(
+  element: Element | null,
+  motion: Motion | null,
+  running?: Set<Animation>,
+): Promise<void> {
   if (element === null || motion === null || typeof element.animate !== 'function') {
     return Promise.resolve();
   }
   const animation = element.animate(motion.keyframes, motion.options);
-  return animation.finished.then(
-    () => undefined,
-    () => undefined,
-  );
+  running?.add(animation);
+  const settle = (): void => {
+    running?.delete(animation);
+  };
+  return animation.finished.then(settle, settle);
+}
+
+/**
+ * Cancels every animation in `running` (each one's `finished` then settles) and forgets them.
+ *
+ * @param running - The animations `play` is tracking.
+ */
+export function cancelAll(running: Set<Animation>): void {
+  for (const animation of [...running]) animation.cancel();
+  running.clear();
 }
 
 /**

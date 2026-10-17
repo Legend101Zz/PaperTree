@@ -8,21 +8,13 @@
  */
 'use client';
 
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 import { cardStateLine } from '@/features/library/model/catalogue';
 
 import { useFocusTrap } from '../hooks/useFocusTrap';
-import { play, useReducedMotion } from '../hooks/useBookMotion';
+import { cancelAll, play, useReducedMotion } from '../hooks/useBookMotion';
 import { openBook, pullOut, putBack as putBackMotion, TO_READER, type Box } from '../model/motion';
 import './book.css';
 import { BookCover } from './BookCover';
@@ -76,7 +68,11 @@ export function PulledBook({
   const cover = useRef<HTMLButtonElement>(null);
   const spread = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion();
-  const [leaving, setLeaving] = useState(false);
+  // Where the book is going, kept in a ref because every animation-end handler must read the
+  // CURRENT moment, not the one it closed over (#200 review B1): an opening swing that Esc
+  // cancelled must not open the book it was putting back.
+  const moving = useRef<'idle' | 'opening' | 'leaving'>('idle');
+  const running = useRef(new Set<Animation>());
   useFocusTrap(dialog, behind);
   // Read once per stage: a later re-measure or a change of preference must not replay a motion.
   const start = useRef({ from, reduced });
@@ -87,28 +83,43 @@ export function PulledBook({
     const node = stage === 'pulled' ? cover.current : spread.current;
     if (node === null) return;
     const { from: spine, reduced: less } = start.current;
+    if (moving.current === 'opening') moving.current = 'idle';
     if (stage === 'pulled') {
-      void play(node, pullOut(spine, node.getBoundingClientRect(), less));
+      void play(node, pullOut(spine, node.getBoundingClientRect(), less), running.current);
       node.focus({ preventScroll: true });
     } else {
-      void play(node, openBook(less).spread);
+      void play(node, openBook(less).spread, running.current);
       node.querySelector<HTMLElement>('[data-book-read]')?.focus({ preventScroll: true });
     }
   }, [stage]);
+  // Unmounted (put back, read, or the book left the library): nothing may act any more.
+  useEffect(() => {
+    const animations = running.current;
+    moving.current = 'idle'; // a remount (StrictMode's double effect) starts afresh
+    return () => {
+      moving.current = 'leaving';
+      cancelAll(animations);
+    };
+  }, []);
 
   const leave = useCallback(
     (then: () => void, motion = putBackMotion(reduced)) => {
-      if (leaving) return;
-      setLeaving(true);
+      if (moving.current === 'leaving') return;
+      moving.current = 'leaving';
+      cancelAll(running.current);
       const node = stage === 'pulled' ? cover.current : spread.current;
-      void play(node, motion).then(then);
+      void play(node, motion, running.current).then(then);
     },
-    [leaving, reduced, stage],
+    [reduced, stage],
   );
   const back = useCallback(() => leave(onPutBack), [leave, onPutBack]);
   const read = useCallback(() => leave(onRead, TO_READER), [leave, onRead]);
   const open = useCallback(() => {
-    void play(cover.current, openBook(reduced).cover).then(onOpen);
+    if (moving.current !== 'idle') return; // a second Enter, or Esc already on its way
+    moving.current = 'opening';
+    void play(cover.current, openBook(reduced).cover, running.current).then(() => {
+      if (moving.current === 'opening') onOpen();
+    });
   }, [onOpen, reduced]);
 
   // On the document, not the dialog: the dialog is modal, so every Esc is its own, even when the

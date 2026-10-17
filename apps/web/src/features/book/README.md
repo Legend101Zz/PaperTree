@@ -15,19 +15,26 @@ A book taken off the shelf and opened (#200; frames 02a, 02 and 11; DESIGN.md §
 - **The spread (02).** Left, on patterned endpaper: the _Ex libris_ bookplate ("From the library of <name>", the
   topic, the arXiv id, "PaperTree · shelved 15 Oct 2026"), or the chosen plate with its caption. The name is
   `display_name`; without one the plate asks once, inline, "Whose library is this?" (Save stores it with
-  `PATCH /auth/me`; "Not now" is remembered in this browser, `papertree/book/name-declined`, and the line is then
-  left out). It never makes a name up from the email. Under it: "Use Figure 1 (p. 3) as the plate" when the parser
+  `PATCH /auth/me` and focus moves to the name; "Not now" is remembered for that account in this browser,
+  `papertree/book/name-declined/<user_id>`, the line is left out and a quiet "Name this library" (focused) asks
+  again; the first Esc in a field with text clears the text, not the book). It never makes a name up from the
+  email. The header's account initial is that name's once there is one, else the email's. Under it: "Use Figure 1 (p. 3) as the plate" when the parser
   found a figure whose caption starts "Figure 1" (with a crop and an Anchor), or "Use the typographic cover".
-  Right: the topic and where it came from ("chosen by you", "suggested from arXiv cs.CL · you accepted"), "2017 ·
-  arXiv 1706.03762 · 15 pages", "5 figures · found Figure 1 (p. 3), Figure 2 (p. 4)" (captioned figures, said as
-  _found_: detection misses some, #103), the title, the byline, the abstract's first whole sentences as the paper's
+  Right: the topic and where it came from (the library's one `topicSource` rule: "chosen by you", "suggested from
+  arXiv cs.CL · you accepted", "suggested by the AI (MiniMax-M3) · you accepted"), "2017 · arXiv 1706.03762 · 15
+  pages", "5 figures found · Figure 1 (p. 3), Figure 2 (p. 4)" (the captioned figures the parser FOUND, never the
+  paper's count: ResNet has 7 and 3 are found, #103), the title, the byline, the abstract's first whole sentences as the paper's
   words under a "p. 1 · Abstract" tab (a link: the reader flashes the abstract), where you are with the rule, the
   counts ("3 highlights · 2 explanation threads · 1 notebook page", zeros left out), **Read** (oxblood cloth),
-  **Summary** ("Summary ready (cached)" when the server has one; it opens the reader's panel on the summary), the
-  arXiv link and "Put it back (Esc)".
+  **Summary**, its words from `GET /papers/{id}/summary` when the book opens ("Summary ready (cached)" only for a
+  complete summary of the current prompt, "Summary cached (partial: …)", "A summary is being written", or
+  **Summarize** with "No summary yet"; it opens the reader's panel on the summary), the arXiv link and "Put it back
+  (Esc)".
 - **Keyboard and focus.** The book is a modal dialog (`role="dialog"`, `aria-modal`), labelled by its title; Tab
   stays in it and the library behind is `inert`. Focus is on the cover when it comes out and on Read when it opens;
-  Esc (anywhere) or "Put it back" puts it back, and focus returns to the book on the shelf. Choosing or clearing the
+  Esc (anywhere) or "Put it back" puts it back, and focus returns to the book on the shelf. Esc while the book
+  is still moving cancels the motion and wins: every animation's end checks the current moment (`moving` in
+  `PulledBook`, the functional `onOpen` in `useBookOnShelf`), so a swing Esc cancelled never reopens the book. Choosing or clearing the
   plate moves focus to the button that replaces the one pressed.
 - **Motion** (`model/motion.ts`, WAAPI over CSS 3D): pull out = lift 120 → turn 200 → settle 80 on the lift curve,
   starting at the spine's own box; open = the cover swings 480 while the spread comes up; put back 200; Read

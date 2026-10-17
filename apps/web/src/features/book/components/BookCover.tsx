@@ -27,7 +27,7 @@ export interface BookCoverProps {
 function footLine(book: BookPaper): string {
   return [
     book.year === null ? null : String(book.year),
-    book.arxivId === null ? null : `arXiv ${book.arxivId}`,
+    (book.arxivId ?? null) === null ? null : `arXiv ${book.arxivId ?? ''}`,
   ]
     .filter((part): part is string => part !== null)
     .join(' · ');

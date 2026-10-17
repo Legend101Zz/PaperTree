@@ -116,7 +116,13 @@ export function useBookOnShelf(
           labelled: clothTakesLabel(cloth),
           from: out.from,
           behind: document.querySelector<HTMLElement>('.pt-library'),
-          onOpen: () => setOut({ ...out, stage: 'open' }),
+          // From the CURRENT state: the book may have been put back since this was made.
+          onOpen: () =>
+            setOut((current) =>
+              current?.id === out.id && current.stage === 'pulled'
+                ? { ...current, stage: 'open' }
+                : current,
+            ),
           onPutBack: putBack,
           onRead: () => onRead(out.id),
           onSummary: () => router.push(bookReaderHref(out.id, 'summary')),

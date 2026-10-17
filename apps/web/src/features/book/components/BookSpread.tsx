@@ -100,7 +100,7 @@ export const BookSpread = forwardRef<HTMLDivElement, BookSpreadProps>(function B
   { book, cloth, titleId, onRead, onSummary, onPutBack },
   ref,
 ) {
-  const { figures, abstract } = useBookFacts(book.id, true);
+  const { figures, abstract, summary } = useBookFacts(book.id, true);
   const name = useDisplayName();
   const plate = book.plate ?? null;
   const offer = figures.data === undefined ? null : figureOneOffer(figures.data);
@@ -119,6 +119,7 @@ export const BookSpread = forwardRef<HTMLDivElement, BookSpreadProps>(function B
             declined={name.declined}
             onSaveName={(value) => name.save.mutateAsync(value)}
             onDecline={name.decline}
+            onReopen={name.reopen}
           />
         ) : (
           <figure className="pt-spread__plate" data-plate="">
@@ -143,6 +144,7 @@ export const BookSpread = forwardRef<HTMLDivElement, BookSpreadProps>(function B
           cloth={cloth}
           titleId={titleId}
           figures={figures.data ?? null}
+          summary={summary.data?.state ?? null}
           abstract={
             abstract.data === undefined
               ? null

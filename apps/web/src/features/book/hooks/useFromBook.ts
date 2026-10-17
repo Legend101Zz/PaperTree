@@ -32,6 +32,18 @@ export function bookReaderHref(paperId: string, target?: 'abstract' | 'summary')
 }
 
 /**
+ * Takes the book's own query off the address once its action has run, so a reload neither flashes
+ * the abstract again nor reopens the summary (review nit). Other parameters are kept; the history
+ * entry is replaced, not added.
+ */
+function dropBookParams(): void {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  for (const key of ['from', 'at', 'open']) url.searchParams.delete(key);
+  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+}
+
+/**
  * Flashes the abstract when the reader was opened from its tab.
  *
  * @param paperId - The paper open in the reader (null for a sample).
@@ -57,7 +69,11 @@ export function useFocusFromBook(
       (found) => {
         const anchor = found.anchor;
         if (cancelled || anchor === null) return;
-        timer = setTimeout(() => latest.current(anchor), FOCUS_SETTLE_MS);
+        timer = setTimeout(() => {
+          latest.current(anchor);
+          // Only now: dropping the query changes `wanted`, whose cleanup would cancel this.
+          dropBookParams();
+        }, FOCUS_SETTLE_MS);
       },
       () => undefined,
     );
@@ -83,6 +99,7 @@ export function useSummaryFromBook(paperId: string | null, openSummary: () => vo
   useEffect(() => {
     if (!wanted || paperId === null || done.current === paperId) return;
     done.current = paperId;
+    dropBookParams();
     latest.current();
   }, [wanted, paperId]);
 }

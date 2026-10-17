@@ -97,7 +97,7 @@ same papers as a ruled catalogue, Topics shows each topic as a card, and the Map
   first matching paper. Sample papers (fixtures on) are on neither Topics nor the Map, and the note says so.
 - **The Table** (01d) is a native `<table>`: Title (a link to the reader), Authors (first author "et al.";
   three or more open "Authors · full", a popover with every name), Year, Topic (its cloth, name and source line,
-  "arXiv cs.CL · accepted", "chosen by you" or "suggested by the AI · accepted"; else "Unshelved"), Pages, State
+  "arXiv cs.CL · accepted", "chosen by you" or "suggested by the AI (model) · accepted"; else "Unshelved"), Pages, State
   ("Reading now · p. 4 of 15" (the stats line's set), "Read", "Not started" ("Some parts unreadable" under it
   for our partial reading; "Opened" for a place in a paper whose page count is unknown), "Queued" / "Reading ·
   Readable in Source mode now", "Could not read" with Retry · Remove, which says it is busy while it runs and

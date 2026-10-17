@@ -77,9 +77,10 @@ function figureAt(figure: BookFigure): string {
 }
 
 /**
- * The figures line: "5 figures · found Figure 1 (p. 3), Figure 2 (p. 4)". The count is the
- * distinct captioned figures (Figure 2 drawn as two regions is one figure); "found" because float
- * detection misses some (#103), so the line never claims to be complete.
+ * The figures line: "5 figures found · Figure 1 (p. 3), Figure 2 (p. 4)". The number is what the
+ * parser FOUND, the distinct captioned figures (Figure 2 drawn as two regions is one), never the
+ * paper's figure count: float detection misses some (#103; ResNet has 7 figures and 3 are found,
+ * YOLO 6 and 5), so "found" sits on the number (#200 review S2).
  *
  * @param figures - `GET /papers/{id}/figures`, in reading order.
  * @returns The line; null when the parser found no figure at all.
@@ -96,7 +97,7 @@ export function figuresLine(figures: readonly BookFigure[]): string | null {
   }
   const n = labelled.size;
   const first = [...labelled.values()].slice(0, 2).map(figureAt).join(', ');
-  return `${String(n)} figure${n === 1 ? '' : 's'} · found ${first}`;
+  return `${String(n)} figure${n === 1 ? '' : 's'} found · ${first}`;
 }
 
 /**
@@ -143,23 +144,6 @@ export function countsLine(paper: BookPaper): string {
   return parts.length === 0 ? 'No highlights, threads or notebook pages yet' : parts.join(' · ');
 }
 
-/**
- * Where an accepted topic came from, in the book's words: "suggested from arXiv cs.CL · you
- * accepted", "chosen by you", "suggested · you accepted".
- *
- * @param topic - The paper's accepted topic.
- * @returns The line, or null without a topic (or when the server did not say).
- */
-export function topicSourceLine(topic: BookPaper['topic']): string | null {
-  if (topic === null || topic === undefined) return null;
-  if (topic.source === 'arxiv_category') {
-    const from = topic.sourceDetail ? `arXiv ${topic.sourceDetail}` : 'arXiv';
-    return `suggested from ${from} · you accepted`;
-  }
-  if (topic.source === 'model') return 'suggested · you accepted';
-  return topic.source === 'manual' ? 'chosen by you' : null;
-}
-
 /** The excerpt stops after the sentence that reaches this many characters. */
 export const EXCERPT_CHARS = 360;
 
@@ -174,11 +158,13 @@ export function abstractExcerpt(text: string | null): string | null {
   if (text === null) return null;
   const flat = dehyphenate(text).replace(/\s+/g, ' ').trim();
   if (flat === '') return null;
-  const sentences = flat.match(/[^.!?]+(?:[.!?]+["”’)]*|$)\s*/g) ?? [flat];
+  // A sentence ends at a stop followed by a space and a capital (or an opening quote or bracket):
+  // "e.g. the", "Fig. 3" and "28.4 BLEU" do not end one (#200 review).
+  const sentences = flat.split(/(?<=[.!?]["”’)]*)\s+(?=[A-Z“"(])/);
   let out = '';
   for (const sentence of sentences) {
-    out += sentence;
-    if (out.trim().length >= EXCERPT_CHARS) break;
+    out = out === '' ? sentence : `${out} ${sentence}`;
+    if (out.length >= EXCERPT_CHARS) break;
   }
   return out.trim();
 }
@@ -221,10 +207,38 @@ export function canOpenBook(paper: Pick<BookPaper, 'processing' | 'isSample'>): 
 export function plateCaption(
   plate: Pick<BookPlate, 'label' | 'pageIndex' | 'captionText'>,
 ): string {
-  const where = `${plate.label ?? 'Figure'} (p. ${String(plate.pageIndex + 1)})`;
+  const where = `${plate.label ?? 'A figure'} (p. ${String(plate.pageIndex + 1)})`;
   const words = dehyphenate(plate.captionText ?? '')
     .replace(/\s+/g, ' ')
     .replace(/^\s*(?:figure|fig\.?)\s*\d+(?:\.\d+)*\s*[:.]?\s*/i, '')
     .trim();
   return words === '' ? where : `${where} · ${words}`;
+}
+
+/** `GET /papers/{id}/summary`'s states. */
+export type SummaryState = 'none' | 'running' | 'ready' | 'partial' | 'failed';
+
+/**
+ * What the Summary button and the words beside it say, from the summary route itself (the current
+ * prompt version; #200 review S4). "(cached)" only for a complete summary that is there to read;
+ * a partial one says so; with none the button offers to make one.
+ *
+ * @param state - The route's state, or null while it loads or when it could not be read.
+ * @returns The button's label and the line beside it ('' says nothing).
+ */
+export function summaryLine(state: SummaryState | null): { button: string; line: string } {
+  switch (state) {
+    case 'ready':
+      return { button: 'Summary', line: 'Summary ready (cached)' };
+    case 'partial':
+      return { button: 'Summary', line: 'Summary cached (partial: some points have no passage)' };
+    case 'running':
+      return { button: 'Summary', line: 'A summary is being written' };
+    case 'failed':
+      return { button: 'Summarize', line: 'The last summary did not finish' };
+    case 'none':
+      return { button: 'Summarize', line: 'No summary yet' };
+    default:
+      return { button: 'Summary', line: '' };
+  }
 }

@@ -1,7 +1,8 @@
 /**
  * LibraryHeader: the compact library header (#195, frame 01): the sprout and name, the central
  * search, Add papers, Aa (reading settings: the theme switch) and the account (its initial in a
- * circle; a menu with the email and Sign out). Aa and the account are disclosure popovers: a
+ * circle, from the name the person gave their library once there is one, else the email; a menu
+ * with the email and Sign out). Aa and the account are disclosure popovers: a
  * button with `aria-expanded`, closed by Esc (focus back on the button) or a press outside.
  */
 'use client';
@@ -52,6 +53,8 @@ export interface LibraryHeaderProps {
   readonly onFiles: (files: readonly File[]) => void;
   /** The signed-in email, or null while it is not known. */
   readonly email: string | null;
+  /** The name the person gave their library (`display_name`, #200), or null/absent. */
+  readonly name?: string | null;
   readonly signingOut: boolean;
   readonly onSignOut: () => void;
 }
@@ -67,14 +70,16 @@ export function LibraryHeader({
   searchRef,
   onFiles,
   email,
+  name = null,
   signingOut,
   onSignOut,
 }: LibraryHeaderProps): ReactNode {
   const { choice, setChoice } = useTheme();
   const touch = useTouchTargets();
-  // The account's initial, from the email: S2a serves `display_name` on /auth/me, but the auth
-  // store does not carry it yet, so the frame's "M" for a named owner waits for that.
-  const initial = (email ?? '?').trim().charAt(0).toUpperCase() || '?';
+  // The account's initial: the library's name once the person gave one (the bookplate's
+  // `PATCH /auth/me`, #200), else the email's first letter. Never a name made up from the email.
+  const named = (name ?? '').trim();
+  const initial = (named || (email ?? '?')).trim().charAt(0).toUpperCase() || '?';
   return (
     <header className="pt-libhead">
       <Link

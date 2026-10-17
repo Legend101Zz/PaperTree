@@ -66,7 +66,7 @@ test('shelf → Enter → the cover → Enter → the spread → Figure 1 as the
     '2017 · arXiv 1706.03762 · 15 pages',
   );
   await expect(dialog.locator('[data-book-figures]')).toHaveText(
-    '5 figures · found Figure 1 (p. 3), Figure 2 (p. 4)',
+    '5 figures found · Figure 1 (p. 3), Figure 2 (p. 4)',
   );
   await expect(dialog.locator('blockquote[data-voice="paper"]')).toContainText(
     'The dominant sequence transduction models are based on',

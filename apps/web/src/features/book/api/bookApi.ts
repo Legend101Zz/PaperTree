@@ -57,6 +57,7 @@ export function bookFigureFromWire(wire: PaperFigure): BookFigure {
 export const bookKeys = {
   figures: (paperId: string) => ['book', paperId, 'figures'] as const,
   abstract: (paperId: string) => ['book', paperId, 'abstract'] as const,
+  summary: (paperId: string) => ['book', paperId, 'summary'] as const,
 };
 
 /** The book's calls. */

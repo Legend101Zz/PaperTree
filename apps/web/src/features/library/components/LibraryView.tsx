@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SessionBanner } from '@/components/auth/SessionBanner';
 import { OfflineState } from '@/components/library/SystemStates';
 import { describeError } from '@/components/ui/errors';
+import { useMe } from '@/features/book';
 import { useAuthStore } from '@/store/authStore';
 
 import { useContinue } from '../hooks/useContinue';
@@ -73,6 +74,7 @@ export function LibraryView(): ReactNode {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user, logout } = useAuthStore();
+  const me = useMe(); // the library's name, for the header's initial (#200)
   const online = useOnline();
   const { books, own, query, upload, afterCancel, retry, remove } = useLibrary(online);
   const queue = useUploadQueue({ onUpload: upload, onCancelled: afterCancel });
@@ -147,6 +149,7 @@ export function LibraryView(): ReactNode {
         searchRef={searchRef}
         onFiles={queue.enqueue}
         email={user?.email ?? null}
+        name={me.data?.display_name ?? null}
         signingOut={signingOut}
         onSignOut={() => void signOut()}
       />

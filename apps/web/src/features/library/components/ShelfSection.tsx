@@ -136,64 +136,68 @@ export function ShelfSection({
       .querySelector<HTMLElement>('[role="toolbar"][aria-label="Shelf"] [tabindex="0"]')
       ?.focus();
   }, []);
+  // The opened book renders beside the section, not in it: its portal's React events would
+  // otherwise bubble into the section's focus keeper (`useShelfFocus`, review nit).
   return (
-    <section
-      ref={focus.section}
-      className={`pt-shelfband${faceOut ? ' pt-shelfband--faceout' : ''}`}
-      aria-label="Your shelf"
-      onFocus={focus.onFocus}
-    >
-      <div className="pt-shelfband__band" ref={band}>
-        {openBook === null ? null : (
-          // Keyed by paper: a half-armed Delete or a Retry error belongs to one book and must
-          // never open on the next one taken down.
-          <CatalogueCard
-            key={openBook.id}
-            id={cardId}
-            book={openBook}
-            placement={placement}
-            onRead={onRead}
-            onRetry={retry}
-            onDelete={remove}
-            onClose={putBack}
-            onOpenBook={book.open}
+    <>
+      <section
+        ref={focus.section}
+        className={`pt-shelfband${faceOut ? ' pt-shelfband--faceout' : ''}`}
+        aria-label="Your shelf"
+        onFocus={focus.onFocus}
+      >
+        <div className="pt-shelfband__band" ref={band}>
+          {openBook === null ? null : (
+            // Keyed by paper: a half-armed Delete or a Retry error belongs to one book and must
+            // never open on the next one taken down.
+            <CatalogueCard
+              key={openBook.id}
+              id={cardId}
+              book={openBook}
+              placement={placement}
+              onRead={onRead}
+              onRetry={retry}
+              onDelete={remove}
+              onClose={putBack}
+              onOpenBook={book.open}
+            />
+          )}
+        </div>
+        {/* Face-out below about 12 papers (DESIGN.md §9); the count is the shelf's, so a search,
+          which dims in place, never re-lays it out. */}
+        {faceOut ? (
+          <CoverShelf
+            papers={books}
+            arrangement={arrangement}
+            matches={matches}
+            openId={shownId}
+            cardId={cardId}
+            onActivate={takeDown}
+            onPutBack={putBack}
+            focus={lifted}
+            onOpen={onRead}
+            onContinue={onContinue}
+          />
+        ) : (
+          <OnPlanks
+            papers={books}
+            arrangement={arrangement}
+            matches={matches}
+            openId={shownId}
+            cardId={cardId}
+            onActivate={takeDown}
+            onPutBack={putBack}
+            focus={lifted}
           />
         )}
-      </div>
+        <ShelfHints
+          query={search}
+          matched={matches?.size ?? 0}
+          total={books.length}
+          onKeysHidden={toShelf}
+        />
+      </section>
       {book.overlay}
-      {/* Face-out below about 12 papers (DESIGN.md §9); the count is the shelf's, so a search,
-          which dims in place, never re-lays it out. */}
-      {faceOut ? (
-        <CoverShelf
-          papers={books}
-          arrangement={arrangement}
-          matches={matches}
-          openId={shownId}
-          cardId={cardId}
-          onActivate={takeDown}
-          onPutBack={putBack}
-          focus={lifted}
-          onOpen={onRead}
-          onContinue={onContinue}
-        />
-      ) : (
-        <OnPlanks
-          papers={books}
-          arrangement={arrangement}
-          matches={matches}
-          openId={shownId}
-          cardId={cardId}
-          onActivate={takeDown}
-          onPutBack={putBack}
-          focus={lifted}
-        />
-      )}
-      <ShelfHints
-        query={search}
-        matched={matches?.size ?? 0}
-        total={books.length}
-        onKeysHidden={toShelf}
-      />
-    </section>
+    </>
   );
 }

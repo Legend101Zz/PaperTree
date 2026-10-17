@@ -12,19 +12,21 @@ import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
 import { cardStateLine } from '@/features/library/model/catalogue';
+import { topicSource } from '@/features/library/model/table';
 import { readingPage } from '@/features/library/model/shelf';
 
 import { bookReaderHref } from '../hooks/useFromBook';
 import {
   abstractExcerpt,
+  summaryLine,
   arxivLink,
   countsLine,
   figuresLine,
   longDate,
   metaLine,
-  topicSourceLine,
 } from '../model/book';
 
+import type { SummaryState } from '../model/book';
 import type { BookFigure } from '../model/types';
 import type { LibraryBook } from '@/features/library';
 import type { ReactNode } from 'react';
@@ -39,6 +41,8 @@ export interface BookDetailsProps {
   readonly figures: readonly BookFigure[] | null;
   /** `GET …/abstract`'s text and page, or null while it loads. */
   readonly abstract: { readonly text: string | null; readonly pageIndex: number | null } | null;
+  /** `GET …/summary`'s state, or null while it loads (nothing is claimed then). */
+  readonly summary: SummaryState | null;
   readonly onRead: () => void;
   readonly onSummary: () => void;
   readonly onPutBack: () => void;
@@ -88,11 +92,12 @@ export function BookDetails({
   onRead,
   onSummary,
   onPutBack,
+  summary,
 }: BookDetailsProps): ReactNode {
   const meta = metaLine(book);
   const found = figures === null ? null : figuresLine(figures);
   const excerpt = abstract === null ? null : abstractExcerpt(abstract.text);
-  const source = topicSourceLine(book.topic);
+  const source = topicSource(book.topic, 'book');
   const arxiv = arxivLink(book.arxivId);
   return (
     <div className="pt-bookdetails">
@@ -151,11 +156,9 @@ export function BookDetails({
           Read<span className="pt-sr-only">{` ${book.title}`}</span>
         </Button>
         <Button size="touch" onClick={onSummary}>
-          Summary
+          {summaryLine(summary).button}
         </Button>
-        <span className="pt-bookdetails__summary">
-          {book.hasSummary ? 'Summary ready (cached)' : 'No summary yet'}
-        </span>
+        <span className="pt-bookdetails__summary">{summaryLine(summary).line}</span>
       </div>
       <div className="pt-bookdetails__foot">
         {arxiv === null ? (
