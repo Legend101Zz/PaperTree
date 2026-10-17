@@ -4,8 +4,10 @@
  * Anchor (`?nb=<page>&item=<item>`), reads that item back, and flashes its stored Anchor
  * (`hooks/useFocusFromNotebook`). Pure.
  */
+import { ASK_KEY_PARAM, ASK_TEXT_PARAM } from './askHandoff';
 import { blockIdOf } from './exchange';
 
+import type { AskHandOff } from './askHandoff';
 import type { Item } from './page';
 import type { ExchangeBody } from './wire';
 import type { Anchor } from '@papertree/anchoring';
@@ -21,6 +23,22 @@ export function readerHref(paperId: string, at?: { pageId: string; itemId: strin
   const base = `/paper/${encodeURIComponent(paperId)}/read`;
   if (at === undefined) return base;
   return `${base}?${new URLSearchParams({ nb: at.pageId, item: at.itemId }).toString()}`;
+}
+
+/**
+ * The reader with a NEW ask open whose question box holds the lasso's typed words (S5d, #209):
+ * the link carries the hand-off's storage key, or the words only where storage is blocked
+ * (`model/askHandoff`); the reader's `AskFromNotebook` takes them once.
+ *
+ * @param paperId - The paper.
+ * @param hand - What `stashAsk` returned.
+ * @returns A path such as `/paper/ppr_1/read?ask=ak_…`.
+ */
+export function askHref(paperId: string, hand: AskHandOff): string {
+  const query = new URLSearchParams();
+  if ('key' in hand) query.set(ASK_KEY_PARAM, hand.key);
+  else query.set(ASK_TEXT_PARAM, hand.text);
+  return `${readerHref(paperId)}?${query.toString()}`;
 }
 
 /**

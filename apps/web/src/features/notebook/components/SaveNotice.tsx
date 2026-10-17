@@ -15,6 +15,8 @@ import { Button, Toast } from '@papertree/ui';
 import { useState } from 'react';
 
 import type { SaveStatus } from '../hooks/useItemSaver';
+import type { NotebookPageModel } from '../hooks/useNotebookPage';
+import type { PageTemplateModel } from '../hooks/usePageTemplate';
 import type { ReactNode } from 'react';
 
 /** Props for `SaveNotice`. */
@@ -153,6 +155,48 @@ export function SaveNotice(props: SaveNoticeProps): ReactNode {
       message={quiet.message}
       duration={0}
       onDismiss={() => setDismissed(quiet.key)}
+    />
+  );
+}
+
+/** Props for `PageSaveNotice`. */
+export interface PageSaveNoticeProps {
+  readonly model: Pick<
+    NotebookPageModel,
+    'save' | 'ink' | 'unsaved' | 'unsavedInk' | 'unsavedText' | 'retry'
+  >;
+  readonly template: Pick<PageTemplateModel, 'save' | 'unsaved' | 'retry'>;
+}
+
+/**
+ * The page's one saving notice. The items, the template (S5c) and the ink (S5d) save separately
+ * and are reported as one: one conflict bar, one count of what is not saved, one Try again that
+ * re-sends all three.
+ */
+export function PageSaveNotice({ model, template }: PageSaveNoticeProps): ReactNode {
+  const { save, ink } = model;
+  const status: SaveStatus = {
+    ...save,
+    conflict: save.conflict || template.save.conflict,
+    pageGone: save.pageGone || template.save.pageGone || ink.pageGone,
+    failed: save.failed + (template.save.failed ? 1 : 0) + ink.failed,
+    failure: save.failure + template.save.failure + ink.failure,
+    // Said as sentences (`SaveNotice`), so a refused stroke is never called a note.
+    rejected: [
+      ...save.rejected.map((d) => `A note could not be saved: ${d}`),
+      ...ink.rejected.map((d) => `A stroke could not be saved: ${d}`),
+    ],
+  };
+  return (
+    <SaveNotice
+      status={status}
+      unsaved={unsavedPhrase(model.unsaved, template.unsaved, model.unsavedInk)}
+      unsavedText={model.unsavedText}
+      onRetry={() => {
+        model.retry();
+        template.retry();
+      }}
+      onReload={() => window.location.reload()}
     />
   );
 }

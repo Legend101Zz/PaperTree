@@ -1,12 +1,13 @@
 /**
- * The ink tools' state (S5d, #209): which tool is in the hand, each drawing tool's nib and colour,
- * the keys that switch them, the colour TOKEN a stroke stores, and the palm-rejection rule that says
- * what a pointer may do. Pure: the tool bar and the ink surface hold this in React and ask it.
+ * The ink tools' state (S5d, #209): which tool is in the hand (pen, highlighter, stroke eraser,
+ * lasso), each drawing tool's nib and colour, the keys that switch them, the colour TOKEN a stroke
+ * stores, and the palm-rejection rule that says what a pointer may do. Pure: the tool bar and the
+ * ink surface hold this in React and ask it.
  */
 import type { StrokeNib, StrokeTool } from './stroke';
 
 /** A tool that takes the pointer from the page while it is in the hand. */
-export type InkTool = StrokeTool | 'eraser';
+export type InkTool = StrokeTool | 'eraser' | 'lasso';
 
 /** The six ink colours of the tool bar (frame 05), by name; `pen` is the blue-black ink. */
 export type InkColour = 'pen' | 'amber' | 'green' | 'blue' | 'pink' | 'purple';
@@ -71,7 +72,8 @@ export function toolReducer(state: ToolState, action: ToolAction): ToolState {
       return state.tool === null ? state : { ...state, tool: null };
     case 'tool': {
       if (state.tool === action.tool) return { ...state, tool: null };
-      const last = action.tool === 'eraser' ? state.last : action.tool;
+      const last =
+        action.tool === 'pen' || action.tool === 'highlighter' ? action.tool : state.last;
       return { ...state, tool: action.tool, last };
     }
     case 'nib':
@@ -91,6 +93,7 @@ export const TOOL_KEYS: Readonly<Record<string, InkTool>> = {
   p: 'pen',
   h: 'highlighter',
   e: 'eraser',
+  l: 'lasso',
 };
 
 /**

@@ -10,13 +10,15 @@
  * hides what it touches at once and hands every stroke of the gesture on at pointer-up, so one undo
  * brings them all back. Palm rejection (`pointerRole`): once a pen has touched the page a finger
  * scrolls instead of inking, never while the pen is down, and a pen landing on a resting palm takes
- * over from it. The latch (`penSeen`) belongs to the page, not to this surface.
+ * over from it. The latch (`penSeen`) belongs to the page, not to this surface. The lasso draws its
+ * dashed loop over the items and hands the loop on at pointer-up.
  */
 import { useRef } from 'react';
 
 import { newClientId } from '../api/notebookApi';
 import { eraseStrokes } from '../model/hitTest';
 import { inFold, storedPoints, strokesAsShown } from '../model/inkPlace';
+import { loopPath } from '../model/lasso';
 import { strokeToPath } from '../model/outline';
 import { MAX_STROKE_POINTS } from '../model/stroke';
 import { hasRealPressure, pointerRole } from '../model/tools';
@@ -50,7 +52,23 @@ export interface InkInputOptions {
   readonly onErase: (ids: readonly string[]) => void;
   /** A stroke was begun in the band the open answer opened, where it has no place (`inFold`). */
   readonly onRefused?: () => void;
+  /** The lasso's loop as it is drawn, over the items. */
+  readonly lassoLive?: RefObject<SVGPathElement>;
+  /** A lasso closed (its loop, in page units as shown), or a new one began (null). */
+  readonly onLasso?: (path: readonly Vec2[] | null) => void;
 }
+
+/** The tool in the hand as the page is given it (`inkInHand`); the page adds the rest. */
+export type InkInHand = Pick<
+  InkInputOptions,
+  'tool' | 'pen' | 'onStroke' | 'onErase' | 'penSeen' | 'onRefused'
+> & {
+  /** A lasso closed (or a new one began: null), with the page's scale and the answer's push. */
+  readonly onLasso?: (
+    path: readonly Vec2[] | null,
+    view: Pick<InkInputOptions, 'scale' | 'shift'>,
+  ) => void;
+};
 
 /** The handlers to spread on the ink surface. */
 export interface InkHandlers {
@@ -75,7 +93,9 @@ type Erase = Base & {
   /** The strokes where they are shown, taken at pointer-down. */
   shown: readonly Stroke[];
 };
-type Ink = Draw | Erase;
+/** A lasso loop, in page units as shown. */
+type Loop = Base & { kind: 'lasso'; pts: Vec2[] };
+type Ink = Draw | Erase | Loop;
 interface Pan {
   readonly id: number;
   x: number;
@@ -136,8 +156,8 @@ function scroll(g: Pan, e: { clientX: number; clientY: number }): void {
 }
 
 /**
- * What an inking pointer that just went down starts: an erase or a stroke; null for a stroke begun
- * where the open answer leaves it no place.
+ * What an inking pointer that just went down starts: a lasso, an erase or a stroke; null for a
+ * stroke begun where the open answer leaves it no place.
  *
  * @param e - The pointerdown.
  * @param o - The surface's options.
@@ -147,6 +167,10 @@ function begin(e: PointerEvent<HTMLElement>, o: InkInputOptions): Ink | null {
   const el = e.currentTarget;
   const base = { id: e.pointerId, type: e.pointerType, rect: el.getBoundingClientRect() };
   const start = at(base.rect, e, o.scale);
+  if (o.tool === 'lasso') {
+    o.onLasso?.(null);
+    return { ...base, kind: 'lasso', pts: [start] };
+  }
   if (o.tool === 'eraser') {
     const shown = strokesAsShown(o.strokes, o.shift);
     const page = el.closest('.pt-nb-page');
@@ -176,6 +200,7 @@ export function useInkInput(options: InkInputOptions): InkHandlers {
   const paint = (): void => {
     frame.current = null;
     const [g, o] = [ink.current, latest.current];
+    if (g?.kind === 'lasso') o.lassoLive?.current?.setAttribute('d', loopPath(g.pts));
     if (g?.kind !== 'draw' || o.pen === null) return;
     const live = { id: 'live', ...o.pen, hasPressure: g.pressure, points: g.pts };
     o.live.current?.setAttribute('d', strokeToPath(live, true));
@@ -213,8 +238,13 @@ export function useInkInput(options: InkInputOptions): InkHandlers {
     if (frame.current !== null) cancelAnimationFrame(frame.current);
     frame.current = null;
     latest.current.live.current?.setAttribute('d', '');
+    latest.current.lassoLive?.current?.setAttribute('d', '');
     if (g.kind === 'draw') {
       if (keep) commit(g);
+      return;
+    }
+    if (g.kind === 'lasso') {
+      latest.current.onLasso?.(keep && g.pts.length >= 3 ? g.pts : null);
       return;
     }
     if (keep && g.hit.size > 0) latest.current.onErase([...g.hit]);
@@ -257,11 +287,12 @@ export function useInkInput(options: InkInputOptions): InkHandlers {
         const native = e.nativeEvent;
         const samples = native.getCoalescedEvents?.() ?? [];
         for (const ev of samples.length > 0 ? samples : [native]) {
-          if (g.kind === 'erase')
-            sweep(g, at(g.rect, ev, latest.current.scale), latest.current.scale);
+          const p = at(g.rect, ev, latest.current.scale);
+          if (g.kind === 'erase') sweep(g, p, latest.current.scale);
+          else if (g.kind === 'lasso') g.pts.push(p);
           else add(g, ev);
         }
-        if (g.kind === 'draw') frame.current ??= requestAnimationFrame(paint);
+        if (g.kind !== 'erase') frame.current ??= requestAnimationFrame(paint);
         return;
       }
       if (pan.current?.id === e.pointerId) scroll(pan.current, e);

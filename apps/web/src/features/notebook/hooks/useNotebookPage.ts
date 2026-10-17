@@ -65,6 +65,8 @@ function touched(cmd: Command): string[] {
     case 'edit-text':
     case 'resize':
       return [cmd.itemId];
+    case 'batch':
+      return cmd.commands.flatMap(touched);
     default:
       return [];
   }

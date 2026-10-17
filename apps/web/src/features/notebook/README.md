@@ -59,13 +59,13 @@ and the tablet and phone layouts are S5e (#210).
 ## Ink (S5d)
 
 - The tool bar's ink group (`components/InkTools.tsx`, the state machine in `model/tools.ts`): pen,
-  highlighter and stroke eraser, each a toggle with `aria-pressed`; then, after Sticky note, the
-  nibs EF / F / M and the six colours of the drawing tool in the hand (or of the last one held: a
-  nib or colour chosen with no pen in the hand picks it up). Keys (`hooks/useInkTools.ts`): **P**
-  pen, **H** highlighter, **E** stroke eraser, the same key again or **Escape** puts the tool down
-  (back to typing, dragging and selecting). Keys typed into a note or a field stay the field's, and
-  an Escape the Shapes menu took closes only the menu. Each nib's name starts with its letters
-  ("EF, extra fine nib"), so voice control can say what is shown.
+  highlighter, stroke eraser and lasso, each a toggle with `aria-pressed`; then, after Sticky note,
+  the nibs EF / F / M and the six colours of the drawing tool in the hand (or of the last one held:
+  a nib or colour chosen with no pen in the hand picks it up). Keys (`hooks/useInkTools.ts`): **P**
+  pen, **H** highlighter, **E** stroke eraser, **L** lasso; the same key again or **Escape** puts
+  the tool down (back to typing, dragging and selecting). Keys typed into a note or a field stay the
+  field's, and an Escape the Shapes menu took closes only the menu. Each nib's name starts with its
+  letters ("EF, extra fine nib"), so voice control can say what is shown.
 - Drawing (`hooks/useInkInput.ts`, `components/InkSurface.tsx`): while a tool is held a surface
   covers the items layer with `touch-action: none` (only then), takes one inking pointer at a time
   and keeps its samples, coalesced where the browser offers them, in a ref; the live stroke's one
@@ -108,10 +108,32 @@ and the tablet and phone layouts are S5e (#210).
   command's sync waits for that flush (`isLeaving`). `beforeunload` warns when what the two savers
   owe together is more than keepalive can still carry (a long note plus owed ink, or one stroke too
   big on its own).
+- The lasso (`hooks/useLasso.ts`, `model/lasso.ts`, `components/LassoLayer.tsx` + `LassoMenu.tsx`):
+  a loop drawn over the items is tested against the page as SHOWN (`shown`, by the same rule as the
+  ink layers) with S5b's `lassoSelect`; its dashed loop stays and the menu opens under it with the
+  keyboard on its first action (arrows, Home, End; Escape closes it and keeps the lasso). Its name
+  counts what it holds by kind ("Lasso selection: 1 note, 7 strokes", `selectionName`). On a phone
+  (600 px and below) the menu sits at the foot of the screen, wrapping, since the page is wider
+  than the screen there. The AI cannot read handwriting, so **Ask about this**, **Make sticky**,
+  **Send to board** and **Copy** take only the typed notes and stickies inside the loop; an action
+  whose need is missing stays in place, disabled, and says why: to a screen reader with it
+  (`aria-describedby`), and on screen under the menu while it has the keyboard or the pointer. **Ask about this** hands the words to the reader in this tab's
+  `sessionStorage` under a short key (`model/askHandoff.ts`; only when storage is blocked do they
+  travel in the URL), and the reader (`components/AskFromNotebook.tsx`) takes them once: it drops
+  the key from the URL, starts a NEW ask (`startFresh`) with the words as the explain controller's
+  draft (`setDraft`, S4d), puts the keyboard at the end of the question box, and says once, in a
+  note, why the words are there: the ask API takes a passage of the paper as context, never
+  notebook text. Sent, cleared or not, the words never come back on a reopen or a reload. Make
+  sticky (the notes go, one sticky with their words takes the first's place) and **Delete**
+  (strokes and the person's items; never the exchange or a quote card) are each ONE history
+  command (`batch`), so one undo puts everything back. Send to board makes one note card from the
+  words, below everything already on the board (read first if this page has not read it; ink is
+  not sent); Copy puts them on the clipboard.
 - Ink latency (`model/latency.ts`, probe `apps/web/scripts/ink-latency.mjs`): pointer-event times
   paired with the frame that wrote the live path and with the next frame; measured in a production
   build by scripted 200-point strokes. The probe's header says what each number does and does not
-  include.
+  include; the numbers, load averages and what a real tablet still needs are in
+  `research/build/v0.2-ui/shots/S5d/README.md`.
 
 ## Data flow
 
@@ -133,7 +155,9 @@ the stored thread (`hooks/useExchange.ts`, `GET /papers/{id}/threads/{tid}`).
   units, stroke encoding, perfect-freehand outlines, lasso and eraser, undo/redo).
 - `model/tools.ts` (tools, keys, colour tokens, palm rejection), `model/inkPlace.ts` (where ink
   sits while the answer is open), `model/inkSync.ts` (what the server lacks, the batching rule),
-  `model/inkLedger.ts` (the saver's bookkeeping), `model/latency.ts`: S5d's pure ink model.
+  `model/inkLedger.ts` (the saver's bookkeeping), `model/lasso.ts` (what the lasso picked up, what
+  each menu action needs, its commands), `model/askHandoff.ts` (Ask about this's hand-off to the
+  reader), `model/latency.ts`: S5d's pure ink model.
 - `model/wire.ts`: API rows ↔ model items. `model/save.ts`: what to send for one item.
   `model/exchange.ts`: passage numbers, labels, the usage line. `model/layout.ts`: page height,
   where a new note lands, the five template paints. `model/links.ts`: reader and page URLs.
@@ -145,12 +169,15 @@ the stored thread (`hooks/useExchange.ts`, `GET /papers/{id}/threads/{tid}`).
   their honest status. `usePageEditing`: the editing session, focus and shortcuts.
   `usePageTemplate`: the template, saved with `version`. `useBoardCard`: the page's board card and
   Send page to board. `usePointerDrag`: drags in page units without a render per move.
-  `useInkTools`, `useInkInput`, `useStrokeSaver`: the tool in the hand, the pointer, the ink's saves.
-- `components/NotebookView.tsx` (the screen), `NotebookPage.tsx` (the bound page),
+  `useInkTools`, `useInkInput`, `useStrokeSaver`, `useLasso`: the tool in the hand, the pointer,
+  the ink's saves, the lasso's menu. `useAskFromNotebook`: the reader's half of Ask about this.
+- `components/NotebookView.tsx` (the screen; `NotebookBar.tsx` its top bar, `SaveNotice.tsx`'s
+  `PageSaveNotice` its one saving notice), `NotebookPage.tsx` (the bound page),
   `ExchangeBlock.tsx` + `AnswerProse.tsx`, `QuoteCard.tsx`, `NoteItem.tsx` + `NoteEditor.tsx`,
-  `ShapeItem.tsx`, `InkLayer.tsx`, `InkSurface.tsx`, `InkTools.tsx`, `NotebookToolbar.tsx`, `SaveNotice.tsx`, `NotebookPanel.tsx`
-  (+ `TemplatePicker.tsx`, `NotebookSearch.tsx`), `NotebookPageList.tsx`, `notebook.css` (the
-  page) and `panel.css` (the side panel).
+  `ShapeItem.tsx`, `InkLayer.tsx`, `InkSurface.tsx`, `InkTools.tsx`, `LassoLayer.tsx`,
+  `LassoMenu.tsx`, `NotebookToolbar.tsx`, `SaveNotice.tsx`, `NotebookPanel.tsx` (+
+  `TemplatePicker.tsx`, `NotebookSearch.tsx`), `NotebookPageList.tsx`, `notebook.css` (the page)
+  and `panel.css` (the side panel).
 
 Colours are token names (`pen`, `hl-amber`) mapped to `--pt-*`, never hex, so the lamp-lit scheme
 re-maps them; the page's own template inks are `--pt-nb-*` in `notebook.css`, for both schemes.

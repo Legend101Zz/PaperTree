@@ -49,6 +49,7 @@ describe('the tool state machine', () => {
   it('picks the last drawing tool up again when a nib or colour is chosen without one', () => {
     const s = run(
       { type: 'tool', tool: 'highlighter' },
+      { type: 'tool', tool: 'lasso' },
       { type: 'tool', tool: 'eraser' },
       { type: 'colour', colour: 'pink' },
     );
@@ -57,8 +58,8 @@ describe('the tool state machine', () => {
     expect(run({ type: 'nib', nib: 'M' })).toMatchObject({ tool: 'pen', nib: { pen: 'M' } });
   });
 
-  it('switches by key: P, H and E, in either case; other keys are not tools', () => {
-    expect(['p', 'H', 'e'].map(toolForKey)).toEqual(['pen', 'highlighter', 'eraser']);
+  it('switches by key: P, H, E and L, in either case; other keys are not tools', () => {
+    expect(['p', 'H', 'e', 'L'].map(toolForKey)).toEqual(['pen', 'highlighter', 'eraser', 'lasso']);
     expect(toolForKey('x')).toBeNull();
     expect(toolForKey('Escape')).toBeNull();
   });
