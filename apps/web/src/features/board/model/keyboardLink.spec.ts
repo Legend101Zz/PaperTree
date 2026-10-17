@@ -81,7 +81,7 @@ describe('the cards a keyboard thread walks', () => {
 });
 
 describe('the keys that move the highlight', () => {
-  it('Tab, → and ↓ step forward; Shift+Tab, ← and ↑ step back; both wrap', () => {
+  it('Tab, ArrowRight and ArrowDown step forward; Shift+Tab, ArrowLeft and ArrowUp step back; both wrap', () => {
     expect(stepTarget(0, 3, 'Tab', false)).toBe(1);
     expect(stepTarget(2, 3, 'ArrowRight', false)).toBe(0);
     expect(stepTarget(1, 3, 'ArrowDown', false)).toBe(2);
