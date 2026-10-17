@@ -205,11 +205,15 @@ test.describe('v0.2 frame 08b: the phone reader and its explain sheet (faux agen
       expect((await row.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
     }
 
-    // The pinned footer: usage and To board under the scroll, never over it; nothing dead.
+    // The pinned footer: usage, Dive in (S5e, #293) and To board under the scroll, never over it;
+    // nothing dead. A diagram starts from the selection toolbar (#217), never from the sheet.
     const pinned = sheet.locator('[data-pinned-footer]');
     await expect(pinned).toContainText('(estimate)');
     await expect(pinned.getByRole('button', { name: 'To board' })).toBeVisible();
-    await expect(sheet.getByRole('button', { name: /Dive in|Diagram/ })).toHaveCount(0);
+    const dive = pinned.getByRole('button', { name: /Dive in/ });
+    await expect(dive).toBeVisible();
+    expect((await dive.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+    await expect(sheet.getByRole('button', { name: /Diagram/ })).toHaveCount(0);
     const scroll = await sheet.locator('.pt-explain__scroll').boundingBox();
     const foot = await pinned.boundingBox();
     expect((scroll?.y ?? 0) + (scroll?.height ?? 0)).toBeLessThanOrEqual((foot?.y ?? 0) + 1);

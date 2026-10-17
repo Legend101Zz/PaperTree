@@ -10,8 +10,10 @@ import { ToolbarButton } from '@papertree/ui';
 import { Circle, MoveRight, Redo2, Shapes, Square, StickyNote, Type, Undo2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
+import { stepAlong } from '../model/tools';
+
 import type { ShapeItem } from '../model/page';
-import type { ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 
 const SHAPES: readonly { shape: ShapeItem['shape']; label: string; icon: ReactNode }[] = [
   { shape: 'rect', label: 'Add a rectangle', icon: <Square size={20} /> },
@@ -35,6 +37,8 @@ export interface NotebookToolbarProps {
   readonly inkTools?: ReactNode;
   /** S5d's second slot, after Sticky note: the nibs and the colours. */
   readonly inkOptions?: ReactNode;
+  /** `vertical` is the tablet's left rail (frame 05b, S5e); the same tools in the same order. */
+  readonly orientation?: 'horizontal' | 'vertical';
 }
 
 /** The Shapes tool: a button that opens the three shapes; Escape or a press elsewhere closes it. */
@@ -95,10 +99,42 @@ function ShapesTool({ onShape }: { onShape: NotebookToolbarProps['onShape'] }): 
   );
 }
 
+/**
+ * The bar's arrow keys (`stepAlong`): along its own buttons, never into an open flyout or the
+ * Shapes group, whose buttons keep their own keys.
+ *
+ * @param e - The key press on the bar.
+ * @param orientation - The bar's orientation.
+ */
+function arrowAlong(
+  e: KeyboardEvent<HTMLDivElement>,
+  orientation: 'horizontal' | 'vertical',
+): void {
+  const buttons = [...e.currentTarget.querySelectorAll<HTMLElement>('button')].filter(
+    (b) => b.closest('.pt-nb-tools__pop') === null,
+  );
+  const to = stepAlong(
+    e.key,
+    orientation,
+    buttons.indexOf(e.target as HTMLElement),
+    buttons.length,
+  );
+  if (to === null) return;
+  e.preventDefault();
+  buttons[to]?.focus();
+}
+
 /** The tool bar above the page. */
 export function NotebookToolbar(props: NotebookToolbarProps): ReactNode {
+  const orientation = props.orientation ?? 'horizontal';
   return (
-    <div className="pt-nb-tools" role="toolbar" aria-label="Notebook tools">
+    <div
+      className={`pt-nb-tools${orientation === 'vertical' ? ' pt-nb-tools--rail' : ''}`}
+      role="toolbar"
+      aria-label="Notebook tools"
+      aria-orientation={orientation}
+      onKeyDown={(e) => arrowAlong(e, orientation)}
+    >
       {props.inkTools === undefined ? null : (
         <div className="pt-nb-tools__group" data-slot="ink-tools">
           {props.inkTools}

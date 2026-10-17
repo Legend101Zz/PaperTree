@@ -36,6 +36,8 @@ export interface ExchangeProps {
   /** Stop the answer that is streaming (Stop on its tab row). */
   readonly onStop: () => void;
   readonly onSendToCanvas: (messageId: string) => Promise<void>;
+  /** Dive in: open the answer as a notebook page (S5e, #210); without it there is no Dive in. */
+  readonly onDiveIn?: (messageId: string, exchange: HTMLElement | null) => Promise<void>;
   /** Open folded: two lines and the counts, with Show (an earlier exchange of a reopened thread). */
   readonly startsFolded?: boolean;
   /** The composer holds this exchange's ask now, so a refusal may say "your text is kept". */
@@ -53,7 +55,7 @@ export interface ExchangeProps {
  * An exchange, named by its ask (never "Turn 1").
  *
  * @example
- * <Exchange exchange={exchanges[0]} initial="M" onShow={flash} onRetry={retry} onSendToCanvas={send} />
+ * <Exchange exchange={exchanges[0]} initial="M" onShow={flash} onRetry={retry} onSendToCanvas={send} onDiveIn={dive} />
  */
 export function Exchange({
   exchange,
@@ -62,6 +64,7 @@ export function Exchange({
   onRetry,
   onStop,
   onSendToCanvas,
+  onDiveIn,
   startsFolded = false,
   askInBox = false,
   phone = false,
@@ -129,6 +132,7 @@ export function Exchange({
           onRetry={retry}
           onStop={onStop}
           onSendToCanvas={onSendToCanvas}
+          {...(onDiveIn === undefined ? {} : { onDiveIn })}
           notSent={kept}
           fold={foldable ? { folded, toggle: () => setFolded((was) => !was) } : undefined}
           clip={

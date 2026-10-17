@@ -56,46 +56,61 @@ export function InkToolButtons({ state, onAction }: InkToolsProps): ReactNode {
   ));
 }
 
-/** The nib widths and the colour row; a choice picks the drawing tool up if none is held. */
-export function InkOptions({ state, onAction }: InkToolsProps): ReactNode {
+/** The three nibs of the drawing tool in the hand (or of the last one held). */
+export function NibSet({ state, onAction }: InkToolsProps): ReactNode {
   const target = drawingTool(state) ?? state.last;
+  return (
+    <span className="pt-nb-tools__set" role="group" aria-label="Nib width">
+      {NIBS.map((n) => (
+        <button
+          key={n.nib}
+          type="button"
+          className="pt-nb-nib"
+          data-nib={n.nib}
+          aria-label={n.label}
+          aria-pressed={state.nib[target] === n.nib}
+          onClick={() => onAction({ type: 'nib', nib: n.nib })}
+        >
+          <span
+            className="pt-nb-nib__dot"
+            style={{ inlineSize: n.dot, blockSize: n.dot }}
+            aria-hidden="true"
+          />
+          <span aria-hidden="true">{n.nib}</span>
+        </button>
+      ))}
+    </span>
+  );
+}
+
+/** The six colours of the drawing tool in the hand (or of the last one held). */
+export function ColourSet({ state, onAction }: InkToolsProps): ReactNode {
+  const target = drawingTool(state) ?? state.last;
+  return (
+    <span className="pt-nb-tools__set" role="group" aria-label="Ink colour">
+      {INK_COLOURS.map((c) => (
+        <button
+          key={c.colour}
+          type="button"
+          className="pt-nb-swatch"
+          aria-label={c.label}
+          aria-pressed={state.colour[target] === c.colour}
+          style={swatch(c.colour)}
+          onClick={() => onAction({ type: 'colour', colour: c.colour })}
+        />
+      ))}
+    </span>
+  );
+}
+
+/** The nib widths and the colour row; a choice picks the drawing tool up if none is held. */
+export function InkOptions(props: InkToolsProps): ReactNode {
   return (
     <>
       <span className="pt-nb-tools__rule" aria-hidden="true" />
-      <span className="pt-nb-tools__set" role="group" aria-label="Nib width">
-        {NIBS.map((n) => (
-          <button
-            key={n.nib}
-            type="button"
-            className="pt-nb-nib"
-            data-nib={n.nib}
-            aria-label={n.label}
-            aria-pressed={state.nib[target] === n.nib}
-            onClick={() => onAction({ type: 'nib', nib: n.nib })}
-          >
-            <span
-              className="pt-nb-nib__dot"
-              style={{ inlineSize: n.dot, blockSize: n.dot }}
-              aria-hidden="true"
-            />
-            <span aria-hidden="true">{n.nib}</span>
-          </button>
-        ))}
-      </span>
+      <NibSet {...props} />
       <span className="pt-nb-tools__rule" aria-hidden="true" />
-      <span className="pt-nb-tools__set" role="group" aria-label="Ink colour">
-        {INK_COLOURS.map((c) => (
-          <button
-            key={c.colour}
-            type="button"
-            className="pt-nb-swatch"
-            aria-label={c.label}
-            aria-pressed={state.colour[target] === c.colour}
-            style={swatch(c.colour)}
-            onClick={() => onAction({ type: 'colour', colour: c.colour })}
-          />
-        ))}
-      </span>
+      <ColourSet {...props} />
     </>
   );
 }

@@ -3056,6 +3056,24 @@ span.pt-paper .pt-paper__cite {
   box-shadow: var(--pt-e1);
 }
 
+/* Dive in first, then Send to board, on one row (frame 04). */
+.pt-exchange__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--pt-space-2);
+}
+
+/* Dive in (S5e, #210, frame 11): the slips and trace cards lift off the panel for --pt-dur-quick
+   before the page slides in carrying them. Reduced motion never sets the attribute. */
+.pt-exchange[data-dive='lift'] :is(.pt-call-slip, .pt-ai-slip, .pt-trace-row) {
+  transform: translateY(-6px);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+  transition:
+    transform var(--pt-dur-quick) var(--pt-ease-lift),
+    box-shadow var(--pt-dur-quick) var(--pt-ease-lift);
+}
+
 .pt-exchange .pt-ai-slip__aside {
   flex-direction: column;
   flex-wrap: nowrap;
@@ -4853,4 +4871,19 @@ button.pt-holder {
     justify-content: space-between;
     padding-block-start: var(--pt-space-1);
   }
+}
+
+/* The phone's pinned footer (08b): Dive in and To board share the row, 44 px each (S5e, #293). */
+.pt-explain__pinned .pt-exchange__actions {
+  flex-wrap: nowrap;
+}
+
+.pt-explain__pinned .pt-exchange__actions > .pt-button,
+.pt-explain__pinned .pt-exchange__actions > .pt-explain__actions {
+  flex: 1 1 0;
+}
+
+.pt-explain__pinned .pt-exchange__actions > .pt-explain__actions > .pt-btn {
+  inline-size: 100%;
+  justify-content: center;
 }

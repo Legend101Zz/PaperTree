@@ -3,11 +3,11 @@
 /**
  * The phone sheet's pinned footer (#205, frame 08b): the last answer's usage line (it ends
  * "(estimate)") and its actions, above the follow-up box and outside the sheet's scroll, so they
- * never cover the answer and never scroll away. Only what works is drawn: To board today; Dive in
- * joins when S5e wires it (#210, explain → notebook) and Diagram with the diagram run (#217), never
- * as dead buttons.
+ * never cover the answer and never scroll away. Only what works is drawn: Dive in (S5e, #210:
+ * the same one-request `useDiveIn` as the answer's own footer, 44 px) and To board; Diagram joins
+ * with the diagram run (#217), never as a dead button.
  */
-import { SendToCanvas } from './AnswerParts';
+import { DiveIn, SendToCanvas } from './AnswerParts';
 import { UsageLine } from './AnswerStates';
 
 import type { RunSummary } from '@/lib/api/types';
@@ -24,6 +24,8 @@ export interface PinnedFooterProps {
    * ("Send answer 2 to board"), since earlier answers keep their own To board in the scroll.
    */
   readonly answer?: number;
+  /** Dive in on this answer; absent (a sample paper), no Dive in is drawn. */
+  readonly onDiveIn?: () => Promise<void>;
 }
 
 /** The board pin of frame 08b's "To board". */
@@ -45,17 +47,28 @@ export function PinnedFooter({
   usage,
   onSendToBoard,
   answer,
+  onDiveIn,
 }: PinnedFooterProps): ReactNode {
   return (
     <div className="pt-explain__pinned" data-pinned-footer>
       <UsageLine usage={usage} />
-      <SendToCanvas
-        key={messageId}
-        short
-        icon={PIN}
-        onSend={onSendToBoard}
-        {...(answer === undefined ? {} : { label: `Send answer ${String(answer)} to board` })}
-      />
+      <div className="pt-exchange__actions">
+        {onDiveIn === undefined ? null : (
+          <DiveIn
+            key={messageId}
+            size="touch"
+            onDiveIn={onDiveIn}
+            {...(answer === undefined ? {} : { label: `Dive in to answer ${String(answer)}` })}
+          />
+        )}
+        <SendToCanvas
+          key={messageId}
+          short
+          icon={PIN}
+          onSend={onSendToBoard}
+          {...(answer === undefined ? {} : { label: `Send answer ${String(answer)} to board` })}
+        />
+      </div>
     </div>
   );
 }

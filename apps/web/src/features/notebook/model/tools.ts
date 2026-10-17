@@ -149,3 +149,30 @@ export function pointerRole(pointerType: string, penSeen: boolean): PointerRole 
 export function hasRealPressure(pointerType: string, pressure: number): boolean {
   return pointerType === 'pen' && pressure > 0 && pressure !== 0.5;
 }
+
+/**
+ * Where an arrow key moves the keyboard along a tool bar (S5e, #210): the arrows of its own
+ * orientation step and wrap (Up and Down on the tablet's rail, Left and Right on the floating
+ * bar), Home and End go to the ends; any other key is not the bar's.
+ *
+ * @param key - `KeyboardEvent.key`.
+ * @param orientation - The bar's `aria-orientation`.
+ * @param at - The focused button's index.
+ * @param count - How many buttons the bar has.
+ * @returns The index to focus, or null when the key does not move along the bar.
+ */
+export function stepAlong(
+  key: string,
+  orientation: 'horizontal' | 'vertical',
+  at: number,
+  count: number,
+): number | null {
+  if (count === 0 || at < 0) return null;
+  const [back, forth] =
+    orientation === 'vertical' ? ['ArrowUp', 'ArrowDown'] : ['ArrowLeft', 'ArrowRight'];
+  if (key === 'Home') return 0;
+  if (key === 'End') return count - 1;
+  if (key === forth) return (at + 1) % count;
+  if (key === back) return (at - 1 + count) % count;
+  return null;
+}

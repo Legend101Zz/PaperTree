@@ -9,7 +9,7 @@
  * - markers are 22 px squares whose hit area reaches 44 px (`hitOutset`); each trace row is one
  *   button (the 44 px row height is measured in the e2e);
  * - the pinned footer carries the last answer's usage ("estimate") and To board, outside the
- *   scroll, and draws no Dive in or Diagram (neither is wired on this branch);
+ *   scroll, with Dive in beside it (S5e, #293; `s5e-pinned-dive-in.spec`) and no Diagram;
  * - a marker tap lowers the sheet to peek and flashes the passage.
  */
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -150,8 +150,8 @@ describe('the phone sheet (frame 08b)', () => {
     expect(pinned?.closest('.pt-explain__scroll')).toBeNull();
     expect(pinned?.nextElementSibling?.classList.contains('pt-explain__composer')).toBe(true);
     expect(within(pinned as HTMLElement).getByText(/\(estimate\)$/)).toBeTruthy();
-    // Only what works is drawn: no dead Dive in or Diagram.
-    expect(within(sheet).queryByRole('button', { name: /Dive in|Diagram/ })).toBeNull();
+    // Only what works is drawn: Dive in (S5e, #293) and To board; no dead Diagram.
+    expect(within(sheet).queryByRole('button', { name: /Diagram/ })).toBeNull();
     // The last answer's footer is pinned, not repeated in the scroll; the first keeps its own.
     const scroll = sheet.querySelector('.pt-explain__scroll') as HTMLElement;
     expect(scroll.querySelectorAll('[data-usage-line]')).toHaveLength(1);
