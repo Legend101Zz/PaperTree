@@ -90,6 +90,17 @@ export function useViewNavigation({
       );
       return;
     }
+    // On the Map, its list is the keyboard's way in: open it at the first matching paper.
+    if (view === 'map') {
+      const list = document.querySelector<HTMLDetailsElement>('details.pt-map__list');
+      const row = [...(list?.querySelectorAll<HTMLElement>('li[data-paper-id]') ?? [])].find(
+        (li) => matches?.has(li.dataset['paperId'] ?? '') === true,
+      );
+      if (list === null || row === undefined) return;
+      list.open = true;
+      row.querySelector<HTMLElement>('a')?.focus();
+      return;
+    }
     const first = arrangeShelf(books, arrangement)
       .flatMap((group) => group.papers)
       .find((book) => matches?.has(book.id) === true);

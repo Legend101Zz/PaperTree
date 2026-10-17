@@ -10,7 +10,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Topic } from '@/lib/api/topics';
-import type { LibraryLink, LibraryPaper } from '@/lib/api/types';
+import { ApiError, type LibraryLink, type LibraryPaper } from '@/lib/api/types';
 import { useAuthStore } from '@/store/authStore';
 
 import { renderLibrary, row } from './library-table-cases';
@@ -143,7 +143,10 @@ describe('the Map view (#198)', () => {
       'title',
       'title',
     ]);
-    for (const g of drawn) expect(g.textContent).toBe('cites itmatched by title');
+    for (const g of drawn) {
+      expect(g.querySelector('.pt-map__tag-text')?.textContent).toBe('cites itmatched by title');
+      expect(g.querySelector('title')?.textContent).toBe('cites it · matched by title');
+    }
     expect(
       within(screen.getByRole('region', { name: 'Plan of the reading room' })).getByText(
         /matched by its title or arXiv id\) · 3/,
@@ -152,7 +155,7 @@ describe('the Map view (#198)', () => {
     expect(screen.getByText('Papers you linked on a board · none yet')).toBeTruthy();
   });
 
-  it('the list alternative, reached by Tab, lists the topics, their papers and the 3 real links', async () => {
+  it('the list alternative after the plan (one disclosure) lists the topics, their papers and the 3 real links', async () => {
     await openMap();
     const summary = screen.getByText('The plan as a list');
     expect(summary.tagName).toBe('SUMMARY');
@@ -182,6 +185,91 @@ describe('the Map view (#198)', () => {
     expect(openList().textContent).toContain(
       'None yet: no paper here cites another paper in your library.',
     );
+  });
+
+  it('the list says each paper’s state as the plan does: being read, could not read', async () => {
+    papersApi.list.mockResolvedValue([
+      ...PAPERS.slice(0, 3),
+      { ...(PAPERS[3] as LibraryPaper), processing: 'reading' },
+      { ...(PAPERS[4] as LibraryPaper), processing: 'failed' },
+    ]);
+    const plan = await openMap();
+    const list = openList();
+    const item = (id: string) => list.querySelector(`li[data-paper-id="${id}"]`)?.textContent;
+    expect(item('ppr_resnet')).toBe('Deep Residual Learning for Image Recognition · being read');
+    expect(item('ppr_yolo')).toBe(
+      'You Only Look Once: Unified, Real-Time Object Detection · could not read',
+    );
+    expect(
+      plan.querySelector('[data-paper-id="ppr_yolo"] .pt-map__state--failed')?.textContent,
+    ).toBe(' · could not read');
+  });
+
+  it('while the links load the plan and the legend say so, never "0 links"', async () => {
+    let answer: (value: { links: LibraryLink[] }) => void = () => undefined;
+    papersApi.links.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
+    await renderLibrary();
+    fireEvent.click(screen.getByRole('button', { name: 'Map' }));
+    const plan = await screen.findByRole('img', { name: /citation links still loading\./ });
+    expect(screen.getByText(/matched by its title or arXiv id\) · loading/)).toBeTruthy();
+    expect(plan.getAttribute('aria-label')).not.toMatch(/0 citation links/);
+    answer({ links: LINKS });
+    await screen.findByRole('img', { name: /3 citation links\./ });
+  });
+
+  it('a failed links read says so with Try again (after one retry), never "0 links" or "loading"', async () => {
+    papersApi.links.mockRejectedValue(new ApiError(500, 'internal', 'boom', true));
+    await renderLibrary();
+    fireEvent.click(screen.getByRole('button', { name: 'Map' }));
+    // One retry (the query's own, about a second) before the read counts as failed.
+    const alert = await screen.findByText(
+      /could not be read, so no line is drawn/,
+      {},
+      { timeout: 5000 },
+    );
+    expect(
+      screen.getByRole('img', { name: /the citation links could not be read\./ }),
+    ).toBeTruthy();
+    expect(screen.getByText(/matched by its title or arXiv id\) · could not be read/)).toBeTruthy();
+    expect(openList().textContent).toContain('The citation links could not be read (Try again');
+    expect(screen.queryByText(/· loading/)).toBeNull();
+    papersApi.links.mockResolvedValue({ links: LINKS });
+    fireEvent.click(
+      within(alert.closest('p') as HTMLElement).getByRole('button', { name: 'Try again' }),
+    );
+    await screen.findByRole('img', { name: /3 citation links\./ });
+    expect(screen.queryByText(/The citation links could not be read/)).toBeNull();
+  }, 15_000);
+
+  it('when the topics cannot be read it says so, with Try again, and never "No topics yet"', async () => {
+    topicsApi.list.mockRejectedValue(new ApiError(500, 'internal', 'boom', true));
+    await renderLibrary();
+    fireEvent.click(screen.getByRole('button', { name: 'Map' }));
+    const alert = await screen.findByText(
+      /Your topics could not be read, so a topic with no papers is missing/,
+    );
+    expect(screen.queryByText(/No topics yet/)).toBeNull();
+    // The papers' own accepted topics still stand as islands.
+    const plan = await screen.findByRole('img', { name: /^Plan of the reading room: 2 topics/ });
+    expect(plan.querySelectorAll('[data-group]')).toHaveLength(3);
+    topicsApi.list.mockResolvedValue([T, V]);
+    fireEvent.click(
+      within(alert.closest('p') as HTMLElement).getByRole('button', { name: 'Try again' }),
+    );
+    await waitFor(() => expect(screen.queryByText(/Your topics could not be read/)).toBeNull());
+  });
+
+  it('Enter in the search opens the list at the first matching paper, and touches no hidden shelf', async () => {
+    await openMap();
+    const search = screen.getByRole('searchbox');
+    fireEvent.change(search, { target: { value: 'bert' } });
+    fireEvent.keyDown(search, { key: 'Enter' });
+    const list = screen.getByText('The plan as a list').closest('details') as HTMLDetailsElement;
+    expect(list.open).toBe(true);
+    expect(document.activeElement?.textContent).toBe(
+      'BERT: Pre-training of Deep Bidirectional Transformers',
+    );
+    expect(document.querySelector('[data-card-paper-id]')).toBeNull();
   });
 
   it('a search dims the papers it does not match and lights the ones it does', async () => {

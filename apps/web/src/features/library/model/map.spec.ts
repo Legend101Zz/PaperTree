@@ -5,7 +5,16 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { layoutMap, linkLabel, mapGroups, mapLinks, type MapGroup } from './map';
+import {
+  layoutMap,
+  linkLabel,
+  mapGroups,
+  mapLinks,
+  mapPlanName,
+  type MapGroup,
+  type MapLayout,
+  type MapLink,
+} from './map';
 
 import type { ShelfPaper } from './shelf';
 import type { Topic } from '@/lib/api/topics';
@@ -101,24 +110,56 @@ describe('layoutMap', () => {
     for (const g of GROUPS) for (const p of g.papers) expect(plan.at.has(p.id)).toBe(true);
   });
 
-  it('a paper keeps its place when another paper arrives in a different topic, or a topic is added', () => {
-    const before = layoutMap(GROUPS, 1216);
-    const grown = GROUPS.map((g) =>
-      g.key === 'g1' ? { ...g, papers: [...g.papers, paper('g1-99')] } : g,
+  // Every island of `before` but those in `changed` is exactly where it was, at the same size.
+  function unmoved(before: MapLayout, after: MapLayout, changed: readonly string[]): void {
+    for (const was of before.islands) {
+      if (changed.includes(was.group.key)) continue;
+      const now = after.islands.find((i) => i.group.key === was.group.key);
+      expect(now?.tokens, was.group.key).toEqual(was.tokens);
+      expect([now?.cx, now?.cy, now?.r, now?.cart], was.group.key).toEqual([
+        was.cx,
+        was.cy,
+        was.r,
+        was.cart,
+      ]);
+    }
+  }
+  const grow = (key: string, n: number): MapGroup[] =>
+    GROUPS.map((g) =>
+      g.key === key
+        ? {
+            ...g,
+            papers: [
+              ...g.papers,
+              ...Array.from({ length: n }, (_, i) => paper(`${key}-9${String(i)}`)),
+            ],
+          }
+        : g,
     );
+
+  it.each([
+    ['a full island in the first row', 'g1', 1],
+    ['a small island in a middle row (rows never pack by their tallest island)', 'g4', 3],
+    ['the largest island (no island is sized against the largest)', 'g6', 5],
+    ['the first island shrinking to one paper', 'g0', -6],
+  ])('a paper keeps its place when papers arrive in or leave another topic: %s', (_, key, n) => {
+    const changed =
+      n > 0
+        ? grow(key, n)
+        : GROUPS.map((g) =>
+            g.key === key ? { ...g, papers: g.papers.slice(0, g.papers.length + n) } : g,
+          );
+    for (const width of [1216, 900, 326])
+      unmoved(layoutMap(GROUPS, width), layoutMap(changed, width), [key]);
+  });
+
+  it('a new topic (after the others, before Unshelved) moves only Unshelved', () => {
     const withTopic = [
       ...GROUPS.slice(0, -1),
       group('new', 2),
       GROUPS[GROUPS.length - 1] as MapGroup,
     ];
-    for (const after of [layoutMap(grown, 1216), layoutMap(withTopic, 1216)]) {
-      for (const key of ['g0', 'g2', 'g3', 'g4', 'g5']) {
-        const was = before.islands.find((i) => i.group.key === key);
-        const now = after.islands.find((i) => i.group.key === key);
-        expect(now?.tokens).toEqual(was?.tokens);
-        expect([now?.cx, now?.cy, now?.r]).toEqual([was?.cx, was?.cy, was?.r]);
-      }
-    }
+    unmoved(layoutMap(GROUPS, 1216), layoutMap(withTopic, 1216), ['g6']);
   });
 
   it('cuts long titles to the room and says a paper is being read or could not be read', () => {
@@ -172,6 +213,39 @@ describe('mapGroups', () => {
   });
 });
 
+type Box = readonly [number, number, number, number];
+const hits = (a: Box, b: Box): boolean => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+
+/** Every tag drawn is inside the plan and covers no paper, no cartouche and no other tag. */
+function expectTagsClear(plan: MapLayout, drawn: readonly MapLink[], total: number): void {
+  expect(drawn).toHaveLength(total);
+  const papers: Box[] = [...plan.at.values()].map(({ left, right }) => [
+    left.x - 6,
+    left.y - 14,
+    right.x + 4,
+    left.y + 14,
+  ]);
+  const carts: Box[] = plan.islands.map(({ cart }) => [
+    cart.x,
+    cart.y,
+    cart.x + cart.w,
+    cart.y + 44,
+  ]);
+  const tags: Box[] = drawn.flatMap((d) =>
+    d.tag === null
+      ? []
+      : [[d.tag.x - d.tagWidth / 2, d.tag.y - 17, d.tag.x + d.tagWidth / 2, d.tag.y + 17] as const],
+  );
+  for (const [i, tag] of tags.entries()) {
+    expect(tag[0]).toBeGreaterThanOrEqual(0);
+    expect(tag[2]).toBeLessThanOrEqual(plan.width);
+    expect(tag[1]).toBeGreaterThanOrEqual(0);
+    expect(tag[3]).toBeLessThanOrEqual(plan.height);
+    expect([...papers, ...carts].some((other) => hits(tag, other))).toBe(false);
+    expect(tags.some((other, j) => j !== i && hits(tag, other))).toBe(false);
+  }
+}
+
 describe('mapLinks: only real links', () => {
   const plan = layoutMap([group('a', 3), group('b', 2), group('c', 1, 'unshelved')], 1216);
   const link = (
@@ -212,16 +286,126 @@ describe('mapLinks: only real links', () => {
       across?.d.endsWith(`${(to?.left.x ?? 0).toFixed(1)} ${(to?.left.y ?? 0).toFixed(1)}`),
     ).toBe(true);
     const narrow = layoutMap([group('a', 3), group('b', 2)], 326);
-    for (const drawn of mapLinks(narrow, [link('a-02', 'a-00'), link('b-01', 'a-00')])) {
-      expect(drawn.tag.x - drawn.tagWidth / 2).toBeGreaterThanOrEqual(0);
-      expect(drawn.tag.x + drawn.tagWidth / 2).toBeLessThanOrEqual(326);
-      for (const { left, right } of narrow.at.values()) {
-        const clear =
-          drawn.tag.x + drawn.tagWidth / 2 <= left.x - 6 ||
-          drawn.tag.x - drawn.tagWidth / 2 >= right.x + 4 ||
-          Math.abs(drawn.tag.y - left.y) >= 31;
-        expect(clear).toBe(true);
+    expectTagsClear(narrow, mapLinks(narrow, [link('a-02', 'a-00'), link('b-01', 'a-00')]), 2);
+  });
+});
+
+describe('the 14-paper corpus: 12 topics (a 60-character name, five empty) and its 15 real links', () => {
+  // The titles, topics and links of an account holding every corpus and fresh PDF (measured on the
+  // S2g stack, 2026-10-17): the case the review found tags covering papers and each other in.
+  const TOPICS: [string, string[]][] = [
+    ['Transformers & attention', ['p01', 'p02', 'p03', 'p10', 'p12']],
+    ['Vision & detection', ['p06', 'p11', 'p13']],
+    ['Methods for modelling very long sequences in language and vi', ['p00']],
+    ['Generative models', ['p04', 'p09']],
+    ['Optimization & training', ['p08']],
+    ['Document parsing', ['p05']],
+    ['Reinforcement learning', []],
+    ['Benchmarks', ['p07']],
+    ['Retrieval', []],
+    ['Graph networks', []],
+    ['Speech', []],
+    ['Theory', []],
+  ];
+  const TITLES: Record<string, string> = {
+    p00: 'Abstract',
+    p01: 'Attention Is All You Need',
+    p02: 'BERT: Pre-training of Deep Bidirectional Transformers for',
+    p03: 'Language Models are Few-Shot Learners',
+    p04: 'Neural Ordinary Differential Equations',
+    p05: 'PDF-to-Tree: Parsing PDF Text Blocks into a Tree',
+    p06: 'Deep Residual Learning for Image Recognition',
+    p07: 'SuperGLUE: A Stickier Benchmark for General-Purpose Language Understanding Systems',
+    p08: 'ADAM: A METHOD FOR STOCHASTIC OPTIMIZATION',
+    p09: 'Denoising Diffusion Probabilistic Models',
+    p10: 'FlashAttention: Fast and Memory-Efficient Exact Attention',
+    p11: 'Mask R-CNN',
+    p12: 'Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks',
+    p13: 'You Only Look Once: Unified, Real-Time Object Detection',
+  };
+  const LINKS = [
+    'p12>p02:arxiv_id',
+    'p12>p01:title',
+    'p10>p03:title',
+    'p10>p01:title',
+    'p09>p01:title',
+    'p09>p08:title',
+    'p07>p02:arxiv_id',
+    'p07>p08:arxiv_id',
+    'p04>p06:title',
+    'p04>p08:arxiv_id',
+    'p03>p02:arxiv_id',
+    'p03>p01:title',
+    'p02>p01:title',
+    'p01>p06:title',
+    'p01>p08:title',
+  ].map((spec): LibraryLink => {
+    const [ends = '', how] = spec.split(':');
+    const [from = '', to = ''] = ends.split('>');
+    return {
+      from_paper_id: from,
+      to_paper_id: to,
+      via: 'citation',
+      matched_by: how === 'arxiv_id' ? 'arxiv_id' : 'title',
+      reference: { index: 0, text: '' },
+    };
+  });
+  const groups: MapGroup[] = TOPICS.map(([label, ids]) => ({
+    key: label,
+    label,
+    kind: 'topic',
+    meta: `${String(ids.length)} papers · arXiv cs.CL, cs.CV, cs.LG, stat.ML · no topic yet, and more words`,
+    papers: ids.map((id) => paper(id, { title: TITLES[id] ?? id })),
+  }));
+
+  it.each([1216, 326])(
+    'no link tag covers a paper, a cartouche or another tag (%i px)',
+    (width) => {
+      const plan = layoutMap(groups, width);
+      const drawn = mapLinks(plan, LINKS);
+      expectTagsClear(plan, drawn, 15);
+      // Measured on this corpus: 12 of the 15 tags find a free place at 1216 px, 11 at 326 px; the
+      // others are labelled in the list only (the legend counts them).
+      expect(drawn.filter((d) => d.tag !== null)).toHaveLength(width > 900 ? 12 : 11);
+    },
+  );
+
+  it.each([1216, 326])(
+    'a cartouche stays in its cell and on the plan, a long name cut (%i px)',
+    (width) => {
+      const plan = layoutMap(groups, width);
+      const cells = Math.min(3, Math.max(1, Math.floor((width - 48) / 380)));
+      const cellW = (width - 48) / cells;
+      for (const [i, island] of plan.islands.entries()) {
+        const { x, w, name, meta } = island.cart;
+        expect(x).toBeGreaterThanOrEqual(4);
+        expect(x + w).toBeLessThanOrEqual(width - 4);
+        expect(w).toBeLessThanOrEqual(cellW - 16);
+        expect(name.length * 8.4 + 28).toBeLessThanOrEqual(w + 8.4);
+        expect(meta.length * 6.4 + 28).toBeLessThanOrEqual(w + 6.4);
+        for (const other of plan.islands.slice(i + 1)) {
+          const apart =
+            other.cart.x >= x + w ||
+            other.cart.x + other.cart.w <= x ||
+            other.cart.y >= island.cart.y + 44 ||
+            other.cart.y + 44 <= island.cart.y;
+          expect(apart).toBe(true);
+        }
       }
-    }
+      const long = plan.islands.find((island) => island.group.label.startsWith('Methods'));
+      expect(long?.cart.name.endsWith('…')).toBe(true);
+      expect(long?.group.label).toBe(
+        'Methods for modelling very long sequences in language and vi',
+      );
+    },
+  );
+
+  it('names the plan without claiming a link count it does not have', () => {
+    const plan = layoutMap(groups, 1216);
+    expect(mapPlanName(plan, 15, 'ready')).toBe(
+      'Plan of the reading room: 12 topics, 14 papers, 15 citation links. The plan as a list, after it, says the same in words.',
+    );
+    expect(mapPlanName(plan, 0, 'loading')).toContain('14 papers, citation links still loading.');
+    expect(mapPlanName(plan, 0, 'error')).toContain('the citation links could not be read.');
   });
 });

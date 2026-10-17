@@ -87,6 +87,28 @@
   line-height: 1.45;
 }
 
+.pt-map__failed {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--pt-danger);
+}
+
+.pt-map__retry {
+  min-block-size: 32px;
+  padding: 0 10px;
+  font: inherit;
+  color: var(--pt-ink);
+  cursor: pointer;
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-map__retry:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
 .pt-map__host {
   margin-block-start: 8px;
 }
@@ -248,6 +270,10 @@
 }
 
 .pt-map__list a {
+  /* 24 px tall, so each paper in the list is a whole target (WCAG 2.5.8), not a line of text. */
+  display: inline-block;
+  min-block-size: 24px;
+  line-height: 24px;
   color: var(--pt-primary);
 }
 

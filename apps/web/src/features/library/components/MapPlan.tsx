@@ -9,7 +9,7 @@
 
 import { useId } from 'react';
 
-import { MAP_CHAR } from '../model/map';
+import { MAP_CHAR, mapPlanName, type MapLinksState, type MapPoint } from '../model/map';
 import { clothFor, isReadingNow, spineState } from '../model/shelf';
 
 import type { MapIsland, MapLayout, MapLink, MapToken } from '../model/map';
@@ -21,6 +21,8 @@ export interface MapPlanProps {
   readonly layout: MapLayout;
   readonly links: readonly MapLink[];
   readonly matches: ReadonlySet<string> | null;
+  /** Whether the links have been read: the plan's name never claims "0 links" it does not know. */
+  readonly linksState: MapLinksState;
 }
 
 /** One paper on the plan. */
@@ -89,7 +91,8 @@ function Island({
   readonly matches: ReadonlySet<string> | null;
 }): ReactNode {
   const { group, cx, cy, r } = island;
-  const { x, y: top, w } = island.cart;
+  const { x, y: top, w, name, meta } = island.cart;
+  const middle = x + w / 2;
   return (
     <g className={`pt-map__island pt-map__island--${group.kind}`} data-group={group.key}>
       <circle
@@ -100,14 +103,18 @@ function Island({
         style={group.kind === 'topic' ? { fill: hatch } : undefined}
       />
       <circle className="pt-map__ring" cx={cx} cy={cy} r={r - 6} />
-      <rect className="pt-map__cart" x={x} y={top} width={w} height={44} />
-      <rect className="pt-map__cart-rule" x={x + 3} y={top + 3} width={w - 6} height={38} />
-      <text className="pt-map__cart-name" x={cx} y={top + 20} textAnchor="middle">
-        {group.label}
-      </text>
-      <text className="pt-map__cart-meta" x={cx} y={top + 35} textAnchor="middle">
-        {group.meta}
-      </text>
+      <g className="pt-map__cartouche">
+        {/* The full name and line, for a pointer; a cut one is whole in the list too. */}
+        <title>{`${group.label} · ${group.meta}`}</title>
+        <rect className="pt-map__cart" x={x} y={top} width={w} height={44} />
+        <rect className="pt-map__cart-rule" x={x + 3} y={top + 3} width={w - 6} height={38} />
+        <text className="pt-map__cart-name" x={middle} y={top + 20} textAnchor="middle">
+          {name}
+        </text>
+        <text className="pt-map__cart-meta" x={middle} y={top + 35} textAnchor="middle">
+          {meta}
+        </text>
+      </g>
       {island.tokens.map((token, index) => {
         const paper = group.papers[index];
         return paper === undefined ? null : (
@@ -128,17 +135,39 @@ function Island({
   );
 }
 
+/** A link's paper tag, in two lines ("cites it" / "matched by title"), so it covers less. */
+function LinkTag({
+  at,
+  w,
+  label,
+}: {
+  readonly at: MapPoint;
+  readonly w: number;
+  readonly label: string;
+}): ReactNode {
+  return (
+    <>
+      <rect className="pt-map__tag" x={at.x - w / 2} y={at.y - 17} width={w} height={34} rx={2} />
+      <text className="pt-map__tag-text" x={at.x} y={at.y - 3} textAnchor="middle">
+        {label.split(' · ').map((line, index) => (
+          <tspan key={line} x={at.x} dy={index === 0 ? 0 : 14}>
+            {line}
+          </tspan>
+        ))}
+      </text>
+    </>
+  );
+}
+
 /**
  * The plan.
  *
  * @example
- * <MapPlan layout={layoutMap(groups, 1216)} links={mapLinks(layout, links)} matches={null} />
+ * <MapPlan layout={layoutMap(groups, 1216)} links={mapLinks(layout, links)} matches={null} linksState="ready" />
  */
-export function MapPlan({ layout, links, matches }: MapPlanProps): ReactNode {
+export function MapPlan({ layout, links, matches, linksState }: MapPlanProps): ReactNode {
   const id = useId().replace(/:/g, '');
-  const topics = layout.islands.filter((i) => i.group.kind === 'topic').length;
-  const papers = layout.islands.reduce((n, i) => n + i.group.papers.length, 0);
-  const name = `Plan of the reading room: ${String(topics)} ${topics === 1 ? 'topic' : 'topics'}, ${String(papers)} ${papers === 1 ? 'paper' : 'papers'}, ${String(links.length)} citation ${links.length === 1 ? 'link' : 'links'}. The plan as a list, after it, says the same in words.`;
+  const name = mapPlanName(layout, links.length, linksState);
   return (
     <svg
       className="pt-map__plan"
@@ -178,28 +207,20 @@ export function MapPlan({ layout, links, matches }: MapPlanProps): ReactNode {
           matches={matches}
         />
       ))}
-      {links.map((drawn) => {
-        const { x, y } = drawn.tag;
-        const w = drawn.tagWidth;
-        return (
-          <g
-            key={`${drawn.link.from_paper_id}>${drawn.link.to_paper_id}`}
-            className="pt-map__link"
-            data-matched-by={drawn.link.matched_by}
-          >
-            <path d={drawn.d} markerEnd={`url(#${id}-arrow)`} />
-            <rect className="pt-map__tag" x={x - w / 2} y={y - 17} width={w} height={34} rx={2} />
-            {/* Two lines ("cites it" / "matched by title"), so the tag covers less of the plan. */}
-            <text className="pt-map__tag-text" x={x} y={y - 3} textAnchor="middle">
-              {drawn.label.split(' · ').map((line, index) => (
-                <tspan key={line} x={x} dy={index === 0 ? 0 : 14}>
-                  {line}
-                </tspan>
-              ))}
-            </text>
-          </g>
-        );
-      })}
+      {links.map((drawn) => (
+        <g
+          key={`${drawn.link.from_paper_id}>${drawn.link.to_paper_id}`}
+          className="pt-map__link"
+          data-matched-by={drawn.link.matched_by}
+          data-tagged={String(drawn.tag !== null)}
+        >
+          <title>{drawn.label}</title>
+          <path d={drawn.d} markerEnd={`url(#${id}-arrow)`} />
+          {drawn.tag === null ? null : (
+            <LinkTag at={drawn.tag} w={drawn.tagWidth} label={drawn.label} />
+          )}
+        </g>
+      ))}
     </svg>
   );
 }

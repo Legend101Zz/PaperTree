@@ -22,13 +22,18 @@ BERT → Attention, Attention → ResNet (GAP-A1's citation table lists the same
 | `compare-03-light.png` | frame 03 (left) beside the build (right), half size |
 | `01e-map-1440-{light,dark}.png` | the Map tab: the legend, two topic islands and the dashed Unshelved, the three links with their tags |
 | `01e-map-list-1440-{light,dark}.png` | full page, "The plan as a list" open: topics, papers (links to the reader), the three links in words |
-| `01e-map-390-{light,dark}.png` | phone, full page: one island to a row; the links run in the left lane, their tags slid off every paper |
+| `01e-map-390-{light,dark}.png` | phone, full page: one island to a row; the links run in the left lane, their tags off every paper |
+| `01e-map-14papers-1440-light.png`, `01e-map-14papers-390-light.png` | after review: every corpus and fresh PDF (14), 12 topics (one with a 60-character name, cut with "…"; five empty), the 15 real links; 12 tags at 1440 and 11 at 390 find a free place, the rest are labelled in the list only and the legend says so |
+| `03-topics-12topics-1440-light.png` | after review: the same account's Topics, "12 topics" in the title (empty topics counted) |
 | `compare-01e-light.png` | frame 01e (left) beside the build (right), half size |
 | `e2e-map-live-parse-1440.png` | the e2e's last shot (`e2e/v02/library-topics-map.spec.ts`), taken while YOLO and DDPM were still being read: kraft spines, "· being read", two links so far |
 
 axe (wcag2a/aa, 21a/aa, 22aa, every rule including colour contrast) on the whole page: the Topics tab, with a card's
 "…" menu open and with New topic open; the Map tab, and with its list open; at 1440 and 390, light and dark:
 **0 violations of any impact** (20 runs, from the Map branch; the Topics branch alone had 12 of its own, also 0).
+After the review the shots were retaken and axe run again on both accounts (the 5-paper one and the 14-paper one):
+0 violations in 40 runs on the Map branch, and 24 on the Topics branch. The first run on the 14-paper account
+found the list's paper links 18 px tall (`target-size`); they are 24 px now.
 `document.documentElement.scrollWidth` equals the viewport at 390 and 1440 in every view.
 
 The e2e `e2e/v02/library-topics-map.spec.ts` was run against these servers with a scratch Playwright config (no
@@ -68,3 +73,19 @@ The e2e `e2e/v02/library-topics-map.spec.ts` was run against these servers with 
   keyboard path is "The plan as a list" after it, where every paper is a link to the reader. The search rings and
   dims tokens as the frame's focus ring does.
 - At 390 the plan is one column; the frame has no phone Map.
+
+## After the review (#198 should-fix items)
+
+- An open "…" panel stands above every other card (`elementFromPoint` at the next card's "…" centre returns the
+  panel, 1440 and 390, the review's `p10-stack` probe on this build).
+- The title counts every topic (`03-topics-12topics-1440-light.png`: "12 topics" over 12 cards, 5 of them empty).
+- Enter in the search on Topics or the Map acts on that view (a lit card's name; the Map's list, opened at the
+  match) and opens no catalogue card on the hidden shelf.
+- While `GET /library/links` loads, the plan's name says "citation links still loading" and the legend "· loading";
+  a failed read (after one retry) says "could not be read" in the name, the legend and the list, with an alert and
+  Try again. A failed `GET /topics` read is an alert with Try again ("a topic with no papers is missing from the
+  plan"), never "No topics yet" (the review's `p8b` probe, and a variant failing `/topics` from the first load).
+- Cartouches are at most their cell's width and on the plan; the 60-character name is cut with "…" and whole in the
+  cartouche's `<title>` and the list.
+- Link tags are placed along their curve where they cover no paper, cartouche or other tag (the review's `p5b`
+  probe: 12 tags at 1440 and 11 at 390, 0 overlaps); the links without a free place are labelled in the list only.

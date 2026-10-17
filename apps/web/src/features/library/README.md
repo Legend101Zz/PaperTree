@@ -74,18 +74,27 @@ same papers as a ruled catalogue, Topics shows each topic as a card, and the Map
   "…" panel stands above every other card. Sample papers (fixtures on) are not the person's and take no topic; a line
   under Unshelved says so.
 - **Map** (01e, #198): "Plan of the reading room", one SVG laid out by `model/map.ts`. Each topic (in the topics'
-  order, an empty one too) is a hatched island in a fixed cell of a grid (three to a row at 1440, one on a phone),
-  sized by its papers' estimated label widths; Unshelved is a dashed island after them. Its papers stand inside as
-  small cloth spines with their short titles (cut to the room, "· being read" on kraft, "· could not read" in red, a
-  ribbon while reading); past the room, "+n more". A cell depends only on its index and its own papers, so papers
-  arriving in one topic never move another. **Only real links:** the citation links `GET /library/links` returned,
-  dotted (the "references" thread) with an arrowhead at the cited paper and a paper tag "cites it / matched by
-  title" (worded from `matched_by`), slid off any paper or cartouche it would cover; nothing is drawn for papers that
-  are merely alike. The legend counts the links ("· 3", or "none yet") and says "Papers you linked on a board · none
-  yet": a board holds one paper (S2c). The plan is `role="img"` with a name ("2 topics, 5 papers, 3 citation
-  links"); **The plan as a list** after it (a disclosure, one Tab stop) lists the topics, their papers (links to the
-  reader) and every link in words ("BERT cites Attention Is All You Need · matched by title"). A search dims the
-  papers it does not match and rings the ones it does. Sample papers (fixtures on) are on neither Topics nor the Map.
+  order, an empty one too, and a paper's accepted topic even if `GET /topics` lacks it) is a hatched island in a
+  fixed cell of a grid (three to a row at 1440, one on a phone), sized by its papers' estimated label widths;
+  Unshelved is a dashed island after them. Its cartouche is at most its cell's width and stays on the plan: a long
+  name or line is cut with "…" (whole in the cartouche's `<title>` and in the list). Its papers stand inside as small
+  cloth spines with their short titles (cut to the room, "· being read" on kraft, "· could not read" in red, a ribbon
+  while reading); past the room, "+n more". A cell depends only on its index and its own papers, so papers arriving
+  in or leaving one topic never move or resize another. **Only real links:** the citation links `GET /library/links`
+  returned, dotted (the "references" thread) with an arrowhead at the cited paper and a paper tag "cites it /
+  matched by title" (worded from `matched_by`; the link's `<title>` says it too). A tag goes on or beside its curve,
+  searched from the middle outwards, to the first place that covers no paper, cartouche or other tag; a link with no
+  such place has no tag on the plan and is labelled in the list only, and the legend counts those ("15 (3 labelled
+  only in the list)", measured on the 14-paper corpus at 1440). Nothing is drawn for papers that are merely alike.
+  The legend counts the links ("· 3", "none yet", "loading", "could not be read") and says "Papers you linked on a
+  board · none yet": a board holds one paper (S2c). The plan is `role="img"` with a name that never claims a count it
+  does not have ("2 topics, 5 papers, 3 citation links", "citation links still loading", "the citation links could
+  not be read"). A failed links read, or a failed topics read (then a topic with no papers is missing, and the plan
+  says so instead of "No topics yet"), is an alert with Try again. **The plan as a list** after it (a disclosure, one
+  Tab stop; hidden while the topics load) lists the topics, their papers (links to the reader, with "· being read",
+  "· could not read", "· reading now") and every link in words ("BERT cites Attention Is All You Need · matched by
+  title"). A search dims the papers it does not match and rings the ones it does; Enter in it opens the list at the
+  first matching paper. Sample papers (fixtures on) are on neither Topics nor the Map, and the note says so.
 - **The Table** (01d) is a native `<table>`: Title (a link to the reader), Authors (first author "et al.";
   three or more open "Authors · full", a popover with every name), Year, Topic (its cloth, name and source line,
   "arXiv cs.CL · accepted", "chosen by you" or "suggested · accepted"; else "Unshelved"), Pages, State
@@ -142,6 +151,10 @@ rows and spines. Nothing is invented: no topic puts a paper under "Unshelved", n
 ribbon, no year means no year on the spine.
 
 ## Choices the owner may change
+
+- **The Map's rows are all one height** (about 445 px at 1440): that is what keeps every island in place when
+  another grows, at the price of empty space under a row of small or empty topics (12 topics with 5 empty make a
+  plan about 1,570 px tall).
 
 - **Cloth without a topic** (`clothFor`): cs.CL → transformers, cs.CV → vision, cs.LG and stat.ML →
   generative, math.OC and cs.NE → optimization, cs.IR → language, cs.AI / cs.RO / cs.MA → reinforcement;

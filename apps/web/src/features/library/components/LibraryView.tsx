@@ -111,17 +111,8 @@ export function LibraryView(): ReactNode {
   useEffect(() => {
     if (openId !== null && !books.some((book) => book.id === openId)) setOpenId(null);
   }, [openId, books]);
-  const navigation = {
-    view,
-    setView,
-    setArrangement,
-    books,
-    arrangement,
-    matches,
-    openId,
-    setOpenId,
-  };
-  const { showOnShelf, showTopicOnShelf, takeFirstMatch } = useViewNavigation(navigation);
+  const nav = { view, setView, setArrangement, books, arrangement, matches, openId, setOpenId };
+  const { showOnShelf, showTopicOnShelf, takeFirstMatch } = useViewNavigation(nav);
   const needALook = useCallback(
     (on: boolean) => {
       setChip(on ? 'look' : 'all');

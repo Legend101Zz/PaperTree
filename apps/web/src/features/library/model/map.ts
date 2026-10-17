@@ -42,8 +42,15 @@ export interface MapIsland<P extends ShelfPaper = ShelfPaper> {
   /** Papers past the island's room, shown as one "+n more" token at `more`. */
   readonly hidden: number;
   readonly more: { readonly x: number; readonly y: number } | null;
-  /** The cartouche over the circle: its top-left corner and width (it is 44 px tall). */
-  readonly cart: { readonly x: number; readonly y: number; readonly w: number };
+  /** The cartouche over the circle: its top-left corner, its width (at most its cell's, inside the
+   * plan; it is 44 px tall) and its two lines cut to fit (the full ones are in `group`). */
+  readonly cart: {
+    readonly x: number;
+    readonly y: number;
+    readonly w: number;
+    readonly name: string;
+    readonly meta: string;
+  };
 }
 
 /** A point on the plan. */
@@ -65,9 +72,9 @@ export interface MapLink {
   readonly link: LibraryLink;
   readonly d: string;
   readonly label: string;
-  /** The label's paper tag: its centre and width, kept inside the plan. It sits on the curve, or
-   * just left of an upright link's curve (on the curve it would cover the papers it joins). */
-  readonly tag: MapPoint;
+  /** The label's paper tag: its centre, on or beside the curve, inside the plan, covering no paper,
+   * cartouche or other tag. Null when no such place exists: the link is labelled in the list only. */
+  readonly tag: MapPoint | null;
   readonly tagWidth: number;
 }
 
@@ -93,8 +100,14 @@ function clip(text: string, chars: number): string {
 
 const tokenWidth = (label: string): number => GLYPH + CHAR * label.length;
 
-// The state a token says in words, with its " · " (its spine says it in colour too).
-function noteOf(paper: ShelfPaper): MapToken['note'] {
+/**
+ * The state a paper's token says in words after its title (its spine says it in colour too); the
+ * list alternative says the same.
+ *
+ * @param paper - The paper.
+ * @returns "being read", "could not read", or null.
+ */
+export function mapNote(paper: ShelfPaper): MapToken['note'] {
   const state = spineState(paper);
   if (state === 'failed') return 'could not read';
   return state === 'queued' || state === 'parsing' ? 'being read' : null;
@@ -136,7 +149,7 @@ function placeTokens<P extends ShelfPaper>(
   };
   const tokens = papers.slice(0, shown).map((paper, index) => {
     const { y, colLeft, colWidth } = slot(index);
-    const note = noteOf(paper);
+    const note = mapNote(paper);
     const room = Math.floor((colWidth - GLYPH) / CHAR) - (note === null ? 0 : note.length + 3);
     const label = clip(spineTitle(paper.title), Math.min(LABEL_MAX, room));
     const width = tokenWidth(noted(label, note));
@@ -250,7 +263,7 @@ export function layoutMap<P extends ShelfPaper>(
   const cellH = CART_H + 2 * rMax + 24;
   const at = new Map<string, { left: MapPoint; right: MapPoint }>();
   const islands = groups.map((group, index) => {
-    const labels = group.papers.map((p) => noted(clip(spineTitle(p.title), LABEL_MAX), noteOf(p)));
+    const labels = group.papers.map((p) => noted(clip(spineTitle(p.title), LABEL_MAX), mapNote(p)));
     const { cols, r } = islandSize(labels, rMax);
     // Each island hangs from the top of its own cell, under its cartouche: its place depends on
     // its index and its own papers only.
@@ -267,12 +280,85 @@ export function layoutMap<P extends ShelfPaper>(
     for (const paper of group.papers.slice(placed.tokens.length)) {
       at.set(paper.id, { left: rest, right: rest });
     }
-    // The cartouche's width from its two lines (Caslon bold 14.5 px, Alegreya 13 px: estimates).
-    const w = Math.max(group.label.length * 8.4, group.meta.length * 6.4) + 28;
-    return { group, cx, cy, r, ...placed, cart: { x: cx - w / 2, y: cy - r - 54, w } };
+    // The cartouche's width from its two lines (Caslon bold 14.5 px, Alegreya 13 px: estimates),
+    // at most its cell's, so a long name is cut rather than laid over a neighbour or off the plan.
+    const w = Math.min(
+      cellW - 16,
+      Math.max(group.label.length * 8.4, group.meta.length * 6.4) + 28,
+    );
+    const cart = {
+      x: Math.min(width - 4 - w, Math.max(4, cx - w / 2)),
+      y: cy - r - 54,
+      w,
+      name: clip(group.label, Math.floor((w - 28) / 8.4)),
+      meta: clip(group.meta, Math.floor((w - 28) / 6.4)),
+    };
+    return { group, cx, cy, r, ...placed, cart };
   });
   const bottom = Math.max(0, ...islands.map((island) => island.cy + island.r));
   return { width, height: bottom + PAD, islands, at };
+}
+
+// A point of the quadratic Bézier from `a` through control `c` to `b`.
+function bezier(a: MapPoint, c: MapPoint, b: MapPoint, t: number): MapPoint {
+  const u = 1 - t;
+  return {
+    x: u * u * a.x + 2 * u * t * c.x + t * t * b.x,
+    y: u * u * a.y + 2 * u * t * c.y + t * t * b.y,
+  };
+}
+
+const tagBox = (tag: MapPoint, w: number): Box =>
+  box(tag.x - w / 2, tag.y - 17, tag.x + w / 2, tag.y + 17);
+
+// Where a link's tag goes: along its curve from the middle outwards, on it or a little above or
+// below (beside it, to the left, for an upright link), inside the plan and covering nothing
+// `taken` holds; null when every such place covers something.
+function placeTag(
+  layout: MapLayout,
+  taken: readonly Box[],
+  w: number,
+  along: (t: number) => MapPoint,
+  upright: boolean,
+): MapPoint | null {
+  for (const t of [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8, 0.15, 0.85]) {
+    const p = along(t);
+    for (const dy of [0, -24, 24, -48, 48]) {
+      const x = Math.min(
+        layout.width - 4 - w / 2,
+        Math.max(4 + w / 2, upright ? p.x - w / 2 - 6 : p.x),
+      );
+      const y = Math.min(layout.height - 21, Math.max(21, p.y + dy));
+      const spot = { x, y };
+      if (!taken.some((other) => overlaps(other, tagBox(spot, w)))) return spot;
+    }
+  }
+  return null;
+}
+
+/** Whether `GET /library/links` has answered: `loading`, `error` (no answer to show) or `ready`. */
+export type MapLinksState = 'loading' | 'error' | 'ready';
+
+/**
+ * The plan's accessible name: what it shows, and never a link count it does not have.
+ *
+ * @param layout - The plan.
+ * @param links - How many links are drawn.
+ * @param state - Whether the links have been read.
+ * @returns "Plan of the reading room: 2 topics, 5 papers, 3 citation links. …".
+ */
+export function mapPlanName(layout: MapLayout, links: number, state: MapLinksState): string {
+  const count = (n: number, one: string, many: string): string =>
+    `${String(n)} ${n === 1 ? one : many}`;
+  const topics = layout.islands.filter((island) => island.group.kind === 'topic').length;
+  const papers = layout.islands.reduce((n, island) => n + island.group.papers.length, 0);
+  const cites =
+    state === 'ready'
+      ? count(links, 'citation link', 'citation links')
+      : state === 'loading'
+        ? 'citation links still loading'
+        : 'the citation links could not be read';
+  return `Plan of the reading room: ${count(topics, 'topic', 'topics')}, ${count(papers, 'paper', 'papers')}, ${cites}. The plan as a list, after it, says the same in words.`;
 }
 
 /**
@@ -319,25 +405,17 @@ export function mapLinks(layout: MapLayout, links: readonly LibraryLink[]): MapL
     const c = upright
       ? { x: Math.max(8, Math.min(a.x, b.x) - bow), y: (a.y + b.y) / 2 }
       : { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 - bow };
-    // The curve's midpoint (t = 0.5) is halfway between the chord's midpoint and the control.
-    const mid = { x: (a.x + b.x) / 4 + c.x / 2, y: (a.y + b.y) / 4 + c.y / 2 };
     const label = linkLabel(link);
     const tagWidth = Math.max(...label.split(' · ').map((line) => line.length)) * 6.4 + 14;
-    const want = upright ? mid.x - tagWidth / 2 - 6 : mid.x;
-    const tagX = Math.min(layout.width - 4 - tagWidth / 2, Math.max(4 + tagWidth / 2, want));
-    // Slide the tag up or down its lane, a row at a time, to the first place that covers nothing.
-    const at = (dy: number): Box =>
-      box(tagX - tagWidth / 2, mid.y + dy - 17, tagX + tagWidth / 2, mid.y + dy + 17);
-    const dy =
-      [0, -36, 36, -72, 72, -108, 108].find((d) => !taken.some((t) => overlaps(t, at(d)))) ?? 0;
-    taken.push(at(dy));
+    const tag = placeTag(layout, taken, tagWidth, (t) => bezier(a, c, b, t), upright);
+    if (tag !== null) taken.push(tagBox(tag, tagWidth));
     const round = (n: number): string => n.toFixed(1);
     return [
       {
         link,
         d: `M${round(a.x)} ${round(a.y)} Q${round(c.x)} ${round(c.y)} ${round(b.x)} ${round(b.y)}`,
         label,
-        tag: { x: tagX, y: mid.y + dy },
+        tag,
         tagWidth,
       },
     ];
