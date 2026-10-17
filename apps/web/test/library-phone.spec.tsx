@@ -250,7 +250,7 @@ describe('the phone library at 390', () => {
     expect(shading).not.toMatch(/rgb\(255 255 255 \/ \d/);
   });
 
-  it('is one tab stop: ↓ and ↑ walk down the stacks and into the next, End jumps', async () => {
+  it('is one tab stop: ArrowDown and ArrowUp walk down the stacks and into the next, End jumps', async () => {
     await renderPhone();
     const all = books();
     expect(all.filter((b) => b.tabIndex === 0)).toHaveLength(1);
