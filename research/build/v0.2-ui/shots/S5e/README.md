@@ -1,4 +1,4 @@
-# S5e shots: Dive in, the tablet notebook (05b), the motion (11)
+# S5e shots: Dive in, the tablet (05b) and phone (08c) notebook, the motion (11)
 
 Slice S5e (#210), shot on 2026-10-17 against a `next dev` server of the slice's worktree (web 18900,
 API 18907) on a copy of the v0.2 demo data, Playwright's Chromium, device scale 1, load average
@@ -67,3 +67,52 @@ What still differs from frame 11:
   first answer keeps its own Dive in and To board in the scroll, 44 px too. Still differing from
   08b: the thread has two answers, so both pinned buttons name answer 2 and "Send answer 2 to
   board" wraps to two lines at half the width.
+
+## The phone, 390 × 844 (frame 08c)
+
+Shot with touch emulation. One more stroke was drawn on the phone itself (pen switched on, a
+finger), so "Your ink" holds eight strokes.
+
+- `08c-phone-notebook-390-{light,dark}.png`: the stack at the 844 fold, with the bottom bar.
+- `08c-phone-notebook-390x1380-{light,dark}.png`: the whole stack at the frame's 1380 height.
+- `08c-phone-notebook-390-vs-reference.png`: frame 08c beside the daylight 1380 shot.
+- `08c-phone-pen-on-390-light.png`: "Pen: on": the page itself, scaled to the screen's width, the
+  pen in the hand and Undo in the bar; switching it off returns to the stack.
+
+What still differs from 08c:
+
+- **The header's three controls are 44 px icons** (Back, Send page to board, Open board, named by
+  their words for a screen reader), not the frame's "⋯" menu.
+- **The coverage line is one line** under the AI slip ("Stands on 4 passages · 11 citations · 1
+  paragraph uncited (the AI's own reading)", S5c's `CoverageReadout`), not the frame's heading with
+  a ¶ disc and a second line.
+- **Each trace row says where as well as how often** ("Abstract · cited 5×", as the explain
+  panel's trace does), where the frame shows "cited 5×" alone.
+- **Your ink is the real strokes, cropped to where they are**, so ink spread over the page comes
+  out small; the frame's script face stands in for handwriting. The sticky sits beside it as drawn;
+  a page with several stickies wraps them.
+- **Undo** joins the bar while a drawing tool is in the hand (the frame draws no undo); with the
+  pen off the bar is exactly Text, Sticky, Highlight and "Pen: off".
+- **Text is not a pressed toggle**: Text and Sticky add a note and start typing in it; the frame
+  draws Text pressed while a note is typed.
+- **Highlight** takes the highlighter (S5d's ink tool) and shows the page to draw on, as "Pen: on"
+  does; the phone has no other highlight on the notebook.
+- **The page view with the pen on is small** (about 0.35 of the desktop page) and pinch zoom is
+  not supported (#292).
+- **Dive in in S4e's pinned footer** (08b) is not here: that footer is not on `release/v0.2`
+  yet (#293); on a phone Dive in is in the answer's footer inside the sheet.
+
+## Checks behind these shots
+
+- **axe-core** (apps/web's copy), serious and critical: **0** at 1440 × 900, 1180 × 820 and
+  390 × 844, daylight and lamp-lit, on the dived page; also 0 on the reader with the explain panel
+  showing Dive in (1440), with the tablet's nib flyout open (1180), and on the phone with the pen on
+  and with a typed note being edited (390). Moderate findings left: none on the notebook; on the
+  reader the existing `landmark-unique` and a pdf.js canvas `region`, not this slice's.
+- **`e2e/v02/notebook-dive.spec.ts`** is written and `pnpm typecheck:e2e` passes; it was **not
+  run** (the slice brief forbids `pnpm e2e`). Its steps were replayed by hand-written Playwright
+  probes against this worktree's own servers: Dive in from the panel at 1440, 1180 and 390 (the
+  phone sheet) opens `np_01M508X9PCVH6CHJJDJEGDTC7V` with its 4 quote cards (4 trace rows on the
+  phone); a second Dive in opens the same page; Back to the paper lands on
+  `/read?nb=…&item=…&thread=thr_01M508X9PC9K9HKHSVB2J9W1A1` with the panel on that thread; at 390
+  a typed note added from the bar is POSTed (201) and is there after a reload; no eraser or lasso.

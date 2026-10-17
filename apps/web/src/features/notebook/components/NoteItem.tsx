@@ -32,6 +32,11 @@ export interface NoteItemProps {
   /** Move this item by this much, in page units. */
   readonly onMove: (id: string, dx: number, dy: number) => void;
   readonly onDelete: (id: string) => void;
+  /**
+   * In the phone's stack (S5e, #210): the note flows in the column instead of sitting at its stored
+   * place, and is edited and deleted there but never moved.
+   */
+  readonly flow?: boolean;
 }
 
 const ARROWS: Readonly<Record<string, readonly [number, number]>> = {
@@ -47,7 +52,11 @@ const ARROWS: Readonly<Record<string, readonly [number, number]>> = {
  */
 function sameNote(a: NoteItemProps, b: NoteItemProps): boolean {
   return (
-    a.item === b.item && a.scale === b.scale && a.editing === b.editing && a.matched === b.matched
+    a.item === b.item &&
+    a.scale === b.scale &&
+    a.editing === b.editing &&
+    a.matched === b.matched &&
+    a.flow === b.flow
   );
 }
 
@@ -71,7 +80,7 @@ export const NoteItem = memo(function NoteItem(props: NoteItemProps): ReactNode 
     () => place(0, 0),
   );
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
-    const arrow = ARROWS[e.key];
+    const arrow = props.flow === true ? undefined : ARROWS[e.key];
     const step = e.shiftKey ? 24 : 8;
     if (arrow !== undefined) props.onMove(item.id, arrow[0] * step, arrow[1] * step);
     else if (e.key === 'Enter' || e.key === ' ') props.onEdit(item.id);
@@ -83,10 +92,14 @@ export const NoteItem = memo(function NoteItem(props: NoteItemProps): ReactNode 
   return (
     <div
       ref={ref}
-      className={`pt-nb-note pt-nb-note--${item.kind}`}
+      className={`pt-nb-note pt-nb-note--${item.kind}${props.flow === true ? ' pt-nb-note--flow' : ''}`}
       data-item-id={item.id}
       data-match={props.matched === true ? 'true' : undefined}
-      style={{ left: item.x, top: item.y, width: item.w, minHeight: item.h, zIndex: item.z + 10 }}
+      style={
+        props.flow === true
+          ? undefined
+          : { left: item.x, top: item.y, width: item.w, minHeight: item.h, zIndex: item.z + 10 }
+      }
     >
       {editing ? (
         <NoteEditor
@@ -103,8 +116,9 @@ export const NoteItem = memo(function NoteItem(props: NoteItemProps): ReactNode 
           // The search's light is visual; the name says it too, so a screen reader hears which
           // note matched.
           aria-label={`${noun[0]?.toUpperCase() ?? ''}${noun.slice(1)}: ${item.text}${props.matched === true ? ' (matches your search)' : ''}`}
-          aria-describedby="pt-nb-note-help"
-          {...drag}
+          aria-describedby={props.flow === true ? undefined : 'pt-nb-note-help'}
+          // In the stack one tap edits: nothing there is dragged, so a tap means nothing else.
+          {...(props.flow === true ? { onClick: () => props.onEdit(item.id) } : drag)}
           onDoubleClick={() => props.onEdit(item.id)}
           onKeyDown={onKeyDown}
         >

@@ -175,6 +175,22 @@ motion and the tablet and phone layouts are S5e (#210).
   than a landmark beside it. Pen input is S5d's (palm rejection; one finger scrolls the desk once a
   pen has touched it). **Pinch zoom is not supported**: the page's scale follows the desk's width
   only (#292).
+- **The phone** (08c; `components/PhoneStack.tsx`, `PhoneBar.tsx`, `phone.css`, `model/phone.ts`):
+  with no drawing tool in the hand the page reads as a stack: "From your question…", the exchange
+  (`ExchangeBlock` with `phone`: "Read the whole answer" and "N more paragraphs" in the slip's foot,
+  no margin echoes), the coverage line, the trace as one 44 px index-card row per numbered quote
+  card ("Abstract · cited 5×", S4's touch `TraceList`) that opens its passage in the paper, then
+  "Your ink · view only" (the strokes cropped to where they are, `inkCrop`; a picture, never a
+  surface), the stickies and the typed notes (`NoteItem` with `flow`: one tap edits, Escape or blur
+  saves through the same saver; never moved). The bar at the foot says "Lasso, shapes and
+  templates: on a tablet or computer" and offers exactly Text, Sticky, Highlight and "Pen: off".
+  Highlight and switching the pen on put that tool in the hand, and the page itself is shown (scaled
+  to the screen's width, `usePageScale`'s floor is 0.3 for it) so drawing works as on a tablet;
+  Undo joins the bar while a tool is held; switching it off returns to the stack. Keys never pick
+  up the eraser or the lasso there, and the pen only through its switch (`useInkTools`'
+  `keyAllowed`); a tool the layout leaves out is put down when the window becomes a phone. The bar
+  names the page and keeps Back, Send page to board and Open board as 44 px icons. There is no
+  side panel: templates are not offered, and search and the counts are the tablet's and desktop's.
 
 ## Data flow
 
@@ -213,8 +229,10 @@ the stored thread (`hooks/useExchange.ts`, `GET /papers/{id}/threads/{tid}`).
   `useInkTools`, `useInkInput`, `useStrokeSaver`, `useLasso`: the tool in the hand, the pointer,
   the ink's saves, the lasso's menu. `useAskFromNotebook`: the reader's half of Ask about this.
 - S5e: `model/layoutMode.ts`, `model/diveIn.ts`; `hooks/useLayoutMode`, `useDiveIn`,
-  `useDiveArrival`, `useThreadFromNotebook`, `useSendPage` (Send page to board's toast, moved out
-  of the view); `components/RailInkOptions.tsx`.
+  `useDiveArrival`, `useThreadFromNotebook`, `useSendPage` (Send page to board's toast) and
+  `usePageLinks` (the page's links), both moved out of the view; `components/RailInkOptions.tsx`,
+  `PhoneStack.tsx`, `PhoneBar.tsx`, `PageToast.tsx` (the screen's one toast), `phone.css`;
+  `model/phone.ts`.
 - `components/NotebookView.tsx` (the screen; `NotebookBar.tsx` its top bar, `SaveNotice.tsx`'s
   `PageSaveNotice` its one saving notice), `NotebookPage.tsx` (the bound page),
   `ExchangeBlock.tsx` + `AnswerProse.tsx`, `QuoteCard.tsx`, `NoteItem.tsx` + `NoteEditor.tsx`,

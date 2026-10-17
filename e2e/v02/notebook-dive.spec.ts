@@ -6,8 +6,9 @@
  *   four cited passages, `support.ts`) → the reader → the header's Explain opens the stored thread →
  *   Dive in on its answer → the page with the exchange and 4 quote cards → Back to the paper lands
  *   on the reader with the panel on that thread → a second Dive in opens the SAME page (one page on
- *   the server) → the tablet layout at 1180 × 820 (the rail, the page named in the bar) → axe at
- *   1440 and 1180, daylight and lamp-lit.
+ *   the server) → the tablet layout at 1180 × 820 (the rail, the page named in the bar) → at 390 the
+ *   phone stack (the trace as rows, the bar's four tools, no eraser or lasso), a typed note added
+ *   there survives a reload → axe at 1440, 1180 and 390, daylight and lamp-lit.
  *
  * The corpus PDF is fetched, not committed: the spec SKIPS, loudly, without it.
  */
@@ -24,7 +25,7 @@ import { storeAnswer } from './support';
 const ATTENTION = join(REPO, 'research', 'benchmarks', 'corpus', 'attention-is-all-you-need.pdf');
 const AXE = join(REPO, 'apps', 'web', 'node_modules', 'axe-core', 'axe.min.js');
 
-test.describe('S5e — Dive in, the tablet notebook (faux agent)', () => {
+test.describe('S5e — Dive in, the tablet and phone notebook (faux agent)', () => {
   test.skip(
     !existsSync(ATTENTION),
     'SKIPPED: the corpus PDF attention-is-all-you-need.pdf is absent; run research/benchmarks/fetch_corpus.sh.',
@@ -130,15 +131,44 @@ test.describe('S5e — Dive in, the tablet notebook (faux agent)', () => {
     await expect(page.locator('.pt-nb__bar .pt-nb__title')).toContainText('Dive in:');
     await page.screenshot({ path: shot('s5e-tablet-1180.png') });
 
-    // ── 7. axe: no serious or critical violation at 1440 and 1180, daylight and lamp-lit ──
+    // ── 7. the phone (08c): the stack, the bar's four tools, no eraser or lasso ──
+    await page.setViewportSize({ width: 390, height: 844 });
+    const phone = page.locator('.pt-nb-stack');
+    await expect(phone).toBeVisible();
+    await expect(phone.locator('.pt-trace-row')).toHaveCount(4);
+    await expect(phone.getByRole('button', { name: 'Read the whole answer' })).toBeVisible();
+    const tools = page.getByRole('toolbar', { name: 'Notebook tools' });
+    await expect(tools.getByRole('button')).toHaveText(['Text', 'Sticky', 'Highlight', 'Pen: off']);
+    await expect(
+      page.getByText('Lasso, shapes and templates: on a tablet or computer'),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Stroke eraser' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Lasso' })).toHaveCount(0);
+    await page.screenshot({ path: shot('s5e-phone-390.png') });
+
+    // ── 8. a typed note added on the phone is saved, and is there after a reload ──
+    const note = 'Typed on the phone: check §3.5.';
+    const saved = page.waitForResponse(
+      (r) => r.request().method() === 'POST' && r.url().endsWith(`/notebook/pages/${pageId}/items`),
+    );
+    await tools.getByRole('button', { name: 'Text' }).click();
+    await page.getByRole('textbox', { name: 'Typed note' }).fill(note);
+    await page.keyboard.press('Escape');
+    expect((await saved).status()).toBe(201);
+    await page.reload();
+    await expect(phone.getByRole('button', { name: `Typed note: ${note}` })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Stroke eraser' })).toHaveCount(0);
+
+    // ── 9. axe: no serious or critical violation at 1440, 1180 and 390, daylight and lamp-lit ──
     for (const [width, height] of [
       [1440, 900],
       [1180, 820],
+      [390, 844],
     ] as const) {
       for (const colorScheme of ['light', 'dark'] as const) {
         await page.setViewportSize({ width, height });
         await page.emulateMedia({ colorScheme });
-        await expect(page.locator('.pt-nb-quote')).toHaveCount(4);
+        await expect(page.locator(width < 768 ? '.pt-trace-row' : '.pt-nb-quote')).toHaveCount(4);
         expect(await axeSerious(page), `${String(width)} ${colorScheme}`).toEqual([]);
       }
     }

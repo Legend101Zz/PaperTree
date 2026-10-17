@@ -13,7 +13,7 @@ import { inField } from './usePageEditing';
 import { INITIAL_TOOLS, colourToken, drawingTool, toolForKey, toolReducer } from '../model/tools';
 
 import type { InkInHand } from './useInkInput';
-import type { ToolAction, ToolState } from '../model/tools';
+import type { InkTool, ToolAction, ToolState } from '../model/tools';
 import type { MutableRefObject } from 'react';
 
 /** What `useInkTools` returns. */
@@ -27,11 +27,15 @@ export interface InkTools {
 /**
  * The tool bar's ink state, with its keyboard shortcuts on the window.
  *
+ * @param keyAllowed - Whether a key may pick a tool up (S5e: the phone's layout has no eraser or
+ *   lasso, and its pen comes only from its "Pen: off" switch). Every tool when omitted.
  * @returns The state and its dispatcher.
  */
-export function useInkTools(): InkTools {
+export function useInkTools(keyAllowed?: (tool: InkTool) => boolean): InkTools {
   const [state, dispatch] = useReducer(toolReducer, INITIAL_TOOLS);
   const penSeen = useRef(false);
+  const allowed = useRef(keyAllowed);
+  allowed.current = keyAllowed;
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
@@ -41,7 +45,7 @@ export function useInkTools(): InkTools {
         return;
       }
       const tool = toolForKey(e.key);
-      if (tool === null) return;
+      if (tool === null || allowed.current?.(tool) === false) return;
       e.preventDefault();
       dispatch({ type: 'tool', tool });
     };

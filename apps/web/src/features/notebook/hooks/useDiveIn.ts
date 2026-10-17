@@ -51,13 +51,14 @@ export function readMotion(): DiveMotion {
  *
  * @param root - The panel's exchange, or the page.
  * @param passages - The selector of a numbered passage under `root`.
- * @param attr - The `data-*` attribute that holds its number.
+ * @param attrs - The `data-*` attributes that may hold its number, the first present wins (a quote
+ *   card's `data-passage`, a trace row's `data-n` on the phone's stack).
  * @returns Each card's key, element and box.
  */
 export function cardsIn(
   root: Element,
   passages: string,
-  attr: string,
+  attrs: readonly string[],
 ): (DiveCard & { readonly el: HTMLElement })[] {
   const one = (key: string, el: HTMLElement | null) =>
     el === null ? [] : [{ key, el, box: el.getBoundingClientRect() }];
@@ -65,7 +66,7 @@ export function cardsIn(
     ...one('call', root.querySelector<HTMLElement>('.pt-call-slip')),
     ...one('ai', root.querySelector<HTMLElement>('.pt-ai-slip')),
     ...[...root.querySelectorAll<HTMLElement>(passages)].flatMap((el) =>
-      one(`passage-${el.getAttribute(attr) ?? ''}`, el),
+      one(`passage-${attrs.map((a) => el.getAttribute(a)).find((v) => v !== null) ?? ''}`, el),
     ),
   ];
 }
@@ -138,7 +139,7 @@ export function useDiveIn(paperId: string | null): DiveIn {
         exchange?.removeAttribute('data-dive');
         throw error;
       }
-      const cards = exchange === null ? [] : cardsIn(exchange, '.pt-trace-row[data-n]', 'data-n');
+      const cards = exchange === null ? [] : cardsIn(exchange, '.pt-trace-row[data-n]', ['data-n']);
       diveHandoff.put({
         pageId,
         cards: cards.map(({ key, box }) => ({ key, box })),
