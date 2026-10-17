@@ -98,8 +98,10 @@ derived on read from the parse, never stored).
   44 px (`hitOutset` in `@papertree/ui`; each square is drawn above every tap area, and in a run "[1, 4]" the two
   areas meet halfway, `model/phone.runSides`); trace rows are one 44 px button each. The last complete answer's usage line
   and To board are pinned above the follow-up box, outside the scroll (`PinnedFooter`, `model/phone.pinnedExchange`),
-  so they never cover the answer; earlier answers keep theirs in the scroll. Dive in and Diagram are drawn only when
-  they are wired (Dive in: S5e, #210; #217's plate starts from the selection toolbar, not from an answer): never a dead button. A marker or row tap lowers
+  so they never cover the answer; earlier answers keep theirs in the scroll. Dive in (S5e, #293) sits before To board
+  there, 44 px, through the same one-request `useDiveIn` ("Dive in to answer 2" when the thread has several); the
+  footers in the scroll give it 44 px on the phone too. Diagram is not drawn there (#217's plate starts from the
+  selection toolbar, not from an answer): never a dead button. A marker or row tap lowers
   the sheet to peek and runs the flash with `bottomInset` = the peek's height, so a passage behind the peek scrolls
   up first; a passage already in view starts flashing while the sheet is still lowering. In a landscape phone
   (max-height 500 px) the sheet opens full height under the header and the pinned footer takes one line.

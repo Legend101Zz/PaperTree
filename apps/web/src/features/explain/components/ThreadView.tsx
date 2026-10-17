@@ -244,6 +244,18 @@ export function ThreadView({
           usage={pinnedUsage}
           onSendToBoard={() => sendToCanvas(pinnedId)}
           {...(exchanges.length > 1 ? { answer: pin + 1 } : {})}
+          // The pinned footer sits outside its exchange, so the cards that fly are looked up.
+          {...(diveIn === null
+            ? {}
+            : {
+                onDiveIn: () =>
+                  diveIn(
+                    pinnedId,
+                    [
+                      ...(scroller.current?.querySelectorAll<HTMLElement>('[data-exchange]') ?? []),
+                    ].find((el) => el.dataset['exchange'] === exchanges[pin]?.key) ?? null,
+                  ),
+              })}
         />
       )}
       {/* A diagram thread is redrawn, never continued with a typed question (the API's 422). */}

@@ -137,7 +137,10 @@ export function AnswerSlip({
       {canSend ? (
         <div className="pt-exchange__actions">
           {onDiveIn === undefined ? null : (
-            <DiveIn onDiveIn={(exchange) => onDiveIn(messageId, exchange)} />
+            <DiveIn
+              size={lights.touch === true ? 'touch' : 'md'}
+              onDiveIn={(exchange) => onDiveIn(messageId, exchange)}
+            />
           )}
           <SendToCanvas onSend={() => onSendToCanvas(messageId)} short={lights.touch === true} />
         </div>
