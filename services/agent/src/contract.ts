@@ -11,6 +11,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Compile } from 'typebox/schema';
 
+import { parseTopicInput } from './topic.ts';
+
 /** The four read-only paper tools, in the order they are registered (contracts.md §3.1, §4). */
 export const TOOL_NAMES = ['get_outline', 'get_section', 'get_passage', 'search_passages'] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
@@ -121,8 +123,8 @@ function conditionalFields(schemaPath: string): string[] {
   return Object.keys(then?.properties ?? {});
 }
 
-export type Kind = 'explain' | 'ask' | 'summary' | 'diagram';
-export type PromptVersion = 'explain-v1' | 'ask-v1' | 'summary-v1' | 'diagram-v1';
+export type Kind = 'explain' | 'ask' | 'summary' | 'diagram' | 'topic';
+export type PromptVersion = 'explain-v1' | 'ask-v1' | 'summary-v1' | 'diagram-v1' | 'topic-v1';
 
 export interface SeedPassage {
   readonly handle: string;
@@ -169,6 +171,7 @@ export const PROMPT_FOR_KIND: Readonly<Record<Kind, PromptVersion>> = {
   ask: 'ask-v1',
   summary: 'summary-v1',
   diagram: 'diagram-v1',
+  topic: 'topic-v1',
 };
 
 /**
@@ -218,6 +221,12 @@ export function validateRunRequest(body: unknown): Validation {
   }
   if (!request.tool.base_url.endsWith(`/${request.run_id}`)) {
     return { ok: false, detail: "tool.base_url: must end with this run's run_id" };
+  }
+  if (request.kind === 'topic' && parseTopicInput(request.question) === null) {
+    return {
+      ok: false,
+      detail: 'question: a topic run takes "Category: …" and "Existing topics: [...]" lines',
+    };
   }
   const history = historyProblem(request.history?.entries ?? []);
   if (history !== null) return { ok: false, detail: `history.entries: ${history}` };

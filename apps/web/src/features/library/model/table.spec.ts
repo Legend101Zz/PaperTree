@@ -166,7 +166,7 @@ describe('the words around the cells', () => {
     );
     expect(topicSource({ ...base, source: 'manual', sourceDetail: null })).toBe('chosen by you');
     expect(topicSource({ ...base, source: 'model', sourceDetail: 'flash-1' })).toBe(
-      'suggested · accepted',
+      'suggested by the AI · accepted',
     );
     expect(topicSource(base)).toBeNull();
     expect(topicSource(null)).toBeNull();

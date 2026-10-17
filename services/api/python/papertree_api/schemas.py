@@ -718,7 +718,7 @@ class ResolutionsPut(Wire):
 
 MessageStatus = Literal["streaming", "complete", "partial", "error", "aborted"]
 ThreadKind = Literal["explain", "ask", "diagram"]
-RunKind = Literal["explain", "ask", "summary", "diagram"]
+RunKind = Literal["explain", "ask", "summary", "diagram", "topic"]
 DoneStatus = Literal["complete", "partial", "error", "aborted"]
 
 
@@ -1504,7 +1504,7 @@ class AgentRunRequest(Wire):
     run_id: str = Field(pattern=server_id("run"))
     request_id: str = Field(pattern=server_id("req"))
     kind: RunKind
-    prompt_version: Literal["explain-v1", "ask-v1", "summary-v1", "diagram-v1"]
+    prompt_version: Literal["explain-v1", "ask-v1", "summary-v1", "diagram-v1", "topic-v1"]
     tool: AgentToolAccess
     datamark: str = Field(pattern=r"^\^[0-9a-f]{8}$")
     paper: AgentPaper
@@ -1517,7 +1517,7 @@ class AgentRunRequest(Wire):
     @classmethod
     def _seed_matches_kind(cls, value: AgentSeed | None, info: ValidationInfo) -> Any:
         kind = info.data.get("kind")
-        if kind in ("summary", "explain", "diagram") and value is None:
+        if kind in ("summary", "explain", "diagram", "topic") and value is None:
             raise PydanticCustomError("missing", f"Field required for a {kind} run")
         return value
 

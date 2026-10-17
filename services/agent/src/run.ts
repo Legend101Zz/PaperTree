@@ -31,6 +31,10 @@
  * message that cites and THEN asks for a tool therefore keeps its text (the reader already has it)
  * and the answer continues in the next message, joined with a blank line.
  *
+ * A TOPIC run (v0.2 S2b2) has no tools and one short JSON answer; when the answer is not a valid
+ * `{topic_name, is_new, reason}` for the topics the request names (topic.ts) the run ends `error`
+ * (`internal`) with the text kept, so a bad answer is "no suggestion" and never a retry.
+ *
  * A DIAGRAM run (v0.2 S7a) is the same loop with three differences: its answer is NDJSON lines, so
  * a message proves to be the answer by holding one complete valid line (not a `[bN]` marker);
  * every line of the text sent is also read by diagram.ts's `PlateReader`, which emits `plate`,
@@ -62,6 +66,7 @@ import {
   TOOL_NAMES,
 } from './contract.ts';
 import { DIAGRAM_TOOLS, holdsDiagramLine, PlateReader } from './diagram.ts';
+import { parseTopicAnswer, parseTopicInput } from './topic.ts';
 import type { FauxBrain, FauxModel } from './faux.ts';
 import type { ModelChoice } from './models.ts';
 import type { Logger } from './log.ts';
@@ -215,6 +220,8 @@ class Run {
   private readonly refusedKind = new Set<string>();
   /** A diagram run's line reader; null for every other kind. */
   private readonly plate: PlateReader | null;
+  /** A topic run's verdict on its own answer (null for every other kind, or before the end). */
+  private topicValid: boolean | null = null;
   private toolCalls = 0;
   /** The cap was hit: the session is being stopped so the final, answer-only turn can follow. */
   private budgetTurnPending = false;
@@ -419,6 +426,7 @@ class Run {
     if (this.request.kind === 'explain' || this.request.kind === 'diagram')
       return 'Reading the selected passage';
     if (this.request.kind === 'summary') return "Reading the paper's key passages";
+    if (this.request.kind === 'topic') return 'Reading the title and abstract';
     return undefined;
   }
 
@@ -630,7 +638,8 @@ class Run {
         maxOutputTokens: limits.max_output_tokens,
         maxRetries: limits.max_retries,
         systemPrompt: systemPrompt(request),
-        tools,
+        // A topic is chosen from what the request holds: the model gets no tool at all.
+        tools: request.kind === 'topic' ? [] : tools,
         sessionId: this.sessionId,
         entries: (request.history?.entries ?? []) as SessionEntry[],
         ...(deps.providerTimeoutMs === undefined
@@ -698,6 +707,7 @@ class Run {
       turns: done.turns,
       markers: done.markers,
       ...(this.plate === null ? {} : { parts: this.plate.parts }),
+      ...(this.topicValid === null ? {} : { topic_valid: this.topicValid }),
       unseen_markers: parseMarkers(done.final_text).filter((m) => !done.handles_seen.includes(m)),
       first_text_ms: done.first_text_ms,
       first_token_ms: this.firstTokenMs,
@@ -772,6 +782,16 @@ class Run {
       error = runError('internal', false);
     } else {
       status = 'complete';
+    }
+    if (this.request.kind === 'topic' && status === 'complete') {
+      // A bad answer is "no suggestion", not a retry (#242): the run ends as an error whose text
+      // the API still stores (final_text), and the API checks the answer again on its side.
+      const verdict = parseTopicAnswer(text, parseTopicInput(this.request.question)?.topics ?? []);
+      this.topicValid = verdict.ok;
+      if (!verdict.ok) {
+        status = 'error';
+        error = runError('internal', false);
+      }
     }
     const totals: Usage = {
       input: 0,

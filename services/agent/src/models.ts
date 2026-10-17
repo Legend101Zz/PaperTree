@@ -2,7 +2,7 @@
  * The model policy (ADR-003). Which MiniMax model answers which kind of run, and how hard it thinks.
  *
  *   PAPERTREE_MODEL            one model for every kind (unset: DEFAULT_MODELS below)
- *   PAPERTREE_MODEL_EXPLAIN    override for `explain`; likewise _ASK, _SUMMARY and _DIAGRAM
+ *   PAPERTREE_MODEL_EXPLAIN    override for `explain`; likewise _ASK, _SUMMARY, _DIAGRAM and _TOPIC
  *   PAPERTREE_MODEL_EFFORT     Flash thinking effort (low | medium | high); likewise per kind
  *
  * Two models are allowed: MiniMax-M3 (in Pi's catalog) and MiniMax-M3.1-Flash-Preview (NOT in the
@@ -20,7 +20,7 @@ export const FLASH_MODEL_ID = 'MiniMax-M3.1-Flash-Preview';
 export const ALLOWED_MODEL_IDS = [M3_MODEL_ID, FLASH_MODEL_ID] as const;
 export type ModelId = (typeof ALLOWED_MODEL_IDS)[number];
 
-export const RUN_KINDS = ['explain', 'ask', 'summary', 'diagram'] as const;
+export const RUN_KINDS = ['explain', 'ask', 'summary', 'diagram', 'topic'] as const;
 export type RunKind = (typeof RUN_KINDS)[number];
 
 export const EFFORTS = ['low', 'medium', 'high'] as const;
@@ -33,13 +33,15 @@ export type Effort = (typeof EFFORTS)[number];
  * 0) and writes the `summary` (Flash's summaries read `partial` far more often: an uncited heading
  * bullet, citation ranges that do not parse). Flash (effort low) draws the `diagram` (v0.2 S7a,
  * ADR-004 §2.9: a short, structured plate from one selection, like an explain); whether it keeps
- * to the NDJSON lines is NOT CONFIRMED until S7b's live smoke.
+ * to the NDJSON lines is NOT CONFIRMED until S7b's live smoke. Flash (effort low) also suggests a
+ * `topic` (v0.2 S2b2, #242): one short JSON object per upload, no tools (D2: "one short Flash call").
  */
 export const DEFAULT_MODELS: Readonly<Record<RunKind, ModelId>> = {
   explain: FLASH_MODEL_ID,
   ask: M3_MODEL_ID,
   summary: M3_MODEL_ID,
   diagram: FLASH_MODEL_ID,
+  topic: FLASH_MODEL_ID,
 };
 export const DEFAULT_EFFORT: Effort = 'low';
 
@@ -105,6 +107,7 @@ export function readPolicy(env: NodeJS.ProcessEnv): ModelPolicy {
     ask: choice('ask'),
     summary: choice('summary'),
     diagram: choice('diagram'),
+    topic: choice('topic'),
   };
 }
 
@@ -121,7 +124,7 @@ export function uniformPolicy(id: ModelId, effort: Effort = DEFAULT_EFFORT): Mod
     label: modelLabel(id),
     effort: id === FLASH_MODEL_ID ? effort : null,
   };
-  return { explain: c, ask: c, summary: c, diagram: c };
+  return { explain: c, ask: c, summary: c, diagram: c, topic: c };
 }
 
 /** The models a policy uses, once each. */
