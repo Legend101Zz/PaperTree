@@ -68,7 +68,7 @@ export function readFixture(name: FixtureName): Fixture {
 }
 
 export function readExample(
-  name: 'explain' | 'followup' | 'summary' | 'diagram',
+  name: 'explain' | 'followup' | 'summary' | 'diagram' | 'topic',
 ): Record<string, any> {
   return readJson(`examples/run-request-${name}.json`);
 }

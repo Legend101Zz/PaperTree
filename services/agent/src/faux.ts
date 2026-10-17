@@ -23,6 +23,7 @@ import {
 } from '@earendil-works/pi-ai';
 
 import type { RunRequest } from './contract.ts';
+import { parseTopicInput } from './topic.ts';
 import { parseHeaders } from './tools.ts';
 
 export const FAUX_PROVIDER = 'papertree-faux';
@@ -573,6 +574,63 @@ function diagramFromSeed(request: RunRequest): FauxStep {
   };
 }
 
+// ── topic runs (v0.2 S2b2): ONE JSON object, no tools ─────────────────────────────────────────
+
+/** One short JSON answer, streamed in a few chunks. */
+function topicTurn(context: FauxContext, answer: string): FauxTurn {
+  return {
+    thinking: "Match the paper to one of the reader's topics, else name a new one.",
+    text: chunks(answer, 24),
+    usage: estimate(context, answer),
+  };
+}
+
+/** No marker: prose, not the JSON object, so the run ends `error` and there is no suggestion. */
+function topicDeclines(): FauxStep {
+  return (context) => topicTurn(context, '(faux) No topic is suggested for this paper.');
+}
+
+/** `[faux:topic-existing]`: the first existing topic (a new one if the reader has none). */
+function topicExisting(request: RunRequest): FauxStep {
+  return (context) => {
+    const first = parseTopicInput(request.question)?.topics[0];
+    return topicTurn(
+      context,
+      JSON.stringify(
+        first === undefined
+          ? {
+              topic_name: 'Faux Topic',
+              is_new: true,
+              reason: '(faux) the reader has no topics yet.',
+            }
+          : { topic_name: first, is_new: false, reason: '(faux) it fits this topic best.' },
+      ),
+    );
+  };
+}
+
+/** `[faux:topic-new]`: a name that is not in the reader's list. */
+function topicNew(): FauxStep {
+  return (context) =>
+    topicTurn(
+      context,
+      JSON.stringify({
+        topic_name: 'Diffusion models',
+        is_new: true,
+        reason: '(faux) none of the existing topics covers it.',
+      }),
+    );
+}
+
+/** `[faux:topic-bad]`: prose around the JSON and a name the list does not hold with is_new false. */
+function topicBad(): FauxStep {
+  return (context) =>
+    topicTurn(
+      context,
+      'Sure! {"topic_name":"A topic nobody has","is_new":false,"reason":"(faux) not in the list."}',
+    );
+}
+
 const SCENARIO = /\[faux:([a-z0-9-]+)\]/;
 
 /** Named scenarios for e2e error paths, selected by `[faux:<name>]` in the question. */
@@ -623,6 +681,12 @@ function scenario(name: string, request: RunRequest): readonly FauxStep[] | null
           return { ...turn, text: chunks(text), usage: estimate(context, text) };
         },
       ];
+    case 'topic-existing':
+      return [topicExisting(request)];
+    case 'topic-new':
+      return [topicNew()];
+    case 'topic-bad':
+      return [topicBad()];
     case 'tool-loop':
       return Array.from({ length: 12 }, () => ({
         toolCalls: [{ name: 'search_passages', arguments: { query: 'method' } }],
@@ -640,6 +704,9 @@ export const defaultBrain: FauxBrain = (request) => {
     if (steps) return steps;
   }
   if (request.kind === 'diagram') return [diagramFromSeed(request)];
+  // No marker: the faux model offers NOTHING. The e2e stack runs this agent, and an invented AI
+  // offer would race the arXiv rule's own ("Suggested ... from arXiv") on the same Unshelved row.
+  if (request.kind === 'topic') return [topicDeclines()];
   if (request.kind === 'summary') {
     return [
       { thinking: 'Read the outline first.', toolCalls: [{ name: 'get_outline', arguments: {} }] },

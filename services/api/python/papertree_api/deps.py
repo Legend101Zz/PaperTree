@@ -74,6 +74,7 @@ somebody forgets.
 
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
@@ -223,6 +224,11 @@ def live_runs_of(request: Request) -> dict[str, RunBroker]:
     return _app_singleton(request, "live_runs", dict)
 
 
+def topic_tasks_of(request: Request) -> set[asyncio.Task[None]]:
+    """The background topic runs this app is finishing (held so the loop does not drop them)."""
+    return _app_singleton(request, "topic_tasks", set)
+
+
 def agent_client_of(request: Request) -> AgentClient:
     settings: Settings = request.app.state.settings
     return AgentClient(
@@ -256,4 +262,5 @@ AgentTransportDep = Annotated[httpx.AsyncBaseTransport | None, Depends(agent_tra
 IndexCacheDep = Annotated[PaperIndexCache, Depends(index_cache_of)]
 DocumentsDep = Annotated[DocumentCache, Depends(documents_of)]
 LiveRunsDep = Annotated[dict[str, RunBroker], Depends(live_runs_of)]
+TopicTasksDep = Annotated[set[asyncio.Task[None]], Depends(topic_tasks_of)]
 AgentClientDep = Annotated[AgentClient, Depends(agent_client_of)]

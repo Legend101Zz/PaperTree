@@ -21,7 +21,7 @@ from typing import Annotated, cast
 from fastapi import APIRouter, Depends, Response, status
 from papertree_db import UNSET, PaperId, PaperTopicRow, TopicExists, TopicRow
 
-from ..deps import CallerDep
+from ..deps import AgentClientDep, CallerDep, IndexCacheDep, SettingsDep, TopicTasksDep
 from ..errors import ApiError
 from ..schemas import (
     Cloth,
@@ -32,6 +32,7 @@ from ..schemas import (
     TopicPatch,
     TopicRef,
 )
+from ..topic_run import TopicRunDeps
 from ..topic_suggestion import offer_topic
 from ._shared import json_body
 
@@ -119,13 +120,24 @@ async def delete_topic(call: CallerDep, topic_id: str) -> Response:
 
 
 @router.get("/papers/{paper_id}/topic", response_model=PaperTopic)
-async def get_paper_topic(call: CallerDep, paper_id: str) -> PaperTopic:
+async def get_paper_topic(
+    call: CallerDep,
+    paper_id: str,
+    settings: SettingsDep,
+    client: AgentClientDep,
+    index_cache: IndexCacheDep,
+    tasks: TopicTasksDep,
+) -> PaperTopic:
     """Where the paper sits.
 
-    With no row yet, a first offer is computed and stored (the deterministic rule, then the model
-    seam); reading again returns the same row.
+    With no row yet, a first offer is computed and stored: the deterministic rule, else (once per
+    paper, never for one the person has decided about) the Flash `topic` run, which starts in the
+    BACKGROUND: this read answers `status: "none"` at once and a later read returns the offer. A
+    model offer says `source: "model"` and `source_detail` is the model id.
     """
-    return _paper_topic(offer_topic(call, paper_id))
+    return _paper_topic(
+        offer_topic(call, paper_id, TopicRunDeps(settings, client, index_cache, tasks))
+    )
 
 
 @router.put("/papers/{paper_id}/topic", response_model=PaperTopic)

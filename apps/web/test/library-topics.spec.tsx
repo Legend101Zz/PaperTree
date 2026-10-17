@@ -366,6 +366,41 @@ describe('the Topics view (#198)', () => {
     );
   });
 
+  it("a suggestion that lands later keeps the row's choice control and the pick in progress", async () => {
+    await openTopics();
+    await createTopic('Transformers & attention');
+    await waitFor(() => expect(unshelvedRow('ppr_att')?.querySelector('select')).toBeTruthy());
+    const att = unshelvedRow('ppr_att') as HTMLElement;
+    fireEvent.change(within(att).getByLabelText(/Choose a topic for Attention/), {
+      target: { value: 'top_1' },
+    });
+    // The model's offer (made in the background, #242) arrives on a later read.
+    const model: PaperTopic = {
+      status: 'suggested',
+      topic: { topic_id: 'top_1', name: 'Transformers & attention', cloth: null },
+      suggested_name: null,
+      source: 'model',
+      source_detail: 'MiniMax-M3.1-Flash-Preview',
+      arxiv_category: 'cs.CL',
+    };
+    const before = topicsApi.ofPaper.getMockImplementation();
+    topicsApi.ofPaper.mockImplementation(async (id: string) =>
+      id === 'ppr_att' ? model : before?.(id),
+    );
+    await waitFor(
+      () => expect(unshelvedRow('ppr_att')?.textContent).toContain('Suggested: Transformers'),
+      { timeout: 8000 },
+    );
+    const after = unshelvedRow('ppr_att') as HTMLElement;
+    // The person can still choose their own topic, and the pick made before the offer is kept.
+    const select = within(after).getByLabelText(/Or choose another topic for Attention/);
+    expect((select as HTMLSelectElement).value).toBe('top_1');
+    expect(
+      (within(after).getByRole('button', { name: /^Shelve Attention/ }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+  }, 15000);
+
   it('"Not this" records the no and keeps the paper unshelved', async () => {
     db.topics.push({
       topic_id: 'top_9',
