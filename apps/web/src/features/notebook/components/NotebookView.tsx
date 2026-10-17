@@ -16,6 +16,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { papersApi } from '@/lib/api/papers';
 
+import { InkOptions, InkToolButtons } from './InkTools';
 import { NotebookPage } from './NotebookPage';
 import { NotebookPanel } from './NotebookPanel';
 import { NotebookToolbar } from './NotebookToolbar';
@@ -23,12 +24,14 @@ import { SaveNotice, unsavedPhrase } from './SaveNotice';
 import { notebookApi, notebookKeys } from '../api/notebookApi';
 import { useBoardCard } from '../hooks/useBoardCard';
 import { useExchange } from '../hooks/useExchange';
+import { useInkTools } from '../hooks/useInkTools';
 import { useNotebookPage } from '../hooks/useNotebookPage';
 import { usePageEditing } from '../hooks/usePageEditing';
 import { usePageScale } from '../hooks/usePageScale';
 import { usePageTemplate } from '../hooks/usePageTemplate';
 import { dayAndTime, originPlace } from '../model/exchange';
 import { boardHref, itemForAnchor, readerHref } from '../model/links';
+import { colourToken, drawingTool } from '../model/tools';
 import { parseExchangeBody } from '../model/wire';
 
 import './notebook.css';
@@ -51,6 +54,11 @@ const SENT: Readonly<Record<Exclude<SendResult, 'already'>, string>> = {
   failed: 'The page could not be sent to the board. Try again.',
 };
 
+/** Said when a stroke starts in the band the open answer opened (`model/inkPlace`). */
+export const INK_FOLD_NOTE =
+  'Ink can’t start beside the opened part of the answer: that space goes when the answer ' +
+  'closes. Start above it or below it, or collapse the answer first.';
+
 /** One notebook page, editable. */
 export function NotebookView({ paperId, pageId }: NotebookViewProps): ReactNode {
   const model = useNotebookPage(paperId, pageId);
@@ -71,6 +79,8 @@ export function NotebookView({ paperId, pageId }: NotebookViewProps): ReactNode 
   });
   const paperTitle = papers.data?.find((p) => p.paper_id === paperId)?.title ?? null;
   const editing = usePageEditing(model);
+  const tools = useInkTools();
+  const pen = drawingTool(tools.state);
   const template = usePageTemplate(page);
   const board = useBoardCard(paperId, pageId, page?.title ?? 'Notebook page');
   const desk = useRef<HTMLDivElement>(null);
@@ -79,6 +89,7 @@ export function NotebookView({ paperId, pageId }: NotebookViewProps): ReactNode 
   const [matches, setMatches] = useState<ReadonlySet<string>>(NO_MATCHES);
   const [sent, setSent] = useState<SendResult | null>(null);
   const [dismissed, setDismissed] = useState<string | null>(null);
+  const [foldNote, setFoldNote] = useState(0);
   const items = model.step?.state.items ?? [];
 
   const exchanges = useMemo(
@@ -123,9 +134,14 @@ export function NotebookView({ paperId, pageId }: NotebookViewProps): ReactNode 
   const saving: SaveStatus = {
     ...model.save,
     conflict: model.save.conflict || template.save.conflict,
-    pageGone: model.save.pageGone || template.save.pageGone,
-    failed: model.save.failed + (template.save.failed ? 1 : 0),
-    failure: model.save.failure + template.save.failure,
+    pageGone: model.save.pageGone || template.save.pageGone || model.ink.pageGone,
+    failed: model.save.failed + (template.save.failed ? 1 : 0) + model.ink.failed,
+    failure: model.save.failure + template.save.failure + model.ink.failure,
+    // Said as sentences (`SaveNotice`), so a refused stroke is never called a note.
+    rejected: [
+      ...model.save.rejected.map((d) => `A note could not be saved: ${d}`),
+      ...model.ink.rejected.map((d) => `A stroke could not be saved: ${d}`),
+    ],
   };
   const retry = (): void => {
     model.retry();
@@ -194,6 +210,8 @@ export function NotebookView({ paperId, pageId }: NotebookViewProps): ReactNode 
               onRedo={editing.redo}
               canUndo={model.step.history.past.length > 0}
               canRedo={model.step.history.future.length > 0}
+              inkTools={<InkToolButtons state={tools.state} onAction={tools.dispatch} />}
+              inkOptions={<InkOptions state={tools.state} onAction={tools.dispatch} />}
             />
             <NotebookPage
               page={page}
@@ -221,6 +239,25 @@ export function NotebookView({ paperId, pageId }: NotebookViewProps): ReactNode 
               onDelete={editing.remove}
               onFocusAnchor={focusAnchor}
               matches={matches}
+              ink={
+                tools.state.tool === null
+                  ? null
+                  : {
+                      tool: tools.state.tool,
+                      pen:
+                        pen === null
+                          ? null
+                          : {
+                              tool: pen,
+                              nib: tools.state.nib[pen],
+                              color: colourToken(pen, tools.state.colour[pen]),
+                            },
+                      onStroke: editing.draw,
+                      onErase: editing.erase,
+                      penSeen: tools.penSeen,
+                      onRefused: () => setFoldNote((n) => n + 1),
+                    }
+              }
             />
           </>
         )}
@@ -246,12 +283,14 @@ export function NotebookView({ paperId, pageId }: NotebookViewProps): ReactNode 
       )}
       <SaveNotice
         status={saving}
-        unsaved={unsavedPhrase(model.unsaved, template.unsaved)}
+        unsaved={unsavedPhrase(model.unsaved, template.unsaved, model.unsavedInk)}
         unsavedText={model.unsavedText}
         onRetry={retry}
         onReload={() => window.location.reload()}
       />
-      {notice === null || dismissed === notice.key ? null : (
+      {foldNote > 0 ? (
+        <Toast key={foldNote} message={INK_FOLD_NOTE} onDismiss={() => setFoldNote(0)} />
+      ) : notice === null || dismissed === notice.key ? null : (
         <Toast
           message={notice.message}
           action={notice.action}

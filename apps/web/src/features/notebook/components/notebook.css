@@ -12,6 +12,16 @@
   --pt-nb-binding-fade: rgb(60 40 20 / 0%);
   --pt-nb-binding-edge: rgb(60 40 20 / 6%);
   --pt-nb-stitch: rgb(80 55 30 / 40%);
+  /* The ink colours (S5d, #209): a stroke stores the token NAME, so lamp-lit re-maps it. Pen inks
+     are solid (3:1 and up on the page); highlighter washes are packages/ui's --pt-hl-* plus the
+     blue-black one, laid on like a marker: multiply by day, screen by lamplight. */
+  --pt-pen-amber: #a8650a;
+  --pt-pen-green: #2c7442;
+  --pt-pen-blue: #2d56a0;
+  --pt-pen-pink: #a8356a;
+  --pt-pen-purple: #6442ae;
+  --pt-hl-pen: rgb(30 42 74 / 22%);
+  --pt-nb-hl-blend: multiply;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -25,6 +35,13 @@
     --pt-nb-binding-fade: rgb(0 0 0 / 0%);
     --pt-nb-binding-edge: rgb(255 236 210 / 8%);
     --pt-nb-stitch: rgb(226 196 142 / 35%);
+    --pt-pen-amber: #f0be46;
+    --pt-pen-green: #78be7d;
+    --pt-pen-blue: #78a5dc;
+    --pt-pen-pink: #e68ca5;
+    --pt-pen-purple: #aa87d7;
+    --pt-hl-pen: rgb(169 193 236 / 28%);
+    --pt-nb-hl-blend: screen;
   }
 }
 
@@ -39,6 +56,13 @@
   --pt-nb-binding-fade: rgb(0 0 0 / 0%);
   --pt-nb-binding-edge: rgb(255 236 210 / 8%);
   --pt-nb-stitch: rgb(226 196 142 / 35%);
+  --pt-pen-amber: #f0be46;
+  --pt-pen-green: #78be7d;
+  --pt-pen-blue: #78a5dc;
+  --pt-pen-pink: #e68ca5;
+  --pt-pen-purple: #aa87d7;
+  --pt-hl-pen: rgb(169 193 236 / 28%);
+  --pt-nb-hl-blend: screen;
 }
 
 .pt-nb {
@@ -575,4 +599,117 @@
     border-inline-start: 0;
     border-block-start: 1px solid var(--pt-rule);
   }
+}
+
+/* ── The ink tools (S5d, #209) ─────────────────────────────────────────────────────────────── */
+
+/* The tool in the hand is oxblood cloth, as in frame 05. */
+.pt-nb-tools [data-ink-tool][aria-pressed='true'] {
+  color: var(--pt-on-primary);
+  background: var(--pt-primary-fill);
+}
+
+.pt-nb-tools__set {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.pt-nb-nib,
+.pt-nb-swatch {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pt-ink-2);
+  cursor: pointer;
+}
+
+.pt-nb-nib {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  inline-size: 36px;
+  block-size: 40px;
+  border-radius: var(--pt-radius-control);
+  font: 12px/1 var(--pt-font-you);
+}
+
+.pt-nb-nib__dot {
+  border-radius: 50%;
+  background: var(--pt-pen);
+}
+
+.pt-nb-nib[aria-pressed='true'] {
+  color: var(--pt-ink);
+  font-weight: 700;
+  background: var(--pt-ai-slip);
+  box-shadow: inset 0 -2px 0 var(--pt-primary);
+}
+
+/* A 28 px target around a 20 px swatch; the chosen one wears a ring of its own colour. */
+.pt-nb-swatch {
+  position: relative;
+  inline-size: 28px;
+  block-size: 28px;
+  border-radius: 50%;
+}
+
+.pt-nb-swatch::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: var(--pt-swatch);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 28%);
+}
+
+.pt-nb-swatch[aria-pressed='true']::before {
+  box-shadow:
+    0 0 0 2px var(--pt-e2-fill),
+    0 0 0 4px var(--pt-swatch);
+}
+
+.pt-nb-nib:hover,
+.pt-nb-swatch:hover {
+  background: color-mix(in srgb, var(--pt-ink) 7%, transparent);
+}
+
+.pt-nb-nib:focus-visible,
+.pt-nb-swatch:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+.pt-nb-ink__wash {
+  mix-blend-mode: var(--pt-nb-hl-blend);
+}
+
+/* While a tool is held, this takes the pointer from the page and stops the browser panning or
+   zooming mid-stroke. The items are their own stacking context, so no item's z rises above it. */
+.pt-nb-page__items {
+  isolation: isolate;
+}
+
+.pt-nb-surface {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  z-index: 1;
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.pt-nb-surface[data-tool='eraser'] {
+  cursor: cell;
+}
+
+/* The band the open answer opened: no stroke can start there (model/inkPlace). */
+.pt-nb-surface__fold {
+  position: absolute;
+  inset-inline: 0;
+  cursor: not-allowed;
 }

@@ -4,9 +4,9 @@
  * knows how one maps onto the other, in both directions, so a save writes back exactly what a read
  * would turn into the same item. Pure: no React, no fetch.
  */
-import { decodeStroke } from './stroke';
+import { decodeStroke, encodeStroke } from './stroke';
 
-import type { NotebookItemWire, NotebookStrokeWire } from '../api/notebookApi';
+import type { NotebookItemWire, NotebookStrokeIn, NotebookStrokeWire } from '../api/notebookApi';
 import type { Item, ShapeItem } from './page';
 import type { Stroke } from './stroke';
 import type { Anchor } from '@papertree/anchoring';
@@ -144,4 +144,42 @@ export function strokeFromWire(wire: NotebookStrokeWire): Stroke | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Bytes → base64 without Node's Buffer, in slices so a long stroke never overflows the call stack.
+ *
+ * @param bytes - The bytes.
+ * @returns Standard base64.
+ */
+export function base64FromBytes(bytes: Uint8Array): string {
+  let raw = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    raw += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(raw);
+}
+
+/** Encoded strokes by stroke object: a stroke is immutable, so a retry never re-encodes it. */
+const WIRES = new WeakMap<Stroke, NotebookStrokeIn>();
+
+/**
+ * The request entry for a stroke: what `strokeFromWire` reads back into the same stroke.
+ *
+ * @param stroke - A stroke on the page.
+ * @returns Its id, tool, nib, colour token and `encodeStroke` blob in base64.
+ * @throws StrokeTooLongError or StrokeRangeError from `encodeStroke` for a stroke it cannot store.
+ */
+export function strokeToWire(stroke: Stroke): NotebookStrokeIn {
+  const known = WIRES.get(stroke);
+  if (known !== undefined) return known;
+  const wire = {
+    stroke_id: stroke.id,
+    tool: stroke.tool,
+    nib: stroke.nib,
+    colour: stroke.color,
+    points_b64: base64FromBytes(encodeStroke(stroke)),
+  };
+  WIRES.set(stroke, wire);
+  return wire;
 }

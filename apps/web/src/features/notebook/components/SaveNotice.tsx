@@ -30,17 +30,26 @@ export interface SaveNoticeProps {
 }
 
 /**
- * "2 items", "1 item and the paper template", "the paper template": what is not saved, counted
- * by item (five nudges of one note are one unsaved item).
+ * "2 items", "1 item and the paper template", "1 item, 3 strokes and the paper template": what is
+ * not saved, counted by item (five nudges of one note are one unsaved item) and by stroke.
  *
  * @param items - Items that differ from the server.
  * @param template - True when the page's template is not saved either.
+ * @param strokes - Strokes the server does not hold as shown (S5d, #209).
  * @returns The phrase; "nothing" when everything is saved.
  */
-export function unsavedPhrase(items: number, template = false): string {
-  const counted = items === 0 ? '' : items === 1 ? '1 item' : `${String(items)} items`;
-  const paper = template ? 'the paper template' : '';
-  return [counted, paper].filter(Boolean).join(' and ') || 'nothing';
+export function unsavedPhrase(items: number, template = false, strokes = 0): string {
+  const count = (n: number, one: string) =>
+    n === 0 ? '' : `${String(n)} ${one}${n === 1 ? '' : 's'}`;
+  const parts = [
+    count(items, 'item'),
+    count(strokes, 'stroke'),
+    template ? 'the paper template' : '',
+  ];
+  const said = parts.filter(Boolean);
+  return said.length < 2
+    ? (said[0] ?? 'nothing')
+    : `${said.slice(0, -1).join(', ')} and ${said.at(-1) ?? ''}`;
 }
 
 function edits(n: number): string {
@@ -123,11 +132,12 @@ export function SaveNotice(props: SaveNoticeProps): ReactNode {
       />
     );
   }
+  // `rejected` holds whole sentences: the page says whether a note or a stroke was refused.
   const quiet =
     status.rejected.length > 0
       ? {
           key: `rejected-${String(status.rejected.length)}`,
-          message: `A note could not be saved: ${status.rejected.at(-1) ?? ''}`,
+          message: status.rejected.at(-1) ?? '',
         }
       : status.recreated > 0
         ? {

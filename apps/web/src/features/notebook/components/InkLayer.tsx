@@ -1,10 +1,12 @@
 'use client';
 
 /**
- * The page's ink, read-only (S5c, #208): every stored stroke decoded by `stroke.ts` and outlined by
- * `perfect-freehand` (`outline.ts`) into ONE SVG in page units. Paths are derived once per stroke
- * list and cached; drawing new ink is S5d's (#209). Colours are token names mapped to `--pt-*`,
- * set as a style because an SVG presentation attribute does not resolve `var()`.
+ * The page's ink (S5c, #208): every stored stroke decoded by `stroke.ts` and outlined by
+ * `perfect-freehand` (`outline.ts`) into ONE SVG in page units, under the items. Paths are derived
+ * once per stroke and cached; new ink is drawn by `InkSurface` (S5d, #209). Highlighter washes
+ * paint first, under the pen, in their own blend group (`--pt-nb-hl-blend`). Each path carries
+ * its stroke id, so the eraser can hide what it touches without a render. Colours are token names
+ * mapped to `--pt-*`, set as a style because an SVG presentation attribute does not resolve `var()`.
  */
 import { memo, useMemo } from 'react';
 
@@ -61,10 +63,19 @@ export const InkLayer = memo(function InkLayer({
   labelled = true,
 }: InkLayerProps): ReactNode {
   const paths = useMemo(
-    () => strokes.map((s) => ({ id: s.id, d: outlineOf(s), fill: inkColour(s.color) })),
+    () =>
+      strokes.map((s) => ({
+        id: s.id,
+        d: outlineOf(s),
+        fill: inkColour(s.color),
+        wash: s.tool === 'highlighter',
+      })),
     [strokes],
   );
   if (paths.length === 0) return null;
+  const draw = (p: (typeof paths)[number]): ReactNode => (
+    <path key={p.id} data-stroke-id={p.id} d={p.d} style={{ fill: p.fill }} />
+  );
   return (
     <svg
       className="pt-nb-ink"
@@ -75,9 +86,8 @@ export const InkLayer = memo(function InkLayer({
         ? { role: 'img', 'aria-label': 'Your handwriting (not searchable)' }
         : { 'aria-hidden': true })}
     >
-      {paths.map((p) => (
-        <path key={p.id} d={p.d} style={{ fill: p.fill }} />
-      ))}
+      <g className="pt-nb-ink__wash">{paths.filter((p) => p.wash).map(draw)}</g>
+      {paths.filter((p) => !p.wash).map(draw)}
     </svg>
   );
 });

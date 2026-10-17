@@ -2,8 +2,8 @@
 
 The Dive-in notebook: a bound page that starts from the exchange it came from (frame 05). The pure
 model is slice S5b (#207); the page is slice S5c (#208); ink tools, lasso and the nib/colour bar
-are S5d (#209, through `NotebookToolbar`'s `inkTools` slot); the Dive-in motion and the tablet and
-phone layouts are S5e (#210).
+are S5d (#209, through `NotebookToolbar`'s `inkTools` and `inkOptions` slots); the Dive-in motion
+and the tablet and phone layouts are S5e (#210).
 
 ## What the page does (S5c)
 
@@ -56,6 +56,63 @@ phone layouts are S5e (#210).
 - Performance: items are memoised and their callbacks stable, stroke outlines are cached per stroke
   object, and a drag restyles one element; a 200-item, 500-stroke page drags at the frame rate.
 
+## Ink (S5d)
+
+- The tool bar's ink group (`components/InkTools.tsx`, the state machine in `model/tools.ts`): pen,
+  highlighter and stroke eraser, each a toggle with `aria-pressed`; then, after Sticky note, the
+  nibs EF / F / M and the six colours of the drawing tool in the hand (or of the last one held: a
+  nib or colour chosen with no pen in the hand picks it up). Keys (`hooks/useInkTools.ts`): **P**
+  pen, **H** highlighter, **E** stroke eraser, the same key again or **Escape** puts the tool down
+  (back to typing, dragging and selecting). Keys typed into a note or a field stay the field's, and
+  an Escape the Shapes menu took closes only the menu. Each nib's name starts with its letters
+  ("EF, extra fine nib"), so voice control can say what is shown.
+- Drawing (`hooks/useInkInput.ts`, `components/InkSurface.tsx`): while a tool is held a surface
+  covers the items layer with `touch-action: none` (only then), takes one inking pointer at a time
+  and keeps its samples, coalesced where the browser offers them, in a ref; the live stroke's one
+  path is rewritten once per frame by perfect-freehand, in the items layer UNDER the items like the
+  stored ink, and pen-up adds the stroke as one history command (a pencil stroke cancelled by a
+  system gesture is kept too). Pressure is stored only for a pen that reports it
+  (`hasRealPressure`); else the encoder's no-pressure flag. A scribble longer than the encoder's
+  20,000 points is stored as several strokes.
+- **Ink and the open answer** (`model/inkPlace.ts`): the open answer is taller than its stored box,
+  and everything below the box is SHOWN that much lower. A stroke belongs to the layer it STARTS
+  in: begun above the box's bottom it stays put; begun below it, it is stored where it will sit
+  once the answer closes, and drawn back where it was while it is open. The band the open answer
+  opened has no stored place, so a stroke cannot START there (the cursor says not-allowed there,
+  and starting one says why), though one may pass through it. The page's two ink layers, the
+  eraser's hit-test and a new stroke's stored place all follow this one rule.
+- **Palm rejection** (`pointerRole`): a pen and a mouse always draw; a finger draws until a pen has
+  touched the page, and from then on a finger scrolls the desk instead of inking. While the pen is
+  down a finger does nothing at all (a palm neither inks nor scrolls), and a pen that lands on a
+  resting palm takes over from it, whichever touched first. The latch belongs to the page
+  (`useInkTools`): putting the tool down does not reset it.
+- The highlighter is wide and translucent (`--pt-hl-*`), painted under the pen in its own group,
+  multiply by day and screen by lamplight (`--pt-nb-hl-blend`). Colours are stored as token names
+  (`pen`, `pen-amber`, `hl-amber`, `hl-pen`, …; `colourToken`) and drawn from `notebook.css`'s
+  tokens in both schemes.
+- The stroke eraser hides what it touches as SHOWN at once (`eraseStrokes` on `strokesAsShown`),
+  and takes every stroke of one gesture away as ONE command at pointer-up: one undo brings them
+  all back.
+- Saving (`hooks/useStrokeSaver.ts`, its ledger `model/inkLedger.ts`, `model/inkSync.ts`, the
+  network half `api/pushStrokes.ts`): strokes carry no version (immutable, and the create is
+  idempotent on `stroke_id`), so the saver compares ids: what only the page has is POSTed (one
+  batch per round trip, at most 200 strokes and 2 MiB; strokes drawn while one is in flight join
+  the next), what only the server has is DELETEd, and so is a stroke whose failed POST may have
+  reached the server (no answer, a 5xx) once it leaves the page, so it never comes back on reload.
+  A failure counts only while its stroke is still owed: undoing a stroke that never landed clears
+  it. Failures, refusals ("A stroke could not be saved: …", said once, never resent) and a deleted
+  page go to the same `SaveNotice` as the items'; Try again re-sends.
+- Leaving: while hidden the saver sends with keepalive, within what is left of ONE budget shared
+  with the item saver (`api/keepalive.ts`). On `pagehide` every owed request starts inside the
+  event, with keepalive for what the items left of the budget and best effort for the rest; a last
+  command's sync waits for that flush (`isLeaving`). `beforeunload` warns when what the two savers
+  owe together is more than keepalive can still carry (a long note plus owed ink, or one stroke too
+  big on its own).
+- Ink latency (`model/latency.ts`, probe `apps/web/scripts/ink-latency.mjs`): pointer-event times
+  paired with the frame that wrote the live path and with the next frame; measured in a production
+  build by scripted 200-point strokes. The probe's header says what each number does and does not
+  include.
+
 ## Data flow
 
 UI gesture → one S5b history `Command` (`execute` / `undo` / `redo`) → local `NotebookState` →
@@ -74,18 +131,24 @@ the stored thread (`hooks/useExchange.ts`, `GET /papers/{id}/threads/{tid}`).
 
 - `model/page.ts`, `stroke.ts`, `outline.ts`, `hitTest.ts`, `history.ts`: S5b's pure model (page
   units, stroke encoding, perfect-freehand outlines, lasso and eraser, undo/redo).
+- `model/tools.ts` (tools, keys, colour tokens, palm rejection), `model/inkPlace.ts` (where ink
+  sits while the answer is open), `model/inkSync.ts` (what the server lacks, the batching rule),
+  `model/inkLedger.ts` (the saver's bookkeeping), `model/latency.ts`: S5d's pure ink model.
 - `model/wire.ts`: API rows ↔ model items. `model/save.ts`: what to send for one item.
   `model/exchange.ts`: passage numbers, labels, the usage line. `model/layout.ts`: page height,
   where a new note lands, the five template paints. `model/links.ts`: reader and page URLs.
 - `api/notebookApi.ts`: typed client and react-query keys (all under `['notebook', paperId]`).
   `api/pushItem.ts`: one save, with the 409 reported as a conflict and never retried.
+  `api/pushStrokes.ts`: one strokes POST or DELETE, and what became of each stroke.
+  `api/keepalive.ts`: the keepalive budget, the "being left" flag and what the savers owe.
 - `hooks/useNotebookPage.ts`: load once, edit locally. `useItemSaver`: the background saves and
   their honest status. `usePageEditing`: the editing session, focus and shortcuts.
   `usePageTemplate`: the template, saved with `version`. `useBoardCard`: the page's board card and
   Send page to board. `usePointerDrag`: drags in page units without a render per move.
+  `useInkTools`, `useInkInput`, `useStrokeSaver`: the tool in the hand, the pointer, the ink's saves.
 - `components/NotebookView.tsx` (the screen), `NotebookPage.tsx` (the bound page),
   `ExchangeBlock.tsx` + `AnswerProse.tsx`, `QuoteCard.tsx`, `NoteItem.tsx` + `NoteEditor.tsx`,
-  `ShapeItem.tsx`, `InkLayer.tsx`, `NotebookToolbar.tsx`, `SaveNotice.tsx`, `NotebookPanel.tsx`
+  `ShapeItem.tsx`, `InkLayer.tsx`, `InkSurface.tsx`, `InkTools.tsx`, `NotebookToolbar.tsx`, `SaveNotice.tsx`, `NotebookPanel.tsx`
   (+ `TemplatePicker.tsx`, `NotebookSearch.tsx`), `NotebookPageList.tsx`, `notebook.css` (the
   page) and `panel.css` (the side panel).
 

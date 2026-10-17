@@ -14,20 +14,21 @@
  * Leaving: while the tab is hidden, writes use `keepalive` when they fit the browser's 64 KiB
  * budget. On `pagehide` every open editor commits first, then everything still owed goes out at
  * once in chunks under the budget (`model/leave.ts`), including a write queued behind one in
- * flight, sent with the version it will have; `beforeunload` warns while a write too big for any
- * keepalive request is unsaved.
+ * flight, sent with the version it will have; `beforeunload` warns while what the page owes, with
+ * the ink's saver (`api/keepalive`), is more than keepalive can still carry.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { commitOpenEditors, openEditorTexts } from './pageLeave';
-import { pushItem } from '../api/pushItem';
 import {
-  KEEPALIVE_CAP,
-  chunkWrites,
-  needsLeaveWarning,
-  opBytes,
-  predictedAfter,
-} from '../model/leave';
+  leavingWouldLose,
+  owesOnLeave,
+  releaseKeepalive,
+  reserveKeepalive,
+  setLeaving,
+} from '../api/keepalive';
+import { pushItem } from '../api/pushItem';
+import { chunkWrites, opBytes, predictedAfter } from '../model/leave';
 import { saveOp, savedFromWire } from '../model/save';
 
 import type { PushResult } from '../api/pushItem';
@@ -112,7 +113,6 @@ export function useItemSaver(pageId: string, source: SaverSource): ItemSaver {
   const stopped = useRef(false);
   const hidden = useRef(false);
   const leaving = useRef(false);
-  const keepaliveBytes = useRef(0);
   const latest = useRef(source);
   latest.current = source;
 
@@ -142,13 +142,13 @@ export function useItemSaver(pageId: string, source: SaverSource): ItemSaver {
   const send = useCallback(
     async (id: string, op: SaveOp, allowKeepalive: boolean): Promise<PushResult> => {
       const bytes = opBytes(op);
-      const keepalive = allowKeepalive && keepaliveBytes.current + bytes <= KEEPALIVE_CAP;
-      if (keepalive) keepaliveBytes.current += bytes;
+      // One budget with the ink's saver (`api/keepalive`): the browser counts every request.
+      const keepalive = allowKeepalive && reserveKeepalive(bytes);
       try {
         return await pushItem(pageId, id, op, { keepalive });
       } finally {
         release(id, op);
-        if (keepalive) keepaliveBytes.current -= bytes;
+        if (keepalive) releaseKeepalive(bytes);
       }
     },
     [pageId, release],
@@ -296,7 +296,7 @@ export function useItemSaver(pageId: string, source: SaverSource): ItemSaver {
 /**
  * The page-lifecycle listeners: a hidden tab sends with keepalive; `pagehide` commits every open
  * editor and flushes; `pageshow` (back from the cache) resumes normal saving; `beforeunload` warns
- * while a write too big for keepalive is unsaved.
+ * while what the page owes (with the ink's) is more than keepalive can still carry.
  */
 function useLeaveListeners(refs: {
   hidden: { current: boolean };
@@ -311,19 +311,26 @@ function useLeaveListeners(refs: {
       latest.current.hidden.current = document.visibilityState === 'hidden';
     };
     const pagehide = (): void => {
+      setLeaving(true); // the ink's saver now waits for its own flush (`api/keepalive`)
       latest.current.leaving.current = true;
       commitOpenEditors(); // their commits go straight into the flush (`sync` while leaving)
       latest.current.flush();
     };
     const pageshow = (): void => {
+      setLeaving(false);
       latest.current.leaving.current = false;
     };
-    const beforeunload = (e: BeforeUnloadEvent): void => {
+    const owedBytes = (): number => {
       const editors = openEditorTexts().map((t) =>
         opBytes({ kind: 'patch', body: { version: 1, body: t } }),
       );
-      const writes = latest.current.owed().map((w) => w.bytes);
-      if (!needsLeaveWarning([...writes, ...editors])) return;
+      return [...latest.current.owed().map((w) => w.bytes), ...editors].reduce((a, b) => a + b, 0);
+    };
+    // One budget with the ink (`api/keepalive`): warn when what both owe cannot all go together,
+    // which includes one note too long for any keepalive request.
+    const unregister = owesOnLeave(owedBytes);
+    const beforeunload = (e: BeforeUnloadEvent): void => {
+      if (owedBytes() === 0 || !leavingWouldLose()) return;
       e.preventDefault();
       e.returnValue = LONG_NOTE_WARNING;
     };
@@ -332,6 +339,7 @@ function useLeaveListeners(refs: {
     window.addEventListener('pageshow', pageshow);
     window.addEventListener('beforeunload', beforeunload);
     return () => {
+      unregister();
       document.removeEventListener('visibilitychange', visibility);
       window.removeEventListener('pagehide', pagehide);
       window.removeEventListener('pageshow', pageshow);
