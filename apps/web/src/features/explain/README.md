@@ -99,7 +99,7 @@ derived on read from the parse, never stored).
   areas meet halfway, `model/phone.runSides`); trace rows are one 44 px button each. The last complete answer's usage line
   and To board are pinned above the follow-up box, outside the scroll (`PinnedFooter`, `model/phone.pinnedExchange`),
   so they never cover the answer; earlier answers keep theirs in the scroll. Dive in and Diagram are drawn only when
-  they are wired (Dive in: S5e, #210; the diagram run: #217): never a dead button. A marker or row tap lowers
+  they are wired (Dive in: S5e, #210; #217's plate starts from the selection toolbar, not from an answer): never a dead button. A marker or row tap lowers
   the sheet to peek and runs the flash with `bottomInset` = the peek's height, so a passage behind the peek scrolls
   up first; a passage already in view starts flashing while the sheet is still lowering. In a landscape phone
   (max-height 500 px) the sheet opens full height under the header and the pinned footer takes one line.

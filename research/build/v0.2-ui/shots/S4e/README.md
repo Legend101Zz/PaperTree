@@ -69,7 +69,9 @@ Against 08b:
 2. **The sheet's header has "Summary"**: without it the summary has no way in on a phone.
 3. **The pinned footer has its board button only.** Dive in from the explain panel is S5e's (#210: explain →
    notebook, with its motion); the API and the notebook page exist, but nothing wires the button yet on any surface.
-   Diagram waits for #217. Neither is drawn dead.
+   Diagram: #217's plate starts from the selection toolbar ("Explain with a diagram"); no surface offers it under an
+   answer yet (04's "Explain with a diagram" is not wired on desktop either). Neither is drawn dead. A plate in the
+   thread keeps its own actions; only answers are pinned.
 4. **The thread is the real one, with two exchanges:** the first keeps its own usage line and To board in the scroll;
    only the last answer's are pinned, and the pinned button then says which it sends ("Send answer 2 to board"). The
    menu says "Thread 1 of 6".
