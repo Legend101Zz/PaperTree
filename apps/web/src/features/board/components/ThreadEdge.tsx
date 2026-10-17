@@ -5,9 +5,13 @@
  * second cue from `THREAD_LINES` (dashes with crosses, chevrons, an arrowhead, a doubled line,
  * dots, a fine line), and a paper tag at the middle with the kind's glyph and its words (the
  * reader's own label when there is one). Colour is never the only cue; the tag names it too.
+ *
+ * At 500 cards (#215) a thread is memoised and its geometry (the curve, its marks, the head) is
+ * worked out only when an end or the kind moves, not when the board re-renders around it.
  */
 import { THREAD_LINES, THREAD_MARK_PATHS, markPositions, type ThreadLine } from '@papertree/ui';
 import { BaseEdge, EdgeLabelRenderer, type EdgeProps } from '@xyflow/react';
+import { memo, useMemo } from 'react';
 
 import { edgeText, type PtEdge } from '../model/flow';
 import {
@@ -24,23 +28,28 @@ import {
 
 import type { ReactNode } from 'react';
 
-/** The kind's marks (`THREAD_LINES`), placed along the thread and turned with it. */
-function Marks({ curve, line }: { curve: ThreadCurve; line: ThreadLine }): ReactNode {
+/** Where the kind's marks (`THREAD_LINES`) sit along the thread, turned with it. */
+function markTransforms(curve: ThreadCurve, line: ThreadLine): string[] {
+  if (line.marks === undefined) return [];
+  return tAtFractions(curve, markPositions(line, curveLength(curve))).map((t) => {
+    const p = pointAt(curve, t);
+    return `translate(${String(p.x)} ${String(p.y)}) rotate(${String(p.angle)})`;
+  });
+}
+
+/** The kind's marks, at the places `markTransforms` worked out. */
+function Marks({ at, line }: { at: readonly string[]; line: ThreadLine }): ReactNode {
   const marks = line.marks;
   if (marks === undefined) return null;
-  const at = tAtFractions(curve, markPositions(line, curveLength(curve)));
-  return at.map((t, i) => {
-    const p = pointAt(curve, t);
-    return (
-      <path
-        key={i}
-        className="pt-thread__mark"
-        d={THREAD_MARK_PATHS[marks.shape]}
-        transform={`translate(${String(p.x)} ${String(p.y)}) rotate(${String(p.angle)})`}
-        {...(marks.weight === undefined ? {} : { strokeWidth: marks.weight })}
-      />
-    );
-  });
+  return at.map((transform, i) => (
+    <path
+      key={i}
+      className="pt-thread__mark"
+      d={THREAD_MARK_PATHS[marks.shape]}
+      transform={transform}
+      {...(marks.weight === undefined ? {} : { strokeWidth: marks.weight })}
+    />
+  ));
 }
 
 /** A thread between two pins. */
@@ -50,14 +59,21 @@ export function ThreadEdge(props: EdgeProps<PtEdge>): ReactNode {
   const kind = threadKindOf(wire);
   const info = threadInfo(wire);
   const spec = THREAD_LINES[kind];
-  const curve = threadCurve(
-    { x: props.sourceX, y: props.sourceY },
-    props.sourcePosition,
-    { x: props.targetX, y: props.targetY },
-    props.targetPosition,
-  );
-  const d = curvePath(curve);
-  const end = pointAt(curve, 1);
+  const { sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition } = props;
+  const { curve, d, end, marks } = useMemo(() => {
+    const at = threadCurve(
+      { x: sourceX, y: sourceY },
+      sourcePosition,
+      { x: targetX, y: targetY },
+      targetPosition,
+    );
+    return {
+      curve: at,
+      d: curvePath(at),
+      end: pointAt(at, 1),
+      marks: markTransforms(at, THREAD_LINES[kind]),
+    };
+  }, [sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition, kind]);
   return (
     <g
       className="pt-thread"
@@ -77,7 +93,7 @@ export function ThreadEdge(props: EdgeProps<PtEdge>): ReactNode {
         }}
       />
       {spec.doubled === true ? <path className="pt-thread__inner" d={d} /> : null}
-      <Marks curve={curve} line={spec} />
+      <Marks at={marks} line={spec} />
       {spec.arrow === true ? (
         <path
           className="pt-thread__head"
@@ -108,5 +124,5 @@ export function ThreadEdge(props: EdgeProps<PtEdge>): ReactNode {
   );
 }
 
-/** Edge type → the component that draws it. */
-export const edgeTypes = { thread: ThreadEdge };
+/** Edge type → the component that draws it, memoised. */
+export const edgeTypes = { thread: memo(ThreadEdge) };

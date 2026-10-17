@@ -1,7 +1,7 @@
 /* chrome.css — around and under the cards (frames 06, 06b; lamp-lit 09c follows the tokens): the
    header and its tools, the "More board tools" menu, frames with their paper tags, the minimap and
    the empty board. Measurements are the mock-ups' (06-board-1440.dc.html, 06b-…). Colours are
-   --pt-* tokens; the laid-paper tints are named once below and read the same in both schemes. */
+   --pt-* tokens; the laid-paper tints are named once below (lit by lamplight in cards.css). */
 
 .pt-cv {
   --pt-bc-laid-h: rgb(96 80 60 / 2.5%);

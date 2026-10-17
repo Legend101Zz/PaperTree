@@ -7,10 +7,14 @@
  *
  * Nothing here talks to the API directly; every gesture goes through `useBoardController`, which is
  * the only module that sends a request (and only on the gestures contracts.md §2.7 lists).
+ *
+ * At scale (#215): the cards are memoised; a board of 150 cards or more renders only those in view
+ * and turns them to glances below the low-zoom switch (one subscription to the zoom, here); the
+ * zoom the stylesheet reads is published in 0.05 steps, since each write restyles every card.
  */
 import { Background, ReactFlow, ReactFlowProvider, useReactFlow, useStore } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { useBoardController } from '../hooks/useBoardController';
 import { useBoardSelection } from '../hooks/useBoardSelection';
@@ -22,17 +26,18 @@ import { useThreadDrawing } from '../hooks/useThreadDrawing';
 import { useUndoKeys } from '../hooks/useUndoKeys';
 import { ZOOM_RANGE, boardCounts, countsLine } from '../model/chrome';
 import { withPageTitles, type PtEdge, type PtNode } from '../model/flow';
+import { bigBoard, glanceAt, publishedZoom } from '../model/glance';
 import { BoardHeader } from './BoardHeader';
 import { BoardMinimap } from './BoardMinimap';
 import { BoardFailed, BoardLoading, BoardNotice, UndoToast } from './BoardStates';
 import { BoardToolbar } from './BoardToolbar';
-import { CanvasActionsProvider, LinkingProvider } from './BoardContext';
+import { CanvasActionsProvider, GlanceProvider, LinkingProvider } from './BoardContext';
 import { nodeTypes } from './cards';
 import { EmptyBoard } from './EmptyBoard';
 import { LinkAsLayer } from './LinkAsLayer';
 import { ThreadBar } from './ThreadBar';
 import { edgeTypes } from './ThreadEdge';
-import { ThreadLegend } from './ThreadLegend';
+import { ThreadLegend as Legend } from './ThreadLegend';
 import { ThreadPreview } from './ThreadPreview';
 import './cards.css';
 import './threads.css';
@@ -58,6 +63,9 @@ export function citationHref(
   if (threadId !== undefined) q.set('thread', threadId);
   return `/paper/${encodeURIComponent(paperId)}/read?${q.toString()}`;
 }
+
+/** The legend never changes with the board, so a drag does not redraw it. */
+const ThreadLegend = memo(Legend);
 
 /** Shift as well as Ctrl/Cmd adds to the selection (S9). */
 const MULTI_SELECT_KEYS = ['Shift', 'Meta', 'Control'];
@@ -96,10 +104,11 @@ export function BoardView({ paperId }: { readonly paperId: string }): ReactNode 
 /**
  * Publishes the board's zoom as `--pt-cv-zoom` on the stage, so the stylesheet can keep in-card
  * controls tappable (>= 40 px on screen) at phone widths. It writes the variable straight onto the
- * element: a pan or zoom must not re-render the whole board.
+ * element: a pan or zoom must not re-render the whole board; and only in 0.05 steps
+ * (`publishedZoom`), since every write restyles every card under the stage.
  */
 function ZoomVar() {
-  const zoom = useStore((state) => state.transform[2]);
+  const zoom = useStore((state) => publishedZoom(state.transform[2]));
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     ref.current
@@ -109,8 +118,25 @@ function ZoomVar() {
   return <span ref={ref} hidden />;
 }
 
+/**
+ * Whether the cards are glances now: one subscription for the whole board, which re-renders it only
+ * when the zoom crosses the switch (`glanceAt`'s band keeps a hovering zoom from flickering).
+ *
+ * @param big Whether the board is drawn for scale (`bigBoard`).
+ */
+function useGlanceZoom(big: boolean): boolean {
+  const was = useRef(false);
+  const glance = useStore((state) =>
+    glanceAt(state.transform[2], was.current, big, state.fitViewQueued),
+  );
+  was.current = glance;
+  return glance;
+}
+
 function Board({ paperId }: { readonly paperId: string }) {
   const ctl = useBoardController(paperId);
+  const big = bigBoard(ctl.nodes.length);
+  const glance = useGlanceZoom(big);
   const flow = useReactFlow<PtNode, PtEdge>();
   const { selection, onSelectionChange } = useBoardSelection();
   const drawing = useThreadDrawing(ctl.nodes);
@@ -235,66 +261,69 @@ function Board({ paperId }: { readonly paperId: string }) {
             ) : (
               <>
                 <LinkingProvider value={drawing.linking}>
-                  <ReactFlow<PtNode, PtEdge>
-                    nodes={nodes}
-                    edges={ctl.edges}
-                    nodeTypes={nodeTypes}
-                    edgeTypes={edgeTypes}
-                    onNodesChange={ctl.onNodesChange}
-                    onEdgesChange={ctl.onEdgesChange}
-                    onNodeDragStop={ctl.onNodeDragStop}
-                    {...drawing.flowProps}
-                    onNodesDelete={(ns) =>
-                      queueDelete(
-                        ns.map((n) => n.id),
-                        [],
-                      )
-                    }
-                    onEdgesDelete={(es) =>
-                      queueDelete(
-                        [],
-                        es.map((e) => e.id),
-                      )
-                    }
-                    onSelectionChange={onSelectionChange}
-                    onMoveEnd={(event, viewport) => {
-                      // Programmatic moves (the first fit) have no event; only the reader's pan/zoom END is saved.
-                      if (event !== null) ctl.saveViewport(viewport);
-                    }}
-                    onDoubleClick={(event) => {
-                      const target = event.target as HTMLElement;
-                      if (!target.classList.contains('react-flow__pane')) return;
-                      void ctl.addNote(
-                        flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }),
-                      );
-                    }}
-                    defaultViewport={ctl.initialViewport ?? undefined}
-                    fitView={ctl.initialViewport === null}
-                    fitViewOptions={fitOptions}
-                    minZoom={ZOOM_RANGE.min}
-                    maxZoom={ZOOM_RANGE.max}
-                    zoomOnDoubleClick={false}
-                    // Delete only: Backspace is a typing key and one stray press must not remove a card.
-                    deleteKeyCode={['Delete']}
-                    // S9: Shift, Ctrl and Cmd all ADD to the selection (React Flow's own default is
-                    // Meta/Ctrl only). Shift-drag on the empty board still draws a selection box.
-                    multiSelectionKeyCode={MULTI_SELECT_KEYS}
-                    selectionOnDrag={areaMode}
-                    panOnDrag={!areaMode}
-                    elevateNodesOnSelect={false}
-                    nodesFocusable
-                    edgesFocusable
-                    ariaLabelConfig={link.keyboard.walking ? WALK_KEYS : CARD_KEYS}
-                    onKeyDown={link.keyboard.onKeyDown}
-                    aria-label="Board of passages, explanations and notes"
-                  >
-                    <ZoomVar />
-                    {link.preview === null ? null : <ThreadPreview {...link.preview} />}
-                    <Background gap={24} size={1} />
-                    <BoardMinimap empty={empty} />
-                  </ReactFlow>
+                  <GlanceProvider value={glance}>
+                    <ReactFlow<PtNode, PtEdge>
+                      nodes={nodes}
+                      edges={ctl.edges}
+                      nodeTypes={nodeTypes}
+                      edgeTypes={edgeTypes}
+                      onNodesChange={ctl.onNodesChange}
+                      onEdgesChange={ctl.onEdgesChange}
+                      onNodeDragStop={ctl.onNodeDragStop}
+                      {...drawing.flowProps}
+                      onNodesDelete={(ns) =>
+                        queueDelete(
+                          ns.map((n) => n.id),
+                          [],
+                        )
+                      }
+                      onEdgesDelete={(es) =>
+                        queueDelete(
+                          [],
+                          es.map((e) => e.id),
+                        )
+                      }
+                      onSelectionChange={onSelectionChange}
+                      onMoveEnd={(event, viewport) => {
+                        // Programmatic moves (the first fit) have no event; only the reader's pan/zoom END is saved.
+                        if (event !== null) ctl.saveViewport(viewport);
+                      }}
+                      onDoubleClick={(event) => {
+                        const target = event.target as HTMLElement;
+                        if (!target.classList.contains('react-flow__pane')) return;
+                        void ctl.addNote(
+                          flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }),
+                        );
+                      }}
+                      defaultViewport={ctl.initialViewport ?? undefined}
+                      fitView={ctl.initialViewport === null}
+                      fitViewOptions={fitOptions}
+                      minZoom={ZOOM_RANGE.min}
+                      maxZoom={ZOOM_RANGE.max}
+                      zoomOnDoubleClick={false}
+                      // Delete only: Backspace is a typing key and one stray press must not remove a card.
+                      deleteKeyCode={['Delete']}
+                      // S9: Shift, Ctrl and Cmd all ADD to the selection (React Flow's own default is
+                      // Meta/Ctrl only). Shift-drag on the empty board still draws a selection box.
+                      multiSelectionKeyCode={MULTI_SELECT_KEYS}
+                      selectionOnDrag={areaMode}
+                      panOnDrag={!areaMode}
+                      elevateNodesOnSelect={false}
+                      nodesFocusable
+                      edgesFocusable
+                      ariaLabelConfig={link.keyboard.walking ? WALK_KEYS : CARD_KEYS}
+                      onKeyDown={link.keyboard.onKeyDown}
+                      onlyRenderVisibleElements={big}
+                      aria-label="Board of passages, explanations and notes"
+                    >
+                      <ZoomVar />
+                      {link.preview === null ? null : <ThreadPreview {...link.preview} />}
+                      <Background gap={24} size={1} />
+                      <BoardMinimap empty={empty} />
+                    </ReactFlow>
+                  </GlanceProvider>
                 </LinkingProvider>
-                {empty ? <EmptyBoard paperId={paperId} /> : <ThreadLegend />}
+                {empty ? <EmptyBoard paperId={paperId} /> : <ThreadLegend glance={glance} />}
                 {link.request === null ? null : (
                   <LinkAsLayer
                     request={link.request}

@@ -308,6 +308,7 @@
     --pt-pdf-hl-blue: rgb(120 165 220 / 45%);
     --pt-pdf-hl-pink: rgb(230 140 165 / 45%);
     --pt-pdf-hl-purple: rgb(170 135 215 / 45%);
+    --pt-call-slip-rule: rgb(143 184 232 / 13%); /* the call slip's ruling, lit (09c) */
   }
 }
 
@@ -373,6 +374,7 @@
   --pt-pdf-hl-blue: rgb(120 165 220 / 45%);
   --pt-pdf-hl-pink: rgb(230 140 165 / 45%);
   --pt-pdf-hl-purple: rgb(170 135 215 / 45%);
+  --pt-call-slip-rule: rgb(143 184 232 / 13%); /* the call slip's ruling, lit (09c) */
 
   color-scheme: dark;
 }
@@ -4246,7 +4248,8 @@ button.pt-holder {
    test/tokens.spec.ts already covers (ink / pen / tab / nv-ink on page, AI slip and call slip). */
 
 /* The two translucent colours this section needs, named once so no rgb() literal sits in a rule.
-   Both are tints that read on every ground in both schemes, so they are not redefined for dark. */
+   The ruling is lit by lamplight in the dark blocks at the top (09c, #215); the ring reads on every
+   ground in both schemes. */
 :root {
   --pt-call-slip-rule: rgb(60 96 130 / 13%); /* the 24 px blue ruling on a call slip */
   --pt-lit-ring: rgb(160 120 40 / 25%); /* the faint inset ring around a lit trace row */
