@@ -11,10 +11,11 @@ import { type RefObject } from 'react';
 import { threadTool } from '../model/chrome';
 
 import type { BoardController } from './useBoardController';
+import type { BoardHistory } from './useBoardHistory';
 import type { BoardSelection } from './useBoardSelection';
 import type { LinkAs } from './useLinkAs';
 import type { ThreadDrawing } from './useThreadDrawing';
-import type { BoardToolbarProps } from '../components/BoardToolbar';
+import type { BoardTool, BoardToolbarProps } from '../components/BoardToolbar';
 import type { PtEdge, PtNode } from '../model/flow';
 
 /** What the tools act on. */
@@ -27,6 +28,33 @@ export interface BoardToolsInput {
   readonly areaMode: boolean;
   readonly setAreaMode: (next: boolean) => void;
   readonly fitOptions: FitViewOptions<PtNode>;
+}
+
+/** The history's keys, said in a tool's tooltip and given to assistive technology. */
+const HISTORY_KEYS = {
+  Undo: { said: 'Cmd/Ctrl+Z', aria: 'Meta+Z Control+Z' },
+  Redo: { said: 'Shift+Cmd/Ctrl+Z', aria: 'Shift+Meta+Z Shift+Control+Z Control+Y' },
+} as const;
+
+/**
+ * Undo or Redo, named by the step it would take back ("Undo move of 3 cards"), off when there is
+ * none.
+ *
+ * @param verb Which of the two.
+ * @param history The board's history.
+ * @returns The tool.
+ */
+export function historyTool(verb: 'Undo' | 'Redo', history: BoardHistory): BoardTool {
+  const name = verb === 'Undo' ? history.undoName : history.redoName;
+  const keys = HISTORY_KEYS[verb];
+  return {
+    label: name === null ? verb : `${verb} ${name}`,
+    icon: verb === 'Undo' ? 'undo' : 'redo',
+    enabled: name !== null,
+    hint: name === null ? `Nothing to ${verb.toLowerCase()}.` : `${verb} ${name} (${keys.said})`,
+    shortcuts: keys.aria,
+    run: () => void (verb === 'Undo' ? history.undo() : history.redo()),
+  };
 }
 
 /**
@@ -76,6 +104,8 @@ export function useBoardTools(input: BoardToolsInput): BoardToolbarProps {
           drawing.link(cards[0], cards[1]);
       },
     },
+    undo: historyTool('Undo', ctl.history),
+    redo: historyTool('Redo', ctl.history),
     fitAll: {
       label: 'Fit all',
       icon: 'fit',

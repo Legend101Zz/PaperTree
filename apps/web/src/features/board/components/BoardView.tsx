@@ -19,6 +19,7 @@ import { useCardSources } from '../hooks/useCardSources';
 import { useLinkAs } from '../hooks/useLinkAs';
 import { usePaperTitle } from '../hooks/usePaperTitle';
 import { useThreadDrawing } from '../hooks/useThreadDrawing';
+import { useUndoKeys } from '../hooks/useUndoKeys';
 import { ZOOM_RANGE, boardCounts, countsLine } from '../model/chrome';
 import { withPageTitles, type PtEdge, type PtNode } from '../model/flow';
 import { BoardHeader } from './BoardHeader';
@@ -116,6 +117,7 @@ function Board({ paperId }: { readonly paperId: string }) {
   const stage = useRef<HTMLDivElement>(null);
   const [areaMode, setAreaMode] = useState(false);
   const paperTitle = usePaperTitle(paperId);
+  useUndoKeys(ctl.history);
   // The first view on any width is the WHOLE board (never zoomed in past 100 %, never out past 20 %).
   // A phone used to be capped at 60 %, which cropped a board wider than the screen; "Fit all" in
   // the toolbar brings the whole board back after the reader has panned or zoomed.

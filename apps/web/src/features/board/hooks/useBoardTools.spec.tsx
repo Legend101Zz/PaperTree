@@ -52,6 +52,7 @@ function stubs() {
     groupNodes: vi.fn(async () => undefined),
     deleteNodes: vi.fn(),
     deleteSelection: vi.fn(),
+    history: { undoName: null, redoName: null, undo: vi.fn(), redo: vi.fn() },
   };
   const drawing = { linking: null as unknown, cancel: vi.fn(), link: vi.fn() };
   const link = { keyboard: { start: vi.fn() } };

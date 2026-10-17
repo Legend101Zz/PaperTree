@@ -1,11 +1,12 @@
 'use client';
 
 /**
- * board/components/BoardToolbar — frame 06's tools: Select, Add note, Add frame, Thread (L), Fit all
- * and the zoom (− 100% +), with a "More board tools" menu that keeps v0.1's Frame selected cards,
- * Remove frame and Delete within reach. Below 1100 px the words fold to icons (the names stay); on
- * a phone Select and the zoom move into the menu too, so the bar is one row beside the title (the
- * v0.1 defect at 390, GAP-A3 §3). A tool that cannot act now says why (`title`) and stays focusable.
+ * board/components/BoardToolbar — frame 06's tools: Select, Add note, Add frame, Thread (L), Undo and
+ * Redo (named by the step they take back, #215), Fit all and the zoom (− 100% +), with a "More board
+ * tools" menu that keeps v0.1's Frame selected cards, Remove frame and Delete within reach. Below
+ * 1100 px the words fold to icons (the names stay); on a phone Select, the zoom, Undo and Redo move
+ * into the menu, so the bar is one row beside the title (the v0.1 defect at 390, GAP-A3 §3). A tool
+ * that cannot act now says why (`title`) and stays focusable.
  */
 import { useStore } from '@xyflow/react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
@@ -25,6 +26,8 @@ export interface BoardTool {
   readonly pressed?: boolean;
   /** Its key on the board (`aria-keyshortcuts`), shown as a key cap. */
   readonly keys?: string;
+  /** Its keys for assistive technology only (`aria-keyshortcuts`, no key cap). */
+  readonly shortcuts?: string;
   /** Red ink (Delete): DESIGN.md §3.1, never a red fill. */
   readonly danger?: boolean;
   readonly run: () => void;
@@ -38,6 +41,9 @@ export interface BoardToolbarProps {
   /** Thread (L): what it does with the selection (`threadTool`), and whether a thread is drawn. */
   readonly thread: ThreadTool & { readonly pressed: boolean; readonly run: () => void };
   readonly fitAll: BoardTool;
+  /** Undo and Redo, their names saying what they take back ("Undo move of 3 cards"). */
+  readonly undo: BoardTool;
+  readonly redo: BoardTool;
   readonly zoom: (direction: 'in' | 'out') => void;
   /** v0.1's selection tools, in the menu. */
   readonly more: readonly BoardTool[];
@@ -53,7 +59,7 @@ function Tool({ tool, icon }: { readonly tool: BoardTool; readonly icon?: boolea
       }`}
       aria-disabled={off ? true : undefined}
       aria-pressed={tool.pressed}
-      aria-keyshortcuts={tool.keys}
+      aria-keyshortcuts={tool.keys ?? tool.shortcuts}
       title={tool.hint}
       onClick={() => {
         if (!off) tool.run();
@@ -147,7 +153,7 @@ function MoreMenu({ tools }: { readonly tools: readonly BoardTool[] }): ReactNod
  * <BoardToolbar select={…} addNote={…} addFrame={…} thread={…} fitAll={…} zoom={zoomBy} more={[…]} />
  */
 export function BoardToolbar(props: BoardToolbarProps): ReactNode {
-  const { select, addNote, addFrame, thread, fitAll, more } = props;
+  const { select, addNote, addFrame, thread, fitAll, undo, redo, more } = props;
   const wide = useWide();
   const zoom = useStore((state) => state.transform[2]);
   const [zoomOut, zoomIn] = zoomTools(zoom, props.zoom);
@@ -167,6 +173,13 @@ export function BoardToolbar(props: BoardToolbarProps): ReactNode {
       <Tool tool={addFrame} />
       <Tool tool={threadButton} />
       <span className="pt-boardtools__rule" aria-hidden="true" />
+      {wide ? (
+        <>
+          <Tool tool={undo} icon />
+          <Tool tool={redo} icon />
+          <span className="pt-boardtools__rule" aria-hidden="true" />
+        </>
+      ) : null}
       <Tool tool={fitAll} />
       {wide ? (
         <>
@@ -175,7 +188,8 @@ export function BoardToolbar(props: BoardToolbarProps): ReactNode {
           <Tool tool={zoomIn} icon />
         </>
       ) : null}
-      <MoreMenu tools={wide ? more : [select, zoomOut, zoomIn, ...more]} />
+      {/* A phone's bar holds five tools in one row; Undo and Redo open its menu. */}
+      <MoreMenu tools={wide ? more : [undo, redo, select, zoomOut, zoomIn, ...more]} />
     </div>
   );
 }
