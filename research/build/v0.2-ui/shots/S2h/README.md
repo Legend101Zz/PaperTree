@@ -18,6 +18,7 @@ for the capture and drops touch (the key hints then appear, as no phone shows th
 | `08a-library-390-{light,dark}.png` | the first screen: header, search, title and stats, "1 need a look", the tabs, Reading now, the first stack |
 | `08a-library-390-{light,dark}-full.png` | the whole page: six stacks under their holders, the ribbons out of the fore-edge, the torn label |
 | `08a-sheet-390-{light,dark}.png`, `08a-sheet-320-dark.png`, `08a-sheet-768-light.png` | after review: a book taken down, its card a modal bottom sheet over a scrim (Read focused, Delete, Put it back), the book pulled out and clear above it |
+| `08a-spread-390-{light,dark}.png` | after the rebase onto S3 (#200): the sheet's "Open the book" opens S3's spread, stacked at 390 (Enter, Space and a tap open the sheet on a phone; no pull-out) |
 | `08a-library-768-light.png` | after review: a 768 px tablet held upright is in the phone range: two stacks side by side |
 | `08a-library-320-light-full.png` | 320 px: the header on two rows, two-line titles cut with "…", nothing sideways |
 | `08a-search-390-light.png` | typing "atten": 5 of 15 lit (the topic's name matches too), the rest dimmed, nothing reordered; the clear button an × (after review) |
@@ -42,6 +43,15 @@ sheet up, ↓ ↓ ↓ ↑, Tab × 4 and Shift+Tab all leave focus in the sheet, 
 bottom 371, sheet top 481). Crossing 900 px in Chromium (1000 → 800 → 1000) with a card open: the pointer is back on
 its book (373/372, 763/762, 736/735 px; before the fix 689/372 and 261/1009), the sheet was modal at 800 with focus
 in it, and no `inert` is left; with focus on a paper in the Map's list, focus and the open list survive both ways.
+
+**After the rebase onto S3** (`effe78c`), on a fresh copy of the data: axe, every rule, whole page, at 320, 390,
+768 (touch) and 1440, light and dark, in the shelf, the sheet, S3's spread opened from the sheet (320, 390, 768), a
+search, Topics, the Map and the Table: **0 violations in 38 runs**, no page wider than its viewport. The sheet shots
+were retaken (they now carry "Open the book"). On S3's spread at the phone widths two links are under 44 px: the
+"p. 1 · Abstract" tab (125 × 20, a clipped margin tab) and the arXiv link (186 × 41); both are S3's
+(`features/book`), reported rather than changed here. Against S3's head, the base's `features/library` checked out
+on the dev server (0 flat books served at 390): 12 views at 1440, light and dark (shelf, a card, the pulled and
+opened book, Topics, the Map with its list, the Table), **0 pixels differ in all 12.**
 
 **The desktop does not change:** the shelf, a card open, Topics, the Map with its list open and the Table at
 1440 × 900, light and dark, were shot before (the branch's base, by `git stash`) and after: **0 pixels differ in all
