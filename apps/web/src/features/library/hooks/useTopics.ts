@@ -14,6 +14,13 @@ import { topicsApi, type PaperTopic } from '@/lib/api/topics';
 
 const TOPICS_KEY = ['topics'] as const;
 const OFFER_KEY = 'paper-topic';
+/**
+ * A paper with no offer is read again a few times: the model's suggestion (#242) is made in the
+ * background after the first read, so it lands a few seconds later and would otherwise wait for a
+ * reload. Bounded: a paper nothing can be offered for stops being asked after OFFER_POLLS reads.
+ */
+export const OFFER_POLL_MS = 3000;
+const OFFER_POLLS = 5;
 
 /**
  * The person's topics and the writes the view makes.
@@ -72,6 +79,12 @@ export function usePaperOffers(
       queryKey: [OFFER_KEY, paper.id, paper.processing],
       queryFn: () => topicsApi.ofPaper(paper.id),
       refetchOnWindowFocus: false,
+      refetchInterval: (query: {
+        state: { data: PaperTopic | undefined; dataUpdateCount: number };
+      }) =>
+        query.state.data?.status === 'none' && query.state.dataUpdateCount < OFFER_POLLS
+          ? OFFER_POLL_MS
+          : false,
     })),
     combine: (results) =>
       new Map(

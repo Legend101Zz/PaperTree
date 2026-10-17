@@ -585,6 +585,11 @@ function topicTurn(context: FauxContext, answer: string): FauxTurn {
   };
 }
 
+/** No marker: prose, not the JSON object, so the run ends `error` and there is no suggestion. */
+function topicDeclines(): FauxStep {
+  return (context) => topicTurn(context, '(faux) No topic is suggested for this paper.');
+}
+
 /** `[faux:topic-existing]`: the first existing topic (a new one if the reader has none). */
 function topicExisting(request: RunRequest): FauxStep {
   return (context) => {
@@ -699,7 +704,9 @@ export const defaultBrain: FauxBrain = (request) => {
     if (steps) return steps;
   }
   if (request.kind === 'diagram') return [diagramFromSeed(request)];
-  if (request.kind === 'topic') return [topicExisting(request)];
+  // No marker: the faux model offers NOTHING. The e2e stack runs this agent, and an invented AI
+  // offer would race the arXiv rule's own ("Suggested ... from arXiv") on the same Unshelved row.
+  if (request.kind === 'topic') return [topicDeclines()];
   if (request.kind === 'summary') {
     return [
       { thinking: 'Read the outline first.', toolCalls: [{ name: 'get_outline', arguments: {} }] },

@@ -200,11 +200,9 @@ describe('a topic run through the service (faux brain)', () => {
     assert.equal(logged.at(-1)?.['topic_valid'], false);
   });
 
-  test('with no marker the faux agent picks the first existing topic, or a new name for none', async () => {
-    const some = await postRun(agent.url, topicRequest(''));
-    assert.ok(parseTopicAnswer(done(some.events)['final_text'], EXISTING).ok);
-    const empty = await postRun(agent.url, topicRequest('', []));
-    const verdict = parseTopicAnswer(done(empty.events)['final_text'], []);
-    assert.ok(verdict.ok && verdict.answer.is_new);
+  test('with no marker the faux agent suggests nothing (the e2e stack must not race the arXiv rule)', async () => {
+    const result = await postRun(agent.url, topicRequest(''));
+    assert.equal(done(result.events)['status'], 'error');
+    assert.equal(parseTopicAnswer(done(result.events)['final_text'], EXISTING).ok, false);
   });
 });
