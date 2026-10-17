@@ -35,7 +35,7 @@ notebook page, and lay out what you found on a board.
 [![TS tests](https://img.shields.io/badge/TS%20tests-3%2C152%20passing-brightgreen)](#tests-and-quality-gates)
 [![pytest](https://img.shields.io/badge/pytest-2%2C562%20passing-brightgreen)](#tests-and-quality-gates)
 [![e2e](https://img.shields.io/badge/e2e-88%2F88%20Playwright-brightgreen)](#tests-and-quality-gates)
-[![axe](https://img.shields.io/badge/axe-0%20serious%20or%20critical-brightgreen)](#metrics-against-v010)
+[![axe](https://img.shields.io/badge/axe-0%20serious%20or%20critical-brightgreen)](#how-v020-compares-with-the-last-release)
 
 [Quick start](#quick-start) · [Features](#features) · [Screenshots](#screenshots) ·
 [Release notes](#release-notes-v020) · [v0.3 plans](#v03-plans) · [Docs](#docs)
@@ -59,8 +59,8 @@ notebook page, and lay out what you found on a board.
 - [Model policy](#model-policy)
 - [Tests and quality gates](#tests-and-quality-gates)
 - [Release notes (v0.2.0)](#release-notes-v020)
-  - [What's new](#whats-new) · [Metrics against v0.1.0](#metrics-against-v010) ·
-    [Earlier releases](#earlier-releases)
+  - [What's new](#whats-new) ·
+    [How v0.2.0 compares with the last release](#how-v020-compares-with-the-last-release)
 - [Known limits (v0.2.0)](#known-limits-v020)
 - [v0.3 plans](#v03-plans)
 - [Troubleshooting](#troubleshooting)
@@ -100,7 +100,7 @@ What **v0.2.0** does, by area. The facts below come from each feature's README (
 heading), where the rules, the data flow and the tests are. The CI suite of 88 Playwright specs runs the
 app in Chromium against a scripted test model. Among them, the prototype-flow spec walks the design's
 14-step flow, from the shelf to a thread on the board, at 1440 and 390 px in both colour schemes. During the
-build the real model was called five times ([Metrics](#metrics-against-v010)).
+build the real model was called five times ([Metrics](#how-v020-compares-with-the-last-release)).
 
 ### Library
 
@@ -199,7 +199,7 @@ build the real model was called five times ([Metrics](#metrics-against-v010)).
 
 [`features/board`](apps/web/src/features/board/README.md)
 
-- **v0.1's canvas, now called the board** (`/paper/<id>/canvas` redirects to `/paper/<id>/board`). Index
+- **The board**, formerly the canvas (`/paper/<id>/canvas` redirects to `/paper/<id>/board`). Index
   cards (passage, note, question, notebook page, diagram) and AI-slip cards (answers), sent from the
   reader, the notebook or the plate.
 - **Brass pins:** evidence in, question in, claim out, answer out. Drag a thread from a brass pin; every
@@ -252,7 +252,7 @@ build the real model was called five times ([Metrics](#metrics-against-v010)).
   rather than falling to the page.
 - **Text alternatives:** the plate's key, the Map's text list, and named pins and buttons on the board.
 - **axe** found 0 serious or critical issues after each of the prototype flow's 14 steps, at 1440 and 390
-  px, daylight and lamp-lit ([Metrics](#metrics-against-v010)).
+  px, daylight and lamp-lit ([Metrics](#how-v020-compares-with-the-last-release)).
 - **Reduced motion:** every moment has a reduced path, measured by a spec against the design's reduced
   column. Pull out, open, put back, Read and Dive in are one 120 ms fade each. Explain, Back to the paper,
   the plate's parts and a new thread on the board have no motion, and the flash keeps only a 120 ms colour
@@ -288,12 +288,12 @@ copy of the demo data with nine more corpus papers uploaded, 13 in all (credited
 [Acknowledgements](#acknowledgements)).
 
 **What is real in these shots.** Every paper was parsed by PaperTree. The explain thread on "Attention Is
-All You Need" is real model output (MiniMax-M3.1-Flash-Preview, recorded on v0.1.0 on 2026-10-15). The plate
-is one live diagram run made for these screenshots (MiniMax-M3.1-Flash-Preview, 4,318 tokens, ≈ $0.0015, an
-estimate on M3 rates). The notebook page, the board's new cards and its three new threads were made in the
-app from that thread (Dive in, Send to board, Send page to board, a brass pin, Link as); the board's
-passage card, first answer, note and supports thread come from the v0.1 demo. The typed note, the sticky,
-the ink and the board's note are the demo account's own words. The topics, three reading places, the
+All You Need" is real model output (MiniMax-M3.1-Flash-Preview, recorded on 2026-10-15 and stored in the
+demo data). The plate is one live diagram run made for these screenshots (MiniMax-M3.1-Flash-Preview, 4,318
+tokens, ≈ $0.0015, an estimate on M3 rates). The notebook page, the board's new cards and its three new
+threads were made in the app from that thread (Dive in, Send to board, Send page to board, a brass pin, Link
+as); the board's passage card, first answer, note and supports thread were already in the demo data. The
+typed note, the sticky, the ink and the board's note are the demo account's own words. The topics, three reading places, the
 bookplate's name and the board's layout were set through the API routes the app calls. No shot shows the
 test model's answers.
 
@@ -332,46 +332,6 @@ test model's answers.
 Each slice's own shots, compared against the design's frames, are in
 [`research/build/v0.2-ui/shots/`](research/build/v0.2-ui/shots/); the frames themselves are in
 [`research/build/v0.2-ui/reference/`](research/build/v0.2-ui/reference/).
-
-<details>
-<summary><b>v0.1.0 screenshots</b></summary>
-
-All of these are of the real app (v0.1.0) on four arXiv papers. The v0.1.0 demo recording (upload, explain
-a passage, a follow-up, a citation, the summary, a highlight and the canvas, with the live model) is
-[`docs/assets/readme/demo.gif`](docs/assets/readme/demo.gif).
-
-<table>
-  <tr>
-    <td width="50%"><img src="docs/assets/readme/explain.png" alt="Explain panel: an answer about the selected passage, with page citation chips"/><br/><sub><b>Explain.</b> Select a passage and press Ask. The answer cites pages.</sub></td>
-    <td width="50%"><img src="docs/assets/readme/chip-flash.png" alt="A citation chip has scrolled the reader to the cited passage and flashed it"/><br/><sub><b>Citations you can check.</b> A chip takes you to the passage it cites.</sub></td>
-  </tr>
-  <tr>
-    <td><img src="docs/assets/readme/summary.png" alt="Paper summary with cited bullets"/><br/><sub><b>Summary.</b> Cited bullets, cached after the first run. A citation the checker can't verify says "not verified".</sub></td>
-    <td><img src="docs/assets/readme/highlights.png" alt="Contents panel with the Highlights tab, and a highlighted passage on the page"/><br/><sub><b>Highlights.</b> Stored as anchors and listed in Contents.</sub></td>
-  </tr>
-  <tr>
-    <td><img src="docs/assets/readme/split.png" alt="Split mode: the PDF on the left, the reflowed text on the right"/><br/><sub><b>Split mode.</b> The PDF beside the paper's own words reflowed.</sub></td>
-    <td><img src="docs/assets/readme/canvas.png" alt="Canvas with a passage card, an AI explanation card, a supports link and a note"/><br/><sub><b>Canvas.</b> Passages, answers, notes and labelled links.</sub></td>
-  </tr>
-  <tr>
-    <td><img src="docs/assets/readme/library.png" alt="Library with four Ready papers"/><br/><sub><b>Library.</b> Upload and watch each paper go Queued → Reading → Ready.</sub></td>
-    <td><img src="docs/assets/readme/explain-dark.png" alt="The reader and the explain panel in dark mode"/><br/><sub><b>Dark mode.</b> Every screen has a light and a dark theme.</sub></td>
-  </tr>
-</table>
-
-<p align="center">
-  <img src="docs/assets/readme/phone-reader.png" alt="The reader at phone width" width="24%"/>
-  &nbsp;
-  <img src="docs/assets/readme/phone-explain.png" alt="The explain sheet at phone width" width="24%"/>
-  &nbsp;
-  <img src="docs/assets/readme/phone-library-dark.png" alt="The library at phone width in dark mode" width="24%"/>
-  <br/><sub><b>Phone (390 px).</b> The reader, the explain sheet and the library in dark mode.</sub>
-</p>
-
-The full set from the v0.1 hands-on test (every screen at 1440 and 390 px, light and dark) is in
-[`docs/release/v0.1/screens/`](docs/release/v0.1/screens/).
-
-</details>
 
 ## How it works
 
@@ -467,8 +427,8 @@ A follow-up runs as its thread's kind. A topic run that fails or answers badly i
 - A MiniMax API key for the AI features. Without one you can still upload, read, highlight and use the
   board; every AI request fails visibly, and the notebook has nothing to start from, since a page starts
   from an AI answer.
-- A current Chrome (or another Chromium browser). v0.1.0 was tested in Chrome 155; v0.2's checks run in
-  Playwright's Chromium. **In Safari (26.3.1), selecting text in Source mode does not open Explain or Ask**
+- A current Chrome (or another Chromium browser). v0.2.0's checks run in Playwright's Chromium. **In
+  Safari (26.3.1), selecting text in Source mode does not open Explain or Ask**
   ([#327](https://github.com/Legend101Zz/PaperTree/issues/327)); use Chrome for now. Other browsers are
   untested (Safari's handling of the 3D book is not checked either).
 
@@ -545,16 +505,16 @@ Start the web app with `pnpm`, not `next dev` directly. Its `predev` step copies
 `apps/web/public/`; without it every PDF fails with "This PDF could not be opened".
 
 Your data is in `~/.papertree` (SQLite, uploaded PDFs, extracted figures). Delete that folder to start
-clean; set `PAPERTREE_DATA_ROOT` to keep it elsewhere. A v0.1 data root works on v0.2.0: the API applies
-the new migrations when it starts. Before the two table rebuilds it first copies the database to
-`papertree.sqlite.pre-0008.bak` and `.pre-0011.bak`.
+clean; set `PAPERTREE_DATA_ROOT` to keep it elsewhere. A data root from the earlier release works on
+v0.2.0: the API applies the new migrations when it starts. Before the two table rebuilds it first copies the
+database to `papertree.sqlite.pre-0008.bak` and `.pre-0011.bak`.
 
 ## Configuration
 
 The variables below are every one the code reads, apart from test and research switches. The contract is
 `research/build/reader-release/contracts.md` section 7. It, `.env.example` and `apps/web/.env.example`
-list the v0.1 set; the four model variables for the v0.2 kinds and `NEXT_PUBLIC_PAPERTREE_DESIGN_SYSTEM`
-are not in them yet ([#323](https://github.com/Legend101Zz/PaperTree/issues/323)). Everything is optional
+do not list the four model variables for the `diagram` and `topic` kinds or
+`NEXT_PUBLIC_PAPERTREE_DESIGN_SYSTEM` yet ([#323](https://github.com/Legend101Zz/PaperTree/issues/323)). Everything is optional
 except the secret and the key.
 
 <details>
@@ -594,8 +554,8 @@ If you move the API, change `PAPERTREE_PORT`, `PAPERTREE_API_INTERNAL_URL` and
 ## Model policy
 
 The agent decides which MiniMax model answers which kind of run (`services/agent/src/models.ts`,
-`DEFAULT_MODELS`; [ADR-003](research/architecture-decisions/ADR-003-model-policy.md)). The v0.1 defaults
-were chosen from an A/B test and a 3-judge quality panel ([`MODEL-AB.md`](docs/release/v0.1/MODEL-AB.md),
+`DEFAULT_MODELS`; [ADR-003](research/architecture-decisions/ADR-003-model-policy.md)). The defaults for explain, ask
+and summary were chosen from an A/B test and a 3-judge quality panel ([`MODEL-AB.md`](docs/release/v0.1/MODEL-AB.md),
 [`QUALITY.md`](docs/release/v0.1/QUALITY.md)):
 
 | Kind                                                         | Model                                    | Why                                                                                                        |
@@ -664,10 +624,6 @@ installs a pre-commit hook (lefthook) that runs Prettier and the linters on stag
   ([run 39015930115](https://github.com/Legend101Zz/PaperTree/actions/runs/39015930115)), which tested
   `cbe70fa` merged into `release/v0.2`.
 
-At the v0.1.0 release the uncached local gate ran 1,858 TypeScript tests, 2,236 passing Python tests (4
-skipped, 1 expected failure) and 60 of 60 Playwright specs, and every CI job was green, including the
-live journey against the real model ([`docs/METRICS.md`](docs/METRICS.md)).
-
 ## Release notes (v0.2.0)
 
 **v0.2.0** is the "Ex Libris" release: the whole interface rebuilt from one design, plus a notebook and AI
@@ -692,7 +648,7 @@ Each area is described in full under [Features](#features).
 - **Diagrams (new):** an engraved plate whose parts stream in, each cited, not verified or inferred.
 - **Notebook (new):** Dive in from an answer to a bound page with quote cards, notes, ink and a lasso, on a
   computer, a tablet or a phone.
-- **Board** (v0.1's canvas): new cards with brass pins, seven thread kinds told apart by colour and a
+- **Board** (formerly the canvas): new cards with brass pins, seven thread kinds told apart by colour and a
   second cue, Link as, keyboard threading, frames, a minimap, undo and redo, and 500 cards.
 - **Lamp-lit**, a dark scheme that keeps the PDF page paper, and the System / Daylight / Lamp-lit switch.
 - **Reduced motion:** every animation has a reduced path, measured against the design.
@@ -702,116 +658,25 @@ Each area is described in full under [Features](#features).
   (MIT) and five Fontsource font packages (SIL OFL 1.1)
   ([ADR-004 §3](research/architecture-decisions/ADR-004-v0.2-ui-stack.md)).
 
-### Metrics against v0.1.0
+### How v0.2.0 compares with the last release
 
-| Metric               | v0.1.0                                                                                                                                     | v0.2.0                                                                                                                                                                                               | Source                                                                                                                          |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| TypeScript tests     | 1,858 (vitest 1,716, agent 142)                                                                                                            | **3,152** (vitest 2,973, agent 179)                                                                                                                                                                  | v0.1: `docs/METRICS.md` on `60ae507`; v0.2: `turbo run test --force` on `91857a4`, re-run on `065f709`                          |
-| pytest               | 2,236 passed                                                                                                                               | **2,562 passed**, 4 skipped, 1 expected failure                                                                                                                                                      | v0.1: `docs/METRICS.md`; v0.2: S8's gate on `cbe70fa`, and CI on #320                                                           |
-| e2e (Playwright)     | 60 of 60                                                                                                                                   | **88 of 88**, in 30.1 min                                                                                                                                                                            | v0.1: `docs/METRICS.md`; v0.2: CI run 39015930115 on #320                                                                       |
-| axe                  | 0 serious or critical in 12 combinations (library, reader Source, reader Guided); canvas and explain panel not tested                      | **0 serious or critical** after each of the 14 steps of the prototype flow at 1440 and 390 px, daylight and lamp-lit: library, book, reader, explain panel, notebook and board                       | v0.1: [`READER-RELEASE-RESULT.md`](research/build/READER-RELEASE-RESULT.md); v0.2: S8's `e2e/v02/prototype-flow.spec.ts` (#320) |
-| Design frames        | none                                                                                                                                       | 32 frames: 16 done, 16 partial (each with its issue), 0 not done                                                                                                                                     | S8's verdict per frame (`RESULT.md`, "Frames")                                                                                  |
-| 500 cards on a board | loaded in 553 ms; zoom frames median 16.7 ms, p95 17.7 ms (load 3.6–9.1); all 500 in the DOM; first view at the 0.2 zoom floor, unreadable | first card 198–245 ms after navigation; pan, wheel zoom and drag p50 / p95 / max 16.7 / 16.7 / 17 ms; at the first view (20 %) all 500 drawn as glances, at 106 % only the 30 cards in view, in full | v0.1: [`GAP-AUDIT.md`](research/build/v0.2-ui/GAP-AUDIT.md) on `79f637d`; v0.2: S8 (a different probe, see below)               |
-| Live AI spend        | —                                                                                                                                          | 5 live calls during the v0.2 build, ≈ $0.0058 in all (estimates)                                                                                                                                     | `RESULT.md`, "Live AI spend"                                                                                                    |
+| Metric               | v0.1.0                                                                        | v0.2.0                                                                                                                                                                          | Source                                                                                               |
+| -------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| TypeScript tests     | 1,858                                                                         | **3,152**                                                                                                                                                                       | v0.1: `docs/METRICS.md`; v0.2: `turbo run test --force` on `91857a4`, re-run on `065f709`            |
+| pytest               | 2,236 passed                                                                  | **2,562 passed**, 4 skipped, 1 expected failure                                                                                                                                 | v0.1: `docs/METRICS.md`; v0.2: CI run 39015930115 on #320                                            |
+| e2e (Playwright)     | 60 of 60                                                                      | **88 of 88**, in 30.1 min                                                                                                                                                       | v0.1: `docs/METRICS.md`; v0.2: CI run 39015930115 on #320                                            |
+| axe                  | 0 serious or critical in 12 combinations; canvas and explain panel not tested | **0 serious or critical** after each of the 14 steps of the prototype flow, at 1440 and 390 px, daylight and lamp-lit: library, book, reader, explain panel, notebook and board | v0.1: `docs/METRICS.md`; v0.2: S8's `e2e/v02/prototype-flow.spec.ts` (#320)                          |
+| Design frames        | none                                                                          | 32: 16 done, 16 partial (each with its issue)                                                                                                                                   | `RESULT.md`, "Frames"                                                                                |
+| 500 cards on a board | all 500 drawn; first view at the 0.2 zoom floor, unreadable; loaded in 553 ms | only the cards in view drawn; all 500 readable as glances at 20 %; first card 198–245 ms                                                                                        | v0.1: [`GAP-AUDIT.md`](research/build/v0.2-ui/GAP-AUDIT.md) on `79f637d`; v0.2: S8; different probes |
+| Live AI spend        | —                                                                             | 5 live calls during the build, ≈ $0.0058 in all (estimates)                                                                                                                     | `RESULT.md`, "Live AI spend"                                                                         |
 
-**At scale** (S8, #320): a production build in headless Chromium at 1440 × 900, on a copy of the v0.2 data.
-"To the frame" is from the action's dispatch to the second animation frame after it, measured in the page;
-"script" is CDP's `ScriptDuration` over the action. The box was nearly idle (load about 2–4), quieter than
-during the slices' own runs, so a lower number than a slice's is mostly the load, not a gain.
+**Got worse:** the CI Python job went from 15 min 55 s to 18 min 44 s, and the E2E job from 19 min 33 s
+with 60 specs to 31 min 14 s with 88. Selecting text in Safari's Source mode is a new known break
+([#327](https://github.com/Legend101Zz/PaperTree/issues/327)). No live-journey run and no hands-on walk
+on the live model were made for v0.2.0. The rest, with sources, machine loads, the numbers at scale and
+what was not measured, is in [`docs/METRICS.md`](docs/METRICS.md#v02-against-v01).
 
-| What                                                    | Measured                                                                                                                                                                                                     | Load (1 / 5 / 15 min)             |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------- |
-| 400 spines (the demo rows repeated to 400; 3 runs)      | shelf drawn 18–23 ms after the `GET /papers` answer; a search keystroke 3–31 ms to the frame (median 15–18), 1–15 ms of script; Arrange by Year / Title / Topic 43–57 / 31–46 / 18–28 ms                     | 2.02–2.30 / 4.62–4.86 / 7.13–7.30 |
-| 400 rows in the Table (3 runs)                          | open the Table 62–81 ms; sort by year 26–48 ms; a keystroke 3–57 ms (median 10–12); back to the Shelf 33–49 ms                                                                                               | same runs                         |
-| 500 cards (real ResNet paragraphs, 167 threads; 2 runs) | first card 198–245 ms; one long task (66–82 ms); at 20 % and 106 % zoom, pan, wheel zoom and a card drag p50 / p95 / max 16.7 / 16.7 / 17 ms; Fit all max 33–67 ms; a settled board makes 0 requests in 15 s | 2.26–4.00 / 4.30–4.77 / 6.80–7.11 |
-| Ink latency (200-point strokes at 240 Hz, 2 × 3 runs)   | pointer event to the frame that wrote the path: median 13.5–14.2 ms, p95 15.2–16.0 ms; to the next frame (a proxy): 28.1–29.0 / 30.4–31.3 ms; script 1.7–2.1 / 2.4–2.6 ms                                    | 2.22–2.69 / 3.98–4.24 / 6.56–6.75 |
-
-Not measured: a real phone or tablet (every number is headless Chromium at 60 Hz, with no display),
-glass-to-pixel time, the library at 400 papers on a phone, ink on an iPad with a Pencil, and the 3D book in
-Safari.
-
-**Got worse or costs more:**
-
-- The E2E job is the slowest check: 31 min 14 s on #320's run, 30.1 min of it the 88 specs (19 min 33 s with
-  60 specs at v0.1.0, `docs/METRICS.md`). #320 raised its timeout from 40 to 60 min.
-- The Python job took 18 min 44 s on #320's run (15 min 55 s at v0.1.0, `docs/METRICS.md`).
-
-### Earlier releases
-
-<details>
-<summary><b>v0.1.0, 2026-10-15</b></summary>
-
-v0.1.0 is the first usable release. The full notes are on the
-[GitHub release](https://github.com/Legend101Zz/PaperTree/releases/tag/v0.1.0) and in
-[`CHANGELOG.md`](CHANGELOG.md); the metrics page is [`docs/METRICS.md`](docs/METRICS.md).
-
-**What it does.** Each item was checked in a real browser (Chrome, driven through Playwright) against the
-real stack and model on the release code. A few items, such as drag and drop, Cancel and the budget
-message, were carried over from an earlier walk of nearly the same code; the full feature table marks them
-"carried" ([`research/build/READER-RELEASE-RESULT.md`](research/build/READER-RELEASE-RESULT.md)).
-
-| Area                  | What you can do                                                                                                                                                                                                                                                                                   |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Library**           | Register and sign in. Upload PDFs with the file picker or by drag and drop, with progress and Cancel. Cards go Queued → Reading → Ready without a reload and show the real title and page count.                                                                                                  |
-| **Reader**            | Source (the PDF), Guided (the paper's words in one column) and Split. Zoom, mode switches and reloads keep your place. Contents has Outline, Pages and Highlights tabs. A paper still being read opens at once.                                                                                   |
-| **Highlights**        | Highlight a sentence, a table cell, a figure label or a passage across paragraphs. Change the colour, add a note, delete. A highlight that can't be placed goes to a tray with the reason.                                                                                                        |
-| **Explain and ask**   | Select a passage and press Ask: the answer streams, with status labels. Ask follow-ups or free questions about the paper. Stop keeps the partial answer; Retry after an error.                                                                                                                    |
-| **Citations**         | Answers carry page chips. A chip scrolls to the cited passage and flashes it.                                                                                                                                                                                                                     |
-| **Summary**           | A paper summary with cited bullets. It is cached, so a reload does not pay for it again.                                                                                                                                                                                                          |
-| **Canvas**            | Send passages and answers to a per-paper canvas. Drag, connect cards with labelled links (supports, contradicts, derives from, answers, compares with, references, or a plain link), add notes, group, delete with Undo. "Open source" jumps back to the passage.                                 |
-| **Cost and evidence** | A usage line under each answer (tokens and estimated cost). Each run is recorded in `ai_runs` with model, provider, tokens, cost, first-text time, latency, request id and code path. A daily budget cap.                                                                                         |
-| **Everywhere**        | Desktop (1440 px) and phone (390 px), light and dark, keyboard navigation. axe reported 0 serious or critical issues in all 12 combinations tested (the library, reader Source and reader Guided, each at 1440 and 390 px, light and dark); the canvas and the explain panel were not axe-tested. |
-
-**What changed since the pre-release baseline.** The baseline column is the discovery walk at `6ff15ad`
-(2026-09-25). `docs/METRICS.md` also has the handoff gate `45fb2db` (2026-09-26) as a second baseline.
-
-| Metric                                 | Baseline (`6ff15ad`)                                           | v0.1 (`60ae507`)                                                                |
-| -------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Journey A: upload, parse, read         | PARTIAL (DDPM dead-letters; card only after a reload, 0 pages) | PASS                                                                            |
-| Journey B: highlights                  | FAIL (mouse cannot create one; gone on reload)                 | PASS; two items PARTIAL (see Known limits)                                      |
-| Journey C: explain, follow-up, summary | PARTIAL (2 of 5 asks 504; no follow-up, no summary)            | PASS                                                                            |
-| Journey D: canvas                      | FAIL (404)                                                     | PASS, minimal scope                                                             |
-| Journey E: which code and provider ran | code read; one socket seen                                     | PASS: request id → logs → `ai_runs` row; only socket = `api.minimax.io`         |
-| Papers that parse (of 14)              | 12                                                             | 14                                                                              |
-| Repo-gold pooled reading order         | 0.900 (26 discordant pairs)                                    | 0.962 (9)                                                                       |
-| Explain first text                     | not streamed; 10–40 s silence                                  | Flash p50 2.13 s (n=9); 2.4 s in the hands-on test                              |
-| Failed AI answers                      | 2 of 5 asks returned 504                                       | 0 of 38 A/B runs failed (3 summaries ended partial)                             |
-| TS tests                               | 1,389                                                          | 1,858                                                                           |
-| pytest                                 | 1,733 passed                                                   | 2,236 passed, 0 failed                                                          |
-| e2e (Playwright)                       | 0                                                              | 60 specs in CI                                                                  |
-| CI checks                              | 5 jobs; no prettier, build, corpus, browser or live call       | + prettier, `next build`, corpus tests, Playwright A–D, live journey; all green |
-| 390 px reader                          | FAIL (scrollWidth 622)                                         | PASS                                                                            |
-
-**Got worse** (the main items; the full list, with causes, is in [`docs/METRICS.md`](docs/METRICS.md) →
-"WORSE, with cause"):
-
-- ResNet pooled reading order 0.932 → 0.906. This was accepted: the scored pool shrank, and real discordant
-  pairs went 2 → 0. Some per-type F1 scores dropped with the same parser rule. GPT-3 macro-F1 fell by
-  0.0013.
-- Explain on M3 got slower in one sample: first text p50 8.45 → 20.62 s (n=6, cause not attributed). This
-  is why explain moved to Flash.
-- The grounding check lets more fabricated claims through in mixed cases: 3 of 18 judged supported,
-  against 2 of 18 before.
-- The Python CI job takes about 16 min, because the corpus tests now run.
-- Datamarked quotes add about 12 % input tokens.
-
-**Known limits at v0.1.0:**
-
-- **Two hands-on items are PARTIAL:**
-  - Highlighting once scrolled the reader. It is not reproduced on the release code and is guarded, but
-    the cause was never found.
-  - A Shift+click selection that starts at the very start of a line loses its first 1–2 characters.
-- **Grounding:** the citation check is lexical. Negation and comparator swaps pass it, and names found
-  only in the references list, and equation numbers, cannot be verified.
-- **Other defects:** a selection across columns includes the figure caption between them; highlight delete
-  has no undo; the Contents outline shows raw block labels; a Guided figure crop shows its caption twice;
-  the phone canvas first opens tiny. The full list is in
-  [`docs/METRICS.md`](docs/METRICS.md) → "Known defects at release".
-- **Not in v0.1:** audio (Epic 4), OCR or scanned PDFs, and memory write-back. There is no hosted version
-  and no Docker setup.
-- **Not measured yet:** a human-scored grounding rate (#62), and latency under concurrent users.
-
-</details>
+Earlier releases: [v0.1.0](https://github.com/Legend101Zz/PaperTree/releases/tag/v0.1.0) · full history in [CHANGELOG.md](CHANGELOG.md) and [docs/METRICS.md](docs/METRICS.md).
 
 ## Known limits (v0.2.0)
 
@@ -854,7 +719,7 @@ message, were carried over from an earlier walk of nearly the same code; the ful
   ([#284](https://github.com/Legend101Zz/PaperTree/issues/284)); Dive in's page id is global, not per
   owner ([#300](https://github.com/Legend101Zz/PaperTree/issues/300)).
 - **Parser:** A3C's title parses as "Abstract" ([#298](https://github.com/Legend101Zz/PaperTree/issues/298));
-  the parser issues carried over from v0.1 are still open
+  two older parser issues are still open
   ([#101](https://github.com/Legend101Zz/PaperTree/issues/101),
   [#103](https://github.com/Legend101Zz/PaperTree/issues/103)).
 - **Setup:** `.env.example` and `apps/web/.env.example` do not list v0.2's variables yet
@@ -970,8 +835,8 @@ from. The tracker also lists three owner-only issues that builds leave alone
 
 - [`research/architecture-decisions/ADR-002-reader-release.md`](research/architecture-decisions/ADR-002-reader-release.md):
   the architecture and why
-- [`research/architecture-decisions/ADR-003-model-policy.md`](research/architecture-decisions/ADR-003-model-policy.md)
-  and [`docs/release/v0.1/MODEL-AB.md`](docs/release/v0.1/MODEL-AB.md): models
+- [`research/architecture-decisions/ADR-003-model-policy.md`](research/architecture-decisions/ADR-003-model-policy.md):
+  the model policy
 - [`research/architecture-decisions/ADR-004-v0.2-ui-stack.md`](research/architecture-decisions/ADR-004-v0.2-ui-stack.md):
   what the v0.2 interface is built with, and what was rejected
 - [`research/build/reader-release/contracts.md`](research/build/reader-release/contracts.md): the normative
@@ -986,7 +851,7 @@ from. The tracker also lists three owner-only issues that builds leave alone
   [design system](apps/web/src/features/design-system/README.md)
 - **The v0.2 build** ([`research/build/v0.2-ui/`](research/build/v0.2-ui/)):
   [`PLAN.md`](research/build/v0.2-ui/PLAN.md) (the slices and their issues),
-  [`GAP-AUDIT.md`](research/build/v0.2-ui/GAP-AUDIT.md) (the design against the v0.1 app),
+  [`GAP-AUDIT.md`](research/build/v0.2-ui/GAP-AUDIT.md) (the design against the app it replaced),
   [`RESULT.md`](research/build/v0.2-ui/RESULT.md) (the gates, the slices, the live spend, a verdict per
   frame), [`STATE.md`](research/build/v0.2-ui/STATE.md), the research notes on the
   [canvas](research/build/v0.2-ui/RESEARCH-R1-canvas.md), [ink](research/build/v0.2-ui/RESEARCH-R2-ink.md)
@@ -994,11 +859,8 @@ from. The tracker also lists three owner-only issues that builds leave alone
   [frames](research/build/v0.2-ui/reference/)
 - [`docs/METRICS.md`](docs/METRICS.md): release metrics, and what got better or worse
 - [`CHANGELOG.md`](CHANGELOG.md): the changelog
-- [`research/build/READER-RELEASE-RESULT.md`](research/build/READER-RELEASE-RESULT.md): the v0.1 hands-on
-  feature table
 - [`AGENTS.md`](AGENTS.md): working rules and hazards for contributors and coding agents
 - [`CONTRIBUTING.md`](CONTRIBUTING.md): setup, dev ports, the gate, lint rules, code layout
-- [`docs/release/v0.1/PLAN.md`](docs/release/v0.1/PLAN.md): the v0.1 release plan
 - [`archive/README.md`](archive/README.md): the retired v1 code, kept for reference and not part of the
   build
 
@@ -1026,7 +888,7 @@ work.
   Prime (SIL Open Font License 1.1), self-hosted from the [Fontsource](https://fontsource.org/) packages.
 - Product video made with [HyperFrames](https://github.com/heygen-com/hyperframes) (Apache-2.0); narration
   voice [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache-2.0).
-- The screenshots and the v0.1.0 demo show these papers, used as examples; they belong to their authors:
+- The screenshots and the product video show these papers, used as examples; they belong to their authors:
   - Vaswani et al., [_Attention Is All You Need_](https://arxiv.org/abs/1706.03762) (2017).
   - Redmon et al., [_You Only Look Once: Unified, Real-Time Object Detection_](https://arxiv.org/abs/1506.02640) (2016).
   - He et al., [_Deep Residual Learning for Image Recognition_](https://arxiv.org/abs/1512.03385) (2016).
