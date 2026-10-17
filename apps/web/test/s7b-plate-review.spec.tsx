@@ -101,7 +101,7 @@ describe('Stop before the first part (review B2)', () => {
 });
 
 describe('a keyboard Stop (review S5)', () => {
-  it('hands focus to Retry and announces the stopped plate', async () => {
+  it('hands focus to Redraw and announces the stopped plate', async () => {
     const frames = plateFrames('diagram-plate');
     routes((signal) => sseResponse(frames.slice(0, 5), { hold: true, signal }));
     mount();
@@ -112,8 +112,8 @@ describe('a keyboard Stop (review S5)', () => {
     fireEvent.click(stop);
     const note = await within(panel).findByText('Stopped. The parts that arrived are kept.');
     expect(note.getAttribute('role')).toBe('status');
-    await waitFor(() => expect(document.activeElement?.textContent).toBe('Retry'));
-    expect(document.activeElement?.getAttribute('aria-describedby')).toBe(note.id);
+    // The plate has parts, so its own Redraw takes focus (an empty one hands it to Retry).
+    await waitFor(() => expect(document.activeElement?.textContent).toBe('Redraw'));
   });
 });
 

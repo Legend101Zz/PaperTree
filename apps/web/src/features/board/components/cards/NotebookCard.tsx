@@ -5,11 +5,13 @@
  *
  * A notebook card (DESIGN.md §7) is one index card with a miniature of the page drawn from the
  * page's own items, its title, its counts from the board read ("4 quotes · 1 sticky") and "Open
- * page". A diagram card is the AI slip with an empty plate frame and the diagram's title: the
- * diagrams (S7) are not built yet, so it draws no parts and claims no counts, and no art is made up.
+ * page". A diagram card is the AI slip with the plate drawn small from its stored parts (#217) and
+ * the plate's counts; no part is drawn and no count claimed before the plate is read.
  */
 import { AiSlip } from '@papertree/ui';
 import { type NodeProps } from '@xyflow/react';
+
+import { PlateMiniature, plateReadout } from '@/features/diagram';
 
 import { countsLine, miniature } from '../../model/cards';
 import { useCanvasActions } from '../BoardContext';
@@ -17,6 +19,7 @@ import { CardShell } from './CardShell';
 
 import type { ReactNode } from 'react';
 import type { PtNode } from '../../model/flow';
+import type { MessageDiagram } from '@/lib/api/types';
 
 /** The miniature's size in card pixels (frame 06: a 200 × 96 dot-grid page). */
 const MINI_W = 200;
@@ -54,14 +57,40 @@ export function NotebookCard({ id, data, selected }: NodeProps<PtNode>): ReactNo
   );
 }
 
-/** A diagram card: a `diagram` row, its title on an empty plate until the diagrams land. */
+const UNFINISHED: Partial<Record<MessageDiagram['status'], string>> = {
+  streaming: 'still drawing',
+  stopped: 'stopped',
+  partial: 'cut short',
+  error: 'cut short',
+};
+
+/** "6 parts · 5 cited", and "· stopped" / "· cut short" for a plate that did not finish (N8). */
+function plateCounts(plate: MessageDiagram): string | null {
+  const counts = plateReadout(plate.parts, false, false);
+  const unfinished = UNFINISHED[plate.status];
+  return counts === null || unfinished === undefined ? counts : `${counts} · ${unfinished}`;
+}
+
+/**
+ * A diagram card: a `diagram` row. Its plate is read from the stored parts (#217) and drawn as a
+ * miniature with its counts; until that read lands (or if it fails) the frame stays empty and no
+ * count is claimed.
+ */
 export function DiagramCard({ id, data, selected }: NodeProps<PtNode>): ReactNode {
-  const title = (data.node.title ?? '').trim();
+  const ctx = useCanvasActions();
+  const plate = ctx.sources?.diagrams.get(data.node.source_diagram_id ?? '');
+  const title = (plate?.title ?? data.node.title ?? '').trim();
+  const counts = plate === undefined ? null : plateCounts(plate);
   return (
     <CardShell id={id} selected={selected} kind="diagram" stock="bare">
       <AiSlip>
-        <div className="pt-bc__plate" aria-hidden="true" />
+        <div className="pt-bc__plate">
+          {plate === undefined || plate.parts.length === 0 ? null : (
+            <PlateMiniature plate={plate} />
+          )}
+        </div>
         <p className="pt-bc__title">{title === '' ? 'Untitled diagram' : title}</p>
+        {counts === null ? null : <p className="pt-bc__meta">{counts}</p>}
       </AiSlip>
     </CardShell>
   );

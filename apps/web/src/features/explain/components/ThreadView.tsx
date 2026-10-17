@@ -116,6 +116,11 @@ export function ThreadView({
     (messageId: string) => actions.sendToCanvas({ kind: 'explanation', messageId }),
     [actions],
   );
+  const sendPlate = useCallback(
+    (messageId: string, title: string) =>
+      actions.sendToCanvas({ kind: 'diagram', messageId, title }),
+    [actions],
+  );
   const offline = paperId === null;
 
   return (
@@ -200,6 +205,8 @@ export function ThreadView({
                   onFlash={onFlash}
                   onStop={controller.stop}
                   onRedraw={controller.redraw}
+                  onSendToBoard={sendPlate}
+                  busy={busy}
                 />
               );
             })}

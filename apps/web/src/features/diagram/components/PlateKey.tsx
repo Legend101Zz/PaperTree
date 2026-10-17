@@ -145,17 +145,20 @@ function KeyRow({
               {part.label}
             </span>
             {n === null ? null : <span className="pt-sr-only">. Passage {n}, </span>}
-            {n === null ? null : (
-              <span
-                className={`pt-marker pt-marker--static${status === 'cited' ? '' : ' pt-marker--not-verified'}${lit ? ' is-lit' : ''}`}
-                aria-hidden="true"
-              >
-                {n}
-              </span>
-            )}
-            {tab === null ? null : (
-              <PageTab page={tab.page} para={tab.para} status={status} lit={lit} />
-            )}
+            {/* Marker and tab wrap as one, so a long label never splits them. */}
+            <span className="pt-plate-key__where">
+              {n === null ? null : (
+                <span
+                  className={`pt-marker pt-marker--static${status === 'cited' ? '' : ' pt-marker--not-verified'}${lit ? ' is-lit' : ''}`}
+                  aria-hidden="true"
+                >
+                  {n}
+                </span>
+              )}
+              {tab === null ? null : (
+                <PageTab page={tab.page} para={tab.para} status={status} lit={lit} />
+              )}
+            </span>
           </span>
           <span className="pt-sr-only">. </span>
           <Evidence part={part} />

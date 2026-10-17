@@ -5,6 +5,7 @@
  */
 export { DiagramExchange, type DiagramExchangeProps } from './components/DiagramExchange';
 export { DiagramPlate, type DiagramPlateProps } from './components/DiagramPlate';
+export { PlateMiniature, type PlateMiniatureProps } from './components/PlateMiniature';
 export { layoutPlate, type PlateLayout } from './model/layout';
 export {
   applyPlateEvent,

@@ -8,13 +8,16 @@ import { loadavg } from 'node:os';
 import { describe, expect, it } from 'vitest';
 
 import { plateEvents } from '../../../../test/fixtures/diagram-plate';
-import { GRID, layoutPlate, rowOf, slotOf, type LayoutPart } from './layout';
+import { GRID, layoutPlate, rowOf, slotOf, type LayoutPart, type Route } from './layout';
 
 import type { DiagramLink, DiagramPart } from '@/lib/api/types';
 
 const RECORDED: DiagramPart[] = plateEvents('diagram-plate').flatMap((e) =>
   e.event === 'part' ? [e.data] : [],
 );
+
+/** A route's lines, without its label's room (a later lane at the label's height may shorten it). */
+const lines = (r: Route) => ({ key: r.key, points: r.points, labelAt: r.labelAt });
 
 const part = (
   letter: string,
@@ -48,7 +51,8 @@ describe('layoutPlate: streaming', () => {
       const partial = layoutPlate(RECORDED.slice(0, n), [], true);
       expect(partial.slots).toEqual(final.slots.slice(0, n));
       for (const route of partial.routes) {
-        expect(final.routes.find((r) => r.key === route.key)).toEqual(route);
+        const same = final.routes.find((r) => r.key === route.key);
+        expect(same === undefined ? null : lines(same)).toEqual(lines(route));
       }
       expect(partial.height).toBeGreaterThan(height);
       height = partial.height;
@@ -61,12 +65,12 @@ describe('layoutPlate: streaming', () => {
     const after = layoutPlate(RECORDED, [link], false);
     const route = (l: ReturnType<typeof layoutPlate>, key: string) =>
       l.routes.find((r) => r.key === key);
-    expect(route(after, 'C~A')).toEqual(route(before, 'C~A'));
+    expect(lines(route(after, 'C~A') as Route)).toEqual(lines(route(before, 'C~A') as Route));
     expect(route(after, 'C~A')?.points[1]?.[0]).toBe(GRID.laneX + GRID.laneGap);
     expect(route(after, 'C~A')?.feedback).toBe(true);
     // And the `after` arrows are the same with or without the link.
-    expect(after.routes.filter((r) => !r.feedback)).toEqual(
-      layoutPlate(RECORDED, [], false).routes,
+    expect(after.routes.filter((r) => !r.feedback).map(lines)).toEqual(
+      layoutPlate(RECORDED, [], false).routes.map(lines),
     );
   });
 
@@ -140,7 +144,13 @@ describe('layoutPlate: honesty and determinism', () => {
     expect(layout.width).toBeGreaterThan(GRID.width);
     // Widening moves nothing already drawn: the first eleven parts' arrows keep their lanes.
     const before = layoutPlate(twelve.slice(0, 11), [], false);
-    for (const r of before.routes) expect(layout.routes.find((q) => q.key === r.key)).toEqual(r);
+    for (const r of before.routes) {
+      expect(lines(layout.routes.find((q) => q.key === r.key) as Route)).toEqual(lines(r));
+    }
+    // A lane label never runs into the next lane at its height: its room stops short of it.
+    for (const r of layout.routes.filter((q) => q.points.length === 4)) {
+      expect(r.labelAt[0] + r.labelRoom).toBeLessThanOrEqual(layout.width);
+    }
   });
 
   it('places a slot by its letter alone, an output a size larger', () => {

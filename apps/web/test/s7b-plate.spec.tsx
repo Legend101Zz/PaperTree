@@ -12,6 +12,7 @@ import { plateFrames } from './fixtures/diagram-plate';
 import { stubDesktop } from './s6-harness';
 import { installFetch, jsonResponse, sseResponse, type SseHandle } from './s6-support';
 import {
+  BAD_THREAD,
   box,
   focusAnchor,
   keyRows,
@@ -172,6 +173,154 @@ describe('a finished plate', () => {
       rules: { 'color-contrast': { enabled: false }, 'target-size': { enabled: false } },
     });
     expect(results.violations.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([]);
+  });
+});
+
+describe('what a settled plate offers', () => {
+  it('Send to board puts a diagram card holding the plate on the board, once', async () => {
+    const { calls } = routes((signal) => sseResponse(plateFrames('diagram-plate'), { signal }));
+    mount();
+    const panel = await screen.findByRole('complementary', { name: 'Explain' });
+    fireEvent.click(await within(panel).findByRole('button', { name: 'Send to board' }));
+    await waitFor(() =>
+      expect(within(panel).getByRole('button', { name: 'On your board' })).toBeTruthy(),
+    );
+    const created = calls.filter((c) => c.method === 'POST' && c.path.endsWith('/board/nodes'));
+    expect(created).toHaveLength(1);
+    expect(created[0]?.body).toMatchObject({
+      kind: 'diagram',
+      title: 'Scaled dot-product attention',
+      source_diagram_id: 'msg_01M536X6ADDW22T669B1QXQM1E',
+    });
+    expect(
+      within(panel).getByRole('button', { name: 'On your board' }).getAttribute('aria-disabled'),
+    ).toBe('true');
+  });
+
+  it('Redraw adds Plate 2 under its own ask, with redraw_of the first', async () => {
+    const { calls } = routes((signal) => sseResponse(plateFrames('diagram-plate'), { signal }));
+    mount();
+    const panel = await screen.findByRole('complementary', { name: 'Explain' });
+    await waitFor(() =>
+      expect(panel.querySelector('[data-plate-phase="complete"]')).not.toBeNull(),
+    );
+    fireEvent.click(within(panel).getByRole('button', { name: 'Redraw' }));
+    await waitFor(() =>
+      expect(within(panel).getByRole('group', { name: /^Plate 2,/ })).toBeTruthy(),
+    );
+    const redraw = calls.find((c) => c.path.endsWith('/messages'));
+    expect(redraw?.body).toEqual({
+      question: 'Redraw the diagram.',
+      redraw_of: 'msg_01M536X6ADDW22T669B1QXQM1E',
+    });
+    expect(within(panel).getByText('Redraw the diagram.')).toBeTruthy();
+    // Plate 1 stays as it was, above.
+    expect(within(panel).getByRole('group', { name: /^Plate 1,/ })).toBeTruthy();
+  });
+
+  it('offers the crafted figure as information only, with Not now and no job button', async () => {
+    routes((signal) => sseResponse(plateFrames('diagram-plate'), { signal }));
+    mount();
+    const offer = await screen.findByRole('note', { name: 'A crafted figure, not available yet' });
+    expect(offer.textContent).toContain('It is not available yet');
+    expect(
+      within(offer)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Not now']);
+    fireEvent.click(within(offer).getByRole('button', { name: 'Not now' }));
+    expect(screen.queryByRole('note', { name: 'A crafted figure, not available yet' })).toBeNull();
+  });
+});
+
+describe('Redraw: refused, waiting, and the offer remembered (review S6, S7, N7)', () => {
+  const PLATE_1 = 'msg_01M536X6ADDW22T669B1QXQM1E';
+  const FOLLOW = `POST /papers/${PAPER}/threads/${THREAD}/messages`;
+  const redrawFrames = () =>
+    plateFrames('diagram-plate-bad').map((f) => f.replaceAll(BAD_THREAD, THREAD));
+
+  it('Retry after a refused Redraw sends that Redraw again, never a new thread', async () => {
+    let n = 0;
+    const { calls } = routes(
+      (signal) => sseResponse(plateFrames('diagram-plate'), { signal }),
+      undefined,
+      {
+        [FOLLOW]: (_call, signal) =>
+          (n += 1) === 1
+            ? jsonResponse(409, { detail: 'busy', code: 'busy', retryable: true })
+            : sseResponse(redrawFrames(), { signal }),
+      },
+    );
+    mount();
+    const panel = await screen.findByRole('complementary', { name: 'Explain' });
+    await waitFor(() =>
+      expect(panel.querySelector('[data-plate-phase="complete"]')).not.toBeNull(),
+    );
+    fireEvent.click(within(panel).getByRole('button', { name: 'Redraw' }));
+    const refused = await within(panel).findByRole('alert');
+    expect(refused.getAttribute('data-error-code')).toBe('busy');
+    expect(panel.querySelector('.pt-exchange__not-sent')?.textContent).toBe('not sent');
+    fireEvent.click(within(refused).getByRole('button', { name: 'Retry' }));
+    await waitFor(() =>
+      expect(within(panel).getByRole('group', { name: /^Plate 2,/ })).toBeTruthy(),
+    );
+    const follows = calls.filter((c) => `${c.method} ${c.path}` === FOLLOW);
+    expect(follows.map((c) => c.body)).toEqual([
+      { question: 'Redraw the diagram.', redraw_of: PLATE_1 },
+      { question: 'Redraw the diagram.', redraw_of: PLATE_1 },
+    ]);
+    expect(
+      calls.filter((c) => c.method === 'POST' && c.path === `/papers/${PAPER}/threads`),
+    ).toHaveLength(1);
+    // One "Redraw the diagram." ask: the Retry went in place, it did not add another.
+    expect(within(panel).getAllByText('Redraw the diagram.')).toHaveLength(1);
+  });
+
+  it('while Plate 2 draws, Plate 1’s Redraw is disabled and says why, and does nothing', async () => {
+    const { calls } = routes(
+      (signal) => sseResponse(plateFrames('diagram-plate'), { signal }),
+      undefined,
+      {
+        [FOLLOW]: (_call, signal) =>
+          sseResponse(redrawFrames().slice(0, 2), { hold: true, signal }),
+      },
+    );
+    mount();
+    const panel = await screen.findByRole('complementary', { name: 'Explain' });
+    await waitFor(() =>
+      expect(panel.querySelector('[data-plate-phase="complete"]')).not.toBeNull(),
+    );
+    fireEvent.click(within(panel).getByRole('button', { name: 'Redraw' }));
+    await waitFor(() =>
+      expect(panel.querySelector('[data-plate-phase="thinking"]')).not.toBeNull(),
+    );
+    const redraw = within(panel).getByRole('button', { name: 'Redraw' });
+    expect(redraw.getAttribute('aria-disabled')).toBe('true');
+    const why = document.getElementById(redraw.getAttribute('aria-describedby') ?? '');
+    expect(why?.textContent).toBe('Redraw waits for the plate being drawn.');
+    const before = calls.length;
+    fireEvent.click(redraw);
+    await act(async () => new Promise((settle) => setTimeout(settle, 30)));
+    expect(calls.slice(before).filter((c) => c.method === 'POST')).toEqual([]);
+  });
+
+  it('remembers Not now for the plate: reopened, the offer stays away', async () => {
+    window.localStorage.removeItem(`papertree/crafted-offer/${PLATE_1}`);
+    routes((signal) => sseResponse(plateFrames('diagram-plate'), { signal }));
+    mount();
+    const offer = await screen.findByRole('note', { name: 'A crafted figure, not available yet' });
+    expect(offer.textContent).toContain('may come later');
+    fireEvent.click(within(offer).getByRole('button', { name: 'Not now' }));
+    expect(window.localStorage.getItem(`papertree/crafted-offer/${PLATE_1}`)).toBe('not-now');
+    cleanup();
+    routes((signal) => sseResponse(plateFrames('diagram-plate'), { signal }));
+    mount();
+    const panel = await screen.findByRole('complementary', { name: 'Explain' });
+    await waitFor(() =>
+      expect(panel.querySelector('[data-plate-phase="complete"]')).not.toBeNull(),
+    );
+    expect(screen.queryByRole('note', { name: 'A crafted figure, not available yet' })).toBeNull();
+    window.localStorage.removeItem(`papertree/crafted-offer/${PLATE_1}`);
   });
 });
 

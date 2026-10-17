@@ -3,6 +3,8 @@
  *
  *   { kind: 'excerpt', anchor }       -> an excerpt node holding the Anchor (never a bare block id)
  *   { kind: 'explanation', messageId } -> an explanation node holding the answer's text
+ *   { kind: 'diagram', messageId, title } -> a diagram card holding the plate's message id (#217),
+ *                                          one card per plate
  *
  * A board is created ONLY here, by an explicit send: the first `createNode` creates it in the
  * same transaction (ADR-002 §3.7). The new node is placed where it overlaps no existing node, and
@@ -26,6 +28,11 @@ const MAX_THREADS_SEARCHED = 6;
 /** The API's card limits (schemas.py), so a long answer is clipped instead of refused. */
 const CANVAS_BODY_MAX = 20_000;
 const CANVAS_TITLE_MAX = 200;
+const ADDED: Record<SendToCanvasInput['kind'], string> = {
+  excerpt: 'Passage added to your board.',
+  explanation: 'Answer added to your board.',
+  diagram: 'Plate added to your board.',
+};
 
 /** The text of an assistant message: the newest threads first, which is where the open panel is. */
 async function messageText(
@@ -66,7 +73,25 @@ export async function sendToCanvas(
     const view = await boardsApi.get(paperId);
     const size = DEFAULT_SIZE[input.kind];
     const spot = freeSpot(view.nodes, size);
-    if (input.kind === 'excerpt') {
+    if (input.kind === 'diagram') {
+      // One plate, one card: a second send points at the card already there (#217).
+      if (view.nodes.some((n) => n.kind === 'diagram' && n.source_diagram_id === input.messageId)) {
+        showCanvasToast({
+          message: 'This plate is already on your board',
+          href: boardHref(paperId),
+          linkLabel: 'Open board',
+        });
+        return;
+      }
+      await boardsApi.createNode(paperId, {
+        node_id: newNodeId(),
+        kind: 'diagram',
+        ...spot,
+        ...size,
+        title: input.title.slice(0, CANVAS_TITLE_MAX),
+        source_diagram_id: input.messageId,
+      });
+    } else if (input.kind === 'excerpt') {
       // The same passage twice would be two identical cards: say so and point at the board.
       if (findExcerptFor(view.nodes, input.anchor) !== null) {
         showCanvasToast({
@@ -105,8 +130,7 @@ export async function sendToCanvas(
       });
     }
     showCanvasToast({
-      message:
-        input.kind === 'excerpt' ? 'Passage added to your board.' : 'Answer added to your board.',
+      message: ADDED[input.kind],
       href: boardHref(paperId),
       linkLabel: 'Open board',
     });

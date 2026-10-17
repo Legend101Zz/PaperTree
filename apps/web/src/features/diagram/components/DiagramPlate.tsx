@@ -101,7 +101,12 @@ export function DiagramPlate({
         {live ? (
           <WorkingLabel label={phase === 'thinking' ? 'Thinking' : 'Drawing the diagram'} />
         ) : phase === 'stopped' ? (
-          `Stopped · ${name}`
+          // The model is known only once usage arrives; a plate stopped before that says Stopped.
+          answer.usage === null ? (
+            'Stopped'
+          ) : (
+            `Stopped · ${name}`
+          )
         ) : (
           `${name} · from the paper`
         )}

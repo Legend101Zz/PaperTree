@@ -22,6 +22,8 @@ export const DEFAULT_SIZE = {
   explanation: { w: 380, h: 260 },
   note: { w: 260, h: 150 },
   group: { w: 400, h: 300 },
+  /** The AI-slip card with the plate miniature (frame 06, #217). */
+  diagram: { w: 300, h: 300 },
 } as const;
 
 /**

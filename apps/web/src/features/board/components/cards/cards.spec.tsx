@@ -10,8 +10,9 @@ import { ExplanationCard } from './ExplanationCard';
 import { DiagramCard, NotebookCard } from './NotebookCard';
 import { NoteCard, QuestionCard } from './NoteCard';
 import { PassageCard } from './PassageCard';
+import storedPlate from '../../../../../test/fixtures/diagram-thread.json';
 
-import type { CanvasNode } from '@/lib/api/types';
+import type { CanvasNode, MessageDiagram } from '@/lib/api/types';
 import type { ComponentType } from 'react';
 
 afterEach(cleanup);
@@ -44,7 +45,11 @@ function mount(
   );
 }
 
-const sources = (explanations = new Map(), pages = new Map()) => ({ explanations, pages });
+const sources = (explanations = new Map(), pages = new Map(), diagrams = new Map()) => ({
+  explanations,
+  pages,
+  diagrams,
+});
 
 describe('passage card', () => {
   it("shows the paper's words in the paper voice, its page tab and Open source", () => {
@@ -193,6 +198,30 @@ describe('notebook and diagram cards', () => {
     const slip = screen.getByRole('note', { name: "AI answer, not the paper's words" });
     expect(within(slip).getByText('Scaled dot-product attention')).not.toBeNull();
     expect(container.textContent).not.toMatch(/parts|cited/);
+  });
+
+  it('a diagram read back (#217): the plate drawn small from its stored parts, and its counts', () => {
+    const plate = storedPlate.messages[1]?.diagram as MessageDiagram;
+    const { container } = mount(
+      DiagramCard,
+      cardRow('diagram', { title: 'Scaled dot-product attention', source_diagram_id: 'msg_a' }),
+      actions({ sources: sources(new Map(), new Map(), new Map([['msg_a', plate]])) }),
+    );
+    expect(container.querySelector('[data-plate-mini="6"]')).not.toBeNull();
+    expect(container.querySelectorAll('.pt-plate-mini .pt-plate__box')).toHaveLength(6);
+    expect(container.querySelector('[data-verdict="inferred"]')).not.toBeNull();
+    expect(screen.getByText('6 parts · 5 cited')).not.toBeNull();
+  });
+
+  it('a plate that did not finish says so on its card (review N8)', () => {
+    const plate = storedPlate.messages[1]?.diagram as MessageDiagram;
+    const stopped: MessageDiagram = { ...plate, status: 'stopped', parts: plate.parts.slice(0, 3) };
+    mount(
+      DiagramCard,
+      cardRow('diagram', { title: 'Scaled dot-product attention', source_diagram_id: 'msg_a' }),
+      actions({ sources: sources(new Map(), new Map(), new Map([['msg_a', stopped]])) }),
+    );
+    expect(screen.getByText('3 parts · 3 cited · stopped')).not.toBeNull();
   });
 });
 
