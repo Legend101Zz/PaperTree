@@ -44,7 +44,9 @@ motion and the tablet and phone layouts are S5e (#210).
   `version`), the notebook search (S5a's search; matches on this page are lit with the wash and a
   focus ring), **On this page** (the server's counts; ink is "yours", never a number), and **On the
   board** (the page's `notebook` card with a miniature and "4 quotes · 1 sticky", or the offer to
-  send it). The header's Send page to board creates that card (S6a) and offers Open board. One
+  send it). The header's Send page to board creates that card (S6a) and offers Open board; it
+  reads the board again first and puts the card below everything on it then, so a card added
+  since the page opened (another tab, the reader's Send to board) is never covered (#218). One
   page, one card: the card's id is derived from the page id (`cardIdFor`), so a second tab sends
   the same id and the idempotent create returns the card already there; the button waits while a
   send is in flight or the board is unknown, and a page already on the board opens it instead.

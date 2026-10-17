@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NotebookView } from '@/features/notebook';
 import { citationsPhrase } from '@/features/notebook/components/NotebookPanel';
 import { cardIdFor } from '@/features/notebook/hooks/useBoardCard';
+import { API_BASE_URL } from '@/lib/api/client';
 
 import { PAGE, PAPER, pageView, stubApi, wireItem } from './s5c-notebook-fixtures';
 
@@ -181,6 +182,24 @@ describe('Send page to board, once', () => {
     fireEvent.click(headerSend());
     await waitFor(() => expect(push).toHaveBeenCalledWith(`/paper/${PAPER}/board`));
     expect(writes(calls).filter((c) => c.path === `/papers/${PAPER}/board/nodes`)).toHaveLength(1);
+  });
+
+  it('places the card below a card added to the board since the page read it (#218)', async () => {
+    const calls = stubApi(pageView());
+    mount();
+    await screen.findByText(/not on the board yet/);
+    // Another tab (or the reader's Send to board) adds a card after this page read the board.
+    await fetch(`${API_BASE_URL}/papers/${PAPER}/board/nodes`, {
+      method: 'POST',
+      body: JSON.stringify({ node_id: 'cn_othertab01', kind: 'note', x: 0, y: 0, w: 300, h: 300 }),
+    });
+    fireEvent.click(headerSend());
+    await screen.findByText('The page is on the board now, as one card.');
+    const sent = writes(calls).filter(
+      (c) => c.path === `/papers/${PAPER}/board/nodes` && c.body?.['kind'] === 'notebook',
+    );
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.body?.['y']).toBe(340);
   });
 
   it('sends nothing while the board cannot be read, and says so', async () => {

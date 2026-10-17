@@ -96,10 +96,16 @@ export function useBoardCard(paperId: string, pageId: string, title: string): Bo
   const card = cardOn(board.data, pageId);
 
   const create = async (): Promise<SendResult> => {
-    const nodes = board.data?.nodes ?? [];
-    // Below everything already on the board, so the new card never covers another.
-    const y = nodes.reduce((max, n) => Math.max(max, n.y + n.h + 40), 0);
     try {
+      // Below everything on the board NOW, so the new card never covers another: the board read
+      // when the page opened misses cards added since (another tab, the reader's Send to board),
+      // and the card landed on top of them (found by the prototype flow, #218).
+      const now = await client.fetchQuery({
+        queryKey: boardKey(paperId),
+        queryFn: () => boardsApi.get(paperId),
+        staleTime: 0,
+      });
+      const y = now.nodes.reduce((max, n) => Math.max(max, n.y + n.h + 40), 0);
       await boardsApi.createNode(paperId, {
         node_id: nodeId,
         kind: 'notebook',
