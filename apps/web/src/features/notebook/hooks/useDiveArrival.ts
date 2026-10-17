@@ -38,7 +38,7 @@ function play(root: HTMLElement, hand: DiveHandoff, scale: number): void {
   const easing = getComputedStyle(root).getPropertyValue('--pt-ease-lift').trim() || 'ease-out';
   const timing = { duration: motion.slideMs, easing };
   // Measured where they settle, so before the page is moved off to the right.
-  const cards = cardsIn(page, '[data-passage]', 'data-passage');
+  const cards = cardsIn(page, '[data-passage], .pt-trace-row[data-n]', ['data-passage', 'data-n']);
   const flights = pairFlights(hand.cards, cards, window.innerWidth, window.innerHeight);
   const slideX = Math.max(0, window.innerWidth - page.getBoundingClientRect().left);
   page.animate([{ transform: `translateX(${String(slideX)}px)` }, { transform: 'none' }], timing);

@@ -28,6 +28,8 @@ export interface AnswerProseProps {
   readonly citations: ReadonlyMap<string, Citation>;
   /** Scroll the paper to an Anchor and flash it. */
   readonly onFocusAnchor: (anchor: Anchor) => void;
+  /** The phone's stack (S5e, #210): markers get the shared 44 px touch target. */
+  readonly touch?: boolean;
 }
 
 /**
@@ -85,6 +87,7 @@ function Inlines({
               n={n}
               label={formatPageLabel(passage?.page ?? 1, passage?.para ?? null)}
               notVerified={citation.supported === false}
+              size={props.touch === true ? 'touch' : 'compact'}
               onFlash={() => props.onFocusAnchor(citation.anchor)}
             />
           );

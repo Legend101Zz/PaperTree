@@ -10,10 +10,12 @@
 import { useEffect, useReducer, useRef } from 'react';
 
 import { inField } from './usePageEditing';
+import { allows } from '../model/layoutMode';
 import { INITIAL_TOOLS, colourToken, drawingTool, toolForKey, toolReducer } from '../model/tools';
 
 import type { InkInHand } from './useInkInput';
-import type { ToolAction, ToolState } from '../model/tools';
+import type { LayoutMode } from '../model/layoutMode';
+import type { InkTool, ToolAction, ToolState } from '../model/tools';
 import type { MutableRefObject } from 'react';
 
 /** What `useInkTools` returns. */
@@ -27,11 +29,15 @@ export interface InkTools {
 /**
  * The tool bar's ink state, with its keyboard shortcuts on the window.
  *
+ * @param keyAllowed - Whether a key may pick a tool up (S5e: the phone's layout has no eraser or
+ *   lasso, and its pen comes only from its "Pen: off" switch). Every tool when omitted.
  * @returns The state and its dispatcher.
  */
-export function useInkTools(): InkTools {
+export function useInkTools(keyAllowed?: (tool: InkTool) => boolean): InkTools {
   const [state, dispatch] = useReducer(toolReducer, INITIAL_TOOLS);
   const penSeen = useRef(false);
+  const allowed = useRef(keyAllowed);
+  allowed.current = keyAllowed;
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
@@ -41,7 +47,7 @@ export function useInkTools(): InkTools {
         return;
       }
       const tool = toolForKey(e.key);
-      if (tool === null) return;
+      if (tool === null || allowed.current?.(tool) === false) return;
       e.preventDefault();
       dispatch({ type: 'tool', tool });
     };
@@ -69,4 +75,24 @@ export function inkInHand(
       ? null
       : { tool: pen, nib: state.nib[pen], color: colourToken(pen, state.colour[pen]) };
   return { tool: state.tool, pen: nibbed, ...on };
+}
+
+/**
+ * The tool bar's ink state for a layout (S5e, #210): keys never pick up what the layout leaves out
+ * (on a phone the eraser and the lasso, and the pen, which comes only from its "Pen: off" switch),
+ * and a tool the layout leaves out is put down when the window turns into it (the lasso, after a
+ * tablet becomes a phone). A pen or highlighter already in the hand stays, so a tablet turned into
+ * a phone with the pen held opens on the page with "Pen: on".
+ *
+ * @param mode - The layout.
+ * @returns The tool state and its dispatcher.
+ */
+export function useLayoutInkTools(mode: LayoutMode): InkTools {
+  const tools = useInkTools((tool) => allows(mode, tool, false));
+  const { tool } = tools.state;
+  const { dispatch } = tools;
+  useEffect(() => {
+    if (tool !== null && !allows(mode, tool, tool === 'pen')) dispatch({ type: 'release' });
+  }, [mode, tool, dispatch]);
+  return tools;
 }

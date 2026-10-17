@@ -20,9 +20,18 @@ import { boardKey } from './useBoardCard';
 import { newClientId } from '../api/notebookApi';
 import { stashAsk } from '../model/askHandoff';
 import { lassoSelect } from '../model/hitTest';
-import { deleteCommand, lassoText, picked, shown, stickyCommand } from '../model/lasso';
+import {
+  deleteCommand,
+  enabledActions,
+  lassoText,
+  picked,
+  selectionName,
+  shown,
+  stickyCommand,
+} from '../model/lasso';
 import { askHref, boardHref } from '../model/links';
 
+import type { LassoLayerProps } from '../components/LassoLayer';
 import type { NotebookPageModel } from './useNotebookPage';
 import type { InkInHand } from './useInkInput';
 import type { BoardView } from '@/lib/api/boards';
@@ -46,6 +55,8 @@ export interface Lasso {
   readonly close: () => void;
   readonly notice: LassoNotice | null;
   readonly dismiss: () => void;
+  /** The page's `lasso` prop: the loop, its name and its menu; null while there is none. */
+  readonly layer: Omit<LassoLayerProps, 'scale'> | null;
 }
 
 /** The board's note cards hold 20,000 characters (`CANVAS_BODY_MAX`). */
@@ -150,5 +161,15 @@ export function useLasso(paperId: string, model: NotebookPageModel, active: bool
     }
     close();
   };
-  return { selection, onLasso, act, close, notice, dismiss: () => setNotice(null) };
+  const layer =
+    selection === null
+      ? null
+      : {
+          path: selection.path,
+          name: selectionName(selection.picked),
+          enabled: enabledActions(selection.picked),
+          onAction: act,
+          onClose: close,
+        };
+  return { selection, onLasso, act, close, notice, dismiss: () => setNotice(null), layer };
 }

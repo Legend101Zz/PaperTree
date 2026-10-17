@@ -583,27 +583,7 @@
   opacity: 0;
 }
 
-/* The phone, until its stack (08c) is drawn: the panel goes under the page, every control kept. */
-.pt-nb[data-layout='phone'] {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto auto;
-  block-size: auto;
-  min-block-size: 100dvh;
-}
-
-.pt-nb[data-layout='phone'] .pt-nb__bar {
-  flex-wrap: wrap;
-  padding-block: 8px;
-}
-
-.pt-nb[data-layout='phone'] .pt-nb-tools {
-  margin-inline-start: 0;
-}
-
-.pt-nb[data-layout='phone'] .pt-nb-panel {
-  border-inline-start: 0;
-  border-block-start: 1px solid var(--pt-rule);
-}
+/* The phone (08c) is phone.css's: the stack, its view-only ink and the bottom bar. */
 
 /* The tablet (05b, 1180 × 820): the bar names the page, the tools stand in a rail on the left,
    the page runs full-bleed, and the side panel follows it down the desk. */
@@ -945,5 +925,37 @@
   .pt-nb-lasso-menu {
     flex-wrap: wrap;
     justify-content: center;
+  }
+}
+
+/* Delete on a touch screen (S5e, #210): never the hidden × a stray tap finds (it shows only on
+   hover), always the editor's own 44 px button; with a mouse the × stays and the editor's goes. */
+.pt-nb-note__remove {
+  display: block;
+  min-block-size: var(--pt-target-touch);
+  margin-block-start: 6px;
+  padding: 0 14px;
+  color: var(--pt-danger);
+  font: 15px var(--pt-font-ai);
+  background: var(--pt-page);
+  border: 1px solid var(--pt-danger);
+  border-radius: var(--pt-radius-control);
+  cursor: pointer;
+}
+
+.pt-nb-note__remove:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+@media (hover: none), (pointer: coarse) {
+  .pt-nb-note__delete {
+    display: none;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pt-nb-note:not(.pt-nb-note--flow) .pt-nb-note__remove {
+    display: none;
   }
 }
