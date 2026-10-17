@@ -31,7 +31,12 @@ export interface HighlightCardProps {
    * Where it opened from, client px: the click, and the highlight's own top and bottom edges so the
    * card opens BESIDE the passage instead of over it. Null centres it low on the screen.
    */
-  readonly at: { readonly clientX: number; readonly clientY: number; readonly top?: number; readonly bottom?: number } | null;
+  readonly at: {
+    readonly clientX: number;
+    readonly clientY: number;
+    readonly top?: number;
+    readonly bottom?: number;
+  } | null;
   readonly onColor: (color: HighlightColor) => void;
   readonly onNote: (note: string | null) => void;
   readonly onDelete: () => void;
@@ -85,7 +90,10 @@ export function HighlightCard(props: HighlightCardProps): JSX.Element {
       });
       return;
     }
-    const left = Math.min(window.innerWidth - width - margin, Math.max(margin, props.at.clientX - width / 2));
+    const left = Math.min(
+      window.innerWidth - width - margin,
+      Math.max(margin, props.at.clientX - width / 2),
+    );
     const below = (props.at.bottom ?? props.at.clientY) + 12;
     const above = (props.at.top ?? props.at.clientY) - height - 12;
     const top = below + height + margin <= window.innerHeight ? below : Math.max(margin, above);
@@ -93,7 +101,9 @@ export function HighlightCard(props: HighlightCardProps): JSX.Element {
   }, [props.at]);
 
   useEffect(() => {
-    ref.current?.querySelector<HTMLElement>('[aria-pressed="true"]')?.focus({ preventScroll: true });
+    ref.current
+      ?.querySelector<HTMLElement>('[aria-pressed="true"]')
+      ?.focus({ preventScroll: true });
   }, []);
 
   useEffect(() => {
@@ -101,7 +111,12 @@ export function HighlightCard(props: HighlightCardProps): JSX.Element {
       if (event.key === 'Escape') close();
     };
     const onDown = (event: PointerEvent): void => {
-      if (ref.current !== null && event.target instanceof Node && !ref.current.contains(event.target)) close();
+      if (
+        ref.current !== null &&
+        event.target instanceof Node &&
+        !ref.current.contains(event.target)
+      )
+        close();
     };
     document.addEventListener('keydown', onKey);
     document.addEventListener('pointerdown', onDown, true);
@@ -118,7 +133,9 @@ export function HighlightCard(props: HighlightCardProps): JSX.Element {
       role="dialog"
       aria-label="Highlight"
       className="pt-hlcard"
-      style={box === null ? { visibility: 'hidden', left: 0, top: 0 } : { left: box.left, top: box.top }}
+      style={
+        box === null ? { visibility: 'hidden', left: 0, top: 0 } : { left: box.left, top: box.top }
+      }
       data-highlight-card={highlight.highlightId}
     >
       <p className="pt-hlcard__quote">{quote === '' ? 'Highlight' : `“${quote}”`}</p>
@@ -171,7 +188,9 @@ export function HighlightCard(props: HighlightCardProps): JSX.Element {
         </div>
       </div>
       <p className="pt-hlcard__meta" role="status">
-        {highlight.status === 'unsaved' && highlight.error !== undefined ? highlight.error : STATUS[highlight.status]}
+        {highlight.status === 'unsaved' && highlight.error !== undefined
+          ? highlight.error
+          : STATUS[highlight.status]}
       </p>
     </div>
   );

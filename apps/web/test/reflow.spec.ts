@@ -10,7 +10,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { joinContinuedBlocks, reflow, reflowPreservingLines } from '../src/components/reader/reflow';
+import {
+  joinContinuedBlocks,
+  reflow,
+  reflowPreservingLines,
+} from '../src/components/reader/reflow';
 
 interface FixtureBlock {
   readonly block_id: string;
@@ -40,7 +44,11 @@ function loadFixture(slug: string): { readonly blocks: readonly FixtureBlock[] }
   return JSON.parse(readFileSync(path, 'utf8')) as { blocks: readonly FixtureBlock[] };
 }
 
-const FIXTURES = ['attention-is-all-you-need', 'neural-odes-mathheavy', 'resnet-cvpr-2col'] as const;
+const FIXTURES = [
+  'attention-is-all-you-need',
+  'neural-odes-mathheavy',
+  'resnet-cvpr-2col',
+] as const;
 
 describe('reflow', () => {
   it('joins a soft hyphen and drops it', () => {
@@ -95,11 +103,9 @@ describe('reflow', () => {
 
 describe('reflowPreservingLines', () => {
   it('repairs soft hyphens but keeps the layout', () => {
-    expect(reflowPreservingLines('Input: parameters\nfor t in steps do\n  compute-\nvalue')).toEqual([
-      'Input: parameters',
-      'for t in steps do',
-      'computevalue',
-    ]);
+    expect(
+      reflowPreservingLines('Input: parameters\nfor t in steps do\n  compute-\nvalue'),
+    ).toEqual(['Input: parameters', 'for t in steps do', 'computevalue']);
   });
 });
 

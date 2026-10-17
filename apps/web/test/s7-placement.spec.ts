@@ -4,7 +4,15 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_SIZE, boundsOf, freeSpot, overlaps, type Rect } from '@/components/canvas/placement';
+import {
+  DEFAULT_SIZE,
+  FRAME_GAP,
+  boundsOf,
+  freeSpot,
+  overlaps,
+  spotNear,
+  type Rect,
+} from '@/features/board/model/placement';
 
 describe('freeSpot', () => {
   it('starts at the origin on an empty board', () => {
@@ -14,7 +22,12 @@ describe('freeSpot', () => {
   it('never overlaps, however many nodes are already there, and is deterministic', () => {
     const board: Rect[] = [];
     for (let i = 0; i < 60; i += 1) {
-      const size = i % 3 === 0 ? DEFAULT_SIZE.explanation : i % 3 === 1 ? DEFAULT_SIZE.excerpt : DEFAULT_SIZE.note;
+      const size =
+        i % 3 === 0
+          ? DEFAULT_SIZE.explanation
+          : i % 3 === 1
+            ? DEFAULT_SIZE.excerpt
+            : DEFAULT_SIZE.note;
       const spot = freeSpot(board, size);
       expect(freeSpot(board, size)).toEqual(spot);
       const rect = { ...spot, ...size };
@@ -50,5 +63,29 @@ describe('boundsOf', () => {
       expect(box.x + box.w).toBeGreaterThanOrEqual(r.x + r.w);
       expect(box.y + box.h).toBeGreaterThanOrEqual(r.y + r.h);
     }
+  });
+});
+
+describe('spotNear: a new frame in clear space nearest the view’s middle (#214)', () => {
+  const size = DEFAULT_SIZE.group;
+  const centre = { x: 500, y: 400 };
+
+  it('centres the box on the point when nothing is near', () => {
+    expect(spotNear([], size, centre)).toEqual({ x: 300, y: 250 });
+    expect(spotNear([{ x: 2000, y: 0, w: 260, h: 150 }], size, centre)).toEqual({ x: 300, y: 250 });
+  });
+
+  it('never overlaps a card or frame, keeps the gap, and stays as near as it can', () => {
+    const board: Rect[] = [
+      { x: 300, y: 100, w: 260, h: 180 },
+      { x: 620, y: 300, w: 340, h: 200 },
+      { x: 0, y: 600, w: 400, h: 300 },
+    ];
+    const spot = spotNear(board, size, centre);
+    for (const r of board) expect(overlaps({ ...spot, ...size }, r, FRAME_GAP)).toBe(false);
+    // Nearer than the row-by-row search would put it, and the same answer every time.
+    const centreOf = (p: { x: number; y: number }) => Math.hypot(p.x + 200 - 500, p.y + 150 - 400);
+    expect(centreOf(spot)).toBeLessThan(centreOf(freeSpot(board, size, { x: 300, y: 250 })));
+    expect(spotNear(board, size, centre)).toEqual(spot);
   });
 });

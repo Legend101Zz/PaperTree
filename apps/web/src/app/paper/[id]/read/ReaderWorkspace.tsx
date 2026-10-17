@@ -22,14 +22,23 @@
  *   `papertree/reader/<paper_id>` (contracts.md §5), in try/catch because it is a convenience. A
  *   zoom keeps the top line (`VirtualPageList`), a mode switch keeps the block, a reload keeps both.
  *
- *   `focusAnchor` IS REAL (contracts.md §5/§6): resolve, scroll the passage into view, flash it for
- *   1.2 s. The explain panel's citation chips (S6) and the canvas's "open source" (S7) call it.
+ *   `focusAnchor` IS REAL (contracts.md §5/§6): resolve, scroll the passage into view if it is not,
+ *   and run the citation flash (`reader/flash`). The explain panel's markers and trace (#202) and
+ *   the canvas's "open source" (S7) call it.
  *
  *   DESIGNED STATES: opening, still being read (Source works from the PDF alone, and the reader
  *   retries on its own), not in your library, unreachable, a PDF pdf.js cannot open.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import {
   extentOf,
@@ -45,11 +54,21 @@ import { sendToCanvas } from '@/components/canvas/sendToCanvas';
 import { useFocusFromCanvas } from '@/components/canvas/useFocusFromCanvas';
 import { ExplainPanel } from '@/components/explain';
 import { useExplainActions } from '@/components/explain/useExplainActions';
-import { ReaderActionsProvider, type ReaderActions } from '@/components/reader/actions';
+import {
+  ReaderActionsProvider,
+  type FocusOptions,
+  type ReaderActions,
+} from '@/components/reader/actions';
+import {
+  FLASH_MS,
+  FLASH_SCROLL_MS,
+  nextFlashPhase,
+  prefersReducedMotion,
+  useClearOnNextAction,
+} from '@/components/reader/flash';
 import { GuidedView } from '@/components/reader/GuidedView';
 import { HighlightCard } from '@/components/reader/HighlightCard';
 import type { FlashPaint } from '@/components/reader/HighlightOverlay';
-import { ModeSwitch } from '@/components/reader/ModeSwitch';
 import { Navigator, type NavigatorHighlight } from '@/components/reader/Navigator';
 import { PageThumbnail } from '@/components/reader/PageThumbnail';
 import { PdfDocumentProvider, usePdfDocument } from '@/components/reader/PdfDocumentProvider';
@@ -57,18 +76,29 @@ import { ReaderToast } from '@/components/reader/ReaderToast';
 import { paintItemsOf, SourcePane } from '@/components/reader/SourcePane';
 import { SplitView } from '@/components/reader/SplitView';
 import { UnanchoredTray } from '@/components/reader/UnanchoredTray';
-import { useHighlights, type ReaderHighlight, type UseHighlights } from '@/components/reader/useHighlights';
+import {
+  useHighlights,
+  type ReaderHighlight,
+  type UseHighlights,
+} from '@/components/reader/useHighlights';
 import type { PendingSelection, SelectionCapture } from '@/components/reader/useSelectionCapture';
 import { displayQuote } from '@/components/reader/quote';
 import type { ReadingPosition } from '@/components/reader/VirtualPageList';
-import { FIT_WIDTH, resolveZoom, ZoomControl, type ZoomMode } from '@/components/reader/ZoomControl';
+import { FIT_WIDTH, resolveZoom, type ZoomMode } from '@/components/reader/ZoomControl';
 import {
   applyScroll,
   type DocumentHandle,
   type DocumentRef,
   type PendingScroll,
 } from '@/components/reader/documentHandle';
+import { HighlightUndoToast } from '@/features/highlights';
+import { useFocusFromBook, useSummaryFromBook } from '@/features/book';
+import { AskFromNotebook } from '@/features/notebook/components/AskFromNotebook';
+import { useFocusFromNotebook } from '@/features/notebook/hooks/useFocusFromNotebook';
+import { useThreadFromNotebook } from '@/features/notebook/hooks/useThreadFromNotebook';
+import { ReaderHeader, type ExplainToggle } from '@/features/reader';
 import { NetworkError } from '@/lib/api/client';
+import { papersApi } from '@/lib/api/papers';
 import { ApiError, type HighlightColor } from '@/lib/api/types';
 import {
   loadDocument,
@@ -77,6 +107,7 @@ import {
   readerStorageKey,
   type PaperRef,
 } from '@/lib/paperSource';
+import { createReadingStateSync } from '@/lib/readingStateSync';
 
 export type ReadingMode = 'source' | 'guided' | 'split';
 
@@ -112,7 +143,8 @@ export function readSavedReaderState(key: string): SavedReaderState | null {
     if (value.v !== 1) return null;
     if (value.mode !== 'source' && value.mode !== 'guided' && value.mode !== 'split') return null;
     if (!isZoomMode(value.zoomMode)) return null;
-    if (typeof value.page !== 'number' || !Number.isInteger(value.page) || value.page < 0) return null;
+    if (typeof value.page !== 'number' || !Number.isInteger(value.page) || value.page < 0)
+      return null;
     if (typeof value.yPt !== 'number' || !Number.isFinite(value.yPt) || value.yPt < 0) return null;
     return {
       v: 1,
@@ -120,7 +152,9 @@ export function readSavedReaderState(key: string): SavedReaderState | null {
       zoomMode: value.zoomMode,
       page: value.page,
       yPt: value.yPt,
-      ...(typeof value.blockId === 'string' && value.blockId !== '' ? { blockId: value.blockId } : {}),
+      ...(typeof value.blockId === 'string' && value.blockId !== ''
+        ? { blockId: value.blockId }
+        : {}),
     };
   } catch {
     // Private mode, blocked storage, a corrupt entry: the paper opens at the top. Never a crash.
@@ -184,7 +218,10 @@ export function topBlockAt(doc: IndexedDocument, position: ReadingPosition): str
  * the parse had loaded, or the reader scrolled before it did - and "no block" must not mean "the top
  * of the paper" (RFIX2 R8).
  */
-export function initialBlockFor(doc: IndexedDocument | null, at: SavedReaderState | null): string | null {
+export function initialBlockFor(
+  doc: IndexedDocument | null,
+  at: SavedReaderState | null,
+): string | null {
   if (at === null) return null;
   if (at.blockId !== undefined) return at.blockId;
   return doc === null ? null : (topBlockAt(doc, { page: at.page, yPt: at.yPt }) ?? null);
@@ -192,7 +229,10 @@ export function initialBlockFor(doc: IndexedDocument | null, at: SavedReaderStat
 
 function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(
-    () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(query).matches,
+    () =>
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia(query).matches,
   );
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
@@ -229,11 +269,15 @@ function failureOf(error: unknown): Failure {
 }
 
 /** Where a highlight's card opens from: the click, and the passage's top and bottom, client px. */
-type CardAt = { readonly clientX: number; readonly clientY: number; readonly top?: number; readonly bottom?: number };
+type CardAt = {
+  readonly clientX: number;
+  readonly clientY: number;
+  readonly top?: number;
+  readonly bottom?: number;
+};
 
 /** While a paper is still being read, try again this often. */
 const RETRY_MS = 4000;
-const FLASH_MS = 1200;
 
 export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   const paperKey = paperRefKey(given);
@@ -242,7 +286,9 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const paper = useMemo(() => given, [paperKey]);
   const storageKey = readerStorageKey(paper);
-  const [saved] = useState(() => (typeof window === 'undefined' ? null : readSavedReaderState(storageKey)));
+  const [saved] = useState(() =>
+    typeof window === 'undefined' ? null : readSavedReaderState(storageKey),
+  );
 
   const [pdfSource, setPdfSource] = useState<string | ArrayBuffer | null>(null);
   const [pdfFailure, setPdfFailure] = useState<Failure | null>(null);
@@ -261,6 +307,10 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   const [flash, setFlash] = useState<FlashPaint | null>(null);
   const [guidedFlash, setGuidedFlash] = useState<string | null>(null);
   const [followBlockId, setFollowBlockId] = useState<string | null>(null);
+  // Guided's page for the header's "p. 2 of 15" (#203): the page of its top paragraph, kept in step
+  // by Source. Source and Split show the page filling most of the view (`PageCounter`); before
+  // either reports, the saved place, or the first page.
+  const [topPage, setTopPage] = useState<number>(saved?.page ?? 0);
   const narrow = useMediaQuery('(max-width: 639px)');
 
   // Guided and Split need the parse; until it is here the reader stays in Source.
@@ -317,12 +367,47 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   // ── the reading position ──
   const positionRef = useRef<SavedReaderState | null>(saved);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // True once the reader has reported a position (scroll or guided top), i.e. shown a real page.
+  const shownRef = useRef(false);
   const modeRef = useRef(mode);
   modeRef.current = mode;
   const zoomModeRef = useRef(zoomMode);
   zoomModeRef.current = zoomMode;
 
+  // The server's copy of the place (#192), for the library's "reading now". Real papers only; a
+  // fixture has no account to write to.
+  const readingSync = useMemo(
+    () =>
+      paper.kind === 'api'
+        ? createReadingStateSync({
+            send: (page, readingMode) =>
+              papersApi.putReadingState(paper.paperId, page, readingMode),
+          })
+        : null,
+    [paper],
+  );
+  useEffect(() => {
+    if (readingSync === null) return undefined;
+    const flush = (): void => readingSync.flush({ keepalive: true });
+    const onHide = (): void => {
+      if (document.visibilityState === 'hidden') readingSync.flush({ keepalive: true });
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onHide);
+      readingSync.flush(); // not dispose: React strict mode remounts with the same instance
+    };
+  }, [readingSync]);
+
   const persist = useCallback(() => {
+    // Only a page the reader has shown: not on mount, not on a mode or zoom change before the
+    // first reported position (that would overwrite the server's place with page 0).
+    readingSync?.update(
+      shownRef.current ? (positionRef.current?.page ?? null) : null,
+      modeRef.current,
+    );
     if (saveTimer.current !== null) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       saveTimer.current = null;
@@ -336,7 +421,7 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
         ...(at?.blockId === undefined ? {} : { blockId: at.blockId }),
       });
     }, 250);
-  }, [storageKey]);
+  }, [storageKey, readingSync]);
 
   useEffect(() => {
     persist();
@@ -352,6 +437,11 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   const onSourcePosition = useCallback(
     (position: ReadingPosition) => {
       const blockId = doc === null ? undefined : topBlockAt(doc, position);
+      shownRef.current = true;
+      // The page Guided would open at: its top block's (#203's counter, while Guided is shown).
+      setTopPage(
+        (blockId === undefined ? undefined : doc?.byId.get(blockId)?.pageIndex) ?? position.page,
+      );
       positionRef.current = {
         v: 1,
         mode: modeRef.current,
@@ -369,19 +459,22 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   const documentRef = useRef<DocumentHandle | null>(null);
   const pendingScroll = useRef<PendingScroll | null>(null);
 
-  const requestScroll = useCallback((request: PendingScroll) => {
+  /** Returns how long the scroll takes (a deferred one is assumed to take the flash's 240 ms). */
+  const requestScroll = useCallback((request: PendingScroll): number => {
     const handle = documentRef.current;
     if (handle === null) {
       pendingScroll.current = request;
-      return;
+      return request.kind === 'rect' ? FLASH_SCROLL_MS : 0;
     }
-    applyScroll(handle, request);
+    return applyScroll(handle, request);
   }, []);
 
   const onGuidedTop = useCallback(
     (blockId: string) => {
       const block = doc?.byId.get(blockId);
       if (block === undefined) return;
+      shownRef.current = true;
+      setTopPage(block.pageIndex);
       positionRef.current = {
         v: 1,
         mode: modeRef.current,
@@ -390,7 +483,8 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
         yPt: Math.max(0, block.bbox[1] - 12),
         blockId,
       };
-      if (modeRef.current === 'split') requestScroll({ kind: 'rect', pageIndex: block.pageIndex, bbox: block.bbox });
+      if (modeRef.current === 'split')
+        requestScroll({ kind: 'rect', pageIndex: block.pageIndex, bbox: block.bbox });
       persist();
     },
     [doc, persist, requestScroll],
@@ -432,15 +526,32 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
     [],
   );
 
+  // The flash's phases (`reader/flash`): scroll → flash → linger, each keyed to this flash, so a
+  // newer flash is never moved on by an older one's timer. The faint outline (and its margin tab)
+  // stays until the reader's next action.
+  useEffect(() => {
+    if (flash === null) return undefined;
+    const next = nextFlashPhase(flash.phase, flash.scrollMs, prefersReducedMotion());
+    if (next === null) return undefined;
+    const timer = setTimeout(
+      () => setFlash((f) => (f?.key === flash.key ? { ...f, phase: next.phase } : f)),
+      next.afterMs,
+    );
+    return () => clearTimeout(timer);
+  }, [flash]);
+  const clearFlash = useCallback(() => setFlash(null), []);
+  useClearOnNextAction(flash !== null, clearFlash);
+
   /**
-   * `focusAnchor` (contracts.md §5/§6): resolve, scroll the passage into view, flash it 1.2 s.
+   * `focusAnchor` (contracts.md §5/§6): resolve, scroll the passage into view if it is not, and
+   * run the citation flash (`reader/flash`: in 180 → hold 900 → out 600, a faint outline stays).
    *
    * In Source and Split the passage is the anchor's Source paint — its stored quads for a user
    * highlight, the ladder's matched range for a citation. In Guided it is the paragraph that renders
    * it. An anchor painted nowhere still gets its page, and the tray says why.
    */
   const focusAnchor = useCallback(
-    (anchor: Anchor, opts?: { flash?: boolean }) => {
+    (anchor: Anchor, opts?: FocusOptions) => {
       if (doc === null) return;
       const resolution = resolveAnchor(anchor, doc);
       const shouldFlash = opts?.flash !== false;
@@ -453,15 +564,30 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
       }
       const paint = sourcePaint(anchor, doc, resolution);
       if (paint === null) {
-        if (resolution.pageIndex !== null) requestScroll({ kind: 'page', pageIndex: resolution.pageIndex });
+        if (resolution.pageIndex !== null)
+          requestScroll({ kind: 'page', pageIndex: resolution.pageIndex });
         return;
       }
       const extent: BBox | null = extentOf(paint.polygons);
-      if (extent !== null) requestScroll({ kind: 'rect', pageIndex: paint.pageIndex, bbox: extent });
+      const scrollMs =
+        extent === null
+          ? 0
+          : requestScroll({
+              kind: 'rect',
+              pageIndex: paint.pageIndex,
+              bbox: extent,
+              ...(opts?.bottomInset === undefined ? {} : { bottomInset: opts.bottomInset }),
+            });
       if (!shouldFlash) return;
-      setFlash({ key: `${anchor.id}:${String(Date.now())}`, pageIndex: paint.pageIndex, polygons: paint.polygons });
-      if (flashTimer.current !== null) clearTimeout(flashTimer.current);
-      flashTimer.current = setTimeout(() => setFlash(null), FLASH_MS + 100);
+      setFlash({
+        key: `${anchor.id}:${String(Date.now())}`,
+        pageIndex: paint.pageIndex,
+        polygons: paint.polygons,
+        extent,
+        phase: scrollMs > 0 ? 'scroll' : 'flash',
+        scrollMs,
+        ...(opts?.from === undefined ? {} : { from: opts.from }),
+      });
     },
     [doc, requestScroll],
   );
@@ -479,11 +605,16 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
 
   // S7: the canvas's "Open source" lands here as `?focus=<node_id>`.
   useFocusFromCanvas(paper.kind === 'api' ? paper.paperId : null, doc !== null, focusAnchor);
+  // S5c: the notebook's "Open source" lands here as `?nb=<page>&item=<item>`.
+  useFocusFromNotebook(paper.kind === 'api' ? paper.paperId : null, doc !== null, focusAnchor);
+  // The opened book's "p. 1 · Abstract" tab (#200): flash the abstract once the parse is in.
+  useFocusFromBook(paper.kind === 'api' ? paper.paperId : null, doc !== null, focusAnchor);
 
-  /** The colour a new highlight gets: the last one the reader picked, amber at first. */
+  /** The colour a new highlight gets: the wash pressed, else the last one picked (amber at first). */
   const lastColor = useRef<HighlightColor>('amber');
   const onCreateHighlight = useCallback(
-    (captured: SelectionCapture) => {
+    (captured: SelectionCapture, color?: HighlightColor) => {
+      if (color !== undefined) lastColor.current = color;
       void highlights.create(captured.anchors, lastColor.current);
     },
     [highlights],
@@ -533,7 +664,8 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
       />
     );
   }
-  const unreachable = docFailure?.kind === 'unreachable' && (pdfFailure !== null || pdfSource === null);
+  const unreachable =
+    docFailure?.kind === 'unreachable' && (pdfFailure !== null || pdfSource === null);
   const hardError = docFailure?.kind === 'error' && (pdfFailure !== null || pdfSource === null);
   if (unreachable || hardError) {
     return (
@@ -574,6 +706,7 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
         <ReaderWorkspaceView
           doc={doc}
           paper={paper}
+          page={topPage}
           mode={mode}
           onModeChange={setMode}
           zoom={zoom}
@@ -597,7 +730,11 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
           onJumpToPage={jumpToPage}
           selection={selection}
           onSelectionChange={setSelection}
-          initialPosition={positionRef.current === null ? null : { page: positionRef.current.page, yPt: positionRef.current.yPt }}
+          initialPosition={
+            positionRef.current === null
+              ? null
+              : { page: positionRef.current.page, yPt: positionRef.current.yPt }
+          }
           initialBlockId={initialBlockFor(doc, positionRef.current)}
           onSourcePosition={onSourcePosition}
           onGuidedTop={onGuidedTop}
@@ -616,6 +753,7 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
           />
         )}
         <ReaderToast message={notice} onDismiss={() => setNotice(null)} />
+        <HighlightUndoToast highlights={highlights} />
       </ReaderActionsMount>
     </PdfDocumentProvider>
   );
@@ -677,12 +815,18 @@ function HighlightCardSlot({
 }
 
 /**
+ * The header's Explain toggle (#203), provided by the mount that owns the explain controller; null
+ * for a sample paper, which has no server to ask.
+ */
+const ExplainToggleContext = createContext<ExplainToggle | null>(null);
+
+/**
  * The `ReaderActions` mount (contracts.md §5) — S0's lines in this file.
  *
  * It decides which implementation fills each action; the callers (`SourcePane`'s toolbar, the
  * explain panel's chips in S6, the canvas in S7) reach them through `useReaderActions()`.
  * `openExplain` and `sendToCanvas` are owned by S6 and S7 and change behind these same lines.
- * `focusAnchor` is S4's: resolve → scroll → 1.2 s flash, implemented by the workspace above.
+ * `focusAnchor` is S4's: resolve → scroll → the citation flash, implemented by the workspace above.
  *
  * A component of its own because the workspace returns early (loading, error) and hooks may not
  * follow an early return.
@@ -693,25 +837,50 @@ function ReaderActionsMount({
   children,
 }: {
   readonly paper: PaperRef;
-  readonly onFocusAnchor: (anchor: Anchor, opts?: { flash?: boolean }) => void;
+  readonly onFocusAnchor: (anchor: Anchor, opts?: FocusOptions) => void;
   readonly children: React.ReactNode;
 }) {
   const paperId = paper.kind === 'api' ? paper.paperId : null;
   const explain = useExplainActions({ paperId });
-  const { openExplain } = explain;
+  const { openExplain, openDiagram, askAbout, openPanel, closeExplain, summarize } = explain;
+  const explainOpen = explain.state.open;
+  // S5e: a dived page's Back to the paper (`?thread=`) reopens the panel on its thread.
+  useThreadFromNotebook(paperId, explain.selectThread);
+  // The opened book's Summary (#200): the panel opens on the summary, the cached one first.
+  useSummaryFromBook(paperId, () => {
+    openPanel();
+    summarize();
+  });
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const toggle = useMemo<ExplainToggle | null>(
+    () =>
+      paperId === null
+        ? null
+        : {
+            open: explainOpen,
+            ref: toggleRef,
+            onToggle: (next) => (next ? openPanel() : closeExplain()),
+          },
+    [paperId, explainOpen, openPanel, closeExplain],
+  );
   const actions = useMemo<ReaderActions>(
     () => ({
       openExplain,
+      askAbout,
+      // A sample paper has no server to draw a plate: no button rather than an inert one.
+      ...(paperId === null ? {} : { explainWithDiagram: openDiagram }),
       sendToCanvas: (input) => sendToCanvas(paperId, input),
       focusAnchor: (anchor, opts) => onFocusAnchor(anchor, opts),
     }),
-    [openExplain, paperId, onFocusAnchor],
+    [openExplain, openDiagram, askAbout, paperId, onFocusAnchor],
   );
 
   return (
     <ReaderActionsProvider value={actions}>
-      {children}
-      <ExplainPanel controller={explain} />
+      <ExplainToggleContext.Provider value={toggle}>{children}</ExplainToggleContext.Provider>
+      <ExplainPanel controller={explain} toggleRef={toggleRef} />
+      {/* S5d: the notebook lasso's "Ask about this" arrives here as a new ask (`?ask=`). */}
+      <AskFromNotebook paperId={paperId} controller={explain} />
     </ReaderActionsProvider>
   );
 }
@@ -723,6 +892,8 @@ function ReaderActionsMount({
 interface ViewProps {
   readonly doc: IndexedDocument | null;
   readonly paper: PaperRef;
+  /** 0-based page Guided is on, or the saved one (the header's counter). */
+  readonly page: number | null;
   readonly mode: ReadingMode;
   readonly onModeChange: (mode: ReadingMode) => void;
   readonly zoom: number;
@@ -732,7 +903,7 @@ interface ViewProps {
   readonly navigatorOpen: boolean;
   readonly onNavigatorToggle: () => void;
   readonly highlights: UseHighlights;
-  readonly onCreateHighlight: (captured: SelectionCapture) => void;
+  readonly onCreateHighlight: (captured: SelectionCapture, color?: HighlightColor) => void;
   readonly onActivateHighlight: (highlightId: string, at: CardAt | null) => void;
   readonly activeHighlightId: string | null;
   readonly flash: FlashPaint | null;
@@ -768,6 +939,10 @@ function ReaderWorkspaceView(props: ViewProps) {
     doc?.blocks.find((block) => block.type === 'title')?.text.replace(/\n/g, ' ') ??
     (paper.kind === 'api' ? 'Opening the paper…' : paper.slug);
 
+  const explain = useContext(ExplainToggleContext);
+  const { numPages } = usePdfDocument();
+  const pageCount = (numPages ?? 0) > 0 ? numPages : (doc?.pages.length ?? null);
+
   const { items: painted, unplaced } = useMemo(
     () => paintItemsOf(doc, props.highlights.highlights),
     [doc, props.highlights.highlights],
@@ -787,9 +962,13 @@ function ReaderWorkspaceView(props: ViewProps) {
       const pageIndex =
         first === undefined
           ? null
-          : ((first.anchor.selectors.find((s) => s.type === 'PageSelector') as { index?: number } | undefined)
-              ?.index ?? first.resolution.pageIndex);
-      const nowhere = highlight.anchors.length > 0 && highlight.anchors.every((a) => unplacedAnchors.has(a.anchor.id));
+          : ((
+              first.anchor.selectors.find((s) => s.type === 'PageSelector') as
+                { index?: number } | undefined
+            )?.index ?? first.resolution.pageIndex);
+      const nowhere =
+        highlight.anchors.length > 0 &&
+        highlight.anchors.every((a) => unplacedAnchors.has(a.anchor.id));
       return {
         id: highlight.highlightId,
         blockIds: highlight.anchors.flatMap((a) => a.resolution.blockIds),
@@ -806,19 +985,26 @@ function ReaderWorkspaceView(props: ViewProps) {
 
   return (
     <div className="pt-reader" data-reader-mode={mode}>
-      <ReaderToolbarShell
+      <ReaderHeader
         title={title}
+        page={props.page}
+        pageCount={pageCount}
         mode={mode}
         onModeChange={props.onModeChange}
         guidedAvailable={doc !== null}
         zoom={props.zoom}
         zoomMode={props.zoomMode}
         onZoomChange={props.onZoomChange}
-        onNavigatorToggle={props.onNavigatorToggle}
         navigatorOpen={props.navigatorOpen}
         navigatorAvailable={doc !== null}
+        onNavigatorToggle={props.onNavigatorToggle}
         highlightCount={props.highlights.highlights.length}
-        canvasHref={props.paper.kind === 'api' ? `/paper/${encodeURIComponent(props.paper.paperId)}/canvas` : null}
+        boardHref={
+          props.paper.kind === 'api'
+            ? `/paper/${encodeURIComponent(props.paper.paperId)}/board`
+            : null
+        }
+        explain={explain}
       />
 
       {props.stillReading ? (
@@ -830,7 +1016,11 @@ function ReaderWorkspaceView(props: ViewProps) {
       {props.highlights.load === 'error' && props.highlights.loadError !== null ? (
         <div className="pt-banner" role="alert">
           <span className="flex-1">{props.highlights.loadError}</span>
-          <button type="button" className="pt-btn pt-btn--outline" onClick={props.highlights.reload}>
+          <button
+            type="button"
+            className="pt-btn pt-btn--outline"
+            onClick={props.highlights.reload}
+          >
             Try again
           </button>
         </div>
@@ -876,87 +1066,6 @@ function ReaderWorkspaceView(props: ViewProps) {
   );
 }
 
-/**
- * The reader's one toolbar: back to the library, the Navigator, the paper's title, zoom, mode.
- * Below 640 px the controls take their own row, the mode switch first, all reachable by thumb.
- */
-function ReaderToolbarShell({
-  title,
-  mode,
-  onModeChange,
-  guidedAvailable,
-  zoom,
-  zoomMode,
-  onZoomChange,
-  onNavigatorToggle,
-  navigatorOpen,
-  navigatorAvailable,
-  highlightCount,
-  canvasHref,
-}: {
-  title: string;
-  mode: ReadingMode;
-  onModeChange: (mode: ReadingMode) => void;
-  guidedAvailable: boolean;
-  zoom: number;
-  zoomMode: ZoomMode;
-  onZoomChange: (mode: ZoomMode) => void;
-  onNavigatorToggle: () => void;
-  navigatorOpen: boolean;
-  navigatorAvailable: boolean;
-  highlightCount: number;
-  canvasHref: string | null;
-}) {
-  return (
-    <header className="pt-reader__bar">
-      <a className="pt-btn" href="/dashboard" aria-label="Back to your library">
-        <span aria-hidden="true">←</span>
-        <span className="hidden sm:inline">Library</span>
-      </a>
-      {/* The accessible name STARTS WITH the visible label (WCAG 2.5.3, s4-review.md F9): a
-          speech user says "Contents", and the panel it opens is titled the same. */}
-      <button
-        type="button"
-        className="pt-btn"
-        aria-label={
-          highlightCount > 0
-            ? `Contents, ${String(highlightCount)} ${highlightCount === 1 ? 'highlight' : 'highlights'}`
-            : 'Contents'
-        }
-        aria-expanded={navigatorOpen}
-        aria-pressed={navigatorOpen}
-        disabled={!navigatorAvailable}
-        title={navigatorAvailable ? 'Outline, pages and highlights' : 'Available when the paper has been read'}
-        onClick={onNavigatorToggle}
-      >
-        Contents
-        {highlightCount > 0 ? (
-          <span className="pt-num text-[--pt-ink-muted]" aria-hidden="true">
-            {highlightCount}
-          </span>
-        ) : null}
-      </button>
-      <h1 className="pt-reader__title" title={title}>
-        {title}
-      </h1>
-      <div className="pt-reader__controls">
-        <ModeSwitch
-          mode={mode}
-          onModeChange={onModeChange}
-          guidedAvailable={guidedAvailable}
-          unavailableReason="Guided and Split open when the paper has been read."
-        />
-        {mode === 'guided' ? null : <ZoomControl mode={zoomMode} zoom={zoom} onModeChange={onZoomChange} />}
-        {canvasHref === null ? null : (
-          <a className="pt-btn" href={canvasHref}>
-            Canvas
-          </a>
-        )}
-      </div>
-    </header>
-  );
-}
-
 function GuidedPane(props: ViewProps & { readonly doc: IndexedDocument }) {
   return (
     <GuidedView
@@ -972,7 +1081,13 @@ function GuidedPane(props: ViewProps & { readonly doc: IndexedDocument }) {
   );
 }
 
-function PdfUnavailable({ failure, onRetry }: { readonly failure: Failure; readonly onRetry: () => void }) {
+function PdfUnavailable({
+  failure,
+  onRetry,
+}: {
+  readonly failure: Failure;
+  readonly onRetry: () => void;
+}) {
   const body =
     failure.kind === 'unreachable'
       ? 'The PDF could not be downloaded: PaperTree is not reachable. Check the connection, then try again.'
@@ -995,7 +1110,8 @@ function PdfUnavailable({ failure, onRetry }: { readonly failure: Failure; reado
 }
 
 function SourceSlot(props: ViewProps) {
-  if (props.pdfFailure !== null) return <PdfUnavailable failure={props.pdfFailure} onRetry={props.onRetryPdf} />;
+  if (props.pdfFailure !== null)
+    return <PdfUnavailable failure={props.pdfFailure} onRetry={props.onRetryPdf} />;
   return (
     <SourcePane
       doc={props.doc}
@@ -1022,7 +1138,13 @@ function DocumentSlot(props: ViewProps) {
   const doc = props.doc;
   if (props.mode === 'guided' && doc !== null) return <GuidedPane {...props} doc={doc} />;
   if (props.mode === 'split' && doc !== null) {
-    return <SplitView source={<SourceSlot {...props} />} guided={<GuidedPane {...props} doc={doc} />} className="h-full" />;
+    return (
+      <SplitView
+        source={<SourceSlot {...props} />}
+        guided={<GuidedPane {...props} doc={doc} />}
+        className="h-full"
+      />
+    );
   }
   return <SourceSlot {...props} />;
 }

@@ -4,6 +4,7 @@ reader's document routes. S1 owns this module.
 POST   /papers                     the bytes -> uploads/<id>.pdf, a paper_owners row, a parse job
 GET    /papers                     LibraryPaper[], one per paper, newest first
 GET    /papers/{id}                one LibraryPaper
+GET    /library/links              citation links between the caller's own papers (#194)
 DELETE /papers/{id}                the rows, the paper's jobs, its upload, crops and staging
 POST   /papers/{id}/retry          the dead-lettered generation again, as a new attempt
 POST   /papers/{id}/reparse        generation next_generation
@@ -19,13 +20,20 @@ import hashlib
 import os
 import shutil
 import time
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from pathlib import Path
 from typing import Annotated, Any, Final
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import FileResponse, JSONResponse, Response
-from papertree_db import SQLITE_INTEGER_MAX, BlockId, PaperId, PaperTreeDb, generation
+from papertree_db import (
+    SQLITE_INTEGER_MAX,
+    BlockId,
+    PaperId,
+    PaperNotFound,
+    PaperTreeDb,
+    generation,
+)
 from papertree_document_worker.crops import CropStore
 from papertree_document_worker.pdf import pymupdf
 from starlette.datastructures import UploadFile
@@ -35,6 +43,7 @@ from .. import assets
 from ..deps import AuthConnDep, Caller, CallerDep, SettingsDep, open_database
 from ..deps import promoted_or_404 as _promoted
 from ..errors import BODY_UNPARSEABLE, ApiError
+from ..figures import asset_signer
 from ..ir import block_location, paper_document
 from ..library import (
     BUSY_STATES,
@@ -45,8 +54,18 @@ from ..library import (
     parse_jobs,
     plan_upload,
 )
+from ..library_links import find_links
 from ..logging import user_ref
-from ..schemas import JobAccepted, LibraryPaper, ReparseRequest, UploadAccepted
+from ..schemas import (
+    JobAccepted,
+    LibraryLink,
+    LibraryLinks,
+    LibraryPaper,
+    LibraryReference,
+    ReadingStateUpdate,
+    ReparseRequest,
+    UploadAccepted,
+)
 from ..security import user_for_token
 from ..settings import Settings
 from ._shared import GenParam, json_body, public_row
@@ -231,33 +250,92 @@ async def upload(request: Request, call: CallerDep, settings: SettingsDep) -> Up
         paper_id=paper_id,
         job_id=accepted.job_id,
         created=accepted.created,
-        paper=_library_paper(call, paper_id),
+        paper=_library_paper(call, paper_id, _signer(request, settings)),
     )
 
 
 # ── the library ──────────────────────────────────────────────────────────────────────────────
 
 
-def _library_paper(call: Caller, paper_id: str) -> LibraryPaper:
+def _signer(request: Request, settings: Settings) -> Callable[[str, str | None], str | None]:
+    """Signs a plate's crop URL (#200), one `exp` for the whole response."""
+    return asset_signer(str(request.base_url), settings.signing_secret, time.time())
+
+
+def _library_paper(
+    call: Caller, paper_id: str, sign: Callable[[str, str | None], str | None]
+) -> LibraryPaper:
     row = call.db.library_row(call.db_owner, PaperId(paper_id))
     if row is None:
         raise ApiError("not_found", "no such paper")
-    return library_paper(row)
+    return library_paper(row, sign)
 
 
 @router.get("/papers", response_model=list[LibraryPaper])
-async def list_papers(call: CallerDep) -> list[LibraryPaper]:
-    return [library_paper(row) for row in call.db.list_library(call.db_owner)]
+async def list_papers(
+    request: Request, call: CallerDep, settings: SettingsDep
+) -> list[LibraryPaper]:
+    sign = _signer(request, settings)
+    return [library_paper(row, sign) for row in call.db.list_library(call.db_owner)]
+
+
+@router.get("/library/links", response_model=LibraryLinks)
+async def library_links(call: CallerDep) -> LibraryLinks:
+    """Citation links among the caller's own papers, computed on read from the parses (#194).
+
+    One link per (citing paper, cited paper): a bibliography entry of the citing paper carries
+    the cited paper's arXiv id (preferred), or its title is the entry's title segment (the exact
+    rules, and why nothing is fuzzy, are in ``library_links``). Citation links only: no board can
+    reference a second paper yet, so ``via`` is always ``"citation"``. A paper still being read
+    has no references and yields no links; it is not an error. Another user's papers are never
+    visible.
+    """
+    found = find_links(call.db.library_link_sources(call.db_owner))
+    return LibraryLinks(
+        links=[
+            LibraryLink(
+                from_paper_id=link.from_paper_id,
+                to_paper_id=link.to_paper_id,
+                via="citation",
+                matched_by=link.matched_by,
+                reference=LibraryReference(index=link.reference_index, text=link.reference_text),
+            )
+            for link in found
+        ]
+    )
 
 
 @router.get("/papers/{paper_id}", response_model=LibraryPaper)
-async def get_paper(call: CallerDep, paper_id: str, gen: GenParam) -> LibraryPaper:
+async def get_paper(
+    request: Request, call: CallerDep, settings: SettingsDep, paper_id: str, gen: GenParam
+) -> LibraryPaper:
     """The paper's library row. `?gen=` (kept from the pre-release route) answers 404 unless that
     generation is stored; the row itself always describes the paper and its promoted generation."""
-    paper = _library_paper(call, paper_id)
+    paper = _library_paper(call, paper_id, _signer(request, settings))
     if gen is not None and gen not in call.db.list_generations(call.db_owner, PaperId(paper_id)):
         raise ApiError("not_found", "no such generation")
     return paper
+
+
+@router.put("/papers/{paper_id}/reading-state", status_code=status.HTTP_204_NO_CONTENT)
+async def put_reading_state(
+    call: CallerDep,
+    paper_id: str,
+    body: Annotated[ReadingStateUpdate, Depends(json_body(ReadingStateUpdate))],
+) -> Response:
+    """The reader says which page it is on (#192). A convenience write: the reader keeps its exact
+    place locally, this is what the library's "reading now" and "continue" are built from.
+
+    404 for a paper that is not the caller's; 422 for a page past the last one when the page count
+    is known. `ReadingStateUpdate` already refused a negative page.
+    """
+    try:
+        call.db.put_reading_state(call.db_owner, PaperId(paper_id), body.last_page, body.mode)
+    except PaperNotFound as exc:
+        raise ApiError("not_found", "no such paper") from exc
+    except ValueError as exc:
+        raise ApiError("validation_failed", f"last_page: {exc}") from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ── delete, retry, re-parse ──────────────────────────────────────────────────────────────────

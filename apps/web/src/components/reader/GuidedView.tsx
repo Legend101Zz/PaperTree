@@ -37,7 +37,9 @@ import {
 import type { HighlightColor } from '@/lib/api/types';
 
 import { assetSrc } from './assetSrc';
+import { FLASH_MS } from './flash';
 import { planFigures } from './guidedFigures';
+import { tableRegionName, useScrollsSideways } from './guidedTables';
 import { displayQuote } from './quote';
 import { joinContinuedBlocks, reflow, reflowPreservingLines } from './reflow';
 import type { ReaderHighlight } from './useHighlights';
@@ -73,7 +75,11 @@ interface GuidedMarks {
   readonly text: ReadonlyMap<string, readonly Mark[]>;
   /** Blocks marked as a whole (a cell, a figure, a claimed caption): element id → colour. */
   readonly elements: ReadonlyMap<string, HighlightColor>;
-  readonly unavailable: readonly { readonly highlightId: string; readonly quote: string; readonly message: string }[];
+  readonly unavailable: readonly {
+    readonly highlightId: string;
+    readonly quote: string;
+    readonly message: string;
+  }[];
 }
 
 function quoteOf(highlight: ReaderHighlight): string {
@@ -138,7 +144,11 @@ function withMarks(text: string, marks: readonly Mark[] | undefined): ReactNode 
     if (start > cursor) out.push(points.slice(cursor, start).join(''));
     if (end > start) {
       out.push(
-        <mark key={`m${String(index)}`} data-color={mark.color} data-highlight-id={mark.highlightId}>
+        <mark
+          key={`m${String(index)}`}
+          data-color={mark.color}
+          data-highlight-id={mark.highlightId}
+        >
           {points.slice(start, end).join('')}
         </mark>,
       );
@@ -181,7 +191,12 @@ export function planGuidedReading(doc: IndexedDocument): {
   }
   const figures = planFigures(all);
   const rendered = all.filter((block) => !figures.redirect.has(block.id));
-  return { rendered, furnitureCount: view.furnitureCount, redirect: figures.redirect, captionOf: figures.caption };
+  return {
+    rendered,
+    furnitureCount: view.furnitureCount,
+    redirect: figures.redirect,
+    captionOf: figures.caption,
+  };
 }
 
 /** The full text of a block, following any continuation chain, plus every contributing id. */
@@ -252,7 +267,11 @@ function GuidedText({
 
 function CropMissing({ what }: { readonly what: string }): JSX.Element {
   return (
-    <div className="pt-crop-missing" role="img" aria-label={`${what}: the image is not available yet`}>
+    <div
+      className="pt-crop-missing"
+      role="img"
+      aria-label={`${what}: the image is not available yet`}
+    >
       {what} — the image from the PDF is not available yet. It is on its page in Source.
     </div>
   );
@@ -398,9 +417,27 @@ function GuidedTable({
           })),
       }));
   }, [block.id, doc, rawCells]);
+  const scroller = useRef<HTMLDivElement>(null);
+  const scrolls = useScrollsSideways(scroller);
+  const header = rows.flatMap((row) => row.cells).find((cell) => cell.isHeader === true)?.text;
 
   return (
-    <div className="my-6 overflow-x-auto">
+    // Only a table wider than its column scrolls, so only then is it a named, focusable region
+    // (axe `scrollable-region-focusable`; a tab stop on a table that fits does nothing).
+    <div
+      ref={scroller}
+      className="pt-guided__table-scroller my-6 overflow-x-auto"
+      {...(scrolls
+        ? {
+            role: 'region',
+            'aria-label': tableRegionName(
+              caption === undefined ? undefined : reflow(caption),
+              header,
+            ),
+            tabIndex: 0,
+          }
+        : {})}
+    >
       <TableView
         blockId={block.id}
         rows={rows}
@@ -422,7 +459,8 @@ function elementFor(
   let cursor: string | undefined = blockId;
   while (cursor !== undefined && !seen.has(cursor)) {
     seen.add(cursor);
-    const escaped = typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(cursor) : cursor;
+    const escaped =
+      typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(cursor) : cursor;
     const direct = root.querySelector<HTMLElement>(`[data-block-id="${escaped}"]`);
     if (direct !== null) return direct;
     // A panel of a figure is carried by the whole crop's card (RFIX2 R9).
@@ -491,7 +529,10 @@ export function GuidedView({
 }: GuidedViewProps) {
   const projection = useMemo(() => guidedProjectionFor(doc), [doc]);
   const plan = useMemo(() => planGuidedReading(doc), [doc]);
-  const marks = useMemo(() => guidedMarks(doc, projection, highlights), [doc, projection, highlights]);
+  const marks = useMemo(
+    () => guidedMarks(doc, projection, highlights),
+    [doc, projection, highlights],
+  );
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const drivenUntil = useRef(0);
   const lastTop = useRef<string | null>(null);
@@ -573,7 +614,7 @@ export function GuidedView({
     if (element === null) return undefined;
     scrollToBlock(flashBlockId);
     element.setAttribute('data-guided-flash', 'true');
-    const timer = setTimeout(() => element.removeAttribute('data-guided-flash'), 1200);
+    const timer = setTimeout(() => element.removeAttribute('data-guided-flash'), FLASH_MS);
     return () => {
       clearTimeout(timer);
       element.removeAttribute('data-guided-flash');
@@ -621,7 +662,10 @@ export function GuidedView({
       >
         <article className="pt-guided__sheet">
           {marks.unavailable.length === 0 ? null : (
-            <aside className="pt-banner mb-6 mt-0 flex-col items-start" aria-label="Highlights not shown here">
+            <aside
+              className="pt-banner mb-6 mt-0 flex-col items-start"
+              aria-label="Highlights not shown here"
+            >
               {marks.unavailable.map((item) => (
                 <p key={item.highlightId} className="m-0 text-[0.8125rem]">
                   {item.quote === '' ? (
@@ -641,7 +685,11 @@ export function GuidedView({
             let body: ReactNode;
             if (block.type === 'equation') {
               body = (
-                <GuidedEquation block={block} onShowSource={onShowSource} resolveAssetSrc={resolveAssetSrc} />
+                <GuidedEquation
+                  block={block}
+                  onShowSource={onShowSource}
+                  resolveAssetSrc={resolveAssetSrc}
+                />
               );
             } else if (block.type === 'figure') {
               body = (
@@ -674,8 +722,9 @@ export function GuidedView({
           {plan.furnitureCount === 0 ? null : (
             <p className="mt-8 border-t border-[--pt-rule] pt-3 text-[0.8125rem] text-[--pt-ink-muted]">
               {plan.furnitureCount} page-furniture block{plan.furnitureCount === 1 ? '' : 's'} (page
-              numbers, running footers, the arXiv stamp, hairline rules) {plan.furnitureCount === 1 ? 'is' : 'are'}{' '}
-              left out of this reading. {plan.furnitureCount === 1 ? 'It is' : 'They are'} still in Source.
+              numbers, running footers, the arXiv stamp, hairline rules){' '}
+              {plan.furnitureCount === 1 ? 'is' : 'are'} left out of this reading.{' '}
+              {plan.furnitureCount === 1 ? 'It is' : 'They are'} still in Source.
             </p>
           )}
         </article>

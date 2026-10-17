@@ -37,24 +37,29 @@ after(async () => {
 });
 
 describe('readPolicy(): env -> which model answers which kind', () => {
-  test('the shipped default: Flash (low) for explain, M3 for ask and summary (ADR-003, revised 2026-10-15)', () => {
+  test('the shipped default: Flash (low) for explain and diagram, M3 for ask and summary (ADR-003, revised 2026-10-15; ADR-004 §2.9)', () => {
     const p = readPolicy({});
     assert.deepEqual(
-      [p.explain.id, p.ask.id, p.summary.id],
-      [FLASH_MODEL_ID, M3_MODEL_ID, M3_MODEL_ID],
+      [p.explain.id, p.ask.id, p.summary.id, p.diagram.id],
+      [FLASH_MODEL_ID, M3_MODEL_ID, M3_MODEL_ID, FLASH_MODEL_ID],
     );
-    assert.deepEqual([p.explain.effort, p.ask.effort, p.summary.effort], ['low', null, null]);
+    assert.deepEqual(
+      [p.explain.effort, p.ask.effort, p.summary.effort, p.diagram.effort],
+      ['low', null, null, 'low'],
+    );
     assert.equal(p.explain.label, `minimax/${FLASH_MODEL_ID}`);
     assert.deepEqual(DEFAULT_MODELS, {
       explain: FLASH_MODEL_ID,
       ask: M3_MODEL_ID,
       summary: M3_MODEL_ID,
+      diagram: FLASH_MODEL_ID,
+      topic: FLASH_MODEL_ID,
     });
   });
 
   test('PAPERTREE_MODEL=MiniMax-M3 is the whole-service fallback', () => {
     const p = readPolicy({ PAPERTREE_MODEL: M3_MODEL_ID });
-    for (const kind of ['explain', 'ask', 'summary'] as const) {
+    for (const kind of ['explain', 'ask', 'summary', 'diagram', 'topic'] as const) {
       assert.equal(p[kind].id, M3_MODEL_ID);
       assert.equal(p[kind].effort, null);
     }
@@ -213,8 +218,16 @@ describe('Flash on the wire (mock Anthropic server)', () => {
       explain: `minimax/${FLASH_MODEL_ID}`,
       ask: `minimax/${M3_MODEL_ID}`,
       summary: `minimax/${FLASH_MODEL_ID}`,
+      diagram: `minimax/${M3_MODEL_ID}`,
+      topic: `minimax/${M3_MODEL_ID}`,
     });
-    assert.deepEqual(body['effort'], { explain: 'low', ask: null, summary: 'medium' });
+    assert.deepEqual(body['effort'], {
+      explain: 'low',
+      ask: null,
+      summary: 'medium',
+      diagram: null,
+      topic: null,
+    });
     assert.equal(body['cost_basis'][FLASH_MODEL_ID], 'estimate on M3 rates');
     assert.equal(body['model'], `minimax/${FLASH_MODEL_ID}`);
   });

@@ -60,7 +60,7 @@ test.describe('S0 smoke', () => {
     await page.waitForURL('**/dashboard');
     // The library asked the LIVE API for the user's papers, with the new session, and got them.
     expect((await library).status()).toBe(200);
-    await expect(page.getByRole('heading', { name: 'My papers' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Your library' })).toBeVisible();
 
     // ── open a committed fixture paper in the reader ───────────────────────────────────────
     await page.goto(`/paper/${FIXTURE}/read`);

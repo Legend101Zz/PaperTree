@@ -56,10 +56,16 @@ OWNED_TABLES = (
     "canvas_boards",
     "canvas_nodes",
     "canvas_edges",
+    # 0007_notebook.sql (v0.2 S5a, #206).
+    "notebook_pages",
+    "notebook_items",
+    "notebook_strokes",
+    # 0010_plate.sql (v0.2 S3, #200).
+    "paper_plate",
 )
 
-#: The 9 tables contracts.md §1 says 0005 adds to the owner-FK audit.
-NEW_IN_0005 = OWNED_TABLES[-9:]
+#: The 9 tables contracts.md §1 says 0005 adds to the owner-FK audit (0007's three follow them).
+NEW_IN_0005 = OWNED_TABLES[9:18]
 
 
 @dataclass(frozen=True, slots=True)
@@ -278,9 +284,13 @@ def test_conn_is_a_forbidden_token_outside_papertree_db() -> None:
         # is a slice of the one class that owns the connection, split into files only so that one
         # slice owns each file. They hold no connection of their own (`__slots__ = ()`).
         "packages/db/python/papertree_db/library.py",
+        "packages/db/python/papertree_db/reading.py",
+        "packages/db/python/papertree_db/topics.py",
         "packages/db/python/papertree_db/highlights.py",
         "packages/db/python/papertree_db/ai.py",
         "packages/db/python/papertree_db/canvas.py",
+        "packages/db/python/papertree_db/notebook.py",
+        "packages/db/python/papertree_db/plate.py",
     }
     # Parsed, not grepped: an `ast.Attribute` named `_conn` is a real access, whereas a grep also
     # hits every docstring that explains the rule — including the ones in this repo that do.

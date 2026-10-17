@@ -290,10 +290,149 @@
               "type": "null"
             }
           ]
+        },
+        "locator": {
+          "$ref": "#/$defs/PassageLocator"
         }
       },
       "required": ["citation_id", "ordinal", "marker", "page_index", "anchor", "supported"],
       "title": "Citation",
+      "type": "object"
+    },
+    "DiagramCite": {
+      "additionalProperties": false,
+      "description": "Where a part's quote was found. `supported` true: verbatim in the Anchor's block (\"cited\");\nfalse: there with differences, or nowhere at all (`anchor` null), \"not verified\".",
+      "properties": {
+        "citation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quote": {
+          "type": "string"
+        },
+        "anchor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AnchorV1"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "locator": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PassageLocator"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "page_index": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "supported": {
+          "type": "boolean"
+        }
+      },
+      "required": ["citation_id", "quote", "anchor", "locator", "page_index", "supported"],
+      "title": "DiagramCite",
+      "type": "object"
+    },
+    "DiagramLink": {
+      "additionalProperties": false,
+      "description": "An edge `after` cannot say (a feedback edge), from one placed part to another.",
+      "properties": {
+        "source": {
+          "pattern": "^[A-L]$",
+          "type": "string"
+        },
+        "target": {
+          "pattern": "^[A-L]$",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["source", "target", "label"],
+      "title": "DiagramLink",
+      "type": "object"
+    },
+    "DiagramPart": {
+      "additionalProperties": false,
+      "properties": {
+        "letter": {
+          "pattern": "^[A-L]$",
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": ["input", "step", "output", "concept"],
+          "type": "string"
+        },
+        "after": {
+          "items": {
+            "pattern": "^[A-L]$",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "edge": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "cite": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DiagramCite"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["letter", "label", "text", "kind", "after", "edge", "cite"],
+      "title": "DiagramPart",
       "type": "object"
     },
     "FollowUp": {
@@ -306,6 +445,10 @@
           "type": "string"
         },
         "retry_of": {
+          "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "redraw_of": {
           "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$",
           "type": "string"
         }
@@ -369,6 +512,12 @@
           },
           "type": "array"
         },
+        "coverage": {
+          "$ref": "#/$defs/MessageCoverage"
+        },
+        "diagram": {
+          "$ref": "#/$defs/MessageDiagram"
+        },
         "created_at": {
           "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
           "type": "string"
@@ -400,6 +549,83 @@
         "completed_at"
       ],
       "title": "Message",
+      "type": "object"
+    },
+    "MessageCoverage": {
+      "additionalProperties": false,
+      "description": "How much of an assistant answer is cited (#201); counted by `exchanges.message_coverage`.",
+      "properties": {
+        "passages": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "citations": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "unresolved_markers": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "paragraphs": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "uncited_paragraphs": {
+          "items": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "not_verified": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "passages",
+        "citations",
+        "unresolved_markers",
+        "paragraphs",
+        "uncited_paragraphs",
+        "not_verified"
+      ],
+      "title": "MessageCoverage",
+      "type": "object"
+    },
+    "MessageDiagram": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "enum": ["streaming", "complete", "partial", "stopped", "error"],
+          "type": "string"
+        },
+        "parts": {
+          "items": {
+            "$ref": "#/$defs/DiagramPart"
+          },
+          "type": "array"
+        },
+        "links": {
+          "items": {
+            "$ref": "#/$defs/DiagramLink"
+          },
+          "type": "array"
+        }
+      },
+      "required": ["title", "status", "parts", "links"],
+      "title": "MessageDiagram",
       "type": "object"
     },
     "MessageError": {
@@ -439,6 +665,7 @@
                 "busy",
                 "stale_version",
                 "generation_not_found",
+                "topic_exists",
                 "anchor_incomplete",
                 "anchor_mismatch",
                 "budget_exhausted",
@@ -480,6 +707,44 @@
       },
       "required": ["type", "index"],
       "title": "PageSelector",
+      "type": "object"
+    },
+    "PassageLocator": {
+      "additionalProperties": false,
+      "description": "Where a cited passage sits, DERIVED on read from the parse (never stored; #201).\n\nThe UI shows `p. 2 ¶3 · Introduction`; `passage_key` is only a display key that numbers\n\"the same passage\" within one answer, so it is never kept on a user row.",
+      "properties": {
+        "passage_key": {
+          "type": "string"
+        },
+        "page_index": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "para_index": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "section_heading": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["passage_key", "page_index", "para_index", "section_heading"],
+      "title": "PassageLocator",
       "type": "object"
     },
     "RunSummary": {
@@ -846,7 +1111,7 @@
           "type": "string"
         },
         "kind": {
-          "enum": ["explain", "ask"],
+          "enum": ["explain", "ask", "diagram"],
           "type": "string"
         },
         "title": {
@@ -873,6 +1138,20 @@
         "message_count": {
           "minimum": 0,
           "type": "integer"
+        },
+        "ask": {
+          "type": "string"
+        },
+        "last_status": {
+          "anyOf": [
+            {
+              "enum": ["streaming", "complete", "partial", "error", "aborted"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -882,17 +1161,19 @@
         "origin_anchor",
         "created_at",
         "updated_at",
-        "message_count"
+        "message_count",
+        "ask",
+        "last_status"
       ],
       "title": "Thread",
       "type": "object"
     },
     "ThreadCreate": {
       "additionalProperties": false,
-      "description": "`POST /papers/{id}/threads`. `anchor` is required for `explain`.",
+      "description": "`POST /papers/{id}/threads`. `anchor` is required for `explain` and `diagram`; a diagram's\ndefault question is `DIAGRAM_QUESTION`.",
       "properties": {
         "kind": {
-          "enum": ["explain", "ask"],
+          "enum": ["explain", "ask", "diagram"],
           "type": "string"
         },
         "anchor": {

@@ -4,7 +4,7 @@
  */
 import { join } from 'node:path';
 
-import type { Page, Request } from '@playwright/test';
+import type { Locator, Page, Request } from '@playwright/test';
 
 import { register, upload, waitParsed } from '../s4/support';
 
@@ -42,6 +42,7 @@ export interface WireNode {
   readonly y: number;
   readonly w: number;
   readonly h: number;
+  readonly title: string | null;
   readonly body: string;
   readonly version: number;
   readonly source_anchor: { readonly id: string } | null;
@@ -52,6 +53,8 @@ export interface WireEdge {
   readonly to_node_id: string;
   readonly kind: string;
   readonly label: string | null;
+  readonly from_port?: string | null;
+  readonly to_port?: string | null;
 }
 export interface WireBoard {
   readonly board: {
@@ -97,6 +100,20 @@ export function recordApi(page: Page, apiUrl: string): string[] {
   return seen;
 }
 
+/**
+ * A board tool by name (#214): from the bar when it is there, else from "More board tools", which
+ * holds Frame selected cards, Remove frame and Delete everywhere, and Select and the zoom on a phone.
+ */
+export async function boardTool(page: Page, name: string): Promise<Locator> {
+  const bar = page.getByRole('toolbar', { name: 'Board tools' });
+  const direct = bar.getByRole('button', { name, exact: true });
+  if ((await direct.count()) > 0) return direct.first();
+  await bar.getByRole('button', { name: 'More board tools' }).click();
+  return page
+    .getByRole('group', { name: 'More board tools' })
+    .getByRole('button', { name, exact: true });
+}
+
 export async function tokenInit(page: Page, token: string): Promise<void> {
   await page.addInitScript((t) => {
     try {
@@ -117,8 +134,10 @@ export async function clickEdge(page: Page): Promise<void> {
     const m = path?.getScreenCTM() ?? null;
     if (path === null || m === null) return null;
     const total = path.getTotalLength();
-    for (let f = 0.05; f < 1; f += 0.05) {
-      const p = path.getPointAtLength(total * f);
+    // Every 1 % of its length: at a phone's 20 % zoom a thread's open stretches between cards
+    // are a few pixels long, shorter than 5 % of the line.
+    for (let k = 1; k < 100; k += 1) {
+      const p = path.getPointAtLength((total * k) / 100);
       const x = p.x * m.a + p.y * m.c + m.e;
       const y = p.x * m.b + p.y * m.d + m.f;
       if (x < 4 || y < 140 || x > window.innerWidth - 4 || y > window.innerHeight - 4) continue;

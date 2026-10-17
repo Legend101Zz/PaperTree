@@ -51,6 +51,7 @@ from dataclasses import dataclass, field
 from typing import Any, Final
 
 from papertree_agent_tools import (
+    ClaimAssessment,
     ClaimEvidence,
     PaperVocabulary,
     Verdict,
@@ -84,6 +85,7 @@ from papertree_retrieval import (
 )
 from pydantic import ValidationError
 
+from . import paragraph_shape as para_shape
 from .ir import paper_document
 from .logging import log_event
 from .schemas import AgentPassage, AgentSeed, AnchorV1
@@ -444,6 +446,185 @@ class DocumentCache:
         return indexed
 
 
+# ── passage locators: where a cited block sits (#201) ────────────────────────────────────────
+
+#: Block types a reader counts as a numbered paragraph.
+_BODY_PARAGRAPH_TYPES: Final = frozenset({"paragraph", "abstract"})
+
+
+def anchor_block_id(anchor: Mapping[str, Any]) -> str | None:
+    """The block a citation Anchor names (its ``BlockSelector``), or None."""
+    for selector in _selectors(anchor, "BlockSelector"):
+        block_id = selector.get("blockId")
+        if isinstance(block_id, str) and block_id:
+            return block_id
+    return None
+
+
+def passage_key(generation: int, block_id: str) -> str:
+    """``g{generation}:{block_id}``: equal keys mean "the same passage" within one answer.
+
+    A display key for numbering passages, never stored on a user row (a block id is only a hint,
+    AGENTS.md §4)."""
+    return f"g{generation}:{block_id}"
+
+
+_NUMBER_PREFIX: Final = re.compile(r"^\s*(?:\d+(?:\.\d+)*\.?|[IVX]+\.)\s+")
+_FIGURE_TYPES: Final = frozenset({"figure", "table"})
+
+
+def section_display_title(index: PaperIndex, block_id: str) -> str | None:
+    """The title of the block's section as a reader would say it: the leading number is dropped
+    (``1 Introduction``, ``1. Introduction`` and ``Introduction`` are one title; ``3.2.1 Scaled
+    Dot-Product`` becomes ``Scaled Dot-Product``), and a "heading" that is clearly a sentence
+    fragment (ends with a period, starts lowercase: the parser's ``scholarly works.``) is None.
+
+    A section the parser never made (a heading it typed ``paragraph``) cannot be recovered here:
+    the block then reports the previous real section."""
+    title = section_title(index, block_id)
+    if title is None:
+        return None
+    title = _NUMBER_PREFIX.sub("", title).strip()
+    if not title or title.endswith(".") or title[0].islower():
+        return None
+    return title
+
+
+def _same_column_overlap(prev: Sequence[float], cur: Sequence[float]) -> bool:
+    """``cur`` starts above where ``prev`` ends, in the same column: the typesetter's lines
+    interleave, so the parser split ONE paragraph in two (a paragraph break leaves a positive
+    gap, measured +4 to +12 pt on the corpus; a split overlaps by about a line)."""
+    shared = min(prev[2], cur[2]) - max(prev[0], cur[0])
+    narrower = min(prev[2] - prev[0], cur[2] - cur[0])
+    return narrower > 0 and shared >= 0.5 * narrower and cur[1] < prev[3] - 0.5
+
+
+def _bboxes_overlap(a: Sequence[float], b: Sequence[float]) -> bool:
+    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+
+class PassageLocators:
+    """Derives ``{passage_key, page_index, para_index, section_heading}`` for cited blocks.
+
+    ``para_index`` is the 1-based position of a block among its page's body paragraphs IN READING
+    ORDER (``PaperIndex.reading_order``: ``Page.flows`` plus parent/child descent, never
+    ``doc_order ?? 0``, AGENTS.md §4). It must be a number a reader reproduces by counting, so the
+    counted set is strict and anything doubtful is ``None`` (the UI then shows the page only).
+
+    Counted: a top-level ``body`` block typed ``paragraph`` or ``abstract``. Not counted:
+
+    * a section's heading block, and (``paragraph_shape``) a block shaped like a heading, a
+      caption or a figure label, or one overlapping a figure or table box;
+    * a CONTINUATION: the target of a ``continues_*`` relation, a block that starts like the
+      middle of a sentence, one that follows a block that ended without closing punctuation, or
+      one that starts above where the previous block of its column ends (the parser split one
+      paragraph in two: ``_same_column_overlap``);
+    * on the page holding the abstract, every block before it (front matter, e.g. the attribution
+      banner on p. 1 of Attention, which would otherwise make the abstract ¶2).
+
+    A bullet is its own paragraph. Built once per index; ``locate`` is then a dict lookup.
+    """
+
+    def __init__(self, index: PaperIndex) -> None:
+        self._index = index
+        self._para_of: dict[str, int] = {}
+        heading_ids = {s.heading_block_id for s in index.sections}
+        abstract_id = next(
+            (b for b in index.reading_order if (blk := index.block(b)) and blk.type == "abstract"),
+            None,
+        )
+        abstract = index.block(abstract_id) if abstract_id else None
+        before_abstract = abstract is not None
+        figure_boxes: dict[int, list[tuple[float, float, float, float]]] = {}
+        for block in (index.block(b) for b in index.reading_order):
+            if block is not None and block.type in _FIGURE_TYPES:
+                figure_boxes.setdefault(block.page_index, []).append(block.bbox)
+        counts: dict[int, int] = {}
+        unfinished = False  # the previous body-text block ended mid-sentence
+        prev_box: tuple[float, float, float, float] | None = None
+        prev_block: Any = None  # the last real-text block (not a heading, label or tail)
+        prev_page = -1
+        for block_id in index.reading_order:
+            block = index.block(block_id)
+            if block is None:
+                continue
+            if abstract is not None and block.page_index == abstract.page_index:
+                if block_id == abstract_id:
+                    before_abstract = False
+                elif before_abstract:
+                    continue
+            if (
+                block.type not in _BODY_PARAGRAPH_TYPES
+                or block.flow != "body"
+                or not index.is_top_level(block_id)
+            ):
+                continue
+            not_text = (
+                block_id in heading_ids
+                or para_shape.is_label_shaped(block.text)
+                or para_shape.is_heading_shaped(block.text)
+                or para_shape.is_caption_shaped(block.text)
+            )
+            if block.page_index != prev_page:
+                prev_box, prev_block, prev_page, unfinished = None, None, block.page_index, False
+            # A bullet's box includes its marker's line, so overlapping one proves nothing.
+            split_off = (
+                prev_box is not None
+                and not (prev_block is not None and prev_block.text.lstrip().startswith("\u2022"))
+                and _same_column_overlap(prev_box, block.bbox)
+            )
+            # The parser splits one abstract paragraph into several blocks (ResNet, BERT).
+            if (
+                block.type == "abstract"
+                and prev_block is not None
+                and prev_block.type == "abstract"
+            ):
+                split_off = True
+            not_text = (
+                block_id in heading_ids
+                or para_shape.is_label_shaped(block.text)
+                or para_shape.is_heading_shaped(block.text)
+                or para_shape.is_caption_shaped(block.text)
+            )
+            tail = para_shape.starts_as_continuation(block.text) or any(
+                r.type.startswith("continues") for r in index.relations_to(block_id)
+            )
+            continuation = unfinished or split_off or tail
+            if not not_text:  # a heading or label says nothing about the paragraph around it
+                unfinished = para_shape.ends_unfinished(
+                    block.text
+                )  # a tail finishes (or not) the one
+                if not tail:  # before it; it does not move where the column's text ends
+                    prev_box, prev_block = block.bbox, block
+            if (
+                not_text
+                or continuation
+                or any(
+                    _bboxes_overlap(block.bbox, box)
+                    for box in figure_boxes.get(block.page_index, ())
+                )
+            ):
+                continue
+            counts[block.page_index] = counts.get(block.page_index, 0) + 1
+            self._para_of[block_id] = counts[block.page_index]
+
+    def locate(self, anchor: Mapping[str, Any]) -> dict[str, Any] | None:
+        """The locator of the block ``anchor`` names, or None when this generation lacks it."""
+        block_id = anchor_block_id(anchor)
+        block = self._index.block(block_id) if block_id else None
+        if block_id is None or block is None:
+            return None
+        heading = section_display_title(self._index, block_id)
+        if heading is None and block.type == "abstract":
+            heading = "Abstract"
+        return {
+            "passage_key": passage_key(int(self._index.generation), block_id),
+            "page_index": block.page_index,
+            "para_index": self._para_of.get(block_id),
+            "section_heading": heading,
+        }
+
+
 # ── on done: markers, claims, grounding, citation Anchors ─────────────────────────────────────
 
 
@@ -509,25 +690,40 @@ def split_bullets(text: str) -> list[str]:
     return bullets if bullets else lines
 
 
+def claim_assessment(
+    claim: str,
+    cited_blocks: Sequence[str],
+    texts: Mapping[str, str],
+    paper: PaperVocabulary | None = None,
+) -> ClaimAssessment | None:
+    """``assess_claim`` on one claim over its cited blocks (its verdict AND its coverage), or None
+    when there is nothing to assess: an empty claim, or no cited block in ``texts``. Markers are
+    stripped first: the handle ``b3`` is not a word of the paper and would count against the
+    claim's coverage."""
+    clean = _LIST_ORDINAL.sub("", strip_markers(claim), count=1)
+    bags = {
+        block: frozenset(content_tokens(texts[block])) for block in cited_blocks if block in texts
+    }
+    if not clean or not bags:
+        return None
+    refs = frozenset().union(*(structure_refs(texts[block]) for block in bags))
+    return assess_claim(clean, ClaimEvidence(bags, (), refs), paper=paper)
+
+
 def claim_verdict(
     claim: str,
     cited_blocks: Sequence[str],
     texts: Mapping[str, str],
     paper: PaperVocabulary | None = None,
 ) -> Verdict:
-    """``assess_claim`` on one claim over its cited blocks. Markers are stripped first: the
-    handle ``b3`` is not a word of the paper and would count against the claim's coverage. A claim
-    whose cited blocks are not in ``texts`` (a block the generation lacks) has no evidence, and no
-    evidence is ``neutral`` only when the claim is empty: a claim citing nothing real is not
-    supported."""
-    clean = _LIST_ORDINAL.sub("", strip_markers(claim), count=1)
-    bags = {
-        block: frozenset(content_tokens(texts[block])) for block in cited_blocks if block in texts
-    }
-    if not clean or not bags:
+    """:func:`claim_assessment`'s verdict. A claim whose cited blocks are not in ``texts`` (a block
+    the generation lacks) has no evidence, and no evidence is ``neutral`` only when the claim is
+    empty: a claim citing nothing real is not supported."""
+    assessed = claim_assessment(claim, cited_blocks, texts, paper)
+    if assessed is None:
+        clean = _LIST_ORDINAL.sub("", strip_markers(claim), count=1)
         return "unsupported" if clean else "neutral"
-    refs = frozenset().union(*(structure_refs(texts[block]) for block in bags))
-    return assess_claim(clean, ClaimEvidence(bags, (), refs), paper=paper).verdict
+    return assessed.verdict
 
 
 def claim_supported(
@@ -584,6 +780,27 @@ class MintedCitation:
         }
 
 
+def mint_block_anchor(
+    document: IndexedDocument, block_id: str, citation_id: str
+) -> dict[str, Any] | None:
+    """The whole-block citation Anchor over ``block_id`` (contracts.md §3.4, §6), or None when the
+    contract would refuse it: a record ``anchor-v1.schema.json`` / ``AnchorV1`` refuses is never
+    stored. Checked on its JSON, the wire form (strict pydantic takes a JSON array as a tuple, a
+    Python list not). Shared by an answer's citations and a diagram part's quote.
+
+    Raises:
+        KeyError: ``block_id`` is not in ``document`` (the caller checks first).
+    """
+    anchor: dict[str, Any] = dict(
+        capture_citation(document, block_id, citation_id=citation_id, at=now_wire())
+    )
+    try:
+        AnchorV1.model_validate_json(json.dumps(anchor))
+    except ValidationError:
+        return None
+    return anchor
+
+
 @dataclass
 class CitationMinter:
     """Mints citations for one run's answer. ``handles`` is the run's ``handle -> block_id``."""
@@ -620,14 +837,8 @@ class CitationMinter:
             )
             return None
         citation_id = self.new_id("cit")
-        anchor: dict[str, Any] = dict(
-            capture_citation(self.document, block_id, citation_id=citation_id, at=now_wire())
-        )
-        try:  # never store a record the contract refuses (anchor-v1.schema.json == AnchorV1),
-            # checked on its JSON: the wire form (strict pydantic takes a JSON array as a tuple,
-            # a Python list not)
-            AnchorV1.model_validate_json(json.dumps(anchor))
-        except ValidationError:
+        anchor = mint_block_anchor(self.document, block_id, citation_id)
+        if anchor is None:
             self.dropped.append(marker)
             log_event(
                 "run.citation_dropped",

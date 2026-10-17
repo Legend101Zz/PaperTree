@@ -9,10 +9,19 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { BrowserContext, Page } from '@playwright/test';
+import type { BrowserContext, Locator, Page } from '@playwright/test';
 
 import { expect, test } from '../harness/test';
-import { api, clickEdge, getBoard, recordApi, seedPaper, shotPath, tokenInit } from './support';
+import {
+  api,
+  boardTool,
+  clickEdge,
+  getBoard,
+  recordApi,
+  seedPaper,
+  shotPath,
+  tokenInit,
+} from './support';
 
 const VIEWPORTS = [
   { name: '1440', width: 1440, height: 900, mobile: false },
@@ -62,6 +71,10 @@ async function touch(page: Page, context: BrowserContext, kind: 'swipe' | 'pinch
   }
   await page.waitForTimeout(800);
 }
+
+/** A board tool that turned itself off (the zoom at its floor): `aria-disabled` or `disabled`. */
+const isOff = async (tool: Locator) =>
+  (await tool.getAttribute('aria-disabled')) === 'true' || (await tool.isDisabled());
 
 const scale = (page: Page) =>
   page.evaluate(() => {
@@ -175,9 +188,9 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
       // ── the empty state: explains how to send things; nothing was made for the reader ──
       await tokenInit(page, empty.token);
       const emptyCalls = recordApi(page, stack.apiUrl);
-      await page.goto(`/paper/${empty.paperId}/canvas`);
+      await page.goto(`/paper/${empty.paperId}/board`);
       await expect(page.getByTestId('canvas-empty')).toBeVisible();
-      await expect(page.getByTestId('canvas-empty')).toContainText('Send to canvas');
+      await expect(page.getByTestId('canvas-empty')).toContainText('Send to board');
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(vp.width);
       await page.screenshot({ path: shot(`s01-empty-${tag}.png`) });
       // Reads only (`next dev` runs effects twice, so a read can repeat); not one write.
@@ -185,21 +198,33 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
       expect((await getBoard(stack.apiUrl, empty.token, empty.paperId)).board).toBeNull();
 
       // ── the loading skeleton and the failure state ──
+      // Only the API's board read (`GET {api}/papers/<id>/board`): since #214 the page is
+      // /paper/<id>/board too, and a bare '**/board' would also hold or abort its navigation.
+      const apiOrigin = new URL(stack.apiUrl).origin;
+      const boardRead = (url: URL) => url.origin === apiOrigin && url.pathname.endsWith('/board');
       const slow = await context.newPage();
       await tokenInit(slow, full.token);
-      await slow.route('**/board', async (route) => {
+      let held = 0;
+      await slow.route(boardRead, async (route) => {
+        held += 1;
         await new Promise((done) => setTimeout(done, 2500));
         await route.continue();
       });
-      await slow.goto(`/paper/${full.paperId}/canvas`);
-      await expect(slow.getByRole('status', { name: 'Loading your canvas' })).toBeVisible();
+      await slow.goto(`/paper/${full.paperId}/board`);
+      await expect(slow.getByRole('status', { name: 'Loading your board' })).toBeVisible();
+      expect(held, 'the board read was the request held').toBeGreaterThan(0);
       await slow.screenshot({ path: shot(`s02-loading-${tag}.png`) });
       await slow.close();
       const broken = await context.newPage();
       await tokenInit(broken, full.token);
-      await broken.route('**/board', (route) => route.abort());
-      await broken.goto(`/paper/${full.paperId}/canvas`);
+      let aborted = 0;
+      await broken.route(boardRead, (route) => {
+        aborted += 1;
+        return route.abort();
+      });
+      await broken.goto(`/paper/${full.paperId}/board`);
       await expect(broken.getByRole('heading', { name: /didn.t load/ })).toBeVisible();
+      expect(aborted, 'the board read was the request aborted').toBeGreaterThan(0);
       await expect(broken.getByRole('button', { name: 'Try again' })).toBeVisible();
       expect(await broken.locator('body').innerText()).not.toMatch(/\{|ppr_|brd_|NetworkError/);
       await broken.screenshot({ path: shot(`s03-error-${tag}.png`) });
@@ -208,44 +233,57 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
       // ── a populated board ──
       const fullPage = await context.newPage();
       await tokenInit(fullPage, full.token);
-      await fullPage.goto(`/paper/${full.paperId}/canvas`);
+      await fullPage.goto(`/paper/${full.paperId}/board`);
       await expect(fullPage.locator('.react-flow__node')).toHaveCount(6);
       await expect(fullPage.getByTestId('edge-label')).toHaveText('supports');
       expect(await fullPage.evaluate(() => document.documentElement.scrollWidth)).toBe(vp.width);
       await fullPage.waitForTimeout(600);
       await fullPage.screenshot({ path: shot(`s04-board-${tag}.png`) });
 
-      // the toolbar fits, every control is a >= 40 px target, and nothing overlaps it
-      const tools = await fullPage
-        .getByRole('toolbar', { name: 'Canvas tools' })
-        .locator('button')
-        .evaluateAll((els) =>
+      // the toolbar fits on one row, every control is a >= 40 px target, and nothing overlaps it
+      const bar = fullPage.getByRole('toolbar', { name: 'Board tools' });
+      const boxes = (root: typeof bar) =>
+        root.locator('button').evaluateAll((els) =>
           els.map((e) => {
             const r = e.getBoundingClientRect();
-            return { w: r.width, h: r.height, right: r.right, left: r.left };
+            return { w: r.width, h: r.height, right: r.right, left: r.left, top: r.top };
           }),
         );
-      expect(tools).toHaveLength(7); // Add note, Select area, Group, Ungroup, Link, Delete, Fit all
+      const tools = await boxes(bar);
+      // #214: Select, Add note, Add frame, Thread, Fit all, Zoom out, Zoom in, More board tools; on
+      // a phone Select and the zoom are in More, so the bar is one row beside "Board". #215 adds
+      // Undo and Redo after Thread (in More on a phone).
+      expect(tools).toHaveLength(vp.mobile ? 5 : 10);
       for (const t of tools) {
         expect(t.h).toBeGreaterThanOrEqual(40);
         expect(t.w).toBeGreaterThanOrEqual(40);
         expect(t.right).toBeLessThanOrEqual(vp.width);
         expect(t.left).toBeGreaterThanOrEqual(0);
+        expect(t.top).toBe(tools[0]!.top);
       }
-      const controls = await fullPage
-        .locator('.react-flow__controls-button')
-        .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
-      for (const h of controls) expect(h).toBeGreaterThanOrEqual(40);
+      // v0.1's controls (the zoom, Group, Ungroup, Delete) are still >= 40 px targets, in More.
+      await bar.getByRole('button', { name: 'More board tools' }).click();
+      const menu = await boxes(fullPage.getByRole('group', { name: 'More board tools' }));
+      expect(menu).toHaveLength(vp.mobile ? 8 : 3);
+      for (const m of menu) expect(m.h).toBeGreaterThanOrEqual(40);
+      await fullPage.keyboard.press('Escape');
 
       // the kind picker: pick two notes with the area tool, then Link
       if (vp.mobile) {
-        // Zoom out with the visible control (a 40 px button) so both notes are in reach.
-        for (let i = 0; i < 2; i += 1) {
-          await fullPage.locator('.react-flow__controls-zoomout').tap();
+        // Zoom out with the visible control (a 40 px button) so both notes are in reach, all the
+        // way to the 20 % floor: two taps reach it on one font stack and not on another, and the
+        // floor is where cards sit closest together (#212: Linux CI stopped there, macOS did not).
+        // The control turns itself off at the floor (#214: in More on a phone).
+        for (let i = 0; i < 8; i += 1) {
+          const zoomOut = await boardTool(fullPage, 'Zoom out');
+          if (await isOff(zoomOut)) break;
+          await zoomOut.tap();
           await fullPage.waitForTimeout(300);
         }
+        await fullPage.keyboard.press('Escape');
+        expect(await scale(fullPage)).toBeCloseTo(0.2, 2);
       }
-      await fullPage.getByRole('button', { name: 'Select area' }).click();
+      await (await boardTool(fullPage, 'Select')).click();
       const pair = await Promise.all(
         [explanationId, ids[2]!].map((id) =>
           fullPage.locator(`.react-flow__node[data-id="${id}"]`).boundingBox(),
@@ -257,27 +295,62 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
       const y0 = Math.min(p1!.y, p2!.y) - 10;
       const x1 = Math.max(p1!.x + p1!.width, p2!.x + p2!.width) + 10;
       const y1 = Math.max(p1!.y + p1!.height, p2!.y + p2!.height) + 10;
+      // The drag must start on the empty board, or it is a pan or a thread and selects nothing.
+      expect(
+        await fullPage.evaluate(
+          ([x, y]) => document.elementFromPoint(x!, y!)?.classList.contains('react-flow__pane'),
+          [x0, y0],
+        ),
+        'the Select-area drag starts on the empty board',
+      ).toBe(true);
       await fullPage.mouse.move(x0, y0);
       await fullPage.mouse.down();
       await fullPage.mouse.move((x0 + x1) / 2, (y0 + y1) / 2, { steps: 6 });
       await fullPage.mouse.move(x1, y1, { steps: 6 });
       await fullPage.mouse.up();
-      await expect(fullPage.getByRole('button', { name: 'Link' })).toBeEnabled();
-      await fullPage.getByRole('button', { name: 'Link' }).click();
-      const dialog = fullPage.getByRole('dialog', { name: 'How are these connected?' });
+      // #214: Thread (L) with two cards selected links the first to the second (v0.1's Link).
+      await expect(fullPage.getByRole('button', { name: 'Thread', exact: true })).toBeEnabled();
+      await fullPage.getByRole('button', { name: 'Thread', exact: true }).click();
+      // #213: the "Link as" picker (no longer a modal dialog).
+      const dialog = fullPage.getByRole('group', { name: /link as/i });
       await expect(dialog).toBeVisible();
       expect(await fullPage.evaluate(() => document.documentElement.scrollWidth)).toBe(vp.width);
       await fullPage.screenshot({ path: shot(`s05-picker-${tag}.png`) });
       const kinds = await dialog
-        .locator('.pt-cv-kind')
+        .getByRole('option')
         .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
       expect(kinds).toHaveLength(7);
       for (const h of kinds) expect(h).toBeGreaterThanOrEqual(40);
+      // #213 changes v0.1's "Escape cancels" on purpose: Escape keeps a PLAIN LINK. The new
+      // thread's Undo takes it back, so the board on screen and the next pass are one thread again.
       await fullPage.keyboard.press('Escape');
       await expect(dialog).toBeHidden();
-      await fullPage.getByRole('button', { name: 'Select area' }).click();
+      const plainLink = async () =>
+        (await getBoard(stack.apiUrl, full.token, full.paperId)).edges.find(
+          (e) => e.from_node_id === explanationId && e.to_node_id === ids[2],
+        );
+      await expect.poll(async () => (await plainLink())?.kind).toBe('relates');
+      const undoLink = fullPage.getByTestId('undo-toast');
+      await expect(undoLink).toContainText('Linked as a plain link.');
+      await undoLink.getByRole('button', { name: 'Undo' }).click();
+      await expect.poll(plainLink).toBeUndefined();
+      await expect(fullPage.getByTestId('edge-label')).toHaveCount(1);
+      await (await boardTool(fullPage, 'Select')).click();
 
-      // a selected edge shows its editor
+      // a selected edge shows its editor. First clear the two cards picked above on the empty
+      // board: xyflow's selection rectangle over them, with a phone's grown in-card targets at the
+      // 20 % floor, covers every point of the thread's line otherwise (#214).
+      const stageBox = (await fullPage.getByTestId('canvas-stage').boundingBox())!;
+      const blank = { x: stageBox.x + 12, y: stageBox.y + 12 };
+      expect(
+        await fullPage.evaluate(
+          ([x, y]) => document.elementFromPoint(x!, y!)?.classList.contains('react-flow__pane'),
+          [blank.x, blank.y],
+        ),
+        'the deselecting click lands on the empty board',
+      ).toBe(true);
+      await fullPage.mouse.click(blank.x, blank.y);
+      await expect(fullPage.locator('.react-flow__node.selected')).toHaveCount(0);
       await clickEdge(fullPage);
       await expect(fullPage.getByRole('group', { name: 'Selected link' })).toBeVisible();
       await fullPage.screenshot({ path: shot(`s06-selected-${tag}.png`) });
@@ -288,11 +361,18 @@ test('the canvas screens, both sizes, both themes', async ({ browser, stack }, t
         await expect(fullPage.locator('.react-flow__node')).toHaveCount(6);
         await fullPage.waitForTimeout(800);
         const calls = recordApi(fullPage, stack.apiUrl);
-        // Two fingers must land on empty pane: zoom out with the visible controls first.
+        // Two fingers must land on empty pane: zoom out with the visible controls first, up to
+        // twice. The control turns itself off at the 20 % floor, and the board can reopen there:
+        // the tap on the empty board above ended a (still) pan, which saves the view it ended on.
         for (let i = 0; i < 2; i += 1) {
-          await fullPage.locator('.react-flow__controls-zoomout').tap();
+          const zoomOut = await boardTool(fullPage, 'Zoom out');
+          if (await isOff(zoomOut)) break;
+          await zoomOut.tap();
           await fullPage.waitForTimeout(300);
         }
+        const menu = fullPage.getByRole('group', { name: 'More board tools' });
+        if (await menu.isVisible()) await fullPage.keyboard.press('Escape');
+        await expect(menu).toBeHidden();
         const s0 = await scale(fullPage);
         await touch(fullPage, context, 'pinch');
         const s1 = await scale(fullPage);

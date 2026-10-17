@@ -1,0 +1,185 @@
+"""S6a (#211): the board's v0.2 wire - new card kinds, typed pins, notebook counts, frames.
+
+The v0.1 contract stays in ``test_s7_canvas_api.py``; this file holds only what v0.2 adds.
+"""
+
+from __future__ import annotations
+
+import subprocess
+import time
+from pathlib import Path
+from typing import Any
+
+from api_support import Harness, assert_envelope, auth, harness, register, seed_paper
+
+SLUG = "resnet-cvpr-2col"
+PIN_SENTENCE = "that pin does not take that thread"
+
+
+def _node(node_id: str, kind: str = "note", **fields: Any) -> dict[str, Any]:
+    return {"node_id": node_id, "kind": kind, "x": 10, "y": 20, "w": 240, "h": 120, **fields}
+
+
+def _page(h: Harness, token: str, paper_id: str, page_id: str = "pg_real0000001") -> str:
+    made = h.client.post(
+        f"/papers/{paper_id}/notebook/pages", headers=auth(token), json={"page_id": page_id}
+    )
+    assert made.status_code == 201, made.text
+    return page_id
+
+
+def _send(h: Harness, token: str, paper_id: str, node: dict[str, Any]) -> Any:
+    return h.client.post(f"/papers/{paper_id}/board/nodes", headers=auth(token), json=node)
+
+
+def test_new_kinds_round_trip_and_the_board_returns_them(tmp_path: Path) -> None:
+    with harness(tmp_path) as h:
+        token = register(h.client, "alice@example.com")
+        paper_id = seed_paper(h.settings, h.client, token, SLUG)
+        page = _page(h, token, paper_id)
+        sent = [
+            _node("cn_frame001", "group", title="Why attention only", w=600, h=400),
+            _node("cn_quest001", "question", body="Why scale by sqrt(d)?"),
+            _node("cn_notebk01", "notebook", source_page_id=page),
+            _node("cn_diagrm01", "diagram", source_diagram_id="dg_unchecked"),
+        ]
+        for node in sent:
+            made = _send(h, token, paper_id, node)
+            assert made.status_code == 201, made.text
+        board = h.client.get(f"/papers/{paper_id}/board", headers=auth(token)).json()
+        by_id = {n["node_id"]: n for n in board["nodes"]}
+        assert [by_id[n["node_id"]]["kind"] for n in sent] == [n["kind"] for n in sent]
+        assert by_id["cn_notebk01"]["source_page_id"] == page
+        assert by_id["cn_notebk01"]["counts"] == {
+            "quotes": 0, "stickies": 0, "text": 0, "shapes": 0, "strokes": 0,
+        }  # fmt: skip
+        assert by_id["cn_diagrm01"]["source_diagram_id"] == "dg_unchecked"
+        assert by_id["cn_quest001"]["counts"] is None
+        # A frame is a group: empty, titled, and moving it touches no other row.
+        patched = h.client.patch(
+            f"/boards/{board['board']['board_id']}/nodes/cn_frame001",
+            headers=auth(token),
+            json={"version": 1, "x": 99},
+        )
+        assert patched.status_code == 200 and patched.json()["x"] == 99
+        assert all(
+            n["version"] == 1 for n in h.client.get(
+                f"/papers/{paper_id}/board", headers=auth(token)
+            ).json()["nodes"] if n["node_id"] != "cn_frame001"
+        )  # fmt: skip
+
+
+def test_notebook_and_diagram_cards_need_their_pointer(tmp_path: Path) -> None:
+    with harness(tmp_path) as h:
+        token = register(h.client, "alice@example.com")
+        paper_id = seed_paper(h.settings, h.client, token, SLUG)
+        for kind in ("notebook", "diagram"):
+            assert_envelope(
+                _send(h, token, paper_id, _node("cn_nopointer", kind)), 422, "validation_failed"
+            )
+        assert_envelope(
+            _send(h, token, paper_id, _node("cn_stray0001", "note", source_page_id="pg_1")),
+            422,
+            "validation_failed",
+        )
+
+
+def test_pins_are_checked_and_ports_come_back(tmp_path: Path) -> None:
+    with harness(tmp_path) as h:
+        token = register(h.client, "alice@example.com")
+        paper_id = seed_paper(h.settings, h.client, token, SLUG)
+        board_id = ""
+        for node in (_node("cn_note00001"), _node("cn_quest0001", "question")):
+            board_id = _send(h, token, paper_id, node).json()["board"]["board_id"]
+        url = f"/boards/{board_id}/edges"
+
+        def edge(edge_id: str, a: str, b: str, **ports: Any) -> Any:
+            body = {"edge_id": edge_id, "from_node_id": a, "to_node_id": b, "kind": "supports"}
+            return h.client.post(url, headers=auth(token), json={**body, **ports})
+
+        ok = edge("ce_ok000001", "cn_note00001", "cn_quest0001", from_port="claim_out",
+                  to_port="evidence_in")  # fmt: skip
+        assert ok.status_code == 201, ok.text
+        assert (ok.json()["from_port"], ok.json()["to_port"]) == ("claim_out", "evidence_in")
+        assert ok.json()["created_at"]
+        # A question offers no out-pin; a note takes no question pin.
+        no_out = edge("ce_bad00001", "cn_quest0001", "cn_note00001", from_port="claim_out")
+        assert_envelope(no_out, 422, "validation_failed")
+        assert PIN_SENTENCE in no_out.json()["detail"]
+        assert_envelope(
+            edge("ce_bad00002", "cn_note00001", "cn_note00001x", to_port="evidence_in"),
+            422,
+            "validation_failed",
+        )
+        no_in = edge("ce_bad00003", "cn_quest0001", "cn_note00001", to_port="question_in")
+        assert PIN_SENTENCE in no_in.json()["detail"]
+        # An unknown pin name is refused by the schema; no ports at all stays legal.
+        assert (
+            edge("ce_bad00004", "cn_note00001", "cn_quest0001", to_port="bogus").status_code == 422
+        )
+        plain = edge("ce_plain001", "cn_quest0001", "cn_note00001")
+        assert plain.status_code == 201 and plain.json()["from_port"] is None
+
+
+def test_a_500_card_board_answers_in_one_request(tmp_path: Path) -> None:
+    with harness(tmp_path) as h:
+        token = register(h.client, "alice@example.com")
+        paper_id = seed_paper(h.settings, h.client, token, SLUG)
+        page = _page(h, token, paper_id)
+        for i in range(500):
+            kind = "notebook" if i % 50 == 0 else "note"
+            extra = {"source_page_id": page} if kind == "notebook" else {}
+            made = _send(h, token, paper_id, _node(f"cn_bulk{i:05d}", kind, x=i, **extra))
+            assert made.status_code == 201
+        started = time.perf_counter()
+        board = h.client.get(f"/papers/{paper_id}/board", headers=auth(token))
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        load = subprocess.run(["uptime"], capture_output=True, text=True, check=False).stdout
+        print(f"500-card board GET: {elapsed_ms:.0f} ms; {load.strip()}")
+        assert board.status_code == 200 and len(board.json()["nodes"]) == 500
+        assert elapsed_ms < 1000
+
+
+def test_a_stale_version_409_carries_the_notebook_counts(tmp_path: Path) -> None:
+    with harness(tmp_path) as h:
+        token = register(h.client, "alice@example.com")
+        paper_id = seed_paper(h.settings, h.client, token, SLUG)
+        page = _page(h, token, paper_id)
+        made = _send(h, token, paper_id, _node("cn_notebk02", "notebook", source_page_id=page))
+        board_id = made.json()["board"]["board_id"]
+        url = f"/boards/{board_id}/nodes/cn_notebk02"
+        assert (
+            h.client.patch(url, headers=auth(token), json={"version": 1, "x": 5}).status_code == 200
+        )
+        stale = h.client.patch(url, headers=auth(token), json={"version": 1, "x": 6})
+        assert stale.status_code == 409 and stale.json()["code"] == "stale_version"
+        assert stale.json()["current"]["counts"] == {
+            "quotes": 0, "stickies": 0, "text": 0, "shapes": 0, "strokes": 0,
+        }  # fmt: skip
+
+
+def test_notebook_pages_over_http_404_for_strangers_and_422_on_delete_while_carded(
+    tmp_path: Path,
+) -> None:
+    with harness(tmp_path) as h:
+        alice = register(h.client, "alice@example.com")
+        bob = register(h.client, "bob@example.com")
+        paper_id = seed_paper(h.settings, h.client, alice, SLUG)
+        bob_paper = seed_paper(h.settings, h.client, bob, "neural-odes-mathheavy")
+        mine = _page(h, alice, paper_id, "pg_alice000001")
+        theirs = _page(h, bob, bob_paper, "pg_bob00000001")
+        assert_envelope(
+            _send(h, alice, paper_id, _node("cn_nbx00001", "notebook", source_page_id=theirs)),
+            404,
+            "not_found",
+        )
+        made = _send(h, alice, paper_id, _node("cn_nbx00002", "notebook", source_page_id=mine))
+        assert made.status_code == 201
+        url = f"/notebook/pages/{mine}"
+        refused = h.client.delete(url, headers=auth(alice))
+        assert_envelope(refused, 422, "validation_failed")
+        assert h.client.get(url, headers=auth(alice)).status_code == 200
+        board_id = made.json()["board"]["board_id"]
+        gone = h.client.delete(f"/boards/{board_id}/nodes/cn_nbx00002", headers=auth(alice))
+        assert gone.status_code == 204
+        assert h.client.delete(url, headers=auth(alice)).status_code == 204

@@ -126,6 +126,7 @@ function usePress(onPress: () => void, disabled: boolean): PressHandlers {
 // IconButton
 // ────────────────────────────────────────────────────────────────────────────────────────────────
 
+/** Props for `IconButton`. */
 export interface IconButtonProps {
   /**
    * The accessible name. REQUIRED — the toolbar in §19.1 is seven glyphs with no labels, so an
@@ -145,6 +146,10 @@ export interface IconButtonProps {
   readonly style?: CSSProperties;
 }
 
+/**
+ * A square button that shows only an icon, named by `label` for assistive tech. It meets the 44 px
+ * touch minimum and fires `onPress` once per press, from a pointer or from Enter/Space.
+ */
 export function IconButton({
   label,
   icon,
@@ -197,6 +202,7 @@ export function IconButton({
 // Panel
 // ────────────────────────────────────────────────────────────────────────────────────────────────
 
+/** Props for `Panel`. */
 export interface PanelProps {
   readonly title: string;
   readonly children: ReactNode;
@@ -270,11 +276,13 @@ export function Panel({
 // SegmentedControl
 // ────────────────────────────────────────────────────────────────────────────────────────────────
 
+/** One choice in a `SegmentedControl`. */
 export interface SegmentedOption<V extends string> {
   readonly value: V;
   readonly label: ReactNode;
 }
 
+/** Props for `SegmentedControl`. */
 export interface SegmentedControlProps<V extends string> {
   /** Accessible name for the group, e.g. "Reading mode". */
   readonly label: string;
@@ -410,12 +418,14 @@ function Segment<V extends string>({
 // Tabs
 // ────────────────────────────────────────────────────────────────────────────────────────────────
 
+/** One tab in `Tabs`: its id, its label, and the panel it shows. */
 export interface TabItem {
   readonly id: string;
   readonly label: ReactNode;
   readonly content: ReactNode;
 }
 
+/** Props for `Tabs`. */
 export interface TabsProps {
   /** Accessible name for the tab list, e.g. "Navigator". */
   readonly label: string;
@@ -581,6 +591,7 @@ function Tab({ tab, idPrefix, selected, tabStop, onSelect, register }: TabProps)
 // Sheet
 // ────────────────────────────────────────────────────────────────────────────────────────────────
 
+/** How far a `Sheet` is pulled up: a peek strip, half the viewport, or full height. */
 export type SheetDetent = 'peek' | 'half' | 'full';
 
 /** §19.6's peek detent, in CSS px. Exported so the shell reserves the same number. */
@@ -616,6 +627,7 @@ const FOCUSABLE_SELECTOR = [
   '[contenteditable="true"]',
 ].join(',');
 
+/** Props for `Sheet`. */
 export interface SheetProps {
   readonly open: boolean;
   readonly title: string;
@@ -629,6 +641,11 @@ export interface SheetProps {
    */
   readonly trapFocus?: boolean;
   readonly className?: string;
+  /** Controls in the header between the title and the close button (the phone explain sheet's
+   * thread menu and Summary, frame 08b). */
+  readonly actions?: ReactNode;
+  /** The close button's name. Default `Dismiss`. */
+  readonly closeLabel?: string;
 }
 
 /**
@@ -656,6 +673,8 @@ export function Sheet({
   children,
   trapFocus,
   className,
+  actions,
+  closeLabel = 'Dismiss',
 }: SheetProps): ReactNode {
   const titleId = useId();
   const sheetRef = useRef<HTMLElement | null>(null);
@@ -845,7 +864,8 @@ export function Sheet({
           <h2 className="pt-sheet__title" id={titleId}>
             {title}
           </h2>
-          <IconButton label="Dismiss" icon="✕" onPress={onDismiss} className="pt-sheet__close" />
+          {actions}
+          <IconButton label={closeLabel} icon="✕" onPress={onDismiss} className="pt-sheet__close" />
         </header>
 
         {/* The sheet's own content scrolls; the document behind it does not. */}

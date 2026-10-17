@@ -30,10 +30,10 @@ export class PdfEngineError extends Error {
 
 export function classifyPdfFailure(cause: unknown): PdfFailureKind {
   if (cause instanceof PdfEngineError) return 'engine';
-  const name = typeof cause === 'object' && cause !== null ? (cause as { name?: unknown }).name : undefined;
+  const name =
+    typeof cause === 'object' && cause !== null ? (cause as { name?: unknown }).name : undefined;
   if (typeof name === 'string' && DOCUMENT_EXCEPTIONS.has(name)) return 'document';
-  const message =
-    cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : '';
+  const message = cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : '';
   if (ENGINE_MESSAGE.test(message)) return 'engine';
   return 'document';
 }

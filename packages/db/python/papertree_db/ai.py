@@ -13,7 +13,8 @@ the run and usage signatures; the routes need more reads and writes than that, s
 (owner-first, like everything else): ``list_messages``, ``get_message``, ``delete_thread``,
 ``delete_messages``, ``put_citations``, ``list_citations``, ``set_agent_state``,
 ``live_run_for_thread``, ``get_run``, ``latest_run``, ``extend_run``, ``assign_run_handles``,
-``run_handles``, ``thread_handles``, ``record_tool_request`` and ``put_summary``.
+``run_handles``, ``thread_handles``, ``record_tool_request`` and ``put_summary``; and for a diagram
+answer (0011, #216) ``put_diagram_part``, ``list_diagram_parts`` and ``set_message_diagram``.
 ``tests/test_contract_signatures.py`` pins the §1.1 ones and the S0 proposals; ``test_ai.py`` pins
 the behaviour of all of them.
 
@@ -48,8 +49,15 @@ if TYPE_CHECKING:
 else:
     _Base = object
 
-THREAD_KINDS: Final = frozenset({"explain", "ask"})
-RUN_KINDS: Final = frozenset({"explain", "ask", "summary"})
+THREAD_KINDS: Final = frozenset({"explain", "ask", "diagram"})
+#: Every kind 0011's CHECK allows. ``topic`` (the topic Flash run, #242) is not built yet, but a
+#: row of it is already recorded, reserved for (``RUN_RESERVE_USD``) and counted in ``GET /usage``,
+#: so the day one exists it cannot break the spend cap or the usage read.
+RUN_KINDS: Final = frozenset({"explain", "ask", "summary", "diagram", "topic"})
+#: ``ai_diagram_parts.part_kind`` (0011): how the plate draws a part (DESIGN.md §1 "Diagrams").
+DIAGRAM_PART_KINDS: Final = frozenset({"input", "step", "output", "concept"})
+#: A plate holds at most twelve parts, lettered A-L in arrival order.
+MAX_DIAGRAM_PARTS: Final = 12
 MESSAGE_ROLES: Final = frozenset({"user", "assistant"})
 MESSAGE_STATUSES: Final = frozenset({"streaming", "complete", "partial", "error", "aborted"})
 #: ``finish_run`` moves a run OUT of ``running`` into one of these; the token dies with it.
@@ -177,7 +185,7 @@ class UsageTotals:
     input_tokens: int
     output_tokens: int
     cost_usd_est: float
-    #: ``explain``, ``ask`` and ``summary``, always all three.
+    #: Every kind in :data:`RUN_KINDS`, always all of them.
     by_kind: Mapping[str, UsageBucket]
 
 
@@ -197,6 +205,67 @@ class CitationIn:
     page_index: int
     #: ``verify_grounding``'s verdict over the cited block; None when it could not run.
     supported: bool | None
+
+
+@dataclass(frozen=True, slots=True)
+class DiagramPartIn:
+    """One part of a diagram answer, as the API resolved it (``ai_diagram_parts``, 0011).
+
+    The three states a part can be in (DESIGN.md §4: cited, not verified or inferred, never
+    silently uncited): ``quote`` with an ``anchor`` and ``supported`` True (found verbatim) or
+    False (found with differences); ``quote`` with no anchor and ``supported`` False (found
+    nowhere); no ``quote`` at all and every cite field None (inferred).
+    """
+
+    part_id: str
+    #: 0-11; the letter is ``A`` + ordinal (arrival order, assigned by the agent).
+    ordinal: int
+    label: str
+    text: str
+    #: One of :data:`DIAGRAM_PART_KINDS`.
+    kind: str
+    #: Letters of EARLIER parts with an edge into this one.
+    after: Sequence[str]
+    #: One label (or None) per ``after`` entry.
+    edge: Sequence[str | None]
+    quote: str | None
+    #: The server-minted Anchor v1 record of the block the quote was found in; None if none.
+    anchor: Mapping[str, Any] | None
+    supported: bool | None
+    generation: int
+    #: A HINT only, never a foreign key (AGENTS.md §4).
+    block_id: str | None
+    page_index: int | None
+
+    @property
+    def letter(self) -> str:
+        """The part's letter, ``A`` for ordinal 0."""
+        return chr(ord("A") + self.ordinal)
+
+
+def _diagram_part_problem(part: DiagramPartIn) -> str | None:
+    """Why ``part`` cannot be stored, or None; the same rules as 0011's CHECKs, said in words."""
+    if not 0 <= part.ordinal < MAX_DIAGRAM_PARTS:
+        return f"ordinal={part.ordinal} is outside 0..{MAX_DIAGRAM_PARTS - 1}"
+    if part.kind not in DIAGRAM_PART_KINDS:
+        return f"kind={part.kind!r} is not one of {sorted(DIAGRAM_PART_KINDS)}"
+    if not part.label.strip():
+        return "a part needs a label"
+    if any(not (len(a) == 1 and "A" <= a < part.letter) for a in part.after):
+        return f"after={list(part.after)!r} must name earlier letters only"
+    if len(part.edge) != len(part.after):
+        return "edge needs one label (or None) per after entry"
+    if (part.quote is None) != (part.supported is None):
+        return "a quote and its supported flag go together"
+    if part.anchor is not None and part.quote is None:
+        return "an anchor needs the quote it was resolved from"
+    if part.supported and part.anchor is None:
+        return "a supported part needs an anchor"
+    if (part.anchor is None) != (part.block_id is None) or (part.anchor is None) != (
+        part.page_index is None
+    ):
+        return "block_id and page_index go with the anchor"
+    return None
 
 
 # ── the mixin ────────────────────────────────────────────────────────────────────────────────
@@ -340,7 +409,8 @@ class AiMixin(_Base):
                 )
 
     def list_threads(self, owner: OwnerId, paper_id: PaperId) -> list[Row]:
-        """This owner's threads on a paper, most recently active first, with ``message_count``."""
+        """This owner's threads on a paper, most recently active first (the order canvas code relies
+        on; do not change it), with ``message_count``, ``first_ask`` and ``last_status``."""
         owner_id = self._resolve(owner)
         return self._all(
             _THREAD_SELECT + " WHERE t.owner_id = ? AND t.paper_id = ? "
@@ -368,21 +438,18 @@ class AiMixin(_Base):
 
     def list_messages(self, owner: OwnerId, thread_id: str) -> list[Row]:
         owner_id = self._resolve(owner)
-        return self._all(
-            "SELECT message_id, thread_id, ordinal, role, generation, content, status, "
-            "error_code, run_id, created_at, completed_at FROM ai_messages "
-            "WHERE owner_id = ? AND thread_id = ? ORDER BY ordinal",
+        rows = self._all(
+            _MESSAGE_SELECT + " WHERE owner_id = ? AND thread_id = ? ORDER BY ordinal",
             (owner_id, thread_id),
         )
+        return [_with_diagram(row) for row in rows]
 
     def get_message(self, owner: OwnerId, message_id: str) -> Row | None:
         owner_id = self._resolve(owner)
-        return self._one(
-            "SELECT message_id, thread_id, ordinal, role, generation, content, status, "
-            "error_code, run_id, created_at, completed_at FROM ai_messages "
-            "WHERE owner_id = ? AND message_id = ?",
-            (owner_id, message_id),
+        row = self._one(
+            _MESSAGE_SELECT + " WHERE owner_id = ? AND message_id = ?", (owner_id, message_id)
         )
+        return None if row is None else _with_diagram(row)
 
     def delete_messages(self, owner: OwnerId, message_ids: Sequence[str]) -> int:
         """For a follow-up that failed before any SSE byte: its two messages go again."""
@@ -472,6 +539,88 @@ class AiMixin(_Base):
                 row["supported"] = None if supported is None else bool(supported)
                 out.append(row)
         return out
+
+    # ── diagram parts (0011, #216) ───────────────────────────────────────────────────────
+
+    def put_diagram_part(self, owner: OwnerId, message_id: str, part: DiagramPartIn) -> None:
+        """Stores one part of a diagram answer as it arrives, so a Stop keeps what came.
+
+        ``ValueError`` for a part 0011 would refuse (said in words, before any SQL);
+        ``AiRecordNotFound`` when the message is not this owner's.
+        """
+        owner_id = self._resolve(owner)
+        problem = _diagram_part_problem(part)
+        if problem is not None:
+            raise ValueError(problem)
+        _int_or_none("generation", part.generation)
+        _int_or_none("page_index", part.page_index)
+        anchor = None if part.anchor is None else client_json(_strip_resolution(part.anchor))
+        with self.transaction():
+            owned = self._one(
+                "SELECT message_id FROM ai_messages WHERE owner_id = ? AND message_id = ?",
+                (owner_id, message_id),
+            )
+            if owned is None:
+                raise AiRecordNotFound(f"no message {message_id}")
+            self._conn.execute(
+                "INSERT INTO ai_diagram_parts (part_id, owner_id, message_id, letter, ordinal, "
+                "label, note, part_kind, after_json, edge_json, cite_quote, anchor_json, "
+                "supported, generation, block_id, page_index) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    part.part_id,
+                    owner_id,
+                    message_id,
+                    part.letter,
+                    part.ordinal,
+                    part.label,
+                    part.text,
+                    part.kind,
+                    to_json(list(part.after)),
+                    to_json(list(part.edge)),
+                    part.quote,
+                    anchor,
+                    None if part.supported is None else int(part.supported),
+                    part.generation,
+                    part.block_id,
+                    part.page_index,
+                ),
+            )
+
+    def list_diagram_parts(self, owner: OwnerId, message_ids: Sequence[str]) -> list[Row]:
+        """Parts of the given messages, by message then letter, with ``after``, ``edge`` and
+        ``anchor`` parsed and ``supported`` a bool (or None for an inferred part)."""
+        owner_id = self._resolve(owner)
+        out: list[Row] = []
+        for message_id in message_ids:
+            for row in self._all(
+                "SELECT part_id, message_id, letter, ordinal, label, note, part_kind, after_json, "
+                "edge_json, cite_quote, anchor_json, supported, generation, block_id, page_index "
+                "FROM ai_diagram_parts WHERE owner_id = ? AND message_id = ? ORDER BY ordinal",
+                (owner_id, message_id),
+            ):
+                row["after"] = json.loads(row.pop("after_json"))
+                row["edge"] = json.loads(row.pop("edge_json"))
+                anchor = row.pop("anchor_json")
+                row["anchor"] = None if anchor is None else json.loads(anchor)
+                supported = row["supported"]
+                row["supported"] = None if supported is None else bool(supported)
+                out.append(row)
+        return out
+
+    def set_message_diagram(
+        self, owner: OwnerId, message_id: str, diagram: Mapping[str, Any] | None
+    ) -> None:
+        """``ai_messages.diagram_json``: a diagram answer's plate title and links (a JSON object),
+        or None. ``AiRecordNotFound`` when the message is not this owner's."""
+        owner_id = self._resolve(owner)
+        value = None if diagram is None else client_json(dict(diagram))
+        cursor = self._conn.execute(
+            "UPDATE ai_messages SET diagram_json = ? WHERE owner_id = ? AND message_id = ?",
+            (value, owner_id, message_id),
+        )
+        if cursor.rowcount == 0:
+            raise AiRecordNotFound(f"no message {message_id}")
 
     # ── runs ─────────────────────────────────────────────────────────────────────────────
 
@@ -800,7 +949,7 @@ class AiMixin(_Base):
             "WHERE owner_id = ? AND started_at >= ? GROUP BY kind",
             (owner_id, normalise_time(since)),
         )
-        by_kind = {kind: UsageBucket(0, 0, 0, 0.0) for kind in ("explain", "ask", "summary")}
+        by_kind = {kind: UsageBucket(0, 0, 0, 0.0) for kind in sorted(RUN_KINDS)}
         for row in rows:
             by_kind[str(row["kind"])] = UsageBucket(
                 runs=int(row["runs"]),
@@ -917,9 +1066,30 @@ class AiMixin(_Base):
 
 _THREAD_SELECT: Final = (
     "SELECT t.thread_id, t.paper_id, t.kind, t.title, t.origin_anchor_json, t.agent_state_json, "
-    "t.created_at, t.updated_at, COUNT(m.message_id) AS message_count FROM ai_threads t "
+    "t.created_at, t.updated_at, COUNT(m.message_id) AS message_count, "
+    # The thread list's `ask` and `last_status` (#201) ride on the same query as two scalar
+    # subqueries, so a list of N threads is still one statement (no N+1). The ask is bounded here;
+    # the API cuts it to 160 characters on a word boundary.
+    "(SELECT substr(f.content, 1, 1000) FROM ai_messages f WHERE f.owner_id = t.owner_id "
+    "AND f.thread_id = t.thread_id AND f.role = 'user' ORDER BY f.ordinal LIMIT 1) AS first_ask, "
+    "(SELECT l.status FROM ai_messages l WHERE l.owner_id = t.owner_id "
+    "AND l.thread_id = t.thread_id AND l.role = 'assistant' ORDER BY l.ordinal DESC LIMIT 1) "
+    "AS last_status FROM ai_threads t "
     "LEFT JOIN ai_messages m ON m.owner_id = t.owner_id AND m.thread_id = t.thread_id"
 )
+
+#: Every ``ai_messages`` column; ``diagram_json`` comes back parsed, as ``diagram``.
+_MESSAGE_SELECT: Final = (
+    "SELECT message_id, thread_id, ordinal, role, generation, content, status, error_code, run_id, "
+    "created_at, completed_at, diagram_json FROM ai_messages"
+)
+
+
+def _with_diagram(row: Row) -> Row:
+    raw = row.pop("diagram_json")
+    row["diagram"] = None if raw is None else json.loads(raw)
+    return row
+
 
 #: Every ``ai_runs`` column except ``owner_id``, ``token_sha256`` and ``datamark``.
 _RUN_SELECT: Final = (

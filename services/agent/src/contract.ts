@@ -11,6 +11,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Compile } from 'typebox/schema';
 
+import { parseTopicInput } from './topic.ts';
+
 /** The four read-only paper tools, in the order they are registered (contracts.md §3.1, §4). */
 export const TOOL_NAMES = ['get_outline', 'get_section', 'get_passage', 'search_passages'] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
@@ -67,6 +69,49 @@ function loadSchema(name: string): Record<string, unknown> {
 const requestSchema = loadSchema('run-request.schema.json');
 const requestValidator = Compile(requestSchema);
 
+/** A length bound in Unicode code points (JSON Schema's `minLength`/`maxLength` unit). */
+export interface TextBound {
+  readonly min: number;
+  readonly max: number;
+}
+
+/** The node at `path` under `root` (keys and array indexes), or undefined. */
+function dig(root: unknown, path: readonly (string | number)[]): unknown {
+  let node = root;
+  for (const key of path) {
+    if (typeof node !== 'object' || node === null) return undefined;
+    node = (node as Record<string | number, unknown>)[key];
+  }
+  return node;
+}
+
+/** One text bound of run-events.schema.json; refusing to start without it beats a silent default. */
+function bound(path: readonly (string | number)[]): TextBound {
+  const node = dig(eventsSchema, ['$defs', ...path]) as
+    { minLength?: unknown; maxLength?: unknown } | undefined;
+  if (typeof node?.maxLength !== 'number')
+    throw new Error(`run-events.schema.json: $defs.${path.join('.')} has no maxLength`);
+  return { min: typeof node.minLength === 'number' ? node.minLength : 0, max: node.maxLength };
+}
+
+const eventsSchema = loadSchema('run-events.schema.json');
+
+/**
+ * The text limits of a diagram's lines (v0.2 S7a), read from the ONE place they are written: the
+ * committed `run-events.schema.json` (`$defs.plate`, `part`, `PartCite`, `link`). The API's
+ * pydantic twins read the same file, so the agent never emits a value the API refuses.
+ */
+export const DIAGRAM_LIMITS: Readonly<
+  Record<'title' | 'label' | 'text' | 'quote' | 'edge' | 'link', TextBound>
+> = {
+  title: bound(['plate', 'properties', 'title']),
+  label: bound(['part', 'properties', 'label']),
+  text: bound(['part', 'properties', 'text']),
+  quote: bound(['PartCite', 'properties', 'quote']),
+  edge: bound(['part', 'properties', 'edge', 'items', 'anyOf', 0]),
+  link: bound(['link', 'properties', 'label', 'anyOf', 0]),
+};
+
 /** For an `if`/`then` failure (reported at the root), the fields its `then` constrains. */
 function conditionalFields(schemaPath: string): string[] {
   let node: unknown = requestSchema;
@@ -78,8 +123,8 @@ function conditionalFields(schemaPath: string): string[] {
   return Object.keys(then?.properties ?? {});
 }
 
-export type Kind = 'explain' | 'ask' | 'summary';
-export type PromptVersion = 'explain-v1' | 'ask-v1' | 'summary-v1';
+export type Kind = 'explain' | 'ask' | 'summary' | 'diagram' | 'topic';
+export type PromptVersion = 'explain-v1' | 'ask-v1' | 'summary-v1' | 'diagram-v1' | 'topic-v1';
 
 export interface SeedPassage {
   readonly handle: string;
@@ -125,6 +170,8 @@ export const PROMPT_FOR_KIND: Readonly<Record<Kind, PromptVersion>> = {
   explain: 'explain-v1',
   ask: 'ask-v1',
   summary: 'summary-v1',
+  diagram: 'diagram-v1',
+  topic: 'topic-v1',
 };
 
 /**
@@ -174,6 +221,12 @@ export function validateRunRequest(body: unknown): Validation {
   }
   if (!request.tool.base_url.endsWith(`/${request.run_id}`)) {
     return { ok: false, detail: "tool.base_url: must end with this run's run_id" };
+  }
+  if (request.kind === 'topic' && parseTopicInput(request.question) === null) {
+    return {
+      ok: false,
+      detail: 'question: a topic run takes "Category: …" and "Existing topics: [...]" lines',
+    };
   }
   const history = historyProblem(request.history?.entries ?? []);
   if (history !== null) return { ok: false, detail: `history.entries: ${history}` };

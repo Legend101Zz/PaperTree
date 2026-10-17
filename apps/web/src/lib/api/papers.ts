@@ -14,7 +14,7 @@ import {
   uploadWithProgress as uploadWithProgressTransport,
   type UploadOptions,
 } from './client';
-import type { LibraryPaper } from './types';
+import type { LibraryLinks, LibraryPaper, Me, ReadingMode } from './types';
 
 const seg = encodeURIComponent;
 
@@ -43,7 +43,10 @@ export const authApi = {
     }),
   /** 204. Contracts §2.1: the web now CALLS it on sign-out (wired by S3). */
   logout: () => request<void>('/auth/logout', { method: 'POST' }),
-  me: () => request<{ user_id: string; email: string }>('/auth/me'),
+  me: () => request<Me>('/auth/me'),
+  /** 200 `Me`; 422 outside 1 to 60 characters after trimming (#192). */
+  setDisplayName: (displayName: string) =>
+    request<Me>('/auth/me', { method: 'PATCH', body: json({ display_name: displayName }) }),
 };
 
 // ─── papers ───────────────────────────────────────────────────────────────────────────────────
@@ -81,6 +84,29 @@ export const papersApi = {
 
   /** Every paper this caller owns, newest first (contracts §2.2). */
   list: () => request<readonly LibraryPaper[]>('/papers'),
+
+  /**
+   * Citation links between the caller's own papers, computed on read (#194). Each link says how it
+   * matched (`matched_by`), so word the label from that field.
+   */
+  links: () => request<LibraryLinks>('/library/links'),
+
+  /**
+   * 204. Tells the server which page (zero-based) the reader is on, for the library's "reading
+   * now" and "Continue" (#192). 404 for another user's paper; 422 past the last page.
+   */
+  putReadingState: (
+    paperId: string,
+    lastPage: number,
+    mode?: ReadingMode,
+    options: { readonly keepalive?: boolean } = {},
+  ) =>
+    request<void>(`/papers/${seg(paperId)}/reading-state`, {
+      method: 'PUT',
+      // keepalive: the page-hide flush must outlive the page (the body is tiny, well under 64 KB).
+      ...(options.keepalive === true ? { keepalive: true } : {}),
+      body: json(mode === undefined ? { last_page: lastPage } : { last_page: lastPage, mode }),
+    }),
 
   /** PaperIR 1.0.0 for the promoted generation, or `gen` when given (§2.2). */
   ir: (paperId: string, gen?: number) =>

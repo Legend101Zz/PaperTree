@@ -54,6 +54,15 @@ import type {
 } from '@/lib/api/highlights';
 import type { SummaryStatus, summaryApi } from '@/lib/api/summary';
 import type { CreateThreadBody, FollowUpBody, threadsApi } from '@/lib/api/threads';
+import type { PaperAbstract, PaperFigure, PlatePut } from '@/features/book/api/bookApi';
+import type {
+  AcceptTopicBody,
+  CreateTopicBody,
+  PaperTopic,
+  PatchTopicBody,
+  Topic,
+  TopicRef,
+} from '@/lib/api/topics';
 import type {
   Anchor,
   AnchorWire,
@@ -61,11 +70,21 @@ import type {
   CanvasEdge,
   CanvasNode,
   Citation,
+  DiagramCite,
+  DiagramLink,
+  DiagramPart,
   ErrorCode,
   Highlight,
   JobSummary,
+  LibraryLink,
   LibraryPaper,
+  LibraryPlate,
+  LibraryReference,
+  ReadingProgress,
   Message,
+  MessageCoverage,
+  MessageDiagram,
+  PassageLocator,
   ResolutionWire,
   RunErrorCode,
   RunSummary,
@@ -81,6 +100,7 @@ import papersSchema from '../../../contracts/api/papers.schema.json';
 import sseSchema from '../../../contracts/api/sse.schema.json';
 import summarySchema from '../../../contracts/api/summary.schema.json';
 import threadsSchema from '../../../contracts/api/threads.schema.json';
+import topicsSchema from '../../../contracts/api/topics.schema.json';
 import usageSchema from '../../../contracts/api/usage.schema.json';
 
 const REPO = fileURLToPath(new URL('../../../', import.meta.url));
@@ -101,6 +121,7 @@ const API_GROUPS = [
   'summary',
   'usage',
   'boards',
+  'topics',
   'healthz',
   'internal',
 ] as const;
@@ -166,6 +187,22 @@ const PAPER: LibraryPaper = {
   highlight_count: 3,
   created_at: T,
   updated_at: T,
+  reading: {
+    last_page: 4,
+    furthest_page: 6,
+    page_count: 10,
+    opened_at: T,
+    finished_at: null,
+    state: 'reading',
+  },
+  year: 2015,
+  arxiv_id: '1506.02640',
+  arxiv_category: 'cs.CV',
+  thread_count: 2,
+  has_summary: false,
+  topic: null,
+  notebook_count: 0,
+  plate: null,
 };
 
 const HIGHLIGHT: Highlight = {
@@ -223,6 +260,22 @@ const RUN: RunSummary = {
   tool_calls: 1,
 };
 
+const LOCATOR: PassageLocator = {
+  passage_key: 'g1:blk_qbvf5imegh7s3l5q',
+  page_index: 1,
+  para_index: 2,
+  section_heading: 'Introduction',
+};
+
+const COVERAGE: MessageCoverage = {
+  passages: 1,
+  citations: 1,
+  unresolved_markers: 0,
+  paragraphs: 1,
+  uncited_paragraphs: [],
+  not_verified: 0,
+};
+
 const CITATION: Citation = {
   citation_id: 'cit_01K63A9W4XJ7Q2N8R5T0V3Y6ZE',
   ordinal: 0,
@@ -230,6 +283,7 @@ const CITATION: Citation = {
   page_index: 1,
   anchor: CITATION_ANCHOR,
   supported: true,
+  locator: LOCATOR,
 };
 
 const ANSWER: Message = {
@@ -243,6 +297,7 @@ const ANSWER: Message = {
   generation: 1,
   run: RUN,
   citations: [CITATION],
+  coverage: COVERAGE,
   created_at: T,
   completed_at: T,
 };
@@ -255,6 +310,59 @@ const FAILED: Message = {
   citations: [],
   completed_at: null,
 };
+
+// v0.2 S7a (#216): a diagram answer, one part in each of its three states.
+const DIAGRAM_CITE: DiagramCite = {
+  citation_id: CITATION.citation_id,
+  quote: 'queries and keys of dimension dk',
+  anchor: CITATION_ANCHOR,
+  locator: LOCATOR,
+  page_index: 3,
+  supported: true,
+};
+const CITED_PART: DiagramPart = {
+  letter: 'A',
+  label: 'Q, K, V',
+  text: 'queries, keys and values',
+  kind: 'input',
+  after: [],
+  edge: [],
+  cite: DIAGRAM_CITE,
+};
+const LINK: DiagramLink = { source: 'C', target: 'A', label: null };
+const PLATE: MessageDiagram = {
+  title: 'Scaled dot-product attention',
+  status: 'stopped',
+  parts: [
+    CITED_PART,
+    {
+      ...CITED_PART,
+      letter: 'B',
+      kind: 'step',
+      after: ['A'],
+      edge: ['scores'],
+      cite: {
+        ...DIAGRAM_CITE,
+        citation_id: null,
+        anchor: null,
+        locator: null,
+        page_index: null,
+        supported: false,
+      },
+    },
+    {
+      ...CITED_PART,
+      letter: 'C',
+      kind: 'concept',
+      after: ['A', 'B'],
+      edge: [null, null],
+      cite: null,
+    },
+  ],
+  links: [LINK],
+};
+const { coverage: _prose, ...WITHOUT_COVERAGE } = ANSWER;
+const DIAGRAM_ANSWER: Message = { ...WITHOUT_COVERAGE, diagram: PLATE };
 
 const QUESTION: Message = {
   ...ANSWER,
@@ -274,6 +382,8 @@ const THREAD: Thread = {
   created_at: T,
   updated_at: T,
   message_count: 2,
+  ask: 'Explain this passage.',
+  last_status: 'complete',
 };
 
 const EVENTS: SseEvent[] = [
@@ -305,6 +415,9 @@ const EVENTS: SseEvent[] = [
   },
   { event: 'text', data: { delta: 'This sentence is ' } },
   { event: 'citations', data: { items: [CITATION] } },
+  { event: 'plate', data: { title: 'Scaled dot-product attention' } },
+  { event: 'part', data: CITED_PART },
+  { event: 'link', data: LINK },
   { event: 'usage', data: RUN },
   { event: 'done', data: { status: 'complete', error: null, message_id: ANSWER.message_id } },
   {
@@ -321,6 +434,9 @@ const SSE_MODEL: Record<SseEvent['event'], string> = {
   status: 'SseStatus',
   text: 'SseText',
   citations: 'SseCitations',
+  plate: 'SsePlate',
+  part: 'DiagramPart',
+  link: 'DiagramLink',
   usage: 'RunSummary',
   done: 'SseDone',
 };
@@ -359,6 +475,9 @@ const EXCERPT: CanvasNode = {
   body: '',
   source_anchor: TEXT_ANCHOR,
   source_message_id: null,
+  source_page_id: null,
+  source_diagram_id: null,
+  counts: null,
   version: 1,
   created_at: T,
   updated_at: T,
@@ -380,44 +499,48 @@ const EDGE: CanvasEdge = {
   to_node_id: EXCERPT.node_id,
   kind: 'supports',
   label: null,
+  from_port: 'claim_out',
+  to_port: 'evidence_in',
+  created_at: T,
 };
 
 // `satisfies` makes each object exactly its union: a missing or an extra key fails tsc.
 const CODES = {
-    auth_required: true,
-    invalid_credentials: true,
-    email_taken: true,
-    not_found: true,
-    validation_failed: true,
-    empty_upload: true,
-    payload_too_large: true,
-    unsupported_media_type: true,
-    not_parsed: true,
-    not_failed: true,
-    busy: true,
-    stale_version: true,
-    generation_not_found: true,
-    anchor_incomplete: true,
-    anchor_mismatch: true,
-    budget_exhausted: true,
-    agent_unavailable: true,
-    not_configured: true,
-    internal: true,
-    not_implemented: true,
+  auth_required: true,
+  invalid_credentials: true,
+  email_taken: true,
+  not_found: true,
+  validation_failed: true,
+  empty_upload: true,
+  payload_too_large: true,
+  unsupported_media_type: true,
+  not_parsed: true,
+  not_failed: true,
+  busy: true,
+  stale_version: true,
+  generation_not_found: true,
+  topic_exists: true,
+  anchor_incomplete: true,
+  anchor_mismatch: true,
+  budget_exhausted: true,
+  agent_unavailable: true,
+  not_configured: true,
+  internal: true,
+  not_implemented: true,
 } satisfies Record<ErrorCode, true>;
 const RUN_CODES = {
-    provider_auth: true,
-    rate_limited: true,
-    quota: true,
-    upstream_unavailable: true,
-    timeout: true,
-    aborted: true,
-    bad_request: true,
-    tool_failed: true,
-    tool_budget_exhausted: true,
-    output_truncated: true,
-    agent_unavailable: true,
-    internal: true,
+  provider_auth: true,
+  rate_limited: true,
+  quota: true,
+  upstream_unavailable: true,
+  timeout: true,
+  aborted: true,
+  bad_request: true,
+  tool_failed: true,
+  tool_budget_exhausted: true,
+  output_truncated: true,
+  agent_unavailable: true,
+  internal: true,
 } satisfies Record<RunErrorCode, true>;
 
 // ─── every key and every enum (S0 review S3) ──────────────────────────────────────────────────
@@ -431,11 +554,14 @@ const SCHEMAS = {
   summary: summarySchema,
   usage: usageSchema,
   boards: boardsSchema,
+  topics: topicsSchema,
 };
 type Schemas = typeof SCHEMAS;
 /** The property names of `<group>.schema.json#/$defs/<model>`, at type level. */
-type SchemaKeys<G extends keyof Schemas, M extends keyof Schemas[G]['$defs']> =
-  Schemas[G]['$defs'][M] extends { properties: infer P } ? keyof P : never;
+type SchemaKeys<
+  G extends keyof Schemas,
+  M extends keyof Schemas[G]['$defs'],
+> = Schemas[G]['$defs'][M] extends { properties: infer P } ? keyof P : never;
 /** The keys `T` lets the sender leave out. */
 type OptionalKeys<T> = { [K in keyof T]-?: object extends Pick<T, K> ? K : never }[keyof T];
 /** Type equality (mutual assignability is not it: `string` and a union of strings pass one way). */
@@ -459,19 +585,32 @@ type NodeCreated = Awaited<ReturnType<(typeof boardsApi)['createNode']>>;
 const OPTIONAL = {
   'papers.JobSummary': [],
   'papers.LibraryPaper': [],
+  'papers.LibraryPlate': [],
+  'papers.PaperFigure': [],
+  'papers.PaperAbstract': [],
+  'papers.ReadingProgress': [],
+  'papers.LibraryLink': [],
+  'papers.LibraryReference': [],
   'highlights.ResolutionWire': [],
   'highlights.AnchorWire': [],
   'highlights.Highlight': [],
-  'threads.Citation': [],
+  'threads.Citation': ['locator'],
   'threads.RunSummary': [],
   'threads.MessageError': [],
-  'threads.Message': [],
+  'threads.Message': ['coverage', 'diagram'],
   'threads.Thread': [],
   'threads.ThreadDetail': [],
+  'threads.MessageDiagram': [],
+  'threads.DiagramPart': [],
+  'threads.DiagramCite': [],
+  'threads.DiagramLink': [],
   'sse.SseRun': [],
   'sse.SseStatus': ['label', 'attempt', 'delay_ms'],
   'sse.SseText': [],
   'sse.SseCitations': [],
+  'sse.SsePlate': [],
+  'sse.DiagramPart': [],
+  'sse.DiagramLink': [],
   'sse.SseDone': [],
   'sse.MessageError': [],
   'summary.Summary': [],
@@ -486,6 +625,9 @@ const OPTIONAL = {
   'usage.UsageTotals': [],
   'usage.UsageBucket': [],
   'usage.UsageByKind': [],
+  'topics.TopicRef': [],
+  'topics.Topic': [],
+  'topics.PaperTopic': [],
   // requests
   'highlights.AnchorV1In': ['subTarget', 'resolution'],
   'highlights.HighlightCreate': ['note', 'resolutions'],
@@ -495,13 +637,35 @@ const OPTIONAL = {
   'highlights.ResolutionsPut': [],
   'highlights.ResolutionPutItem': ['reason', 'upgraded_anchor'],
   'threads.ThreadCreate': ['anchor', 'question'],
-  'threads.FollowUp': ['retry_of'],
+  'threads.FollowUp': ['retry_of', 'redraw_of'],
   'summary.SummaryRequest': ['regenerate'],
-  'boards.NodeCreate': ['title', 'body', 'source_anchor', 'source_message_id', 'group_id'],
-  'boards.NodePatch': ['x', 'y', 'w', 'h', 'z', 'title', 'body', 'group_id'],
-  'boards.EdgeCreate': ['label'],
-  'boards.EdgePatch': ['kind', 'label'],
+  'boards.NodeCreate': [
+    'title',
+    'body',
+    'source_anchor',
+    'source_message_id',
+    'source_page_id',
+    'source_diagram_id',
+    'group_id',
+  ],
+  'boards.NodePatch': [
+    'x',
+    'y',
+    'w',
+    'h',
+    'z',
+    'title',
+    'body',
+    'group_id',
+    'source_page_id',
+    'source_diagram_id',
+  ],
+  'boards.EdgeCreate': ['label', 'from_port', 'to_port'],
+  'boards.EdgePatch': ['kind', 'label', 'from_port', 'to_port'],
   'boards.BoardPatch': ['title', 'viewport'],
+  'topics.TopicCreate': ['cloth'],
+  'topics.TopicPatch': ['name', 'cloth', 'sort_order'],
+  'topics.PaperTopicPut': ['topic_id', 'new_topic_name', 'cloth'],
 } as const;
 type Shape = keyof typeof OPTIONAL;
 type Opt<K extends Shape> = (typeof OPTIONAL)[K][number];
@@ -521,6 +685,9 @@ const REQUESTS = new Set<Shape>([
   'boards.EdgeCreate',
   'boards.EdgePatch',
   'boards.BoardPatch',
+  'topics.TopicCreate',
+  'topics.TopicPatch',
+  'topics.PaperTopicPut',
 ]);
 
 /**
@@ -532,6 +699,19 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<OptionalKeys<JobSummary>, Opt<'papers.JobSummary'>>,
   true satisfies Equal<keyof LibraryPaper, SchemaKeys<'papers', 'LibraryPaper'>>,
   true satisfies Equal<OptionalKeys<LibraryPaper>, Opt<'papers.LibraryPaper'>>,
+  true satisfies Equal<keyof LibraryPlate, SchemaKeys<'papers', 'LibraryPlate'>>,
+  true satisfies Equal<OptionalKeys<LibraryPlate>, Opt<'papers.LibraryPlate'>>,
+  true satisfies Equal<keyof PaperFigure, SchemaKeys<'papers', 'PaperFigure'>>,
+  true satisfies Equal<OptionalKeys<PaperFigure>, Opt<'papers.PaperFigure'>>,
+  true satisfies Equal<keyof PaperAbstract, SchemaKeys<'papers', 'PaperAbstract'>>,
+  true satisfies Equal<OptionalKeys<PaperAbstract>, Opt<'papers.PaperAbstract'>>,
+  true satisfies Equal<keyof PlatePut, SchemaKeys<'papers', 'PlatePut'>>,
+  true satisfies Equal<keyof LibraryLink, SchemaKeys<'papers', 'LibraryLink'>>,
+  true satisfies Equal<OptionalKeys<LibraryLink>, Opt<'papers.LibraryLink'>>,
+  true satisfies Equal<keyof LibraryReference, SchemaKeys<'papers', 'LibraryReference'>>,
+  true satisfies Equal<OptionalKeys<LibraryReference>, Opt<'papers.LibraryReference'>>,
+  true satisfies Equal<keyof ReadingProgress, SchemaKeys<'papers', 'ReadingProgress'>>,
+  true satisfies Equal<OptionalKeys<ReadingProgress>, Opt<'papers.ReadingProgress'>>,
   true satisfies Equal<keyof ResolutionWire, SchemaKeys<'highlights', 'ResolutionWire'>>,
   true satisfies Equal<OptionalKeys<ResolutionWire>, Opt<'highlights.ResolutionWire'>>,
   true satisfies Equal<keyof AnchorWire, SchemaKeys<'highlights', 'AnchorWire'>>,
@@ -546,6 +726,14 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<OptionalKeys<MessageErrorT>, Opt<'threads.MessageError'>>,
   true satisfies Equal<keyof Message, SchemaKeys<'threads', 'Message'>>,
   true satisfies Equal<OptionalKeys<Message>, Opt<'threads.Message'>>,
+  true satisfies Equal<keyof MessageDiagram, SchemaKeys<'threads', 'MessageDiagram'>>,
+  true satisfies Equal<OptionalKeys<MessageDiagram>, Opt<'threads.MessageDiagram'>>,
+  true satisfies Equal<keyof DiagramPart, SchemaKeys<'threads', 'DiagramPart'>>,
+  true satisfies Equal<OptionalKeys<DiagramPart>, Opt<'threads.DiagramPart'>>,
+  true satisfies Equal<keyof DiagramCite, SchemaKeys<'threads', 'DiagramCite'>>,
+  true satisfies Equal<OptionalKeys<DiagramCite>, Opt<'threads.DiagramCite'>>,
+  true satisfies Equal<keyof DiagramLink, SchemaKeys<'threads', 'DiagramLink'>>,
+  true satisfies Equal<OptionalKeys<DiagramLink>, Opt<'threads.DiagramLink'>>,
   true satisfies Equal<keyof Thread, SchemaKeys<'threads', 'Thread'>>,
   true satisfies Equal<OptionalKeys<Thread>, Opt<'threads.Thread'>>,
   true satisfies Equal<keyof ThreadDetail, SchemaKeys<'threads', 'ThreadDetail'>>,
@@ -558,11 +746,23 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<OptionalKeys<SseData<'text'>>, Opt<'sse.SseText'>>,
   true satisfies Equal<keyof SseData<'citations'>, SchemaKeys<'sse', 'SseCitations'>>,
   true satisfies Equal<OptionalKeys<SseData<'citations'>>, Opt<'sse.SseCitations'>>,
+  true satisfies Equal<keyof SseData<'plate'>, SchemaKeys<'sse', 'SsePlate'>>,
+  true satisfies Equal<OptionalKeys<SseData<'plate'>>, Opt<'sse.SsePlate'>>,
+  true satisfies Equal<keyof SseData<'part'>, SchemaKeys<'sse', 'DiagramPart'>>,
+  true satisfies Equal<OptionalKeys<SseData<'part'>>, Opt<'sse.DiagramPart'>>,
+  true satisfies Equal<keyof SseData<'link'>, SchemaKeys<'sse', 'DiagramLink'>>,
+  true satisfies Equal<OptionalKeys<SseData<'link'>>, Opt<'sse.DiagramLink'>>,
   true satisfies Equal<keyof SseData<'usage'>, SchemaKeys<'sse', 'RunSummary'>>,
   true satisfies Equal<keyof SseData<'done'>, SchemaKeys<'sse', 'SseDone'>>,
   true satisfies Equal<OptionalKeys<SseData<'done'>>, Opt<'sse.SseDone'>>,
-  true satisfies Equal<keyof NonNullable<SseData<'done'>['error']>, SchemaKeys<'sse', 'MessageError'>>,
-  true satisfies Equal<OptionalKeys<NonNullable<SseData<'done'>['error']>>, Opt<'sse.MessageError'>>,
+  true satisfies Equal<
+    keyof NonNullable<SseData<'done'>['error']>,
+    SchemaKeys<'sse', 'MessageError'>
+  >,
+  true satisfies Equal<
+    OptionalKeys<NonNullable<SseData<'done'>['error']>>,
+    Opt<'sse.MessageError'>
+  >,
   true satisfies Equal<keyof Summary, SchemaKeys<'summary', 'Summary'>>,
   true satisfies Equal<OptionalKeys<Summary>, Opt<'summary.Summary'>>,
   true satisfies Equal<keyof Summary['bullets'][number], SchemaKeys<'summary', 'SummaryBullet'>>,
@@ -587,6 +787,18 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<OptionalKeys<UsageBucket>, Opt<'usage.UsageBucket'>>,
   true satisfies Equal<keyof UsageTotals['by_kind'], SchemaKeys<'usage', 'UsageByKind'>>,
   true satisfies Equal<OptionalKeys<UsageTotals['by_kind']>, Opt<'usage.UsageByKind'>>,
+  true satisfies Equal<keyof TopicRef, SchemaKeys<'topics', 'TopicRef'>>,
+  true satisfies Equal<OptionalKeys<TopicRef>, Opt<'topics.TopicRef'>>,
+  true satisfies Equal<keyof Topic, SchemaKeys<'topics', 'Topic'>>,
+  true satisfies Equal<OptionalKeys<Topic>, Opt<'topics.Topic'>>,
+  true satisfies Equal<keyof PaperTopic, SchemaKeys<'topics', 'PaperTopic'>>,
+  true satisfies Equal<OptionalKeys<PaperTopic>, Opt<'topics.PaperTopic'>>,
+  true satisfies Equal<keyof CreateTopicBody, SchemaKeys<'topics', 'TopicCreate'>>,
+  true satisfies Equal<OptionalKeys<CreateTopicBody>, Opt<'topics.TopicCreate'>>,
+  true satisfies Equal<keyof PatchTopicBody, SchemaKeys<'topics', 'TopicPatch'>>,
+  true satisfies Equal<OptionalKeys<PatchTopicBody>, Opt<'topics.TopicPatch'>>,
+  true satisfies Equal<keyof AcceptTopicBody, SchemaKeys<'topics', 'PaperTopicPut'>>,
+  true satisfies Equal<OptionalKeys<AcceptTopicBody>, Opt<'topics.PaperTopicPut'>>,
   // requests
   true satisfies Equal<keyof Anchor, SchemaKeys<'highlights', 'AnchorV1In'>>,
   true satisfies Equal<OptionalKeys<Anchor>, Opt<'highlights.AnchorV1In'>>,
@@ -633,11 +845,15 @@ const KEYS_ARE_EXACT: true[] = [
  * `ENUM_TYPES_ARE_EXACT` holds each list to its TypeScript type in tsc, so a widened key
  * (`color: string`) fails the type-check, and the test holds it to the schema's values.
  */
+const CLOTHS = ['transformers', 'vision', 'generative', 'optimization', 'language', 'rl'] as const;
 const ENUMS = {
   'JobSummary.kind': ['parse'],
   'JobSummary.state': ['pending', 'running', 'succeeded', 'dead_letter', 'cancelled'],
   'JobSummary.step': ['parse', 'persist', 'promote', null],
   'LibraryPaper.processing': ['queued', 'reading', 'ready', 'partial', 'failed'],
+  'LibraryLink.via': ['citation'],
+  'LibraryLink.matched_by': ['arxiv_id', 'title'],
+  'ReadingProgress.state': ['reading', 'finished'],
   'ResolutionWire.state': ['anchored', 'approximate', 'orphan'],
   'ResolutionWire.reason': [
     'block_id_missing',
@@ -653,12 +869,17 @@ const ENUMS = {
   'Highlight.color': ['amber', 'green', 'blue', 'pink', 'purple'],
   'Message.role': ['user', 'assistant'],
   'Message.status': ['streaming', 'complete', 'partial', 'error', 'aborted'],
-  'Thread.kind': ['explain', 'ask'],
+  'Thread.kind': ['explain', 'ask', 'diagram'],
+  'MessageDiagram.status': ['streaming', 'complete', 'partial', 'stopped', 'error'],
+  'DiagramPart.kind': ['input', 'step', 'output', 'concept'],
+  'Thread.last_status': ['streaming', 'complete', 'partial', 'error', 'aborted', null],
   'SseStatus.phase': ['thinking', 'tool', 'retrying', 'writing'],
   'SseDone.status': ['complete', 'partial', 'error', 'aborted'],
   'Summary.status': ['complete', 'partial'],
   'SummaryStatus.state': ['none', 'running', 'ready', 'partial', 'failed'],
-  'CanvasNode.kind': ['excerpt', 'explanation', 'note', 'group'],
+  'CanvasNode.kind': ['excerpt', 'explanation', 'note', 'group', 'question', 'notebook', 'diagram'],
+  'CanvasEdge.from_port': ['claim_out', 'answer_out', null],
+  'CanvasEdge.to_port': ['evidence_in', 'question_in', null],
   'CanvasEdge.kind': [
     'supports',
     'contradicts',
@@ -683,6 +904,13 @@ const ENUMS = {
     'citation',
   ],
   'AnchorV1In.provenanceClass': ['source', 'ai_generated'],
+  'TopicRef.cloth': [...CLOTHS, null],
+  'Topic.cloth': [...CLOTHS, null],
+  'PaperTopic.status': ['none', 'suggested', 'accepted', 'rejected'],
+  'PaperTopic.source': ['arxiv_category', 'manual', 'model', null],
+  'TopicCreate.cloth': CLOTHS,
+  'TopicPatch.cloth': [...CLOTHS, null],
+  'PaperTopicPut.cloth': CLOTHS,
 } as const;
 type Values<K extends keyof typeof ENUMS> = (typeof ENUMS)[K][number];
 /** The enum keys whose values are not a list above: the two error-code unions (the ErrorCode and
@@ -702,12 +930,19 @@ const ENUMS_ELSEWHERE: Record<string, string> = {
   'NodeCreate.kind': 'CanvasNode.kind',
   'EdgeCreate.kind': 'CanvasEdge.kind',
   'EdgePatch.kind': 'CanvasEdge.kind',
+  'EdgeCreate.from_port': 'CanvasEdge.from_port',
+  'EdgeCreate.to_port': 'CanvasEdge.to_port',
+  'EdgePatch.from_port': 'CanvasEdge.from_port',
+  'EdgePatch.to_port': 'CanvasEdge.to_port',
 };
 const ENUM_TYPES_ARE_EXACT: true[] = [
   true satisfies Equal<JobSummary['kind'], Values<'JobSummary.kind'>>,
   true satisfies Equal<JobSummary['state'], Values<'JobSummary.state'>>,
   true satisfies Equal<JobSummary['step'], Values<'JobSummary.step'>>,
   true satisfies Equal<LibraryPaper['processing'], Values<'LibraryPaper.processing'>>,
+  true satisfies Equal<LibraryLink['via'], Values<'LibraryLink.via'>>,
+  true satisfies Equal<LibraryLink['matched_by'], Values<'LibraryLink.matched_by'>>,
+  true satisfies Equal<ReadingProgress['state'], Values<'ReadingProgress.state'>>,
   true satisfies Equal<ResolutionWire['state'], Values<'ResolutionWire.state'>>,
   true satisfies Equal<ResolutionWire['reason'], Values<'ResolutionWire.reason'>>,
   true satisfies Equal<Highlight['color'], Values<'Highlight.color'>>,
@@ -719,12 +954,17 @@ const ENUM_TYPES_ARE_EXACT: true[] = [
     keyof typeof CODES | keyof typeof RUN_CODES
   >,
   true satisfies Equal<Thread['kind'], Values<'Thread.kind'>>,
+  true satisfies Equal<MessageDiagram['status'], Values<'MessageDiagram.status'>>,
+  true satisfies Equal<DiagramPart['kind'], Values<'DiagramPart.kind'>>,
+  true satisfies Equal<Thread['last_status'], Values<'Thread.last_status'>>,
   true satisfies Equal<SseData<'status'>['phase'], Values<'SseStatus.phase'>>,
   true satisfies Equal<SseData<'done'>['status'], Values<'SseDone.status'>>,
   true satisfies Equal<Summary['status'], Values<'Summary.status'>>,
   true satisfies Equal<SummaryStatus['state'], Values<'SummaryStatus.state'>>,
   true satisfies Equal<CanvasNode['kind'], Values<'CanvasNode.kind'>>,
   true satisfies Equal<CanvasEdge['kind'], Values<'CanvasEdge.kind'>>,
+  true satisfies Equal<CanvasEdge['from_port'], Values<'CanvasEdge.from_port'>>,
+  true satisfies Equal<CanvasEdge['to_port'], Values<'CanvasEdge.to_port'>>,
   true satisfies Equal<Anchor['anchorVersion'], Values<'AnchorV1In.anchorVersion'>>,
   true satisfies Equal<Anchor['offsetUnit'], Values<'AnchorV1In.offsetUnit'>>,
   true satisfies Equal<Anchor['targetKind'], Values<'AnchorV1In.targetKind'>>,
@@ -740,6 +980,13 @@ const ENUM_TYPES_ARE_EXACT: true[] = [
   true satisfies Equal<CreateNodeBody['kind'], CanvasNode['kind']>,
   true satisfies Equal<CreateEdgeBody['kind'], CanvasEdge['kind']>,
   true satisfies Equal<Sent<PatchEdgeBody['kind']>, CanvasEdge['kind']>,
+  true satisfies Equal<TopicRef['cloth'], Values<'TopicRef.cloth'>>,
+  true satisfies Equal<Topic['cloth'], Values<'Topic.cloth'>>,
+  true satisfies Equal<PaperTopic['status'], Values<'PaperTopic.status'>>,
+  true satisfies Equal<PaperTopic['source'], Values<'PaperTopic.source'>>,
+  true satisfies Equal<Sent<CreateTopicBody['cloth']>, Values<'TopicCreate.cloth'>>,
+  true satisfies Equal<Sent<PatchTopicBody['cloth']>, Values<'TopicPatch.cloth'>>,
+  true satisfies Equal<Sent<AcceptTopicBody['cloth']>, Values<'PaperTopicPut.cloth'>>,
 ];
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -789,7 +1036,9 @@ function shapeProblems(shape: Shape, def: Def): string[] {
   for (const key of keys) {
     const web = optional.has(key) ? 'optional' : 'required';
     const schema = required.has(key) ? 'required' : 'optional';
-    const wrong = REQUESTS.has(shape) ? web === 'optional' && schema === 'required' : web !== schema;
+    const wrong = REQUESTS.has(shape)
+      ? web === 'optional' && schema === 'required'
+      : web !== schema;
     if (wrong) problems.push(`${shape}.${key}: web ${web}, schema ${schema}`);
   }
   return problems;
@@ -853,10 +1102,60 @@ describe('contracts.spec — lib/api/types.ts against contracts/api (exported fr
       page_count: null,
       original_filename: null,
     } satisfies LibraryPaper);
+    const plate: LibraryPlate = {
+      block_id: 'blk_dsibp5ju4rblkcpa',
+      page_index: 2,
+      label: 'Figure 1',
+      caption_text: 'Figure 1: The Transformer - model architecture.',
+      asset_url: 'http://127.0.0.1:8000/papers/ppr_C425DTWW1KYMYDSWR205HB2069/assets/figures/x',
+    };
+    expectValid('papers', 'LibraryPaper', {
+      ...PAPER,
+      notebook_count: 1,
+      plate,
+    } satisfies LibraryPaper);
+    expectValid('papers', 'LibraryPlate', {
+      ...plate,
+      label: null,
+      caption_text: null,
+    } satisfies LibraryPlate);
+    // #200: the opened book's figures and abstract, and the plate's write.
+    const figure: PaperFigure = {
+      block_id: 'blk_dsibp5ju4rblkcpa',
+      page_index: 2,
+      bbox: [197, 72, 415, 394],
+      caption_text: 'Figure 1: The Transformer - model architecture.',
+      caption_block_id: 'blk_jlkncbwok3ehjqth',
+      label: 'Figure 1',
+      asset_url: plate.asset_url,
+      anchor: CITATION_ANCHOR,
+    };
+    expectValid('papers', 'PaperFigure', figure);
+    expectValid('papers', 'PaperFigure', {
+      ...figure,
+      caption_text: null,
+      caption_block_id: null,
+      label: null,
+      asset_url: null,
+      anchor: null,
+    } satisfies PaperFigure);
+    expectValid('papers', 'PaperAbstract', {
+      text: 'The dominant sequence transduction models are based on',
+      page_index: 0,
+      anchor: TEXT_ANCHOR,
+    } satisfies PaperAbstract);
+    expectValid('papers', 'PaperAbstract', {
+      text: null,
+      page_index: null,
+      anchor: null,
+    } satisfies PaperAbstract);
+    expectValid('papers', 'PlatePut', { anchor: CITATION_ANCHOR } satisfies PlatePut);
     expectValid('highlights', 'Highlight', HIGHLIGHT);
     expectValid('threads', 'RunSummary', RUN);
     expectValid('threads', 'Citation', CITATION);
-    for (const message of [ANSWER, FAILED, QUESTION]) expectValid('threads', 'Message', message);
+    for (const message of [ANSWER, FAILED, QUESTION, DIAGRAM_ANSWER]) {
+      expectValid('threads', 'Message', message);
+    }
     expectValid('threads', 'Thread', THREAD);
     expectValid('threads', 'Thread', {
       ...THREAD,
@@ -886,9 +1185,42 @@ describe('contracts.spec — lib/api/types.ts against contracts/api (exported fr
       since: T,
       ...bucket,
       budget_usd: 1,
-      by_kind: { explain: bucket, ask: { ...bucket, runs: 0 }, summary: bucket },
+      by_kind: {
+        explain: bucket,
+        ask: { ...bucket, runs: 0 },
+        summary: bucket,
+        diagram: bucket,
+        topic: bucket,
+      },
     };
     expectValid('usage', 'UsageTotals', usage);
+    const topic: Topic = {
+      topic_id: 'top_01J9Z3K8Q4R5S6T7V8W9X0Y1Z2',
+      name: 'Transformers & attention',
+      cloth: 'transformers',
+      sort_order: 0,
+      paper_count: 2,
+      page_count: 31,
+      categories: ['cs.CL'],
+    };
+    expectValid('topics', 'Topic', topic);
+    expectValid('topics', 'Topic', { ...topic, cloth: null, categories: [] } satisfies Topic);
+    const offer: PaperTopic = {
+      status: 'suggested',
+      topic: { topic_id: topic.topic_id, name: topic.name, cloth: topic.cloth },
+      suggested_name: null,
+      source: 'arxiv_category',
+      source_detail: 'cs.CL',
+      arxiv_category: 'cs.CL',
+    };
+    expectValid('topics', 'PaperTopic', offer);
+    expectValid('topics', 'PaperTopic', {
+      ...offer,
+      status: 'none',
+      topic: null,
+      source: null,
+      source_detail: null,
+    } satisfies PaperTopic);
   });
 
   it('every browser SSE event’s data validates against its model', () => {
@@ -974,6 +1306,19 @@ describe('contracts.spec — lib/api/types.ts against contracts/api (exported fr
       title: 'YOLO',
       viewport: { x: 0, y: 0, zoom: 1 },
     } satisfies PatchBoardBody);
+    expectValid('topics', 'TopicCreate', {
+      name: 'Vision',
+      cloth: 'vision',
+    } satisfies CreateTopicBody);
+    for (const patch of [{ name: 'Vision' }, { cloth: null }, {}] satisfies PatchTopicBody[]) {
+      expectValid('topics', 'TopicPatch', patch);
+    }
+    for (const put of [
+      { topic_id: 'top_01J9Z3K8Q4R5S6T7V8W9X0Y1Z2' },
+      { new_topic_name: 'Generative models', cloth: 'generative' },
+    ] satisfies AcceptTopicBody[]) {
+      expectValid('topics', 'PaperTopicPut', put);
+    }
   });
 
   it('the schemas refuse what the contract forbids (the check is not vacuous)', () => {
@@ -1052,11 +1397,12 @@ describe('contracts.spec — every key, its presence and every enum, against the
 describe('contracts.spec — the agent contract (hand-written) and its recorded streams', () => {
   const fixtures = readdirSync(`${REPO}contracts/agent/fixtures`).filter((f) => f.endsWith('.sse'));
 
-  it('there are the eight recorded streams', () => {
+  it('there are the eight recorded streams, and the diagram stream (v0.2 S7a, faux brain)', () => {
     expect(fixtures.sort()).toEqual(
       [
         'aborted-partial',
         'auth-error',
+        'diagram-ok',
         'explain-ok',
         'followup-ok',
         'stall-timeout',
@@ -1093,7 +1439,7 @@ describe('contracts.spec — the agent contract (hand-written) and its recorded 
 
   it('the run-request examples validate, and a summary without its digest seed does not', () => {
     const request = validator('run-request');
-    for (const name of ['explain', 'followup', 'summary']) {
+    for (const name of ['explain', 'followup', 'summary', 'diagram']) {
       const body = load(`contracts/agent/examples/run-request-${name}.json`);
       expect(request(body), `${name}: ${JSON.stringify(request.errors)}`).toBe(true);
     }

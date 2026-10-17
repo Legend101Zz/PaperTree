@@ -1,0 +1,230 @@
+/* The phone notebook (S5e, #210, frame 08c): the stack, its view-only ink, and the bottom bar.
+   Tokens only; the page itself is notebook.css's. */
+
+.pt-nb[data-layout='phone'] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 56px minmax(0, 1fr);
+}
+
+.pt-nb[data-layout='phone'] .pt-nb__bar {
+  gap: 2px;
+  padding: 0 4px;
+}
+
+.pt-nb[data-layout='phone'] .pt-nb__back {
+  /* A long title must not squeeze it below its 44 px (the bar's other controls are fixed too). */
+  flex: none;
+  justify-content: center;
+  inline-size: 44px;
+  min-block-size: 44px;
+  padding: 0;
+}
+
+.pt-nb[data-layout='phone'] .pt-nb__actions {
+  flex: none;
+  gap: 0;
+}
+
+/* Room under the content for the fixed bar, so the last note can be read and typed in. */
+.pt-nb[data-layout='phone'] .pt-nb__desk {
+  padding: 8px 8px calc(var(--pt-nb-bar-space) + env(safe-area-inset-bottom, 0px));
+}
+
+.pt-nb-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin: -8px;
+  padding: 16px 16px 24px;
+  min-block-size: 100%;
+}
+
+.pt-nb-stack__from {
+  margin: 0;
+  color: var(--pt-ink-muted);
+  font-size: 14.5px;
+}
+
+.pt-nb-stack__from a {
+  color: var(--pt-primary);
+}
+
+.pt-nb-stack .pt-trace-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Each passage an index card, one 44 px button: marker, tab, "where · cited n×" and the chevron
+   on its first line, two lines of the paper's words under them (08c). */
+.pt-nb-stack .pt-trace-row {
+  border: 0;
+}
+
+.pt-nb-stack .pt-trace-row__touch {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'marker head chevron'
+    'quote quote quote';
+  row-gap: 12px;
+  column-gap: 10px;
+  padding: 12px 14px 14px;
+  background: var(--pt-call-slip);
+  border-radius: var(--pt-radius-paper);
+  box-shadow:
+    var(--pt-e1),
+    inset 0 0 0 1px var(--pt-card-edge);
+}
+
+.pt-nb-stack .pt-trace-row__touch .pt-trace-row__body {
+  display: contents;
+}
+
+.pt-nb-stack .pt-trace-row__touch .pt-marker {
+  grid-area: marker;
+}
+
+.pt-nb-stack .pt-trace-row__touch .pt-trace-row__head {
+  display: flex;
+  grid-area: head;
+  align-items: center;
+  gap: 10px;
+  min-inline-size: 0;
+}
+
+.pt-nb-stack .pt-trace-row__touch .pt-trace-row__quote {
+  grid-area: quote;
+}
+
+.pt-nb-stack .pt-trace-row__touch .pt-trace-row__chevron {
+  grid-area: chevron;
+}
+
+.pt-nb-stack__mine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.pt-nb-stack__ink {
+  flex: 1 1 160px;
+  min-inline-size: 0;
+  margin: 0;
+}
+
+.pt-nb-stack__ink figcaption {
+  margin-block-end: 6px;
+  color: var(--pt-ink-2);
+  font: 700 14px var(--pt-font-label);
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--pt-ls-label);
+}
+
+.pt-nb-stack .pt-nb-ink {
+  position: static;
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  max-block-size: 200px;
+}
+
+/* A note in the stack flows; its stored place on the page is the tablet's and the desktop's. */
+.pt-nb-stack .pt-nb-note--flow {
+  position: relative;
+  inline-size: 100%;
+  min-block-size: 44px;
+}
+
+.pt-nb-stack .pt-nb-note--text .pt-nb-note__face,
+.pt-nb-stack .pt-nb-note--text .pt-nb-note__editor {
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--pt-page) 92%, transparent);
+  box-shadow: inset 0 0 0 1px var(--pt-control-border);
+  border-radius: var(--pt-radius-paper);
+}
+
+/* "Read the whole answer" and its count on one line, the usage line under them (08c). */
+.pt-nb-exchange__more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  inline-size: 100%;
+}
+
+.pt-nb-exchange__more button {
+  min-block-size: 44px;
+  padding: 0;
+  color: var(--pt-primary);
+  font: inherit;
+  font-size: 15px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.pt-nb-exchange__more span {
+  font: var(--pt-t-num-s) var(--pt-font-you);
+}
+
+.pt-nb-stack .pt-nb-exchange__usage {
+  display: block;
+  inline-size: 100%;
+}
+
+.pt-nb-stack__mine .pt-nb-note--flow.pt-nb-note--sticky {
+  flex: none;
+  inline-size: 150px;
+}
+
+.pt-nb-phonebar {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 8px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: var(--pt-page);
+  border-block-start: 1px solid var(--pt-rule);
+}
+
+.pt-nb-phonebar__note {
+  margin: 0;
+  color: var(--pt-ink-2);
+  font-size: 13.5px;
+}
+
+.pt-nb-phonebar__tools {
+  display: flex;
+  gap: 4px;
+  inline-size: 100%;
+}
+
+.pt-nb-phonebar__tools .pt-toolbtn {
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  block-size: 56px;
+  font-size: 13.5px;
+}
+
+.pt-nb-phonebar__tools .pt-toolbtn[aria-pressed='true'] {
+  background: var(--pt-ai-slip);
+  box-shadow: inset 0 -2px 0 var(--pt-primary);
+}
+
+.pt-nb-stack .pt-ai-slip__footer {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+}

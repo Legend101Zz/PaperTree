@@ -1,0 +1,218 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  createHistory,
+  HistoryError,
+  execute,
+  redo,
+  removalCommands,
+  undo,
+  type Command,
+  type NotebookState,
+  type Step,
+} from './history';
+import { stroke, sticky } from './test-helpers';
+
+const s1 = stroke('s1', [
+  [0, 0],
+  [1, 1],
+]);
+const s2 = stroke('s2', [
+  [5, 5],
+  [6, 6],
+]);
+const s3 = stroke('s3', [
+  [9, 9],
+  [9, 10],
+]);
+const empty: NotebookState = { strokes: [], items: [] };
+const begin = (cap?: number): Step => ({ state: empty, history: createHistory(cap) });
+
+describe('history', () => {
+  it('undoes and redoes adds', () => {
+    let s = execute(begin(), { type: 'add-strokes', strokes: [s1] });
+    s = execute(s, { type: 'add-items', items: [sticky('i1', 0, 0)] });
+    s = undo(s);
+    expect(s.state.items).toEqual([]);
+    expect(s.state.strokes).toEqual([s1]);
+    s = undo(s);
+    expect(s.state).toEqual(empty);
+    s = redo(redo(s));
+    expect(s.state.strokes).toEqual([s1]);
+    expect(s.state.items).toHaveLength(1);
+  });
+
+  it('restores removed strokes at their original paint position', () => {
+    let s = execute(begin(), { type: 'add-strokes', strokes: [s1, s2, s3] });
+    for (const c of removalCommands(s.state, ['s1', 's3'], [])) s = execute(s, c);
+    expect(s.state.strokes.map((x) => x.id)).toEqual(['s2']);
+    s = undo(s);
+    expect(s.state.strokes.map((x) => x.id)).toEqual(['s1', 's2', 's3']);
+  });
+
+  it('moves strokes and items together and reverses exactly', () => {
+    let s = execute(begin(), { type: 'add-strokes', strokes: [s1] });
+    s = execute(s, { type: 'add-items', items: [sticky('i1', 10, 10)] });
+    s = execute(s, { type: 'move', strokeIds: ['s1'], itemIds: ['i1'], dx: 5, dy: -3 });
+    expect(s.state.strokes[0]!.points[1]).toEqual([6, -2, 0.5]);
+    expect(s.state.items[0]).toMatchObject({ x: 15, y: 7 });
+    s = undo(s);
+    expect(s.state.strokes[0]!.points[1]).toEqual([1, 1, 0.5]);
+    expect(s.state.items[0]).toMatchObject({ x: 10, y: 10 });
+  });
+
+  it('edits text and undoes it', () => {
+    let s = execute(begin(), { type: 'add-items', items: [sticky('i1', 0, 0)] });
+    s = execute(s, { type: 'edit-text', itemId: 'i1', before: 'i1', after: 'new words' });
+    expect(s.state.items[0]).toMatchObject({ text: 'new words' });
+    expect(undo(s).state.items[0]).toMatchObject({ text: 'i1' });
+  });
+
+  it('drops the redo stack when a new command follows an undo', () => {
+    let s = execute(begin(), { type: 'add-strokes', strokes: [s1] });
+    s = undo(s);
+    expect(s.history.future).toHaveLength(1);
+    s = execute(s, { type: 'add-strokes', strokes: [s2] });
+    expect(s.history.future).toHaveLength(0);
+    expect(redo(s)).toBe(s);
+    expect(s.state.strokes).toEqual([s2]);
+  });
+
+  it('caps the stack, forgetting the oldest, and no-ops at the ends', () => {
+    let s = begin(2);
+    for (const st of [s1, s2, s3]) s = execute(s, { type: 'add-strokes', strokes: [st] });
+    expect(s.history.past).toHaveLength(2);
+    s = undo(undo(s));
+    expect(s.state.strokes.map((x) => x.id)).toEqual(['s1']); // the first add is beyond the cap
+    expect(undo(s)).toBe(s);
+  });
+
+  it('does not mutate the previous state', () => {
+    const before = execute(begin(), { type: 'add-strokes', strokes: [s1] });
+    execute(before, { type: 'move', strokeIds: ['s1'], itemIds: [], dx: 9, dy: 9 });
+    expect(before.state.strokes[0]!.points[0]).toEqual([0, 0, 0.5]);
+  });
+
+  it('rejects a cap that would silently mean unlimited or nothing', () => {
+    for (const bad of [0, -1, NaN, 1.5, Infinity])
+      expect(() => createHistory(bad)).toThrow(HistoryError);
+    expect(createHistory(1).cap).toBe(1);
+  });
+
+  it('refuses to add an id already on the page, so undo cannot remove two', () => {
+    const s = execute(begin(), { type: 'add-strokes', strokes: [s1] });
+    expect(() => execute(s, { type: 'add-strokes', strokes: [s1] })).toThrow(HistoryError);
+    expect(() => execute(s, { type: 'add-strokes', strokes: [s2, s2] })).toThrow(HistoryError);
+    const i = execute(begin(), { type: 'add-items', items: [sticky('i1', 0, 0)] });
+    expect(() => execute(i, { type: 'add-items', items: [sticky('i1', 5, 5)] })).toThrow(
+      HistoryError,
+    );
+    expect(s.state.strokes).toHaveLength(1);
+  });
+
+  it('records no command for a no-op', () => {
+    let s = execute(begin(), { type: 'add-strokes', strokes: [s1] });
+    s = execute(s, { type: 'add-items', items: [sticky('i1', 0, 0)] });
+    const n = s.history.past.length;
+    const noops = [
+      { type: 'move', strokeIds: ['s1'], itemIds: [], dx: 0, dy: 0 },
+      { type: 'move', strokeIds: [], itemIds: [], dx: 4, dy: 4 },
+      { type: 'move', strokeIds: ['nope'], itemIds: [], dx: 4, dy: 4 },
+      { type: 'edit-text', itemId: 'i1', before: 'a', after: 'a' },
+      { type: 'edit-text', itemId: 'missing', before: 'a', after: 'b' },
+      { type: 'add-strokes', strokes: [] },
+    ] as const;
+    for (const cmd of noops) expect(execute(s, cmd)).toBe(s);
+    expect(s.history.past).toHaveLength(n);
+  });
+
+  it('undoes a move to the exact original numbers, even after many cycles', () => {
+    let s = execute(begin(), { type: 'add-strokes', strokes: [stroke('f', [[0.1, 0.7]])] });
+    s = execute(s, { type: 'add-items', items: [sticky('i1', 0.1, 0.7)] });
+    for (let k = 0; k < 20; k++) {
+      s = execute(s, { type: 'move', strokeIds: ['f'], itemIds: ['i1'], dx: 0.3, dy: 0.1 });
+      s = undo(s);
+    }
+    expect(s.state.strokes[0]!.points[0]).toEqual([0.1, 0.7, 0.5]);
+    expect(s.state.items[0]).toMatchObject({ x: 0.1, y: 0.7 });
+  });
+});
+
+describe('resize (S5c)', () => {
+  const box = {
+    kind: 'shape',
+    id: 's1',
+    x: 10,
+    y: 20,
+    w: 100,
+    h: 60,
+    z: 0,
+    shape: 'rect',
+  } as const;
+  const start = { state: { strokes: [], items: [box] }, history: createHistory() };
+
+  it('changes the box, and undo and redo restore each side exactly', () => {
+    const cmd = {
+      type: 'resize',
+      itemId: 's1',
+      before: { x: 10, y: 20, w: 100, h: 60 },
+      after: { x: 2, y: 20, w: 140, h: 72 },
+    } as const;
+    const done = execute(start, cmd);
+    expect(done.state.items[0]).toMatchObject({ x: 2, w: 140, h: 72 });
+    expect(undo(done).state.items[0]).toEqual(box);
+    expect(redo(undo(done)).state.items[0]).toMatchObject({ x: 2, w: 140, h: 72 });
+  });
+
+  it('records nothing for a no-op, a zero size or an unknown item', () => {
+    const same = { x: 10, y: 20, w: 100, h: 60 };
+    expect(execute(start, { type: 'resize', itemId: 's1', before: same, after: same })).toBe(start);
+    const flat = { ...same, h: 0 };
+    expect(execute(start, { type: 'resize', itemId: 's1', before: same, after: flat })).toBe(start);
+    const moved = { ...same, w: 120 };
+    expect(execute(start, { type: 'resize', itemId: 'nope', before: same, after: moved })).toBe(
+      start,
+    );
+  });
+});
+
+describe('batch', () => {
+  const note = { kind: 'text', id: 'n1', x: 0, y: 0, w: 10, h: 10, z: 0, text: 'a' } as const;
+  const ink = {
+    id: 's1',
+    tool: 'pen',
+    nib: 'F',
+    color: 'pen',
+    hasPressure: false,
+    points: [[1, 1, 0.5]],
+  } as const;
+  const start = (): Step => ({
+    state: { strokes: [ink], items: [note] },
+    history: createHistory(),
+  });
+
+  it('runs its parts as ONE undo step, and undoes them in reverse', () => {
+    const s0 = start();
+    const cmd: Command = {
+      type: 'batch',
+      commands: [
+        ...removalCommands(s0.state, ['s1'], ['n1']),
+        { type: 'add-items', items: [{ ...note, id: 'n2', kind: 'sticky', color: 'sticky' }] },
+      ],
+    };
+    const s1 = execute(s0, cmd);
+    expect(s1.state.strokes).toEqual([]);
+    expect(s1.state.items.map((i) => i.id)).toEqual(['n2']);
+    expect(s1.history.past).toHaveLength(1);
+    const back = undo(s1);
+    expect(back.state).toEqual(s0.state);
+    expect(redo(back).state).toEqual(s1.state);
+  });
+
+  it('records nothing when every part would change nothing', () => {
+    const s0 = start();
+    expect(execute(s0, { type: 'batch', commands: removalCommands(s0.state, ['x'], ['y']) })).toBe(
+      s0,
+    );
+  });
+});

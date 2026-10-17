@@ -39,7 +39,9 @@ export type ZoomMode =
  * 150 %, and — worse — lost the reader's place doing it; the place is now kept by
  * `VirtualPageList`'s reading position).
  */
-export const ZOOM_PRESETS: readonly number[] = [0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 3, 4];
+export const ZOOM_PRESETS: readonly number[] = [
+  0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 3, 4,
+];
 export const MIN_ZOOM = 0.25;
 export const MAX_ZOOM = 6;
 
@@ -234,8 +236,6 @@ function pressHandlers(action: () => void): {
 
 const BUTTON_CLASS = 'pt-btn';
 
-const ACTIVE_CLASS = '';
-
 export interface ZoomControlProps {
   readonly mode: ZoomMode;
   /** The resolved scalar — what a fit mode currently works out to. */
@@ -244,7 +244,12 @@ export interface ZoomControlProps {
   readonly className?: string;
 }
 
-export function ZoomControl({ mode, zoom, onModeChange, className }: ZoomControlProps): JSX.Element {
+export function ZoomControl({
+  mode,
+  zoom,
+  onModeChange,
+  className,
+}: ZoomControlProps): JSX.Element {
   const percent = Math.round(zoom * 100);
 
   const setScale = useCallback(
@@ -252,12 +257,15 @@ export function ZoomControl({ mode, zoom, onModeChange, className }: ZoomControl
     [onModeChange],
   );
 
-  const zoomOut = useMemo(() => pressHandlers(() => setScale(nextZoomDown(zoom))), [setScale, zoom]);
+  const zoomOut = useMemo(
+    () => pressHandlers(() => setScale(nextZoomDown(zoom))),
+    [setScale, zoom],
+  );
   const zoomIn = useMemo(() => pressHandlers(() => setScale(nextZoomUp(zoom))), [setScale, zoom]);
-  const fitWidth = useMemo(() => pressHandlers(() => onModeChange(FIT_WIDTH)), [onModeChange]);
 
   // A native <select> rather than a bespoke menu: it is keyboard- and screen-reader-correct for
-  // free, and on touch it opens the platform picker instead of a 20px-tall dropdown.
+  // free, and on touch it opens the platform picker instead of a 20px-tall dropdown. It also holds
+  // "Fit width": v0.2's header (frame 04) has no separate Fit width button (#203).
   const selectValue =
     mode.kind === 'scale'
       ? ZOOM_PRESETS.includes(quantiseZoom(mode.scale))
@@ -314,16 +322,6 @@ export function ZoomControl({ mode, zoom, onModeChange, className }: ZoomControl
         {...zoomIn}
       >
         <span aria-hidden="true">+</span>
-      </button>
-
-      <button
-        type="button"
-        className={joinClasses(BUTTON_CLASS, 'pt-zoom__fit', ACTIVE_CLASS)}
-        aria-label="Fit width"
-        aria-pressed={mode.kind === 'fit-width'}
-        {...fitWidth}
-      >
-        Fit width
       </button>
 
       {/* A live region, not a tooltip: the current zoom must be readable without hovering. It is

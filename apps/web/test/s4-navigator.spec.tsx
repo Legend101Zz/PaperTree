@@ -12,13 +12,21 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { indexDocument, resolveAnchor, captureAnchor, type PaperSource } from '@papertree/anchoring';
+import {
+  indexDocument,
+  resolveAnchor,
+  captureAnchor,
+  type PaperSource,
+} from '@papertree/anchoring';
 
 import { Navigator } from '@/components/reader/Navigator';
 import { UnanchoredTray } from '@/components/reader/UnanchoredTray';
 
 const source = JSON.parse(
-  readFileSync(`${process.cwd()}/../../packages/document-ir/fixtures/resnet-cvpr-2col.paperir.json`, 'utf8'),
+  readFileSync(
+    `${process.cwd()}/../../packages/document-ir/fixtures/resnet-cvpr-2col.paperir.json`,
+    'utf8',
+  ),
 ) as PaperSource;
 const doc = indexDocument(source, 's4-navigator.spec');
 
@@ -72,16 +80,26 @@ describe('s4: the unanchored tray', () => {
   const item = { anchor, resolution: resolveAnchor(anchor, doc), highlightId: 'hl_x' };
 
   it('says Delete removes the WHOLE highlight when other passages of it still paint', () => {
-    render(<UnanchoredTray items={[{ ...item, placedElsewhere: 2 }]} onJumpToPage={() => undefined} onForget={() => undefined} />);
+    render(
+      <UnanchoredTray
+        items={[{ ...item, placedElsewhere: 2 }]}
+        onJumpToPage={() => undefined}
+        onForget={() => undefined}
+      />,
+    );
     screen.getByRole('button', { name: /could not be placed/ }).click();
     return Promise.resolve().then(() => {
       expect(screen.getByRole('button', { name: 'Delete the whole highlight' })).toBeTruthy();
-      expect(screen.getByText(/other 2 passages of this highlight are still on the page/)).toBeTruthy();
+      expect(
+        screen.getByText(/other 2 passages of this highlight are still on the page/),
+      ).toBeTruthy();
     });
   });
 
   it('keeps the plain label when nothing else of it is on the page', () => {
-    render(<UnanchoredTray items={[item]} onJumpToPage={() => undefined} onForget={() => undefined} />);
+    render(
+      <UnanchoredTray items={[item]} onJumpToPage={() => undefined} onForget={() => undefined} />,
+    );
     screen.getByRole('button', { name: /could not be placed/ }).click();
     return Promise.resolve().then(() => {
       expect(screen.getByRole('button', { name: 'Delete highlight' })).toBeTruthy();

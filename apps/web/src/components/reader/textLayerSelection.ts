@@ -180,10 +180,15 @@ function layerUnder(
     return { layer, overText: hit.closest('[data-item-index]') !== null, onPage: true };
   }
   // Only inside the reader's scroller, and only level with a page.
-  if (hit.closest('[data-papertree-scroller]') === null || hit.closest('[role="toolbar"], [role="dialog"], button') !== null) return null;
+  if (
+    hit.closest('[data-papertree-scroller]') === null ||
+    hit.closest('[role="toolbar"], [role="dialog"], button') !== null
+  )
+    return null;
   for (const candidate of layers.keys()) {
     const box = candidate.getBoundingClientRect();
-    if (clientY >= box.top && clientY <= box.bottom) return { layer: candidate, overText: false, onPage: false };
+    if (clientY >= box.top && clientY <= box.bottom)
+      return { layer: candidate, overText: false, onPage: false };
   }
   return null;
 }
@@ -208,7 +213,12 @@ function candidatesOf(layer: HTMLElement): Candidate[] {
  * The item a pointer over BLANK space means. Level with a line: the nearest item on it. In a gap or
  * past the text: the line before the pointer (dragging down) or after it (dragging up).
  */
-function nearestItem(pool: readonly Candidate[], clientX: number, clientY: number, forward: boolean): Candidate | null {
+function nearestItem(
+  pool: readonly Candidate[],
+  clientX: number,
+  clientY: number,
+  forward: boolean,
+): Candidate | null {
   let best: Candidate | null = null;
   let bestScore = Number.POSITIVE_INFINITY;
   // 1. level with a line: the nearest item on it.
@@ -239,12 +249,23 @@ function nearestItem(pool: readonly Candidate[], clientX: number, clientY: numbe
 }
 
 /** The offset in `best` for a pointer that is over blank space near it. */
-function caretIn(best: Candidate, clientX: number, clientY: number, forward: boolean): Caret | null {
+function caretIn(
+  best: Candidate,
+  clientX: number,
+  clientY: number,
+  forward: boolean,
+): Caret | null {
   const node = best.element.firstChild;
   if (!(node instanceof Text)) return null;
   let offset = offsetAtPoint(node, best, clientX, clientY);
   // Below/above the line and beyond it: take the whole line, not a half-letter.
-  if (clientY > best.bottom && forward) offset = clientX >= best.left && clientX < best.right ? offset : clientX >= best.right ? node.data.length : 0;
+  if (clientY > best.bottom && forward)
+    offset =
+      clientX >= best.left && clientX < best.right
+        ? offset
+        : clientX >= best.right
+          ? node.data.length
+          : 0;
   return { node, offset };
 }
 
@@ -255,9 +276,11 @@ function caretUnder(clientX: number, clientY: number): Caret | null {
     caretRangeFromPoint?: (x: number, y: number) => Range | null;
   };
   const position = doc.caretPositionFromPoint?.(clientX, clientY);
-  if (position && position.offsetNode instanceof Text) return { node: position.offsetNode, offset: position.offset };
+  if (position && position.offsetNode instanceof Text)
+    return { node: position.offsetNode, offset: position.offset };
   const range = doc.caretRangeFromPoint?.(clientX, clientY);
-  if (range && range.startContainer instanceof Text) return { node: range.startContainer, offset: range.startOffset };
+  if (range && range.startContainer instanceof Text)
+    return { node: range.startContainer, offset: range.startOffset };
   return null;
 }
 
@@ -282,7 +305,8 @@ export function caretNearBlank(clientX: number, clientY: number): Caret | null {
  */
 export function snapFocusToText(clientX: number, clientY: number, force = false): boolean {
   const selection = document.getSelection();
-  if (selection === null || selection.rangeCount === 0 || selection.anchorNode === null) return false;
+  if (selection === null || selection.rangeCount === 0 || selection.anchorNode === null)
+    return false;
   const under = layerUnder(clientX, clientY);
   if (under === null) return false;
   if (under.overText && !force) return false;
@@ -304,7 +328,10 @@ export function snapFocusToText(clientX: number, clientY: number, force = false)
   }
 
   const anchor = anchorPoint(selection);
-  const forward = anchor === null ? true : clientY > anchor.y + 2 || (Math.abs(clientY - anchor.y) <= 2 && clientX >= anchor.x);
+  const forward =
+    anchor === null
+      ? true
+      : clientY > anchor.y + 2 || (Math.abs(clientY - anchor.y) <= 2 && clientX >= anchor.x);
 
   const all = candidatesOf(layer);
   // A drag stays in its column: only text that overlaps the horizontal span between where the drag
@@ -353,9 +380,17 @@ function enableGlobalListeners(): void {
       snapFocusToText(x, y);
       return;
     }
-    const before = selection.focusNode !== null ? { node: selection.focusNode, offset: selection.focusOffset } : null;
+    const before =
+      selection.focusNode !== null
+        ? { node: selection.focusNode, offset: selection.focusOffset }
+        : null;
     try {
-      selection.setBaseAndExtent(owned.anchor.node, owned.anchor.offset, owned.anchor.node, owned.anchor.offset);
+      selection.setBaseAndExtent(
+        owned.anchor.node,
+        owned.anchor.offset,
+        owned.anchor.node,
+        owned.anchor.offset,
+      );
     } catch {
       owned = null;
       return;
@@ -379,13 +414,21 @@ function enableGlobalListeners(): void {
       const target = event.target instanceof Element ? event.target : null;
       const inLayer = target?.closest('.papertree-text-layer') ?? null;
       const primary = inLayer !== null && event.button === 0 && event.pointerType !== 'touch';
-      downAt = inLayer !== null && event.button === 0 && !event.shiftKey ? { x: event.clientX, y: event.clientY } : null;
+      downAt =
+        inLayer !== null && event.button === 0 && !event.shiftKey
+          ? { x: event.clientX, y: event.clientY }
+          : null;
       if (!primary || event.detail > 1) return;
       const selection = document.getSelection();
       if (event.shiftKey) {
         // Shift+click extends the selection the reader already has. Into blank space the browser
         // chooses the extension from DOM order; the anchor is kept and the focus snapped.
-        if (selection === null || selection.rangeCount === 0 || !(selection.anchorNode instanceof Text)) return;
+        if (
+          selection === null ||
+          selection.rangeCount === 0 ||
+          !(selection.anchorNode instanceof Text)
+        )
+          return;
         const host = selection.anchorNode.parentElement?.closest('.papertree-text-layer');
         if (host === null || host === undefined) return;
         if (caretNearBlank(event.clientX, event.clientY) === null) return;
@@ -408,7 +451,8 @@ function enableGlobalListeners(): void {
       if (event.pointerType === 'touch' || (event.buttons & 1) === 0 || !pointerDown) return;
       const { clientX, clientY } = event;
       if (downAt === null && owned === null) return;
-      if (downAt !== null && Math.hypot(clientX - downAt.x, clientY - downAt.y) > 4) dragging = true;
+      if (downAt !== null && Math.hypot(clientX - downAt.x, clientY - downAt.y) > 4)
+        dragging = true;
       if (!dragging && owned === null) return;
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => apply(clientX, clientY));
@@ -420,7 +464,8 @@ function enableGlobalListeners(): void {
     (event) => {
       cancelAnimationFrame(frame);
       // The final word: before the reader's own pointerup handler reads the selection.
-      if (pointerDown && (dragging || owned !== null) && event.pointerType !== 'touch') apply(event.clientX, event.clientY);
+      if (pointerDown && (dragging || owned !== null) && event.pointerType !== 'touch')
+        apply(event.clientX, event.clientY);
       pointerDown = false;
       dragging = false;
       downAt = null;

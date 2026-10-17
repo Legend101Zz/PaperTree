@@ -43,6 +43,7 @@ import type { BBox } from '@papertree/document-ir';
 
 import { PdfPage, type TextLayerInfo } from './PdfPage';
 import { pageUnitSize, usePdfDocument, type PdfPageMeta } from './PdfDocumentProvider';
+import { tweenScroll } from './flash';
 import { releaseScrollHold } from './scrollHold';
 
 /* ────────────────────────────── the pure windowing math ────────────────────────────── */
@@ -240,7 +241,8 @@ export function computePageWindow(
   for (let i = firstVisible; i <= lastVisible; i += 1) visible.push(i);
 
   const consumedTop = layout.offsets[firstMounted] as number;
-  const lastBottom = (layout.offsets[lastMounted] as number) + (layout.heights[lastMounted] as number);
+  const lastBottom =
+    (layout.offsets[lastMounted] as number) + (layout.heights[lastMounted] as number);
   // Every page but the document's last carries a bottom gutter, so the trailing spacer must not
   // count it twice.
   const trailingGap = lastMounted < n - 1 ? layout.gap : 0;
@@ -330,6 +332,11 @@ export interface FloatingGeometry {
   irScale(pageIndex: number): number;
   /** The content column's width, px. */
   readonly contentWidth: number;
+  /**
+   * The part of the content box on screen, content px (#203: the selection toolbar is placed in
+   * it). Wider than the content column when the scroller is wider than the pages.
+   */
+  readonly viewport: { left: number; top: number; right: number; bottom: number };
 }
 
 /* ────────────────────────────── visible-page publication ────────────────────────────── */
@@ -403,12 +410,45 @@ export function useVisiblePages(): VisiblePages {
 export interface ScrollToOptions {
   readonly behavior?: ScrollBehavior;
   readonly margin?: number;
+  /** Leave the scroll alone when the whole rectangle is already in view (the citation flash). */
+  readonly ifNeeded?: boolean;
+  /** Tween the scroll over this many ms instead of `behavior` (`reader/flash`, #202). */
+  readonly durationMs?: number;
+  /**
+   * CSS px at the bottom of the view that something covers (the phone's peek sheet, #205): the
+   * rectangle is in view only above it, and a scroll places it in what is left.
+   */
+  readonly bottomInset?: number;
+}
+
+/**
+ * Whether a span of the scroller's content is wholly on screen: below the scroll top and above
+ * the bottom of the view, less whatever covers its foot (the phone's peek sheet, #205).
+ *
+ * @param top - The span's top, in the scroller's content px.
+ * @param bottom - Its bottom.
+ * @param scrollTop - The scroller's `scrollTop`.
+ * @param clientHeight - The scroller's `clientHeight`.
+ * @param bottomInset - Px covered at the bottom of the view.
+ * @returns True when no scroll is needed to see all of it.
+ */
+export function spanInView(
+  top: number,
+  bottom: number,
+  scrollTop: number,
+  clientHeight: number,
+  bottomInset = 0,
+): boolean {
+  return top >= scrollTop && bottom <= scrollTop + clientHeight - Math.max(0, bottomInset);
 }
 
 export interface VirtualPageListHandle {
   scrollToPage(pageIndex: number, opts?: ScrollToOptions): void;
-  /** `bbox` is IR space: PDF points, origin top-left, `/Rotate` applied. */
-  scrollToBlock(pageIndex: number, bbox: BBox, opts?: ScrollToOptions): void;
+  /**
+   * `bbox` is IR space: PDF points, origin top-left, `/Rotate` applied. Returns whether it
+   * scrolled (false with `ifNeeded` when the rectangle was already in view).
+   */
+  scrollToBlock(pageIndex: number, bbox: BBox, opts?: ScrollToOptions): boolean;
   getVisiblePages(): VisiblePages;
   getScrollElement(): HTMLDivElement | null;
   /** Put this position at the top of the viewport. */
@@ -484,7 +524,9 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
     const store = useContext(VisiblePagesContext);
 
     const [scrollTop, setScrollTop] = useState(0);
+    const [scrollLeft, setScrollLeft] = useState(0);
     const [viewportHeight, setViewportHeight] = useState(0);
+    const [viewportWidth, setViewportWidth] = useState(0);
 
     const units = useMemo<UnitSize[]>(() => {
       const out: UnitSize[] = [];
@@ -499,7 +541,12 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
     const layout = useMemo(() => computePageLayout(units, zoom, gap), [units, zoom, gap]);
     const win = useMemo(
       () =>
-        computePageWindow(layout, Math.max(0, scrollTop - CONTENT_PAD_TOP), viewportHeight, overscan),
+        computePageWindow(
+          layout,
+          Math.max(0, scrollTop - CONTENT_PAD_TOP),
+          viewportHeight,
+          overscan,
+        ),
       [layout, scrollTop, viewportHeight, overscan],
     );
 
@@ -555,6 +602,7 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
         const el = scrollRef.current;
         if (el === null) return;
         setScrollTop(el.scrollTop);
+        setScrollLeft(el.scrollLeft);
         const current = layoutRef.current;
         if (current === null) return;
         const position = positionAt(current, el.scrollTop - CONTENT_PAD_TOP, irScaleOfRef.current);
@@ -583,12 +631,14 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
       const el = scrollRef.current;
       if (el === null) return;
       setViewportHeight(el.clientHeight);
+      setViewportWidth(el.clientWidth);
       onViewportResizeRef.current?.({ width: el.clientWidth, height: el.clientHeight });
       if (typeof ResizeObserver === 'undefined') return;
       const observer = new ResizeObserver((entries) => {
         const entry = entries[0];
         if (entry === undefined) return;
         setViewportHeight(entry.contentRect.height);
+        setViewportWidth(entry.contentRect.width);
         onViewportResizeRef.current?.({
           width: entry.contentRect.width,
           height: entry.contentRect.height,
@@ -632,16 +682,32 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
         },
         scrollToBlock(pageIndex, bbox, opts) {
           const el = scrollRef.current;
-          if (el === null) return;
+          if (el === null) return false;
+          const inset = Math.max(0, opts?.bottomInset ?? 0);
+          if (opts?.ifNeeded === true) {
+            const scale = irScaleFor(pageIndex);
+            const top = CONTENT_PAD_TOP + offsetForPage(layout, pageIndex) + bbox[1] * scale;
+            const bottom = top + (bbox[3] - bbox[1]) * scale;
+            if (spanInView(top, bottom, el.scrollTop, el.clientHeight, inset)) return false;
+          }
           const target = offsetForBlock(layout, pageIndex, bbox, irScaleFor(pageIndex), {
             margin: opts?.margin ?? 24,
-            viewportHeight,
+            viewportHeight: Math.max(0, viewportHeight - inset),
           });
           // Horizontally only when the page is wider than the viewport: otherwise a column on the
           // right would drag a centred page sideways for nothing.
           const left = layout.maxWidth > el.clientWidth ? target.left : el.scrollLeft;
           releaseScrollHold(el);
-          el.scrollTo({ top: CONTENT_PAD_TOP + target.top, left, behavior: opts?.behavior ?? 'auto' });
+          if (opts?.durationMs !== undefined) {
+            tweenScroll(el, CONTENT_PAD_TOP + target.top, left, opts.durationMs);
+            return true;
+          }
+          el.scrollTo({
+            top: CONTENT_PAD_TOP + target.top,
+            left,
+            behavior: opts?.behavior ?? 'auto',
+          });
+          return true;
         },
         scrollToPosition(position) {
           const el = scrollRef.current;
@@ -678,7 +744,10 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
     return (
       <div
         ref={scrollRef}
-        className={joinClasses('relative h-full w-full overflow-auto overscroll-contain', className)}
+        className={joinClasses(
+          'relative h-full w-full overflow-auto overscroll-contain',
+          className,
+        )}
         onScroll={onScroll}
         onPointerDown={surfaceProps?.onPointerDown}
         onPointerMove={surfaceProps?.onPointerMove}
@@ -742,6 +811,7 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
                 },
                 irScale: irScaleFor,
                 contentWidth: layout.maxWidth,
+                viewport: visibleBox(scrollTop, scrollLeft, viewportWidth, viewportHeight, layout),
               })}
             </div>
           )}
@@ -750,6 +820,19 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
     );
   },
 );
+
+/** The visible part of the content box, in its own px: it is centred when narrower (`margin: auto`). */
+function visibleBox(
+  scrollTop: number,
+  scrollLeft: number,
+  width: number,
+  height: number,
+  layout: PageLayout,
+): FloatingGeometry['viewport'] {
+  const left = scrollLeft - Math.max(0, (width - layout.maxWidth) / 2);
+  const top = scrollTop - CONTENT_PAD_TOP;
+  return { left, top, right: left + width, bottom: top + height };
+}
 
 function joinClasses(...values: readonly (string | undefined)[]): string {
   return values.filter((v): v is string => typeof v === 'string' && v.length > 0).join(' ');

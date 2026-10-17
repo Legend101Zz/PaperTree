@@ -47,7 +47,10 @@ export default function RegisterPage() {
   };
 
   return (
-    <AuthShell title="Create your account" subtitle="Read papers with the paper itself in front of you.">
+    <AuthShell
+      title="Create your account"
+      subtitle="Read papers with the paper itself in front of you."
+    >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {error && (
           <p role="alert" className="pt-s3-alert pt-s3-alert--error">

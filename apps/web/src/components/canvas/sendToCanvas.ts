@@ -3,27 +3,36 @@
  *
  *   { kind: 'excerpt', anchor }       -> an excerpt node holding the Anchor (never a bare block id)
  *   { kind: 'explanation', messageId } -> an explanation node holding the answer's text
+ *   { kind: 'diagram', messageId, title } -> a diagram card holding the plate's message id (#217),
+ *                                          one card per plate
  *
  * A board is created ONLY here, by an explicit send: the first `createNode` creates it in the
  * same transaction (ADR-002 §3.7). The new node is placed where it overlaps no existing node, and
- * a toast says so with an "Open canvas" link. A failure throws (the reader shows its notice); an
+ * a toast says so with an "Open board" link: a passage from the selection toolbar's "Send to board"
+ * (#203) and an answer from the explain panel's "Send to board" alike (#214). A failure throws (the reader shows its notice); an
  * explanation send also shows its own error toast, because the explain panel is another slice's.
  */
-import type { SendToCanvasInput } from '@/components/reader/actions';
 import { displayQuote } from '@/components/reader/quote';
 import { ApiError } from '@/lib/api/types';
 import { boardsApi } from '@/lib/api/boards';
 import { threadsApi } from '@/lib/api/threads';
+import { newNodeId } from '@/features/board/model/ids';
+import { DEFAULT_SIZE, freeSpot } from '@/features/board/model/placement';
 
 import { findExcerptFor } from './duplicate';
-import { newNodeId } from './ids';
-import { DEFAULT_SIZE, freeSpot } from './placement';
 import { showCanvasToast } from './toast';
+
+import type { SendToCanvasInput } from '@/components/reader/actions';
 
 const MAX_THREADS_SEARCHED = 6;
 /** The API's card limits (schemas.py), so a long answer is clipped instead of refused. */
 const CANVAS_BODY_MAX = 20_000;
 const CANVAS_TITLE_MAX = 200;
+const ADDED: Record<SendToCanvasInput['kind'], string> = {
+  excerpt: 'Passage added to your board.',
+  explanation: 'Answer added to your board.',
+  diagram: 'Plate added to your board.',
+};
 
 /** The text of an assistant message: the newest threads first, which is where the open panel is. */
 async function messageText(
@@ -42,15 +51,21 @@ async function messageText(
   return null;
 }
 
+/** The board's route (#214; `/canvas` redirects to it). */
+const boardHref = (paperId: string): string => `/paper/${encodeURIComponent(paperId)}/board`;
+
 function sentence(error: unknown): string {
   if (error instanceof ApiError && error.detail.length > 0) return error.detail;
-  return "Couldn't add this to the canvas. Check your connection and try again.";
+  return "Couldn't add this to the board. Check your connection and try again.";
 }
 
-export async function sendToCanvas(paperId: string | null, input: SendToCanvasInput): Promise<void> {
+export async function sendToCanvas(
+  paperId: string | null,
+  input: SendToCanvasInput,
+): Promise<void> {
   if (paperId === null) {
     // A fixture paper has no account, so there is nowhere to keep a board.
-    const message = 'This sample paper is not in your library, so it has no canvas.';
+    const message = 'This sample paper is not in your library, so it has no board.';
     if (input.kind === 'explanation') showCanvasToast({ message, tone: 'error' });
     throw new Error(message);
   }
@@ -58,13 +73,31 @@ export async function sendToCanvas(paperId: string | null, input: SendToCanvasIn
     const view = await boardsApi.get(paperId);
     const size = DEFAULT_SIZE[input.kind];
     const spot = freeSpot(view.nodes, size);
-    if (input.kind === 'excerpt') {
-      // The same passage twice would be two identical cards: say so and point at the canvas.
+    if (input.kind === 'diagram') {
+      // One plate, one card: a second send points at the card already there (#217).
+      if (view.nodes.some((n) => n.kind === 'diagram' && n.source_diagram_id === input.messageId)) {
+        showCanvasToast({
+          message: 'This plate is already on your board',
+          href: boardHref(paperId),
+          linkLabel: 'Open board',
+        });
+        return;
+      }
+      await boardsApi.createNode(paperId, {
+        node_id: newNodeId(),
+        kind: 'diagram',
+        ...spot,
+        ...size,
+        title: input.title.slice(0, CANVAS_TITLE_MAX),
+        source_diagram_id: input.messageId,
+      });
+    } else if (input.kind === 'excerpt') {
+      // The same passage twice would be two identical cards: say so and point at the board.
       if (findExcerptFor(view.nodes, input.anchor) !== null) {
         showCanvasToast({
-          message: 'Already on your canvas',
-          href: `/paper/${encodeURIComponent(paperId)}/canvas`,
-          linkLabel: 'Open canvas',
+          message: 'Already on your board',
+          href: boardHref(paperId),
+          linkLabel: 'Open board',
         });
         return;
       }
@@ -79,7 +112,12 @@ export async function sendToCanvas(paperId: string | null, input: SendToCanvasIn
     } else {
       const found = await messageText(paperId, input.messageId);
       if (found === null) {
-        throw new ApiError(404, 'not_found', "This answer isn't saved yet, so it can't be added.", false);
+        throw new ApiError(
+          404,
+          'not_found',
+          "This answer isn't saved yet, so it can't be added.",
+          false,
+        );
       }
       await boardsApi.createNode(paperId, {
         node_id: newNodeId(),
@@ -92,9 +130,9 @@ export async function sendToCanvas(paperId: string | null, input: SendToCanvasIn
       });
     }
     showCanvasToast({
-      message: input.kind === 'excerpt' ? 'Passage added to your canvas.' : 'Answer added to your canvas.',
-      href: `/paper/${encodeURIComponent(paperId)}/canvas`,
-      linkLabel: 'Open canvas',
+      message: ADDED[input.kind],
+      href: boardHref(paperId),
+      linkLabel: 'Open board',
     });
   } catch (error) {
     if (input.kind === 'explanation') showCanvasToast({ message: sentence(error), tone: 'error' });

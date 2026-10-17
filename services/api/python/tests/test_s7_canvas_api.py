@@ -342,7 +342,15 @@ def test_edges_end_to_end_and_their_errors(tmp_path: Path) -> None:
         )
         made = h.client.post(url, headers=auth(token), json={**edge, "label": "because"})
         assert made.status_code == 201, made.text
-        assert made.json() == {"board_id": board_id, "label": "because", **edge}
+        body = made.json()
+        assert body.pop("created_at")  # v0.2: the wire carries the edge's age
+        assert body == {
+            "board_id": board_id,
+            "label": "because",
+            "from_port": None,  # a v0.1-style edge has no pins
+            "to_port": None,
+            **edge,
+        }
         patched = h.client.patch(
             f"{url}/ce_edge0001", headers=auth(token), json={"kind": "contradicts", "label": None}
         )

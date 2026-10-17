@@ -1,7 +1,8 @@
 /**
  * The committed contract files, read the way the tests hold the agent to them: ajv over
  * `contracts/agent/*.schema.json` (ajv 8.20.0 is this package's devDependency), the eight recorded
- * streams, and the three request examples.
+ * streams plus the diagram stream (v0.2 S7a; emitted under the faux brain), and the request
+ * examples.
  */
 import { readFileSync } from 'node:fs';
 
@@ -33,6 +34,7 @@ export const FIXTURE_NAMES = [
   'auth-error',
   'aborted-partial',
   'upstream-503-retry-ok',
+  'diagram-ok',
 ] as const;
 export type FixtureName = (typeof FIXTURE_NAMES)[number];
 
@@ -65,7 +67,9 @@ export function readFixture(name: FixtureName): Fixture {
   };
 }
 
-export function readExample(name: 'explain' | 'followup' | 'summary'): Record<string, any> {
+export function readExample(
+  name: 'explain' | 'followup' | 'summary' | 'diagram' | 'topic',
+): Record<string, any> {
   return readJson(`examples/run-request-${name}.json`);
 }
 

@@ -1,11 +1,11 @@
 'use client';
 
 /**
- * canvas/toast — the short confirmation after "Send to canvas", with an "Open canvas" link.
+ * canvas/toast — the short confirmation after "Send to board", with an "Open board" link.
  *
  * It mounts itself into `document.body`, so the reader (S4) and the explain panel (S6) call
  * `sendToCanvas` without owning a toast slot. One toast at a time. It stays 8 s, and the clock stops while the pointer is over it or focus is
- * inside it, so "Open canvas" can be reached by mouse or by keyboard (Tab) before it goes.
+ * inside it, so "Open board" can be reached by mouse or by keyboard (Tab) before it goes.
  */
 import { useEffect, useRef, useState, type FocusEvent } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -22,7 +22,7 @@ let root: Root | null = null;
 let seq = 0;
 
 /**
- * How the last gesture was made, and on what. A keyboard "Send to canvas" disables its own button
+ * How the last gesture was made, and on what. A keyboard "Send to board" disables its own button
  * while it works, which drops focus to the page, so the toast cannot ask `document.activeElement`
  * afterwards; it remembers the last keyboard target instead, until a pointer press replaces it.
  */
@@ -70,7 +70,7 @@ function Toast({ content, onDismiss }: { content: CanvasToastContent; onDismiss:
   }, [paused, onDismiss]);
   const link = useRef<HTMLAnchorElement>(null);
   const previous = useRef<HTMLElement | null>(null);
-  // A keyboard user who pressed "Send to canvas" lands on "Open canvas" (it is otherwise at the end
+  // A keyboard user who pressed "Send to board" lands on "Open board" (it is otherwise at the end
   // of the page); Escape or Dismiss puts them back where they were. A mouse click moves nothing.
   useEffect(() => {
     previous.current = keyboardOrigin;
@@ -78,7 +78,9 @@ function Toast({ content, onDismiss }: { content: CanvasToastContent; onDismiss:
   }, []);
   const close = (): void => {
     const back = previous.current;
-    const hadFocus = document.activeElement !== null && link.current?.parentElement?.contains(document.activeElement) === true;
+    const hadFocus =
+      document.activeElement !== null &&
+      link.current?.parentElement?.contains(document.activeElement) === true;
     onDismiss();
     if (hadFocus && back !== null && back.isConnected) back.focus();
   };
@@ -103,7 +105,7 @@ function Toast({ content, onDismiss }: { content: CanvasToastContent; onDismiss:
         <span>{content.message}</span>
         {content.href === undefined ? null : (
           <a ref={link} className="pt-btn pt-btn--outline" href={content.href}>
-            {content.linkLabel ?? 'Open canvas'}
+            {content.linkLabel ?? 'Open board'}
           </a>
         )}
         <button type="button" className="pt-btn" onClick={close}>

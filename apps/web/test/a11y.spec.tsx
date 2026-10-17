@@ -28,7 +28,6 @@ import { cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DerivedBlock } from '@papertree/ui';
 
-import { PaperGrid } from '@/components/library/PaperGrid';
 import {
   EmptyLibrary,
   FailureState,
@@ -36,6 +35,8 @@ import {
   PartialState,
   UncertaintyState,
 } from '@/components/library/SystemStates';
+import { Shelf } from '@/features/library';
+
 import { CASES, PAPERS } from './library-cases';
 
 afterEach(cleanup);
@@ -104,13 +105,34 @@ describe('axe: zero violations at WCAG 2.2 AA', () => {
   it('actually ran a meaningful set of rules (guards against a vacuous pass)', async () => {
     // A `runOnly` typo, or an axe that silently found nothing to evaluate, produces "zero
     // violations" too. This asserts the sweep had teeth.
-    const { container } = render(<PaperGrid papers={PAPERS} onOpen={() => {}} onRetry={() => {}} />);
+    // #195: the card grid is gone; the shelf (buttons, ARIA) and the failure state (a list) between
+    // them still exercise every rule named below.
+    const { container } = render(
+      <>
+        <Shelf
+          papers={PAPERS}
+          arrangement="topic"
+          matches={null}
+          openId={null}
+          cardId="card"
+          onActivate={() => {}}
+        />
+        <FailureState
+          failedStep="equation crops"
+          completedSteps={['page images']}
+          onRetryFrom={() => {}}
+        />
+      </>,
+    );
     const results = await analyse(container);
 
     const evaluated = new Set(
-      [...results.passes, ...results.violations, ...results.incomplete, ...results.inapplicable].map(
-        (result) => result.id,
-      ),
+      [
+        ...results.passes,
+        ...results.violations,
+        ...results.incomplete,
+        ...results.inapplicable,
+      ].map((result) => result.id),
     );
     for (const rule of ['button-name', 'aria-valid-attr-value', 'aria-required-attr', 'list']) {
       expect(evaluated.has(rule), `axe did not evaluate ${rule}`).toBe(true);
@@ -183,13 +205,22 @@ describe('keyboard operation', () => {
     });
   }
 
-  it('Enter/Space on a card title opens the paper', () => {
-    const onOpen = vi.fn();
-    const { container } = render(<PaperGrid papers={PAPERS} onOpen={onOpen} onRetry={() => {}} />);
-    const title = container.querySelector<HTMLButtonElement>('h3 button');
-    expect(title).not.toBeNull();
-    fireEvent.click(title as HTMLButtonElement, { detail: 0 });
-    expect(onOpen).toHaveBeenCalledWith('p-pending');
+  it('a click (Space; Enter on an unparsed book) on a spine takes the book down (#195, #200)', () => {
+    const onActivate = vi.fn();
+    const { container } = render(
+      <Shelf
+        papers={PAPERS}
+        arrangement="topic"
+        matches={null}
+        openId={null}
+        cardId="card"
+        onActivate={onActivate}
+      />,
+    );
+    const spine = container.querySelector<HTMLButtonElement>('button[tabindex="0"]');
+    expect(spine).not.toBeNull();
+    fireEvent.click(spine as HTMLButtonElement, { detail: 0 });
+    expect(onActivate).toHaveBeenCalledWith('p-pending');
   });
 
   it('Enter/Space on Retry resumes from the failed step, not from scratch', () => {
@@ -212,7 +243,11 @@ describe('keyboard operation', () => {
   it('Enter/Space on a hatched page opens that page', () => {
     const onOpenPage = vi.fn();
     const { container } = render(
-      <PartialState partialReason="Pages 12-14 were skipped." affectedPages={[11]} onOpenPage={onOpenPage} />,
+      <PartialState
+        partialReason="Pages 12-14 were skipped."
+        affectedPages={[11]}
+        onOpenPage={onOpenPage}
+      />,
     );
     const chip = container.querySelector<HTMLButtonElement>('[data-testid="partial-pages"] button');
     expect(chip).not.toBeNull();
@@ -222,7 +257,7 @@ describe('keyboard operation', () => {
 
   it('Enter/Space adds the first paper from the empty library', () => {
     const onAddPaper = vi.fn();
-    const { container } = render(<EmptyLibrary onAddPaper={onAddPaper} onOpenSample={() => {}} />);
+    const { container } = render(<EmptyLibrary onAddPaper={onAddPaper} />);
     const add = Array.from(container.querySelectorAll('button')).find((button) =>
       (button.textContent ?? '').includes('Upload a PDF'),
     );
@@ -296,7 +331,9 @@ describe('keyboard operation', () => {
 function assertDerivedRegionsAnnounced(root: HTMLElement, label: string): number {
   const regions = Array.from(root.querySelectorAll<HTMLElement>('[data-derived="true"]'));
   for (const region of regions) {
-    expect(region.getAttribute('role'), `${label}: derived region without role="note"`).toBe('note');
+    expect(region.getAttribute('role'), `${label}: derived region without role="note"`).toBe(
+      'note',
+    );
     const ariaLabel = region.getAttribute('aria-label') ?? '';
     expect(
       ariaLabel,

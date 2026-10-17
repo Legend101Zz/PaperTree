@@ -6,11 +6,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  staleSubject,
-  useBoardController,
-} from '@/components/canvas/useBoardController';
-import { cardName } from '@/components/canvas/model';
+import { staleSubject, useBoardController } from '@/features/board/hooks/useBoardController';
+import { cardName } from '@/features/board/model/flow';
 import { boardsApi } from '@/lib/api/boards';
 import { ApiError, type Board, type CanvasEdge, type CanvasNode } from '@/lib/api/types';
 
@@ -28,18 +25,52 @@ vi.mock('@/lib/api/boards', () => ({
 }));
 
 const api = vi.mocked(boardsApi);
-const BOARD: Board = { board_id: 'brd_1', paper_id: 'ppr_1', title: 'Canvas', viewport: null, created_at: '', updated_at: '' };
+const BOARD: Board = {
+  board_id: 'brd_1',
+  paper_id: 'ppr_1',
+  title: 'Canvas',
+  viewport: null,
+  created_at: '',
+  updated_at: '',
+};
 const ANCHOR = { id: 'anc_1', doc: { paperId: 'ppr_1' }, selectors: [] } as never;
 
 function node(id: string, extra: Partial<CanvasNode> = {}): CanvasNode {
   return {
-    node_id: id, board_id: 'brd_1', kind: 'note', group_id: null, x: 0, y: 0, w: 260, h: 150, z: 0,
-    title: null, body: 'b', source_anchor: null, source_message_id: null, version: 1,
-    created_at: '', updated_at: '', ...extra,
+    node_id: id,
+    board_id: 'brd_1',
+    kind: 'note',
+    group_id: null,
+    x: 0,
+    y: 0,
+    w: 260,
+    h: 150,
+    z: 0,
+    title: null,
+    body: 'b',
+    source_anchor: null,
+    source_message_id: null,
+    source_page_id: null,
+    source_diagram_id: null,
+    counts: null,
+    version: 1,
+    created_at: '',
+    updated_at: '',
+    ...extra,
   };
 }
 function edge(id: string, from: string, to: string): CanvasEdge {
-  return { edge_id: id, board_id: 'brd_1', from_node_id: from, to_node_id: to, kind: 'supports', label: 'because' };
+  return {
+    edge_id: id,
+    board_id: 'brd_1',
+    from_node_id: from,
+    to_node_id: to,
+    kind: 'supports',
+    label: 'because',
+    from_port: null,
+    to_port: null,
+    created_at: '',
+  };
 }
 
 async function mount(nodes: CanvasNode[], edges: CanvasEdge[] = []) {
@@ -56,9 +87,19 @@ beforeEach(() => {
   api.deleteEdge.mockResolvedValue(undefined);
   api.createNode.mockImplementation(async (_p, body) => ({
     board: BOARD,
-    node: node(body.node_id, { kind: body.kind, body: body.body ?? '', title: body.title ?? null, x: body.x, y: body.y, w: body.w, h: body.h }),
+    node: node(body.node_id, {
+      kind: body.kind,
+      body: body.body ?? '',
+      title: body.title ?? null,
+      x: body.x,
+      y: body.y,
+      w: body.w,
+      h: body.h,
+    }),
   }));
-  api.createEdge.mockImplementation(async (_b, body) => edge(body.edge_id, body.from_node_id, body.to_node_id));
+  api.createEdge.mockImplementation(async (_b, body) =>
+    edge(body.edge_id, body.from_node_id, body.to_node_id),
+  );
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -67,9 +108,18 @@ afterEach(() => {
 describe('Undo after a delete', () => {
   it('offers Undo, and Undo re-POSTs the card and its link with the SAME ids', async () => {
     const passage = node('cn_a', {
-      kind: 'excerpt', body: 'A long passage the reader selected', source_anchor: ANCHOR, x: 40, y: 50, w: 300, h: 200,
+      kind: 'excerpt',
+      body: 'A long passage the reader selected',
+      source_anchor: ANCHOR,
+      x: 40,
+      y: 50,
+      w: 300,
+      h: 200,
     });
-    const { result } = await mount([passage, node('cn_b', { x: 500 })], [edge('ce_ab', 'cn_a', 'cn_b')]);
+    const { result } = await mount(
+      [passage, node('cn_b', { x: 500 })],
+      [edge('ce_ab', 'cn_a', 'cn_b')],
+    );
 
     act(() => result.current.deleteSelection(['cn_a'], []));
     expect(result.current.nodes.map((n) => n.id)).toEqual(['cn_b']);
@@ -84,11 +134,21 @@ describe('Undo after a delete', () => {
     expect(api.createNode).toHaveBeenCalledTimes(1);
     expect(api.createNode.mock.calls[0]![0]).toBe('ppr_1');
     expect(api.createNode.mock.calls[0]![1]).toMatchObject({
-      node_id: 'cn_a', kind: 'excerpt', x: 40, y: 50, w: 300, h: 200,
-      body: 'A long passage the reader selected', source_anchor: ANCHOR,
+      node_id: 'cn_a',
+      kind: 'excerpt',
+      x: 40,
+      y: 50,
+      w: 300,
+      h: 200,
+      body: 'A long passage the reader selected',
+      source_anchor: ANCHOR,
     });
     expect(api.createEdge).toHaveBeenCalledWith('brd_1', {
-      edge_id: 'ce_ab', from_node_id: 'cn_a', to_node_id: 'cn_b', kind: 'supports', label: 'because',
+      edge_id: 'ce_ab',
+      from_node_id: 'cn_a',
+      to_node_id: 'cn_b',
+      kind: 'supports',
+      label: 'because',
     });
     expect(result.current.nodes.map((n) => n.id).sort()).toEqual(['cn_a', 'cn_b']);
     expect(result.current.edges.map((e) => e.id)).toEqual(['ce_ab']);
@@ -103,7 +163,10 @@ describe('Undo after a delete', () => {
       await result.current.runUndo();
     });
     expect(api.deleteEdge).toHaveBeenCalledWith('brd_1', 'ce_ab');
-    expect(api.createEdge).toHaveBeenCalledWith('brd_1', expect.objectContaining({ edge_id: 'ce_ab' }));
+    expect(api.createEdge).toHaveBeenCalledWith(
+      'brd_1',
+      expect.objectContaining({ edge_id: 'ce_ab' }),
+    );
     expect(api.createNode).not.toHaveBeenCalled();
   });
 
@@ -112,14 +175,17 @@ describe('Undo after a delete', () => {
       node('cn_g', { kind: 'group', title: 'Group' }),
       node('cn_a', { group_id: 'cn_g' }),
     ]);
-    api.get.mockResolvedValue({ board: BOARD, nodes: [node('cn_a', { version: 3 })], edges: [] });
     act(() => result.current.deleteNodes(['cn_g']));
     await act(async () => {
       await result.current.runUndo();
     });
     expect(api.createNode.mock.calls[0]![1]).toMatchObject({ node_id: 'cn_g', kind: 'group' });
-    // The member's version comes from a fresh read: the server's trigger ungrouped it.
-    await waitFor(() => expect(api.patchNode).toHaveBeenCalledWith('brd_1', 'cn_a', { version: 3, group_id: 'cn_g' }));
+    // The server's trigger ungroups without a new version (0008), so the version held is the
+    // server's and no fresh read is made; a member changed elsewhere answers 409 (#215).
+    await waitFor(() =>
+      expect(api.patchNode).toHaveBeenCalledWith('brd_1', 'cn_a', { version: 1, group_id: 'cn_g' }),
+    );
+    expect(api.get).toHaveBeenCalledTimes(1);
     expect(result.current.nodes.find((n) => n.id === 'cn_a')?.data.node.group_id).toBe('cn_g');
   });
 
@@ -149,7 +215,11 @@ describe('Undo after a delete', () => {
     await act(async () => {
       await result.current.runUndo();
     });
-    await waitFor(() => expect(result.current.notice).toMatch(/bring that back/i));
+    await waitFor(() =>
+      expect(result.current.notice).toBe(
+        "Couldn't undo delete of “b”. The board was reloaded from your last saved version.",
+      ),
+    );
     expect(api.get).toHaveBeenCalledTimes(2);
   });
 });
@@ -160,7 +230,9 @@ describe('the stale-version notice', () => {
     api.patchNode.mockRejectedValueOnce(new ApiError(409, 'stale_version', 'stale', false));
     // A drag-end (a position change) leaves the words alone, so the name is the card's own words.
     act(() => {
-      result.current.onNodesChange([{ type: 'position', id: 'cn_a', position: { x: 90, y: 5 }, dragging: true }]);
+      result.current.onNodesChange([
+        { type: 'position', id: 'cn_a', position: { x: 90, y: 5 }, dragging: true },
+      ]);
       result.current.onNodeDragStop();
     });
     await waitFor(() =>

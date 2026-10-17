@@ -85,6 +85,7 @@ const ERROR_CODES: Record<ErrorCode, true> = {
   busy: true,
   stale_version: true,
   generation_not_found: true,
+  topic_exists: true,
   anchor_incomplete: true,
   anchor_mismatch: true,
   budget_exhausted: true,
@@ -305,6 +306,10 @@ const SSE_EVENTS: ReadonlySet<string> = new Set([
   'citations',
   'usage',
   'done',
+  // A diagram run's plate, parts and feedback edges (v0.2 S7a, #216).
+  'plate',
+  'part',
+  'link',
 ]);
 
 /**
@@ -472,9 +477,7 @@ export function uploadWithProgress(
         try {
           resolve(JSON.parse(xhr.responseText) as UploadResponse);
         } catch {
-          reject(
-            new ApiError(xhr.status, 'internal', 'The upload response was not JSON.', false),
-          );
+          reject(new ApiError(xhr.status, 'internal', 'The upload response was not JSON.', false));
         }
         return;
       }

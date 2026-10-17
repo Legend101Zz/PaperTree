@@ -94,7 +94,8 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
     await drag(page, points.from, points.to);
     const toolbar = page.getByRole('toolbar', { name: 'Selection actions' });
     await expect(toolbar).toBeVisible();
-    const ask = toolbar.getByRole('button', { name: /Ask/ });
+    // #203: Explain runs the answer now (v0.1's Ask); the toolbar's Ask waits for a question.
+    const ask = toolbar.getByRole('button', { name: 'Explain this passage' });
     const box = await ask.boundingBox();
     expect(box).not.toBeNull();
     await page.screenshot({ path: shot('c01-selection-1440.png') });
@@ -109,7 +110,8 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
     await expect(panel.locator('[data-explain-quote]')).toContainText('We reframe object');
     const answer = panel.locator('[data-message-status]').first();
     await expect(answer).toHaveAttribute('data-message-status', 'complete', { timeout: 120_000 });
-    await expect(panel.locator('[data-register="ai"]').first()).toContainText('AI interpretation');
+    // #202: the answer is an AI slip (the AI's voice), its citations numbered passage markers.
+    await expect(panel.locator('[data-voice="ai"]').first()).toBeVisible();
     const text = (await panel.innerText()).replace(/\s+/g, ' ');
     expect(text).not.toMatch(/\[b\d+\]|\bmsg_|\bthr_|\brun_|\bblk_|\{"|"citation_id"/);
     const chips = panel.locator('[data-citation-id]');
@@ -133,7 +135,7 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
     expect(threadPosts.filter((p) => !p.endsWith('/messages'))).toHaveLength(1);
     await page.screenshot({ path: shot('c03-followup-1440.png') });
 
-    // ── a chip: the cited passage scrolls into view and flashes ──
+    // ── a marker: the cited passage scrolls into view and flashes ──
     await panel.locator('[data-citation-id]').first().click();
     const flash = page.locator('svg [data-flash="true"] polygon');
     await expect(flash.first()).toBeVisible({ timeout: 10_000 });
@@ -192,7 +194,8 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
 
     // ── reload: the cached summary, with NO new run ──
     await open();
-    await page.getByRole('button', { name: 'Ask AI' }).click();
+    // #203: the header's Explain toggle opens the panel (it replaced the floating "Ask AI").
+    await page.getByRole('button', { name: 'Explain', exact: true }).click();
     await page
       .getByRole('complementary', { name: 'Explain' })
       .getByRole('button', { name: 'Summarize paper' })
@@ -206,7 +209,7 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
     );
     await page.screenshot({ path: shot('c06-summary-cached-1440.png') });
 
-    // ── Esc closes the drawer and focus goes back to the launcher, not <body> ──
+    // ── Esc closes the drawer and focus goes back to the header's Explain toggle, not <body> ──
     await page.keyboard.press('Escape');
     await expect(page.getByRole('complementary', { name: 'Explain' })).toHaveCount(0);
     const focused = await page.evaluate(() => ({
@@ -214,6 +217,10 @@ test.describe('S6 Journey C (faux agent) — explain, follow-up, chip, summary, 
       text: (document.activeElement?.textContent ?? '').trim(),
     }));
     note(`after Esc, focus is on ${JSON.stringify(focused)}`);
-    expect(focused).toEqual({ tag: 'BUTTON', text: 'Ask AI' });
+    expect(focused).toEqual({ tag: 'BUTTON', text: 'Explain' });
+    await expect(page.getByRole('button', { name: 'Explain', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
   });
 });

@@ -20,6 +20,12 @@ WHAT A TURN WRITES, in one transaction: the thread (a new one), the user's messa
 the datamark, ``code_path``) and the seed's handles ``b1…``. A follow-up's run first inherits the
 thread's earlier handles (``thread_handles``), so a ``[b4]`` the model reads in its own history
 still names the same passage, and the explain seed is rebuilt from the thread's origin anchor.
+
+A DIAGRAM THREAD (v0.2 S7a, #216) starts like an explain (an anchor is required; the default
+question is "Explain with a diagram."). It is not continued by a question: its only next turn is a
+Redraw (``FollowUp.redraw_of``, a finished diagram answer of the same thread), which appends a new
+user turn and a new plate; ``redraw_of`` on any other thread, or a diagram follow-up without it,
+is 422. Its assistant messages read back with ``diagram: {title, status, parts, links}``.
 """
 
 from __future__ import annotations
@@ -36,7 +42,7 @@ from papertree_prompts import mint_datamark
 from pydantic_core import from_json
 
 from .. import agent_client as runs
-from .. import evidence
+from .. import diagrams, evidence
 from ..agent_client import RunBroker, RunKind, RunSpec
 from ..deps import (
     AgentClientDep,
@@ -48,7 +54,10 @@ from ..deps import (
     SettingsDep,
 )
 from ..errors import ApiError, ErrorEnvelope
+from ..exchanges import ask_excerpt, message_coverage
+from ..logging import log_event
 from ..schemas import (
+    DIAGRAM_QUESTION,
     AgentHistory,
     AgentPaper,
     AgentRunRequest,
@@ -156,10 +165,13 @@ async def create_thread(
     datamark = mint_datamark()
     plan = evidence.plan_seed(index, anchor, datamark=datamark) if anchor is not None else None
     kind: RunKind = body.kind
+    question = body.question
+    if kind == "diagram" and "question" not in body.model_fields_set:
+        question = DIAGRAM_QUESTION
     thread_id, user_message_id = new_id("thr"), new_id("msg")
     message_id, run_id = new_id("msg"), new_id("run")
     token, token_sha256 = runs.mint_run_token()
-    title = _title(plan.quote if plan is not None and plan.quote else body.question)
+    title = _title(plan.quote if plan is not None and plan.quote else question)
 
     db, owner = call.db, call.db_owner
     with db.transaction():
@@ -177,7 +189,7 @@ async def create_thread(
             message_id=user_message_id,
             role="user",
             generation=generation,
-            content=body.question,
+            content=question,
             status="complete",
         )
         db.append_message(
@@ -222,7 +234,7 @@ async def create_thread(
             generation=generation,
         ),
         seed=plan.to_wire(handles) if plan is not None else None,
-        question=body.question,
+        question=question,
         history=None,
         limits=runs.LIMITS[kind],
     )
@@ -308,11 +320,10 @@ async def follow_up(
         raise ApiError("not_found", "no such thread")
     runs.require_configured(settings)
     generation = promoted_generation(call, paper_id)
-    user_message_id: str | None
+    user_message_id: str | None = None
+    _check_redraw(db, owner, thread, body.redraw_of, retry=body.retry_of is not None)
     if body.retry_of is not None:
         user_message_id = _retry_target(db, owner, thread_id, body.retry_of)
-    else:
-        user_message_id = None
     if db.live_run_for_thread(owner, thread_id) is not None:
         raise ApiError("busy", "This conversation is still answering; wait for it or cancel it.")
     runs.require_budget(db, owner, settings)
@@ -436,6 +447,30 @@ def _retry_target(db: PaperTreeDb, owner: OwnerId, thread_id: str, retry_of: str
     raise ApiError("validation_failed", "retry_of: not an answer of this thread")
 
 
+def _check_redraw(
+    db: PaperTreeDb, owner: OwnerId, thread: dict[str, Any], redraw_of: str | None, *, retry: bool
+) -> None:
+    """A diagram thread takes a Redraw (of one of its own answers) and nothing else; no other
+    thread takes one (422). A plate still drawing is not refused here: its live run makes the
+    thread 409 ``busy`` (the check after this one), and a run that died is swept, so its plate can
+    be redrawn."""
+    if thread["kind"] != "diagram":
+        if redraw_of is not None:
+            raise ApiError("validation_failed", "redraw_of: only a diagram answer is redrawn")
+        return
+    if retry or redraw_of is None:
+        raise ApiError(
+            "validation_failed", "redraw_of: a diagram thread is redrawn, not continued or retried"
+        )
+    message = db.get_message(owner, redraw_of)
+    if (
+        message is None
+        or message["thread_id"] != thread["thread_id"]
+        or message["role"] != "assistant"
+    ):
+        raise ApiError("validation_failed", "redraw_of: not a diagram answer of this thread")
+
+
 # ── reads ────────────────────────────────────────────────────────────────────────────────────
 
 
@@ -449,6 +484,8 @@ def thread_wire(row: dict[str, Any]) -> dict[str, Any]:
         "created_at": wire_time(row["created_at"]),
         "updated_at": wire_time(row["updated_at"]),
         "message_count": int(row["message_count"]),
+        "ask": ask_excerpt(row["first_ask"]),
+        "last_status": row["last_status"],
     }
 
 
@@ -460,11 +497,52 @@ def _run_is_live(run: dict[str, Any] | None) -> bool:
     )
 
 
+def _citation_wire(c: dict[str, Any], locators: evidence.PassageLocators | None) -> dict[str, Any]:
+    """One stored citation as the wire shape, with its derived ``locator`` when one can be had."""
+    item: dict[str, Any] = {
+        "citation_id": c["citation_id"],
+        "ordinal": c["ordinal"],
+        "marker": c["marker"],
+        "page_index": c["page_index"],
+        "anchor": c["anchor"],
+        "supported": c["supported"],
+    }
+    locator = locators.locate(c["anchor"]) if locators is not None else None
+    if locator is not None:
+        item["locator"] = locator
+    return item
+
+
+def _coverage_of(row: dict[str, Any], cited: list[dict[str, Any]]) -> dict[str, Any]:
+    """``MessageCoverage`` of an assistant row. A citation without a locator (its parse could not
+    be loaded) still has a passage key, built from its Anchor the way the locator builds it."""
+    keys = [
+        (
+            c["marker"],
+            c["locator"]["passage_key"]
+            if "locator" in c
+            else evidence.passage_key(
+                int(row["generation"]), evidence.anchor_block_id(c["anchor"]) or str(c["marker"])
+            ),
+            c["supported"],
+        )
+        for c in cited
+    ]
+    return message_coverage(row["content"], keys)
+
+
 def message_wire(
     row: dict[str, Any],
     run: dict[str, Any] | None,
     citations: list[dict[str, Any]],
+    locators: evidence.PassageLocators | None = None,
+    parts: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    """One stored message as the wire shape. ``locators`` (the parse of the message's generation,
+    None when that parse can no longer be loaded) adds each citation's ``locator``; an assistant
+    message that is complete or partial also gets its ``coverage`` (#201). ``parts`` (a diagram
+    thread's assistant message only, possibly empty) makes it a plate: ``diagram`` instead of
+    ``coverage``, which counts prose paragraphs and has none to count here."""
     status, error_code = row["status"], row["error_code"]
     if status == "streaming" and not _run_is_live(run):
         # An answer whose run can no longer finish (the API process stopped mid-stream, so no
@@ -473,7 +551,8 @@ def message_wire(
         status = "partial" if row["content"] else "error"
         error_code = "agent_unavailable"
     failed = status in ("error", "partial", "aborted")
-    return {
+    cited = [_citation_wire(c, locators) for c in citations]
+    wire: dict[str, Any] = {
         "message_id": row["message_id"],
         "thread_id": row["thread_id"],
         "ordinal": row["ordinal"],
@@ -483,25 +562,40 @@ def message_wire(
         "error": runs.error_wire(error_code) if failed and error_code else None,
         "generation": row["generation"],
         "run": runs.run_summary(run) if run is not None else None,
-        "citations": [
-            {
-                "citation_id": c["citation_id"],
-                "ordinal": c["ordinal"],
-                "marker": c["marker"],
-                "page_index": c["page_index"],
-                "anchor": c["anchor"],
-                "supported": c["supported"],
-            }
-            for c in citations
-        ],
+        "citations": cited,
         "created_at": wire_time(row["created_at"]),
         "completed_at": wire_time(row["completed_at"]) if row["completed_at"] else None,
     }
+    if parts is not None:
+        wire["diagram"] = diagrams.diagram_wire(row["diagram"], status, parts, locators)
+    elif row["role"] == "assistant" and status in ("complete", "partial"):
+        wire["coverage"] = _coverage_of(row, cited)
+    return wire
 
 
 # RESPONSES ARE BUILT, NOT RE-VALIDATED (the highlight routes' rule): the wire shape is written
 # field by field and returned as JSON; `response_model` is what the OpenAPI document says, and
 # `test_threads_api.py` holds every response to `contracts/api/threads.schema.json` and the model.
+
+
+def _locators(
+    call: Caller, cache: IndexCacheDep, paper_id: str, generation: int
+) -> evidence.PassageLocators | None:
+    """The locators of one generation's parse, None if it can no longer be loaded (the citations
+    are then shown by page only, the same as a caption)."""
+    try:
+        index = evidence.load_index(
+            cache, call.db, call.db_owner, call.user_id, paper_id, generation
+        )
+        return evidence.PassageLocators(index)
+    except Exception as error:  # a missing or unreadable parse must not fail the thread read
+        log_event(
+            "thread.locators_unavailable",
+            level="warning",
+            paper_id=paper_id,
+            error_type=type(error).__name__,
+        )
+        return None
 
 
 @router.get("/papers/{paper_id}/threads", response_model=list[Thread], responses=ERRORS)
@@ -513,7 +607,9 @@ async def list_threads(call: CallerDep, paper_id: str) -> Response:
 
 
 @router.get("/papers/{paper_id}/threads/{thread_id}", response_model=ThreadDetail, responses=ERRORS)
-async def get_thread(call: CallerDep, paper_id: str, thread_id: str) -> Response:
+async def get_thread(
+    call: CallerDep, paper_id: str, thread_id: str, cache: IndexCacheDep
+) -> Response:
     owned_paper(call, paper_id)
     db, owner = call.db, call.db_owner
     runs.sweep_orphans(db)
@@ -524,10 +620,23 @@ async def get_thread(call: CallerDep, paper_id: str, thread_id: str) -> Response
     citations: dict[str, list[dict[str, Any]]] = {}
     for citation in db.list_citations(owner, [m["message_id"] for m in messages]):
         citations.setdefault(citation["message_id"], []).append(citation)
+    plates: dict[str, list[dict[str, Any]]] | None = None
+    if thread["kind"] == "diagram":
+        answers = [m["message_id"] for m in messages if m["role"] == "assistant"]
+        plates = {message_id: [] for message_id in answers}
+        for part in db.list_diagram_parts(owner, answers):
+            plates[part["message_id"]].append(part)
+    parses: dict[int, evidence.PassageLocators | None] = {}  # one parse per generation read
     out = []
     for message in messages:
         run = db.get_run(owner, message["run_id"]) if message["run_id"] else None
-        out.append(message_wire(message, run, citations.get(message["message_id"], [])))
+        mine = citations.get(message["message_id"], [])
+        parts = plates.get(message["message_id"]) if plates is not None else None
+        anchored = any(part["anchor"] is not None for part in parts or [])
+        generation = int(message["generation"])
+        if (mine or anchored) and generation not in parses:
+            parses[generation] = _locators(call, cache, paper_id, generation)
+        out.append(message_wire(message, run, mine, parses.get(generation), parts))
     return JSONResponse({"thread": thread_wire(thread), "messages": out})
 
 

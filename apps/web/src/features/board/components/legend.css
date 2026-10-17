@@ -1,0 +1,119 @@
+/* legend.css — the strip under the board (frame 06): THREADS and PINS, and the hint. It is a key,
+   not a control: clicks pass through it to the board (a click there deselects, as on the pane),
+   except on the phone's fold summary. */
+
+.pt-legend {
+  pointer-events: none;
+  position: absolute;
+  z-index: 5;
+  inset-block-end: 12px;
+  inset-inline: 24px 176px; /* the minimap's column (144 + 2 × 16) stays clear (#214) */
+  max-inline-size: 1216px;
+  padding: 10px 20px;
+  color: var(--pt-ink);
+  font: 14px / 20px var(--pt-font-ai);
+  background: var(--pt-page);
+  border-radius: var(--pt-radius-paper);
+  box-shadow: var(--pt-e1);
+}
+
+.pt-legend__fold {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pt-legend__summary {
+  display: none; /* wide screens: always open, nothing to fold */
+}
+
+.pt-legend__row,
+.pt-legend__list {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin: 0;
+  padding: 0;
+  white-space: nowrap;
+  list-style: none;
+}
+
+.pt-legend__head {
+  flex: none;
+  inline-size: 60px;
+  margin: 0;
+  font: 700 14px / 1 var(--pt-font-label);
+  letter-spacing: var(--pt-ls-label);
+}
+
+.pt-legend .pt-thread-swatch {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.pt-legend .pt-thread-swatch__tag {
+  padding: 0;
+  color: var(--pt-ink);
+  background: none;
+}
+
+.pt-legend__pin {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pt-legend .pt-pin {
+  display: inline-block;
+}
+
+.pt-legend .pt-pin--question_in,
+.pt-legend .pt-pin--answer_out {
+  transform: rotate(45deg);
+}
+
+.pt-legend__hint {
+  margin: 0;
+}
+
+@media (max-width: 639px) {
+  .pt-legend {
+    inset-inline: 16px auto;
+    max-inline-size: calc(100% - 32px);
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .pt-legend__summary {
+    display: list-item;
+    min-block-size: var(--pt-target-touch);
+    line-height: var(--pt-target-touch);
+    font-weight: 500;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+
+  .pt-legend__fold[open] .pt-legend__row,
+  .pt-legend__fold[open] .pt-legend__list {
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    white-space: normal;
+  }
+}
+
+/* The Undo offer sits above the strip, never over it, and left of the minimap's column. */
+.pt-cv .pt-toast--lift {
+  inset-inline: 24px 176px;
+}
+
+.pt-cv:has(.pt-legend) .pt-toast--lift {
+  inset-block-end: calc(104px + env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 639px) {
+  .pt-cv .pt-toast--lift {
+    inset-inline: 16px;
+  }
+}

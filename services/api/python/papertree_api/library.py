@@ -21,6 +21,7 @@ and which parse job an upload, a retry or a re-parse gets.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Final, cast, get_args
@@ -29,7 +30,9 @@ from papertree_db import LibraryRow, OwnerId, PaperId, PaperTreeDb
 from papertree_document_worker.job import PARSE_KIND, PARSE_STEPS, enqueue_parse, payload_generation
 from papertree_jobs import Job, JobStore, StepRecord, error_code
 
+from .figures import library_plate
 from .schemas import (
+    Cloth,
     JobErrorCode,
     JobState,
     JobStatus,
@@ -37,7 +40,10 @@ from .schemas import (
     JobStepStatus,
     JobSummary,
     LibraryPaper,
+    LibraryTopic,
     Processing,
+    ReadingProgress,
+    TopicSource,
 )
 
 _ERROR_CODES: Final = frozenset(get_args(JobErrorCode))
@@ -132,7 +138,37 @@ def _updated_at(row: LibraryRow) -> str:
     return max(candidates)[1] if candidates else row.created_at
 
 
-def library_paper(row: LibraryRow) -> LibraryPaper:
+def reading_progress(row: LibraryRow) -> ReadingProgress | None:
+    """`LibraryPaper.reading`: the caller's place, or None for a paper they have not started."""
+    state = row.reading
+    if state is None:
+        return None
+    return ReadingProgress(
+        last_page=state.last_page,
+        furthest_page=state.furthest_page,
+        page_count=state.page_count,
+        opened_at=state.opened_at,
+        finished_at=state.finished_at,
+        state=state.state,
+    )
+
+
+def library_topic(row: LibraryRow) -> LibraryTopic | None:
+    """`LibraryPaper.topic`: the accepted topic, or None."""
+    shelf = row.topic
+    if shelf is None:
+        return None
+    return LibraryTopic(
+        topic_id=shelf.topic_id,
+        name=shelf.name,
+        cloth=cast(Cloth | None, shelf.cloth),
+        source=cast(TopicSource, shelf.source),
+        source_detail=shelf.source_detail,
+    )
+
+
+def library_paper(row: LibraryRow, sign: Callable[[str, str | None], str | None]) -> LibraryPaper:
+    """The wire row. ``sign`` (``figures.asset_signer``) signs the plate's crop URL (#200)."""
     return LibraryPaper(
         paper_id=row.paper_id,
         title=title_for(row),
@@ -147,6 +183,15 @@ def library_paper(row: LibraryRow) -> LibraryPaper:
         highlight_count=row.highlight_count,
         created_at=row.created_at,
         updated_at=_updated_at(row),
+        reading=reading_progress(row),
+        year=row.year,
+        arxiv_id=row.arxiv_id,
+        arxiv_category=row.arxiv_category,
+        thread_count=row.thread_count,
+        has_summary=row.has_summary,
+        topic=library_topic(row),
+        notebook_count=row.notebook_count,
+        plate=library_plate(row, sign),
     )
 
 

@@ -223,7 +223,10 @@ export function stampTextLayer(args: StampArgs): StampResult {
 
   // Pass 1: item → block, keeping render order within each block. Render order IS reading order for
   // the alignment below, and it is pdf.js's order, not ours to re-derive.
-  const perBlock = new Map<string, { block: IndexedBlock; entries: { div: HTMLElement; str: string }[] }>();
+  const perBlock = new Map<
+    string,
+    { block: IndexedBlock; entries: { div: HTMLElement; str: string }[] }
+  >();
   let matched = 0;
   let textual = 0;
 

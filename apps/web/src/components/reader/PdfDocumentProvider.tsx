@@ -172,7 +172,8 @@ function describePage(page: PDFPageProxy): PdfPageMeta {
   const view = toBBox(page.view);
   // v3 has no `userUnit` at all and a malformed file can carry 0; either way 1 is the spec default.
   const rawUnit = (page as { userUnit?: number }).userUnit;
-  const userUnit = typeof rawUnit === 'number' && Number.isFinite(rawUnit) && rawUnit > 0 ? rawUnit : 1;
+  const userUnit =
+    typeof rawUnit === 'number' && Number.isFinite(rawUnit) && rawUnit > 0 ? rawUnit : 1;
   const frame = frameForPdfPage({ view, rotate: page.rotate, userUnit });
   return {
     index: page.pageNumber - 1,
@@ -261,46 +262,50 @@ export function PdfDocumentProvider({ src, children }: PdfDocumentProviderProps)
     // One macrotask late, on purpose: React StrictMode (development) mounts, unmounts and mounts
     // again synchronously, and the unmount clears this timer — so the discarded first mount never
     // calls `getDocument`, and the one-open-per-session count means what it says.
-    started = setTimeout(() => void (async () => {
-      try {
-        const pdfjs = await getPdfjs().catch((cause: unknown) => {
-          throw new PdfEngineError('The PDF engine could not be loaded.', { cause });
-        });
-        if (cancelled) return;
+    started = setTimeout(
+      () =>
+        void (async () => {
+          try {
+            const pdfjs = await getPdfjs().catch((cause: unknown) => {
+              throw new PdfEngineError('The PDF engine could not be loaded.', { cause });
+            });
+            if (cancelled) return;
 
-        const debug = debugState();
-        if (debug !== null) debug.getDocumentCalls += 1;
-        task = pdfjs.getDocument(openable(src) as Parameters<typeof pdfjs.getDocument>[0]);
-        const doc = await task.promise;
-        if (cancelled) return;
+            const debug = debugState();
+            if (debug !== null) debug.getDocumentCalls += 1;
+            task = pdfjs.getDocument(openable(src) as Parameters<typeof pdfjs.getDocument>[0]);
+            const doc = await task.promise;
+            if (cancelled) return;
 
-        const pageMeta = await describeAllPages(doc, () => cancelled);
-        if (cancelled) return;
+            const pageMeta = await describeAllPages(doc, () => cancelled);
+            if (cancelled) return;
 
-        setState({
-          pdf: doc,
-          pdfjsVersion: typeof pdfjs.version === 'string' ? pdfjs.version : null,
-          numPages: doc.numPages,
-          pageMeta,
-          error: null,
-          errorKind: null,
-          loading: false,
-        });
-      } catch (cause) {
-        // A cancelled load rejects too; reporting that as an error would flash a failure screen on
-        // every navigation away.
-        if (cancelled) return;
-        setState({
-          pdf: null,
-          pdfjsVersion: null,
-          numPages: 0,
-          pageMeta: EMPTY_META,
-          error: toError(cause),
-          errorKind: classifyPdfFailure(cause),
-          loading: false,
-        });
-      }
-    })(), 0);
+            setState({
+              pdf: doc,
+              pdfjsVersion: typeof pdfjs.version === 'string' ? pdfjs.version : null,
+              numPages: doc.numPages,
+              pageMeta,
+              error: null,
+              errorKind: null,
+              loading: false,
+            });
+          } catch (cause) {
+            // A cancelled load rejects too; reporting that as an error would flash a failure screen on
+            // every navigation away.
+            if (cancelled) return;
+            setState({
+              pdf: null,
+              pdfjsVersion: null,
+              numPages: 0,
+              pageMeta: EMPTY_META,
+              error: toError(cause),
+              errorKind: classifyPdfFailure(cause),
+              loading: false,
+            });
+          }
+        })(),
+      0,
+    );
 
     return () => {
       cancelled = true;

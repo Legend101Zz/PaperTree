@@ -1,16 +1,18 @@
 /**
  * A tiny reader stand-in for the S6 specs: the REAL `useExplainActions` + `<ExplainPanel>`, inside
- * a real `ReaderActionsProvider`, with a button per thing the reader would call. Only `fetch` and
- * the three reader actions are fakes.
+ * a real `ReaderActionsProvider`, behind the real header's Explain toggle (#203), with a button per
+ * thing the reader would call. Only `fetch` and the three reader actions are fakes.
  */
 import { useMemo, type ReactNode } from 'react';
 import { vi } from 'vitest';
 
 import type { Anchor } from '@papertree/anchoring';
 
-import { ExplainPanel, useExplainActions } from '@/components/explain';
+import { useExplainActions } from '@/components/explain';
 import { ReaderActionsProvider, type ReaderActions } from '@/components/reader/actions';
 
+import { HeaderAndPanel } from './explain-toggle';
+import { TestQueryProvider } from './query-client';
 import { anchorFixture } from './s6-support';
 
 export const focusAnchor = vi.fn();
@@ -25,7 +27,15 @@ export function stubDesktop(desktop = true): void {
   }));
 }
 
-export function Harness({ paperId = 'ppr_s6test' }: { readonly paperId?: string | null }): ReactNode {
+export function Harness(props: { readonly paperId?: string | null }): ReactNode {
+  return (
+    <TestQueryProvider>
+      <HarnessBody {...props} />
+    </TestQueryProvider>
+  );
+}
+
+function HarnessBody({ paperId = 'ppr_s6test' }: { readonly paperId?: string | null }): ReactNode {
   const explain = useExplainActions({ paperId });
   const { openExplain } = explain;
   const actions = useMemo<ReaderActions>(
@@ -40,17 +50,28 @@ export function Harness({ paperId = 'ppr_s6test' }: { readonly paperId?: string 
     <ReaderActionsProvider value={actions}>
       <button
         type="button"
-        onClick={() => openExplain({ anchor: anchorFixture('sel1'), quote: 'We reframe object detection as a single regression problem.' })}
+        onClick={() =>
+          openExplain({
+            anchor: anchorFixture('sel1'),
+            quote: 'We reframe object detection as a single regression problem.',
+          })
+        }
       >
         ask one
       </button>
       <button
         type="button"
-        onClick={() => openExplain({ anchor: anchorFixture('sel2'), quote: 'Our system divides the input image into an S x S grid.' })}
+        onClick={() =>
+          openExplain({
+            anchor: anchorFixture('sel2'),
+            quote: 'Our system divides the input image into an S x S grid.',
+          })
+        }
       >
         ask two
       </button>
-      <ExplainPanel controller={explain} />
+      {/* #203: opened and closed through the header's Explain toggle, as in the reader. */}
+      <HeaderAndPanel explain={explain} />
     </ReaderActionsProvider>
   );
 }

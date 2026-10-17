@@ -56,7 +56,12 @@ const NODE = {
   h: 120,
   source_anchor: ANCHOR,
 };
-const EDGE = { edge_id: E, from_node_id: N, to_node_id: 'cn_other-node-0001', kind: 'supports' as const };
+const EDGE = {
+  edge_id: E,
+  from_node_id: N,
+  to_node_id: 'cn_other-node-0001',
+  kind: 'supports' as const,
+};
 
 describe('boardsApi — contracts §2.7 routes', () => {
   const rows: readonly [string, () => Promise<unknown>, string, string, unknown][] = [
@@ -69,7 +74,13 @@ describe('boardsApi — contracts §2.7 routes', () => {
       `/boards/${B}/nodes/${N}`,
       { version: 3, x: 11 },
     ],
-    ['deleteNode', () => boardsApi.deleteNode(B, N), 'DELETE', `/boards/${B}/nodes/${N}`, undefined],
+    [
+      'deleteNode',
+      () => boardsApi.deleteNode(B, N),
+      'DELETE',
+      `/boards/${B}/nodes/${N}`,
+      undefined,
+    ],
     ['createEdge', () => boardsApi.createEdge(B, EDGE), 'POST', `/boards/${B}/edges`, EDGE],
     [
       'patchEdge',
@@ -78,7 +89,13 @@ describe('boardsApi — contracts §2.7 routes', () => {
       `/boards/${B}/edges/${E}`,
       { kind: 'contradicts', label: 'no' },
     ],
-    ['deleteEdge', () => boardsApi.deleteEdge(B, E), 'DELETE', `/boards/${B}/edges/${E}`, undefined],
+    [
+      'deleteEdge',
+      () => boardsApi.deleteEdge(B, E),
+      'DELETE',
+      `/boards/${B}/edges/${E}`,
+      undefined,
+    ],
     [
       'patchBoard',
       () => boardsApi.patchBoard(B, { viewport: { x: 1, y: 2, zoom: 0.5 } }),

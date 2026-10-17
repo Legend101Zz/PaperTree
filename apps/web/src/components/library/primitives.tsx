@@ -25,7 +25,11 @@
  * wherever the finger lands, happens constantly.
  */
 
-import type { CSSProperties, PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react';
+import type {
+  CSSProperties,
+  PointerEvent as ReactPointerEvent,
+  MouseEvent as ReactMouseEvent,
+} from 'react';
 import { AlertTriangle, CheckCircle2, Clock, Highlighter, Loader2 } from 'lucide-react';
 import { TOUCH_TARGET_MIN_PX, TOUCH_TARGET_STYLE } from '@papertree/ui';
 import { PROCESSING_DETAIL, PROCESSING_LABEL, type ProcessingState } from './types';

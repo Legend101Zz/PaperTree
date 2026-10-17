@@ -24,13 +24,16 @@ from .middleware import REQUEST_ID_HEADER, CompressJson, RequestIdMiddleware, lo
 from .routers import (
     auth,
     boards,
+    book,
     health,
     highlights,
     internal,
     jobs,
+    notebooks,
     papers,
     summary,
     threads,
+    topics,
     usage,
 )
 from .routers.papers import derive_paper_id  # re-exported: it lived here before the split
@@ -119,5 +122,8 @@ def create_app(
     app.include_router(summary.router)
     app.include_router(usage.router)
     app.include_router(boards.router)
+    app.include_router(notebooks.router)
+    app.include_router(topics.router)
+    app.include_router(book.router)
     app.include_router(internal.router)
     return app

@@ -6,7 +6,20 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { focusAnchor, Harness, stubDesktop } from './s6-harness';
-import { citation, done, errorBody, frame, installFetch, jsonResponse, PAPER, run, sseResponse, status, text, usage } from './s6-support';
+import {
+  citation,
+  done,
+  errorBody,
+  frame,
+  installFetch,
+  jsonResponse,
+  PAPER,
+  run,
+  sseResponse,
+  status,
+  text,
+  usage,
+} from './s6-support';
 
 beforeEach(() => {
   stubDesktop();
@@ -32,24 +45,28 @@ const SUMMARY = (statusValue: 'complete' | 'partial', bullets = 5) => ({
 });
 
 async function open(): Promise<void> {
-  fireEvent.click(screen.getByRole('button', { name: 'Ask AI' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Explain' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Summarize paper' }));
 }
 
 describe('the paper summary', () => {
   it('a cached summary renders from GET and starts NO run', async () => {
     const { calls } = installFetch({
-      [`GET /papers/${PAPER}/summary`]: () => jsonResponse(200, { state: 'ready', summary: SUMMARY('complete') }),
+      [`GET /papers/${PAPER}/summary`]: () =>
+        jsonResponse(200, { state: 'ready', summary: SUMMARY('complete') }),
     });
     render(<Harness />);
     await open();
     await waitFor(() => expect(document.querySelectorAll('[data-summary-bullet]')).toHaveLength(5));
     expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
     expect(document.querySelector('[data-summary-warning]')).toBeNull();
-    // chips work
-    fireEvent.click(document.querySelectorAll('[data-citation-id]')[2] as Element);
+    // markers work (#204: numbered by passage, the flash says which marker)
+    fireEvent.click(document.querySelectorAll('[data-citation-id] button')[2] as Element);
     expect(focusAnchor.mock.calls[0]?.[0]).toMatchObject({ id: 'anchor-b3' });
-    expect(focusAnchor.mock.calls[0]?.[1]).toEqual({ flash: true });
+    expect(focusAnchor.mock.calls[0]?.[1]).toEqual({
+      flash: true,
+      from: { n: 3, page: 4, para: null, notVerified: false },
+    });
   });
 
   it('with none cached: POSTs, shows the progress label, then the bullets from GET', async () => {
@@ -58,18 +75,33 @@ describe('the paper summary', () => {
     installFetch({
       [`GET /papers/${PAPER}/summary`]: () => {
         gets += 1;
-        return jsonResponse(200, gets === 1 ? { state: 'none', summary: null } : { state: 'ready', summary: SUMMARY('complete', 6) });
+        return jsonResponse(
+          200,
+          gets === 1
+            ? { state: 'none', summary: null }
+            : { state: 'ready', summary: SUMMARY('complete', 6) },
+        );
       },
       [`POST /papers/${PAPER}/summary`]: (_c, signal) =>
-        sseResponse([run({ thread_id: null }), status({ phase: 'tool', label: 'Reading p. 2 · 2. Unified Detection' })], {
-          hold: true,
-          signal,
-          onHandle: (h) => (handle = h),
-        }),
+        sseResponse(
+          [
+            run({ thread_id: null }),
+            status({ phase: 'tool', label: 'Reading p. 2 · 2. Unified Detection' }),
+          ],
+          {
+            hold: true,
+            signal,
+            onHandle: (h) => (handle = h),
+          },
+        ),
     });
     render(<Harness />);
     await open();
-    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Reading p. 2 · 2. Unified Detection'));
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toContain(
+        'Reading p. 2 · 2. Unified Detection',
+      ),
+    );
     handle?.push(text('- raw streamed bullet [b1]\n'));
     handle?.push(frame('citations', { items: [] }) + usage() + done());
     handle?.close();
@@ -80,12 +112,17 @@ describe('the paper summary', () => {
 
   it('a partial summary says so in plain words and marks the bullet without a passage', async () => {
     installFetch({
-      [`GET /papers/${PAPER}/summary`]: () => jsonResponse(200, { state: 'partial', summary: SUMMARY('partial') }),
+      [`GET /papers/${PAPER}/summary`]: () =>
+        jsonResponse(200, { state: 'partial', summary: SUMMARY('partial') }),
     });
     render(<Harness />);
     await open();
-    await waitFor(() => expect(document.querySelector('[data-summary-warning]')?.textContent).toBe('Some points could not be linked to a passage.'));
-    expect(screen.getByText('No linked passage')).toBeTruthy();
+    await waitFor(() =>
+      expect(document.querySelector('[data-summary-warning]')?.textContent).toBe(
+        'Some points could not be linked to a passage.',
+      ),
+    );
+    expect(screen.getByText("no citation · the AI's own reading")).toBeTruthy();
   });
 
   it('a failed run shows a designed error with Retry', async () => {
@@ -95,22 +132,27 @@ describe('the paper summary', () => {
     });
     render(<Harness />);
     await open();
-    expect((await screen.findByRole('alert')).textContent).toContain("today's AI budget");
+    expect((await screen.findByRole('alert')).textContent).toContain('Daily spend cap reached');
   });
 
-  it('a cached PARTIAL summary can be regenerated: Regenerate POSTs {regenerate: true} and shows the new one', async () => {
+  it('a cached PARTIAL summary can be summarised again: it POSTs {regenerate: true} and shows the new one', async () => {
     let gets = 0;
     const { calls } = installFetch({
       [`GET /papers/${PAPER}/summary`]: () => {
         gets += 1;
-        return jsonResponse(200, gets <= 1 ? { state: 'partial', summary: SUMMARY('partial') } : { state: 'ready', summary: SUMMARY('complete', 7) });
+        return jsonResponse(
+          200,
+          gets <= 1
+            ? { state: 'partial', summary: SUMMARY('partial') }
+            : { state: 'ready', summary: SUMMARY('complete', 7) },
+        );
       },
       [`POST /papers/${PAPER}/summary`]: (_c, signal) =>
         sseResponse([run({ thread_id: null }), usage(), done()], { signal }),
     });
     render(<Harness />);
     await open();
-    const button = await screen.findByRole('button', { name: 'Regenerate summary' });
+    const button = await screen.findByRole('button', { name: 'Summarise again' });
     expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
     fireEvent.click(button);
     await waitFor(() => expect(document.querySelectorAll('[data-summary-bullet]')).toHaveLength(7));
@@ -118,16 +160,20 @@ describe('the paper summary', () => {
     expect(posts).toHaveLength(1);
     expect(posts[0]?.body).toEqual({ regenerate: true });
     expect(document.querySelector('[data-summary-warning]')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Regenerate summary' })).toBeNull();
+    // A new run spent tokens: its footer gives the usage, never "no new tokens used".
+    expect(document.querySelector('[data-summary-footer]')?.textContent).toMatch(
+      /made with M3 · [\d,]+ tokens · ≈ \$[\d.]+ \(estimate\)$/,
+    );
   });
 
-  it('a complete summary has no Regenerate button', async () => {
+  it('a complete summary can be summarised again too (frame 04d)', async () => {
     installFetch({
-      [`GET /papers/${PAPER}/summary`]: () => jsonResponse(200, { state: 'ready', summary: SUMMARY('complete') }),
+      [`GET /papers/${PAPER}/summary`]: () =>
+        jsonResponse(200, { state: 'ready', summary: SUMMARY('complete') }),
     });
     render(<Harness />);
     await open();
     await waitFor(() => expect(document.querySelectorAll('[data-summary-bullet]')).toHaveLength(5));
-    expect(screen.queryByRole('button', { name: 'Regenerate summary' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Summarise again' })).toBeTruthy();
   });
 });

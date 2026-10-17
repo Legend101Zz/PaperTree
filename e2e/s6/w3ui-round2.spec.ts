@@ -1,11 +1,11 @@
 /**
  * W3UI round 2 (#141) on the real stack (api + worker + agent + web), YOLO:
  *
- *   R3  the quote is de-hyphenated and never cut mid-word ("Show all" for a long one)
- *   R4  a chip keeps the punctuation that follows it on its line
- *   R10 light markdown is rendered (no asterisks), chips still work inside lists and bold
+ *   R3  the quote is de-hyphenated (on the call slip since #202: one line, ellipsis by CSS)
+ *   R4  a marker keeps the punctuation that follows it on its line (chips until #202)
+ *   R10 light markdown is rendered (no asterisks), markers still work inside lists and bold
  *   R5  a canvas explanation card shows page labels, never "[bN]", and renders the same markdown
- *   R7  the "Send to canvas" toast lasts 8 s, waits while hovered or focused, and "Open canvas" is
+ *   R7  the "Send to board" toast lasts 8 s, waits while hovered or focused, and "Open board" is
  *       reachable by keyboard
  *
  * The panel visuals (R3/R4/R10) use a CRAFTED event stream (page.route) so the answer carries the
@@ -107,7 +107,8 @@ async function selectAndAsk(page: Page, from: string, to: string): Promise<void>
   await drag(page, points.from, points.to);
   const toolbar = page.getByRole('toolbar', { name: 'Selection actions' });
   await expect(toolbar).toBeVisible();
-  await toolbar.getByRole('button', { name: /Ask/ }).click();
+  // #203: the toolbar's Explain runs the answer now (v0.1's Ask); its Ask waits for a question.
+  await toolbar.getByRole('button', { name: 'Explain this passage' }).click();
 }
 
 async function noSideScroll(page: Page, width: number): Promise<void> {
@@ -117,7 +118,7 @@ async function noSideScroll(page: Page, width: number): Promise<void> {
 test.describe('W3UI round 2 (YOLO)', () => {
   test.skip(YOLO === null, 'SKIPPED: the YOLO PDF is not present.');
 
-  test('R3 R4 R10: the explain panel quote, chips and markdown', async ({
+  test('R3 R4 R10: the explain panel quote, markers and markdown', async ({
     browser,
     stack,
   }, testInfo) => {
@@ -178,48 +179,41 @@ test.describe('W3UI round 2 (YOLO)', () => {
         await expect(panel).toBeVisible();
         const quote = panel.locator('[data-explain-quote]');
         await expect(quote).toContainText('Prior work');
-        const shown = (await quote.locator('blockquote').innerText()).replace(/\s+/g, ' ');
-        // R3: no line-end hyphen is left, and a long quote is cut at a word, with Show all.
+        // #202: the selection is quoted on the first call slip, in the paper's voice: one line with
+        // an ellipsis by CSS (two on a phone), the whole passage in the DOM, de-hyphenated (R3).
+        const words = quote.locator('[data-voice="paper"]');
+        const shown = (await words.innerText()).replace(/\s+/g, ' ');
         expect(shown).not.toMatch(/\p{L}- \p{Ll}/u);
         expect(shown).toContain('repurposes classifiers to perform detection');
-        const fold = quote.getByRole('button', { name: 'Show all' });
-        await expect(fold).toBeVisible();
-        const cut = shown.replace(/\s*p\. \d+\s*$/, '');
-        expect(cut.endsWith('\u2026')).toBe(true);
-        const kept = cut.slice(0, -1);
-        // Must-fix: the toolbar has its own ground and a hairline, and the scroll area starts
-        // below it, so scrolled quote text never sits behind "Summarize paper".
-        const bar = await panel.locator('.pt-explain__toolbar').evaluate((el) => {
+        expect(shown).toContain('end-to-end');
+        const clip = await words.evaluate((el) => {
           const css = getComputedStyle(el);
-          const scroll = el.parentElement?.querySelector('.pt-explain__scroll');
+          return { overflow: css.textOverflow, wrap: css.whiteSpace, clamp: css.webkitLineClamp };
+        });
+        if (screen.width >= 768)
+          expect(clip).toMatchObject({ overflow: 'ellipsis', wrap: 'nowrap' });
+        else expect(clip.clamp).toBe('2');
+        // Must-fix (kept from v0.1): the scroll area starts below the panel's tools, so scrolled
+        // text never sits behind them.
+        const bar = await panel.locator('.pt-explain__tools').evaluate((el) => {
+          const scroll = el
+            .closest('.pt-explain, .pt-explain-sheet')
+            ?.querySelector('.pt-explain__scroll');
           return {
-            bg: css.backgroundColor,
-            border: css.borderBottomWidth,
             barBottom: el.getBoundingClientRect().bottom,
             scrollTop: scroll?.getBoundingClientRect().top ?? -1,
           };
         });
-        expect(bar.bg).not.toMatch(/rgba\(0, 0, 0, 0\)|transparent/);
-        expect(bar.border).toBe('1px');
         expect(bar.scrollTop).toBeGreaterThanOrEqual(bar.barBottom - 0.5);
-        // Should-fix: "Show all" sits close under the cut quote.
-        const gap = await quote.evaluate((el) => {
-          const q = el.querySelector('blockquote')?.getBoundingClientRect();
-          const f = el.querySelector('.pt-explain__fold')?.getBoundingClientRect();
-          return q && f ? f.top - q.bottom : -1;
-        });
-        expect(gap).toBeGreaterThanOrEqual(-8);
-        expect(gap).toBeLessThan(16);
-        await fold.click();
-        const full = (await quote.locator('blockquote').innerText()).replace(/\s+/g, ' ');
-        expect(full.startsWith(kept)).toBe(true);
-        expect(/\s/.test(full[kept.length] ?? ' ')).toBe(true);
-        expect(full).not.toMatch(/\p{L}- \p{Ll}/u);
-        expect(full).toContain('end-to-end');
-        await quote.getByRole('button', { name: 'Show less' }).click();
 
         const answer = panel.locator('[data-message-status="complete"]').first();
         await expect(answer).toBeVisible({ timeout: 60_000 });
+        // Below 768 px the sheet opens on the answer's first paragraph (#205, frame 08b): read the
+        // whole answer before counting what it renders.
+        if (screen.width < 768) {
+          await answer.getByRole('button', { name: 'Read the whole answer' }).click();
+          await expect(answer.getByRole('button', { name: 'Show less' })).toBeVisible();
+        }
         // R10: rendered, not raw.
         const text = (await answer.innerText()).replace(/\s+/g, ' ');
         expect(text).not.toMatch(/\*|\[b\d|_where_|`/);
@@ -228,9 +222,11 @@ test.describe('W3UI round 2 (YOLO)', () => {
         expect(await answer.locator('code').count()).toBe(1);
         expect(await answer.locator('ul > li').count()).toBe(2);
         expect(await answer.locator('ol > li').count()).toBe(2);
-        expect(await answer.locator('li .pt-chip').count()).toBe(1);
-        expect(await answer.locator('.pt-chip').count()).toBe(3);
-        // R4: the full stop travels with the chip: the run is one line, and nothing is left after it.
+        // #202: numbered passage markers, not chips: [b1] [b2] [b1] are markers 1, 2, 1.
+        expect(await answer.locator('li [data-citation-id]').count()).toBe(1);
+        expect(await answer.locator('[data-citation-id]').count()).toBe(3);
+        expect(await answer.locator('.pt-chip').count()).toBe(0);
+        // R4: the full stop travels with the marker: the run is one line, nothing left after it.
         const runs = await answer.locator('.pt-cite-run').evaluateAll((nodes) =>
           nodes.map((n) => ({
             text: n.textContent,
@@ -240,7 +236,7 @@ test.describe('W3UI round 2 (YOLO)', () => {
         );
         expect(runs.length).toBe(3);
         for (const run of runs) expect(run.lines).toBe(1);
-        expect(runs[2]).toMatchObject({ text: 'p. 1.', tail: true });
+        expect(runs[2]).toMatchObject({ text: '1.', tail: true });
         await noSideScroll(page, screen.width);
         await page.screenshot({
           path: shotPath(`r2-panel-${label}.png`, testInfo.outputPath('shots')),
@@ -279,11 +275,11 @@ test.describe('W3UI round 2 (YOLO)', () => {
     });
 
     // R7, mouse: the toast is still there after 6.5 s (the old one went at 6 s), waits while hovered.
-    const send = panel.getByRole('button', { name: 'Send to canvas' });
+    const send = panel.getByRole('button', { name: 'Send to board' });
     await send.click();
     const toast = page.getByTestId('canvas-toast');
     await expect(toast).toBeVisible();
-    await expect(toast).toContainText('Answer added to your canvas.');
+    await expect(toast).toContainText('Answer added to your board.');
     await page.waitForTimeout(6_500);
     await expect(toast).toBeVisible();
     await page.screenshot({ path: shot('r2-toast-1440-light.png') });
@@ -293,17 +289,17 @@ test.describe('W3UI round 2 (YOLO)', () => {
     await page.mouse.move(100, 100);
     await expect(toast).toBeHidden({ timeout: 15_000 });
 
-    // R7, keyboard: a second answer's toast takes the keyboard to "Open canvas"; Escape returns.
+    // R7, keyboard: a second answer's toast takes the keyboard to "Open board"; Escape returns.
     await panel.getByLabel('Ask a question about this paper').fill('Why is that fast?');
     await panel.getByRole('button', { name: 'Ask', exact: true }).click();
     await expect(panel.locator('[data-message-status="complete"]')).toHaveCount(2, {
       timeout: 120_000,
     });
-    const sendSecond = panel.getByRole('button', { name: 'Send to canvas' }).last();
+    const sendSecond = panel.getByRole('button', { name: 'Send to board' }).last();
     await sendSecond.focus();
     await page.keyboard.press('Enter');
     await expect(toast).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Open canvas' })).toBeFocused();
+    await expect(page.getByRole('link', { name: 'Open board' })).toBeFocused();
     await page.waitForTimeout(9_000);
     await expect(toast).toBeVisible(); // focus inside holds the clock
     await page.keyboard.press('Escape');
@@ -352,9 +348,12 @@ test.describe('W3UI round 2 (YOLO)', () => {
           }
         }, token);
         const canvas = await ctx.newPage();
-        await canvas.goto(`/paper/${paperId}/canvas`);
+        await canvas.goto(`/paper/${paperId}/board`);
         await expect(canvas.locator('.react-flow__node-explanation')).toHaveCount(2);
-        await expect(canvas.locator('.pt-cite-label').first()).toBeVisible({ timeout: 30_000 });
+        // #212: a board card cites with the passage's numbered marker, not a "p. 4" label.
+        await expect(
+          canvas.locator('.react-flow__node-explanation .pt-marker').first(),
+        ).toBeVisible({ timeout: 30_000 });
         const body = (await canvas.locator('.react-flow__node-explanation').allInnerTexts()).join(
           ' ',
         );

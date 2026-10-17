@@ -1,0 +1,1458 @@
+/*
+ * The library's shelf (#195): spines, the walnut plank, bookends, holders and the catalogue card,
+ * measured from frame 01 (`01-shelf-1440.dc.html`). Colours are the Ex Libris tokens; the furniture
+ * values below are the same in both schemes because furniture does not change at night (DESIGN.md §2).
+ */
+:root {
+  --pt-spine-cast: rgb(48 30 16 / 38%);
+  --pt-spine-headband: repeating-linear-gradient(90deg, #ede1c2 0 2px, #8e2e27 2px 4px);
+  --pt-spine-rule: rgb(232 212 160 / 85%);
+  --pt-spine-label-edge: #7a5a22;
+  --pt-spine-string: #6e5226;
+  --pt-spine-note: #6a4a2c; /* 6.3:1 on the paper label */
+  --pt-spine-danger: #9e2420; /* labels stay paper at night, so their red stays the daylight red */
+  --pt-spine-dim-ink: #675d53; /* a dimmed label's ink: 6.1:1 on the day label, 5.4:1 at night */
+  --pt-plank-lip: linear-gradient(#9a7353, #80583a);
+  --pt-bookend: linear-gradient(90deg, #8c6b2e, #e7cf8e 35%, #b8944c 60%, #6e5420);
+  /*
+   * Gilt on cloth. DESIGN.md's 4.7–6.5:1 holds on flat cloth only; with the spine's sheen and weave
+   * under a title, the shared --pt-gilt fell to about 3.6:1 on Vision and Reinforcement. So the
+   * spine's gilt starts lighter and the light under the title is capped; test/library-gilt.spec.ts
+   * recomputes every cloth's title pair from these values (a deviation from the mock-up, recorded
+   * in shots/S2d/README.md).
+   */
+  --pt-spine-gilt-low: #efe1b4;
+  --pt-spine-gilt: linear-gradient(
+    100deg,
+    var(--pt-spine-gilt-low) 0%,
+    #faf1d6 36%,
+    #f1e4ba 54%,
+    #f8eecd 76%,
+    var(--pt-spine-gilt-low) 100%
+  );
+  --pt-spine-sheen-peak: 5%;
+  --pt-spine-weave-light: 3%;
+}
+
+/* ── the plank ─────────────────────────────────────────────────────────────────────────── */
+
+.pt-plank {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  padding-inline: 8px;
+}
+
+.pt-plank__wood {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  block-size: 54px;
+  border-radius: 2px 2px 3px 3px;
+  background:
+    var(--pt-plank-lip) top / 100% 8px no-repeat,
+    repeating-linear-gradient(
+      90deg,
+      rgb(0 0 0 / 9%) 0 2px,
+      transparent 2px 11px,
+      rgb(255 255 255 / 5%) 11px 12px,
+      transparent 12px 27px
+    ),
+    var(--pt-walnut);
+  box-shadow:
+    inset 0 -2px 0 rgb(30 16 6 / 35%),
+    0 2px 2px rgb(40 24 10 / 30%),
+    6px 14px 18px -8px var(--pt-spine-cast);
+}
+
+/* Bookends stand on the plank at each end of the books, so a short shelf is held, not stretched. */
+.pt-plank__bookend {
+  position: relative;
+  flex: none;
+  inline-size: 12px;
+  block-size: 168px;
+  margin-block-end: 54px;
+  margin-inline-end: 8px;
+  border-radius: 2px 2px 0 0;
+  background: var(--pt-bookend);
+  box-shadow: 4px 0 8px -2px var(--pt-spine-cast);
+}
+
+.pt-plank__bookend--end {
+  margin-inline: 8px 0;
+  transform: scaleX(-1);
+}
+
+.pt-plank__holder {
+  position: relative;
+  z-index: 4; /* in front of the ribbons that hang over the plank */
+  display: flex;
+  margin-inline: -16px; /* a holder may reach half-way into the gap, so one book is not islanded */
+  block-size: 54px;
+  padding-block-start: 12px;
+  justify-content: center;
+}
+
+/* ── the rows: one tab stop, scrolling sideways when wider than the page ─────────────── */
+
+.pt-shelf {
+  position: relative;
+  display: flex;
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  gap: 32px;
+  align-items: flex-end;
+  padding-block-start: 24px; /* room for a lifted spine and its focus ring */
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.pt-shelf__row {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+}
+
+.pt-shelf__spines {
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+  padding-inline: 2px;
+}
+
+.pt-shelf[data-searching='true'] .pt-plank__holder,
+.pt-rows[data-searching='true'] .pt-plank__holder {
+  opacity: 0.7; /* the holder's ink stays above 5:1 on its card */
+  filter: saturate(0.5);
+}
+
+/* ── a spine ───────────────────────────────────────────────────────────────────────────── */
+
+.pt-spine,
+.pt-cover {
+  position: relative;
+  flex: none;
+  padding: 0;
+  color: var(--pt-paper-label-ink);
+  cursor: pointer;
+  border: 0;
+  border-radius: 2px 2px 0 0;
+  background-image:
+    linear-gradient(
+      90deg,
+      rgb(0 0 0 / 30%),
+      rgb(255 255 255 / 3%) 26%,
+      rgb(255 255 255 / var(--pt-spine-sheen-peak)) 40%,
+      rgb(0 0 0 / 4%) 68%,
+      rgb(0 0 0 / 34%)
+    ),
+    repeating-linear-gradient(
+      45deg,
+      rgb(255 255 255 / var(--pt-spine-weave-light)) 0 1px,
+      transparent 1px 3px
+    ),
+    repeating-linear-gradient(-45deg, rgb(0 0 0 / 9%) 0 1px, transparent 1px 3px);
+  box-shadow:
+    6px 0 9px -4px var(--pt-spine-cast),
+    inset 0 2px 0 rgb(255 255 255 / 7%);
+  transition: transform var(--pt-dur-quick) var(--pt-ease-lift);
+}
+
+.pt-spine:not(.pt-spine--kraft)::before {
+  position: absolute;
+  inset-inline: 2px;
+  top: -3px;
+  block-size: 3px;
+  content: '';
+  background: var(--pt-spine-headband);
+  border-radius: 2px 2px 0 0;
+}
+
+.pt-spine:hover,
+.pt-cover:hover {
+  transform: translateY(-4px);
+}
+
+.pt-spine:focus-visible,
+.pt-cover:focus-visible {
+  z-index: 2;
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: 3px;
+}
+
+.pt-spine[aria-expanded='true'],
+.pt-cover[aria-expanded='true'] {
+  z-index: 2;
+  transform: translateY(-14px);
+}
+
+/*
+ * A search dims what does not match to about a third (DESIGN.md §1). A veil of the ground colour
+ * goes over the cloth, the gilt fades with it, and a paper label keeps 6:1 ink: the label is text
+ * someone may still need to read, so it recedes without dropping under 4.5:1 (WCAG 1.4.3).
+ */
+.pt-spine::after,
+.pt-cover::after {
+  position: absolute;
+  inset: -3px 0 0;
+  pointer-events: none;
+  content: '';
+  background: var(--pt-ground);
+  opacity: 0;
+  transition: opacity var(--pt-dur-quick) var(--pt-ease-out);
+}
+
+.pt-spine[data-match='false'],
+.pt-cover[data-match='false'] {
+  filter: saturate(0.45);
+}
+
+.pt-spine[data-match='false']::after,
+.pt-cover[data-match='false']::after {
+  opacity: 0.68;
+}
+
+.pt-spine__face,
+.pt-spine__year {
+  transition: opacity var(--pt-dur-quick) var(--pt-ease-out);
+}
+
+.pt-spine[data-match='false'] .pt-spine__face,
+.pt-spine[data-match='false'] .pt-spine__year,
+.pt-spine[data-match='false'] .pt-spine__ribbon,
+.pt-cover--gilt[data-match='false'] .pt-cover__inner,
+.pt-cover[data-match='false'] .pt-cover__ribbon {
+  opacity: 0.5;
+}
+
+.pt-spine[data-match='false'] .pt-spine__label {
+  filter: saturate(0.5);
+  box-shadow: none;
+}
+
+.pt-spine[data-match='false'] .pt-spine__label .pt-spine__title,
+.pt-spine[data-match='false'] .pt-spine__label .pt-spine__note {
+  color: var(--pt-spine-dim-ink);
+}
+
+.pt-spine[data-match='true'],
+.pt-cover[data-match='true'] {
+  z-index: 1;
+  box-shadow:
+    inset 0 0 0 2px var(--pt-paper-label),
+    inset 0 0 0 3.5px var(--pt-focus),
+    8px 8px 14px -4px rgb(48 30 16 / 55%);
+}
+
+.pt-spine__inner,
+.pt-cover__inner {
+  position: absolute;
+  inset: 0;
+  z-index: 1; /* above the search veil */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.pt-spine__band {
+  flex: none;
+  inline-size: 100%;
+  block-size: 6px;
+  margin-block: 12px;
+  border-block: 1px solid var(--pt-spine-rule);
+}
+
+.pt-spine__gap {
+  flex: none;
+  block-size: 16px;
+}
+
+.pt-spine__middle {
+  display: flex;
+  flex: 1 1 0;
+  min-block-size: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.pt-spine__face {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.pt-spine__title,
+.pt-spine__authors,
+.pt-spine__note {
+  overflow: hidden;
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+}
+
+.pt-spine__title {
+  font-family: var(--pt-font-paper);
+  line-height: 1.1;
+  text-overflow: ellipsis;
+}
+
+.pt-spine__title--wrap {
+  line-height: 1.12;
+  white-space: normal;
+}
+
+.pt-spine__authors {
+  font-family: var(--pt-font-label);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+}
+
+.pt-spine__year,
+.pt-cover__year {
+  margin-block-end: 6px;
+  font-family: var(--pt-font-you);
+  font-size: 11px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.pt-spine--gilt .pt-spine__title,
+.pt-spine--gilt .pt-spine__authors,
+.pt-spine--gilt .pt-spine__year,
+.pt-cover--gilt :is(.pt-cover__title, .pt-cover__authors, .pt-cover__year),
+.pt-cover--torn :is(.pt-cover__title, .pt-cover__authors, .pt-cover__year) {
+  color: transparent;
+  background-image: var(--pt-spine-gilt);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+/* Paper labels: the Language cloth, the kraft wrap and the torn "could not read" label. */
+.pt-spine__label {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 3px;
+  background: var(--pt-paper-label);
+  border: 1px solid var(--pt-spine-label-edge);
+  box-shadow:
+    inset 0 0 0 2px var(--pt-paper-label),
+    inset 0 0 0 2.6px rgb(122 90 34 / 50%);
+}
+
+.pt-spine__note,
+.pt-cover__note {
+  font-family: var(--pt-font-label);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  color: var(--pt-spine-note);
+}
+
+.pt-spine__label--kraft .pt-spine__title {
+  font-family: var(--pt-font-you);
+  font-weight: 700;
+}
+
+.pt-spine__label--torn {
+  padding-block-end: 24px;
+  clip-path: polygon(0 0, 100% 0, 100% 89%, 84% 93%, 70% 87%, 52% 96%, 36% 90%, 18% 97%, 0 91%);
+}
+
+.pt-spine__label--torn .pt-spine__note,
+.pt-cover--torn .pt-cover__note {
+  font-weight: 700;
+  color: var(--pt-spine-danger);
+}
+
+.pt-spine--kraft,
+.pt-cover--kraft {
+  background-color: var(--pt-kraft);
+  background-image:
+    linear-gradient(
+      90deg,
+      rgb(0 0 0 / 18%),
+      rgb(255 255 255 / 8%) 30%,
+      rgb(255 255 255 / 12%) 42%,
+      rgb(0 0 0 / 18%)
+    ),
+    repeating-linear-gradient(112deg, rgb(255 255 255 / 10%) 0 2px, transparent 2px 15px);
+}
+
+/*
+ * Desktop floors for the small text buttons, at zero specificity, so the 44 px touch class
+ * (`useTouchTargets`) wins on a phone or touch screen.
+ */
+:where(.pt-search__clear, .pt-libtitle__alert) {
+  min-block-size: 24px;
+}
+
+:where(.pt-hints__gotit) {
+  min-block-size: 28px;
+}
+
+/* the string round the kraft wrap, behind its label */
+.pt-spine--kraft::before {
+  position: absolute;
+  inset-inline: 0;
+  top: 92px;
+  block-size: 2px;
+  content: '';
+  background: var(--pt-spine-string);
+  box-shadow: 0 6px 0 -0.5px var(--pt-spine-string);
+}
+
+.pt-spine__ribbon,
+.pt-cover__ribbon {
+  position: absolute;
+  bottom: -50px;
+  left: calc(50% - 5px);
+  z-index: 3;
+  inline-size: 10px;
+  block-size: 50px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--pt-ribbon) 72%, black),
+    var(--pt-ribbon) 45%,
+    color-mix(in srgb, var(--pt-ribbon) 80%, black)
+  );
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 86%, 0 100%);
+}
+
+/* ── the catalogue card in the band above the shelf ───────────────────────────────────── */
+
+/* The band above the spines: the card stands in it, so it never covers a book. */
+.pt-shelfband__band {
+  display: flex;
+  min-block-size: 136px;
+  align-items: flex-end;
+  margin-block-start: 16px;
+}
+
+.pt-catalogue {
+  /* In the band's flow, so a taller card (a long title, a confirmation) grows the band and moves
+     the shelf down instead of covering the view row above it. */
+  position: relative;
+  z-index: 5;
+  flex: none;
+  margin-block-end: 10px;
+  display: flex;
+  inline-size: min(480px, 100%);
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  color: var(--pt-ink);
+  background: var(--pt-e2-fill);
+  border: 1px solid var(--pt-rule);
+  border-radius: var(--pt-radius-paper);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+}
+
+.pt-catalogue__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.pt-catalogue__title {
+  margin: 0;
+  font-family: var(--pt-font-paper);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.pt-catalogue__state {
+  margin: 0;
+  font-size: var(--pt-t-meta);
+  font-variant-numeric: lining-nums;
+  color: var(--pt-primary);
+}
+
+.pt-catalogue__meta,
+.pt-catalogue__reason {
+  margin: 0;
+  font-size: var(--pt-t-meta);
+  font-variant-numeric: lining-nums;
+  color: var(--pt-ink-2);
+}
+
+.pt-catalogue__reason[data-failure-reason] {
+  color: var(--pt-danger);
+}
+
+.pt-catalogue__pointer {
+  position: absolute;
+  bottom: -7px;
+  inline-size: 12px;
+  block-size: 12px;
+  margin-inline-start: -6px;
+  background: var(--pt-e2-fill);
+  border-inline-end: 1px solid var(--pt-rule);
+  border-block-end: 1px solid var(--pt-rule);
+  transform: rotate(45deg);
+}
+
+.pt-catalogue__confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.pt-catalogue__confirm p,
+.pt-catalogue__error {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--pt-t-meta);
+  color: var(--pt-ink-2);
+}
+
+.pt-catalogue__error {
+  color: var(--pt-danger);
+}
+
+.pt-catalogue__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+  margin-block-start: 8px;
+}
+
+/* ── the page: header, uploads, title, views, hints (frame 01) ─────────────────────────── */
+
+.pt-library {
+  min-block-size: 100vh;
+  color: var(--pt-ink);
+  font-family: var(--pt-font-ai);
+}
+
+.pt-libhead {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: 24px;
+  align-items: center;
+  min-block-size: 64px;
+  padding-inline: var(--pt-margin-desktop);
+  background: var(--pt-page);
+  border-block-end: 1px solid var(--pt-rule);
+}
+
+.pt-libhead__brand {
+  display: flex;
+  grid-column: 1 / span 3;
+  gap: 10px;
+  align-items: center;
+  font-family: var(--pt-font-paper);
+  font-size: 20px;
+  color: var(--pt-ink);
+  text-decoration: none;
+}
+
+.pt-search {
+  display: flex;
+  grid-column: 4 / span 6;
+  gap: 10px;
+  align-items: center;
+  min-block-size: 40px;
+  padding-inline: 14px 10px;
+  background: var(--pt-call-slip);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-search:focus-within {
+  border-color: var(--pt-focus);
+  box-shadow: 0 0 0 1px var(--pt-focus);
+}
+
+.pt-search__icon {
+  flex: none;
+  color: var(--pt-ink-muted);
+}
+
+.pt-search__input {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  font: inherit;
+  font-size: 16px;
+  color: var(--pt-ink);
+  background: none;
+  border: 0;
+  outline: none;
+}
+
+.pt-search__input::placeholder {
+  color: var(--pt-ink-muted);
+  opacity: 1;
+}
+
+.pt-search__input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.pt-search__count {
+  font-size: var(--pt-t-meta);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--pt-ink-2);
+  white-space: nowrap;
+}
+
+.pt-search__clear {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+.pt-kbd {
+  padding: 3px 6px 2px;
+  font-family: var(--pt-font-you);
+  font-size: 12px;
+  line-height: 1;
+  color: var(--pt-ink-2);
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-block-end-width: 2px;
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-libhead__actions {
+  display: flex;
+  grid-column: 10 / span 3;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.pt-hmenu {
+  position: relative;
+}
+
+.pt-hmenu__button {
+  display: inline-flex;
+  inline-size: 40px;
+  block-size: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-family: var(--pt-font-paper);
+  font-size: 15px;
+  color: var(--pt-ink);
+  cursor: pointer;
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-hmenu__button--round {
+  font-size: 16px;
+  background: var(--pt-ground);
+  border-radius: var(--pt-radius-round);
+}
+
+.pt-hmenu__button:focus-visible,
+.pt-search__clear:focus-visible,
+.pt-libtitle__alert:focus-visible,
+.pt-hints__gotit:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+.pt-hmenu__panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  min-inline-size: 240px;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--pt-e2-fill);
+  border: 1px solid var(--pt-rule);
+  border-radius: var(--pt-radius-menu);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+}
+
+.pt-hmenu__email {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--pt-t-meta);
+  color: var(--pt-ink-2);
+}
+
+/* uploads: one quiet line per file under the header, no separators (#175) */
+.pt-uploads__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 8px var(--pt-margin-desktop);
+  list-style: none;
+  background: var(--pt-page);
+  border-block-end: 1px solid var(--pt-rule);
+}
+
+.pt-uploads__item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: center;
+  font-size: var(--pt-t-meta);
+  color: var(--pt-ink-2);
+}
+
+.pt-uploads__text {
+  flex: 1 1 240px;
+  min-inline-size: 0;
+}
+
+.pt-uploads__name {
+  font-weight: 500;
+  color: var(--pt-ink);
+}
+
+.pt-uploads__note {
+  display: block;
+}
+
+.pt-uploads__note[data-failed='true'],
+.pt-uploads__item--refused .pt-uploads__text {
+  color: var(--pt-danger);
+}
+
+.pt-uploads__bar {
+  flex: 0 0 160px;
+}
+
+.pt-dropall {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--pt-ground) 72%, transparent);
+  border: 2px dashed var(--pt-focus);
+}
+
+.pt-dropall__note {
+  padding: 12px 20px;
+  font-size: 17px;
+  background: var(--pt-e2-fill);
+  border-radius: var(--pt-radius-menu);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+}
+
+.pt-library__main {
+  display: flex;
+  flex-direction: column;
+  padding: 32px var(--pt-margin-desktop) 48px;
+}
+
+/* The shelf's wrapper keeps the page's flex column for Reading now and the shelf (laid out as before
+   #197), and hides them, still mounted, under the Table. */
+.pt-library__shelf {
+  display: flex;
+  flex-direction: column;
+}
+
+.pt-library__shelf[hidden] {
+  display: none;
+}
+
+.pt-libtitle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 32px;
+  align-items: baseline;
+}
+
+.pt-libtitle__h1 {
+  margin: 0;
+  font-family: var(--pt-font-display);
+  font-size: var(--pt-t-display-xl);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.012em;
+}
+
+.pt-libtitle__stats {
+  margin: 0;
+  font-size: 17px;
+  font-variant-numeric: lining-nums;
+  color: var(--pt-ink-2);
+}
+
+.pt-libtitle__sep {
+  margin-inline: 4px;
+  white-space: pre;
+}
+
+.pt-libtitle__stats b {
+  font-weight: 500;
+  color: var(--pt-ink);
+}
+
+.pt-libtitle__alert {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 0;
+  font: inherit;
+  font-size: 17px;
+  color: var(--pt-primary);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+.pt-libtitle__alert[aria-pressed='true'] {
+  font-weight: 500;
+  text-decoration-thickness: 2px;
+}
+
+.pt-libtitle__dot {
+  inline-size: 7px;
+  block-size: 7px;
+  background: var(--pt-danger);
+  border-radius: var(--pt-radius-round);
+}
+
+.pt-libviews {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: center;
+  margin-block-start: 24px;
+  padding-block-end: 12px;
+  border-block-end: 1px solid var(--pt-rule);
+}
+
+.pt-libviews__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.pt-libviews__tabs .pt-toolbtn[aria-pressed='true'] {
+  font-weight: 500;
+  color: var(--pt-ink);
+  background: none;
+  border-color: transparent;
+  border-radius: 0;
+  box-shadow: inset 0 -2px 0 var(--pt-primary);
+}
+
+.pt-libviews__arrange {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-inline-start: auto;
+  font-size: 15px;
+  color: var(--pt-ink-2);
+}
+
+.pt-libviews__select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.pt-libviews__select svg {
+  position: absolute;
+  right: 10px;
+  pointer-events: none;
+}
+
+.pt-libviews__arrange select {
+  block-size: 36px;
+  min-inline-size: 128px;
+  padding-inline: 12px 34px;
+  appearance: none;
+  font: inherit;
+  color: var(--pt-ink);
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  margin-block-start: 14px;
+  font-size: var(--pt-t-meta);
+  color: var(--pt-ink-2);
+}
+
+.pt-hints__key {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.pt-hints__gotit {
+  padding-inline: 8px;
+  font: inherit;
+  color: var(--pt-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+.pt-hints--empty {
+  justify-content: center;
+}
+
+.pt-hints__note {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  margin-inline-start: auto;
+}
+
+/* ── Reading now (#196, frame 01): above the spines, one row per paper, at most three ───── */
+
+.pt-readingnow {
+  margin-block-start: 16px;
+}
+
+.pt-readingnow__heading {
+  margin: 0 0 10px;
+  font-family: var(--pt-font-label);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pt-ink-2);
+  text-transform: lowercase;
+}
+
+.pt-readingnow__list {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pt-readingnow__item {
+  flex: 1 1 0;
+  min-inline-size: 0;
+  padding-inline: 24px;
+}
+
+.pt-readingnow__item:first-child {
+  padding-inline-start: 0;
+}
+
+.pt-readingnow__item + .pt-readingnow__item {
+  border-inline-start: 1px solid var(--pt-rule);
+}
+
+/* The shared row as frame 01 sets it: a 12 × 48 cloth with the ribbon at its foot, the title
+   across the row, the page beside the rule under it. */
+.pt-readingnow .pt-readnow {
+  position: relative;
+  display: grid;
+  grid-template-areas: 'spine title title button' 'spine rule page button';
+  grid-template-columns: 18px minmax(0, 1fr) auto auto;
+  gap: 8px 10px;
+  padding: 0;
+}
+
+.pt-readingnow .pt-readnow__text {
+  display: contents; /* its title and rule take their own cells */
+}
+
+.pt-readingnow .pt-readnow__ribbon {
+  position: absolute;
+  top: 42px;
+  left: 3px;
+  inline-size: 7px;
+  block-size: 16px;
+  margin: 0;
+}
+
+.pt-readingnow .pt-readnow__spine {
+  grid-area: spine;
+  inline-size: 12px;
+  block-size: 48px;
+  box-shadow: 2px 1px 3px var(--pt-spine-cast);
+}
+
+.pt-readingnow .pt-readnow__title {
+  grid-area: title;
+  font-family: var(--pt-font-paper);
+  font-size: 16px;
+}
+
+.pt-readingnow .pt-button {
+  grid-area: button;
+  margin-inline-start: 6px;
+}
+
+.pt-readnow__page {
+  color: var(--pt-ink);
+}
+
+/* ── the empty library (#196, frame 01b): an empty plank and the accession slip ─────────── */
+
+.pt-emptyshelf__slot {
+  display: flex;
+  flex: 1 1 auto;
+  justify-content: center;
+  padding-block: 160px 58px; /* the slip stands on the plank (54 px) */
+}
+
+.pt-slip {
+  position: relative;
+  display: flex;
+  inline-size: min(560px, 100%);
+  min-block-size: 344px;
+  flex-direction: column;
+  gap: 16px;
+  padding: 32px 40px 28px 48px;
+  background: var(--pt-page);
+  box-shadow: var(--pt-e1);
+  transform: rotate(-1.6deg);
+  transform-origin: bottom left;
+}
+
+/* Torn off a pad: a perforated left edge in the ground's colour. */
+.pt-slip::before {
+  position: absolute;
+  inset-block: 10px;
+  left: -1px;
+  inline-size: 6px;
+  content: '';
+  background: radial-gradient(circle at 0 50%, var(--pt-ground) 2.4px, transparent 3px) 0 0 / 6px
+    12px;
+}
+
+.pt-slip__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-block-end: 20px;
+  font-family: var(--pt-font-you);
+  font-size: 14px;
+  border-block-end: 1.5px solid var(--pt-ink);
+}
+
+.pt-slip__name {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font: 700 15px var(--pt-font-label);
+  letter-spacing: 0.14em;
+  text-transform: lowercase;
+}
+
+.pt-slip__call {
+  margin: 12px 0 0;
+  font: 400 26px/1.3 var(--pt-font-paper);
+}
+
+.pt-slip__choose {
+  padding: 0;
+  font: inherit;
+  color: var(--pt-primary);
+  text-decoration: underline 1.5px;
+  text-underline-offset: 5px;
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+.pt-slip__note {
+  max-inline-size: 440px;
+  margin: 0;
+  line-height: 1.55;
+}
+
+.pt-slip__foot {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: auto 0 0;
+  font-size: 14px;
+  color: var(--pt-ink-2);
+}
+
+/* ── face-out covers (#196, frame 01c): a short library stands its books face-out ───────── */
+
+/* 01c's covers start 64 px under the view row; the card's band grows when a book comes down. */
+.pt-shelfband--faceout .pt-shelfband__band {
+  min-block-size: 56px;
+}
+
+.pt-covers__shelf + .pt-covers__shelf {
+  margin-block-start: 48px;
+}
+
+/* Covers and captions share columns: the captions are inset by the plank's ends
+   (`PLANK_ENDS` in model/states.ts) and both rows space their items evenly. */
+.pt-covers__row,
+.pt-covers__captions {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 36px;
+  justify-content: space-evenly;
+}
+
+.pt-covers__captions {
+  padding: 22px 28px 0;
+}
+
+/* 264 px columns that may shrink, so a 320 px window does not scroll sideways (WCAG 1.4.10). */
+.pt-covers__slot,
+.pt-covercap {
+  flex: 0 1 264px;
+  min-inline-size: 0;
+}
+
+.pt-covers__slot {
+  padding: 16px 0 54px 8px; /* room for a lifted cover above; the plank below */
+}
+
+.pt-cover {
+  inline-size: 224px;
+  block-size: 304px;
+  text-align: start;
+  border-radius: 2px 4px 4px 2px;
+  /* The spine's light budget (sheen peak + weave), so its gilt keeps the tested 4.5:1. */
+  background-image:
+    linear-gradient(135deg, rgb(255 255 255 / var(--pt-spine-sheen-peak)), transparent 45%),
+    repeating-linear-gradient(
+      45deg,
+      rgb(255 255 255 / var(--pt-spine-weave-light)) 0 1px,
+      transparent 1px 3px
+    ),
+    repeating-linear-gradient(-45deg, rgb(0 0 0 / 9%) 0 1px, transparent 1px 3px);
+  box-shadow:
+    inset 6px 0 0 rgb(0 0 0 / 18%),
+    12px 6px 18px -6px var(--pt-spine-cast),
+    3px 0 0 -1px #e9e2d3,
+    4px 1px 0 -1px #cfc4b0;
+}
+
+.pt-cover__inner {
+  align-items: flex-start;
+  padding: 34px 26px 22px 34px;
+}
+
+.pt-cover__frame {
+  position: absolute;
+  inset: 12px 12px 12px 18px;
+  border: 1px solid rgb(232 212 160 / 75%);
+  box-shadow: inset 0 0 0 4px rgb(232 212 160 / 45%);
+}
+
+.pt-cover__title {
+  display: -webkit-box;
+  overflow: hidden;
+  font: 28px/1.05 var(--pt-font-display);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+}
+
+.pt-cover__rule {
+  flex: none;
+  inline-size: 44px;
+  block-size: 1px;
+  margin-block: 16px 12px;
+  background: var(--pt-spine-gilt);
+}
+
+.pt-cover__authors {
+  font: 14px var(--pt-font-label);
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+}
+
+/* The chosen plate (#200): the paper's own figure on a paper mount; the PDF's white page. The title
+   keeps its lines (three at most) and the figure takes what is left above the year. */
+.pt-cover--plate .pt-cover__title {
+  flex: none;
+  font-size: 21px;
+  -webkit-line-clamp: 3;
+}
+
+.pt-cover__plate {
+  flex: 1 1 0;
+  min-block-size: 0;
+  max-inline-size: 100%;
+  margin-block-start: 12px;
+  object-fit: contain;
+  background: #fff;
+  border: 5px solid var(--pt-paper-label);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 35%);
+}
+
+.pt-cover__year {
+  margin-block: auto 0;
+  font-size: 13px;
+}
+
+/* Gilt cannot be read on the Language cloth or on kraft: ink on a paper label instead. */
+.pt-cover--label .pt-cover__inner,
+.pt-cover--kraft .pt-cover__inner {
+  inset: 22px 16px 22px 24px;
+  padding: 18px 16px 14px;
+  background: var(--pt-paper-label);
+  border: 1px solid var(--pt-spine-label-edge);
+}
+
+.pt-cover--label .pt-cover__frame,
+.pt-cover--kraft .pt-cover__frame {
+  display: none;
+}
+
+.pt-cover--torn .pt-cover__note {
+  align-self: flex-start;
+  margin-block-start: 12px;
+  padding: 6px 10px 14px;
+  background: var(--pt-paper-label);
+  clip-path: polygon(0 0, 100% 0, 100% 82%, 80% 92%, 58% 80%, 36% 94%, 16% 84%, 0 92%);
+}
+
+.pt-cover__ribbon {
+  bottom: -56px;
+  left: 150px;
+  block-size: 56px;
+}
+
+.pt-covercap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: 14px;
+  font-variant-numeric: lining-nums;
+  color: var(--pt-ink-2);
+}
+
+/* Zero specificity, so the state line's own margin wins. */
+:where(.pt-covercap) p {
+  margin: 0;
+}
+
+.pt-covercap__title {
+  font: 700 15px/1.35 var(--pt-font-paper);
+  color: var(--pt-ink);
+}
+
+.pt-covercap__meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.pt-covercap__swatch {
+  inline-size: 7px;
+  block-size: 14px;
+}
+
+.pt-covercap__state {
+  margin-block-start: 6px;
+  font-size: 15px;
+  color: var(--pt-ink);
+}
+
+.pt-covercap__progress {
+  display: flex;
+  align-self: stretch;
+  gap: 10px;
+  align-items: center;
+  margin-block: 6px 8px;
+}
+
+.pt-covercap__progress .pt-readnow__rule {
+  flex: 1 1 auto;
+}
+
+.pt-covercap__state + .pt-button {
+  margin-block-start: 8px;
+}
+
+/* ── a library at scale (#196, frame 01f): a plank per row, scrolling sideways ─────────── */
+
+.pt-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+
+.pt-rows__spines {
+  display: flex;
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  gap: 2px;
+  align-items: flex-end;
+  padding: 24px 2px 54px; /* a lifted spine above; below, the plank the ribbons hang over */
+  /* A spine focused by the arrows scrolls clear of the sticky bookend (WCAG 2.4.11): the
+     bookend's 104 px and a gap (`ROW_SCROLL_PADDING` in model/states.ts). */
+  scroll-padding-inline-end: 112px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+/* The "+n more" bookend ends an overflowing row in place of the brass one, sticky at its right
+   edge (96 + 8 px: `MORE_WIDTH` in ShelfRow.tsx). */
+.pt-rows__more {
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  display: flex;
+  flex: none;
+  inline-size: 96px;
+  block-size: 132px;
+  margin-inline-start: 8px;
+  padding: 6px;
+  cursor: pointer;
+  background: var(--pt-bookend);
+  border: 0;
+  border-radius: 3px 3px 0 0;
+  /* The ground above the bookend hides the taller spines running on beneath it. */
+  box-shadow:
+    0 -60px 0 var(--pt-ground),
+    -6px 0 12px -4px var(--pt-spine-cast);
+}
+
+/* The spines run on under the bookend: they fade into the ground before it, as in 01f. */
+.pt-rows__more::before {
+  position: absolute;
+  inset-block: -56px 0;
+  right: calc(100% + 8px);
+  inline-size: 72px;
+  pointer-events: none;
+  content: '';
+  background: linear-gradient(90deg, transparent, var(--pt-ground) 90%);
+}
+
+.pt-rows__spines:has(.pt-rows__more) ~ .pt-plank__bookend--end {
+  display: none;
+}
+
+.pt-rows__more:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+.pt-rows__card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--pt-paper-label-ink);
+  background: var(--pt-paper-label);
+  box-shadow: inset 0 1px 2px var(--pt-holder-inset);
+}
+
+.pt-rows__count {
+  font: 30px/1 var(--pt-font-display);
+}
+
+.pt-rows__holder {
+  position: absolute;
+  bottom: 0;
+  left: 40px;
+  z-index: 4;
+  display: flex;
+}
+
+/* Paper-coloured on the walnut: 7:1 and more in both schemes. */
+.pt-rows__shown {
+  position: absolute;
+  right: 160px;
+  bottom: 17px;
+  z-index: 4;
+  font-size: 13.5px;
+  color: var(--pt-paper-label);
+}
+
+@media (max-width: 900px) {
+  .pt-libhead {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding: 12px var(--pt-gutter-phone);
+  }
+
+  .pt-libhead__brand {
+    flex: 1 1 auto;
+  }
+
+  .pt-search {
+    flex: 1 1 100%;
+    order: 3;
+  }
+
+  .pt-library__main,
+  .pt-uploads__list {
+    padding-inline: var(--pt-gutter-phone);
+  }
+
+  .pt-libtitle__h1 {
+    font-size: var(--pt-t-display-l);
+  }
+
+  .pt-readingnow__list {
+    flex-direction: column;
+  }
+
+  .pt-readingnow__item {
+    padding: 10px 0;
+  }
+
+  .pt-readingnow__item + .pt-readingnow__item {
+    border-block-start: 1px solid var(--pt-rule);
+    border-inline-start: 0;
+  }
+
+  .pt-emptyshelf__slot {
+    padding-block-start: 32px;
+  }
+
+  .pt-slip {
+    min-block-size: 0;
+    padding: 24px 20px 20px 28px;
+    transform: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .pt-addpapers__label,
+  .pt-rows__shown {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-cover,
+  .pt-cover::after,
+  .pt-spine,
+  .pt-spine::after,
+  .pt-spine__face,
+  .pt-spine__year {
+    transition: none;
+  }
+}

@@ -127,6 +127,16 @@ export function scenario(name: FixtureName): Scenario {
           hit.path.endsWith('/search') ? ok(toolText(entries[6]!), ['b5', 'b6']) : notFound,
       };
     }
+    case 'diagram-ok': {
+      // The model's lines are the recording's deltas; every `plate`, `part` and status is the
+      // agent's own reading of them (diagram.ts).
+      return {
+        name,
+        request: readExample('diagram'),
+        steps: [recordedTurn(entries[1]!, { text: fx.texts, usage: usage(fx.usages[0]) })],
+        tools: () => notFound,
+      };
+    }
     case 'summary-ok': {
       const request = readExample('summary');
       return {

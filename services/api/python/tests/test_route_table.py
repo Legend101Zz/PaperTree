@@ -70,6 +70,25 @@ ADDED: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/papers/{paper_id}/summary"),
         ("POST", "/papers/{paper_id}/summary"),
         ("GET", "/usage"),
+        # v0.2 S2a (#192)
+        ("PATCH", "/auth/me"),
+        ("PUT", "/papers/{paper_id}/reading-state"),
+        # v0.2 S2c (#194)
+        ("GET", "/library/links"),
+        # v0.2 S2b (#193)
+        ("GET", "/topics"),
+        ("POST", "/topics"),
+        ("PATCH", "/topics/{topic_id}"),
+        ("DELETE", "/topics/{topic_id}"),
+        ("GET", "/papers/{paper_id}/topic"),
+        ("PUT", "/papers/{paper_id}/topic"),
+        ("DELETE", "/papers/{paper_id}/topic"),
+        ("POST", "/papers/{paper_id}/topic/reject"),
+        # v0.2 S3 (#200): the opened book
+        ("GET", "/papers/{paper_id}/figures"),
+        ("PUT", "/papers/{paper_id}/plate"),
+        ("DELETE", "/papers/{paper_id}/plate"),
+        ("GET", "/papers/{paper_id}/abstract"),
         # §2.7 (S7)
         ("GET", "/papers/{paper_id}/board"),
         ("POST", "/papers/{paper_id}/board/nodes"),
@@ -79,6 +98,18 @@ ADDED: frozenset[tuple[str, str]] = frozenset(
         ("PATCH", "/boards/{board_id}/edges/{edge_id}"),
         ("DELETE", "/boards/{board_id}/edges/{edge_id}"),
         ("PATCH", "/boards/{board_id}"),
+        # v0.2 S5a (#206): the notebook
+        ("POST", "/papers/{paper_id}/notebook/pages"),
+        ("GET", "/papers/{paper_id}/notebook/pages"),
+        ("GET", "/papers/{paper_id}/notebook/search"),
+        ("GET", "/notebook/pages/{page_id}"),
+        ("PATCH", "/notebook/pages/{page_id}"),
+        ("DELETE", "/notebook/pages/{page_id}"),
+        ("POST", "/notebook/pages/{page_id}/items"),
+        ("PATCH", "/notebook/pages/{page_id}/items/{item_id}"),
+        ("DELETE", "/notebook/pages/{page_id}/items/{item_id}"),
+        ("POST", "/notebook/pages/{page_id}/strokes"),
+        ("DELETE", "/notebook/pages/{page_id}/strokes/{stroke_id}"),
         # §4 (S5)
         ("GET", "/internal/agent/runs/{run_id}/outline"),
         ("GET", "/internal/agent/runs/{run_id}/sections/{handle}"),

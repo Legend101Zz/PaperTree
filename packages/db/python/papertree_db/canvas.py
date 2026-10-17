@@ -17,7 +17,7 @@ import math
 import sqlite3
 import uuid
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final, Literal
 
 from ._support import Row, client_json, now_iso
@@ -58,6 +58,10 @@ class NodeRow:
     version: int
     created_at: str
     updated_at: str
+    #: Notebook card -> the notebook page it shows (0008; plain TEXT, validated in Python).
+    source_page_id: str | None = None
+    #: Diagram card -> the diagram it shows (0008; validated once diagrams exist).
+    source_diagram_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,25 +79,92 @@ class EdgeRow:
     to_node_id: str
     kind: str
     label: str | None
+    created_at: str
+    #: The pins this thread was drawn between (0008). None on a v0.1 edge or a keyboard link.
+    from_port: str | None = None
+    to_port: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NotebookCounts:
+    """What a notebook card says about its page ("4 quotes · 1 sticky"), counted on read."""
+
+    quotes: int = 0
+    stickies: int = 0
+    text: int = 0
+    shapes: int = 0
+    strokes: int = 0
 
 
 @dataclass(frozen=True, slots=True)
 class BoardSnapshot:
-    """``GET /papers/{id}/board``: ``board`` is None until the first send; then nodes and edges."""
+    """``GET /papers/{id}/board``: ``board`` is None until the first send; then nodes and edges.
+
+    ``notebook_counts`` maps the ``node_id`` of every notebook card to its page's counts.
+    """
 
     board: BoardRow | None
     nodes: tuple[NodeRow, ...]
     edges: tuple[EdgeRow, ...]
+    notebook_counts: Mapping[str, NotebookCounts] = field(default_factory=dict)
 
 
-NODE_KINDS: Final = frozenset({"excerpt", "explanation", "note", "group"})
+#: "frame" on the design's board IS the ``group`` kind on the wire (dashed outline, paper tag in
+#: the UI). A frame is created empty with a title, w and h; moving one moves nothing server-side,
+#: because every child carries its own x/y and the client moves them.
+NODE_KINDS: Final = frozenset(
+    {"excerpt", "explanation", "note", "group", "question", "notebook", "diagram"}
+)
+OUT_PORTS: Final = frozenset({"claim_out", "answer_out"})
+IN_PORTS: Final = frozenset({"evidence_in", "question_in"})
+
+
+@dataclass(frozen=True, slots=True)
+class Pins:
+    """The pins one card kind offers: brass out-pins and open in-pins (DESIGN.md section 5)."""
+
+    out: frozenset[str] = frozenset()
+    into: frozenset[str] = frozenset()
+
+
+#: Which card kind offers which pins (frame 06, DESIGN.md section 5). The one table the API
+#: checks a threaded edge against; a ``group`` (frame) offers none. An edge without ports is
+#: always legal (keyboard linking, and every v0.1 edge).
+#: Re-derived from reference/06-board-1440.png, card by card. What the frame DRAWS:
+#:   passage (excerpt): ring (evidence in) on the left, brass dot (claim out) on the right
+#:   explanation: ring left, brass dot right, brass diamond (answer out) on the bottom edge
+#:   note: ring left, brass dot right
+#:   question: open diamond (question in) on the top edge
+#:   notebook page: ring left
+#:   diagram: ring left, brass dot right
+#: Pins the frame does NOT draw but the design text (DESIGN.md section 5, the brief) allows, kept
+#: so a legal thread is never refused for want of a drawing: question_in on an explanation,
+#: evidence_in on a question, claim_out on a notebook page. The thread the frame's own picker
+#: shows (diagram claim_out -> passage evidence_in) is why a passage takes an in-pin.
+PIN_TABLE: Final[Mapping[str, Pins]] = {
+    "excerpt": Pins(out=frozenset({"claim_out"}), into=frozenset({"evidence_in"})),
+    "note": Pins(out=frozenset({"claim_out"}), into=frozenset({"evidence_in"})),
+    "explanation": Pins(
+        out=frozenset({"claim_out", "answer_out"}),
+        into=frozenset({"evidence_in", "question_in"}),
+    ),
+    "question": Pins(into=frozenset({"evidence_in", "question_in"})),
+    "notebook": Pins(out=frozenset({"claim_out"}), into=frozenset({"evidence_in"})),
+    "diagram": Pins(out=frozenset({"claim_out"}), into=frozenset({"evidence_in"})),
+    "group": Pins(),
+}
+PIN_REFUSED: Final = "that pin does not take that thread"
+_KIND_WITH_SOURCE_PAGE: Final = "notebook"
+_KIND_WITH_SOURCE_DIAGRAM: Final = "diagram"
 EDGE_KINDS: Final = frozenset(
     {"supports", "contradicts", "derives_from", "answers", "compares", "references", "relates"}
 )
-_NODE_PATCHABLE: Final = ("x", "y", "w", "h", "z", "title", "body", "group_id")
+_NODE_PATCHABLE: Final = (
+    "x", "y", "w", "h", "z", "title", "body", "group_id", "source_page_id", "source_diagram_id"
+)  # fmt: skip
 _NODE_COLUMNS: Final = (
     "node_id, board_id, kind, group_id, x, y, w, h, z, title, body, source_anchor_json, "
-    "source_message_id, version, created_at, updated_at"
+    "source_message_id, version, created_at, updated_at, source_page_id, source_diagram_id"
 )
 
 
@@ -122,6 +193,43 @@ def _finite(name: str, value: object, *, positive: bool = False) -> float:
     return float(value)
 
 
+def check_ports(from_kind: str, to_kind: str, from_port: object, to_port: object) -> None:
+    """Refuses a thread whose pins the two cards do not offer (``PIN_TABLE``).
+
+    A missing port is fine (keyboard link, v0.1 edge); each given port must be a real pin the
+    card on that end offers.
+
+    Args:
+        from_kind: Kind of the source card.
+        to_kind: Kind of the target card.
+        from_port: The out-pin the thread leaves from, or None.
+        to_port: The in-pin the thread arrives at, or None.
+
+    Raises:
+        CanvasRejected: ``validation_failed`` - "that pin does not take that thread".
+    """
+    if from_port is not None and (
+        not isinstance(from_port, str) or from_port not in PIN_TABLE.get(from_kind, Pins()).out
+    ):
+        raise _bad(PIN_REFUSED)
+    if to_port is not None and (
+        not isinstance(to_port, str) or to_port not in PIN_TABLE.get(to_kind, Pins()).into
+    ):
+        raise _bad(PIN_REFUSED)
+
+
+def _source_ref(name: str, value: object, kind: object, owner_kind: str) -> str | None:
+    """A card's pointer to the thing it shows: required (a non-empty string) on its own kind,
+    refused on every other, so a stray id cannot ride on a note."""
+    if kind != owner_kind:
+        if value is not None:
+            raise _bad(f"{name}: only a {owner_kind} card carries one")
+        return None
+    if not isinstance(value, str) or not value:
+        raise _bad(f"{name}: required for a {owner_kind} card")
+    return value
+
+
 def _node_row(row: Row) -> NodeRow:
     anchor = row["source_anchor_json"]
     return NodeRow(
@@ -141,6 +249,8 @@ def _node_row(row: Row) -> NodeRow:
         version=row["version"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        source_page_id=row["source_page_id"],
+        source_diagram_id=row["source_diagram_id"],
     )
 
 
@@ -164,11 +274,16 @@ def _edge_row(row: Row) -> EdgeRow:
         to_node_id=row["to_node_id"],
         kind=row["kind"],
         label=row["label"],
+        created_at=row["created_at"],
+        from_port=row["from_port"],
+        to_port=row["to_port"],
     )
 
 
 _BOARD_COLUMNS: Final = "board_id, paper_id, title, viewport_json, created_at, updated_at"
-_EDGE_COLUMNS: Final = "edge_id, board_id, from_node_id, to_node_id, kind, label"
+_EDGE_COLUMNS: Final = (
+    "edge_id, board_id, from_node_id, to_node_id, kind, label, created_at, from_port, to_port"
+)
 
 
 class CanvasMixin(_Base):
@@ -199,11 +314,67 @@ class CanvasMixin(_Base):
             "ORDER BY created_at, edge_id",
             (owner_id, board_id),
         )
+        node_rows = tuple(_node_row(r) for r in nodes)
         return BoardSnapshot(
             _board_row(board),
-            tuple(_node_row(r) for r in nodes),
+            node_rows,
             tuple(_edge_row(r) for r in edges),
+            self._notebook_counts(owner_id, node_rows),
         )
+
+    def notebook_counts(
+        self, owner: OwnerId, nodes: tuple[NodeRow, ...]
+    ) -> dict[str, NotebookCounts]:
+        """Counts for the notebook cards among ``nodes`` (what a single patched or created card
+        needs; ``get_board`` already includes them for the whole board)."""
+        return self._notebook_counts(self._resolve(owner), nodes)
+
+    def _notebook_counts(
+        self, owner_id: str, nodes: tuple[NodeRow, ...]
+    ) -> dict[str, NotebookCounts]:
+        """Counts for every notebook card in ONE grouped query (no query per card).
+
+        Items and strokes are counted from the real notebook tables (0007), owner-scoped. A page
+        with nothing on it (or, through a direct SQL delete, none at all) reads as zeros.
+        """
+        cards = [n for n in nodes if n.kind == "notebook" and n.source_page_id is not None]
+        if not cards:
+            return {}
+        found: dict[str, dict[str, int]] = {}
+        pages = sorted({str(c.source_page_id) for c in cards})
+        marks = ", ".join("?" for _ in pages)
+        rows = self._all(
+            "SELECT page_id, kind, COUNT(*) AS n FROM notebook_items "  # noqa: S608 - only "?"
+            f"WHERE owner_id = ? AND page_id IN ({marks}) GROUP BY page_id, kind "
+            "UNION ALL "
+            "SELECT page_id, 'stroke', COUNT(*) FROM notebook_strokes "
+            f"WHERE owner_id = ? AND page_id IN ({marks}) GROUP BY page_id",
+            (owner_id, *pages, owner_id, *pages),
+        )
+        for r in rows:
+            found.setdefault(r["page_id"], {})[r["kind"]] = r["n"]
+        out: dict[str, NotebookCounts] = {}
+        for card in cards:
+            by_kind = found.get(str(card.source_page_id), {})
+            out[card.node_id] = NotebookCounts(
+                quotes=by_kind.get("quote", 0),
+                stickies=by_kind.get("sticky", 0),
+                text=by_kind.get("text", 0),
+                shapes=by_kind.get("shape", 0),
+                strokes=by_kind.get("stroke", 0),
+            )
+        return out
+
+    def _check_source_page(self, owner_id: str, paper_id: str, page_id: str) -> None:
+        """404 unless the page is this owner's AND on this paper (one answer for both, so a
+        stranger's page id is indistinguishable from a missing one)."""
+        found = self._one(
+            "SELECT 1 AS ok FROM notebook_pages WHERE owner_id = ? AND paper_id = ? "
+            "AND page_id = ?",
+            (owner_id, paper_id, page_id),
+        )
+        if found is None:
+            raise CanvasRejected("not_found", "no such notebook page on this paper")
 
     def create_node(self, owner: OwnerId, paper_id: PaperId, node: Mapping[str, Any]) -> NodeRow:
         """Adds a node, creating the paper's board in the SAME transaction on the first one.
@@ -218,7 +389,7 @@ class CanvasMixin(_Base):
         owner_id = self._resolve(owner)
         kind = node.get("kind")
         if kind not in NODE_KINDS:
-            raise _bad("kind: must be excerpt, explanation, note or group")
+            raise _bad("kind: not one of the seven card kinds")
         node_id = node.get("node_id")
         if not isinstance(node_id, str) or not node_id:
             raise _bad("node_id: required")
@@ -251,8 +422,14 @@ class CanvasMixin(_Base):
         if kind == "explanation":
             if not isinstance(message_id, str) or not message_id:
                 raise _bad("source_message_id: required for an explanation")
-        elif message_id is not None:
-            raise _bad("source_message_id: only an explanation carries one")
+        elif message_id is not None and kind != "question":
+            raise _bad("source_message_id: only an explanation or a question carries one")
+        elif message_id is not None and not isinstance(message_id, str):
+            raise _bad("source_message_id: must be a string")
+        page_id = _source_ref("source_page_id", node.get("source_page_id"), kind, "notebook")
+        diagram_id = _source_ref(
+            "source_diagram_id", node.get("source_diagram_id"), kind, "diagram"
+        )
         group_id = node.get("group_id")
 
         with self.transaction():
@@ -276,17 +453,21 @@ class CanvasMixin(_Base):
                 if board is not None and existing["board_id"] == board["board_id"]:
                     return _node_row(existing)
                 raise _bad("node_id: already in use")
-            if kind == "explanation":
+            if message_id is not None:
                 assert isinstance(message_id, str)
+                role = "assistant" if kind == "explanation" else "user"
                 known = self._one(
                     "SELECT 1 AS ok FROM ai_messages m JOIN ai_threads t "
                     "ON t.owner_id = m.owner_id AND t.thread_id = m.thread_id "
                     "WHERE m.owner_id = ? AND m.message_id = ? AND t.paper_id = ? "
-                    "AND m.role = 'assistant'",
-                    (owner_id, message_id, paper_id),
+                    "AND m.role = ?",
+                    (owner_id, message_id, paper_id, role),
                 )
                 if known is None:
-                    raise _bad("source_message_id: no such answer on this paper")
+                    what = "answer" if kind == "explanation" else "question"
+                    raise _bad(f"source_message_id: no such {what} on this paper")
+            if page_id is not None:
+                self._check_source_page(owner_id, paper_id, page_id)
             now = now_iso()
             if board is None:
                 board_id = "brd_" + uuid.uuid4().hex
@@ -303,10 +484,11 @@ class CanvasMixin(_Base):
                 self._conn.execute(
                     "INSERT INTO canvas_nodes (node_id, owner_id, board_id, kind, group_id, x, y, "
                     "w, h, z, title, body, source_anchor_json, source_message_id, version, "
-                    "created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)",
+                    "created_at, updated_at, source_page_id, source_diagram_id) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?)",
                     (
                         node_id, owner_id, board_id, kind, group_id, x, y, w, h, int(z), title,
-                        body, anchor_json, message_id, now, now,
+                        body, anchor_json, message_id, now, now, page_id, diagram_id,
                     ),
                 )  # fmt: skip
             except sqlite3.IntegrityError as exc:
@@ -387,6 +569,25 @@ class CanvasMixin(_Base):
                 return None
             if current["version"] != version:
                 return StaleVersion(_node_row(current))
+            for name, owner_kind in (
+                ("source_page_id", _KIND_WITH_SOURCE_PAGE),
+                ("source_diagram_id", _KIND_WITH_SOURCE_DIAGRAM),
+            ):
+                if name in fields:
+                    # Same rule as create: only its own kind carries one, and never cleared.
+                    value = _source_ref(name, fields[name], current["kind"], owner_kind)
+                    if value is None:
+                        raise _bad(f"{name}: a card's source cannot be cleared")
+                    if name == "source_page_id":
+                        paper = self._one(
+                            "SELECT paper_id FROM canvas_boards "
+                            "WHERE owner_id = ? AND board_id = ?",
+                            (owner_id, board_id),
+                        )
+                        assert paper is not None
+                        self._check_source_page(owner_id, paper["paper_id"], value)
+                    sets.append(f"{name} = ?")
+                    params.append(value)
             if "group_id" in fields:
                 if fields["group_id"] is not None:
                     self._check_group(
@@ -434,6 +635,7 @@ class CanvasMixin(_Base):
         owner_id = self._resolve(owner)
         edge_id, a, b = edge.get("edge_id"), edge.get("from_node_id"), edge.get("to_node_id")
         kind, label = edge.get("kind"), edge.get("label")
+        from_port, to_port = edge.get("from_port"), edge.get("to_port")
         if not isinstance(edge_id, str) or not edge_id:
             raise _bad("edge_id: required")
         if kind not in EDGE_KINDS:
@@ -452,19 +654,17 @@ class CanvasMixin(_Base):
                 if existing["board_id"] == board_id:
                     return _edge_row(existing)
                 raise _bad("edge_id: already in use")
-            found = self._one(
-                "SELECT COUNT(*) AS n FROM canvas_nodes "
-                "WHERE owner_id = ? AND board_id = ? AND node_id IN (?, ?)",
-                (owner_id, board_id, a, b),
-            )
-            if found is None or found["n"] != 2:
+            kinds = self._node_kinds(owner_id, board_id, (a, b))
+            if len(kinds) != 2:
                 raise _bad("from_node_id: both nodes must be on this board")
+            check_ports(kinds[a], kinds[b], from_port, to_port)
             now = now_iso()
             try:
                 self._conn.execute(
                     "INSERT INTO canvas_edges (edge_id, owner_id, board_id, from_node_id, "
-                    "to_node_id, kind, label, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
-                    (edge_id, owner_id, board_id, a, b, kind, label, now, now),
+                    "to_node_id, kind, label, created_at, updated_at, from_port, to_port) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    (edge_id, owner_id, board_id, a, b, kind, label, now, now, from_port, to_port),
                 )
             except sqlite3.IntegrityError as exc:
                 raise _bad("edge_id: already in use") from exc
@@ -474,6 +674,15 @@ class CanvasMixin(_Base):
             )
         assert row is not None
         return _edge_row(row)
+
+    def _node_kinds(self, owner_id: str, board_id: str, ids: tuple[str, ...]) -> dict[str, str]:
+        marks = ", ".join("?" for _ in ids)
+        rows = self._all(
+            "SELECT node_id, kind FROM canvas_nodes "  # noqa: S608 - only "?" is interpolated
+            f"WHERE owner_id = ? AND board_id = ? AND node_id IN ({marks})",
+            (owner_id, board_id, *ids),
+        )
+        return {r["node_id"]: r["kind"] for r in rows}
 
     def _require_board(self, owner_id: str, board_id: str) -> None:
         if (
@@ -488,7 +697,8 @@ class CanvasMixin(_Base):
     def patch_edge(
         self, owner: OwnerId, board_id: str, edge_id: str, fields: Mapping[str, Any]
     ) -> EdgeRow | None:
-        """Changes ``kind`` and/or ``label`` (a present ``label`` of None clears it)."""
+        """Changes ``kind``, ``label``, ``from_port`` and/or ``to_port`` (a present ``label`` or
+        port of None clears it; a port that stays set is re-checked against :data:`PIN_TABLE`)."""
         owner_id = self._resolve(owner)
         sets: list[str] = []
         params: list[Any] = []
@@ -503,6 +713,25 @@ class CanvasMixin(_Base):
             sets.append("label = ?")
             params.append(fields["label"])
         with self.transaction():
+            if "from_port" in fields or "to_port" in fields:
+                ends = self._one(
+                    "SELECT from_node_id, to_node_id, from_port, to_port FROM canvas_edges "
+                    "WHERE owner_id = ? AND board_id = ? AND edge_id = ?",
+                    (owner_id, board_id, edge_id),
+                )
+                if ends is not None:
+                    kinds = self._node_kinds(
+                        owner_id, board_id, (ends["from_node_id"], ends["to_node_id"])
+                    )
+                    new_from = fields.get("from_port", ends["from_port"])
+                    new_to = fields.get("to_port", ends["to_port"])
+                    check_ports(
+                        kinds[ends["from_node_id"]], kinds[ends["to_node_id"]], new_from, new_to
+                    )
+                    for name in ("from_port", "to_port"):
+                        if name in fields:
+                            sets.append(f"{name} = ?")
+                            params.append(fields[name])
             if sets:
                 self._conn.execute(
                     f"UPDATE canvas_edges SET {', '.join(sets)}, updated_at = ? "

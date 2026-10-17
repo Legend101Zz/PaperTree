@@ -9,7 +9,7 @@
  * A script is a list of turns, consumed one per model request, keyed by the Pi session id (the
  * thread id, or the run id on a first turn). `defaultBrain` answers any request from what the run
  * actually gave it — the seed passages in the system prompt, or the handles its tools returned — so
- * the e2e stack can drive explain, ask and summary through a real API.
+ * the e2e stack can drive explain, ask, summary and diagram through a real API.
  */
 import {
   type AssistantMessage,
@@ -23,6 +23,7 @@ import {
 } from '@earendil-works/pi-ai';
 
 import type { RunRequest } from './contract.ts';
+import { parseTopicInput } from './topic.ts';
 import { parseHeaders } from './tools.ts';
 
 export const FAUX_PROVIDER = 'papertree-faux';
@@ -438,6 +439,198 @@ function answerFromTools(request: RunRequest, summary: boolean): FauxStep {
   };
 }
 
+// ── diagram runs (v0.2 S7a): NDJSON lines, streamed in chunks that cut lines in two ──────────────
+
+/** Lines as the model writes them, cut every `size` characters so no chunk is a whole line. */
+function ndjson(lines: ReadonlyArray<Record<string, unknown> | string>, size = 37): string[] {
+  const text = lines
+    .map((line) => (typeof line === 'string' ? line : JSON.stringify(line)))
+    .join('\n');
+  const out: string[] = [];
+  for (let i = 0; i < text.length; i += size) out.push(text.slice(i, i + size));
+  return out;
+}
+
+function diagramTurn(context: FauxContext, lines: Parameters<typeof ndjson>[0]): FauxTurn {
+  const text = ndjson(lines);
+  return {
+    thinking: 'Plan the parts from the selected passage, then write one line per part.',
+    text,
+    usage: estimate(context, text.join('')),
+  };
+}
+
+/**
+ * `[faux:diagram]`: the frames' own plate (07a-07c), §3.2.1 of "Attention Is All You Need", p. 4.
+ * Every quote is copied from the paper's text as the parser reads it (the corpus PDF and the
+ * committed fixture agree on these words), so through the API each resolves VERBATIM; part F is
+ * inferred (no passage says the weights sum to one).
+ */
+export const ATTENTION_PLATE: ReadonlyArray<Record<string, unknown>> = [
+  { t: 'plate', title: 'Scaled dot-product attention' },
+  {
+    t: 'part',
+    label: 'Q, K, V',
+    text: 'queries and keys of dimension dk, values of dimension dv',
+    kind: 'input',
+    after: [],
+    cite: { quote: 'queries and keys of dimension dk, and values of dimension dv', page: 4 },
+  },
+  {
+    t: 'part',
+    label: 'MatMul (Q · Kᵀ)',
+    text: 'one dot product of the query with each key',
+    kind: 'step',
+    after: ['A'],
+    cite: { quote: 'We compute the dot products of the query with all keys', page: 4 },
+  },
+  {
+    t: 'part',
+    label: 'Scale ÷ √dk',
+    text: 'each dot product divided by √dk',
+    kind: 'step',
+    after: ['B'],
+    cite: { quote: 'divide each by √dk', page: 4 },
+  },
+  {
+    t: 'part',
+    label: 'Softmax',
+    text: 'turns the scaled scores into weights on the values',
+    kind: 'step',
+    after: ['C'],
+    cite: { quote: 'apply a softmax function to obtain the weights on the values', page: 4 },
+  },
+  {
+    t: 'part',
+    label: 'MatMul with V',
+    text: 'the weights applied to the values give the output',
+    kind: 'output',
+    after: ['D', 'A'],
+    edge: [null, 'V'],
+    cite: { quote: 'We compute the matrix of outputs as', page: 4 },
+  },
+  {
+    t: 'part',
+    label: 'Weights sum to 1',
+    text: "each query's weights over the keys add up to one",
+    kind: 'concept',
+    after: ['D'],
+    cite: null,
+  },
+  { t: 'end' },
+];
+
+/**
+ * `[faux:diagram-bad]`: one broken part line, then an arrow from a later part, an arrow from the
+ * broken (never drawn) part, and a quote the paper does not hold. Letters are the model's count of
+ * the lines it wrote, so "Learned weights" `after: ['B']` names the broken line.
+ */
+export const BAD_PLATE: ReadonlyArray<Record<string, unknown> | string> = [
+  { t: 'plate', title: 'Scaled dot-product attention' },
+  ATTENTION_PLATE[1]!,
+  '{"t":"part","label":"Broken","kind":',
+  { ...ATTENTION_PLATE[2]!, after: ['A', 'D'] },
+  {
+    t: 'part',
+    label: 'Learned weights',
+    text: 'the weights are trained, not computed',
+    kind: 'concept',
+    after: ['B'],
+    cite: { quote: 'the attention weights are learned end to end by gradient descent' },
+  },
+  { t: 'end' },
+];
+
+/** The first `n` words of a seed passage's text, datamarks and tags removed. */
+function firstWords(text: string, datamark: string, n: number): string {
+  return words(text, datamark, n).replace(/ …$/, '');
+}
+
+/** A diagram run with no scenario: a plate quoting the seed passages, one part inferred. */
+function diagramFromSeed(request: RunRequest): FauxStep {
+  return (context) => {
+    const passages = seedPassages(context.systemPrompt).slice(0, 2);
+    const lines: Array<Record<string, unknown>> = [{ t: 'plate', title: 'The selected passage' }];
+    passages.forEach((passage, i) => {
+      lines.push({
+        t: 'part',
+        label: i === 0 ? 'The passage' : 'Its context',
+        text: '(faux) what this passage says, in its own words',
+        kind: i === 0 ? 'input' : 'step',
+        after: i === 0 ? [] : ['A'],
+        cite: { quote: firstWords(passage.text, request.datamark, 12) },
+      });
+    });
+    lines.push({
+      t: 'part',
+      label: 'What follows',
+      text: '(faux) an inference no passage states',
+      kind: 'concept',
+      after: [passages.length > 1 ? 'B' : 'A'],
+      cite: null,
+    });
+    lines.push({ t: 'end' });
+    return diagramTurn(context, lines);
+  };
+}
+
+// ── topic runs (v0.2 S2b2): ONE JSON object, no tools ─────────────────────────────────────────
+
+/** One short JSON answer, streamed in a few chunks. */
+function topicTurn(context: FauxContext, answer: string): FauxTurn {
+  return {
+    thinking: "Match the paper to one of the reader's topics, else name a new one.",
+    text: chunks(answer, 24),
+    usage: estimate(context, answer),
+  };
+}
+
+/** No marker: prose, not the JSON object, so the run ends `error` and there is no suggestion. */
+function topicDeclines(): FauxStep {
+  return (context) => topicTurn(context, '(faux) No topic is suggested for this paper.');
+}
+
+/** `[faux:topic-existing]`: the first existing topic (a new one if the reader has none). */
+function topicExisting(request: RunRequest): FauxStep {
+  return (context) => {
+    const first = parseTopicInput(request.question)?.topics[0];
+    return topicTurn(
+      context,
+      JSON.stringify(
+        first === undefined
+          ? {
+              topic_name: 'Faux Topic',
+              is_new: true,
+              reason: '(faux) the reader has no topics yet.',
+            }
+          : { topic_name: first, is_new: false, reason: '(faux) it fits this topic best.' },
+      ),
+    );
+  };
+}
+
+/** `[faux:topic-new]`: a name that is not in the reader's list. */
+function topicNew(): FauxStep {
+  return (context) =>
+    topicTurn(
+      context,
+      JSON.stringify({
+        topic_name: 'Diffusion models',
+        is_new: true,
+        reason: '(faux) none of the existing topics covers it.',
+      }),
+    );
+}
+
+/** `[faux:topic-bad]`: prose around the JSON and a name the list does not hold with is_new false. */
+function topicBad(): FauxStep {
+  return (context) =>
+    topicTurn(
+      context,
+      'Sure! {"topic_name":"A topic nobody has","is_new":false,"reason":"(faux) not in the list."}',
+    );
+}
+
 const SCENARIO = /\[faux:([a-z0-9-]+)\]/;
 
 /** Named scenarios for e2e error paths, selected by `[faux:<name>]` in the question. */
@@ -468,6 +661,32 @@ function scenario(name: string, request: RunRequest): readonly FauxStep[] | null
           deltaDelayMs: 400,
         },
       ];
+    case 'diagram':
+      return [(context) => diagramTurn(context, ATTENTION_PLATE)];
+    case 'diagram-bad':
+      return [(context) => diagramTurn(context, BAD_PLATE)];
+    case 'paragraphs':
+      // Three paragraphs for the phone sheet's "Read the whole answer" (e2e, #205): the seed
+      // answer, a second paragraph citing both seed passages as one run ("[b1, b2]": two markers
+      // side by side), and an uncited reading.
+      return [
+        (context) => {
+          const first = answerFromSeed(request);
+          const turn = typeof first === 'function' ? first(context) : first;
+          const handles = seedPassages(context.systemPrompt)
+            .slice(0, 2)
+            .map((p) => p.handle);
+          const run = handles.length === 0 ? 'b1' : handles.join(', ');
+          const text = `${(turn.text ?? []).join('')}\n\nIt comes back to the selection [${run}].\n\nThis is my reading, not the paper's claim. (Faux.)`;
+          return { ...turn, text: chunks(text), usage: estimate(context, text) };
+        },
+      ];
+    case 'topic-existing':
+      return [topicExisting(request)];
+    case 'topic-new':
+      return [topicNew()];
+    case 'topic-bad':
+      return [topicBad()];
     case 'tool-loop':
       return Array.from({ length: 12 }, () => ({
         toolCalls: [{ name: 'search_passages', arguments: { query: 'method' } }],
@@ -484,6 +703,10 @@ export const defaultBrain: FauxBrain = (request) => {
     const steps = scenario(named[1], request);
     if (steps) return steps;
   }
+  if (request.kind === 'diagram') return [diagramFromSeed(request)];
+  // No marker: the faux model offers NOTHING. The e2e stack runs this agent, and an invented AI
+  // offer would race the arXiv rule's own ("Suggested ... from arXiv") on the same Unshelved row.
+  if (request.kind === 'topic') return [topicDeclines()];
   if (request.kind === 'summary') {
     return [
       { thinking: 'Read the outline first.', toolCalls: [{ name: 'get_outline', arguments: {} }] },

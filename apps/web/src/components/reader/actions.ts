@@ -6,7 +6,7 @@
  *
  *   openExplain   S6 implements it (`components/explain/useExplainActions.ts`)
  *   sendToCanvas  S7 implements it (`components/canvas/sendToCanvas.ts`)
- *   focusAnchor   S4 implements it (resolve, scroll, 1.2 s flash)
+ *   focusAnchor   S4 implements it (resolve, scroll, the citation flash of DESIGN.md §6)
  *
  * `ReaderWorkspace` mounts `<ReaderActionsProvider>` and decides which implementation fills each
  * slot; `SourcePane`'s toolbar, the explain panel's citation chips and the canvas's "open source"
@@ -21,15 +21,53 @@ import { createContext, createElement, useContext, type ReactNode } from 'react'
 
 import type { Anchor } from '@papertree/anchoring';
 
+/**
+ * The numbered marker a citation flash was started from (#202): the reader draws its margin tab
+ * ("from marker 2 in the answer") beside the flashed passage.
+ */
+export interface FlashSource {
+  readonly n: number;
+  /** 1-based page and ¶, as the marker's tab shows them. */
+  readonly page: number;
+  readonly para: number | null;
+  readonly notVerified: boolean;
+  /** A diagram part's flash (#217): the tab says "from part C, Scale" instead of the marker. */
+  readonly part?: { readonly letter: string; readonly label: string };
+}
+
 export type SendToCanvasInput =
   | { kind: 'excerpt'; anchor: Anchor }
-  | { kind: 'explanation'; messageId: string };
+  | { kind: 'explanation'; messageId: string }
+  /** A diagram answer's plate (#217): the card keeps the message id and draws the stored parts. */
+  | { kind: 'diagram'; messageId: string; title: string };
 
 export type ReaderActions = {
   openExplain(input: { anchor: Anchor; quote: string }): void;
+  /**
+   * The selection toolbar's Ask (#203): the panel opens on the passage, waiting for the reader's
+   * own question. Optional: a reader without it draws no Ask button (never an inert one).
+   */
+  askAbout?(input: { anchor: Anchor; quote: string }): void;
+  /**
+   * The selection toolbar's "Explain with a diagram" (#217): a diagram thread on the passage.
+   * Optional like `askAbout`: a reader without it draws no such button.
+   */
+  explainWithDiagram?(input: { anchor: Anchor; quote: string }): void;
   sendToCanvas(input: SendToCanvasInput): Promise<void>;
-  focusAnchor(anchor: Anchor, opts?: { flash?: boolean }): void;
+  /**
+   * Resolve the anchor, scroll its passage into view if it is not, and flash it. `bottomInset` is
+   * the px something covers at the bottom of the window (the phone's peek sheet, #205), so a passage
+   * behind it counts as out of view.
+   */
+  focusAnchor(anchor: Anchor, opts?: FocusOptions): void;
 };
+
+/** What a `focusAnchor` call asks for besides the passage. */
+export interface FocusOptions {
+  readonly flash?: boolean;
+  readonly from?: FlashSource;
+  readonly bottomInset?: number;
+}
 
 const ReaderActionsContext = createContext<ReaderActions | null>(null);
 

@@ -67,30 +67,48 @@ import { indexDocument, type PaperSource } from '@papertree/anchoring';
 import { ReaderActionsProvider, type ReaderActions } from '@/components/reader/actions';
 import type { DocumentRef } from '@/components/reader/documentHandle';
 
-const FIXTURE = join(process.cwd(), '../../packages/document-ir/fixtures/resnet-cvpr-2col.paperir.json');
+const FIXTURE = join(
+  process.cwd(),
+  '../../packages/document-ir/fixtures/resnet-cvpr-2col.paperir.json',
+);
 
 /** Everything the scroller was asked to do, in order. */
-const calls: { readonly method: 'block' | 'page'; readonly page: number; readonly bbox?: readonly number[] }[] =
-  [];
+const calls: {
+  readonly method: 'block' | 'page';
+  readonly page: number;
+  readonly bbox?: readonly number[];
+  readonly bottomInset?: number;
+}[] = [];
 
 // `VirtualPageList` renders pdf.js, which needs a real PDF, a worker and a layout engine. None of
 // those exist here and none of them is what #64 is about — so the SCROLLER is replaced and every
 // other link in the chain is the real one. The spy implements the same imperative handle, so a
 // signature change on either side is a type error rather than a silently unrecorded call.
 vi.mock('@/components/reader/VirtualPageList', () => ({
-  VirtualPageList: forwardRef<unknown, Record<string, unknown>>(function VirtualPageListSpy(_props, ref) {
-    useImperativeHandle(ref, () => ({
-      scrollToPage(pageIndex: number) {
-        calls.push({ method: 'page', page: pageIndex });
-      },
-      scrollToBlock(pageIndex: number, bbox: readonly number[]) {
-        calls.push({ method: 'block', page: pageIndex, bbox });
-      },
-      getVisiblePages: () => ({ first: 0, last: 0 }),
-      getScrollElement: () => null,
-    }));
-    return <div data-testid="scroller" />;
-  }),
+  VirtualPageList: forwardRef<unknown, Record<string, unknown>>(
+    function VirtualPageListSpy(_props, ref) {
+      useImperativeHandle(ref, () => ({
+        scrollToPage(pageIndex: number) {
+          calls.push({ method: 'page', page: pageIndex });
+        },
+        scrollToBlock(
+          pageIndex: number,
+          bbox: readonly number[],
+          opts?: { readonly bottomInset?: number },
+        ) {
+          calls.push({
+            method: 'block',
+            page: pageIndex,
+            bbox,
+            ...(opts?.bottomInset === undefined ? {} : { bottomInset: opts.bottomInset }),
+          });
+        },
+        getVisiblePages: () => ({ first: 0, last: 0 }),
+        getScrollElement: () => null,
+      }));
+      return <div data-testid="scroller" />;
+    },
+  ),
 }));
 
 // pdf.js is loaded by `PdfDocumentProvider` at module scope in a worker; nothing here needs a
@@ -105,7 +123,10 @@ vi.mock('@/components/reader/PdfDocumentProvider', () => ({
  * The pane as the workspace mounts it: inside `ReaderActionsProvider` (its toolbar reaches Ask and
  * Send to canvas through `useReaderActions()`, which refuses to hand out no-ops), with the S4 props.
  */
-function renderPane(SourcePane: typeof import('@/components/reader/SourcePane').SourcePane, ref: DocumentRef) {
+function renderPane(
+  SourcePane: typeof import('@/components/reader/SourcePane').SourcePane,
+  ref: DocumentRef,
+) {
   const actions: ReaderActions = {
     openExplain: () => undefined,
     sendToCanvas: async () => undefined,
@@ -150,7 +171,10 @@ describe('reader/citation-scroll.spec — clicking a citation moves the page (#6
   it('a Navigator entry click reaches the scroller with the right page and bbox', async () => {
     const { SourcePane } = await import('@/components/reader/SourcePane');
     const target = doc.blocks.find((block) => block.pageIndex > 0);
-    expect(target, 'the fixture must have a block off page 0, or this asserts nothing').toBeDefined();
+    expect(
+      target,
+      'the fixture must have a block off page 0, or this asserts nothing',
+    ).toBeDefined();
 
     const ref: DocumentRef = { current: null };
     renderPane(SourcePane, ref);
@@ -208,5 +232,17 @@ describe('reader/citation-scroll.spec — clicking a citation moves the page (#6
 
     ref.current?.scrollToRect(3, [72, 400, 300, 412]);
     expect(calls).toEqual([{ method: 'block', page: 3, bbox: [72, 400, 300, 412] }]);
+  });
+
+  it('scrollToRect passes on what covers the foot of the view (the phone sheet, #205)', async () => {
+    const { SourcePane } = await import('@/components/reader/SourcePane');
+    const ref: DocumentRef = { current: null };
+    renderPane(SourcePane, ref);
+    await waitFor(() => expect(ref.current).not.toBeNull());
+
+    ref.current?.scrollToRect(3, [72, 400, 300, 412], 120);
+    expect(calls).toEqual([
+      { method: 'block', page: 3, bbox: [72, 400, 300, 412], bottomInset: 120 },
+    ]);
   });
 });

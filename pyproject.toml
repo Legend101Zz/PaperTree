@@ -95,6 +95,11 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
+# Docstring rules (D) are not in `select`: tools/check-docstrings.sh runs them on modules added since
+# v0.2 (everything not in tools/docstring-baseline.txt), with this convention. See CONTRIBUTING.md.
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
 [tool.mypy]
 python_version = "3.12"
 strict = true

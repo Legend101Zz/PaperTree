@@ -20,7 +20,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "oxlint src",
+    "lint": "oxlint src && eslint --ext .ts,.tsx src",
     "test": "vitest run"
   },
   "dependencies": {
@@ -32,11 +32,14 @@
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.1.0",
     "@types/node": "^22.10.2",
     "@types/react": "^18.2.52",
     "@types/react-dom": "^18.2.18",
-    "@testing-library/react": "^16.1.0",
+    "@typescript-eslint/parser": "6.21.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "8.57.1",
+    "eslint-plugin-jsdoc": "62.9.0",
     "happy-dom": "^15.11.7",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"

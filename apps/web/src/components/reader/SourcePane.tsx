@@ -17,10 +17,14 @@
  * the pages render from pdf.js alone, selectable, and Highlight says why it is not available yet.
  *
  * A CLICK ON HIGHLIGHTED TEXT opens that highlight. The overlay is `pointer-events: none` so it never
- * eats a drag; the click is hit-tested here, against the same stored quads, in IR space.
+ * eats a drag; the click is hit-tested here, against the same stored quads, in IR space, and a press
+ * counts as a click by `isHighlightClick` (#176: a hand's few pixels of jitter are not a drag).
+ *
+ * THE SELECTION TOOLBAR goes where `placeToolbar` says (#203): in the page margin beside the
+ * selection, or docked across the top or bottom of the column, never over the selected lines.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import {
   frameForPdfPage,
@@ -31,15 +35,17 @@ import {
   type Resolution,
 } from '@papertree/anchoring';
 
+import { FlashMarginTab } from '@/features/explain/components/FlashMarginTab';
+import { useHighlightClick, useSelectionToolbar } from '@/features/reader';
 import { MAX_ANCHORS_PER_HIGHLIGHT } from '@/lib/api/highlights';
 
 import { useReaderActions } from './actions';
 import { type DocumentHandle, type DocumentRef } from './documentHandle';
-import { HighlightOverlay, hitsItem, type FlashPaint, type PaintItem } from './HighlightOverlay';
+import { FLASH_SCROLL_MS, prefersReducedMotion } from './flash';
+import { HighlightOverlay, type FlashPaint, type PaintItem } from './HighlightOverlay';
 import { usePdfDocument } from './PdfDocumentProvider';
 import { displayQuote } from './quote';
 import type { TextLayerInfo } from './PdfPage';
-import { SelectionToolbar } from './SelectionToolbar';
 import { holdScroll } from './scrollHold';
 import { stampTextLayer } from './stampTextLayer';
 import { tooLongSentence, type ReaderHighlight } from './useHighlights';
@@ -51,9 +57,12 @@ import {
 } from './useSelectionCapture';
 import {
   VirtualPageList,
+  type FloatingGeometry,
   type ReadingPosition,
   type VirtualPageListHandle,
 } from './VirtualPageList';
+
+import type { HighlightColor } from '@/lib/api/types';
 
 export interface SourcePaneProps {
   /** The indexed parse, or null while the paper is still being read (Source still renders). */
@@ -61,14 +70,22 @@ export interface SourcePaneProps {
   readonly zoom: number;
   /** The reader's highlights, resolved against `doc`. Painted from their stored quads. */
   readonly highlights: readonly ReaderHighlight[];
-  /** Highlight was pressed on a selection: persist these anchors (one highlight, N anchors). */
-  readonly onCreateHighlight: (capture: SelectionCapture) => void;
+  /**
+   * Highlight was pressed on a selection: persist these anchors (one highlight, N anchors), in the
+   * wash pressed, or the last one used when Highlight itself was.
+   */
+  readonly onCreateHighlight: (capture: SelectionCapture, color?: HighlightColor) => void;
   /** Why Highlight is unavailable right now, or null. */
   readonly highlightUnavailableReason: string | null;
   /** A painted highlight was clicked (or Enter was pressed on it). */
   readonly onActivateHighlight: (
     highlightId: string,
-    at: { readonly clientX: number; readonly clientY: number; readonly top?: number; readonly bottom?: number } | null,
+    at: {
+      readonly clientX: number;
+      readonly clientY: number;
+      readonly top?: number;
+      readonly bottom?: number;
+    } | null,
   ) => void;
   readonly activeHighlightId: string | null;
   /** `focusAnchor`'s 1.2 s flash, when it is on a page. */
@@ -97,7 +114,7 @@ export interface SourcePaneProps {
   /** Where to open (contracts.md §5's `{page, yPt}`), applied once when the pages are known. */
   readonly initialPosition: ReadingPosition | null;
   readonly onPositionChange: (position: ReadingPosition) => void;
-  /** Said when an action fails (Send to canvas). */
+  /** Said when an action fails (Send to board). */
   readonly onNotice?: (message: string) => void;
 }
 
@@ -109,7 +126,10 @@ function quoteOf(anchor: Anchor): string {
 export function paintItemsOf(
   doc: IndexedDocument | null,
   highlights: readonly ReaderHighlight[],
-): { readonly items: PaintItem[]; readonly unplaced: { anchor: Anchor; resolution: Resolution; highlightId: string }[] } {
+): {
+  readonly items: PaintItem[];
+  readonly unplaced: { anchor: Anchor; resolution: Resolution; highlightId: string }[];
+} {
   const items: PaintItem[] = [];
   const unplaced: { anchor: Anchor; resolution: Resolution; highlightId: string }[] = [];
   if (doc === null) return { items, unplaced };
@@ -183,7 +203,9 @@ export function SourcePane(props: SourcePaneProps) {
             ...(style?.ascent === undefined ? {} : { ascent: style.ascent }),
             ...(style?.descent === undefined ? {} : { descent: style.descent }),
             // The family the text layer sets this span in: the capture measures glyph advances in it.
-            ...(typeof style?.fontFamily === 'string' && style.fontFamily !== '' ? { fontFamily: style.fontFamily } : {}),
+            ...(typeof style?.fontFamily === 'string' && style.fontFamily !== ''
+              ? { fontFamily: style.fontFamily }
+              : {}),
           };
         }),
       });
@@ -221,30 +243,51 @@ export function SourcePane(props: SourcePaneProps) {
 
   // A toolbar action must not move the page (RFIX2 R2): the hold puts back any scroll the reader
   // did not ask for in the moments after it.
-  const onHighlight = useCallback(() => {
-    const captured = capture('text');
-    if (captured === null) return;
-    holdScroll(root);
-    onCreateHighlight(captured);
-    clear();
-  }, [capture, clear, onCreateHighlight, root]);
+  const onHighlight = useCallback(
+    (color?: HighlightColor) => {
+      const captured = capture('text');
+      if (captured === null) return;
+      holdScroll(root);
+      onCreateHighlight(captured, color);
+      clear();
+    },
+    [capture, clear, onCreateHighlight, root],
+  );
 
-  const onAsk = useCallback(() => {
+  // Explain runs now; Ask opens the panel on the passage for the reader's own question. No scroll
+  // hold for either: the explain panel opens beside the paper and the page list repositions it.
+  const onExplain = useCallback(() => {
     const captured = capture('text');
     if (captured === null) return;
-    // No hold here: the explain panel opens beside the paper and the page list repositions it.
     actions.openExplain({ anchor: captured.anchor, quote: captured.selection.text });
     clear();
   }, [actions, capture, clear]);
 
+  const askAbout = actions.askAbout;
+  const onAsk = useCallback(() => {
+    const captured = capture('text');
+    if (captured === null) return;
+    askAbout?.({ anchor: captured.anchor, quote: captured.selection.text });
+    clear();
+  }, [askAbout, capture, clear]);
+
+  // #217: drawn only when the reader wires it, like Ask (never an inert button).
+  const explainWithDiagram = actions.explainWithDiagram;
+  const onExplainWithDiagram = useCallback(() => {
+    const captured = capture('text');
+    if (captured === null) return;
+    explainWithDiagram?.({ anchor: captured.anchor, quote: captured.selection.text });
+    clear();
+  }, [explainWithDiagram, capture, clear]);
+
   const onNotice = props.onNotice;
-  const onSendToCanvas = useCallback(() => {
+  const onSendToBoard = useCallback(() => {
     const captured = capture('text');
     if (captured === null) return;
     holdScroll(root);
     clear();
     actions.sendToCanvas({ kind: 'excerpt', anchor: captured.anchor }).catch(() => {
-      onNotice?.("Couldn't send this passage to the canvas. Try again.");
+      onNotice?.("Couldn't send this passage to the board. Try again.");
     });
   }, [actions, capture, clear, onNotice, root]);
 
@@ -267,60 +310,45 @@ export function SourcePane(props: SourcePaneProps) {
       scrollToPage(pageIndex) {
         listRef.current?.scrollToPage(pageIndex, { behavior: 'smooth' });
       },
-      scrollToRect(pageIndex, bbox) {
-        // Instant, not smooth: `focusAnchor` flashes the passage for 1.2 s, and a smooth scroll
-        // spends most of that travelling — the flash would play before the passage is on screen.
-        listRef.current?.scrollToBlock(pageIndex, bbox, { behavior: 'auto' });
+      scrollToRect(pageIndex, bbox, bottomInset) {
+        // A timed tween, not `smooth` (which has no duration): the flash waits exactly this long
+        // for the passage to arrive, and does not wait at all when it is already in view.
+        const scrolled = listRef.current?.scrollToBlock(pageIndex, bbox, {
+          ifNeeded: true,
+          durationMs: FLASH_SCROLL_MS,
+          ...(bottomInset === undefined ? {} : { bottomInset }),
+        });
+        return scrolled === true && !prefersReducedMotion() ? FLASH_SCROLL_MS : 0;
       },
     }),
     [doc],
   );
 
-  // A click (not a drag) on highlighted text opens that highlight. Hit-tested in IR space against
-  // the stored quads; the page's own box is the only thing read from the DOM, and only to turn a
-  // pointer's client position into a position on the page.
-  const itemsRef = useRef(items);
-  itemsRef.current = items;
-  const zoomRef = useRef(props.zoom);
-  zoomRef.current = props.zoom;
-  useEffect(() => {
-    if (root === null) return undefined;
-    const onClick = (event: MouseEvent): void => {
-      const selected = window.getSelection();
-      if (selected !== null && !selected.isCollapsed && selected.toString().trim() !== '') return;
-      const target = event.target instanceof Element ? event.target : null;
-      const page = target?.closest('.papertree-page[data-page-index]');
-      if (!(page instanceof HTMLElement)) return;
-      const pageIndex = Number(page.getAttribute('data-page-index'));
-      const userUnit = pdf.pageMeta?.get(pageIndex)?.userUnit ?? 1;
-      const scale = zoomRef.current * userUnit;
-      if (!(scale > 0)) return;
-      const rect = page.getBoundingClientRect();
-      const x = (event.clientX - rect.left) / scale;
-      const y = (event.clientY - rect.top) / scale;
-      const hit = [...itemsRef.current]
-        .reverse()
-        .find((item) => item.pageIndex === pageIndex && hitsItem(item, x, y));
-      if (hit === undefined) return;
-      // The passage's own top and bottom on screen, so its card opens beside it, not over it.
-      const quads = itemsRef.current
-        .filter((item) => item.highlightId === hit.highlightId && item.pageIndex === pageIndex)
-        .flatMap((item) => item.quads);
-      const top = rect.top + Math.min(...quads.map((q) => q[1])) * scale;
-      const bottom = rect.top + Math.max(...quads.map((q) => q[3])) * scale;
-      onActivateHighlight(hit.highlightId, { clientX: event.clientX, clientY: event.clientY, top, bottom });
-    };
-    root.addEventListener('click', onClick);
-    return () => root.removeEventListener('click', onClick);
-  }, [root, onActivateHighlight, pdf.pageMeta]);
+  // A click (not a drag) on highlighted text opens that highlight (#176, `useHighlightClick`).
+  const pageMeta = pdf.pageMeta;
+  useHighlightClick({
+    root,
+    items,
+    zoom: props.zoom,
+    userUnitOf: (pageIndex) => pageMeta?.get(pageIndex)?.userUnit ?? 1,
+    onActivate: onActivateHighlight,
+  });
 
-  const toolbarProps = {
-    onHighlight,
-    onAsk,
-    onSendToCanvas,
-    onCopy,
-    ...(unavailable === undefined ? {} : { highlightDisabledReason: unavailable }),
-  };
+  const toolbar = useSelectionToolbar({
+    selection,
+    doc,
+    narrow: props.narrow,
+    sheetOpen: props.sheetOpen === true,
+    actions: {
+      onHighlight,
+      onExplain,
+      ...(askAbout === undefined ? {} : { onAsk }),
+      ...(explainWithDiagram === undefined ? {} : { onExplainWithDiagram }),
+      onSendToBoard,
+      onCopy,
+      ...(unavailable === undefined ? {} : { highlightDisabledReason: unavailable }),
+    },
+  });
 
   if (pdf.error !== null && pdf.error !== undefined) {
     return (
@@ -355,12 +383,33 @@ export function SourcePane(props: SourcePaneProps) {
     );
   }
 
+  /** "from marker 2 in the answer" beside the flashed passage, while the flash lasts (#202). */
+  function marginTab(geometry: FloatingGeometry): ReactNode {
+    const flash = props.flash;
+    if (flash?.from === undefined || flash.extent === null || flash.phase === 'scroll') return null;
+    const box = geometry.pageBox(flash.pageIndex);
+    if (box === null) return null;
+    const scale = geometry.irScale(flash.pageIndex);
+    return (
+      <FlashMarginTab
+        key={flash.key}
+        from={flash.from}
+        left={box.left + flash.extent[0] * scale}
+        top={box.top + flash.extent[1] * scale}
+      />
+    );
+  }
+
   const ready = pdf.pdf !== null && pdf.pdf !== undefined && (pdf.numPages ?? 0) > 0;
 
   return (
     <div className="relative h-full">
       {ready ? null : (
-        <div className="pt-skeleton absolute inset-0 overflow-hidden" role="status" aria-live="polite">
+        <div
+          className="pt-skeleton absolute inset-0 overflow-hidden"
+          role="status"
+          aria-live="polite"
+        >
           <span className="pt-sr-only">Opening the PDF…</span>
           <div className="pt-skeleton__page" />
           <div className="pt-skeleton__page" />
@@ -393,39 +442,15 @@ export function SourcePane(props: SourcePaneProps) {
             onActivate={(highlightId) => onActivateHighlight(highlightId, null)}
           />
         )}
-        renderFloating={(geometry) => {
-          if (props.narrow || selection === null) return null;
-          // Across pages, the bar goes by the selection's END, below it: that is where the pointer
-          // was released (the page auto-scrolled there), while the start is off screen above.
-          const acrossPages = selection.endPageIndex !== selection.pageIndex && selection.endExtent !== null;
-          const pageIndex = acrossPages ? selection.endPageIndex : selection.pageIndex;
-          const at = acrossPages ? selection.endExtent : selection.irExtent;
-          if (at === null) return null;
-          const box = geometry.pageBox(pageIndex);
-          if (box === null) return null;
-          const scale = geometry.irScale(pageIndex);
-          const [x0, y0, x1, y1] = at;
-          return (
-            <SelectionToolbar
-              placement={{
-                kind: 'float',
-                extent: {
-                  left: box.left + x0 * scale,
-                  top: box.top + y0 * scale,
-                  right: box.left + x1 * scale,
-                  bottom: box.top + y1 * scale,
-                },
-                boundsWidth: geometry.contentWidth,
-                prefer: acrossPages ? 'below' : 'above',
-              }}
-              {...toolbarProps}
-            />
-          );
-        }}
+        renderFloating={(geometry) => (
+          <>
+            {marginTab(geometry)}
+            {toolbar.floating(geometry)}
+          </>
+        )}
       />
-      {props.narrow && selection !== null && props.sheetOpen !== true ? (
-        <SelectionToolbar placement={{ kind: 'sheet' }} {...toolbarProps} />
-      ) : null}
+      {toolbar.dock}
+      {toolbar.sheet}
     </div>
   );
 }

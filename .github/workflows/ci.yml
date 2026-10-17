@@ -403,6 +403,11 @@ jobs:
       - name: Typecheck
         run: uv run mypy packages/*/python services/*/python
 
+      # v0.2 S0: Google-style docstrings (ruff D) on every Python module added since v0.2. The modules
+      # that existed before are listed in tools/docstring-baseline.txt, which may only shrink.
+      - name: Docstrings on new modules
+        run: tools/check-docstrings.sh
+
   # ── Prettier (#141) ─────────────────────────────────────────────────────────────────────────
   # Its own job: it needs only node + the lockfile, so it finishes in a fraction of the
   # TypeScript job and a formatting slip is red in seconds, not after the whole suite.
@@ -486,7 +491,8 @@ jobs:
   e2e:
     name: E2E (Playwright, faux agent)
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # 60, not 40 (S8, #218): the job took 31 min on S8's PR (#320), and runs vary by 2 min or more.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
 

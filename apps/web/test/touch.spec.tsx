@@ -45,6 +45,19 @@ afterEach(cleanup);
  */
 const TOUCH_CASES: readonly LibraryCase[] = [
   ...CASES,
+  // #197: a row's "…" menu and its authors popover, open (closed, their items are not rendered).
+  {
+    ...(CASES.find((c) => c.name === 'TableView') as LibraryCase),
+    name: 'TableView (a row menu and the authors open)',
+    afterRender: (container) => {
+      const row = container.querySelector('tr[data-row-id="p-failed"]');
+      const menu = row?.querySelector<HTMLElement>('[aria-label^="More actions"]');
+      const authors = container.querySelector<HTMLElement>('.pt-trow__authors--more');
+      if (menu) fireEvent.click(menu);
+      if (authors) fireEvent.click(authors);
+      expect(container.querySelectorAll('[data-row-menu-item]').length).toBe(4);
+    },
+  },
   {
     ...(CASES.find((c) => c.name === 'UncertaintyState') as LibraryCase),
     name: 'UncertaintyState (expanded)',
@@ -177,7 +190,8 @@ function inlineDeclarations(element: HTMLElement, axis: Axis): Declaration[] {
     if (raw === '') continue;
     const px = parseCssLength(raw);
     if (px !== undefined) found.push({ kind: 'px', value: px });
-    else if (raw.includes('%') || DELEGATING_VALUES.has(raw.trim())) found.push({ kind: 'inherit' });
+    else if (raw.includes('%') || DELEGATING_VALUES.has(raw.trim()))
+      found.push({ kind: 'inherit' });
   }
   return found;
 }
@@ -195,7 +209,11 @@ interface Resolution {
  * list (`min-h-[44px] h-6`) are ambiguous without a cascade, and for a minimum-size audit the
  * pessimistic reading is the correct one.
  */
-function resolveDeclaredMin(element: HTMLElement, axis: Axis, root: HTMLElement): Resolution | null {
+function resolveDeclaredMin(
+  element: HTMLElement,
+  axis: Axis,
+  root: HTMLElement,
+): Resolution | null {
   let current: HTMLElement | null = element;
   let depth = 0;
 
@@ -252,7 +270,10 @@ describe('touch targets are at least 44 x 44 CSS px', () => {
       testCase.afterRender?.(container);
 
       const offenders = auditTargets(container);
-      expect(offenders, `${testCase.name} has undersized targets:\n  ${offenders.join('\n  ')}`).toEqual([]);
+      expect(
+        offenders,
+        `${testCase.name} has undersized targets:\n  ${offenders.join('\n  ')}`,
+      ).toEqual([]);
     });
   }
 
@@ -393,7 +414,12 @@ function scan(file: string): Offence[] {
 
   lines.forEach((line, index) => {
     if (MOUSE_INTERACTION.test(line)) {
-      offences.push({ file: path, line: index + 1, text: line.trim(), rule: 'mouse-only-interaction' });
+      offences.push({
+        file: path,
+        line: index + 1,
+        text: line.trim(),
+        rule: 'mouse-only-interaction',
+      });
     }
     if (HOVER_HANDLER.test(line)) {
       offences.push({ file: path, line: index + 1, text: line.trim(), rule: 'hover-handler' });
@@ -404,7 +430,12 @@ function scan(file: string): Offence[] {
       // positive gets the rule disabled, a false negative gets it fixed next sweep.
       const window = [lines[index - 1] ?? '', line, lines[index + 1] ?? ''].join(' ');
       if (!FOCUS_COUNTERPART.test(window)) {
-        offences.push({ file: path, line: index + 1, text: line.trim(), rule: 'hover-only-visibility' });
+        offences.push({
+          file: path,
+          line: index + 1,
+          text: line.trim(),
+          rule: 'hover-only-visibility',
+        });
       }
     }
   });
@@ -413,7 +444,9 @@ function scan(file: string): Offence[] {
 }
 
 function format(offences: readonly Offence[]): string {
-  return offences.map((o) => `  ${o.file}:${String(o.line)} [${o.rule}] ${o.text.slice(0, 110)}`).join('\n');
+  return offences
+    .map((o) => `  ${o.file}:${String(o.line)} [${o.rule}] ${o.text.slice(0, 110)}`)
+    .join('\n');
 }
 
 describe('source audit: no hover-only actions, no mouse-only interaction', () => {
@@ -445,10 +478,7 @@ describe('source audit: no hover-only actions, no mouse-only interaction', () =>
       if (quarantined.has(path)) return;
       offenders.push(...offences.filter((o) => o.rule === 'mouse-only-interaction'));
     });
-    expect(
-      offenders,
-      `Pointer Events only. Offenders:\n${format(offenders)}`,
-    ).toEqual([]);
+    expect(offenders, `Pointer Events only. Offenders:\n${format(offenders)}`).toEqual([]);
   });
 
   it('no component outside the v1 quarantine has a hover-only action or hover-only visibility', () => {

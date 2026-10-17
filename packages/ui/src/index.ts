@@ -28,3 +28,13 @@
 export * from './provenance.js';
 export * from './primitives.js';
 export * from './fixtureUri.js';
+
+// v0.2 interface components (#189)
+export * from './controls.js';
+export * from './toast.js';
+export * from './furniture.js';
+
+export * from './citations.js';
+export * from './slips.js';
+export * from './trace.js';
+export * from './threads.js';

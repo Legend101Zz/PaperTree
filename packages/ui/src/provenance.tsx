@@ -52,6 +52,7 @@ import type { ReactNode } from 'react';
  */
 export const DERIVED_MARKER = '⊙';
 
+/** Props for `DerivedBlock`. */
 export interface DerivedBlockProps {
   /**
    * The PaperIR block ids this content was derived from. REQUIRED and non-empty — a derived block
@@ -155,6 +156,7 @@ export interface EquationViewProps {
   readonly onShowSource: (blockIds: readonly string[]) => void;
 }
 
+/** An equation: the paper's own crop first, with any LaTeX or MathML offered as our transcription. */
 export function EquationView({
   blockId,
   imageSrc,
@@ -214,6 +216,7 @@ export interface TableViewProps {
   readonly onShowSource: (blockIds: readonly string[]) => void;
 }
 
+/** A table: cells from the PDF text layer, with any parser HTML offered as our reading. */
 export function TableView({
   blockId,
   rows,
@@ -268,6 +271,7 @@ export interface FigureViewProps {
   readonly caption?: string;
 }
 
+/** A figure: the paper's own crop and caption, never a drawing of it. */
 export function FigureView({ blockId, imageSrc, imageAlt, caption }: FigureViewProps): ReactNode {
   return (
     <figure className="pt-figure" data-block-id={blockId}>
@@ -287,6 +291,7 @@ function classes(base: string, extra: string | undefined): string {
   return extra === undefined ? base : `${base} ${extra}`;
 }
 
+/** Props for `PaperText`. */
 export interface PaperTextProps {
   /** The paper's words, verbatim. Never a paraphrase: a paraphrase is `AiText`. */
   readonly children: ReactNode;
@@ -305,7 +310,7 @@ export function PaperText({
   className,
 }: PaperTextProps): ReactNode {
   return (
-    <Element className={classes('pt-paper', className)} data-register="paper">
+    <Element className={classes('pt-paper', className)} data-register="paper" data-voice="paper">
       <span className="pt-paper__text">{children}</span>
       {pageLabel === undefined ? null : <cite className="pt-paper__cite">{pageLabel}</cite>}
     </Element>
@@ -315,6 +320,7 @@ export function PaperText({
 /** The marker `ReflowedText` carries. Exported so a test or a legend can name it exactly. */
 export const REFLOWED_LABEL = 'Reflowed from the PDF';
 
+/** Props for `ReflowedText`. */
 export interface ReflowedTextProps {
   /** The PaperIR blocks whose text this is, published as `data-block-ids`. */
   readonly blockIds: readonly string[];
@@ -356,6 +362,7 @@ export function ReflowedText({
     <Element
       className={classes('pt-paper pt-reflowed', className)}
       data-register="reflowed"
+      data-voice="paper"
       data-block-ids={blockIds.join(' ')}
       {...(dataBlockId === undefined ? {} : { 'data-block-id': dataBlockId })}
     >
@@ -384,6 +391,7 @@ export function ReflowedText({
   );
 }
 
+/** Props for `AiText`. */
 export interface AiTextProps {
   /** What the model wrote. Citation chips go inside, next to the claims they support. */
   readonly children: ReactNode;
@@ -409,6 +417,7 @@ export function AiText({
     <Element
       className={classes('pt-ai', className)}
       data-register="ai"
+      data-voice="ai"
       role="note"
       aria-label={`AI-generated${model === undefined ? '' : ` by ${model}`}, not the paper's words`}
     >
@@ -421,6 +430,33 @@ export function AiText({
         </span>
       </div>
       <div className="pt-ai__body">{children}</div>
+    </Element>
+  );
+}
+
+/** Props for `YouText`. */
+export interface YouTextProps {
+  /** The person's own words: an ask, a note, a margin comment. */
+  readonly children: ReactNode;
+  /** The element to render. Default `p`. */
+  readonly as?: 'p' | 'div' | 'span';
+  readonly className?: string;
+}
+
+/**
+ * The person's own words, in the third voice: Courier Prime in pen colour (#190, DESIGN.md §3).
+ *
+ * It carries no marker and no announcement: these are the reader's words, and the typeface and ink
+ * are what set them apart from the paper's serif and the AI's sans. `data-voice="you"` is the hook
+ * for tests and for the board and notebook, which render the same words.
+ *
+ * @example
+ * <YouText>What does the residual connection add?</YouText>
+ */
+export function YouText({ children, as: Element = 'p', className }: YouTextProps): ReactNode {
+  return (
+    <Element className={classes('pt-you', className)} data-voice="you">
+      {children}
     </Element>
   );
 }

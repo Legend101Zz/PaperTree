@@ -23,10 +23,15 @@ export interface UsageTotals extends UsageBucket {
     readonly explain: UsageBucket;
     readonly ask: UsageBucket;
     readonly summary: UsageBucket;
+    readonly diagram: UsageBucket;
+    /** The topic run (#242), not built yet: 0 until it is. */
+    readonly topic: UsageBucket;
   };
 }
 
 export const usageApi = {
   get: (since?: string) =>
-    request<UsageTotals>(`/usage${since === undefined ? '' : `?since=${encodeURIComponent(since)}`}`),
+    request<UsageTotals>(
+      `/usage${since === undefined ? '' : `?since=${encodeURIComponent(since)}`}`,
+    ),
 };

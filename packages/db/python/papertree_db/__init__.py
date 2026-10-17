@@ -20,7 +20,18 @@ is a forbidden token and ``test_ownership.py`` greps for it.
 """
 
 from .ai import RunGrant, UsageTotals
-from .canvas import BoardRow, BoardSnapshot, CanvasRejected, EdgeRow, NodeRow, StaleVersion
+from .canvas import (
+    PIN_TABLE,
+    BoardRow,
+    BoardSnapshot,
+    CanvasRejected,
+    EdgeRow,
+    NodeRow,
+    NotebookCounts,
+    Pins,
+    StaleVersion,
+    check_ports,
+)
 from .database import (
     MAX_DERIVATION_DEPTH,
     VECTOR_DIMENSIONS,
@@ -39,6 +50,8 @@ from .errors import (
     MigrationError,
     OwnershipError,
     PaperNotFound,
+    TopicExists,
+    TopicNotFound,
 )
 from .highlights import (
     SQLITE_INTEGER_MAX,
@@ -62,7 +75,7 @@ from .ids import (
     mint_owner,
     new_id,
 )
-from .library import LibraryRow
+from .library import DISPLAY_NAME_MAX, LibraryRow, LinkReference, LinkSource, ShelfTopic
 from .migrate import (
     AppliedMigration,
     Migration,
@@ -74,8 +87,37 @@ from .migrate import (
     migrate,
     split_statements,
 )
+from .notebook import NotebookRejected, NotebookStale
+from .plate import PLATE_MIN_IOU, PlateFigure, plate_block_sql
+from .reading import ProgressState, ReadingState, progress_state, reached_last_page
+from .topics import (
+    CLOTHS,
+    TOPIC_NAME_MAX,
+    UNSET,
+    Holding,
+    PaperTopicRow,
+    TopicRef,
+    TopicRow,
+    TopicSuggestion,
+    clean_topic_name,
+    suggest_by_category,
+)
 
 __all__ = [
+    "UNSET",
+    "CLOTHS",
+    "TOPIC_NAME_MAX",
+    "Holding",
+    "PaperTopicRow",
+    "ShelfTopic",
+    "TopicExists",
+    "TopicNotFound",
+    "TopicRef",
+    "TopicRow",
+    "TopicSuggestion",
+    "clean_topic_name",
+    "suggest_by_category",
+    "DISPLAY_NAME_MAX",
     "MAX_DERIVATION_DEPTH",
     "SQLITE_INTEGER_MAX",
     "VECTOR_DIMENSIONS",
@@ -99,16 +141,29 @@ __all__ = [
     "HighlightRow",
     "HighlightWithAnchors",
     "LibraryRow",
+    "LinkReference",
+    "LinkSource",
     "Migration",
     "MigrationError",
     "MigrationResult",
     "NodeRow",
+    "NotebookRejected",
+    "NotebookStale",
+    "PLATE_MIN_IOU",
+    "PlateFigure",
+    "plate_block_sql",
+    "NotebookCounts",
+    "PIN_TABLE",
+    "Pins",
+    "check_ports",
     "OwnerId",
     "OwnershipError",
     "PageId",
     "PaperId",
     "PaperNotFound",
     "PaperTreeDb",
+    "ProgressState",
+    "ReadingState",
     "ResolutionIn",
     "ResolutionRow",
     "Row",
@@ -125,6 +180,8 @@ __all__ = [
     "mint_owner",
     "new_id",
     "open_database",
+    "progress_state",
+    "reached_last_page",
     "split_statements",
     "to_vector_blob",
 ]

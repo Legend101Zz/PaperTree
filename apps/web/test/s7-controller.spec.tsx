@@ -6,7 +6,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { NUDGE_DEBOUNCE_MS, useBoardController } from '@/components/canvas/useBoardController';
+import { NUDGE_DEBOUNCE_MS, useBoardController } from '@/features/board/hooks/useBoardController';
 import { boardsApi } from '@/lib/api/boards';
 import { ApiError, type Board, type CanvasNode } from '@/lib/api/types';
 
@@ -24,13 +24,37 @@ vi.mock('@/lib/api/boards', () => ({
 }));
 
 const api = vi.mocked(boardsApi);
-const BOARD: Board = { board_id: 'brd_1', paper_id: 'ppr_1', title: 'Canvas', viewport: null, created_at: '', updated_at: '' };
+const BOARD: Board = {
+  board_id: 'brd_1',
+  paper_id: 'ppr_1',
+  title: 'Canvas',
+  viewport: null,
+  created_at: '',
+  updated_at: '',
+};
 
 function node(id: string, extra: Partial<CanvasNode> = {}): CanvasNode {
   return {
-    node_id: id, board_id: 'brd_1', kind: 'note', group_id: null, x: 0, y: 0, w: 260, h: 150, z: 0,
-    title: null, body: 'b', source_anchor: null, source_message_id: null, version: 1,
-    created_at: '', updated_at: '', ...extra,
+    node_id: id,
+    board_id: 'brd_1',
+    kind: 'note',
+    group_id: null,
+    x: 0,
+    y: 0,
+    w: 260,
+    h: 150,
+    z: 0,
+    title: null,
+    body: 'b',
+    source_anchor: null,
+    source_message_id: null,
+    source_page_id: null,
+    source_diagram_id: null,
+    counts: null,
+    version: 1,
+    created_at: '',
+    updated_at: '',
+    ...extra,
   };
 }
 
@@ -68,7 +92,8 @@ describe('useBoardController', () => {
   it('sends exactly one PATCH for a drag, however many move events it had', async () => {
     const { result } = await mount([node('cn_a'), node('cn_b', { x: 500 })]);
     act(() => {
-      for (let i = 1; i <= 20; i += 1) result.current.onNodesChange([move('cn_a', i * 5, i * 3, true)]);
+      for (let i = 1; i <= 20; i += 1)
+        result.current.onNodesChange([move('cn_a', i * 5, i * 3, true)]);
     });
     expect(api.patchNode).not.toHaveBeenCalled();
     act(() => {
@@ -149,7 +174,10 @@ describe('useBoardController', () => {
     });
     await waitFor(() => expect(api.patchNode).toHaveBeenCalledTimes(2));
     const sent = api.patchNode.mock.calls.map((c) => [c[1], (c[2] as { x: number }).x]).sort();
-    expect(sent).toEqual([['cn_a', 60], ['cn_g', 50]]);
+    expect(sent).toEqual([
+      ['cn_a', 60],
+      ['cn_g', 50],
+    ]);
   });
 
   it('saves the viewport only when it changed, and only through patchBoard', async () => {
@@ -161,5 +189,30 @@ describe('useBoardController', () => {
     });
     expect(api.patchBoard).toHaveBeenCalledTimes(1);
     expect(api.patchBoard).toHaveBeenCalledWith('brd_1', { viewport: { x: 1, y: 2, zoom: 1 } });
+  });
+
+  it('a new thread offers Undo ("Linked as …"), and Undo takes that thread back (#213)', async () => {
+    api.createEdge.mockImplementation(async (_board, body) => ({
+      ...body,
+      board_id: 'brd_1',
+      label: body.label ?? null,
+      from_port: body.from_port ?? null,
+      to_port: body.to_port ?? null,
+      created_at: '',
+    }));
+    api.deleteEdge.mockResolvedValue(undefined);
+    const { result } = await mount([node('cn_a'), node('cn_b')]);
+    const ports = { from_port: 'claim_out', to_port: 'evidence_in' } as const;
+    await act(async () => {
+      expect(await result.current.connect('cn_a', 'cn_b', 'relates', null, ports)).toBe(true);
+    });
+    expect(result.current.undo?.message).toBe('Linked as a plain link.');
+    const id = result.current.edges[0]!.id;
+    await act(async () => {
+      await result.current.runUndo();
+    });
+    expect(result.current.edges).toEqual([]);
+    expect(api.deleteEdge).toHaveBeenCalledWith('brd_1', id);
+    expect(result.current.undo).toBeNull();
   });
 });

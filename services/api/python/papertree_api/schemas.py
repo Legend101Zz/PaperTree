@@ -27,8 +27,10 @@ already declare them (the 501 stubs, `routers/*.py`).
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Annotated, Any, Final, Literal, Self
 
 from papertree_db import SQLITE_INTEGER_MAX
@@ -37,6 +39,7 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
+    RootModel,
     ValidationError,
     ValidationInfo,
     WithJsonSchema,
@@ -373,9 +376,28 @@ class Session(Wire):
     email: str
 
 
+def _trimmed(value: object) -> object:
+    """Strips a string before its length is checked, so `"  x  "` is `"x"` and 60 letters padded
+    with spaces is still 60 letters. Anything else is left for the type check to refuse."""
+    return value.strip() if isinstance(value, str) else value
+
+
+#: A chosen name for the library's bookplate and the account menu: 1 to 60 characters AFTER
+#: trimming. Enforced here, not by a CHECK, so relaxing it later needs no table rebuild (0006).
+DisplayName = Annotated[str, BeforeValidator(_trimmed), Field(min_length=1, max_length=60)]
+
+
 class Me(Wire):
     user_id: str
     email: str
+    #: Null until the person sets one. Never derived from the email (#192).
+    display_name: str | None
+
+
+class MeUpdate(Wire):
+    """`PATCH /auth/me` (#192)."""
+
+    display_name: DisplayName
 
 
 # ── §2.2 papers, library, jobs ───────────────────────────────────────────────────────────────
@@ -399,6 +421,128 @@ class JobSummary(Wire):
     error_code: JobErrorCode | None
 
 
+class ReadingProgress(Wire):
+    """Where the caller is in a paper (#192). A paper they have not started has `reading: null`.
+
+    Pages are zero-based. `state` is the progress rule: `finished` once the last page was
+    reached (or the paper was marked read), else `reading`.
+    """
+
+    last_page: NonNegative
+    furthest_page: NonNegative
+    page_count: NonNegative | None
+    #: When the reader last wrote its page (every write counts), not the first open.
+    opened_at: WireTime
+    #: Always set when `state` is `finished`.
+    finished_at: WireTime | None
+    state: Literal["reading", "finished"]
+
+
+class ReadingStateUpdate(Wire):
+    """`PUT /papers/{id}/reading-state` (#192): the page the reader is on now."""
+
+    last_page: PageIndex
+    mode: Literal["source", "guided", "split"] | None = omittable()
+
+
+# ── topics (#193) ────────────────────────────────────────────────────────────────────────────
+
+#: The six cloth colours of the design (`papertree_db.CLOTHS`; a test pins that they agree).
+Cloth = Literal["transformers", "vision", "generative", "optimization", "language", "rl"]
+TopicSource = Literal["arxiv_category", "manual", "model"]
+#: 1 to 60 characters AFTER trimming (`papertree_db.TOPIC_NAME_MAX`). Not a CHECK: see 0009.
+TopicName = Annotated[str, BeforeValidator(_trimmed), Field(min_length=1, max_length=60)]
+
+
+class TopicRef(Wire):
+    """A topic as another record points at it."""
+
+    topic_id: str = Field(pattern=server_id("top"))
+    name: str
+    cloth: Cloth | None
+
+
+class Topic(TopicRef):
+    """`GET /topics` (#193): a shelf with what it holds. Counts cover ACCEPTED papers only."""
+
+    sort_order: NonNegative
+    paper_count: NonNegative
+    #: The sum of the held papers' page counts (a paper of unknown length counts for 0).
+    page_count: NonNegative
+    #: The distinct arXiv categories of the held papers, sorted ("arXiv cs.CL, cs.LG").
+    categories: list[str]
+
+
+class TopicCreate(Wire):
+    """`POST /topics`."""
+
+    name: TopicName
+    cloth: Cloth | None = omittable()
+
+
+class TopicPatch(Wire):
+    """`PATCH /topics/{topic_id}`: only what is sent changes (`cloth: null` clears the colour)."""
+
+    name: TopicName | None = omittable()
+    #: Sent as `null` it CLEARS the colour (the design's "no cloth"); left out it is kept.
+    cloth: Cloth | None = None
+    sort_order: PageIndex | None = omittable()
+
+
+class LibraryTopic(TopicRef):
+    """`LibraryPaper.topic`: the topic the caller ACCEPTED for the paper. A mere offer is not
+    here (`GET /papers/{id}/topic` has it): an unaccepted suggestion must not group the shelf."""
+
+    source: TopicSource
+    #: `cs.CL` for `arxiv_category`, the model id for `model`, else null.
+    source_detail: str | None
+
+
+class PaperTopic(Wire):
+    """`GET /papers/{id}/topic` and the body of its writes (#193).
+
+    `none`: no topic, no offer. `suggested`: an offer (`topic`, or `suggested_name` for a topic
+    that does not exist yet); the paper is NOT shelved. `accepted`: shelved under `topic`.
+    `rejected`: the person said no.
+    """
+
+    status: Literal["none", "suggested", "accepted", "rejected"]
+    topic: TopicRef | None
+    suggested_name: str | None
+    source: TopicSource | None
+    source_detail: str | None
+    #: The paper's own arXiv category, whatever the status.
+    arxiv_category: str | None
+
+
+class PaperTopicPut(Wire):
+    """`PUT /papers/{id}/topic`: accept an existing topic, or name a new one (reused if the person
+    already has a topic of that name).
+
+    EXACTLY ONE of `topic_id` and `new_topic_name`. The route enforces it (422), not this model:
+    every field here is omittable, which is what the exported schema and `omittable_cases` say.
+    """
+
+    topic_id: str | None = omittable(pattern=server_id("top"))
+    new_topic_name: TopicName | None = omittable()
+    cloth: Cloth | None = omittable()
+
+
+class LibraryPlate(Wire):
+    """`LibraryPaper.plate` (#200): the figure the caller chose as the cover, as it is in the
+    promoted generation. Null on the paper means the typographic cover."""
+
+    #: Which entry of `GET /papers/{id}/figures` it is: a hint, the choice is stored as an Anchor.
+    block_id: str
+    page_index: PageIndex
+    #: "Figure 1", read from the start of its caption; null when the parser attached none.
+    label: str | None
+    #: The caption as the paper has it ("Figure 1: The Transformer - model architecture."), or null.
+    caption_text: str | None
+    #: The crop, signed for about an hour (the same URL for ten minutes, so a polled list keeps it).
+    asset_url: str
+
+
 class LibraryPaper(Wire):
     """The row shape used everywhere a paper is listed (§2.2)."""
 
@@ -415,6 +559,60 @@ class LibraryPaper(Wire):
     highlight_count: NonNegative
     created_at: WireTime
     updated_at: WireTime
+    #: The caller's place in the paper; null when they have not started it (#192).
+    reading: ReadingProgress | None
+    #: The year first submitted, from the arXiv id only; null when unsure (never a guess).
+    year: NonNegative | None
+    arxiv_id: str | None
+    #: The primary category from the arXiv margin stamp (`cs.CL`); null when absent.
+    arxiv_category: str | None
+    thread_count: NonNegative
+    #: True when the promoted generation has any cached summary (whatever prompt or model).
+    has_summary: bool
+    #: The topic the caller accepted for it (#193); null when unshelved or only offered.
+    topic: LibraryTopic | None
+    #: The caller's notebook pages on this paper (#200).
+    notebook_count: NonNegative
+    #: The figure the caller chose as the cover (#200); null for the typographic cover, and when
+    #: the chosen figure is not in the promoted parse or has no crop.
+    plate: LibraryPlate | None
+
+
+class PaperFigure(Wire):
+    """One figure the parser FOUND (`GET /papers/{id}/figures`, #200). Detection misses some
+    (#103), so a list is never "every figure"."""
+
+    block_id: str
+    page_index: PageIndex
+    bbox: BBox
+    #: The caption `caption_of` attaches, as the paper has it; null when none is attached.
+    caption_text: str | None
+    caption_block_id: str | None
+    #: "Figure 1" (or "Figure 1.1") when the caption starts with its number; else null.
+    label: str | None
+    #: The crop, signed for about an hour; null when none was rendered.
+    asset_url: str | None
+    #: A whole-block Anchor on the figure, minted by this response: what `PUT …/plate` takes back.
+    #: Null only when no valid Anchor could be minted (such a figure cannot be chosen).
+    anchor: AnchorV1 | None
+
+
+class PlatePut(Wire):
+    """`PUT /papers/{id}/plate`: the Anchor of one of the paper's figures (from `…/figures`)."""
+
+    anchor: AnchorV1In
+
+
+class PaperAbstract(Wire):
+    """`GET /papers/{id}/abstract` (#200): the abstract the parser found, for the opened book.
+    Every field is null when it found none."""
+
+    #: The abstract's blocks' text as the paper has it (line breaks and line-end hyphens kept; a
+    #: reader joins them for display), blocks separated by a blank line.
+    text: str | None
+    page_index: PageIndex | None
+    #: A whole-block Anchor on the abstract's first block: the "p. 1 · Abstract" tab.
+    anchor: AnchorV1 | None
 
 
 class UploadAccepted(Wire):
@@ -432,6 +630,34 @@ class JobAccepted(Wire):
 
     job_id: str
     generation: Generation
+
+
+class LibraryReference(Wire):
+    """The bibliography entry that made a library link: its position and its text."""
+
+    #: Zero-based position in the citing paper's bibliography (document order).
+    index: int = Field(ge=0, le=SQLITE_INTEGER_MAX)
+    text: str
+
+
+class LibraryLink(Wire):
+    """One real link between two of the caller's papers (``GET /library/links``, #194).
+
+    ``via`` is only ``"citation"``: ``"board"`` joins the enum when a board can hold a second
+    paper. ``matched_by`` is what actually matched, so the UI words it from the field.
+    """
+
+    from_paper_id: str
+    to_paper_id: str
+    via: Literal["citation"]
+    matched_by: Literal["arxiv_id", "title"]
+    reference: LibraryReference
+
+
+class LibraryLinks(Wire):
+    """``GET /library/links``."""
+
+    links: list[LibraryLink]
 
 
 class ReparseRequest(Wire):
@@ -548,8 +774,8 @@ class ResolutionsPut(Wire):
 # ── §2.5 AI threads, messages, citations, runs ───────────────────────────────────────────────
 
 MessageStatus = Literal["streaming", "complete", "partial", "error", "aborted"]
-ThreadKind = Literal["explain", "ask"]
-RunKind = Literal["explain", "ask", "summary"]
+ThreadKind = Literal["explain", "ask", "diagram"]
+RunKind = Literal["explain", "ask", "summary", "diagram", "topic"]
 DoneStatus = Literal["complete", "partial", "error", "aborted"]
 
 
@@ -557,6 +783,23 @@ class MessageError(Wire):
     code: RunErrorCode | ErrorCode
     retryable: bool
     message: str
+
+
+class PassageLocator(Wire):
+    """Where a cited passage sits, DERIVED on read from the parse (never stored; #201).
+
+    The UI shows `p. 2 ¶3 · Introduction`; `passage_key` is only a display key that numbers
+    "the same passage" within one answer, so it is never kept on a user row.
+    """
+
+    #: `g{generation}:{block_id}`: equal keys are the same passage within one generation.
+    passage_key: str
+    page_index: PageIndex
+    #: 1-based among that page's body paragraphs in reading order; null for a caption, a table
+    #: cell, a heading or anything else the UI should show by page only.
+    para_index: Positive | None
+    #: The display title of the section the block belongs to; null for none.
+    section_heading: str | None
 
 
 class Citation(Wire):
@@ -567,6 +810,85 @@ class Citation(Wire):
     page_index: PageIndex
     anchor: AnchorV1
     supported: bool | None
+    #: Present on a stored answer read back (`GET /papers/{id}/threads/{tid}`), when its
+    #: generation's parse can still be loaded; the live SSE `citations` event omits it.
+    locator: PassageLocator | None = omittable()
+
+
+class MessageCoverage(Wire):
+    """How much of an assistant answer is cited (#201); counted by `exchanges.message_coverage`."""
+
+    #: Distinct cited passages among the message's citations.
+    passages: NonNegative
+    #: Marker handle occurrences in the text that have a stored citation (`[b1, b8]` counts 2).
+    citations: NonNegative
+    #: Occurrences whose handle has no stored citation (a handle the run dropped): never counted
+    #: in `citations`.
+    unresolved_markers: NonNegative
+    paragraphs: NonNegative
+    #: 0-based indexes, into exactly the list `exchanges.answer_paragraphs` returns (split on
+    #: blank lines, bare Markdown heading lines dropped), of the paragraphs with no marker.
+    uncited_paragraphs: list[NonNegative]
+    #: Stored citations whose `supported` is false ("not verified", never "wrong"); an
+    #: unchecked one (`supported: null`) is not counted.
+    not_verified: NonNegative
+
+
+# ── a diagram answer (v0.2 S7a, #216; DESIGN.md §1 "Diagrams", §4) ─────────────────────────────
+
+#: How the plate draws a part: `input` (bare letters, Q K V), `step` (a ruled box), `output` (a
+#: double rule), `concept` (plain).
+DiagramPartKind = Literal["input", "step", "output", "concept"]
+#: A plate's state, from its message's: `stopped` is the reader's Stop (the parts that came are
+#: kept), `partial` a plate cut short by anything else.
+DiagramStatus = Literal["streaming", "complete", "partial", "stopped", "error"]
+#: A part's letter: the Nth part to arrive is the Nth letter, A to L (twelve parts at most).
+Letter = Annotated[str, Field(pattern=r"^[A-L]$")]
+
+
+class DiagramCite(Wire):
+    """Where a part's quote was found. `supported` true: verbatim in the Anchor's block ("cited");
+    false: there with differences, or nowhere at all (`anchor` null), "not verified"."""
+
+    #: The Anchor's id (`cit_…`); null when the quote was found nowhere.
+    citation_id: str | None
+    #: The quote as the model wrote it.
+    quote: str
+    anchor: AnchorV1 | None
+    #: Derived from the parse on read (never stored); null when it cannot be had.
+    locator: PassageLocator | None
+    page_index: PageIndex | None
+    supported: bool
+
+
+class DiagramPart(Wire):
+    letter: Letter
+    label: str
+    #: One short line for the plate's key.
+    text: str
+    kind: DiagramPartKind
+    #: Edges INTO this part, from earlier letters only (acyclic by construction).
+    after: list[Letter]
+    #: One label (or null) per `after` entry, same order.
+    edge: list[str | None]
+    #: Null: the part is inferred, with no passage behind it ("inferred, no passage").
+    cite: DiagramCite | None
+
+
+class DiagramLink(Wire):
+    """An edge `after` cannot say (a feedback edge), from one placed part to another."""
+
+    source: Letter
+    target: Letter
+    label: str | None
+
+
+class MessageDiagram(Wire):
+    #: The plate's title; null until the model wrote one.
+    title: str | None
+    status: DiagramStatus
+    parts: list[DiagramPart]
+    links: list[DiagramLink]
 
 
 class RunSummary(Wire):
@@ -596,6 +918,10 @@ class Message(Wire):
     generation: Generation
     run: RunSummary | None
     citations: list[Citation]
+    #: Only on an assistant message that is `complete` or `partial` (and not a diagram).
+    coverage: MessageCoverage | None = omittable()
+    #: Only on an assistant message of a `diagram` thread; `content` keeps the raw lines.
+    diagram: MessageDiagram | None = omittable()
     created_at: WireTime
     completed_at: WireTime | None
 
@@ -608,6 +934,12 @@ class Thread(Wire):
     created_at: WireTime
     updated_at: WireTime
     message_count: NonNegative
+    #: The first user message, cut to 160 characters on a word boundary ("" if none yet).
+    ask: str
+    #: Stored status of the thread's last assistant message; null when there is none. A run that
+    #: died but has not expired still reads `streaming` here, where the thread detail already says
+    #: `partial` or `error`.
+    last_status: MessageStatus | None
 
 
 class ThreadDetail(Wire):
@@ -616,10 +948,13 @@ class ThreadDetail(Wire):
 
 
 DEFAULT_QUESTION: Final = "Explain this passage."
+#: A `diagram` thread's question when the client sends none.
+DIAGRAM_QUESTION: Final = "Explain with a diagram."
 
 
 class ThreadCreate(Wire):
-    """`POST /papers/{id}/threads`. `anchor` is required for `explain`."""
+    """`POST /papers/{id}/threads`. `anchor` is required for `explain` and `diagram`; a diagram's
+    default question is `DIAGRAM_QUESTION`."""
 
     kind: ThreadKind
     anchor: AnchorV1In | None = omittable(validate_default=True)
@@ -628,8 +963,10 @@ class ThreadCreate(Wire):
     @field_validator("anchor", mode="after")
     @classmethod
     def _explain_needs_an_anchor(cls, value: AnchorV1In | None, info: ValidationInfo) -> Any:
-        if value is None and info.data.get("kind") == "explain":
-            raise PydanticCustomError("missing", "Field required for an explain thread")
+        kind = info.data.get("kind")
+        if value is None and kind in ("explain", "diagram"):
+            article = "an" if kind == "explain" else "a"
+            raise PydanticCustomError("missing", f"Field required for {article} {kind} thread")
         return value
 
 
@@ -639,6 +976,9 @@ class FollowUp(Wire):
     question: str = Field(min_length=1, max_length=2000)
     #: Re-run a failed assistant message instead of appending a new user turn.
     retry_of: str | None = omittable(pattern=server_id("msg"))
+    #: Redraw: a diagram answer of this thread (finished, in any state) to draw again. Required on
+    #: a `diagram` thread, refused on any other; it appends a new turn, never replaces one.
+    redraw_of: str | None = omittable(pattern=server_id("msg"))
 
 
 # ── §2.6 browser-facing SSE events (the `data` of each `event:`) ─────────────────────────────
@@ -667,6 +1007,13 @@ class SseCitations(Wire):
     items: list[Citation]
 
 
+class SsePlate(Wire):
+    """A diagram run's plate title (v0.2 S7a); its parts follow as `part` (a `DiagramPart`, the
+    quote already resolved) and its feedback edges as `link` (a `DiagramLink`)."""
+
+    title: str
+
+
 class SseDone(Wire):
     status: DoneStatus
     error: MessageError | None
@@ -679,6 +1026,9 @@ BROWSER_EVENTS: Final[dict[str, type[Wire]]] = {
     "status": SseStatus,
     "text": SseText,
     "citations": SseCitations,
+    "plate": SsePlate,
+    "part": DiagramPart,
+    "link": DiagramLink,
     "usage": RunSummary,
     "done": SseDone,
 }
@@ -727,6 +1077,9 @@ class UsageByKind(Wire):
     explain: UsageBucket
     ask: UsageBucket
     summary: UsageBucket
+    diagram: UsageBucket
+    #: The topic run (#242) is not built yet; its bucket is 0 until it is.
+    topic: UsageBucket
 
 
 class UsageTotals(Wire):
@@ -741,7 +1094,11 @@ class UsageTotals(Wire):
 
 # ── §2.7 canvas ──────────────────────────────────────────────────────────────────────────────
 
-NodeKind = Literal["excerpt", "explanation", "note", "group"]
+#: "frame" on the design's board is the `group` kind on the wire.
+NodeKind = Literal["excerpt", "explanation", "note", "group", "question", "notebook", "diagram"]
+#: The four typed pins (DESIGN.md section 5); `papertree_db.canvas.PIN_TABLE` says who offers which.
+FromPort = Literal["claim_out", "answer_out"]
+ToPort = Literal["evidence_in", "question_in"]
 EdgeKind = Literal[
     "supports", "contradicts", "derives_from", "answers", "compares", "references", "relates"
 ]
@@ -780,6 +1137,16 @@ class Board(Wire):
     updated_at: WireTime
 
 
+class NotebookCardCounts(Wire):
+    """What a notebook card says about its page ("4 quotes · 1 sticky"), counted on read."""
+
+    quotes: NonNegative
+    stickies: NonNegative
+    text: NonNegative
+    shapes: NonNegative
+    strokes: NonNegative
+
+
 class CanvasNode(Wire):
     node_id: str
     board_id: str
@@ -794,6 +1161,10 @@ class CanvasNode(Wire):
     body: str
     source_anchor: AnchorV1 | None
     source_message_id: str | None
+    source_page_id: str | None
+    source_diagram_id: str | None
+    #: A notebook card's page counts, computed on read; null on every other kind.
+    counts: NotebookCardCounts | None
     version: Version
     created_at: WireTime
     updated_at: WireTime
@@ -806,6 +1177,9 @@ class CanvasEdge(Wire):
     to_node_id: str
     kind: EdgeKind
     label: str | None
+    from_port: FromPort | None
+    to_port: ToPort | None
+    created_at: WireTime
 
 
 class BoardView(Wire):
@@ -830,6 +1204,8 @@ class NodeCreate(Wire):
     body: CanvasBody = ""
     source_anchor: AnchorV1In | None = omittable(validate_default=True)
     source_message_id: str | None = omittable(validate_default=True)
+    source_page_id: str | None = omittable(validate_default=True)
+    source_diagram_id: str | None = omittable(validate_default=True)
     group_id: str | None = None
 
     @field_validator("source_anchor", mode="after")
@@ -844,6 +1220,20 @@ class NodeCreate(Wire):
     def _explanation_needs_a_message(cls, value: str | None, info: ValidationInfo) -> Any:
         if value is None and info.data.get("kind") == "explanation":
             raise PydanticCustomError("missing", "Field required for an explanation node")
+        return value
+
+    @field_validator("source_page_id", mode="after")
+    @classmethod
+    def _notebook_needs_a_page(cls, value: str | None, info: ValidationInfo) -> Any:
+        if value is None and info.data.get("kind") == "notebook":
+            raise PydanticCustomError("missing", "Field required for a notebook node")
+        return value
+
+    @field_validator("source_diagram_id", mode="after")
+    @classmethod
+    def _diagram_needs_a_diagram(cls, value: str | None, info: ValidationInfo) -> Any:
+        if value is None and info.data.get("kind") == "diagram":
+            raise PydanticCustomError("missing", "Field required for a diagram node")
         return value
 
 
@@ -864,6 +1254,8 @@ class NodePatch(Wire):
     title: CanvasTitle | None = None
     body: CanvasBody | None = omittable()
     group_id: str | None = None
+    source_page_id: str | None = omittable()
+    source_diagram_id: str | None = omittable()
 
 
 class StaleVersion(Wire):
@@ -881,6 +1273,9 @@ class EdgeCreate(Wire):
     to_node_id: str
     kind: EdgeKind
     label: CanvasLabel | None = None
+    #: Both optional: a link made with the keyboard (and every v0.1 edge) has no pins.
+    from_port: FromPort | None = None
+    to_port: ToPort | None = None
 
     @field_validator("to_node_id", mode="after")
     @classmethod
@@ -893,11 +1288,189 @@ class EdgeCreate(Wire):
 class EdgePatch(Wire):
     kind: EdgeKind | None = omittable()
     label: CanvasLabel | None = None
+    from_port: FromPort | None = None
+    to_port: ToPort | None = None
 
 
 class BoardPatch(Wire):
     title: str | None = omittable(min_length=1, max_length=200)
     viewport: Viewport | None = None
+
+
+# ── v0.2 notebook (S5a, #206) ───────────────────────────────────────────────────────────────
+
+PageTemplate = Literal["blank", "dot", "lined", "cornell", "derivation"]
+NotebookItemKind = Literal["exchange", "text", "sticky", "quote", "shape"]
+StrokeTool = Literal["pen", "highlighter"]
+StrokeNib = Literal["EF", "F", "M"]
+#: Page units (the web's PAGE_WIDTH is 960); same bounds as a canvas card.
+NOTEBOOK_BODY_MAX = 100_000
+#: A stroke colour is a TOKEN NAME (`pen`, `hl-amber`), never a hex, so a theme can re-map it.
+ColourToken = Annotated[str, Field(pattern=r"^[a-z][a-z0-9-]{0,31}$")]
+NotebookTitle = Annotated[str, Field(min_length=1, max_length=200)]
+#: Base64 of one stroke blob. Generous on the wire so the store, not the parser, answers 413.
+PointsB64 = Annotated[str, Field(min_length=1, max_length=8_000_000)]
+
+
+class NotebookPage(Wire):
+    page_id: str
+    paper_id: str
+    title: str
+    template: PageTemplate
+    source_thread_id: str | None
+    source_message_id: str | None
+    version: Version
+    created_at: WireTime
+    updated_at: WireTime
+
+
+class NotebookItem(Wire):
+    """`anchor` is the full Anchor of a quote (required for `quote`, null otherwise); `body` is the
+    typed text, the quote's display cache, or the JSON of an exchange / shape."""
+
+    item_id: str
+    page_id: str
+    kind: NotebookItemKind
+    x: float
+    y: float
+    w: Extent
+    h: Extent
+    z: SqlInt
+    body: str
+    anchor: AnchorV1 | None
+    version: Version
+    created_at: WireTime
+    updated_at: WireTime
+
+
+class NotebookStroke(Wire):
+    stroke_id: str
+    page_id: str
+    tool: StrokeTool
+    nib: StrokeNib
+    colour: str
+    points_b64: str
+    created_at: WireTime
+
+
+class NotebookCounts(Wire):
+    quotes: NonNegative
+    stickies: NonNegative
+    text: NonNegative
+    shapes: NonNegative
+    strokes: NonNegative
+
+
+class NotebookPageSummary(Wire):
+    page_id: str
+    title: str
+    template: PageTemplate
+    counts: NotebookCounts
+    version: Version
+    updated_at: WireTime
+
+
+class NotebookPageView(Wire):
+    """`GET /notebook/pages/{id}`."""
+
+    page: NotebookPage
+    items: list[NotebookItem]
+    strokes: list[NotebookStroke]
+
+
+class NotebookPageCreated(Wire):
+    """`POST /papers/{id}/notebook/pages` (201): the page and its seeded items."""
+
+    page: NotebookPage
+    items: list[NotebookItem]
+
+
+class NotebookHit(Wire):
+    page_id: str
+    page_title: str
+    item_id: str
+    kind: NotebookItemKind
+    snippet: str
+
+
+class NotebookPageCreate(Wire):
+    """`from_message_id` is "Dive in": an assistant message of this paper's threads."""
+
+    page_id: ClientId
+    title: NotebookTitle | None = omittable(max_length=200)
+    template: PageTemplate | None = omittable()
+    from_message_id: str | None = omittable(min_length=1, max_length=200)
+
+
+class NotebookPagePatch(Wire):
+    version: Version
+    title: NotebookTitle | None = omittable(max_length=200)
+    template: PageTemplate | None = omittable()
+
+
+class NotebookItemCreate(Wire):
+    item_id: ClientId
+    kind: NotebookItemKind
+    x: Coord
+    y: Coord
+    w: Extent
+    h: Extent
+    z: SqlInt = 0
+    body: Annotated[str, Field(max_length=NOTEBOOK_BODY_MAX)] = ""
+    anchor: AnchorV1In | None = omittable(validate_default=True)
+
+    @field_validator("anchor", mode="after")
+    @classmethod
+    def _quote_needs_an_anchor(cls, value: AnchorV1In | None, info: ValidationInfo) -> Any:
+        if value is None and info.data.get("kind") == "quote":
+            raise PydanticCustomError("missing", "Field required for a quote")
+        return value
+
+
+class NotebookItemPatch(Wire):
+    version: Version
+    x: Coord | None = omittable()
+    y: Coord | None = omittable()
+    w: Extent | None = omittable()
+    h: Extent | None = omittable()
+    z: SqlInt | None = omittable()
+    body: Annotated[str, Field(max_length=NOTEBOOK_BODY_MAX)] | None = omittable()
+
+
+class NotebookStrokeIn(Wire):
+    stroke_id: ClientId
+    tool: StrokeTool
+    nib: StrokeNib
+    colour: ColourToken
+    points_b64: PointsB64
+
+
+class NotebookStrokeBatch(RootModel[list[NotebookStrokeIn]]):
+    """`POST /notebook/pages/{id}/strokes`: a bare JSON array, one pen-up batch of 1 to 200."""
+
+    root: Annotated[list[NotebookStrokeIn], Field(min_length=1, max_length=200)]
+
+
+class NotebookStrokesAdded(Wire):
+    added: NonNegative
+
+
+class NotebookPageStale(Wire):
+    """`409 stale_version` on a page: the envelope plus the page as it now is."""
+
+    detail: str
+    code: Literal["stale_version"]
+    retryable: bool
+    current: NotebookPage
+
+
+class NotebookItemStale(Wire):
+    """`409 stale_version` on an item: the envelope plus the item as it now is."""
+
+    detail: str
+    code: Literal["stale_version"]
+    retryable: bool
+    current: NotebookItem
 
 
 # ── §2.8 health ──────────────────────────────────────────────────────────────────────────────
@@ -988,7 +1561,7 @@ class AgentRunRequest(Wire):
     run_id: str = Field(pattern=server_id("run"))
     request_id: str = Field(pattern=server_id("req"))
     kind: RunKind
-    prompt_version: Literal["explain-v1", "ask-v1", "summary-v1"]
+    prompt_version: Literal["explain-v1", "ask-v1", "summary-v1", "diagram-v1", "topic-v1"]
     tool: AgentToolAccess
     datamark: str = Field(pattern=r"^\^[0-9a-f]{8}$")
     paper: AgentPaper
@@ -1001,7 +1574,7 @@ class AgentRunRequest(Wire):
     @classmethod
     def _seed_matches_kind(cls, value: AgentSeed | None, info: ValidationInfo) -> Any:
         kind = info.data.get("kind")
-        if kind in ("summary", "explain") and value is None:
+        if kind in ("summary", "explain", "diagram", "topic") and value is None:
             raise PydanticCustomError("missing", f"Field required for a {kind} run")
         return value
 
@@ -1023,6 +1596,65 @@ class AgentStatus(Wire):
 
 class AgentText(Wire):
     delta: str
+
+
+def _agent_event_defs() -> dict[str, Any]:
+    """`$defs` of the committed `contracts/agent/run-events.schema.json`, found by walking up from
+    this file (the agent finds the same file the same way, `contract.ts`)."""
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / "contracts" / "agent" / "run-events.schema.json"
+        if candidate.is_file():
+            defs: dict[str, Any] = json.loads(candidate.read_text(encoding="utf-8"))["$defs"]
+            return defs
+    raise RuntimeError("contracts/agent/run-events.schema.json not found above papertree_api")
+
+
+def _text(node: dict[str, Any]) -> Any:
+    """A `str` field bounded exactly as the schema node says. pydantic counts code points, as JSON
+    Schema does (and as the agent's zod does, `text.ts`), so the two sides agree on every bound."""
+    return Field(min_length=node.get("minLength"), max_length=node["maxLength"])
+
+
+#: The ONE place a diagram line's text limits are written (S7a review): the agent contract.
+_EVENT_DEFS: Final = _agent_event_defs()
+_PART: Final = _EVENT_DEFS["part"]["properties"]
+
+
+class AgentPlate(Wire):
+    """A diagram run's first line (`run-events.schema.json` `$defs.plate`, v0.2 S7a)."""
+
+    title: str = _text(_EVENT_DEFS["plate"]["properties"]["title"])
+
+
+class AgentCite(Wire):
+    """The model's quote for a part, before the API looked for it in the paper."""
+
+    quote: str = _text(_EVENT_DEFS["PartCite"]["properties"]["quote"])
+    #: A hint only; the resolver never trusts it.
+    page: Positive | None = omittable()
+
+
+class AgentPart(Wire):
+    """One part as the agent checked it (`$defs.part`): its letter by arrival, `after` from
+    earlier letters only, one `edge` label (or null) per `after` entry."""
+
+    letter: Letter
+    label: str = _text(_PART["label"])
+    text: str = _text(_PART["text"])
+    kind: DiagramPartKind
+    after: list[Letter] = Field(max_length=_PART["after"]["maxItems"])
+    edge: list[Annotated[str, _text(_PART["edge"]["items"]["anyOf"][0])] | None] = Field(
+        max_length=_PART["edge"]["maxItems"]
+    )
+    cite: AgentCite | None
+
+
+class AgentLink(Wire):
+    """A feedback edge between two placed parts (`$defs.link`)."""
+
+    source: Letter
+    target: Letter
+    label: Annotated[str, _text(_EVENT_DEFS["link"]["properties"]["label"]["anyOf"][0])] | None
 
 
 class AgentUsage(Wire):
@@ -1079,6 +1711,9 @@ AGENT_EVENTS: Final[dict[str, type[Wire]]] = {
     "run": AgentRun,
     "status": AgentStatus,
     "text": AgentText,
+    "plate": AgentPlate,
+    "part": AgentPart,
+    "link": AgentLink,
     "usage": AgentUsage,
     "done": AgentDone,
 }

@@ -25,18 +25,8 @@
 
 import { useId, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Flag,
-  Loader2,
-  Plus,
-  RotateCcw,
-  WifiOff,
-} from 'lucide-react';
-import { PaperGrid } from './PaperGrid';
+import { AlertTriangle, CheckCircle2, Flag, Loader2, Plus, RotateCcw, WifiOff } from 'lucide-react';
 import { ProgressMeter, TOUCH_TARGET, pointerActivate } from './primitives';
-import type { LibraryPaper } from './types';
 
 /** A subtle 45° hatch. Inline because it is geometry, not a theme token. */
 const HATCH: CSSProperties = {
@@ -63,7 +53,13 @@ const DEFAULT_GATED_ACTIONS: readonly GatedAction[] = [
  * is the WCAG 2.2 guidance and it is the difference between "visibly disabled with the reason" and
  * "silently broken", which is exactly the distinction §19.8 draws for the offline state.
  */
-function GatedActionButton({ action, reasonId }: { readonly action: GatedAction; readonly reasonId: string }) {
+function GatedActionButton({
+  action,
+  reasonId,
+}: {
+  readonly action: GatedAction;
+  readonly reasonId: string;
+}) {
   return (
     <button
       type="button"
@@ -215,7 +211,9 @@ function affectedPagesHeading(sorted: readonly number[]): string {
   const last = sorted[sorted.length - 1] ?? 0;
   if (sorted.length === 1) return `Page ${String(first + 1)} needs a closer look`;
 
-  const contiguous = sorted.every((page, index) => index === 0 || page === (sorted[index - 1] ?? 0) + 1);
+  const contiguous = sorted.every(
+    (page, index) => index === 0 || page === (sorted[index - 1] ?? 0) + 1,
+  );
   if (contiguous) return `Pages ${String(first + 1)}–${String(last + 1)} need a closer look`;
 
   const shown = sorted.slice(0, 6).map((page) => String(page + 1));
@@ -236,7 +234,10 @@ export function PartialState({ partialReason, affectedPages, onOpenPage }: Parti
       data-state="partial"
       className="flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950"
     >
-      <p id={headingId} className="flex items-center gap-2 text-sm font-medium text-amber-900 dark:text-amber-100">
+      <p
+        id={headingId}
+        className="flex items-center gap-2 text-sm font-medium text-amber-900 dark:text-amber-100"
+      >
         <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
         {affectedPagesHeading(pages)}
       </p>
@@ -339,7 +340,11 @@ export function UncertaintyState({
         </button>
       </div>
 
-      <div id={panelId} hidden={!open} className="rounded-lg border border-amber-300 p-3 dark:border-amber-800">
+      <div
+        id={panelId}
+        hidden={!open}
+        className="rounded-lg border border-amber-300 p-3 dark:border-amber-800"
+      >
         <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
           We&rsquo;re unsure of this region
         </p>
@@ -348,7 +353,11 @@ export function UncertaintyState({
         </p>
         {/* The crop is the evidence, and it is the paper. No transcription, no marker, no register:
             showing our reading here would beg the exact question the panel is asking. */}
-        <img src={cropSrc} alt={cropAlt} className="mt-2 max-w-full rounded border border-gray-200 dark:border-gray-700" />
+        <img
+          src={cropSrc}
+          alt={cropAlt}
+          className="mt-2 max-w-full rounded border border-gray-200 dark:border-gray-700"
+        />
         <button
           type="button"
           className={`${TOUCH_TARGET} mt-2 inline-flex items-center justify-center gap-2 rounded-lg border border-amber-400 px-3 text-sm text-amber-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700 dark:text-amber-100`}
@@ -402,7 +411,10 @@ export function FailureState({
       data-state="failed"
       className="flex flex-col gap-3 rounded-lg border border-red-300 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950"
     >
-      <p id={headingId} className="flex items-center gap-2 text-sm font-medium text-red-900 dark:text-red-100">
+      <p
+        id={headingId}
+        className="flex items-center gap-2 text-sm font-medium text-red-900 dark:text-red-100"
+      >
         <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
         Stopped at: {failedStep}
       </p>
@@ -538,21 +550,22 @@ export function OfflineState({
 
 export interface EmptyLibraryProps {
   readonly onAddPaper: () => void;
-  /** Sample papers to offer. Empty (the default) unless the fixtures flag is on (#137). */
-  readonly samples?: readonly LibraryPaper[];
-  readonly onOpenSample?: (paperId: string) => void;
 }
 
 /**
- * The empty library: one sentence about what to do and ONE action. Sample papers are offered only
- * when the caller passes some, which the library does only with `NEXT_PUBLIC_PAPERTREE_FIXTURES=on`
- * (#137): a real user never meets a card that is not theirs.
+ * The empty library: one sentence about what to do and ONE action. (The sample-paper offer that
+ * used to sit under it was never passed any samples, so it rendered nowhere; #195 removed it, and
+ * the empty library's v0.2 design, frame 01b, is #196's.)
  */
-export function EmptyLibrary({ onAddPaper, samples = [], onOpenSample }: EmptyLibraryProps) {
+export function EmptyLibrary({ onAddPaper }: EmptyLibraryProps) {
   const headingId = useId();
 
   return (
-    <section aria-labelledby={headingId} data-state="empty-library" className="flex flex-col gap-6 py-8">
+    <section
+      aria-labelledby={headingId}
+      data-state="empty-library"
+      className="flex flex-col gap-6 py-8"
+    >
       <div className="flex flex-col items-center gap-3 text-center">
         <h2 id={headingId} className="pt-s3-h1" style={{ fontSize: '1.375rem' }}>
           Add your first paper
@@ -571,13 +584,6 @@ export function EmptyLibrary({ onAddPaper, samples = [], onOpenSample }: EmptyLi
           Upload a PDF
         </button>
       </div>
-
-      {samples.length > 0 && onOpenSample !== undefined ? (
-        <div className="flex flex-col gap-3">
-          <h3 className="text-sm font-medium">Or try one of these</h3>
-          <PaperGrid papers={samples} onOpen={onOpenSample} />
-        </div>
-      ) : null}
     </section>
   );
 }

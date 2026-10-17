@@ -31,7 +31,7 @@ from typing import Any, Final, Literal
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from papertree_db import GenerationNotFound, HighlightRejected, PaperNotFound
+from papertree_db import GenerationNotFound, HighlightRejected, PaperNotFound, TopicNotFound
 from pydantic import BaseModel, ConfigDict
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -52,6 +52,8 @@ ErrorCode = Literal[
     "busy",
     "stale_version",
     "generation_not_found",
+    # A CONTRACT ADDITION (#193): POST/PATCH /topics with a name the person already uses.
+    "topic_exists",
     "anchor_incomplete",
     "anchor_mismatch",
     "budget_exhausted",
@@ -96,6 +98,7 @@ ERROR_STATUS: Final[dict[ErrorCode, int]] = {
     "busy": 409,
     "stale_version": 409,
     "generation_not_found": 409,
+    "topic_exists": 409,
     "anchor_incomplete": 422,
     "anchor_mismatch": 422,
     "budget_exhausted": 429,
@@ -244,6 +247,10 @@ def _paper_not_found(_: Request, exc: Exception) -> JSONResponse:
     return envelope_response(ApiError("not_found", "no such paper"))
 
 
+def _topic_not_found(_: Request, exc: Exception) -> JSONResponse:
+    return envelope_response(ApiError("not_found", "no such topic"))
+
+
 def _generation_not_found(_: Request, exc: Exception) -> JSONResponse:
     return envelope_response(ApiError("generation_not_found", str(exc) or "no such generation"))
 
@@ -254,6 +261,7 @@ def install_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(RequestValidationError, _request_validation)
     app.add_exception_handler(HighlightRejected, _highlight_rejected)
     app.add_exception_handler(PaperNotFound, _paper_not_found)
+    app.add_exception_handler(TopicNotFound, _topic_not_found)
     app.add_exception_handler(GenerationNotFound, _generation_not_found)
 
 

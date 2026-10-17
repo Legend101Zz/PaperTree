@@ -27,7 +27,12 @@ import {
   type ReaderActions,
 } from '@/components/reader/actions';
 
-const FIXTURE = join(process.cwd(), '../../packages/document-ir/fixtures/resnet-cvpr-2col.paperir.json');
+import { TestQueryProvider } from './query-client';
+
+const FIXTURE = join(
+  process.cwd(),
+  '../../packages/document-ir/fixtures/resnet-cvpr-2col.paperir.json',
+);
 const paper = JSON.parse(readFileSync(FIXTURE, 'utf8')) as PaperSource & { ir_version?: string };
 const doc = indexDocument(paper, `fixture/${paper.ir_version ?? 'unknown'}`);
 
@@ -39,17 +44,21 @@ const probe = vi.hoisted(() => ({
 }));
 
 vi.mock('@/components/reader/VirtualPageList', () => ({
-  VirtualPageList: forwardRef<unknown, Record<string, unknown>>(function VirtualPageListSpy(_props, ref) {
-    useImperativeHandle(ref, () => ({
-      scrollToPage: () => undefined,
-      scrollToBlock(pageIndex: number, bbox: readonly number[]) {
-        probe.scrolls.push({ page: pageIndex, bbox });
-      },
-      getVisiblePages: () => ({ first: 0, last: 0 }),
-      getScrollElement: () => null,
-    }));
-    return <div data-testid="scroller" />;
-  }),
+  VirtualPageList: forwardRef<unknown, Record<string, unknown>>(
+    function VirtualPageListSpy(_props, ref) {
+      useImperativeHandle(ref, () => ({
+        scrollToPage: () => undefined,
+        scrollToBlock(pageIndex: number, bbox: readonly number[]) {
+          probe.scrolls.push({ page: pageIndex, bbox });
+        },
+        getVisiblePages: () => ({ first: 0, last: 0 }),
+        getScrollElement: () => null,
+      }));
+      return <div data-testid="scroller" />;
+    },
+  ),
+  // The header's page counter reads the pages on screen (#203); a stub scroller shows none.
+  useVisiblePages: () => ({ pages: [], current: -1 }),
 }));
 
 vi.mock('@/components/reader/PdfDocumentProvider', () => ({
@@ -86,14 +95,18 @@ vi.mock('@/components/reader/ModeSwitch', async () => {
         <div>
           <button
             type="button"
-            onClick={() => actions.openExplain({ anchor: probe.anchor as Anchor, quote: probe.quote })}
+            onClick={() =>
+              actions.openExplain({ anchor: probe.anchor as Anchor, quote: probe.quote })
+            }
           >
             probe explain
           </button>
           <button
             type="button"
             onClick={() => {
-              probe.sent.push(actions.sendToCanvas({ kind: 'excerpt', anchor: probe.anchor as Anchor }));
+              probe.sent.push(
+                actions.sendToCanvas({ kind: 'excerpt', anchor: probe.anchor as Anchor }),
+              );
             }}
           >
             probe canvas
@@ -188,7 +201,9 @@ describe('ReaderActions — mounted by ReaderWorkspace, reached from inside the 
     });
     probe.quote = target!.text.slice(0, 40);
     const { ReaderWorkspace } = await import('@/app/paper/[id]/read/ReaderWorkspace');
-    render(<ReaderWorkspace paper={{ kind: 'fixture', slug: 'resnet-cvpr-2col' }} />);
+    render(<ReaderWorkspace paper={{ kind: 'fixture', slug: 'resnet-cvpr-2col' }} />, {
+      wrapper: TestQueryProvider,
+    });
     await waitFor(() => expect(screen.getByRole('button', { name: 'probe explain' })).toBeTruthy());
   }
 
@@ -246,7 +261,8 @@ describe('the mount site itself', () => {
       'utf8',
     );
     expect(source).toContain('<ReaderActionsProvider value={actions}>');
-    expect(source).toContain('<ExplainPanel controller={explain} />');
+    // #203: mounted with the header's Explain toggle, which replaced its floating launcher.
+    expect(source).toContain('<ExplainPanel controller={explain} toggleRef={toggleRef} />');
     expect(source).toContain('sendToCanvas: (input) => sendToCanvas(paperId, input)');
   });
 });

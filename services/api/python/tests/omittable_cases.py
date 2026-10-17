@@ -46,6 +46,11 @@ CASES: Final[dict[str, tuple[dict[str, Any], tuple[str, ...]]]] = {
     "AnchorV1": (capture_anchor(), ("subTarget",)),
     "AnchorV1In": (capture_anchor(), ("subTarget",)),
     "ReparseRequest": ({}, ("reason",)),
+    "ReadingStateUpdate": ({"last_page": 0}, ("mode",)),
+    "TopicCreate": ({"name": "Vision"}, ("cloth",)),
+    "TopicPatch": ({}, ("name", "sort_order")),
+    # "Exactly one of topic_id / new_topic_name" is the route's rule (422), not the model's.
+    "PaperTopicPut": ({}, ("topic_id", "new_topic_name", "cloth")),
     "HighlightPatch": ({}, ("color",)),
     "ResolutionPutItem": (
         {
@@ -58,7 +63,9 @@ CASES: Final[dict[str, tuple[dict[str, Any], tuple[str, ...]]]] = {
         ("upgraded_anchor",),
     ),
     "ThreadCreate": ({"kind": "ask"}, ("anchor",)),
-    "FollowUp": ({"question": "And that?"}, ("retry_of",)),
+    "FollowUp": ({"question": "And that?"}, ("retry_of", "redraw_of")),
+    # v0.2 S7a (#216): a diagram part's quote, as the agent sends it.
+    "AgentCite": ({"quote": "queries and keys of dimension dk"}, ("page",)),
     "SseStatus": ({"phase": "tool"}, ("label", "attempt", "delay_ms")),
     "NodeCreate": (
         {
@@ -69,11 +76,60 @@ CASES: Final[dict[str, tuple[dict[str, Any], tuple[str, ...]]]] = {
             "w": 240,
             "h": 120,
         },
-        ("source_anchor", "source_message_id"),
+        ("source_anchor", "source_message_id", "source_page_id", "source_diagram_id"),
     ),
-    "NodePatch": ({"version": 1}, ("x", "y", "w", "h", "z", "body")),
+    "NodePatch": (
+        {"version": 1},
+        ("x", "y", "w", "h", "z", "body", "source_page_id", "source_diagram_id"),
+    ),
     "EdgePatch": ({}, ("kind",)),
     "BoardPatch": ({}, ("title",)),
+    "Citation": (
+        {
+            "citation_id": "cit_01K63A9W4XJ7Q2N8R5T0V3Y6ZE",
+            "ordinal": 0,
+            "marker": "b1",
+            "page_index": 0,
+            "anchor": capture_anchor(),
+            "supported": True,
+        },
+        ("locator",),
+    ),
+    "Message": (
+        {
+            "message_id": "msg_01K63A9W4XJ7Q2N8R5T0V3Y6ZF",
+            "thread_id": "thr_01K63A9W4XJ7Q2N8R5T0V3Y6ZB",
+            "ordinal": 0,
+            "role": "user",
+            "content": "Explain this passage.",
+            "status": "complete",
+            "error": None,
+            "generation": 1,
+            "run": None,
+            "citations": [],
+            "created_at": "2026-09-26T05:00:00.000Z",
+            "completed_at": None,
+        },
+        ("coverage", "diagram"),
+    ),
+    # v0.2 S5a (#206): the notebook.
+    "NotebookPageCreate": (
+        {"page_id": "pg_0f9e8d7caaaa4bbb"},
+        ("title", "template", "from_message_id"),
+    ),
+    "NotebookPagePatch": ({"version": 1}, ("title", "template")),
+    "NotebookItemCreate": (
+        {
+            "item_id": "ni_0f9e8d7caaaa4bbb",
+            "kind": "sticky",
+            "x": 0,
+            "y": 0,
+            "w": 120,
+            "h": 60,
+        },
+        ("anchor",),
+    ),
+    "NotebookItemPatch": ({"version": 1}, ("x", "y", "w", "h", "z", "body")),
     "AgentStatus": ({"phase": "tool"}, ("tool", "label", "attempt", "delay_ms")),
 }
 
