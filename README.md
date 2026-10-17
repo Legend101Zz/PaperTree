@@ -292,8 +292,10 @@ A follow-up runs as its thread's kind. A topic run that fails or answers badly i
 - Python 3.12 and [uv](https://docs.astral.sh/uv/)
 - A MiniMax API key for the AI features. Without one you can still upload, read, highlight and use the
   board; every AI request fails visibly (and a notebook page starts from an AI answer).
-- A current Chrome. v0.1.0 was tested in Chrome 155; v0.2's checks run in Playwright's Chromium. Other
-  browsers are untested (Safari's handling of the 3D book is not checked).
+- A current Chrome (or another Chromium browser). v0.1.0 was tested in Chrome 155; v0.2's checks run in
+  Playwright's Chromium. **In Safari (26.3.1), selecting text in Source mode does not open Explain or Ask**
+  ([#327](https://github.com/Legend101Zz/PaperTree/issues/327)); use Chrome for now. Other browsers are
+  untested (Safari's handling of the 3D book is not checked either).
 
 ### Run it
 
@@ -630,6 +632,9 @@ Safari.
 
 ### Known limits (v0.2)
 
+- **Safari:** selecting paper text in Source mode does not open Explain or Ask in Safari 26.3.1; it works in
+  Chrome ([#327](https://github.com/Legend101Zz/PaperTree/issues/327)). CI's e2e runs Chromium only, and
+  Playwright's WebKit build does not reproduce it.
 - **Design frames still partial** (S8's verdicts): Enter in the library search opens the card instead of
   pulling the book out ([#313](https://github.com/Legend101Zz/PaperTree/issues/313)); topic banners never
   show the paper's Figure 1 ([#314](https://github.com/Legend101Zz/PaperTree/issues/314)); small library
