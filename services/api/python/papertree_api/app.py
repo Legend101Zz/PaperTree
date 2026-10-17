@@ -24,6 +24,7 @@ from .middleware import REQUEST_ID_HEADER, CompressJson, RequestIdMiddleware, lo
 from .routers import (
     auth,
     boards,
+    book,
     health,
     highlights,
     internal,
@@ -123,5 +124,6 @@ def create_app(
     app.include_router(boards.router)
     app.include_router(notebooks.router)
     app.include_router(topics.router)
+    app.include_router(book.router)
     app.include_router(internal.router)
     return app

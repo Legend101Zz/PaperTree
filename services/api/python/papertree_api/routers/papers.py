@@ -20,7 +20,7 @@ import hashlib
 import os
 import shutil
 import time
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from pathlib import Path
 from typing import Annotated, Any, Final
 
@@ -43,6 +43,7 @@ from .. import assets
 from ..deps import AuthConnDep, Caller, CallerDep, SettingsDep, open_database
 from ..deps import promoted_or_404 as _promoted
 from ..errors import BODY_UNPARSEABLE, ApiError
+from ..figures import asset_signer
 from ..ir import block_location, paper_document
 from ..library import (
     BUSY_STATES,
@@ -249,23 +250,33 @@ async def upload(request: Request, call: CallerDep, settings: SettingsDep) -> Up
         paper_id=paper_id,
         job_id=accepted.job_id,
         created=accepted.created,
-        paper=_library_paper(call, paper_id),
+        paper=_library_paper(call, paper_id, _signer(request, settings)),
     )
 
 
 # ── the library ──────────────────────────────────────────────────────────────────────────────
 
 
-def _library_paper(call: Caller, paper_id: str) -> LibraryPaper:
+def _signer(request: Request, settings: Settings) -> Callable[[str, str | None], str | None]:
+    """Signs a plate's crop URL (#200), one `exp` for the whole response."""
+    return asset_signer(str(request.base_url), settings.signing_secret, time.time())
+
+
+def _library_paper(
+    call: Caller, paper_id: str, sign: Callable[[str, str | None], str | None]
+) -> LibraryPaper:
     row = call.db.library_row(call.db_owner, PaperId(paper_id))
     if row is None:
         raise ApiError("not_found", "no such paper")
-    return library_paper(row)
+    return library_paper(row, sign)
 
 
 @router.get("/papers", response_model=list[LibraryPaper])
-async def list_papers(call: CallerDep) -> list[LibraryPaper]:
-    return [library_paper(row) for row in call.db.list_library(call.db_owner)]
+async def list_papers(
+    request: Request, call: CallerDep, settings: SettingsDep
+) -> list[LibraryPaper]:
+    sign = _signer(request, settings)
+    return [library_paper(row, sign) for row in call.db.list_library(call.db_owner)]
 
 
 @router.get("/library/links", response_model=LibraryLinks)
@@ -295,10 +306,12 @@ async def library_links(call: CallerDep) -> LibraryLinks:
 
 
 @router.get("/papers/{paper_id}", response_model=LibraryPaper)
-async def get_paper(call: CallerDep, paper_id: str, gen: GenParam) -> LibraryPaper:
+async def get_paper(
+    request: Request, call: CallerDep, settings: SettingsDep, paper_id: str, gen: GenParam
+) -> LibraryPaper:
     """The paper's library row. `?gen=` (kept from the pre-release route) answers 404 unless that
     generation is stored; the row itself always describes the paper and its promoted generation."""
-    paper = _library_paper(call, paper_id)
+    paper = _library_paper(call, paper_id, _signer(request, settings))
     if gen is not None and gen not in call.db.list_generations(call.db_owner, PaperId(paper_id)):
         raise ApiError("not_found", "no such generation")
     return paper

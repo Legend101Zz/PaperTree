@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Any, Final
 from ._support import Row, now_iso
 from .errors import OwnershipError, PaperNotFound
 from .ids import OwnerId, PaperId
+from .plate import PlateFigure, plate_block_sql
 from .reading import ReadingState, reading_state_from
 
 if TYPE_CHECKING:
@@ -116,6 +117,11 @@ class LibraryRow:
     has_summary: bool
     #: The topic the owner accepted for this paper, or None (unshelved, or only an offer).
     topic: ShelfTopic | None = None
+    #: The owner's notebook pages on this paper (#200: the opened book's counts line).
+    notebook_count: int = 0
+    #: The figure the owner chose as the cover, found in the promoted generation; None for the
+    #: typographic cover, and also when the chosen figure is not in this parse (#200).
+    plate: PlateFigure | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,6 +198,19 @@ SELECT po.paper_id, po.source_hash, po.original_filename, po.byte_size, po.creat
                 WHERE d.owner_id = pp.owner_id AND d.paper_id = pp.paper_id
                   AND d.generation = pp.generation
                   AND d.kind = 'paper_summary') AS has_summary,
+       (SELECT COUNT(*) FROM notebook_pages nb
+         WHERE nb.owner_id = po.owner_id AND nb.paper_id = po.paper_id) AS notebook_count,
+       fb.block_id AS plate_block_id, fb.page_index AS plate_page_index,
+       json_extract(fb.payload, '$.image.uri') AS plate_image_uri,
+       -- caption_of is authoritative (FigurePayload.caption_block only mirrors it).
+       (SELECT c.text FROM relations r
+          JOIN blocks c
+            ON c.owner_id = r.owner_id AND c.paper_id = r.paper_id
+           AND c.generation = r.generation AND c.block_id = r.from_block
+         WHERE r.owner_id = fb.owner_id AND r.paper_id = fb.paper_id
+           AND r.generation = fb.generation AND r.type = 'caption_of'
+           AND r.to_block = fb.block_id
+         ORDER BY r.from_block LIMIT 1) AS plate_caption_text,
        rs.last_page AS rs_last_page, rs.furthest_page AS rs_furthest_page, rs.mode AS rs_mode,
        rs.opened_at AS rs_opened_at, rs.updated_at AS rs_updated_at,
        rs.finished_at AS rs_finished_at,
@@ -208,6 +227,14 @@ SELECT po.paper_id, po.source_hash, po.original_filename, po.byte_size, po.creat
          ON pp.owner_id = po.owner_id AND pp.paper_id = po.paper_id
   LEFT JOIN papers p
          ON p.owner_id = pp.owner_id AND p.paper_id = pp.paper_id AND p.generation = pp.generation
+  LEFT JOIN paper_plate pl
+         ON pl.owner_id = po.owner_id AND pl.paper_id = po.paper_id
+  LEFT JOIN blocks fb
+         ON fb.owner_id = pp.owner_id AND fb.paper_id = pp.paper_id
+        AND fb.generation = pp.generation
+        AND fb.block_id = {
+    plate_block_sql("pl.anchor_json", "pp.owner_id", "pp.paper_id", "pp.generation")
+}
   LEFT JOIN jobs j
          ON j.owner_id = po.owner_id
         AND j.job_id = COALESCE(
@@ -423,6 +450,17 @@ def _library_row(row: Row) -> LibraryRow:
         arxiv_category=stamp_category(row["stamp_text"], arxiv_id),
         thread_count=int(row["thread_count"]),
         has_summary=bool(row["has_summary"]),
+        notebook_count=int(row["notebook_count"]),
+        plate=(
+            None
+            if row["plate_block_id"] is None
+            else PlateFigure(
+                block_id=row["plate_block_id"],
+                page_index=int(row["plate_page_index"]),
+                image_uri=row["plate_image_uri"],
+                caption_text=row["plate_caption_text"],
+            )
+        ),
         topic=(
             None
             if row["tp_topic_id"] is None

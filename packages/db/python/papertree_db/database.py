@@ -82,6 +82,7 @@ from .ids import (
 from .library import LibraryMixin
 from .migrate import MigrationResult, migrate
 from .notebook import NotebookMixin
+from .plate import PlateMixin
 from .reading import ReadingMixin
 from .topics import TopicsMixin
 
@@ -641,6 +642,7 @@ class DatabaseCore:
 
 class PaperTreeDb(
     TopicsMixin,
+    PlateMixin,
     LibraryMixin,
     ReadingMixin,
     HighlightsMixin,

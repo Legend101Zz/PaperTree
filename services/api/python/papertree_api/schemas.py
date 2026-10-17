@@ -528,6 +528,21 @@ class PaperTopicPut(Wire):
     cloth: Cloth | None = omittable()
 
 
+class LibraryPlate(Wire):
+    """`LibraryPaper.plate` (#200): the figure the caller chose as the cover, as it is in the
+    promoted generation. Null on the paper means the typographic cover."""
+
+    #: Which entry of `GET /papers/{id}/figures` it is: a hint, the choice is stored as an Anchor.
+    block_id: str
+    page_index: PageIndex
+    #: "Figure 1", read from the start of its caption; null when the parser attached none.
+    label: str | None
+    #: The caption as the paper has it ("Figure 1: The Transformer - model architecture."), or null.
+    caption_text: str | None
+    #: The crop, signed for about an hour (the same URL for ten minutes, so a polled list keeps it).
+    asset_url: str
+
+
 class LibraryPaper(Wire):
     """The row shape used everywhere a paper is listed (§2.2)."""
 
@@ -556,6 +571,48 @@ class LibraryPaper(Wire):
     has_summary: bool
     #: The topic the caller accepted for it (#193); null when unshelved or only offered.
     topic: LibraryTopic | None
+    #: The caller's notebook pages on this paper (#200).
+    notebook_count: NonNegative
+    #: The figure the caller chose as the cover (#200); null for the typographic cover, and when
+    #: the chosen figure is not in the promoted parse or has no crop.
+    plate: LibraryPlate | None
+
+
+class PaperFigure(Wire):
+    """One figure the parser FOUND (`GET /papers/{id}/figures`, #200). Detection misses some
+    (#103), so a list is never "every figure"."""
+
+    block_id: str
+    page_index: PageIndex
+    bbox: BBox
+    #: The caption `caption_of` attaches, as the paper has it; null when none is attached.
+    caption_text: str | None
+    caption_block_id: str | None
+    #: "Figure 1" (or "Figure 1.1") when the caption starts with its number; else null.
+    label: str | None
+    #: The crop, signed for about an hour; null when none was rendered.
+    asset_url: str | None
+    #: A whole-block Anchor on the figure, minted by this response: what `PUT …/plate` takes back.
+    #: Null only when no valid Anchor could be minted (such a figure cannot be chosen).
+    anchor: AnchorV1 | None
+
+
+class PlatePut(Wire):
+    """`PUT /papers/{id}/plate`: the Anchor of one of the paper's figures (from `…/figures`)."""
+
+    anchor: AnchorV1In
+
+
+class PaperAbstract(Wire):
+    """`GET /papers/{id}/abstract` (#200): the abstract the parser found, for the opened book.
+    Every field is null when it found none."""
+
+    #: The abstract's blocks' text as the paper has it (line breaks and line-end hyphens kept; a
+    #: reader joins them for display), blocks separated by a blank line.
+    text: str | None
+    page_index: PageIndex | None
+    #: A whole-block Anchor on the abstract's first block: the "p. 1 · Abstract" tab.
+    anchor: AnchorV1 | None
 
 
 class UploadAccepted(Wire):

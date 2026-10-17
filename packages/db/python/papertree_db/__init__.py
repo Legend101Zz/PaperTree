@@ -88,6 +88,7 @@ from .migrate import (
     split_statements,
 )
 from .notebook import NotebookRejected, NotebookStale
+from .plate import PLATE_MIN_IOU, PlateFigure, plate_block_sql
 from .reading import ProgressState, ReadingState, progress_state, reached_last_page
 from .topics import (
     CLOTHS,
@@ -148,6 +149,9 @@ __all__ = [
     "NodeRow",
     "NotebookRejected",
     "NotebookStale",
+    "PLATE_MIN_IOU",
+    "PlateFigure",
+    "plate_block_sql",
     "NotebookCounts",
     "PIN_TABLE",
     "Pins",
