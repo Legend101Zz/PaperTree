@@ -30,7 +30,9 @@ function play(root: HTMLElement, hand: DiveHandoff, scale: number): void {
   const page = root.querySelector<HTMLElement>('[data-dive-page]');
   if (page === null || typeof page.animate !== 'function') return;
   if (motion.fadeMs > 0) {
-    root.animate([{ opacity: 0 }, { opacity: 1 }], { duration: motion.fadeMs, easing: 'linear' });
+    // The desk, which waited unseen; the bar above it was never hidden, so it must not blink.
+    const desk = root.querySelector<HTMLElement>('.pt-nb__desk') ?? page;
+    desk.animate([{ opacity: 0 }, { opacity: 1 }], { duration: motion.fadeMs, easing: 'linear' });
     return;
   }
   const easing = getComputedStyle(root).getPropertyValue('--pt-ease-lift').trim() || 'ease-out';

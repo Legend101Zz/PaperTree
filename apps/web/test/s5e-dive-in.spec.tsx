@@ -4,10 +4,10 @@
  * way, and navigates to the page; a second Dive in on the same answer sends the same derived page
  * id, so the idempotent route answers with the page already there and the same page opens; a
  * refusal is said and nothing navigates; the cards lift for --pt-dur-quick before the route
- * changes. Back to the paper then reopens the explain panel on the dived thread.
+ * changes; a derived id another account holds falls back to a fresh one. Back to the paper then
+ * reopens the explain panel on the dived thread and takes `?thread=` out of the URL.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import {
   act,
   cleanup,
@@ -33,21 +33,13 @@ import type { Thread } from '@/lib/api/types';
 import type { ReactNode } from 'react';
 
 const push = vi.fn();
+const replace = vi.fn();
 let search = new URLSearchParams();
 vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push, replace }),
   usePathname: () => '/paper/x/read',
   useSearchParams: () => search,
 }));
-
-/** What the app router gives `useDiveIn` (it reads the router's context). */
-const ROUTER = {
-  push,
-  replace: vi.fn(),
-  back: vi.fn(),
-  forward: vi.fn(),
-  refresh: vi.fn(),
-  prefetch: vi.fn(),
-};
 
 const PAPER = 'ppr_G9AYN750E5MG1NRBMGSQJ4N5JM';
 const ANSWER = 'msg_01M508X9PCVH6CHJJDJEGDTC7V';
@@ -56,6 +48,7 @@ const CREATE = `POST /papers/${PAPER}/notebook/pages`;
 
 beforeEach(() => {
   push.mockReset();
+  replace.mockReset();
   search = new URLSearchParams();
   window.localStorage.setItem('papertree.session', 'test-token');
 });
@@ -68,11 +61,7 @@ afterEach(() => {
 
 function provider(children: ReactNode): ReactNode {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return (
-    <AppRouterContext.Provider value={ROUTER}>
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
-    </AppRouterContext.Provider>
-  );
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
 /** The golden thread's first exchange, as the panel shows it, with Dive in wired to the hook. */
@@ -143,14 +132,12 @@ describe('Dive in', () => {
     expect(push).toHaveBeenCalledTimes(1);
   });
 
-  it('is not offered where there is no notebook: a sample paper, or no app router', () => {
+  it('is not offered for a sample paper, which has no notebook', () => {
     stubCreate();
     const sample = renderHook(() => useDiveIn(null), {
       wrapper: ({ children }) => provider(children),
     });
     expect(sample.result.current.diveIn).toBeNull();
-    const bare = renderHook(() => useDiveIn(PAPER));
-    expect(bare.result.current.diveIn).toBeNull();
     render(
       <Exchange
         exchange={buildExchanges(goldenMessages(), null)[0] as ExchangeModel<ViewMessage>}
@@ -163,6 +150,31 @@ describe('Dive in', () => {
     );
     expect(screen.queryByRole('button', { name: 'Dive in' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Send to board' })).toBeTruthy();
+  });
+
+  it('dives into a fresh page when another account holds the derived id', async () => {
+    const { calls } = installFetch({
+      [CREATE]: (call) => {
+        const id = (call.body as { page_id: string }).page_id;
+        return id === PAGE
+          ? jsonResponse(422, {
+              detail: 'page_id: already in use',
+              code: 'validation_failed',
+              retryable: false,
+            })
+          : jsonResponse(201, { page: { page_id: id, paper_id: PAPER }, items: [] });
+      },
+    });
+    render(provider(<Panel />));
+    fireEvent.click(screen.getByRole('button', { name: 'Dive in' }));
+    await waitFor(() => expect(push).toHaveBeenCalledTimes(1));
+    const ids = calls
+      .filter((c) => c.method === 'POST')
+      .map((c) => (c.body as { page_id: string }).page_id);
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).toBe(PAGE);
+    expect(ids[1]).toMatch(/^np_[0-9a-f-]{36}$/);
+    expect(push).toHaveBeenCalledWith(`/paper/${PAPER}/notebook/${ids[1]}`);
   });
 
   it('opens the page already made on a second Dive in: the same id, so no second page', async () => {
@@ -233,10 +245,10 @@ describe('Back to the paper', () => {
     expect(readerHref(PAPER)).toBe(`/paper/${PAPER}/read`);
   });
 
-  it('opens the explain panel on that thread, once', async () => {
+  it('opens the explain panel on that thread, once, and takes the thread out of the URL', async () => {
     const thread = GOLDEN.thread as Thread;
     installFetch({ [`GET /papers/${PAPER}/threads`]: () => jsonResponse(200, [thread]) });
-    search = new URLSearchParams({ thread: thread.thread_id });
+    search = new URLSearchParams({ nb: PAGE, item: 'ni_1', thread: thread.thread_id });
     const select = vi.fn();
     function Reader(): ReactNode {
       useThreadFromNotebook(PAPER, select);
@@ -245,6 +257,8 @@ describe('Back to the paper', () => {
     const view = render(provider(<Reader />));
     await waitFor(() => expect(select).toHaveBeenCalledTimes(1));
     expect(select.mock.calls[0]![0]).toMatchObject({ thread_id: thread.thread_id });
+    // Consumed: a reload after closing the panel does not open it again; the passage's link stays.
+    expect(replace).toHaveBeenCalledWith(`/paper/x/read?nb=${PAGE}&item=ni_1`, { scroll: false });
     view.rerender(provider(<Reader />));
     await new Promise((done) => setTimeout(done, 20));
     expect(select).toHaveBeenCalledTimes(1);
@@ -259,7 +273,7 @@ describe('Back to the paper', () => {
       return null;
     }
     render(provider(<Reader />));
-    await new Promise((done) => setTimeout(done, 30));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/paper/x/read', { scroll: false }));
     expect(select).not.toHaveBeenCalled();
   });
 });

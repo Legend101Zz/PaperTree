@@ -101,6 +101,36 @@ describe('the tablet (05b, 1180 × 820)', () => {
     expect(screen.getByRole('button', { name: 'Pen' }).getAttribute('aria-pressed')).toBe('true');
   });
 
+  it('moves along the rail with Up and Down, wrapping, never into a flyout', async () => {
+    viewport(1180, 820);
+    const rail = await mount();
+    const pen = within(rail).getByRole('button', { name: 'Pen' });
+    pen.focus();
+    fireEvent.keyDown(pen, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(within(rail).getByRole('button', { name: 'Highlighter' }));
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowUp' });
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(within(rail).getByRole('button', { name: 'Redo' }));
+    fireEvent.click(within(rail).getByRole('button', { name: 'Nib: F' }));
+    const fine = within(screen.getByRole('group', { name: 'Nib: F' })).getByRole('button', {
+      name: 'F, fine nib',
+    });
+    fine.focus();
+    fireEvent.keyDown(fine, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(fine);
+  });
+
+  it('closes a flyout when the keyboard leaves it', async () => {
+    viewport(1180, 820);
+    const rail = await mount();
+    fireEvent.click(within(rail).getByRole('button', { name: 'Nib: F' }));
+    const fine = within(screen.getByRole('group', { name: 'Nib: F' })).getByRole('button', {
+      name: 'F, fine nib',
+    });
+    fireEvent.focusOut(fine, { relatedTarget: within(rail).getByRole('button', { name: 'Undo' }) });
+    expect(screen.queryByRole('group', { name: 'Nib: F' })).toBeNull();
+  });
+
   it('names the page in the bar, and runs the panel under the page on the desk', async () => {
     viewport(1180, 820);
     await mount();
@@ -160,7 +190,7 @@ describe('Dive in arrives', () => {
     expect(timing.duration).toBe(300);
   });
 
-  it('with reduced motion fades the page in for --pt-dur-quick and moves nothing', async () => {
+  it('with reduced motion fades the desk in for --pt-dur-quick and moves nothing', async () => {
     const real = window.matchMedia.bind(window);
     vi.spyOn(window, 'matchMedia').mockImplementation((q: string) =>
       q === '(prefers-reduced-motion: reduce)'
@@ -170,7 +200,8 @@ describe('Dive in arrives', () => {
     arrive();
     await mount();
     await waitFor(() => expect(animate).toHaveBeenCalledTimes(1));
-    expect(animate.mock.contexts[0]).toBe(root());
+    // The desk fades in; the bar, never hidden, is not animated (it would blink).
+    expect(animate.mock.contexts[0]).toBe(document.querySelector('.pt-nb__desk'));
     expect(animate.mock.calls[0]).toEqual([
       [{ opacity: 0 }, { opacity: 1 }],
       { duration: 120, easing: 'linear' },

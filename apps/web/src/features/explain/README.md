@@ -118,8 +118,8 @@ derived on read from the parse, never stored).
   draws no composer (a plate is redrawn, never continued).
 - **Dive in** (S5e, #210): the answer's footer has Dive in (frame 04's oxblood outline) before Send to
   board, on every complete stored answer; it is the notebook's `useDiveIn` (`features/notebook`), which
-  makes the answer's page once and opens it with the Dive-in motion. Without a paper server or an app
-  router the footer leaves it out.
+  makes the answer's page once and opens it with the Dive-in motion. A sample paper (no server) has no
+  Dive in.
 - `components/ThreadMenu.tsx`: "‹ Thread 1 of 2 ›" and a listbox of the threads named by their asks, ending in
   "New thread" (owner may change). A switch keeps focus in the menu, never on the drawer.
 - The citation flash is the reader's (`components/reader/flash.ts`, `ReaderWorkspace.focusAnchor`, `.pt-flash`),

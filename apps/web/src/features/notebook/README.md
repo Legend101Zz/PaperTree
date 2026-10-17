@@ -151,10 +151,15 @@ motion and the tablet and phone layouts are S5e (#210).
   (FLIP, translate only: paper is not stretched; a card only flies when it was on screen in the
   panel and lands on screen). Reduced motion: no lift, one `--pt-dur-quick` fade, nothing travels.
   Durations are read from the live tokens at run time. A page opened from a link just appears.
-  Without a paper server or an app router (a sample paper, a test) the footer has no Dive in.
+  A sample paper (no server) has no Dive in. Page ids are global keys on the server (S5a's create
+  looks the id up per owner, then inserts it), so if another account ever holds the derived id
+  (it would need this answer's message id) the 422 "page_id: already in use" makes the answer dive
+  into a fresh id instead of failing on every press. A reader still on screen 1.5 s after the
+  route was asked for settles its lifted cards and its button.
 - **Back to the paper** carries `?thread=<the page's source thread>` (`readerHref`); the reader's
-  `hooks/useThreadFromNotebook.ts` opens the explain panel on that thread, and `?nb=&item=` still
-  flashes the passage the question came from.
+  `hooks/useThreadFromNotebook.ts` opens the explain panel on that thread and then takes `thread`
+  out of the URL (`router.replace`), so closing the panel and reloading does not reopen it;
+  `?nb=&item=` still flashes the passage the question came from.
 - **Layouts** (`model/layoutMode.ts`, `hooks/useLayoutMode.ts`, `data-layout` on `.pt-nb`):
   phone below 768 px (the explain panel's sheet breakpoint, so Dive in on a phone lands on the
   phone notebook), tablet 768–1279 (frame 05b), desktop from 1280 (frame 05). `allows` says what
@@ -163,11 +168,13 @@ motion and the tablet and phone layouts are S5e (#210).
 - **The tablet** (05b): the tool bar becomes a vertical rail on the left (`aria-orientation`), the
   same tools in the same order; the nib and the colour are one button each showing what the drawing
   tool holds, opening a flyout with S5d's choices (`components/RailInkOptions.tsx`; a choice,
-  Escape or a press elsewhere closes it, and Escape never puts the tool down). The bar names the
-  page and its controls are 44 px; the page is full-bleed (`usePageScale` with no gutter) and the
-  side panel follows it down the desk, as a region rather than a landmark beside it. Pen input is
-  S5d's (palm rejection; one finger scrolls the desk once a pen has touched it). **Pinch zoom is
-  not supported**: the page's scale follows the desk's width only (#292).
+  Escape, a press elsewhere or the keyboard leaving closes it, and Escape never puts the tool down).
+  Up and Down move along the rail (Left and Right along the desktop bar), wrapping, Home and End to
+  its ends. The bar names the page and its controls are 44 px; the page is full-bleed
+  (`usePageScale` with no gutter) and the side panel follows it down the desk, as a region rather
+  than a landmark beside it. Pen input is S5d's (palm rejection; one finger scrolls the desk once a
+  pen has touched it). **Pinch zoom is not supported**: the page's scale follows the desk's width
+  only (#292).
 
 ## Data flow
 

@@ -5,13 +5,16 @@
  * through S5a's Dive-in route under a page id DERIVED from the answer (`diveInPageId`), so a second
  * press, or another tab, gets the page already there; the exchange's slips and trace cards lift for
  * `--pt-dur-quick` meanwhile; then their screen boxes go into a one-shot hand-off and the route
- * changes. The page (`useDiveArrival`) takes the boxes and slides in carrying the cards.
+ * changes. The page (`useDiveArrival`) takes the boxes and slides in carrying the cards. Page ids
+ * are global keys on the server (S5a's `create_notebook_page` looks the id up per owner, then
+ * inserts it), so a derived id another account already holds is answered 422 "page_id: already in
+ * use"; then the answer dives into a fresh id instead of failing on every press.
  */
 import { QueryClientContext } from '@tanstack/react-query';
-// The context `useRouter` reads: read directly, a panel outside the app router (a test, a sample)
-// gets no Dive in instead of the invariant error `useRouter` throws.
-import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
+import { useRouter } from 'next/navigation';
 import { useCallback, useContext, useRef } from 'react';
+
+import { ApiError } from '@/lib/api/types';
 
 import { newClientId, notebookApi, notebookKeys } from '../api/notebookApi';
 import { createHandoffSlot, diveInPageId, diveMotion, durationMs } from '../model/diveIn';
@@ -70,12 +73,40 @@ export function cardsIn(
 const wait = (ms: number): Promise<void> =>
   ms <= 0 ? Promise.resolve() : new Promise((done) => setTimeout(done, ms));
 
+/** A reader still on screen this long after the route was asked for settles its lifted cards. */
+export const LIFT_HOLD_MS = 1500;
+
+/**
+ * Creates (or finds) the answer's page: the derived id first, a fresh one only when another
+ * account holds the derived id.
+ *
+ * @param paperId - The paper.
+ * @param messageId - The answer.
+ * @returns The page id that now holds the answer's page.
+ */
+async function createDived(paperId: string, messageId: string): Promise<string> {
+  const derived = diveInPageId(messageId);
+  // Never null for a server message id; a fresh id still opens a page, only not the same one.
+  const first = derived ?? newClientId('np');
+  try {
+    await notebookApi.createPage(paperId, { page_id: first, from_message_id: messageId });
+    return first;
+  } catch (error) {
+    const taken =
+      error instanceof ApiError && error.status === 422 && error.detail.startsWith('page_id:');
+    if (!taken || derived === null) throw error;
+    const fresh = newClientId('np');
+    await notebookApi.createPage(paperId, { page_id: fresh, from_message_id: messageId });
+    return fresh;
+  }
+}
+
 /** What `useDiveIn` returns. */
 export interface DiveIn {
   /**
    * Opens the answer's page, creating it the first time; a press while one is under way joins it.
-   * Rejects when the page could not be made, so the button can say so. Null where there is no
-   * notebook to open (a sample paper, no app router): the footer then draws no Dive in.
+   * Rejects when the page could not be made, so the button can say so. Null for a sample paper,
+   * which has no notebook: the footer then draws no Dive in.
    */
   readonly diveIn: ((messageId: string, exchange: HTMLElement | null) => Promise<void>) | null;
 }
@@ -84,29 +115,25 @@ export interface DiveIn {
  * Dive in from the explain panel.
  *
  * @param paperId - The paper the answer is about (null for a sample paper, which has no server).
- * @returns `diveIn`, or null where nothing can be opened.
+ * @returns `diveIn`, or null for a sample paper.
  * @example
  * const { diveIn } = useDiveIn(paperId);
  * <Exchange {...props} {...(diveIn === null ? {} : { onDiveIn: diveIn })} />
  */
 export function useDiveIn(paperId: string | null): DiveIn {
-  const router = useContext(AppRouterContext);
+  const router = useRouter();
   // Optional, as the reader's: a panel mounted without a query client still dives.
   const client = useContext(QueryClientContext);
   const flights = useRef(new Map<string, Promise<void>>());
 
   const open = useCallback(
     async (messageId: string, exchange: HTMLElement | null): Promise<void> => {
-      if (paperId === null || router === null) throw new Error('No notebook to open here.');
-      // Never null for a server message id; a fresh id still opens a page, only not the same one.
-      const pageId = diveInPageId(messageId) ?? newClientId('np');
+      if (paperId === null) throw new Error('A sample paper has no notebook.');
       const motion = readMotion();
       if (motion.liftMs > 0) exchange?.setAttribute('data-dive', 'lift');
+      let pageId: string;
       try {
-        await Promise.all([
-          notebookApi.createPage(paperId, { page_id: pageId, from_message_id: messageId }),
-          wait(motion.liftMs),
-        ]);
+        [pageId] = await Promise.all([createDived(paperId, messageId), wait(motion.liftMs)]);
       } catch (error) {
         exchange?.removeAttribute('data-dive');
         throw error;
@@ -119,6 +146,8 @@ export function useDiveIn(paperId: string | null): DiveIn {
       });
       void client?.invalidateQueries({ queryKey: notebookKeys.pages(paperId) });
       router.push(notebookHref(paperId, pageId));
+      // The reader unmounts on the way; if it has not (a navigation that was refused), it settles.
+      setTimeout(() => exchange?.removeAttribute('data-dive'), LIFT_HOLD_MS);
     },
     [paperId, router, client],
   );
@@ -133,5 +162,5 @@ export function useDiveIn(paperId: string | null): DiveIn {
     },
     [open],
   );
-  return { diveIn: paperId === null || router === null ? null : diveIn };
+  return { diveIn: paperId === null ? null : diveIn };
 }

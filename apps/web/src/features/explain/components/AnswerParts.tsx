@@ -181,12 +181,22 @@ export interface DiveInProps {
   readonly onDiveIn: (exchange: HTMLElement | null) => Promise<void>;
 }
 
+/** A Dive in whose route change did not take the reader away is pressable again after this. */
+const DIVE_SETTLE_MS = 1500;
+
 /**
  * Dive in (frames 04 and 11): the answer opens as a notebook page, the same page every time. It
  * waits while the page is being made, and says so when it could not be.
  */
 export function DiveIn({ onDiveIn }: DiveInProps): ReactNode {
   const [state, setState] = useState<'idle' | 'opening' | 'failed'>('idle');
+  const settle = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (settle.current !== null) clearTimeout(settle.current);
+    },
+    [],
+  );
   return (
     <>
       <Button
@@ -196,7 +206,10 @@ export function DiveIn({ onDiveIn }: DiveInProps): ReactNode {
         onClick={(event) => {
           setState('opening');
           onDiveIn(event.currentTarget.closest<HTMLElement>('.pt-exchange')).then(
-            () => undefined,
+            // The reader normally unmounts on the way to the page; if it is still here, it settles.
+            () => {
+              settle.current = setTimeout(() => setState('idle'), DIVE_SETTLE_MS);
+            },
             () => setState('failed'),
           );
         }}

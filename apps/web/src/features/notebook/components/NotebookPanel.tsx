@@ -149,7 +149,13 @@ export function NotebookPanel(props: NotebookPanelProps): ReactNode {
         ) : card === null ? (
           <>
             <p>This page is not on the board yet. Sending it puts one card there that opens it.</p>
-            <Button leadingIcon={<Pin size={18} />} onClick={props.onSend} disabled={props.sending}>
+            <Button
+              leadingIcon={<Pin size={18} />}
+              // Under the page on a tablet, a touch control like the bar's (44 px).
+              size={props.inline === true ? 'touch' : 'md'}
+              onClick={props.onSend}
+              disabled={props.sending}
+            >
               Send page to board
             </Button>
           </>

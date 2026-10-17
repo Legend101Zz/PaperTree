@@ -7,6 +7,7 @@ import {
   drawingTool,
   hasRealPressure,
   pointerRole,
+  stepAlong,
   toolForKey,
   toolReducer,
 } from './tools';
@@ -89,5 +90,24 @@ describe('palm rejection', () => {
     expect(hasRealPressure('pen', 0.5)).toBe(false);
     expect(hasRealPressure('mouse', 0.37)).toBe(false);
     expect(hasRealPressure('touch', 0.37)).toBe(false);
+  });
+});
+
+describe("stepAlong (S5e: the bar's arrow keys)", () => {
+  it("steps along the orientation's own arrows and wraps; Home and End go to the ends", () => {
+    expect(stepAlong('ArrowDown', 'vertical', 0, 11)).toBe(1);
+    expect(stepAlong('ArrowUp', 'vertical', 0, 11)).toBe(10);
+    expect(stepAlong('ArrowDown', 'vertical', 10, 11)).toBe(0);
+    expect(stepAlong('ArrowRight', 'horizontal', 3, 11)).toBe(4);
+    expect(stepAlong('ArrowLeft', 'horizontal', 3, 11)).toBe(2);
+    expect(stepAlong('Home', 'vertical', 5, 11)).toBe(0);
+    expect(stepAlong('End', 'horizontal', 5, 11)).toBe(10);
+  });
+
+  it("leaves the other orientation's arrows, other keys and a focus outside the bar alone", () => {
+    expect(stepAlong('ArrowRight', 'vertical', 0, 11)).toBeNull();
+    expect(stepAlong('ArrowDown', 'horizontal', 0, 11)).toBeNull();
+    expect(stepAlong('Enter', 'vertical', 0, 11)).toBeNull();
+    expect(stepAlong('ArrowDown', 'vertical', -1, 11)).toBeNull();
   });
 });

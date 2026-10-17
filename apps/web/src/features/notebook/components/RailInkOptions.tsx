@@ -4,7 +4,8 @@
  * The tablet rail's nib and colour (S5e, #210, frame 05b): one button each, showing what the drawing
  * tool holds, opening a flyout beside the rail with S5d's choices (`NibSet`, `ColourSet`). A choice,
  * Escape or a press elsewhere closes it and gives the keyboard back to its button; Escape closes
- * only the flyout, never puts the tool down (`useInkTools` skips a handled Escape).
+ * only the flyout, never puts the tool down (`useInkTools` skips a handled Escape). Tabbing out of
+ * it closes it too.
  */
 import { useEffect, useRef, useState } from 'react';
 
@@ -46,9 +47,30 @@ function Flyout({ id, label, face, children }: FlyoutProps): ReactNode {
       setOpen(false);
       holder.current?.querySelector('button')?.focus();
     };
+    // The keyboard leaving it closes it. A press inside does not count: Safari does not focus a
+    // pressed button, so the focus a press takes away would otherwise close it under the press.
+    const el = holder.current;
+    let pressing = false;
+    const press = (): void => {
+      pressing = true;
+    };
+    const release = (): void => {
+      pressing = false;
+    };
+    const leave = (e: FocusEvent): void => {
+      const to = e.relatedTarget;
+      if (pressing || (to instanceof Node && el?.contains(to) === true)) return;
+      setOpen(false);
+    };
+    el?.addEventListener('pointerdown', press);
+    el?.addEventListener('click', release);
+    el?.addEventListener('focusout', leave);
     document.addEventListener('pointerdown', outside);
     document.addEventListener('keydown', escape);
     return () => {
+      el?.removeEventListener('pointerdown', press);
+      el?.removeEventListener('click', release);
+      el?.removeEventListener('focusout', leave);
       document.removeEventListener('pointerdown', outside);
       document.removeEventListener('keydown', escape);
     };
