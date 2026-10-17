@@ -77,6 +77,7 @@ const calls: {
   readonly method: 'block' | 'page';
   readonly page: number;
   readonly bbox?: readonly number[];
+  readonly bottomInset?: number;
 }[] = [];
 
 // `VirtualPageList` renders pdf.js, which needs a real PDF, a worker and a layout engine. None of
@@ -90,8 +91,17 @@ vi.mock('@/components/reader/VirtualPageList', () => ({
         scrollToPage(pageIndex: number) {
           calls.push({ method: 'page', page: pageIndex });
         },
-        scrollToBlock(pageIndex: number, bbox: readonly number[]) {
-          calls.push({ method: 'block', page: pageIndex, bbox });
+        scrollToBlock(
+          pageIndex: number,
+          bbox: readonly number[],
+          opts?: { readonly bottomInset?: number },
+        ) {
+          calls.push({
+            method: 'block',
+            page: pageIndex,
+            bbox,
+            ...(opts?.bottomInset === undefined ? {} : { bottomInset: opts.bottomInset }),
+          });
         },
         getVisiblePages: () => ({ first: 0, last: 0 }),
         getScrollElement: () => null,
@@ -222,5 +232,17 @@ describe('reader/citation-scroll.spec — clicking a citation moves the page (#6
 
     ref.current?.scrollToRect(3, [72, 400, 300, 412]);
     expect(calls).toEqual([{ method: 'block', page: 3, bbox: [72, 400, 300, 412] }]);
+  });
+
+  it('scrollToRect passes on what covers the foot of the view (the phone sheet, #205)', async () => {
+    const { SourcePane } = await import('@/components/reader/SourcePane');
+    const ref: DocumentRef = { current: null };
+    renderPane(SourcePane, ref);
+    await waitFor(() => expect(ref.current).not.toBeNull());
+
+    ref.current?.scrollToRect(3, [72, 400, 300, 412], 120);
+    expect(calls).toEqual([
+      { method: 'block', page: 3, bbox: [72, 400, 300, 412], bottomInset: 120 },
+    ]);
   });
 });

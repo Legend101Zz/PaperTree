@@ -196,6 +196,18 @@
   --pt-highlight-approx-fill: rgb(240 190 70 / 14%);
   --pt-highlight-approx-stroke: rgb(168 101 10 / 90%);
   --pt-highlight-orphan-stroke: var(--pt-danger);
+  /* drawn ON the PDF page, which stays paper in both schemes (#205): the citation flash's ring and
+   * a focused highlight in daylight navy (8.7 on white, 6.7 on the dimmed page; the lamp-lit focus
+   * blue would be 1.6), the selection's blue-grey wash, and the outline the flash leaves behind,
+   * which is the only lasting cue on a phone: 3.1:1 on white (WCAG 1.4.11; 0.35 was 1.8) */
+  --pt-pdf-ring: #1f4e79;
+  --pt-pdf-selection: rgb(31 78 121 / 24%);
+  --pt-flash-rest: 0.6;
+  --pt-pdf-hl-amber: var(--pt-hl-amber);
+  --pt-pdf-hl-green: var(--pt-hl-green);
+  --pt-pdf-hl-blue: var(--pt-hl-blue);
+  --pt-pdf-hl-pink: var(--pt-hl-pink);
+  --pt-pdf-hl-purple: var(--pt-hl-purple);
 
   /* v0.1 names, now aliases of their Ex Libris roles */
   --pt-font-body: var(--pt-font-paper);
@@ -287,6 +299,15 @@
     /* v0.1 paints --pt-accent as a FILL under --pt-accent-ink too; on the light lamp-lit accent the
      * ink must be dark (7.9:1), as v0.1's light-blue dark accent had a dark ink */
     --pt-accent-ink: #1c1714;
+    /* the dimmed page (#205): the faint outline after a flash keeps 3.5:1, and each wash on the PDF
+     * is raised so it stands off the ivory at least as far as it does off white by day (Guided's
+     * dark page keeps the plain washes: its light ink needs them faint) */
+    --pt-flash-rest: 0.7;
+    --pt-pdf-hl-amber: rgb(240 190 70 / 56%);
+    --pt-pdf-hl-green: rgb(120 190 125 / 45%);
+    --pt-pdf-hl-blue: rgb(120 165 220 / 45%);
+    --pt-pdf-hl-pink: rgb(230 140 165 / 45%);
+    --pt-pdf-hl-purple: rgb(170 135 215 / 45%);
   }
 }
 
@@ -343,6 +364,15 @@
   /* v0.1 paints --pt-accent as a FILL under --pt-accent-ink too; on the light lamp-lit accent the
    * ink must be dark (7.9:1), as v0.1's light-blue dark accent had a dark ink */
   --pt-accent-ink: #1c1714;
+  /* the dimmed page (#205): the faint outline after a flash keeps 3.5:1, and each wash on the PDF
+   * is raised so it stands off the ivory at least as far as it does off white by day (Guided's
+   * dark page keeps the plain washes: its light ink needs them faint) */
+  --pt-flash-rest: 0.7;
+  --pt-pdf-hl-amber: rgb(240 190 70 / 56%);
+  --pt-pdf-hl-green: rgb(120 190 125 / 45%);
+  --pt-pdf-hl-blue: rgb(120 165 220 / 45%);
+  --pt-pdf-hl-pink: rgb(230 140 165 / 45%);
+  --pt-pdf-hl-purple: rgb(170 135 215 / 45%);
 
   color-scheme: dark;
 }
@@ -1228,7 +1258,7 @@ span.pt-paper .pt-paper__cite {
 
 /* The selected text reads through a blue-grey wash (frame 04), not the browser's bright blue. */
 .pt-reader .papertree-text-layer ::selection {
-  background: rgb(31 78 121 / 24%);
+  background: var(--pt-pdf-selection);
 }
 
 /* Lamp-lit: the PDF page stays paper, dimmed (DESIGN.md §2). pdf.js paints white, and multiply
@@ -1423,7 +1453,7 @@ span.pt-paper .pt-paper__cite {
 /* ── the highlight paint ───────────────────────────────────────────────────────────────────── */
 
 .pt-hl-fill {
-  fill: var(--pt-hl-amber);
+  fill: var(--pt-pdf-hl-amber);
 }
 
 .pt-hl-line {
@@ -1434,25 +1464,25 @@ span.pt-paper .pt-paper__cite {
 }
 
 .pt-hl[data-color='green'] .pt-hl-fill {
-  fill: var(--pt-hl-green);
+  fill: var(--pt-pdf-hl-green);
 }
 .pt-hl[data-color='green'] .pt-hl-line {
   stroke: var(--pt-hl-green-ink);
 }
 .pt-hl[data-color='blue'] .pt-hl-fill {
-  fill: var(--pt-hl-blue);
+  fill: var(--pt-pdf-hl-blue);
 }
 .pt-hl[data-color='blue'] .pt-hl-line {
   stroke: var(--pt-hl-blue-ink);
 }
 .pt-hl[data-color='pink'] .pt-hl-fill {
-  fill: var(--pt-hl-pink);
+  fill: var(--pt-pdf-hl-pink);
 }
 .pt-hl[data-color='pink'] .pt-hl-line {
   stroke: var(--pt-hl-pink-ink);
 }
 .pt-hl[data-color='purple'] .pt-hl-fill {
-  fill: var(--pt-hl-purple);
+  fill: var(--pt-pdf-hl-purple);
 }
 .pt-hl[data-color='purple'] .pt-hl-line {
   stroke: var(--pt-hl-purple-ink);
@@ -1472,7 +1502,7 @@ span.pt-paper .pt-paper__cite {
 }
 
 .pt-hl:focus-visible .pt-hl-fill {
-  stroke: var(--pt-focus);
+  stroke: var(--pt-pdf-ring);
   stroke-width: 2px;
   vector-effect: non-scaling-stroke;
 }
@@ -1490,11 +1520,11 @@ span.pt-paper .pt-paper__cite {
    `--linger` keeps that outline, without animation, until the reader's next action. */
 .pt-flash {
   fill: var(--pt-lit-wash);
-  stroke: var(--pt-focus);
+  stroke: var(--pt-pdf-ring);
   stroke-width: 2px;
   vector-effect: non-scaling-stroke;
   fill-opacity: 0;
-  stroke-opacity: 0.35;
+  stroke-opacity: var(--pt-flash-rest);
   animation:
     pt-flash-in var(--pt-dur-flash-in) var(--pt-ease-out) both,
     pt-flash-out var(--pt-dur-flash-out) var(--pt-ease-out)
@@ -1523,7 +1553,7 @@ span.pt-paper .pt-paper__cite {
   }
   to {
     fill-opacity: 0;
-    stroke-opacity: 0.35;
+    stroke-opacity: var(--pt-flash-rest);
   }
 }
 
@@ -3065,6 +3095,20 @@ span.pt-paper .pt-paper__cite {
   margin-inline-start: 2px;
 }
 
+/* In a run "[1, 4]" the two tap areas meet halfway across the 2 px between the squares and never
+   overlap, so a tap on 1 cannot flash 4 (#205). The grid keeps those layers to itself. */
+.pt-exchange__inline-marker[data-run~='next'] .pt-marker--touch::after {
+  inset-inline-end: -1px;
+}
+
+.pt-exchange__inline-marker[data-run~='prev'] .pt-marker--touch::after {
+  inset-inline-start: -1px;
+}
+
+.pt-ai-slip__grid {
+  isolation: isolate;
+}
+
 /* A marker and the punctuation after it are one unbreakable box: "…output 4." never leaves its
    full stop on the next line (R4), and the run is one line box however it is measured. */
 .pt-exchange .pt-cite-run {
@@ -4316,35 +4360,38 @@ button.pt-holder {
   background: var(--pt-focus);
 }
 
-/* Phone: the same small square inside a 44 px target. */
+/* Phone (frame 08b): small numerals in a 22 px square, so the line keeps its height, and a tap area
+   under it that reaches 44 px (`--pt-hit-outset`, from `hitOutset` on the element, citations.tsx).
+   The square is a layer above every marker's tap area, so a marker always owns what it shows, even
+   where a neighbour's 44 px reaches over it (#205). */
 .pt-marker--touch {
-  min-inline-size: var(--pt-target-touch);
-  block-size: var(--pt-target-touch);
-  background: transparent;
-  vertical-align: middle;
+  position: relative;
+  min-inline-size: 22px;
+  block-size: 22px;
+  padding: 0;
+  font-size: var(--pt-t-label-s);
+  vertical-align: 1px;
 }
 
 .pt-marker--touch .pt-marker__n {
+  position: relative;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-inline-size: 16px;
-  block-size: 16px;
+  box-sizing: border-box;
+  min-inline-size: 22px;
+  block-size: 22px;
   padding: 0 3px;
-  border-radius: var(--pt-radius-paper);
-  background: var(--pt-tab);
-  color: var(--pt-on-tab);
+  background: inherit;
+  border-radius: inherit;
 }
 
-.pt-marker--touch.is-lit {
-  outline: none;
-  background: transparent;
-}
-
-.pt-marker--touch.is-lit .pt-marker__n {
-  background: var(--pt-focus);
-  outline: var(--pt-focus-width) solid var(--pt-focus);
-  outline-offset: 1px;
+.pt-marker--touch::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  inset: calc(-1 * var(--pt-hit-outset, 11px));
 }
 
 .pt-marker--static {
@@ -4706,4 +4753,99 @@ button.pt-holder {
 
 .pt-thread-swatch__glyph {
   font-family: var(--pt-font-you);
+}
+
+/* ── S4e: the phone explain sheet (frame 08b) (#205) ─────────────────────────────────────────
+   Below 768 px the explain sheet carries its thread menu in its own header, answers open on their
+   first paragraph, markers and trace rows are 44 px targets, and the last answer's usage and actions
+   are pinned above the follow-up box, outside the scroll, so they never cover the answer. Tokens only. */
+
+.pt-explain-sheet .pt-sheet__header {
+  gap: 6px;
+  min-block-size: 48px;
+  padding: 0 4px 0 var(--pt-space-4);
+  border-block-end: 1px solid var(--pt-rule);
+}
+
+.pt-explain-sheet .pt-sheet__title {
+  flex: none;
+  font: 400 var(--pt-t-paper-title) / 1.2 var(--pt-font-paper);
+}
+
+.pt-explain-sheet .pt-explain__tools {
+  flex: 1;
+}
+
+/* The × alone, as drawn: its name is on the button, not under it. */
+.pt-explain-sheet .pt-sheet__close .pt-iconbutton__label,
+.pt-explain-sheet .pt-thread-menu__step {
+  display: none;
+}
+
+.pt-explain-sheet .pt-thread-menu__trigger,
+.pt-explain-sheet .pt-explain__summary-toggle {
+  min-block-size: var(--pt-target-touch);
+}
+
+.pt-explain-sheet .pt-thread-menu__trigger {
+  border-color: transparent;
+  background: none;
+}
+
+.pt-exchange__more {
+  min-block-size: var(--pt-target-touch);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pt-primary);
+  font: var(--pt-t-ai) / 1.2 var(--pt-font-ai);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.pt-trace-row--touch .pt-marker {
+  align-self: flex-start;
+  min-inline-size: 22px;
+  block-size: 22px;
+  margin-block-start: 2px;
+  font-size: var(--pt-t-label-s);
+}
+
+.pt-explain__pinned {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pt-space-2);
+  padding: 10px var(--pt-space-4) 0;
+  background: var(--pt-e3-fill);
+  border-block-start: 1px solid var(--pt-rule);
+}
+
+.pt-explain__pinned .pt-btn {
+  min-block-size: var(--pt-target-touch);
+}
+
+.pt-explain__pinned + .pt-explain__composer {
+  border-block-start: 0;
+  background: var(--pt-e3-fill);
+}
+
+.pt-explain-sheet .pt-explain__input {
+  min-block-size: var(--pt-target-touch);
+}
+
+/* A landscape phone (#205): the sheet opens to the full height under the reader's 56 px header and
+   the pinned footer folds onto one line, so the answer keeps a readable area and the follow-up box
+   stays on screen (at 667 × 375 the half detent left 32 px of answer and cut the box off). */
+@media (max-width: 767px) and (max-height: 500px) {
+  .pt-explain-sheet[data-detent='half'] {
+    height: calc(100% - var(--pt-reader-bar-h)) !important;
+  }
+
+  .pt-explain__pinned {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding-block-start: var(--pt-space-1);
+  }
 }

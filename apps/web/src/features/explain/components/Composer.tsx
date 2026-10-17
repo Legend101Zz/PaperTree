@@ -23,6 +23,8 @@ export interface ComposerProps {
   readonly onSend: (question: string) => Promise<AskOutcome>;
   /** Focus the box when this changes to a number (the toolbar's Ask opened the panel, #203). */
   readonly focusKey?: number | null;
+  /** The box's hint; the phone sheet's is shorter ("Ask a follow-up", frame 08b). */
+  readonly placeholder?: string;
 }
 
 /** The question box at the foot of the panel. */
@@ -33,6 +35,7 @@ export function Composer({
   onChange,
   onSend,
   focusKey,
+  placeholder = 'Ask a follow-up, or any question about the paper',
 }: ComposerProps): ReactNode {
   const box = useRef<HTMLTextAreaElement>(null);
   // Runs before the drawer's own focus effect (children first), which then leaves focus here.
@@ -69,7 +72,7 @@ export function Composer({
         rows={1}
         maxLength={2000}
         value={value}
-        placeholder="Ask a follow-up, or any question about the paper"
+        placeholder={placeholder}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={onKeyDown}

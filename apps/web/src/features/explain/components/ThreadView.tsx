@@ -16,9 +16,11 @@ import { cleanQuote, selectorOf } from '../model/anchor';
 import { buildExchanges } from '../model/exchange';
 import { isStored } from '../model/messages';
 import { numberPassages } from '../model/passages';
-import { opensFolded } from '../model/states';
+import { pinnedExchange } from '../model/phone';
+import { opensFolded, wasStopped } from '../model/states';
 import { Composer } from './Composer';
 import { Exchange } from './Exchange';
+import { PinnedFooter } from './PinnedFooter';
 import { SummaryExchange } from './SummaryExchange';
 import { ThreadReadFailure } from './ThreadReadFailure';
 
@@ -39,6 +41,8 @@ export interface ThreadViewProps {
   readonly onShow: (marker: PassageMarker) => void;
   /** Flash a diagram part's passage (#217). */
   readonly onFlash: (anchor: Anchor, from: FlashSource) => void;
+  /** The phone sheet (#205): 44 px targets, clipped answers and the pinned footer. */
+  readonly phone?: boolean;
 }
 
 /** The passage alone, for a sample paper that has no server to ask. */
@@ -60,6 +64,7 @@ export function ThreadView({
   initial,
   onShow,
   onFlash,
+  phone = false,
 }: ThreadViewProps): ReactNode {
   const actions = useReaderActions();
   const { state, paperId } = controller;
@@ -122,6 +127,21 @@ export function ThreadView({
     [actions],
   );
   const offline = paperId === null;
+  // The phone pins the last complete answer's usage and actions above the follow-up box.
+  const pinAt = phone
+    ? pinnedExchange(
+        // A plate keeps its own actions (#217): only an answer is pinned.
+        exchanges.map((e) =>
+          e.answer === null || wasStopped(e.answer) || plates.plateNo.has(e.key)
+            ? null
+            : e.answer.status,
+        ),
+      )
+    : -1;
+  // Only a stored answer can be sent; until its id lands its footer stays in the slip.
+  const pinnedId = exchanges[pinAt]?.answer?.messageId ?? null;
+  const pin = pinnedId === null ? -1 : pinAt;
+  const pinnedUsage = exchanges[pin]?.answer?.usage ?? null;
 
   return (
     <div className="pt-explain__body" data-explain-view={state.view}>
@@ -194,6 +214,8 @@ export function ThreadView({
                   // Read once, at mount (`useState`): an exchange never folds under the reader.
                   startsFolded={opensFolded(index, exchanges.length)}
                   askInBox={draft !== '' && draft === exchange.ask.trim()}
+                  phone={phone}
+                  pinned={index === pin}
                 />
               ) : (
                 <DiagramExchange
@@ -213,9 +235,18 @@ export function ThreadView({
           </>
         )}
       </div>
+      {state.view === 'summary' || state.diagram || pinnedId === null ? null : (
+        <PinnedFooter
+          messageId={pinnedId}
+          usage={pinnedUsage}
+          onSendToBoard={() => sendToCanvas(pinnedId)}
+          {...(exchanges.length > 1 ? { answer: pin + 1 } : {})}
+        />
+      )}
       {/* A diagram thread is redrawn, never continued with a typed question (the API's 422). */}
       {state.view === 'summary' || state.diagram ? null : (
         <Composer
+          {...(phone ? { placeholder: 'Ask a follow-up' } : {})}
           busy={busy}
           disabled={offline}
           value={state.draft}

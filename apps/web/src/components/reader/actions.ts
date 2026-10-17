@@ -54,8 +54,20 @@ export type ReaderActions = {
    */
   explainWithDiagram?(input: { anchor: Anchor; quote: string }): void;
   sendToCanvas(input: SendToCanvasInput): Promise<void>;
-  focusAnchor(anchor: Anchor, opts?: { flash?: boolean; from?: FlashSource }): void;
+  /**
+   * Resolve the anchor, scroll its passage into view if it is not, and flash it. `bottomInset` is
+   * the px something covers at the bottom of the window (the phone's peek sheet, #205), so a passage
+   * behind it counts as out of view.
+   */
+  focusAnchor(anchor: Anchor, opts?: FocusOptions): void;
 };
+
+/** What a `focusAnchor` call asks for besides the passage. */
+export interface FocusOptions {
+  readonly flash?: boolean;
+  readonly from?: FlashSource;
+  readonly bottomInset?: number;
+}
 
 const ReaderActionsContext = createContext<ReaderActions | null>(null);
 

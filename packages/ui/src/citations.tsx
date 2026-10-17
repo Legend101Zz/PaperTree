@@ -10,7 +10,27 @@
  * Presentation lives in the "v0.2 voices and citations (#190)" section of `styles.css`.
  */
 
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+
+/** DESIGN.md §2 and §10: every tap target on a phone is 44 px or more. */
+export const TOUCH_TARGET_PX = 44;
+
+/** The phone marker's visible square (frame 08b): small numerals that do not spread the lines. */
+export const TOUCH_MARKER_PX = 22;
+
+/**
+ * How far a target's hit area reaches past its visible box on each side, so a small square in a
+ * line of text answers taps over a `target`-sized area without making the line taller.
+ *
+ * @param visual The visible size, px.
+ * @param target The size the hit area must reach, px. Default `TOUCH_TARGET_PX`.
+ * @returns The outset per side, px; 0 when the box is already big enough.
+ * @example
+ * hitOutset(22); // 11: a 22 px marker answers taps over 44 × 44 px
+ */
+export function hitOutset(visual: number, target: number = TOUCH_TARGET_PX): number {
+  return Math.max(0, Math.ceil((target - visual) / 2));
+}
 
 /** Props for `NumberedMarker`. */
 export interface NumberedMarkerProps {
@@ -29,7 +49,7 @@ export interface NumberedMarkerProps {
   readonly onLight?: (lit: boolean) => void;
   /** Dashed outline instead of a solid fill: the claim's passage was not verified. */
   readonly notVerified?: boolean;
-  /** `touch` gives the phone a 44 px target around the same small square. */
+  /** `touch` draws a 22 px square whose hit area reaches 44 px (`hitOutset`), for the phone. */
   readonly size?: 'compact' | 'touch';
 }
 
@@ -52,9 +72,15 @@ export function NumberedMarker({
   size = 'compact',
 }: NumberedMarkerProps): ReactNode {
   const light = (on: boolean): void => onLight?.(on);
+  // The hit area is a ::after this far out on each side (styles.css, `.pt-marker--touch`).
+  const outset =
+    size === 'touch'
+      ? ({ '--pt-hit-outset': `${String(hitOutset(TOUCH_MARKER_PX))}px` } as CSSProperties)
+      : undefined;
   return (
     <button
       type="button"
+      style={outset}
       className={`pt-marker${size === 'touch' ? ' pt-marker--touch' : ''}${notVerified ? ' pt-marker--not-verified' : ''}${lit ? ' is-lit' : ''}`}
       aria-label={`Passage ${String(n)}, ${label}${notVerified ? ', not verified' : ''}`}
       // `lit` is a hover/focus echo between a marker and its trace row, so it is visual and a test

@@ -13,6 +13,7 @@
 import { AiSlip } from '@papertree/ui';
 import { useRef, type ReactNode } from 'react';
 
+import { clipAnswer } from '../model/phone';
 import { foldedPreview, wasStopped, type RefusalKind } from '../model/states';
 import { shortModelName } from '../model/summary';
 import {
@@ -35,8 +36,17 @@ export interface AnswerFold {
   readonly toggle: () => void;
 }
 
+/** The phone sheet's clip (#205): whether the reader asked for the whole answer, and the toggle. */
+export interface AnswerClipState {
+  readonly expanded: boolean;
+  readonly toggle: () => void;
+}
+
 /** Props for `AnswerSlip`. */
-export interface AnswerSlipProps extends Pick<MarkerHandlers, 'lit' | 'onLight' | 'onShow'> {
+export interface AnswerSlipProps extends Pick<
+  MarkerHandlers,
+  'lit' | 'onLight' | 'onShow' | 'touch'
+> {
   readonly answer: ViewMessage;
   /** Null until the answer has text. */
   readonly model: AnswerModel | null;
@@ -48,6 +58,10 @@ export interface AnswerSlipProps extends Pick<MarkerHandlers, 'lit' | 'onLight' 
   readonly notSent: RefusalKind;
   /** Present when the answer opened folded (an earlier exchange of a reopened thread). */
   readonly fold?: AnswerFold | undefined;
+  /** Present on the phone sheet: the first paragraph, then "Read the whole answer" (`clipAnswer`). */
+  readonly clip?: AnswerClipState | undefined;
+  /** The usage line and Send to board sit in the phone sheet's pinned footer instead. */
+  readonly pinned?: boolean;
 }
 
 const UNCITED = "no citation · the AI's own reading";
@@ -69,6 +83,8 @@ export function AnswerSlip({
   onSendToCanvas,
   notSent,
   fold,
+  clip,
+  pinned = false,
   ...lights
 }: AnswerSlipProps): ReactNode {
   const streaming = answer.status === 'streaming';
@@ -111,22 +127,40 @@ export function AnswerSlip({
   const canSend = answer.status === 'complete' && messageId !== null && !folded;
   const footer = stopped ? (
     <StoppedNote answer={answer} handoff={handoff} onRetry={retry} />
-  ) : streaming || folded || (answer.usage === null && !canSend) ? undefined : (
+  ) : pinned || streaming || folded || (answer.usage === null && !canSend) ? undefined : (
     <>
       <UsageLine usage={answer.usage} />
-      {canSend ? <SendToCanvas onSend={() => onSendToCanvas(messageId)} /> : null}
+      {canSend ? (
+        <SendToCanvas onSend={() => onSendToCanvas(messageId)} short={lights.touch === true} />
+      ) : null}
     </>
   );
   const name = shortModelName(answer.usage?.model);
-  const uncited = folded ? [] : (model?.uncited ?? []);
+  const clippable =
+    clip !== undefined && model !== null && !folded && clipAnswer(model, false).clipped;
+  const expanded = clip?.expanded === true;
+  const shown = model === null ? null : clipAnswer(model, !clippable || expanded);
+  const uncited = folded ? [] : (shown?.uncited ?? []);
   const body =
     model === null ? (
       <Skeleton />
     ) : folded ? (
       <p className="pt-exchange__preview">{foldedPreview(model.body)}</p>
     ) : (
-      model.body.map(bodyParagraph)
+      shown?.body.map(bodyParagraph)
     );
+  // One button that swaps its words, so focus stays on it (`aria-expanded` says which).
+  const more =
+    clippable && clip !== undefined ? (
+      <button
+        type="button"
+        className="pt-exchange__more"
+        aria-expanded={expanded}
+        onClick={clip.toggle}
+      >
+        {expanded ? 'Show less' : 'Read the whole answer'}
+      </button>
+    ) : null;
   // A refused Retry's note replaces the answer's own (its text stays as it was).
   const refused = answer.refusal ?? null;
   const failure = refused ?? answer.failure;
@@ -143,6 +177,7 @@ export function AnswerSlip({
           source="from the paper"
           headingLevel={3}
           meta={metaOf(answer, streaming, stopped, name)}
+          {...(more === null ? {} : { footer: more })}
           {...(uncited.length > 0 ? { uncited: uncited.map((p) => paragraph(p, false)) } : {})}
         >
           {body}

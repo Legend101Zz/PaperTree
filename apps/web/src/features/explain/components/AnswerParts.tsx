@@ -129,13 +129,24 @@ type SendState = 'idle' | 'sending' | 'sent' | 'failed';
 /** Props for `SendToCanvas`. */
 export interface SendToCanvasProps {
   readonly onSend: () => Promise<void>;
+  /** The phone footer's shorter words (frame 08b): "To board". */
+  readonly short?: boolean;
+  /** Drawn before the words (the phone footer's pin). */
+  readonly icon?: ReactNode;
+  /** The button's words before it is pressed, when the default would not say which answer. */
+  readonly label?: string;
 }
 
 /** Send to board, saying when it is sending, sent, or failed. */
-export function SendToCanvas({ onSend }: SendToCanvasProps): ReactNode {
+export function SendToCanvas({
+  onSend,
+  short = false,
+  icon,
+  label: idleLabel,
+}: SendToCanvasProps): ReactNode {
   const [send, setSend] = useState<SendState>('idle');
-  const label =
-    send === 'sending' ? 'Sending…' : send === 'sent' ? 'Sent to board' : 'Send to board';
+  const idle = idleLabel ?? (short ? 'To board' : 'Send to board');
+  const label = send === 'sending' ? 'Sending…' : send === 'sent' ? 'Sent to board' : idle;
   return (
     <div className="pt-explain__actions">
       <button
@@ -150,6 +161,7 @@ export function SendToCanvas({ onSend }: SendToCanvasProps): ReactNode {
           );
         }}
       >
+        {icon}
         {label}
       </button>
       {send === 'failed' ? (

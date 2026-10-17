@@ -310,12 +310,13 @@ export function SourcePane(props: SourcePaneProps) {
       scrollToPage(pageIndex) {
         listRef.current?.scrollToPage(pageIndex, { behavior: 'smooth' });
       },
-      scrollToRect(pageIndex, bbox) {
+      scrollToRect(pageIndex, bbox, bottomInset) {
         // A timed tween, not `smooth` (which has no duration): the flash waits exactly this long
         // for the passage to arrive, and does not wait at all when it is already in view.
         const scrolled = listRef.current?.scrollToBlock(pageIndex, bbox, {
           ifNeeded: true,
           durationMs: FLASH_SCROLL_MS,
+          ...(bottomInset === undefined ? {} : { bottomInset }),
         });
         return scrolled === true && !prefersReducedMotion() ? FLASH_SCROLL_MS : 0;
       },
