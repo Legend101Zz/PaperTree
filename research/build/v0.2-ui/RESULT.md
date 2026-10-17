@@ -102,6 +102,7 @@ head, the local uncached gate, and a code review whose findings were fixed befor
 | S2h the phone library (08a), lamp-lit (09a) | #199 | #311 | b10ce90 | full gate 11 of 11 (pytest 2,562); desktop 0 px against S3's head over 14 views; on a phone Enter/tap opens the sheet and "Open the book" the spread; CI green |
 | no-network guard for web unit tests | #310 | #312 | a8eb3e5 | 97 connection attempts to port 8000 in a full run → 0, measured by a counting stub and again by the reviewer; 8 specs given mocks; CI green |
 | S8 the whole flow, reduced motion, numbers, RESULT per frame | #218 | #320 | 91857a4 | full gate 11 of 11 (pytest 2,562); CI full e2e 88/88 in 30.1 min (job timeout raised to 60); the flow found a stale-board placement bug in Send page to board and the lasso's send, fixed with tests; 32 frames: 16 done, 16 partial (see below) |
+| README for v0.2 (unreleased) | (#182) | #325 | fd22b86 | 13 real screenshots in `docs/assets/readme/v0.2/` (explain from the stored real thread; the plate from one live diagram run, ≈ $0.0015); metrics against v0.1 each with its source (TS 3,152 on 91857a4, pytest 2,562, e2e 88/88); 119 links checked; CI green |
 
 ## Live AI spend (estimates)
 
