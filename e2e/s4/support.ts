@@ -114,9 +114,14 @@ export function python(script: string, args: readonly string[]): string {
     cwd: REPO,
     encoding: 'utf8',
     env: { PATH: process.env['PATH'] ?? '', HOME: process.env['HOME'] ?? '' },
+    // spawnSync's default is 1 MiB: past it the child is killed (status null, empty stderr). The
+    // 500-card board's anchors are larger than that (#215).
+    maxBuffer: 64 * 1024 * 1024,
   });
   if (result.status !== 0)
-    throw new Error(`python failed (${String(result.status)}): ${result.stderr}`);
+    throw new Error(
+      `python failed (${String(result.status)}): ${result.error?.message ?? ''} ${result.stderr}`,
+    );
   return result.stdout.trim();
 }
 
