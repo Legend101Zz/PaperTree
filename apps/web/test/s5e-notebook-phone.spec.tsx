@@ -11,6 +11,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { NotebookView } from '@/features/notebook';
+import { moreParagraphs } from '@/features/notebook/components/ExchangeBlock';
 import { strokeToWire } from '@/features/notebook/model/wire';
 
 import { PAGE, PAPER, pageView, stubApi, wireItem } from './s5c-notebook-fixtures';
@@ -36,6 +37,7 @@ afterEach(() => {
   cleanup();
   viewport(1440, 900);
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   push.mockReset();
 });
 
@@ -159,9 +161,98 @@ describe('the stack (08c)', () => {
   });
 });
 
+describe('deleting on the phone (review blocker)', () => {
+  const deletes = (calls: Call[]) => calls.filter((c) => c.method === 'DELETE');
+
+  it('has no × a stray tap could find: a tap on the note, corner included, only edits it', async () => {
+    const calls = await mountPhone();
+    const stack = document.querySelector<HTMLElement>('.pt-nb-stack')!;
+    expect(stack.querySelectorAll('.pt-nb-note__delete')).toHaveLength(0);
+    expect(within(stack).queryByRole('button', { name: /^Delete/ })).toBeNull();
+    const face = screen.getByRole('button', {
+      name: 'Typed note: Check §3.5 positional encoding.',
+    });
+    fireEvent.pointerDown(face, { pointerType: 'touch', clientX: 370, clientY: 640 });
+    fireEvent.click(face, { clientX: 370, clientY: 640 });
+    const box = screen.getByRole('textbox', { name: 'Typed note' });
+    fireEvent.blur(box);
+    await new Promise((done) => setTimeout(done, 30));
+    expect(deletes(calls)).toEqual([]);
+    expect(
+      screen.getByRole('button', { name: 'Typed note: Check §3.5 positional encoding.' }),
+    ).toBeTruthy();
+  });
+
+  it('deletes from the editor’s 44 px Delete, says so, and Undo brings the note back', async () => {
+    const calls = await mountPhone();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Typed note: Check §3.5 positional encoding.' }),
+    );
+    const remove = screen.getByRole('button', { name: 'Delete note' });
+    expect(remove.classList.contains('pt-nb-note__remove')).toBe(true);
+    // A press keeps the keyboard in the box, so the editing does not end under the press.
+    expect(fireEvent.pointerDown(remove)).toBe(false);
+    fireEvent.click(remove);
+    await waitFor(() => expect(deletes(calls)).toHaveLength(1));
+    expect(deletes(calls)[0]!.path).toContain('/items/ni_typed00001');
+    expect(screen.queryByRole('button', { name: /^Typed note: Check/ })).toBeNull();
+    expect(screen.getByText('Typed note deleted.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(await screen.findByRole('button', { name: /^Typed note: Check/ })).toBeTruthy();
+    await waitFor(() =>
+      expect(
+        calls.some((c) => c.method === 'POST' && c.body?.['item_id'] === 'ni_typed00001'),
+      ).toBe(true),
+    );
+    expect(screen.queryByText('Typed note deleted.')).toBeNull();
+  });
+
+  it('drops a new note deleted before it was saved, sending nothing', async () => {
+    const calls = await mountPhone();
+    fireEvent.click(within(bar()).getByRole('button', { name: 'Text' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Typed note' }), {
+      target: { value: 'never mind' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Delete note' }));
+    expect(screen.queryByRole('textbox', { name: 'Typed note' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /never mind/ })).toBeNull();
+    await new Promise((done) => setTimeout(done, 30));
+    expect(calls.some((c) => c.method === 'POST' && c.body?.['body'] === 'never mind')).toBe(false);
+  });
+
+  it('gives the answer’s markers the shared 44 px touch target', async () => {
+    await mountPhone();
+    const exchange = screen.getByRole('region', { name: 'The exchange this page started from' });
+    const markers = exchange.querySelectorAll('.pt-marker:not(.pt-marker--static)');
+    expect(markers.length).toBeGreaterThan(0);
+    for (const m of markers) expect(m.classList.contains('pt-marker--touch')).toBe(true);
+  });
+});
+
 describe('turning a tablet into a phone', () => {
+  /** media queries that answer for a width the test sets, and say when it crosses them */
+  function media(start: number): (width: number) => void {
+    let width = start;
+    const heard = new Set<() => void>();
+    vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => {
+      const min = Number(/min-width: (\d+)px/.exec(query)?.[1] ?? Number.NaN);
+      return {
+        get matches() {
+          return width >= min;
+        },
+        media: query,
+        addEventListener: (_: string, f: () => void) => heard.add(f),
+        removeEventListener: (_: string, f: () => void) => heard.delete(f),
+      } as unknown as MediaQueryList;
+    });
+    return (next) => {
+      width = next;
+      for (const f of heard) f();
+    };
+  }
+
   it('puts down a tool the phone leaves out, and shows the stack', async () => {
-    viewport(1180, 820);
+    const turn = media(1180);
     stubApi(pageView());
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
@@ -171,10 +262,17 @@ describe('turning a tablet into a phone', () => {
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Lasso' }));
     expect(document.querySelector('.pt-nb-surface')).not.toBeNull();
-    act(() => viewport(390, 844));
+    act(() => turn(390));
     await waitFor(() => expect(document.querySelector('.pt-nb-stack')).not.toBeNull());
     expect(document.querySelector('.pt-nb-surface')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Lasso' })).toBeNull();
+  });
+});
+
+describe('the answer’s foot', () => {
+  it('counts what "Read the whole answer" holds back, one paragraph or several', () => {
+    expect(moreParagraphs(1)).toBe('1 more paragraph');
+    expect(moreParagraphs(4)).toBe('4 more paragraphs');
   });
 });
 

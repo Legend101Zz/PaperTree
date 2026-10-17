@@ -20,6 +20,16 @@ import type { ExchangeBody } from '../model/wire';
 import type { Anchor } from '@papertree/anchoring';
 import type { ReactNode } from 'react';
 
+/**
+ * "1 more paragraph" or "4 more paragraphs": what "Read the whole answer" holds back.
+ *
+ * @param n - Paragraphs not shown.
+ * @returns The phrase.
+ */
+export function moreParagraphs(n: number): string {
+  return `${String(n)} more paragraph${n === 1 ? '' : 's'}`;
+}
+
 /** Props for `ExchangeBlock`. */
 export interface ExchangeBlockProps {
   /** What Dive in stored on the page. */
@@ -80,6 +90,7 @@ export const ExchangeBlock = memo(function ExchangeBlock({
         layout={layout}
         citations={citations}
         onFocusAnchor={onFocusAnchor}
+        touch={phone}
       />
     );
   const cited = shown.filter((p) => !uncited.has(p.i));
@@ -132,9 +143,7 @@ export const ExchangeBlock = memo(function ExchangeBlock({
                         <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
                           {open ? 'Show less' : 'Read the whole answer'}
                         </button>
-                        {open ? null : (
-                          <span>{`${String(paragraphs.length - 1)} more paragraphs`}</span>
-                        )}
+                        {open ? null : <span>{moreParagraphs(paragraphs.length - 1)}</span>}
                       </span>
                     ) : null}
                     {usage === null ? null : <span className="pt-nb-exchange__usage">{usage}</span>}

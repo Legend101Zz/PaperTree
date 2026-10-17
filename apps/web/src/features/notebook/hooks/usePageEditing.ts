@@ -138,6 +138,13 @@ export function usePageEditing(model: NotebookPageModel): PageEditing {
       run({ type: 'resize', itemId: id, before, after });
     },
     remove: (id) => {
+      // Deleted from its own editor (S5e's Delete): the editing ends with it, nothing to commit;
+      // a draft was never on the page, so it simply goes.
+      if (editingId === id) setEditingId(null);
+      if (draft !== null && draft.id === id) {
+        setDraft(null);
+        return;
+      }
       const index = items.findIndex((i) => i.id === id);
       const value = items[index];
       if (value === undefined) return;

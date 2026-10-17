@@ -182,13 +182,19 @@ motion and the tablet and phone layouts are S5e (#210).
   card ("Abstract · cited 5×", S4's touch `TraceList`) that opens its passage in the paper, then
   "Your ink · view only" (the strokes cropped to where they are, `inkCrop`; a picture, never a
   surface), the stickies and the typed notes (`NoteItem` with `flow`: one tap edits, Escape or blur
-  saves through the same saver; never moved). The bar at the foot says "Lasso, shapes and
+  saves through the same saver; never moved). There is no × on a note in the stack, nor on any touch
+  screen (CSS `hover: none`): a hidden button a stray tap finds would delete it. Delete is the
+  editor's own 44 px button (`NoteEditor`'s `onDelete`), and every delete on the phone, whatever is
+  in the hand, leaves a toast with Undo (`hooks/useDeleteUndo.ts`) while it is still the last thing
+  done. The answer's markers take the shared 44 px touch target. The bar at the foot says "Lasso, shapes and
   templates: on a tablet or computer" and offers exactly Text, Sticky, Highlight and "Pen: off".
   Highlight and switching the pen on put that tool in the hand, and the page itself is shown (scaled
   to the screen's width, `usePageScale`'s floor is 0.3 for it) so drawing works as on a tablet;
   Undo joins the bar while a tool is held; switching it off returns to the stack. Keys never pick
   up the eraser or the lasso there, and the pen only through its switch (`useInkTools`'
-  `keyAllowed`); a tool the layout leaves out is put down when the window becomes a phone. The bar
+  `keyAllowed`, `useLayoutInkTools`); a tool the layout leaves out is put down when the window
+  becomes a phone, while a pen or highlighter already in the hand stays, so a tablet turned into a
+  phone with the pen held opens on the page with "Pen: on". The bar
   names the page and keeps Back, Send page to board and Open board as 44 px icons. There is no
   side panel: templates are not offered, and search and the counts are the tablet's and desktop's.
 

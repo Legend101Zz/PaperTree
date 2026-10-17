@@ -12,6 +12,8 @@
 }
 
 .pt-nb[data-layout='phone'] .pt-nb__back {
+  /* A long title must not squeeze it below its 44 px (the bar's other controls are fixed too). */
+  flex: none;
   justify-content: center;
   inline-size: 44px;
   min-block-size: 44px;
@@ -25,7 +27,7 @@
 
 /* Room under the content for the fixed bar, so the last note can be read and typed in. */
 .pt-nb[data-layout='phone'] .pt-nb__desk {
-  padding: 8px 8px calc(136px + env(safe-area-inset-bottom, 0px));
+  padding: 8px 8px calc(var(--pt-nb-bar-space) + env(safe-area-inset-bottom, 0px));
 }
 
 .pt-nb-stack {
@@ -193,7 +195,6 @@
   padding: 8px 8px calc(10px + env(safe-area-inset-bottom, 0px));
   background: var(--pt-page);
   border-block-start: 1px solid var(--pt-rule);
-  box-shadow: 0 -8px 18px -12px rgb(58 40 24 / 35%);
 }
 
 .pt-nb-phonebar__note {

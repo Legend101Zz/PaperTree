@@ -9,7 +9,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 
-import { ColourSet, NibSet } from './InkTools';
+import { ColourSet, InkOptions, NibSet } from './InkTools';
 import { INK_COLOURS, drawingTool } from '../model/tools';
 
 import type { InkToolsProps } from './InkTools';
@@ -124,4 +124,19 @@ export function RailInkOptions({ state, onAction }: InkToolsProps): ReactNode {
       </Flyout>
     </>
   );
+}
+
+/**
+ * The ink options a layout draws in the tool bar's second slot: the rail's two flyouts on a
+ * tablet, S5d's nib and colour rows on the desktop bar.
+ *
+ * @param props - The tool state and its dispatcher, and whether the bar is the tablet's rail.
+ * @param props.rail - True on the tablet.
+ * @returns The options.
+ */
+export function LayoutInkOptions({
+  rail,
+  ...props
+}: InkToolsProps & { readonly rail: boolean }): ReactNode {
+  return rail ? <RailInkOptions {...props} /> : <InkOptions {...props} />;
 }

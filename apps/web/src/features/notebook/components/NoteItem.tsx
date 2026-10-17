@@ -2,10 +2,11 @@
 
 /**
  * A typed note or a sticky on the notebook page (S5c, #208): the person's own words in Courier
- * Prime (`data-voice="you"`). It moves by drag or by arrow keys (8 units; Shift for 24), Enter edits
- * it in place (`NoteEditor`), Delete removes it. A drag moves the element with a CSS translate and
- * commits ONE history command on release, so dragging never re-renders the page (the 16 ms frame
- * budget); a cancelled pointer snaps back and records nothing.
+ * Prime (`data-voice="you"`). It moves by drag or by arrow keys (8 units; Shift for 24), Enter
+ * edits it in place (`NoteEditor`, which carries a 44 px Delete for touch screens), Delete removes
+ * it. A drag moves the element with a CSS translate and commits ONE history command on release, so
+ * dragging never re-renders the page (the 16 ms frame budget); a cancelled pointer snaps back and
+ * records nothing.
  */
 import { YouText } from '@papertree/ui';
 import { X } from 'lucide-react';
@@ -106,6 +107,7 @@ export const NoteItem = memo(function NoteItem(props: NoteItemProps): ReactNode 
           kind={item.kind}
           initial={item.text}
           onCommit={(text) => props.onCommit(item.id, text)}
+          onDelete={() => props.onDelete(item.id)}
         />
       ) : (
         <div
@@ -127,7 +129,9 @@ export const NoteItem = memo(function NoteItem(props: NoteItemProps): ReactNode 
           </YouText>
         </div>
       )}
-      {editing ? null : (
+      {/* No × in the stack, and none shows on a touch screen (notebook.css): a hidden button a
+          stray tap can find would delete the note. There Delete is in the editor (S5e). */}
+      {editing || props.flow === true ? null : (
         <button
           type="button"
           className="pt-nb-note__delete"

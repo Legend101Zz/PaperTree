@@ -9,12 +9,19 @@ import { Toast } from '@papertree/ui';
 
 import type { ReactNode } from 'react';
 
+/** Said when a stroke starts in the band the open answer opened (`model/inkPlace`). */
+export const INK_FOLD_NOTE =
+  'Ink can’t start beside the opened part of the answer: that space goes when the answer ' +
+  'closes. Start above it or below it, or collapse the answer first.';
+
 /** One notice the page may show. */
 export interface PageNotice {
   /** A new key is a new toast (its timer starts again). */
   readonly key: string | number;
   readonly message: string;
   readonly action?: { readonly label: string; readonly onAction: () => void } | undefined;
+  /** The shared toast's Undo (DESIGN.md §3). */
+  readonly undo?: () => void;
   readonly onDismiss: () => void;
 }
 
@@ -40,6 +47,7 @@ export function PageToast({
       key={n.key}
       message={n.message}
       {...(n.action === undefined ? {} : { action: n.action })}
+      {...(n.undo === undefined ? {} : { onUndo: n.undo })}
       onDismiss={n.onDismiss}
       {...(bottomInset === undefined ? {} : { bottomInset })}
     />
