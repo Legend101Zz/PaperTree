@@ -288,13 +288,15 @@ describe('the title block', () => {
       '2022, 1 paper',
       'Year unknown, 1 paper',
     ]);
-    const topics = screen.getByRole('button', { name: 'Topics' });
-    expect(topics.getAttribute('aria-disabled')).toBe('true');
-    expect(topics.getAttribute('aria-describedby')).toBeTruthy();
-    expect(
-      document.getElementById(topics.getAttribute('aria-describedby') ?? '')?.textContent,
-    ).toBe('Coming in this release');
-    expect(screen.getByRole('button', { name: 'Table' }).getAttribute('aria-disabled')).toBeNull();
+    const map = screen.getByRole('button', { name: 'Map' });
+    expect(map.getAttribute('aria-disabled')).toBe('true');
+    expect(map.getAttribute('aria-describedby')).toBeTruthy();
+    expect(document.getElementById(map.getAttribute('aria-describedby') ?? '')?.textContent).toBe(
+      'Coming in this release',
+    );
+    for (const live of ['Topics', 'Table']) {
+      expect(screen.getByRole('button', { name: live }).getAttribute('aria-disabled')).toBeNull();
+    }
   });
 });
 

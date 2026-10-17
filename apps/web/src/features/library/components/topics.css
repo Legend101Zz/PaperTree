@@ -1,0 +1,453 @@
+/*
+ * The Topics view (#198), measured from frame 03 (`03-topics-1440.dc.html`): cards of 340 px with a
+ * 120 px cloth banner (its pattern, a gilt frame and the ornament), the name in display type, the
+ * stats, a skyline of spines on a walnut lip and the source line; then the Unshelved card. Cloth,
+ * gilt and walnut are furniture and stay the same at night; the card itself is page stock. The "…"
+ * and New topic buttons are the header's `pt-hmenu__button`; Delete's confirmation is the card's.
+ */
+
+.pt-topics {
+  margin-block-start: 32px;
+}
+
+.pt-topics__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pt-topiccard,
+.pt-topics__empty,
+.pt-unshelved {
+  position: relative;
+  background: var(--pt-e1-fill);
+  border-radius: var(--pt-radius-control);
+  box-shadow: var(--pt-e1), var(--pt-e1-edge);
+}
+
+.pt-topiccard {
+  display: flex;
+  min-block-size: 340px;
+  flex-direction: column;
+}
+
+/* The card whose "…" is open stands above the others, so a later card's "…" never covers its panel
+   (every menu button has the same z-index). */
+.pt-topiccard:has(.pt-topicmenu__button[aria-expanded='true']) {
+  z-index: 4;
+}
+
+.pt-topics__samples {
+  margin: 16px 0 0;
+  font-size: 14px;
+  color: var(--pt-ink-2);
+}
+
+/* ── the banner: the cloth, its pattern, a gilt frame and the ornament ── */
+
+.pt-topicbanner {
+  position: relative;
+  display: flex;
+  flex: none;
+  block-size: 120px;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--pt-tb-cloth, var(--pt-page));
+  background-image: var(
+    --pt-tb-pattern,
+    repeating-linear-gradient(45deg, rgb(255 255 255 / 5%) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(-45deg, rgb(0 0 0 / 9%) 0 1px, transparent 1px 3px)
+  );
+  border-radius: var(--pt-radius-control) var(--pt-radius-control) 0 0;
+  box-shadow: inset 0 -1px 0 rgb(0 0 0 / 25%);
+
+  --pt-tb-gilt: rgb(232 212 160 / 20%);
+  --pt-tb-sheen: linear-gradient(135deg, rgb(255 255 255 / 8%), rgb(0 0 0 / 15%));
+}
+
+.pt-topicbanner--transformers {
+  --pt-tb-cloth: var(--pt-cloth-transformers);
+}
+
+.pt-topicbanner--language {
+  --pt-tb-cloth: var(--pt-cloth-language);
+}
+
+.pt-topicbanner--rl {
+  --pt-tb-cloth: var(--pt-cloth-rl);
+}
+
+.pt-topicbanner--vision {
+  --pt-tb-cloth: var(--pt-cloth-vision);
+  --pt-tb-pattern:
+    repeating-linear-gradient(60deg, var(--pt-tb-gilt) 0 1px, transparent 1px 14px),
+    repeating-linear-gradient(-60deg, var(--pt-tb-gilt) 0 1px, transparent 1px 14px),
+    var(--pt-tb-sheen);
+}
+
+.pt-topicbanner--generative {
+  --pt-tb-cloth: var(--pt-cloth-generative);
+  --pt-tb-pattern:
+    radial-gradient(circle, rgb(232 212 160 / 34%) 1.4px, transparent 1.9px), var(--pt-tb-sheen);
+
+  background-size:
+    16px 16px,
+    auto;
+}
+
+.pt-topicbanner--optimization {
+  --pt-tb-cloth: var(--pt-cloth-optimization);
+  --pt-tb-pattern:
+    repeating-linear-gradient(0deg, var(--pt-tb-gilt) 0 1px, transparent 1px 9px),
+    var(--pt-tb-sheen);
+}
+
+.pt-topicbanner__frame {
+  position: absolute;
+  inset: 12px;
+  border: 1px solid rgb(232 212 160 / 75%);
+  box-shadow: inset 0 0 0 4px var(--pt-tb-gilt);
+}
+
+.pt-topicbanner__ornament {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.pt-topicbanner__ornament i {
+  inline-size: 64px;
+  block-size: 1px;
+  background: var(--pt-gilt);
+}
+
+.pt-topicbanner__ornament b {
+  inline-size: 9px;
+  block-size: 9px;
+  background: var(--pt-gilt);
+  transform: rotate(45deg);
+}
+
+/* Gilt on mustard is 2.4:1 (DESIGN.md §2): there the ornament is ink on a paper label, as on the
+   spines; a topic without a cloth is plain page with an ink ornament. */
+.pt-topicbanner--language .pt-topicbanner__frame,
+.pt-topicbanner--none .pt-topicbanner__frame {
+  border-color: var(--pt-rule);
+  box-shadow: none;
+}
+
+.pt-topicbanner--language .pt-topicbanner__ornament {
+  padding: 8px 20px;
+  background: var(--pt-paper-label);
+  border: 1px solid var(--pt-spine-label-edge);
+}
+
+.pt-topicbanner--language .pt-topicbanner__ornament :is(i, b) {
+  background: var(--pt-paper-label-ink);
+}
+
+.pt-topicbanner--none .pt-topicbanner__ornament :is(i, b) {
+  background: var(--pt-ink);
+}
+
+/* ── the body ── */
+
+.pt-topiccard__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 20px;
+}
+
+.pt-topiccard__name,
+.pt-topics__empty-title,
+.pt-unshelved__heading {
+  margin: 0;
+  font-family: var(--pt-font-display);
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1.05;
+  color: var(--pt-ink);
+}
+
+.pt-topiccard__open {
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  outline: none;
+}
+
+/* A press anywhere on the card presses its name; the "…" menu stands above it. */
+.pt-topiccard__open::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-topiccard__open[aria-disabled='true'] {
+  cursor: default;
+}
+
+.pt-topiccard__open:focus-visible::after {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: 3px;
+}
+
+.pt-topiccard__stats,
+.pt-topiccard__source,
+.pt-topics__empty p,
+.pt-unshelved__note,
+.pt-unshelved__offer {
+  margin: 0;
+  font-size: 15px;
+  color: var(--pt-ink-2);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.pt-topiccard__stats b {
+  font-weight: 500;
+  color: var(--pt-ink);
+}
+
+.pt-topiccard__source {
+  margin-block-start: auto;
+  font-size: 14px;
+}
+
+/* A search lights the cards that hold a match and dims the rest (their words stay readable). */
+.pt-topiccard[data-match='true'] {
+  box-shadow:
+    inset 0 0 0 2px var(--pt-focus),
+    var(--pt-e1);
+}
+
+:is(.pt-topiccard, .pt-unshelved__row)[data-match='false']
+  :is(.pt-topicbanner, .pt-sky, .pt-unshelved__spine),
+.pt-topiccard[data-match='true'] .pt-sky__spine[data-match='false'] {
+  opacity: 0.33;
+}
+
+/* ── the skyline: the shelf's spines, drawn small ── */
+
+.pt-sky__spines {
+  display: flex;
+  gap: 2px;
+  block-size: 70px;
+  align-items: flex-end;
+  padding-inline-start: 10px;
+}
+
+.pt-sky__spine {
+  position: relative;
+  background-image:
+    linear-gradient(90deg, rgb(0 0 0 / 30%), rgb(255 255 255 / 11%) 40%, rgb(0 0 0 / 34%)),
+    repeating-linear-gradient(-45deg, rgb(0 0 0 / 9%) 0 1px, transparent 1px 3px);
+  border-block-start: 2px solid #ede1c2; /* the headband */
+  border-radius: 1px 1px 0 0;
+  box-shadow: 3px 0 4px -2px var(--pt-spine-cast);
+}
+
+.pt-sky__spine--kraft {
+  background-color: var(--pt-kraft);
+  border-color: var(--pt-spine-string);
+}
+
+.pt-sky__spine--torn {
+  border-block-start: 6px solid var(--pt-paper-label);
+  outline: 1px dashed var(--pt-spine-danger);
+}
+
+.pt-sky__ribbon {
+  position: absolute;
+  bottom: -16px;
+  left: 35%;
+  z-index: 2;
+  inline-size: 5px;
+  block-size: 18px;
+  background: var(--pt-ribbon);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
+}
+
+.pt-sky__more {
+  align-self: center;
+  padding-inline-start: 6px;
+  font-size: 14px;
+  color: var(--pt-ink-2);
+}
+
+.pt-sky__lip {
+  display: block;
+  block-size: 8px;
+  background: var(--pt-walnut);
+  border-radius: 0 0 2px 2px;
+  box-shadow: 2px 3px 4px -1px var(--pt-spine-cast);
+}
+
+/* ── the "…" menu, New topic and the topic form ── */
+
+.pt-topicmenu {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 3;
+}
+
+.pt-newtopic {
+  inline-size: auto;
+  gap: 8px;
+  padding-inline: 14px;
+  font-family: inherit;
+}
+
+.pt-topicmenu__panel {
+  inline-size: min(340px, calc(100vw - 32px));
+}
+
+.pt-topicform {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pt-topicform__cloths {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px 12px;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+  border: 0;
+}
+
+.pt-topicform__cloths legend {
+  margin-block-end: 6px;
+  color: var(--pt-ink-2);
+}
+
+.pt-topicform__cloth {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.pt-topicform__swatch {
+  inline-size: 16px;
+  block-size: 20px;
+  border-radius: 1px;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 25%);
+}
+
+/* ── no topics yet, and Unshelved ── */
+
+.pt-topics__empty,
+.pt-unshelved {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-block-start: 32px;
+  padding: 20px 24px;
+}
+
+.pt-topics__empty {
+  margin-block-start: 0;
+}
+
+.pt-unshelved__list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pt-unshelved__row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  gap: 4px 16px;
+  align-items: center;
+  padding-block: 12px;
+  border-block-start: 1px solid var(--pt-rule);
+}
+
+.pt-unshelved__spine {
+  align-self: stretch;
+  min-block-size: 32px;
+  border-radius: 1px;
+  box-shadow: 2px 1px 2px var(--pt-spine-cast);
+}
+
+.pt-unshelved__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pt-unshelved__title {
+  font-family: var(--pt-font-paper);
+  font-size: 16px;
+}
+
+.pt-unshelved__offer {
+  font-size: 14px;
+}
+
+.pt-unshelved__error {
+  font-size: 14px;
+  color: var(--pt-danger);
+}
+
+.pt-unshelved__actions,
+.pt-unshelved__choose {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.pt-unshelved__choose select {
+  min-inline-size: 160px;
+  padding-inline: 10px;
+  font: inherit;
+  color: var(--pt-ink);
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+}
+
+@media (max-width: 1100px) {
+  .pt-topics__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .pt-topics__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pt-unshelved {
+    padding: 16px;
+  }
+
+  .pt-unshelved__row {
+    grid-template-columns: 10px minmax(0, 1fr);
+  }
+
+  .pt-unshelved__actions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  .pt-topicmenu .pt-hmenu__button {
+    inline-size: 44px;
+    block-size: 44px;
+  }
+}

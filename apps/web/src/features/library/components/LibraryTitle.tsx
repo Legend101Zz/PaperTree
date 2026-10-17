@@ -1,8 +1,8 @@
 /**
  * LibraryTitle: "Your library" with its stats line and the one alert, "N need a look" (#195,
  * frame 01), then the view tabs and, for the shelf, Arrange by (the Table puts its Columns menu
- * there instead, frame 01d). Shelf and Table are live (#197); Topics and Map are shown, disabled,
- * and say "Coming in this release" (S2g).
+ * there instead, frame 01d; Topics puts New topic, #198). Shelf, Topics and Table are live; Map is
+ * shown, disabled, and says "Coming in this release" (S2g's second half).
  */
 'use client';
 
@@ -19,7 +19,7 @@ import { statsLine } from '../model/states';
 import type { ReactNode } from 'react';
 
 /** The library's views that exist so far. */
-export type LibraryViewName = 'shelf' | 'table';
+export type LibraryViewName = 'shelf' | 'topics' | 'table';
 
 /** Props for `LibraryTitle`. */
 export interface LibraryTitleProps {
@@ -33,8 +33,8 @@ export interface LibraryTitleProps {
   readonly onNeedALook: (on: boolean) => void;
   readonly view: LibraryViewName;
   readonly onView: (view: LibraryViewName) => void;
-  /** What stands at the right of the view row in the Table view (its Columns menu). */
-  readonly tableTools?: ReactNode;
+  /** What stands at the right of the view row outside the shelf (Columns, New topic). */
+  readonly tools?: ReactNode;
   readonly arrangement: Arrangement;
   readonly onArrange: (next: Arrangement) => void;
 }
@@ -46,7 +46,7 @@ const VIEWS = [
   { id: 'table', label: 'Table', icon: <Table2 size={20} strokeWidth={1.5} /> },
 ] as const;
 
-const isLive = (id: string): id is LibraryViewName => id === 'shelf' || id === 'table';
+const isLive = (id: string): id is LibraryViewName => id !== 'map';
 
 /**
  * The title block and the view row.
@@ -61,7 +61,7 @@ export function LibraryTitle({
   onNeedALook,
   view,
   onView,
-  tableTools,
+  tools,
   arrangement,
   onArrange,
 }: LibraryTitleProps): ReactNode {
@@ -136,8 +136,8 @@ export function LibraryTitle({
           </span>
         </div>
         {/* Nothing to arrange on an empty shelf (01b keeps the view tabs, not Arrange by). */}
-        {stats !== null && stats.papers === 0 ? null : view === 'table' ? (
-          <div className="pt-libviews__tools">{tableTools}</div>
+        {stats !== null && stats.papers === 0 ? null : view !== 'shelf' ? (
+          <div className="pt-libviews__tools">{tools}</div>
         ) : (
           <label className="pt-libviews__arrange" htmlFor={arrangeId}>
             Arrange by
