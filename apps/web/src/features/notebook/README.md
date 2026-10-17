@@ -44,7 +44,10 @@ motion and the tablet and phone layouts are S5e (#210).
   `version`), the notebook search (S5a's search; matches on this page are lit with the wash and a
   focus ring), **On this page** (the server's counts; ink is "yours", never a number), and **On the
   board** (the page's `notebook` card with a miniature and "4 quotes · 1 sticky", or the offer to
-  send it). The header's Send page to board creates that card (S6a) and offers Open board. One
+  send it). The header's Send page to board creates that card (S6a) and offers Open board; it
+  reads the board again first (`freshBoard`, or the board as last read when that read fails) and
+  puts the card below everything on it then, so a card added since the page opened (another
+  tab, the reader's Send to board) is never covered (#218). One
   page, one card: the card's id is derived from the page id (`cardIdFor`), so a second tab sends
   the same id and the idempotent create returns the card already there; the button waits while a
   send is in flight or the board is unknown, and a page already on the board opens it instead.
@@ -127,8 +130,8 @@ motion and the tablet and phone layouts are S5e (#210).
   sticky (the notes go, one sticky with their words takes the first's place) and **Delete**
   (strokes and the person's items; never the exchange or a quote card) are each ONE history
   command (`batch`), so one undo puts everything back. Send to board makes one note card from the
-  words, below everything already on the board (read first if this page has not read it; ink is
-  not sent); Copy puts them on the clipboard.
+  words, below everything on the board when it is sent (read again first with `freshBoard`, as
+  Send page to board does, #218; ink is not sent); Copy puts them on the clipboard.
 - Ink latency (`model/latency.ts`, probe `apps/web/scripts/ink-latency.mjs`): pointer-event times
   paired with the frame that wrote the live path and with the next frame; measured in a production
   build by scripted 200-point strokes. The probe's header says what each number does and does not

@@ -1182,6 +1182,25 @@
   text-transform: lowercase;
 }
 
+/* The chosen plate (#200): the paper's own figure on a paper mount; the PDF's white page. The title
+   keeps its lines (three at most) and the figure takes what is left above the year. */
+.pt-cover--plate .pt-cover__title {
+  flex: none;
+  font-size: 21px;
+  -webkit-line-clamp: 3;
+}
+
+.pt-cover__plate {
+  flex: 1 1 0;
+  min-block-size: 0;
+  max-inline-size: 100%;
+  margin-block-start: 12px;
+  object-fit: contain;
+  background: #fff;
+  border: 5px solid var(--pt-paper-label);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 35%);
+}
+
 .pt-cover__year {
   margin-block: auto 0;
   font-size: 13px;

@@ -281,7 +281,10 @@
   .pt-map {
     padding: 20px 16px;
   }
+}
 
+/* 44 px wherever the library is a phone (#199: up to 900 px) and on any touch screen. */
+@media (max-width: 900px), (pointer: coarse) {
   .pt-map__list summary {
     min-block-size: 44px;
   }

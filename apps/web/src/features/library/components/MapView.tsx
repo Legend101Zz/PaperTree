@@ -5,13 +5,15 @@
  * papers, each tagged with how it matched. Nothing is drawn for papers that are merely alike, and
  * "Papers you linked on a board" says "none yet" because a board holds one paper (S2c). The plan is
  * a picture with a name; `MapList` after it says the same in words and is reached by Tab. A read
- * that is still loading or has failed says so, with Try again, and is never shown as "none".
+ * that is still loading or has failed says so, with Try again, and is never shown as "none". On a
+ * phone (#199) the list comes first (by CSS, `phone.css`) and opens: one island to a row makes the
+ * plan a long scroll.
  */
 'use client';
 
 import { SproutMark } from '@papertree/ui';
 import { useQuery } from '@tanstack/react-query';
-import { useId, useMemo, useRef } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 
 import { papersApi } from '@/lib/api/papers';
 
@@ -29,6 +31,8 @@ import type { ReactNode } from 'react';
 export interface MapViewProps {
   readonly books: readonly LibraryBook[];
   readonly matches: ReadonlySet<string> | null;
+  /** The phone: the list opens when the Map is first drawn (`phone.css` puts it first). */
+  readonly listFirst?: boolean;
 }
 
 /** A failed read in words, with its Try again. */
@@ -65,7 +69,7 @@ function citeCount(state: MapLinksState, drawn: number, untagged: number): strin
  * @example
  * <MapView books={books} matches={matches} />
  */
-export function MapView({ books, matches }: MapViewProps): ReactNode {
+export function MapView({ books, matches, listFirst = false }: MapViewProps): ReactNode {
   const { topics, query } = useTopics();
   // A sample paper (fixtures on) is not the person's: it is on no topic and cites nothing of theirs.
   const own = useMemo(() => books.filter((book) => book.isSample !== true), [books]);
@@ -89,6 +93,8 @@ export function MapView({ books, matches }: MapViewProps): ReactNode {
   const layout = useMemo(() => layoutMap(groups, width), [groups, width]);
   const drawn = useMemo(() => mapLinks(layout, links.data?.links ?? []), [layout, links.data]);
   const untagged = drawn.filter((d) => d.tag === null).length;
+  // Read once: crossing 900 px later must not open or close the person's list (review SF4).
+  const [openList] = useState(listFirst);
   return (
     <section className="pt-map" aria-labelledby={headingId}>
       <div className="pt-map__legend">
@@ -149,6 +155,7 @@ export function MapView({ books, matches }: MapViewProps): ReactNode {
           links={links.data?.links ?? null}
           linksState={linksState}
           books={own}
+          open={openList}
         />
       )}
     </section>

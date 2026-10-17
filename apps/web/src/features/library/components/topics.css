@@ -445,7 +445,10 @@
     grid-column: 2;
     justify-content: flex-start;
   }
+}
 
+/* 44 px wherever the library is a phone (#199: up to 900 px) and on any touch screen. */
+@media (max-width: 900px), (pointer: coarse) {
   .pt-topicmenu .pt-hmenu__button {
     inline-size: 44px;
     block-size: 44px;

@@ -10,12 +10,11 @@ import { memo } from 'react';
 
 import {
   authorLine,
+  bookFace,
   clothFor,
-  clothTakesLabel,
   spineName,
   spineState,
   type ShelfPaper,
-  type SpineState,
 } from '../model/shelf';
 
 import type { ReactNode } from 'react';
@@ -32,13 +31,6 @@ export interface CoverProps {
   readonly cardId?: string;
   readonly onActivate: (paperId: string) => void;
   readonly onFocusCover: (paperId: string) => void;
-}
-
-/** Gilt on cloth; ink on a paper label where gilt cannot be read (the Language cloth, kraft). */
-function faceOf(state: SpineState, paper: ShelfPaper): 'gilt' | 'label' | 'kraft' | 'torn' {
-  if (state === 'failed') return 'torn';
-  if (state === 'queued' || state === 'parsing') return 'kraft';
-  return clothTakesLabel(clothFor(paper)) ? 'label' : 'gilt';
 }
 
 /**
@@ -58,13 +50,14 @@ export const Cover = memo(function Cover({
   onFocusCover,
 }: CoverProps): ReactNode {
   const state = spineState(paper);
-  const face = faceOf(state, paper);
+  const face = bookFace(paper);
   const authors = authorLine(paper.authors);
   const note = face === 'torn' ? 'could not read' : face === 'kraft' ? 'being read' : null;
+  const plate = face === 'gilt' || face === 'label' ? paper.plate : null;
   return (
     <button
       type="button"
-      className={`pt-cover pt-cover--${face}`}
+      className={`pt-cover pt-cover--${face}${plate === null || plate === undefined ? '' : ' pt-cover--plate'}`}
       style={
         face === 'kraft' ? undefined : { backgroundColor: `var(--pt-cloth-${clothFor(paper)})` }
       }
@@ -82,8 +75,16 @@ export const Cover = memo(function Cover({
       <span className="pt-cover__inner" aria-hidden="true">
         <span className="pt-cover__frame" />
         <span className="pt-cover__title">{paper.title.trim()}</span>
-        <span className="pt-cover__rule" />
-        {authors === null ? null : <span className="pt-cover__authors">{authors}</span>}
+        {plate === null || plate === undefined ? (
+          <>
+            <span className="pt-cover__rule" />
+            {authors === null ? null : <span className="pt-cover__authors">{authors}</span>}
+          </>
+        ) : (
+          // The plate the person chose (#200): the paper's own figure, never generated art.
+          // eslint-disable-next-line @next/next/no-img-element -- a signed crop URL of the API
+          <img className="pt-cover__plate" src={plate.assetUrl} alt="" />
+        )}
         {note === null ? null : <span className="pt-cover__note">{note}</span>}
         {typeof paper.year === 'number' ? (
           <span className="pt-cover__year">{paper.year}</span>

@@ -31,6 +31,10 @@ vi.mock('@/lib/api/papers', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api/papers')>()),
   papersApi: api,
 }));
+// The library reads `GET /topics` for its stats line; this spec is not about topics (#310).
+vi.mock('@/lib/api/topics', async (importOriginal) =>
+  (await import('./api-stubs')).withNoTopics(await importOriginal()),
+);
 
 // `openedLabel` runs once per drawn row (its Last opened cell), so its calls count row renders.
 vi.mock('@/features/library/model/table', async (importOriginal) => {

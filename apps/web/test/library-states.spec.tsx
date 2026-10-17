@@ -31,6 +31,10 @@ vi.mock('@/lib/api/papers', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api/papers')>()),
   papersApi: api,
 }));
+// The library reads `GET /topics` for its stats line; this spec is not about topics (#310).
+vi.mock('@/lib/api/topics', async (importOriginal) =>
+  (await import('./api-stubs')).withNoTopics(await importOriginal()),
+);
 
 function row(
   id: string,
@@ -249,7 +253,7 @@ describe('the empty library', () => {
 });
 
 describe('a short library stands face-out', () => {
-  it('draws covers, one tab stop, the arrows walk them and Enter takes one down', async () => {
+  it('draws covers, one tab stop, the arrows walk them and a click takes one down', async () => {
     await renderLibrary([ATTENTION, DDPM, YOLO]);
     const shelf = screen.getByRole('toolbar', { name: 'Shelf' });
     const covers = books(shelf);
@@ -298,7 +302,7 @@ describe('a short library stands face-out', () => {
 });
 
 describe('a library of spines (13 to 40 papers) at page level (review S2)', () => {
-  it('is one tab stop; the arrows walk it; Enter takes a book down, Esc puts it back', async () => {
+  it('is one tab stop; the arrows walk it; a click takes a book down, Esc puts it back', async () => {
     await renderLibrary(corpusRows(13));
     const shelf = screen.getByRole('toolbar', { name: 'Shelf' });
     const spines = books(shelf);

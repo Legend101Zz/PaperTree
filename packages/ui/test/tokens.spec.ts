@@ -289,3 +289,53 @@ describe('the PDF page, which stays paper in both schemes (#205, frame 09b)', ()
     }
   });
 });
+
+/** One property's value in a rule body (`color`, `background`, …), comments stripped. */
+function property(block: string, name: string): string | undefined {
+  const clean = block.replace(/\/\*[\s\S]*?\*\//g, '');
+  return new RegExp(`(?:^|[;{\\s])${name}\\s*:\\s*([^;]+);`).exec(clean)?.[1]?.trim();
+}
+
+/** The token a plain `var(--pt-…)` value reads. */
+function tokenOf(value: string | undefined): string {
+  const name = /^var\((--pt-[a-z0-9-]+)\)$/.exec(value ?? '')?.[1];
+  if (name === undefined) throw new Error(`not a plain token read: ${value ?? 'undefined'}`);
+  return name;
+}
+
+// PR #302's axe failure (the opened book's Summary button at 1440 lamp-lit): the shared button
+// rule eased `background-color` over 120 ms, and a scheme change eased the fill too while the ink
+// snapped, so for a moment the label was lamp-lit ink on daylight's page (#ede4d3 on #faf8f3,
+// 1.18:1, measured). The settled pair below never changed; the transition list is the guard.
+describe('the filled buttons through a scheme change (#200)', () => {
+  const base = rule('.pt-button,\n.pt-toolbtn');
+  const FILLED = ['secondary', 'primary', 'danger'] as const;
+
+  for (const [name, scheme] of [
+    ['daylight', LIGHT],
+    ['lamp-lit', DARK],
+  ] as const) {
+    it.each(FILLED)(`${name}: the %s button's label reads at 4.5:1 on its fill`, (variant) => {
+      const own = rule(`.pt-button--${variant}`);
+      const ink = tokenOf(property(own, 'color') ?? property(base, 'color'));
+      const fill = tokenOf(property(own, 'background'));
+      expect(ratio(scheme, ink, fill)).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+
+  it('no button rule eases its fill or its ink, so a scheme change repaints both at once', () => {
+    const clean = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+    const offenders: string[] = [];
+    for (const m of clean.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = m[1]!.trim();
+      if (!/\.pt-(button|toolbtn)\b/.test(selector)) continue;
+      for (const t of m[2]!.matchAll(/(?:^|[;\s])transition(?:-property)?\s*:\s*([^;]+)/g)) {
+        const eased = t[1]!.split(',').map((item) => item.trim().split(/\s+/)[0]);
+        const colours = eased.filter((p) => /^(all|background(-color)?|color)$/.test(p ?? ''));
+        if (colours.length > 0)
+          offenders.push(`${selector.replace(/\s+/g, ' ')}: ${colours.join(', ')}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});

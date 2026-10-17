@@ -6,6 +6,8 @@
  * the band above and the hint row under the plank, or Topics, the Map or the Table; an empty library
  * shows the accession slip. PDFs drop anywhere. The shelf stays mounted (hidden) under the others,
  * so its focus, open card and scroll survive a switch; `useViewNavigation` moves between them.
+ * At phone width (#199, frame 08a) the books lie flat under their holders, Reading now always
+ * stands above them, the card opens as a bottom sheet, and the Map puts its list first.
  *
  * The data layer is `useLibrary` (polling only while a row is unfinished, Retry, Delete) and the
  * uploads are `useUploadQueue`, both unchanged in behaviour from v0.1. Read goes to
@@ -21,19 +23,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SessionBanner } from '@/components/auth/SessionBanner';
 import { OfflineState } from '@/components/library/SystemStates';
 import { describeError } from '@/components/ui/errors';
+import { useMe } from '@/features/book';
 import { useAuthStore } from '@/store/authStore';
 
 import { useContinue } from '../hooks/useContinue';
 import { useLibrary, useOnline } from '../hooks/useLibrary';
+import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { useTableView } from '../hooks/useTableView';
 import { useTopics } from '../hooks/useTopics';
 import { useTouchTargets } from '../hooks/useTouchTargets';
 import { useUploadQueue } from '../hooks/useUploadQueue';
 import { useViewNavigation } from '../hooks/useViewNavigation';
+import { libraryPlan } from '../model/phone';
 import { libraryStats, matchPapers, type Arrangement } from '../model/shelf';
 import { readingNow, shelfLayout } from '../model/states';
 import { readerHref } from '../model/table';
 import './library.css';
+// The phone's page-wide rules too (header, tabs, hints, the Map's list), not only the stacks'.
+import './phone.css';
 import { AccessionSlip } from './AccessionSlip';
 import { DropAnywhere } from './AddPapers';
 import { LibraryHeader } from './LibraryHeader';
@@ -73,6 +80,7 @@ export function LibraryView(): ReactNode {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user, logout } = useAuthStore();
+  const me = useMe(); // the library's name, for the header's initial (#200)
   const online = useOnline();
   const { books, own, query, upload, afterCancel, retry, remove } = useLibrary(online);
   const queue = useUploadQueue({ onUpload: upload, onCancelled: afterCancel });
@@ -81,6 +89,7 @@ export function LibraryView(): ReactNode {
   const [view, setView] = useState<LibraryViewName>('shelf');
   const table = useTableView();
   const touch = useTouchTargets();
+  const phone = usePhoneLayout();
   const [openId, setOpenId] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -98,9 +107,9 @@ export function LibraryView(): ReactNode {
   }, [loaded, books, topicCount]);
   const matches = useMemo(() => matchPapers(books, search), [books, search]);
   // A short library stands face-out and carries Continue under each cover (frame 01c draws no
-  // strip), so the strip stands above a library of spines only.
-  const faceOut = shelfLayout(books.length) === 'face-out';
-  const reading = useMemo(() => (faceOut ? [] : readingNow(books)), [faceOut, books]);
+  // strip), so the strip stands above spines, rows and the phone's flat books only.
+  const withStrip = libraryPlan(books.length, phone).readingNow;
+  const reading = useMemo(() => (withStrip ? readingNow(books) : []), [withStrip, books]);
 
   // "Need a look" ends when nothing needs one any more, so a later upload cannot switch it back
   // on by itself; and a card whose book has left the shelf closes rather than waiting to return.
@@ -147,6 +156,7 @@ export function LibraryView(): ReactNode {
         searchRef={searchRef}
         onFiles={queue.enqueue}
         email={user?.email ?? null}
+        name={me.data?.display_name ?? null}
         signingOut={signingOut}
         onSignOut={() => void signOut()}
       />
@@ -215,6 +225,7 @@ export function LibraryView(): ReactNode {
                 onContinue={resume}
                 onRetry={retry}
                 onDelete={remove}
+                phone={phone}
               />
             </div>
             {view === 'table' ? (
@@ -232,7 +243,7 @@ export function LibraryView(): ReactNode {
             {view === 'topics' ? (
               <TopicsView books={books} matches={matches} onShowOnShelf={showTopicOnShelf} />
             ) : null}
-            {view === 'map' ? <MapView books={books} matches={matches} /> : null}
+            {view === 'map' ? <MapView books={books} matches={matches} listFirst={phone} /> : null}
           </>
         )}
       </main>

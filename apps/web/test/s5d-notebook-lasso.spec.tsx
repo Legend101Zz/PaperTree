@@ -2,9 +2,9 @@
  * s5d-notebook-lasso.spec — the lasso and its menu as a person uses them (#209): a loop drawn with
  * synthetic pointer events opens the menu on its first action; each action does what it says
  * (Ask about this → the reader with the typed words, Make sticky and Delete as ONE undo step each,
- * Send to board → one note card without the ink, Copy → the clipboard); what an action needs is
- * said when it is missing; the keyboard reaches all of it. The reader's half of Ask about this is
- * s5d-ask-from-notebook.spec.
+ * Send to board → one note card without the ink, below every card on the board now, Copy → the
+ * clipboard); what an action needs is said when it is missing; the keyboard reaches all of it. The
+ * reader's half of Ask about this is s5d-ask-from-notebook.spec.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NotebookView, encodeStroke } from '@/features/notebook';
 import { LassoLayer } from '@/features/notebook/components/LassoLayer';
 import { base64FromBytes } from '@/features/notebook/model/wire';
+import { API_BASE_URL } from '@/lib/api/client';
 
 import { PAGE, PAPER, pageView, stubApi, wireItem } from './s5c-notebook-fixtures';
 
@@ -256,6 +257,24 @@ describe('the lasso’s actions', () => {
     const sent = calls.filter((c) => c.path === `/papers/${PAPER}/board/nodes`);
     expect(sent).toHaveLength(1);
     expect(sent[0]?.body).toMatchObject({ kind: 'note', body: NOTE });
+  });
+
+  it('Send to board places the note card below a card added since the page read the board (#218)', async () => {
+    const calls = stub();
+    await mount();
+    await screen.findByText(/not on the board yet/);
+    // Another tab (or the reader's Send to board) adds a card after this page read the board.
+    await fetch(`${API_BASE_URL}/papers/${PAPER}/board/nodes`, {
+      method: 'POST',
+      body: JSON.stringify({ node_id: 'cn_othertab01', kind: 'note', x: 0, y: 0, w: 300, h: 300 }),
+    });
+    fireEvent.click(within(lasso(AROUND_BOTH)).getByRole('menuitem', { name: 'Send to board' }));
+    await screen.findByText(/Sent to the board as a note card\. Ink stays on this page\./);
+    const sent = calls.filter(
+      (c) => c.path === `/papers/${PAPER}/board/nodes` && c.body?.['body'] === NOTE,
+    );
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.body?.['y']).toBe(340);
   });
 
   it('Copy puts the typed words on the clipboard', async () => {

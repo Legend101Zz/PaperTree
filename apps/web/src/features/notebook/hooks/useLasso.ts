@@ -16,7 +16,7 @@ import { useEffect, useState } from 'react';
 import { boardsApi } from '@/lib/api/boards';
 
 import { sessionStore } from './useAskFromNotebook';
-import { boardKey } from './useBoardCard';
+import { boardKey, freshBoard } from './useBoardCard';
 import { newClientId } from '../api/notebookApi';
 import { stashAsk } from '../model/askHandoff';
 import { lassoSelect } from '../model/hitTest';
@@ -122,10 +122,8 @@ export function useLasso(paperId: string, model: NotebookPageModel, active: bool
     setSelection(got.count === 0 ? null : { path, picked: got });
   };
   const toBoard = async (text: string): Promise<void> => {
-    // Below everything already there: the board is read first when this page has not read it.
-    const board = await client
-      .ensureQueryData({ queryKey: boardKey(paperId), queryFn: () => boardsApi.get(paperId) })
-      .catch(() => undefined);
+    // Below everything on the board now, not as this page last read it (#218).
+    const board = await freshBoard(client, paperId);
     const { sent, cut } = await sendCard(paperId, board, text);
     if (!sent) {
       say('The note card could not be sent to the board. Try again.');

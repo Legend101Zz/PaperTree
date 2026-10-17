@@ -1,11 +1,12 @@
 /**
  * SearchField: the library header's central search (#195, frame 01, DESIGN.md §6). "/" anywhere
  * on the page focuses it (wired by LibraryView), Esc clears it, Enter takes down the first match,
- * and while it holds a query it says "2 of 24" inside the field.
+ * and while it holds a query it says "2 of 24" inside the field. On a phone or a touch screen the
+ * clear button is an × rather than "Esc" (#199: no key hints for a finger).
  */
 'use client';
 
-import { Search } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { forwardRef, useId } from 'react';
 
 import { TOUCH_TARGET } from '@/components/library/primitives';
@@ -37,7 +38,8 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
   ref,
 ): ReactNode {
   const countId = useId();
-  const target = useTouchTargets() ? ` ${TOUCH_TARGET}` : '';
+  const touch = useTouchTargets();
+  const target = touch ? ` ${TOUCH_TARGET}` : '';
   return (
     <div className="pt-search" role="search">
       <Search className="pt-search__icon" size={20} strokeWidth={1.5} aria-hidden="true" />
@@ -79,7 +81,11 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
             onChange('');
           }}
         >
-          <kbd className="pt-kbd">Esc</kbd>
+          {touch ? (
+            <X size={18} strokeWidth={1.5} aria-hidden="true" />
+          ) : (
+            <kbd className="pt-kbd">Esc</kbd>
+          )}
         </button>
       )}
     </div>

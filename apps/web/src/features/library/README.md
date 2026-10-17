@@ -1,7 +1,7 @@
 # library
 
-The signed-in library at `/dashboard` (#195–#198; frames 00, 01, 01b–01f, 03): the papers stand as cloth
-spines on one walnut plank, a row per group, each row under a brass label holder. A spine shows its state: a red ribbon
+The signed-in library at `/dashboard` (#195–#199; frames 00, 01, 01b–01f, 03, 08a): the papers stand as cloth
+spines on one walnut plank (on a phone they lie flat in stacks), a row per group, each row under a brass label holder. A spine shows its state: a red ribbon
 while you are reading it, a kraft wrap while we read it, a torn red label when we could not. The Table view lists the
 same papers as a ruled catalogue, Topics shows each topic as a card, and the Map is a plan of the reading room.
 
@@ -97,7 +97,7 @@ same papers as a ruled catalogue, Topics shows each topic as a card, and the Map
   first matching paper. Sample papers (fixtures on) are on neither Topics nor the Map, and the note says so.
 - **The Table** (01d) is a native `<table>`: Title (a link to the reader), Authors (first author "et al.";
   three or more open "Authors · full", a popover with every name), Year, Topic (its cloth, name and source line,
-  "arXiv cs.CL · accepted", "chosen by you" or "suggested by the AI · accepted"; else "Unshelved"), Pages, State
+  "arXiv cs.CL · accepted", "chosen by you" or "suggested by the AI (model) · accepted"; else "Unshelved"), Pages, State
   ("Reading now · p. 4 of 15" (the stats line's set), "Read", "Not started" ("Some parts unreadable" under it
   for our partial reading; "Opened" for a place in a paper whose page count is unknown), "Queued" / "Reading ·
   Readable in Source mode now", "Could not read" with Retry · Remove, which says it is busy while it runs and
@@ -120,9 +120,12 @@ same papers as a ruled catalogue, Topics shows each topic as a card, and the Map
   popover or menu is placed on the screen (upward on the last rows), so the region never clips it. A poll
   re-draws only the rows whose paper changed: `useLibrary` keeps an unchanged paper's object.
   Nothing is virtualised: 400 rows are measured in `research/build/v0.2-ui/shots/S2f/README.md`.
-- **The shelf** is one tab stop: ←/→ walk along it, Home and End jump to its ends. Enter or a click takes a
+- **The shelf** is one tab stop: ←/→ walk along it, Home and End jump to its ends. Enter on a book whose parse is
+  in takes it OUT and opens it (#200, `features/book`: the pull-out, then the spread). A click or Space takes a
   book down: its catalogue card opens in the band above, pointing at the spine, with focus on Read (Enter again
-  opens the reader), Retry for a paper we could not read, and Delete (danger, confirmed inline). Esc puts it
+  opens the reader), "Open the book" for a parsed paper, Retry for a paper we could not read, and Delete (danger,
+  confirmed inline). Enter on a paper that cannot be opened yet (queued, being read, failed, a sample) still opens
+  its card. Esc puts it
   back and returns focus to the spine. The card is keyed by paper (an armed Delete never follows it to
   the next book), sits in the band's flow (a taller card moves the shelf down rather than covering the view
   row) and re-points at its spine whenever the shelf re-lays itself out. Focus never falls to the page: after
@@ -131,7 +134,28 @@ same papers as a ruled catalogue, Topics shows each topic as a card, and the Map
   row under the plank says what the keys do.
 - **Touch:** on a phone width or a coarse pointer every control in the header, title row and hints is 44 px
   (`useTouchTargets`); on a desktop they keep frame 01's 36–40 px. The spines keep their 26–48 px widths
-  (WCAG 2.5.8's 24 px holds; the phone shelf is S2h).
+  (WCAG 2.5.8's 24 px holds); a phone lays the books flat instead. A coarse pointer gets no key hints and no
+  "/" in the search (a finger has neither); a narrow window with a keyboard keeps the key hints.
+- **Phone** (08a, #199; at most 900 px wide, `PHONE_MAX_WIDTH`, the width at which the header goes compact and the
+  Table scrolls sideways; owner may change): search under the header, the stats, the four view tabs across the
+  screen, Reading now (always: flat books carry no Continue, so a short library shows it too), then the books
+  **lying flat**, a stack per row of the arrangement under its brass holder, on a strip of walnut
+  (`FlatShelf`, `FlatBook`; two stacks side by side where two fit). Each book is a 44 px button with the
+  spine's name, its short title across it (two lines at most), the year in gilt, the ribbon out of the
+  fore-edge while you read it, kraft with "being read", a torn red label with "could not read". The stacks are
+  the shelf's one tab stop: ↓/↑ (and →/←) walk every book in order, down a stack and into the next. A book
+  taken down opens its catalogue card as a **modal bottom sheet** (`useModalSheet`): Read focused, the rest of
+  the page `inert` behind a scrim (no key or tap can reach a book under it), Tab wrapping inside it, its book
+  scrolled clear above it and room under the stacks of the sheet's measured height; Esc, Put it back or a tap
+  on the scrim puts the book back and returns focus to it once the inert has lifted. On a phone Enter and
+  Space take a book down into the sheet, as a tap does: there is no pull-out (#200's 02a turns a standing
+  spine out of its row, a desktop moment; a book lying flat has no row to turn out of), and the hints say
+  "Enter take it down". The sheet's **Open the book** closes the sheet and opens #200's spread, which stacks
+  at 390; Esc puts it back on the flat book. Crossing 900 px with a
+  card open re-points it (band ↔ sheet). The Map's list comes first, by CSS (one element at every width, so
+  focus in it survives a resize), and opens; its summary, its papers and the Topics "…" are 44 px up to
+  900 px and on any coarse pointer. The search's clear button is an × there, not "Esc". No page scrolls
+  sideways at 320, 390 or 768.
 
 ## Data flow
 
@@ -159,6 +183,9 @@ ribbon, no year means no year on the spine.
 - **Cloth without a topic** (`clothFor`): cs.CL → transformers, cs.CV → vision, cs.LG and stat.ML →
   generative, math.OC and cs.NE → optimization, cs.IR → language, cs.AI / cs.RO / cs.MA → reinforcement;
   another category takes a stable cloth by hash, no category the slate cloth.
+- **Flat book length** (phone): `274 + 1.12 × pages` px on frame 08a's 358 px stack, kept as how far it falls short
+  of the stack (0–84 px), so a 320 px phone draws the same stack narrower; each book sits 0–12 px in from the
+  stack's edge by a hash of its id.
 - **Spine width**: `26 + 0.85 × pages` px (fitted to frame 01), capped at 48; 40 while the page count is
   unknown or the paper is still being read, so the count arriving mid-parse does not reflow the shelf.
 - **Order within a row**: shelving order (when added) for Topic; Year rows by title; Title A–Z; Recently
@@ -200,6 +227,11 @@ ribbon, no year means no year on the spine.
   `UploadRow.tsx`, `LibraryTitle.tsx`, `ShelfSection.tsx` (with `Shelf.tsx`, `Spine.tsx`, `ShelfPlank.tsx`,
   `CatalogueCard.tsx`, `ShelfHints.tsx`), `ReadingNow.tsx`, `AccessionSlip.tsx`, `CoverShelf.tsx` (with
   `Cover.tsx`, `CoverCaption.tsx`), `ShelfRows.tsx` (with `ShelfRow.tsx`); `library.css`: their styles, from the tokens.
+- `model/phone.ts`: the phone rule (`libraryPlan`: what a phone draws instead), a flat book's picture (`flatPicture`)
+  and the stack keys (`flatStep`), tested in `model/phone.spec.ts`; `hooks/usePhoneLayout.ts`;
+  `hooks/useModalSheet.ts`; `components/FlatShelf.tsx`, `FlatBook.tsx` and `phone.css` (imported by the page:
+  it holds the phone's page-wide rules too); tests in `apps/web/test/library-phone.spec.tsx`,
+  e2e `e2e/v02/library-phone.spec.ts`.
 - Tests: `apps/web/test/library-table.spec.tsx` (the Table through the page), `apps/web/test/library-shelf.spec.tsx`, `library-page.spec.tsx`, `library-states.spec.tsx` (with
   the corpus rows in `library-corpus.ts`), `s3-library-states.spec.tsx`, `w2ui-library.spec.tsx`; e2e
   `e2e/s2d/shelf.spec.ts`, `e2e/v02/library-states.spec.ts`, `e2e/v02/library-table.spec.ts` and `e2e/s3/*`.

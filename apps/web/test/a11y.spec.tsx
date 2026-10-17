@@ -205,7 +205,7 @@ describe('keyboard operation', () => {
     });
   }
 
-  it('Enter/Space on a spine takes the book down (#195: the shelf replaced the card titles)', () => {
+  it('a click (Space; Enter on an unparsed book) on a spine takes the book down (#195, #200)', () => {
     const onActivate = vi.fn();
     const { container } = render(
       <Shelf

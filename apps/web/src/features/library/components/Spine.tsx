@@ -10,16 +10,16 @@ import { memo } from 'react';
 
 import {
   authorLine,
+  bookFace,
   clothFor,
-  clothTakesLabel,
   spineHeight,
   spineName,
   spineState,
   spineTitle,
   spineWidth,
   SPINE_MAX_WIDTH,
+  type BookFace,
   type ShelfPaper,
-  type SpineState,
 } from '../model/shelf';
 
 import type { ReactNode } from 'react';
@@ -41,15 +41,6 @@ export interface SpineProps {
   readonly onFocusSpine: (paperId: string) => void;
   /** The shorter spine of a library at scale (frame 01f). */
   readonly compact?: boolean;
-}
-
-/** How the face is drawn: gilt on cloth, a paper label, a kraft wrap or a torn label. */
-type Face = 'gilt' | 'label' | 'kraft' | 'torn';
-
-function faceOf(state: SpineState, paper: ShelfPaper): Face {
-  if (state === 'failed') return 'torn';
-  if (state === 'queued' || state === 'parsing') return 'kraft';
-  return clothTakesLabel(clothFor(paper)) ? 'label' : 'gilt';
 }
 
 /** Caslon's mean advance is about half an em; enough to choose a size, not to lay out text. */
@@ -79,7 +70,7 @@ function SpineFace({
   compact,
 }: {
   readonly paper: ShelfPaper;
-  readonly face: Face;
+  readonly face: BookFace;
   readonly compact: boolean;
 }): ReactNode {
   const short = spineTitle(paper.title);
@@ -133,7 +124,7 @@ export const Spine = memo(function Spine({
   compact = false,
 }: SpineProps): ReactNode {
   const state = spineState(paper);
-  const face = faceOf(state, paper);
+  const face = bookFace(paper);
   // No year on the torn label, nor on the Language cloth, where neither gilt nor ink reaches 4.5:1.
   const year =
     typeof paper.year === 'number' && (face === 'gilt' || face === 'kraft') ? paper.year : null;

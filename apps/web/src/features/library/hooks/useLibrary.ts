@@ -14,6 +14,7 @@ import { papersApi } from '@/lib/api/papers';
 import { ApiError } from '@/lib/api/types';
 
 import type { ShelfTopic } from '../model/shelf';
+import type { BookPlate } from '@/features/book/model/types';
 import type { CancelOutcome, UploadContext } from './useUploadQueue';
 import type { LibraryPaper } from '@/components/library/types';
 import type { LibraryPaper as ApiLibraryPaper } from '@/lib/api/types';
@@ -26,13 +27,23 @@ const PAPERS_KEY = ['papers'] as const;
 /** How long a cancelled upload waits before the library is re-read. */
 const CANCEL_SETTLE_MS = 700;
 
-/** A library row as the shelf reads it: the v0.1 view model, S2a's facts (#192), S2b's topic. */
+/**
+ * A library row as the shelf reads it: the v0.1 view model, S2a's facts (#192), S2b's topic, and
+ * what the opened book prints (#200: the arXiv id, the counts, the cached summary, the plate).
+ */
 export type LibraryBook = LibraryPaper & {
   readonly year: number | null;
   readonly reading: ApiLibraryPaper['reading'];
   readonly arxivCategory: string | null;
   /** The accepted topic (#193), or null: the shelf's Topic rows and the cloth come from it. */
   readonly topic?: ShelfTopic | null;
+  // Optional so a sample paper (no server) and an older server's row still read as a book.
+  readonly arxivId?: string | null;
+  readonly threadCount?: number;
+  readonly notebookCount?: number;
+  readonly hasSummary?: boolean;
+  /** The figure chosen as the cover (#200), or null for the typographic cover. */
+  readonly plate?: BookPlate | null;
 };
 
 /**
@@ -48,6 +59,20 @@ export function libraryBookFromWire(row: ApiLibraryPaper): LibraryBook {
     year: row.year ?? null,
     reading: row.reading ?? null,
     arxivCategory: row.arxiv_category ?? null,
+    arxivId: row.arxiv_id ?? null,
+    threadCount: row.thread_count ?? 0,
+    notebookCount: row.notebook_count ?? 0,
+    hasSummary: row.has_summary ?? false,
+    plate:
+      row.plate === null || row.plate === undefined
+        ? null
+        : {
+            blockId: row.plate.block_id,
+            pageIndex: row.plate.page_index,
+            label: row.plate.label,
+            captionText: row.plate.caption_text,
+            assetUrl: row.plate.asset_url,
+          },
     topic:
       row.topic === null || row.topic === undefined
         ? null
