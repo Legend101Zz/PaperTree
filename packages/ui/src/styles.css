@@ -3819,8 +3819,11 @@ html:has(.pt-notice--undo) .pt-toast {
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--pt-radius-control);
+  /* The fill and the ink are never eased: both are scheme tokens, and an eased fill also eased
+     through a scheme change while the ink snapped, so for ~100 ms a secondary button's label was
+     lamp-lit ink on daylight's page (1.18:1; axe on #302). Hover therefore changes the fill at
+     once (DESIGN.md §6 gives buttons no motion); tokens.spec guards it. */
   transition:
-    background-color var(--pt-dur-quick) var(--pt-ease-out),
     box-shadow var(--pt-dur-quick) var(--pt-ease-out),
     transform var(--pt-dur-quick) var(--pt-ease-out);
 }
