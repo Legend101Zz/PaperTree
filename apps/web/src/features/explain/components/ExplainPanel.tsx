@@ -90,11 +90,16 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
     [actions, desktop, setDetent],
   );
 
-  // A diagram part's flash (#217): the margin tab names the part it came from.
+  // A diagram part's flash (#217): the margin tab names the part it came from. On a phone the
+  // peek covers the window's foot, as for a marker (#205).
   const onFlash = useCallback(
     (anchor: Anchor, from: FlashSource) => {
       if (!desktop) setDetent('peek');
-      actions.focusAnchor(anchor, { flash: true, from });
+      actions.focusAnchor(anchor, {
+        flash: true,
+        from,
+        ...(desktop ? {} : { bottomInset: SHEET_PEEK_PX }),
+      });
     },
     [actions, desktop, setDetent],
   );
