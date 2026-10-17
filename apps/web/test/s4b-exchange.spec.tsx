@@ -38,7 +38,9 @@ import {
 
 import {
   FLASH_MS,
+  FLASH_SCROLL_MS,
   nextFlashPhase,
+  tweenScroll,
   useClearOnNextAction,
   type FlashPhase,
 } from '@/components/reader/flash';
@@ -348,6 +350,38 @@ describe('the citation flash in the reader', () => {
     expect(FLASH_MS).toBe(180 + 900 + 600);
     expect(nextFlashPhase('linger', 240, false)).toBeNull();
     expect(nextFlashPhase('flash', 0, true)).toBeNull();
+  });
+
+  it('jumps to an off-screen passage under reduced motion, and tweens there otherwise (S8 review)', () => {
+    const reduce = (on: boolean) =>
+      vi.spyOn(window, 'matchMedia').mockImplementation(
+        (query: string) =>
+          ({
+            matches: on && query.includes('reduce'),
+            media: query,
+            addEventListener: vi.fn(),
+            removeEventListener: vi.fn(),
+          }) as unknown as MediaQueryList,
+      );
+    const frame = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(1);
+    const el = document.createElement('div');
+    const scrollTo = vi.fn();
+    el.scrollTo = scrollTo as unknown as HTMLElement['scrollTo'];
+    try {
+      reduce(true);
+      tweenScroll(el, 500, 0, FLASH_SCROLL_MS);
+      // One instant scroll to the target, and no frame loop: nothing travels.
+      expect(scrollTo.mock.calls).toEqual([[{ top: 500, left: 0, behavior: 'auto' }]]);
+      expect(frame).not.toHaveBeenCalled();
+      scrollTo.mockClear();
+      reduce(false);
+      tweenScroll(el, 800, 0, FLASH_SCROLL_MS);
+      // Full motion: the scroll is left to the frame loop, 240 ms of eased steps.
+      expect(scrollTo).not.toHaveBeenCalled();
+      expect(frame).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 
   it('paints nothing while it scrolls, the ring and wash in flash, a faint outline in linger', () => {

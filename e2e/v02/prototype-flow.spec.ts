@@ -13,10 +13,14 @@
  *
  * At 390 each step takes the phone's own path, and where the phone does not offer a step by design
  * the walk asserts what it offers instead: there is no pull-out (a book lying flat has no row to turn
- * out of, #199), so Enter takes the book down into its bottom sheet, and the sheet's "Open the book"
+ * out of, #199), so a tap takes the book down into its bottom sheet, and the sheet's "Open the book"
  * opens the spread; the reader's controls are in the header's "Reading options" menu; the explain
  * panel is a sheet whose pinned footer holds the usage line and Dive in; the notebook is the phone
- * stack (no lasso, shapes or templates: it says so); the board threads by tap, pin then pin.
+ * stack (no lasso, shapes or templates: it says so); the board threads by tap, pin then pin. Taps
+ * throughout, except: the search is typed, Escape closes the menu, the passage is selected with a
+ * mouse drag (Playwright has no touch text selection, as in phone-reader.spec), and the sheet is
+ * raised with its grip slider's arrow key (no spec drags the grip by touch yet). At 1440 the walk
+ * focuses the book before Enter: Enter in the search opens its card, not the pull-out (#313).
  *
  * The prototype's board already holds a plate and a passage when the walk reaches it. Here they are
  * made through the API's own routes just before step 11: a faux diagram run (`[faux:diagram]`) on
@@ -41,9 +45,17 @@ import {
   waitParsed,
 } from '../s4/support';
 import { getBoard, tokenInit } from '../s7/support';
-import { ATTENTION, checkStep, drawPlate, mintAnchor, placeCard } from './flow-support';
+import {
+  ATTENTION,
+  centre,
+  checkStep,
+  drawPlate,
+  mintAnchor,
+  placeCard,
+  steadyCentre,
+} from './flow-support';
 
-import type { Locator, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 
 const JOURNEYS = [
   { width: 1440, scheme: 'light' },
@@ -53,13 +65,6 @@ const JOURNEYS = [
 ] as const;
 
 const SENTENCE = ['We propose a new simple network architecture', 'entirely.'] as const;
-
-/** The centre of a locator's box, in client px. */
-async function centre(target: Locator): Promise<{ x: number; y: number }> {
-  const box = await target.boundingBox();
-  if (box === null) throw new Error('no box');
-  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-}
 
 /** The text-layer words under the flashed passage's polygons. */
 async function flashedWords(page: Page): Promise<string> {
@@ -147,13 +152,17 @@ test.describe('S8: the prototype flow, 14 steps, at 1440 and 390, both schemes (
         await expect(page.locator('.pt-search__count')).toHaveText(
           `${String(lit)} of ${String(before.length)}`,
         );
-        // Filters in place: the rest dims, nothing reorders.
+        // Filters in place: the rest dims (some book is not lit), nothing reorders.
+        expect(lit).toBeLessThan(before.length);
         expect(await order()).toEqual(before);
       });
 
       await step(phone ? 'take it down (the phone has no pull-out)' : 'pull out', async () => {
-        await book.focus();
-        await page.keyboard.press('Enter');
+        if (phone) await book.tap();
+        else {
+          await book.focus();
+          await page.keyboard.press('Enter');
+        }
         if (phone) {
           const sheet = page.locator(`[data-card-paper-id="${paperId}"]`);
           await expect(sheet).toHaveClass(/pt-catalogue--sheet/);
@@ -234,10 +243,10 @@ test.describe('S8: the prototype flow, 14 steps, at 1440 and 390, both schemes (
         const sent = page.waitForRequest(
           (r) => r.method() === 'POST' && r.url().endsWith(`/papers/${paperId}/threads`),
         );
-        await page
+        const explain = page
           .getByRole('toolbar', { name: 'Selection actions' })
-          .getByRole('button', { name: 'Explain this passage' })
-          .click();
+          .getByRole('button', { name: 'Explain this passage' });
+        await (phone ? explain.tap() : explain.click());
         selection = ((await sent).postDataJSON() as { anchor: { doc: { paperId: string } } })
           .anchor;
         await expect(exchange.locator('[data-message-status="complete"]')).toBeVisible({
@@ -280,14 +289,18 @@ test.describe('S8: the prototype flow, 14 steps, at 1440 and 390, both schemes (
         await expect(page.locator('[data-flash-tab="2"]')).toContainText(
           'from marker 2 in the answer',
         );
-        await page.waitForTimeout(500);
+        // In view, above the sheet on a phone, once the scroll and the sheet's lowering are over.
+        await expect
+          .poll(async () => {
+            const box = await page.locator('svg [data-flash] polygon').first().boundingBox();
+            const floor = phone
+              ? ((await page.locator('.pt-explain-sheet').boundingBox())?.y ?? 0)
+              : 900;
+            return box !== null && box.y >= 0 && box.y + box.height <= floor;
+          })
+          .toBe(true);
         // WHERE it flashed: the words under the ring are passage 2's own.
         expect(letters(await flashedWords(page))).toContain(letters(quote).slice(0, 24));
-        const box = await flash.first().boundingBox();
-        const floor = phone
-          ? ((await page.locator('.pt-explain-sheet').boundingBox())?.y ?? 0)
-          : 900;
-        expect((box?.y ?? -1) >= 0 && (box?.y ?? 0) + (box?.height ?? 0) <= floor).toBe(true);
       });
 
       let pageId = '';
@@ -362,6 +375,8 @@ test.describe('S8: the prototype flow, 14 steps, at 1440 and 390, both schemes (
         source_anchor: selection,
       });
       const card = (id: string) => page.locator(`.react-flow__node[data-id="${id}"]`);
+      const claimOut = card(plateCard).locator('[data-handleid="claim_out"]');
+      const evidenceIn = card(passageCard).locator('[data-handleid="evidence_in"]');
 
       await step('the board', async () => {
         const sent = page.waitForResponse(
@@ -369,9 +384,11 @@ test.describe('S8: the prototype flow, 14 steps, at 1440 and 390, both schemes (
             r.request().method() === 'POST' && r.url().endsWith(`/papers/${paperId}/board/nodes`),
         );
         const bar = page.locator('.pt-nb__bar');
-        await bar.getByRole('button', { name: /Send page to board/ }).click();
+        const send = bar.getByRole('button', { name: /Send page to board/ });
+        await (phone ? send.tap() : send.click());
         expect((await sent).status()).toBe(201);
-        await bar.getByRole('link', { name: /Open board/ }).click();
+        const open = bar.getByRole('link', { name: /Open board/ });
+        await (phone ? open.tap() : open.click());
         await page.waitForURL(`**/paper/${paperId}/board**`);
         await expect(page.locator('.react-flow__node')).toHaveCount(3, { timeout: 60_000 });
         // A phone's header is one row beside "Board"; the minimap folds behind "Map" (#214).
@@ -394,11 +411,11 @@ test.describe('S8: the prototype flow, 14 steps, at 1440 and 390, both schemes (
                 a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h,
                 `${a.kind} and ${b.kind} overlap`,
               ).toBe(false);
-        await page.waitForTimeout(800);
+        // The board has fitted itself and placed the pins the next step aims at.
+        await steadyCentre(page, claimOut);
+        await steadyCentre(page, evidenceIn);
       });
 
-      const claimOut = card(plateCard).locator('[data-handleid="claim_out"]');
-      const evidenceIn = card(passageCard).locator('[data-handleid="evidence_in"]');
       const picker = page.getByRole('group', { name: /link as/i });
       await step("a thread from the plate's brass pin", async () => {
         if (phone) {

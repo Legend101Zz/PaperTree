@@ -1,7 +1,8 @@
 /**
  * e2e/v02 — helpers for the whole prototype flow (S8, #218): the checks run after every step (the
- * motion settled, the scheme really applied, no banned label, axe), the board's plate and passage
- * made through the API's own routes, and the animation recorder the reduced-motion walk reads.
+ * motion settled, the scheme really applied, no banned label, axe), a box that has stopped moving,
+ * the board's plate and passage made through the API's own routes, and the animation and scroll
+ * recorders the reduced-motion walk reads.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -10,8 +11,9 @@ import { expect } from '../harness/test';
 import { python, REPO } from '../s4/support';
 import { api } from '../s7/support';
 
-import type { BrowserContext, Page } from '@playwright/test';
+import type { BrowserContext, Locator, Page } from '@playwright/test';
 
+/** The committed corpus's Attention PDF (fetched by `research/benchmarks/fetch_corpus.sh`). */
 export const ATTENTION = join(
   REPO,
   'research',
@@ -71,6 +73,44 @@ interface AxeResults {
     readonly impact: string | null;
     readonly nodes: readonly { readonly target: readonly string[] }[];
   }[];
+}
+
+/**
+ * The centre of a locator's box, in client px.
+ *
+ * @param target - The element.
+ * @returns Its centre.
+ */
+export async function centre(target: Locator): Promise<{ x: number; y: number }> {
+  const box = await target.boundingBox();
+  if (box === null) throw new Error('no box');
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
+/**
+ * The centre of a box once it is the same on two frames running: React Flow has measured the cards
+ * and placed the pins, so a drag or a tap aimed at it lands on it.
+ *
+ * @param page - The page.
+ * @param target - The element (a brass pin, say).
+ * @returns Its settled centre.
+ */
+export async function steadyCentre(page: Page, target: Locator): Promise<{ x: number; y: number }> {
+  const frames = () =>
+    page.evaluate(
+      () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+    );
+  await expect
+    .poll(
+      async () => {
+        const before = JSON.stringify(await centre(target));
+        await frames();
+        return before === JSON.stringify(await centre(target));
+      },
+      { message: 'the box holds still over two frames', timeout: 20_000 },
+    )
+    .toBe(true);
+  return centre(target);
 }
 
 /**
@@ -134,7 +174,7 @@ if doc is None:
 block = next(b for b in doc.blocks if needle in b.text)
 at = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 print(json.dumps(dict(capture_anchor(doc, block.block.block_id, anchor_id=str(uuid.uuid4()),
-                                     at=at, client="papertree-web/reader"))))
+                                     at=at, client="e2e/s8"))))
 `,
     [dataRoot, user, paperId, needle],
   );
@@ -255,8 +295,9 @@ export async function recordAnimations(context: BrowserContext): Promise<void> {
 }
 
 /**
- * The animations recorded since the last call, after the longest reduced moment has had time to
- * end (so none is caught mid-way and missed).
+ * The animations recorded since the last call. The recorder sees each one, with its end time, on
+ * its first frame; the wait is for animations that START late (a fade after a commit) to be
+ * counted in this moment rather than the next.
  *
  * @param page - The page.
  * @returns What ran.
@@ -266,4 +307,37 @@ export async function takeAnimations(page: Page): Promise<SeenAnimation[]> {
   return page.evaluate(() =>
     (window as unknown as { ptS8Animations: SeenAnimation[] }).ptS8Animations.splice(0),
   );
+}
+
+/**
+ * Record a scroller's `scrollTop` on every frame until `stop` is called: the flash's scroll before
+ * it is a script-driven tween (`tweenScroll`, a `requestAnimationFrame` loop), which
+ * `document.getAnimations()` never sees.
+ *
+ * @param page - The page.
+ * @param selector - The scroller.
+ * @returns `stop`, which ends the recording and returns every value seen, in order.
+ */
+export async function recordScroll(
+  page: Page,
+  selector: string,
+): Promise<{ stop: () => Promise<number[]> }> {
+  await page.evaluate((sel) => {
+    const el = document.querySelector(sel) as HTMLElement;
+    const w = window as unknown as { ptS8Scroll: { seen: number[]; on: boolean } };
+    w.ptS8Scroll = { seen: [el.scrollTop], on: true };
+    const tick = (): void => {
+      w.ptS8Scroll.seen.push(el.scrollTop);
+      if (w.ptS8Scroll.on) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, selector);
+  return {
+    stop: () =>
+      page.evaluate(() => {
+        const w = window as unknown as { ptS8Scroll: { seen: number[]; on: boolean } };
+        w.ptS8Scroll.on = false;
+        return w.ptS8Scroll.seen;
+      }),
+  };
 }

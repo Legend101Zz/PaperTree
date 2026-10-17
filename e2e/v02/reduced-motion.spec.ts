@@ -6,7 +6,11 @@
  * 120 ms cross-fade at most, and none at all for the flash ("the ring and wash appear, clear on the
  * next action"), the plate's parts ("simply appear") and the thread ("drawn on release, no
  * settle"). Every animation is read from `document.getAnimations()` on every frame
- * (`recordAnimations`), so a CSS transition, a CSS animation and a Web Animation all count.
+ * (`recordAnimations`), so a CSS transition, a CSS animation and a Web Animation all count. The one
+ * motion those cannot see is script-driven: the flash's scroll to an off-screen passage
+ * (`tweenScroll`, a `requestAnimationFrame` loop, 240 ms in full motion). The walk starts the flash
+ * with its passage off screen and reads the scroller's `scrollTop` on every frame (`recordScroll`):
+ * under reduced motion it must jump, not travel.
  *
  * The board's passage card holds the Anchor the reader sent for the explained selection, placed
  * through the API (as in `prototype-flow.spec.ts`); the plate is drawn in the panel by the faux
@@ -16,17 +20,19 @@
 import { existsSync } from 'node:fs';
 
 import { expect, test } from '../harness/test';
-import { drag, pointsFor, register, reveal, upload, waitParsed } from '../s4/support';
+import { drag, pointsFor, register, reveal, SCROLLER, upload, waitParsed } from '../s4/support';
 import { getBoard, tokenInit } from '../s7/support';
 import {
   ATTENTION,
   placeCard,
   recordAnimations,
+  recordScroll,
+  steadyCentre,
   takeAnimations,
   type SeenAnimation,
 } from './flow-support';
 
-import type { Locator, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 
 /** DESIGN.md §6, reduced motion: the longest moment is one 120 ms cross-fade. */
 const REDUCED_MS = 120;
@@ -48,12 +54,6 @@ async function select(page: Page, from: string, to: string): Promise<void> {
   await reveal(page, from);
   const points = await pointsFor(page, from, to);
   await drag(page, points.from, points.to);
-}
-
-async function centre(target: Locator): Promise<{ x: number; y: number }> {
-  const box = await target.boundingBox();
-  if (box === null) throw new Error('no box');
-  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
 const textLayer = (page: Page) => page.locator('.papertree-text-layer span[data-cp-start]');
@@ -100,6 +100,7 @@ test.describe('S8: reduced motion, every moment (faux agent)', () => {
     await page.goto('/dashboard');
     const book = page.locator(`[aria-label="Your shelf"] button[data-paper-id="${paperId}"]`);
     await expect(book).toBeVisible({ timeout: 60_000 });
+    // The library's own arrival (covers, the header) is not one of frame 11's moments: drop it.
     await takeAnimations(page);
     const spread = page.locator('[role="dialog"][data-book-stage]');
     await book.focus();
@@ -118,6 +119,7 @@ test.describe('S8: reduced motion, every moment (faux agent)', () => {
     await expect(spread).toHaveAttribute('data-book-stage', 'pulled');
     await page.keyboard.press('Enter');
     await expect(spread.getByRole('button', { name: /^Read / })).toBeFocused();
+    // A second pull out and open, already held to the bound above: drop them, so "Read" is alone.
     await takeAnimations(page);
     await page.keyboard.press('Enter');
     await page.waitForURL(`**/paper/${paperId}/read**`);
@@ -140,9 +142,30 @@ test.describe('S8: reduced motion, every moment (faux agent)', () => {
       timeout: 120_000,
     });
     expectWithin('Explain', await takeAnimations(page));
-    await exchange.locator('[data-passage="2"] button').first().click();
+    // The passage off screen first, so the flash must scroll to it: half the paper further down.
+    await page.evaluate((sel) => {
+      const el = document.querySelector(sel) as HTMLElement;
+      el.scrollTop = el.scrollHeight / 2;
+    }, SCROLLER);
     const flash = page.locator('svg [data-flash] polygon.pt-flash');
+    await expect(flash).toHaveCount(0);
+    const scroll = await recordScroll(page, SCROLLER);
+    await exchange.locator('[data-passage="2"] button').first().click();
     await expect(flash.first()).toBeVisible({ timeout: 10_000 });
+    const seen = await scroll.stop();
+    const [first, last] = [seen[0] ?? 0, seen.at(-1) ?? 0];
+    const between = seen.filter((v, i) => v !== first && v !== last && v !== seen[i - 1]);
+    console.log(`[e2e s8 reduced] the flash's scroll: ${JSON.stringify(seen)}`);
+    const height = await page.evaluate(
+      (sel) => document.querySelector(sel)!.clientHeight,
+      SCROLLER,
+    );
+    expect(first - last, 'the flash scrolled back to its passage').toBeGreaterThan(height);
+    // A jump: the scroller goes from where it was to the passage in one frame, never through a
+    // run of eased positions (240 ms of them in full motion).
+    expect(between.length, `positions on the way: ${JSON.stringify(between)}`).toBeLessThanOrEqual(
+      1,
+    );
     // Past the whole normal flash (180 + 900 + 600): still the full ring, no fade to an outline.
     await page.waitForTimeout(2_000);
     await expect(page.locator('svg [data-flash="true"]').first()).toBeAttached();
@@ -197,12 +220,14 @@ test.describe('S8: reduced motion, every moment (faux agent)', () => {
     await expect(page.locator('.react-flow__node')).toHaveCount(2, { timeout: 60_000 });
     const plateCard = page.locator('.react-flow__node-diagram');
     await expect(plateCard.locator('[data-plate-mini="6"]')).toBeVisible();
-    await page.waitForTimeout(800);
-    await takeAnimations(page);
-    const from = await centre(plateCard.locator('[data-handleid="claim_out"]'));
-    const to = await centre(
+    // The board has fitted itself and placed the pins the drag aims at.
+    const from = await steadyCentre(page, plateCard.locator('[data-handleid="claim_out"]'));
+    const to = await steadyCentre(
+      page,
       page.locator(`.react-flow__node[data-id="${passage}"] [data-handleid="evidence_in"]`),
     );
+    // The board's own arrival (cards, the minimap) is not one of frame 11's moments: drop it.
+    await takeAnimations(page);
     await page.mouse.move(from.x, from.y);
     await page.mouse.down();
     await page.mouse.move((from.x + to.x) / 2, (from.y + to.y) / 2, { steps: 8 });
