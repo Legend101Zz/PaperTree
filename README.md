@@ -23,7 +23,7 @@ with citations that jump back to the exact passage, and lay out what you found o
 [![uv](https://img.shields.io/badge/uv-workspace-DE5FE9)](https://docs.astral.sh/uv/)
 [![Model: MiniMax](https://img.shields.io/badge/model-MiniMax%20M3%20%2B%20M3.1%20Flash-E5484D)](#model-policy)
 
-[![TS tests](https://img.shields.io/badge/TS%20tests-3%2C149%20passing-brightgreen)](#tests-and-quality-gates)
+[![TS tests](https://img.shields.io/badge/TS%20tests-3%2C152%20passing-brightgreen)](#tests-and-quality-gates)
 [![pytest](https://img.shields.io/badge/pytest-2%2C562%20passing-brightgreen)](#tests-and-quality-gates)
 [![e2e](https://img.shields.io/badge/e2e-88%2F88%20Playwright-brightgreen)](#tests-and-quality-gates)
 [![axe](https://img.shields.io/badge/axe-0%20serious%20or%20critical-brightgreen)](#metrics-against-v010)
@@ -475,9 +475,9 @@ installs a pre-commit hook (lefthook) that runs Prettier and the linters on stag
 
 **The counts for v0.2** (each read from its own run's log for this README):
 
-- **TypeScript: 3,149 tests** on `release/v0.2` at `a8eb3e5`: vitest 2,970 (web 1,568, document-ir 864,
+- **TypeScript: 3,152 tests** on `release/v0.2` at `91857a4` (with S8): vitest 2,973 (web 1,571, document-ir 864,
   anchoring 336, ui 202) and 179 agent tests. `pnpm exec turbo run test --force`, 2026-10-17, load average
-  2.07 at the start.
+  2.24 at the start.
 - **pytest: 2,562 passed**, 4 skipped, 1 expected failure, with the peak-RSS test passing in its own process.
   The local gate on `cbe70fa` (the head of [#320](https://github.com/Legend101Zz/PaperTree/pull/320), S8),
   2026-10-17, load average 19.32 at the start; the CI run on #320 counted the same.
@@ -598,7 +598,7 @@ accessibility; docstrings on new Python modules; Prettier on `apps/web`; a pre-c
 
 | Metric               | v0.1.0                                                                                                                                     | v0.2 (unreleased)                                                                                                                                                                                    | Source                                                                                                            |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| TypeScript tests     | 1,858 (vitest 1,716, agent 142)                                                                                                            | **3,149** (vitest 2,970, agent 179)                                                                                                                                                                  | v0.1: the baseline gate in `RESULT.md`; v0.2: `turbo run test --force` on `a8eb3e5`                               |
+| TypeScript tests     | 1,858 (vitest 1,716, agent 142)                                                                                                            | **3,152** (vitest 2,973, agent 179)                                                                                                                                                                  | v0.1: the baseline gate in `RESULT.md`; v0.2: `turbo run test --force` on `a8eb3e5`                               |
 | pytest               | 2,236 passed                                                                                                                               | **2,562 passed**, 4 skipped, 1 expected failure                                                                                                                                                      | S8's gate on `cbe70fa`; CI on #320                                                                                |
 | e2e (Playwright)     | 60 of 60                                                                                                                                   | **88 of 88**, in 30.1 min                                                                                                                                                                            | CI run 39015930115 on #320                                                                                        |
 | axe                  | 0 serious or critical in 12 combinations (library, reader Source, reader Guided); canvas and explain panel not tested                      | **0 serious or critical** after each of the 14 steps of the prototype flow at 1440 and 390 px, daylight and lamp-lit: library, book, reader, explain panel, notebook and board                       | S8's `e2e/v02/prototype-flow.spec.ts` (#320)                                                                      |
