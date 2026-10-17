@@ -4,7 +4,7 @@
  *   upload Attention → a page (`POST /papers/{id}/notebook/pages`) → pick up the pen → draw a
  *   stroke with the mouse → its POST lands → reload → the stroke is there, at the same place →
  *   the stroke eraser across it → its DELETE lands → reload → gone → a typed note → the lasso
- *   round it → the menu → axe with the tool bar and the lasso menu open, at 1440 and 390, daylight
+ *   round it → the menu → axe with the tool bar and the lasso menu open, at 1440 and 1180, daylight
  *   and lamp-lit → Make sticky → reload → the note is a sticky.
  *
  * The corpus PDF is fetched, not committed: the spec SKIPS, loudly, without it.
@@ -127,16 +127,18 @@ test.describe('S5d — ink on the notebook page', () => {
     await expect(menu.getByRole('menuitem', { name: 'Ask about this' })).toBeFocused();
     await page.screenshot({ path: shot('s5d-lasso-menu-1440.png') });
 
-    // ── 6. axe with the tool bar and the lasso menu open ──
+    // ── 6. axe with the tool bar and the lasso menu open, on the desktop and on the tablet's rail.
+    //    The phone does not offer the lasso (S5e, #210: it is put down there, and the stack shows);
+    //    notebook-dive.spec checks the phone. ──
     for (const [width, height] of [
       [1440, 900],
-      [390, 844],
+      [1180, 820],
     ] as const) {
       for (const colorScheme of ['light', 'dark'] as const) {
         await page.setViewportSize({ width, height });
         await scheme(page, colorScheme);
         await expect(menu).toBeVisible();
-        // All five actions on screen, at a phone's width too (the menu moves to the screen's foot).
+        // All five actions on screen, beside the rail too.
         const at = (await menu.boundingBox())!;
         expect(at.x).toBeGreaterThanOrEqual(0);
         expect(at.x + at.width).toBeLessThanOrEqual(width);
