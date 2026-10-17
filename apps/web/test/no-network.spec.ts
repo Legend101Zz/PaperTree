@@ -40,9 +40,19 @@ describe('an unmocked request', () => {
   it('through the API client is offline to the code and names GET and the URL to the test', async () => {
     await expect(apiFetch('/auth/me')).rejects.toBeInstanceOf(NetworkError);
     const report = drained();
-    expect(report).toContain(`GET ${API_BASE_URL}/auth/me (in "an unmocked request > through`);
+    expect(report).toContain(`GET ${API_BASE_URL}/auth/me\n    in "an unmocked request > through`);
     expect(report).toContain('tests never touch the network');
     expect(drained()).toBe('');
+  });
+
+  it('names where it came from, in the failure and in its own rejection', async () => {
+    const error = await apiFetch('/auth/me').catch((caught: unknown) => caught);
+    // The NetworkError's cause is the guard's rejection: what an uncaught one would print.
+    const cause = String((error as NetworkError).cause);
+    expect(cause).toMatch(/^TypeError: #310: blocked network request GET \S+\/auth\/me, from /);
+    const origin = /from src\/lib\/api\/client\.ts:\d+:\d+ < test\/no-network\.spec\.ts:\d+:\d+/;
+    expect(cause).toMatch(origin);
+    expect(drained()).toMatch(origin);
   });
 
   it('names the method of a Request, and resolves a relative URL against the test page', async () => {

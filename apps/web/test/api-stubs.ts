@@ -5,6 +5,10 @@
  * letting the read reach `localhost:8000`, which `setup-no-network.ts` fails. Only the read is
  * replaced: the writes stay real, so a spec that makes one still trips the guard.
  *
+ * Each answers a SUCCEEDED read (`[]`). Before #310 these specs' reads failed (nothing listened),
+ * so a spec that wants the failed state now says so, per read: the stub is a `vi.fn`, e.g.
+ * `vi.mocked(topicsApi.list).mockRejectedValueOnce(new NetworkError('offline'))`.
+ *
  * Not a `.spec.` file, so vitest does not collect it.
  */
 import { vi } from 'vitest';
