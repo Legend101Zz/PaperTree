@@ -143,6 +143,10 @@ class has a Google-style docstring.
 ## Tests
 
 - **vitest** for logic and **Testing Library** for components.
+- **Web unit tests never touch the network** (#310: the default API port, 8000, belongs to another app
+  on the maintainer's machine). `apps/web/test/setup-no-network.ts` fails any test that makes an
+  unmocked request and names it. Mock the module (`vi.mock('@/lib/api/…')`, or a stub from
+  `apps/web/test/api-stubs.ts`) or stub `fetch` (`vi.stubGlobal('fetch', …)`).
 - **Playwright** (`e2e/`) for journeys at 1440 and 390 px, plus axe.
 - **pytest** for every endpoint and migration. Where a test touches parser output, run it against a real
   parse of a corpus paper, not only a fixture you wrote (AGENTS.md §4).
