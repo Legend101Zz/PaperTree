@@ -27,6 +27,10 @@ import {
 const ATTENTION = join(REPO, 'research', 'benchmarks', 'corpus', 'attention-is-all-you-need.pdf');
 
 test.describe('v0.2 S7b: Explain with a diagram → the plate → tap a part → Send to board', () => {
+  // FIXME(#339): this walk starts the plate from the selection menu's "Explain with a diagram",
+  // which #346 removed (diagrams live inside answers now). Re-enter the plate through the answer's
+  // own control when #339 lands, then delete this line.
+  test.fixme(true, 'the selection menu no longer has "Explain with a diagram" (#346, #339)');
   test.skip(
     !existsSync(ATTENTION),
     'SKIPPED: the corpus PDF attention-is-all-you-need.pdf is absent. Run research/benchmarks/fetch_corpus.sh.',

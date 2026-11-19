@@ -81,9 +81,10 @@ test.describe('Journey D: the canvas', () => {
     await drag(page, points.from, points.to);
     const selected = await selectionRects(page);
     expect(selected.text).toContain('Deeper neural networks');
-    await page.getByRole('button', { name: 'Send to board' }).click(); // #203's wording
+    await page.getByRole('button', { name: 'Send to board', exact: true }).click(); // #203's wording
+    await page.getByRole('button', { name: /^Just send/ }).click(); // #346: stays on the paper
     const toast = page.getByTestId('canvas-toast');
-    await expect(toast).toContainText('Passage added to your board'); // #203: the toolbar's wording
+    await expect(toast).toContainText('Added'); // #346: Just send says Added, with Show
     await page.screenshot({ path: shot('d01-reader-toast-1440.png') });
     const afterFirst = await getBoard(stack.apiUrl, token, paperId);
     expect(afterFirst.board).not.toBeNull();
@@ -131,7 +132,7 @@ test.describe('Journey D: the canvas', () => {
     expect(created.status, JSON.stringify(created.json)).toBe(201);
 
     // ── 3. open the canvas from the toast's link: exactly 2 nodes ──
-    await page.getByRole('link', { name: 'Open board' }).click(); // the passage's toast (#203)
+    await page.getByRole('link', { name: 'Show' }).click(); // the passage's toast (#203, #346)
     await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/board$`));
     await expect(page.locator('.react-flow__node')).toHaveCount(2);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1440);

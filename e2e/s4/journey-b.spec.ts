@@ -140,7 +140,7 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
       expect(selection.text.replace(/\s+/g, ' ').trim().length).toBeGreaterThan(0);
       await expect(page.getByRole('toolbar', { name: 'Selection actions' })).toBeVisible();
       await page.screenshot({ path: shot(`b02-select-${label}-1440.png`) });
-      const hit = await hitTest(page, 'Highlight');
+      const hit = await hitTest(page, 'Highlight in amber');
       expect(hit.hit, 'the element at the Highlight button centre must be the button').toBe(
         'button',
       );
@@ -552,7 +552,7 @@ test.describe('S4 Journey B — highlight, reload, zoom, modes, orphan, 390 px',
     const mPoints = await pointsFor(mobile, 'YOLO is refreshingly', 'see Figure');
     await drag(mobile, mPoints.from, mPoints.to);
     await expect(mobile.getByRole('toolbar', { name: 'Selection actions' })).toBeVisible();
-    const mHit = await hitTest(mobile, 'Highlight');
+    const mHit = await hitTest(mobile, 'Highlight in amber');
     expect(mHit.hit).toBe('button');
     await mobile.screenshot({ path: shot('b14-select-390.png') });
     await readingControls(mobile, (controls) =>
