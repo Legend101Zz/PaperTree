@@ -44,12 +44,12 @@ ALLOWED_ENV = ["PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC
 ARMS: dict[str, dict[str, Any]] = {
     "m3": {"model": "MiniMax-M3", "effort": None, "kinds": ["explain", "ask", "summary"]},
     "flash-low": {
-        "model": "MiniMax-M3.1-Flash-Preview",
+        "model": "MiniMax-M3.1-Flash",
         "effort": "low",
         "kinds": ["explain", "ask", "summary"],
     },
     "flash-medium": {
-        "model": "MiniMax-M3.1-Flash-Preview",
+        "model": "MiniMax-M3.1-Flash",
         "effort": "medium",
         "kinds": ["summary"],
     },

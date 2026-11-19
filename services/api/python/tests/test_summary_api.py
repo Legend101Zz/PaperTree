@@ -262,7 +262,7 @@ def test_partial_text_from_a_broken_run_is_kept_as_a_partial_summary(tmp_path: P
         assert status["state"] == "partial" and status["summary"]["bullets"]
 
 
-FLASH = "MiniMax-M3.1-Flash-Preview"
+FLASH = "MiniMax-M3.1-Flash"
 
 
 def test_a_flash_run_is_stored_and_served_under_the_model_the_agent_reported(

@@ -88,7 +88,7 @@
       "generation": 1,
       "run": {
         "run_id": "run_01M508X9PC5TCTKKCW83ST2XD2",
-        "model": "MiniMax-M3.1-Flash-Preview",
+        "model": "MiniMax-M3.1-Flash",
         "provider": "minimax",
         "agent_sdk": "pi-coding-agent@0.87.1",
         "input_tokens": 6286,
@@ -391,7 +391,7 @@
       "generation": 1,
       "run": {
         "run_id": "run_01M508XKD97B3DPF9T500EZ5XT",
-        "model": "MiniMax-M3.1-Flash-Preview",
+        "model": "MiniMax-M3.1-Flash",
         "provider": "minimax",
         "agent_sdk": "pi-coding-agent@0.87.1",
         "input_tokens": 6569,

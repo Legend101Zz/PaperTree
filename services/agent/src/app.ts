@@ -76,7 +76,7 @@ export interface Health {
   /** `run.model` per kind, and the Flash effort per kind (null for M3). */
   models: Record<RunKind, string>;
   effort: Record<RunKind, string | null>;
-  /** How a reported cost was priced, per model in use ("estimate on M3 rates" for Flash). */
+  /** How a reported cost was priced, per model in use ("published rates" for Flash and M3 alike). */
   cost_basis: Record<string, string>;
   key_present: boolean;
   wiring_ok: boolean;

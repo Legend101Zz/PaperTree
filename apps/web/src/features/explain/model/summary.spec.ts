@@ -107,6 +107,6 @@ describe('the summary as an exchange (frame 04d)', () => {
   it('the footer facts come from the stored summary', () => {
     expect(summaryDay(SUMMARY.created_at, 'UTC')).toBe('15 Oct');
     expect(shortModelName(SUMMARY.model)).toBe('M3');
-    expect(shortModelName('MiniMax-M3.1-Flash-Preview')).toBe('M3.1 Flash');
+    expect(shortModelName('MiniMax-M3.1-Flash')).toBe('M3.1 Flash');
   });
 });

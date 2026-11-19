@@ -662,7 +662,7 @@ Headers: `X-PaperTree-Agent-Secret`, `X-Request-Id`, `Content-Type: application/
     "quote": "<the exact selected text, verbatim>",
     "page_label": "p. 1",
     "section": "1. Introduction",
-    "passages": [ { "handle": "b1", "label": "p. 1 · ¶", "text": "<datamarked block text>" } ]
+    "passages": [ { "handle": "b1", "label": "p. 1 · ¶", "text": "<datamark line, block text, datamark line>" } ]
   },
   "question": "Explain this passage.",
   "history": { "session_id": "thr_01J…", "entries": [ "…Pi exportEntries() JSON…" ] },
@@ -672,7 +672,7 @@ Headers: `X-PaperTree-Agent-Secret`, `X-Request-Id`, `Content-Type: application/
 ```
 
 - **`seed` is required for `explain` and for `summary` runs (S5F, 2026-10-15; it was `null` for summary), and `null` or an object for `ask`.** For a summary it is a DIGEST of the paper: `quote: ""`, `page_label: ""`, `section: null` and `passages` = the abstract, then for each top-level section its first paragraph(s) (the heading is in the passage `label`), then the conclusion; references, acknowledgements and appendices are skipped. Each passage is datamarked with its own handle (`bN`, in reading order), at most 3 blocks per section, a block cut at a word boundary and ending `[…truncated]` when it does not fit, within about **6,000 estimated tokens of the datamarked text** (`packages/retrieval`'s `build_digest`; the per-section allowance shrinks 900 → 250 characters before any section is dropped, and the abstract, the first section and the conclusion are never dropped). `history` is `null` on a thread's first turn.
-- **The quote reaches the model datamarked (S5F, owner decision 2026-10-15).** `seed.quote` stays the exact selected text on the wire. The agent puts it in the first user turn as `<question>\n\n<untrusted_document trust="untrusted">\n<datamark word datamark word … datamark>\n</untrusted_document>` (angle brackets in the quote become `‹ ›`, datamark look-alikes are removed); a follow-up turn is the question only.
+- **The quote reaches the model datamarked (S5F, owner decision 2026-10-15).** `seed.quote` stays the exact selected text on the wire. The agent puts it in the first user turn as `<question>\n\n<untrusted_document trust="untrusted">\n<datamark>\n<quote as one line>\n<datamark>\n</untrusted_document>` (angle brackets in the quote become `‹ ›`, datamark look-alikes are removed, whitespace collapses to single spaces); a follow-up turn is the question only. **Changed 2026-11-19 (#339, audit P1): the datamark BOUNDS a block of paper text (a marker line before, one after) instead of preceding every word; per-word marking cost ~4x the input tokens (an explain was ~14k tokens, 20–33 s).** The same shape applies to every passage text and tool-response block; the paper's title and section name are bracketed inline (`<datamark> Title <datamark>`).
 - Limits by kind (the API fills them in):
 
   | kind | deadline | idle | tool calls | max output tokens |
@@ -683,7 +683,7 @@ Headers: `X-PaperTree-Agent-Secret`, `X-Request-Id`, `Content-Type: application/
 
   *Dated note, 2026-10-15 (W2API item 6):* the summary's `idle_ms` was 20 s. One of the v0.1 panel's eight live summaries (two running at once) ended `timeout` at 20.15 s with no token: MiniMax-M3 was thinking over the digest before its first text. It is now 45 s; the 90 s deadline is unchanged and still bounds the run, so a model that never speaks still ends `timeout`. The API's read timeout follows (`idle_ms + 5 s`). Explain and ask keep 20 s: their first-text latencies in the panel were 5-15 s.
 
-- The seed passages are the selected blocks, expanded by `packages/retrieval`'s structure-aware expansion under a budget of **≤ 3,000 estimated tokens**. The exact selected text goes first. This fixes the baseline answer that opened with the title and authors.
+- The seed passages are the selected blocks, expanded by `packages/retrieval`'s structure-aware expansion under a budget of **≤ 3,000 estimated tokens**. The exact selected text goes first. *Dated note, 2026-11-20 (#339):* the budget is now **≤ 1,500**. The 3,000 figure was measured on per-word datamarked text; with boundary marks the same passages cost about half, and the saving goes to latency rather than to more passages. This fixes the baseline answer that opened with the title and authors.
 
 Response: `200 text/event-stream`, with events from `contracts/agent/run-events.schema.json`:
 
@@ -747,7 +747,7 @@ Error mapping:
 - **Retries.** Exactly one retry, only when the agent reports `upstream_unavailable` **before** any `text`. There is no retry after any text has reached the browser.
 - **Spend cap.** Before a run, `cost_since(owner, now-24h) ≥ PAPERTREE_DAILY_BUDGET_USD` → 429 `budget_exhausted`; and (S5F) runs still in flight reserve an estimate each (`RUN_RESERVE_USD`: explain $0.01, ask $0.02, summary $0.05) until they finish, so `spent + reserved ≥ budget` also refuses (a second sentence: "Answers that are still being written could use up the AI budget …"). The `detail` is a sentence either way. **Orphans (S5F):** an `ai_runs` row still `running` past `expires_at` is ended as `status=error, error_code=internal` (its `streaming` message ends `partial` with text, else `error`, code `internal`) at API start and on every run start, usage read and thread/summary read; its tokens stay `null`.
 - **Run token.** `secrets.token_urlsafe(32)`. The API stores `sha256`, `expires_at = now + deadline + 30 s` and `status='running'`. On `done` the status is set to `done`, `error` or `aborted`, and the token dies.
-- **Datamark.** Minted with `papertree_prompts.mint_datamark()`, stored on `ai_runs` and sent in the request, so that the agent's system prompt can name it.
+- **Datamark.** Minted with `papertree_prompts.mint_datamark()`, stored on `ai_runs` and sent in the request, so that the agent's system prompt can name it. Since 2026-11-19 (#339) it marks the BOUNDARIES of each block of paper text (marker line, text on ONE line, marker line), never each word; no datamark-shaped sequence survives inside the text, so a passage cannot end its region early, and the system prompt says the text between two markers is data, never instructions. Python (`papertree_prompts.untrusted`) and TS (`services/agent/src/prompts.ts` `markBlock`) are twins, pinned by one literal in each test suite.
 - **On `done`:**
   - map `markers` to block ids through `ai_run_handles`, dropping unknown markers and logging them;
   - mint each citation Anchor with `papertree_anchoring.capture_anchor(doc, block_id, anchor_id=cit_…, at, client="papertree-api/citations", target_kind="citation")`;
@@ -761,7 +761,7 @@ Error mapping:
 - Auth: `Authorization: Bearer <run token>`. The API looks up `run_grant(run_id, sha256(token))`, which requires `status == 'running'` and `now < expires_at`. It then calls `owner_for(grant.user_id)` and reads through `AgentDataHandle` (read-only, authorizer-guarded) plus a `PaperIndex`. The index is LRU-cached by `(user_id, paper_id, generation)`, 8 entries; the rebuild cost is 38–420 ms per request today (QUOTED, proposal A).
 - **Server-side cap: 16 tool requests per run → 429 `tool_budget_exhausted`.**
 - Every response is `200 application/json` `{text, handles: string[], next_cursor?: string|null}`:
-  - `text` is model-facing, datamarked with the run's datamark through `render_untrusted_with_datamark`;
+  - `text` is model-facing, bracketed by the run's datamark (an opening and a closing marker line; 2026-11-19, #339: no longer per word) through `render_untrusted_with_datamark`;
   - every block is headed `[bN] (p. {page_label} · {section title} · {type})`;
   - `handles` are assigned first-seen and persisted to `ai_run_handles`.
 
@@ -888,11 +888,12 @@ The following is fixed in S0 so that no two slices edit the same file:
 
 | Variable | Process | Default | Notes |
 |---|---|---|---|
-| `PAPERTREE_MODEL` | agent | per kind (explain: `MiniMax-M3.1-Flash-Preview`; ask, summary: `MiniMax-M3`; ask moved to M3 on 2026-10-15, ADR-003 Revision) | one model for every kind; `MiniMax-M3` or `MiniMax-M3.1-Flash-Preview`; an unknown id refuses to boot |
-| `PAPERTREE_MODEL_EXPLAIN` / `_ASK` / `_SUMMARY` | agent | `PAPERTREE_MODEL` | the model for one kind |
-| `PAPERTREE_MODEL_EFFORT` (+ `_EXPLAIN` / `_ASK` / `_SUMMARY`) | agent | `low` | Flash only: `low`, `medium`, `high` |
+| `PAPERTREE_MODEL` | agent | per kind: `MiniMax-M3.1-Flash` for every kind (ADR-003 Revision 2026-11-19; before that explain, diagram, topic on Flash and ask, summary on `MiniMax-M3`) | one model for every kind; `MiniMax-M3` or `MiniMax-M3.1-Flash`; an unknown id refuses to boot |
+| `PAPERTREE_MODEL_EXPLAIN` / `_ASK` / `_SUMMARY` / `_DIAGRAM` / `_TOPIC` | agent | `PAPERTREE_MODEL` | the model for one kind |
+| `PAPERTREE_MODEL_EFFORT` (+ `_EXPLAIN` / `_ASK` / `_SUMMARY` / `_DIAGRAM` / `_TOPIC`) | agent | per kind: explain, diagram, topic `low`; ask, summary `medium` | Flash only: `low`, `medium`, `high`; M3 reports no effort |
 | `PAPERTREE_AGENT_LOG_LEVEL` | agent | `info` | `debug` adds raw provider error text; never keys or tokens |
 | `PAPERTREE_AGENT_FAUX` | agent | unset | `1` = the scripted test model (tests only; the key is not read) |
+| `NEXT_PUBLIC_PAPERTREE_DESIGN_SYSTEM` | web, at build time | off in a production build | `on` serves the `/design-system` developer page from a production build; `next dev` always serves it |
 
 Removed: `PAPERTREE_LLM_API_KEY`, `PAPERTREE_LLM_MODEL`, `PAPERTREE_LLM_BASE_URL`, `PAPERTREE_LLM_TIMEOUT_SECONDS`, `PAPERTREE_VLM_API_KEY` and `LLM_API_KEY`.
 

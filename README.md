@@ -513,10 +513,8 @@ database to `papertree.sqlite.pre-0008.bak` and `.pre-0011.bak`.
 ## Configuration
 
 The variables below are every one the code reads, apart from test and research switches. The contract is
-`research/build/reader-release/contracts.md` section 7. It, `.env.example` and `apps/web/.env.example`
-do not list the four model variables for the `diagram` and `topic` kinds or
-`NEXT_PUBLIC_PAPERTREE_DESIGN_SYSTEM` yet ([#323](https://github.com/Legend101Zz/PaperTree/issues/323)). Everything is optional
-except the secret and the key.
+`research/build/reader-release/contracts.md` section 7, which `.env.example` and `apps/web/.env.example` follow.
+Everything is optional except the secret and the key.
 
 <details>
 <summary><b>All environment variables</b></summary>
@@ -535,9 +533,9 @@ except the secret and the key.
 | `PAPERTREE_AGENT_PORT`                                                            | agent              | `8200`                    | binds `127.0.0.1` only                                                                                     |
 | `PAPERTREE_API_INTERNAL_URL`                                                      | agent              | `http://127.0.0.1:8000`   | the API origin the agent fetches paper tools from                                                          |
 | `PAPERTREE_MINIMAX_API_KEY`                                                       | **agent only**     | **required**              | read once, then removed from the agent's environment; never `MINIMAX_API_KEY`                              |
-| `PAPERTREE_MODEL`                                                                 | agent              | per kind, see below       | one model for every kind: `MiniMax-M3` or `MiniMax-M3.1-Flash-Preview`                                     |
+| `PAPERTREE_MODEL`                                                                 | agent              | per kind, see below       | one model for every kind: `MiniMax-M3` or `MiniMax-M3.1-Flash`                                             |
 | `PAPERTREE_MODEL_EXPLAIN`, `_ASK`, `_SUMMARY`, `_DIAGRAM`, `_TOPIC`               | agent              | `PAPERTREE_MODEL`         | the model for one kind (`_DIAGRAM` and `_TOPIC` are new in v0.2)                                           |
-| `PAPERTREE_MODEL_EFFORT` (+ `_EXPLAIN`, `_ASK`, `_SUMMARY`, `_DIAGRAM`, `_TOPIC`) | agent              | `low`                     | Flash only: `low`, `medium` or `high`                                                                      |
+| `PAPERTREE_MODEL_EFFORT` (+ `_EXPLAIN`, `_ASK`, `_SUMMARY`, `_DIAGRAM`, `_TOPIC`) | agent              | per kind, see below       | Flash only: `low`, `medium` or `high`                                                                      |
 | `PAPERTREE_AGENT_LOG_LEVEL`                                                       | agent              | `info`                    | `debug` adds raw provider error text; keys and tokens are never logged                                     |
 | `PAPERTREE_AGENT_FAUX`                                                            | agent              | unset                     | `1` = a scripted test model with canned answers (the e2e suite uses it); not for real use                  |
 | `PI_OFFLINE`, `PI_TELEMETRY`, `PI_CODING_AGENT_DIR`                               | agent              | set by the agent          | defence in depth; do not set them                                                                          |
@@ -555,22 +553,22 @@ If you move the API, change `PAPERTREE_PORT`, `PAPERTREE_API_INTERNAL_URL` and
 ## Model policy
 
 The agent decides which MiniMax model answers which kind of run (`services/agent/src/models.ts`,
-`DEFAULT_MODELS`; [ADR-003](research/architecture-decisions/ADR-003-model-policy.md)). The defaults for explain, ask
-and summary were chosen from an A/B test and a 3-judge quality panel ([`MODEL-AB.md`](docs/release/v0.1/MODEL-AB.md),
-[`QUALITY.md`](docs/release/v0.1/QUALITY.md)):
+`DEFAULT_MODELS` and `DEFAULT_EFFORTS`; [ADR-003](research/architecture-decisions/ADR-003-model-policy.md), Revision
+2026-11-19). `MiniMax-M3.1-Flash` is generally available, faster and smarter than the preview the v0.1 A/B measured
+([`MODEL-AB.md`](docs/release/v0.1/MODEL-AB.md), [`QUALITY.md`](docs/release/v0.1/QUALITY.md)), and it is the default for
+every kind:
 
-| Kind                                                         | Model                                    | Why                                                                                                        |
-| ------------------------------------------------------------ | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `explain`: a selection (and follow-ups in that thread)       | `MiniMax-M3.1-Flash-Preview`, effort low | First text p50 1.8 s in the A/B, against 9.3 s on M3                                                       |
-| `ask`: a question about the whole paper (and its follow-ups) | `MiniMax-M3`                             | Flash's ask follow-ups drew 9 wrong-citation marks against 0 for M3 (3 follow-ups, 3 judges, summed)       |
-| `summary`                                                    | `MiniMax-M3`                             | Flash summaries (effort medium) had 14 unsupported claims against 3 for M3 (3 summaries, 3 judges, summed) |
-| `diagram` (v0.2)                                             | `MiniMax-M3.1-Flash-Preview`, effort low | A short, structured plate from one selection, like an explain. Not A/B-tested: two live runs so far        |
-| `topic` (v0.2)                                               | `MiniMax-M3.1-Flash-Preview`, effort low | One short JSON answer per paper, no tools. Not A/B-tested: one live smoke (two calls)                      |
+| Kind                                                   | Model                               | Why this effort                                                   |
+| ------------------------------------------------------ | ----------------------------------- | ----------------------------------------------------------------- |
+| `explain`: a selection (and follow-ups in that thread) | `MiniMax-M3.1-Flash`, effort low    | A short answer from one selection: speed matters                  |
+| `ask`: a question about the paper (and its follow-ups) | `MiniMax-M3.1-Flash`, effort medium | An open question over a path through the paper: more reasoning    |
+| `summary`                                              | `MiniMax-M3.1-Flash`, effort medium | The whole paper: structure and citations to keep straight         |
+| `diagram`                                              | `MiniMax-M3.1-Flash`, effort low    | A short, structured plate from one selection, shaped like explain |
+| `topic`                                                | `MiniMax-M3.1-Flash`, effort low    | One short JSON answer per paper, no tools                         |
 
-A follow-up stays on its thread's model. Follow-ups to an explanation therefore run on Flash; the quality
-panel's follow-ups were all asks, so that case has not been measured. `PAPERTREE_MODEL=MiniMax-M3` puts every
-kind on M3, and `PAPERTREE_MODEL_ASK=MiniMax-M3.1-Flash-Preview` puts ask back on Flash. MiniMax publishes no
-price for Flash, so the cost recorded in `ai_runs` for Flash runs is an estimate on M3's rates, and the
+A follow-up stays on its thread's model. `PAPERTREE_MODEL=MiniMax-M3` puts every kind on M3, and
+`PAPERTREE_MODEL_ASK=MiniMax-M3` puts one kind there (M3 takes no effort). The cost recorded in `ai_runs` for Flash
+uses MiniMax's published rates ($0.15 input, $0.60 output, $0.015 cache read per million tokens, read 2026-11-19), and the
 agent's `/healthz` says so (`cost_basis`).
 
 ## Tests and quality gates
@@ -724,9 +722,6 @@ Earlier releases: [v0.1.0](https://github.com/Legend101Zz/PaperTree/releases/tag
   two older parser issues are still open
   ([#101](https://github.com/Legend101Zz/PaperTree/issues/101),
   [#103](https://github.com/Legend101Zz/PaperTree/issues/103)).
-- **Setup:** `.env.example` and `apps/web/.env.example` do not list v0.2's variables yet
-  ([#323](https://github.com/Legend101Zz/PaperTree/issues/323)); the table under
-  [Configuration](#configuration) does.
 - **Not in v0.2.0:** audio and paper replay ([#5](https://github.com/Legend101Zz/PaperTree/issues/5)), OCR
   or scanned PDFs, memory write-back, a hosted version and a Docker setup.
 
@@ -781,8 +776,7 @@ it starts.
    ([#179](https://github.com/Legend101Zz/PaperTree/issues/179)); changing the daily cap in the app
    ([#256](https://github.com/Legend101Zz/PaperTree/issues/256)).
 6. **CI, tooling and docs.** Faux `ai_runs` rows, the Linux network-deny audit and the Python job's time
-   ([#181](https://github.com/Legend101Zz/PaperTree/issues/181)); the env files and `contracts.md` list v0.2's
-   variables ([#323](https://github.com/Legend101Zz/PaperTree/issues/323)). Also
+   ([#181](https://github.com/Legend101Zz/PaperTree/issues/181)); also
    [#219](https://github.com/Legend101Zz/PaperTree/issues/219),
    [#268](https://github.com/Legend101Zz/PaperTree/issues/268) and
    [#129](https://github.com/Legend101Zz/PaperTree/issues/129).

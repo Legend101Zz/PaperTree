@@ -10,7 +10,8 @@
  *   PAPERTREE_API_INTERNAL_URL  default http://127.0.0.1:8000; a run's `tool.base_url` must be on
  *                               this origin, so a run token is never sent anywhere else
  *   PAPERTREE_AGENT_LOG_LEVEL   default info; `debug` adds raw provider error text (§3.3)
- *   PAPERTREE_MODEL[_EXPLAIN|_ASK|_SUMMARY], PAPERTREE_MODEL_EFFORT[_...]   the model policy (models.ts)
+ *   PAPERTREE_MODEL[_EXPLAIN|_ASK|_SUMMARY|_DIAGRAM|_TOPIC]   the model per kind (models.ts)
+ *   PAPERTREE_MODEL_EFFORT[_EXPLAIN|_ASK|_SUMMARY|_DIAGRAM|_TOPIC]   Flash effort per kind (default per kind: models.ts)
  *
  * Set here, before any Pi code runs: PI_OFFLINE=1, PI_TELEMETRY=0, and PI_CODING_AGENT_DIR = a new
  * empty directory this process owns (mode 0700, removed at exit). `MINIMAX_API_KEY` — Pi's ambient

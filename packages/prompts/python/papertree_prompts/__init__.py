@@ -10,7 +10,8 @@ WHERE THIS SITS
   filesystem, no shell, no egress but the model — and the tools read through a run token that
   authorises one paper of one user for one run. This package is the second layer: every piece of
   paper text the API hands the agent (the seed passages in ``POST /v1/runs``, every internal tool
-  response) is datamarked with the run's own datamark, which ``services/api`` mints here and sends
+  response) is delimited by the run's own datamark (an opening and a closing marker line round
+  each block's text), which ``services/api`` mints here and sends
   in the run request so the agent's system prompt can name it (contracts.md §3.2, §3.4, §4).
 
   The correctness standard is that every claim is TRUE OF THE OUTPUT BYTES: content cannot contain
@@ -21,9 +22,11 @@ THE PIECES
 
   1. ``render_untrusted`` / ``render_untrusted_with_datamark``  —  ``untrusted.py``
      §13.6(a)'s four steps: strip control/invisible characters, strip tag-ish sequences, strip
-     datamark-shaped sequences from the source, interleave the datamark at every whitespace gap
-     (Hines et al., arXiv 2403.14720), inside ``<untrusted_document … trust="untrusted">``.
-  2. ``datamark_text``  —  the same four steps without the wrapper, for the run request's seed
+     datamark-shaped sequences from the source, put the text between an opening and a closing
+     datamark line (boundary marking; per-word datamarking after Hines et al., arXiv 2403.14720,
+     was dropped on 2026-11-19, #339: ~4x the tokens), inside
+     ``<untrusted_document … trust="untrusted">``.
+  2. ``datamark_text``  —  the same four steps without the tag, for the run request's seed
      passages, whose record already says they are document text.
   3. ``mint_datamark``  —  one per RUN; stored on ``ai_runs.datamark``.
   4. ``channels.py``  —  whether a text's origin may be treated as the author speaking.

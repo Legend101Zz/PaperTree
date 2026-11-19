@@ -1,22 +1,29 @@
 /**
- * The model policy (ADR-003). Which MiniMax model answers which kind of run, and how hard it thinks.
+ * The model policy (ADR-003, Revision 2026-11-19). Which MiniMax model answers which kind of run,
+ * and how hard it thinks.
  *
  *   PAPERTREE_MODEL            one model for every kind (unset: DEFAULT_MODELS below)
  *   PAPERTREE_MODEL_EXPLAIN    override for `explain`; likewise _ASK, _SUMMARY, _DIAGRAM and _TOPIC
  *   PAPERTREE_MODEL_EFFORT     Flash thinking effort (low | medium | high); likewise per kind
+ *                              (unset: DEFAULT_EFFORTS below)
  *
- * Two models are allowed: MiniMax-M3 (in Pi's catalog) and MiniMax-M3.1-Flash-Preview (NOT in the
- * catalog; registered below as a custom model through the SDK's own registerProvider). Flash cannot
+ * Flash (MiniMax-M3.1-Flash, GA) is the default for EVERY kind. MiniMax-M3 stays an allowed
+ * override. Two models are allowed: M3 (in Pi's catalog) and Flash (NOT in Pi's catalog, pi-ai
+ * 0.87.1; registered below as a custom model through the SDK's own registerProvider). Flash cannot
  * have thinking switched off (the API answers 400 "requires adaptive thinking" to thinking
  * {type: disabled} and to effort "none"), so a Flash request is always adaptive thinking plus an
  * effort. Pi sends exactly that for a model whose compat sets `forceAdaptiveThinking`: no payload
  * rewriting here.
+ *
+ * The retired id MiniMax-M3.1-Flash-Preview is not accepted as an override (no legacy shim; it now
+ * aliases to Flash and responses report the GA id). Old `ai_runs.model` rows that carry it stay
+ * readable in the API as data: see KNOWN_MODELS in services/api/python/papertree_api/agent_client.py.
  */
 import type { ModelRuntime } from '@earendil-works/pi-coding-agent';
 
 export const PROVIDER_ID = 'minimax';
 export const M3_MODEL_ID = 'MiniMax-M3';
-export const FLASH_MODEL_ID = 'MiniMax-M3.1-Flash-Preview';
+export const FLASH_MODEL_ID = 'MiniMax-M3.1-Flash';
 export const ALLOWED_MODEL_IDS = [M3_MODEL_ID, FLASH_MODEL_ID] as const;
 export type ModelId = (typeof ALLOWED_MODEL_IDS)[number];
 
@@ -27,23 +34,33 @@ export const EFFORTS = ['low', 'medium', 'high'] as const;
 export type Effort = (typeof EFFORTS)[number];
 
 /**
- * The shipped default (ADR-003), decided by the A/B in docs/release/v0.1/MODEL-AB.md and revised by
- * the v0.1 quality panel (ADR-003 "Revision 2026-10-15"): Flash (effort low) answers `explain`,
- * M3 answers `ask` (the panel's ask follow-ups: Flash grounded 3.22, 9 wrong citations; M3 3.78,
- * 0) and writes the `summary` (Flash's summaries read `partial` far more often: an uncited heading
- * bullet, citation ranges that do not parse). Flash (effort low) draws the `diagram` (v0.2 S7a,
- * ADR-004 §2.9: a short, structured plate from one selection, like an explain); whether it keeps
- * to the NDJSON lines is NOT CONFIRMED until S7b's live smoke. Flash (effort low) also suggests a
- * `topic` (v0.2 S2b2, #242): one short JSON object per upload, no tools (D2: "one short Flash call").
+ * The shipped default (ADR-003 "Revision 2026-11-19"): Flash answers every kind. It is GA, smarter
+ * and faster than the preview the v0.1 A/B (docs/release/v0.1/MODEL-AB.md) measured, so the v0.1
+ * split (M3 for ask and summary) is retired; M3 stays one env var away.
+ * The image ask (Wave 5) will join this table and DEFAULT_EFFORTS as its own kind.
  */
 export const DEFAULT_MODELS: Readonly<Record<RunKind, ModelId>> = {
   explain: FLASH_MODEL_ID,
-  ask: M3_MODEL_ID,
-  summary: M3_MODEL_ID,
+  ask: FLASH_MODEL_ID,
+  summary: FLASH_MODEL_ID,
   diagram: FLASH_MODEL_ID,
   topic: FLASH_MODEL_ID,
 };
-export const DEFAULT_EFFORT: Effort = 'low';
+
+/** Flash's default effort per kind. A global or per-kind env var overrides it exactly as before. */
+export const DEFAULT_EFFORTS: Readonly<Record<RunKind, Effort>> = {
+  // A short answer from one selection: speed matters.
+  explain: 'low',
+  // An open question over a path through the paper: more reasoning.
+  ask: 'medium',
+  // The whole paper, with structure and citations to keep straight.
+  summary: 'medium',
+  // A short, structured plate from one selection, shaped like an explain; no evidence yet that
+  // more thinking helps it keep to the line format, so it keeps explain's speed.
+  diagram: 'low',
+  // One short JSON object per upload, no tools.
+  topic: 'low',
+};
 
 export interface ModelChoice {
   readonly id: ModelId;
@@ -58,10 +75,11 @@ export type ModelPolicy = Readonly<Record<RunKind, ModelChoice>>;
 export const modelLabel = (id: string): string => `${PROVIDER_ID}/${id}`;
 
 /**
- * MiniMax publishes no price for Flash (checked 2026-10-09 on the pricing and Anthropic-API pages).
- * The Flash definition below carries M3's rates, and every place that reports a Flash cost says so.
+ * Flash's rates are MiniMax's published ones (platform.minimax.io/docs/guides/pricing, read
+ * 2026-11-19): $0.15 input / $0.60 output / $0.015 cache read per million tokens; no cache-write
+ * price is listed, so it is 0. M3 ($0.30 / $1.20 / $0.06) comes from Pi's catalog.
  */
-export const FLASH_COST_BASIS = 'estimate on M3 rates';
+export const FLASH_COST_BASIS = 'published rates (MiniMax pricing page, 2026-11-19)';
 export const CATALOG_COST_BASIS = 'Pi catalog rates';
 export const costBasis = (id: string): string =>
   id === FLASH_MODEL_ID ? FLASH_COST_BASIS : CATALOG_COST_BASIS;
@@ -99,7 +117,7 @@ export function readPolicy(env: NodeJS.ProcessEnv): ModelPolicy {
     const effort =
       pickEffort(`PAPERTREE_MODEL_EFFORT_${suffix}`, env[`PAPERTREE_MODEL_EFFORT_${suffix}`]) ??
       allEffort ??
-      DEFAULT_EFFORT;
+      DEFAULT_EFFORTS[kind];
     return { id, label: modelLabel(id), effort: id === FLASH_MODEL_ID ? effort : null };
   };
   return {
@@ -118,7 +136,7 @@ export const namesPolicy = (env: NodeJS.ProcessEnv): boolean =>
   );
 
 /** A policy with one model for every kind (tests, defaults). */
-export function uniformPolicy(id: ModelId, effort: Effort = DEFAULT_EFFORT): ModelPolicy {
+export function uniformPolicy(id: ModelId, effort: Effort = 'low'): ModelPolicy {
   const c: ModelChoice = {
     id,
     label: modelLabel(id),
@@ -139,8 +157,8 @@ const FLASH_DEFINITION = {
   baseUrl: 'https://api.minimax.io/anthropic',
   reasoning: true,
   input: ['text', 'image'] as ('text' | 'image')[],
-  // M3's rates: see FLASH_COST_BASIS.
-  cost: { input: 0.3, output: 1.2, cacheRead: 0.06, cacheWrite: 0 },
+  // Published rates: see FLASH_COST_BASIS.
+  cost: { input: 0.15, output: 0.6, cacheRead: 0.015, cacheWrite: 0 },
   contextWindow: 1_000_000,
   maxTokens: 128_000,
   // The one switch that makes Pi send {thinking: {type: 'adaptive'}, output_config: {effort}}.

@@ -133,7 +133,7 @@ export const ANSWER_MESSAGE: Message = {
   },
   run: {
     run_id: 'run_1',
-    model: 'MiniMax-M3.1-Flash-Preview',
+    model: 'MiniMax-M3.1-Flash',
     provider: 'minimax',
     agent_sdk: 'pi',
     input_tokens: 6000,
@@ -178,7 +178,7 @@ function item(
 
 const EXCHANGE_BODY = JSON.stringify({
   call: { text: 'Explain this passage.', origin_anchor: ORIGIN },
-  ai: { message_id: ANSWER, model: 'MiniMax-M3.1-Flash-Preview', content: CONTENT },
+  ai: { message_id: ANSWER, model: 'MiniMax-M3.1-Flash', content: CONTENT },
 });
 
 export function pageView(extra: NotebookItemWire[] = []): NotebookPageView {
