@@ -53,6 +53,8 @@ const message = (fields: Partial<Message> & Pick<Message, 'message_id' | 'role'>
   citations: [],
   created_at: '',
   completed_at: null,
+  level: null,
+  sibling_group: null,
   ...fields,
 });
 

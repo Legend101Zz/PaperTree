@@ -18,7 +18,7 @@ import { useThreads } from '../hooks/useThreads';
 import { ThreadMenu } from './ThreadMenu';
 import { ThreadView } from './ThreadView';
 
-import type { ExplainController } from '@/components/explain/useExplainActions';
+import type { ExplainController } from '@/features/explain/model/controller';
 import type { PaperSource } from '../model/exchange';
 import type { Anchor } from '@papertree/anchoring';
 

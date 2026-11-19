@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { buildExchanges } from './exchange';
 import { fromStored, mergeStored, type ThreadMessage } from './messages';
 import { GOLDEN } from '../../../../test/fixtures/attention-thread';
 
@@ -114,5 +115,97 @@ describe('mergeStored: a read that lands before the run event names the ids (rev
 
   it('keeps the stored generation, which the passage key is built from', () => {
     expect(fromStored(answer1, 'q').generation).toBe(answer1.generation);
+  });
+});
+
+describe('stored answers at other levels (v0.3)', () => {
+  const at = (over: Partial<Message>): Message => ({ ...answer1, ...over });
+  const rootMsg = at({
+    message_id: 'msg_r',
+    ordinal: 1,
+    level: 'familiar',
+    sibling_group: 'msg_r',
+  });
+  const expert = at({
+    message_id: 'msg_x',
+    ordinal: 2,
+    level: 'expert',
+    sibling_group: 'msg_r',
+    content: 'Expert.',
+  });
+  const simple = at({
+    message_id: 'msg_n',
+    ordinal: 3,
+    level: 'new',
+    sibling_group: 'msg_r',
+    content: 'Simple.',
+  });
+
+  it('keeps every level of a question: an answer followed by its sibling is not a replaced retry', () => {
+    const merged = mergeStored([], [ask1, rootMsg, expert, simple]);
+    expect(merged.map((m) => [m.role, m.level ?? null, m.siblingGroup ?? null])).toEqual([
+      ['user', null, null],
+      ['assistant', 'familiar', 'msg_r'],
+      ['assistant', 'expert', 'msg_r'],
+      ['assistant', 'new', 'msg_r'],
+    ]);
+  });
+
+  it('a retried sibling replaces the attempt it retried; a retried root still does too', () => {
+    const retry = at({
+      message_id: 'msg_x2',
+      ordinal: 3,
+      level: 'expert',
+      sibling_group: 'msg_r',
+      content: 'Expert again.',
+    });
+    const merged = mergeStored([], [ask1, rootMsg, expert, retry]);
+    expect(merged.filter((m) => m.role === 'assistant').map((m) => m.text)).toEqual([
+      rootMsg.content,
+      'Expert again.',
+    ]);
+    const rootRetry = at({
+      message_id: 'msg_r2',
+      ordinal: 2,
+      level: 'familiar',
+      sibling_group: 'msg_r2',
+      content: 'Retried.',
+    });
+    expect(
+      mergeStored([], [ask1, rootMsg, rootRetry])
+        .filter((m) => m.role === 'assistant')
+        .map((m) => m.text),
+    ).toEqual(['Retried.']);
+  });
+
+  it('keeps the level the reader asked for until the server names one (an older API sends none)', () => {
+    const liveSibling = live(expert, {
+      level: 'expert',
+      siblingGroup: 'msg_r',
+      messageId: 'msg_x',
+    });
+    const stored = { ...expert, level: null, sibling_group: null };
+    const merged = mergeStored([liveSibling], [ask1, rootMsg, stored as Message]);
+    const sib = merged.find((m) => m.messageId === 'msg_x');
+    expect(sib?.level).toBe('expert');
+    expect(sib?.siblingGroup).toBe('msg_r');
+  });
+
+  it('a reload rebuilds each level of a question from sibling_group: one exchange, one variant per level', () => {
+    const merged = mergeStored(
+      [],
+      [ask1, rootMsg, expert, simple, { ...ask2, ordinal: 4 }, { ...answer2, ordinal: 5 }],
+    );
+    const exchanges = buildExchanges(merged, null);
+    expect(exchanges).toHaveLength(2);
+    const first = exchanges[0];
+    expect(first?.answer?.messageId).toBe('msg_r');
+    expect(first?.variants.map((v) => [v.level, v.answer.messageId])).toEqual([
+      ['familiar', 'msg_r'],
+      ['expert', 'msg_x'],
+      ['new', 'msg_n'],
+    ]);
+    // An answer with no sibling carries its own id and stays a single level.
+    expect(exchanges[1]?.variants).toHaveLength(1);
   });
 });

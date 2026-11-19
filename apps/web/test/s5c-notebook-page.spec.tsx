@@ -92,7 +92,6 @@ describe('the exchange block', () => {
       'From the paper: p. 1 · p. 2',
       'From the paper: p. 2',
       'From the paper: p. 1 · p. 2',
-      'General knowledge',
     ]);
     expect(
       within(screen.getByRole('article', { name: 'Passage 1, p. 1 ¶1' })).getByText('×5'),
@@ -135,7 +134,6 @@ describe('Show in paper', () => {
       cited: 1,
       anchorIds: [],
       blockId: null,
-      supported: true,
     };
     render(<QuoteCard item={quote} passage={passage} onFocusAnchor={focus} />);
     fireEvent.click(

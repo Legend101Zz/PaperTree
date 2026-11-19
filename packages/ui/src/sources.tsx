@@ -1,9 +1,12 @@
 /**
  * ui/sources — the one quiet line under an AI answer's paragraph (v0.3, #340).
  *
- * The AI is a tutor, not an auditor: a paragraph that leans on the paper ends with
- * `From the paper: p. 1 · p. 4`, and one that does not ends with `General knowledge`, in the same
- * quiet type. Neither is a verdict, a count or a warning. Each page is a real button: hover or
+ * The AI is a tutor, not an auditor: where an answer leans on the paper its line reads
+ * `From the paper: p. 1 · p. 4`, and where the caller says so (a whole answer with no handle) it
+ * reads `General knowledge`, in the same quiet type. Where the line sits is the caller's call: one
+ * per answer, at the end of its "In the paper" section; a paragraph of an older unsectioned answer
+ * or a summary bullet keeps its own, only when it has pages. Neither is a verdict, a count or a
+ * warning. Each page is a real button: hover or
  * focus peeks the passage's first words in a small popover, a click runs the caller's flash (the
  * reader scrolls there and pulses the passage). Nothing sits inside a line of prose.
  *

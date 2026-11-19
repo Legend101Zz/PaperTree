@@ -124,8 +124,8 @@ describe('Ask: a streamed answer with a quiet source line, a usage line and noth
     );
     handle?.push(text('Now writing'));
     await waitFor(() => expect(screen.getByText(/Now writing/)).toBeTruthy());
-    // Once text flows the tab row says the AI is writing (#204), never the tool.
-    expect(screen.getByRole('status').textContent).toBe('Writing…');
+    // Once text flows the foot says the AI is writing (#204), never the tool.
+    expect(screen.getByRole('status').textContent).toBe('writing…');
     handle?.push(done());
     handle?.close();
   });
@@ -153,7 +153,7 @@ describe('Ask: a streamed answer with a quiet source line, a usage line and noth
     fireEvent.click(screen.getByRole('button', { name: 'Ask' }));
     await waitFor(() => expect(screen.getByText(/one network pass/)).toBeTruthy());
     const follow = calls.find((c) => c.path === `/papers/${PAPER}/threads/thr_1/messages`);
-    expect(follow?.body).toEqual({ question: 'What does that mean?' });
+    expect(follow?.body).toEqual({ question: 'What does that mean?', level: 'familiar' });
     expect(screen.getByText('What does that mean?')).toBeTruthy();
   });
 

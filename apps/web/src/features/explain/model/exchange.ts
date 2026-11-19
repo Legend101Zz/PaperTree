@@ -5,12 +5,12 @@
  */
 import { cleanQuote, selectorOf } from './anchor';
 import { buildAnswer, type AnswerModel, type ExchangeMessage } from './answer';
+import { levelOf, type Variant } from './levels';
 import { threadHandles, type ThreadHandles } from './passages';
 
 import type { Anchor } from '@papertree/anchoring';
 
 export {
-  answerParagraphs,
   buildAnswer,
   type AnswerModel,
   type AnswerParagraph,
@@ -40,6 +40,12 @@ export interface Exchange<M extends ExchangeMessage = ExchangeMessage> {
   readonly answer: M | null;
   /** Null until the answer has any text. */
   readonly model: AnswerModel | null;
+  /**
+   * The answer at each level fetched so far, the one the user turn started first (v0.3: a level
+   * switch asks the same question again; the siblings join their exchange, never open one).
+   * Empty when there is no answer.
+   */
+  readonly variants: readonly Variant<M, AnswerModel>[];
 }
 
 /** What the thread was opened on: the selection's Anchor and its exact words. */
@@ -92,11 +98,27 @@ export function buildExchanges<M extends ExchangeMessage>(
 ): Exchange<M>[] {
   const answers = messages.filter((m) => m.role === 'assistant');
   const numbers = threadHandles(answers);
+  // An answer re-levelled (`relevel_of`) is the same question again: it joins the exchange of the
+  // answer it names, so the switch never grows the thread by a turn. One whose root is not here
+  // (an orphan) stays an exchange of its own.
+  const rootIds = new Set(answers.flatMap((a) => (a.messageId === null ? [] : [a.messageId])));
+  const siblings = new Map<string, M[]>();
+  const isSibling = (m: M): boolean =>
+    m.role === 'assistant' &&
+    m.siblingGroup != null &&
+    m.siblingGroup !== m.messageId &&
+    rootIds.has(m.siblingGroup);
+  for (const m of messages) {
+    if (isSibling(m) && m.siblingGroup != null) {
+      siblings.set(m.siblingGroup, [...(siblings.get(m.siblingGroup) ?? []), m]);
+    }
+  }
   const exchangeOf = (ask: M | null, answer: M | null): Exchange<M> =>
-    exchangeFrom(ask, answer, numbers);
+    exchangeFrom(ask, answer, numbers, siblings.get(answer?.messageId ?? '') ?? []);
   const out: Exchange<M>[] = [];
   let open: { ask: M } | null = null;
   for (const message of messages) {
+    if (isSibling(message)) continue;
     if (message.role === 'user') {
       if (open !== null) out.push(exchangeOf(open.ask, null));
       open = { ask: message };
@@ -117,16 +139,33 @@ function exchangeFrom<M extends ExchangeMessage>(
   ask: M | null,
   answer: M | null,
   numbers: ThreadHandles,
+  siblings: readonly M[],
 ): Exchange<M> {
   const hasText = answer !== null && answer.text.trim().length > 0;
+  const variants: Variant<M, AnswerModel>[] = [];
+  for (const m of answer === null ? [] : [answer, ...siblings]) {
+    const level = levelOf(m);
+    const variant = {
+      level,
+      answer: m,
+      model: m.text.trim().length > 0 ? buildAnswer(m, numbers) : null,
+    };
+    // One answer per level: a retried sibling replaces the attempt it retried.
+    const at = variants.findIndex((v) => v.level === level);
+    if (at === -1) variants.push(variant);
+    else variants[at] = variant;
+  }
   return {
+    variants,
     key: answer?.key ?? ask?.key ?? '',
     ask: ask?.text ?? answer?.question ?? '',
     askedAt: ask?.createdAt ?? answer?.createdAt ?? null,
     quote: null,
     typed: ask !== null,
     answer,
-    model: hasText ? buildAnswer(answer, numbers) : null,
+    model: hasText
+      ? (variants.find((v) => v.answer === answer)?.model ?? buildAnswer(answer, numbers))
+      : null,
   };
 }
 

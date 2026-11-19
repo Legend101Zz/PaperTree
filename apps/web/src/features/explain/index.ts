@@ -14,6 +14,9 @@ export {
   type PaperSource,
 } from './model/exchange';
 export { mergeStored, type MessageStatus, type ThreadMessage } from './model/messages';
+export type { ExplainController } from './model/controller';
+export type { ExplainRequest, ViewMessage } from './model/state';
+export { useExplainActions } from './hooks/useExplainActions';
 export { sortThreads, threadPosition } from './model/threads';
 export { type ThreadDetail } from './api/threads';
 export { useThreads, type ThreadsState } from './hooks/useThreads';

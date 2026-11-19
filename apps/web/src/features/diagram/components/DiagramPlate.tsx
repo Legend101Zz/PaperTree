@@ -20,7 +20,7 @@ import { PlateKey } from './PlateKey';
 
 import './plate.css';
 
-import type { ViewMessage } from '@/components/explain/useExplainActions';
+import type { ViewMessage } from '@/features/explain/model/state';
 import type { DiagramPart } from '@/lib/api/types';
 
 /** Props for `DiagramPlate`. */

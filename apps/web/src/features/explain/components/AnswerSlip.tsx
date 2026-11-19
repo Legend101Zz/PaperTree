@@ -1,17 +1,19 @@
 'use client';
 
 /**
- * One AI answer of an exchange (#202, #204, #340): the `AiSlip` with its paragraphs, each with one
- * quiet source line under it. The interface's own words sit around the AI's: on the tab row (the
- * model, the working label while it streams, "Stopped · M3" after Stop) and outside the slip: Stop (frame 04b), the typed caret, the usage line, Dive in and
- * Send to board on a footer that continues the slip, the note after Stop with Retry (04c), a designed
- * failure (the daily-cap card among them), a refused Retry's note, and, for an answer that opened
- * folded, its two-line preview with Show.
+ * One AI answer of an exchange (#202, #204, #340, v0.3): the `AiSlip` with the tutor-format body
+ * (`AnswerBody`: labels, the TL;DR lead, paragraphs each with one quiet source line, the inline
+ * figure, Check yourself). The interface's own words sit around the AI's: the level switch above the
+ * slip, Go deeper and the foot (model · writing… · Stop, or · stopped) inside it, and outside it the
+ * typed caret, the usage line, Dive in and Send to board on a footer that continues the slip, the
+ * note after Stop with Retry (04c), a designed failure (the daily-cap card among them), a refused
+ * Retry's note, and, for an answer that opened folded, its two-line preview with Show.
  */
 import { AiSlip } from '@papertree/ui';
 import { useRef, type ReactNode } from 'react';
 
-import { clipAnswer } from '../model/phone';
+import { levelOf, type AnswerLevel } from '../model/levels';
+import { blocksUpTo, clipAnswer } from '../model/phone';
 import { foldedPreview, wasStopped, type RefusalKind } from '../model/states';
 import { shortModelName } from '../model/summary';
 import {
@@ -19,15 +21,18 @@ import {
   FoldRow,
   SendToCanvas,
   Skeleton,
-  StopButton,
   StoppedNote,
   type FocusHandoff,
 } from './AnswerParts';
-import { FailureNote, UsageLine, WorkingLabel } from './AnswerStates';
-import { AnswerText, type AnswerTextProps } from './AnswerText';
+import { AnswerBody, type CheckControl } from './AnswerBody';
+import { AnswerFoot } from './AnswerFoot';
+import { FailureNote, UsageLine } from './AnswerStates';
+import { GoDeeper } from './GoDeeper';
+import { LevelSwitch } from './LevelSwitch';
 
-import type { ViewMessage } from '@/components/explain/useExplainActions';
-import type { AnswerModel, AnswerParagraph } from '../model/exchange';
+import type { ViewMessage } from '@/features/explain/model/state';
+import type { AnswerTextProps } from './AnswerText';
+import type { AnswerModel } from '../model/exchange';
 
 /** An answer that opened folded: whether it is folded now, and the toggle. */
 export interface AnswerFold {
@@ -60,14 +65,27 @@ export interface AnswerSlipProps extends Pick<AnswerTextProps, 'onShow' | 'touch
   readonly clip?: AnswerClipState | undefined;
   /** The usage line and Send to board sit in the phone sheet's pinned footer instead. */
   readonly pinned?: boolean;
+  /**
+   * The Explain panel's extras. Absent, nothing of them is drawn:
+   *  - `onLevel`: the level switch above the slip (a level the exchange holds costs no request);
+   *  - `deeper`: the go-deeper chips under the answer (the thread's last answer only);
+   *  - `check`: the Check yourself block (never in a small card, #349).
+   */
+  readonly onLevel?: ((level: AnswerLevel) => void) | undefined;
+  readonly deeper?: { readonly onAsk: (question: string) => void } | undefined;
+  readonly check?: CheckControl | undefined;
+  /** Another answer is being written: the level switch and the chips wait. */
+  readonly busy?: boolean;
+  /** The thread's last known model, for the foot until this run's usage names its own. */
+  readonly modelHint?: string | null;
+  /** Counts up when a cached level comes back: the slip fades in once (never typed out again). */
+  readonly fade?: number;
 }
 
-/** The tab row's words: the working label (never "Writing" before a word arrived), or Stopped. */
-function metaOf(answer: ViewMessage, streaming: boolean, stopped: boolean, name: string) {
-  if (streaming) {
-    return <WorkingLabel label={answer.label ?? (answer.text === '' ? 'Starting' : 'Writing')} />;
-  }
-  return stopped ? `Stopped · ${name}` : undefined;
+/** The short model name, or null when this run has not named one and the thread has none. */
+function modelName(answer: ViewMessage, hint: string | null): string | null {
+  const own = answer.usage?.model;
+  return own !== undefined && own !== '' ? shortModelName(own) : hint;
 }
 
 /** The answer on AI-slip stock, and the interface's lines around it. */
@@ -82,6 +100,12 @@ export function AnswerSlip({
   fold,
   clip,
   pinned = false,
+  onLevel,
+  deeper,
+  check,
+  busy = false,
+  modelHint = null,
+  fade = 0,
   ...lights
 }: AnswerSlipProps): ReactNode {
   const streaming = answer.status === 'streaming';
@@ -95,17 +119,7 @@ export function AnswerSlip({
     onRetry(answer.key);
   };
   const lastIndex = model?.paragraphs.at(-1)?.index;
-  const paragraph = (p: AnswerParagraph) => (
-    <AnswerText
-      key={p.index}
-      paragraph={p}
-      streaming={streaming}
-      general={model?.live === false}
-      caret={streaming && p.index === lastIndex}
-      onShow={lights.onShow}
-      {...(lights.touch === undefined ? {} : { touch: lights.touch })}
-    />
-  );
+  const quick = answer.quick === true;
   const messageId = answer.messageId;
   const canSend = answer.status === 'complete' && messageId !== null && !folded;
   const footer = stopped ? (
@@ -126,18 +140,48 @@ export function AnswerSlip({
       ) : null}
     </>
   );
-  const name = shortModelName(answer.usage?.model);
+  const name = modelName(answer, modelHint);
   const clippable =
     clip !== undefined && model !== null && !folded && clipAnswer(model, false).clipped;
   const expanded = clip?.expanded === true;
   const shown = model === null ? null : clipAnswer(model, !clippable || expanded);
+  const blocks =
+    model === null || shown === null
+      ? []
+      : shown.clipped
+        ? blocksUpTo(model.blocks, shown.paragraphs.length)
+        : model.blocks;
+  const level = levelOf(answer);
+  const settled = answer.status === 'complete' && !stopped && !folded;
   const body =
     model === null ? (
-      <Skeleton />
+      // A quick ask (a chip, a level switch) skips the thinking pause: no placeholder lines.
+      quick ? null : (
+        <Skeleton />
+      )
     ) : folded ? (
       <p className="pt-exchange__preview">{foldedPreview(model.paragraphs)}</p>
     ) : (
-      shown?.paragraphs.map(paragraph)
+      <>
+        <AnswerBody
+          blocks={blocks}
+          streaming={streaming}
+          general={model.live === false}
+          caretAt={streaming ? (lastIndex ?? null) : null}
+          onShow={lights.onShow}
+          {...(lights.touch === undefined ? {} : { touch: lights.touch })}
+          check={check}
+        />
+        {deeper !== undefined && settled && onLevel !== undefined ? (
+          <GoDeeper
+            level={level}
+            onRelevel={onLevel}
+            onAsk={deeper.onAsk}
+            disabled={busy}
+            {...(lights.touch === undefined ? {} : { touch: lights.touch })}
+          />
+        ) : null}
+      </>
     );
   // One button that swaps its words, so focus stays on it (`aria-expanded` says which).
   const more =
@@ -154,18 +198,47 @@ export function AnswerSlip({
   // A refused Retry's note replaces the answer's own (its text stays as it was).
   const refused = answer.refusal ?? null;
   const failure = refused ?? answer.failure;
+  // The foot says what is being done; a quick ask never shows the status labels of a long one.
+  const working = quick ? null : (answer.label ?? null);
+  const foot = (
+    <AnswerFoot
+      model={name}
+      streaming={streaming}
+      stopped={stopped}
+      label={working ?? (answer.text === '' ? 'starting' : 'writing')}
+      handoff={handoff}
+      onStop={onStop}
+    />
+  );
+  const footerShown = more !== null || (!folded && (streaming || stopped || name !== null));
   return (
     <article
       ref={article}
       className="pt-explain__answer pt-exchange__answer"
       data-message-status={answer.status}
+      data-level={level}
+      {...(fade === 0 ? {} : { 'data-fade': fade % 2 === 0 ? 'b' : 'a' })}
     >
-      {streaming ? <StopButton handoff={handoff} onStop={onStop} /> : null}
+      {onLevel === undefined || model === null || folded ? null : (
+        <LevelSwitch
+          level={level}
+          onChange={onLevel}
+          disabled={busy || answer.messageId === null}
+          {...(lights.touch === undefined ? {} : { touch: lights.touch })}
+        />
+      )}
       {model === null && !streaming ? null : (
         <AiSlip
-          model={name}
-          meta={metaOf(answer, streaming, stopped, name)}
-          {...(more === null ? {} : { footer: more })}
+          {...(footerShown
+            ? {
+                footer: (
+                  <>
+                    {more}
+                    {folded ? null : foot}
+                  </>
+                ),
+              }
+            : {})}
         >
           {body}
         </AiSlip>

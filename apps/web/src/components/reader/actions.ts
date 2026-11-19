@@ -4,7 +4,7 @@
  * reader/actions — the three things any part of the reader may ask the reader to do
  * (contracts.md §5, fixed in S0 so that no two slices edit the same file).
  *
- *   openExplain   S6 implements it (`components/explain/useExplainActions.ts`)
+ *   openExplain   S6 implements it (`features/explain/hooks/useExplainActions.ts`)
  *   sendToCanvas  S7 implements it (`components/canvas/sendToCanvas.ts`)
  *   focusAnchor   S4 implements it (resolve, scroll, the citation flash of DESIGN.md §6)
  *

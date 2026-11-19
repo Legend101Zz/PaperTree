@@ -15,7 +15,7 @@ import { buildSummary, shortModelName, summaryDay } from '../model/summary';
 import { formatUsage } from './AnswerStates';
 import { AnswerText } from './AnswerText';
 
-import type { SummaryView as SummaryState } from '@/components/explain/useExplainActions';
+import type { SummaryView as SummaryState } from '@/features/explain/model/state';
 import type { Summary } from '@/lib/api/types';
 import type { PaperSource } from '../model/answer';
 
@@ -77,7 +77,7 @@ export function SummaryExchange({
           <ul className="pt-summary__bullets">
             {model.bullets.map((bullet) => (
               <li key={bullet.index} className="pt-summary__bullet" data-summary-bullet>
-                <AnswerText paragraph={bullet} streaming={false} general onShow={onShow} />
+                <AnswerText paragraph={bullet} streaming={false} onShow={onShow} />
               </li>
             ))}
           </ul>

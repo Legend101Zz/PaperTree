@@ -22,7 +22,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GOLDEN, goldenMessages } from './fixtures/attention-thread';
 import { installFetch, jsonResponse } from './s6-support';
 
-import type { ViewMessage } from '@/components/explain/useExplainActions';
+import type { ViewMessage } from '@/features/explain/model/state';
 import { Exchange } from '@/features/explain/components/Exchange';
 import { buildExchanges, type Exchange as ExchangeModel } from '@/features/explain/model/exchange';
 import { diveHandoff, useDiveIn } from '@/features/notebook/hooks/useDiveIn';

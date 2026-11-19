@@ -1,12 +1,12 @@
 /**
  * A bare answer as the panel draws it, for the specs that test text rendering (Markdown, maths,
  * stopped answers): `buildAnswer` over one message, each paragraph through `AnswerText`. Not a spec
- * (no `.spec`), so vitest does not collect it. "General knowledge" is off by default so a spec can
- * compare the prose's own `textContent`.
+ * (no `.spec`), so vitest does not collect it. "General knowledge" (said once, in a sectioned answer) is
+ * off by default so a spec can compare the prose's own `textContent`.
  */
 import type { ReactNode } from 'react';
 
-import { AnswerText } from '@/features/explain/components/AnswerText';
+import { AnswerBody } from '@/features/explain/components/AnswerBody';
 import { buildAnswer, type PaperSource } from '@/features/explain/model/answer';
 import { threadHandles } from '@/features/explain/model/passages';
 import type { Citation } from '@/lib/api/types';
@@ -35,7 +35,7 @@ export function sourceLines(root: ParentNode): string[] {
   });
 }
 
-/** One answer's paragraphs, each with its quiet source line. */
+/** One answer's blocks as the panel draws them: each paragraph, and the source line(s). */
 export function Answer({
   text,
   citations = [],
@@ -48,14 +48,13 @@ export function Answer({
     { key: 'a', role: 'assistant', text, status, citations, question: '', createdAt: null },
     threadHandles([]),
   );
-  return model.paragraphs.map((p) => (
-    <AnswerText
-      key={p.index}
-      paragraph={p}
+  return (
+    <AnswerBody
+      blocks={model.blocks}
       streaming={status === 'streaming'}
       general={general}
       touch={touch}
       onShow={onShow}
     />
-  ));
+  );
 }

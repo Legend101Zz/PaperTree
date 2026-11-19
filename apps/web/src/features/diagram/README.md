@@ -9,7 +9,7 @@ each quote already resolved to an Anchor.
 
 ## Data flow
 
-UI (a stored diagram thread opened in the explain panel) → controller (`components/explain/useExplainActions`:
+UI (a stored diagram thread opened in the explain panel) → controller (`features/explain/hooks/useExplainActions`:
 `selectThread`, the stream reader, `redraw`; the plate rides on the panel's message as `diagram`) → `lib/api/threads` →
 `GET /papers/{id}/threads/{tid}` and, for a Redraw,
 `POST /papers/{id}/threads/{tid}/messages {question, redraw_of}` (`services/api` `routers/threads.py`) → DB

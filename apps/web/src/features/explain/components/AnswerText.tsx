@@ -2,11 +2,17 @@
 
 /**
  * One answer paragraph on the AI slip (#202, #340): the safe Markdown subset of `lib/markdown`,
- * then, under it, ONE quiet source line: `From the paper: p. 1 · p. 4`, or `General knowledge`
- * when the paragraph leans on no page. The `[bN]` handles stay in the model's text and are never
- * drawn: the parser hands them over and this component only keeps the punctuation they carried.
- * Each page is a button: hover or focus peeks the passage, a click flashes it in the paper.
- * Every string is a React text child; nothing is injected as HTML.
+ * then, where the paragraph owns one (an unsectioned older answer, a summary bullet), a quiet
+ * source line `From the paper: p. 1 · p. 4`, only when it has handles: never "General knowledge"
+ * under a paragraph. A sectioned (tutor format) answer has its one source line in `AnswerBody`,
+ * at the end of "In the paper". The `[bN]` handles stay in the model's text and are never drawn:
+ * the parser hands them over and this component only keeps the punctuation they carried. Each
+ * page is a button: hover or focus peeks the passage, a click flashes it in the paper. Every
+ * string is a React text child; nothing is injected as HTML.
+ *
+ * The tutor format's lead (the TL;DR paragraph) is set larger and carries no source line: it is
+ * the whole idea in a breath, not a claim about the paper. A paragraph of display maths alone has
+ * no words to stand a source under either.
  */
 import { AiParagraph, SourceLine } from '@papertree/ui';
 import { Fragment, type ReactNode } from 'react';
@@ -21,11 +27,6 @@ export interface AnswerTextProps {
   readonly paragraph: AnswerParagraph;
   /** The answer is still arriving: an unclosed Markdown mark at the end is dropped. */
   readonly streaming: boolean;
-  /**
-   * Say "General knowledge" under a paragraph with no paper source. False until the answer has
-   * settled: a handle may not have resolved yet, and the line must never flip under the reader.
-   */
-  readonly general: boolean;
   /** The typed caret at the end of a streaming answer (frame 04b); decoration, hidden from AT. */
   readonly caret?: boolean;
   /** The citation flash: scroll to the passage and flash it. */
@@ -34,7 +35,8 @@ export interface AnswerTextProps {
   readonly touch?: boolean;
 }
 
-function renderInline(nodes: readonly Inline[]): ReactNode {
+/** Inline nodes as React: maths typeset, handles left to the source line (only their punctuation stays). */
+export function renderInline(nodes: readonly Inline[]): ReactNode {
   return nodes.map((node, index) => {
     const key = String(index);
     if (node.t === 'cite') {
@@ -49,7 +51,8 @@ function renderInline(nodes: readonly Inline[]): ReactNode {
   });
 }
 
-function renderBlock(block: Block, index: number): ReactNode {
+/** One Markdown block as React (a display equation, a paragraph's lines, a heading, a list). */
+export function renderBlock(block: Block, index: number): ReactNode {
   if (block.k === 'dm') return <Maths key={index} tex={block.tex} display />;
   if (block.k === 'p') {
     return block.lines.map((line, i) => (
@@ -70,31 +73,45 @@ function renderBlock(block: Block, index: number): ReactNode {
   );
 }
 
-/** One paragraph of the answer and its one quiet source line. */
+/** One paragraph of the answer and, when it owns one, its quiet source line. */
 export function AnswerText({
   paragraph,
   streaming,
-  general,
   caret = false,
   onShow,
   touch = false,
 }: AnswerTextProps): ReactNode {
   const blocks = parseMarkdown(dehyphenate(paragraph.text), { streaming });
   const end = caret ? <span className="pt-exchange__caret" aria-hidden="true" /> : null;
-  const source = (
-    <SourceLine
-      general={general}
-      touch={touch}
-      sources={paragraph.sources.map((s) => ({
-        page: s.page,
-        passage: s.passage,
-        onShow: () => onShow(s),
-      }))}
-    />
-  );
-  if (blocks.every((b) => b.k === 'p' || b.k === 'h' || b.k === 'dm')) {
+  const lead = paragraph.section === 'tldr';
+  const mathsOnly = blocks.every((b) => b.k === 'dm');
+  const owns = paragraph.ownLine !== false && paragraph.sources.length > 0;
+  const source =
+    lead || mathsOnly || !owns ? undefined : (
+      <SourceLine
+        general={false}
+        touch={touch}
+        sources={paragraph.sources.map((s) => ({
+          page: s.page,
+          passage: s.passage,
+          onShow: () => onShow(s),
+        }))}
+      />
+    );
+  const inline = blocks.every((b) => b.k === 'p' || b.k === 'h' || b.k === 'dm');
+  if (lead && inline) {
     return (
-      <AiParagraph source={source}>
+      <div className="pt-ai-slip__row">
+        <p className="pt-ai-slip__text pt-ai-lead">
+          {blocks.map((b, i) => renderBlock(b, i))}
+          {end}
+        </p>
+      </div>
+    );
+  }
+  if (inline) {
+    return (
+      <AiParagraph {...(source === undefined ? {} : { source })}>
         {blocks.map((b, i) => renderBlock(b, i))}
         {end}
       </AiParagraph>

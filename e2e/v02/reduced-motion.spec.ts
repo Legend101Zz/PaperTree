@@ -185,7 +185,8 @@ test.describe('S8: reduced motion, every moment (faux agent)', () => {
     // ── Dive in, and Back to the paper ──
     await exchange.getByRole('button', { name: /^Dive in/ }).click();
     await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/notebook/np_`));
-    await expect(page.locator('.pt-nb-quote')).toHaveCount(2);
+    // One handle under "In the paper" in the tutor answer: one quote card.
+    await expect(page.locator('.pt-nb-quote')).toHaveCount(1);
     await expect(page.locator('.pt-nb[data-dive]')).toHaveCount(0);
     expectWithin('Dive in', await takeAnimations(page));
     await page

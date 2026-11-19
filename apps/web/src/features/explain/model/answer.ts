@@ -3,9 +3,13 @@
  * the paper it draws on. Pure; `exchange.ts` pairs answers with their asks.
  *
  * THE AI IS A TUTOR, NOT AN AUDITOR. A paragraph's sources are the pages its `[bN]` handles point
- * at, de-duplicated and in page order ("From the paper: p. 1 · p. 4"); a paragraph none of whose
- * handles resolved has none, and the screen says "General knowledge" under it once the answer has
- * settled. There is no verdict, no count and no readout. The handles stay in the model's text (the
+ * at, de-duplicated ("From the paper: p. 1 · p. 4"). WHERE THAT LINE SITS (#340, V3-AI-NOTES): in a
+ * SECTIONED answer (the tutor format) there is exactly one, at the end of the "In the paper"
+ * section, gathering every handle of the whole answer in document order; an answer with no handle
+ * at all says "General knowledge" there instead, once it has settled. No other paragraph carries
+ * a line. An UNSECTIONED answer (stored before v0.3) and a summary bullet keep a line under each
+ * paragraph that has handles, and never say "General knowledge". There is no verdict, no count
+ * and no readout. The handles stay in the model's text (the
  * agent still emits them); the renderer never draws them, it gathers them here.
  *
  * While an answer streams, a handle resolves as soon as the thread has seen its citation (a
@@ -13,9 +17,11 @@
  * arrive just before it settles; nothing is ever shown and then taken back.
  */
 import { quoteOf } from './anchor';
+import { parseCheck, type CheckSpec } from './check';
 import { handleRuns, type ThreadHandles } from './passages';
+import { parseAnswerItems, type SectionKey } from './sections';
 
-import type { Citation, DiagramPart } from '@/lib/api/types';
+import type { AnswerLevel, Citation, DiagramPart } from '@/lib/api/types';
 
 /** The message fields an exchange is built from; the controller's `ViewMessage` has them all. */
 export interface ExchangeMessage {
@@ -36,6 +42,12 @@ export interface ExchangeMessage {
    * while streaming (#204).
    */
   readonly awaitingStored?: boolean;
+  /** The level the answer was written at; absent or null on an older one (= familiar). */
+  readonly level?: AnswerLevel | null;
+  /** The `sibling_group` of an answer: the first answer to its question; null until known. */
+  readonly siblingGroup?: string | null;
+  /** The server's id once known (a sibling joins the exchange of the answer that has this id). */
+  readonly messageId?: string | null;
   /** A diagram answer's parts (#217): their located Anchors place the call slip's ¶. */
   readonly diagram?: { readonly parts: readonly Pick<DiagramPart, 'cite'>[] } | null;
 }
@@ -57,17 +69,39 @@ export interface AnswerParagraph {
   /** The paragraph's Markdown, `[bN]` handles kept (the renderer drops them). */
   readonly text: string;
   readonly sources: readonly PaperSource[];
+  /** The tutor format's section it sits in (the TL;DR one is the lead); null in an older answer. */
+  readonly section?: SectionKey | null;
+  /**
+   * Whether the paragraph draws its own source line (when it has sources). False in a sectioned
+   * answer, whose one line is the `source` block; absent (= true) on a summary bullet.
+   */
+  readonly ownLine?: boolean;
 }
+
+/** One thing to draw, in reading order: a section label, a paragraph, the figure or the check. */
+export type AnswerBlock =
+  | { readonly k: 'label'; readonly section: SectionKey }
+  | { readonly k: 'p'; readonly paragraph: AnswerParagraph }
+  | { readonly k: 'diagram'; readonly body: string; readonly closed: boolean }
+  | { readonly k: 'check'; readonly spec: CheckSpec }
+  /**
+   * A sectioned answer's one source line: every page the whole answer draws on, in document order
+   * (none: "General knowledge", said once the answer has settled).
+   */
+  | { readonly k: 'source'; readonly sources: readonly PaperSource[] };
 
 /** An answer, ready to draw. */
 export interface AnswerModel {
+  /** The paragraphs alone (what the phone clips, the fold previews and the card counts). */
   readonly paragraphs: readonly AnswerParagraph[];
+  /** Everything in reading order: labels, paragraphs, the inline figure and the check. */
+  readonly blocks: readonly AnswerBlock[];
+  /** The tutor format's sections are present: the one source line is a block, not per paragraph. */
+  readonly sectioned: boolean;
   /** Still streaming (or stopped and waiting for its stored copy): no "General knowledge" yet. */
   readonly live: boolean;
 }
 
-const BLANK_LINE = /\n[ \t]*\n/;
-const HEADING_ONLY = /^#{1,6}\s+\S[^\n]*$/;
 /** A handle cut off by the end of a streaming chunk: `[`, `[b`, `[b12`, `[b1, b`. */
 const PARTIAL_TAIL = /\s*\[(?:b\d*(?:\s*,\s*b?\d*)*)?\s*$/;
 
@@ -80,20 +114,6 @@ const PARTIAL_TAIL = /\s*\[(?:b\d*(?:\s*,\s*b?\d*)*)?\s*$/;
  */
 export function stripPartialTail(text: string): string {
   return text.replace(PARTIAL_TAIL, '');
-}
-
-/**
- * An answer's paragraphs, by the server's rule (`exchanges.answer_paragraphs`): split on blank
- * lines, trim, drop empty pieces and pieces that are one Markdown heading line.
- *
- * @param text The answer.
- * @returns Its paragraphs.
- */
-export function answerParagraphs(text: string): string[] {
-  return text
-    .split(BLANK_LINE)
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0 && !HEADING_ONLY.test(part));
 }
 
 /**
@@ -125,12 +145,106 @@ export function sourcesOf(citations: readonly Citation[]): PaperSource[] {
 }
 
 /**
+ * The pages a set of citations draws on in the order they are met, each page once.
+ *
+ * @param citations The citations, in document order.
+ * @returns One source per page (the first citation seen on it).
+ */
+function sourcesInOrder(citations: readonly Citation[]): PaperSource[] {
+  const byPage = new Map<number, PaperSource>();
+  for (const citation of citations) {
+    const page = pageOf(citation);
+    if (!byPage.has(page)) byPage.set(page, { page, passage: quoteOf(citation.anchor), citation });
+  }
+  return [...byPage.values()];
+}
+
+/**
+ * Where a sectioned answer's one source line goes: right after the last block of its "In the
+ * paper" section. While the answer streams and that section has not started, nowhere (the line
+ * must not appear under another section and then move); once settled without one, after the last
+ * paragraph.
+ *
+ * @param blocks The answer's blocks.
+ * @param live The answer is still arriving.
+ * @returns The index to insert at, or -1 when the line has no place (yet).
+ */
+function sourceLineAt(blocks: readonly AnswerBlock[], live: boolean): number {
+  const inPaper = (b: AnswerBlock): boolean =>
+    (b.k === 'label' && b.section === 'paper') || (b.k === 'p' && b.paragraph.section === 'paper');
+  const last = (test: (b: AnswerBlock) => boolean): number => blocks.findLastIndex(test) + 1 || -1;
+  const inSection = last(inPaper);
+  if (inSection !== -1 || live) return inSection;
+  return last((b) => b.k === 'p');
+}
+
+/**
+ * The drawable model of an answer's text: its blocks and paragraphs, each paragraph with the pages
+ * its handles point at. Shared by the panel, the board card and the notebook page, so the same
+ * answer reads the same everywhere.
+ *
+ * @param text The answer, cut-off handles already removed.
+ * @param resolve The citation a handle names, or undefined when it names nothing yet.
+ * @param live The text is still arriving: a half-written figure is a placeholder, not dropped.
+ * @returns The model.
+ */
+export function answerModel(
+  text: string,
+  resolve: (handle: string) => Citation | undefined,
+  live: boolean,
+): AnswerModel {
+  const paragraphs: AnswerParagraph[] = [];
+  const blocks: AnswerBlock[] = [];
+  const items = parseAnswerItems(text, live);
+  const sectioned = items.some((item) => item.k === 'label');
+  for (const item of items) {
+    if (item.k === 'label') blocks.push(item);
+    else if (item.k === 'diagram') {
+      // A cut-off answer's open fence is no figure: never show raw lines, never a placeholder
+      // that waits for nothing.
+      if (item.closed || live) blocks.push(item);
+    } else if (item.k === 'check') {
+      const spec = parseCheck(item.body);
+      if (spec !== null) blocks.push({ k: 'check', spec });
+    } else {
+      const paragraph: AnswerParagraph = {
+        index: paragraphs.length,
+        text: item.text,
+        section: item.section,
+        ownLine: !sectioned,
+        sources: sourcesOf(
+          handleRuns(item.text)
+            .flat()
+            .flatMap((h) => resolve(h) ?? []),
+        ),
+      };
+      paragraphs.push(paragraph);
+      blocks.push({ k: 'p', paragraph });
+    }
+  }
+  if (sectioned) {
+    const at = sourceLineAt(blocks, live);
+    if (at !== -1) {
+      const sources = sourcesInOrder(
+        paragraphs.flatMap((p) =>
+          handleRuns(p.text)
+            .flat()
+            .flatMap((h) => resolve(h) ?? []),
+        ),
+      );
+      blocks.splice(at, 0, { k: 'source', sources });
+    }
+  }
+  return { paragraphs, blocks, sectioned, live };
+}
+
+/**
  * Build the drawable model of one answer.
  *
  * @param answer The answer message.
  * @param numbers The thread's handles (resolve a handle of a passage the thread already cites,
  *   before this answer's own citations arrive).
- * @returns The paragraphs, each with its sources.
+ * @returns The paragraphs, each with its sources, and the blocks in reading order.
  */
 export function buildAnswer(answer: ExchangeMessage, numbers: ThreadHandles): AnswerModel {
   // Stopped and waiting for the stored copy counts as live (#204).
@@ -140,14 +254,5 @@ export function buildAnswer(answer: ExchangeMessage, numbers: ThreadHandles): An
   const own = new Map(answer.citations.map((c) => [c.marker, c] as const));
   const resolve = (handle: string): Citation | undefined =>
     own.get(handle) ?? (live ? numbers.handleCitations.get(handle)?.citation : undefined);
-  const paragraphs = answerParagraphs(text).map((paragraph, index) => ({
-    index,
-    text: paragraph,
-    sources: sourcesOf(
-      handleRuns(paragraph)
-        .flat()
-        .flatMap((h) => resolve(h) ?? []),
-    ),
-  }));
-  return { paragraphs, live };
+  return answerModel(text, resolve, live);
 }

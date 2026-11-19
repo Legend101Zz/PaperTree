@@ -5,9 +5,15 @@
  * page peeks the passage → clicking it scrolls to the passage and flashes it, with no margin tab;
  * the faint outline stays until the next action.
  *
+ * v0.3 tutor answer (#339, #349): the answer has its section labels and a lead, typeset maths, the
+ * inline figure and the foot (model); the level switch asks once per level and a level seen before
+ * comes back with no request; New to this brings Check yourself, marked in the browser.
+ *
  * The faux model quotes the first two seed passages the API planned for the selection, so the
  * paragraph draws on those pages: this proves the wiring (the source line, the peek, the flash),
- * not answer quality. The PDF is the committed corpus's; the spec SKIPS, loudly, without it.
+ * not answer quality. The faux agent answers in the v0.3 shape (`## TL;DR` … `## In the paper`, one
+ * `$…$`, one `[bN]`, a ```diagram fence in explain, and a ```check fence when the request says
+ * `check: true`). The PDF is the committed corpus's; the spec SKIPS, loudly, without it.
  */
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -93,6 +99,23 @@ test.describe('v0.2 steps 6–8: select → Explain → the source line flashes 
       timeout: 120_000,
     });
     await expect(exchange.locator('[data-voice="ai"]')).toContainText('The selected passage says');
+    // The tutor shape: small lower-case labels, the TL;DR as the lead, maths typeset, the figure
+    // drawn inline, and the foot naming the model. Familiar is the default level, so no check yet.
+    await expect(exchange.locator('.pt-ai-slip h3.pt-ai-label')).toContainText([
+      'tl;dr',
+      'in plain words',
+      'how it works',
+      'in the paper',
+    ]);
+    await expect(exchange.locator('.pt-ai-lead')).toBeVisible();
+    await expect(exchange.locator('.pt-ai-slip .katex').first()).toBeVisible();
+    await expect(exchange.locator('[data-diagram-inline]')).toBeVisible();
+    await expect(exchange.locator('.pt-answer-foot')).toContainText(/\S/);
+    await expect(exchange.getByRole('button', { name: 'Familiar' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(exchange.locator('.pt-check')).toHaveCount(0);
     // One quiet source line under the paragraph, and nothing that audits the AI.
     const source = exchange.locator('.pt-source[data-source="paper"]').first();
     await expect(source).toContainText('From the paper: p.');
@@ -133,6 +156,37 @@ test.describe('v0.2 steps 6–8: select → Explain → the source line flashes 
     expect(Number(rest)).toBeCloseTo(0.6, 2);
     await page.mouse.click(5, 450);
     await expect(page.locator('svg [data-flash]')).toHaveCount(0);
+
+    // ── the level switch: one request per level, a level seen before comes back for free ──
+    const releveled: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && /\/threads\/[^/]+\/messages$/.test(request.url())) {
+        releveled.push(request.postData() ?? '');
+      }
+    });
+    await exchange.getByRole('button', { name: 'New to this' }).click();
+    await expect(exchange.getByRole('button', { name: 'New to this' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(exchange.locator('[data-message-status="complete"]')).toBeVisible({
+      timeout: 120_000,
+    });
+    expect(releveled).toHaveLength(1);
+    expect(JSON.parse(releveled[0] ?? '{}')).toMatchObject({ level: 'new' });
+    expect(JSON.parse(releveled[0] ?? '{}')).toHaveProperty('relevel_of');
+    // At New to this the API asks for one Check yourself: marked here, no request.
+    const check = exchange.locator('.pt-check');
+    await expect(check).toBeVisible();
+    await check.getByRole('button', { name: 'Show me' }).click();
+    await expect(check.getByLabel('Fill the blank')).not.toHaveValue('');
+    await page.screenshot({ path: shot('v02-trace-04-level-new-check-1440.png') });
+    await exchange.getByRole('button', { name: 'Familiar' }).click();
+    await expect(exchange.locator('[data-voice="ai"]')).toContainText('The selected passage says');
+    await exchange.getByRole('button', { name: 'New to this' }).click();
+    // The blank was kept across the switch, and nothing was asked again.
+    await expect(check.getByLabel('Fill the blank')).not.toHaveValue('');
+    expect(releveled).toHaveLength(1);
     await context.close();
   });
 });

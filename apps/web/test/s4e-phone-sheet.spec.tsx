@@ -96,7 +96,8 @@ describe('the phone sheet (frame 08b)', () => {
     expect(more.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(more);
     expect(within(exchange).getByText(/The motivation is/)).toBeTruthy();
-    expect(sourceLines(exchange).at(-1)).toBe('General knowledge');
+    // An older (unsectioned) answer keeps a line under each paragraph with handles, no other.
+    expect(sourceLines(exchange).at(-1)).toBe('From the paper: p. 1 · p. 2');
     // The same element, now the other way round: focus stays on it.
     expect(more.textContent).toBe('Show less');
     expect(more.getAttribute('aria-expanded')).toBe('true');

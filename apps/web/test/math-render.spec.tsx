@@ -9,14 +9,15 @@ import { ReactFlowProvider, type NodeProps } from '@xyflow/react';
 import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AnswerBody } from '@/features/explain/components/AnswerBody';
 import { AnswerText } from '@/features/explain/components/AnswerText';
+import { answerModel } from '@/features/explain/model/answer';
 import { clipAnswer } from '@/features/explain/model/phone';
 import { foldedPreview } from '@/features/explain/model/states';
 import { CanvasActionsProvider } from '@/features/board/components/BoardContext';
 import { ExplanationCard } from '@/features/board/components/cards/ExplanationCard';
 import { toFlowNode, type PtNode } from '@/features/board/model/flow';
 import { cardRow } from '@/features/board/model/test-data';
-import { AnswerProse } from '@/features/notebook/components/AnswerProse';
 import { Maths, typeset } from '@/lib/math';
 import { MathText } from '@/lib/MathText';
 
@@ -48,7 +49,6 @@ const answerText = (text: string, streaming = false): ReactElement => (
   <AnswerText
     paragraph={{ index: 0, text, sources: [] }}
     streaming={streaming}
-    general={false}
     onShow={() => undefined}
   />
 );
@@ -147,9 +147,12 @@ describe('an explain or Ask answer paragraph', () => {
 describe('the notebook prose', () => {
   it('typesets inline and display maths', () => {
     const { container } = render(
-      <p>
-        <AnswerProse text={FIXTURE} />
-      </p>,
+      <AnswerBody
+        blocks={answerModel(FIXTURE, () => undefined, false).blocks}
+        streaming={false}
+        general={false}
+        onShow={() => undefined}
+      />,
     );
     expectTypeset(container);
   });

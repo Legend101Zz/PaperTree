@@ -106,7 +106,7 @@ describe('the paper summary', () => {
     expect(document.querySelector('[data-usage-line]')?.textContent).toContain('(estimate)');
   });
 
-  it('a partial summary draws no warning: the bullet without a passage says "General knowledge"', async () => {
+  it('a partial summary draws no warning: the bullet without a passage has no source line"', async () => {
     installFetch({
       [`GET /papers/${PAPER}/summary`]: () =>
         jsonResponse(200, { state: 'partial', summary: SUMMARY('partial') }),
@@ -115,7 +115,8 @@ describe('the paper summary', () => {
     await open();
     await waitFor(() => expect(document.querySelectorAll('[data-summary-bullet]')).toHaveLength(5));
     expect(document.querySelector('[data-summary-warning]')).toBeNull();
-    expect(document.querySelectorAll('.pt-source--general')).toHaveLength(1);
+    // A bullet keeps a source line only where it has handles; it never says "General knowledge".
+    expect(document.querySelectorAll('.pt-source--general')).toHaveLength(0);
     expect(document.body.textContent).not.toMatch(/own reading|could not be linked/i);
   });
 

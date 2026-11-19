@@ -264,7 +264,7 @@ def test_a_passage_cited_twice_becomes_one_quote_at_its_first_use(tmp_path: Path
         try:
             conn.execute(
                 "INSERT INTO ai_citations SELECT 'cit_repeat', owner_id, message_id, 99, marker, "
-                "anchor_json, generation, block_id, page_index, supported FROM ai_citations "
+                "anchor_json, generation, block_id, page_index FROM ai_citations "
                 "WHERE message_id = ? AND ordinal = ?",
                 (message["message_id"], cites[0]["ordinal"]),
             )

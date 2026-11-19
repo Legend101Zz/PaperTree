@@ -9,11 +9,13 @@
 import { CallSlip } from '@papertree/ui';
 import { useCallback, useState, type ReactNode } from 'react';
 
+import { FRESH_CHECK, type CheckState } from '../model/check';
 import { formatAskTime } from '../model/exchange';
+import { variantAt, type AnswerLevel } from '../model/levels';
 import { wasNotSent, type RefusalKind } from '../model/states';
 import { AnswerSlip } from './AnswerSlip';
 
-import type { ViewMessage } from '@/components/explain/useExplainActions';
+import type { ViewMessage } from '@/features/explain/model/state';
 import type { Exchange as ExchangeModel, PaperSource } from '../model/exchange';
 
 /** Props for `Exchange`: the small interface any ask → answer → trace layout implements. */
@@ -40,6 +42,17 @@ export interface ExchangeProps {
   readonly phone?: boolean;
   /** Its usage line and Send to board are in the sheet's pinned footer (the last exchange). */
   readonly pinned?: boolean;
+  /**
+   * Switch this answer to a level (the controller's `relevel`; `rootMessageId` is the answer the
+   * user turn started). Without it the exchange has no level switch and no go-deeper chips.
+   */
+  readonly onLevel?: (rootMessageId: string, level: AnswerLevel) => void;
+  /** A go-deeper chip's fixed question: only the thread's last exchange passes it. */
+  readonly onAsk?: (question: string) => void;
+  /** Another answer is being written: the level switch and the chips wait. */
+  readonly busy?: boolean;
+  /** The thread's last known model, for the answer's foot until its own run names one. */
+  readonly modelHint?: string | null;
 }
 
 /**
@@ -60,12 +73,33 @@ export function Exchange({
   askInBox = false,
   phone = false,
   pinned = false,
+  onLevel,
+  onAsk,
+  busy = false,
+  modelHint = null,
 }: ExchangeProps): ReactNode {
   // Read once, at mount: an exchange never gains or loses its fold as the thread grows.
   const [foldable] = useState(startsFolded);
   const [folded, setFolded] = useState(startsFolded);
-  const model = exchange.model;
-  const answer = exchange.answer;
+  // The level shown: the answer the user turn started until the reader picks another. Every level
+  // fetched is held in `exchange.variants`, so a level seen before is shown again, never re-asked.
+  const [picked, setPicked] = useState<AnswerLevel | null>(null);
+  const [fade, setFade] = useState(0);
+  // Check yourself is marked here, per answer, so it survives a level switch (#349: no reset).
+  const [checks, setChecks] = useState<Readonly<Record<string, CheckState>>>({});
+  const variant =
+    (picked === null ? undefined : variantAt(exchange.variants, picked)) ?? exchange.variants[0];
+  const model = variant?.model ?? exchange.model;
+  const answer = variant?.answer ?? exchange.answer;
+  const rootId = exchange.answer?.messageId ?? null;
+  const switchLevel =
+    onLevel === undefined || rootId === null
+      ? undefined
+      : (level: AnswerLevel): void => {
+          if (variantAt(exchange.variants, level) !== undefined) setFade((n) => n + 1);
+          setPicked(level);
+          onLevel(rootId, level);
+        };
   // The phone's "Read the whole answer" (`clipAnswer`); only an answer's reader opens it.
   const [expanded, setExpanded] = useState(false);
   const notSent = wasNotSent(answer);
@@ -120,6 +154,15 @@ export function Exchange({
           }
           touch={phone}
           pinned={pinned}
+          onLevel={switchLevel}
+          {...(onAsk === undefined || switchLevel === undefined ? {} : { deeper: { onAsk } })}
+          busy={busy}
+          modelHint={modelHint}
+          fade={fade}
+          check={{
+            state: checks[answer.key] ?? FRESH_CHECK,
+            onChange: (next) => setChecks((was) => ({ ...was, [answer.key]: next })),
+          }}
         />
       )}
     </div>
