@@ -101,6 +101,11 @@ def test_an_image_anchor_is_a_page_and_one_rectangle() -> None:
         {"quads": [[10, 10, 10, 50]]},  # no area
         {"quads": [[1, 2, 3, "4"]]},  # not numbers
         {"quads": [[1, 2, 3]]},  # not four
+        {"quads": [[10, 10, 1e308, 1e308]]},  # finite, absurd: refused where it is written
+        {"quads": [[10, 10, float("inf"), 50]]},  # not finite
+        {"quads": [[10, 10, float("nan"), 50]]},
+        {"quads": [[-1e7, 10, 50, 50]]},  # beyond the bound on the low side too
+        {"quads": [[10, 10, 10**400, 50]]},  # an int too big for a float: no OverflowError
     ],
 )
 def test_anything_else_is_not_an_image_anchor(bad: dict[str, Any]) -> None:

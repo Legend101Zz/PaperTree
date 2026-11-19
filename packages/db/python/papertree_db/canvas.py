@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any, Final, Literal
 from ._support import Row, client_json, now_iso
 from .errors import PaperNotFound
 from .ids import OwnerId, PaperId
+from .image_anchor import image_box, is_image_anchor
 
 if TYPE_CHECKING:
     from .database import DatabaseCore as _Base
@@ -645,6 +646,13 @@ class CanvasMixin(_Base):
             doc = anchor.get("doc")
             if not isinstance(doc, Mapping) or doc.get("paperId") != paper_id:
                 raise _bad("source_anchor: the anchor is not on this paper")
+            if is_image_anchor(anchor):
+                # The validator `create_thread` applies to an image anchor: a bad one here would
+                # be a 500 at the first ask on the card, so it is refused where it is written.
+                try:
+                    image_box(anchor)
+                except ValueError as exc:
+                    raise _bad(f"source_anchor: {exc}") from exc
             try:
                 anchor_json = client_json({k: v for k, v in anchor.items() if k != "resolution"})
             except (TypeError, ValueError) as exc:
