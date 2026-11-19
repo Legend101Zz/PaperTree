@@ -70,6 +70,8 @@ export interface BoardAsk {
  * @param offer Where each gesture's step is recorded.
  * @param control What is open (an ask closes its box, a new card takes focus).
  * @param tree The trees as they stand.
+ * @param onBranched Told when a card grows to the RIGHT of an answer (a first branch, #349), so the
+ *   split view can give the tree more room.
  * @returns The streams and the gestures.
  */
 export function useBoardAsk(
@@ -79,6 +81,7 @@ export function useBoardAsk(
   offer: UndoOfferControl,
   control: BoardUiControl,
   tree: BoardTree,
+  onBranched?: () => void,
 ): BoardAsk {
   const {
     boardRef,
@@ -95,6 +98,18 @@ export function useBoardAsk(
   const aborts = useRef(new Map<string, AbortController>());
   const treeRef = useRef(tree);
   treeRef.current = tree;
+  const branchedRef = useRef(onBranched);
+  branchedRef.current = onBranched;
+
+  /** A card that hangs to the right of an ANSWER is a branch: the tree is growing sideways. */
+  const branched = useCallback(
+    (node: CanvasNode): void => {
+      if (node.branch !== 'right' || node.parent_id == null) return;
+      const parent = nodesRef.current.find((n) => n.id === node.parent_id)?.data.node;
+      if (parent?.kind === 'explanation') branchedRef.current?.();
+    },
+    [nodesRef],
+  );
 
   useEffect(() => {
     const live = aborts.current;
@@ -136,6 +151,7 @@ export function useBoardAsk(
       const controller = new AbortController();
       let id: string | null = null;
       let written = '';
+      let cited: readonly Citation[] = [];
       try {
         for await (const event of boardsApi.ask(boardId, parentId, body, controller.signal)) {
           if (!aliveRef.current) return id !== null;
@@ -144,6 +160,7 @@ export function useBoardAsk(
             id = node.node_id;
             aborts.current.set(id, controller);
             adopt(node);
+            branched(node);
             setStreams((prev) =>
               new Map(prev).set(node.node_id, {
                 text: '',
@@ -173,8 +190,10 @@ export function useBoardAsk(
                 thinking: false,
               });
             });
-          } else if (event.event === 'citations') patchStream(id, { citations: event.data.items });
-          else if (event.event === 'done') {
+          } else if (event.event === 'citations') {
+            cited = event.data.items;
+            patchStream(id, { citations: event.data.items });
+          } else if (event.event === 'done') {
             const { status, error } = event.data;
             patchStream(id, {
               status: status === 'aborted' ? 'stopped' : status,
@@ -203,11 +222,16 @@ export function useBoardAsk(
         if (id !== null) {
           aborts.current.delete(id);
           // What arrived is the card's own text now; the stored copy comes with the next read.
-          if (written !== '' && aliveRef.current) mergeData(id, { final_text: written });
+          if (written !== '' && aliveRef.current) {
+            mergeData(id, {
+              final_text: written,
+              ...(cited.length > 0 ? { citations: [...cited] } : {}),
+            });
+          }
         }
       }
     },
-    [adopt, aliveRef, boardRef, control, mergeData, patchStream, setNotice],
+    [adopt, aliveRef, boardRef, branched, control, mergeData, patchStream, setNotice],
   );
 
   const send = useCallback(
@@ -267,6 +291,7 @@ export function useBoardAsk(
         const note = await boardsApi.keepNote(boardId, parentId, { span, text: span.quote });
         if (!aliveRef.current) return;
         adopt(note);
+        branched(note);
         control.focus(note.node_id);
       } catch (error) {
         setNotice(
@@ -274,7 +299,7 @@ export function useBoardAsk(
         );
       }
     },
-    [adopt, aliveRef, boardRef, control, setNotice],
+    [adopt, aliveRef, boardRef, branched, control, setNotice],
   );
 
   const stop = useCallback(

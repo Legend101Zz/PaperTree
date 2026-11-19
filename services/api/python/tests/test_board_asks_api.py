@@ -125,6 +125,25 @@ def test_an_ask_on_a_passage_streams_the_node_first_and_is_a_right_branch(tmp_pa
         assert stored["uses"]["paper"] == "page" and stored["uses"]["path"] is True
 
 
+def test_get_board_returns_each_answers_citations_with_its_final_text(tmp_path: Path) -> None:
+    """#344/#349: handle -> page and Anchor ride on the node, so the board needs no thread scan
+    (which stopped at the newest 20 threads): a board with more than 20 asks resolves them all."""
+    with ai_harness(tmp_path, _script()) as h:
+        b = _setup(h)
+        answers = [b.ask(b.root, question=f"Question {i}?")[1]["node_id"] for i in range(22)]
+        nodes = b.nodes()
+        for node_id in answers:
+            cites = nodes[node_id]["citations"]
+            assert cites and {c["marker"] for c in cites} == {"b1"}
+            assert [c["ordinal"] for c in cites] == sorted(c["ordinal"] for c in cites)
+            first = cites[0]
+            assert first["citation_id"].startswith("cit_") and isinstance(first["page_index"], int)
+            assert first["anchor"]["selectors"], "the Anchor is there to flash the passage"
+            assert nodes[node_id]["final_text"].startswith("## TL;DR")
+        # A passage (or any non-answer card) carries none.
+        assert nodes[b.root]["citations"] is None
+
+
 def test_a_board_answers_thread_is_not_one_of_the_readers_threads(tmp_path: Path) -> None:
     with ai_harness(tmp_path, _script()) as h:
         b = _setup(h)

@@ -94,6 +94,10 @@ class NodeAnswer:
     #: The run that writes (or wrote) the answer: a ``streaming`` answer whose run is gone is
     #: shown as ended, not as a stream a reader would wait on forever.
     run_id: str | None = None
+    #: The answer's citations (handle -> page and Anchor), in ordinal order, read in the same query
+    #: as ``final_text`` so a board of any size resolves every ``[bN]`` without a thread read per
+    #: card (the old scan stopped at the newest 20 threads). Empty for an answer with none.
+    citations: tuple[Mapping[str, Any], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -517,9 +521,9 @@ class CanvasMixin(_Base):
         return self._node_answers(self._resolve(owner), nodes)
 
     def _node_answers(self, owner_id: str, nodes: tuple[NodeRow, ...]) -> dict[str, NodeAnswer]:
-        """Final text, level, model and status of every explanation card in ONE query: the card's
-        message, the run that wrote it (the model), the question before it and its thread's
-        origin anchor. No query per card."""
+        """Final text, level, model, status and citations of every explanation card in ONE query:
+        the card's message, the run that wrote it (the model), the question before it, its thread's
+        origin anchor and its citations. No query per card."""
         cards = {n.source_message_id: n.node_id for n in nodes if n.kind == "explanation"}
         cards.pop(None, None)
         if not cards:
@@ -530,6 +534,11 @@ class CanvasMixin(_Base):
             "SELECT m.message_id AS message_id, m.content AS content, m.level AS level, "  # noqa: S608
             "m.status AS status, m.run_id AS run_id, r.model AS model, "
             "t.origin_anchor_json AS origin, "
+            "(SELECT json_group_array(json_object('citation_id', c.citation_id, "
+            "'ordinal', c.ordinal, 'marker', c.marker, 'page_index', c.page_index, "
+            "'anchor', json(c.anchor_json))) FROM (SELECT * FROM ai_citations x "
+            "WHERE x.owner_id = m.owner_id AND x.message_id = m.message_id "
+            "ORDER BY x.ordinal) c) AS cites, "
             "(SELECT u.content FROM ai_messages u WHERE u.owner_id = m.owner_id "
             "AND u.thread_id = m.thread_id AND u.role = 'user' AND u.ordinal < m.ordinal "
             "ORDER BY u.ordinal DESC LIMIT 1) AS asked "
@@ -551,6 +560,7 @@ class CanvasMixin(_Base):
                 asked=r["asked"],
                 origin_anchor=None if origin is None else json.loads(origin),
                 run_id=r["run_id"],
+                citations=tuple(json.loads(r["cites"] or "[]")),
             )
         return out
 

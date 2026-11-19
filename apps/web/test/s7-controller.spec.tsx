@@ -63,6 +63,7 @@ function node(id: string, extra: Partial<CanvasNode> = {}): CanvasNode {
     level: null,
     model: null,
     answer_status: null,
+    citations: null,
     version: 1,
     created_at: '',
     updated_at: '',

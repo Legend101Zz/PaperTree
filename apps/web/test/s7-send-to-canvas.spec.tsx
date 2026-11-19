@@ -57,6 +57,7 @@ function existing(x: number, y: number): CanvasNode {
     level: null,
     model: null,
     answer_status: null,
+    citations: null,
     version: 1,
     created_at: '',
     updated_at: '',
@@ -128,6 +129,21 @@ describe('sendToCanvas', () => {
     // Both cards of the tree are taller than 60 + 150: the root goes under all of them.
     expect(body.y).toBeGreaterThan(60 + 150 + GAP);
     expect(body.x).toBe(40);
+  });
+
+  it('returns the id of the card it made, and puts a dropped passage at the drop point (#344)', async () => {
+    get.mockResolvedValue({ board: {} as never, nodes: [existing(0, 0)], edges: [] });
+    const id = await sendToCanvas(PAPER, {
+      kind: 'excerpt',
+      anchor: ANCHOR,
+      toast: 'none',
+      at: { x: 356, y: 372 },
+    });
+    const body = createNode.mock.calls[0]![1];
+    expect([body.x, body.y]).toEqual([356, 372]);
+    expect(id).toBe(body.node_id);
+    // With the board beside the paper, the board says it by arriving: no toast.
+    expect(document.querySelector('[data-testid="canvas-toast"]')).toBeNull();
   });
 
   it('sends an explanation with the answer text and its message id, found in the newest thread', async () => {
@@ -230,6 +246,22 @@ describe('sendToCanvas', () => {
         `/paper/${PAPER}/board?card=cn_passage0001`,
       );
       expect(toast.querySelector('a')?.textContent).toBe('Open board');
+    });
+
+    it('with the board about to open, finds the card without a toast and returns its id', async () => {
+      get.mockResolvedValue({
+        board: {} as never,
+        nodes: [onBoard(withPage(2, 'Residual learning framework'))],
+        edges: [],
+      });
+      const id = await sendToCanvas(PAPER, {
+        kind: 'excerpt',
+        anchor: withPage(2, 'Residual learning framework'),
+        toast: 'none',
+      });
+      expect(id).toBe('cn_passage0001');
+      expect(createNode).not.toHaveBeenCalled();
+      expect(document.querySelector('[data-testid="canvas-toast"]')).toBeNull();
     });
 
     it('still adds the same words on another page, and other words on the same page', async () => {

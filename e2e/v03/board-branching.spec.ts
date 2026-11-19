@@ -219,11 +219,15 @@ test('branch a conversation: ask, branch from words, focus a path, tidy, fold, o
   await expect(answerCards(page)).toHaveCount(3);
   await escape(page);
 
-  // "p. n": the paper opens on the words the answer draws on.
+  // "p. n" on the FULL-WIDTH board (#349): the paper opens BESIDE it, on the words the answer draws
+  // on, and the clicked card stays on screen in the board pane (`?card=` centres it).
   const src = answerCards(page).locator('.pt-tc__src').first();
   if ((await src.count()) > 0) {
     await src.click();
-    await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/read\\?focus=`));
+    await expect(page).toHaveURL(
+      new RegExp(`/paper/${paperId}/read\\?beside=1&card=cn_[\\w-]+&focus=`),
+    );
+    await expect(page.getByRole('complementary', { name: 'Board' })).toBeVisible();
     await page.goBack();
     await expect(answerCards(page)).toHaveCount(3);
   }

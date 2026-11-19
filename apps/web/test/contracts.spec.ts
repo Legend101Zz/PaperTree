@@ -484,6 +484,7 @@ const EXCERPT: CanvasNode = {
   level: null,
   model: null,
   answer_status: null,
+  citations: null,
   version: 1,
   created_at: T,
   updated_at: T,
@@ -517,6 +518,7 @@ const BOARD_ANSWER: CanvasNode = {
   level: 'new',
   model: 'MiniMax-M3',
   answer_status: 'complete',
+  citations: [],
 };
 const EDGE: CanvasEdge = {
   edge_id: 'ce_0f9e8d7c-aaaa-4bbb-8ccc-123456789abf',

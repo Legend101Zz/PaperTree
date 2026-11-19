@@ -74,8 +74,9 @@ test.describe('Journey D: the canvas', () => {
       })
       .toBeGreaterThan(20);
     expect(await page.evaluate(() => document.visibilityState)).toBe('visible');
-    // #203: the reader's header names the board "Board".
-    await expect(page.getByRole('link', { name: 'Board' })).toBeVisible();
+    // #344: the reader's header offers the board beside the paper (key B); the plain "Board" link
+    // is the phone's.
+    await expect(page.getByRole('button', { name: /^Board beside/ })).toBeVisible();
     await reveal(page, 'Deeper neural networks');
     const points = await pointsFor(page, 'Deeper neural networks', 'substantially deeper');
     await drag(page, points.from, points.to);

@@ -1220,6 +1220,9 @@ class CanvasNode(Wire):
     level: AnswerLevel | None
     model: str | None
     answer_status: AnswerStatus | None
+    #: The answer's citations (each `[bN]` handle -> its page and Anchor), read in the same query
+    #: as `final_text`; the live `locator` is not derived here. Null on every non-answer kind.
+    citations: list[Citation] | None
     version: Version
     created_at: WireTime
     updated_at: WireTime

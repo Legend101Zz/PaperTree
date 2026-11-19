@@ -32,8 +32,12 @@ export interface BranchActions {
   readonly retry: (nodeId: string) => Promise<boolean>;
   readonly stop: (nodeId: string) => void;
   readonly fold: (id: string, folded: boolean) => void;
-  /** Opens the reader on a card's source and flashes it. */
-  readonly openSource: (nodeId: string, citationId?: string, threadId?: string) => void;
+  /** A card's source "p. n": flashes it in the paper beside, or opens the paper beside (#344, #349). */
+  readonly openSource: (nodeId: string, citationId?: string) => void;
+  /** The 0-based pages on screen in the paper beside (the faint amber edge); empty when none. */
+  readonly visiblePages: ReadonlySet<number>;
+  /** True when the board sits beside the paper. */
+  readonly beside: boolean;
   /** The stage the span menu sits in (its pane), for placing it inside. */
   readonly stage: { readonly current: HTMLElement | null };
 }

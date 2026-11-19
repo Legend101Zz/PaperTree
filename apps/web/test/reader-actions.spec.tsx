@@ -40,7 +40,7 @@ const probe = vi.hoisted(() => ({
   anchor: null as unknown,
   quote: '',
   scrolls: [] as { readonly page: number; readonly bbox: readonly number[] }[],
-  sent: [] as Promise<void>[],
+  sent: [] as Promise<unknown>[],
 }));
 
 vi.mock('@/components/reader/VirtualPageList', () => ({

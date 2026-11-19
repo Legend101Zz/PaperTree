@@ -18,7 +18,6 @@ import { AnswerBody } from '@/features/explain/components/AnswerBody';
 
 import { locateQuote } from '../../model/spans';
 import { branchCounts, childrenOf, countsPhrase, downChild, spanKnots } from '../../model/tree';
-import { useCanvasActions } from '../BoardContext';
 import { useBranch } from '../BranchContext';
 import { answerView } from '../tree/answerView';
 import { BranchCard } from '../tree/BranchCard';
@@ -39,13 +38,11 @@ function Stamp(): ReactNode {
 
 /** An answer card: an `explanation` row. */
 export function AnswerCard({ id, data, selected }: NodeProps<PtNode>): ReactNode {
-  const ctx = useCanvasActions();
   const branch = useBranch();
   const node = data.node;
   const body = useRef<HTMLDivElement | null>(null);
   const root = useRef<HTMLDivElement | null>(null);
   const stream = branch.streams.get(id);
-  const source = ctx.sources?.explanations.get(node.source_message_id ?? '') ?? null;
   const live = stream?.status === 'writing';
   const text =
     stream !== undefined && stream.text !== '' ? stream.text : (node.final_text ?? node.body);
@@ -62,9 +59,10 @@ export function AnswerCard({ id, data, selected }: NodeProps<PtNode>): ReactNode
       : node.answer_status === 'error' ||
         node.answer_status === 'aborted' ||
         node.answer_status === 'partial');
-  const citations = stream?.citations ?? source?.answer.citations ?? [];
-  const view = answerView(id, text, state, citations, source?.numbers);
-  const question = (node.question ?? source?.question ?? node.title ?? '').trim();
+  // The citations ride on the board's own read of the node (no thread scan), the live ones while it streams.
+  const citations = stream?.citations ?? node.citations ?? [];
+  const view = answerView(id, text, state, citations);
+  const question = (node.question ?? node.title ?? '').trim();
   const folded = node.folded === true;
   const knots = spanKnots(branch.tree, id);
   const placed = useSpanMarks(id, root, body, text, knots, branch.reports);
@@ -168,9 +166,7 @@ export function AnswerCard({ id, data, selected }: NodeProps<PtNode>): ReactNode
               type="button"
               className="pt-tc__src"
               aria-label={`Show p. ${String(s.page)} in the paper`}
-              // TODO(#344): in split view the paper scrolls and flashes while the board stays put;
-              // on the full-width board this leaves for the reader, as the old cards did.
-              onClick={() => branch.openSource(id, s.citation.citation_id, source?.threadId)}
+              onClick={() => branch.openSource(id, s.citation.citation_id)}
             >
               p. {s.page}
             </button>
@@ -218,7 +214,7 @@ export function AnswerCard({ id, data, selected }: NodeProps<PtNode>): ReactNode
           blocks={view.model.blocks}
           streaming={live}
           general={false}
-          onShow={(s) => branch.openSource(id, s.citation.citation_id, source?.threadId)}
+          onShow={(s) => branch.openSource(id, s.citation.citation_id)}
         />
         {stream?.failure != null ? <p className="pt-tc__fail">{stream.failure}</p> : null}
       </div>

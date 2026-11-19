@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { ARRIVAL_MIN_ZOOM, MENU_MARGIN, placeMenu, viewToCentre } from './panes';
+import {
+  ARRIVAL_MIN_ZOOM,
+  MENU_MARGIN,
+  footprintHeight,
+  placeMenu,
+  shiftInto,
+  viewToCentre,
+} from './panes';
 
 const MENU = { w: 200, h: 180 };
 const PANE = { w: 700, h: 500 };
@@ -48,5 +55,38 @@ describe('viewToCentre: the arrival (#342)', () => {
   it('lines the top up under a margin when the pair is taller than the pane', () => {
     const view = viewToCentre([{ x: 0, y: 50, w: 300, h: 900 }], PANE, 1);
     expect(view.y).toBe(MENU_MARGIN * 3 - 50);
+  });
+});
+
+describe('the drop footprint', () => {
+  it('is as tall as the card will be for its words, capped at 60% of the pane', () => {
+    expect(footprintHeight(0, 500)).toBe(68);
+    expect(footprintHeight(180, 500)).toBeGreaterThan(footprintHeight(45, 500));
+    expect(footprintHeight(5000, 300)).toBe(300);
+  });
+});
+
+describe('shiftInto: a picker stays inside the pane (#349)', () => {
+  const pane = { w: 700, h: 500 };
+  it('leaves a box that fits alone', () => {
+    expect(shiftInto({ x: 100, y: 100, w: 300, h: 200 }, pane)).toEqual({ dx: 0, dy: 0 });
+  });
+  it('shifts a box cut off at the right or the bottom back inside, with the margin', () => {
+    expect(shiftInto({ x: 500, y: 400, w: 300, h: 200 }, pane)).toEqual({
+      dx: 700 - MENU_MARGIN - 800,
+      dy: 500 - MENU_MARGIN - 600,
+    });
+  });
+  it('shifts a box cut off at the left or the top back inside', () => {
+    expect(shiftInto({ x: -40, y: -10, w: 300, h: 200 }, pane)).toEqual({
+      dx: MENU_MARGIN + 40,
+      dy: MENU_MARGIN + 10,
+    });
+  });
+  it('lines a box bigger than the pane up under the margin', () => {
+    expect(shiftInto({ x: 300, y: 50, w: 900, h: 700 }, pane)).toEqual({
+      dx: MENU_MARGIN - 300,
+      dy: MENU_MARGIN - 50,
+    });
   });
 });

@@ -30,6 +30,7 @@
  *   retries on its own), not in your library, unreachable, a PDF pdf.js cannot open.
  */
 
+import { useSearchParams } from 'next/navigation';
 import {
   createContext,
   useCallback,
@@ -95,7 +96,14 @@ import { useFocusFromBook, useSummaryFromBook } from '@/features/book';
 import { AskFromNotebook } from '@/features/notebook/components/AskFromNotebook';
 import { useFocusFromNotebook } from '@/features/notebook/hooks/useFocusFromNotebook';
 import { useThreadFromNotebook } from '@/features/notebook/hooks/useThreadFromNotebook';
-import { ReaderHeader, type ExplainToggle } from '@/features/reader';
+import { ReaderHeader, type BoardBesideToggle, type ExplainToggle } from '@/features/reader';
+import {
+  BoardBeside,
+  draggedPassage,
+  setDraggedPassage,
+  useBoardBeside,
+  type BoardBesideControl,
+} from '@/features/split';
 import { NetworkError } from '@/lib/api/client';
 import { papersApi } from '@/lib/api/papers';
 import { ApiError, type HighlightColor } from '@/lib/api/types';
@@ -316,8 +324,43 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
   const [topPage, setTopPage] = useState<number>(saved?.page ?? 0);
   const narrow = useMediaQuery('(max-width: 639px)');
 
-  // Guided and Split need the parse; until it is here the reader stays in Source.
-  const mode: ReadingMode = doc === null ? 'source' : requestedMode;
+  // Board beside (#344): the board in a pane next to the paper. A window with no room for two panes
+  // opens the full-width board instead, on the same card.
+  const boardPath =
+    paper.kind === 'api' ? `/paper/${encodeURIComponent(paper.paperId)}/board` : null;
+  const beside = useBoardBeside(
+    useCallback(
+      (cardId: string | null) => {
+        if (boardPath === null) return;
+        const to = cardId === null ? boardPath : `${boardPath}?card=${encodeURIComponent(cardId)}`;
+        window.location.assign(to);
+      },
+      [boardPath],
+    ),
+  );
+  // The pages on screen, for the faint amber edge on the board's cards (as a set that changes
+  // only when the pages do, so the board does not redraw on every scroll).
+  const [visiblePages, setVisiblePages] = useState<ReadonlySet<number>>(() => new Set());
+  const onVisiblePages = useCallback((pages: readonly number[]) => {
+    setVisiblePages((was) =>
+      was.size === pages.length && pages.every((p) => was.has(p)) ? was : new Set(pages),
+    );
+  }, []);
+  // `?beside=1` (a source click on the full-width board, B there) opens the split on arrival; the
+  // board reads `?card=` itself and keeps that card on screen.
+  const wantsBeside = useSearchParams()?.get('beside') === '1';
+  const openedFromUrl = useRef(false);
+  const openBeside = beside.openBeside;
+  useEffect(() => {
+    if (!wantsBeside || openedFromUrl.current || boardPath === null) return;
+    openedFromUrl.current = true;
+    openBeside();
+  }, [wantsBeside, boardPath, openBeside]);
+
+  // Guided and Split need the parse; until it is here the reader stays in Source. With the board
+  // beside, the reader's own Split (Source | Guided) steps aside: the word is the board's.
+  const mode: ReadingMode =
+    doc === null || (beside.open && requestedMode === 'split') ? 'source' : requestedMode;
 
   // ── the document and the PDF, loaded independently ──
   useEffect(() => {
@@ -630,18 +673,10 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
     [highlights],
   );
 
-  // The selection menu's Board beside. TODO(#344): the split view puts the board next to the paper;
-  // until it lands this is the existing board-open behaviour, the header's Board link.
-  const boardPath =
-    paper.kind === 'api' ? `/paper/${encodeURIComponent(paper.paperId)}/board` : null;
+  // The selection menu's Board beside: the card is sent, then the board opens beside the paper on it.
   const onOpenBoard = useMemo(
-    () =>
-      boardPath === null
-        ? undefined
-        : () => {
-            window.location.assign(boardPath);
-          },
-    [boardPath],
+    () => (boardPath === null ? undefined : (cardId: string | null) => beside.openOn(cardId)),
+    [boardPath, beside],
   );
 
   const onActivateHighlight = useCallback(
@@ -726,7 +761,13 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
 
   return (
     <PdfDocumentProvider src={pdfSource}>
-      <ReaderActionsMount paper={paper} onFocusAnchor={focusAnchor}>
+      <ReaderActionsMount
+        paper={paper}
+        onFocusAnchor={focusAnchor}
+        beside={beside}
+        visiblePages={visiblePages}
+        onNotice={setNotice}
+      >
         <ReaderWorkspaceView
           doc={doc}
           paper={paper}
@@ -743,6 +784,8 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
           onCreateHighlight={onCreateHighlight}
           onCreateNote={onCreateNote}
           onOpenBoard={onOpenBoard}
+          onVisiblePages={onVisiblePages}
+          beside={beside}
           onActivateHighlight={onActivateHighlight}
           activeHighlightId={card?.highlightId ?? null}
           flash={flash}
@@ -862,13 +905,19 @@ const ExplainToggleContext = createContext<ExplainToggle | null>(null);
  * A component of its own because the workspace returns early (loading, error) and hooks may not
  * follow an early return.
  */
-function ReaderActionsMount({
+export function ReaderActionsMount({
   paper,
   onFocusAnchor,
+  beside,
+  visiblePages,
+  onNotice,
   children,
 }: {
   readonly paper: PaperRef;
   readonly onFocusAnchor: (anchor: Anchor, opts?: FocusOptions) => void;
+  readonly beside: BoardBesideControl;
+  readonly visiblePages: ReadonlySet<number>;
+  readonly onNotice: (message: string) => void;
   readonly children: React.ReactNode;
 }) {
   const paperId = paper.kind === 'api' ? paper.paperId : null;
@@ -882,6 +931,52 @@ function ReaderActionsMount({
     openPanel();
     summarize();
   });
+  // Explain and the board share the right-hand side (P4 decision 4): opening one closes the other.
+  const boardOpen = beside.open;
+  const closeBeside = beside.close;
+  useEffect(() => {
+    if (boardOpen) closeExplain();
+  }, [boardOpen, closeExplain]);
+  useEffect(() => {
+    if (explainOpen) closeBeside();
+  }, [explainOpen, closeBeside]);
+
+  // A source "p. n" clicked on a card: the paper scrolls to the passage and flashes it; the board
+  // stays put. A paper folded to a strip comes back first, and the flash waits for it to settle.
+  const folded = beside.state.folded;
+  const restore = beside.restore;
+  const showInPaper = useCallback(
+    (target: { readonly anchor: Anchor | null }) => {
+      const anchor = target.anchor;
+      if (anchor === null) return;
+      if (folded === 'paper') {
+        restore();
+        setTimeout(() => onFocusAnchor(anchor, { flash: true }), 360);
+      } else {
+        onFocusAnchor(anchor, { flash: true });
+      }
+    },
+    [folded, restore, onFocusAnchor],
+  );
+  // A selection dragged across the divider: the card lands at the drop point, and glows.
+  const arriveAt = beside.arriveAt;
+  const dragIn = useMemo(
+    () => ({
+      current: () => draggedPassage(),
+      drop: (at: { readonly x: number; readonly y: number }) => {
+        const passage = draggedPassage();
+        if (passage === null) return;
+        setDraggedPassage(null);
+        sendToCanvas(paperId, { kind: 'excerpt', anchor: passage.anchor, toast: 'none', at })
+          .then((cardId) => {
+            if (cardId !== null) arriveAt(cardId, false);
+          })
+          .catch(() => onNotice("Couldn't send this passage to the board. Try again."));
+      },
+    }),
+    [paperId, arriveAt, onNotice],
+  );
+
   const toggleRef = useRef<HTMLButtonElement>(null);
   const toggle = useMemo<ExplainToggle | null>(
     () =>
@@ -908,6 +1003,16 @@ function ReaderActionsMount({
     <ReaderActionsProvider value={actions}>
       <ExplainToggleContext.Provider value={toggle}>{children}</ExplainToggleContext.Provider>
       <ExplainPanel controller={explain} toggleRef={toggleRef} />
+      {paperId !== null && beside.open ? (
+        <BoardBeside
+          paperId={paperId}
+          split={beside}
+          visiblePages={visiblePages}
+          arrival={beside.arrival}
+          onShowInPaper={showInPaper}
+          dragIn={dragIn}
+        />
+      ) : null}
       {/* S5d: the notebook lasso's "Ask about this" arrives here as a new ask (`?ask=`). */}
       <AskFromNotebook paperId={paperId} controller={explain} />
     </ReaderActionsProvider>
@@ -934,7 +1039,9 @@ interface ViewProps {
   readonly highlights: UseHighlights;
   readonly onCreateHighlight: (captured: SelectionCapture, color?: HighlightColor) => void;
   readonly onCreateNote: (captured: SelectionCapture, at: CardAt | null) => void;
-  readonly onOpenBoard: (() => void) | undefined;
+  readonly onOpenBoard: ((cardId: string | null) => void) | undefined;
+  readonly onVisiblePages: (pages: readonly number[]) => void;
+  readonly beside: BoardBesideControl;
   readonly onActivateHighlight: (highlightId: string, at: CardAt | null) => void;
   readonly activeHighlightId: string | null;
   readonly flash: FlashPaint | null;
@@ -971,6 +1078,11 @@ function ReaderWorkspaceView(props: ViewProps) {
     (paper.kind === 'api' ? 'Opening the paper…' : paper.slug);
 
   const explain = useContext(ExplainToggleContext);
+  const toggleBeside = props.beside.toggle;
+  const besideToggle = useMemo<BoardBesideToggle>(
+    () => ({ open: props.beside.open, onToggle: toggleBeside }),
+    [props.beside.open, toggleBeside],
+  );
   const { numPages } = usePdfDocument();
   const pageCount = (numPages ?? 0) > 0 ? numPages : (doc?.pages.length ?? null);
 
@@ -1036,6 +1148,7 @@ function ReaderWorkspaceView(props: ViewProps) {
             : null
         }
         explain={explain}
+        boardBeside={props.onOpenBoard === undefined ? null : besideToggle}
       />
 
       {props.stillReading ? (
@@ -1151,6 +1264,8 @@ function SourceSlot(props: ViewProps) {
       onCreateHighlight={props.onCreateHighlight}
       onCreateNote={props.onCreateNote}
       {...(props.onOpenBoard === undefined ? {} : { onOpenBoard: props.onOpenBoard })}
+      onVisiblePages={props.onVisiblePages}
+      boardBeside={props.beside.open}
       highlightUnavailableReason={props.highlights.unavailableReason}
       onActivateHighlight={props.onActivateHighlight}
       activeHighlightId={props.activeHighlightId}

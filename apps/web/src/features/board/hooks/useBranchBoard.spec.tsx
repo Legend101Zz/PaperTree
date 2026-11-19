@@ -12,12 +12,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { boardsApi, type CreateNodeBody } from '@/lib/api/boards';
 import { threadsApi } from '@/lib/api/threads';
 
+import { hostOf } from '../../../../test/branch-harness';
 import { DRAFT_ID } from '../model/display';
 import { CARD_WIDTH, COLUMN_GAP, DOWN_GAP } from '../model/layout';
 import { node, resetClock, spanOf } from '../model/treeFixtures';
 import { useBoardController } from './useBoardController';
 import { useBranchBoard } from './useBranchBoard';
 
+import type { Anchor } from '@papertree/anchoring';
+import type { BoardHost } from '../components/BoardHost';
 import type { Board, CanvasNode, SseEvent } from '@/lib/api/types';
 
 const flowStub = vi.hoisted(() => ({
@@ -79,13 +82,13 @@ function stageEl(): HTMLElement {
   return el;
 }
 
-async function mount(rows: CanvasNode[]) {
+async function mount(rows: CanvasNode[], host: BoardHost = hostOf()) {
   api.get.mockResolvedValue({ board: BOARD, nodes: rows, edges: [] });
   const stage = { current: stageEl() };
   const hook = renderHook(
     () => {
       const ctl = useBoardController('ppr_1');
-      const branch = useBranchBoard('ppr_1', ctl, stage);
+      const branch = useBranchBoard('ppr_1', ctl, stage, host);
       return { ctl, branch };
     },
     { wrapper: ReactFlowProvider },
@@ -623,5 +626,105 @@ describe('arriving from Send to board (#342)', () => {
     measure(result, ['p', 'a', 'b', 'n']);
     await Promise.resolve();
     expect(flowStub.setViewport).not.toHaveBeenCalled();
+  });
+});
+
+/** An anchor on a page, as the board stores it (only the page selector matters here). */
+const anchorOn = (index: number, id = `anc_${String(index)}`): Anchor =>
+  ({ id, selectors: [{ type: 'PageSelector', index }] }) as unknown as Anchor;
+
+describe('beside the paper (#344)', () => {
+  const ARRIVE = { cardId: 'p', nonce: 1, centre: true } as const;
+
+  it('a card that arrives through the host is read in, centred with its ask box, and glows once', async () => {
+    const host = hostOf({ beside: true, arrival: ARRIVE });
+    const { result } = await mount([node({ id: 'p', x: 100, y: 100, body: 'Words.' })], host);
+    measure(result, ['p'], 200);
+    await waitFor(() => expect(result.current.branch.control.ui.draft?.parentId).toBe('p'));
+    measure(result, [DRAFT_ID], 120);
+    await waitFor(() => expect(flowStub.setViewport).toHaveBeenCalledTimes(1));
+    // The board was read again for the card the reader made: once on mount, once on arrival.
+    expect(api.get.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(result.current.branch.view.nodes.find((n) => n.id === 'p')?.className).toContain(
+      'pt-tn--arrived',
+    );
+  });
+
+  it('a DROPPED card keeps the view: it glows where it lands and the ask box opens, no pan', async () => {
+    const host = hostOf({ beside: true, arrival: { ...ARRIVE, centre: false } });
+    const { result } = await mount([node({ id: 'p', x: 300, y: 220, body: 'Words.' })], host);
+    measure(result, ['p'], 200);
+    await waitFor(() => expect(result.current.branch.control.ui.draft?.parentId).toBe('p'));
+    measure(result, [DRAFT_ID], 120);
+    await waitFor(() =>
+      expect(result.current.branch.view.nodes.find((n) => n.id === 'p')?.className).toContain(
+        'pt-tn--arrived',
+      ),
+    );
+    expect(flowStub.setViewport).not.toHaveBeenCalled();
+    // A root sits at the stored point of the drop: the layout keeps it as a tree root.
+    expect(card(result, 'p')).toMatchObject({ x: 300, y: 220 });
+  });
+
+  it('Escape with nothing left to close tells the host; with something open it does not', async () => {
+    const host = hostOf({ beside: true });
+    const { result } = await mount(tree(), host);
+    act(() => result.current.branch.control.openAsk('a'));
+    const press = () =>
+      act(
+        () =>
+          void window.dispatchEvent(
+            new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }),
+          ),
+      );
+    press(); // the ask box
+    expect(host.onEscapeUnused).not.toHaveBeenCalled();
+    press(); // the path focus
+    expect(host.onEscapeUnused).not.toHaveBeenCalled();
+    press(); // nothing left: the board beside closes on its own level
+    expect(host.onEscapeUnused).toHaveBeenCalledTimes(1);
+  });
+
+  it('a source link goes to the host with the passage, or the cited passage of an answer', async () => {
+    const host = hostOf({ beside: true });
+    const rows = [
+      { ...node({ id: 'p', body: 'Words.' }), source_anchor: anchorOn(2) },
+      {
+        ...node({ id: 'a', parent: 'p', branch: 'right', finalText: 'Shortcut [b1].' }),
+        citations: [
+          { citation_id: 'cit_1', ordinal: 0, marker: 'b1', page_index: 4, anchor: anchorOn(4) },
+        ],
+      },
+    ];
+    const { result } = await mount(rows, host);
+    act(() => result.current.branch.actions.openSource('p'));
+    expect(host.showInPaper).toHaveBeenLastCalledWith({ nodeId: 'p', anchor: anchorOn(2) });
+    act(() => result.current.branch.actions.openSource('a', 'cit_1'));
+    expect(host.showInPaper).toHaveBeenLastCalledWith({
+      nodeId: 'a',
+      anchor: anchorOn(4),
+      citationId: 'cit_1',
+    });
+  });
+
+  it('the first branch off an ANSWER tells the host (the board may widen); the first ask on a passage does not', async () => {
+    const host = hostOf({ beside: true });
+    const frames = (id: string, parent: string) => [
+      {
+        event: 'node',
+        data: node({ id, parent, branch: 'right', span: parent === 'a' ? SPAN : undefined }),
+      },
+      { event: 'done', data: { status: 'complete', error: null, message_id: 'm' } },
+    ];
+    const { result } = await mount(tree(), host);
+    api.ask.mockImplementationOnce(() => stream(frames('q1', 'p')));
+    act(() => result.current.branch.control.openAsk('p'));
+    act(() => result.current.branch.control.setText('why?'));
+    await act(() => result.current.branch.ask.send(result.current.branch.view.draft!));
+    expect(host.onBranched).not.toHaveBeenCalled();
+
+    api.ask.mockImplementationOnce(() => stream(frames('q2', 'a')));
+    await act(() => result.current.branch.ask.quick('a', SPAN, 'simpler'));
+    expect(host.onBranched).toHaveBeenCalledTimes(1);
   });
 });

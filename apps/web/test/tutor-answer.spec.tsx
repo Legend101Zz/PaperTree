@@ -476,7 +476,6 @@ describe('the small board card', () => {
             commitBody: vi.fn(),
             commitTitle: vi.fn(),
             commitSize: vi.fn(),
-            openCitation: vi.fn(),
           }}
         >
           <BranchProvider value={branchActions()}>

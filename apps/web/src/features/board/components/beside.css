@@ -1,0 +1,79 @@
+/*
+ * board/components/beside — the board in the split view's pane (P4 step 7, V3-25, V3-26, #344):
+ * its own bar, the drop cross and dashed footprint, and the faint amber edge of a card whose
+ * passage is on the page being read. Tokens only; the amber is the paper's own highlight hue.
+ */
+
+/* The pane's bar: the board's name, its counts and its tools (no way back to take: the paper is there). */
+.pt-boardbar--beside {
+  block-size: 48px;
+  padding: 0 10px 0 14px;
+}
+
+.pt-boardbar--beside .pt-boardbar__h1 {
+  flex: 0 1 auto;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+/* The pane is narrow: its bar keeps its icons and drops their words whatever the window's width. */
+.pt-cv[data-beside] .pt-boardtools > .pt-boardtool .pt-boardtool__label {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.pt-cv[data-beside] .pt-boardtools > .pt-boardtool {
+  justify-content: center;
+  min-inline-size: 40px;
+  padding: 0;
+}
+
+.pt-cv[data-beside] .pt-boardtools > .pt-boardtool kbd {
+  display: none;
+}
+
+/* A selection in the air over the board: a cross and the dashed footprint of the card that lands. */
+.pt-drop__foot {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+  border: 1.5px dashed var(--pt-focus);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--pt-focus) 6%, transparent);
+}
+
+.pt-drop__cross {
+  position: absolute;
+  z-index: 7;
+  inline-size: 28px;
+  block-size: 28px;
+  pointer-events: none;
+  stroke: var(--pt-focus);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.pt-drop__cross circle {
+  fill: var(--pt-page);
+}
+
+.pt-drop__says {
+  position: absolute;
+  z-index: 7;
+  pointer-events: none;
+  font: 12px / 1 var(--pt-font-you);
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+  color: var(--pt-focus);
+}
+
+/* Cards from the page on screen: a faint amber edge, inherited by the whole tree. The focus ring wins. */
+.pt-tc[data-edge='amber']:not([data-focused='true']) {
+  box-shadow:
+    0 0 0 1.5px rgb(205 150 30 / 85%),
+    var(--pt-e1);
+}

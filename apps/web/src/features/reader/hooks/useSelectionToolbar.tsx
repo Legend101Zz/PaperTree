@@ -39,6 +39,8 @@ export interface UseSelectionToolbarArgs {
   readonly narrow: boolean;
   /** A bottom sheet (Contents on a phone) is open: the bar waits under it. */
   readonly sheetOpen: boolean;
+  /** The board is beside the paper (#344): the menu always docks. */
+  readonly dockOnly?: boolean;
   readonly actions: ToolbarActions;
 }
 
@@ -59,7 +61,7 @@ export interface SelectionToolbarMount {
  * @returns The floating renderer, the dock host and the phone bar.
  */
 export function useSelectionToolbar(args: UseSelectionToolbarArgs): SelectionToolbarMount {
-  const { selection, doc, narrow, sheetOpen, actions } = args;
+  const { selection, doc, narrow, sheetOpen, actions, dockOnly = false } = args;
   const [dockHost, setDockHost] = useState<HTMLDivElement | null>(null);
   const [sizes, setSizes] = useState<Sizes>(FIRST_GUESS);
   const measureMargin = useCallback(
@@ -94,6 +96,7 @@ export function useSelectionToolbar(args: UseSelectionToolbarArgs): SelectionToo
       toolbar: sizes.margin,
       dockHeight: sizes.docked,
       viewport: geometry.viewport,
+      dockOnly,
     });
     if (placed.kind === 'margin') {
       return (

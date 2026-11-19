@@ -18,6 +18,20 @@ Answer,BranchNote}Card.tsx` on the shared `components/tree/BranchCard.tsx`; the 
 Uses line and pickers, the span menu, the breadcrumb, the lines, the Outline and the export sheet
 are in `components/tree/`. Loose v0.2 notes, frames and threads between cards are untouched.
 
+**Beside the paper (#344).** `BoardHost` (`components/BoardHost.tsx`) is everything the board needs of
+where it is shown. On its own page the host is built in `BoardView` (`fullWidthHost`): a source "p. n"
+opens the reader with the board beside it and the clicked card kept on screen (`besideHref`), and B
+does the same without a card. In the split view `features/split` provides the host: the pages on
+screen (`model/edge.ts`: the faint amber edge on a card whose ROOT passage is visible, inherited by
+the tree), `showInPaper` (the paper flashes the passage, the board stays), a `dragIn` (a selection
+dragged across the divider: `hooks/useDropIn.ts` draws the cross and the dashed footprint, the card
+lands at the drop point and the layout keeps it as a root), an `arrival` (centre with the ask box, or,
+for a drop, keep the view and glow), `onBranched` (the first branch off an answer: the split widens the
+board by folding the paper to a strip, #349) and `onEscapeUnused` (Escape with nothing left to close
+closes the board on its own level). An answer's citations come with the board read (`CanvasNode.citations`):
+there is no thread scan (`useCardSources` reads only notebook pages and plates). Pickers shift inside the
+pane (`model/panes.shiftInto`), as the span menu does (`placeMenu`).
+
 ## The cards
 
 | Wire kind     | Card                                                          | Voices                         |

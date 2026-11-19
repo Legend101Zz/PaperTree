@@ -69,6 +69,35 @@ describe('the page counter', () => {
   });
 });
 
+describe('Board beside (#344)', () => {
+  it('is a toggle with the B key, instead of the plain Board link, and drops the reader’s Split while open', () => {
+    const onToggle = vi.fn();
+    const { rerender } = render(<ReaderHeader {...BASE} boardBeside={{ open: false, onToggle }} />);
+    const header = screen.getByRole('banner');
+    expect(within(header).queryByRole('link', { name: 'Board' })).toBeNull();
+    const button = within(header).getByRole('button', { name: /Board beside/ });
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+    expect(button.getAttribute('aria-keyshortcuts')).toBe('B');
+    expect(
+      within(within(header).getByRole('radiogroup', { name: 'Reading mode' }))
+        .getAllByRole('radio')
+        .map((r) => r.textContent),
+    ).toEqual(['Source', 'Guided', 'Split']);
+    fireEvent.click(button);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+
+    rerender(<ReaderHeader {...BASE} boardBeside={{ open: true, onToggle }} />);
+    expect(
+      within(screen.getByRole('radiogroup', { name: 'Reading mode' }))
+        .getAllByRole('radio')
+        .map((r) => r.textContent),
+    ).toEqual(['Source', 'Guided']);
+    expect(screen.getByRole('button', { name: /Board beside/ }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+  });
+});
+
 describe('the reader header', () => {
   it('has every control of frame 04, by role and name', () => {
     render(<ReaderHeader {...BASE} />);

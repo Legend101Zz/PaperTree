@@ -168,44 +168,15 @@ describe('canvas citations', () => {
       updated_at: '',
     }) as CanvasNode;
 
-  it("reads a message's citations from its thread", async () => {
-    vi.mocked(threadsApi.list).mockResolvedValue([
-      { thread_id: 'thr_old', updated_at: '2026-01-01' },
-      { thread_id: 'thr_new', updated_at: '2026-02-01' },
-    ] as never);
-    vi.mocked(threadsApi.get).mockImplementation(async (_p, tid) => ({
-      thread: {} as never,
-      messages: (tid === 'thr_old'
-        ? [message('msg_1', ['b1', 'b2'])]
-        : [message('msg_other', ['b1'])]) as never,
-    }));
-    const nodes = [toFlowNode(explanation('cn_1', 'msg_1'), 'ppr_1')];
-    const { result } = renderHook(() => useCardSources('ppr_1', nodes));
-    await waitFor(() =>
-      expect(result.current.explanations.get('msg_1')?.answer.citations).toHaveLength(2),
-    );
-  });
-
-  it("asks for the board's own threads: a board answer's thread is not in the reader's list", async () => {
-    vi.mocked(threadsApi.list).mockResolvedValue([
-      { thread_id: 'thr_b', updated_at: '2026' },
-    ] as never);
-    vi.mocked(threadsApi.get).mockResolvedValue({
-      thread: {} as never,
-      messages: [message('msg_1', ['b1'])] as never,
-    });
-    const nodes = [toFlowNode(explanation('cn_1', 'msg_1'), 'ppr_1')];
-    const { result } = renderHook(() => useCardSources('ppr_1', nodes));
-    await waitFor(() => expect(result.current.explanations.has('msg_1')).toBe(true));
-    expect(threadsApi.list).toHaveBeenCalledWith('ppr_1', { includeBoard: true });
-  });
-
-  it('gives no entry when the read fails', async () => {
-    vi.mocked(threadsApi.list).mockRejectedValue(new Error('offline'));
+  it('reads no thread for an answer card: its citations come with the board read', async () => {
+    vi.mocked(threadsApi.list).mockClear();
+    vi.mocked(threadsApi.get).mockClear();
     const nodes = [toFlowNode(explanation('cn_1', 'msg_1'), 'ppr_1')];
     const { result } = renderHook(() => useCardSources('ppr_1', nodes));
     await new Promise((r) => setTimeout(r, 20));
-    expect(result.current.explanations.has('msg_1')).toBe(false);
+    expect(threadsApi.list).not.toHaveBeenCalled();
+    expect(threadsApi.get).not.toHaveBeenCalled();
+    expect('explanations' in result.current).toBe(false);
   });
 });
 
@@ -240,6 +211,7 @@ describe('the stale-version notice', () => {
       level: null,
       model: null,
       answer_status: null,
+      citations: null,
       version: 2,
       created_at: '',
       updated_at: '',

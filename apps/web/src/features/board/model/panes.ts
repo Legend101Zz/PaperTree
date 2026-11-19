@@ -94,3 +94,48 @@ export function viewToCentre(
     zoom: z,
   };
 }
+
+/** A dropped passage's footprint is drawn this wide: a passage card's width. */
+export const FOOTPRINT_WIDTH = 304;
+/** About how many characters fit on a line of a passage card, and how tall a line and the strip are. */
+const CHARS_PER_LINE = 45;
+const LINE_HEIGHT = 18;
+const CARD_CHROME = 50;
+
+/**
+ * How tall the card of a dropped passage will be, for the dashed footprint (an estimate: the card
+ * is measured once it lands, so it can be a line off).
+ *
+ * @param characters The passage's length.
+ * @param cap The tallest a card grows (60% of the pane).
+ * @returns The footprint's height in px.
+ */
+export function footprintHeight(characters: number, cap: number): number {
+  const lines = Math.ceil((characters + 2) / CHARS_PER_LINE);
+  return Math.min(cap, CARD_CHROME + lines * LINE_HEIGHT);
+}
+
+/**
+ * How far a floating box (a picker, a menu) must move to sit wholly inside the pane: shifted
+ * sideways and up or down rather than cut off at an edge (#349). A box larger than the pane lines
+ * its top-left up under the margin.
+ *
+ * @param box The box, in the pane's coordinates.
+ * @param pane The pane's size (its own origin is 0, 0).
+ * @param pane.w Its width.
+ * @param pane.h Its height.
+ * @param margin The air kept between the box and the pane's edge.
+ * @returns The move in px, `{ dx: 0, dy: 0 }` when it already fits.
+ */
+export function shiftInto(
+  box: Box,
+  pane: { readonly w: number; readonly h: number },
+  margin: number = MENU_MARGIN,
+): { readonly dx: number; readonly dy: number } {
+  const along = (start: number, size: number, room: number): number => {
+    if (size > room - 2 * margin || start < margin) return margin - start;
+    const end = start + size;
+    return end > room - margin ? room - margin - end : 0;
+  };
+  return { dx: along(box.x, box.w, pane.w), dy: along(box.y, box.h, pane.h) };
+}

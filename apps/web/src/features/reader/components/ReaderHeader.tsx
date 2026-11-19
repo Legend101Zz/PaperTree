@@ -28,6 +28,12 @@ export interface ExplainToggle {
   readonly ref: RefObject<HTMLButtonElement>;
 }
 
+/** The Board beside toggle's state. */
+export interface BoardBesideToggle {
+  readonly open: boolean;
+  readonly onToggle: () => void;
+}
+
 /** Props for `ReaderHeader`. */
 export interface ReaderHeaderProps {
   readonly title: string;
@@ -48,6 +54,11 @@ export interface ReaderHeaderProps {
   readonly highlightCount: number;
   /** The paper's board, or null for a sample paper. */
   readonly boardHref: string | null;
+  /**
+   * Board beside (key B): the board in a pane next to the paper (#344). Absent where the window has
+   * no room for two panes or the paper has no board; the bar then keeps its plain Board link.
+   */
+  readonly boardBeside?: BoardBesideToggle | null;
   readonly explain: ExplainToggle | null;
 }
 
@@ -99,7 +110,16 @@ function ContentsButton({ props, onPress }: { props: ReaderHeaderProps; onPress?
 }
 
 /** The reading mode, zoom (not in Guided) and Board: the bar's right side, or the phone menu's. */
-function ReadingControls({ props, onLeave }: { props: ReaderHeaderProps; onLeave?: () => void }) {
+function ReadingControls({
+  props,
+  onLeave,
+  phone = false,
+}: {
+  props: ReaderHeaderProps;
+  onLeave?: () => void;
+  phone?: boolean;
+}) {
+  const beside = phone ? null : (props.boardBeside ?? null);
   return (
     <>
       <ModeSwitch
@@ -107,11 +127,29 @@ function ReadingControls({ props, onLeave }: { props: ReaderHeaderProps; onLeave
         onModeChange={props.onModeChange}
         guidedAvailable={props.guidedAvailable}
         unavailableReason="Guided and Split open when the paper has been read."
+        hideSplit={beside?.open === true}
       />
       {props.mode === 'guided' ? null : (
         <ZoomControl mode={props.zoomMode} zoom={props.zoom} onModeChange={props.onZoomChange} />
       )}
-      {props.boardHref === null ? null : (
+      {beside !== null ? (
+        <button
+          type="button"
+          className="pt-toolbtn pt-reader__board"
+          aria-pressed={beside.open}
+          aria-keyshortcuts="B"
+          title="Board beside: the board next to the paper (B)"
+          onClick={beside.onToggle}
+        >
+          <span className="pt-toolbtn__icon" aria-hidden="true">
+            <Workflow size={ICON} strokeWidth={1.5} />
+          </span>
+          <span className="pt-toolbtn__label">Board beside</span>
+          <kbd className="pt-reader__key" aria-hidden="true">
+            B
+          </kbd>
+        </button>
+      ) : props.boardHref === null ? null : (
         <a className="pt-toolbtn pt-reader__board" href={props.boardHref} onClick={onLeave}>
           <span className="pt-toolbtn__icon" aria-hidden="true">
             <Workflow size={ICON} strokeWidth={1.5} />
@@ -173,7 +211,7 @@ function PhoneHeader({
                 close();
               }}
             />
-            <ReadingControls props={props} onLeave={close} />
+            <ReadingControls props={props} onLeave={close} phone />
             <ReadingSettings page={page} inline />
           </>
         )}

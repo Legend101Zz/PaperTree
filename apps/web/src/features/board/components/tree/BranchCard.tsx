@@ -16,6 +16,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
+import { rootOnVisiblePage } from '../../model/edge';
 import { useBranch } from '../BranchContext';
 import { CardPins } from '../CardPins';
 
@@ -75,6 +76,12 @@ export function BranchCard({
   const [scrolls, setScrolls] = useState(false);
   const focused = branch.control.ui.focusId === id;
   const { reports } = branch;
+  // Beside the paper, a card whose root passage is on a visible page has a faint amber edge.
+  const rootId = branch.layout.cards.get(id)?.rootId;
+  const amber =
+    branch.beside &&
+    rootId !== undefined &&
+    rootOnVisiblePage(branch.tree, rootId, branch.visiblePages);
 
   useEffect(() => {
     const el = root.current;
@@ -102,11 +109,12 @@ export function BranchCard({
       ref={root}
       className="pt-tc"
       role="group"
-      aria-label={label}
+      aria-label={amber ? `${label}, on the page you are reading` : label}
       data-kind={kind}
       data-stock={stock}
       data-focused={focused}
       data-selected={selected}
+      data-edge={amber ? 'amber' : undefined}
       data-scrolls={scrolls}
       onClick={() => branch.control.focus(id)}
     >

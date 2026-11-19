@@ -82,19 +82,38 @@ export function readerHref(paperId: string): string {
  * @param paperId The paper.
  * @param nodeId The card the marker is on.
  * @param citationId The citation behind the marker; absent for a passage card (the passage itself).
- * @param threadId The thread the answer is in, so the reader reads that one thread only.
- * @returns `/paper/<id>/read?focus=<card>[&cite=<citation>][&thread=<thread>]`.
+ * @returns `/paper/<id>/read?focus=<card>[&cite=<citation>]`.
  */
-export function citationHref(
-  paperId: string,
-  nodeId: string,
-  citationId?: string,
-  threadId?: string,
-): string {
+export function citationHref(paperId: string, nodeId: string, citationId?: string): string {
   const q = new URLSearchParams({ focus: nodeId });
   if (citationId !== undefined) q.set('cite', citationId);
-  if (threadId !== undefined) q.set('thread', threadId);
   return `${readerHref(paperId)}?${q.toString()}`;
+}
+
+/**
+ * Where a card's source "p. n" goes from the FULL-WIDTH board (#349): the reader with the board
+ * beside it, the passage flashed and the clicked card kept on screen (`?card=` centres it in the
+ * board pane, `?beside=1` opens the split).
+ *
+ * @param paperId The paper.
+ * @param nodeId The card whose source was clicked.
+ * @param citationId The citation behind the link; absent for a passage card.
+ * @returns `/paper/<id>/read?beside=1&card=<card>&focus=<card>[&cite=<citation>]`.
+ */
+export function besideHref(paperId: string, nodeId: string, citationId?: string): string {
+  const q = new URLSearchParams({ beside: '1', card: nodeId, focus: nodeId });
+  if (citationId !== undefined) q.set('cite', citationId);
+  return `${readerHref(paperId)}?${q.toString()}`;
+}
+
+/**
+ * The reader with the board beside it and no card to keep on screen (B from the full-width board).
+ *
+ * @param paperId The paper.
+ * @returns `/paper/<id>/read?beside=1`.
+ */
+export function paperBesideHref(paperId: string): string {
+  return `${readerHref(paperId)}?beside=1`;
 }
 
 /** A route's query string as Next hands it to a page. */
