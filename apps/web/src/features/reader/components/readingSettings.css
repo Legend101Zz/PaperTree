@@ -1,28 +1,14 @@
 /*
  * The reader's Aa menu (#345): a 40 px "Aa" button on the bar and a small panel under it, holding
- * Page and Room. The popover's wrapper and panel classes (`pt-hmenu`, `pt-hmenu__panel`) are the
- * library's, whose stylesheet loads with the library route only, so the few rules the reader
- * needs are here, scoped to the reader. Colours are tokens; the button eases only shadow and
- * transform, like every `pt-toolbtn`.
+ * Page and Room. The popover's wrapper and panel (`pt-hmenu`, `pt-hmenu__panel`) are the shared
+ * `PopoverMenu`'s, styled once in `library/components/popoverMenu.css`; the panel here only asks
+ * for more room and a place above the reader's bar. Colours are tokens; the button eases only
+ * shadow and transform, like every `pt-toolbtn`.
  */
-.pt-reader .pt-hmenu {
-  position: relative;
-}
-
 .pt-reader .pt-hmenu__panel {
-  position: absolute;
-  inset-block-start: calc(100% + 8px);
-  inset-inline-end: 0;
   z-index: 40;
-  display: flex;
   min-inline-size: 300px;
-  flex-direction: column;
   gap: 16px;
-  padding: 16px;
-  background: var(--pt-e2-fill);
-  border: 1px solid var(--pt-rule);
-  border-radius: var(--pt-radius-menu);
-  box-shadow: var(--pt-e2), var(--pt-e2-edge);
 }
 
 .pt-aa__button {
