@@ -416,9 +416,61 @@ export interface CanvasNode {
   source_diagram_id: string | null;
   /** A notebook card's page counts, computed on read; null on every other kind. */
   counts: NotebookCardCounts | null;
+  /**
+   * The v0.3 branching fields (v03-BOARD-SPEC section 2). Optional while the API side lands: a
+   * node without `parent_id` is a tree root or a loose v0.2 card, and the model treats absent
+   * fields as `null` / `0` / `false`.
+   */
+  /** The node this one answers or annotates; null on a root and on a loose card. */
+  parent_id?: string | null;
+  /** Where a child sits relative to its parent; null on a root and on a loose card. */
+  branch?: BoardBranch | null;
+  /** The words of the parent's answer this branch starts from; null for a follow-up. */
+  parent_span?: ParentSpan | null;
+  /** For an answer, the ask as typed or the quick-ask label. */
+  question?: string | null;
+  /** What the ask sent: the Uses picker's choices. */
+  uses?: AskUses | null;
+  /** The reader's drag offset on top of the Tidy layout. */
+  offset_x?: number;
+  offset_y?: number;
+  /** A folded subtree shows as one pill. */
+  folded?: boolean;
+  /** Answer nodes only, returned by the GET so the board needs no thread fetches. */
+  final_text?: string | null;
+  level?: AskLevel | null;
+  model?: string | null;
   version: number;
   created_at: string;
   updated_at: string;
+}
+
+/** Which way a child leaves its parent: `down` continues the thread, `right` branches. */
+export type BoardBranch = 'down' | 'right';
+
+/**
+ * A selection in the parent's stored answer text. The offsets are UTF-16 code units into the
+ * Markdown the model wrote (not the rendered text), so they hold across renders.
+ */
+export interface ParentSpan {
+  start: number;
+  end: number;
+  quote: string;
+}
+
+/** The depth an answer is written at. */
+export type AskLevel = 'new' | 'familiar' | 'expert';
+
+/** The Uses picker's choices, sent with an ask and stored on the answer node. */
+export interface AskUses {
+  /** Whether the ancestors' questions and answers go with the ask. */
+  path: boolean;
+  /** `page` = the passage's page and one either side, no tools; `whole` = tools allowed. */
+  paper: 'page' | 'whole' | 'off';
+  level: AskLevel;
+  diagram: 'may' | 'never' | 'always';
+  /** Cards the reader selected on purpose; sibling branches are never sent otherwise. */
+  extra_node_ids: string[];
 }
 
 type CanvasNodeKind =
