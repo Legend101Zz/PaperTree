@@ -63,13 +63,15 @@ export interface ShelfGroup<P extends ShelfPaper = ShelfPaper> {
 }
 
 /**
- * Spine width in px is `26 + 0.85 × pages`, fitted uncapped to the 24 spines of frame 01 (8 pp →
- * 33, 15 → 39, 25 → 47, 34 → 55, 75 → 90) and exact to the pixel on all of them; DESIGN.md §9's
- * 48 px cap then overrides the frame's four wide spines (FlashAttention, GPT-3, CLIP, SuperGLUE).
+ * Spine width in px is `34 + 1.5 × pages` (v0.3 V3-AI-NOTES §6.1, "about 34 px + 1.5 px per page,
+ * capped"), the v0.3 shelf's spines, thicker than v0.2's `26 + 0.85 × pages` (which frame 01 and a
+ * 48 px cap fitted). V3-34's and the prototype's measure 15 pp → 58, 16 → 60, 11 → 50, 12 → 54,
+ * 18 → 62, 29 → 78 and 34 → 88 (FlashAttention); the line is within a few px of every one, and
+ * the cap is that 88.
  */
-export const SPINE_MAX_WIDTH = 48;
+export const SPINE_MAX_WIDTH = 88;
 /** Used while the page count is unknown (see `spineWidth`). */
-export const SPINE_DEFAULT_WIDTH = 40;
+export const SPINE_DEFAULT_WIDTH = 48;
 /**
  * The v0.3 prototype draws its spines at 76% of V3-34's 280–330 px, 217–251 px, so that nine books
  * stand on two planks in a 900 px window; 01f's shorter rows run 150–179. Decoration, not data.
@@ -100,10 +102,12 @@ export function spineState(paper: ShelfPaper): SpineState {
  *
  * @param pageCount - Pages in the PDF, 0 when unknown.
  * @returns Width in CSS px, at most `SPINE_MAX_WIDTH`.
+ * @example
+ * spineWidth(15); // 57
  */
 export function spineWidth(pageCount: number): number {
   if (!(pageCount > 0)) return SPINE_DEFAULT_WIDTH;
-  return Math.min(SPINE_MAX_WIDTH, Math.round(26 + 0.85 * pageCount));
+  return Math.min(SPINE_MAX_WIDTH, Math.round(34 + 1.5 * pageCount));
 }
 
 /**
