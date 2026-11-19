@@ -7,7 +7,7 @@
  * from the stream's first `next()`. The server answers 501 until S5 lands.
  */
 import { request, streamSse } from './client';
-import type { Anchor, Message, SseEvent, Thread } from './types';
+import type { Anchor, AnswerLevel, Message, SseEvent, Thread } from './types';
 
 const seg = encodeURIComponent;
 
@@ -18,6 +18,8 @@ export interface CreateThreadBody {
   /** 1..2000; the server defaults it to "Explain this passage." ("Explain with a diagram." for a
    * diagram). */
   readonly question?: string;
+  /** How deep the answer goes; the server's default is `familiar`. */
+  readonly level?: AnswerLevel;
 }
 
 export interface FollowUpBody {
@@ -26,6 +28,13 @@ export interface FollowUpBody {
   readonly retry_of?: string;
   /** Redraw a finished diagram answer of this thread (required on a diagram thread). */
   readonly redraw_of?: string;
+  /** How deep the answer goes; the server's default is `familiar`. */
+  readonly level?: AnswerLevel;
+  /**
+   * The reader switched this answer to another level: the same question answered again at `level`
+   * (a sibling of the answer `relevel_of` names), not a new user turn. The server decides `check`.
+   */
+  readonly relevel_of?: string;
 }
 
 export const threadsApi = {

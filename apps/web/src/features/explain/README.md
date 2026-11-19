@@ -34,16 +34,12 @@ never stored).
   newest thread, so the next free question starts a new thread. Explain on a selection always starts one.
 - **A read that fails** (404, network) shows a designed failure with Try again and New thread
   (`ThreadReadFailure`), never a blank panel; a 404 is not retried and re-reads the list.
-- **Streaming and Stop (#204, frames 04b/04c).** While it streams, the AI tab row shows the working label
-  ("Starting…" before a word arrives, "Reading the paper…" or "Writing…", dotted pulse) and **Stop**, whose row
-  is sticky in the panel's scroll so a long answer never scrolls it away; a typed caret ends the text (dots and
-  caret hold still under reduced motion). After Stop, the slip's footer says "Stopped. The part that arrived is
-  kept." (or "Stopped before any text arrived."), with Retry and the run's usage when it reported any; a stored
-  `aborted` answer reads the same (`wasStopped`). Focus hands over Stop → Retry → Stop (`AnswerParts`), never
-  to `<body>`. **Until the stopped answer's stored copy lands** (`awaitingStored`, about a second) it is drawn
-  as while streaming: a paragraph citing a handle the thread has not seen yet is held as cited, and the trace
-  and readout wait, so nothing is shown "uncited" and then moved. If that read never lands, the answer stays
-  in this state (no trace) rather than guess.
+- **Streaming and Stop (#204, frames 04b/04c; v0.3 foot).** While it streams, the slip's **foot** says
+  `M3.1 Flash · writing…` (dotted pulse; "starting…" before a word, "Reading the paper…" while a tool runs) with
+  **Stop** at its right; a typed caret ends the text (dots and caret hold still under reduced motion). After
+  Stop the foot says `· stopped`, and under the slip a note says what was kept, with Retry (focus comes to it
+  from Stop). The model is the run's own (its usage), the thread's last until then. A **quick ask** (a chip, a
+  level switch) never shows the status labels or the grey placeholder lines (#349).
 - **Refusals before the stream (#204).** Only a documented pre-stream code on an error status counts
   (`refusedBeforeStream`; a 200 with an empty stream does not). A refused new ask is stamped "not sent" and its
   words go back into the composer, never over words typed since. **The composer's text is the controller's**
@@ -85,6 +81,18 @@ never stored).
 
 - `components/ExplainPanel.tsx`: the drawer (≥ 768 px) or sheet; its header holds the thread menu, Summarize
   and Close. `components/PinnedFooter.tsx`: the phone sheet's pinned usage line and To board. `components/ThreadView.tsx`: the thread as exchanges (or the summary) above the `Composer`.
+- **The tutor answer (v0.3, #339, #349).** `model/sections.ts` reads the text into labels, paragraphs and the two
+  fences (`## TL;DR`, `## In plain words` | `## The trade-off`, `## How it works`, `## In the paper`; an unknown
+  heading stays as it was, so an old answer renders); `answer.ts` gives each paragraph its sources and
+  `AnswerModel.blocks` the reading order. `AnswerBody` draws them (label, the TL;DR lead, paragraphs, the inline
+  figure, Check yourself) and is the one renderer for the panel, the board card and the notebook page; the
+  card and the notebook pass no check. ``diagram: `features/diagram` `InlineDiagram` (placeholder until the fence
+closes; nothing when invalid). ``check: `model/check.ts` + `CheckYourself` (marked in the browser; state is
+  the exchange's, so it survives a level switch). **Levels**: `LevelSwitch` on an answer; a level is asked once
+  (`FollowUp { question, level, relevel_of }`, a sibling answer, not a turn) and every level fetched is held in
+  `Exchange.variants` (`model/levels.ts`), so switching back re-shows it with one fade and no request.
+  `GoDeeper` chips (Simpler = relevel to New to this; the rest are fixed quick follow-ups) sit under the
+  thread's last answer. `ThreadMessage.level/relevelOf/quick` carry it.
 - `components/Exchange.tsx`: THE layout of one exchange (frame 13 option 1, the owner's default; owner may
   change): `CallSlip` (stamped "not sent" when refused) → `AnswerSlip` (each paragraph through `AnswerText`, with its source line). One component behind
   `ExchangeProps`.

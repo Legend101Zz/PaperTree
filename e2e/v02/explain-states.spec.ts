@@ -85,7 +85,8 @@ test.describe('#204: streaming, Stop and the daily cap (faux agent)', () => {
     await panel.getByRole('button', { name: 'Ask', exact: true }).click();
     const live = panel.locator('[data-message-status="streaming"]');
     await expect(live).toContainText('This answer streams slowly', { timeout: 60_000 });
-    await expect(live.locator('.pt-ai-slip__source [role="status"]')).toContainText('…');
+    // The working label sits in the slip's foot (model · writing… · Stop).
+    await expect(live.locator('.pt-answer-foot [role="status"]')).toContainText('…');
     await expect(live.locator('.pt-exchange__caret')).toHaveCount(1);
     await expect(live.locator('.pt-source button').first()).toBeVisible({
       timeout: 30_000,
@@ -93,7 +94,7 @@ test.describe('#204: streaming, Stop and the daily cap (faux agent)', () => {
     expect((await live.innerText()).replace(/\s+/g, ' ')).not.toMatch(/\[b|\bb\d+\b/);
     await page.screenshot({ path: shot('v02-states-01-streaming-1440.png') });
 
-    // ── 04c state 1: Stop on the tab row → the kept part and Retry ──
+    // ── 04c state 1: Stop on the foot → the kept part and Retry ──
     await live.getByRole('button', { name: 'Stop' }).click();
     const stopped = panel.locator('[data-message-status]').last();
     await expect(stopped).toContainText('Stopped. The part that arrived is kept.', {
@@ -101,7 +102,7 @@ test.describe('#204: streaming, Stop and the daily cap (faux agent)', () => {
     });
     await expect(stopped.getByRole('button', { name: 'Retry' })).toBeFocused();
     await expect(stopped).toContainText('This answer streams slowly');
-    await expect(stopped.locator('.pt-ai-slip__source')).toContainText('Stopped ·');
+    await expect(stopped.locator('.pt-answer-foot')).toContainText('stopped');
     expect((await stopped.innerText()).replace(/\s+/g, ' ')).not.toMatch(/kept above|\[b\d/);
     await page.screenshot({ path: shot('v02-states-02-stopped-1440.png') });
 

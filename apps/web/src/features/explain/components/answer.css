@@ -1,0 +1,328 @@
+/*
+ * The tutor answer's own furniture (v0.3, prototype `P4-journey` Explain panel): the small
+ * lower-case section labels, the TL;DR lead, the Check yourself block, the level switch, the
+ * go-deeper chips and the foot (model, writing…, Stop). Tokens only, so the lamp-lit scheme is
+ * the same answer at night. Motion is a short fade; reduced motion turns it off.
+ */
+
+/* ── section labels and the lead ────────────────────────────────────────────────────────── */
+
+.pt-ai-label {
+  display: block;
+  margin: 0;
+  font: 700 13px / 16px var(--pt-font-label);
+  letter-spacing: 0.08em;
+  color: var(--pt-ai-tab-ink);
+  text-transform: lowercase; /* the small-caps face draws lowercase as small capitals */
+}
+
+/* A label after the first one opens the next part of the answer. */
+.pt-ai-slip__grid > * + .pt-ai-label,
+.pt-bc__clip-body > div > * + .pt-ai-label {
+  margin-block-start: var(--pt-space-3);
+}
+
+/* In a board card paragraphs carry their own bottom margin, so the label needs only a hair. */
+.pt-bc__clip-body .pt-ai-label {
+  margin-block-end: 2px;
+}
+
+.pt-ai-label__note {
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--pt-ink-2);
+}
+
+/* The one-or-two-sentence answer, set larger. */
+.pt-ai-lead {
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 500;
+}
+
+/* A label sits close to what it names. */
+.pt-ai-slip__grid > .pt-ai-label + .pt-ai-slip__row {
+  margin-block-start: calc(var(--pt-space-3) * -0.6);
+}
+
+/* ── Check yourself ─────────────────────────────────────────────────────────────────────── */
+
+.pt-check {
+  margin-block-start: var(--pt-space-3);
+}
+
+.pt-check:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: 3px;
+}
+
+.pt-check__box {
+  margin-block-start: 8px;
+  padding: 9px 12px;
+  border: 1.5px dashed var(--pt-tab);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--pt-page) 50%, transparent);
+}
+
+.pt-check__box p {
+  margin: 0;
+  font: var(--pt-t-ai-panel) / 21px var(--pt-font-ai);
+}
+
+.pt-check__box p + p {
+  margin-block-start: 6px;
+}
+
+.pt-check__hint {
+  color: var(--pt-ink-2);
+}
+
+/* The blank: a ruled line in the reader's own pen. */
+.pt-check__blank {
+  display: inline-block;
+  inline-size: 96px;
+  block-size: 26px;
+  margin-inline: 3px;
+  padding: 0 6px;
+  border: 0;
+  border-block-end: 1.5px solid var(--pt-pen);
+  border-radius: 2px 2px 0 0;
+  background: var(--pt-call-slip);
+  font: 14px var(--pt-font-you);
+  color: var(--pt-pen);
+  text-align: center;
+  vertical-align: -5px;
+}
+
+.pt-check__blank:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: 1px;
+}
+
+.pt-check__blank[readonly] {
+  border-block-end-style: dotted;
+}
+
+.pt-check__row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-block-start: 6px;
+  font-size: 13.5px;
+  color: var(--pt-ink-2);
+}
+
+.pt-check__keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pt-check__keys kbd {
+  padding: 3px 6px 2px;
+  border: 1px solid var(--pt-control-border);
+  border-block-end-width: 2px;
+  border-radius: 3px;
+  background: var(--pt-page);
+  font: 12px / 1 var(--pt-font-you);
+  color: var(--pt-ink-2);
+}
+
+/* A text link on the slip: oxblood, underlined, a 26 px row. */
+.pt-answer-link {
+  block-size: 26px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--pt-primary);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.pt-answer-link--quiet {
+  color: var(--pt-ink-2);
+}
+
+.pt-answer-link:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.pt-check__row .pt-answer-link:first-of-type {
+  margin-inline-start: auto;
+}
+
+/* ── the level switch ───────────────────────────────────────────────────────────────────── */
+
+.pt-level {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-block-end: var(--pt-space-2);
+}
+
+.pt-level__name {
+  font: 700 13.5px / 1 var(--pt-font-label);
+  letter-spacing: 0.1em;
+  color: var(--pt-ink-2);
+  text-transform: lowercase;
+}
+
+.pt-level__group {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--pt-control-border);
+  border-radius: 4px;
+  background: var(--pt-page);
+}
+
+.pt-level__option {
+  block-size: 30px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  font: inherit;
+  font-size: 14.5px;
+  color: var(--pt-ink);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pt-level__option[aria-pressed='true'] {
+  background: var(--pt-ink);
+  color: var(--pt-page);
+}
+
+.pt-level__option:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.pt-level__option:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: 1px;
+}
+
+/* The phone sheet: 44 px targets. */
+.pt-level--touch .pt-level__option {
+  block-size: 44px;
+}
+
+/* A cached level coming back fades in once; it is never typed out again (#349). The two names
+   alternate so the same slip can replay the fade without being rebuilt. */
+.pt-explain__answer[data-fade='a'] .pt-ai-slip {
+  animation: pt-answer-fade-a var(--pt-dur-sheet) var(--pt-ease-out);
+}
+
+.pt-explain__answer[data-fade='b'] .pt-ai-slip {
+  animation: pt-answer-fade-b var(--pt-dur-sheet) var(--pt-ease-out);
+}
+
+@keyframes pt-answer-fade-a {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes pt-answer-fade-b {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ── go deeper ──────────────────────────────────────────────────────────────────────────── */
+
+.pt-deeper {
+  margin-block-start: var(--pt-space-3);
+}
+
+.pt-deeper__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-block-start: 3px;
+}
+
+.pt-deeper__chip {
+  display: inline-flex;
+  align-items: center;
+  block-size: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--pt-control-border);
+  border-radius: 3px;
+  background: var(--pt-page);
+  font: inherit;
+  font-size: 14px;
+  color: var(--pt-ink);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pt-deeper__chip:hover:not(:disabled, [aria-disabled='true']) {
+  background: var(--pt-call-slip);
+}
+
+.pt-deeper__chip:disabled,
+.pt-deeper__chip[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.pt-deeper__chip:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: 1px;
+}
+
+.pt-deeper--touch .pt-deeper__chip {
+  block-size: 44px;
+}
+
+/* ── the foot: model · writing… · Stop ──────────────────────────────────────────────────── */
+
+.pt-answer-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-block-start: var(--pt-space-3);
+  padding-block-start: 6px;
+  border-block-start: 1px solid var(--pt-rule);
+  font-size: 13.5px;
+  color: var(--pt-ink-2);
+  white-space: nowrap;
+}
+
+.pt-answer-foot__stop {
+  margin-inline-start: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  block-size: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--pt-ink);
+  cursor: pointer;
+}
+
+.pt-answer-foot__stop:hover {
+  background: var(--pt-page);
+}
+
+.pt-answer-foot__stop:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-explain__answer[data-fade] .pt-ai-slip {
+    animation: none;
+  }
+}

@@ -5,7 +5,7 @@
  */
 import { endsInsideMath } from '@/lib/markdown';
 
-import type { AnswerModel, AnswerParagraph } from './answer';
+import type { AnswerBlock, AnswerModel, AnswerParagraph } from './answer';
 
 /** What the sheet shows of one answer. */
 export interface AnswerClip {
@@ -33,6 +33,23 @@ export function clipAnswer(model: Pick<AnswerModel, 'paragraphs'>, expanded: boo
   // display split by a blank line) takes the paragraphs up to the one that closes it.
   const shown = firstWhole(all);
   return { paragraphs: all.slice(0, shown), clipped: shown < all.length };
+}
+
+/**
+ * The blocks up to and including the `n`th paragraph (the fold's first paragraph): the labels and
+ * figures before it stay, everything after it waits behind "Read the whole answer".
+ *
+ * @param blocks The answer's blocks.
+ * @param n How many paragraphs to keep.
+ * @returns The leading blocks (all of them when there are no more than `n` paragraphs).
+ */
+export function blocksUpTo(blocks: readonly AnswerBlock[], n: number): readonly AnswerBlock[] {
+  let seen = 0;
+  for (let i = 0; i < blocks.length; i += 1) {
+    if (blocks[i]?.k === 'p') seen += 1;
+    if (seen === n) return blocks.slice(0, i + 1);
+  }
+  return blocks;
 }
 
 /**

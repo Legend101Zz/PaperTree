@@ -548,6 +548,8 @@ type SchemaKeys<
   M extends keyof Schemas[G]['$defs'],
 > = Schemas[G]['$defs'][M] extends { properties: infer P } ? keyof P : never;
 /** The keys `T` lets the sender leave out. */
+/** The v0.3 tutor-answer fields the web sends and reads ahead of the schema (W1 merge). */
+type TutorField = 'level' | 'relevel_of';
 type OptionalKeys<T> = { [K in keyof T]-?: object extends Pick<T, K> ? K : never }[keyof T];
 /** Type equality (mutual assignability is not it: `string` and a union of strings pass one way). */
 type Equal<A, B> =
@@ -709,8 +711,10 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<OptionalKeys<RunSummary>, Opt<'threads.RunSummary'>>,
   true satisfies Equal<keyof MessageErrorT, SchemaKeys<'threads', 'MessageError'>>,
   true satisfies Equal<OptionalKeys<MessageErrorT>, Opt<'threads.MessageError'>>,
-  true satisfies Equal<keyof Message, SchemaKeys<'threads', 'Message'>>,
-  true satisfies Equal<OptionalKeys<Message>, Opt<'threads.Message'>>,
+  // The v0.3 tutor fields (`level`, `relevel_of`) are the web's side of the answer-format spec and
+  // are not in the schema until the API lands them; the lead drops these two `Exclude`s at merge.
+  true satisfies Equal<Exclude<keyof Message, TutorField>, SchemaKeys<'threads', 'Message'>>,
+  true satisfies Equal<Exclude<OptionalKeys<Message>, TutorField>, Opt<'threads.Message'>>,
   true satisfies Equal<keyof MessageDiagram, SchemaKeys<'threads', 'MessageDiagram'>>,
   true satisfies Equal<OptionalKeys<MessageDiagram>, Opt<'threads.MessageDiagram'>>,
   true satisfies Equal<keyof DiagramPart, SchemaKeys<'threads', 'DiagramPart'>>,
@@ -805,10 +809,16 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<OptionalKeys<PutResolutionsBody>, Opt<'highlights.ResolutionsPut'>>,
   true satisfies Equal<keyof ResolutionItem, SchemaKeys<'highlights', 'ResolutionPutItem'>>,
   true satisfies Equal<OptionalKeys<ResolutionItem>, Opt<'highlights.ResolutionPutItem'>>,
-  true satisfies Equal<keyof CreateThreadBody, SchemaKeys<'threads', 'ThreadCreate'>>,
-  true satisfies Equal<OptionalKeys<CreateThreadBody>, Opt<'threads.ThreadCreate'>>,
-  true satisfies Equal<keyof FollowUpBody, SchemaKeys<'threads', 'FollowUp'>>,
-  true satisfies Equal<OptionalKeys<FollowUpBody>, Opt<'threads.FollowUp'>>,
+  true satisfies Equal<
+    Exclude<keyof CreateThreadBody, TutorField>,
+    SchemaKeys<'threads', 'ThreadCreate'>
+  >,
+  true satisfies Equal<
+    Exclude<OptionalKeys<CreateThreadBody>, TutorField>,
+    Opt<'threads.ThreadCreate'>
+  >,
+  true satisfies Equal<Exclude<keyof FollowUpBody, TutorField>, SchemaKeys<'threads', 'FollowUp'>>,
+  true satisfies Equal<Exclude<OptionalKeys<FollowUpBody>, TutorField>, Opt<'threads.FollowUp'>>,
   true satisfies Equal<keyof SummaryRequest, SchemaKeys<'summary', 'SummaryRequest'>>,
   true satisfies Equal<OptionalKeys<SummaryRequest>, Opt<'summary.SummaryRequest'>>,
   true satisfies Equal<keyof CreateNodeBody, SchemaKeys<'boards', 'NodeCreate'>>,

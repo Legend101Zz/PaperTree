@@ -289,6 +289,9 @@ export interface MessageDiagram {
   links: DiagramLink[];
 }
 
+/** How deep an AI answer goes (v0.3 answer format §2); the default is `familiar`. */
+export type AnswerLevel = 'new' | 'familiar' | 'expert';
+
 export interface Message {
   message_id: string;
   thread_id: string;
@@ -302,6 +305,14 @@ export interface Message {
   citations: Citation[];
   /** Only on an assistant message of a `diagram` thread. */
   diagram?: MessageDiagram;
+  /** The level an assistant answer was written at; absent or null on an older answer (= familiar). */
+  level?: AnswerLevel | null;
+  /**
+   * Set on a sibling answer: the id of the assistant message it is the same question answered at
+   * another level (the answer the reader switched levels on). Siblings share that id; null or
+   * absent on the answer a user turn started.
+   */
+  relevel_of?: string | null;
   created_at: string;
   completed_at: string | null;
 }

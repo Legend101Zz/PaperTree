@@ -7,6 +7,10 @@
  * drawn: the parser hands them over and this component only keeps the punctuation they carried.
  * Each page is a button: hover or focus peeks the passage, a click flashes it in the paper.
  * Every string is a React text child; nothing is injected as HTML.
+ *
+ * The tutor format's lead (the TL;DR paragraph) is set larger and carries no source line: it is
+ * the whole idea in a breath, not a claim about the paper. A paragraph of display maths alone has
+ * no words to stand a source under either.
  */
 import { AiParagraph, SourceLine } from '@papertree/ui';
 import { Fragment, type ReactNode } from 'react';
@@ -34,7 +38,8 @@ export interface AnswerTextProps {
   readonly touch?: boolean;
 }
 
-function renderInline(nodes: readonly Inline[]): ReactNode {
+/** Inline nodes as React: maths typeset, handles left to the source line (only their punctuation stays). */
+export function renderInline(nodes: readonly Inline[]): ReactNode {
   return nodes.map((node, index) => {
     const key = String(index);
     if (node.t === 'cite') {
@@ -49,7 +54,8 @@ function renderInline(nodes: readonly Inline[]): ReactNode {
   });
 }
 
-function renderBlock(block: Block, index: number): ReactNode {
+/** One Markdown block as React (a display equation, a paragraph's lines, a heading, a list). */
+export function renderBlock(block: Block, index: number): ReactNode {
   if (block.k === 'dm') return <Maths key={index} tex={block.tex} display />;
   if (block.k === 'p') {
     return block.lines.map((line, i) => (
@@ -81,20 +87,34 @@ export function AnswerText({
 }: AnswerTextProps): ReactNode {
   const blocks = parseMarkdown(dehyphenate(paragraph.text), { streaming });
   const end = caret ? <span className="pt-exchange__caret" aria-hidden="true" /> : null;
-  const source = (
-    <SourceLine
-      general={general}
-      touch={touch}
-      sources={paragraph.sources.map((s) => ({
-        page: s.page,
-        passage: s.passage,
-        onShow: () => onShow(s),
-      }))}
-    />
-  );
-  if (blocks.every((b) => b.k === 'p' || b.k === 'h' || b.k === 'dm')) {
+  const lead = paragraph.section === 'tldr';
+  const mathsOnly = blocks.every((b) => b.k === 'dm');
+  const source =
+    lead || mathsOnly ? undefined : (
+      <SourceLine
+        general={general}
+        touch={touch}
+        sources={paragraph.sources.map((s) => ({
+          page: s.page,
+          passage: s.passage,
+          onShow: () => onShow(s),
+        }))}
+      />
+    );
+  const inline = blocks.every((b) => b.k === 'p' || b.k === 'h' || b.k === 'dm');
+  if (lead && inline) {
     return (
-      <AiParagraph source={source}>
+      <div className="pt-ai-slip__row">
+        <p className="pt-ai-slip__text pt-ai-lead">
+          {blocks.map((b, i) => renderBlock(b, i))}
+          {end}
+        </p>
+      </div>
+    );
+  }
+  if (inline) {
+    return (
+      <AiParagraph {...(source === undefined ? {} : { source })}>
         {blocks.map((b, i) => renderBlock(b, i))}
         {end}
       </AiParagraph>
