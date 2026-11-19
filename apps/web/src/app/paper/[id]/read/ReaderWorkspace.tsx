@@ -96,7 +96,13 @@ import { useFocusFromBook, useSummaryFromBook } from '@/features/book';
 import { AskFromNotebook } from '@/features/notebook/components/AskFromNotebook';
 import { useFocusFromNotebook } from '@/features/notebook/hooks/useFocusFromNotebook';
 import { useThreadFromNotebook } from '@/features/notebook/hooks/useThreadFromNotebook';
-import { ReaderHeader, type BoardBesideToggle, type ExplainToggle } from '@/features/reader';
+import {
+  ImageToolProvider,
+  ReaderHeader,
+  useImageTool,
+  type BoardBesideToggle,
+  type ExplainToggle,
+} from '@/features/reader';
 import {
   BoardBeside,
   draggedPassage,
@@ -656,21 +662,31 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
 
   /** The colour a new highlight gets: the wash pressed, else the last one picked (amber at first). */
   const lastColor = useRef<HighlightColor>('amber');
-  const onCreateHighlight = useCallback(
-    (captured: SelectionCapture, color?: HighlightColor) => {
+  /** Highlight these anchors in the colour pressed (words, or a picture's region, #348). */
+  const onCreateAnchors = useCallback(
+    (anchors: readonly Anchor[], color?: HighlightColor) => {
       if (color !== undefined) lastColor.current = color;
-      void highlights.create(captured.anchors, lastColor.current);
+      void highlights.create(anchors, lastColor.current);
     },
     [highlights],
   );
+  const onCreateHighlight = useCallback(
+    (captured: SelectionCapture, color?: HighlightColor) =>
+      onCreateAnchors(captured.anchors, color),
+    [onCreateAnchors],
+  );
 
   /** The selection menu's Note: a highlight, with its card open on the note field. */
-  const onCreateNote = useCallback(
-    async (captured: SelectionCapture, at: CardAt | null) => {
-      const made = await highlights.create(captured.anchors, lastColor.current);
+  const onNoteAnchors = useCallback(
+    async (anchors: readonly Anchor[], at: CardAt | null) => {
+      const made = await highlights.create(anchors, lastColor.current);
       if (made !== null) setCard({ highlightId: made.highlightId, at, focusNote: true });
     },
     [highlights],
+  );
+  const onCreateNote = useCallback(
+    (captured: SelectionCapture, at: CardAt | null) => onNoteAnchors(captured.anchors, at),
+    [onNoteAnchors],
   );
 
   // The selection menu's Board beside: the card is sent, then the board opens beside the paper on it.
@@ -783,6 +799,8 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
           highlights={highlights}
           onCreateHighlight={onCreateHighlight}
           onCreateNote={onCreateNote}
+          onCreateAnchors={onCreateAnchors}
+          onNoteAnchors={onNoteAnchors}
           onOpenBoard={onOpenBoard}
           onVisiblePages={onVisiblePages}
           beside={beside}
@@ -973,6 +991,8 @@ export function ReaderActionsMount({
         sendToCanvas(paperId, {
           kind: 'excerpt',
           anchor: passage.anchor,
+          // A picture has no words to quote: its caption is the card's body (#348).
+          ...(passage.image === true ? { body: passage.text } : {}),
           toast: 'none',
           at,
           onOutcome: (outcome) => (landed = outcome),
@@ -1010,7 +1030,9 @@ export function ReaderActionsMount({
 
   return (
     <ReaderActionsProvider value={actions}>
-      <ExplainToggleContext.Provider value={toggle}>{children}</ExplainToggleContext.Provider>
+      <ExplainToggleContext.Provider value={toggle}>
+        <ImageToolProvider>{children}</ImageToolProvider>
+      </ExplainToggleContext.Provider>
       <ExplainPanel controller={explain} toggleRef={toggleRef} />
       {paperId !== null && beside.open ? (
         <BoardBeside
@@ -1048,6 +1070,8 @@ interface ViewProps {
   readonly highlights: UseHighlights;
   readonly onCreateHighlight: (captured: SelectionCapture, color?: HighlightColor) => void;
   readonly onCreateNote: (captured: SelectionCapture, at: CardAt | null) => void;
+  readonly onCreateAnchors: (anchors: readonly Anchor[], color?: HighlightColor) => void;
+  readonly onNoteAnchors: (anchors: readonly Anchor[], at: CardAt | null) => void;
   readonly onOpenBoard: ((cardId: string | null) => void) | undefined;
   readonly onVisiblePages: (pages: readonly number[]) => void;
   readonly beside: BoardBesideControl;
@@ -1087,6 +1111,7 @@ function ReaderWorkspaceView(props: ViewProps) {
     (paper.kind === 'api' ? 'Opening the paper…' : paper.slug);
 
   const explain = useContext(ExplainToggleContext);
+  const imageTool = useImageTool();
   const toggleBeside = props.beside.toggle;
   const besideToggle = useMemo<BoardBesideToggle>(
     () => ({ open: props.beside.open, onToggle: toggleBeside }),
@@ -1158,6 +1183,7 @@ function ReaderWorkspaceView(props: ViewProps) {
         }
         explain={explain}
         boardBeside={props.onOpenBoard === undefined ? null : besideToggle}
+        imageTool={doc === null || paper.kind !== 'api' ? null : imageTool}
       />
 
       {props.stillReading ? (
@@ -1272,6 +1298,8 @@ function SourceSlot(props: ViewProps) {
       highlights={props.highlights.highlights}
       onCreateHighlight={props.onCreateHighlight}
       onCreateNote={props.onCreateNote}
+      onCreateAnchors={props.onCreateAnchors}
+      onNoteAnchors={props.onNoteAnchors}
       {...(props.onOpenBoard === undefined ? {} : { onOpenBoard: props.onOpenBoard })}
       onVisiblePages={props.onVisiblePages}
       boardBeside={props.beside.open}

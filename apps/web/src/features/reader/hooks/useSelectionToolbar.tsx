@@ -11,10 +11,14 @@ import { createPortal } from 'react-dom';
 
 import { SelectionToolbar, type SelectionToolbarProps } from '@/components/reader/SelectionToolbar';
 
-import { placeToolbar, selectionLines, typeAreaOf } from '../model/toolbarPlacement';
+import {
+  placeToolbar,
+  selectionLines,
+  typeAreaOf,
+  type SelectionGeometry,
+} from '../model/toolbarPlacement';
 
 import type { IndexedDocument } from '@papertree/anchoring';
-import type { PendingSelection } from '@/components/reader/useSelectionCapture';
 import type { FloatingGeometry } from '@/components/reader/VirtualPageList';
 
 /**
@@ -33,7 +37,8 @@ interface Sizes {
 
 /** What `useSelectionToolbar` needs. */
 export interface UseSelectionToolbarArgs {
-  readonly selection: PendingSelection | null;
+  /** What the bar is placed by: the selected lines of words, or the rectangle of a picked picture. */
+  readonly selection: SelectionGeometry | null;
   readonly doc: IndexedDocument | null;
   /** Below 640 px the bar is the phone's bottom bar. */
   readonly narrow: boolean;

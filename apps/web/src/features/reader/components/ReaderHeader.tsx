@@ -7,7 +7,7 @@
  * holds no state of the reading itself: the workspace owns the mode, zoom, page and panels, and this bar reports presses.
  */
 import { ToolbarButton } from '@papertree/ui';
-import { AlignLeft, ArrowLeft, Workflow } from 'lucide-react';
+import { AlignLeft, ArrowLeft, Crop, Workflow } from 'lucide-react';
 import { useRef, type ReactNode, type RefObject } from 'react';
 
 import { ModeSwitch, type ReadingMode } from '@/components/reader/ModeSwitch';
@@ -19,6 +19,8 @@ import { usePhone } from '../hooks/usePhone';
 import { PageCounter } from './PageCounter';
 import { ReaderMenu } from './ReaderMenu';
 import { ReadingSettings } from './ReadingSettings';
+
+import type { ImageTool } from '../hooks/useImageTool';
 
 /** The Explain toggle's state; absent for a sample paper, which has no server to ask. */
 export interface ExplainToggle {
@@ -60,6 +62,11 @@ export interface ReaderHeaderProps {
    */
   readonly boardBeside?: BoardBesideToggle | null;
   readonly explain: ExplainToggle | null;
+  /**
+   * The Select area tool (v0.3 #348): draw a rectangle over any part of a page to ask about it.
+   * Null where there is nothing to select on (a sample paper, a paper still being read).
+   */
+  readonly imageTool?: ImageTool | null;
 }
 
 const ICON = 18;
@@ -109,6 +116,27 @@ function ContentsButton({ props, onPress }: { props: ReaderHeaderProps; onPress?
   );
 }
 
+/**
+ * Select area: arms the rectangle tool. Alt+drag draws one without it. Pressed from the keyboard it
+ * also puts a rectangle on the page, which the arrow keys then move and resize.
+ */
+function AreaToolButton({ tool }: { tool: ImageTool }): ReactNode {
+  return (
+    <button
+      type="button"
+      className="pt-toolbtn pt-reader__area"
+      aria-pressed={tool.armed}
+      title="Select area: draw a rectangle over any part of a page to ask about it (or hold Alt and drag)"
+      onClick={(event) => tool.toggle(event.detail === 0)}
+    >
+      <span className="pt-toolbtn__icon" aria-hidden="true">
+        <Crop size={ICON} strokeWidth={1.5} />
+      </span>
+      <span className="pt-toolbtn__label">Select area</span>
+    </button>
+  );
+}
+
 /** The reading mode, zoom (not in Guided) and Board: the bar's right side, or the phone menu's. */
 function ReadingControls({
   props,
@@ -129,6 +157,9 @@ function ReadingControls({
         unavailableReason="Guided and Split open when the paper has been read."
         hideSplit={beside?.open === true}
       />
+      {props.mode === 'guided' || props.imageTool == null ? null : (
+        <AreaToolButton tool={props.imageTool} />
+      )}
       {props.mode === 'guided' ? null : (
         <ZoomControl mode={props.zoomMode} zoom={props.zoom} onModeChange={props.onZoomChange} />
       )}

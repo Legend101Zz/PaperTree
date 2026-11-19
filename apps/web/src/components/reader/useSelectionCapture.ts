@@ -616,7 +616,7 @@ function canvasAdvanceMeasure(): AdvanceMeasure | undefined {
 
 // ─── the hook ───────────────────────────────────────────────────────────────────────────────────
 
-function defaultAnchorId(): string {
+export function defaultAnchorId(): string {
   const cryptoObj = globalThis.crypto as Crypto | undefined;
   if (cryptoObj !== undefined && typeof cryptoObj.randomUUID === 'function') {
     return cryptoObj.randomUUID();

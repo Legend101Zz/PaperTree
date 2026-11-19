@@ -42,3 +42,9 @@ export {
   type SelectionGeometry,
   type SelectionLines,
 } from './model/toolbarPlacement';
+export {
+  useImageSelection,
+  type ImageSelection,
+  type UseImageSelectionArgs,
+} from './hooks/useImageSelection';
+export { ImageToolProvider, useImageTool, type ImageTool } from './hooks/useImageTool';

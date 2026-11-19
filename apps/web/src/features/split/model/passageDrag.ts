@@ -10,8 +10,10 @@ import type { Anchor } from '@papertree/anchoring';
 /** The passage in the air. */
 export interface DraggedPassage {
   readonly anchor: Anchor;
-  /** Its words, for the footprint's height. */
+  /** Its words, for the footprint's height. For a picture, its caption. */
   readonly text: string;
+  /** A figure or a region (v0.3 #348): it lands as an image card, which is as tall as its picture. */
+  readonly image?: boolean;
 }
 
 let current: DraggedPassage | null = null;
