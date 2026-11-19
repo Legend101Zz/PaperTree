@@ -119,13 +119,16 @@ def test_the_second_request_is_a_cache_hit_on_disk(tmp_path: Path) -> None:
         )
         assert first.headers["x-crop-cache"] == "miss"
         regions = list((h.settings.asset_root / paper_id).rglob("regions/*.png"))
-        assert [p.name for p in regions] == ["p0-980-1980-3820-3020@355dpi.png"]
-        stamp = regions[0].stat().st_mtime_ns
+        assert [p.name for p in regions] == ["p0-100-200-380-300@355dpi.png"]
+        written = regions[0].stat()
         again = h.client.get(
             f"/papers/{paper_id}/crop", params=params(RED_BOX), headers=auth(token)
         )
         assert again.headers["x-crop-cache"] == "hit" and again.content == first.content
-        assert regions[0].stat().st_mtime_ns == stamp  # not rewritten
+        # Not rewritten (same file, same bytes); only touched, so the cap's LRU sees the use.
+        seen = regions[0].stat()
+        assert seen.st_ino == written.st_ino and seen.st_size == written.st_size
+        assert seen.st_mtime_ns >= written.st_mtime_ns
         # A box a hair off (within a tenth of a point) is the same file; a real change is another.
         near = (RED_BOX[0] + 0.01, *RED_BOX[1:])
         assert (

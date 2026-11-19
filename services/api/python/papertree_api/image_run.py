@@ -101,5 +101,5 @@ async def prepare_image_run(
         seed=seed,
         images=[image],
         title=evidence.header_text(named or question, limit=80),
-        dpi=crop.plan.dpi,
+        dpi=crop.dpi,
     )

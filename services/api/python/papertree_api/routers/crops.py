@@ -20,7 +20,7 @@ from typing import Annotated, Any, Final
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, Response
-from papertree_db import SQLITE_INTEGER_MAX, PaperId, PaperTreeDb
+from papertree_db import SQLITE_INTEGER_MAX, OwnerId, PaperId, PaperTreeDb
 from starlette.concurrency import run_in_threadpool
 
 from .. import assets
@@ -49,6 +49,22 @@ def box_of(x0: float, y0: float, x1: float, y1: float) -> BBox:
     if not (x1 > x0 and y1 > y0):
         raise ApiError("validation_failed", "box: x1 must exceed x0 and y1 must exceed y0")
     return (x0, y0, x1, y1)
+
+
+def generation_of(db: PaperTreeDb, owner: OwnerId, paper_id: str, gen: int | None) -> int:
+    """The generation to crop: the promoted one by default.
+
+    ``?gen=`` only when the paper really has that generation (404 otherwise), so a client cannot
+    name a directory of its own on disk.
+    """
+    if gen is None:
+        promoted = db.promoted_generation(owner, PaperId(paper_id))
+        if promoted is None:
+            raise ApiError("not_parsed", "this paper has not been parsed yet", retryable=True)
+        return promoted
+    if gen not in db.list_generations(owner, PaperId(paper_id)):
+        raise ApiError("not_found", "no such generation")
+    return gen
 
 
 async def render_for(
@@ -119,16 +135,14 @@ async def crop(
     owner = db.owner_for(user_id)
     if db.owned_paper(owner, PaperId(paper_id)) is None:
         raise ApiError("not_found", "no such paper")
-    generation = gen if gen is not None else db.promoted_generation(owner, PaperId(paper_id))
-    if generation is None:
-        raise ApiError("not_parsed", "this paper has not been parsed yet", retryable=True)
+    generation = generation_of(db, owner, paper_id, gen)
     rendered = await render_for(settings, paper_id, generation, page, box)
     return Response(
         rendered.png,
         media_type="image/png",
         headers={
             "Cache-Control": CACHE_CONTROL,
-            "X-Crop-Dpi": str(rendered.plan.dpi),
+            "X-Crop-Dpi": str(rendered.dpi),
             "X-Crop-Size": f"{rendered.width_px}x{rendered.height_px}",
             "X-Crop-Cache": "hit" if rendered.cached else "miss",
         },
@@ -157,11 +171,7 @@ async def crop_url(
     box = box_of(x0, y0, x1, y1)
     if call.db.owned_paper(call.db_owner, PaperId(paper_id)) is None:
         raise ApiError("not_found", "no such paper")
-    generation = (
-        gen if gen is not None else call.db.promoted_generation(call.db_owner, PaperId(paper_id))
-    )
-    if generation is None:
-        raise ApiError("not_parsed", "this paper has not been parsed yet", retryable=True)
+    generation = generation_of(call.db, call.db_owner, paper_id, gen)
     rendered = await render_for(settings, paper_id, generation, page, box)
     exp = stable_exp(time.time())
     body: dict[str, Any] = {
@@ -175,7 +185,7 @@ async def crop_url(
             exp=exp,
         ),
         "expires_at": format_moment(datetime.fromtimestamp(exp, UTC)),
-        "dpi": rendered.plan.dpi,
+        "dpi": rendered.dpi,
         "width": rendered.width_px,
         "height": rendered.height_px,
     }
