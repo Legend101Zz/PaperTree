@@ -29,6 +29,7 @@ export interface BranchActions {
   readonly send: (draft: Draft) => Promise<boolean>;
   readonly quick: (parentId: string, span: ParentSpan, quick: QuickAsk) => Promise<boolean>;
   readonly keepNote: (parentId: string, span: ParentSpan) => Promise<void>;
+  readonly retry: (nodeId: string) => Promise<boolean>;
   readonly stop: (nodeId: string) => void;
   readonly fold: (id: string, folded: boolean) => void;
   /** Opens the reader on a card's source and flashes it. */

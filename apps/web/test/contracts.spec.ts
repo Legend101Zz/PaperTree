@@ -37,10 +37,14 @@ import Ajv2020 from 'ajv/dist/2020';
 import { describe, expect, it } from 'vitest';
 
 import type {
+  AskBody,
   BoardView,
   CreateEdgeBody,
   CreateNodeBody,
+  KeepNoteBody,
   PatchBoardBody,
+  Tidied,
+  TidyBody,
   boardsApi,
 } from '@/lib/api/boards';
 import type { PatchEdgeBody, PatchNodeBody } from '@/lib/api/boards';
@@ -66,6 +70,8 @@ import type {
 import type {
   Anchor,
   AnchorWire,
+  AskUses,
+  ParentSpan,
   Board,
   CanvasEdge,
   CanvasNode,
@@ -417,6 +423,7 @@ const EVENTS: SseEvent[] = [
   },
 ];
 const SSE_MODEL: Record<SseEvent['event'], string> = {
+  node: 'CanvasNode',
   run: 'SseRun',
   status: 'SseStatus',
   text: 'SseText',
@@ -465,6 +472,18 @@ const EXCERPT: CanvasNode = {
   source_page_id: null,
   source_diagram_id: null,
   counts: null,
+  parent_id: null,
+  branch: null,
+  parent_span: null,
+  question: null,
+  uses: null,
+  offset_x: 0,
+  offset_y: 0,
+  folded: false,
+  final_text: null,
+  level: null,
+  model: null,
+  answer_status: null,
   version: 1,
   created_at: T,
   updated_at: T,
@@ -478,6 +497,26 @@ const NOTE: CanvasNode = {
   body: 'Speed comes from one evaluation.',
   source_anchor: null,
   version: 4,
+};
+/** A branch the way a board ask streams it first (`node`), then the same card as the board reads it. */
+const BOARD_ANSWER: CanvasNode = {
+  ...EXCERPT,
+  node_id: 'cn_0f9e8d7c-aaaa-4bbb-8ccc-123456789ac0',
+  kind: 'explanation',
+  source_anchor: null,
+  source_message_id: 'msg_01K63A9W4XJ7Q2N8R5T0V3Y6ZE',
+  parent_id: EXCERPT.node_id,
+  branch: 'right',
+  parent_span: { start: 4, end: 11, quote: 'Residual' },
+  question: 'Explain this more simply.',
+  uses: { path: true, paper: 'page', level: 'new', diagram: 'may', extra_node_ids: [] },
+  offset_x: 12.5,
+  offset_y: -3,
+  folded: true,
+  final_text: 'One pass.',
+  level: 'new',
+  model: 'MiniMax-M3',
+  answer_status: 'complete',
 };
 const EDGE: CanvasEdge = {
   edge_id: 'ce_0f9e8d7c-aaaa-4bbb-8ccc-123456789abf',
@@ -551,31 +590,6 @@ type SchemaKeys<
 > = Schemas[G]['$defs'][M] extends { properties: infer P } ? keyof P : never;
 /** The keys `T` lets the sender leave out. */
 type OptionalKeys<T> = { [K in keyof T]-?: object extends Pick<T, K> ? K : never }[keyof T];
-/**
- * TEMPORARY (#343): the v0.3 branching fields are typed on `CanvasNode` (all optional) before the
- * `boards` schema carries them. Delete this and the two `Exclude`s on `CanvasNode` below once
- * migration 0016's contract lands.
- */
-type BranchKeys =
-  | 'parent_id'
-  | 'branch'
-  | 'parent_span'
-  | 'question'
-  | 'uses'
-  | 'offset_x'
-  | 'offset_y'
-  | 'folded'
-  | 'final_text'
-  | 'level'
-  | 'model';
-/**
- * TEMPORARY (#343): the same for `PatchNodeBody`, which sends `offset_x`, `offset_y` and `folded`
- * (v03-BOARD-SPEC section 3) before the `NodePatch` schema lists them. Delete with `BranchKeys`.
- */
-type PatchBranchKeys = 'offset_x' | 'offset_y' | 'folded';
-/** TEMPORARY (#343): and `CreateNodeBody`, which puts a deleted tree card back with its place. */
-type CreateBranchKeys =
-  PatchBranchKeys | 'parent_id' | 'branch' | 'parent_span' | 'question' | 'uses';
 /** Type equality (mutual assignability is not it: `string` and a union of strings pass one way). */
 type Equal<A, B> =
   (<X>() => X extends A ? 1 : 2) extends <X>() => X extends B ? 1 : 2 ? true : false;
@@ -625,6 +639,7 @@ const OPTIONAL = {
   'sse.DiagramLink': [],
   'sse.SseDone': [],
   'sse.MessageError': [],
+  'sse.CanvasNode': [],
   'summary.Summary': [],
   'summary.SummaryBullet': [],
   'summary.SummaryStatus': [],
@@ -634,6 +649,9 @@ const OPTIONAL = {
   'boards.CanvasEdge': [],
   'boards.BoardView': [],
   'boards.NodeCreated': [],
+  'boards.Tidied': [],
+  'boards.ParentSpan': [],
+  'boards.NodeUses-Output': [],
   'usage.UsageTotals': [],
   'usage.UsageBucket': [],
   'usage.UsageByKind': [],
@@ -659,6 +677,14 @@ const OPTIONAL = {
     'source_page_id',
     'source_diagram_id',
     'group_id',
+    'parent_id',
+    'branch',
+    'parent_span',
+    'question',
+    'uses',
+    'offset_x',
+    'offset_y',
+    'folded',
   ],
   'boards.NodePatch': [
     'x',
@@ -671,7 +697,14 @@ const OPTIONAL = {
     'group_id',
     'source_page_id',
     'source_diagram_id',
+    'offset_x',
+    'offset_y',
+    'folded',
   ],
+  'boards.AskCreate': ['node_id', 'span', 'ask_differently', 'quick', 'redo_of'],
+  'boards.NoteCreate': ['node_id'],
+  'boards.TidyRequest': [],
+  'boards.NodeUses-Input': [],
   'boards.EdgeCreate': ['label', 'from_port', 'to_port'],
   'boards.EdgePatch': ['kind', 'label', 'from_port', 'to_port'],
   'boards.BoardPatch': ['title', 'viewport'],
@@ -694,6 +727,10 @@ const REQUESTS = new Set<Shape>([
   'summary.SummaryRequest',
   'boards.NodeCreate',
   'boards.NodePatch',
+  'boards.AskCreate',
+  'boards.NoteCreate',
+  'boards.TidyRequest',
+  'boards.NodeUses-Input',
   'boards.EdgeCreate',
   'boards.EdgePatch',
   'boards.BoardPatch',
@@ -785,8 +822,8 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<OptionalKeys<Board>, Opt<'boards.Board'>>,
   true satisfies Equal<keyof NonNullable<Board['viewport']>, SchemaKeys<'boards', 'Viewport'>>,
   true satisfies Equal<OptionalKeys<NonNullable<Board['viewport']>>, Opt<'boards.Viewport'>>,
-  true satisfies Equal<Exclude<keyof CanvasNode, BranchKeys>, SchemaKeys<'boards', 'CanvasNode'>>,
-  true satisfies Equal<Exclude<OptionalKeys<CanvasNode>, BranchKeys>, Opt<'boards.CanvasNode'>>,
+  true satisfies Equal<keyof CanvasNode, SchemaKeys<'boards', 'CanvasNode'>>,
+  true satisfies Equal<OptionalKeys<CanvasNode>, Opt<'boards.CanvasNode'>>,
   true satisfies Equal<keyof CanvasEdge, SchemaKeys<'boards', 'CanvasEdge'>>,
   true satisfies Equal<OptionalKeys<CanvasEdge>, Opt<'boards.CanvasEdge'>>,
   true satisfies Equal<keyof BoardView, SchemaKeys<'boards', 'BoardView'>>,
@@ -838,22 +875,26 @@ const KEYS_ARE_EXACT: true[] = [
   true satisfies Equal<OptionalKeys<FollowUpBody>, Opt<'threads.FollowUp'>>,
   true satisfies Equal<keyof SummaryRequest, SchemaKeys<'summary', 'SummaryRequest'>>,
   true satisfies Equal<OptionalKeys<SummaryRequest>, Opt<'summary.SummaryRequest'>>,
-  true satisfies Equal<
-    Exclude<keyof CreateNodeBody, CreateBranchKeys>,
-    SchemaKeys<'boards', 'NodeCreate'>
-  >,
-  true satisfies Equal<
-    Exclude<OptionalKeys<CreateNodeBody>, CreateBranchKeys>,
-    Opt<'boards.NodeCreate'>
-  >,
-  true satisfies Equal<
-    Exclude<keyof PatchNodeBody, PatchBranchKeys>,
-    SchemaKeys<'boards', 'NodePatch'>
-  >,
-  true satisfies Equal<
-    Exclude<OptionalKeys<PatchNodeBody>, PatchBranchKeys>,
-    Opt<'boards.NodePatch'>
-  >,
+  true satisfies Equal<keyof CreateNodeBody, SchemaKeys<'boards', 'NodeCreate'>>,
+  true satisfies Equal<OptionalKeys<CreateNodeBody>, Opt<'boards.NodeCreate'>>,
+  true satisfies Equal<keyof PatchNodeBody, SchemaKeys<'boards', 'NodePatch'>>,
+  true satisfies Equal<OptionalKeys<PatchNodeBody>, Opt<'boards.NodePatch'>>,
+  true satisfies Equal<keyof AskBody, SchemaKeys<'boards', 'AskCreate'>>,
+  true satisfies Equal<OptionalKeys<AskBody>, Opt<'boards.AskCreate'>>,
+  true satisfies Equal<keyof KeepNoteBody, SchemaKeys<'boards', 'NoteCreate'>>,
+  true satisfies Equal<OptionalKeys<KeepNoteBody>, Opt<'boards.NoteCreate'>>,
+  true satisfies Equal<keyof TidyBody, SchemaKeys<'boards', 'TidyRequest'>>,
+  true satisfies Equal<OptionalKeys<TidyBody>, Opt<'boards.TidyRequest'>>,
+  true satisfies Equal<keyof Tidied, SchemaKeys<'boards', 'Tidied'>>,
+  true satisfies Equal<OptionalKeys<Tidied>, Opt<'boards.Tidied'>>,
+  true satisfies Equal<keyof ParentSpan, SchemaKeys<'boards', 'ParentSpan'>>,
+  true satisfies Equal<OptionalKeys<ParentSpan>, Opt<'boards.ParentSpan'>>,
+  true satisfies Equal<keyof AskUses, SchemaKeys<'boards', 'NodeUses-Output'>>,
+  true satisfies Equal<OptionalKeys<AskUses>, Opt<'boards.NodeUses-Output'>>,
+  true satisfies Equal<keyof AskUses, SchemaKeys<'boards', 'NodeUses-Input'>>,
+  true satisfies Equal<OptionalKeys<AskUses>, Opt<'boards.NodeUses-Input'>>,
+  true satisfies Equal<keyof SseData<'node'>, SchemaKeys<'sse', 'CanvasNode'>>,
+  true satisfies Equal<OptionalKeys<SseData<'node'>>, Opt<'sse.CanvasNode'>>,
   true satisfies Equal<keyof CreateEdgeBody, SchemaKeys<'boards', 'EdgeCreate'>>,
   true satisfies Equal<OptionalKeys<CreateEdgeBody>, Opt<'boards.EdgeCreate'>>,
   true satisfies Equal<keyof PatchEdgeBody, SchemaKeys<'boards', 'EdgePatch'>>,
@@ -905,6 +946,15 @@ const ENUMS = {
   'Summary.status': ['complete', 'partial'],
   'SummaryStatus.state': ['none', 'running', 'ready', 'partial', 'failed'],
   'CanvasNode.kind': ['excerpt', 'explanation', 'note', 'group', 'question', 'notebook', 'diagram'],
+  'CanvasNode.branch': ['down', 'right', null],
+  'CanvasNode.level': ['new', 'familiar', 'expert', null],
+  'CanvasNode.answer_status': ['streaming', 'complete', 'partial', 'error', 'aborted', null],
+  'NodeCreate.branch': ['down', 'right'],
+  'AskCreate.quick': ['simpler', 'example', 'diagram', null],
+  'AskCreate.level': ['new', 'familiar', 'expert'],
+  'NodeUses-Output.paper': ['page', 'whole', 'off'],
+  'NodeUses-Output.level': ['new', 'familiar', 'expert'],
+  'NodeUses-Output.diagram': ['may', 'never', 'always'],
   'CanvasEdge.from_port': ['claim_out', 'answer_out', null],
   'CanvasEdge.to_port': ['evidence_in', 'question_in', null],
   'CanvasEdge.kind': [
@@ -955,6 +1005,9 @@ const ENUMS_ELSEWHERE: Record<string, string> = {
   'ResolutionPutItem.reason': 'ResolutionWire.reason',
   'ThreadCreate.kind': 'Thread.kind',
   'NodeCreate.kind': 'CanvasNode.kind',
+  'NodeUses-Input.paper': 'NodeUses-Output.paper',
+  'NodeUses-Input.level': 'NodeUses-Output.level',
+  'NodeUses-Input.diagram': 'NodeUses-Output.diagram',
   'EdgeCreate.kind': 'CanvasEdge.kind',
   'EdgePatch.kind': 'CanvasEdge.kind',
   'EdgeCreate.from_port': 'CanvasEdge.from_port',
@@ -992,6 +1045,16 @@ const ENUM_TYPES_ARE_EXACT: true[] = [
   true satisfies Equal<Summary['status'], Values<'Summary.status'>>,
   true satisfies Equal<SummaryStatus['state'], Values<'SummaryStatus.state'>>,
   true satisfies Equal<CanvasNode['kind'], Values<'CanvasNode.kind'>>,
+  true satisfies Equal<CanvasNode['branch'], Values<'CanvasNode.branch'>>,
+  true satisfies Equal<CanvasNode['level'], Values<'CanvasNode.level'>>,
+  true satisfies Equal<CanvasNode['answer_status'], Values<'CanvasNode.answer_status'>>,
+  true satisfies Equal<Sent<CreateNodeBody['branch']>, Values<'NodeCreate.branch'>>,
+  true satisfies Equal<NonNullable<Sent<AskBody['quick']>> | null, Values<'AskCreate.quick'>>,
+  true satisfies Equal<AskBody['level'], Values<'AskCreate.level'>>,
+  true satisfies Equal<AskUses['paper'], Values<'NodeUses-Output.paper'>>,
+  true satisfies Equal<AskUses['level'], Values<'NodeUses-Output.level'>>,
+  true satisfies Equal<AskUses['diagram'], Values<'NodeUses-Output.diagram'>>,
+  true satisfies Equal<SseData<'node'>['branch'], CanvasNode['branch']>,
   true satisfies Equal<CanvasEdge['kind'], Values<'CanvasEdge.kind'>>,
   true satisfies Equal<CanvasEdge['from_port'], Values<'CanvasEdge.from_port'>>,
   true satisfies Equal<CanvasEdge['to_port'], Values<'CanvasEdge.to_port'>>,
@@ -1206,6 +1269,7 @@ describe('contracts.spec — lib/api/types.ts against contracts/api (exported fr
     expectValid('boards', 'Board', { ...BOARD, viewport: null } satisfies Board);
     expectValid('boards', 'CanvasNode', EXCERPT);
     expectValid('boards', 'CanvasNode', NOTE);
+    expectValid('boards', 'CanvasNode', BOARD_ANSWER);
     expectValid('boards', 'CanvasEdge', EDGE);
     const view: BoardView = { board: BOARD, nodes: [EXCERPT, NOTE], edges: [EDGE] };
     expectValid('boards', 'BoardView', view);
@@ -1254,7 +1318,8 @@ describe('contracts.spec — lib/api/types.ts against contracts/api (exported fr
   });
 
   it('every browser SSE event’s data validates against its model', () => {
-    for (const { event, data } of EVENTS) expectValid('sse', SSE_MODEL[event], data);
+    const node: SseEvent = { event: 'node', data: BOARD_ANSWER };
+    for (const { event, data } of [...EVENTS, node]) expectValid('sse', SSE_MODEL[event], data);
   });
 
   it('the request bodies the feature modules send validate against the request models', () => {
@@ -1320,6 +1385,60 @@ describe('contracts.spec — lib/api/types.ts against contracts/api (exported fr
     expectValid('boards', 'NodeCreate', node);
     const patchNode: PatchNodeBody = { version: 3, x: 12.5, y: -4, group_id: null, title: null };
     expectValid('boards', 'NodePatch', patchNode);
+    expectValid('boards', 'NodePatch', {
+      version: 4,
+      offset_x: 40,
+      offset_y: -8,
+      folded: true,
+    } satisfies PatchNodeBody);
+    // An Undo puts a tree card back with its place in the tree.
+    const restored: CreateNodeBody = {
+      node_id: BOARD_ANSWER.node_id,
+      kind: 'explanation',
+      x: 0,
+      y: 0,
+      w: 320,
+      h: 200,
+      source_message_id: 'msg_01K63A9W4XJ7Q2N8R5T0V3Y6ZE',
+      parent_id: EXCERPT.node_id,
+      branch: 'right',
+      parent_span: { start: 4, end: 11, quote: 'Residual' },
+      question: 'Explain this more simply.',
+      uses: { path: true, paper: 'page', level: 'new', diagram: 'may', extra_node_ids: [] },
+      offset_x: 12.5,
+      offset_y: -3,
+      folded: true,
+    };
+    expectValid('boards', 'NodeCreate', restored);
+    // The asks, notes and tidy of the branching board.
+    const uses: AskUses = {
+      path: true,
+      paper: 'whole',
+      level: 'expert',
+      diagram: 'always',
+      extra_node_ids: ['cn_0f9e8d7c-aaaa-4bbb-8ccc-123456789ac2'],
+    };
+    for (const ask of [
+      { question: 'Why?', uses, level: 'familiar' },
+      {
+        node_id: 'cn_0f9e8d7c-aaaa-4bbb-8ccc-123456789ac1',
+        question: 'Explain this more simply.',
+        span: { start: 0, end: 4, quote: 'This' },
+        ask_differently: true,
+        quick: 'simpler',
+        uses,
+        level: 'new',
+      },
+      { question: 'Why?', uses, level: 'familiar', quick: null, redo_of: BOARD_ANSWER.node_id },
+    ] satisfies AskBody[]) {
+      expectValid('boards', 'AskCreate', ask);
+    }
+    expectValid('boards', 'NoteCreate', {
+      span: { start: 4, end: 11, quote: 'Residual' },
+      text: 'Residual',
+    } satisfies KeepNoteBody);
+    expectValid('boards', 'TidyRequest', { root_id: EXCERPT.node_id } satisfies TidyBody);
+    expectValid('boards', 'Tidied', { nodes: [EXCERPT, BOARD_ANSWER] } satisfies Tidied);
     const edge: CreateEdgeBody = {
       edge_id: EDGE.edge_id,
       from_node_id: NOTE.node_id,

@@ -85,7 +85,16 @@ CONTRACT: dict[str, list[str]] = {
 
 #: Named in §1.1 without parameters; these are S0's proposal (see each module's docstring).
 PROPOSED: dict[str, list[str]] = {
-    "create_thread": ["owner", "paper_id", "*", "thread_id", "kind", "title", "origin_anchor"],
+    "create_thread": [
+        "owner",
+        "paper_id",
+        "*",
+        "thread_id",
+        "kind",
+        "title",
+        "origin_anchor",
+        "board_id",
+    ],
     "append_message": [
         "owner",
         "thread_id",
@@ -108,7 +117,7 @@ PROPOSED: dict[str, list[str]] = {
         "error_code",
         "completed_at",
     ],
-    "list_threads": ["owner", "paper_id"],
+    "list_threads": ["owner", "paper_id", "*", "board_threads"],
     "get_thread": ["owner", "paper_id", "thread_id"],
     "delete_node": ["owner", "board_id", "node_id"],
     "create_edge": ["owner", "board_id", "edge"],

@@ -9,7 +9,7 @@
  * Words the answer has branches from stay underlined with a count knot in the right padding. Select
  * words and the span menu opens (`SpanMenu`). The foot: the model, "writing… · Stop" while it
  * streams, the page it draws on ("p. 3", which opens the paper and flashes the passage), Fold, and,
- * when the answer already has a next turn, "Ask differently".
+ * when the answer stopped short, "Try again", and, when it already has a next turn, "Ask differently".
  */
 import { type NodeProps } from '@xyflow/react';
 import { useRef, type ReactNode } from 'react';
@@ -54,6 +54,14 @@ export function AnswerCard({ id, data, selected }: NodeProps<PtNode>): ReactNode
     : stream?.status === 'stopped' || stream?.status === 'error'
       ? 'cut'
       : 'done';
+  // An answer that stopped short can be asked again (rule 6: replaced in place, or a sibling).
+  const cut =
+    !live &&
+    (stream !== undefined
+      ? stream.status === 'error' || stream.status === 'stopped' || stream.status === 'partial'
+      : node.answer_status === 'error' ||
+        node.answer_status === 'aborted' ||
+        node.answer_status === 'partial');
   const citations = stream?.citations ?? source?.answer.citations ?? [];
   const view = answerView(id, text, state, citations, source?.numbers);
   const question = (node.question ?? source?.question ?? node.title ?? '').trim();
@@ -168,6 +176,11 @@ export function AnswerCard({ id, data, selected }: NodeProps<PtNode>): ReactNode
             </button>
           ))}
           <span className="pt-tc__grow" />
+          {cut && question !== '' ? (
+            <button type="button" className="pt-tc__act" onClick={() => void branch.retry(id)}>
+              Try again
+            </button>
+          ) : null}
           {hasNext ? (
             <button
               type="button"

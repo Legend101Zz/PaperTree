@@ -13,6 +13,7 @@ import { boardsApi } from '@/lib/api/boards';
 import { ApiError, type CanvasNode } from '@/lib/api/types';
 
 import { cardName, toFlowNode, withFields } from '../model/flow';
+import { withSubtrees } from '../model/tree';
 import { itemsPhrase, restoreBody, restoreThreadBody, type RowsCommand } from '../model/history';
 import { RELOADED, sentence } from './controllerShared';
 
@@ -106,17 +107,37 @@ export function useBoardRows(
         failed(error, `Couldn't delete ${what}. ${RELOADED}`, { lead, thread });
       };
       const pending: Promise<void>[] = [];
-      for (const id of doomed) {
-        const previous = chainRef.current.get(id) ?? Promise.resolve();
-        deletingRef.current.add(id);
+      const below = new Map<string, string[]>();
+      for (const row of rows.nodes) {
+        const parent = row.parent_id ?? null;
+        if (parent !== null && doomed.has(parent)) {
+          below.set(parent, [...(below.get(parent) ?? []), row.node_id]);
+        }
+      }
+      // The server deletes a card's whole subtree: one DELETE for the top of each doomed branch,
+      // and the cards under it share its request (their chain and "being deleted" mark).
+      const tops = [...doomed].filter((id) => {
+        const parent = rows.nodes.find((n) => n.node_id === id)?.parent_id ?? null;
+        return parent === null || !doomed.has(parent);
+      });
+      const under = (id: string): string[] =>
+        (below.get(id) ?? []).flatMap((child) => [child, ...under(child)]);
+      for (const id of tops) {
+        const covered = [id, ...under(id)];
+        const previous = Promise.all(
+          covered.map((c) => chainRef.current.get(c) ?? Promise.resolve()),
+        );
+        for (const c of covered) deletingRef.current.add(c);
         const done = previous
           .then(() => boardsApi.deleteNode(boardId, id))
           .catch(refused('that'))
-          .finally(() => deletingRef.current.delete(id));
-        chainRef.current.set(id, done);
+          .finally(() => covered.forEach((c) => deletingRef.current.delete(c)));
+        for (const c of covered) {
+          chainRef.current.set(c, done);
+          sentRef.current.delete(c);
+          versionRef.current.delete(c);
+        }
         pending.push(done);
-        sentRef.current.delete(id);
-        versionRef.current.delete(id);
       }
       for (const edge of own) {
         const id = edge.edge_id;
@@ -225,7 +246,15 @@ export function useBoardRows(
    */
   const deleteSelection = useCallback(
     (nodeIds: readonly string[], edgeIds: readonly string[]) => {
-      const doomed = new Set(nodeIds.filter((id) => nodesRef.current.some((n) => n.id === id)));
+      // The server deletes the whole subtree of a card, so the screen and the Undo take it too:
+      // every card under a chosen one goes with it, parents first (an Undo puts them back in order).
+      const live = new Map(nodesRef.current.map((n) => [n.id, n] as const));
+      const chosen = new Set(nodeIds.filter((id) => live.has(id)));
+      const ordered = withSubtrees(
+        nodesRef.current.map((n) => n.data.node),
+        chosen,
+      );
+      const doomed = new Set(ordered.map((n) => n.node_id));
       const edgeSet = new Set(edgeIds);
       const lostEdges = edgesRef.current.filter(
         (e) => edgeSet.has(e.id) || doomed.has(e.source) || doomed.has(e.target),
@@ -233,15 +262,20 @@ export function useBoardRows(
       const ownEdges = lostEdges.filter((e) => !doomed.has(e.source) && !doomed.has(e.target));
       if (boardRef.current === null || (doomed.size === 0 && ownEdges.length === 0)) return;
 
-      const removedNodes: CanvasNode[] = nodesRef.current
-        .filter((n) => doomed.has(n.id))
-        .map((n) => ({
-          ...n.data.node,
-          x: n.position.x,
-          y: n.position.y,
-          w: n.width ?? n.data.node.w,
-          h: n.height ?? n.data.node.h,
-        }));
+      const removedNodes: CanvasNode[] = ordered.flatMap((row) => {
+        const n = live.get(row.node_id);
+        return n === undefined
+          ? []
+          : [
+              {
+                ...n.data.node,
+                x: n.position.x,
+                y: n.position.y,
+                w: n.width ?? n.data.node.w,
+                h: n.height ?? n.data.node.h,
+              },
+            ];
+      });
       const rows: RowsCommand = {
         type: 'remove',
         label: `delete of ${itemsPhrase(removedNodes, ownEdges.length)}`,

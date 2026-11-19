@@ -17,7 +17,7 @@ import { ApiError } from '@/lib/api/types';
 import { boardsApi } from '@/lib/api/boards';
 import { threadsApi } from '@/lib/api/threads';
 import { newNodeId } from '@/features/board/model/ids';
-import { DEFAULT_SIZE, freeSpot } from '@/features/board/model/placement';
+import { DEFAULT_SIZE, freeSpot, rootSpot } from '@/features/board/model/placement';
 
 import { findExcerptFor } from './duplicate';
 import { showCanvasToast } from './toast';
@@ -78,7 +78,12 @@ export async function sendToCanvas(
     /** The card this send made: the board opens on it. */
     let added: string | undefined;
     const size = DEFAULT_SIZE[input.kind];
-    const spot = freeSpot(view.nodes, size);
+    // A passage starts a tree: it goes below the lowest tree, which `freeSpot`'s grid cannot see
+    // the height of. Everything else on the board (loose answers, plates) stays on the grid.
+    const spot =
+      input.kind === 'excerpt'
+        ? rootSpot(view.nodes, size, window.innerHeight)
+        : freeSpot(view.nodes, size);
     if (input.kind === 'diagram') {
       // One plate, one card: a second send points at the card already there (#217).
       const existing = view.nodes.find(

@@ -125,6 +125,36 @@ def test_an_ask_on_a_passage_streams_the_node_first_and_is_a_right_branch(tmp_pa
         assert stored["uses"]["paper"] == "page" and stored["uses"]["path"] is True
 
 
+def test_a_board_answers_thread_is_not_one_of_the_readers_threads(tmp_path: Path) -> None:
+    with ai_harness(tmp_path, _script()) as h:
+        b = _setup(h)
+        frames, _ = b.ask(b.root, question="Why does this help?")
+        board_thread = events(frames, "run")[0]["thread_id"]
+        listing = f"/papers/{b.paper_id}/threads"
+        assert h.client.get(listing, headers=auth(b.token)).json() == []
+        # The reader's own conversation, asked the ordinary way, is listed; the board's is not.
+        made = h.client.post(
+            listing,
+            json={"kind": "ask", "question": "What is a residual block?"},
+            headers={**auth(b.token), **SSE},
+        )
+        reader_thread = events(read_sse(made)[0], "run")[0]["thread_id"]
+        listed = [t["thread_id"] for t in h.client.get(listing, headers=auth(b.token)).json()]
+        assert listed == [reader_thread] and board_thread not in listed
+        # A second board ask changes nothing in the list; the thread still opens by its id.
+        b.ask(b.root, question="And again?")
+        assert [t["thread_id"] for t in h.client.get(listing, headers=auth(b.token)).json()] == [
+            reader_thread
+        ]
+        opened = h.client.get(f"{listing}/{board_thread}", headers=auth(b.token))
+        assert opened.status_code == 200
+        # The board reads its own answers' sources with `include_board`: every thread then.
+        everything = h.client.get(f"{listing}?include_board=true", headers=auth(b.token)).json()
+        assert board_thread in {t["thread_id"] for t in everything}
+        assert reader_thread in {t["thread_id"] for t in everything}
+        assert len(everything) == 3
+
+
 def test_down_exists_only_under_an_answer_then_every_other_ask_is_right(tmp_path: Path) -> None:
     with ai_harness(tmp_path, _script()) as h:
         b = _setup(h)
@@ -500,6 +530,53 @@ def test_deleting_a_node_deletes_its_subtree_and_an_undo_can_put_it_back(tmp_pat
             ).status_code
             == 404
         )
+
+
+def test_an_undo_restores_a_span_branch_and_a_kept_note_with_their_place(tmp_path: Path) -> None:
+    with ai_harness(tmp_path, _script()) as h:
+        b = _setup(h)
+        _, a1 = b.ask(b.root, question="One?")
+        words = _span(b, a1["node_id"], "Residual blocks")
+        _, spanned = b.ask(a1["node_id"], question="Which?", span=words)
+        kept = h.client.post(
+            f"/boards/{b.board_id}/nodes/{a1['node_id']}/notes",
+            json={"span": words, "text": "Residual blocks"},
+            headers=auth(b.token),
+        )
+        assert kept.status_code == 201, kept.text
+        before = b.nodes()
+        assert before[spanned["node_id"]]["parent_span"] == words
+        gone = h.client.delete(f"/boards/{b.board_id}/nodes/{a1['node_id']}", headers=auth(b.token))
+        assert gone.status_code == 204
+        assert set(b.nodes()) == {b.root}
+        keys = (
+            "node_id", "kind", "x", "y", "w", "h", "body", "source_message_id", "parent_id",
+            "branch", "parent_span", "question", "uses", "offset_x", "offset_y", "folded",
+        )  # fmt: skip
+        for node_id in (a1["node_id"], spanned["node_id"], kept.json()["node_id"]):
+            body = {k: before[node_id][k] for k in keys if before[node_id][k] is not None}
+            restored = h.client.post(
+                f"/papers/{b.paper_id}/board/nodes", json=body, headers=auth(b.token)
+            )
+            assert restored.status_code == 201, restored.text
+        after = b.nodes()
+        for node_id in (a1["node_id"], spanned["node_id"], kept.json()["node_id"]):
+            for key in ("parent_id", "branch", "parent_span", "question", "uses", "folded"):
+                assert after[node_id][key] == before[node_id][key], (node_id, key)
+        # A child sent before its parent is refused: the web sends parents first.
+        again = h.client.delete(
+            f"/boards/{b.board_id}/nodes/{a1['node_id']}", headers=auth(b.token)
+        )
+        assert again.status_code == 204
+        orphan = {
+            k: before[spanned["node_id"]][k]
+            for k in keys
+            if before[spanned["node_id"]][k] is not None
+        }
+        refused = h.client.post(
+            f"/papers/{b.paper_id}/board/nodes", json=orphan, headers=auth(b.token)
+        )
+        assert refused.status_code == 422, refused.text
 
 
 def test_another_users_board_and_nodes_are_not_found(tmp_path: Path) -> None:

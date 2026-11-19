@@ -45,7 +45,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Annotated, Any, Final, cast
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse, Response
 from papertree_db import OwnerId, PaperId, PaperTreeDb, new_id
 from papertree_db.ai import normalise_time
@@ -713,10 +713,16 @@ def _locators(
 
 
 @router.get("/papers/{paper_id}/threads", response_model=list[Thread], responses=ERRORS)
-async def list_threads(call: CallerDep, paper_id: str) -> Response:
+async def list_threads(
+    call: CallerDep,
+    paper_id: str,
+    include_board: Annotated[bool, Query()] = False,
+) -> Response:
+    """The reader's threads. A board answer's thread is not one of them (0016); the board reads its
+    own answers' sources with ``include_board=true``."""
     owned_paper(call, paper_id)
     runs.sweep_orphans(call.db)
-    rows = call.db.list_threads(call.db_owner, PaperId(paper_id))
+    rows = call.db.list_threads(call.db_owner, PaperId(paper_id), board_threads=include_board)
     return JSONResponse([thread_wire(row) for row in rows])
 
 

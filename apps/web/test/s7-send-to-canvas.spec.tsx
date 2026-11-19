@@ -45,6 +45,18 @@ function existing(x: number, y: number): CanvasNode {
     source_page_id: null,
     source_diagram_id: null,
     counts: null,
+    parent_id: null,
+    branch: null,
+    parent_span: null,
+    question: null,
+    uses: null,
+    offset_x: 0,
+    offset_y: 0,
+    folded: false,
+    final_text: null,
+    level: null,
+    model: null,
+    answer_status: null,
     version: 1,
     created_at: '',
     updated_at: '',
@@ -97,6 +109,25 @@ describe('sendToCanvas', () => {
       body.x + body.w <= -GAP ||
       body.y + body.h <= -GAP;
     expect(clear).toBe(true);
+  });
+
+  it('puts a new passage below the lowest tree, not on the old grid', async () => {
+    const root = { ...existing(40, 60), node_id: 'cn_root', kind: 'excerpt' as const };
+    const answer = {
+      ...existing(0, 0),
+      node_id: 'cn_answer',
+      kind: 'explanation' as const,
+      parent_id: 'cn_root',
+      branch: 'right' as const,
+      final_text: 'x',
+    };
+    const next = { ...answer, node_id: 'cn_next', parent_id: 'cn_answer', branch: 'down' as const };
+    get.mockResolvedValue({ board: {} as never, nodes: [root, answer, next], edges: [] });
+    await sendToCanvas(PAPER, { kind: 'excerpt', anchor: ANCHOR });
+    const body = createNode.mock.calls[0]![1];
+    // Both cards of the tree are taller than 60 + 150: the root goes under all of them.
+    expect(body.y).toBeGreaterThan(60 + 150 + GAP);
+    expect(body.x).toBe(40);
   });
 
   it('sends an explanation with the answer text and its message id, found in the newest thread', async () => {

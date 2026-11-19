@@ -283,6 +283,10 @@ def test_thread_count_and_has_summary_are_per_paper_and_per_owner(db: PaperTreeD
     _thread(db, alice, a1, 1)
     _thread(db, alice, a1, 2)
     _thread(db, bob, b1, 3)  # another owner's thread must not count for alice
+    db.create_thread(  # a board answer's thread is not one of the reader's threads
+        alice, a1, thread_id=f"thr_{9:026d}", kind="ask", title="B", origin_anchor=None,
+        board_id="brd_1",
+    )  # fmt: skip
     db.put_summary(
         alice,
         a1,

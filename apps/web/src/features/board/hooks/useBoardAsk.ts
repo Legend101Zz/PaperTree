@@ -19,7 +19,7 @@ import { boardsApi } from '@/lib/api/boards';
 import { threadsApi } from '@/lib/api/threads';
 import { ApiError, type CanvasNode, type Citation, type ParentSpan } from '@/lib/api/types';
 
-import { buildAskBody, type QuickAsk } from '../model/askPayload';
+import { buildAskBody, isValidQuestion, type QuickAsk } from '../model/askPayload';
 import { toFlowNode } from '../model/flow';
 import { tidyResets } from '../model/layout';
 import { branchCounts, countsPhrase, type BoardTree } from '../model/tree';
@@ -52,6 +52,8 @@ export interface BoardAsk {
   readonly quick: (parentId: string, span: ParentSpan, quick: QuickAsk) => Promise<boolean>;
   /** Keep as note: a note child on the words. */
   readonly keepNote: (parentId: string, span: ParentSpan) => Promise<void>;
+  /** Try again on an answer that stopped short. */
+  readonly retry: (nodeId: string) => Promise<boolean>;
   readonly stop: (nodeId: string) => void;
   /** Folds a branch into its pill, or unfolds it. */
   readonly fold: (id: string, folded: boolean) => void;
@@ -138,7 +140,7 @@ export function useBoardAsk(
         for await (const event of boardsApi.ask(boardId, parentId, body, controller.signal)) {
           if (!aliveRef.current) return id !== null;
           if (event.event === 'node') {
-            const node = event.data.node;
+            const node = event.data;
             id = node.node_id;
             aborts.current.set(id, controller);
             adopt(node);
@@ -230,6 +232,32 @@ export function useBoardAsk(
     [control, run],
   );
 
+  /**
+   * Try again on an answer that stopped short (rule 6): the same question, Uses and level, with
+   * `redo_of` set, so the server replaces a failed answer with no branches in place and gives any
+   * other a `right` sibling.
+   */
+  const retry = useCallback(
+    (nodeId: string): Promise<boolean> => {
+      const row = nodesRef.current.find((n) => n.id === nodeId)?.data.node;
+      const question = (row?.question ?? '').trim();
+      if (row === undefined || !isValidQuestion(question)) return Promise.resolve(false);
+      const uses = row.uses ?? control.freshUses;
+      return run(
+        nodeId,
+        {
+          question,
+          uses,
+          level: row.level ?? uses.level,
+          redo_of: nodeId,
+          ...(row.parent_span != null ? { span: row.parent_span } : {}),
+        },
+        false,
+      );
+    },
+    [control.freshUses, nodesRef, run],
+  );
+
   const keepNote = useCallback(
     async (parentId: string, span: ParentSpan): Promise<void> => {
       const boardId = boardRef.current?.board_id;
@@ -289,15 +317,29 @@ export function useBoardAsk(
     const ids = jobs.flatMap((job) => job.ids);
     for (const id of ids) mergeData(id, { offset_x: 0, offset_y: 0 });
     // The server bumps every version it touches: the history must not keep a step that would write
-    // over them with the version it knew (it would answer 409), and the board reads itself again.
+    // over them with the version it knew (it would answer 409).
     for (const id of ids) forgetRow(id);
     try {
-      for (const job of jobs) await boardsApi.tidy(boardId, job.root.node_id);
+      // The answer lists the cards it changed with their new versions: no second read of the board.
+      for (const job of jobs) {
+        const { nodes } = await boardsApi.tidy(boardId, job.root.node_id);
+        if (!aliveRef.current) return;
+        for (const changed of nodes) {
+          versionRef.current.set(changed.node_id, changed.version);
+          mergeData(changed.node_id, {
+            offset_x: changed.offset_x,
+            offset_y: changed.offset_y,
+            version: changed.version,
+            updated_at: changed.updated_at,
+          });
+        }
+      }
     } catch (error) {
       setNotice(sentence(error, "Couldn't tidy the board. Check your connection, then try again."));
+      // A refused or half-done Tidy: what the server holds is the truth.
+      await reload();
     }
-    await reload();
-  }, [boardRef, forgetRow, mergeData, reload, setNotice]);
+  }, [aliveRef, boardRef, forgetRow, mergeData, reload, setNotice, versionRef]);
 
-  return { streams, send, quick, keepNote, stop, fold, tidy };
+  return { streams, send, quick, retry, keepNote, stop, fold, tidy };
 }

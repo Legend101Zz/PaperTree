@@ -214,6 +214,7 @@ export function useBranchBoard(
       send: ask.send,
       quick: ask.quick,
       keepNote: ask.keepNote,
+      retry: ask.retry,
       stop: ask.stop,
       fold: ask.fold,
       openSource,

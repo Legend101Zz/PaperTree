@@ -5,6 +5,9 @@
  * predictable and testable. Nodes are laid out on a grid of columns and rows, row by row, and the
  * first free cell wins. A node is "in the way" when it is closer than `GAP` to the candidate.
  */
+import { heightCap, layoutBoard, type LayoutNodeInput } from './layout';
+import { buildTree } from './tree';
+
 /** A card's box in board units. */
 export interface Rect {
   readonly x: number;
@@ -140,4 +143,46 @@ export function boundsOf(rects: readonly Rect[], pad = 24): Rect {
     w: maxX - minX + pad * 2,
     h: maxY - minY + pad * 2 + 28,
   };
+}
+
+/** What `rootSpot` reads of a card (`CanvasNode` satisfies it). */
+export type PlacedNodeInput = LayoutNodeInput & {
+  readonly w: number;
+  readonly h: number;
+};
+
+/**
+ * Where a NEW TREE ROOT goes (a passage sent to the board, #342): below the lowest card of every
+ * existing tree, in line with the leftmost tree. `freeSpot`'s grid does not know how tall a tree
+ * grows (its answers and notes are laid out by `layoutBoard`, up to 60% of the viewport each), so
+ * it could drop the new passage onto one. The trees' cards are taken at their capped height,
+ * because a card nobody has measured yet may be that tall; loose notes and frames from v0.2 stay on
+ * `freeSpot`: the spot found here is only where its search starts, so it still avoids them.
+ *
+ * @param nodes Every card on the board, as the server holds them.
+ * @param size The new passage's size.
+ * @param viewportHeight The window's height in px (a card is capped at 60% of it).
+ * @returns The top-left corner for the new root.
+ */
+export function rootSpot(
+  nodes: readonly PlacedNodeInput[],
+  size: { readonly w: number; readonly h: number },
+  viewportHeight: number,
+): { x: number; y: number } {
+  const tree = buildTree(nodes);
+  const placed = layoutBoard(tree, {
+    viewportHeight,
+    // A card not yet measured may be as tall as the cap allows.
+    measure: () => heightCap(viewportHeight),
+  });
+  const trees = [...placed.cards.values()];
+  const inTrees = new Set(placed.order);
+  const loose: Rect[] = nodes
+    .filter((n) => !inTrees.has(n.node_id) && !placed.hidden.has(n.node_id))
+    .map((n) => ({ x: n.x, y: n.y, w: n.w, h: n.h }));
+  const rects: Rect[] = [...trees.map((c) => ({ x: c.x, y: c.y, w: c.w, h: c.h })), ...loose];
+  if (trees.length === 0) return freeSpot(rects, size);
+  const left = Math.min(...tree.roots.map((r) => (placed.cards.get(r.node_id) ?? r).x));
+  const bottom = Math.max(...trees.map((c) => c.y + c.h));
+  return freeSpot(rects, size, { x: left, y: bottom + GAP });
 }

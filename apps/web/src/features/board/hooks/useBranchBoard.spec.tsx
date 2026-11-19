@@ -9,7 +9,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { boardsApi } from '@/lib/api/boards';
+import { boardsApi, type CreateNodeBody } from '@/lib/api/boards';
 import { threadsApi } from '@/lib/api/threads';
 
 import { DRAFT_ID } from '../model/display';
@@ -120,7 +120,7 @@ beforeEach(() => {
     ...node({ id, kind: 'note' }),
     version: body.version + 1,
   }));
-  api.tidy.mockResolvedValue({});
+  api.tidy.mockResolvedValue({ nodes: [] });
   vi.mocked(threadsApi.cancelRun).mockResolvedValue(undefined);
 });
 afterEach(cleanup);
@@ -177,23 +177,108 @@ describe('Tidy', () => {
     });
     const { result } = await mount(rows);
     measure(result, ['p', 'a', 'b', 'n']);
-    // The server clears the offsets; the board reads itself again for the new versions.
-    api.tidy.mockImplementation(async () => {
-      api.get.mockResolvedValue({ board: BOARD, nodes: tree(), edges: [] });
-      return {};
-    });
+    // The answer lists the cards Tidy changed with their new versions: the board does not read
+    // itself again.
+    api.tidy.mockImplementation(async () => ({
+      nodes: [{ ...node({ id: 'a', parent: 'p', branch: 'right', finalText: TEXT }), version: 7 }],
+    }));
+    const reads = api.get.mock.calls.length;
 
     await act(() => result.current.branch.ask.tidy());
     expect(api.tidy).toHaveBeenCalledTimes(1);
     expect(api.tidy).toHaveBeenCalledWith('brd_1', 'p');
+    expect(api.get.mock.calls.length).toBe(reads);
     const cleared = result.current.ctl.nodes.find((n) => n.id === 'a')!.data.node;
-    expect(cleared).toMatchObject({ offset_x: 0, offset_y: 0 });
+    expect(cleared).toMatchObject({ offset_x: 0, offset_y: 0, version: 7 });
+  });
+
+  it('reads the board again when Tidy is refused', async () => {
+    const rows = tree();
+    rows[1] = node({
+      id: 'a',
+      parent: 'p',
+      branch: 'right',
+      finalText: TEXT,
+      offset: { x: 90, y: 40 },
+    });
+    const { result } = await mount(rows);
+    measure(result, ['p', 'a', 'b', 'n']);
+    api.tidy.mockRejectedValue(new Error('offline'));
+    const reads = api.get.mock.calls.length;
+    await act(() => result.current.branch.ask.tidy());
+    expect(api.get.mock.calls.length).toBe(reads + 1);
+    expect(result.current.ctl.notice).not.toBeNull();
   });
 
   it('sends nothing when every branch is already where the board puts it', async () => {
     const { result } = await mount(tree());
     await act(() => result.current.branch.ask.tidy());
     expect(api.tidy).not.toHaveBeenCalled();
+  });
+});
+
+describe('deleting a branch and taking it back', () => {
+  /** The server's answer to the restore: the row it was sent, as a new version 1. */
+  const createdAs = (body: CreateNodeBody): CanvasNode => ({
+    ...node({ id: body.node_id }),
+    ...body,
+    source_anchor: null,
+    parent_id: body.parent_id ?? null,
+    branch: body.branch ?? null,
+    parent_span: body.parent_span ?? null,
+    question: body.question ?? null,
+    uses: body.uses ?? null,
+    offset_x: body.offset_x ?? 0,
+    offset_y: body.offset_y ?? 0,
+    folded: body.folded ?? false,
+    version: 1,
+  });
+
+  it('takes the whole subtree off the screen with one request, and Undo puts it back parents first', async () => {
+    api.deleteNode.mockResolvedValue(undefined);
+    api.createNode.mockImplementation(async (_paper, body) => ({
+      board: BOARD,
+      node: createdAs(body),
+    }));
+    const { result } = await mount(tree());
+    measure(result, ['p', 'a', 'b', 'n']);
+
+    act(() => result.current.ctl.deleteSelection(['a'], []));
+    // The answer, its follow-up and the note kept from its words all go; the passage stays.
+    expect(result.current.ctl.nodes.map((n) => n.id)).toEqual(['p']);
+    await waitFor(() => expect(api.deleteNode).toHaveBeenCalledTimes(1));
+    expect(api.deleteNode).toHaveBeenCalledWith('brd_1', 'a');
+    expect(result.current.ctl.history.undoName).toBe('delete of 3 cards');
+
+    await act(() => result.current.ctl.history.undo());
+    const sent = api.createNode.mock.calls.map(([, body]) => body);
+    // A parent is created before its children, or the server would refuse the child.
+    expect(sent.map((body) => body.node_id)).toEqual(['a', 'n', 'b']);
+    const at = (id: string) => sent.findIndex((body) => body.node_id === id);
+    expect(at('a')).toBeLessThan(at('b'));
+    expect(at('a')).toBeLessThan(at('n'));
+    // Each comes back with its place in the tree.
+    expect(sent[at('a')]).toMatchObject({ parent_id: 'p', branch: 'right', question: 'why?' });
+    expect(sent[at('b')]).toMatchObject({ parent_id: 'a', branch: 'down' });
+    expect(sent[at('n')]).toMatchObject({ parent_id: 'a', branch: 'right', parent_span: SPAN });
+    expect(result.current.ctl.nodes.map((n) => n.id).sort()).toEqual(['a', 'b', 'n', 'p']);
+  });
+
+  it('deleting a child and its parent together lists the parent first', async () => {
+    api.deleteNode.mockResolvedValue(undefined);
+    api.createNode.mockImplementation(async (_paper, body) => ({
+      board: BOARD,
+      node: createdAs(body),
+    }));
+    const { result } = await mount(tree());
+    measure(result, ['p', 'a', 'b', 'n']);
+    act(() => result.current.ctl.deleteSelection(['b', 'a'], []));
+    await waitFor(() => expect(api.deleteNode).toHaveBeenCalledTimes(1));
+    expect(api.deleteNode).toHaveBeenCalledWith('brd_1', 'a');
+    await act(() => result.current.ctl.history.undo());
+    const ids = api.createNode.mock.calls.map(([, body]) => body.node_id);
+    expect(ids.indexOf('a')).toBeLessThan(ids.indexOf('b'));
+    expect(ids).toHaveLength(3);
   });
 });
 
@@ -237,15 +322,13 @@ describe('asking from the Uses line', () => {
       stream([
         {
           event: 'node',
-          data: {
-            node: node({
-              id: 'new',
-              parent: 'a',
-              branch: 'right',
-              span: SPAN,
-              question: 'what is it?',
-            }),
-          },
+          data: node({
+            id: 'new',
+            parent: 'a',
+            branch: 'right',
+            span: SPAN,
+            question: 'what is it?',
+          }),
         },
         {
           event: 'run',
@@ -305,6 +388,41 @@ describe('asking from the Uses line', () => {
     });
   });
 
+  it('Try again on an answer sends the same ask with redo_of (rule 6), and the card is replaced in place', async () => {
+    const rows = tree();
+    rows[3] = node({ id: 'n', kind: 'note', parent: 'p', branch: 'right', body: 'x' });
+    rows[2] = node({ id: 'b', parent: 'p', branch: 'down' }); // an answer with no branches of its own
+    rows[1] = {
+      ...node({ id: 'a', parent: 'p', branch: 'right', question: 'why?', finalText: TEXT }),
+      uses: { path: true, paper: 'whole', level: 'expert', diagram: 'never', extra_node_ids: [] },
+      level: 'expert',
+      answer_status: 'error',
+    };
+    api.ask.mockImplementation(() =>
+      stream([
+        {
+          event: 'node',
+          data: { ...rows[1]!, version: 2, answer_status: 'streaming', final_text: null },
+        },
+        { event: 'done', data: { status: 'complete', error: null, message_id: 'm' } },
+      ]),
+    );
+    const { result } = await mount(rows);
+    await act(() => result.current.branch.ask.retry('a'));
+    expect(api.ask).toHaveBeenCalledTimes(1);
+    const [board, target, body] = api.ask.mock.calls[0]!;
+    expect([board, target]).toEqual(['brd_1', 'a']);
+    expect(body).toEqual({
+      question: 'why?',
+      uses: { path: true, paper: 'whole', level: 'expert', diagram: 'never', extra_node_ids: [] },
+      level: 'expert',
+      redo_of: 'a',
+    });
+    // Same id: the card was replaced, not doubled.
+    expect(result.current.ctl.nodes.filter((n) => n.id === 'a')).toHaveLength(1);
+    expect(result.current.ctl.nodes.find((n) => n.id === 'a')!.data.node.version).toBe(2);
+  });
+
   it('a refusal before the stream is a sentence, and the box stays open with what was typed', async () => {
     api.ask.mockImplementation(() => {
       throw new Error('budget');
@@ -323,7 +441,7 @@ describe('asking from the Uses line', () => {
     api.ask.mockImplementation(async function* () {
       yield {
         event: 'node',
-        data: { node: node({ id: 'new', parent: 'a', branch: 'right' }) },
+        data: node({ id: 'new', parent: 'a', branch: 'right' }),
       } as unknown as SseEvent;
       yield {
         event: 'run',

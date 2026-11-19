@@ -160,6 +160,9 @@ def test_0011_carries_every_ai_row_fk_cascade_and_trigger(tmp_path: Path, base: 
                 # diagram_json (0011) and every later slice's column are appended, NULL.
                 assert all(v is None for r in after for v in r[width:])
                 assert all(len(r) > width for r in after)
+            elif table == "ai_threads":
+                # 0016 (#343) appends board_id: NULL on every thread the reader made.
+                assert all(len(r) == width + 1 and r[width] is None for r in after), table
             else:
                 assert all(len(r) == width for r in after), table
         assert _rows(conn, "PRAGMA foreign_key_check") == []
@@ -174,12 +177,16 @@ def test_0011_carries_every_ai_row_fk_cascade_and_trigger(tmp_path: Path, base: 
         # The widened CHECKs are live, and still refuse what they refused.
         for kind in ("diagram", "topic"):
             conn.execute(
-                "INSERT INTO ai_threads VALUES (?, ?, ?, ?, 't', NULL, NULL, ?, ?)",
+                "INSERT INTO ai_threads (thread_id, owner_id, paper_id, kind, title, "
+                "origin_anchor_json, agent_state_json, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, 't', NULL, NULL, ?, ?)",
                 (f"thr_{kind}", owner_id, paper_id, kind, NOW, NOW),
             )
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute(
-                "INSERT INTO ai_threads VALUES ('thr_s', ?, ?, 'summary', 't', NULL, NULL, ?, ?)",
+                "INSERT INTO ai_threads (thread_id, owner_id, paper_id, kind, title, "
+                "origin_anchor_json, agent_state_json, created_at, updated_at) "
+                "VALUES ('thr_s', ?, ?, 'summary', 't', NULL, NULL, ?, ?)",
                 (owner_id, paper_id, NOW, NOW),
             )
         conn.execute("UPDATE ai_runs SET kind = 'diagram' WHERE run_id = 'run_2'")

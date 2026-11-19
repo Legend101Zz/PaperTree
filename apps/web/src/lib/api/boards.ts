@@ -83,31 +83,40 @@ export interface PatchNodeBody {
 /** The three quick asks of the span menu (rule 8). */
 export type QuickAskName = 'simpler' | 'example' | 'diagram';
 
-/** The body of `POST /boards/{board_id}/nodes/{node_id}/asks` (v03-BOARD-SPEC section 3). */
+/** The body of `POST /boards/{board_id}/nodes/{node_id}/asks` (`AskCreate`; v03-BOARD-SPEC section 3). */
 export interface AskBody {
+  /** Client-minted `cn_` id of the new answer card; a repeat send is idempotent. */
+  readonly node_id?: string;
   /** 1..2000. The web always sends it (a quick ask sends its own words); the server takes it optional with `quick`. */
   readonly question: string;
   readonly span?: ParentSpan;
   readonly ask_differently?: boolean;
-  readonly quick?: QuickAskName;
+  readonly quick?: QuickAskName | null;
   readonly uses: AskUses;
   readonly level: AskLevel;
+  /**
+   * A retry or a re-level of this answer card (rule 6): a failed answer with no branches is
+   * replaced in place, any other answer gets a `right` sibling.
+   */
+  readonly redo_of?: string;
 }
 
-/** The body of `POST /boards/{board_id}/nodes/{node_id}/notes`: Keep as note, no AI. */
-interface KeepNoteBody {
+/** The body of `POST /boards/{board_id}/nodes/{node_id}/notes` (`NoteCreate`): Keep as note, no AI. */
+export interface KeepNoteBody {
+  readonly node_id?: string;
   readonly span: ParentSpan;
   readonly text: string;
 }
 
-/** The first frame of a board ask: the answer card the server made before it began to write. */
-interface BoardNodeEvent {
-  readonly event: 'node';
-  readonly data: { readonly node: CanvasNode };
+/** The body of `POST /boards/{board_id}/tidy` (`TidyRequest`). */
+export interface TidyBody {
+  readonly root_id: string;
 }
 
-/** Every frame a board ask can send: the thread's own events, plus `node` first. */
-type BoardAskEvent = SseEvent | BoardNodeEvent;
+/** The answer to a Tidy (`Tidied`): the cards it changed, with their new versions. */
+export interface Tidied {
+  readonly nodes: CanvasNode[];
+}
 
 export interface CreateEdgeBody {
   /** Client-minted `ce_` + uuid. */
@@ -171,13 +180,8 @@ export const boardsApi = {
     nodeId: string,
     body: AskBody,
     signal?: AbortSignal,
-  ): AsyncGenerator<BoardAskEvent> =>
-    // `streamSse` is typed for the thread's events; `node` is read by its parser too (client.ts).
-    streamSse(
-      `/boards/${seg(boardId)}/nodes/${seg(nodeId)}/asks`,
-      body,
-      signal,
-    ) as AsyncGenerator<BoardAskEvent>,
+  ): AsyncGenerator<SseEvent> =>
+    streamSse(`/boards/${seg(boardId)}/nodes/${seg(nodeId)}/asks`, body, signal),
   /** Keep as note: a `note` child (branch `right`) on the words. No AI call. 201. */
   keepNote: (boardId: string, nodeId: string, body: KeepNoteBody) =>
     request<CanvasNode>(`/boards/${seg(boardId)}/nodes/${seg(nodeId)}/notes`, {
@@ -185,13 +189,13 @@ export const boardsApi = {
       body: JSON.stringify(body),
     }),
   /**
-   * Tidy: every offset of the tree under `rootId` back to 0, versions bumped. The response body is
-   * not relied on: the board reads itself again, which is where the new versions come from.
+   * Tidy: every offset of the tree under `rootId` back to 0, versions bumped. The answer is the
+   * cards it changed with their new versions, so the board needs no second read.
    */
   tidy: (boardId: string, rootId: string) =>
-    request<unknown>(`/boards/${seg(boardId)}/tidy`, {
+    request<Tidied>(`/boards/${seg(boardId)}/tidy`, {
       method: 'POST',
-      body: JSON.stringify({ root_id: rootId }),
+      body: JSON.stringify({ root_id: rootId } satisfies TidyBody),
     }),
   patchBoard: (boardId: string, body: PatchBoardBody) =>
     request<Board>(`/boards/${seg(boardId)}`, { method: 'PATCH', body: JSON.stringify(body) }),

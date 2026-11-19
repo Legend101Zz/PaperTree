@@ -16,6 +16,13 @@
 --   uses_json         {path, paper, level, diagram, extra_node_ids}: what the ask read.
 --   offset_x/offset_y the user's drag offset on top of the Tidy layout (the layout is the web's).
 --   folded            1 when the subtree under this card is collapsed to a pill.
+--
+-- And one column on ai_threads (additive too):
+--   board_id          the board whose card asked this thread. A board answer's conversation is the
+--                     board PATH, kept as a one-ask thread so the answer has a message row; it is
+--                     not a conversation of the reader's, so the explain thread list and the
+--                     library's thread count leave it out (board_id IS NULL). Plain TEXT, no
+--                     foreign key; NULL on every thread the reader made.
 ALTER TABLE canvas_nodes ADD COLUMN parent_id TEXT;
 --;;
 ALTER TABLE canvas_nodes ADD COLUMN branch TEXT CHECK (branch IS NULL OR branch IN ('down', 'right'));
@@ -34,3 +41,5 @@ ALTER TABLE canvas_nodes ADD COLUMN offset_y REAL NOT NULL DEFAULT 0;
 ALTER TABLE canvas_nodes ADD COLUMN folded INTEGER NOT NULL DEFAULT 0 CHECK (folded IN (0, 1));
 --;;
 CREATE INDEX canvas_nodes_by_parent ON canvas_nodes (owner_id, board_id, parent_id);
+--;;
+ALTER TABLE ai_threads ADD COLUMN board_id TEXT;

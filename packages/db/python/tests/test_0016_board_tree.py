@@ -61,7 +61,9 @@ def test_0016_keeps_every_card_and_gives_the_new_columns_their_defaults(tmp_path
 
     with open_database(file) as db:
         result = db.migrate()
-        assert 16 in result.applied and not result.backups  # additive: no backup needed
+        assert 16 in result.applied
+        # Additive: 0016 takes no backup of its own (0015, applied in the same run from 14, does).
+        assert not [b for b in result.backups if b.name.endswith(".pre-0016.bak")]
     assert 16 not in BACKUP_BEFORE_VERSIONS
     conn = sqlite3.connect(file)
     conn.execute("PRAGMA foreign_keys = ON")
@@ -74,6 +76,9 @@ def test_0016_keeps_every_card_and_gives_the_new_columns_their_defaults(tmp_path
         rows = conn.execute(f"SELECT {', '.join(NEW_COLUMNS)} FROM canvas_nodes").fetchall()
         assert rows == [(None, None, None, None, None, 0.0, 0.0, 0)] * 2
         assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+        # A board answer's thread is marked by board_id (NULL for every reader thread).
+        thread_columns = [r[1] for r in conn.execute("PRAGMA table_info(ai_threads)")]
+        assert thread_columns[-1] == "board_id"
         # The CHECKs bite from raw SQL too.
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute("UPDATE canvas_nodes SET branch = 'up' WHERE node_id = 'cn_a'")

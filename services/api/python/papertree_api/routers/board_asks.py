@@ -284,6 +284,7 @@ async def ask_on_board(
             kind="ask",
             title=threads.title_of(quote_for_title),
             origin_anchor=anchor,
+            board_id=board_id,  # the board path's record, not one of the reader's threads
         )
         db.append_message(
             owner,
