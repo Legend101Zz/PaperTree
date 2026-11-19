@@ -76,7 +76,6 @@ export const CITATIONS: Citation[] = PASSAGES.map(
     marker,
     page_index: page,
     anchor: anchor(id, block, page, exact),
-    supported: true,
     locator: {
       passage_key: `g1:${block}`,
       page_index: page,
