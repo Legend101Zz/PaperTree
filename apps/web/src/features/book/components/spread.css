@@ -207,7 +207,10 @@
   padding-inline-start: 8px;
 }
 
-.pt-glance__tab {
+.pt-glance__tabs .pt-glance__tab {
+  /* The AI slip's own tab: its ink is 6.3:1 on the slip, not on the page tab's fill (which is what
+     `.pt-tab` paints), so the tab takes the slip colour too. */
+  background: var(--pt-ai-slip);
   color: var(--pt-ai-tab-ink);
 }
 
