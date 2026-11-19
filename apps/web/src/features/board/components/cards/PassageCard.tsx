@@ -11,14 +11,25 @@ import { PaperText } from '@papertree/ui';
 import { type NodeProps } from '@xyflow/react';
 import { type ReactNode } from 'react';
 
+import { isImageAnchor } from '@/lib/imageAnchor';
+
 import { anchorPageIndex } from '../../model/cards';
 import { useBranch } from '../BranchContext';
 import { BranchCard } from '../tree/BranchCard';
+import { ImageCard } from './ImageCard';
 
 import type { PtNode } from '../../model/flow';
 
-/** A passage card: an `excerpt` row. */
-export function PassageCard({ id, data, selected }: NodeProps<PtNode>): ReactNode {
+/** A passage card: an `excerpt` row. One whose anchor is a picture is an image card instead. */
+export function PassageCard(props: NodeProps<PtNode>): ReactNode {
+  return isImageAnchor(props.data.node.source_anchor) ? (
+    <ImageCard {...props} />
+  ) : (
+    <WordsCard {...props} />
+  );
+}
+
+function WordsCard({ id, data, selected }: NodeProps<PtNode>): ReactNode {
   const branch = useBranch();
   const node = data.node;
   const page = anchorPageIndex(node.source_anchor);

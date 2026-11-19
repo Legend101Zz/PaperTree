@@ -19,6 +19,8 @@ import type { ParentSpan } from '@/lib/api/types';
 
 /** The branching board, as a card sees it. */
 export interface BranchActions {
+  /** The paper, for what a card asks of the server by itself (an image card's crop). */
+  readonly paperId: string;
   readonly tree: BoardTree;
   readonly layout: BoardLayout;
   readonly control: BoardUiControl;

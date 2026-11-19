@@ -7,6 +7,7 @@
  * request body and that list, all pure. The last level chosen on a board is remembered per board
  * in `localStorage`; the storage is passed in, so tests need no browser.
  */
+import { isImageAnchor } from '@/lib/imageAnchor';
 
 import { firstLine, firstSentence } from './answerText';
 import { spanWords } from './spans';
@@ -21,6 +22,7 @@ import {
 
 import type { AskBody, QuickAskName } from '@/lib/api/boards';
 import type { AskLevel, AskUses, BoardBranch, ParentSpan } from '@/lib/api/types';
+import type { Anchor } from '@papertree/anchoring';
 
 /** The level every ask starts at. */
 export const DEFAULT_LEVEL: AskLevel = 'familiar';
@@ -259,11 +261,15 @@ export function whatTheAiWillRead<N extends AskReadNode>(
     // Turns counted back from the ask: the card asked from is 1, its parent 2.
     const turnsBack = path.length - path.indexOf(node);
     if (node.kind === 'excerpt') {
+      // A picture's root sends the crop itself, with its caption (#348).
+      const picture = isImageAnchor(node.source_anchor);
       items.push({
         kind: 'passage',
         id: node.node_id,
-        title: 'The passage',
-        note: `${String(node.body.length)} characters`,
+        title: picture ? 'The picture' : 'The passage',
+        note: picture
+          ? 'the figure itself and its caption'
+          : `${String(node.body.length)} characters`,
       });
       return;
     }
@@ -313,6 +319,8 @@ export function whatTheAiWillRead<N extends AskReadNode>(
 /** What `whatTheAiWillRead` reads of a node. */
 export interface AskReadNode extends TreeNodeInput {
   readonly body: string;
+  /** An excerpt's anchor: a picture's has no words, the picture is what is read. */
+  readonly source_anchor?: Anchor | null;
   readonly title?: string | null;
   readonly question?: string | null;
   readonly final_text?: string | null;

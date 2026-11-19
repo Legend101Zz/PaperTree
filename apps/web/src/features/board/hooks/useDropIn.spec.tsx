@@ -2,6 +2,7 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { hostOf } from '../../../../test/branch-harness';
+import { IMAGE_FOOTPRINT_HEIGHT } from '../model/panes';
 import { useDropIn } from './useDropIn';
 
 import type { DragEvent } from 'react';
@@ -51,6 +52,16 @@ describe('a selection dragged across the divider (V3-25)', () => {
     expect(result.current.mark!.height).toBe(50 + Math.ceil(182 / 45) * 18);
     act(() => result.current.handlers.onDragOver(drag(500, 400)));
     expect(result.current.mark).toMatchObject({ x: 450, y: 320 });
+  });
+
+  it('a dragged picture’s footprint is as tall as an image card, whatever its caption', () => {
+    const h = hostOf({
+      beside: true,
+      dragIn: { current: () => ({ text: 'Figure 1.', image: true }), drop: vi.fn() },
+    });
+    const { result } = renderHook(() => useDropIn(h, stage()));
+    act(() => result.current.handlers.onDragOver(drag(300, 200)));
+    expect(result.current.mark!.height).toBe(IMAGE_FOOTPRINT_HEIGHT);
   });
 
   it('lands the card at the drop point, in board units, and the mark goes', () => {

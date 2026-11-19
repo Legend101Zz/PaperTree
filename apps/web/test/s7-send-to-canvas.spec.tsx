@@ -82,6 +82,73 @@ afterEach(() => {
   document.getElementById('pt-canvas-toast-host')?.remove();
 });
 
+describe('sendToCanvas, a picture (#348)', () => {
+  const PICTURE = {
+    id: 'img1',
+    doc: { paperId: PAPER },
+    targetKind: 'figure',
+    selectors: [
+      { type: 'PageSelector', index: 5 },
+      { type: 'ShapeSelector', pageIndex: 5, quads: [[100.2, 120.4, 400, 300]], polygons: [] },
+    ],
+  } as unknown as Anchor;
+
+  it('sends an excerpt whose anchor is the picture and whose body is the caption it was given', async () => {
+    await sendToCanvas(PAPER, {
+      kind: 'excerpt',
+      anchor: PICTURE,
+      body: 'Figure 4. Training on CIFAR-10.',
+    });
+    const [, body] = createNode.mock.calls[0]!;
+    expect(body.kind).toBe('excerpt');
+    expect(body.source_anchor).toBe(PICTURE);
+    expect(body.body).toBe('Figure 4. Training on CIFAR-10.');
+  });
+
+  it('the same picture twice is one card: it says so and sends nothing', async () => {
+    get.mockResolvedValue({
+      board: { board_id: 'brd_1' } as never,
+      nodes: [{ ...existing(0, 0), node_id: 'cn_pic', kind: 'excerpt', source_anchor: PICTURE }],
+      edges: [],
+    });
+    // A hair's difference in the rectangle (the same figure picked twice) is still the same picture.
+    const again = {
+      ...PICTURE,
+      id: 'img2',
+      selectors: [
+        { type: 'PageSelector', index: 5 },
+        {
+          type: 'ShapeSelector',
+          pageIndex: 5,
+          quads: [[100.4, 120.1, 400.3, 300.2]],
+          polygons: [],
+        },
+      ],
+    } as unknown as Anchor;
+    const id = await sendToCanvas(PAPER, { kind: 'excerpt', anchor: again, body: 'x' });
+    expect(id).toBe('cn_pic');
+    expect(createNode).not.toHaveBeenCalled();
+  });
+
+  it('a different region of the same page is another card', async () => {
+    get.mockResolvedValue({
+      board: { board_id: 'brd_1' } as never,
+      nodes: [{ ...existing(0, 0), node_id: 'cn_pic', kind: 'excerpt', source_anchor: PICTURE }],
+      edges: [],
+    });
+    const other = {
+      ...PICTURE,
+      id: 'img3',
+      selectors: [
+        { type: 'PageSelector', index: 5 },
+        { type: 'ShapeSelector', pageIndex: 5, quads: [[100, 400, 400, 500]], polygons: [] },
+      ],
+    } as unknown as Anchor;
+    await sendToCanvas(PAPER, { kind: 'excerpt', anchor: other, body: '' });
+    expect(createNode).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('sendToCanvas', () => {
   it('sends a passage as an excerpt node holding the Anchor, and toasts with an Open board link', async () => {
     await sendToCanvas(PAPER, { kind: 'excerpt', anchor: ANCHOR });

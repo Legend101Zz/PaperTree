@@ -49,6 +49,7 @@ export function branchActions(
 ): BranchActions {
   const tree = buildTree(rows);
   return {
+    paperId: 'ppr_test',
     tree,
     layout: layoutBoard(tree, { viewportHeight: 800, measure: () => undefined }),
     control: uiControl(ui),

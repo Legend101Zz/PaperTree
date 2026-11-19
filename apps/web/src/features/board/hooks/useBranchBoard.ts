@@ -238,6 +238,7 @@ export function useBranchBoard(
 
   const actions = useMemo<BranchActions>(
     () => ({
+      paperId,
       tree: view.tree,
       layout: view.layout,
       control,
@@ -257,6 +258,7 @@ export function useBranchBoard(
       stage,
     }),
     [
+      paperId,
       view.tree,
       view.layout,
       view.draft,

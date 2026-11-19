@@ -97,6 +97,8 @@ export function viewToCentre(
 
 /** A dropped passage's footprint is drawn this wide: a passage card's width. */
 export const FOOTPRINT_WIDTH = 304;
+/** A dropped picture's footprint: an image card is a picture and a caption, about this tall. */
+export const IMAGE_FOOTPRINT_HEIGHT = 200;
 /** About how many characters fit on a line of a passage card, and how tall a line and the strip are. */
 const CHARS_PER_LINE = 45;
 const LINE_HEIGHT = 18;

@@ -7,13 +7,17 @@
  * board on its own level.
  */
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
 import { createContext, useContext, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { indexDocument, type PaperSource } from '@papertree/anchoring';
 
 import { setDraggedPassage } from '@/features/split';
 import { useBoardBeside } from '@/features/split';
 import { ReaderActionsMount } from '@/app/paper/[id]/read/ReaderWorkspace';
 import { useReaderActions } from '@/components/reader/actions';
+import { buildImageAnchor } from '@/lib/imageAnchor';
 
 import { TestQueryProvider } from './query-client';
 import { stubDesktop } from './s6-harness';
@@ -209,6 +213,39 @@ describe('Board beside, as the reader mounts it', () => {
       expect.objectContaining({ kind: 'excerpt', toast: 'none', at: { x: 356, y: 372 } }),
     );
     await waitFor(() => expect(screen.getByTestId('arrival').textContent).toBe('cn_dropped'));
+  });
+
+  it('a figure dragged across and dropped is sent as an image card: its anchor, its caption as the body (#348)', async () => {
+    sent.mockResolvedValue('cn_picture');
+    mount();
+    fireEvent.keyDown(document.body, { key: 'b' });
+    const picture = buildImageAnchor({
+      doc: indexDocument(
+        JSON.parse(
+          readFileSync(`${process.cwd()}/test/fixtures/real-resnet-p1-2.ir.json`, 'utf8'),
+        ) as PaperSource,
+        'beside-image',
+      ),
+      page: 0,
+      box: [309, 224, 545, 347],
+      kind: 'figure',
+      id: 'dragged-figure',
+      at: '2026-11-20T10:00:00.000Z',
+      client: 'test',
+    });
+    setDraggedPassage({ anchor: picture, text: 'Figure 1. Training error.', image: true });
+    fireEvent.click(screen.getByRole('button', { name: 'drop' }));
+    expect(sent).toHaveBeenCalledWith(
+      'ppr_1',
+      expect.objectContaining({
+        kind: 'excerpt',
+        anchor: picture,
+        body: 'Figure 1. Training error.',
+        toast: 'none',
+        at: { x: 356, y: 372 },
+      }),
+    );
+    await waitFor(() => expect(screen.getByTestId('arrival').textContent).toBe('cn_picture'));
   });
 
   it('a drop on a passage already on the board with a tree pans to it and glows it; a moved or new one keeps the view', async () => {
