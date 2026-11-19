@@ -185,6 +185,14 @@ test.describe('v0.2 frame 08b: the phone reader and its explain sheet (faux agen
     expect(lines).toBeLessThanOrEqual(2);
     const marker = '.pt-explain-sheet .pt-source button';
     expect(await page.locator(marker).count()).toBeGreaterThan(0);
+    // The one source line sits at the foot of the whole answer: bring it to the middle of the
+    // scroll first, so the probe never lands on the pinned footer or off screen.
+    await page
+      .locator(marker)
+      .first()
+      .evaluate((el) => {
+        el.scrollIntoView({ block: 'center' });
+      });
     expect(await hitsAround(page, marker, 19)).toEqual([true, true, true, true]);
     await expect(sheet.locator('.pt-marker, .pt-trace-row, .pt-coverage')).toHaveCount(0);
 
