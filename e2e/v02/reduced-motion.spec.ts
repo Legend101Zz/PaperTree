@@ -1,11 +1,12 @@
 /**
  * S8 (#218): every moment of frame 11 with `prefers-reduced-motion: reduce`, on the real stack with
  * the FAUX agent at 1440: pull out, open, put back, Read, the citation flash, Dive in, Back to the
- * paper, the plate's parts arriving, and the board's thread. Each one must COMPLETE (its end state
+ * paper, and the board's thread. Each one must COMPLETE (its end state
  * is asserted), and no animation it starts may run longer than DESIGN.md §6's reduced column: one
  * 120 ms cross-fade at most, and none at all for the flash ("the ring and wash appear, clear on the
- * next action"), the plate's parts ("simply appear") and the thread ("drawn on release, no
- * settle"). Every animation is read from `document.getAnimations()` on every frame
+ * next action") and the thread ("drawn on release, no settle"). The plate's parts arriving were a
+ * moment of this walk while the reader could start a diagram; diagrams now live inside answers
+ * (#339), so no plate is drawn here. Every animation is read from `document.getAnimations()` on every frame
  * (`recordAnimations`), so a CSS transition, a CSS animation and a Web Animation all count. The one
  * motion those cannot see is script-driven: the flash's scroll to an off-screen passage
  * (`tweenScroll`, a `requestAnimationFrame` loop, 240 ms in full motion). The walk starts the flash
@@ -13,17 +14,28 @@
  * under reduced motion it must jump, not travel.
  *
  * The board's passage card holds the Anchor the reader sent for the explained selection, placed
- * through the API (as in `prototype-flow.spec.ts`); the plate is drawn in the panel by the faux
- * agent (`[faux:diagram]`, added to that one request as `diagram.spec.ts` does) and sent to the
- * board from it. The PDF is the committed corpus's; the spec SKIPS, loudly, without it.
+ * through the API (as in `prototype-flow.spec.ts`), beside a stored plate (a faux `[faux:diagram]`
+ * thread read back from the API, placed as a diagram card) whose claim pin the thread is drawn
+ * from. The PDF is the committed corpus's; the spec SKIPS, loudly, without it.
  */
 import { existsSync } from 'node:fs';
 
 import { expect, test } from '../harness/test';
-import { drag, pointsFor, register, reveal, SCROLLER, upload, waitParsed } from '../s4/support';
+import {
+  drag,
+  pointsFor,
+  register,
+  reveal,
+  SCROLLER,
+  upload,
+  userId,
+  waitParsed,
+} from '../s4/support';
 import { getBoard, tokenInit } from '../s7/support';
 import {
   ATTENTION,
+  drawPlate,
+  mintAnchor,
   placeCard,
   recordAnimations,
   recordScroll,
@@ -59,10 +71,6 @@ async function select(page: Page, from: string, to: string): Promise<void> {
 const textLayer = (page: Page) => page.locator('.papertree-text-layer span[data-cp-start]');
 
 test.describe('S8: reduced motion, every moment (faux agent)', () => {
-  // FIXME(#339): this walk starts the plate from the selection menu's "Explain with a diagram",
-  // which #346 removed (diagrams live inside answers now). Re-enter the plate through the answer's
-  // own control when #339 lands, then delete this line.
-  test.fixme(true, 'the selection menu no longer has "Explain with a diagram" (#346, #339)');
   test.skip(
     !existsSync(ATTENTION),
     'SKIPPED: the corpus PDF attention-is-all-you-need.pdf is absent. Run research/benchmarks/fetch_corpus.sh.',
@@ -89,13 +97,6 @@ test.describe('S8: reduced motion, every moment (faux agent)', () => {
     await recordAnimations(context);
     const page = await context.newPage();
     await tokenInit(page, token);
-    await page.route(`**/papers/${paperId}/threads`, async (route) => {
-      const request = route.request();
-      const body = JSON.parse(request.postData() ?? '{}') as { kind?: string; question?: string };
-      if (request.method() !== 'POST' || body.kind !== 'diagram') return route.continue();
-      body.question = '[faux:diagram] Explain with a diagram.';
-      return route.continue({ postData: JSON.stringify(body) });
-    });
     expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(
       true,
     );
@@ -196,21 +197,24 @@ test.describe('S8: reduced motion, every moment (faux agent)', () => {
     await expect.poll(() => textLayer(page).count(), { timeout: 180_000 }).toBeGreaterThan(50);
     expectWithin('Back to the paper', await takeAnimations(page));
 
-    // ── the plate's parts simply appear ──
-    await select(page, 'We call our particular attention', 'weights on the');
-    await page
-      .getByRole('toolbar', { name: 'Selection actions' })
-      .getByRole('button', { name: 'Explain with a diagram' })
-      .click();
-    await expect(panel.locator('[data-plate-phase="complete"]')).toBeVisible({ timeout: 120_000 });
-    await expect(panel.locator('.pt-plate-key [data-letter]')).toHaveCount(6);
-    const plate = await takeAnimations(page);
-    expectWithin('the plate', plate);
-    expectNoneOn('the plate', plate, /\.pt-plate/);
-    await panel.getByRole('button', { name: 'Send to board' }).click();
-    await expect(panel.getByRole('button', { name: 'On your board' })).toBeVisible();
-
     // ── the board's thread: the picker is there at once, the thread is drawn on release ──
+    // The board holds a stored plate and the passage before the walk reaches it.
+    const user = await userId(stack.apiUrl, token);
+    const plate = await drawPlate(
+      stack.apiUrl,
+      token,
+      paperId,
+      mintAnchor(stack.dataRoot, user, paperId, 'We call our particular attention'),
+    );
+    await placeCard(stack.apiUrl, token, paperId, {
+      kind: 'diagram',
+      x: 0,
+      y: 0,
+      w: 300,
+      h: 300,
+      title: plate.title,
+      source_diagram_id: plate.messageId,
+    });
     const passage = await placeCard(stack.apiUrl, token, paperId, {
       kind: 'excerpt',
       x: 700,

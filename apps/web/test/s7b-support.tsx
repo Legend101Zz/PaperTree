@@ -1,10 +1,12 @@
 /**
  * The S7b plate specs' harness (#217): the REAL `useExplainActions` and explain panel inside a real
- * `ReaderActionsProvider` behind the header's Explain toggle, a button that starts a diagram, and
- * one that switches to another thread (the controller's `selectThread`, as the thread menu calls
- * it). Only `fetch` and `focusAnchor` are fakes; the SSE is the recorded faux runs'. Not a spec.
+ * `ReaderActionsProvider` behind the header's Explain toggle, and two buttons that switch threads
+ * (the controller's `selectThread`, as the thread menu calls it). A plate reaches the panel the two
+ * ways it still can: as a STORED diagram thread (the recorded read), and as a Redraw of it, whose
+ * SSE is a recorded faux run's. (The reader no longer starts a diagram thread, #339.) Only `fetch`
+ * and `focusAnchor` are fakes. Not a spec.
  */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { useMemo, type ReactNode } from 'react';
 import { vi } from 'vitest';
 
@@ -16,7 +18,7 @@ import { HeaderAndPanel } from './explain-toggle';
 import { plateFrames } from './fixtures/diagram-plate';
 import storedThread from './fixtures/diagram-thread.json';
 import { TestQueryProvider } from './query-client';
-import { anchorFixture, installFetch, jsonResponse, sseResponse } from './s6-support';
+import { installFetch, jsonResponse, sseResponse } from './s6-support';
 
 import type { DiagramPart, Thread } from '@/lib/api/types';
 
@@ -34,23 +36,10 @@ function Reader(): ReactNode {
       sendToCanvas: (input) => sendToCanvas(PAPER, input),
       focusAnchor: (anchor, opts) => focusAnchor(anchor, opts),
     }),
-    [explain.openExplain, explain.openDiagram],
+    [explain.openExplain],
   );
   return (
     <ReaderActionsProvider value={actions}>
-      <button
-        type="button"
-        onClick={() =>
-          // The toolbar no longer offers it (diagrams live inside answers, #339); the plate flow
-          // is still driven directly until it is retired with them.
-          explain.openDiagram({
-            anchor: anchorFixture('sel'),
-            quote: 'We call our particular attention "Scaled Dot-Product Attention" (Figure 2).',
-          })
-        }
-      >
-        draw
-      </button>
       <button
         type="button"
         onClick={() =>
@@ -74,52 +63,62 @@ function Reader(): ReactNode {
   );
 }
 
-/** Mount the reader stand-in and start a diagram on the selection. */
+/** Mount the reader stand-in on the recorded diagram thread (the panel reads it from the API). */
 export function mount(): void {
   render(
     <TestQueryProvider>
       <Reader />
     </TestQueryProvider>,
   );
-  fireEvent.click(screen.getByRole('button', { name: 'draw' }));
+  fireEvent.click(screen.getByRole('button', { name: 'switch back' }));
 }
 
-/** The stored read after a Stop at three parts: what the server keeps (status `aborted`). */
+/**
+ * Mount on the stored plate, wait for it, and press its Redraw: Plate 2 streams in under its own
+ * ask from the recorded run `routes` serves.
+ *
+ * @returns The explain panel.
+ */
+export async function mountRedrawing(): Promise<HTMLElement> {
+  mount();
+  const panel = await screen.findByRole('complementary', { name: 'Explain' });
+  fireEvent.click(await within(panel).findByRole('button', { name: 'Redraw' }));
+  return panel;
+}
+
+/** The nth exchange of the panel (0 = Plate 1 as stored, 1 = Plate 2 as redrawn). */
+export const exchange = (panel: HTMLElement, n: number): HTMLElement =>
+  panel.querySelectorAll<HTMLElement>('.pt-exchange--diagram')[n] as HTMLElement;
+
+/** A stored read of the diagram thread: what the server keeps. */
 export interface StoredRead {
   readonly thread: unknown;
   readonly messages: { status: string; diagram?: { status: string; parts: unknown[] } }[];
 }
-/** The recorded stored read as the server keeps it after a Stop at three parts. */
-export function stoppedAtThree(): StoredRead {
-  const copy = structuredClone(storedThread) as StoredRead;
-  const answer = copy.messages[1];
-  if (answer?.diagram === undefined) throw new Error('the recorded thread has no plate');
-  answer.status = 'aborted';
-  answer.diagram.status = 'stopped';
-  answer.diagram.parts = answer.diagram.parts.slice(0, 3);
-  return copy;
-}
 
 /** The faux bad run's thread: its frames are re-addressed to `THREAD` when used as a Redraw. */
+export const BAD_RUN = 'run_01M536XJMQ7TYFG50M6CPHD36C';
 export const BAD_THREAD = 'thr_01M536XJMQX7900YB9C2S1R819';
 
-/** The panel's routes: the diagram stream (held, or whole), the cancel, the reads, the board. */
+/** The panel's routes: the Redraw stream (held, or whole), the cancel, the reads, the board. */
 export function routes(
-  stream: (signal: AbortSignal | null) => Response,
+  stream: (signal: AbortSignal | null) => Response = (signal) =>
+    sseResponse(
+      plateFrames('diagram-plate-bad').map((f) => f.replaceAll(BAD_THREAD, THREAD)),
+      {
+        signal,
+      },
+    ),
   stored: StoredRead = storedThread,
   extra: Parameters<typeof installFetch>[0] = {},
 ) {
   return installFetch({
-    [`POST /papers/${PAPER}/threads`]: (_call, signal) => stream(signal),
     [`POST /runs/${RUN}/cancel`]: () => jsonResponse(202, {}),
+    [`POST /runs/${BAD_RUN}/cancel`]: () => jsonResponse(202, {}),
     [`GET /papers/${PAPER}/threads`]: () => jsonResponse(200, [stored.thread]),
     [`GET /papers/${PAPER}/threads/${THREAD}`]: () => jsonResponse(200, stored),
-    [`POST /papers/${PAPER}/threads/${THREAD}/messages`]: (_call, signal) =>
-      // A Redraw's plate: the bad run's frames, as a turn of THIS thread.
-      sseResponse(
-        plateFrames('diagram-plate-bad').map((f) => f.replaceAll(BAD_THREAD, THREAD)),
-        { signal },
-      ),
+    // A Redraw's plate: by default the bad run's frames, as a turn of THIS thread.
+    [`POST /papers/${PAPER}/threads/${THREAD}/messages`]: (_call, signal) => stream(signal),
     [`GET /papers/${PAPER}/board`]: () => jsonResponse(200, { board: null, nodes: [], edges: [] }),
     [`POST /papers/${PAPER}/board/nodes`]: (call) =>
       jsonResponse(201, { board: { board_id: 'brd_1' }, node: call.body }),
@@ -128,33 +127,11 @@ export function routes(
 }
 
 /** The key's part rows, in order. */
-export const keyRows = (): HTMLElement[] => Array.from(document.querySelectorAll('[data-letter]'));
+export const keyRows = (root: ParentNode = document): HTMLElement[] =>
+  Array.from(root.querySelectorAll<HTMLElement>('[data-letter]'));
 /** A part box's y in the drawing (a slot that moved changes it). */
-export const box = (letter: string) =>
-  document.querySelector(`[data-part="${letter}"] .pt-plate__box`)?.getAttribute('y');
-
-/**
- * Recorded frames with one part changed (both the live frame and, through `storedWith`, its stored
- * copy), for the cases the faux runs do not record.
- *
- * @param frames The recorded frames.
- * @param letter The part to change.
- * @param change The change.
- * @returns The frames.
- */
-export function withPart(
-  frames: readonly string[],
-  letter: string,
-  change: (part: DiagramPart) => DiagramPart,
-): string[] {
-  return frames.map((frame) => {
-    if (!frame.startsWith('event: part')) return frame;
-    const data = JSON.parse(frame.slice(frame.indexOf('data: ') + 6)) as DiagramPart;
-    return data.letter === letter
-      ? `event: part\ndata: ${JSON.stringify(change(data))}\n\n`
-      : frame;
-  });
-}
+export const box = (letter: string, root: ParentNode = document) =>
+  root.querySelector(`[data-part="${letter}"] .pt-plate__box`)?.getAttribute('y');
 
 /**
  * The recorded stored read with one part changed, or with the plate stopped at `keep` parts.
@@ -173,4 +150,34 @@ export function storedWith(
   answer.status = status;
   answer.diagram.parts = change(answer.diagram.parts as DiagramPart[]);
   return copy;
+}
+
+/**
+ * The stored read after a Redraw (Plate 2) was stopped before its first part: the recorded Plate 1,
+ * the Redraw's ask, and an `aborted` answer with no part, under the ids of the bad run's frames.
+ */
+export function redrawStoppedEmpty(): StoredRead {
+  const copy = structuredClone(storedThread) as unknown as {
+    thread: unknown;
+    messages: Record<string, unknown>[];
+  };
+  const [ask, plate] = copy.messages as [Record<string, unknown>, Record<string, unknown>];
+  const answer = structuredClone(plate) as { diagram: { status: string; parts: unknown[] } };
+  answer.diagram.status = 'stopped';
+  answer.diagram.parts = [];
+  copy.messages.push(
+    {
+      ...ask,
+      message_id: 'msg_01M536XJMQHV024A13MK8WTT86',
+      ordinal: 2,
+      content: 'Redraw the diagram.',
+    },
+    {
+      ...answer,
+      message_id: 'msg_01M536XJMQ3RXM94FQ9A74JA02',
+      ordinal: 3,
+      status: 'aborted',
+    },
+  );
+  return copy as unknown as StoredRead;
 }

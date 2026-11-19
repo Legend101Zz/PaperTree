@@ -1,16 +1,17 @@
 # diagram
 
-The engraved plate (#217, frames 07a–07c, DESIGN.md §1 "Diagrams", ADR-004 §2.9): "Explain with a diagram" on
-a selection draws a small figure of lettered parts A–L in the explain panel, each part with the passage it
-stands on. The backend is S7a (#216): a `diagram` thread, the `diagram-v1` prompt, parts streamed as SSE
-`plate` / `part` / `link` events with each quote already resolved to an Anchor.
+The engraved plate (#217, frames 07a–07c, DESIGN.md §1 "Diagrams", ADR-004 §2.9): a small figure of lettered
+parts A–L in the explain panel, each part with the passage it stands on. The reader no longer starts one from a
+selection ("Explain with a diagram" left the selection menu in #346: diagrams live inside answers, #339); a
+`diagram` thread stored by v0.2 still renders in the panel, and its plate can be redrawn. The backend is S7a
+(#216): a `diagram` thread, the `diagram-v1` prompt, parts streamed as SSE `plate` / `part` / `link` events with
+each quote already resolved to an Anchor.
 
 ## Data flow
 
-UI (the selection menu's "Explain with a diagram" was the way in until #346 removed it, because diagrams live
-inside answers (#339); `useExplainActions.openDiagram` has no caller in the app now and is driven by tests only) → controller (`components/explain/useExplainActions`: `openDiagram`, the
-stream reader, `redraw`; the plate rides on the panel's message as `diagram`) → `lib/api/threads` →
-`POST /papers/{id}/threads {kind: "diagram", anchor}` and, for a Redraw,
+UI (a stored diagram thread opened in the explain panel) → controller (`components/explain/useExplainActions`:
+`selectThread`, the stream reader, `redraw`; the plate rides on the panel's message as `diagram`) → `lib/api/threads` →
+`GET /papers/{id}/threads/{tid}` and, for a Redraw,
 `POST /papers/{id}/threads/{tid}/messages {question, redraw_of}` (`services/api` `routers/threads.py`) → DB
 (`ai_diagram_parts` rows, one per part as it arrives; `ai_messages.diagram_json` for the title and links;
 migration 0011). The stored read (`GET /papers/{id}/threads/{tid}`, each message's `diagram`) replaces the live
@@ -92,5 +93,5 @@ plate once it settles (`features/explain/model/messages.mergeStored`), keyed by 
 - `model/plate.ts`: events → plate, verdicts, readout, passage numbers, tabs, the phase. Pure, tested on the
   recorded faux runs (`plate.spec.ts`). `model/fit.ts`: a box label at 15 or 13 px, on one or two lines, else cut;
   an edge label cut to its lane (`fit.spec.ts`).
-- `e2e/v02/diagram.spec.ts`: the walk on the faux agent (select → plate → tap B → Send to board → the board card).
+- `e2e/v02/stored-plate.spec.ts`: the walk on the faux agent (a stored diagram thread → plate in the panel → tap B → Send to board → the board card).
 - `apps/web/test/s7b-plate.spec.tsx`: the panel on recorded SSE frames (`test/fixtures/diagram-plate*.sse`).
