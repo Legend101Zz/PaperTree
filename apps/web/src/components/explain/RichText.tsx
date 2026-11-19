@@ -30,6 +30,7 @@ import {
   type Inline,
 } from '@/lib/markdown';
 import type { Citation } from '@/lib/api/types';
+import { Maths } from '@/lib/math';
 
 import { CitationChip, citationPageLabel } from './CitationChip';
 import { nearestChip } from './chipHit';
@@ -69,6 +70,8 @@ function renderInline(nodes: readonly Inline[], ctx: Ctx): ReactNode {
         return <strong key={key}>{renderInline(node.c, ctx)}</strong>;
       case 'code':
         return <code key={key}>{node.v}</code>;
+      case 'math':
+        return <Maths key={key} tex={node.tex} display={node.display} />;
       case 'cite': {
         if (ctx.streaming)
           return node.after === '' ? null : <Fragment key={key}>{node.after}</Fragment>;
@@ -105,6 +108,8 @@ function renderInline(nodes: readonly Inline[], ctx: Ctx): ReactNode {
 
 function renderBlock(block: Block, index: number, ctx: Ctx): ReactNode {
   switch (block.k) {
+    case 'dm':
+      return <Maths key={index} tex={block.tex} display />;
     case 'p':
       return (
         <p key={index}>

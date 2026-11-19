@@ -4893,3 +4893,44 @@ button.pt-holder {
   inline-size: 100%;
   justify-content: center;
 }
+
+/* ---- MATHS in model text (#338) -------------------------------------------------------------
+ * `lib/math` typesets with KaTeX; the face is KaTeX's own (Latin Modern, from the `katex` package,
+ * imported once in app/layout.tsx). Maths reads the same size as the prose beside it (KaTeX's
+ * default 1.21em is pulled down to the approved prototype's 1.08em inline, 1.14em display), takes
+ * the text colour of whatever it sits in so every theme follows, and a display equation is
+ * centred with a modest line of air above and below. A string KaTeX cannot parse (`--invalid`) is
+ * its TeX source in the same face, no delimiters. */
+.pt-math {
+  color: inherit;
+  font-style: normal;
+  text-indent: 0;
+}
+
+.pt-math .katex {
+  font-size: 1.08em;
+  color: inherit;
+}
+
+.pt-math--display {
+  display: block;
+  margin: 0.5em 0 0.55em;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-align: center;
+}
+
+.pt-math--display .katex-display {
+  margin: 0;
+}
+
+.pt-math--display .katex-display > .katex {
+  font-size: 1.14em;
+}
+
+.pt-math--invalid {
+  font-family: KaTeX_Main, 'Latin Modern Roman', 'STIX Two Text', 'Times New Roman', serif;
+  font-size: 1.08em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

@@ -10,6 +10,7 @@
 import { AiParagraph, NumberedMarker, PageTab, formatPageLabel } from '@papertree/ui';
 import { Fragment, type ReactNode } from 'react';
 
+import { Maths } from '@/lib/math';
 import { dehyphenate, parseMarkdown, type Block, type Inline } from '@/lib/markdown';
 
 import { runSides } from '../model/phone';
@@ -62,6 +63,7 @@ function renderInline(nodes: readonly Inline[], ctx: MarkerHandlers): ReactNode 
     if (node.t !== 'cite') {
       if (node.t === 'text') return <Fragment key={key}>{node.v}</Fragment>;
       if (node.t === 'code') return <code key={key}>{node.v}</code>;
+      if (node.t === 'math') return <Maths key={key} tex={node.tex} display={node.display} />;
       const Tag = node.t;
       return <Tag key={key}>{renderInline(node.c, ctx)}</Tag>;
     }
@@ -92,6 +94,7 @@ function renderInline(nodes: readonly Inline[], ctx: MarkerHandlers): ReactNode 
 }
 
 function renderBlock(block: Block, index: number, ctx: MarkerHandlers): ReactNode {
+  if (block.k === 'dm') return <Maths key={index} tex={block.tex} display />;
   if (block.k === 'p') {
     return block.lines.map((line, i) => (
       <Fragment key={`${String(index)}.${String(i)}`}>
@@ -148,7 +151,7 @@ export function AnswerText({
   const blocks = parseMarkdown(dehyphenate(paragraph.text), { streaming });
   const aside = withMargin ? <MarginCell paragraph={paragraph} ctx={ctx} /> : undefined;
   const end = caret ? <span className="pt-exchange__caret" aria-hidden="true" /> : null;
-  if (blocks.every((b) => b.k === 'p' || b.k === 'h')) {
+  if (blocks.every((b) => b.k === 'p' || b.k === 'h' || b.k === 'dm')) {
     return (
       <AiParagraph aside={aside}>
         {blocks.map((b, i) => renderBlock(b, i, ctx))}
