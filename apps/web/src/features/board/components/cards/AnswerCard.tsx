@@ -16,6 +16,7 @@ import { useRef, type ReactNode } from 'react';
 
 import { AnswerBody } from '@/features/explain/components/AnswerBody';
 
+import { shownAnswerText } from '../../model/answerText';
 import { locateQuote } from '../../model/spans';
 import { branchCounts, childrenOf, countsPhrase, downChild, spanKnots } from '../../model/tree';
 import { useBranch } from '../BranchContext';
@@ -44,8 +45,10 @@ export function AnswerCard({ id, data, selected }: NodeProps<PtNode>): ReactNode
   const root = useRef<HTMLDivElement | null>(null);
   const stream = branch.streams.get(id);
   const live = stream?.status === 'writing';
-  const text =
-    stream !== undefined && stream.text !== '' ? stream.text : (node.final_text ?? node.body);
+  // While it writes, the words that streamed; once it is over, the STORED text, which the span
+  // offsets are into (the agent tidies an answer before it is saved).
+  const text = shownAnswerText(node, stream, live);
+  const settling = live || stream?.settling === true;
   const state = live
     ? 'live'
     : stream?.status === 'stopped' || stream?.status === 'error'
@@ -84,7 +87,7 @@ export function AnswerCard({ id, data, selected }: NodeProps<PtNode>): ReactNode
   const onSelectWords = (el: HTMLElement): void => {
     const picked = selectedWords(el);
     const stage = branch.stage.current;
-    if (picked === null || stage === null || live) {
+    if (picked === null || stage === null || settling) {
       if (branch.control.ui.menu?.cardId === id) branch.control.openMenu(null);
       return;
     }

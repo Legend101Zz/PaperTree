@@ -156,3 +156,28 @@ export function moreLineCount(text: string, perLine = 42): number {
     .reduce((a, b) => a + b, 0);
   return Math.max(1, Math.round(prose / perLine) - 1);
 }
+
+/**
+ * The text an answer card shows and takes spans from. While it writes, the words that streamed; once
+ * it is over, the STORED final text (the offsets of a span are into it, and the agent tidies an
+ * answer before it is saved, so the streamed words may differ); the streamed words only while
+ * nothing is stored yet.
+ *
+ * @param node The card's row.
+ * @param node.final_text The stored answer, or null before it is read back.
+ * @param node.body The card's own body (the fallback of a v0.2 card).
+ * @param stream What streamed into the card, when an ask is or was running.
+ * @param stream.text The streamed words.
+ * @param live True while the answer is still being written.
+ * @returns The text to render.
+ */
+export function shownAnswerText(
+  node: { readonly final_text?: string | null; readonly body: string },
+  stream: { readonly text: string } | undefined,
+  live: boolean,
+): string {
+  const stored = node.final_text ?? '';
+  const streamed = stream?.text ?? '';
+  if (!live && stored !== '') return stored;
+  return streamed !== '' ? streamed : (node.final_text ?? node.body);
+}

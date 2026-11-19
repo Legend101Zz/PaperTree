@@ -393,6 +393,55 @@ describe('asking from the Uses line', () => {
     });
   });
 
+  it('on done the card takes the STORED final text (the agent tidied it) before any span is taken (#343 review)', async () => {
+    const streamedText = 'Intro.\n```diagram\nbox: a\n```\nBody **bold** words.';
+    const storedText = 'Intro.\nBody **bold** words.';
+    api.ask.mockImplementation(() =>
+      stream([
+        { event: 'node', data: node({ id: 'new', parent: 'a', branch: 'right', question: 'q?' }) },
+        { event: 'text', data: { delta: streamedText } },
+        { event: 'done', data: { status: 'complete', error: null, message_id: 'm' } },
+      ]),
+    );
+    const { result } = await mount(tree());
+    // The read-back is slow: until it lands the card is "settling" and no span may be taken.
+    let landed: (view: unknown) => void = () => undefined;
+    api.get.mockReturnValue(new Promise((resolve) => (landed = resolve)) as never);
+    act(() => result.current.branch.control.openAsk('a'));
+    act(() => result.current.branch.control.setText('q?'));
+    await act(() => result.current.branch.ask.send(result.current.branch.view.draft!));
+    await waitFor(() =>
+      expect(result.current.branch.ask.streams.get('new')?.status).toBe('complete'),
+    );
+    expect(result.current.branch.ask.streams.get('new')?.settling).toBe(true);
+    expect(result.current.ctl.nodes.find((n) => n.id === 'new')?.data.node.final_text).toBe(
+      streamedText,
+    );
+
+    await act(async () => {
+      landed({
+        board: BOARD,
+        nodes: [
+          ...tree(),
+          node({
+            id: 'new',
+            parent: 'a',
+            branch: 'right',
+            question: 'q?',
+            finalText: storedText,
+          }),
+        ],
+        edges: [],
+      });
+    });
+    await waitFor(() =>
+      expect(result.current.ctl.nodes.find((n) => n.id === 'new')?.data.node.final_text).toBe(
+        storedText,
+      ),
+    );
+    expect(result.current.branch.ask.streams.get('new')?.settling).toBe(false);
+  });
+
   it('Try again on an answer sends the same ask with redo_of (rule 6), and the card is replaced in place', async () => {
     const rows = tree();
     rows[3] = node({ id: 'n', kind: 'note', parent: 'p', branch: 'right', body: 'x' });

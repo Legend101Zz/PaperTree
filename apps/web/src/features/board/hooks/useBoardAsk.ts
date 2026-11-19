@@ -42,6 +42,12 @@ export interface AnswerStream {
   readonly thinking: boolean;
   /** A sentence about why the answer stopped short; null otherwise. */
   readonly failure: string | null;
+  /**
+   * True from the end of the stream until the stored final text has been read back. The text that
+   * streamed is not the text the API stored (the agent tidies the answer before it is saved), so
+   * no span may be taken from it: its offsets would point at the wrong words.
+   */
+  readonly settling?: boolean;
 }
 
 /** The tree's gestures that reach the server. */
@@ -141,6 +147,39 @@ export function useBoardAsk(
     [nodesRef, paperId, sentRef, setNodes, versionRef],
   );
 
+  /**
+   * Reads the stored answer back (spec rule 4: a span's offsets are into the STORED final text, and
+   * the agent's tidy step may have rewritten what streamed), replaces the card's text with it and
+   * lets spans be taken again. A failed read keeps what streamed: words can be read, not branched.
+   */
+  const settle = useCallback(
+    async (id: string): Promise<void> => {
+      patchStream(id, { settling: true });
+      try {
+        const view = await boardsApi.get(paperId);
+        if (!aliveRef.current) return;
+        const stored = view.nodes.find((n) => n.node_id === id);
+        const current = nodesRef.current.find((n) => n.id === id)?.data.node.version ?? 0;
+        // A read older than the card (another write landed meanwhile) is not taken over it.
+        if (stored?.final_text != null && stored.final_text !== '' && stored.version >= current) {
+          versionRef.current.set(id, stored.version);
+          mergeData(id, {
+            final_text: stored.final_text,
+            citations: stored.citations ?? null,
+            answer_status: stored.answer_status,
+            model: stored.model,
+            version: stored.version,
+          });
+          patchStream(id, { settling: false });
+        }
+        // Nothing stored to read back (a stopped answer with no words): spans stay off.
+      } catch {
+        // Offline: the streamed text stays on the card and spans stay off until the next read.
+      }
+    },
+    [aliveRef, mergeData, nodesRef, paperId, patchStream, versionRef],
+  );
+
   const run = useCallback(
     async (
       parentId: string,
@@ -199,6 +238,7 @@ export function useBoardAsk(
             patchStream(id, {
               status: status === 'aborted' ? 'stopped' : status,
               thinking: false,
+              settling: true,
               failure: error === null ? null : error.message,
             });
           }
@@ -216,23 +256,25 @@ export function useBoardAsk(
         patchStream(id, {
           status: 'error',
           thinking: false,
+          settling: true,
           failure: error instanceof ApiError ? error.detail : 'The answer stopped arriving.',
         });
         return true;
       } finally {
         if (id !== null) {
           aborts.current.delete(id);
-          // What arrived is the card's own text now; the stored copy comes with the next read.
+          // What arrived is the card's text for now; the stored copy replaces it below.
           if (written !== '' && aliveRef.current) {
             mergeData(id, {
               final_text: written,
               ...(cited.length > 0 ? { citations: [...cited] } : {}),
             });
           }
+          void settle(id);
         }
       }
     },
-    [adopt, aliveRef, boardRef, branched, control, mergeData, patchStream, setNotice],
+    [adopt, aliveRef, boardRef, branched, control, mergeData, patchStream, setNotice, settle],
   );
 
   const send = useCallback(
