@@ -57,7 +57,7 @@ def part_wire(part: Mapping[str, Any], locators: evidence.PassageLocators | None
 
     Returns:
         The wire dict. ``cite`` is None for an inferred part (no quote); otherwise it carries the
-        model's quote, the Anchor (None when the quote was found nowhere) and ``supported``.
+        model's quote, the Anchor (None when the quote was found nowhere).
     """
     cite: dict[str, Any] | None = None
     quote = part["cite_quote"]
@@ -69,7 +69,6 @@ def part_wire(part: Mapping[str, Any], locators: evidence.PassageLocators | None
             "anchor": anchor,
             "locator": locators.locate(anchor) if anchor is not None and locators else None,
             "page_index": part["page_index"],
-            "supported": bool(part["supported"]),
         }
     return {
         "letter": part["letter"],

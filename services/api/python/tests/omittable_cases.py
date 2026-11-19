@@ -91,7 +91,6 @@ CASES: Final[dict[str, tuple[dict[str, Any], tuple[str, ...]]]] = {
             "marker": "b1",
             "page_index": 0,
             "anchor": capture_anchor(),
-            "supported": True,
         },
         ("locator",),
     ),
@@ -110,7 +109,7 @@ CASES: Final[dict[str, tuple[dict[str, Any], tuple[str, ...]]]] = {
             "created_at": "2026-09-26T05:00:00.000Z",
             "completed_at": None,
         },
-        ("coverage", "diagram"),
+        ("diagram",),
     ),
     # v0.2 S5a (#206): the notebook.
     "NotebookPageCreate": (

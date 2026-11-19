@@ -14,7 +14,7 @@ import { WorkingLabel } from '@/features/explain/components/AnswerStates';
 import { shortModelName } from '@/features/explain/model/summary';
 
 import { layoutPlate } from '../model/layout';
-import { EMPTY_PLATE, passageKey, platePhase, plateReadout } from '../model/plate';
+import { EMPTY_PLATE, platePhase, plateReadout } from '../model/plate';
 import { PlateDrawing } from './PlateDrawing';
 import { PlateKey } from './PlateKey';
 
@@ -28,13 +28,11 @@ export interface DiagramPlateProps {
   readonly answer: ViewMessage;
   /** 1-based among the plates the thread drew (a Redraw is Plate 2); null for one never drawn. */
   readonly plateNo: number | null;
-  /** The thread's passage numbers (`numberPlatePassages`). */
-  readonly numbers: ReadonlyMap<string, number>;
   /** Stop → Retry: the exchange's focus hand-off (S4d's, so Stop never drops focus). */
   readonly handoff: FocusHandoff;
   readonly onStop: () => void;
   /** A part was tapped (in the drawing or its key row). */
-  readonly onPart: (part: DiagramPart, n: number | null) => void;
+  readonly onPart: (part: DiagramPart) => void;
 }
 
 const plateName = (n: number | null): string => (n === null ? 'Plate' : `Plate ${String(n)}`);
@@ -43,7 +41,9 @@ function EmptyPlate({ plateNo }: { plateNo: number | null }): ReactNode {
   return (
     <div className="pt-plate pt-plate--empty" data-plate-empty>
       <p className="pt-plate__no">{plateName(plateNo)}</p>
-      <p>The plate is drawn here part by part, each part with the passage it stands on.</p>
+      <p>
+        The plate is drawn here part by part, each part with the page it came from, when it has one.
+      </p>
     </div>
   );
 }
@@ -52,7 +52,6 @@ function EmptyPlate({ plateNo }: { plateNo: number | null }): ReactNode {
 export function DiagramPlate({
   answer,
   plateNo,
-  numbers,
   handoff,
   onStop,
   onPart,
@@ -66,21 +65,14 @@ export function DiagramPlate({
     [plate.parts, plate.links, phase],
   );
   const byLetter = useMemo(() => new Map(plate.parts.map((p) => [p.letter, p])), [plate.parts]);
-  const numberOf = useCallback(
-    (part: DiagramPart): number | null => {
-      const key = passageKey(part.cite);
-      return key === null ? null : (numbers.get(key) ?? null);
-    },
-    [numbers],
-  );
   const tap = useCallback(
     (letter: string) => {
       const part = byLetter.get(letter);
       if (part === undefined) return;
       setLit(letter);
-      onPart(part, numberOf(part));
+      onPart(part);
     },
-    [byLetter, numberOf, onPart],
+    [byLetter, onPart],
   );
   const readout = plateReadout(plate.parts, live);
   const title = plate.title ?? 'Untitled diagram';
@@ -108,7 +100,7 @@ export function DiagramPlate({
             `Stopped · ${name}`
           )
         ) : (
-          `${name} · from the paper`
+          name
         )}
       </p>
       {phase === 'thinking' ? <EmptyPlate plateNo={plateNo} /> : null}
@@ -126,19 +118,12 @@ export function DiagramPlate({
           </header>
           <div className="pt-plate__body">
             <div className="pt-plate__figure" data-voice="ai">
-              <PlateDrawing
-                layout={layout}
-                parts={byLetter}
-                numberOf={numberOf}
-                lit={lit}
-                onPart={tap}
-              />
+              <PlateDrawing layout={layout} parts={byLetter} lit={lit} onPart={tap} />
             </div>
             <PlateKey
               parts={plate.parts}
               gaps={layout.gaps}
               ghost={layout.ghost?.letter ?? null}
-              numberOf={numberOf}
               routes={layout.routes}
               lit={lit}
               onLight={setLit}

@@ -156,8 +156,7 @@ def test_dive_in_on_a_real_parse_seeds_the_exchange_and_one_quote_per_cited_pass
                 expected.append(c["anchor"])
         assert [q["anchor"] for q in quotes] == expected
         # ... and that order IS the explain panel's passage numbering: quote i is the i-th
-        # distinct `passage_key` (S4a's locator key) in citation order, and coverage counts the
-        # same number of passages.
+        # distinct `passage_key` (S4a's locator key) in citation order.
         numbered: list[str] = []
         first_anchor: dict[str, dict[str, Any]] = {}
         for c in sorted(cited, key=lambda c: c["ordinal"]):
@@ -166,7 +165,7 @@ def test_dive_in_on_a_real_parse_seeds_the_exchange_and_one_quote_per_cited_pass
                 numbered.append(key)
                 first_anchor[key] = c["anchor"]
         assert [q["anchor"] for q in quotes] == [first_anchor[k] for k in numbered]
-        assert message["coverage"]["passages"] == len(quotes)
+        assert "coverage" not in message, "no coverage readout (#341)"
         assert len(quotes) >= 1 and all(q["body"] for q in quotes)
         body = json.loads(exchanges[0]["body"])
         assert body["ai"]["message_id"] == message["message_id"]

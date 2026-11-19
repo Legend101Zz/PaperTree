@@ -43,7 +43,6 @@ function cite(
     marker,
     page_index: page,
     anchor: anchor(`a_${marker}`, block, page),
-    supported: true,
     locator: {
       passage_key: `g1:${block}`,
       page_index: page,

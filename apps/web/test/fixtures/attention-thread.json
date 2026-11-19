@@ -157,7 +157,6 @@
               "client": "papertree-api/citations"
             }
           },
-          "supported": true,
           "locator": {
             "passage_key": "g1:blk_tutvxcaxihp3krt6",
             "page_index": 0,
@@ -220,7 +219,6 @@
               "client": "papertree-api/citations"
             }
           },
-          "supported": true,
           "locator": {
             "passage_key": "g1:blk_p5c47m5apz2jj3x4",
             "page_index": 1,
@@ -283,7 +281,6 @@
               "client": "papertree-api/citations"
             }
           },
-          "supported": true,
           "locator": {
             "passage_key": "g1:blk_poxmdnipnwgirpwh",
             "page_index": 1,
@@ -346,7 +343,6 @@
               "client": "papertree-api/citations"
             }
           },
-          "supported": true,
           "locator": {
             "passage_key": "g1:blk_jyinmieamvqrzmap",
             "page_index": 1,
@@ -356,15 +352,7 @@
         }
       ],
       "created_at": "2026-10-15T17:14:13.068Z",
-      "completed_at": "2026-10-15T17:14:17.397Z",
-      "coverage": {
-        "passages": 4,
-        "citations": 11,
-        "unresolved_markers": 0,
-        "paragraphs": 5,
-        "uncited_paragraphs": [4],
-        "not_verified": 0
-      }
+      "completed_at": "2026-10-15T17:14:17.397Z"
     },
     {
       "message_id": "msg_01M508XKD9ZMV8F52YS20GNAC8",
@@ -460,7 +448,6 @@
               "client": "papertree-api/citations"
             }
           },
-          "supported": true,
           "locator": {
             "passage_key": "g1:blk_p5c47m5apz2jj3x4",
             "page_index": 1,
@@ -523,7 +510,6 @@
               "client": "papertree-api/citations"
             }
           },
-          "supported": true,
           "locator": {
             "passage_key": "g1:blk_tutvxcaxihp3krt6",
             "page_index": 0,
@@ -586,7 +572,6 @@
               "client": "papertree-api/citations"
             }
           },
-          "supported": true,
           "locator": {
             "passage_key": "g1:blk_jyinmieamvqrzmap",
             "page_index": 1,
@@ -596,15 +581,7 @@
         }
       ],
       "created_at": "2026-10-15T17:14:23.017Z",
-      "completed_at": "2026-10-15T17:14:27.223Z",
-      "coverage": {
-        "passages": 3,
-        "citations": 9,
-        "unresolved_markers": 0,
-        "paragraphs": 5,
-        "uncited_paragraphs": [],
-        "not_verified": 0
-      }
+      "completed_at": "2026-10-15T17:14:27.223Z"
     }
   ]
 }

@@ -4,9 +4,8 @@
  * and today's usage by kind, and when an earlier exchange opens folded. Pure: no React, no fetch;
  * `AnswerSlip`, `BudgetCard` and `Exchange` draw them.
  */
-import { formatCoverage, type Coverage } from '@papertree/ui';
-
-import { parseMarkdown, type Inline } from '@/lib/markdown';
+import { inlinePlain, parseMarkdown } from '@/lib/markdown';
+import { texToPlain } from '@/lib/texPlain';
 
 import type { ThreadMessage } from './messages';
 import type { ErrorCode } from '@/lib/api/types';
@@ -162,7 +161,7 @@ export function usageRows(usage: Pick<UsageTotals, 'by_kind'>): UsageRow[] {
 
 /**
  * Whether an exchange opens folded: a long thread (three exchanges or more) opens with its last two
- * whole and the earlier answers folded to two lines and their counts. Decided once, when the
+ * whole and the earlier answers folded to two lines. Decided once, when the
  * exchange first appears, so nothing folds under the reader while they read (owner may change).
  *
  * @param index The exchange's place, 0-based.
@@ -174,23 +173,6 @@ export function opensFolded(index: number, count: number): boolean {
 }
 
 /**
- * A folded answer's counts, without the readout's "Stands on": "4 passages · 11 citations · 1
- * paragraph uncited (the AI's own reading)".
- *
- * @param coverage The answer's coverage.
- * @returns The line.
- */
-export function foldedCounts(coverage: Coverage): string {
-  return formatCoverage(coverage).replace(/^Stands on /, '');
-}
-
-function plain(nodes: readonly Inline[]): string {
-  return nodes
-    .map((n) => (n.t === 'text' || n.t === 'code' ? n.v : n.t === 'cite' ? n.after : plain(n.c)))
-    .join('');
-}
-
-/**
  * A folded answer's preview: its first paragraph as plain words, read by the answer's own Markdown
  * parser (no handles, no marks; `d_model` keeps its underscore).
  *
@@ -199,7 +181,13 @@ function plain(nodes: readonly Inline[]): string {
  */
 export function foldedPreview(paragraphs: readonly { readonly text: string }[]): string {
   const lines = parseMarkdown(paragraphs[0]?.text ?? '').flatMap((b) =>
-    b.k === 'p' ? b.lines.map(plain) : b.k === 'h' ? [plain(b.c)] : b.items.map(plain),
+    b.k === 'dm'
+      ? [texToPlain(b.tex)]
+      : b.k === 'p'
+        ? b.lines.map(inlinePlain)
+        : b.k === 'h'
+          ? [inlinePlain(b.c)]
+          : b.items.map(inlinePlain),
   );
   return lines.join(' ').replace(/\s+/g, ' ').trim();
 }

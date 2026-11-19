@@ -809,29 +809,9 @@ class Citation(Wire):
     marker: Handle
     page_index: PageIndex
     anchor: AnchorV1
-    supported: bool | None
     #: Present on a stored answer read back (`GET /papers/{id}/threads/{tid}`), when its
     #: generation's parse can still be loaded; the live SSE `citations` event omits it.
     locator: PassageLocator | None = omittable()
-
-
-class MessageCoverage(Wire):
-    """How much of an assistant answer is cited (#201); counted by `exchanges.message_coverage`."""
-
-    #: Distinct cited passages among the message's citations.
-    passages: NonNegative
-    #: Marker handle occurrences in the text that have a stored citation (`[b1, b8]` counts 2).
-    citations: NonNegative
-    #: Occurrences whose handle has no stored citation (a handle the run dropped): never counted
-    #: in `citations`.
-    unresolved_markers: NonNegative
-    paragraphs: NonNegative
-    #: 0-based indexes, into exactly the list `exchanges.answer_paragraphs` returns (split on
-    #: blank lines, bare Markdown heading lines dropped), of the paragraphs with no marker.
-    uncited_paragraphs: list[NonNegative]
-    #: Stored citations whose `supported` is false ("not verified", never "wrong"); an
-    #: unchecked one (`supported: null`) is not counted.
-    not_verified: NonNegative
 
 
 # ── a diagram answer (v0.2 S7a, #216; DESIGN.md §1 "Diagrams", §4) ─────────────────────────────
@@ -847,8 +827,8 @@ Letter = Annotated[str, Field(pattern=r"^[A-L]$")]
 
 
 class DiagramCite(Wire):
-    """Where a part's quote was found. `supported` true: verbatim in the Anchor's block ("cited");
-    false: there with differences, or nowhere at all (`anchor` null), "not verified"."""
+    """Where a part's quote was found: the Anchor of the block it came from (null when the quote
+    was found nowhere). The plate shows only its page; it carries no verdict (#340)."""
 
     #: The Anchor's id (`cit_…`); null when the quote was found nowhere.
     citation_id: str | None
@@ -858,7 +838,6 @@ class DiagramCite(Wire):
     #: Derived from the parse on read (never stored); null when it cannot be had.
     locator: PassageLocator | None
     page_index: PageIndex | None
-    supported: bool
 
 
 class DiagramPart(Wire):
@@ -918,8 +897,6 @@ class Message(Wire):
     generation: Generation
     run: RunSummary | None
     citations: list[Citation]
-    #: Only on an assistant message that is `complete` or `partial` (and not a diagram).
-    coverage: MessageCoverage | None = omittable()
     #: Only on an assistant message of a `diagram` thread; `content` keeps the raw lines.
     diagram: MessageDiagram | None = omittable()
     created_at: WireTime
@@ -1039,7 +1016,6 @@ BROWSER_EVENTS: Final[dict[str, type[Wire]]] = {
 class SummaryBullet(Wire):
     text: str
     citations: list[Citation]
-    supported: bool
 
 
 class Summary(Wire):

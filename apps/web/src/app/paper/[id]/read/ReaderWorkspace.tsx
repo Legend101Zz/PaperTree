@@ -587,10 +587,8 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
         key: `${anchor.id}:${String(Date.now())}`,
         pageIndex: paint.pageIndex,
         polygons: paint.polygons,
-        extent,
         phase: scrollMs > 0 ? 'scroll' : 'flash',
         scrollMs,
-        ...(opts?.from === undefined ? {} : { from: opts.from }),
       });
     },
     [doc, requestScroll],

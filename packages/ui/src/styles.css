@@ -152,7 +152,6 @@
   --pt-tab: #7a5b3a; /* margin tab fill; 4.9 against the AI slip */
   --pt-on-tab: #faf8f3; /* 5.8 */
   --pt-ai-tab-ink: #6a4a2c; /* the "AI" tab, 6.3 on the AI slip */
-  --pt-nv-ink: #5c4228; /* "not verified", 7.3 on the AI slip; dashed tab border, no fill */
   --pt-danger: #9e2420; /* 7.3 */
   --pt-sticky: #f2e3a6; /* ink 11.8 */
   --pt-card-edge: transparent; /* e1's shadow carries the edge by day */
@@ -255,7 +254,6 @@
     --pt-tab: #c9a26b;
     --pt-on-tab: #1c1714; /* 7.5 */
     --pt-ai-tab-ink: #e2c48e;
-    --pt-nv-ink: #e2c48e; /* 7.5 */
     --pt-danger: #f08a7e; /* 6.2 */
     --pt-sticky: #4a4024; /* ink 8.1 */
     --pt-card-edge: #7d705f; /* 3.5 on linen */
@@ -315,7 +313,6 @@
   --pt-tab: #c9a26b;
   --pt-on-tab: #1c1714; /* 7.5 */
   --pt-ai-tab-ink: #e2c48e;
-  --pt-nv-ink: #e2c48e; /* 7.5 */
   --pt-danger: #f08a7e; /* 6.2 */
   --pt-sticky: #4a4024; /* ink 8.1 */
   --pt-card-edge: #7d705f; /* 3.5 on linen */
@@ -2755,63 +2752,6 @@ span.pt-paper .pt-paper__cite {
   white-space: nowrap;
 }
 
-/* Chips stay inline, after the words they support, so a sentence is never broken in two. The pill
-   is 28 px tall and its hit area is padded to 40 px (below). Two chips on CONSECUTIVE lines can
-   overlap by a few px of padding; the 8 px gap between neighbours on one line does not. */
-.pt-chips {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-inline-start: 6px;
-  vertical-align: middle;
-}
-
-.pt-chip {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-block-size: 28px;
-  padding: 1px 10px;
-  font: inherit;
-  font-size: 0.75rem;
-  line-height: 1.5;
-  color: var(--pt-accent);
-  background: var(--pt-ground-raised);
-  border: 1px solid var(--pt-accent);
-  border-radius: 999px;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-/* The pill is small to sit in a line of text; its tap target is not. */
-.pt-chip::after {
-  content: '';
-  position: absolute;
-  inset: -6px -4px;
-}
-
-.pt-chip:hover {
-  background: var(--pt-accent-soft);
-}
-
-.pt-chip:focus-visible {
-  outline: 2px solid var(--pt-focus);
-  outline-offset: 2px;
-}
-
-.pt-chip[data-supported='false'] {
-  /* Muted, not red: "not verified" is a caution in words, and a whole answer of red pills reads as
-     an alarm the reader cannot act on. The word is the signal; the dashed border is the echo. */
-  color: var(--pt-ink-muted);
-  border-color: var(--pt-ink-muted);
-  border-style: dashed;
-}
-
-.pt-chip__flag {
-  font-style: italic;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .pt-explain {
     animation: none;
@@ -3017,7 +2957,7 @@ span.pt-paper .pt-paper__cite {
 
 /* Dive in (S5e, #210, frame 11): the slips and trace cards lift off the panel for --pt-dur-quick
    before the page slides in carrying them. Reduced motion never sets the attribute. */
-.pt-exchange[data-dive='lift'] :is(.pt-call-slip, .pt-ai-slip, .pt-trace-row) {
+.pt-exchange[data-dive='lift'] :is(.pt-call-slip, .pt-ai-slip) {
   transform: translateY(-6px);
   box-shadow: var(--pt-e2), var(--pt-e2-edge);
   transition:
@@ -3025,92 +2965,8 @@ span.pt-paper .pt-paper__cite {
     box-shadow var(--pt-dur-quick) var(--pt-ease-lift);
 }
 
-.pt-exchange .pt-ai-slip__aside {
-  flex-direction: column;
-  flex-wrap: nowrap;
-  gap: var(--pt-space-1);
-  min-inline-size: 96px;
-}
-
-.pt-exchange__sidenote {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--pt-space-1);
-}
-
-.pt-exchange__inline-marker .pt-marker {
-  margin-inline-start: 2px;
-}
-
-/* In a run "[1, 4]" the two tap areas meet halfway across the 2 px between the squares and never
-   overlap, so a tap on 1 cannot flash 4 (#205). The grid keeps those layers to itself. */
-.pt-exchange__inline-marker[data-run~='next'] .pt-marker--touch::after {
-  inset-inline-end: -1px;
-}
-
-.pt-exchange__inline-marker[data-run~='prev'] .pt-marker--touch::after {
-  inset-inline-start: -1px;
-}
-
 .pt-ai-slip__grid {
   isolation: isolate;
-}
-
-/* A marker and the punctuation after it are one unbreakable box: "…output 4." never leaves its
-   full stop on the next line (R4), and the run is one line box however it is measured. */
-.pt-exchange .pt-cite-run {
-  display: inline-block;
-  white-space: nowrap;
-}
-
-/* Marker ↔ trace light each other: 120 ms in and out, colour only (unchanged under reduced
-   motion, DESIGN.md §6). */
-.pt-exchange .pt-marker,
-.pt-exchange .pt-tab,
-.pt-exchange .pt-trace-row {
-  transition:
-    background-color var(--pt-dur-quick) var(--pt-ease-out),
-    box-shadow var(--pt-dur-quick) var(--pt-ease-out),
-    outline-color var(--pt-dur-quick) var(--pt-ease-out);
-}
-
-.pt-exchange__trace {
-  margin-block-start: var(--pt-space-5);
-}
-
-.pt-exchange__trace .pt-coverage {
-  margin-block-end: var(--pt-space-2);
-  font-size: 15px;
-  color: var(--pt-ink);
-}
-
-/* "from marker 2 in the answer": in the page margin beside the flashed passage (frame 04). */
-.pt-flash-tab {
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--pt-space-1);
-  max-inline-size: 112px;
-  padding: 2px var(--pt-space-1);
-  font: 13px / 1.3 var(--pt-font-ai);
-  color: var(--pt-ink-2);
-  text-align: end;
-  background: var(--pt-page); /* its own paper: it reads on the PDF page and on the desk */
-  border-radius: var(--pt-radius-paper);
-  animation: pt-flash-tab-in var(--pt-dur-flash-in) var(--pt-ease-out) both;
-}
-
-.pt-flash-tab__ribbon {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--pt-space-1);
-}
-
-@keyframes pt-flash-tab-in {
-  from {
-    opacity: 0;
-  }
 }
 
 /* ── S4d: streaming, Stop, the daily cap, folded answers (#204) ────────────────────────────────
@@ -3363,20 +3219,6 @@ span.pt-paper .pt-paper__cite {
   content: '•';
   position: absolute;
   inset-inline-start: 4px;
-}
-
-.pt-summary__bullet .pt-ai-slip__aside {
-  flex-direction: column;
-  gap: var(--pt-space-1);
-  min-inline-size: 96px;
-}
-
-.pt-summary__uncited {
-  grid-column: 1 / -1;
-  font: 700 var(--pt-t-label-s) / 1.3 var(--pt-font-label);
-  font-variant-caps: all-small-caps;
-  letter-spacing: var(--pt-ls-label);
-  color: var(--pt-nv-ink);
 }
 
 @media (max-width: 480px) {
@@ -3680,24 +3522,6 @@ html:has(.pt-notice--undo) .pt-toast {
 }
 
 /* ── w3ui round 2 (additive) ───────────────────────────────────────────────────────────────── */
-
-/* A citation chip and the punctuation that directly follows it never part: "...sensors [p. 1]."
-   keeps its full stop on the chip's line. */
-.pt-cite-run {
-  white-space: nowrap;
-}
-
-/* The chip's quiet twin on a canvas card: it says where, and there is nothing to press. */
-.pt-cite-label {
-  display: inline-flex;
-  align-items: center;
-  padding: 0 8px;
-  font-size: 0.75rem;
-  line-height: 1.5;
-  color: var(--pt-ink-muted);
-  background: var(--pt-accent-soft);
-  border-radius: 999px;
-}
 
 .pt-md-heading {
   margin-block: 0 4px;
@@ -4245,19 +4069,6 @@ button.pt-holder {
   outline-offset: var(--pt-focus-offset);
 }
 
-/* Not verified: no fill, a dashed edge, so it is never colour alone. */
-.pt-marker--not-verified {
-  background: transparent;
-  color: var(--pt-nv-ink);
-  outline: 1px dashed var(--pt-tab);
-  outline-offset: -1px;
-}
-
-.pt-marker--not-verified.is-lit {
-  color: var(--pt-on-tab);
-  background: var(--pt-focus);
-}
-
 /* Phone (frame 08b): small numerals in a 22 px square, so the line keeps its height, and a tap area
    under it that reaches 44 px (`--pt-hit-outset`, from `hitOutset` on the element, citations.tsx).
    The square is a layer above every marker's tap area, so a marker always owns what it shows, even
@@ -4317,33 +4128,6 @@ button.pt-holder {
 
 .pt-tab.is-lit {
   background: var(--pt-focus);
-}
-
-.pt-tab--not-verified {
-  clip-path: none;
-  background: transparent;
-  color: var(--pt-nv-ink);
-  border: 1px dashed var(--pt-tab);
-  padding: 0 7px;
-}
-
-.pt-nv-caption {
-  font: 700 var(--pt-t-label-s) / 15px var(--pt-font-ai);
-  color: var(--pt-ink);
-}
-
-.pt-coverage {
-  display: flex;
-  align-items: baseline;
-  gap: var(--pt-space-2);
-  margin: 0;
-  font: var(--pt-t-label-s) / 18px var(--pt-font-ai);
-  color: var(--pt-ink-2);
-}
-
-.pt-coverage__icon {
-  font-family: var(--pt-font-paper);
-  color: var(--pt-ink-muted);
 }
 
 /* The person's ask: ruled ivory, a stamp, a perforated left edge. */
@@ -4474,160 +4258,109 @@ button.pt-holder {
 
 .pt-ai-slip__grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: var(--pt-space-4);
+  grid-template-columns: minmax(0, 1fr);
   row-gap: var(--pt-space-3);
 }
 
-/* A paragraph and its margin cell are one grid row (display: contents keeps them siblings of the
-   grid), so a marker and tab sit level with the paragraph they belong to. Content that is not an
-   AiParagraph spans both columns. */
+/* A paragraph and the one quiet source line under it (#340) are one row of the grid. */
 .pt-ai-slip__row {
-  display: contents;
-}
-
-.pt-ai-slip__grid > :not(.pt-ai-slip__row) {
-  grid-column: 1 / -1;
+  display: block;
 }
 
 .pt-ai-slip__text {
   margin: 0;
 }
 
-.pt-ai-slip__aside {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--pt-space-2);
-  align-items: flex-start;
-  align-content: flex-start;
+/* ── AI answer sources (#340) ──────────────────────────────────────────────────────────────────
+   "From the paper: p. 1 · p. 4" or "General knowledge" under a paragraph: 13.5 / 19 px, muted ink,
+   one line, never inside the prose. Each page is a real button with a dotted underline; hover or
+   focus peeks the passage's first words in the paper's face on ivory; a click flashes it. General
+   knowledge is the same line in italics: no colour, no icon, not a verdict. */
+.pt-source {
+  position: relative;
+  margin: 6px 0 0;
+  font: 13.5px / 19px var(--pt-font-ai);
+  color: var(--pt-ink-muted);
 }
 
-@media (max-width: 480px) {
-  .pt-ai-slip__grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .pt-ai-slip__aside {
-    display: none; /* the margin column is desktop only; the trace list carries the passages */
-  }
-}
-
-.pt-ai-slip__uncited {
-  margin-block-start: var(--pt-space-3);
-  padding-block-start: var(--pt-space-3);
-  border-block-start: 1px dashed var(--pt-tab);
-}
-
-.pt-ai-slip__uncited-head {
-  margin: 0 0 var(--pt-space-1);
-  font: 700 var(--pt-t-label-s) / 1.3 var(--pt-font-label);
-  font-variant-caps: all-small-caps;
-  letter-spacing: var(--pt-ls-label);
-  color: var(--pt-nv-ink);
-}
-
-.pt-ai-slip__uncited-body {
+.pt-source--general {
   font-style: italic;
+}
+
+.pt-source__page {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--pt-ink-2);
+  cursor: pointer;
+  text-decoration: underline dotted var(--pt-tab);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  transition: color var(--pt-dur-quick) var(--pt-ease-out);
+}
+
+.pt-source__page:hover {
+  color: var(--pt-ink);
+  text-decoration-style: solid;
+}
+
+.pt-source__page:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* The page is a word in a line; its tap target is not: a short label ("p. 1") is ~20 px wide, so the
+   hit area reaches 16 px past each side (>= 44 px across, 47 down), and a margin keeps two pages'
+   areas from burying each other. */
+.pt-source__page--touch {
+  margin-inline: 4px;
+}
+
+.pt-source__page--touch::after {
+  content: '';
+  position: absolute;
+  inset: -14px -16px;
+}
+
+.pt-source__peek {
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-start: calc(100% + 4px);
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  inline-size: min(22rem, 100%);
+  padding: 9px 12px 10px;
+  color: var(--pt-ink);
+  background: var(--pt-page);
+  border: 1px solid var(--pt-control-border);
+  border-radius: 4px;
+  box-shadow: var(--pt-e2);
+  pointer-events: none;
+}
+
+.pt-source__peek[hidden] {
+  display: none;
+}
+
+.pt-source__peek-page {
+  font: 700 12px / 16px var(--pt-font-label);
+  letter-spacing: 0.04em;
+  color: var(--pt-ink-2);
+}
+
+.pt-source__peek-text {
+  font: 13.5px / 20px var(--pt-font-paper);
 }
 
 .pt-ai-slip__footer {
   margin-block-start: var(--pt-space-3);
   font-size: var(--pt-t-label-s);
   color: var(--pt-ink-2);
-}
-
-/* The trace: numbered passages the answer stands on. */
-.pt-trace-list {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.pt-trace-row {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--pt-space-3);
-  padding: var(--pt-space-3);
-  border-radius: var(--pt-radius-paper);
-}
-
-.pt-trace-row + .pt-trace-row {
-  border-block-start: 1px solid var(--pt-rule); /* the design's row divider */
-}
-
-.pt-trace-row.is-lit {
-  background: var(--pt-lit-wash);
-  box-shadow: inset 0 0 0 1px var(--pt-lit-ring);
-}
-
-.pt-trace-row__body {
-  flex: 1;
-  min-inline-size: 0;
-}
-
-.pt-trace-row__head {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--pt-space-2);
-  margin-block-end: var(--pt-space-1);
-}
-
-.pt-trace-row__where {
-  font: var(--pt-t-label-s) / 1.3 var(--pt-font-ai);
-  color: var(--pt-ink-2);
-}
-
-.pt-trace-row__quote {
-  margin-inline-start: -0.42em; /* same hang as .pt-call-slip__quote-text */
-  padding-inline-start: 0.42em;
-  text-indent: -0.42em;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  font-size: var(--pt-t-paper-trace);
-  line-height: var(--pt-lh-paper-trace);
-}
-
-.pt-trace-row.is-lit .pt-trace-row__quote {
-  -webkit-line-clamp: 3;
-}
-
-/* "Show in paper" is the shared secondary `Button`; the row only keeps it from shrinking. */
-.pt-trace-row__show {
-  flex: none;
-}
-
-.pt-trace-row--touch {
-  padding: 0;
-}
-
-.pt-trace-row__touch {
-  display: flex;
-  align-items: center;
-  gap: var(--pt-space-3);
-  inline-size: 100%;
-  min-block-size: var(--pt-target-touch);
-  padding: var(--pt-space-2) var(--pt-space-3);
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
-}
-
-.pt-trace-row--touch .pt-trace-row__quote {
-  -webkit-line-clamp: 2;
-}
-
-.pt-trace-row__chevron {
-  flex: none;
-  font-size: 20px;
-  color: var(--pt-ink-muted);
 }
 
 /* ThreadSwatch: a relation kind's line with its second cue, and the paper tag with glyph and name. */
@@ -4782,14 +4515,6 @@ button.pt-holder {
   cursor: pointer;
 }
 
-.pt-trace-row--touch .pt-marker {
-  align-self: flex-start;
-  min-inline-size: 22px;
-  block-size: 22px;
-  margin-block-start: 2px;
-  font-size: var(--pt-t-label-s);
-}
-
 .pt-explain__pinned {
   display: flex;
   flex-direction: column;
@@ -4841,4 +4566,45 @@ button.pt-holder {
 .pt-explain__pinned .pt-exchange__actions > .pt-explain__actions > .pt-btn {
   inline-size: 100%;
   justify-content: center;
+}
+
+/* ---- MATHS in model text (#338) -------------------------------------------------------------
+ * `lib/math` typesets with KaTeX; the face is KaTeX's own (Latin Modern, from the `katex` package,
+ * imported once in app/layout.tsx). Maths reads the same size as the prose beside it (KaTeX's
+ * default 1.21em is pulled down to the approved prototype's 1.08em inline, 1.14em display), takes
+ * the text colour of whatever it sits in so every theme follows, and a display equation is
+ * centred with a modest line of air above and below. A string KaTeX cannot parse (`--invalid`) is
+ * its TeX source in the same face, no delimiters. */
+.pt-math {
+  color: inherit;
+  font-style: normal;
+  text-indent: 0;
+}
+
+.pt-math .katex {
+  font-size: 1.08em;
+  color: inherit;
+}
+
+.pt-math--display {
+  display: block;
+  margin: 0.5em 0 0.55em;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-align: center;
+}
+
+.pt-math--display .katex-display {
+  margin: 0;
+}
+
+.pt-math--display .katex-display > .katex {
+  font-size: 1.14em;
+}
+
+.pt-math--invalid {
+  font-family: KaTeX_Main, 'Latin Modern Roman', 'STIX Two Text', 'Times New Roman', serif;
+  font-size: 1.08em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }

@@ -106,13 +106,15 @@ def test_a_diagram_thread_starts_like_an_explain_with_its_own_question(tmp_path:
         assert detail["thread"]["kind"] == "diagram"
         asked, answer = detail["messages"]
         assert asked["content"] == "Explain with a diagram." and "diagram" not in asked
-        assert "coverage" not in answer, "a plate has no prose paragraphs to count"
+        assert "coverage" not in answer, "a plate has no coverage readout"
         assert answer["diagram"]["status"] == "complete" and len(answer["diagram"]["parts"]) == 6
         usage = h.client.get("/usage", headers=auth(token)).json()
         assert usage["by_kind"]["diagram"]["runs"] == 1 and usage["by_kind"]["explain"]["runs"] == 0
 
 
-def test_the_plate_reads_back_cited_not_verified_and_inferred_parts(tmp_path: Path) -> None:
+def test_the_plate_reads_back_parts_with_and_without_a_passage_and_no_verdict(
+    tmp_path: Path,
+) -> None:
     with ai_harness(tmp_path, Script("explain-ok")) as h:
         token, paper_id = _alice(h)
         anchor = _anchor()
@@ -181,7 +183,7 @@ def test_the_plate_reads_back_cited_not_verified_and_inferred_parts(tmp_path: Pa
         a, b, c = plate["parts"]
         assert [a["letter"], b["letter"], c["letter"]] == ["A", "B", "C"]
         assert a["cite"]["anchor"] == cited and a["cite"]["citation_id"] == cited["id"]
-        assert a["cite"]["supported"] is True and a["cite"]["page_index"] == 3
+        assert "supported" not in a["cite"] and a["cite"]["page_index"] == 3
         assert a["cite"]["locator"]["passage_key"] == f"g1:{block}"
         assert a["cite"]["locator"]["section_heading"] == "Scaled Dot-Product Attention"
         assert b["cite"] == {
@@ -190,7 +192,6 @@ def test_the_plate_reads_back_cited_not_verified_and_inferred_parts(tmp_path: Pa
             "anchor": None,
             "locator": None,
             "page_index": None,
-            "supported": False,
         }
         assert c["cite"] is None and (c["after"], c["edge"]) == (["A", "B"], ["scores", None])
 
