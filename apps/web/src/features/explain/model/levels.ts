@@ -3,7 +3,8 @@
  * each level is called, which level an answer is at, and the fixed question each chip asks.
  *
  * Changing level is not a new question: it asks the same one again at another depth
- * (`relevel_of`), the server stores the result as a sibling of the answer, and the panel keeps
+ * (`relevel_of`), the server stores the result as a sibling of the answer (they share a `sibling_group`), and the
+ * panel keeps
  * every level it has fetched, so switching back costs no request (`variantAt`).
  */
 import type { AnswerLevel } from '@/lib/api/types';

@@ -51,10 +51,12 @@ export interface ThreadMessage {
   /** The level the answer was written at (v0.3); absent or null on an older answer (= familiar). */
   readonly level?: AnswerLevel | null;
   /**
-   * A sibling at another level of the same question: the server id of the answer it re-levels, so
-   * the exchange keeps every level it has fetched and a level switch asks for nothing twice.
+   * The server's `sibling_group` of an answer: the id of the FIRST answer to its question. Answers
+   * that share it are the same question at other levels (the first carries its own id), so the
+   * exchange keeps every level it has fetched and a level switch asks for nothing twice. Null on a
+   * user turn; on a live answer, set only on a sibling (the first learns it from the stored read).
    */
-  readonly relevelOf?: string | null;
+  readonly siblingGroup?: string | null;
   /**
    * A quick ask (a go-deeper chip, a level switch): the panel skips the long thinking pause for it
    * and shows the answer as it is written (#349). Live only.
@@ -109,24 +111,26 @@ export function fromStored(message: Message, question: string): ThreadMessage {
     generation: message.generation,
     diagram: message.diagram === undefined ? null : { ...message.diagram, notes: [] },
     level: message.level ?? null,
-    relevelOf: message.relevel_of ?? null,
+    siblingGroup: message.sibling_group,
   };
 }
 
 /**
  * Whether `next` is another level of the question `message` answers, not a retry of `message`: it
- * names an answer to re-level (`relevel_of`) and is at a different level than `message` is.
+ * is a re-levelled answer (its `sibling_group` is another answer's id, not its own) and is not the
+ * same level of the same group as `message` (a retried sibling replaces the attempt it retried).
  *
  * @param message A stored answer.
  * @param next The stored message right after it.
  * @returns True when both stay.
  */
 function isSiblingOf(message: Message, next: Message): boolean {
-  if (next.relevel_of == null) return false;
-  const same =
-    next.relevel_of === (message.relevel_of ?? null) &&
+  if (next.sibling_group == null || next.sibling_group === next.message_id) return false;
+  const retried =
+    message.sibling_group !== message.message_id &&
+    next.sibling_group === message.sibling_group &&
     (next.level ?? null) === (message.level ?? null);
-  return !same;
+  return !retried;
 }
 
 /**
@@ -177,7 +181,7 @@ function settle(live: ThreadMessage, stored: ThreadMessage): ThreadMessage {
     stopped: live.stopped,
     // What the reader asked for stands until the server says otherwise (an older API has no level).
     level: stored.level ?? live.level ?? null,
-    relevelOf: stored.relevelOf ?? live.relevelOf ?? null,
+    siblingGroup: stored.siblingGroup ?? live.siblingGroup ?? null,
     ...(live.quick === true ? { quick: true } : {}),
     refusal: live.refusal ?? null,
     awaitingStored: false,

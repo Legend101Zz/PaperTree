@@ -11,7 +11,7 @@ first words, a click runs the reader's citation flash on the cited Anchor. The f
 
 ## Data flow
 
-UI (`components/ExplainPanel` → `ThreadView` → `Exchange`) → controller (`components/explain/useExplainActions`, a reducer holding the
+UI (`components/ExplainPanel` → `ThreadView` → `Exchange`) → controller (`hooks/useExplainActions`, a reducer (`model/state`) holding the
 live messages) + `hooks/useThreads` (react-query) → `api/threads` → `lib/api/threads` →
 `GET /papers/{id}/threads` and `GET /papers/{id}/threads/{tid}` (`services/api` `routers/threads.py`) → DB
 (`ai_threads`, `ai_messages`, `ai_citations`; each citation's `locator` is derived on read from the parse,
@@ -89,10 +89,10 @@ never stored).
   card and the notebook pass no check. ``diagram: `features/diagram` `InlineDiagram` (placeholder until the fence
 closes; nothing when invalid). ``check: `model/check.ts` + `CheckYourself` (marked in the browser; state is
   the exchange's, so it survives a level switch). **Levels**: `LevelSwitch` on an answer; a level is asked once
-  (`FollowUp { question, level, relevel_of }`, a sibling answer, not a turn) and every level fetched is held in
+  (`FollowUp { level, relevel_of }`, a sibling answer that shares the first answer's `sibling_group`, not a turn) and every level fetched is held in
   `Exchange.variants` (`model/levels.ts`), so switching back re-shows it with one fade and no request.
   `GoDeeper` chips (Simpler = relevel to New to this; the rest are fixed quick follow-ups) sit under the
-  thread's last answer. `ThreadMessage.level/relevelOf/quick` carry it.
+  thread's last answer. `ThreadMessage.level/siblingGroup/quick` carry it.
 - `components/Exchange.tsx`: THE layout of one exchange (frame 13 option 1, the owner's default; owner may
   change): `CallSlip` (stamped "not sent" when refused) → `AnswerSlip` (each paragraph through `AnswerText`, with its source line). One component behind
   `ExchangeProps`.
@@ -109,9 +109,12 @@ closes; nothing when invalid). ``check: `model/check.ts` + `CheckYourself` (mark
   in phases: `scroll` (240 ms, only if the passage is off screen; nothing painted) → `flash`
   (`data-flash="true"`: in 180 → hold 900 → out 600) → `linger` (`data-flash="linger"`, a faint outline) until
   the next pointer press or key (capture phase).
-- `components/explain` keeps a thin re-export (`index.tsx`, the path `ReaderWorkspace` imports) and still owns
-  the controller (`useExplainActions`), and the summary's working and failed states (`SummaryView`); moving those into
-  the feature is the next split.
+- `components/explain` keeps a thin re-export (`index.tsx`, the path `ReaderWorkspace` imports), the failure
+  wording (`errors.ts`) and the summary's working and failed states (`SummaryView`).
+- The controller is split by job: `hooks/useExplainActions` (wiring and the panel's own moves),
+  `hooks/useRunStream` (one SSE turn: halt, read, start), `hooks/useThreadTurns` (first question, follow-up,
+  level switch, Retry), `hooks/useOpenActions` (Explain, diagram, Redraw, Ask about), `hooks/useSummaryActions`;
+  `model/state` (state + reducer), `model/controller` (the controller's type), `model/turns` (keys, fixed asks).
 
 ## Key files
 

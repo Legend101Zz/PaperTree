@@ -40,8 +40,8 @@ export interface ExchangeMessage {
   readonly awaitingStored?: boolean;
   /** The level the answer was written at; absent or null on an older one (= familiar). */
   readonly level?: AnswerLevel | null;
-  /** For a sibling at another level: the id of the answer it re-levels (`relevel_of`). */
-  readonly relevelOf?: string | null;
+  /** The `sibling_group` of an answer: the first answer to its question; null until known. */
+  readonly siblingGroup?: string | null;
   /** The server's id once known (a sibling joins the exchange of the answer that has this id). */
   readonly messageId?: string | null;
   /** A diagram answer's parts (#217): their located Anchors place the call slip's ¶. */

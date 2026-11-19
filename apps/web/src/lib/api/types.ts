@@ -305,14 +305,17 @@ export interface Message {
   citations: Citation[];
   /** Only on an assistant message of a `diagram` thread. */
   diagram?: MessageDiagram;
-  /** The level an assistant answer was written at; absent or null on an older answer (= familiar). */
-  level?: AnswerLevel | null;
   /**
-   * Set on a sibling answer: the id of the assistant message it is the same question answered at
-   * another level (the answer the reader switched levels on). Siblings share that id; null or
-   * absent on the answer a user turn started.
+   * The level an assistant answer of an explain or ask thread was written at (an answer stored
+   * before v0.3 reads `familiar`); null on a user message and on a diagram answer.
    */
-  relevel_of?: string | null;
+  level: AnswerLevel | null;
+  /**
+   * Assistant messages only (null on a user message): the `message_id` of the FIRST answer to the
+   * question this one answers. Answers that share it are siblings, one per level; an answer with
+   * no sibling carries its own `message_id`.
+   */
+  sibling_group: string | null;
   created_at: string;
   completed_at: string | null;
 }

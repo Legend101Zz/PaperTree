@@ -13,7 +13,7 @@ import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } fr
 import { stoppedNote } from '../model/states';
 import { UsageLine } from './AnswerStates';
 
-import type { ViewMessage } from '@/components/explain/useExplainActions';
+import type { ViewMessage } from '@/features/explain/model/state';
 
 /** Which control takes focus when it next appears: set when the control before it had focus. */
 export type FocusHandoff = MutableRefObject<'stop' | 'retry' | null>;

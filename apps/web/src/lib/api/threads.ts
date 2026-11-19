@@ -23,7 +23,8 @@ export interface CreateThreadBody {
 }
 
 export interface FollowUpBody {
-  readonly question: string;
+  /** Required unless `relevel_of` is given (a relevel re-asks the stored question). */
+  readonly question?: string;
   /** Re-run a failed assistant message instead of appending a new user turn. */
   readonly retry_of?: string;
   /** Redraw a finished diagram answer of this thread (required on a diagram thread). */

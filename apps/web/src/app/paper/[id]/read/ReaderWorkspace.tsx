@@ -52,8 +52,7 @@ import type { BBox } from '@papertree/document-ir';
 
 import { sendToCanvas } from '@/components/canvas/sendToCanvas';
 import { useFocusFromCanvas } from '@/components/canvas/useFocusFromCanvas';
-import { ExplainPanel } from '@/components/explain';
-import { useExplainActions } from '@/components/explain/useExplainActions';
+import { ExplainPanel, useExplainActions } from '@/components/explain';
 import {
   ReaderActionsProvider,
   type FocusOptions,

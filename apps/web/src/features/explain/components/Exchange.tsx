@@ -15,7 +15,7 @@ import { variantAt, type AnswerLevel } from '../model/levels';
 import { wasNotSent, type RefusalKind } from '../model/states';
 import { AnswerSlip } from './AnswerSlip';
 
-import type { ViewMessage } from '@/components/explain/useExplainActions';
+import type { ViewMessage } from '@/features/explain/model/state';
 import type { Exchange as ExchangeModel, PaperSource } from '../model/exchange';
 
 /** Props for `Exchange`: the small interface any ask → answer → trace layout implements. */

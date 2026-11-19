@@ -180,7 +180,7 @@ describe('answers at other levels (v0.3)', () => {
     key,
     messageId: `msg_${key}`,
     level,
-    relevelOf: 'msg_root',
+    siblingGroup: 'msg_root',
     text: `Answer at ${level}.`,
     ...over,
   });
@@ -219,7 +219,7 @@ describe('answers at other levels (v0.3)', () => {
   });
 
   it('a sibling whose root is not in the thread stays an exchange of its own', () => {
-    const orphan = sibling('expert', 'o', { relevelOf: 'msg_gone' });
+    const orphan = sibling('expert', 'o', { siblingGroup: 'msg_gone' });
     expect(build([ask, root, orphan])).toHaveLength(2);
   });
 });

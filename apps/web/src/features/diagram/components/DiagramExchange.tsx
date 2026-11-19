@@ -15,7 +15,7 @@ import { wasNotSent } from '@/features/explain/model/states';
 import { DiagramPlate } from './DiagramPlate';
 import { PlateNotes } from './PlateNotes';
 
-import type { ViewMessage } from '@/components/explain/useExplainActions';
+import type { ViewMessage } from '@/features/explain/model/state';
 import type { FocusHandoff } from '@/features/explain/components/AnswerParts';
 import type { DiagramPart } from '@/lib/api/types';
 import type { Anchor } from '@papertree/anchoring';

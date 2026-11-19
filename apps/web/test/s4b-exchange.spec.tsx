@@ -47,7 +47,7 @@ import {
   type FlashPhase,
 } from '@/components/reader/flash';
 import { HighlightOverlay } from '@/components/reader/HighlightOverlay';
-import type { ViewMessage } from '@/components/explain/useExplainActions';
+import type { ViewMessage } from '@/features/explain/model/state';
 import { Exchange } from '@/features/explain/components/Exchange';
 import { buildExchanges, type Exchange as ExchangeModel } from '@/features/explain/model/exchange';
 import type { Message, Thread } from '@/lib/api/types';

@@ -25,7 +25,8 @@ import { PinnedFooter } from './PinnedFooter';
 import { SummaryExchange } from './SummaryExchange';
 import { ThreadReadFailure } from './ThreadReadFailure';
 
-import type { ExplainController, ExplainRequest } from '@/components/explain/useExplainActions';
+import type { ExplainRequest } from '@/features/explain/model/state';
+import type { ExplainController } from '@/features/explain/model/controller';
 import type { ThreadsState } from '../hooks/useThreads';
 import type { PaperSource } from '../model/exchange';
 import type { Anchor } from '@papertree/anchoring';

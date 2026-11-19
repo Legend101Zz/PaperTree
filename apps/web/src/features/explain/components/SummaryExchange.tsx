@@ -15,7 +15,7 @@ import { buildSummary, shortModelName, summaryDay } from '../model/summary';
 import { formatUsage } from './AnswerStates';
 import { AnswerText } from './AnswerText';
 
-import type { SummaryView as SummaryState } from '@/components/explain/useExplainActions';
+import type { SummaryView as SummaryState } from '@/features/explain/model/state';
 import type { Summary } from '@/lib/api/types';
 import type { PaperSource } from '../model/answer';
 

@@ -105,12 +105,12 @@ export function buildExchanges<M extends ExchangeMessage>(
   const siblings = new Map<string, M[]>();
   const isSibling = (m: M): boolean =>
     m.role === 'assistant' &&
-    m.relevelOf != null &&
-    m.relevelOf !== m.messageId &&
-    rootIds.has(m.relevelOf);
+    m.siblingGroup != null &&
+    m.siblingGroup !== m.messageId &&
+    rootIds.has(m.siblingGroup);
   for (const m of messages) {
-    if (isSibling(m) && m.relevelOf != null) {
-      siblings.set(m.relevelOf, [...(siblings.get(m.relevelOf) ?? []), m]);
+    if (isSibling(m) && m.siblingGroup != null) {
+      siblings.set(m.siblingGroup, [...(siblings.get(m.siblingGroup) ?? []), m]);
     }
   }
   const exchangeOf = (ask: M | null, answer: M | null): Exchange<M> =>

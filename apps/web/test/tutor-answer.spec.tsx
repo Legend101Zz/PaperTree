@@ -320,11 +320,8 @@ describe('the level switch (#349)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Expert' }));
     await screen.findByText('The expert version.');
     expect(posts(calls)).toHaveLength(1);
-    expect(posts(calls)[0]?.body).toEqual({
-      question: 'Explain this passage.',
-      level: 'expert',
-      relevel_of: 'msg_a1',
-    });
+    // No `question`: the server re-asks the stored one.
+    expect(posts(calls)[0]?.body).toEqual({ level: 'expert', relevel_of: 'msg_a1' });
     // The expert answer's second section is "the trade-off", and the switch shows Expert.
     expect([...document.querySelectorAll('h3.pt-ai-label')].map((h) => h.textContent)).toEqual([
       'tl;dr',
@@ -356,6 +353,39 @@ describe('the level switch (#349)', () => {
     expect(document.querySelector('.pt-exchange__caret')).toBeNull();
   });
 
+  it('a failed level is retried as the same level of the same question, never with retry_of', async () => {
+    let tries = 0;
+    const { calls } = installFetch({
+      [THREADS]: (_c, signal) => sseResponse(answer(FAMILIAR), { signal }),
+      [MESSAGES]: (_c, signal) => {
+        tries += 1;
+        return sseResponse(
+          tries === 1
+            ? [
+                run({ message_id: 'msg_a2' }),
+                text('Half of it'),
+                done('error', { code: 'internal', retryable: true }, 'msg_a2'),
+              ]
+            : answer(EXPERT, 'msg_a3'),
+          { signal },
+        );
+      },
+    });
+    render(<Harness />);
+    ask();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Expert' })).toHaveProperty('disabled', false),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Expert' }));
+    fireEvent.click(await screen.findByRole('button', { name: /retry/i }));
+    await screen.findByText('The expert version.');
+    const bodies = calls.filter((c) => c.method === 'POST' && c.path.endsWith('/messages'));
+    expect(bodies.map((c) => c.body)).toEqual([
+      { level: 'expert', relevel_of: 'msg_a1' },
+      { level: 'expert', relevel_of: 'msg_a1' },
+    ]);
+  });
+
   it('later asks are made at the chosen level', async () => {
     const { calls } = await opened();
     fireEvent.click(screen.getByRole('button', { name: 'Expert' }));
@@ -384,7 +414,7 @@ describe('go deeper (§3)', () => {
       'Where else in the paper',
       { question: 'Where else in the paper does this idea come up?', level: 'familiar' },
     ],
-    ['Simpler', { question: 'Explain this passage.', level: 'new', relevel_of: 'msg_a1' }],
+    ['Simpler', { level: 'new', relevel_of: 'msg_a1' }],
   ];
 
   it.each(CASES)('the %s chip sends its fixed follow-up', async (label, expected) => {

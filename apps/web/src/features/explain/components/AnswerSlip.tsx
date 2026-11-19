@@ -30,7 +30,7 @@ import { FailureNote, UsageLine } from './AnswerStates';
 import { GoDeeper } from './GoDeeper';
 import { LevelSwitch } from './LevelSwitch';
 
-import type { ViewMessage } from '@/components/explain/useExplainActions';
+import type { ViewMessage } from '@/features/explain/model/state';
 import type { AnswerTextProps } from './AnswerText';
 import type { AnswerModel } from '../model/exchange';
 

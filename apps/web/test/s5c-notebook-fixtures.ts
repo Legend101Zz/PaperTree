@@ -112,6 +112,8 @@ const USER: Message = {
   generation: 1,
   run: null,
   citations: [],
+  level: null,
+  sibling_group: null,
   created_at: T,
   completed_at: T,
 };

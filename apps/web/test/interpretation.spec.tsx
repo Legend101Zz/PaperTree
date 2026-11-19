@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DERIVED_MARKER } from '@papertree/ui';
 
-import type { ViewMessage } from '@/components/explain/useExplainActions';
+import type { ViewMessage } from '@/features/explain/model/state';
 import { Exchange } from '@/features/explain/components/Exchange';
 import { buildExchanges, type Exchange as ExchangeModel } from '@/features/explain/model/exchange';
 import type { Citation } from '@/lib/api/types';

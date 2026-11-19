@@ -11,7 +11,7 @@ import { useLayoutEffect, useState } from 'react';
 
 import { NOTEBOOK_ASK_NOTE, useAskFromNotebook } from '../hooks/useAskFromNotebook';
 
-import type { ExplainController } from '@/components/explain/useExplainActions';
+import type { ExplainController } from '@/features/explain/model/controller';
 import type { ReactNode } from 'react';
 
 /** Props for `AskFromNotebook`. */
