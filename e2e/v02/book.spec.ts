@@ -18,6 +18,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from '../harness/test';
 import { register, REPO, shotPath, upload, waitParsed } from '../s4/support';
 import { tokenInit } from '../s7/support';
+import { settle } from './flow-support';
 
 const ATTENTION = join(REPO, 'research', 'benchmarks', 'corpus', 'attention-is-all-you-need.pdf');
 const AXE = join(REPO, 'apps', 'web', 'node_modules', 'axe-core', 'axe.min.js');
@@ -69,6 +70,9 @@ test('shelf → Enter → the spread → Figure 1 as the plate → Esc → Read'
     for (const colorScheme of ['light', 'dark'] as const) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
       await page.emulateMedia({ colorScheme });
+      // An axe pass mid-fade measures the fade, not the page (the scheme's colours and the
+      // spread's own motion run for a moment after the change): wait until nothing is moving.
+      await settle(page);
       expect(await axeSerious(page), `${String(width)} ${colorScheme}`).toEqual([]);
     }
   }
@@ -123,7 +127,10 @@ test('the spread’s ⋯ menu: Esc order, Rename persists, Delete → Undo resto
   const book = page.locator(`[aria-label="Your shelf"] button[data-paper-id="${paperId}"]`);
   await expect(book).toHaveAttribute('data-spine-state', 'ready', { timeout: 60_000 });
   const dialog = page.getByRole('dialog', { name: 'Attention Is All You Need' });
-  const more = () => dialog.getByRole('button', { name: /^More: rename, topic, delete/ });
+  // The book's name follows a rename, so after it the dialog is found by its role alone: it is the
+  // only one on the page.
+  const open = page.getByRole('dialog');
+  const more = () => open.getByRole('button', { name: /^More: rename, topic, delete/ });
   const deletes: string[] = [];
   page.on('request', (r) => {
     if (r.method() === 'DELETE' && r.url().endsWith(`/papers/${paperId}`)) deletes.push(r.url());
@@ -167,7 +174,7 @@ test('the spread’s ⋯ menu: Esc order, Rename persists, Delete → Undo resto
   // ── Delete asks nothing: the book closes, the spine goes, Undo brings it back untouched ──
   await book.click();
   await more().click();
-  await dialog.getByRole('menuitem', { name: /^Delete this paper/ }).click();
+  await open.getByRole('menuitem', { name: /^Delete this paper/ }).click();
   const toast = page.getByText(/^Deleted “My Attention”/);
   await expect(toast).toBeVisible();
   await expect(book).toHaveCount(0);
@@ -183,7 +190,7 @@ test('the spread’s ⋯ menu: Esc order, Rename persists, Delete → Undo resto
     (r) => r.url().endsWith(`/papers/${paperId}`) && r.request().method() === 'DELETE',
     { timeout: 30_000 },
   );
-  await dialog.getByRole('menuitem', { name: /^Delete this paper/ }).click();
+  await open.getByRole('menuitem', { name: /^Delete this paper/ }).click();
   await expect(book).toHaveCount(0);
   expect(deletes).toEqual([]);
   expect((await gone).status()).toBe(204);
