@@ -1,8 +1,9 @@
 /**
  * v0.2 frame 08b (#205) on the FAUX agent, at 390 × 844: open "Attention Is All You Need" → select
  * a sentence of the abstract → Explain → the bottom sheet (its header with the thread menu, the call
- * slip's quote on two lines, 44 px markers and trace rows, the pinned footer that never covers the
- * answer) → tap marker 2 → the sheet lowers to peek and passage 2 flashes above it → a follow-up
+ * slip's quote on two lines, the tutor answer opening on its TL;DR, "Read the whole answer", the
+ * source line's 44 px page links, the pinned footer that never covers the answer) → tap a page of
+ * the source line → the sheet lowers to peek and its passage flashes above it → a follow-up
  * answered in three paragraphs (`[faux:paragraphs]`) opens on its first, and "Read the whole
  * answer" shows the rest. Then the zoom a reader picks at 390 survives a reload (#175, the v0.1
  * defect the audit could not confirm), Contents from the menu keeps focus, Guided's tables take focus
@@ -158,8 +159,17 @@ test.describe('v0.2 frame 08b: the phone reader and its explain sheet (faux agen
     await page.keyboard.press('Escape');
     await expect(options).toHaveCount(0);
 
-    // One paragraph: nothing more to read, so no "Read the whole answer".
-    await expect(sheet.getByRole('button', { name: 'Read the whole answer' })).toHaveCount(0);
+    // A tutor answer is four sections: the sheet opens on its TL;DR, and the one source line, at the
+    // end of "In the paper", waits behind "Read the whole answer" (#205, #339).
+    const labels = sheet.locator('h3.pt-ai-label');
+    await expect(labels).toHaveText(['tl;dr']);
+    await expect(sheet.locator('.pt-source')).toHaveCount(0);
+    const whole = sheet.getByRole('button', { name: 'Read the whole answer' });
+    await expect(whole).toHaveAttribute('aria-expanded', 'false');
+    await whole.click();
+    await expect(labels).toContainText(['tl;dr', 'in plain words', 'how it works', 'in the paper']);
+    await expect(sheet.locator('.pt-source')).toHaveCount(1);
+    await expect(whole).toHaveAttribute('aria-expanded', 'true');
 
     // The quote on two lines; page links under the paragraphs that answer taps 19 px out (a ~44 px target).
     const lines = await sheet.locator('.pt-call-slip__quote-text').evaluate((el) => {
@@ -328,6 +338,8 @@ test.describe('v0.2 frame 08b: the phone reader and its explain sheet (faux agen
     await expect(sheet.locator('[data-message-status="complete"]')).toBeVisible({
       timeout: 120_000,
     });
+    // The source line is at the end of the answer's last section: open the whole answer first.
+    await sheet.getByRole('button', { name: 'Read the whole answer' }).click();
     const marker = sheet.locator('.pt-source button').first();
     const scrollTop = () =>
       page.evaluate(
