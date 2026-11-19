@@ -48,9 +48,10 @@ describe('parseDiagramFence', () => {
         'not json',
         '{"t":"part","label":',
         line({ t: 'part', label: 'Only', after: [], cite: null }),
+        line({ t: 'part', label: 'Next', after: ['A'], cite: null }),
       ].join('\n'),
     );
-    expect(figure?.parts.map((p) => p.letter)).toEqual(['A']);
+    expect(figure?.parts.map((p) => p.letter)).toEqual(['A', 'B']);
   });
 
   it('drops an arrow from a part that does not come before, so the graph stays acyclic', () => {
@@ -88,13 +89,21 @@ describe('parseDiagramFence', () => {
       line({ t: 'part', label: `P${String(i)}`, after: [], cite: null }),
     );
     expect(parseDiagramFence(parts.join('\n'))?.parts).toHaveLength(12);
-    const ended = [parts[0], line({ t: 'end' }), parts[1]].join('\n');
-    expect(parseDiagramFence(ended)?.parts).toHaveLength(1);
+    const ended = [parts[0], parts[1], line({ t: 'end' }), parts[2]].join('\n');
+    expect(parseDiagramFence(ended)?.parts).toHaveLength(2);
   });
 
   it('is null when no part could be read: nothing to draw', () => {
     expect(parseDiagramFence('')).toBeNull();
     expect(parseDiagramFence('{"t":"plate","title":"Only a title"}')).toBeNull();
     expect(parseDiagramFence('plain prose, not NDJSON')).toBeNull();
+  });
+
+  it('is null for a one-box figure: it explains nothing, so nothing is drawn', () => {
+    const one = line({ t: 'part', label: 'input x', after: [], cite: null });
+    expect(parseDiagramFence(one)).toBeNull();
+    expect(
+      parseDiagramFence([line({ t: 'plate', title: 'Residual block' }), one].join('\n')),
+    ).toBeNull();
   });
 });
