@@ -238,8 +238,10 @@ export function descendantsOf<N extends TreeNodeInput>(tree: BoardTree<N>, id: s
 }
 
 /**
- * Rule 3: which way an ask from `parentId` goes. An ask with no span on a card that has no `down`
- * child is `down` ("Follow up"). Every other ask, "Ask differently" and every span ask, is `right`.
+ * Rule 3: which way an ask from `parentId` goes. `down` exists only under ANSWER cards: any ask on
+ * a passage or a note is always `right` (the question and its answer are one card, placed to the
+ * right). On an answer, an ask with no span and no "Ask differently" is `down` ("Follow up") when
+ * the answer has no down child yet; every other ask, including every span ask, is `right`.
  * The server enforces this; the web uses it to draw the ask box's wording and the pending card.
  *
  * @param tree The tree.
@@ -254,6 +256,7 @@ export function branchFor<N extends TreeNodeInput>(
   parentId: string,
   ask: { readonly span?: ParentSpan | null; readonly askDifferently?: boolean },
 ): BoardBranch {
+  if (tree.byId.get(parentId)?.kind !== 'explanation') return 'right';
   if (ask.span != null || ask.askDifferently === true) return 'right';
   return downChild(tree, parentId) === undefined ? 'down' : 'right';
 }

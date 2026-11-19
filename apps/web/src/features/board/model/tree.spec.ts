@@ -151,7 +151,18 @@ describe('path, depth, siblings, descendants', () => {
 describe('branchFor (rule 3)', () => {
   const base = [node({ id: 'p' }), node({ id: 'a', parent: 'p', branch: 'down' })];
 
-  it('makes an ask with no words on a card without a down child a follow-up', () => {
+  it('makes every ask on a passage a right branch, even with no down child', () => {
+    const tree = buildTree([node({ id: 'p' })]);
+    expect(branchFor(tree, 'p', {})).toBe('right');
+    expect(branchFor(tree, 'p', { askDifferently: true })).toBe('right');
+  });
+
+  it('makes every ask on a note a right branch', () => {
+    const tree = buildTree([node({ id: 'p' }), node({ id: 'n', parent: 'p', kind: 'note' })]);
+    expect(branchFor(tree, 'n', {})).toBe('right');
+  });
+
+  it('makes an ask with no words on an answer without a down child a follow-up', () => {
     const tree = buildTree(base);
     expect(branchFor(tree, 'a', {})).toBe('down');
   });
