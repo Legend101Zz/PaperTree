@@ -92,6 +92,7 @@ function dataRule(request: RunRequest): string {
 /** What the tools are for, and the one thing the host enforces about them. */
 function toolRule(request: RunRequest, tools: string): string {
   const calls = request.limits.max_tool_calls;
+  if (calls === 0) return 'No tool is available.';
   const rounds = Math.max(1, request.limits.max_turns - 1);
   return (
     `Tools (${tools}) only if the passages are not enough: at most ${String(calls)} calls in ` +
@@ -215,6 +216,20 @@ const CHECK_EXAMPLE = [
   '```',
 ].join('\n');
 
+/** The ```diagram fence of an answer: optional (`may`), required (`always`) or refused (`never`). */
+function diagramRule(request: RunRequest): string {
+  const lines =
+    '{"t":"plate","title":"<name>"} then at most 8 {"t":"part","label":"<words, never a ' +
+    'letter>","text":"<one line>","kind":"input|step|output|concept","after":["A"],"cite":null} ' +
+    '(lettered by order).';
+  if (request.diagram === 'never') return 'No ```diagram fence: the reader asked for no diagram.';
+  const when =
+    request.diagram === 'always'
+      ? 'Exactly one ```diagram fence in "## How it works" (the reader asked for a diagram)'
+      : 'Only if a picture helps, one ```diagram fence in "## How it works"';
+  return `${when}, the diagram lines: ${lines}`;
+}
+
 /** The explain / ask / follow-up answer: a tutor's, in the v0.3 shape (#339; spec §1). */
 function answerRules(request: RunRequest): string {
   const level = request.level ?? 'familiar';
@@ -231,16 +246,15 @@ function answerRules(request: RunRequest): string {
     'Cite the passage a sentence rests on by its handle in square brackets, [b3] or [b1, b4]: at ' +
       'most once per sentence, only where it rests on the paper, and only handles that appear in ' +
       'this prompt or a tool result.',
-    'Only if a picture helps, one ```diagram fence in "## How it works", the diagram lines: ' +
-      '{"t":"plate","title":"<name>"} then at most 8 {"t":"part","label":"<words, never a ' +
-      'letter>","text":"<one line>","kind":"input|step|output|concept","after":["A"],"cite":null} ' +
-      '(lettered by order).',
+    diagramRule(request),
     request.check === true
       ? `End with one fence of exactly these keys (accept: fills separated by |):\n${CHECK_EXAMPLE}`
       : 'No ```check fence.',
-    'Answer from the passages below and the conversation first; use a tool only if the question ' +
-      'needs a part of the paper that is not there. ' +
-      toolRule(request, 'get_outline, get_section, get_passage, search_passages'),
+    request.limits.max_tool_calls === 0
+      ? `Answer from the passages below and the conversation. ${toolRule(request, '')}`
+      : 'Answer from the passages below and the conversation first; use a tool only if the ' +
+        'question needs a part of the paper that is not there. ' +
+        toolRule(request, 'get_outline, get_section, get_passage, search_passages'),
     `Example: "## TL;DR\nA residual block adds its input back.\n${second}\nLike editing a ` +
       'draft.\n## How it works\nIt outputs $y = F(x) + x$.\n## In the paper\nDeeper plain nets ' +
       'train worse [b7]."',

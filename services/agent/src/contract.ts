@@ -127,6 +127,8 @@ export type Kind = 'explain' | 'ask' | 'summary' | 'diagram' | 'topic';
 /** The reader's level an explain/ask answer is written for (v0.3, #339). */
 export type Level = 'new' | 'familiar' | 'expert';
 export const LEVELS: readonly Level[] = ['new', 'familiar', 'expert'];
+/** Whether an answer may, must or must not carry its ```diagram fence (v0.3, #343). */
+export type DiagramUse = 'may' | 'never' | 'always';
 
 export type PromptVersion = 'explain-v1' | 'ask-v1' | 'summary-v1' | 'diagram-v1' | 'topic-v1';
 
@@ -171,6 +173,8 @@ export interface RunRequest {
   readonly level?: Level;
   /** v0.3: end the answer with one ```check fence. The API decides; absent reads false. */
   readonly check?: boolean;
+  /** v0.3 (#343): the ```diagram fence is optional (`may`), required or refused; absent reads `may`. */
+  readonly diagram?: DiagramUse;
 }
 
 /** The prompt each kind runs under. A request that pairs them otherwise is refused (S0 left it open). */

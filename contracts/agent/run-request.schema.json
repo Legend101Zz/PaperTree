@@ -112,6 +112,10 @@
       "description": "v0.3 (#339): the answer ends with one ```check fence (a fill-in-the-blank). The API decides (contracts.md §2.5: only a `new` answer, once per thread); the agent never decides. Optional; absent reads false. Without it the agent also strips a check fence the model wrote.",
       "type": "boolean"
     },
+    "diagram": {
+      "description": "v0.3 (#343): whether an explain or ask answer may (`may`, the default: only if a picture helps), must (`always`) or must not (`never`) carry its one ```diagram fence. A board ask sets it from its `uses.diagram`. Optional; absent reads `may`. A `never` answer has any diagram fence the model wrote stripped.",
+      "enum": ["may", "never", "always"]
+    },
     "limits": {
       "type": "object",
       "required": [

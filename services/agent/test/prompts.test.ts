@@ -216,3 +216,24 @@ describe('the explain and ask prompts are a short contract (#339, P2)', () => {
     assert.match(prompt, /Example: "/);
   });
 });
+
+describe('a board ask: the diagram fence and the tools (#343)', () => {
+  const ask = (patch: Record<string, unknown>): string =>
+    systemPrompt({ ...request('explain'), prompt_version: 'ask-v1', ...patch } as RunRequest);
+
+  test('diagram: may keeps the rule, always requires one fence, never refuses it', () => {
+    assert.match(ask({}), /Only if a picture helps, one ```diagram fence/);
+    assert.match(ask({ diagram: 'always' }), /Exactly one ```diagram fence/);
+    const never = ask({ diagram: 'never' });
+    assert.match(never, /No ```diagram fence/);
+    assert.doesNotMatch(never, /"t":"plate"/);
+  });
+
+  test('with no tool calls allowed the prompt names no tool', () => {
+    const base = request('explain');
+    const noTools = ask({ limits: { ...base.limits, max_tool_calls: 0 } });
+    assert.match(noTools, /No tool is available\./);
+    assert.doesNotMatch(noTools, /get_section|search_passages|calls in/);
+    assert.match(ask({}), /get_section/);
+  });
+});
