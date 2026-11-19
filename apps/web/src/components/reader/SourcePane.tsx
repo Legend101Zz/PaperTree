@@ -29,20 +29,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   frameForPdfPage,
   pageTextStreamId,
-  sourcePaint,
   type Anchor,
   type IndexedDocument,
-  type Resolution,
 } from '@papertree/anchoring';
 
 import { useHighlightClick, useImageSelection, useSelectionToolbar } from '@/features/reader';
 import { MAX_ANCHORS_PER_HIGHLIGHT } from '@/lib/api/highlights';
-import { isImageAnchor } from '@/lib/imageAnchor';
 
 import { type DocumentHandle, type DocumentRef } from './documentHandle';
 import { figureRegions } from './figureRegions';
 import { FLASH_SCROLL_MS, prefersReducedMotion } from './flash';
-import { HighlightOverlay, type FlashPaint, type PaintItem } from './HighlightOverlay';
+import { HighlightOverlay, type FlashPaint } from './HighlightOverlay';
 import { usePdfDocument } from './PdfDocumentProvider';
 import type { TextLayerInfo } from './PdfPage';
 import { paintItemsOf } from './paintItems';

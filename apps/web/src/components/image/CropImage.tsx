@@ -53,6 +53,8 @@ export function CropImage({ paperId, at, alt, className }: CropImageProps): Reac
   }
   const { url, width, height } = crop.crop;
   return (
+    // A signed, short-lived URL of a PNG the API cut: next/image's optimiser has nothing to add.
+    // eslint-disable-next-line @next/next/no-img-element
     <img
       className={cls}
       src={url}

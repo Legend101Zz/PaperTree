@@ -11,8 +11,9 @@ import {
 
 import { isImageAnchor } from '@/lib/imageAnchor';
 
-import type { PaintItem } from './HighlightOverlay';
 import { displayQuote } from './quote';
+
+import type { PaintItem } from './HighlightOverlay';
 import type { ReaderHighlight } from './useHighlights';
 
 function quoteOf(anchor: Anchor): string {
