@@ -13,14 +13,15 @@ THE DPI RULE (#348's 19 Nov comment: the model's image is heavily downsampled se
 crop must be tight and its text large). The box is padded by ``PAD_PT`` (glyph antialiasing) and
 clipped to the page; its LONG side is then rendered at about ``TARGET_LONG_SIDE_PX`` (1,400) pixels:
 
-    scale = clamp(1400 / long_side_pt, MIN_SCALE, MAX_SCALE)    MIN 1.0 (72 dpi), MAX 6.0 (432 dpi)
+    scale = clamp(1400 / long_side_pt, MIN_SCALE, MAX_SCALE)    MIN 1.0 (72 dpi), MAX 10.0 (720 dpi)
     scale = min(scale, 1600 / long_side_pt, sqrt(2.56e6 / area_pt))      the pixel caps win
     dpi   = round(72 * scale)
 
-so a figure 280 pt wide comes out at 5x (360 dpi, 1,400 px), a tiny 40 pt label at the 6x
-ceiling (240 px), a whole 792 pt page at 1.77x (127 dpi, 1,400 px). A box thinner than
-``MIN_BOX_PT`` is grown around its centre to that size first (a 1 pt sliver is not a picture). The
-long side never exceeds ``MAX_LONG_SIDE_PX`` and a crop never exceeds ``MAX_PIXELS``.
+so a figure 280 pt wide comes out at 5x (360 dpi, 1,400 px), a small 137 pt figure at 10x
+(720 dpi, 1,370 px), a tiny 40 pt label at the 10x ceiling (400 px), a whole 792 pt page at
+1.77x (127 dpi, 1,400 px). A box thinner than ``MIN_BOX_PT`` is grown around its centre to that
+size first (a 1 pt sliver is not a picture). The long side never exceeds ``MAX_LONG_SIDE_PX`` and a
+crop never exceeds ``MAX_PIXELS``.
 
 THE CACHE. ``<assets>/<paper>/<generation>/regions/p<page>-<x0>-<y0>-<x1>-<y1>@<dpi>dpi.png``, the
 box in tenths of a point (the requested box rounded to 0.1 pt, so a re-selection a hair off hits the
@@ -53,7 +54,7 @@ TARGET_LONG_SIDE_PX: Final = 1400
 MAX_LONG_SIDE_PX: Final = 1600
 MAX_PIXELS: Final = 2_560_000
 MIN_SCALE: Final = 1.0
-MAX_SCALE: Final = 6.0
+MAX_SCALE: Final = 10.0
 #: Glyph antialiasing and rule ends are not clipped at the boundary (``CropStore`` pads the same).
 PAD_PT: Final = 2.0
 #: A box thinner than this is grown to it around its centre.
@@ -96,7 +97,7 @@ class CropPlan:
 
     @property
     def size_px(self) -> tuple[int, int]:
-        """The expected ``(width, height)`` of the PNG, in pixels."""
+        """The ``(width, height)`` of the PNG in pixels, give or take one (MuPDF rounds out)."""
         x0, y0, x1, y1 = self.box
         return math.ceil((x1 - x0) * self.scale), math.ceil((y1 - y0) * self.scale)
 

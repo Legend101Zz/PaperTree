@@ -88,11 +88,12 @@ async def prepare_image_run(
     except CropError as exc:
         raise ApiError(exc.code, exc.detail) from exc  # type: ignore[arg-type]
     caption = image_caption_line(index, context)
+    # An omittable field is absent or a value, never null: no caption means no `caption` key.
     image = AgentImage(
         media_type="image/png",
         data_base64=base64.b64encode(crop.png).decode("ascii"),
-        caption=caption or None,
         page=context.page_index,
+        **({"caption": caption} if caption else {}),
     )
     named = " ".join(part for part in (context.label, caption) if part)
     return ImageRun(

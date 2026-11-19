@@ -51,7 +51,8 @@ def paper(h: Any, email: str = "alice@example.com") -> tuple[str, str]:
         (280.0, 100.0, 360),  # a figure: 5x, the long side 1,400 px
         (280.0, 280.0, 360),
         (612.0, 792.0, 127),  # a whole page: 1.77x, the long side still 1,400 px
-        (40.0, 12.0, 432),  # a tiny label: capped at 6x
+        (40.0, 12.0, 720),  # a tiny label: capped at 10x
+        (137.0, 78.0, 720),  # a small figure (resnet Figure 2): 10x, its long side 1,370 px
     ],
 )
 def test_the_dpi_puts_the_long_side_near_1400_px_and_is_clamped(
@@ -61,7 +62,7 @@ def test_the_dpi_puts_the_long_side_near_1400_px_and_is_clamped(
     long_px = max(width, height) * dpi / 72
     assert long_px <= region_crops.MAX_LONG_SIDE_PX
     assert width * height * (dpi / 72) ** 2 <= region_crops.MAX_PIXELS
-    if dpi < 432:
+    if dpi < 720:
         assert 1390 <= long_px <= 1410
 
 

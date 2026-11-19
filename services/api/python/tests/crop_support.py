@@ -33,3 +33,43 @@ def store_pdf(upload_root: Path, paper_id: str) -> Path:
     path = upload_root / f"{paper_id}.pdf"
     path.write_bytes(make_pdf())
     return path
+
+
+def image_anchor(
+    doc: dict[str, object],
+    *,
+    kind: str = "figure_region",
+    page: int = 0,
+    box: tuple[float, float, float, float] = RED_BOX,
+    block_id: str | None = None,
+    anchor_id: str = "7e1f0c3a-5b2d-4c8e-9a64-1d2e3f4a5b6c",
+) -> dict[str, object]:
+    """A client-shaped IMAGE anchor (Anchor v1): a PageSelector and one ShapeSelector quad, no text
+    quote. ``doc`` is the paper's (``paragraph_anchor()["doc"]``: its id and its source hash)."""
+    selectors: list[dict[str, object]] = []
+    if block_id is not None:
+        selectors.append({"type": "BlockSelector", "blockId": block_id, "blockTextHash": "h"})
+    selectors += [
+        {"type": "PageSelector", "index": page},
+        {
+            "type": "ShapeSelector",
+            "pageIndex": page,
+            "quads": [list(box)],
+            "polygons": [],
+            "pageWidth": 612,
+            "pageHeight": 792,
+            "rotation": 0,
+            "userUnit": 1,
+            "cropBox": [0, 0, 612, 792],
+        },
+    ]
+    return {
+        "anchorVersion": 1,
+        "offsetUnit": "unicode",
+        "id": anchor_id,
+        "doc": doc,
+        "targetKind": kind,
+        "provenanceClass": "source",
+        "selectors": selectors,
+        "created": {"mode": "source", "at": "2026-11-20T10:00:00.000Z", "client": "api-tests"},
+    }
