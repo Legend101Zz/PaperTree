@@ -1,0 +1,45 @@
+/*
+ * The small figure inside an answer (prototype `dgbox`): the plate's drawing in a single ruled box
+ * in the answer's column. Tokens only; the box is the same plate at night in the lamp-lit scheme.
+ */
+
+.pt-diagram-inline {
+  display: flex;
+  justify-content: center;
+  margin: 8px 0 2px;
+  padding: 4px 6px;
+  background: var(--pt-page);
+  color: var(--pt-ink);
+  border: 1px solid var(--pt-ink);
+  box-shadow:
+    inset 0 0 0 3px var(--pt-page),
+    inset 0 0 0 3.6px var(--pt-ink);
+}
+
+.pt-diagram-inline .pt-plate__drawing {
+  inline-size: var(--pt-diagram-w, 300px);
+  max-inline-size: 100%;
+  block-size: auto;
+}
+
+/* The fence has not closed: a quiet dashed box that holds the figure's place. */
+.pt-diagram-inline--pending {
+  min-block-size: 88px;
+  background: transparent;
+  border-style: dashed;
+  box-shadow: none;
+  opacity: 0.6;
+  animation: pt-diagram-wait 1.4s ease-in-out infinite;
+}
+
+@keyframes pt-diagram-wait {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-diagram-inline--pending {
+    animation: none;
+  }
+}

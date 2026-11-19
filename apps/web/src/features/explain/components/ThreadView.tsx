@@ -18,6 +18,7 @@ import { buildExchanges } from '../model/exchange';
 import { isStored } from '../model/messages';
 import { pinnedExchange } from '../model/phone';
 import { opensFolded, wasStopped } from '../model/states';
+import { shortModelName } from '../model/summary';
 import { Composer } from './Composer';
 import { Exchange } from './Exchange';
 import { PinnedFooter } from './PinnedFooter';
@@ -88,6 +89,18 @@ export function ThreadView({
     });
     return { plateNo };
   }, [exchanges]);
+  // The foot names the run's model once its usage lands; until then the thread's last one stands in.
+  const modelHint = useMemo(() => {
+    const model = state.messages.findLast((m) => m.usage?.model)?.usage?.model;
+    return model === undefined ? null : shortModelName(model);
+  }, [state.messages]);
+  // The chips ask a fixed question of the last answer; they wait while anything is being written.
+  const askQuick = useCallback(
+    (question: string) => {
+      void controller.ask(question, { quick: true });
+    },
+    [controller],
+  );
   const summary = state.summary.summary;
   const summaryShown =
     summary !== null && (state.summary.phase === 'ready' || state.summary.phase === 'partial');
@@ -209,6 +222,10 @@ export function ThreadView({
                   askInBox={draft !== '' && draft === exchange.ask.trim()}
                   phone={phone}
                   pinned={index === pin}
+                  onLevel={controller.relevel}
+                  {...(index === exchanges.length - 1 ? { onAsk: askQuick } : {})}
+                  busy={busy}
+                  modelHint={modelHint}
                 />
               ) : (
                 <DiagramExchange

@@ -7,14 +7,14 @@
  * passage) and `ai`. Collapsed, the slip shows its first paragraph. On a phone (S5e, #210, frame
  * 08c) "Read the whole answer" sits in the slip's foot with how many paragraphs it holds back.
  */
-import { AiParagraph, AiSlip, CallSlip, SourceLine } from '@papertree/ui';
+import { AiSlip, CallSlip } from '@papertree/ui';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 
-import { handleRuns } from '@/features/explain/model/passages';
-import { sourcesOf } from '@/features/explain/model/answer';
+import { AnswerBody } from '@/features/explain/components/AnswerBody';
+import { answerModel, stripPartialTail } from '@/features/explain/model/answer';
+import { blocksUpTo } from '@/features/explain/model/phone';
 
-import { AnswerProse } from './AnswerProse';
 import { anchorQuote, dayAndTime, modelLabel, originPlace, usageLine } from '../model/exchange';
 
 import type { Exchange } from '../hooks/useExchange';
@@ -63,25 +63,20 @@ export const ExchangeBlock = memo(function ExchangeBlock({
   const origin = body.call.originAnchor;
   const place = origin === null ? null : originPlace(origin, layout);
   const asked = question === null ? null : dayAndTime(question.created_at);
-  const paragraphs = (layout?.paragraphs ?? [body.ai.content]).map((text, i) => ({ text, i }));
-  const shown = open ? paragraphs : paragraphs.slice(0, 1);
-  // Without the thread the handles cannot be resolved, so no source line is drawn at all: a
-  // paragraph is never called "general knowledge" on no evidence.
-  const source = (text: string): ReactNode =>
-    layout === null ? null : (
-      <SourceLine
-        sources={sourcesOf(
-          handleRuns(text)
-            .flat()
-            .flatMap((h) => citations.get(h) ?? []),
-        ).map((s) => ({
-          page: s.page,
-          passage: s.passage,
-          onShow: () => onFocusAnchor(s.citation.anchor),
-        }))}
-        touch={phone}
-      />
-    );
+  // The same tutor-format body as the panel and the board card (labels, lead, figure, maths), read
+  // from the stored answer. Without the thread the handles cannot be resolved, so no source line
+  // is drawn at all: a paragraph is never called "general knowledge" on no evidence.
+  const model = useMemo(
+    () =>
+      answerModel(
+        stripPartialTail(answer?.content ?? body.ai.content),
+        (handle) => citations.get(handle),
+        false,
+      ),
+    [answer, body.ai.content, citations],
+  );
+  const count = model.paragraphs.length;
+  const shown = open ? model.blocks : blocksUpTo(model.blocks, 1);
   const usage =
     layout === null && !exchange.loading
       ? 'Its sources could not be read; the passages it drew on are the cards below.'
@@ -100,7 +95,7 @@ export const ExchangeBlock = memo(function ExchangeBlock({
           : { quote: { text: anchorQuote(origin), page: place.page, para: place.para } })}
       />
       <div className="pt-nb-exchange__answer" data-open={open ? 'true' : 'false'}>
-        {paragraphs.length > 1 && !phone ? (
+        {count > 1 && !phone ? (
           <button
             type="button"
             className="pt-nb-exchange__toggle"
@@ -108,22 +103,22 @@ export const ExchangeBlock = memo(function ExchangeBlock({
             onClick={() => setOpen(!open)}
           >
             {open ? <ChevronUp size={16} aria-hidden /> : <ChevronDown size={16} aria-hidden />}
-            {open ? 'Collapse' : `Show all ${String(paragraphs.length)} paragraphs`}
+            {open ? 'Collapse' : `Show all ${String(count)} paragraphs`}
           </button>
         ) : null}
         <AiSlip
           model={modelLabel(answer?.run?.model ?? body.ai.model)}
-          {...(usage === null && !(phone && paragraphs.length > 1)
+          {...(usage === null && !(phone && count > 1)
             ? {}
             : {
                 footer: (
                   <>
-                    {phone && paragraphs.length > 1 ? (
+                    {phone && count > 1 ? (
                       <span className="pt-nb-exchange__more">
                         <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
                           {open ? 'Show less' : 'Read the whole answer'}
                         </button>
-                        {open ? null : <span>{moreParagraphs(paragraphs.length - 1)}</span>}
+                        {open ? null : <span>{moreParagraphs(count - 1)}</span>}
                       </span>
                     ) : null}
                     {usage === null ? null : <span className="pt-nb-exchange__usage">{usage}</span>}
@@ -131,11 +126,13 @@ export const ExchangeBlock = memo(function ExchangeBlock({
                 ),
               })}
         >
-          {shown.map((p) => (
-            <AiParagraph key={p.i} source={source(p.text)}>
-              <AnswerProse text={p.text} />
-            </AiParagraph>
-          ))}
+          <AnswerBody
+            blocks={shown}
+            streaming={false}
+            general={layout !== null}
+            touch={phone}
+            onShow={(s) => onFocusAnchor(s.citation.anchor)}
+          />
         </AiSlip>
       </div>
     </section>
