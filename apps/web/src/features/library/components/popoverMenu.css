@@ -1,0 +1,25 @@
+/*
+ * PopoverMenu's wrapper and panel (#195, #197), loaded by `PopoverMenu` itself so every route that
+ * draws one has them: the library's header and Table, and the reader's Aa menu (#345). The reader's
+ * Aa panel is wider and sits above its own stacking context; it overrides only that, in
+ * `reader/components/readingSettings.css`. Tokens only.
+ */
+.pt-hmenu {
+  position: relative;
+}
+
+.pt-hmenu__panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  min-inline-size: 240px;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--pt-e2-fill);
+  border: 1px solid var(--pt-rule);
+  border-radius: var(--pt-radius-menu);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+}

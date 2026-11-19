@@ -135,7 +135,6 @@
   --pt-call-slip: #fdfbf7; /* your asks; index cards */
   --pt-linen: #e6dfd2; /* the board */
   --pt-desk: #e4dccc; /* behind the PDF */
-  --pt-pdf-page: #ffffff;
   --pt-paper-label: #faf8f3; /* spine labels, holder cards */
   --pt-paper-label-ink: #2a2521; /* labels stay paper in both schemes, so their ink stays dark */
   --pt-ink: #2a2521; /* 14.3 on page, 11.9 on the AI slip */
@@ -196,18 +195,8 @@
   --pt-highlight-approx-fill: rgb(240 190 70 / 14%);
   --pt-highlight-approx-stroke: rgb(168 101 10 / 90%);
   --pt-highlight-orphan-stroke: var(--pt-danger);
-  /* drawn ON the PDF page, which stays paper in both schemes (#205): the citation flash's ring and
-   * a focused highlight in daylight navy (8.7 on white, 6.7 on the dimmed page; the lamp-lit focus
-   * blue would be 1.6), the selection's blue-grey wash, and the outline the flash leaves behind,
-   * which is the only lasting cue on a phone: 3.1:1 on white (WCAG 1.4.11; 0.35 was 1.8) */
-  --pt-pdf-ring: #1f4e79;
-  --pt-pdf-selection: rgb(31 78 121 / 24%);
-  --pt-flash-rest: 0.6;
-  --pt-pdf-hl-amber: var(--pt-hl-amber);
-  --pt-pdf-hl-green: var(--pt-hl-green);
-  --pt-pdf-hl-blue: var(--pt-hl-blue);
-  --pt-pdf-hl-pink: var(--pt-hl-pink);
-  --pt-pdf-hl-purple: var(--pt-hl-purple);
+  /* the paper's own colours (--pt-pdf-*, --pt-guided-*) are declared once per page, below the dark
+   * block: they follow `data-pt-page` (Light, Sepia, Dark), not the room (#345) */
 
   /* v0.1 names, now aliases of their Ex Libris roles */
   --pt-font-body: var(--pt-font-paper);
@@ -250,7 +239,6 @@
     --pt-call-slip: #302822; /* pen 7.9 */
     --pt-linen: #211b17;
     --pt-desk: #16120f;
-    --pt-pdf-page: #e9e1d1; /* the paper stays paper, dimmed; PDF text 14.5 */
     --pt-paper-label: #efe6d2; /* labels and holder cards stay paper, ink 12.2 */
     --pt-ink: #ede4d3;
     --pt-ink-2: #d3c7b3; /* 9.0 */
@@ -299,15 +287,6 @@
     /* v0.1 paints --pt-accent as a FILL under --pt-accent-ink too; on the light lamp-lit accent the
      * ink must be dark (7.9:1), as v0.1's light-blue dark accent had a dark ink */
     --pt-accent-ink: #1c1714;
-    /* the dimmed page (#205): the faint outline after a flash keeps 3.5:1, and each wash on the PDF
-     * is raised so it stands off the ivory at least as far as it does off white by day (Guided's
-     * dark page keeps the plain washes: its light ink needs them faint) */
-    --pt-flash-rest: 0.7;
-    --pt-pdf-hl-amber: rgb(240 190 70 / 56%);
-    --pt-pdf-hl-green: rgb(120 190 125 / 45%);
-    --pt-pdf-hl-blue: rgb(120 165 220 / 45%);
-    --pt-pdf-hl-pink: rgb(230 140 165 / 45%);
-    --pt-pdf-hl-purple: rgb(170 135 215 / 45%);
     --pt-call-slip-rule: rgb(143 184 232 / 13%); /* the call slip's ruling, lit (09c) */
   }
 }
@@ -320,7 +299,6 @@
   --pt-call-slip: #302822; /* pen 7.9 */
   --pt-linen: #211b17;
   --pt-desk: #16120f;
-  --pt-pdf-page: #e9e1d1; /* the paper stays paper, dimmed; PDF text 14.5 */
   --pt-paper-label: #efe6d2; /* labels and holder cards stay paper, ink 12.2 */
   --pt-ink: #ede4d3;
   --pt-ink-2: #d3c7b3; /* 9.0 */
@@ -365,15 +343,6 @@
   /* v0.1 paints --pt-accent as a FILL under --pt-accent-ink too; on the light lamp-lit accent the
    * ink must be dark (7.9:1), as v0.1's light-blue dark accent had a dark ink */
   --pt-accent-ink: #1c1714;
-  /* the dimmed page (#205): the faint outline after a flash keeps 3.5:1, and each wash on the PDF
-   * is raised so it stands off the ivory at least as far as it does off white by day (Guided's
-   * dark page keeps the plain washes: its light ink needs them faint) */
-  --pt-flash-rest: 0.7;
-  --pt-pdf-hl-amber: rgb(240 190 70 / 56%);
-  --pt-pdf-hl-green: rgb(120 190 125 / 45%);
-  --pt-pdf-hl-blue: rgb(120 165 220 / 45%);
-  --pt-pdf-hl-pink: rgb(230 140 165 / 45%);
-  --pt-pdf-hl-purple: rgb(170 135 215 / 45%);
   --pt-call-slip-rule: rgb(143 184 232 / 13%); /* the call slip's ruling, lit (09c) */
 
   color-scheme: dark;
@@ -381,6 +350,113 @@
 
 :root[data-pt-theme='light'] {
   color-scheme: light;
+}
+
+/*
+ * THE PAPER'S PAGE (#345). Light, Sepia or Dark, set on <html> as `data-pt-page` (apps/web
+ * `features/settings`): by default it follows the room (Daylight gives light, Lamp-lit dark), and Aa
+ * overrides it. Everything drawn ON the paper reads these, never the room's tokens, so a dark page in
+ * a daylight room (and the reverse) keeps its contrast. Source recolours the PDF canvas to
+ * `--pt-pdf-page` / `--pt-pdf-ink`; Guided sets its type on `--pt-guided-*`. Figures keep their own
+ * colours on `--pt-pdf-mat` (none on a light page). Contrast is pinned in `test/tokens.spec.ts`.
+ */
+:root,
+:root[data-pt-page='light'] {
+  --pt-pdf-page: #ffffff;
+  --pt-pdf-ink: #111111; /* 18.9 */
+  --pt-pdf-mat: transparent;
+  --pt-pdf-mat-edge: transparent;
+  --pt-pdf-mat-pad: 0px;
+  /* the five washes: base hues drawn at alpha over the page, each with a darker underline ink so a pale
+   * wash stays legible and amber is not told from green by hue alone (3:1 on the page, or better) */
+  --pt-pdf-hl-amber: rgb(240 190 70 / 55%);
+  --pt-pdf-hl-green: rgb(120 190 125 / 50%);
+  --pt-pdf-hl-blue: rgb(120 165 220 / 50%);
+  --pt-pdf-hl-pink: rgb(230 140 165 / 50%);
+  --pt-pdf-hl-purple: rgb(170 135 215 / 50%);
+  --pt-pdf-hl-amber-ink: #a8650a;
+  --pt-pdf-hl-green-ink: #2c7442;
+  --pt-pdf-hl-blue-ink: #2d56a0;
+  --pt-pdf-hl-pink-ink: #a8356a;
+  --pt-pdf-hl-purple-ink: #6442ae;
+  /* the live selection reads through a wash, not a solid band: the text under it is the canvas, and
+   * a solid fill would paint over it; the flash's ring and wash, and the outline it leaves behind,
+   * which is the only lasting cue on a phone: 3.1:1 (WCAG 1.4.11) */
+  --pt-pdf-selection: rgb(31 78 121 / 24%);
+  --pt-pdf-ring: #1f4e79; /* 8.7 */
+  --pt-pdf-lit-wash: rgb(240 190 70 / 22%);
+  --pt-flash-rest: 0.6;
+  /* Guided: the sheet is ivory by day, and its type re-declares the room's ink tokens (below, in
+   * `.pt-guided__sheet`) from these, so everything inside it follows the page and not the room */
+  --pt-guided-page: #faf8f3;
+  --pt-guided-ink: #2a2521; /* 14.3 */
+  --pt-guided-ink-2: #4a423a; /* 9.3 */
+  --pt-guided-ink-muted: #675d53; /* 6.1 */
+  --pt-guided-rule: #dad3c6; /* decorative only */
+  --pt-guided-border: #8a7e6e; /* 3.7 */
+  --pt-guided-link: #7a1f1f; /* 9.7 */
+  --pt-guided-focus: #1f4e79; /* 8.2 */
+}
+
+:root[data-pt-page='sepia'] {
+  --pt-pdf-page: #f4e9d2;
+  --pt-pdf-ink: #3a2e22; /* 10.9 */
+  --pt-pdf-mat: #fbf5e6;
+  --pt-pdf-mat-edge: #cdbb95;
+  --pt-pdf-mat-pad: 10px;
+  --pt-pdf-hl-amber: rgb(232 160 30 / 46%);
+  --pt-pdf-hl-green: rgb(96 170 104 / 44%);
+  --pt-pdf-hl-blue: rgb(96 146 206 / 44%);
+  --pt-pdf-hl-pink: rgb(220 116 146 / 44%);
+  --pt-pdf-hl-purple: rgb(150 112 200 / 44%);
+  --pt-pdf-hl-amber-ink: #8a5206;
+  --pt-pdf-hl-green-ink: #25643a;
+  --pt-pdf-hl-blue-ink: #2a4f92;
+  --pt-pdf-hl-pink-ink: #9a2f62;
+  --pt-pdf-hl-purple-ink: #5a3a9e;
+  --pt-pdf-selection: rgb(31 78 121 / 22%);
+  --pt-pdf-ring: #1f4e79; /* 7.2 */
+  --pt-pdf-lit-wash: rgb(232 160 30 / 24%);
+  --pt-flash-rest: 0.7;
+  --pt-guided-page: #f4e9d2;
+  --pt-guided-ink: #3a2e22;
+  --pt-guided-ink-2: #52453a; /* 7.7 */
+  --pt-guided-ink-muted: #6b5b4a; /* 5.4 */
+  --pt-guided-rule: #cdbb95;
+  --pt-guided-border: #857656; /* 3.7 */
+  --pt-guided-link: #7a1f1f; /* 8.5 */
+  --pt-guided-focus: #1f4e79;
+}
+
+:root[data-pt-page='dark'] {
+  --pt-pdf-page: #1d1a17;
+  --pt-pdf-ink: #e6ded0; /* 13.0 */
+  --pt-pdf-mat: #0f0d0b;
+  --pt-pdf-mat-edge: #4a3f35;
+  --pt-pdf-mat-pad: 10px;
+  --pt-pdf-hl-amber: rgb(240 190 70 / 32%);
+  --pt-pdf-hl-green: rgb(120 190 125 / 30%);
+  --pt-pdf-hl-blue: rgb(120 165 220 / 30%);
+  --pt-pdf-hl-pink: rgb(230 140 165 / 30%);
+  --pt-pdf-hl-purple: rgb(170 135 215 / 30%);
+  /* light underline inks: the daylight ones are 2.3 to 3.9 on a dark page */
+  --pt-pdf-hl-amber-ink: #e8b04a;
+  --pt-pdf-hl-green-ink: #7fcf8c;
+  --pt-pdf-hl-blue-ink: #8fb8e8;
+  --pt-pdf-hl-pink-ink: #f08fb0;
+  --pt-pdf-hl-purple-ink: #b79df0;
+  --pt-pdf-selection: rgb(110 160 235 / 34%);
+  --pt-pdf-ring: #8fb8e8; /* 8.4 */
+  --pt-pdf-lit-wash: rgb(240 190 70 / 13%);
+  --pt-flash-rest: 0.7;
+  --pt-guided-page: #1d1a17;
+  --pt-guided-ink: #e6ded0;
+  --pt-guided-ink-2: #cfc6b6; /* 10.2 */
+  --pt-guided-ink-muted: #a99f8e; /* 6.6 */
+  --pt-guided-rule: #4a3f35;
+  --pt-guided-border: #8e8170; /* 4.6 */
+  --pt-guided-link: #f0a08f; /* 8.4 */
+  --pt-guided-focus: #8fb8e8;
 }
 
 /* Reduced motion: DESIGN.md §6's last column. Moves become cross-fades, flashes appear and clear. */
@@ -1235,21 +1311,16 @@ span.pt-paper .pt-paper__cite {
   }
 }
 
-/* The selected text reads through a blue-grey wash (frame 04), not the browser's bright blue. */
+/* The selected text reads through a blue-grey wash (frame 04), not the browser's bright blue. While
+   a drag is on, and wherever custom paint cannot run (a selection over three pages), this is what
+   shows; once the selection is settled the overlay draws it as one band per line (#346) and the
+   native highlight goes transparent so the two never double up. The text stays selected. */
 .pt-reader .papertree-text-layer ::selection {
   background: var(--pt-pdf-selection);
 }
 
-/* Lamp-lit: the PDF page stays paper, dimmed (DESIGN.md §2). pdf.js paints white, and multiply
-   turns that white into the sheet's own `--pt-pdf-page` while black type stays black. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-pt-theme='light']) .pt-reader .papertree-page canvas {
-    mix-blend-mode: multiply;
-  }
-}
-
-:root[data-pt-theme='dark'] .pt-reader .papertree-page canvas {
-  mix-blend-mode: multiply;
+.pt-reader [data-pt-selpaint] .papertree-text-layer ::selection {
+  background: transparent;
 }
 
 .pt-btn {
@@ -1431,12 +1502,16 @@ span.pt-paper .pt-paper__cite {
 
 /* ── the highlight paint ───────────────────────────────────────────────────────────────────── */
 
+.pt-sel-fill {
+  fill: var(--pt-pdf-selection);
+}
+
 .pt-hl-fill {
   fill: var(--pt-pdf-hl-amber);
 }
 
 .pt-hl-line {
-  stroke: var(--pt-hl-amber-ink);
+  stroke: var(--pt-pdf-hl-amber-ink);
   stroke-width: 1.25px;
   vector-effect: non-scaling-stroke;
   stroke-linecap: round;
@@ -1446,25 +1521,25 @@ span.pt-paper .pt-paper__cite {
   fill: var(--pt-pdf-hl-green);
 }
 .pt-hl[data-color='green'] .pt-hl-line {
-  stroke: var(--pt-hl-green-ink);
+  stroke: var(--pt-pdf-hl-green-ink);
 }
 .pt-hl[data-color='blue'] .pt-hl-fill {
   fill: var(--pt-pdf-hl-blue);
 }
 .pt-hl[data-color='blue'] .pt-hl-line {
-  stroke: var(--pt-hl-blue-ink);
+  stroke: var(--pt-pdf-hl-blue-ink);
 }
 .pt-hl[data-color='pink'] .pt-hl-fill {
   fill: var(--pt-pdf-hl-pink);
 }
 .pt-hl[data-color='pink'] .pt-hl-line {
-  stroke: var(--pt-hl-pink-ink);
+  stroke: var(--pt-pdf-hl-pink-ink);
 }
 .pt-hl[data-color='purple'] .pt-hl-fill {
   fill: var(--pt-pdf-hl-purple);
 }
 .pt-hl[data-color='purple'] .pt-hl-line {
-  stroke: var(--pt-hl-purple-ink);
+  stroke: var(--pt-pdf-hl-purple-ink);
 }
 
 .pt-hl[data-saving='true'] .pt-hl-fill {
@@ -1488,7 +1563,7 @@ span.pt-paper .pt-paper__cite {
 
 /* Approximate: a dashed outline, a different SHAPE, so it survives greyscale and a colour-blind eye. */
 .pt-hl[data-approximate='true'] .pt-hl-fill {
-  stroke: var(--pt-hl-amber-ink);
+  stroke: var(--pt-pdf-hl-amber-ink);
   stroke-width: 1px;
   stroke-dasharray: 4 3;
   vector-effect: non-scaling-stroke;
@@ -1498,7 +1573,7 @@ span.pt-paper .pt-paper__cite {
    scroll is over, the wash and ring come in 180, hold 900 and go out 600 to a faint outline; then
    `--linger` keeps that outline, without animation, until the reader's next action. */
 .pt-flash {
-  fill: var(--pt-lit-wash);
+  fill: var(--pt-pdf-lit-wash);
   stroke: var(--pt-pdf-ring);
   stroke-width: 2px;
   vector-effect: non-scaling-stroke;
@@ -1534,155 +1609,6 @@ span.pt-paper .pt-paper__cite {
     fill-opacity: 0;
     stroke-opacity: var(--pt-flash-rest);
   }
-}
-
-/* ── the selection toolbar ─────────────────────────────────────────────────────────────────── */
-
-.pt-seltool {
-  position: absolute;
-  z-index: 40;
-  display: flex;
-  gap: 2px;
-  padding: 6px;
-  font-family: var(--pt-font-ui);
-  line-height: 1;
-  color: var(--pt-ink);
-  background: var(--pt-e2-fill);
-  border: 1px solid var(--pt-control-border);
-  border-radius: var(--pt-radius-menu);
-  box-shadow: var(--pt-e2), var(--pt-e2-edge);
-  pointer-events: auto;
-  /* Its labels are never part of a text selection, even when a drag ends over the bar (e2e rfix
-     R1 A2 / R1b C selected "Explain Ask" before the bar was dropped on a new press). */
-  user-select: none;
-  -webkit-user-select: none;
-  animation: pt-rise 140ms ease-out;
-}
-
-/* In the page margin (frame 04): a column of buttons beside the selection, never over it (#203).
-   130 px holds five 24 px wash targets; `MARGIN_BAR_WIDTH` in apps/web says the same. */
-.pt-seltool--margin {
-  flex-direction: column;
-  inline-size: 130px;
-  padding: 4px;
-}
-
-/* (scoped: it must win over the shared `.pt-toolbtn`, which centres its content). 40 px: v0.1's floor
-   for the selection bar's buttons (review S4). */
-.pt-seltool .pt-seltool__item {
-  justify-content: flex-start;
-  min-block-size: 40px;
-  padding-inline: 8px;
-  white-space: nowrap;
-}
-
-.pt-seltool__item--primary {
-  font-weight: 700;
-}
-
-.pt-seltool__item[disabled] {
-  color: var(--pt-ink-muted);
-  cursor: not-allowed;
-}
-
-/* Docked across the column (frame 07a) when no margin is wide enough; outside the scroller. */
-.pt-seltool-dock {
-  position: absolute;
-  inset: 0;
-  z-index: 40;
-  pointer-events: none;
-}
-
-.pt-seltool--docked {
-  inset-inline: 24px;
-  flex-wrap: wrap;
-  align-items: center;
-  min-block-size: 52px;
-  padding-block: 4px;
-}
-
-.pt-seltool--top {
-  inset-block-start: 8px;
-}
-
-.pt-seltool--bottom {
-  inset-block-end: 8px;
-}
-
-.pt-seltool--sheet {
-  position: fixed;
-  inset-inline: 16px;
-  inset-block-end: calc(16px + env(safe-area-inset-bottom, 0px));
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-}
-
-/* The five washes: chips like the highlight card's, each drawn 18 px inside a 24 px target (WCAG
-   2.5.8's minimum), 40 px on the phone's bar where a finger presses them (review S4). */
-.pt-seltool__washes {
-  display: flex;
-  padding: 2px 0 4px;
-}
-
-.pt-seltool--docked .pt-seltool__washes {
-  padding: 0 8px;
-}
-
-.pt-seltool--sheet .pt-seltool__washes {
-  padding: 0 4px;
-}
-
-.pt-seltool__wash {
-  position: relative;
-  inline-size: 24px;
-  block-size: 24px;
-  padding: 0;
-  cursor: pointer;
-  background: none;
-  border: 0;
-  border-radius: var(--pt-radius-round);
-}
-
-.pt-seltool__wash::before {
-  content: '';
-  position: absolute;
-  inset: 3px;
-  border-radius: var(--pt-radius-round);
-  background: var(--wash-fill);
-  box-shadow: inset 0 0 0 2px var(--wash-ink);
-}
-
-.pt-seltool--sheet .pt-seltool__wash {
-  inline-size: 40px;
-  block-size: 40px;
-}
-
-.pt-seltool--sheet .pt-seltool__wash::before {
-  inset: 10px;
-}
-
-.pt-seltool__wash:focus-visible {
-  outline: var(--pt-focus-width) solid var(--pt-focus);
-  outline-offset: var(--pt-focus-offset);
-}
-
-.pt-seltool__wash[disabled] {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-/* Highlight is unavailable for this selection: the reason is a sentence in the bar itself, never only
-   a tooltip, taking the bar's width and never setting it. */
-.pt-seltool__note {
-  flex-basis: 100%;
-  inline-size: 0;
-  min-inline-size: 100%;
-  margin: 0;
-  padding: 4px 8px 6px;
-  font-size: 0.8125rem;
-  line-height: 1.4;
-  color: var(--pt-ink-muted);
 }
 
 @keyframes pt-rise {
@@ -1995,10 +1921,33 @@ span.pt-paper .pt-paper__cite {
   max-inline-size: 44rem;
   margin: 24px auto 48px;
   padding: 40px 48px;
-  /* the Guided page: ivory `--pt-page` on the desk, e1, the paper's words in Caslon (#203) */
-  background: var(--pt-page);
+  /* the Guided page: ivory on the desk, e1, the paper's words in Caslon (#203). Its colours are the
+     page's (#345), not the room's: the room's ink tokens are re-declared here from `--pt-guided-*`,
+     so the paragraphs, captions, buttons and rules inside follow Light, Sepia or Dark. */
+  --pt-ink: var(--pt-guided-ink);
+  --pt-ink-2: var(--pt-guided-ink-2);
+  --pt-ink-muted: var(--pt-guided-ink-muted);
+  --pt-rule: var(--pt-guided-rule);
+  --pt-control-border: var(--pt-guided-border);
+  --pt-primary: var(--pt-guided-link);
+  --pt-focus: var(--pt-guided-focus);
+  --pt-page: var(--pt-guided-page);
+  --pt-ground: var(--pt-guided-page);
+  --pt-ground-raised: var(--pt-guided-page);
+  color: var(--pt-guided-ink);
+  background: var(--pt-guided-page);
   border-radius: var(--pt-radius-paper);
   box-shadow: var(--pt-e1), var(--pt-e1-edge);
+}
+
+/* A figure or an equation crop keeps the colours it has in the PDF, on a mat (none on a light page):
+   the mat is what lets a white-ground plot sit on a dark sheet without glare against the ink. */
+.pt-guided__sheet .pt-figure__crop,
+.pt-guided__sheet .pt-equation__crop {
+  box-sizing: border-box;
+  padding: var(--pt-pdf-mat-pad);
+  background: var(--pt-pdf-mat);
+  border: 1px solid var(--pt-pdf-mat-edge);
 }
 
 @media (max-width: 639px) {
@@ -2044,51 +1993,51 @@ span.pt-paper .pt-paper__cite {
 
 .pt-guided mark {
   color: inherit;
-  background: var(--pt-hl-amber);
-  box-shadow: inset 0 -1.5px 0 var(--pt-hl-amber-ink);
+  background: var(--pt-pdf-hl-amber);
+  box-shadow: inset 0 -1.5px 0 var(--pt-pdf-hl-amber-ink);
   border-radius: 2px;
 }
 
 .pt-guided mark[data-color='green'] {
-  background: var(--pt-hl-green);
-  box-shadow: inset 0 -1.5px 0 var(--pt-hl-green-ink);
+  background: var(--pt-pdf-hl-green);
+  box-shadow: inset 0 -1.5px 0 var(--pt-pdf-hl-green-ink);
 }
 .pt-guided mark[data-color='blue'] {
-  background: var(--pt-hl-blue);
-  box-shadow: inset 0 -1.5px 0 var(--pt-hl-blue-ink);
+  background: var(--pt-pdf-hl-blue);
+  box-shadow: inset 0 -1.5px 0 var(--pt-pdf-hl-blue-ink);
 }
 .pt-guided mark[data-color='pink'] {
-  background: var(--pt-hl-pink);
-  box-shadow: inset 0 -1.5px 0 var(--pt-hl-pink-ink);
+  background: var(--pt-pdf-hl-pink);
+  box-shadow: inset 0 -1.5px 0 var(--pt-pdf-hl-pink-ink);
 }
 .pt-guided mark[data-color='purple'] {
-  background: var(--pt-hl-purple);
-  box-shadow: inset 0 -1.5px 0 var(--pt-hl-purple-ink);
+  background: var(--pt-pdf-hl-purple);
+  box-shadow: inset 0 -1.5px 0 var(--pt-pdf-hl-purple-ink);
 }
 
 .pt-guided [data-guided-mark] {
-  background: var(--pt-hl-amber);
-  box-shadow: inset 0 -2px 0 var(--pt-hl-amber-ink);
+  background: var(--pt-pdf-hl-amber);
+  box-shadow: inset 0 -2px 0 var(--pt-pdf-hl-amber-ink);
 }
 .pt-guided [data-guided-mark='green'] {
-  background: var(--pt-hl-green);
-  box-shadow: inset 0 -2px 0 var(--pt-hl-green-ink);
+  background: var(--pt-pdf-hl-green);
+  box-shadow: inset 0 -2px 0 var(--pt-pdf-hl-green-ink);
 }
 .pt-guided [data-guided-mark='blue'] {
-  background: var(--pt-hl-blue);
-  box-shadow: inset 0 -2px 0 var(--pt-hl-blue-ink);
+  background: var(--pt-pdf-hl-blue);
+  box-shadow: inset 0 -2px 0 var(--pt-pdf-hl-blue-ink);
 }
 .pt-guided [data-guided-mark='pink'] {
-  background: var(--pt-hl-pink);
-  box-shadow: inset 0 -2px 0 var(--pt-hl-pink-ink);
+  background: var(--pt-pdf-hl-pink);
+  box-shadow: inset 0 -2px 0 var(--pt-pdf-hl-pink-ink);
 }
 .pt-guided [data-guided-mark='purple'] {
-  background: var(--pt-hl-purple);
-  box-shadow: inset 0 -2px 0 var(--pt-hl-purple-ink);
+  background: var(--pt-pdf-hl-purple);
+  box-shadow: inset 0 -2px 0 var(--pt-pdf-hl-purple-ink);
 }
 
 .pt-guided [data-guided-flash='true'] {
-  outline: 2px solid var(--pt-accent);
+  outline: 2px solid var(--pt-guided-focus);
   outline-offset: 4px;
   border-radius: 4px;
 }

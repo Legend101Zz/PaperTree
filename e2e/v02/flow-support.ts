@@ -189,14 +189,14 @@ print(json.dumps(dict(capture_anchor(doc, block.block.block_id, anchor_id=str(uu
  * @param token - The owner's session.
  * @param paperId - The paper.
  * @param anchor - The passage the diagram is asked about.
- * @returns The plate's assistant message id and title.
+ * @returns The plate's assistant message id, title and thread.
  */
 export async function drawPlate(
   apiUrl: string,
   token: string,
   paperId: string,
   anchor: unknown,
-): Promise<{ messageId: string; title: string }> {
+): Promise<{ messageId: string; title: string; threadId: string }> {
   const stream = await fetch(`${apiUrl}/papers/${paperId}/threads`, {
     method: 'POST',
     headers: {
@@ -225,7 +225,11 @@ export async function drawPlate(
   };
   const plate = detail.messages.find((m) => m.role === 'assistant' && m.diagram !== null);
   expect(plate, 'the stored plate').toBeDefined();
-  return { messageId: plate!.message_id, title: plate!.diagram!.title };
+  return {
+    messageId: plate!.message_id,
+    title: plate!.diagram!.title,
+    threadId: thread!.thread_id,
+  };
 }
 
 /**

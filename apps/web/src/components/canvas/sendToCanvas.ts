@@ -69,6 +69,8 @@ export async function sendToCanvas(
     if (input.kind === 'explanation') showCanvasToast({ message, tone: 'error' });
     throw new Error(message);
   }
+  // The excerpt's card id, for the "Show" link of a quiet send.
+  let landed: string | null = null;
   try {
     const view = await boardsApi.get(paperId);
     const size = DEFAULT_SIZE[input.kind];
@@ -101,8 +103,9 @@ export async function sendToCanvas(
         });
         return;
       }
+      landed = newNodeId();
       await boardsApi.createNode(paperId, {
-        node_id: newNodeId(),
+        node_id: landed,
         kind: 'excerpt',
         ...spot,
         ...size,
@@ -128,6 +131,17 @@ export async function sendToCanvas(
         body: found.text.slice(0, CANVAS_BODY_MAX),
         source_message_id: input.messageId,
       });
+    }
+    if (input.kind === 'excerpt' && input.toast === 'none') return;
+    if (input.kind === 'excerpt' && input.toast === 'added' && landed !== null) {
+      // TODO(#344): the board does not yet read `?card=`; until the split view arrives it opens on
+      // its own view, and Show still lands on the board the card is on.
+      showCanvasToast({
+        message: 'Added',
+        href: `${boardHref(paperId)}?card=${encodeURIComponent(landed)}`,
+        linkLabel: 'Show',
+      });
+      return;
     }
     showCanvasToast({
       message: ADDED[input.kind],
