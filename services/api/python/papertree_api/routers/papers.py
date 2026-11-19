@@ -41,10 +41,20 @@ from starlette.datastructures import UploadFile
 from starlette.formparsers import MultiPartException, MultiPartParser
 
 from .. import assets
-from ..deps import AuthConnDep, Caller, CallerDep, SettingsDep, open_database
+from ..deps import (
+    AgentClientDep,
+    AuthConnDep,
+    Caller,
+    CallerDep,
+    IndexCacheDep,
+    SettingsDep,
+    TopicTasksDep,
+    open_database,
+)
 from ..deps import promoted_or_404 as _promoted
 from ..errors import BODY_UNPARSEABLE, ApiError
 from ..figures import asset_signer
+from ..glance import GlanceRunDeps, start_missing
 from ..ir import block_location, paper_document
 from ..library import (
     BUSY_STATES,
@@ -275,10 +285,21 @@ def _library_paper(
 
 @router.get("/papers", response_model=list[LibraryPaper])
 async def list_papers(
-    request: Request, call: CallerDep, settings: SettingsDep
+    request: Request,
+    call: CallerDep,
+    settings: SettingsDep,
+    client: AgentClientDep,
+    index_cache: IndexCacheDep,
+    tasks: TopicTasksDep,
 ) -> list[LibraryPaper]:
+    """The caller's library. A paper that is read in and has no "At a glance" sheet yet gets its
+    run STARTED here, in the background (`glance.start_missing`: at most two per read, never
+    waited for, nothing in the answer changes): the sheet is made when the paper is added, before
+    anyone opens its book."""
     sign = _signer(request, settings)
-    return [library_paper(row, sign) for row in call.db.list_library(call.db_owner)]
+    rows = call.db.list_library(call.db_owner)
+    start_missing(call, rows, GlanceRunDeps(settings, client, index_cache, tasks))
+    return [library_paper(row, sign) for row in rows]
 
 
 @router.get("/library/links", response_model=LibraryLinks)

@@ -347,7 +347,7 @@ def start_topic_run(
 
 
 @dataclass(slots=True)
-class _Outcome:
+class RunOutcome:
     """What one asked run came to: its model, its `done`, and why there is none."""
 
     model: str | None = None
@@ -356,9 +356,14 @@ class _Outcome:
     code: str = "internal"
 
 
-async def _ask(client: runs.AgentClient, body: AgentRunRequest) -> _Outcome:
-    """Sends the run and reads its stream to `done` (or to a failure, which is not raised)."""
-    outcome = _Outcome()
+async def ask_run(
+    client: runs.AgentClient, body: AgentRunRequest, *, event: str = "run.topic_failed"
+) -> RunOutcome:
+    """Sends the run and reads its stream to `done` (or to a failure, which is not raised).
+
+    `event` names the log line of a failure (the glance run shares this function).
+    """
+    outcome = RunOutcome()
     stream: runs.AgentStream | None = None
     try:
         async with asyncio.timeout(body.limits.deadline_ms / 1000 + WAIT_GRACE_SECONDS):
@@ -372,12 +377,10 @@ async def _ask(client: runs.AgentClient, body: AgentRunRequest) -> _Outcome:
     except runs.AgentUnavailable as exc:
         # A pre-stream refusal: the agent never started. A 4xx is the agent's "no" to THIS request.
         outcome.code = REFUSED if exc.permanent else "agent_unavailable"
-        log_event("run.topic_failed", level="warning", run_id=body.run_id, error_code=outcome.code)
+        log_event(event, level="warning", run_id=body.run_id, error_code=outcome.code)
     except (TimeoutError, runs.AgentProtocolError, OSError) as exc:
         # The agent may have started and spent: never "unavailable" (that is asked again).
-        log_event(
-            "run.topic_failed", level="warning", run_id=body.run_id, error_type=type(exc).__name__
-        )
+        log_event(event, level="warning", run_id=body.run_id, error_type=type(exc).__name__)
     finally:
         if stream is not None:
             await stream.aclose()
@@ -401,7 +404,7 @@ async def _settle(
         return max(0, int((time.monotonic() - started) * 1000))
 
     try:
-        outcome = await _ask(deps.client, body)
+        outcome = await ask_run(deps.client, body)
         _record(db, owner, paper_id, prepared, outcome, elapsed())
     except asyncio.CancelledError:
         db.finish_run(
@@ -424,7 +427,7 @@ def _record(
     owner: Any,
     paper_id: str,
     prepared: _Prepared,
-    outcome: _Outcome,
+    outcome: RunOutcome,
     latency_ms: int,
 ) -> None:
     """Settles the run row with its usage and stores the offer if the answer validates."""
