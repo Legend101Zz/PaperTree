@@ -158,8 +158,8 @@ export function useBoardTree(input: BoardTreeInput): TreeView {
   );
   const onPath = useMemo(() => onPathIds(tree, focusId), [tree, focusId]);
   const nodes = useMemo(
-    () => displayNodes(stored, layout, { paperId, onPath, draft: draftRow, arrivedId }),
-    [stored, layout, paperId, onPath, draftRow, arrivedId],
+    () => displayNodes(stored, layout, { paperId, onPath, arrivedId }),
+    [stored, layout, paperId, onPath, arrivedId],
   );
 
   // ── dragging ────────────────────────────────────────────────────────────────────────────────

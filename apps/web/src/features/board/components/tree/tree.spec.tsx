@@ -20,7 +20,7 @@ import { CanvasActionsProvider, type CanvasActions } from '../BoardContext';
 import { BranchProvider, type BranchActions } from '../BranchContext';
 import { AnswerCard } from '../cards/AnswerCard';
 import { PassageCard } from '../cards/PassageCard';
-import { AskDraft } from './AskBox';
+import { AskBox } from './AskBox';
 import { Breadcrumb } from './Breadcrumb';
 import { ExportSheet } from './ExportSheet';
 import { OutlineView } from './OutlineView';
@@ -271,7 +271,7 @@ describe('the ask box and its Uses line', () => {
     render(
       <ReactFlowProvider>
         <BranchProvider value={branch}>
-          <AskDraft {...props(node({ id: '__draft__', parent: 'a' }))} />
+          <AskBox />
         </BranchProvider>
       </ReactFlowProvider>,
     );
@@ -311,7 +311,7 @@ describe('the ask box and its Uses line', () => {
     render(
       <ReactFlowProvider>
         <BranchProvider value={branch}>
-          <AskDraft {...props(node({ id: '__draft__', parent: 'a' }))} />
+          <AskBox />
         </BranchProvider>
       </ReactFlowProvider>,
     );
@@ -339,7 +339,7 @@ describe('the ask box and its Uses line', () => {
     const view = render(
       <ReactFlowProvider>
         <BranchProvider value={branch}>
-          <AskDraft {...props(node({ id: '__draft__', parent: 'a' }))} />
+          <AskBox />
         </BranchProvider>
       </ReactFlowProvider>,
     );
@@ -350,7 +350,7 @@ describe('the ask box and its Uses line', () => {
     render(
       <ReactFlowProvider>
         <BranchProvider value={right}>
-          <AskDraft {...props(node({ id: '__draft__', parent: 'a' }))} />
+          <AskBox />
         </BranchProvider>
       </ReactFlowProvider>,
     );

@@ -42,6 +42,7 @@ import { ThreadBar } from './ThreadBar';
 import { edgeTypes } from './ThreadEdge';
 import { ThreadLegend as Legend } from './ThreadLegend';
 import { ThreadPreview } from './ThreadPreview';
+import { AskLayer } from './tree/AskBox';
 import { Breadcrumb } from './tree/Breadcrumb';
 import { ExportSheet } from './tree/ExportSheet';
 import { OutlineView } from './tree/OutlineView';
@@ -351,6 +352,7 @@ function Board({ paperId }: { readonly paperId: string }) {
                       >
                         <ZoomVar />
                         <TreeEdges layout={branch.view.layout} onPath={branch.onPath} />
+                        <AskLayer />
                         {link.preview === null ? null : <ThreadPreview {...link.preview} />}
                         <Background gap={24} size={1} />
                         <BoardMinimap empty={empty} />

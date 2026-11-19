@@ -4,7 +4,8 @@
  * The store keeps each card as the server has it (a stored x, y that only roots and loose cards
  * use). What xyflow is given is derived: a tree card sits where the layout puts it, a card of a
  * folded branch is hidden, off-path cards dim under a path focus, and the ask box being written is
- * a node of its own, placed by the same layout so the next card has its room before it exists.
+ * a box of its own (`AskLayer`), placed by the same layout so the next card has its room before it
+ * exists.
  * Pure: the same inputs give the same nodes.
  */
 import type { Draft } from './ui';
@@ -67,8 +68,6 @@ export interface DisplayInput {
   readonly paperId: string;
   /** The cards the path focus keeps lit; null when nothing is focused. */
   readonly onPath: ReadonlySet<string> | null;
-  /** The ask box's node, when one is open. */
-  readonly draft: CanvasNode | null;
   /** The card that just arrived (#342): it glows once. */
   readonly arrivedId: string | null;
 }
@@ -78,8 +77,8 @@ export interface DisplayInput {
  *
  * @param nodes The store's cards.
  * @param layout Tidy's placement of every tree card.
- * @param input The path focus, the ask box and the arrival.
- * @returns The same cards, placed, hidden or dimmed, plus the ask box.
+ * @param input The path focus and the arrival.
+ * @returns The same cards, placed, hidden or dimmed.
  */
 export function displayNodes(
   nodes: readonly PtNode[],
@@ -106,21 +105,5 @@ export function displayNodes(
       ...(classes.length === 0 ? {} : { className: classes.join(' ') }),
     };
   });
-  const spot = input.draft === null ? undefined : layout.cards.get(DRAFT_ID);
-  if (input.draft !== null && spot !== undefined) {
-    out.push({
-      id: DRAFT_ID,
-      type: 'draft',
-      position: { x: spot.x, y: spot.y },
-      width: spot.w,
-      zIndex: 40,
-      draggable: false,
-      selectable: false,
-      focusable: false,
-      deletable: false,
-      connectable: false,
-      data: { node: input.draft, paperId: input.paperId },
-    });
-  }
   return out;
 }

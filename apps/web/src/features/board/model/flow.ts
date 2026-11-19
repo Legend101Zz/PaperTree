@@ -28,8 +28,6 @@ export type PtNodeType =
   | 'note'
   /** A note kept from words in an answer: a child in a tree, laid out with it (v0.3). */
   | 'branchnote'
-  /** The ask box being written, placed by the layout like the card it will become (v0.3). */
-  | 'draft'
   | 'question'
   | 'notebook'
   | 'diagram'

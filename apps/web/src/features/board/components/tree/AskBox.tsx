@@ -10,7 +10,7 @@
  *
  * The box is a node the layout placed (`useBoardTree`): the card it becomes will have its room.
  */
-import { type NodeProps } from '@xyflow/react';
+import { ViewportPortal } from '@xyflow/react';
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 
 import {
@@ -20,17 +20,17 @@ import {
   isValidQuestion,
   whatTheAiWillRead,
 } from '../../model/askPayload';
+import { DRAFT_ID } from '../../model/display';
 import { branchFor } from '../../model/tree';
 import { useBranch } from '../BranchContext';
 import { UsesPicker } from './UsesPicker';
 
 import type { PickerName } from '../../model/ui';
-import type { PtNode } from '../../model/flow';
 
 const DOTTED: readonly PickerName[] = ['path', 'paper', 'level', 'diagram'];
 
-/** The ask box node (and its one-line stub). */
-export function AskDraft(_props: NodeProps<PtNode>): ReactNode {
+/** The ask box (and its one-line stub), as the layout placed it. */
+export function AskBox(): ReactNode {
   const branch = useBranch();
   const { draft, tree, control, reports } = branch;
   const root = useRef<HTMLDivElement>(null);
@@ -41,7 +41,7 @@ export function AskDraft(_props: NodeProps<PtNode>): ReactNode {
   useEffect(() => {
     const el = root.current;
     if (el === null) return undefined;
-    const measure = (): void => reports.height('__draft__', Math.round(el.offsetHeight));
+    const measure = (): void => reports.height(DRAFT_ID, Math.round(el.offsetHeight));
     measure();
     if (typeof ResizeObserver === 'undefined') return undefined;
     const observer = new ResizeObserver(measure);
@@ -190,5 +190,27 @@ export function AskDraft(_props: NodeProps<PtNode>): ReactNode {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * The ask box on the board, in board coordinates under the same pan and zoom as the cards. It is
+ * not a card: it is never selected, dragged, counted or focused as one, and Tidy never moves it.
+ *
+ * @returns The box where the layout put it, or nothing when no ask is open.
+ */
+export function AskLayer(): ReactNode {
+  const { layout, draft } = useBranch();
+  const spot = layout.cards.get(DRAFT_ID);
+  if (draft === null || spot === undefined) return null;
+  return (
+    <ViewportPortal>
+      <div
+        className="pt-ask-layer nodrag nopan nowheel"
+        style={{ left: spot.x, top: spot.y, width: spot.w }}
+      >
+        <AskBox />
+      </div>
+    </ViewportPortal>
   );
 }

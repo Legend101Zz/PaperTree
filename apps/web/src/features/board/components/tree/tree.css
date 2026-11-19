@@ -433,6 +433,12 @@
   opacity: 0.3;
 }
 
+/* The ask box is not a card: it floats in board coordinates where the layout put it. */
+.pt-ask-layer {
+  position: absolute;
+  z-index: 40;
+}
+
 /* ── the ask box ────────────────────────────────────────────────────────────────────────────── */
 
 .pt-ask {

@@ -28,7 +28,7 @@ describe('displayNodes: the cards as xyflow draws them', () => {
   const tree = buildTree(rows);
   const layout = layoutBoard(tree, { viewportHeight: 800, measure: () => 100 });
   const flow = rows.map((r) => toFlowNode(r, 'ppr_1'));
-  const base = { paperId: 'ppr_1', onPath: null, draft: null, arrivedId: null } as const;
+  const base = { paperId: 'ppr_1', onPath: null, arrivedId: null } as const;
 
   it('puts a tree card where the layout says, with a handle on its top strip only', () => {
     const out = displayNodes(flow, layout, base);
@@ -55,7 +55,7 @@ describe('displayNodes: the cards as xyflow draws them', () => {
     expect(out.find((n) => n.id === 'p')!.className).toContain('pt-tn--arrived');
   });
 
-  it('adds the ask box as a node of its own, placed by the same layout', () => {
+  it('does not draw the ask box as a card, but the layout gives it its room', () => {
     const draft = draftNode(
       'brd_1',
       { parentId: 'b', span: null, askDifferently: false, expanded: true, text: '', uses: USES },
@@ -65,10 +65,8 @@ describe('displayNodes: the cards as xyflow draws them', () => {
       viewportHeight: 800,
       measure: () => 100,
     });
-    const out = displayNodes(flow, withDraft, { ...base, draft });
-    const box = out.find((n) => n.id === DRAFT_ID)!;
-    expect(box.type).toBe('draft');
-    expect(box.draggable).toBe(false);
-    expect(box.position.y).toBeGreaterThan(withDraft.cards.get('b')!.y);
+    const out = displayNodes(flow, withDraft, base);
+    expect(out.map((n) => n.id)).toEqual(['p', 'a', 'b', 'loose']);
+    expect(withDraft.cards.get(DRAFT_ID)!.y).toBeGreaterThan(withDraft.cards.get('b')!.y);
   });
 });
