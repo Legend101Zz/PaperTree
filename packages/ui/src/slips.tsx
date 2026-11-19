@@ -80,31 +80,24 @@ export function CallSlip({
 
 /** Props for `AiParagraph`. */
 export interface AiParagraphProps {
-  /** The paragraph's text, with its inline markers. */
+  /** The paragraph's text. */
   readonly children: ReactNode;
-  /**
-   * The margin cell on the same grid row: typically a `NumberedMarker` and a `PageTab` for each
-   * claim in the paragraph. Desktop only (hidden on a phone, where the trace list carries them).
-   */
-  readonly aside?: ReactNode;
+  /** The quiet source line under it (`SourceLine`), when it has one to draw. */
+  readonly source?: ReactNode;
 }
 
 /**
- * One paragraph of an `AiSlip` answer with its margin cell. The text and the cell are two grid
- * items of one row (`display: contents` wrapper), so the cell sits level with its paragraph however
- * tall the paragraph is. The cell is always rendered, empty when there is no `aside`, so a
- * paragraph without citations never shifts the next one into the wrong column.
+ * One paragraph of an `AiSlip` answer and, under it, its one quiet source line. Both are one row
+ * of the slip's grid, so a paragraph never loses its line to the next one.
  *
  * @example
- * <AiParagraph aside={<><NumberedMarker n={1} label="p. 1 ¶1" onFlash={f} /></>}>
- *   The passage states the paper's central proposal.
- * </AiParagraph>
+ * <AiParagraph source={<SourceLine sources={pages} />}>The passage states the proposal.</AiParagraph>
  */
-export function AiParagraph({ children, aside }: AiParagraphProps): ReactNode {
+export function AiParagraph({ children, source }: AiParagraphProps): ReactNode {
   return (
     <div className="pt-ai-slip__row">
       <p className="pt-ai-slip__text">{children}</p>
-      <div className="pt-ai-slip__aside">{aside}</div>
+      {source}
     </div>
   );
 }
@@ -113,47 +106,25 @@ export function AiParagraph({ children, aside }: AiParagraphProps): ReactNode {
 export interface AiSlipProps {
   /**
    * The model, e.g. `"M3.1 Flash"`. Omitted where the slip is too small for the line beside its
-   * tab (a board card): then no source line is drawn and the label names no model.
+   * tab (a board card): then no model line is drawn and the label names no model.
    */
   readonly model?: string;
-  /** What it read, e.g. `"from the paper"`. Shown with `model` only. */
-  readonly source?: string;
-  /**
-   * The answer: `AiParagraph`s for paragraphs with margin cells, or any other content (it spans
-   * both grid columns).
-   */
+  /** The answer: `AiParagraph`s or any other content. */
   readonly children: ReactNode;
   /** Usage line (an estimate) and actions. */
   readonly footer?: ReactNode;
-  /** Uncited AI paragraphs; always labelled under a dashed rule. */
-  readonly uncited?: ReactNode;
   /** The standing tab's text. Default `AI`. */
   readonly tabLabel?: string;
-  /** Heading above the uncited block. Default `no citation · the AI's own reading`. */
-  readonly uncitedHeading?: string;
-  /** Its heading level, to fit the page outline. Default 4. */
-  readonly headingLevel?: 2 | 3 | 4 | 5 | 6;
   /**
-   * Replaces the `{model} · {source}` line beside the tab while the answer is not simply done: the
-   * working label as it streams, `Stopped · M3.1 Flash` after Stop. Inline content only (it sits
-   * in a `<p>`). The slip's accessible name still names the model.
+   * Replaces the model line beside the tab while the answer is not simply done: the working label
+   * as it streams, `Stopped · M3.1 Flash` after Stop. Inline content only (it sits in a `<p>`).
+   * The slip's accessible name still names the model.
    */
   readonly meta?: ReactNode;
 }
 
 /** The AI's answer on AI-slip stock under a standing "AI" tab. */
-export function AiSlip({
-  model,
-  source,
-  children,
-  footer,
-  uncited,
-  tabLabel = 'AI',
-  uncitedHeading = "no citation · the AI's own reading",
-  headingLevel = 4,
-  meta,
-}: AiSlipProps): ReactNode {
-  const Heading = (['h2', 'h3', 'h4', 'h5', 'h6'] as const)[headingLevel - 2] ?? 'h4';
+export function AiSlip({ model, children, footer, tabLabel = 'AI', meta }: AiSlipProps): ReactNode {
   return (
     <section
       className="pt-ai-slip"
@@ -164,18 +135,10 @@ export function AiSlip({
       <span className="pt-ai-tab">{tabLabel}</span>
       {meta !== undefined ? (
         <p className="pt-ai-slip__source">{meta}</p>
-      ) : model === undefined || source === undefined ? null : (
-        <p className="pt-ai-slip__source">
-          {model} · {source}
-        </p>
+      ) : model === undefined ? null : (
+        <p className="pt-ai-slip__source">{model}</p>
       )}
       <div className="pt-ai-slip__grid">{children}</div>
-      {uncited === undefined ? null : (
-        <div className="pt-ai-slip__uncited">
-          <Heading className="pt-ai-slip__uncited-head">{uncitedHeading}</Heading>
-          <div className="pt-ai-slip__uncited-body">{uncited}</div>
-        </div>
-      )}
       {footer === undefined ? null : <div className="pt-ai-slip__footer">{footer}</div>}
     </section>
   );

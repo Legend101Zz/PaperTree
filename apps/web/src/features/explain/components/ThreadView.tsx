@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * The explain panel's body (#202): the thread as exchanges (ask → answer → trace), or the paper
- * summary as an exchange of its own (#204, numbered with the thread's passages), above the composer. It follows a growing answer only after the reader has asked
+ * The explain panel's body (#202): the thread as exchanges (ask → answer), or the paper summary as
+ * an exchange of its own (#204), above the composer. It follows a growing answer only after the reader has asked
  * something of their own, so a new thread opens at its call slip, not at the end.
  */
 import { PaperText } from '@papertree/ui';
@@ -10,13 +10,12 @@ import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
 
 import { SummaryView } from '@/components/explain/SummaryView';
 import { useReaderActions } from '@/components/reader/actions';
-import { DiagramExchange, numberPlatePassages } from '@/features/diagram';
+import { DiagramExchange } from '@/features/diagram';
 import { useDiveIn } from '@/features/notebook/hooks/useDiveIn';
 
 import { cleanQuote, selectorOf } from '../model/anchor';
 import { buildExchanges } from '../model/exchange';
 import { isStored } from '../model/messages';
-import { numberPassages } from '../model/passages';
 import { pinnedExchange } from '../model/phone';
 import { opensFolded, wasStopped } from '../model/states';
 import { Composer } from './Composer';
@@ -26,9 +25,8 @@ import { SummaryExchange } from './SummaryExchange';
 import { ThreadReadFailure } from './ThreadReadFailure';
 
 import type { ExplainController, ExplainRequest } from '@/components/explain/useExplainActions';
-import type { FlashSource } from '@/components/reader/actions';
 import type { ThreadsState } from '../hooks/useThreads';
-import type { PassageMarker } from '../model/exchange';
+import type { PaperSource } from '../model/exchange';
 import type { Anchor } from '@papertree/anchoring';
 
 /** Props for `ThreadView`. */
@@ -38,10 +36,10 @@ export interface ThreadViewProps {
   readonly threads: Pick<ThreadsState, 'failure' | 'retry'>;
   /** The account's initial for the call slips. */
   readonly initial: string;
-  /** Flash a passage (an exchange's or the summary's markers and trace rows). */
-  readonly onShow: (marker: PassageMarker) => void;
+  /** Flash a passage (a page link under an answer paragraph or a summary bullet). */
+  readonly onShow: (source: PaperSource) => void;
   /** Flash a diagram part's passage (#217). */
-  readonly onFlash: (anchor: Anchor, from: FlashSource) => void;
+  readonly onFlash: (anchor: Anchor) => void;
   /** The phone sheet (#205): 44 px targets, clipped answers and the pinned footer. */
   readonly phone?: boolean;
 }
@@ -77,12 +75,8 @@ export function ThreadView({
     () => buildExchanges(state.messages, state.request),
     [state.messages, state.request],
   );
-  const numbers = useMemo(
-    () => numberPassages(state.messages.filter((m) => m.role === 'assistant')),
-    [state.messages],
-  );
   // A diagram thread's plates (#217): numbered 1, 2… among the plates drawn or drawing (one that
-  // ended with no part is never "Plate 1", review N4), one set of passage numbers for the thread.
+  // ended with no part is never "Plate 1", review N4).
   const plates = useMemo(() => {
     let n = 0;
     const plateNo = new Map<string, number | null>();
@@ -92,10 +86,7 @@ export function ThreadView({
       const drawn = answer.status === 'streaming' || answer.diagram.parts.length > 0;
       plateNo.set(e.key, drawn ? (n += 1) : null);
     });
-    const parts = exchanges.flatMap((e) =>
-      e.answer?.diagram == null ? [] : [e.answer.diagram.parts],
-    );
-    return { plateNo, numbers: numberPlatePassages(parts) };
+    return { plateNo };
   }, [exchanges]);
   const summary = state.summary.summary;
   const summaryShown =
@@ -159,7 +150,6 @@ export function ThreadView({
           <SummaryExchange
             summary={summary}
             state={state.summary}
-            numbers={state.messages.length === 0 ? null : numbers}
             initial={initial}
             onShow={onShow}
             onRegenerate={() => controller.summarize({ regenerate: true })}
@@ -226,7 +216,6 @@ export function ThreadView({
                   exchange={exchange}
                   initial={initial}
                   plateNo={plateNo}
-                  numbers={plates.numbers}
                   onFlash={onFlash}
                   onStop={controller.stop}
                   onRedraw={controller.redraw}

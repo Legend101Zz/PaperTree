@@ -110,8 +110,6 @@ export function NotebookView({ paperId, pageId }: NotebookViewProps): ReactNode 
         onTemplate={template.choose}
         counts={pages.data?.find((p) => p.page_id === pageId)?.counts ?? null}
         hasQuestion={exchangeId !== null}
-        citations={exchange.answer?.coverage?.citations ?? null}
-        passages={exchange.answer?.coverage?.passages ?? null}
         card={board.card}
         boardUnreadable={board.unreadable}
         sending={board.sending}

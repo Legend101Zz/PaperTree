@@ -1,5 +1,5 @@
 /**
- * ui/voices.spec — the three voices, the numbered marker, the page tab and coverage (v0.2, #190).
+ * ui/voices.spec — the three voices, the numbered marker and the page tab (v0.2, #190).
  *
  * Behaviour, not snapshots: what a reader or a screen reader meets in the DOM, plus the stylesheet
  * as source (happy-dom applies no CSS) for the claim that the three voices look different in both
@@ -12,16 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  AiText,
-  CoverageReadout,
-  NumberedMarker,
-  PageTab,
-  PaperText,
-  ReflowedText,
-  YouText,
-  formatCoverage,
-} from '../src/index.js';
+import { AiText, NumberedMarker, PageTab, PaperText, ReflowedText, YouText } from '../src/index.js';
 
 afterEach(cleanup);
 
@@ -84,16 +75,12 @@ describe('NumberedMarker', () => {
     expect(screen.getByRole('button').getAttribute('data-lit')).toBe('true');
   });
 
-  it('says "not verified" in its accessible name when it is', () => {
-    render(<NumberedMarker n={2} label="p. 2 ¶2" notVerified onFlash={() => undefined} />);
-    expect(screen.getByRole('button', { name: 'Passage 2, p. 2 ¶2, not verified' })).not.toBeNull();
-  });
-
-  it('has a touch size and a not-verified variant', () => {
+  it('has a touch size, and its name is the passage and where it is, nothing more', () => {
     const { container } = render(
-      <NumberedMarker n={1} label="p. 1" size="touch" notVerified onFlash={() => undefined} />,
+      <NumberedMarker n={1} label="p. 1" size="touch" onFlash={() => undefined} />,
     );
-    expect(container.querySelector('.pt-marker--touch.pt-marker--not-verified')).not.toBeNull();
+    expect(container.querySelector('.pt-marker--touch')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Passage 1, p. 1' })).not.toBeNull();
   });
 });
 
@@ -103,36 +90,6 @@ describe('PageTab', () => {
     expect(screen.getByText('p. 2 ¶2')).not.toBeNull();
     rerender(<PageTab page={2} para={null} />);
     expect(screen.getByText('p. 2')).not.toBeNull();
-  });
-
-  it('says "not verified" in words for the dashed variant, and only then', () => {
-    const { container, rerender } = render(<PageTab page={2} para={2} status="not-verified" />);
-    expect(screen.getByText('not verified')).not.toBeNull();
-    expect(container.querySelector('.pt-tab--not-verified')).not.toBeNull();
-    rerender(<PageTab page={2} para={2} />);
-    expect(screen.queryByText('not verified')).toBeNull();
-  });
-});
-
-describe('CoverageReadout', () => {
-  it('formats zero, one and many', () => {
-    expect(formatCoverage({ passages: 4, citations: 11, uncitedParagraphs: 1 })).toBe(
-      "Stands on 4 passages · 11 citations · 1 paragraph uncited (the AI's own reading)",
-    );
-    expect(formatCoverage({ passages: 1, citations: 1, uncitedParagraphs: 0 })).toBe(
-      'Stands on 1 passage · 1 citation',
-    );
-    expect(formatCoverage({ passages: 0, citations: 0, uncitedParagraphs: 0 })).toBe(
-      'Stands on no passages · 0 citations',
-    );
-    expect(formatCoverage({ passages: 2, citations: 3, uncitedParagraphs: 2 })).toContain(
-      '2 paragraphs uncited',
-    );
-  });
-
-  it('renders the sentence', () => {
-    render(<CoverageReadout passages={1} citations={1} uncitedParagraphs={0} />);
-    expect(screen.getByText('Stands on 1 passage · 1 citation')).not.toBeNull();
   });
 });
 

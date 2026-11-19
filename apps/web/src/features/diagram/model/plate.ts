@@ -1,10 +1,9 @@
 /**
- * A diagram answer as the panel holds it (#217): the plate built from the run's `plate` / `part` /
- * `link` events (or read back stored), its phase, each part's honest verdict (DESIGN.md §4: cited,
- * not verified, or inferred, never silently uncited), the passage numbers its markers show and the
- * readout "6 parts · 6 cited · drawn by AI from p. 4". Pure; the plate components draw it.
+ * A diagram answer as the panel holds it (#217, #340): the plate built from the run's `plate` /
+ * `part` / `link` events (or read back stored), its phase, each part's quiet page source (the page
+ * of the passage it came from, when it has one: no verdicts, no markers) and the readout
+ * "6 parts · drawn by AI from p. 4". Pure; the plate components draw it.
  */
-import { selectorOf } from '@/features/explain/model/anchor';
 import { wasStopped } from '@/features/explain/model/states';
 
 import type { ThreadMessage } from '@/features/explain/model/messages';
@@ -95,117 +94,34 @@ export function stoppedPlateNote(parts: number): string {
     : 'Stopped before any part arrived.';
 }
 
-/** A part's honest label: its quote is word for word in a passage, or it is not, or it has none. */
-export type PartVerdict = 'cited' | 'not-verified' | 'inferred';
-
 /**
- * A part's verdict.
- *
- * @param part The part.
- * @returns `inferred` with no quote; `cited` when the quote was found word for word (an Anchor and
- *   `supported`); else `not-verified`.
- */
-export function verdictOf(part: Pick<DiagramPart, 'cite'>): PartVerdict {
-  if (part.cite === null) return 'inferred';
-  return part.cite.supported && part.cite.anchor !== null ? 'cited' : 'not-verified';
-}
-
-/** The words for an inferred part (DESIGN.md §4.7). */
-export const INFERRED_WORDS = 'Inferred, no passage';
-
-/**
- * Which passage a cite stands on: the Anchor's block, so two parts on one paragraph share a number.
+ * The page a part's passage is on.
  *
  * @param cite The part's cite.
- * @returns The passage key, or null when the quote has no Anchor (found nowhere).
+ * @returns The 1-based page, or null without an Anchor or a page.
  */
-export function passageKey(cite: DiagramCite | null): string | null {
-  if (cite === null || cite.anchor === null) return null;
-  return (
-    selectorOf(cite.anchor, 'BlockSelector')?.blockId ?? cite.locator?.passage_key ?? cite.anchor.id
-  );
-}
-
-/**
- * Passage numbers for a thread's plates: 1..k in the order the plates first stand on a passage, so
- * marker 1 is the same passage on every plate of the thread (DESIGN.md §3.2).
- *
- * @param plates Each plate's parts, oldest plate first.
- * @returns Passage key → its number.
- */
-export function numberPlatePassages(
-  plates: readonly (readonly DiagramPart[])[],
-): ReadonlyMap<string, number> {
-  const numbers = new Map<string, number>();
-  for (const part of plates.flat()) {
-    const key = passageKey(part.cite);
-    if (key !== null && !numbers.has(key)) numbers.set(key, numbers.size + 1);
-  }
-  return numbers;
-}
-
-/**
- * The page tab of a part's passage.
- *
- * @param cite The part's cite.
- * @returns 1-based page and ¶ (null: the page alone), or null without an Anchor or a page.
- */
-export function tabOf(cite: DiagramCite | null): { page: number; para: number | null } | null {
+export function pageOf(cite: DiagramCite | null): number | null {
   if (cite === null || cite.anchor === null) return null;
   const pageIndex = cite.locator?.page_index ?? cite.page_index;
-  return pageIndex === null
-    ? null
-    : { page: pageIndex + 1, para: cite.locator?.para_index ?? null };
-}
-
-/** How many parts, and how many in each verdict. */
-export interface PlateCounts {
-  readonly parts: number;
-  readonly cited: number;
-  readonly notVerified: number;
-  readonly inferred: number;
+  return pageIndex === null ? null : pageIndex + 1;
 }
 
 /**
- * Count a plate's parts by verdict.
+ * The pages the parts stand on: `p. 4` or `pp. 3–4`.
  *
  * @param parts The parts.
- * @returns The counts.
- */
-export function countParts(parts: readonly DiagramPart[]): PlateCounts {
-  const verdicts = parts.map(verdictOf);
-  const n = (v: PartVerdict): number => verdicts.filter((x) => x === v).length;
-  return {
-    parts: parts.length,
-    cited: n('cited'),
-    notVerified: n('not-verified'),
-    inferred: n('inferred'),
-  };
-}
-
-/**
- * The pages the cited parts stand on: `p. 4` or `pp. 3–4`.
- *
- * @param parts The parts.
- * @returns The span, or null when no part is cited.
+ * @returns The span, or null when no part has a page.
  */
 export function pagesLine(parts: readonly DiagramPart[]): string | null {
-  const pages = parts
-    .filter((p) => verdictOf(p) === 'cited')
-    .flatMap((p) => {
-      const tab = tabOf(p.cite);
-      return tab === null ? [] : [tab.page];
-    });
+  const pages = parts.flatMap((p) => pageOf(p.cite) ?? []);
   if (pages.length === 0) return null;
   const [lo, hi] = [Math.min(...pages), Math.max(...pages)];
   return lo === hi ? `p. ${String(lo)}` : `pp. ${String(lo)}–${String(hi)}`;
 }
 
 /**
- * The readout under a plate: "3 parts so far · 3 cited" while it draws, "6 parts · 6 cited · drawn
- * by AI from pp. 3–4" once settled ("drawn by AI" alone when no part is cited). A not-verified part
- * is counted in words; an inferred one is the difference between the two counts, as the design
- * words it ("7 parts · 6 cited").
+ * The readout under a plate: "3 parts so far" while it draws, "6 parts · drawn by AI from pp. 3–4"
+ * once settled ("drawn by AI" alone when no part has a page). No verdict and no count of any.
  *
  * @param parts The parts.
  * @param live True while the run is still drawing.
@@ -218,12 +134,9 @@ export function plateReadout(
   pages = true,
 ): string | null {
   if (parts.length === 0) return null;
-  const c = countParts(parts);
   const words = [
-    `${String(c.parts)} ${c.parts === 1 ? 'part' : 'parts'}${live ? ' so far' : ''}`,
-    `${String(c.cited)} cited`,
+    `${String(parts.length)} ${parts.length === 1 ? 'part' : 'parts'}${live ? ' so far' : ''}`,
   ];
-  if (c.notVerified > 0) words.push(`${String(c.notVerified)} not verified`);
   if (!live && pages) {
     const span = pagesLine(parts);
     words.push(span === null ? 'drawn by AI' : `drawn by AI from ${span}`);

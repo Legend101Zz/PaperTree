@@ -76,13 +76,6 @@ export const COLOUR_ROLES: readonly ColourRole[] = [
     use: 'the standing AI tab',
   },
   {
-    label: 'Not verified',
-    token: '--pt-nv-ink',
-    on: '--pt-ai-slip',
-    min: 4.5,
-    use: 'dashed tab, no fill',
-  },
-  {
     label: 'Danger',
     token: '--pt-danger',
     on: '--pt-page',

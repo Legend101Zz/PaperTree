@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NotebookView, encodeStroke } from '@/features/notebook';
 import { QuoteCard } from '@/features/notebook/components/QuoteCard';
 
+import { sourceLines } from './answer-render';
 import { CITATIONS, PAGE, PAPER, pageView, stubApi, wireItem } from './s5c-notebook-fixtures';
 
 import type { Call } from './s5c-notebook-fixtures';
@@ -65,10 +66,11 @@ describe('the exchange block', () => {
     );
     expect(voices('ai')).toHaveLength(1);
     expect(within(voices('ai')[0] as HTMLElement).queryByText(/Explain this passage/)).toBeNull();
-    expect(exchange.textContent).toContain('Stands on 4 passages · 11 citations');
+    expect(exchange.textContent).not.toMatch(/Stands on|citations|verified/);
+    expect(exchange.querySelector('.pt-coverage')).toBeNull();
   });
 
-  it('numbers quote cards as the answer numbers its markers', async () => {
+  it('keeps the quote cards numbered; the answer draws no marker, only one source line per paragraph', async () => {
     stubApi(pageView());
     mount();
     const exchange = await screen.findByRole('region', {
@@ -83,23 +85,30 @@ describe('the exchange block', () => {
     ] as const) {
       const card = screen.getByRole('article', { name: `Passage ${String(n)}, ${where}` });
       within(card).getByRole('button', { name: `Passage ${String(n)}, ${where}` });
-      expect(
-        within(exchange).getAllByRole('button', { name: `Passage ${String(n)}, ${where}` }).length,
-      ).toBeGreaterThan(0);
     }
+    expect(exchange.querySelector('.pt-marker, .pt-nb-exchange__margin')).toBeNull();
+    expect(sourceLines(exchange)).toEqual([
+      'From the paper: p. 1',
+      'From the paper: p. 1 · p. 2',
+      'From the paper: p. 2',
+      'From the paper: p. 1 · p. 2',
+      'General knowledge',
+    ]);
     expect(
       within(screen.getByRole('article', { name: 'Passage 1, p. 1 ¶1' })).getByText('×5'),
     ).toBeTruthy();
-    expect(within(exchange).getByText(/no citation · the AI's own reading/)).toBeTruthy();
+    expect(exchange.textContent).not.toMatch(/own reading/);
   });
 
-  it('sends a marker in the answer to the reader at the passage it cites', async () => {
+  it('sends a page of the answer’s source line to the reader at the passage it cites', async () => {
     stubApi(pageView());
     mount();
     const exchange = await screen.findByRole('region', {
       name: 'The exchange this page started from',
     });
-    fireEvent.click(await within(exchange).findByRole('button', { name: 'Passage 1, p. 1 ¶1' }));
+    fireEvent.click(
+      await within(exchange).findByRole('button', { name: 'Show p. 1 in the paper' }),
+    );
     expect(push).toHaveBeenCalledWith(`/paper/${PAPER}/read?nb=${PAGE}&item=ni_quote0001`);
   });
 });

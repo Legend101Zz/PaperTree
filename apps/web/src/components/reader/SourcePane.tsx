@@ -24,7 +24,7 @@
  * selection, or docked across the top or bottom of the column, never over the selected lines.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   frameForPdfPage,
@@ -35,7 +35,6 @@ import {
   type Resolution,
 } from '@papertree/anchoring';
 
-import { FlashMarginTab } from '@/features/explain/components/FlashMarginTab';
 import { useHighlightClick, useSelectionToolbar } from '@/features/reader';
 import { MAX_ANCHORS_PER_HIGHLIGHT } from '@/lib/api/highlights';
 
@@ -57,7 +56,6 @@ import {
 } from './useSelectionCapture';
 import {
   VirtualPageList,
-  type FloatingGeometry,
   type ReadingPosition,
   type VirtualPageListHandle,
 } from './VirtualPageList';
@@ -383,23 +381,6 @@ export function SourcePane(props: SourcePaneProps) {
     );
   }
 
-  /** "from marker 2 in the answer" beside the flashed passage, while the flash lasts (#202). */
-  function marginTab(geometry: FloatingGeometry): ReactNode {
-    const flash = props.flash;
-    if (flash?.from === undefined || flash.extent === null || flash.phase === 'scroll') return null;
-    const box = geometry.pageBox(flash.pageIndex);
-    if (box === null) return null;
-    const scale = geometry.irScale(flash.pageIndex);
-    return (
-      <FlashMarginTab
-        key={flash.key}
-        from={flash.from}
-        left={box.left + flash.extent[0] * scale}
-        top={box.top + flash.extent[1] * scale}
-      />
-    );
-  }
-
   const ready = pdf.pdf !== null && pdf.pdf !== undefined && (pdf.numPages ?? 0) > 0;
 
   return (
@@ -442,12 +423,7 @@ export function SourcePane(props: SourcePaneProps) {
             onActivate={(highlightId) => onActivateHighlight(highlightId, null)}
           />
         )}
-        renderFloating={(geometry) => (
-          <>
-            {marginTab(geometry)}
-            {toolbar.floating(geometry)}
-          </>
-        )}
+        renderFloating={(geometry) => <>{toolbar.floating(geometry)}</>}
       />
       {toolbar.dock}
       {toolbar.sheet}

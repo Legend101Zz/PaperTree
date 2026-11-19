@@ -32,7 +32,6 @@ export function citation(marker: string, over: Record<string, unknown> = {}) {
     marker,
     page_index: 3,
     anchor: anchorFixture(marker),
-    supported: true,
     ...over,
   };
 }

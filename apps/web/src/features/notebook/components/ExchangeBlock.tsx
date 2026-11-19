@@ -1,18 +1,20 @@
 'use client';
 
 /**
- * The exchange a dived page starts from (S5c, #208, DESIGN.md §4): the call slip (your question,
- * in your voice), the AI slip (the answer, its markers numbered as the quote cards below it), and
- * the coverage line. The three voices go through the shared slips, so `data-voice` is `you`,
- * `paper` (the quoted passage) and `ai`. Collapsed, the slip shows its first paragraph.
- * On a phone (S5e, #210, frame 08c) "Read the whole answer" sits in the slip's foot with how many
- * paragraphs it holds back, and the margin echoes are left out (the markers stay inline).
+ * The exchange a dived page starts from (S5c, #208, #340, DESIGN.md §4): the call slip (your
+ * question, in your voice) and the AI slip (the answer, each paragraph with one quiet source
+ * line). The voices go through the shared slips, so `data-voice` is `you`, `paper` (the quoted
+ * passage) and `ai`. Collapsed, the slip shows its first paragraph. On a phone (S5e, #210, frame
+ * 08c) "Read the whole answer" sits in the slip's foot with how many paragraphs it holds back.
  */
-import { AiParagraph, AiSlip, CallSlip, CoverageReadout, PageTab } from '@papertree/ui';
+import { AiParagraph, AiSlip, CallSlip, SourceLine } from '@papertree/ui';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 
-import { AnswerProse, paragraphNumbers } from './AnswerProse';
+import { handleRuns } from '@/features/explain/model/passages';
+import { sourcesOf } from '@/features/explain/model/answer';
+
+import { AnswerProse } from './AnswerProse';
 import { anchorQuote, dayAndTime, modelLabel, originPlace, usageLine } from '../model/exchange';
 
 import type { Exchange } from '../hooks/useExchange';
@@ -44,24 +46,7 @@ export interface ExchangeBlockProps {
   readonly phone?: boolean;
 }
 
-function Margin({ numbers, exchange }: { numbers: number[]; exchange: Exchange }): ReactNode {
-  if (numbers.length === 0) return null;
-  return (
-    <span className="pt-nb-exchange__margin" aria-hidden="true">
-      {numbers.map((n) => {
-        const passage = exchange.layout?.passages[n - 1];
-        return (
-          <span key={n} className="pt-nb-exchange__claim">
-            <span className="pt-marker pt-marker--static">{n}</span>
-            <PageTab page={passage?.page ?? 1} para={passage?.para ?? null} />
-          </span>
-        );
-      })}
-    </span>
-  );
-}
-
-/** The call slip, the AI slip and the coverage line of a dived page. */
+/** The call slip and the AI slip of a dived page. */
 export const ExchangeBlock = memo(function ExchangeBlock({
   body,
   exchange,
@@ -78,28 +63,28 @@ export const ExchangeBlock = memo(function ExchangeBlock({
   const origin = body.call.originAnchor;
   const place = origin === null ? null : originPlace(origin, layout);
   const asked = question === null ? null : dayAndTime(question.created_at);
-  const uncited = new Set(answer?.coverage?.uncited_paragraphs ?? []);
   const paragraphs = (layout?.paragraphs ?? [body.ai.content]).map((text, i) => ({ text, i }));
   const shown = open ? paragraphs : paragraphs.slice(0, 1);
-  const prose = (text: string): ReactNode =>
-    layout === null ? (
-      text.replace(/\s*\[b\d+(?:\s*,\s*b\d+)*\]/g, '')
-    ) : (
-      <AnswerProse
-        text={text}
-        layout={layout}
-        citations={citations}
-        onFocusAnchor={onFocusAnchor}
+  // Without the thread the handles cannot be resolved, so no source line is drawn at all: a
+  // paragraph is never called "general knowledge" on no evidence.
+  const source = (text: string): ReactNode =>
+    layout === null ? null : (
+      <SourceLine
+        sources={sourcesOf(
+          handleRuns(text)
+            .flat()
+            .flatMap((h) => citations.get(h) ?? []),
+        ).map((s) => ({
+          page: s.page,
+          passage: s.passage,
+          onShow: () => onFocusAnchor(s.citation.anchor),
+        }))}
         touch={phone}
       />
     );
-  const cited = shown.filter((p) => !uncited.has(p.i));
-  const own = shown.filter((p) => uncited.has(p.i));
-  // Without the thread the handles cannot be numbered, so the slip says so instead of showing
-  // claims with no marker as if they were uncited.
   const usage =
     layout === null && !exchange.loading
-      ? 'Its citations could not be read; the passages it stood on are the cards below.'
+      ? 'Its sources could not be read; the passages it drew on are the cards below.'
       : usageLine(answer?.run ?? null);
   return (
     <section
@@ -128,11 +113,6 @@ export const ExchangeBlock = memo(function ExchangeBlock({
         ) : null}
         <AiSlip
           model={modelLabel(answer?.run?.model ?? body.ai.model)}
-          source="from the paper"
-          headingLevel={2}
-          {...(own.length === 0
-            ? {}
-            : { uncited: own.map((p) => <p key={p.i}>{prose(p.text)}</p>) })}
           {...(usage === null && !(phone && paragraphs.length > 1)
             ? {}
             : {
@@ -151,27 +131,13 @@ export const ExchangeBlock = memo(function ExchangeBlock({
                 ),
               })}
         >
-          {cited.map((p) => (
-            <AiParagraph
-              key={p.i}
-              aside={
-                layout === null || phone ? null : (
-                  <Margin numbers={paragraphNumbers(p.text, layout)} exchange={exchange} />
-                )
-              }
-            >
-              {prose(p.text)}
+          {shown.map((p) => (
+            <AiParagraph key={p.i} source={source(p.text)}>
+              <AnswerProse text={p.text} />
             </AiParagraph>
           ))}
         </AiSlip>
       </div>
-      {answer?.coverage === undefined ? null : (
-        <CoverageReadout
-          passages={answer.coverage.passages}
-          citations={answer.coverage.citations}
-          uncitedParagraphs={answer.coverage.uncited_paragraphs.length}
-        />
-      )}
     </section>
   );
 });

@@ -1,12 +1,15 @@
 /**
  * S9-4: a STOPPED (cancelled, partial) answer is stored with an unterminated marker run and with
- * markers that never got a citation. None of it may reach the screen as raw `[b42, ...` text.
+ * markers that never got a citation. None of it may reach the screen as raw `[b42, ...` text, and
+ * none of it is drawn inline: the handles are gathered into the paragraph's source line (#340).
  */
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { RichText } from '@/components/explain/RichText';
+import { stripPartialTail } from '@/features/explain/model/answer';
 import type { Citation } from '@/lib/api/types';
+
+import { Answer } from './answer-render';
 
 const cite = (n: number): Citation => ({
   citation_id: `cit_${String(n)}`,
@@ -14,11 +17,11 @@ const cite = (n: number): Citation => ({
   marker: `b${String(n)}`,
   page_index: 0,
   anchor: { id: 'a', doc: { paperId: 'p' }, selectors: [] } as never,
-  supported: true,
 });
 
 const text = (content: string, citations: readonly Citation[] = []): string =>
-  render(<RichText citations={citations} text={content} />).container.textContent ?? '';
+  render(<Answer citations={citations} text={content} status="partial" />).container.textContent ??
+  '';
 
 describe('stopped answers never show raw citation markers', () => {
   it.each([
@@ -42,15 +45,23 @@ describe('stopped answers never show raw citation markers', () => {
     expect(shown).toBe('First claim. Then more');
   });
 
-  it('keeps a real citation chip and still hides the dangling run', () => {
+  it('draws no chip or marker for a real citation, only its page, and hides the dangling run', () => {
     const { container } = render(
-      <RichText citations={[cite(1)]} text={'Known claim [b1]. Cut off [b2, b'} />,
+      <Answer citations={[cite(1)]} text={'Known claim [b1]. Cut off [b2, b'} status="partial" />,
     );
-    expect(container.querySelectorAll('.pt-chip')).toHaveLength(1);
+    expect(container.querySelector('.pt-chip, .pt-marker')).toBeNull();
+    expect(container.querySelector('.pt-source')?.textContent).toBe('From the paper: p. 1');
     expect(container.textContent).not.toMatch(/\[b/);
   });
 
   it('does not eat ordinary brackets mid-text', () => {
     expect(text('The set [a, b] is closed.')).toBe('The set [a, b] is closed.');
+  });
+});
+
+describe('stripPartialTail', () => {
+  it('cuts an unfinished handle run and nothing else', () => {
+    expect(stripPartialTail('Claim [b1]. More [b2, b')).toBe('Claim [b1]. More');
+    expect(stripPartialTail('Done [b1].')).toBe('Done [b1].');
   });
 });

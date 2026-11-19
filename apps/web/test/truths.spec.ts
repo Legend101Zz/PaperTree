@@ -1,7 +1,8 @@
 /**
  * truths.spec — the product never says a claim is "verified", "fact-checked" or "accurate" (#190).
  *
- * The honest labels are "cited" and "not verified" (AGENTS.md §2). This parses every .ts/.tsx under
+ * The AI is a tutor, not an auditor (#340, #341): it says neither "verified" nor "not verified", and
+ * has no label for how well a claim matches the paper. This parses every .ts/.tsx under
  * apps/web/src and packages/ui/src with the TypeScript compiler and checks only what a user can
  * read: string literals, template text, JSX text and attribute strings, after decoding HTML
  * entities and joining `'a' + 'b'` literal concatenations. Identifiers, comments, import/export
@@ -10,8 +11,8 @@
  * `typescript` and both source trees are reachable.
  *
  * The banned family: verified, unverified, verifies/verify/verifying, verification, accurate,
- * accurately, accuracy, fact-check(ed|ing) in any spacing or hyphenation. "not verified" and
- * "not-verified" (the status/class name) are exempt.
+ * accurately, accuracy, fact-check(ed|ing) in any spacing or hyphenation, and so "not verified"
+ * too: there is no exemption for it.
  *
  * ALLOW-LIST: `truths.allowlist.json` (path relative to the repo root, the exact string, a one-line
  * reason). It starts empty and the test prints it, so every exemption is visible in the run.
@@ -59,10 +60,9 @@ function decodeEntities(text: string): string {
     .replace(/&([a-z]+);/gi, (m, name: string) => NAMED_ENTITIES[name.toLowerCase()] ?? m);
 }
 
-/** Banned words in `text`, ignoring every "not verified" / "not-verified". */
+/** Banned words in `text`. */
 function bannedIn(text: string): string[] {
-  const cleaned = decodeEntities(text).replace(/\bnot[\s-]+verified\b/gi, ' ');
-  return [...cleaned.matchAll(BANNED)].map((m) => m[0]);
+  return [...decodeEntities(text).matchAll(BANNED)].map((m) => m[0]);
 }
 
 /** True when the string is a module path, a property name or a type, i.e. not text a user reads. */
@@ -173,11 +173,8 @@ describe('banned labels: the scanner catches each form (so the test cannot pass 
     ['hex entity', 'probe.tsx', 'export const A = () => <b>Verif&#x69;ed</b>;'],
     ['concatenation', 'probe.ts', "export const x = 'Veri' + 'fied';"],
     ['three-part concatenation', 'probe.ts', "export const x = ('Ver' + 'if') + 'ied';"],
-    [
-      'a second use after "not verified"',
-      'probe.ts',
-      "export const x = 'not verified, now verified';",
-    ],
+    ['"not verified", which is no longer exempt', 'probe.ts', "export const x = 'not verified';"],
+    ['"Not verified" in JSX', 'probe.tsx', 'export const A = () => <i>not verified</i>;'],
   ];
   for (const [name, file, source] of caught) {
     it(`catches ${name}`, () => {
@@ -185,9 +182,8 @@ describe('banned labels: the scanner catches each form (so the test cannot pass 
     });
   }
 
-  it('allows "not verified" / "not-verified" and ignores comments and identifiers', () => {
-    expect(scan('ok.ts', "export const x = 'not verified'; // verified accurate", [])).toEqual([]);
-    expect(scan('ok.ts', "export const c = 'pt-tab--not-verified';", [])).toEqual([]);
+  it('ignores comments and identifiers', () => {
+    expect(scan('ok.ts', "export const x = 'cited'; // verified accurate", [])).toEqual([]);
     expect(scan('ok.ts', 'const verified = true; const accurate = 1;', [])).toEqual([]);
   });
 

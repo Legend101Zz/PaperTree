@@ -1,5 +1,5 @@
 /**
- * voices-a11y.spec — axe over the v0.2 trace, AI slip and call slip together (#224).
+ * voices-a11y.spec — axe over the call slip and the AI slip with its quiet source lines (#224, #340).
  *
  * Same limits as a11y.spec.tsx: happy-dom has no layout or stylesheet, so colour-contrast and
  * target-size are not measured here (contrast is covered by packages/ui/test/tokens.spec.ts; real
@@ -8,47 +8,34 @@
 import axe from 'axe-core';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  AiParagraph,
-  AiSlip,
-  CallSlip,
-  CoverageReadout,
-  NumberedMarker,
-  TraceList,
-} from '@papertree/ui';
+import { AiParagraph, AiSlip, CallSlip, SourceLine } from '@papertree/ui';
 
 afterEach(cleanup);
 
-const ROWS = [
-  { n: 1, page: 1, para: 1, where: 'Abstract', citedCount: 1, quote: 'A quote.', status: 'cited' },
-  {
-    n: 2,
-    page: 2,
-    para: 2,
-    where: 'Introduction',
-    citedCount: 2,
-    quote: 'Another quote.',
-    status: 'not-verified',
-  },
-] as const;
+const noop = (): void => undefined;
 
 describe('axe over the voices', () => {
-  for (const layout of ['desktop', 'touch'] as const) {
-    it(`has no serious or critical violations (${layout})`, async () => {
+  for (const touch of [false, true]) {
+    it(`has no serious or critical violations (${touch ? 'touch' : 'desktop'})`, async () => {
       const { container } = render(
         <main>
           <CallSlip quote={{ text: 'A quote.', page: 1, para: 1 }} ask="Why?" time="2:14 pm" />
-          <AiSlip
-            model="M3.1 Flash"
-            source="from the paper"
-            footer={<CoverageReadout passages={2} citations={3} uncitedParagraphs={1} />}
-            uncited={<p>My own reading.</p>}
-          >
-            <AiParagraph aside={<NumberedMarker n={1} label="p. 1 ¶1" onFlash={() => undefined} />}>
+          <AiSlip model="M3.1 Flash" footer={<span>12 tokens (estimate)</span>}>
+            <AiParagraph
+              source={
+                <SourceLine
+                  touch={touch}
+                  sources={[
+                    { page: 1, passage: 'A quote from the paper.', onShow: noop },
+                    { page: 4, passage: 'Another passage.', onShow: noop },
+                  ]}
+                />
+              }
+            >
               A claim.
             </AiParagraph>
+            <AiParagraph source={<SourceLine sources={[]} />}>An idea of the AI’s own.</AiParagraph>
           </AiSlip>
-          <TraceList rows={ROWS} lit={2} layout={layout} onShowInPaper={() => undefined} />
         </main>,
       );
       const results = await axe.run(container, {

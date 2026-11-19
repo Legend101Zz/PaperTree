@@ -231,24 +231,8 @@ export interface Citation {
   marker: string;
   page_index: number;
   anchor: Anchor;
-  supported: boolean | null;
   /** On a stored answer read back; absent on the live SSE `citations` event. */
   locator?: PassageLocator;
-}
-
-/** How much of an assistant answer is cited (#201). */
-export interface MessageCoverage {
-  passages: number;
-  /** Marker handle occurrences that have a stored citation (`[b1, b8]` counts 2). */
-  citations: number;
-  /** Occurrences whose handle has no stored citation; never counted in `citations`. */
-  unresolved_markers: number;
-  paragraphs: number;
-  /** 0-based indexes into the list `exchanges.answer_paragraphs` builds (blank-line split, bare
-   * Markdown heading lines dropped) of the paragraphs with no marker. */
-  uncited_paragraphs: number[];
-  /** Stored citations with `supported === false`; an unchecked one (null) is not counted. */
-  not_verified: number;
 }
 
 export interface RunSummary {
@@ -275,11 +259,9 @@ export interface DiagramCite {
   anchor: Anchor | null;
   locator: PassageLocator | null;
   page_index: number | null;
-  /** true: verbatim ("cited"); false: with differences or not found ("not verified"). */
-  supported: boolean;
 }
 
-/** One lettered part of a diagram answer; `cite` null is "inferred, no passage". */
+/** One lettered part of a diagram answer; `cite` null: no passage of the paper behind it. */
 export interface DiagramPart {
   letter: string;
   label: string;
@@ -318,8 +300,6 @@ export interface Message {
   generation: number;
   run: RunSummary | null;
   citations: Citation[];
-  /** Only on an assistant message that is `complete` or `partial` (and not a diagram). */
-  coverage?: MessageCoverage;
   /** Only on an assistant message of a `diagram` thread. */
   diagram?: MessageDiagram;
   created_at: string;
@@ -383,7 +363,7 @@ export interface Summary {
   prompt_version: string;
   created_at: string;
   status: 'complete' | 'partial';
-  bullets: { text: string; citations: Citation[]; supported: boolean }[];
+  bullets: { text: string; citations: Citation[] }[];
 }
 
 export interface Board {

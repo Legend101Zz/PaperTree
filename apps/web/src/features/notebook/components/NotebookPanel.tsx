@@ -33,10 +33,6 @@ export interface NotebookPanelProps {
   readonly counts: NotebookCounts | null;
   /** True when the page came from a question (Dive in). */
   readonly hasQuestion: boolean;
-  /** Citation markers in the answer (its coverage), when the thread was read. */
-  readonly citations: number | null;
-  /** Distinct passages the answer stands on (its coverage), when the thread was read. */
-  readonly passages: number | null;
   /** The page's card on the board: undefined while loading, null when it is not there. */
   readonly card: CanvasNode | null | undefined;
   /** True when the board could not be read; nothing can be sent until it can. */
@@ -48,16 +44,6 @@ export interface NotebookPanelProps {
   readonly onMatches: (ids: ReadonlySet<string>) => void;
   /** Under the page on the desk (the tablet, S5e): a region of the page, not a landmark beside it. */
   readonly inline?: boolean;
-}
-
-/**
- * "1 citation" or "11 citations": the answer's markers, in words.
- *
- * @param n - How many citation markers the answer has.
- * @returns The phrase.
- */
-export function citationsPhrase(n: number): string {
-  return n === 1 ? '1 citation' : `${String(n)} citations`;
 }
 
 /**
@@ -123,16 +109,7 @@ export function NotebookPanel(props: NotebookPanelProps): ReactNode {
         ) : (
           <ul className="pt-nb-panel__counts">
             <Row label="Your question" value={props.hasQuestion ? 1 : 0} />
-            {props.citations === null ? null : (
-              <Row label="The AI’s answer" value={citationsPhrase(props.citations)} />
-            )}
-            {/* The answer's own count; the cards on the page are only the same number until a
-                quote is added from elsewhere, so without the answer they are called what they are. */}
-            {props.passages === null ? (
-              <Row label="Quote cards" value={counts.quotes} />
-            ) : (
-              <Row label="Passages it stands on" value={props.passages} />
-            )}
+            <Row label="Quote cards" value={counts.quotes} />
             <Row label="Typed notes" value={counts.text} />
             <Row label="Sticky notes" value={counts.stickies} />
             <Row label="Ink" value={counts.strokes > 0 ? 'yours' : 'none yet'} />
