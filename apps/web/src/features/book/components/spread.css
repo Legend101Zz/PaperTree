@@ -1,0 +1,146 @@
+/*
+ * spread.css: what v0.3 #337 adds to the opened book's right page: the ⋯ menu, the title field and
+ * the status sentence. Tokens only (`--pt-*`); the page stays paper in both schemes, as book.css.
+ */
+
+/* ── the ⋯ menu: opens upward from the action row, as the prototype's does ─────────────────── */
+
+.pt-spreadmenu {
+  position: relative;
+  margin-inline-start: auto;
+}
+
+.pt-spreadmenu__button {
+  display: inline-flex;
+  inline-size: 44px;
+  block-size: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--pt-ink);
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-spreadmenu__button[aria-expanded='true'] {
+  background: var(--pt-rule);
+}
+
+.pt-spreadmenu__panel {
+  position: absolute;
+  inset-block-end: calc(100% + 8px);
+  inset-inline-end: 0;
+  z-index: 5;
+  display: flex;
+  inline-size: 286px;
+  max-inline-size: calc(100vw - 48px);
+  flex-direction: column;
+  padding: 6px;
+  background: var(--pt-e2-fill);
+  border: 1px solid var(--pt-rule);
+  border-radius: var(--pt-radius-menu);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+}
+
+.pt-spreadmenu__item {
+  display: flex;
+  min-block-size: 44px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  font-family: var(--pt-font-you);
+  font-size: 15px;
+  color: var(--pt-ink);
+  text-align: start;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-spreadmenu__item:hover,
+.pt-spreadmenu__item:focus-visible {
+  background: var(--pt-rule);
+}
+
+.pt-spreadmenu__item:focus-visible,
+.pt-spreadmenu__button:focus-visible,
+.pt-bookdetails__titlefield:focus-visible {
+  outline: var(--pt-focus-width) solid var(--pt-focus);
+  outline-offset: var(--pt-focus-offset);
+}
+
+.pt-spreadmenu__item--danger {
+  color: var(--pt-danger);
+}
+
+/* What the item stands for, pushed to the right: the topic now, "undo for 10 s". */
+.pt-spreadmenu__now {
+  margin-inline-start: auto;
+  font-size: 13.5px;
+  color: var(--pt-ink-2);
+}
+
+.pt-spreadmenu__topics {
+  display: flex;
+  flex-direction: column;
+  margin-inline-start: 28px;
+  padding-block: 2px;
+  border-inline-start: 1px solid var(--pt-rule);
+}
+
+.pt-spreadmenu__topics .pt-spreadmenu__item[aria-checked='true'] {
+  justify-content: space-between;
+}
+
+.pt-spreadmenu__empty {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 14px;
+  color: var(--pt-ink-2);
+}
+
+.pt-spreadmenu__rule {
+  block-size: 1px;
+  margin: 6px;
+  background: var(--pt-rule);
+}
+
+/* ── Rename in place ──────────────────────────────────────────────────────────────────────── */
+
+.pt-bookdetails__rename {
+  margin-block-start: 24px;
+}
+
+.pt-bookdetails__titlefield {
+  inline-size: 100%;
+  padding: 6px 8px;
+  font-family: var(--pt-font-display);
+  font-size: 30px;
+  line-height: 1.1;
+  color: var(--pt-ink);
+  resize: none;
+  background: var(--pt-paper-label);
+  border: 1px solid var(--pt-control-border);
+  border-radius: var(--pt-radius-control);
+}
+
+.pt-bookdetails__renamehint {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  color: var(--pt-ink-muted);
+}
+
+/* ── the status sentence, in place of the abstract ────────────────────────────────────────── */
+
+.pt-bookdetails__status {
+  margin: 20px 0 0;
+  padding: 10px 14px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--pt-ink);
+  background: var(--pt-paper-label);
+  border-inline-start: 3px solid var(--pt-control-border);
+}

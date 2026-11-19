@@ -257,7 +257,7 @@ async function seriousViolations(): Promise<string[]> {
 }
 
 describe('take out and open (v0.3 #337)', () => {
-  it('a click lands on the spread with focus on Read; Esc puts it back with focus on the spine', async () => {
+  it('a click lands on the spread with focus on Continue (reading has started); Esc puts it back with focus on the spine', async () => {
     await renderLibrary();
     const dialog = await takeOut();
     await settled(dialog);
@@ -265,7 +265,7 @@ describe('take out and open (v0.3 #337)', () => {
     expect(within(dialog).getByRole('heading', { name: 'Attention Is All You Need' })).toBeTruthy();
     expect(dialog.querySelector('[data-bookplate]')).not.toBeNull();
     expect(within(dialog).getByText('Reading now · p. 4 of 15')).toBeTruthy();
-    const read = within(dialog).getByRole('button', { name: /^Read / });
+    const read = within(dialog).getByRole('button', { name: /^Continue at p\. 4 / });
     expect(document.activeElement).toBe(read);
     expect(theBook()?.getAttribute('data-pulled')).toBe('true');
     expect(document.querySelector('.pt-library')?.hasAttribute('inert')).toBe(true);
@@ -408,14 +408,6 @@ describe('take out and open (v0.3 #337)', () => {
     expect(document.activeElement).toBe(node);
   });
 
-  it('a book that cannot be opened yet is read instead, where Source mode works for it', async () => {
-    api.list.mockResolvedValue([{ ...ATTENTION, processing: 'failed', generation: null }]);
-    await renderLibrary();
-    fireEvent.click(theBook() as HTMLElement);
-    expect(screen.queryByRole('dialog')).toBeNull();
-    expect(push).toHaveBeenLastCalledWith(`/paper/${ID}/read`);
-  });
-
   it('prints the real facts on the right page and goes to the reader', async () => {
     await renderLibrary();
     const dialog = await takeOut();
@@ -451,7 +443,7 @@ describe('take out and open (v0.3 #337)', () => {
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Summary' }));
     expect(push).toHaveBeenLastCalledWith(`/paper/${ID}/read?from=book&open=summary`);
-    fireEvent.click(within(dialog).getByRole('button', { name: /^Read / }));
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Continue at p\. 4 / }));
     await waitFor(() => expect(push).toHaveBeenLastCalledWith(`/paper/${ID}/read`));
   });
 
@@ -560,13 +552,15 @@ describe('skipping the motion, and the race of review B1', () => {
     await renderLibrary();
     const dialog = await takeOut();
     expect(dialog.getAttribute('data-book-stage')).toBe('moving'); // not before the motion ends
-    expect(within(dialog).queryByRole('button', { name: /^Read / })).not.toBeNull();
+    expect(within(dialog).queryByRole('button', { name: /^Continue at p\. 4 / })).not.toBeNull();
     fireEvent.keyDown(document, { key: 'ArrowDown' });
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     expect(dialog.getAttribute('data-book-stage')).toBe('open');
-    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: /^Read / }));
+    expect(document.activeElement).toBe(
+      within(dialog).getByRole('button', { name: /^Continue at p\. 4 / }),
+    );
     await motion.finishAll();
     expect(screen.getByRole('dialog')).toBe(dialog);
   });
@@ -611,7 +605,7 @@ describe('skipping the motion, and the race of review B1', () => {
     await motion.finishAll(); // the take-out ends by itself
     await settled(dialog);
     fireEvent.keyDown(document, { key: 'Escape' });
-    fireEvent.click(within(dialog).getByRole('button', { name: /^Read / })); // too late: it is leaving
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Continue at p\. 4 / })); // too late: it is leaving
     await motion.finishAll();
     await motion.finishAll();
     expect(screen.queryByRole('dialog')).toBeNull();

@@ -122,7 +122,7 @@ test('390: stacked library → Continue opens p. 3 → back → a flat book open
   await expect(page.locator('[data-card-paper-id]')).toHaveCount(0);
   await expect(spread).toHaveAttribute('data-book-stage', 'open');
   await expect(book).toHaveAttribute('data-pulled', 'true');
-  await expect(spread.getByRole('button', { name: /^Read / })).toBeFocused();
+  await expect(spread.getByRole('button', { name: /^(Read|Continue at p\. \d+) / })).toBeFocused();
   expect(await pageWidth(page)).toBe(390);
   await page.screenshot({ path: shot('s2h-spread-390.png') });
   await spread.getByRole('button', { name: /^Put it back/ }).tap();

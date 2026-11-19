@@ -166,7 +166,9 @@ test.describe('S8: the prototype flow, 14 steps, at 1440 and 390, both schemes (
         await expect(page.locator('[data-card-paper-id]')).toHaveCount(0);
         await expect(book).toHaveAttribute('data-pulled', 'true');
         await expect(spread).toHaveAttribute('data-book-stage', 'open');
-        await expect(spread.getByRole('button', { name: /^Read / })).toBeFocused();
+        await expect(
+          spread.getByRole('button', { name: /^(Read|Continue at p\. \d+) / }),
+        ).toBeFocused();
       });
 
       await step('the spread', async () => {
@@ -182,7 +184,7 @@ test.describe('S8: the prototype flow, 14 steps, at 1440 and 390, both schemes (
       });
 
       await step('Read', async () => {
-        if (phone) await spread.getByRole('button', { name: /^Read / }).tap();
+        if (phone) await spread.getByRole('button', { name: /^(Read|Continue at p\. \d+) / }).tap();
         else await page.keyboard.press('Enter');
         await page.waitForURL(`**/paper/${paperId}/read**`);
         await expect

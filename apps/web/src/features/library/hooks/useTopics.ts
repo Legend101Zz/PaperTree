@@ -54,6 +54,8 @@ export function useTopics() {
       remove: (topicId: string) => after(topicsApi.remove(topicId)),
       accept: (...args: Parameters<typeof topicsApi.accept>) => after(topicsApi.accept(...args)),
       reject: (paperId: string) => after(topicsApi.reject(paperId)),
+      // Takes one paper off its shelf (the opened book's "No topic").
+      clear: (paperId: string) => after(topicsApi.clear(paperId)),
     }),
     [after],
   );

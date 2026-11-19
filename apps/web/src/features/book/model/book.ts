@@ -4,6 +4,8 @@
  * topic's source, the abstract excerpt. Pure: no React, no fetch; every rule is in `book.spec.ts`.
  * Nothing here invents a fact: a missing year, id, name or count is left out, never guessed.
  */
+import { PROCESSING_DETAIL } from '@/components/library/types';
+import { readingPage } from '@/features/library/model/shelf';
 import { dehyphenate } from '@/lib/markdown';
 
 import type { BookFigure, BookPaper, BookPlate } from './types';
@@ -184,17 +186,67 @@ export function arxivLink(
 }
 
 /**
- * Whether a book can be taken out and opened: the parse is in (complete or partial) and the paper
- * is the person's (a sample has no server to ask). A queued, reading or failed paper cannot be
- * opened yet: the shelf reads it instead, and Retry and Remove are the Table's.
+ * Whether a book can be taken out and opened: it is the person's own (a sample has no server to
+ * ask). Every state opens the spread (v0.3 #337): a queued, being-read or failed paper shows its
+ * status in place of its facts, and a failed one offers Retry and Remove instead of Read.
  *
- * @param paper - The book's processing state and sample flag.
+ * @param paper - The book's sample flag.
  * @returns True when a click should take it off the shelf and open it.
  */
-export function canOpenBook(paper: Pick<BookPaper, 'processing' | 'isSample'>): boolean {
-  return (
-    paper.isSample !== true && (paper.processing === 'complete' || paper.processing === 'partial')
-  );
+export function canOpenBook(paper: Pick<BookPaper, 'isSample'>): boolean {
+  return paper.isSample !== true;
+}
+
+/**
+ * Whether the paper has been read in, so the spread can show its facts (the abstract, figures and
+ * summary) and ask the server for them. Before that those routes have nothing to say.
+ *
+ * @param paper - The book's processing state.
+ * @returns True for a complete or partial parse.
+ */
+export function isReadIn(paper: Pick<BookPaper, 'processing'>): boolean {
+  return paper.processing === 'complete' || paper.processing === 'partial';
+}
+
+/**
+ * The sentence the spread shows for a paper that is not simply ready, in place of its facts: what
+ * state it is in and what the person can do. Null for a ready paper. The failed and partial ones
+ * are the old catalogue card's reason sentences (`failureReason`, `partialReason`), which already
+ * say the next action; a failed paper never shows a raw error code.
+ *
+ * @param paper - The book and the reasons its state carries.
+ * @returns The sentence, or null.
+ */
+export function statusSentence(
+  paper: Pick<BookPaper, 'processing'> & {
+    readonly failureReason?: string;
+    readonly partialReason?: string;
+  },
+): string | null {
+  switch (paper.processing) {
+    case 'pending':
+      return 'Waiting for its turn to be read. The PDF opens in Source mode meanwhile.';
+    case 'parsing':
+      return 'We are reading this paper now. It opens as soon as that is done.';
+    case 'failed':
+      return paper.failureReason ?? PROCESSING_DETAIL.failed;
+    case 'partial':
+      return paper.partialReason ?? PROCESSING_DETAIL.partial;
+    default:
+      return null;
+  }
+}
+
+/**
+ * What the primary button says: "Continue at p. 4" once reading has started (the reader resumes
+ * there, `useContinue`), else "Read".
+ *
+ * @param paper - The book's reading progress and page count.
+ * @returns The label.
+ */
+export function readLabel(paper: Pick<BookPaper, 'reading' | 'pageCount'>): string {
+  const at = readingPage(paper);
+  return at === null ? 'Read' : `Continue at p. ${String(at.page)}`;
 }
 
 /**

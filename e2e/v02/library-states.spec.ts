@@ -81,7 +81,7 @@ test('empty → upload → read to p. 3 → the library says p. 3 → Continue o
   await spine.click();
   await page
     .locator('[role="dialog"][data-book-stage="open"]')
-    .getByRole('button', { name: /^Read / })
+    .getByRole('button', { name: /^(Read|Continue at p\. \d+) / })
     .click();
   await page.waitForURL(`**/paper/${paperId}/read`);
   expect(await page.evaluate(() => document.visibilityState)).toBe('visible');
@@ -110,6 +110,13 @@ test('empty → upload → read to p. 3 → the library says p. 3 → Continue o
   await expect(spine.locator('.pt-spine__ribbon')).toBeAttached();
   await expect(page.locator('.pt-libtitle__stats')).toContainText('1 reading now');
   await page.screenshot({ path: shot('s2e-reading-p3-1440.png') });
+
+  // ── the opened book says it too: Read has become "Continue at p. 3", with focus on it ──
+  await spine.click();
+  const reopened = page.locator('[role="dialog"][data-book-stage="open"]');
+  await expect(reopened.getByRole('button', { name: /^Continue at p\. 3 / })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(reopened).toHaveCount(0);
 
   // ── Continue opens the reader on p. 3 ──
   await strip.getByRole('button', { name: 'Continue reading Attention Is All You Need' }).click();

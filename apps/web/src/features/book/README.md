@@ -26,6 +26,19 @@ A book taken off the shelf and opened (#200; frames 02a, 02 and 11; DESIGN.md §
   complete summary of the current prompt, "Summary cached (partial: …)", "A summary is being written", or
   **Summarize** with "No summary yet"; it opens the reader's panel on the summary), the arXiv link and "Put it back
   (Esc)".
+- **The spread's actions (v0.3 #337).** **Read** says **Continue at p. 4** once reading has started and resumes
+  there (`useContinue`; the same place as Reading now's Continue). The **⋯** menu (`SpreadMenu`, a `role="menu"`
+  with arrow keys; Esc closes the menu first, a second Esc puts the book back) has **Rename…** (the title becomes a
+  field in place, Enter saves with `PATCH /papers/{id}`, Esc cancels, a blank title is refused in a sentence; the
+  name is stored beside the paper, `paper_title` 0012, and wins over the parsed title everywhere the library shows
+  one; the parsed title still feeds citation matching and the model's context), **Topic** (the person's topics with
+  the current one ticked, and "No topic": `PUT` / `DELETE /papers/{id}/topic`; the shelf regroups behind the book
+  and the way back flies to the spine's new place) and **Delete this paper** (no confirmation: the book closes in
+  the 420 ms reverse, or just goes under reduced motion; the library hides the spine and offers Undo for 10 s, then
+  sends the request: `usePendingDelete`). A paper that is not read in shows its status sentence in place of the
+  abstract and asks the server for none of the facts: queued says it waits (Read opens the PDF in Source mode),
+  being read has a disabled Read, failed has **Retry** (`useBookActions`) and **Remove** (the same Undo-able
+  delete), partial reads and says what is missing.
 - **Keyboard and focus.** The book is a modal dialog (`role="dialog"`, `aria-modal`), labelled by its title; Tab
   stays in it and the library behind is `inert`. Focus is on the dialog while the book moves and on Read when it is open;
   Esc (anywhere), a click on the veil or "Put it back" puts it back, and focus returns to the spine on the shelf.
@@ -58,6 +71,6 @@ the plate, which the opened book draws. A plate change re-reads `['papers']`. Th
   excerpt, the plate's caption, which books can be opened (pure; `book.spec.ts`).
 - `model/motion.ts`: the keyframes and timings, both paths (pure; `motion.spec.ts`).
 - `components/PulledBook.tsx` (the dialog, its three moments: opening, open, closing), `BookCover.tsx`, `BookSpread.tsx`, `Bookplate.tsx`,
-  `BookDetails.tsx`, `book.css`.
+  `BookDetails.tsx`, `SpreadActions.tsx`, `SpreadMenu.tsx`, `SpreadTitle.tsx`, `book.css`, `spread.css`.
 - `hooks/useBookOnShelf.ts`, `useBookData.ts`, `useBookMotion.ts`, `useFocusTrap.ts`, `useFromBook.ts`.
-- Tests: `apps/web/test/book.spec.tsx` (through the library page), e2e `e2e/v02/book.spec.ts`.
+- Tests: `apps/web/test/book.spec.tsx` and `book-actions.spec.tsx` (through the library page), e2e `e2e/v02/book.spec.ts`.

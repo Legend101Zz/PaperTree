@@ -156,7 +156,7 @@ describe('library rows from the API (S1 shape)', () => {
     expect(push).not.toHaveBeenCalled();
   });
 
-  it('failed is a torn label, and a click reads the paper (Source mode works for it)', async () => {
+  it('failed is a torn label, and a click opens its spread with Retry and Remove, not the reader', async () => {
     api.list.mockResolvedValue([
       row({
         paper_id: 'ppr_X',
@@ -169,10 +169,13 @@ describe('library rows from the API (S1 shape)', () => {
     expect(spine.getAttribute('data-spine-state')).toBe('failed');
     expect(spine.getAttribute('aria-label')).toMatch(/could not read$/);
     fireEvent.click(spine);
-    // There is nothing to open yet: no card and no book, and no Retry here (it is the Table's).
-    expect(screen.queryByRole('dialog')).toBeNull();
+    // The spread opens for a failed paper too (v0.3 #337): its reason, Retry and Remove; no Read.
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: /^Retry/ })).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: /^Remove/ })).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: /^Read/ })).toBeNull();
     expect(document.querySelector('[data-card-paper-id]')).toBeNull();
-    expect(push).toHaveBeenCalledWith('/paper/ppr_X/read');
+    expect(push).not.toHaveBeenCalled();
   });
 });
 

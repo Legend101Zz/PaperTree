@@ -1,9 +1,12 @@
 /**
  * useBookOnShelf — the shelf's side of the opened book (#200, v0.3 #337). `open(id)` takes a book
  * off its plank and opens it: a click, Enter or Space on any spine, or Enter in the search. It
- * says false for a book that cannot be opened yet (queued, being read, failed, a sample), which
- * the caller reads instead. While the book is out its slot is a shadowed gap (`data-pulled` on the
- * spine); when it is put back the gap closes and focus returns to the spine.
+ * says false for a book that cannot be opened (a sample), which the caller reads instead; every
+ * other state opens the spread (queued, being read and failed show their status there). While the
+ * book is out its slot is a shadowed gap (`data-pulled` on the spine); when it is put back the gap
+ * closes and focus returns to the spine. Delete (the spread's ⋯ menu, or Remove on a failed
+ * paper) hands the book to the caller (`onDelete`) once the reverse has played: the slot is not
+ * refocused, because the spine is leaving the shelf.
  */
 'use client';
 
@@ -31,6 +34,18 @@ function spineOf(paperId: string): HTMLElement | null {
   );
 }
 
+/**
+ * An element's box in the form the motion reads.
+ *
+ * @param element - The spine, or null.
+ * @returns Its box, or null when it is not drawn.
+ */
+function boxOf(element: HTMLElement | null): Box | null {
+  if (element === null) return null;
+  const { left, top, width, height } = element.getBoundingClientRect();
+  return { left, top, width, height };
+}
+
 /** What the shelf needs from the opened book. */
 export interface BookOnShelf {
   /** The book out of the shelf, or null. */
@@ -41,16 +56,26 @@ export interface BookOnShelf {
   readonly overlay: ReactNode;
 }
 
+/** What the opened book hands back to the library page. */
+export interface BookHandlers {
+  /** Opens the reader on a paper (at its place once reading has started). */
+  readonly onRead: (paperId: string) => void;
+  /** The book was deleted from its spread: stage the delete (`usePendingDelete`). */
+  readonly onDelete: (paperId: string) => void;
+  /** Retry on a failed paper's spread; resolves when the request has been answered. */
+  readonly onRetry: (paperId: string) => Promise<unknown>;
+}
+
 /**
  * The opened book's state for one shelf.
  *
  * @param books - The library's books.
- * @param onRead - Opens the reader on a paper.
+ * @param handlers - Read, Delete and Retry, which belong to the library page.
  * @returns The open id, the way in, and the dialog.
  */
 export function useBookOnShelf(
   books: readonly LibraryBook[],
-  onRead: (paperId: string) => void,
+  { onRead, onDelete, onRetry }: BookHandlers,
 ): BookOnShelf {
   const router = useRouter();
   const [out, setOut] = useState<{ readonly id: string; readonly from: Box | null } | null>(null);
@@ -61,15 +86,8 @@ export function useBookOnShelf(
       const book = books.find((b) => b.id === paperId);
       if (book === undefined || !canOpenBook(book)) return false;
       const spine = spineOf(paperId);
-      const box = spine?.getBoundingClientRect();
       spine?.setAttribute('data-pulled', 'true');
-      setOut({
-        id: paperId,
-        from:
-          box === undefined
-            ? null
-            : { left: box.left, top: box.top, width: box.width, height: box.height },
-      });
+      setOut({ id: paperId, from: boxOf(spine) });
       return true;
     },
     [books],
@@ -96,11 +114,20 @@ export function useBookOnShelf(
   }, [out]);
 
   const book = out === null ? undefined : books.find((b) => b.id === out.id);
-  // A book deleted (or re-read into another state) while it is out goes back by itself.
+  // A book that left the library while it is out (deleted in another tab) goes back by itself. A
+  // change of state does not: a queued paper that finishes being read just fills its spread.
   const gone = out !== null && (book === undefined || !canOpenBook(book));
   useEffect(() => {
     if (gone) putBack();
   }, [gone, putBack]);
+  const deleteBook = useCallback(
+    (paperId: string) => {
+      spineOf(paperId)?.removeAttribute('data-pulled');
+      setOut(null);
+      onDelete(paperId);
+    },
+    [onDelete],
+  );
   const cloth = book === undefined ? 'rl' : clothFor(book);
   const overlay =
     out === null || book === undefined || gone
@@ -113,7 +140,11 @@ export function useBookOnShelf(
           labelled: clothTakesLabel(cloth),
           from: out.from,
           behind: document.querySelector<HTMLElement>('.pt-library'),
+          // Where the spine is NOW: a topic chosen on the spread moves it to another group.
+          where: () => boxOf(spineOf(out.id)),
           onPutBack: putBack,
+          onDelete: () => deleteBook(out.id),
+          onRetry: () => onRetry(out.id),
           onRead: () => onRead(out.id),
           onSummary: () => router.push(bookReaderHref(out.id, 'summary')),
         });
