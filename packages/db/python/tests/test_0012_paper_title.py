@@ -16,8 +16,6 @@ from papertree_db import OwnerId, PaperId, PaperNotFound, PaperTreeDb, generatio
 from papertree_db.migrate import BACKUP_BEFORE_VERSIONS, migrate
 
 from .saved_shapes import (
-    HEAD_VERSIONS,
-    MIGRATIONS_DIR,
     load_fixture_paper,
     migrations_through,
     raw_connect,
@@ -60,8 +58,10 @@ def test_a_database_at_0011_gets_0012_alone_without_a_backup(tmp_path: Path) -> 
         db.put_paper(owner, document)
     conn = raw_connect(file)
     try:
-        result = migrate(conn, MIGRATIONS_DIR)
-        assert result.applied == (12,) and result.head == HEAD_VERSIONS
+        # Through 0012 only: later migrations (some rebuild tables and take their own backups) are
+        # other tests' business, and this one is about 0012 landing alone without a backup.
+        result = migrate(conn, migrations_through(12, tmp_path / "m12"))
+        assert result.applied == (12,) and result.head[-1] == 12
         assert result.backups == ()
         assert conn.execute("SELECT COUNT(*) FROM papers").fetchone()[0] == 1
     finally:
