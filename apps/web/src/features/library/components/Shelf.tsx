@@ -1,7 +1,7 @@
 /**
  * Shelf: the library's books on one walnut plank, a row per group (#195, DESIGN.md §1 and §6).
  * One tab stop (a roving-tabindex toolbar): ←/→ walk along the shelf, Home and End jump to its
- * ends, Enter or a click takes a book down. A search dims what does not match and lights what
+ * ends, Enter, Space or a click takes a book off the shelf and opens it (v0.3 #337). A search dims what does not match and lights what
  * does, in place: the order never changes while you type.
  */
 'use client';
@@ -22,14 +22,8 @@ export interface ShelfProps {
   readonly arrangement: Arrangement;
   /** The ids a search matched, or null when no search is active (`matchPapers`). */
   readonly matches: ReadonlySet<string> | null;
-  /** The paper whose catalogue card is open. */
-  readonly openId: string | null;
-  /** The catalogue card's element id. */
-  readonly cardId: string;
-  /** A spine was clicked or Entered. */
+  /** A spine was clicked, Entered or Spaced: take it off the shelf and open it. */
   readonly onActivate: (paperId: string) => void;
-  /** Esc on the shelf while a card is open: put the book back. */
-  readonly onPutBack?: () => void;
   /** The section's tab stop, so it survives a change of layout (#196). */
   readonly focus?: LiftedFocus;
 }
@@ -39,21 +33,12 @@ export interface ShelfProps {
  * moves focus.
  *
  * @example
- * <Shelf papers={papers} arrangement="topic" matches={null} openId={null} cardId="card" onActivate={open} />
+ * <Shelf papers={papers} arrangement="topic" matches={null} onActivate={open} />
  */
-export function Shelf({
-  papers,
-  arrangement,
-  matches,
-  openId,
-  cardId,
-  onActivate,
-  onPutBack,
-  focus,
-}: ShelfProps): ReactNode {
+export function Shelf({ papers, arrangement, matches, onActivate, focus }: ShelfProps): ReactNode {
   const groups = useMemo(() => arrangeShelf(papers, arrangement), [papers, arrangement]);
   const order = useMemo(() => groups.flatMap((g) => g.papers.map((p) => p.id)), [groups]);
-  const { toolbar, stop, onFocusBook, onKeyDown } = useRovingShelf(order, openId, onPutBack, focus);
+  const { toolbar, stop, onFocusBook, onKeyDown } = useRovingShelf(order, focus);
 
   return (
     <ShelfPlank>
@@ -80,8 +65,6 @@ export function Shelf({
                   paper={paper}
                   tabIndex={paper.id === stop ? 0 : -1}
                   {...(matches === null ? {} : { match: matches.has(paper.id) })}
-                  expanded={paper.id === openId}
-                  cardId={cardId}
                   onActivate={onActivate}
                   onFocusSpine={onFocusBook}
                 />

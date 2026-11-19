@@ -15,11 +15,11 @@ import {
   libraryStats,
   matchPapers,
   needsALook,
-  placeCard,
   readingPage,
   shelfStep,
   spineHeight,
   spineName,
+  spineTag,
   spineState,
   spineTitle,
   spineWidth,
@@ -367,11 +367,40 @@ describe('stats and need a look', () => {
   });
 });
 
-describe('catalogue card placement', () => {
-  it('points at the spine and stays inside the band', () => {
-    expect(placeCard(123, 1280, 480)).toEqual({ left: 81, pointer: 42 });
-    expect(placeCard(20, 1280, 480)).toEqual({ left: 0, pointer: 20 });
-    expect(placeCard(1270, 1280, 480)).toEqual({ left: 800, pointer: 468 });
-    expect(placeCard(200, 358, 480)).toEqual({ left: 0, pointer: 200 });
+describe('the spine tag', () => {
+  it('is the full title over author, year, pages and state, as the prototype prints it', () => {
+    const resnet = paper({
+      id: 'r',
+      title: ' Deep Residual Learning for Image Recognition ',
+      authors: ['Kaiming He', 'Xiangyu Zhang'],
+      year: 2015,
+      pageCount: 12,
+    });
+    expect(spineTag(resnet)).toEqual({
+      title: 'Deep Residual Learning for Image Recognition',
+      line: 'He and Zhang · 2015 · 12 pages · not started',
+    });
+  });
+
+  it('leaves out what is not known, and says where the person is while reading', () => {
+    expect(spineTag(paper({ id: 'x', title: 'Untitled', pageCount: 0, authors: [] })).line).toBe(
+      'not started',
+    );
+    const reading = paper({ id: 'a', authors: ['Ashish Vaswani', 'Noam Shazeer', 'Niki Parmar'] });
+    expect(
+      spineTag({
+        ...reading,
+        year: 2017,
+        pageCount: 15,
+        reading: {
+          last_page: 3,
+          furthest_page: 3,
+          page_count: 15,
+          opened_at: '2026-10-10T00:00:00Z',
+          finished_at: null,
+          state: 'reading',
+        },
+      }).line,
+    ).toBe('Vaswani et al. · 2017 · 15 pages · reading now, p. 4 of 15');
   });
 });

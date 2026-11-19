@@ -1,7 +1,7 @@
 /**
  * useLibrary: the library's data layer, moved unchanged in behaviour out of v0.1's LibraryView
  * (#195): `GET /papers` with polling only while a row is unfinished, upload with progress and the
- * truthful Cancel, Retry and Delete. The shelf, the catalogue card and (later) the table all read
+ * truthful Cancel, Retry and Delete. The shelf and the table all read
  * the same rows from here. UI → this hook → `papersApi` → services/api → SQLite.
  */
 'use client';

@@ -1,7 +1,6 @@
 /**
- * useElementWidth: an element's content width, kept current (#196). The face-out shelf cuts its
- * covers into planks by how many fit (`coversPerRow`), which CSS wrapping cannot do: each plank is
- * its own piece of furniture with its captions under it.
+ * useElementWidth: an element's content width, kept current (#196). A sideways row at scale reads
+ * how much room it has to say how many spines are in view (`rowWindow`), which CSS cannot say.
  */
 'use client';
 

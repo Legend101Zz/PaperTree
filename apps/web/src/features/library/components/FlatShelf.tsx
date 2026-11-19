@@ -2,7 +2,7 @@
  * FlatShelf: the phone's shelf (#199, frame 08a, DESIGN.md §10): the books lying flat, a stack per
  * row of the arrangement under its brass holder, on a strip of walnut. One toolbar and one tab stop,
  * as with the spines: ↓/↑ (and →/←) walk every book in order, down a stack and into the next, Home
- * and End jump to the ends, Enter or a tap takes a book down (its card opens as a bottom sheet).
+ * and End jump to the ends, Enter or a tap takes a book off the stack and opens it.
  */
 'use client';
 
@@ -21,28 +21,18 @@ import type { ReactNode } from 'react';
  * The flat stacks; they take the `Shelf`'s props.
  *
  * @example
- * <FlatShelf papers={books} arrangement="topic" matches={null} openId={null} cardId="card"
- *   onActivate={takeDown} />
+ * <FlatShelf papers={books} arrangement="topic" matches={null} onActivate={open} />
  */
 export function FlatShelf({
   papers,
   arrangement,
   matches,
-  openId,
-  cardId,
   onActivate,
-  onPutBack,
   focus,
 }: ShelfProps): ReactNode {
   const groups = useMemo(() => arrangeShelf(papers, arrangement), [papers, arrangement]);
   const order = useMemo(() => groups.flatMap((g) => g.papers.map((p) => p.id)), [groups]);
-  const { toolbar, stop, onFocusBook, onKeyDown } = useRovingShelf(
-    order,
-    openId,
-    onPutBack,
-    focus,
-    flatStep,
-  );
+  const { toolbar, stop, onFocusBook, onKeyDown } = useRovingShelf(order, focus, flatStep);
   return (
     <div
       ref={toolbar}
@@ -71,8 +61,6 @@ export function FlatShelf({
                 paper={paper}
                 tabIndex={paper.id === stop ? 0 : -1}
                 {...(matches === null ? {} : { match: matches.has(paper.id) })}
-                expanded={paper.id === openId}
-                cardId={cardId}
                 onActivate={onActivate}
                 onFocusBook={onFocusBook}
               />

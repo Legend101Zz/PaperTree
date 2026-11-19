@@ -51,7 +51,7 @@ export interface ShelfPaper {
   readonly reading?: ReadingProgress | null;
   readonly arxivCategory?: string | null;
   readonly topic?: ShelfTopic | null;
-  /** The figure chosen as the cover (#200): a face-out cover shows it; a spine does not. */
+  /** The figure chosen as the cover (#200): the opened book shows it; a spine does not. */
   readonly plate?: { readonly assetUrl: string; readonly label: string | null } | null;
 }
 
@@ -228,6 +228,24 @@ function stateWords(paper: ShelfPaper): string {
 export function spineName(paper: ShelfPaper): string {
   const parts = [paper.title.trim(), authorLine(paper.authors), paper.year ?? null];
   return [...parts.filter((p) => p !== null), stateWords(paper)].join(', ');
+}
+
+/**
+ * The paper tag a spine shows when you hover it (v0.3 R4): the full title over "He et al. · 2015 ·
+ * 12 pages · not started", leaving out what is not known. The spine's own name says the same to a
+ * screen reader; the tag is for the eyes (a title set sideways on a spine is hard to read).
+ *
+ * @param paper - The paper.
+ * @returns The title and the line under it.
+ */
+export function spineTag(paper: ShelfPaper): { readonly title: string; readonly line: string } {
+  const pages = paper.pageCount > 0 ? `${String(paper.pageCount)} pages` : null;
+  const year = typeof paper.year === 'number' ? String(paper.year) : null;
+  const parts = [authorLine(paper.authors), year, pages];
+  return {
+    title: paper.title.trim(),
+    line: [...parts.filter((p): p is string => p !== null), stateWords(paper)].join(' · '),
+  };
 }
 
 /**
@@ -478,25 +496,4 @@ export function libraryStats(papers: readonly ShelfPaper[]): LibraryStats {
     pages: papers.reduce((sum, p) => sum + (p.pageCount > 0 ? p.pageCount : 0), 0),
     needALook: papers.filter(needsALook).length,
   };
-}
-
-/**
- * Where the catalogue card goes in the band above the shelf: its left edge in band coordinates,
- * kept inside the band, and its pointer's offset from that edge, so it points at the spine.
- *
- * @param spineCenter - The open spine's centre, in px from the band's left edge.
- * @param bandWidth - The band's width.
- * @param cardWidth - The card's width (at most the band's).
- * @returns The card's left edge and the pointer's offset inside the card.
- */
-export function placeCard(
-  spineCenter: number,
-  bandWidth: number,
-  cardWidth: number,
-): { readonly left: number; readonly pointer: number } {
-  const width = Math.min(cardWidth, bandWidth);
-  // Frame 01: the pointer sits 42 px in from the card's left edge when there is room.
-  const left = Math.max(0, Math.min(spineCenter - 42, bandWidth - width));
-  const pointer = Math.max(12, Math.min(spineCenter - left, width - 12));
-  return { left, pointer };
 }
