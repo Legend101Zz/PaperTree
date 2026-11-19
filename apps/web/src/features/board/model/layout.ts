@@ -16,6 +16,7 @@
 import {
   branchCounts,
   branchOf,
+  buildTree,
   childrenOf,
   countsPhrase,
   type BoardTree,
@@ -122,6 +123,12 @@ export interface LayoutInput {
    * level with the card's header).
    */
   readonly spanY?: (parentId: string, span: { start: number; end: number }) => number | undefined;
+  /**
+   * A card that exists for the layout only (the ask box being written): it is placed as the last
+   * child of its kind so the next card has its room before it exists, but it is not in `tree`, so
+   * nothing counted from the tree (pills, knots, `hasNext`) sees it.
+   */
+  readonly slot?: LayoutNodeInput;
 }
 
 /**
@@ -156,14 +163,17 @@ function estimateOf(node: TreeNodeInput): number {
  * not start above the bottom of its parent's own right stack: both stacks live in the same column
  * and would overlap.
  *
- * @param tree The tree.
- * @param input The viewport, the measured heights and the measured span lines.
+ * @param model The tree (what counts are read from).
+ * @param input The viewport, the measured heights, the measured span lines and the ask-box slot.
  * @returns Every card's position and every line's end points.
  */
 export function layoutBoard<N extends LayoutNodeInput = CanvasNode>(
-  tree: BoardTree<N>,
+  model: BoardTree<N>,
   input: LayoutInput,
 ): BoardLayout {
+  // Placement walks the model tree plus the layout-only slot; counts are read from the model alone.
+  const tree: BoardTree<N> =
+    input.slot === undefined ? model : buildTree([...model.byId.values(), input.slot as N]);
   const cap = heightCap(input.viewportHeight);
   const cards = new Map<string, PlacedCard>();
   const order: string[] = [];
@@ -196,7 +206,7 @@ export function layoutBoard<N extends LayoutNodeInput = CanvasNode>(
       measured !== undefined && Number.isFinite(measured) ? measured : estimateOf(node);
     const h = folded ? PILL_HEIGHT : Math.min(Math.max(0, Math.round(wanted)), cap);
     const w = widthOf(node, parent);
-    const counts = folded ? branchCounts(tree, node.node_id) : null;
+    const counts = folded ? branchCounts(model, node.node_id) : null;
     cards.set(node.node_id, {
       id: node.node_id,
       x: Math.round(x + shift.x),

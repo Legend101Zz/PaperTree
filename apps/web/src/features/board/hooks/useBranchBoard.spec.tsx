@@ -15,6 +15,8 @@ import { threadsApi } from '@/lib/api/threads';
 import { hostOf } from '../../../../test/branch-harness';
 import { DRAFT_ID } from '../model/display';
 import { CARD_WIDTH, COLUMN_GAP, DOWN_GAP } from '../model/layout';
+import { buildOutline, exportMarkdown, DEFAULT_INCLUDE } from '../model/outline';
+import { branchCounts, countsPhrase, downChild, spanKnots } from '../model/tree';
 import { node, resetClock, spanOf } from '../model/treeFixtures';
 import { useBoardController } from './useBoardController';
 import { useBranchBoard } from './useBranchBoard';
@@ -507,6 +509,47 @@ describe('down or right (rule 3)', () => {
     const { result } = await mount(tree());
     act(() => result.current.branch.control.focus('a'));
     expect(result.current.branch.view.draft).toBeNull();
+  });
+});
+
+describe('the ask box is a layout slot, not a card of the tree (#343 review)', () => {
+  it('Outline, Export, fold counts, knots and the next-turn check never see it', async () => {
+    // A lone answer under a passage: focusing it opens the "Follow up…" stub under it.
+    const { result } = await mount([
+      node({ id: 'p', x: 40, y: 60, body: 'Residual learning.' }),
+      node({ id: 'a', parent: 'p', branch: 'right', question: 'why?', finalText: TEXT }),
+    ]);
+    measure(result, ['p', 'a']);
+    const before = result.current.branch.view.tree;
+    act(() => result.current.branch.control.focus('a'));
+    measure(result, [DRAFT_ID], 40);
+    const { tree, draft, layout } = result.current.branch.view;
+    // The box is placed (it has its room) ...
+    expect(draft).not.toBeNull();
+    expect(layout.cards.has(DRAFT_ID)).toBe(true);
+    // ... and is in no model of the tree.
+    expect(tree.byId.has(DRAFT_ID)).toBe(false);
+    expect(tree.byId.size).toBe(before.byId.size);
+    expect(downChild(tree, 'a')).toBeUndefined();
+    expect(countsPhrase(branchCounts(tree, 'a'))).toBe('1 answer');
+    expect(countsPhrase(branchCounts(tree, 'p'))).toBe('1 answer');
+    expect(spanKnots(tree, 'a')).toEqual([]);
+    expect(buildOutline(tree).rows.map((r) => r.id)).toEqual(['p', 'a']);
+    expect(exportMarkdown(tree, { title: 'Board', include: DEFAULT_INCLUDE })).not.toContain(
+      DRAFT_ID,
+    );
+  });
+
+  it('a lone answer that is folded says "1 answer" while its ask box is open', async () => {
+    const { result } = await mount([
+      node({ id: 'p', x: 40, y: 60, body: 'Residual learning.' }),
+      node({ id: 'a', parent: 'p', branch: 'right', question: 'why?', finalText: TEXT }),
+    ]);
+    measure(result, ['p', 'a']);
+    act(() => result.current.branch.control.openAsk('a'));
+    measure(result, [DRAFT_ID], 40);
+    act(() => result.current.branch.ask.fold('a', true));
+    expect(card(result, 'a').pill?.label).toBe('1 answer');
   });
 });
 
