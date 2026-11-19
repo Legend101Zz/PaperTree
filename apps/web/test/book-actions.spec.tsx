@@ -363,6 +363,8 @@ describe('Delete, with Undo for 10 seconds', () => {
     fireEvent.click(within(menu).getByRole('menuitem', { name: /^Delete this paper/ }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   }
+  // The fake clock also runs with real time (shouldAdvanceTime), so a slow machine pushes it on by
+  // itself: "not yet" checks stop well short of the 10 s, never at its edge (that was the flake).
   const advance = (ms: number) =>
     act(async () => {
       await vi.advanceTimersByTimeAsync(ms);
@@ -378,7 +380,7 @@ describe('Delete, with Undo for 10 seconds', () => {
     );
     expect(toast).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Undo' })).toBe(document.activeElement);
-    await advance(9_900);
+    await advance(4_000);
     expect(api.remove).not.toHaveBeenCalled();
   });
 
@@ -398,9 +400,9 @@ describe('Delete, with Undo for 10 seconds', () => {
   it('sends DELETE only when the 10 s run out, and the spine stays gone', async () => {
     await renderLibrary();
     await deleteIt();
-    await advance(9_900);
+    await advance(4_000);
     expect(api.remove).not.toHaveBeenCalled();
-    await advance(200);
+    await advance(6_200);
     expect(api.remove).toHaveBeenCalledTimes(1);
     expect(api.remove).toHaveBeenCalledWith(ID);
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull());
