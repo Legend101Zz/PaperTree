@@ -20,9 +20,9 @@
   "properties": {
     "run_id": { "type": "string", "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$" },
     "request_id": { "type": "string", "pattern": "^req_[0-9A-HJKMNP-TV-Z]{26}$" },
-    "kind": { "enum": ["explain", "ask", "summary", "diagram", "topic"] },
+    "kind": { "enum": ["explain", "ask", "summary", "diagram", "topic", "glance"] },
     "prompt_version": {
-      "enum": ["explain-v1", "ask-v1", "summary-v1", "diagram-v1", "topic-v1"]
+      "enum": ["explain-v1", "ask-v1", "summary-v1", "diagram-v1", "topic-v1", "glance-v1"]
     },
     "tool": {
       "description": "Where the agent's four paper tools are served (§4) and the run token they take as `Authorization: Bearer <token>`. The API stores only the token's sha256.",
@@ -140,6 +140,10 @@
     },
     {
       "if": { "properties": { "kind": { "const": "topic" } } },
+      "then": { "properties": { "seed": { "type": "object" } } }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "glance" } } },
       "then": { "properties": { "seed": { "type": "object" } } }
     }
   ]
