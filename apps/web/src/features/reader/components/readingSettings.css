@@ -1,0 +1,71 @@
+/*
+ * The reader's Aa menu (#345): a 40 px "Aa" button on the bar and a small panel under it, holding
+ * Page and Room. The popover's wrapper and panel classes (`pt-hmenu`, `pt-hmenu__panel`) are the
+ * library's, whose stylesheet loads with the library route only, so the few rules the reader
+ * needs are here, scoped to the reader. Colours are tokens; the button eases only shadow and
+ * transform, like every `pt-toolbtn`.
+ */
+.pt-reader .pt-hmenu {
+  position: relative;
+}
+
+.pt-reader .pt-hmenu__panel {
+  position: absolute;
+  inset-block-start: calc(100% + 8px);
+  inset-inline-end: 0;
+  z-index: 40;
+  display: flex;
+  min-inline-size: 300px;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  background: var(--pt-e2-fill);
+  border: 1px solid var(--pt-rule);
+  border-radius: var(--pt-radius-menu);
+  box-shadow: var(--pt-e2), var(--pt-e2-edge);
+}
+
+.pt-aa__button {
+  inline-size: 40px;
+  min-inline-size: 40px;
+  block-size: 40px;
+  padding: 0;
+  font-family: var(--pt-font-paper);
+  font-size: 15px;
+}
+
+.pt-aa__group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pt-aa--inline {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-block-start: 8px;
+}
+
+/* "PAGE the paper itself": the word in small caps, what it paints in the quiet ink */
+.pt-aa__cap {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--pt-t-meta);
+  color: var(--pt-ink-2);
+}
+
+.pt-aa__name {
+  font-variant-caps: all-small-caps;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--pt-ink);
+}
+
+.pt-aa__hint {
+  margin: 0;
+  font-size: var(--pt-t-meta);
+  color: var(--pt-ink-muted);
+}

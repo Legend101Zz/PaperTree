@@ -27,16 +27,28 @@ calls no API. The page count comes from pdf.js (`usePdfDocument`) or, before the
   (`hooks/useMenuContentsFocus`). e2e specs reach these controls through `readingControls` (`e2e/s4/support.ts`),
   which opens the menu below 768 px.
 
-## The lamp-lit page (#205, frame 09b)
+## The page: Light, Sepia, Dark (#345; was the lamp-lit dimmed sheet, #205)
 
-The PDF page stays paper in the dark scheme: pdf.js's canvas is multiplied onto `--pt-pdf-page` (`#E9E1D1`), so its
-white becomes the dimmed ivory and black type stays black (16.2:1). What is painted ON the page uses page tokens, not
-the scheme's: the flash ring and a focused highlight are `--pt-pdf-ring` (daylight navy in both schemes; the lamp-lit
-focus blue would be 1.6:1 there), the selection is `--pt-pdf-selection`, the outline a flash leaves is drawn at
-`--pt-flash-rest` (0.6 by day, 0.7 lamp-lit: 3.1:1 and 3.5:1, the phone's only lasting cue), and the highlight washes are `--pt-pdf-hl-*` (raised in the
-dark so each stands off the ivory at least as far as off white by day; Guided's dark page keeps the plain
-`--pt-hl-*`). `packages/ui/test/tokens.spec.ts` recomputes all of it from the stylesheet. The blend's scroll cost at
-300 % zoom was measured at none the 60 Hz cadence shows (`research/build/v0.2-ui/shots/S4e/README.md`).
+The paper has its own colour, separate from the room. `Aa` (`components/ReadingSettings`, the library's popover; in the
+phone's menu just the two switches) holds **Page** (Auto · Light · Sepia · Dark) and **Room** (the theme switch). **Auto
+is the default: the page follows the room** (Daylight gives a light page, Lamp-lit a dark one; owner decision F). The
+override is `localStorage` `papertree.page`, like the theme, not the API. `features/settings` `usePage` (mounted in
+`ReaderHeader`, which outlives the phone menu) writes `<html data-pt-page>`; `NO_FLASH_SCRIPT` sets it before paint.
+
+The tokens are per page, not per room: `packages/ui` styles.css declares `--pt-pdf-*` (page, ink, mat, washes and
+their underline inks, selection, ring, flash wash and rest) and `--pt-guided-*` in `:root[data-pt-page=...]` blocks,
+and the dark room blocks declare none (`tokens.spec.ts` checks both, and recomputes every contrast).
+
+**Source** recolours the canvas with CSS (`components/reader/pdfPage.css`), so a switch is live: no re-parse and no
+re-render. Dark is `filter: invert(1) hue-rotate(180deg)` (lightness flips, hue stays) multiplied by the ink and
+screened onto the page; Sepia is a multiply. pdf.js's `pageColors` was weighed and not used (it re-renders every
+page, and recolours vector figures); the argument is in `PageMats.tsx`. Because the filter inverts figures too,
+`figureRegions` (the IR's `figure` and `image` boxes, outermost only; a scanned page is one page-sized region) are
+drawn back from the same canvas, whose pixels the filter never touches, on a `--pt-pdf-mat` with 10 px of margin
+(`PageMats`; none on a light page). **Guided** sets its sheet from `--pt-guided-*`, re-declaring the room's ink tokens
+inside the sheet so everything in it follows the page, and puts figure and equation crops on the mat. Nothing eases a
+colour (a fade races a scheme change; #200). What is painted ON the page uses page tokens: the flash ring, the
+selection wash, the outline a flash leaves (`--pt-flash-rest`, 3:1 or better on each page) and the highlight washes.
 
 ## The selection toolbar (#203)
 
@@ -106,5 +118,5 @@ selects.
 - `components/reader/guidedTables.ts` (v0.1 folder): a Guided table wider than its column is a named region
   ("Table: <caption or first header>") and a tab stop, so a keyboard can scroll it; one that fits is neither.
 - `packages/ui/src/styles.css`, "the reader (S4)": the header, the desk (`--pt-desk` with a laid pattern),
-  the PDF page as a `--pt-pdf-page` sheet with e1 (lamp-lit: the canvas is multiplied onto the dimmed sheet),
+  the PDF page as a `--pt-pdf-page` sheet with e1 (Light, Sepia or Dark: the canvas is recoloured by CSS, `pdfPage.css`),
   and the Guided page on `--pt-page`.
