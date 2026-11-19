@@ -20,7 +20,6 @@ export interface Passage {
   /** The anchor ids of the citations that point here (a quote card matches on these). */
   readonly anchorIds: readonly string[];
   readonly blockId: string | null;
-  readonly supported: boolean | null;
 }
 
 /** The answer's paragraphs and the passage numbers each one cites, in reading order. */
@@ -92,7 +91,6 @@ export function layoutAnswer(
       cited: 0,
       anchorIds: [],
       blockId: blockIdOf(citation.anchor),
-      supported: citation.supported,
     };
     const ids = passage.anchorIds.includes(citation.anchor.id)
       ? passage.anchorIds

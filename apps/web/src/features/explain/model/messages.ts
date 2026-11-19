@@ -1,12 +1,12 @@
 /**
  * A thread's messages as the panel holds them, and the merge of the live stream with the stored
  * thread (#202). While an answer streams, the live state is the truth; once it settles, the stored
- * detail (coverage, usage, times, the verdicts) replaces it under the SAME key, so nothing remounts,
- * flickers or appears twice; the markers keep the live citations they were drawn from (#252). Pure; the controller (`useExplainActions`) owns the state, `useThreads` the reads.
+ * detail (usage, times, citations) replaces it under the SAME key, so nothing remounts, flickers or
+ * appears twice. Pure; the controller (`useExplainActions`) owns the state, `useThreads` the reads.
  */
 import type { Failure } from '@/components/explain/errors';
 import type { PlateView } from '@/features/diagram';
-import type { Citation, Message, MessageCoverage, RunSummary } from '@/lib/api/types';
+import type { Citation, Message, RunSummary } from '@/lib/api/types';
 
 /** A message's lifecycle, as the wire spells it. */
 export type MessageStatus = 'streaming' | 'complete' | 'partial' | 'error' | 'aborted';
@@ -32,8 +32,6 @@ export interface ThreadMessage {
   readonly question: string;
   /** ISO time: the server's `created_at` once stored, the moment it was asked until then. */
   readonly createdAt: string | null;
-  /** The server's coverage of a stored answer; null while live. */
-  readonly coverage: MessageCoverage | null;
   /** The parse generation of the run (the `run` event's, or the stored message's); null until known. */
   readonly generation: number | null;
   /**
@@ -44,8 +42,8 @@ export interface ThreadMessage {
   readonly refusal?: Failure | null;
   /**
    * Stopped in this session and its stored copy (with the citations the server minted for what
-   * arrived) has not landed yet: drawn as while streaming, so nothing is classed uncited and then
-   * moved (#204).
+   * arrived) has not landed yet: drawn as while streaming, so no paragraph is called general
+   * knowledge and then changed (#204).
    */
   readonly awaitingStored?: boolean;
   /** A diagram answer's plate (#217): built from its events, or read back; absent on any other. */
@@ -96,7 +94,6 @@ export function fromStored(message: Message, question: string): ThreadMessage {
     usage: message.run,
     question,
     createdAt: message.created_at,
-    coverage: message.coverage ?? null,
     generation: message.generation,
     diagram: message.diagram === undefined ? null : { ...message.diagram, notes: [] },
   };
@@ -136,45 +133,14 @@ function shownStored(stored: readonly Message[]): ThreadMessage[] {
  * @param stored The same message from the server.
  * @returns The message to keep.
  */
-/**
- * The citations a settled answer keeps. The markers on screen were drawn from the live ones: keep
- * those objects, so no marker, number or tab changes under the reader (#252), but take each one's
- * verdict (`supported`) from the stored record, matched by `citation_id`, so a "not verified" is
- * never lost (it may appear after `done`: that is the honest direction). The stored locators (a
- * finer "¶") show the next time the thread is opened. An answer with no live citations (stopped
- * before they came) takes the stored ones.
- *
- * @param live The citations the markers were drawn from.
- * @param stored The stored copy's citations.
- * @returns The citations to keep.
- */
-function shownCitations(
-  live: readonly Citation[],
-  stored: readonly Citation[],
-): readonly Citation[] {
-  if (live.length === 0) return stored;
-  const byId = new Map(stored.map((c) => [c.citation_id, c] as const));
-  const same = byId.size === live.length && live.every((c) => byId.has(c.citation_id));
-  if (!same && process.env.NODE_ENV === 'development') {
-    // Unreachable on today's write path (the API persists, then sends, the same rows); say so if
-    // it ever happens, since the readout (stored coverage) and the markers (live) would disagree.
-    console.warn('explain: the live and stored citations of an answer differ', {
-      live: live.map((c) => c.citation_id),
-      stored: stored.map((c) => c.citation_id),
-    });
-  }
-  return live.map((c) => {
-    const verdict = byId.get(c.citation_id)?.supported;
-    return verdict === undefined || verdict === c.supported ? c : { ...c, supported: verdict };
-  });
-}
-
 function settle(live: ThreadMessage, stored: ThreadMessage): ThreadMessage {
   if (live.status === 'streaming' || stored.status === 'streaming') return live;
   return {
     ...stored,
     key: live.key,
-    citations: shownCitations(live.citations, stored.citations),
+    // The stored copy holds every citation the run minted; one stopped before they arrived has
+    // only the live ones.
+    citations: stored.citations.length === 0 ? live.citations : stored.citations,
     stopped: live.stopped,
     refusal: live.refusal ?? null,
     awaitingStored: false,

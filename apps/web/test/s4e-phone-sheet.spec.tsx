@@ -6,17 +6,19 @@
  * - the call slip keeps the selected passage (the two-line clamp is CSS: measured in
  *   `e2e/v02/phone-reader.spec.ts`), the answer shows its first paragraph and "Read the whole
  *   answer" opens the rest;
- * - markers are 22 px squares whose hit area reaches 44 px (`hitOutset`); each trace row is one
- *   button (the 44 px row height is measured in the e2e);
+ * - each page of a source line is a real button on the touch size, whose hit area reaches 44 px
+ *   (the area itself is CSS: measured in the e2e);
  * - the pinned footer carries the last answer's usage ("estimate") and To board, outside the
  *   scroll, with Dive in beside it (S5e, #293; `s5e-pinned-dive-in.spec`) and no Diagram;
- * - a marker tap lowers the sheet to peek and flashes the passage.
+ * - a page tap lowers the sheet to peek and flashes the passage.
  */
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useState, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { hitOutset, SHEET_PEEK_PX, TOUCH_MARKER_PX, TOUCH_TARGET_PX } from '@papertree/ui';
+
+import { sourceLines } from './answer-render';
 
 import { GOLDEN } from './fixtures/attention-thread';
 import { focusAnchor, Harness, sendToCanvas, stubDesktop } from './s6-harness';
@@ -89,58 +91,35 @@ describe('the phone sheet (frame 08b)', () => {
       /We propose a new simple network architecture/,
     );
     expect(within(exchange).queryByText(/The motivation is/)).toBeNull();
-    expect(exchange.querySelector('.pt-ai-slip__uncited')).toBeNull();
+    expect(sourceLines(exchange)).toEqual(['From the paper: p. 1']);
     const more = within(exchange).getByRole('button', { name: 'Read the whole answer' });
     expect(more.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(more);
     expect(within(exchange).getByText(/The motivation is/)).toBeTruthy();
-    expect(exchange.querySelector('.pt-ai-slip__uncited')?.textContent).toMatch(/my reading/);
+    expect(sourceLines(exchange).at(-1)).toBe('General knowledge');
     // The same element, now the other way round: focus stays on it.
     expect(more.textContent).toBe('Show less');
     expect(more.getAttribute('aria-expanded')).toBe('true');
   });
 
-  it('draws 22 px markers whose hit area reaches 44 px, and the trace as one button per row', async () => {
+  it('gives each page a touch-size button, and draws no marker, tab or trace row', async () => {
     const sheet = await openGoldenOnPhone();
-    const marker = first(sheet).querySelector<HTMLElement>('[data-passage="1"] button');
-    expect(marker?.classList.contains('pt-marker--touch')).toBe(true);
-    const outset = parseFloat(marker?.style.getPropertyValue('--pt-hit-outset') ?? '');
-    expect(TOUCH_MARKER_PX + 2 * outset).toBe(TOUCH_TARGET_PX);
-    const rows = first(sheet).querySelectorAll('.pt-trace-row--touch');
-    expect(rows).toHaveLength(4);
-    for (const row of Array.from(rows)) expect(row.querySelectorAll('button')).toHaveLength(1);
-    expect(rows[1]?.querySelector('button')?.textContent).toMatch(/^Show in paper: 2p\. 2/);
+    const pages = Array.from(first(sheet).querySelectorAll<HTMLElement>('.pt-source button'));
+    expect(pages.length).toBeGreaterThan(0);
+    for (const page of pages) expect(page.classList.contains('pt-source__page--touch')).toBe(true);
+    expect(
+      sheet.querySelector('.pt-marker, .pt-trace-row, .pt-trace-list, .pt-coverage'),
+    ).toBeNull();
   });
 
-  it('splits the tap areas of a run "[1, 4]" between its two markers', async () => {
-    const sheet = await openGoldenOnPhone();
-    const second = sheet.querySelectorAll<HTMLElement>('[data-exchange]')[1] as HTMLElement;
-    fireEvent.click(within(second).getByRole('button', { name: 'Read the whole answer' }));
-    const run = Array.from(second.querySelectorAll('.pt-cite-run')).find(
-      (r) => r.querySelectorAll('.pt-exchange__inline-marker').length === 2,
-    );
-    const pair = Array.from(run?.querySelectorAll('.pt-exchange__inline-marker') ?? []);
-    expect(pair.map((m) => m.getAttribute('data-passage'))).toEqual(['1', '4']);
-    expect(pair.map((m) => m.getAttribute('data-run'))).toEqual(['next', 'prev']);
-    // A marker on its own has no neighbours to share with.
-    const alone = first(sheet).querySelector('[data-passage="1"]');
-    expect(alone?.hasAttribute('data-run')).toBe(false);
-  });
-
-  it('a marker tap lowers the sheet to peek and flashes its passage; so does a trace row', async () => {
+  it('a page tap lowers the sheet to peek and flashes its passage', async () => {
     const sheet = await openGoldenOnPhone();
     expect(sheet.getAttribute('data-detent')).toBe('half');
-    fireEvent.click(first(sheet).querySelector('[data-passage="1"] button') as HTMLElement);
+    fireEvent.click(first(sheet).querySelector('.pt-source button') as HTMLElement);
     await waitFor(() => expect(sheet.getAttribute('data-detent')).toBe('peek'));
     expect(focusAnchor).toHaveBeenCalledTimes(1);
     // The peek still covers the window's foot: the reader counts a passage there as out of view.
-    expect(focusAnchor.mock.calls[0]?.[1]).toMatchObject({
-      flash: true,
-      from: { n: 1 },
-      bottomInset: SHEET_PEEK_PX,
-    });
-    fireEvent.click(first(sheet).querySelectorAll('.pt-trace-row__touch')[1] as HTMLElement);
-    expect(focusAnchor.mock.calls[1]?.[1]).toMatchObject({ flash: true, from: { n: 2 } });
+    expect(focusAnchor.mock.calls[0]?.[1]).toEqual({ flash: true, bottomInset: SHEET_PEEK_PX });
   });
 
   it('pins the last answer’s usage and To board above the follow-up box, outside the scroll', async () => {

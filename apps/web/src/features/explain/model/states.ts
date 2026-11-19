@@ -4,8 +4,6 @@
  * and today's usage by kind, and when an earlier exchange opens folded. Pure: no React, no fetch;
  * `AnswerSlip`, `BudgetCard` and `Exchange` draw them.
  */
-import { formatCoverage, type Coverage } from '@papertree/ui';
-
 import { inlinePlain, parseMarkdown } from '@/lib/markdown';
 import { texToPlain } from '@/lib/texPlain';
 
@@ -163,7 +161,7 @@ export function usageRows(usage: Pick<UsageTotals, 'by_kind'>): UsageRow[] {
 
 /**
  * Whether an exchange opens folded: a long thread (three exchanges or more) opens with its last two
- * whole and the earlier answers folded to two lines and their counts. Decided once, when the
+ * whole and the earlier answers folded to two lines. Decided once, when the
  * exchange first appears, so nothing folds under the reader while they read (owner may change).
  *
  * @param index The exchange's place, 0-based.
@@ -172,17 +170,6 @@ export function usageRows(usage: Pick<UsageTotals, 'by_kind'>): UsageRow[] {
  */
 export function opensFolded(index: number, count: number): boolean {
   return index < count - 2;
-}
-
-/**
- * A folded answer's counts, without the readout's "Stands on": "4 passages · 11 citations · 1
- * paragraph uncited (the AI's own reading)".
- *
- * @param coverage The answer's coverage.
- * @returns The line.
- */
-export function foldedCounts(coverage: Coverage): string {
-  return formatCoverage(coverage).replace(/^Stands on /, '');
 }
 
 /**

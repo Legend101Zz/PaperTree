@@ -9,15 +9,15 @@ motion and the tablet and phone layouts are S5e (#210).
 
 - `/paper/<id>/notebook/<page>` shows one page: the binding edge, the template (blank, dot grid,
   lined, Cornell, derivation grid) drawn as a CSS background, the title with "From your question on
-  p. 1 ¶1 · 15 Oct" linking back to the passage, the exchange block (call slip → AI slip → coverage
-  line), the trace as numbered quote cards, typed notes, stickies, shapes, and stored ink
+  p. 1 ¶1 · 15 Oct" linking back to the passage, the exchange block (call slip → AI slip, each paragraph
+  with one quiet source line), numbered quote cards, typed notes, stickies, shapes, and stored ink
   (read-only). "Show all N paragraphs" opens the answer and moves everything below the exchange
   down by the height it outgrew its box (`exchangeShift`, display only, never saved).
   `/paper/<id>/notebook` lists the paper's pages or says where one comes from.
 - The three voices stay apart: `data-voice="you"` (call slip, notes, stickies), `paper` (quoted
   passages), `ai` (the AI slip). Quote card `n` is passage `n` of the answer: numbers run in the
   order the answer first cites each passage (`model/exchange.ts`), the order Dive in seeded them.
-- "Open source" and every marker leave for the reader at `?nb=<page>&item=<item>`; the reader reads
+- "Open source", every quote card's marker and every page of a source line leave for the reader at `?nb=<page>&item=<item>`; the reader reads
   that item back and flashes its STORED Anchor (`hooks/useFocusFromNotebook.ts`).
 - Typed notes and stickies: create (tool bar), move (drag; arrow keys, Shift for 24), edit in
   place (Enter, double-click), delete (Delete key or the × button), undo/redo (Ctrl/Cmd+Z,
@@ -147,7 +147,7 @@ motion and the tablet and phone layouts are S5e (#210).
   second press, a second tab or a Back-then-Dive-in sends the same id and the idempotent route
   answers with the page already there: one answer, one page. A press while one is under way joins
   it. Meanwhile the exchange lifts (`data-dive="lift"`, `--pt-dur-quick`); then the screen boxes of
-  its call slip, AI slip and trace rows go into a one-shot hand-off (`diveHandoff`, ten seconds
+  its call slip and AI slip go into a one-shot hand-off (`diveHandoff`, ten seconds
   fresh) and the route changes. The page waits unseen (`data-dive="arriving"`) until it is drawn and
   has stopped changing size, then slides in from the right for `--pt-dur-open` minus
   `--pt-dur-quick` (120 → 360) while each card the panel showed flies to its place on the page
@@ -181,15 +181,15 @@ motion and the tablet and phone layouts are S5e (#210).
 - **The phone** (08c; `components/PhoneStack.tsx`, `PhoneBar.tsx`, `phone.css`, `model/phone.ts`):
   with no drawing tool in the hand the page reads as a stack: "From your question…", the exchange
   (`ExchangeBlock` with `phone`: "Read the whole answer" and "N more paragraphs" in the slip's foot,
-  no margin echoes), the coverage line, the trace as one 44 px index-card row per numbered quote
-  card ("Abstract · cited 5×", S4's touch `TraceList`) that opens its passage in the paper, then
+  no margin echoes; each page of a source line is a touch-size button that opens
+  the passage in the paper; no trace rows and no coverage line, #340/#341), then
   "Your ink · view only" (the strokes cropped to where they are, `inkCrop`; a picture, never a
   surface), the stickies and the typed notes (`NoteItem` with `flow`: one tap edits, Escape or blur
   saves through the same saver; never moved). There is no × on a note in the stack, nor on any touch
   screen (CSS `hover: none`): a hidden button a stray tap finds would delete it. Delete is the
   editor's own 44 px button (`NoteEditor`'s `onDelete`), and every delete on the phone, whatever is
   in the hand, leaves a toast with Undo (`hooks/useDeleteUndo.ts`) while it is still the last thing
-  done. The answer's markers take the shared 44 px touch target. The bar at the foot says "Lasso, shapes and
+  done. The answer's page links take the touch size. The bar at the foot says "Lasso, shapes and
   templates: on a tablet or computer" and offers exactly Text, Sticky, Highlight and "Pen: off".
   Highlight and switching the pen on put that tool in the hand, and the page itself is shown (scaled
   to the screen's width, `usePageScale`'s floor is 0.3 for it) so drawing works as on a tablet;

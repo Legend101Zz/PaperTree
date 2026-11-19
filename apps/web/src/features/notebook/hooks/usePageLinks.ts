@@ -5,7 +5,7 @@
  * #210, which the three layouts share): the exchange items Dive in stored, the place the question
  * came from, Back to the paper (aimed at that passage and at the dived thread, so the reader
  * reopens its explain panel), the "From your question" line, and the one stable `focusAnchor`
- * every marker, quote card and trace row uses to show a passage in the paper.
+ * every source line and quote card uses to show a passage in the paper.
  */
 import { formatPageLabel } from '@papertree/ui';
 import { useRouter } from 'next/navigation';

@@ -9,7 +9,6 @@
 import { useId, useMemo, type ReactNode } from 'react';
 
 import { GRID, layoutPlate } from '../model/layout';
-import { verdictOf } from '../model/plate';
 
 import type { MessageDiagram } from '@/lib/api/types';
 
@@ -24,7 +23,6 @@ export interface PlateMiniatureProps {
 export function PlateMiniature({ plate }: PlateMiniatureProps): ReactNode {
   const hatch = `pt-mini-hatch-${useId().replace(/:/g, '')}`;
   const layout = useMemo(() => layoutPlate(plate.parts, plate.links, false), [plate]);
-  const verdicts = new Map(plate.parts.map((p) => [p.letter, verdictOf(p)]));
   return (
     <svg
       className="pt-plate__drawing pt-plate-mini"
@@ -52,26 +50,21 @@ export function PlateMiniature({ plate }: PlateMiniatureProps): ReactNode {
           points={route.points.map((p) => p.join(',')).join(' ')}
         />
       ))}
-      {layout.slots.map((slot) => {
-        const inferred = verdicts.get(slot.letter) === 'inferred';
-        return (
-          <g key={slot.letter} className="pt-plate__part" data-verdict={verdicts.get(slot.letter)}>
-            {inferred ? null : (
-              <rect
-                x={slot.x + 5}
-                y={slot.y + 5}
-                width={slot.w}
-                height={slot.h}
-                fill={`url(#${hatch})`}
-              />
-            )}
-            <rect className="pt-plate__box" x={slot.x} y={slot.y} width={slot.w} height={slot.h} />
-            <text className="pt-plate-mini__letter" x={GRID.circleX} y={slot.y + slot.h / 2 + 8}>
-              {slot.letter}
-            </text>
-          </g>
-        );
-      })}
+      {layout.slots.map((slot) => (
+        <g key={slot.letter} className="pt-plate__part">
+          <rect
+            x={slot.x + 5}
+            y={slot.y + 5}
+            width={slot.w}
+            height={slot.h}
+            fill={`url(#${hatch})`}
+          />
+          <rect className="pt-plate__box" x={slot.x} y={slot.y} width={slot.w} height={slot.h} />
+          <text className="pt-plate-mini__letter" x={GRID.circleX} y={slot.y + slot.h / 2 + 8}>
+            {slot.letter}
+          </text>
+        </g>
+      ))}
     </svg>
   );
 }

@@ -452,23 +452,6 @@ export function mathToPlain(text: string): string {
     .join('');
 }
 
-/** The handles a tree mentions, in order (`b3`, `b4`). */
-export function handlesInBlocks(blocks: readonly Block[]): string[] {
-  const out: string[] = [];
-  const walk = (nodes: readonly Inline[]): void => {
-    for (const node of nodes) {
-      if (node.t === 'cite') out.push(...node.markers);
-      else if (node.t === 'em' || node.t === 'strong') walk(node.c);
-    }
-  };
-  for (const block of blocks) {
-    if (block.k === 'p') block.lines.forEach(walk);
-    else if (block.k === 'h') walk(block.c);
-    else if (block.k !== 'dm') block.items.forEach(walk);
-  }
-  return out;
-}
-
 /** A tree as plain text, handles dropped (for tests and for aria text). */
 export function plainText(blocks: readonly Block[]): string {
   return blocks

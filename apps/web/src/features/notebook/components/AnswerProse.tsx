@@ -1,61 +1,26 @@
 'use client';
 
 /**
- * One paragraph of the dived-from answer on the notebook page (S5c, #208): the model's words with
- * every `[bN]` handle drawn as the passage's numbered marker, which flashes that passage in the
- * paper. Parsing is `lib/markdown`'s (no HTML path); a handle with no stored citation is dropped,
- * as the explain panel drops it, because a reader cannot act on "b9".
+ * One paragraph of the dived-from answer on the notebook page (S5c, #208, #340): the model's words
+ * with every `[bN]` handle left out (the paragraph's sources are one quiet line under it, drawn by
+ * `ExchangeBlock`). Parsing is `lib/markdown`'s (no HTML path); only the punctuation a handle
+ * carried is kept.
  */
-import { NumberedMarker, formatPageLabel } from '@papertree/ui';
 import { Fragment } from 'react';
 
 import { dehyphenate, parseMarkdown } from '@/lib/markdown';
 import { Maths } from '@/lib/math';
 
-import { handlesIn } from '../model/exchange';
-
-import type { AnswerLayout } from '../model/exchange';
-import type { Citation } from '@/lib/api/types';
 import type { Inline } from '@/lib/markdown';
-import type { Anchor } from '@papertree/anchoring';
 import type { ReactNode } from 'react';
 
 /** Props for `AnswerProse`. */
 export interface AnswerProseProps {
   /** One paragraph of the answer, handles included. */
   readonly text: string;
-  readonly layout: AnswerLayout;
-  /** Handle → the stored citation (for the Anchor a marker flashes). */
-  readonly citations: ReadonlyMap<string, Citation>;
-  /** Scroll the paper to an Anchor and flash it. */
-  readonly onFocusAnchor: (anchor: Anchor) => void;
-  /** The phone's stack (S5e, #210): markers get the shared 44 px touch target. */
-  readonly touch?: boolean;
 }
 
-/**
- * The passage numbers of a paragraph, deduplicated in reading order, for its margin cell.
- *
- * @param text - The paragraph.
- * @param layout - The answer's layout.
- * @returns The numbers.
- */
-export function paragraphNumbers(text: string, layout: AnswerLayout): number[] {
-  const out: number[] = [];
-  for (const handle of handlesIn(text)) {
-    const n = layout.numberOf.get(handle);
-    if (n !== undefined && !out.includes(n)) out.push(n);
-  }
-  return out;
-}
-
-function Inlines({
-  nodes,
-  props,
-}: {
-  nodes: readonly Inline[];
-  props: AnswerProseProps;
-}): ReactNode {
+function Inlines({ nodes }: { nodes: readonly Inline[] }): ReactNode {
   return nodes.map((node, i) => {
     switch (node.t) {
       case 'text':
@@ -63,52 +28,28 @@ function Inlines({
       case 'em':
         return (
           <em key={i}>
-            <Inlines nodes={node.c} props={props} />
+            <Inlines nodes={node.c} />
           </em>
         );
       case 'strong':
         return (
           <strong key={i}>
-            <Inlines nodes={node.c} props={props} />
+            <Inlines nodes={node.c} />
           </strong>
         );
       case 'code':
         return <code key={i}>{node.v}</code>;
       case 'math':
         return <Maths key={i} tex={node.tex} display={node.display} />;
-      case 'cite': {
-        const seen = new Set<number>();
-        const markers = node.markers.flatMap((handle) => {
-          const citation = props.citations.get(handle);
-          const n = props.layout.numberOf.get(handle);
-          if (citation === undefined || n === undefined || seen.has(n)) return [];
-          seen.add(n);
-          const passage = props.layout.passages[n - 1];
-          return (
-            <NumberedMarker
-              key={handle}
-              n={n}
-              label={formatPageLabel(passage?.page ?? 1, passage?.para ?? null)}
-              notVerified={citation.supported === false}
-              size={props.touch === true ? 'touch' : 'compact'}
-              onFlash={() => props.onFocusAnchor(citation.anchor)}
-            />
-          );
-        });
-        return (
-          <span key={i} className="pt-cite-run">
-            {markers}
-            {node.after}
-          </span>
-        );
-      }
+      case 'cite':
+        return node.after === '' ? null : <Fragment key={i}>{node.after}</Fragment>;
     }
   });
 }
 
-/** One paragraph of the answer, its markers live. */
-export function AnswerProse(props: AnswerProseProps): ReactNode {
-  const blocks = parseMarkdown(dehyphenate(props.text));
+/** One paragraph of the answer, its handles left to the source line. */
+export function AnswerProse({ text }: AnswerProseProps): ReactNode {
+  const blocks = parseMarkdown(dehyphenate(text));
   return blocks.map((block, i) => {
     switch (block.k) {
       case 'dm':
@@ -119,7 +60,7 @@ export function AnswerProse(props: AnswerProseProps): ReactNode {
             {block.lines.map((line, j) => (
               <Fragment key={j}>
                 {j > 0 ? <br /> : null}
-                <Inlines nodes={line} props={props} />
+                <Inlines nodes={line} />
               </Fragment>
             ))}
           </Fragment>
@@ -127,14 +68,14 @@ export function AnswerProse(props: AnswerProseProps): ReactNode {
       case 'h':
         return (
           <strong key={i}>
-            <Inlines nodes={block.c} props={props} />
+            <Inlines nodes={block.c} />
           </strong>
         );
       case 'ul':
       case 'ol':
         return block.items.map((item, j) => (
           <Fragment key={`${String(i)}-${String(j)}`}>
-            {j > 0 ? <br /> : null}• <Inlines nodes={item} props={props} />
+            {j > 0 ? <br /> : null}• <Inlines nodes={item} />
           </Fragment>
         ));
     }

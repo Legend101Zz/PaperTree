@@ -17,7 +17,6 @@ import { ExplanationCard } from '@/features/board/components/cards/ExplanationCa
 import { toFlowNode, type PtNode } from '@/features/board/model/flow';
 import { cardRow } from '@/features/board/model/test-data';
 import { AnswerProse } from '@/features/notebook/components/AnswerProse';
-import { RichText } from '@/components/explain/RichText';
 import { Maths, typeset } from '@/lib/math';
 import { MathText } from '@/lib/MathText';
 
@@ -47,13 +46,9 @@ function expectTypeset(root: Element): void {
 
 const answerText = (text: string, streaming = false): ReactElement => (
   <AnswerText
-    paragraph={{ index: 0, text, markers: [], cited: false }}
+    paragraph={{ index: 0, text, sources: [] }}
     streaming={streaming}
-    withMargin={false}
-    handleNumbers={new Map()}
-    markers={new Map()}
-    lit={null}
-    onLight={() => undefined}
+    general={false}
     onShow={() => undefined}
   />
 );
@@ -151,15 +146,9 @@ describe('an explain or Ask answer paragraph', () => {
 
 describe('the notebook prose', () => {
   it('typesets inline and display maths', () => {
-    const layout = { passages: [], numberOf: new Map(), paragraphs: [] };
     const { container } = render(
       <p>
-        <AnswerProse
-          text={FIXTURE}
-          layout={layout}
-          citations={new Map()}
-          onFocusAnchor={() => undefined}
-        />
+        <AnswerProse text={FIXTURE} />
       </p>,
     );
     expectTypeset(container);
@@ -186,13 +175,6 @@ describe('the board explanation card', () => {
         </CanvasActionsProvider>
       </ReactFlowProvider>,
     );
-    expectTypeset(container);
-  });
-});
-
-describe('the RichText prose', () => {
-  it('typesets inline and display maths', () => {
-    const { container } = render(<RichText citations={[]} text={FIXTURE} />);
     expectTypeset(container);
   });
 });
@@ -254,25 +236,22 @@ describe('plain-text surfaces never show a dollar', () => {
 });
 
 describe('the phone fold', () => {
-  const para = (index: number, text: string) => ({ index, text, markers: [], cited: true });
+  const para = (index: number, text: string) => ({ index, text, sources: [] });
 
   it('keeps the first paragraph whole when it is complete', () => {
-    const model = { body: [para(0, 'one $x$'), para(1, 'two')], uncited: [] };
-    expect(clipAnswer(model, false)).toMatchObject({ body: [{ index: 0 }], clipped: true });
+    const model = { paragraphs: [para(0, 'one $x$'), para(1, 'two')] };
+    expect(clipAnswer(model, false)).toMatchObject({ paragraphs: [{ index: 0 }], clipped: true });
   });
 
   it('does not cut inside a display equation a blank line split', () => {
-    const model = {
-      body: [para(0, 'so $$y ='), para(1, 'F(x) + x$$'), para(2, 'after')],
-      uncited: [],
-    };
+    const model = { paragraphs: [para(0, 'so $$y ='), para(1, 'F(x) + x$$'), para(2, 'after')] };
     const clip = clipAnswer(model, false);
-    expect(clip.body.map((p) => p.index)).toEqual([0, 1]);
+    expect(clip.paragraphs.map((p) => p.index)).toEqual([0, 1]);
     expect(clip.clipped).toBe(true);
   });
 
   it('is not clipped when the equation is the end of the answer', () => {
-    const model = { body: [para(0, 'so $$y ='), para(1, 'F(x) + x$$')], uncited: [] };
+    const model = { paragraphs: [para(0, 'so $$y ='), para(1, 'F(x) + x$$')] };
     expect(clipAnswer(model, false).clipped).toBe(false);
   });
 });

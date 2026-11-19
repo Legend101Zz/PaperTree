@@ -85,7 +85,7 @@ test.describe('S5c — the notebook page (faux agent)', () => {
     });
     expect(dived.status, JSON.stringify(dived.json)).toBe(201);
 
-    // ── 3. the page: the exchange, and one quote card per passage, numbered as the markers ──
+    // ── 3. the page: the exchange, and one quote card per passage ──
     await page.goto(`/paper/${paperId}/notebook/${pageId}`);
     const exchange = page.getByRole('region', { name: 'The exchange this page started from' });
     await expect(exchange).toBeVisible();
@@ -95,7 +95,8 @@ test.describe('S5c — the notebook page (faux agent)', () => {
     for (const n of [1, 2, 3, 4]) {
       await expect(page.locator(`.pt-nb-quote[data-passage="${String(n)}"]`)).toHaveCount(1);
     }
-    await expect(exchange).toContainText('Stands on 4 passages · 11 citations');
+    await expect(exchange.locator('.pt-source').first()).toContainText('From the paper: p.');
+    await expect(exchange.locator('.pt-coverage')).toHaveCount(0);
     await page.screenshot({ path: shot('s5c-notebook-1440.png') });
 
     // ── 3b. "Show all" opens the answer, and the cards move below it instead of covering it ──
@@ -181,8 +182,10 @@ test.describe('S5c — the notebook page (faux agent)', () => {
       for (const colorScheme of ['light', 'dark'] as const) {
         await page.setViewportSize({ width, height });
         await page.emulateMedia({ colorScheme });
-        // A phone reads the page as a stack (S5e, #210): the four passages are its trace rows.
-        await expect(page.locator(width < 768 ? '.pt-trace-row' : '.pt-nb-quote')).toHaveCount(4);
+        // A phone reads the page as a stack (S5e, #210): the answer's source line, no quote cards.
+        await expect(
+          page.locator(width < 768 ? '.pt-nb-stack .pt-source' : '.pt-nb-quote'),
+        ).toHaveCount(width < 768 ? 1 : 4);
         expect(await axeSerious(page), `${String(width)} ${colorScheme}`).toEqual([]);
       }
     }

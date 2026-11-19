@@ -1,6 +1,6 @@
 /**
  * s6-summary — "Summarize paper": the cached summary renders with NO new run; otherwise a run with
- * a progress label, then 5-8 bullets with working chips; a partial summary says so in words.
+ * a progress label, then 5-8 bullets, each with a working page link under it (#340).
  */
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -40,7 +40,6 @@ const SUMMARY = (statusValue: 'complete' | 'partial', bullets = 5) => ({
   bullets: Array.from({ length: bullets }, (_v, i) => ({
     text: `Point number ${String(i + 1)} [b${String(i + 1)}]`,
     citations: statusValue === 'partial' && i === 0 ? [] : [citation(`b${String(i + 1)}`)],
-    supported: true,
   })),
 });
 
@@ -60,13 +59,10 @@ describe('the paper summary', () => {
     await waitFor(() => expect(document.querySelectorAll('[data-summary-bullet]')).toHaveLength(5));
     expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
     expect(document.querySelector('[data-summary-warning]')).toBeNull();
-    // markers work (#204: numbered by passage, the flash says which marker)
-    fireEvent.click(document.querySelectorAll('[data-citation-id] button')[2] as Element);
+    // a page link works: the third bullet's flashes the passage it cites, and nothing else is said
+    fireEvent.click(document.querySelectorAll('.pt-source button')[2] as Element);
     expect(focusAnchor.mock.calls[0]?.[0]).toMatchObject({ id: 'anchor-b3' });
-    expect(focusAnchor.mock.calls[0]?.[1]).toEqual({
-      flash: true,
-      from: { n: 3, page: 4, para: null, notVerified: false },
-    });
+    expect(focusAnchor.mock.calls[0]?.[1]).toEqual({ flash: true });
   });
 
   it('with none cached: POSTs, shows the progress label, then the bullets from GET', async () => {
@@ -110,19 +106,17 @@ describe('the paper summary', () => {
     expect(document.querySelector('[data-usage-line]')?.textContent).toContain('(estimate)');
   });
 
-  it('a partial summary says so in plain words and marks the bullet without a passage', async () => {
+  it('a partial summary draws no warning: the bullet without a passage says "General knowledge"', async () => {
     installFetch({
       [`GET /papers/${PAPER}/summary`]: () =>
         jsonResponse(200, { state: 'partial', summary: SUMMARY('partial') }),
     });
     render(<Harness />);
     await open();
-    await waitFor(() =>
-      expect(document.querySelector('[data-summary-warning]')?.textContent).toBe(
-        'Some points could not be linked to a passage.',
-      ),
-    );
-    expect(screen.getByText("no citation · the AI's own reading")).toBeTruthy();
+    await waitFor(() => expect(document.querySelectorAll('[data-summary-bullet]')).toHaveLength(5));
+    expect(document.querySelector('[data-summary-warning]')).toBeNull();
+    expect(document.querySelectorAll('.pt-source--general')).toHaveLength(1);
+    expect(document.body.textContent).not.toMatch(/own reading|could not be linked/i);
   });
 
   it('a failed run shows a designed error with Retry', async () => {

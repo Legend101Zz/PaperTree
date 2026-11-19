@@ -69,7 +69,6 @@ function storedStopped(content: string, tokens: number | null): Message[] {
       status: 'aborted',
       error: { code: 'aborted', retryable: true, message: 'stopped' },
       citations: [],
-      coverage: undefined,
       run: {
         ...(golden.run as NonNullable<Message['run']>),
         model: 'MiniMax-M3',
@@ -214,7 +213,7 @@ describe('a follow-up in a stored thread', () => {
     return box;
   }
 
-  it('markers appear in the live text for passages the thread already cited; a partial handle never shows', async () => {
+  it('a page appears under the live text for passages the thread already cited; a partial handle never shows', async () => {
     openGold((_c, signal) =>
       sseResponse(
         [
@@ -234,8 +233,13 @@ describe('a follow-up in a stored thread', () => {
       ),
     );
     const live = document.querySelector('[data-message-status="streaming"]') as HTMLElement;
-    const marker = live.querySelector('[data-passage="2"] button');
-    expect(marker?.getAttribute('aria-label')).toBe('Passage 2, p. 2 ¶2');
+    // b6 is on p. 2 in the first answer: the live paragraph lists it at once, and does not yet
+    // call anything general knowledge.
+    expect(live.querySelector('.pt-source')?.textContent).toMatch(/^From the paper: p\. 2/);
+    expect(live.querySelector('.pt-source button')?.getAttribute('aria-label')).toBe(
+      'Show p. 2 in the paper',
+    );
+    expect(live.querySelector('.pt-source--general')).toBeNull();
     expect(live.textContent).not.toMatch(/\[b|\bb6\b/);
     expect(live.querySelector('.pt-exchange__caret')).not.toBeNull();
   });
@@ -280,7 +284,7 @@ describe('a follow-up in a stored thread', () => {
     expect(await axeClean()).toEqual([]);
   });
 
-  it('a long thread opens with the earlier answer folded: two lines, its counts, Show', async () => {
+  it('a long thread opens with the earlier answer folded: two lines and Show', async () => {
     const third: Message[] = [
       {
         ...(GOLDEN.messages[2] as Message),
@@ -300,19 +304,17 @@ describe('a follow-up in a stored thread', () => {
     const [first, second] = Array.from(document.querySelectorAll<HTMLElement>('[data-exchange]'));
     const fold = within(first as HTMLElement).getByRole('button', { name: 'Show' });
     expect(fold.getAttribute('aria-expanded')).toBe('false');
-    expect(first?.querySelector('.pt-exchange__fold')?.textContent).toContain(
-      "4 passages · 11 citations · 1 paragraph uncited (the AI's own reading)",
-    );
+    expect(first?.querySelector('.pt-exchange__fold')?.textContent).toBe('Show');
     expect(first?.querySelector('.pt-exchange__preview')?.textContent).toMatch(
       /^The passage states/,
     );
-    expect(first?.querySelector('.pt-trace-list')).toBeNull();
-    expect(first?.querySelector('[data-citation-id]')).toBeNull();
-    expect(second?.querySelector('.pt-trace-list')).not.toBeNull();
+    // Folded, the earlier answer shows no source line; the open ones do.
+    expect(first?.querySelector('.pt-source')).toBeNull();
+    expect(second?.querySelector('.pt-source')).not.toBeNull();
 
     fold.focus();
     fireEvent.click(fold);
-    expect(first?.querySelector('.pt-trace-list')).not.toBeNull();
+    expect(first?.querySelector('.pt-source')).not.toBeNull();
     const again = within(first as HTMLElement).getByRole('button', { name: 'Fold' });
     expect(again).toBe(fold);
     expect(document.activeElement).toBe(fold);
@@ -324,7 +326,6 @@ describe('a follow-up in a stored thread', () => {
       ...(GOLDEN.messages[1] as Message),
       status: 'aborted',
       error: { code: 'aborted', retryable: true, message: 'stopped' },
-      coverage: undefined,
     };
     const third: Message[] = [
       { ...(GOLDEN.messages[2] as Message), message_id: 'msg_u9', ordinal: 4, content: 'And?' },

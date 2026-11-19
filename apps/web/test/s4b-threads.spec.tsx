@@ -91,7 +91,6 @@ describe('the panel reads the stored threads', () => {
       message_id: 'msg_a3',
       ordinal: 5,
       content: 'Cheaper to train [b1].',
-      coverage: undefined,
     };
     const { calls } = installFetch({
       [LIST]: () => jsonResponse(200, [NEWER]),

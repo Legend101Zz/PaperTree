@@ -328,7 +328,6 @@ function blankAssistant(question: string, diagram = false): ViewMessage {
     usage: null,
     question,
     createdAt: new Date().toISOString(),
-    coverage: null,
     generation: null,
   };
 }
