@@ -41,6 +41,7 @@ import { MAX_ANCHORS_PER_HIGHLIGHT } from '@/lib/api/highlights';
 
 import { useReaderActions } from './actions';
 import { type DocumentHandle, type DocumentRef } from './documentHandle';
+import { figureRegions } from './figureRegions';
 import { FLASH_SCROLL_MS, prefersReducedMotion } from './flash';
 import { HighlightOverlay, type FlashPaint, type PaintItem } from './HighlightOverlay';
 import { usePdfDocument } from './PdfDocumentProvider';
@@ -61,6 +62,8 @@ import {
   type ReadingPosition,
   type VirtualPageListHandle,
 } from './VirtualPageList';
+
+import type { BBox } from '@papertree/document-ir';
 
 import type { HighlightColor } from '@/lib/api/types';
 
@@ -222,6 +225,14 @@ export function SourcePane(props: SourcePaneProps) {
   );
 
   const { items } = useMemo(() => paintItemsOf(doc, props.highlights), [doc, props.highlights]);
+  // The figure boxes per page, for the dark and sepia page's mats. Built once per document: a new
+  // array on every render would redraw every mat each time.
+  const figuresByPage = useMemo(() => {
+    const byPage = new Map<number, readonly BBox[]>();
+    for (const [pageIndex, blocks] of doc?.byPage ?? [])
+      byPage.set(pageIndex, figureRegions(blocks));
+    return byPage;
+  }, [doc]);
 
   // One highlight holds at most 64 anchors (contracts.md §2.4): a longer selection says so in the
   // bar, before anything is sent — the reviewer's 3-page drag was a raw 422 (s4-review.md F2).
@@ -426,6 +437,7 @@ export function SourcePane(props: SourcePaneProps) {
         zoom={props.zoom}
         className="h-full"
         onTextLayer={onTextLayer}
+        figureRegionsOf={(pageIndex) => figuresByPage.get(pageIndex)}
         onViewportResize={props.onViewportResize}
         initialPosition={props.initialPosition}
         onPositionChange={props.onPositionChange}

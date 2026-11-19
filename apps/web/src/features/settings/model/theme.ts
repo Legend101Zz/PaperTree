@@ -6,6 +6,7 @@
  * `NO_FLASH_SCRIPT` applies the same rule before first paint so a dark reader never sees a white
  * flash on load (#175).
  */
+import { PAGE_NO_FLASH_SNIPPET } from './page';
 
 /** What the person picked in Aa. `system` follows the OS (`prefers-color-scheme`). */
 export type ThemeChoice = 'system' | 'light' | 'dark';
@@ -53,6 +54,8 @@ export function resolveTheme(choice: ThemeChoice, prefersDark: boolean): Resolve
  * `parseThemeChoice` + `resolveTheme` in plain ES5 because it runs before any bundle loads. Storage that
  * throws (private mode, blocked site data) still paints from the OS, so the tokens and Tailwind's `dark:`
  * never disagree;
- * `test/theme.spec.tsx` executes it and checks it agrees with the two functions above.
+ * It also sets `data-pt-page` from the page choice (`page.ts`), so the paper opens on the right page
+ * too. `test/theme.spec.tsx` and `test/page-colour.spec.tsx` execute it and check it agrees with the
+ * functions above.
  */
-export const NO_FLASH_SCRIPT = `(function(){var c=null;try{c=localStorage.getItem('${THEME_STORAGE_KEY}');}catch(e){}if(c!=='light'&&c!=='dark'){try{c=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}catch(e){c='light';}}document.documentElement.setAttribute('${THEME_ATTRIBUTE}',c);})();`;
+export const NO_FLASH_SCRIPT = `(function(){var c=null;try{c=localStorage.getItem('${THEME_STORAGE_KEY}');}catch(e){}if(c!=='light'&&c!=='dark'){try{c=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}catch(e){c='light';}}document.documentElement.setAttribute('${THEME_ATTRIBUTE}',c);${PAGE_NO_FLASH_SNIPPET}})();`;
