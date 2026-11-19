@@ -388,19 +388,68 @@ function seedPassages(systemPrompt: string): Array<{ handle: string; text: strin
   return out;
 }
 
+/**
+ * The faux model's explain / ask answer in the v0.3 shape (contracts.md §3.2.2): the four sections,
+ * one inline `$…$`, one handle (under "In the paper"), a one-part-per-line ```diagram fence in
+ * "How it works" and, when the request says `check: true`, the ```check fence. Deterministic: the
+ * words come from the seed passage and nothing is random. It is already in the canonical form
+ * `tidyAnswer` writes, so the deltas still equal `done.final_text`.
+ */
+function tutorAnswer(request: RunRequest, inPaper: string): string {
+  const level = request.level ?? 'familiar';
+  const diagram = [
+    { t: 'plate', title: 'The idea in three steps' },
+    { t: 'part', label: 'Input x', text: 'what goes in', kind: 'input', after: [], cite: null },
+    {
+      t: 'part',
+      label: 'Layers',
+      text: 'learn the change',
+      kind: 'step',
+      after: ['A'],
+      cite: null,
+    },
+    {
+      t: 'part',
+      label: 'Sum F(x) + x',
+      text: 'the input is added back',
+      kind: 'output',
+      after: ['B', 'A'],
+      cite: null,
+    },
+  ];
+  const sections = [
+    '## TL;DR\n(Faux) The passage in one plain sentence: an idea the paper builds on.',
+    level === 'expert'
+      ? '## The trade-off\n(Faux) It buys a simpler optimisation and costs one extra addition.'
+      : '## In plain words\n(Faux) Think of it as editing a draft instead of rewriting it.',
+    '## How it works\n(Faux) The block outputs $y = F(x) + x$.\n' +
+      `\`\`\`diagram\n${diagram.map((line) => JSON.stringify(line)).join('\n')}\n\`\`\``,
+    `## In the paper\n${inPaper}`,
+  ];
+  if (request.check === true) {
+    sections.push(
+      '```check\nprompt: If $F(x) = 0$, the block outputs ___.\naccept: x | the input | input\n' +
+        'right: Right. $0 + x = x$: the block hands its input straight on.\n' +
+        'hint: Put 0 in place of $F(x)$ in $F(x) + x$ and see what is left.\n```',
+    );
+  }
+  return sections.join('\n\n');
+}
+
+/** The sentence of the faux answer that rests on the paper: the selection, quoted, one handle. */
+function seedSentence(request: RunRequest, context: FauxContext): string | null {
+  const first = seedPassages(context.systemPrompt)[0];
+  if (!first) return null;
+  return `The selected passage says: "${words(first.text, request.datamark, 30)}" [${first.handle}].`;
+}
+
 function answerFromSeed(request: RunRequest): FauxStep {
   return (context) => {
-    const passages = seedPassages(context.systemPrompt);
-    const first = passages[0];
-    if (!first) {
-      const text = 'The paper passages this answer was given do not say. (Faux answer.)';
-      return { text: chunks(text), usage: estimate(context, text) };
-    }
-    const second = passages[1];
-    let text = `The selected passage says: "${words(first.text, request.datamark, 30)}" [${first.handle}].`;
-    if (second)
-      text += ` The text around it adds: "${words(second.text, request.datamark, 24)}" [${second.handle}].`;
-    text += ' (Faux answer: it quotes the paper and adds no interpretation.)';
+    const sentence = seedSentence(request, context);
+    const text = tutorAnswer(
+      request,
+      sentence ?? 'The paper passages this answer was given do not say. (Faux answer.)',
+    );
     return {
       thinking: 'The seed passages hold the selection.',
       text: chunks(text),
@@ -416,7 +465,7 @@ function answerFromTools(request: RunRequest, summary: boolean): FauxStep {
     if (handles.length === 0) {
       const text = summary
         ? "- The paper's outline was empty, so there is nothing to summarise. (Faux.)"
-        : 'The paper does not say. (Faux answer.)';
+        : tutorAnswer(request, 'The paper does not say. (Faux answer.)');
       return { text: chunks(text), usage: estimate(context, text) };
     }
     if (summary) {
@@ -430,11 +479,10 @@ function answerFromTools(request: RunRequest, summary: boolean): FauxStep {
       const text = bullets.join('\n');
       return { text: chunks(text, 6), usage: estimate(context, text) };
     }
-    const cited = handles
-      .slice(0, 2)
-      .map((h) => `[${h}]`)
-      .join(' ');
-    const text = `The paper's passages that match the question are these ${cited}. (Faux answer about "${words(request.question, request.datamark, 12)}".)`;
+    const text = tutorAnswer(
+      request,
+      `The paper's passage that matches the question is this one [${handles[0]}]. (Faux answer about "${words(request.question, request.datamark, 12)}".)`,
+    );
     return { text: chunks(text), usage: estimate(context, text) };
   };
 }
@@ -671,14 +719,24 @@ function scenario(name: string, request: RunRequest): readonly FauxStep[] | null
       // side by side), and an uncited reading.
       return [
         (context) => {
-          const first = answerFromSeed(request);
-          const turn = typeof first === 'function' ? first(context) : first;
           const handles = seedPassages(context.systemPrompt)
             .slice(0, 2)
             .map((p) => p.handle);
           const run = handles.length === 0 ? 'b1' : handles.join(', ');
-          const text = `${(turn.text ?? []).join('')}\n\nIt comes back to the selection [${run}].\n\nThis is my reading, not the paper's claim. (Faux.)`;
-          return { ...turn, text: chunks(text), usage: estimate(context, text) };
+          const second = seedPassages(context.systemPrompt)[1];
+          const first = [
+            seedSentence(request, context) ?? 'The passage does not say. (Faux.)',
+            second &&
+              `The text around it adds: "${words(second.text, request.datamark, 24)}" [${second.handle}].`,
+          ]
+            .filter(Boolean)
+            .join(' ');
+          const text = `${first}\n\nIt comes back to the selection [${run}].\n\nThis is my reading, not the paper's claim. (Faux.)`;
+          return {
+            thinking: 'The seed passages hold the selection.',
+            text: chunks(text),
+            usage: estimate(context, text),
+          };
         },
       ];
     case 'topic-existing':
