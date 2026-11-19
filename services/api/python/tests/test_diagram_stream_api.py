@@ -146,11 +146,8 @@ def test_a_plate_streams_parts_whose_quotes_resolve_to_anchors_on_the_real_parse
         rows = h.rows("SELECT * FROM ai_diagram_parts ORDER BY ordinal")
         assert [r["letter"] for r in rows] == list("ABCDEF")
         inferred = rows[5]
-        assert (inferred["cite_quote"], inferred["anchor_json"], inferred["supported"]) == (
-            None,
-            None,
-            None,
-        )
+        assert (inferred["cite_quote"], inferred["anchor_json"]) == (None, None)
+        assert "supported" not in inferred
         (message,) = h.rows(
             "SELECT content, status, diagram_json FROM ai_messages WHERE role = 'assistant'"
         )
@@ -188,13 +185,9 @@ def test_a_quote_with_differences_is_anchored_and_one_found_nowhere_has_no_ancho
             "locator": None,
             "page_index": None,
         }
-        # The verdict is still stored, for the record; no response carries it (#340).
-        rows = h.rows("SELECT letter, supported, anchor_json IS NULL AS bare FROM ai_diagram_parts")
-        assert [(r["letter"], r["supported"], r["bare"]) for r in rows[:3]] == [
-            ("A", 1, 0),
-            ("B", 0, 0),
-            ("C", 0, 1),
-        ]
+        # No verdict is stored (0015, #351); the Anchor is what tells a found quote from one not.
+        rows = h.rows("SELECT letter, anchor_json IS NULL AS bare FROM ai_diagram_parts")
+        assert [(r["letter"], r["bare"]) for r in rows[:3]] == [("A", 0), ("B", 0), ("C", 1)]
 
 
 def _run_texts(h: AiHarness, token: str, paper_id: str) -> dict[str, str]:
@@ -224,7 +217,8 @@ def test_a_near_quote_anchors_to_the_passage_it_is_closest_to_not_the_first_that
         b6 = next(block for block, text in read.items() if text.startswith(B6))
         selection = _block(a["cite"]["anchor"])
         # The trap is real: the selection (handle b1) passes the claim check for this quote too.
-        assert evidence.claim_verdict(NEAR_B6, [selection], read) == "supported"
+        assessed = evidence.claim_assessment(NEAR_B6, [selection], read)
+        assert assessed is not None and assessed.verdict == "supported"
         assert _block(b["cite"]["anchor"]) == b6
 
 

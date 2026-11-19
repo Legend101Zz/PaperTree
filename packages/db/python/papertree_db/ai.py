@@ -205,18 +205,15 @@ class CitationIn:
     #: A HINT only, never a foreign key (AGENTS.md §4).
     block_id: str
     page_index: int
-    #: ``verify_grounding``'s verdict over the cited block; None when it could not run.
-    supported: bool | None
 
 
 @dataclass(frozen=True, slots=True)
 class DiagramPartIn:
     """One part of a diagram answer, as the API resolved it (``ai_diagram_parts``, 0011).
 
-    The three states a part can be in (DESIGN.md §4: cited, not verified or inferred, never
-    silently uncited): ``quote`` with an ``anchor`` and ``supported`` True (found verbatim) or
-    False (found with differences); ``quote`` with no anchor and ``supported`` False (found
-    nowhere); no ``quote`` at all and every cite field None (inferred).
+    The states a part can be in (never silently uncited): ``quote`` with an ``anchor`` (found in a
+    passage); ``quote`` with no anchor (found nowhere); no ``quote`` at all and every cite field
+    None (inferred). No grounding verdict is stored (0015, #351).
     """
 
     part_id: str
@@ -233,7 +230,6 @@ class DiagramPartIn:
     quote: str | None
     #: The server-minted Anchor v1 record of the block the quote was found in; None if none.
     anchor: Mapping[str, Any] | None
-    supported: bool | None
     generation: int
     #: A HINT only, never a foreign key (AGENTS.md §4).
     block_id: str | None
@@ -257,12 +253,8 @@ def _diagram_part_problem(part: DiagramPartIn) -> str | None:
         return f"after={list(part.after)!r} must name earlier letters only"
     if len(part.edge) != len(part.after):
         return "edge needs one label (or None) per after entry"
-    if (part.quote is None) != (part.supported is None):
-        return "a quote and its supported flag go together"
     if part.anchor is not None and part.quote is None:
         return "an anchor needs the quote it was resolved from"
-    if part.supported and part.anchor is None:
-        return "a supported part needs an anchor"
     if (part.anchor is None) != (part.block_id is None) or (part.anchor is None) != (
         part.page_index is None
     ):
@@ -514,7 +506,6 @@ class AiMixin(_Base):
                     item.generation,
                     item.block_id,
                     item.page_index,
-                    None if item.supported is None else int(item.supported),
                 )
             )
         with self.transaction():
@@ -530,8 +521,8 @@ class AiMixin(_Base):
             )
             self._conn.executemany(
                 "INSERT INTO ai_citations (citation_id, owner_id, message_id, ordinal, marker, "
-                "anchor_json, generation, block_id, page_index, supported) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "anchor_json, generation, block_id, page_index) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 rows,
             )
 
@@ -542,13 +533,11 @@ class AiMixin(_Base):
         for message_id in message_ids:
             for row in self._all(
                 "SELECT citation_id, message_id, ordinal, marker, anchor_json, generation, "
-                "block_id, page_index, supported FROM ai_citations "
+                "block_id, page_index FROM ai_citations "
                 "WHERE owner_id = ? AND message_id = ? ORDER BY ordinal",
                 (owner_id, message_id),
             ):
                 row["anchor"] = json.loads(row.pop("anchor_json"))
-                supported = row["supported"]
-                row["supported"] = None if supported is None else bool(supported)
                 out.append(row)
         return out
 
@@ -577,8 +566,8 @@ class AiMixin(_Base):
             self._conn.execute(
                 "INSERT INTO ai_diagram_parts (part_id, owner_id, message_id, letter, ordinal, "
                 "label, note, part_kind, after_json, edge_json, cite_quote, anchor_json, "
-                "supported, generation, block_id, page_index) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "generation, block_id, page_index) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     part.part_id,
                     owner_id,
@@ -592,7 +581,6 @@ class AiMixin(_Base):
                     to_json(list(part.edge)),
                     part.quote,
                     anchor,
-                    None if part.supported is None else int(part.supported),
                     part.generation,
                     part.block_id,
                     part.page_index,
@@ -601,13 +589,13 @@ class AiMixin(_Base):
 
     def list_diagram_parts(self, owner: OwnerId, message_ids: Sequence[str]) -> list[Row]:
         """Parts of the given messages, by message then letter, with ``after``, ``edge`` and
-        ``anchor`` parsed and ``supported`` a bool (or None for an inferred part)."""
+        and ``anchor`` parsed."""
         owner_id = self._resolve(owner)
         out: list[Row] = []
         for message_id in message_ids:
             for row in self._all(
                 "SELECT part_id, message_id, letter, ordinal, label, note, part_kind, after_json, "
-                "edge_json, cite_quote, anchor_json, supported, generation, block_id, page_index "
+                "edge_json, cite_quote, anchor_json, generation, block_id, page_index "
                 "FROM ai_diagram_parts WHERE owner_id = ? AND message_id = ? ORDER BY ordinal",
                 (owner_id, message_id),
             ):
@@ -615,8 +603,6 @@ class AiMixin(_Base):
                 row["edge"] = json.loads(row.pop("edge_json"))
                 anchor = row.pop("anchor_json")
                 row["anchor"] = None if anchor is None else json.loads(anchor)
-                supported = row["supported"]
-                row["supported"] = None if supported is None else bool(supported)
                 out.append(row)
         return out
 

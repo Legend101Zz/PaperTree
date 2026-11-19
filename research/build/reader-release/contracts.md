@@ -4,6 +4,8 @@ Companion to `ADR-002-reader-release.md` and `slice-plan.md`. Everything here is
 
 Evidence labels: **MEASURED** means the judge ran it (scripts in `judge-evidence/` (the architecture session's local evidence store, not committed; the migration probe is ported to `packages/db/python/tests/test_0005_saved_shapes.py` in S0)). **QUOTED** means it comes from a named report.
 
+> **2026-11-20 (v0.3, #351; supersedes the grounding-verdict parts of §3.4, the `supported` fields of `Citation` and `Summary`, and the `ai_citations` / `ai_diagram_parts` DDL below).** The API no longer computes or stores a grounding verdict (owner ruling: an AI answer is a tutor, not an auditor; the wire dropped `supported` in #340/#341). Migration `0015_drop_grounding_verdicts.sql` drops `ai_citations.supported` and rebuilds `ai_diagram_parts` without `supported`. A citation is still minted per known marker (handle -> block, page, whole-block Anchor); an unknown marker is still dropped and logged. Read every `supported` below as historical.
+
 ## 0. Conventions
 
 - **IDs.**
