@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { answerParagraphs, buildExchanges, formatAskTime, type Exchange } from './exchange';
+import { buildExchanges, formatAskTime, type Exchange } from './exchange';
 import { fromStored, type ThreadMessage } from './messages';
 import { originOf } from './threads';
 import { GOLDEN, goldenMessages } from '../../../../test/fixtures/attention-thread';
@@ -101,11 +101,14 @@ describe('exchange building beyond the stored copy', () => {
     ]);
   });
 
-  it('splits paragraphs like the server: blank lines, headings dropped', () => {
-    expect(answerParagraphs('# Title\n\nOne [b1].\n  \nTwo\nstill two.\n\n## Next\n\n')).toEqual([
-      'One [b1].',
-      'Two\nstill two.',
-    ]);
+  it('splits paragraphs on blank lines and drops an unknown heading line', () => {
+    const model = build([
+      {
+        ...(goldenMessages()[1] as ThreadMessage),
+        text: '# Title\n\nOne [b1].\n  \nTwo\nstill two.\n\n## Next\n\n',
+      },
+    ])[0]?.model;
+    expect(model?.paragraphs.map((p) => p.text)).toEqual(['One [b1].', 'Two\nstill two.']);
   });
 });
 
@@ -166,5 +169,57 @@ describe('a diagram thread (#217)', () => {
     });
     const [first] = buildExchanges(messages, originOf(detail.thread));
     expect(first?.quote).toMatchObject({ page: 4, para: 1 });
+  });
+});
+
+describe('answers at other levels (v0.3)', () => {
+  const [ask, answer] = goldenMessages() as [ThreadMessage, ThreadMessage];
+  const root = { ...answer, level: 'familiar' as const, messageId: 'msg_root' };
+  const sibling = (level: 'new' | 'expert', key: string, over: Partial<ThreadMessage> = {}) => ({
+    ...root,
+    key,
+    messageId: `msg_${key}`,
+    level,
+    relevelOf: 'msg_root',
+    text: `Answer at ${level}.`,
+    ...over,
+  });
+
+  it('a re-levelled answer joins the exchange of the answer it re-levels, never a new one', () => {
+    const exchanges = build([ask, root, sibling('expert', 'e'), sibling('new', 'n')]);
+    expect(exchanges).toHaveLength(1);
+    expect(exchanges[0]?.answer).toBe(root);
+    expect(exchanges[0]?.variants.map((v) => v.level)).toEqual(['familiar', 'expert', 'new']);
+    expect(exchanges[0]?.variants[1]?.model?.paragraphs[0]?.text).toBe('Answer at expert.');
+  });
+
+  it('an answer with no level is Familiar', () => {
+    const exchanges = build([ask, { ...answer, level: null }]);
+    expect(exchanges[0]?.variants.map((v) => v.level)).toEqual(['familiar']);
+  });
+
+  it('keeps one answer per level: a retried sibling replaces the attempt it retried', () => {
+    const failed = sibling('expert', 'e1', { status: 'error', text: '' });
+    const retried = sibling('expert', 'e2');
+    const exchanges = build([ask, root, failed, retried]);
+    const expert = exchanges[0]?.variants.filter((v) => v.level === 'expert');
+    expect(expert).toHaveLength(1);
+    expect(expert?.[0]?.answer.key).toBe('e2');
+  });
+
+  it('a follow-up after a level switch is its own exchange, and the siblings stay on the first', () => {
+    const [, , ask2, answer2] = goldenMessages() as ThreadMessage[] as [
+      ThreadMessage,
+      ThreadMessage,
+      ThreadMessage,
+      ThreadMessage,
+    ];
+    const exchanges = build([ask, root, sibling('expert', 'e'), ask2, answer2]);
+    expect(exchanges.map((e) => e.variants.length)).toEqual([2, 1]);
+  });
+
+  it('a sibling whose root is not in the thread stays an exchange of its own', () => {
+    const orphan = sibling('expert', 'o', { relevelOf: 'msg_gone' });
+    expect(build([ask, root, orphan])).toHaveLength(2);
   });
 });

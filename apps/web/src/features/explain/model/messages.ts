@@ -6,7 +6,7 @@
  */
 import type { Failure } from '@/components/explain/errors';
 import type { PlateView } from '@/features/diagram';
-import type { Citation, Message, RunSummary } from '@/lib/api/types';
+import type { AnswerLevel, Citation, Message, RunSummary } from '@/lib/api/types';
 
 /** A message's lifecycle, as the wire spells it. */
 export type MessageStatus = 'streaming' | 'complete' | 'partial' | 'error' | 'aborted';
@@ -48,6 +48,18 @@ export interface ThreadMessage {
   readonly awaitingStored?: boolean;
   /** A diagram answer's plate (#217): built from its events, or read back; absent on any other. */
   readonly diagram?: PlateView | null;
+  /** The level the answer was written at (v0.3); absent or null on an older answer (= familiar). */
+  readonly level?: AnswerLevel | null;
+  /**
+   * A sibling at another level of the same question: the server id of the answer it re-levels, so
+   * the exchange keeps every level it has fetched and a level switch asks for nothing twice.
+   */
+  readonly relevelOf?: string | null;
+  /**
+   * A quick ask (a go-deeper chip, a level switch): the panel skips the long thinking pause for it
+   * and shows the answer as it is written (#349). Live only.
+   */
+  readonly quick?: boolean;
   /** A Redraw's plate: the plate it redraws (`redraw_of`), so a refused Redraw is sent again as one. */
   readonly redrawOf?: string | null;
 }
@@ -96,7 +108,25 @@ export function fromStored(message: Message, question: string): ThreadMessage {
     createdAt: message.created_at,
     generation: message.generation,
     diagram: message.diagram === undefined ? null : { ...message.diagram, notes: [] },
+    level: message.level ?? null,
+    relevelOf: message.relevel_of ?? null,
   };
+}
+
+/**
+ * Whether `next` is another level of the question `message` answers, not a retry of `message`: it
+ * names an answer to re-level (`relevel_of`) and is at a different level than `message` is.
+ *
+ * @param message A stored answer.
+ * @param next The stored message right after it.
+ * @returns True when both stay.
+ */
+function isSiblingOf(message: Message, next: Message): boolean {
+  if (next.relevel_of == null) return false;
+  const same =
+    next.relevel_of === (message.relevel_of ?? null) &&
+    (next.level ?? null) === (message.level ?? null);
+  return !same;
 }
 
 /**
@@ -117,7 +147,10 @@ function shownStored(stored: readonly Message[]): ThreadMessage[] {
       out.push(fromStored(message, ''));
       return;
     }
-    if (ordered[i + 1]?.role === 'assistant') return;
+    // An answer followed by another is replaced (a retry), unless the next is a sibling of this
+    // one at another level: a re-levelled answer keeps the answers it is a sibling of.
+    const next = ordered[i + 1];
+    if (next?.role === 'assistant' && !isSiblingOf(message, next)) return;
     out.push(fromStored(message, ask));
   });
   return out;
@@ -142,6 +175,10 @@ function settle(live: ThreadMessage, stored: ThreadMessage): ThreadMessage {
     // only the live ones.
     citations: stored.citations.length === 0 ? live.citations : stored.citations,
     stopped: live.stopped,
+    // What the reader asked for stands until the server says otherwise (an older API has no level).
+    level: stored.level ?? live.level ?? null,
+    relevelOf: stored.relevelOf ?? live.relevelOf ?? null,
+    ...(live.quick === true ? { quick: true } : {}),
     refusal: live.refusal ?? null,
     awaitingStored: false,
     // What the run said while drawing (a skipped line, a dropped arrow) is not stored: keep it.
