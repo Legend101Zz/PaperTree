@@ -58,7 +58,7 @@ test.describe('S9-4: a stopped answer never shows raw citation markers', () => {
     await page
       .getByRole('toolbar', { name: 'Selection actions' })
       // #203: Explain runs the answer now (v0.1's Ask); the toolbar's Ask waits for a question.
-      .getByRole('button', { name: 'Explain this passage' })
+      .getByRole('button', { name: 'Explain', exact: true })
       .click();
     const panel = page.getByRole('complementary', { name: 'Explain' });
     await expect(panel.locator('[data-message-status]').first()).toHaveAttribute(

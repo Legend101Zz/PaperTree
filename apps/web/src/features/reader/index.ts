@@ -9,7 +9,6 @@ export {
 } from './components/ReaderHeader';
 export { PageCounter, type PageCounterProps } from './components/PageCounter';
 export {
-  MARGIN_BAR_WIDTH,
   useSelectionToolbar,
   type SelectionToolbarMount,
   type ToolbarActions,

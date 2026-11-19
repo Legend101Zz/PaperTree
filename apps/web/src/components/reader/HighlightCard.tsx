@@ -37,6 +37,8 @@ export interface HighlightCardProps {
     readonly top?: number;
     readonly bottom?: number;
   } | null;
+  /** Open with the cursor in the note field (the selection menu's Note), not on the colour. */
+  readonly focusNote?: boolean;
   readonly onColor: (color: HighlightColor) => void;
   readonly onNote: (note: string | null) => void;
   readonly onDelete: () => void;
@@ -100,11 +102,12 @@ export function HighlightCard(props: HighlightCardProps): JSX.Element {
     setBox({ left, top });
   }, [props.at]);
 
+  const focusNote = props.focusNote === true;
   useEffect(() => {
     ref.current
-      ?.querySelector<HTMLElement>('[aria-pressed="true"]')
+      ?.querySelector<HTMLElement>(focusNote ? 'textarea' : '[aria-pressed="true"]')
       ?.focus({ preventScroll: true });
-  }, []);
+  }, [focusNote]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {

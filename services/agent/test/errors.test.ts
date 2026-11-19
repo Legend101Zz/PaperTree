@@ -133,11 +133,11 @@ describe('the real provider path against a mock Anthropic server', () => {
     const user = JSON.stringify(messages[0]?.content);
     assert.match(
       user,
-      /Explain this passage\.\\n\\n<untrusted_document trust=\\"untrusted\\">\\n\^7f3a91c2 Instead, \^7f3a91c2 we \^7f3a91c2 frame/,
-      'the quote is datamarked word by word, inside the untrusted delimiter',
+      /Explain this passage\.\\n\\n<untrusted_document trust=\\"untrusted\\">\\n\^7f3a91c2\\nInstead, we frame/,
+      'the quote opens after a datamark line, inside the untrusted delimiter',
     );
-    assert.doesNotMatch(user, /Instead, we frame object detection/, 'the raw quote is not sent');
-    assert.match(user, /probabilities\. \^7f3a91c2\\n<\/untrusted_document>/);
+    assert.match(user, /probabilities\.\\n\^7f3a91c2\\n<\/untrusted_document>/);
+    assert.equal(user.split('^7f3a91c2').length - 1, 2, 'two marks around the quote, not per word');
   });
 
   test('a follow-up sends the earlier turns before the new question, so "that" resolves (S5F)', async () => {

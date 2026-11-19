@@ -13,3 +13,15 @@ export {
   type ResolvedTheme,
   type ThemeChoice,
 } from './model/theme';
+export { PageSwitch, type PageSwitchProps } from './components/PageSwitch';
+export { usePage, useResolvedPage, type PageState } from './hooks/usePage';
+export {
+  PAGE_ATTRIBUTE,
+  PAGE_CHOICES,
+  PAGE_NO_FLASH_SNIPPET,
+  PAGE_STORAGE_KEY,
+  parsePageChoice,
+  resolvePage,
+  type PageChoice,
+  type ResolvedPage,
+} from './model/page';

@@ -472,6 +472,8 @@ export interface VirtualPageListProps {
   readonly className?: string;
   /** The highlight overlay for a page, rendered into `PdfPage`'s overlay slot. */
   readonly renderOverlay?: (pageIndex: number, meta: PdfPageMeta) => ReactNode;
+  /** A page's figure and image boxes, kept in their own colours on a dark or sepia page. */
+  readonly figureRegionsOf?: (pageIndex: number) => readonly BBox[] | undefined;
   /** Forwarded to every mounted `PdfPage`. The reader shell stamps the IR attributes from it. */
   readonly onTextLayer?: (info: TextLayerInfo) => void;
   /**
@@ -509,6 +511,7 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
       gap = DEFAULT_PAGE_GAP,
       className,
       renderOverlay,
+      figureRegionsOf,
       onTextLayer,
       onViewportResize,
       onVisibleChange,
@@ -789,7 +792,12 @@ export const VirtualPageList = forwardRef<VirtualPageListHandle, VirtualPageList
                   marginRight: 'auto',
                 }}
               >
-                <PdfPage pageIndex={pageIndex} zoom={zoom} onTextLayer={onTextLayer}>
+                <PdfPage
+                  pageIndex={pageIndex}
+                  zoom={zoom}
+                  onTextLayer={onTextLayer}
+                  figureRegions={figureRegionsOf?.(pageIndex)}
+                >
                   {renderOverlay?.(pageIndex, meta)}
                 </PdfPage>
               </div>

@@ -93,7 +93,7 @@ function askWithSeed(
 }
 
 function header(handle: string, page: string, section: string, type = 'paragraph'): string {
-  return `[${handle}] (${page} · ${section} · ${type})\n<paper_text channel="paper" trust="untrusted">\n${DATAMARK} passage ${DATAMARK} ${handle} ${DATAMARK}\n</paper_text>`;
+  return `[${handle}] (${page} · ${section} · ${type})\n<paper_text channel="paper" trust="untrusted">\n${DATAMARK}\npassage ${handle}\n${DATAMARK}\n</paper_text>`;
 }
 
 export function scenario(name: FixtureName): Scenario {
@@ -172,7 +172,7 @@ export function scenario(name: FixtureName): Scenario {
             : h === 'b15'
               ? 'p. 7 · 4.2. VOC 2007 Error Analysis · paragraph'
               : 'p. 1 · Abstract · paragraph';
-        return { handle: h, label, text: `${DATAMARK} seed ${DATAMARK} ${h} ${DATAMARK}` };
+        return { handle: h, label, text: `${DATAMARK}\nseed ${h}\n${DATAMARK}` };
       });
       const request = { ...base, seed: { ...base['seed'], passages } };
       return {
