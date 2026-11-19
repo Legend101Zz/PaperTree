@@ -84,7 +84,6 @@ const PAIRS: readonly (readonly [string, string, number])[] = [
   ['--pt-pen', '--pt-call-slip', 4.5],
   ['--pt-on-tab', '--pt-tab', 4.5],
   ['--pt-ai-tab-ink', '--pt-ai-slip', 4.5],
-  ['--pt-nv-ink', '--pt-ai-slip', 4.5],
   ['--pt-danger', '--pt-page', 4.5],
   ['--pt-focus', '--pt-page', 3],
   ['--pt-control-border', '--pt-page', 3],
