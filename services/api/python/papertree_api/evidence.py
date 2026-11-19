@@ -332,6 +332,97 @@ def plan_seed(index: PaperIndex, anchor: Mapping[str, Any], *, datamark: str) ->
     )
 
 
+#: The board's "page" paper mode (v0.3 #343): the root passage, its expansion and the blocks of its
+#: page and the page on each side, under a larger budget than a reader's seed (1,500): a board ask
+#: reads a whole page, with no tools.
+BOARD_PAGE_SEED_TOKENS: Final = 3_000
+BOARD_PAGE_RADIUS: Final = 1
+
+
+def plan_page_seed(
+    index: PaperIndex,
+    anchor: Mapping[str, Any],
+    *,
+    datamark: str,
+    budget_tokens: int = BOARD_PAGE_SEED_TOKENS,
+) -> SeedPlan:
+    """The seed of a board ask whose paper is ``page``: what ``plan_seed`` reads for the root
+    passage (the selection first, then its structural expansion), then the text blocks of the
+    passage's page and ±``BOARD_PAGE_RADIUS`` pages, nearest page first and in reading order within
+    a page, each WHOLE or not at all, all under ``budget_tokens`` of datamarked text."""
+    quote = anchor_quote(anchor)
+    selection = selected_block_ids(index, anchor)
+    cost = marked_cost(datamark)
+    passages: list[tuple[str, str, str]] = []
+    total = 0
+    if selection:
+        seed = build_seed(
+            index, selection, focus=quote or None, budget_tokens=budget_tokens, cost=cost
+        )
+        passages = [
+            (p.block_id, passage_label(index, p.block_id), datamark_text(p.text, datamark=datamark))
+            for p in seed.passages
+        ]
+        total = seed.total_tokens
+    first = selection[0] if selection else None
+    first_block = index.block(first) if first is not None else None
+    page = first_block.page_index if first_block is not None else anchor_page(anchor)
+    if page is not None:
+        have = {block for block, _label, _text in passages}
+        nearby = [
+            (abs(block.page_index - page), position, block_id)
+            for position, block_id in enumerate(index.reading_order)
+            if (block := index.block(block_id)) is not None
+            and block_id not in have
+            and abs(block.page_index - page) <= BOARD_PAGE_RADIUS
+            and block.text.strip()
+        ]
+        for _distance, _position, block_id in sorted(nearby):
+            block = index.block(block_id)
+            assert block is not None
+            spend = cost(block.text)
+            if total + spend > budget_tokens:
+                continue
+            passages.append(
+                (
+                    block_id,
+                    passage_label(index, block_id),
+                    datamark_text(block.text, datamark=datamark),
+                )
+            )
+            total += spend
+    if not quote and first_block is not None:
+        quote = first_block.text[:500]
+    return SeedPlan(
+        block_ids=tuple(block for block, _label, _text in passages),
+        quote=quote,
+        page_label=f"p. {page_label(page)}" if page is not None else "",
+        section=section_title(index, first) if first is not None else None,
+        passages=tuple(passages),
+        total_tokens=total,
+    )
+
+
+def plan_quote_seed(index: PaperIndex, anchor: Mapping[str, Any]) -> SeedPlan:
+    """The seed of a board ask whose paper is ``off``: the root passage's words and where it is,
+    and no passage text at all (the path is all the AI reads)."""
+    quote = anchor_quote(anchor)
+    selection = selected_block_ids(index, anchor)
+    first = selection[0] if selection else None
+    first_block = index.block(first) if first is not None else None
+    page = first_block.page_index if first_block is not None else anchor_page(anchor)
+    if not quote and first_block is not None:
+        quote = first_block.text[:500]
+    return SeedPlan(
+        block_ids=(),
+        quote=quote,
+        page_label=f"p. {page_label(page)}" if page is not None else "",
+        section=section_title(index, first) if first is not None else None,
+        passages=(),
+        total_tokens=0,
+    )
+
+
 def plan_digest(index: PaperIndex, *, datamark: str) -> SeedPlan:
     """The seed of a SUMMARY run (contracts.md §3.2): a digest of the whole paper — the abstract,
     each top-level section's first paragraph(s), the conclusion — under about 6,000 estimated
