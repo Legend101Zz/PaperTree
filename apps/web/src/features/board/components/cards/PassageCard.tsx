@@ -17,26 +17,6 @@ import { BranchCard } from '../tree/BranchCard';
 
 import type { PtNode } from '../../model/flow';
 
-/** The page icon on "Open source" (DESIGN.md icons, 1.5 stroke). */
-export function SourceIcon(): ReactNode {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 20 20"
-      aria-hidden="true"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M5.5 2.8h6.2l3 3v11.4H5.5z" />
-      <path d="M11.5 2.8v3.2h3.2M8 10h4.5M8 13h3" />
-    </svg>
-  );
-}
-
 /** A passage card: an `excerpt` row. */
 export function PassageCard({ id, data, selected }: NodeProps<PtNode>): ReactNode {
   const branch = useBranch();

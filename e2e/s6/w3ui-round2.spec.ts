@@ -348,9 +348,10 @@ test.describe('W3UI round 2 (YOLO)', () => {
         const canvas = await ctx.newPage();
         await canvas.goto(`/paper/${paperId}/board`);
         await expect(canvas.locator('.react-flow__node-explanation')).toHaveCount(2);
-        // #340: a board card cites with the quiet source line under a paragraph, no marker or chip.
+        // v0.3: a board card names the page it draws on in its foot ("p. 3", a button), no marker
+        // or chip, and no source line inside the answer.
         await expect(
-          canvas.locator('.react-flow__node-explanation .pt-source').first(),
+          canvas.locator('.react-flow__node-explanation .pt-tc__src').first(),
         ).toBeVisible({ timeout: 30_000 });
         expect(await canvas.locator('.react-flow__node-explanation .pt-marker').count()).toBe(0);
         const body = (await canvas.locator('.react-flow__node-explanation').allInnerTexts()).join(

@@ -138,9 +138,7 @@ export function AnswerCard({ id, data, selected }: NodeProps<PtNode>): ReactNode
       }
       foot={
         <>
-          <span className="pt-tc__ai" data-voice="ai">
-            AI
-          </span>
+          <span className="pt-tc__ai">AI</span>
           {node.model != null && node.model !== '' ? (
             <span className="pt-tc__model">{node.model}</span>
           ) : null}

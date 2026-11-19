@@ -125,15 +125,6 @@
   font: 11px / 1 var(--pt-font-paper);
 }
 
-.pt-bc .pt-bc__quote {
-  margin: 8px 0 0;
-  padding: 0;
-  border: 0;
-  font: var(--pt-t-paper-card) / 17px var(--pt-font-paper);
-  font-variant-numeric: oldstyle-nums proportional-nums;
-  text-indent: -0.42em; /* the opening quotation mark hangs */
-}
-
 .pt-bc .pt-bc__typed {
   margin: 8px 0 0;
   font-size: 13.5px;
@@ -299,32 +290,9 @@
   min-block-size: 0;
 }
 
-.pt-bc__answer p,
-.pt-bc__answer ul,
-.pt-bc__answer ol {
-  margin: 0 0 8px;
-}
-
-.pt-bc__answer ul,
-.pt-bc__answer ol {
-  padding-inline-start: 18px;
-}
-
 .pt-bc .pt-ai-slip__footer {
   flex: none;
   margin-block-start: 6px;
-}
-
-.pt-bc__usage,
-.pt-bc__usage .pt-explain__usage {
-  margin: 0;
-  font: 12.5px / 18px var(--pt-font-you);
-  font-variant-numeric: lining-nums tabular-nums;
-  color: var(--pt-ink-2);
-}
-
-.pt-bc__usage p {
-  margin: 0;
 }
 
 .pt-bc__plate {

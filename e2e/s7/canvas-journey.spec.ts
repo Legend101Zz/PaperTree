@@ -132,7 +132,11 @@ test.describe('Journey D: the canvas', () => {
 
     // ── 3. open the canvas from the toast's link: exactly 2 nodes ──
     await page.getByRole('link', { name: 'Open board' }).click(); // the passage's toast (#203)
-    await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/board$`));
+    // v0.3: the link opens the board on the card this send made (`?card=<id>`, #342).
+    // (Once the board has panned to the card the address drops the parameter, so a reload stays put.)
+    await expect(page).toHaveURL(
+      new RegExp(`/paper/${paperId}/board(\\?card=${excerpt.node_id})?$`),
+    );
     await expect(page.locator('.react-flow__node')).toHaveCount(2);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1440);
     await expect(
@@ -152,7 +156,9 @@ test.describe('Journey D: the canvas', () => {
     await page.waitForTimeout(1000);
     calls.length = 0;
     const head = await nodeBox(page, excerpt.node_id);
-    await mouseDrag(page, { x: head.x + 60, y: head.y + 24 }, { x: head.x + 60, y: head.y + 224 });
+    // v0.3: a card is dragged by its top strip (the words below stay selectable), and a tree card's
+    // drag is an OFFSET on the Tidy layout, not a new x, y.
+    await mouseDrag(page, { x: head.x + 60, y: head.y + 16 }, { x: head.x + 60, y: head.y + 216 });
     await page.waitForTimeout(1200);
     const patches = calls.filter((c) => PATCHES.test(c));
     expect(patches).toEqual([
@@ -160,7 +166,7 @@ test.describe('Journey D: the canvas', () => {
     ]);
     const afterDrag = await getBoard(stack.apiUrl, token, paperId);
     const moved = afterDrag.nodes.find((n) => n.node_id === excerpt.node_id)!;
-    expect(moved.y).toBeGreaterThan(excerpt.y + 100);
+    expect(moved.offset_y ?? 0).toBeGreaterThan(100);
     expect(moved.version).toBe(excerpt.version + 1);
 
     // ── 5. connect with "supports": the label is visible ──
@@ -341,9 +347,10 @@ test.describe('Journey D: the canvas', () => {
     expect(afterDelete.edges).toHaveLength(0);
 
     // ── 11. Open source lands on, and flashes, the passage ──
+    // v0.3: the passage's page is a button on its strip; it opens the reader on those words.
     await page
       .locator(`.react-flow__node[data-id="${excerpt.node_id}"]`)
-      .getByRole('link', { name: 'Open source' })
+      .getByRole('button', { name: /in the paper$/ })
       .click();
     await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/read\\?focus=${excerpt.node_id}$`));
     const flash = page.locator('polygon.pt-flash').first();

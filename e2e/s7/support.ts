@@ -46,6 +46,12 @@ export interface WireNode {
   readonly body: string;
   readonly version: number;
   readonly source_anchor: { readonly id: string } | null;
+  /** v0.3 (v03-BOARD-SPEC section 2): where the card hangs in a tree, and the drag offset. */
+  readonly parent_id?: string | null;
+  readonly branch?: 'down' | 'right' | null;
+  readonly offset_x?: number;
+  readonly offset_y?: number;
+  readonly folded?: boolean;
 }
 export interface WireEdge {
   readonly edge_id: string;

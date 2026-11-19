@@ -400,7 +400,7 @@ test.describe('S8: the prototype flow, 14 steps, at 1440 and 390, both schemes (
         await expect(card(passageCard).locator('blockquote[data-voice="paper"]')).toContainText(
           SENTENCE[0],
         );
-        await expect(card(passageCard).locator('.pt-tab')).toHaveText(/^p\. 1/);
+        await expect(card(passageCard).locator('.pt-tc__src')).toHaveText(/^p\. 1/);
         // The page's card covers no card already there, even one added after the page opened.
         const boxes = (await getBoard(stack.apiUrl, token, paperId)).nodes;
         for (const a of boxes)

@@ -169,6 +169,14 @@ export function useBranchBoard(
     const calm = reducedMotion();
     void flow.setViewport(target, { duration: calm ? 0 : 400 });
     setArrivedId(cardParam);
+    // Arrived: a reload must not pan again, so the address no longer names the card.
+    const here = new URL(window.location.href);
+    here.searchParams.delete('card');
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${here.pathname}${here.search}${here.hash}`,
+    );
   }, [
     cardParam,
     control.ui.draft,
