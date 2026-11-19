@@ -1,8 +1,8 @@
 /**
  * S9-2 and S9-3 on the real stack:
  *   - no page logs a console error (the 404 for /favicon.ico is gone: the app has an icon);
- *   - a library card's screen-reader status text does not begin with stray punctuation (since
- *     #195: the spine's name and the catalogue card's state line).
+ *   - a book's screen-reader status text does not begin with stray punctuation (the spine's name,
+ *     and, since v0.3 #337, the opened book's state line: there is no catalogue card).
  *
  * Screenshots go to the test's output folder and are looked at by the author.
  */
@@ -42,8 +42,8 @@ test('console stays clean and the card status text has no stray period', async (
       await tokenInit(page, token);
       await page.goto('/dashboard');
       await expect(page.getByRole('heading', { name: 'Your library' })).toBeVisible();
-      // #195: the card grid's status badge became the spine's accessible name and the catalogue
-      // card's state line; the same checks run on both.
+      // #195: the card grid's status badge became the spine's accessible name and, since v0.3,
+      // the opened book's state line; the same checks run on both.
       const spine = page.locator('button[data-paper-id]').first();
       await expect(spine).toBeVisible();
       await expect(spine).toHaveAttribute('data-processing-state', 'complete');
@@ -51,7 +51,8 @@ test('console stays clean and the card status text has no stray period', async (
       expect(name.trim()).toMatch(/^[A-Z]/);
       expect(name).not.toMatch(/\s\.\s|,\s*,/);
       await spine.click();
-      const state = page.locator('[data-card-state]');
+      await expect(page.locator('[role="dialog"][data-book-stage="open"]')).toBeVisible();
+      const state = page.locator('.pt-bookdetails__reading span').first();
       const spoken = (await state.evaluate((el) => (el as HTMLElement).innerText)).replace(
         /\s+/g,
         ' ',
