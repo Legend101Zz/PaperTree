@@ -104,6 +104,83 @@ describe('the reader’s quoted selection is datamarked (owner decision 2026-10-
   });
 });
 
+describe('the explain and ask prompts (v0.3, #339)', () => {
+  const base = (kind: 'explain' | 'ask', patch: Partial<RunRequest> = {}): string =>
+    systemPrompt({ ...request(kind === 'explain' ? 'explain' : 'followup'), ...patch, kind });
+
+  test('say the four sections, typeset maths, and that the paper is not a fence', () => {
+    const prompt = base('explain');
+    for (const heading of ['## TL;DR', '## In plain words', '## How it works', '## In the paper']) {
+      assert.ok(prompt.includes(heading), heading);
+    }
+    assert.match(prompt, /\$\$…\$\$/);
+    assert.match(prompt, /not a fence/);
+    assert.match(prompt, /only where it rests on the paper/);
+  });
+
+  test('carry the level guidance, and an expert gets the trade-off section', () => {
+    assert.match(base('explain', { level: 'new' }), /new to this.*180-260 words/s);
+    assert.match(base('explain', { level: 'familiar' }), /knows the basics.*120-200 words/s);
+    assert.match(base('explain'), /knows the basics/, 'no level reads familiar');
+    const expert = base('explain', { level: 'expert' });
+    assert.match(expert, /an expert.*100-180 words/s);
+    assert.match(expert, /## The trade-off/);
+    assert.doesNotMatch(expert, /## In plain words/);
+    assert.doesNotMatch(base('explain', { level: 'new' }), /## The trade-off/);
+  });
+
+  test('ask the check fence only when the request says check: true', () => {
+    assert.doesNotMatch(base('explain'), /accept:/);
+    assert.match(base('explain'), /No ```check fence/);
+    assert.doesNotMatch(base('explain', { check: false }), /accept:/);
+    const asked = base('ask', { check: true });
+    assert.match(asked, /^accept: /m);
+    assert.match(asked, /End with one fence of exactly these keys/);
+    assert.doesNotMatch(asked, /Do not write a ```check fence/);
+  });
+
+  test('describe the diagram fence in the diagram run’s own line format, cite null, 8 parts', () => {
+    const prompt = base('ask');
+    assert.match(prompt, /```diagram/);
+    assert.match(prompt, /"t":"plate"/);
+    assert.match(prompt, /at most 8/);
+    assert.match(prompt, /"cite":null/);
+    assert.match(prompt, /never a letter/);
+  });
+
+  test('an ask or follow-up answers from the seed and thread first, and keeps the tools', () => {
+    for (const kind of ['explain', 'ask'] as const) {
+      const prompt = base(kind);
+      assert.match(prompt, /Answer from the passages below and the conversation first/);
+      assert.match(
+        prompt,
+        /use a tool only if the question needs a part of the paper that is not there/,
+      );
+      for (const tool of ['get_outline', 'get_section', 'get_passage', 'search_passages']) {
+        assert.ok(prompt.includes(tool), tool);
+      }
+    }
+  });
+
+  test('stay short: the old rule list is gone', () => {
+    const seed = { ...request('explain').seed!, passages: [] };
+    const worst = base('explain', { check: true, level: 'new', seed });
+    assert.ok(worst.length < 2500, `well under the old 2,700: ${String(worst.length)}`);
+    assert.doesNotMatch(base('explain'), /Cite every claim/);
+    assert.match(base('explain'), /^Example: "## TL;DR/m, 'one compact example of the shape');
+  });
+
+  test('the diagram run’s example no longer labels a part with a bare letter', () => {
+    const prompt = systemPrompt({
+      ...request('explain'),
+      kind: 'diagram',
+      prompt_version: 'diagram-v1',
+    });
+    assert.doesNotMatch(prompt, /"label":"x"/);
+    assert.match(prompt, /never a single letter/);
+  });
+});
+
 describe('the explain and ask prompts are a short contract (#339, P2)', () => {
   const explain = request('explain');
   const bare = (version: 'explain-v1' | 'ask-v1'): string => {
@@ -119,14 +196,14 @@ describe('the explain and ask prompts are a short contract (#339, P2)', () => {
   const BEFORE = { 'explain-v1': 2772, 'ask-v1': 2670 } as const;
 
   for (const version of ['explain-v1', 'ask-v1'] as const) {
-    test(`${version}: at most half of its former length`, () => {
-      assert.ok(bare(version).length * 2 <= BEFORE[version], String(bare(version).length));
+    test(`${version}: well under its former length (the tutor shape adds some)`, () => {
+      assert.ok(bare(version).length * 10 <= BEFORE[version] * 8, String(bare(version).length));
     });
   }
 
   test('cites the passage a point rests on, once per sentence at most; not every claim', () => {
     const prompt = systemPrompt(explain);
-    assert.match(prompt, /at most once per sentence, only when it helps the reader find it/);
+    assert.match(prompt, /at most once per sentence, only where it rests on the paper/);
     assert.doesNotMatch(prompt, /every claim/i);
     assert.match(prompt, /\[b3\] or \[b1, b4\]/, 'the handle syntax the host parses is kept');
     assert.match(prompt, /only handles that appear in this prompt or a tool result/);

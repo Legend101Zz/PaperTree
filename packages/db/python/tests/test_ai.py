@@ -242,7 +242,7 @@ def test_agent_state_round_trips(env: Env) -> None:
 # ── citations ────────────────────────────────────────────────────────────────────────────────
 
 
-def _citation(t: Tenant, ordinal: int, *, supported: bool | None) -> CitationIn:
+def _citation(t: Tenant, ordinal: int) -> CitationIn:
     return CitationIn(
         citation_id=f"cit_01K63AE8M4Q2T7V9X3B5N6R0C{ordinal}",
         ordinal=ordinal,
@@ -256,7 +256,6 @@ def _citation(t: Tenant, ordinal: int, *, supported: bool | None) -> CitationIn:
         generation=GEN,
         block_id=block_id_for(ordinal),
         page_index=0,
-        supported=supported,
     )
 
 
@@ -277,15 +276,13 @@ def _assistant_message(env: Env, t: Tenant, thread_id: str) -> str:
 def test_citations_are_stored_per_message_and_replaced_whole(env: Env) -> None:
     a = env.alice
     message_id = _assistant_message(env, a, _thread(env, a))
-    env.db.put_citations(
-        a.owner, message_id, [_citation(a, 0, supported=True), _citation(a, 1, supported=None)]
-    )
+    env.db.put_citations(a.owner, message_id, [_citation(a, 0), _citation(a, 1)])
     rows = env.db.list_citations(a.owner, [message_id])
-    assert [(r["marker"], r["supported"]) for r in rows] == [("b1", True), ("b2", None)]
+    assert [r["marker"] for r in rows] == ["b1", "b2"]
     assert rows[0]["anchor"]["id"] == "cit_01K63AE8M4Q2T7V9X3B5N6R0C0"
-    env.db.put_citations(a.owner, message_id, [_citation(a, 0, supported=False)])
+    env.db.put_citations(a.owner, message_id, [_citation(a, 0)])
     rows = env.db.list_citations(a.owner, [message_id])
-    assert [(r["marker"], r["supported"]) for r in rows] == [("b1", False)]
+    assert [r["marker"] for r in rows] == ["b1"]
 
 
 # ── runs, grants, handles ────────────────────────────────────────────────────────────────────
@@ -643,11 +640,11 @@ def test_bob_cannot_see_or_touch_alices_threads_and_messages(env: Env) -> None:
 def test_bob_cannot_see_or_write_alices_citations(env: Env) -> None:
     a, b = env.alice, env.bob
     message_id = _assistant_message(env, a, _thread(env, a))
-    env.db.put_citations(a.owner, message_id, [_citation(a, 0, supported=True)])
+    env.db.put_citations(a.owner, message_id, [_citation(a, 0)])
     assert len(env.db.list_citations(a.owner, [message_id])) == 1
     assert env.db.list_citations(b.owner, [message_id]) == []
     with pytest.raises(AiRecordNotFound):
-        env.db.put_citations(b.owner, message_id, [_citation(b, 1, supported=True)])
+        env.db.put_citations(b.owner, message_id, [_citation(b, 1)])
     assert len(env.db.list_citations(a.owner, [message_id])) == 1
 
 

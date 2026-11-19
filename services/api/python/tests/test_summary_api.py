@@ -73,10 +73,11 @@ def test_a_summary_streams_then_is_served_from_the_cache_without_a_new_run(
         assert len(summary["bullets"]) == 6
         handles = {r["handle"]: r["block_id"] for r in h.rows("SELECT * FROM ai_run_handles")}
         assert set(json.loads(stored["derived_from"])) == {handles[c["marker"]] for c in citations}
-        # Every bullet cites a valid marker, so the summary is complete; YOLO's claims are not in
-        # resnet's text, so each bullet is FLAGGED (supported: false), and that is not "partial".
+        # Every bullet cites a valid marker, so the summary is complete. No grounding verdict is
+        # stored or served with a bullet or its citations (#341).
         assert summary["status"] == "complete"
-        assert [b["supported"] for b in summary["bullets"]] == [False] * 6
+        assert all("supported" not in b for b in summary["bullets"])
+        assert all("supported" not in c for b in summary["bullets"] for c in b["citations"])
 
         runs_before, requests_before = h.count("ai_runs"), len(h.fake.requests)
         cached = _post(h, token, paper_id)
@@ -105,7 +106,7 @@ def test_regenerate_replaces_the_cached_summary(tmp_path: Path) -> None:
         assert h.count("ai_runs") == 2
 
 
-def test_grounded_bullets_are_supported_and_an_unmarked_bullet_makes_it_partial(
+def test_an_unmarked_bullet_makes_the_summary_partial_and_carries_no_verdict(
     tmp_path: Path,
 ) -> None:
     def bullets(context: RunContext) -> str:
@@ -120,8 +121,9 @@ def test_grounded_bullets_are_supported_and_an_unmarked_bullet_makes_it_partial(
         assert events(frames, "done")[0]["status"] == "partial"
         status = h.client.get(f"/papers/{paper_id}/summary", headers=auth(token)).json()
         assert status["state"] == "partial"
-        assert [b["supported"] for b in status["summary"]["bullets"]] == [True, True, False]
-        assert status["summary"]["bullets"][2]["citations"] == []
+        bullets_out = status["summary"]["bullets"]
+        assert all("supported" not in b for b in bullets_out)
+        assert [len(b["citations"]) > 0 for b in bullets_out] == [True, True, False]
 
 
 def test_a_failed_summary_run_reads_back_as_failed(tmp_path: Path) -> None:
@@ -226,7 +228,7 @@ def test_a_summary_with_no_citation_markers_is_partial_not_failed(tmp_path: Path
         assert status["state"] == "partial", "the GET and the done event agree"
         summary = status["summary"]
         assert summary["status"] == "partial" and len(summary["bullets"]) == 3
-        assert all(b["citations"] == [] and b["supported"] is False for b in summary["bullets"])
+        assert all(b["citations"] == [] and "supported" not in b for b in summary["bullets"])
         assert (
             contract_errors(status, "api/summary.schema.json", "SummaryStatus", SummaryStatus) == []
         )

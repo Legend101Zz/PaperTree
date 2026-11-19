@@ -26,8 +26,8 @@ const AXE = join(REPO, 'apps', 'web', 'node_modules', 'axe-core', 'axe.min.js');
 /** The two schemes, by the token every surface is drawn on (`--pt-page`, DESIGN.md §2). */
 const PAGE_TOKEN = { light: '#faf8f3', dark: '#2c251f' } as const;
 
-/** "verified", "fact-checked" or "accurate" as a label; "not verified" is the honest one. */
-export const BANNED = /\bverified\b(?<!not verified)|fact-checked|\baccurate\b/i;
+/** "verified" (and so "not verified"), "fact-checked", "accurate" or "grounded" as a label (#340). */
+export const BANNED = /\bverified\b|fact-checked|\baccurate\b|\bgrounded\b/i;
 
 /**
  * Wait until no finite animation is running (an axe pass mid-fade measures the fade, not the

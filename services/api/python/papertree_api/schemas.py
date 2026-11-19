@@ -787,6 +787,8 @@ class ResolutionsPut(Wire):
 
 MessageStatus = Literal["streaming", "complete", "partial", "error", "aborted"]
 ThreadKind = Literal["explain", "ask", "diagram"]
+#: The reader's level an explain/ask answer is written for (v0.3, #339; 0014).
+AnswerLevel = Literal["new", "familiar", "expert"]
 RunKind = Literal["explain", "ask", "summary", "diagram", "topic"]
 DoneStatus = Literal["complete", "partial", "error", "aborted"]
 
@@ -821,29 +823,9 @@ class Citation(Wire):
     marker: Handle
     page_index: PageIndex
     anchor: AnchorV1
-    supported: bool | None
     #: Present on a stored answer read back (`GET /papers/{id}/threads/{tid}`), when its
     #: generation's parse can still be loaded; the live SSE `citations` event omits it.
     locator: PassageLocator | None = omittable()
-
-
-class MessageCoverage(Wire):
-    """How much of an assistant answer is cited (#201); counted by `exchanges.message_coverage`."""
-
-    #: Distinct cited passages among the message's citations.
-    passages: NonNegative
-    #: Marker handle occurrences in the text that have a stored citation (`[b1, b8]` counts 2).
-    citations: NonNegative
-    #: Occurrences whose handle has no stored citation (a handle the run dropped): never counted
-    #: in `citations`.
-    unresolved_markers: NonNegative
-    paragraphs: NonNegative
-    #: 0-based indexes, into exactly the list `exchanges.answer_paragraphs` returns (split on
-    #: blank lines, bare Markdown heading lines dropped), of the paragraphs with no marker.
-    uncited_paragraphs: list[NonNegative]
-    #: Stored citations whose `supported` is false ("not verified", never "wrong"); an
-    #: unchecked one (`supported: null`) is not counted.
-    not_verified: NonNegative
 
 
 # ── a diagram answer (v0.2 S7a, #216; DESIGN.md §1 "Diagrams", §4) ─────────────────────────────
@@ -859,8 +841,8 @@ Letter = Annotated[str, Field(pattern=r"^[A-L]$")]
 
 
 class DiagramCite(Wire):
-    """Where a part's quote was found. `supported` true: verbatim in the Anchor's block ("cited");
-    false: there with differences, or nowhere at all (`anchor` null), "not verified"."""
+    """Where a part's quote was found: the Anchor of the block it came from (null when the quote
+    was found nowhere). The plate shows only its page; it carries no verdict (#340)."""
 
     #: The Anchor's id (`cit_…`); null when the quote was found nowhere.
     citation_id: str | None
@@ -870,7 +852,6 @@ class DiagramCite(Wire):
     #: Derived from the parse on read (never stored); null when it cannot be had.
     locator: PassageLocator | None
     page_index: PageIndex | None
-    supported: bool
 
 
 class DiagramPart(Wire):
@@ -930,8 +911,13 @@ class Message(Wire):
     generation: Generation
     run: RunSummary | None
     citations: list[Citation]
-    #: Only on an assistant message that is `complete` or `partial` (and not a diagram).
-    coverage: MessageCoverage | None = omittable()
+    #: The level an assistant answer of an `explain` or `ask` thread was written at (an answer
+    #: stored before v0.3 reads `familiar`); null on a user message and on a diagram answer.
+    level: AnswerLevel | None
+    #: Assistant messages only (null on a user message): the `message_id` of the FIRST answer to
+    #: the question this one answers. Answers that share it are siblings, one per level
+    #: (`FollowUp.relevel_of`); an answer with no sibling carries its own `message_id`.
+    sibling_group: str | None
     #: Only on an assistant message of a `diagram` thread; `content` keeps the raw lines.
     diagram: MessageDiagram | None = omittable()
     created_at: WireTime
@@ -971,6 +957,8 @@ class ThreadCreate(Wire):
     kind: ThreadKind
     anchor: AnchorV1In | None = omittable(validate_default=True)
     question: str = Field(default=DEFAULT_QUESTION, min_length=1, max_length=2000)
+    #: The level the first answer is written for (stored on the answer). Ignored by a `diagram`.
+    level: AnswerLevel = "familiar"
 
     @field_validator("anchor", mode="after")
     @classmethod
@@ -983,14 +971,26 @@ class ThreadCreate(Wire):
 
 
 class FollowUp(Wire):
-    """`POST /papers/{id}/threads/{tid}/messages`."""
+    """`POST /papers/{id}/threads/{tid}/messages`. `question` is required except on a relevel
+    (`relevel_of`), which re-asks the stored question and ignores one if sent."""
 
-    question: str = Field(min_length=1, max_length=2000)
+    question: str = Field(default="", max_length=2000)
+    #: The level this answer is written for (stored on the answer). Ignored on a diagram thread.
+    level: AnswerLevel = "familiar"
+    #: Change level: an assistant answer of this thread (finished, any level) to answer AGAIN, to
+    #: the same question, at `level`. It appends a sibling answer and no user turn.
+    relevel_of: str | None = omittable(pattern=server_id("msg"))
     #: Re-run a failed assistant message instead of appending a new user turn.
     retry_of: str | None = omittable(pattern=server_id("msg"))
     #: Redraw: a diagram answer of this thread (finished, in any state) to draw again. Required on
     #: a `diagram` thread, refused on any other; it appends a new turn, never replaces one.
     redraw_of: str | None = omittable(pattern=server_id("msg"))
+
+    @model_validator(mode="after")
+    def _question_unless_relevel(self) -> Self:
+        if self.question == "" and self.relevel_of is None:
+            raise PydanticCustomError("string_too_short", "String should have at least 1 character")
+        return self
 
 
 # ── §2.6 browser-facing SSE events (the `data` of each `event:`) ─────────────────────────────
@@ -1051,7 +1051,6 @@ BROWSER_EVENTS: Final[dict[str, type[Wire]]] = {
 class SummaryBullet(Wire):
     text: str
     citations: list[Citation]
-    supported: bool
 
 
 class Summary(Wire):
@@ -1581,6 +1580,10 @@ class AgentRunRequest(Wire):
     question: str = Field(min_length=1, max_length=2000)
     history: AgentHistory | None
     limits: AgentLimits
+    #: v0.3 (#339): the level an explain/ask answer is written for, and whether it ends with a
+    #: ```check fence (the API decides: contracts.md §2.5). Both are optional on the agent's side.
+    level: AnswerLevel = "familiar"
+    check: bool = False
 
     @field_validator("seed", mode="after")
     @classmethod

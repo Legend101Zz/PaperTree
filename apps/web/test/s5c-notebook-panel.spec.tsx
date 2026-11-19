@@ -11,7 +11,6 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NotebookView } from '@/features/notebook';
-import { citationsPhrase } from '@/features/notebook/components/NotebookPanel';
 import { cardIdFor } from '@/features/notebook/hooks/useBoardCard';
 import { API_BASE_URL } from '@/lib/api/client';
 
@@ -79,9 +78,10 @@ describe('the side panel', () => {
   it('shows the server’s counts, ink as "yours" with no number, and keeps them current', async () => {
     stubApi(pageView([STICKY]));
     mount();
-    await waitFor(() => expect(count('Passages it stands on')).toBe('4'));
+    await waitFor(() => expect(count('Quote cards')).toBe('4'));
     expect(count('Your question')).toBe('1');
-    expect(count('The AI’s answer')).toBe('11 citations');
+    expect(screen.queryByText('The AI’s answer')).toBeNull();
+    expect(screen.queryByText('Passages it stands on')).toBeNull();
     expect(count('Sticky notes')).toBe('1');
     expect(count('Ink')).toBe('none yet');
     expect(screen.getByText(/Handwriting is not searchable/)).toBeTruthy();
@@ -267,19 +267,6 @@ describe('the Shapes menu', () => {
     fireEvent.click(shapes);
     fireEvent.pointerDown(document.body);
     expect(screen.queryByRole('group', { name: 'Shapes' })).toBeNull();
-  });
-});
-
-describe('the counts’ words', () => {
-  it('says "1 citation", and counts passages from the answer, not from the cards', async () => {
-    expect(citationsPhrase(1)).toBe('1 citation');
-    expect(citationsPhrase(11)).toBe('11 citations');
-    // Two quote cards deleted: the answer still stands on its four passages.
-    const view = pageView();
-    stubApi({ ...view, items: view.items.filter((i) => !/^ni_quote000[12]$/.test(i.item_id)) });
-    mount();
-    await waitFor(() => expect(count('Passages it stands on')).toBe('4'));
-    expect(document.querySelectorAll('.pt-nb-quote')).toHaveLength(2);
   });
 });
 

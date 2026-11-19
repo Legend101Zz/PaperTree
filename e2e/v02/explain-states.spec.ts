@@ -79,21 +79,22 @@ test.describe('#204: streaming, Stop and the daily cap (faux agent)', () => {
       timeout: 120_000,
     });
 
-    // ── 04b: a slow follow-up streams; its [b1] is the thread's passage 1, so marker 1 shows live ──
+    // ── 04b: a slow follow-up streams; its [b1] is a passage the thread already cites, so its page shows live ──
     const box = panel.getByLabel('Ask a question about this paper');
     await box.fill('[faux:slow] Say more about the first passage.');
     await panel.getByRole('button', { name: 'Ask', exact: true }).click();
     const live = panel.locator('[data-message-status="streaming"]');
     await expect(live).toContainText('This answer streams slowly', { timeout: 60_000 });
-    await expect(live.locator('.pt-ai-slip__source [role="status"]')).toContainText('…');
+    // The working label sits in the slip's foot (model · writing… · Stop).
+    await expect(live.locator('.pt-answer-foot [role="status"]')).toContainText('…');
     await expect(live.locator('.pt-exchange__caret')).toHaveCount(1);
-    await expect(live.locator('[data-passage="1"] button').first()).toBeVisible({
+    await expect(live.locator('.pt-source button').first()).toBeVisible({
       timeout: 30_000,
     });
     expect((await live.innerText()).replace(/\s+/g, ' ')).not.toMatch(/\[b|\bb\d+\b/);
     await page.screenshot({ path: shot('v02-states-01-streaming-1440.png') });
 
-    // ── 04c state 1: Stop on the tab row → the kept part and Retry ──
+    // ── 04c state 1: Stop on the foot → the kept part and Retry ──
     await live.getByRole('button', { name: 'Stop' }).click();
     const stopped = panel.locator('[data-message-status]').last();
     await expect(stopped).toContainText('Stopped. The part that arrived is kept.', {
@@ -101,7 +102,7 @@ test.describe('#204: streaming, Stop and the daily cap (faux agent)', () => {
     });
     await expect(stopped.getByRole('button', { name: 'Retry' })).toBeFocused();
     await expect(stopped).toContainText('This answer streams slowly');
-    await expect(stopped.locator('.pt-ai-slip__source')).toContainText('Stopped ·');
+    await expect(stopped.locator('.pt-answer-foot')).toContainText('stopped');
     expect((await stopped.innerText()).replace(/\s+/g, ' ')).not.toMatch(/kept above|\[b\d/);
     await page.screenshot({ path: shot('v02-states-02-stopped-1440.png') });
 
@@ -146,15 +147,11 @@ test.describe('#204: streaming, Stop and the daily cap (faux agent)', () => {
       expect(
         await summary.locator('[data-voice="ai"] [data-summary-bullet]').count(),
       ).toBeGreaterThan(0);
-      expect(
-        await summary.locator('[data-summary-bullet] [data-citation-id] button').count(),
-      ).toBeGreaterThan(0);
-      await expect(summary.locator('[data-summary-readout]')).toContainText(
-        /Stands on \d+ passages?/,
-      );
-      expect(await summary.locator('.pt-trace-list [data-voice="paper"]').count()).toBeGreaterThan(
-        0,
-      );
+      // One quiet source line per bullet; no readout and no passage list (#341).
+      expect(await summary.locator('[data-summary-bullet] .pt-source').count()).toBeGreaterThan(0);
+      await expect(
+        summary.locator('[data-summary-readout], .pt-coverage, .pt-trace-list'),
+      ).toHaveCount(0);
       expect((await summary.innerText()).replace(/\s+/g, ' ')).not.toMatch(/\[b\d+|\bblk_/);
       return summary;
     };

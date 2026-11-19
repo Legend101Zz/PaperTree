@@ -77,7 +77,10 @@ test.describe('S5e — Dive in, the tablet and phone notebook (faux agent)', () 
     await page.locator('.pt-reader__explain').click();
     const panel = page.getByRole('complementary', { name: 'Explain' });
     await expect(panel.locator('.pt-exchange')).toHaveCount(1);
-    await expect(panel.locator('.pt-trace-row')).toHaveCount(4);
+    // The panel's answer carries a quiet source line (under a paragraph with handles) and no numbered
+    // passage list.
+    await expect(panel.locator('.pt-source').first()).toBeVisible();
+    await expect(panel.locator('.pt-trace-row, .pt-trace-list')).toHaveCount(0);
 
     // ── 3. Dive in: one POST to the Dive-in route, then the page with its 4 quote cards ──
     const dive = panel.getByRole('button', { name: 'Dive in' });
@@ -141,7 +144,8 @@ test.describe('S5e — Dive in, the tablet and phone notebook (faux agent)', () 
     await page.setViewportSize({ width: 390, height: 844 });
     const phone = page.locator('.pt-nb-stack');
     await expect(phone).toBeVisible();
-    await expect(phone.locator('.pt-trace-row')).toHaveCount(4);
+    await expect(phone.locator('.pt-source')).toHaveCount(1);
+    await expect(phone.locator('.pt-trace-row, .pt-trace-list')).toHaveCount(0);
     await expect(phone.getByRole('button', { name: 'Read the whole answer' })).toBeVisible();
     const tools = page.getByRole('toolbar', { name: 'Notebook tools' });
     await expect(tools.getByRole('button')).toHaveText(['Text', 'Sticky', 'Highlight', 'Pen: off']);
@@ -174,7 +178,9 @@ test.describe('S5e — Dive in, the tablet and phone notebook (faux agent)', () 
       for (const colorScheme of ['light', 'dark'] as const) {
         await page.setViewportSize({ width, height });
         await page.emulateMedia({ colorScheme });
-        await expect(page.locator(width < 768 ? '.pt-trace-row' : '.pt-nb-quote')).toHaveCount(4);
+        await expect(
+          page.locator(width < 768 ? '.pt-nb-stack .pt-source' : '.pt-nb-quote'),
+        ).toHaveCount(width < 768 ? 1 : 4);
         expect(await axeSerious(page), `${String(width)} ${colorScheme}`).toEqual([]);
       }
     }

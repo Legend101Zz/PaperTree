@@ -119,45 +119,30 @@ describe('a keyboard Stop (review S5)', () => {
   });
 });
 
-/** Part A found near its passage but not word for word: an Anchor, `supported: false`. */
-const near = (part: DiagramPart): DiagramPart => ({
-  ...part,
-  cite: part.cite === null ? null : { ...part.cite, supported: false },
-});
-
-describe('not verified near a passage (review S1)', () => {
-  it('is dashed and said in the key, marked in the drawing, flashed as not verified, counted', async () => {
-    routes(
-      undefined,
-      storedWith((parts) => parts.map((p) => (p.letter === 'A' ? near(p) : p))),
-    );
+/** Part A found near its passage, not word for word: it has an Anchor and so a page, like any other. */
+describe('a part found near its passage (#340)', () => {
+  it('shows only its quiet page: no marker, tab, caption or verdict, and the quote is not shown', async () => {
+    routes();
     mount();
     const panel = await screen.findByRole('complementary', { name: 'Explain' });
     await waitFor(() =>
       expect(panel.querySelector('[data-plate-phase="complete"]')).not.toBeNull(),
     );
-    await act(async () => new Promise((settle) => setTimeout(settle, 50))); // the stored read too
     const row = panel.querySelector('[data-letter="A"]') as HTMLElement;
-    expect(row.dataset.verdict).toBe('not-verified');
-    expect(row.querySelector('.pt-tab--not-verified')).not.toBeNull();
-    expect(row.querySelector('.pt-marker--not-verified')).not.toBeNull();
-    expect(row.textContent).toContain('not verified');
-    // The model's quote is not the paper's words: never in the paper's voice.
-    expect(row.querySelector('[data-voice="paper"]')).toBeNull();
-    expect(row.querySelector('[data-voice="ai"].pt-plate-key__ai-quote')).not.toBeNull();
-    const mark = panel.querySelector('[data-part="A"] .pt-plate__mark');
-    expect(mark?.getAttribute('data-not-verified')).toBe('true');
-    expect(panel.querySelector('[data-part="A"] .pt-plate__caption')?.textContent).toBe(
-      'not verified',
-    );
+    expect(row.querySelector('.pt-plate-key__source')?.textContent).toBe('From the paper: p. 4');
+    expect(row.querySelector('.pt-tab, .pt-marker')).toBeNull();
+    expect(row.textContent).not.toMatch(/not verified|verified|grounded/i);
+    expect(
+      panel.querySelector('[data-part="A"] .pt-plate__mark, [data-part="A"] .pt-plate__caption'),
+    ).toBeNull();
     expect(panel.querySelector('[data-plate-readout]')?.textContent).toBe(
-      '6 parts · 4 cited · 1 not verified · drawn by AI from p. 4',
+      '6 parts · drawn by AI from p. 4',
     );
     fireEvent.click(within(row).getByRole('button'));
-    expect(focusAnchor.mock.calls[0]?.[1]).toMatchObject({ from: { n: 1, notVerified: true } });
+    expect(focusAnchor.mock.calls[0]?.[1]).toEqual({ flash: true });
   });
 
-  it('a quote found nowhere: a "?" marker and "not verified" in the drawing, no hatching (S3)', async () => {
+  it('a quote found nowhere has no page and no mark in the drawing, and keeps its hatched shadow', async () => {
     routes();
     const panel = await mountRedrawing();
     const second = exchange(panel, 1);
@@ -165,17 +150,14 @@ describe('not verified near a passage (review S1)', () => {
       expect(second.querySelector('[data-plate-phase="complete"]')).not.toBeNull(),
     );
     const c = second.querySelector('[data-part="C"]') as Element;
-    expect(c.querySelector('.pt-plate__mark text')?.textContent).toBe('?');
-    expect(c.querySelector('.pt-plate__mark')?.getAttribute('data-not-verified')).toBe('true');
-    expect(c.querySelector('.pt-plate__caption')?.textContent).toBe('not verified');
-    expect(hatched(c)).toBe(false);
-    // A cited part keeps its hatched shadow; an inferred one has the dashed caption of its own.
+    expect(c.querySelector('.pt-plate__mark, .pt-plate__caption')).toBeNull();
+    expect(hatched(c)).toBe(true);
     expect(hatched(panel.querySelector('[data-part="A"]') as Element)).toBe(true);
   });
 });
 
 describe('the key says everything the drawing does (review S2)', () => {
-  it('names each row by its own words: the quote, the AI’s own line, the arrows', async () => {
+  it('names each row by its own words: the label, the AI’s line, its page, the arrows', async () => {
     routes();
     mount();
     const panel = await screen.findByRole('complementary', { name: 'Explain' });
@@ -189,13 +171,13 @@ describe('the key says everything the drawing does (review S2)', () => {
       within(panel).getByRole('button', { name: new RegExp(`^Part ${letter}:`) });
     expect(name('A')).toBeTruthy();
     within(panel).getByRole('button', {
-      name: /^Part A: Q, K, V\s*\. Passage 1, p\. 4 ¶1\s*\. “queries and keys of dimension dk, and values of dimension dv” Show in paper\.$/,
+      name: /^Part A: Q, K, V\s*\.\s*queries and keys of dimension dk[\s\S]*\.\s*From the paper: p\. 4 Show in paper\.$/,
     });
     within(panel).getByRole('button', {
-      name: /^Part E: .*“We compute the matrix of outputs as” Arrows in from D and A \(V\)\. Show in paper\.$/,
+      name: /^Part E: [\s\S]*Arrows in from D and A \(V\)\. Show in paper\.$/,
     });
     within(panel).getByRole('button', {
-      name: /^Part F: Weights sum to 1\s*\. Inferred, no passage\s*\. The AI's own line: each query's weights over the keys add up to one Arrow in from D\.$/,
+      name: /^Part F: Weights sum to 1\s*\.\s*each query's weights over the keys add up to one Arrow in from D\.$/,
     });
   });
 

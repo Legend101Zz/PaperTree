@@ -155,7 +155,7 @@ test.describe('S8: reduced motion, every moment (faux agent)', () => {
     const flash = page.locator('svg [data-flash] polygon.pt-flash');
     await expect(flash).toHaveCount(0);
     const scroll = await recordScroll(page, SCROLLER);
-    await exchange.locator('[data-passage="2"] button').first().click();
+    await exchange.locator('.pt-source button').first().click();
     await expect(flash.first()).toBeVisible({ timeout: 10_000 });
     const seen = await scroll.stop();
     const [first, last] = [seen[0] ?? 0, seen.at(-1) ?? 0];
@@ -185,7 +185,8 @@ test.describe('S8: reduced motion, every moment (faux agent)', () => {
     // ── Dive in, and Back to the paper ──
     await exchange.getByRole('button', { name: /^Dive in/ }).click();
     await expect(page).toHaveURL(new RegExp(`/paper/${paperId}/notebook/np_`));
-    await expect(page.locator('.pt-nb-quote')).toHaveCount(2);
+    // One handle under "In the paper" in the tutor answer: one quote card.
+    await expect(page.locator('.pt-nb-quote')).toHaveCount(1);
     await expect(page.locator('.pt-nb[data-dive]')).toHaveCount(0);
     expectWithin('Dive in', await takeAnimations(page));
     await page

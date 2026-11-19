@@ -168,7 +168,7 @@ def test_a_fixture_is_a_contract_stream(path: Path) -> None:
 
 
 def test_the_summary_fixture_cites_every_bullet() -> None:
-    """§3.4: a bullet without a valid marker is `supported: false` and makes the summary
+    """§3.4: a bullet without a valid marker has no citation and makes the summary
     `partial`. The recorded happy path must therefore cite every bullet."""
     frames, _ = read_frames(AGENT / "fixtures" / "summary-ok.sse")
     bullets = [line for line in frames[-1].data["final_text"].split("\n") if line.strip()]

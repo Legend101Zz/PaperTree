@@ -96,6 +96,8 @@ PROPOSED: dict[str, list[str]] = {
         "content",
         "status",
         "run_id",
+        "level",  # 0014 (v0.3, #339): added after the S0 signature, keyword-only with a default
+        "sibling_of",
     ],
     "update_message": [
         "owner",

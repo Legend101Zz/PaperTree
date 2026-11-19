@@ -68,7 +68,23 @@ def _cached(call: Any, paper_id: str, generation: int) -> dict[str, Any] | None:
     ]
     if not rows:
         return None
-    return dict(max(rows, key=lambda r: str(r["created_at"]))["content"])
+    return _public(dict(max(rows, key=lambda r: str(r["created_at"]))["content"]))
+
+
+def _public(summary: dict[str, Any]) -> dict[str, Any]:
+    """A stored summary as served: a summary cached before #341 still carries the grounding
+    verdicts it was stored with (``supported``, per bullet and per citation); none is served."""
+    bullets = [
+        {
+            **{k: v for k, v in bullet.items() if k != "supported"},
+            "citations": [
+                {k: v for k, v in citation.items() if k != "supported"}
+                for citation in bullet.get("citations", [])
+            ],
+        }
+        for bullet in summary.get("bullets", [])
+    ]
+    return {**summary, "bullets": bullets}
 
 
 def _live(run: dict[str, Any] | None) -> bool:

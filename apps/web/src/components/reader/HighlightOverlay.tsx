@@ -39,7 +39,6 @@ import type { BBox, Polygon } from '@papertree/document-ir';
 
 import type { HighlightColor } from '@/lib/api/types';
 
-import type { FlashSource } from './actions';
 import type { FlashPhase } from './flash';
 
 export interface PaintItem {
@@ -64,14 +63,10 @@ export interface FlashPaint {
   readonly key: string;
   readonly pageIndex: number;
   readonly polygons: readonly Polygon[];
-  /** IR-space extent of the polygons: where the margin tab sits. */
-  readonly extent: BBox | null;
   /** Where it is in its timeline (`reader/flash`): nothing is painted while it scrolls. */
   readonly phase: FlashPhase;
   /** How long its `scroll` phase lasts (0 when the passage was already in view). */
   readonly scrollMs: number;
-  /** The numbered marker it came from (#202): "from marker 2 in the answer" in the margin. */
-  readonly from?: FlashSource;
 }
 
 export interface HighlightOverlayProps {

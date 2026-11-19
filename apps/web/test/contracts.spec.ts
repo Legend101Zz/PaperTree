@@ -82,7 +82,6 @@ import type {
   LibraryReference,
   ReadingProgress,
   Message,
-  MessageCoverage,
   MessageDiagram,
   PaperRename,
   PassageLocator,
@@ -268,22 +267,12 @@ const LOCATOR: PassageLocator = {
   section_heading: 'Introduction',
 };
 
-const COVERAGE: MessageCoverage = {
-  passages: 1,
-  citations: 1,
-  unresolved_markers: 0,
-  paragraphs: 1,
-  uncited_paragraphs: [],
-  not_verified: 0,
-};
-
 const CITATION: Citation = {
   citation_id: 'cit_01K63A9W4XJ7Q2N8R5T0V3Y6ZE',
   ordinal: 0,
   marker: 'b3',
   page_index: 1,
   anchor: CITATION_ANCHOR,
-  supported: true,
   locator: LOCATOR,
 };
 
@@ -298,7 +287,8 @@ const ANSWER: Message = {
   generation: 1,
   run: RUN,
   citations: [CITATION],
-  coverage: COVERAGE,
+  level: 'familiar',
+  sibling_group: 'msg_01K63A9W4XJ7Q2N8R5T0V3Y6ZF',
   created_at: T,
   completed_at: T,
 };
@@ -319,7 +309,6 @@ const DIAGRAM_CITE: DiagramCite = {
   anchor: CITATION_ANCHOR,
   locator: LOCATOR,
   page_index: 3,
-  supported: true,
 };
 const CITED_PART: DiagramPart = {
   letter: 'A',
@@ -348,7 +337,6 @@ const PLATE: MessageDiagram = {
         anchor: null,
         locator: null,
         page_index: null,
-        supported: false,
       },
     },
     {
@@ -362,8 +350,7 @@ const PLATE: MessageDiagram = {
   ],
   links: [LINK],
 };
-const { coverage: _prose, ...WITHOUT_COVERAGE } = ANSWER;
-const DIAGRAM_ANSWER: Message = { ...WITHOUT_COVERAGE, diagram: PLATE };
+const DIAGRAM_ANSWER: Message = { ...ANSWER, diagram: PLATE };
 
 const QUESTION: Message = {
   ...ANSWER,
@@ -449,8 +436,8 @@ const SUMMARY: Summary = {
   created_at: T,
   status: 'partial',
   bullets: [
-    { text: 'YOLO frames detection as one regression.', citations: [CITATION], supported: true },
-    { text: 'It is fast.', citations: [], supported: false },
+    { text: 'YOLO frames detection as one regression.', citations: [CITATION] },
+    { text: 'It is fast.', citations: [] },
   ],
 };
 
@@ -598,7 +585,7 @@ const OPTIONAL = {
   'threads.Citation': ['locator'],
   'threads.RunSummary': [],
   'threads.MessageError': [],
-  'threads.Message': ['coverage', 'diagram'],
+  'threads.Message': ['diagram'],
   'threads.Thread': [],
   'threads.ThreadDetail': [],
   'threads.MessageDiagram': [],
@@ -637,8 +624,8 @@ const OPTIONAL = {
   'highlights.HighlightPatch': ['color', 'note'],
   'highlights.ResolutionsPut': [],
   'highlights.ResolutionPutItem': ['reason', 'upgraded_anchor'],
-  'threads.ThreadCreate': ['anchor', 'question'],
-  'threads.FollowUp': ['retry_of', 'redraw_of'],
+  'threads.ThreadCreate': ['anchor', 'question', 'level'],
+  'threads.FollowUp': ['question', 'level', 'relevel_of', 'retry_of', 'redraw_of'],
   'summary.SummaryRequest': ['regenerate'],
   'boards.NodeCreate': [
     'title',
@@ -871,6 +858,9 @@ const ENUMS = {
   'Highlight.color': ['amber', 'green', 'blue', 'pink', 'purple'],
   'Message.role': ['user', 'assistant'],
   'Message.status': ['streaming', 'complete', 'partial', 'error', 'aborted'],
+  'Message.level': ['new', 'familiar', 'expert', null],
+  'ThreadCreate.level': ['new', 'familiar', 'expert'],
+  'FollowUp.level': ['new', 'familiar', 'expert'],
   'Thread.kind': ['explain', 'ask', 'diagram'],
   'MessageDiagram.status': ['streaming', 'complete', 'partial', 'stopped', 'error'],
   'DiagramPart.kind': ['input', 'step', 'output', 'concept'],
@@ -950,6 +940,9 @@ const ENUM_TYPES_ARE_EXACT: true[] = [
   true satisfies Equal<Highlight['color'], Values<'Highlight.color'>>,
   true satisfies Equal<Message['role'], Values<'Message.role'>>,
   true satisfies Equal<Message['status'], Values<'Message.status'>>,
+  true satisfies Equal<Message['level'], Values<'Message.level'>>,
+  true satisfies Equal<Sent<CreateThreadBody['level']>, Values<'ThreadCreate.level'>>,
+  true satisfies Equal<Sent<FollowUpBody['level']>, Values<'FollowUp.level'>>,
   true satisfies Equal<MessageErrorT['code'], keyof typeof CODES | keyof typeof RUN_CODES>,
   true satisfies Equal<
     NonNullable<SseData<'done'>['error']>['code'],

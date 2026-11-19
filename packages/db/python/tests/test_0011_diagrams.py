@@ -138,6 +138,8 @@ def test_0011_carries_every_ai_row_fk_cascade_and_trigger(tmp_path: Path, base: 
     triggers = _rows(conn, TRIGGERS)
     conn.close()
     assert all(before.values()), "every rebuilt table held rows before"
+    # 0015 (#351) drops ai_citations.supported, its last column: head has one column fewer.
+    before["ai_citations"] = [r[:-1] for r in before["ai_citations"]]
 
     with open_database(file) as db:
         result = db.migrate()
@@ -156,7 +158,9 @@ def test_0011_carries_every_ai_row_fk_cascade_and_trigger(tmp_path: Path, base: 
             width = len(before[table][0])
             assert [r[:width] for r in after] == before[table], table  # every old column
             if table == "ai_messages":
-                assert {r[width:] for r in after} == {(None,)}, "diagram_json appended, NULL"
+                # diagram_json (0011) and every later slice's column are appended, NULL.
+                assert all(v is None for r in after for v in r[width:])
+                assert all(len(r) > width for r in after)
             else:
                 assert all(len(r) == width for r in after), table
         assert _rows(conn, "PRAGMA foreign_key_check") == []
@@ -283,7 +287,6 @@ def _part(ordinal: int, **fields: Any) -> DiagramPartIn:
         edge=[],
         quote=None,
         anchor=None,
-        supported=None,
         generation=1,
         block_id=None,
         page_index=None,
@@ -291,13 +294,12 @@ def _part(ordinal: int, **fields: Any) -> DiagramPartIn:
     return replace(base, **fields)
 
 
-def _cited(ordinal: int, supported: bool, **fields: Any) -> DiagramPartIn:
+def _cited(ordinal: int, **fields: Any) -> DiagramPartIn:
     anchor = load_capture_anchor()
     return _part(
         ordinal,
         quote="queries and keys of dimension",
         anchor={**anchor, "resolution": {"tier": 1}},
-        supported=supported,
         block_id="blk_hint",
         page_index=3,
         **fields,
@@ -307,23 +309,20 @@ def _cited(ordinal: int, supported: bool, **fields: Any) -> DiagramPartIn:
 def test_the_three_states_of_a_part_round_trip_in_letter_order(env: Env) -> None:
     db, owner = env.db, env.owner
     db.put_diagram_part(owner, env.message_id, _part(2, after=["A", "B"], edge=["feeds", None]))
-    db.put_diagram_part(owner, env.message_id, _cited(0, True, kind="input"))
+    db.put_diagram_part(owner, env.message_id, _cited(0, kind="input"))
     db.put_diagram_part(
         owner,
         env.message_id,
-        _part(1, after=["A"], edge=[None], quote="not in it", supported=False),
+        _part(1, after=["A"], edge=[None], quote="not in it"),
     )
     parts = db.list_diagram_parts(owner, [env.message_id])
     assert [p["letter"] for p in parts] == ["A", "B", "C"]
     cited, unresolved, inferred = parts
-    assert (cited["supported"], cited["part_kind"], cited["page_index"]) == (True, "input", 3)
+    assert (cited["part_kind"], cited["page_index"]) == ("input", 3)
+    assert all("supported" not in p for p in parts), "no verdict is stored (0015, #351)"
     assert "resolution" not in cited["anchor"], "the T0 cache is never stored"
-    assert (unresolved["supported"], unresolved["anchor"], unresolved["cite_quote"]) == (
-        False,
-        None,
-        "not in it",
-    )
-    assert (inferred["supported"], inferred["cite_quote"], inferred["anchor"]) == (None, None, None)
+    assert (unresolved["anchor"], unresolved["cite_quote"]) == (None, "not in it")
+    assert (inferred["cite_quote"], inferred["anchor"]) == (None, None)
     assert (inferred["after"], inferred["edge"], inferred["note"]) == (
         ["A", "B"],
         ["feeds", None],
@@ -352,9 +351,8 @@ def test_the_plate_title_and_links_ride_on_the_message(env: Env) -> None:
         _part(1, after=["A"], edge=[]),  # an edge label missing
         _part(0, kind="box"),
         _part(0, label=" "),
-        _part(0, quote="q"),  # a quote with no verdict
-        _part(0, quote="q", supported=True),  # "cited" with no anchor
-        _part(0, quote="q", supported=False, block_id="blk_1"),  # a hint with no anchor
+        _part(0, quote="q", block_id="blk_1"),  # a hint with no anchor
+        _part(0, anchor={"id": "anc_1"}),  # an anchor with no quote
     ],
 )
 def test_a_part_0011_would_refuse_is_refused_in_words_before_any_sql(
@@ -370,8 +368,7 @@ def test_a_part_0011_would_refuse_is_refused_in_words_before_any_sql(
     [
         ("letter, ordinal", "'B', 0"),  # the letter is A + ordinal
         ("letter, ordinal", "'M', 12"),
-        ("cite_quote, supported", "'q', NULL"),
-        ("supported, cite_quote", "1, 'q'"),  # supported without an anchor
+        ("anchor_json, cite_quote", "'{}', NULL"),  # an anchor without its quote
         ("after_json, edge_json", "'[\"A\"]', '[]'"),
     ],
 )
@@ -384,16 +381,22 @@ def test_the_table_itself_refuses_a_bad_part(env: Env, columns: str, values: str
         "after_json": "'[]'",
         "edge_json": "'[]'",
         "cite_quote": "NULL",
-        "supported": "NULL",
     }
+    baseline = dict(defaults)
+    baseline.update({"anchor_json": "NULL"})
     for name, value in zip(columns.split(", "), values.split(", "), strict=True):
         defaults[name] = value
-    sql = (
-        "INSERT INTO ai_diagram_parts (part_id, owner_id, message_id, label, part_kind, "
-        f"generation, {', '.join(defaults)}) VALUES ('dp_x', ?, 'msg_d', 'L', 'step', 1, "
-        f"{', '.join(defaults.values())})"
-    )
-    good = sql.replace(f"{', '.join(defaults.values())})", "'A', 0, '[]', '[]', NULL, NULL)")
+    defaults.setdefault("anchor_json", "NULL")
+
+    def insert(cells: dict[str, str]) -> str:
+        return (
+            "INSERT INTO ai_diagram_parts (part_id, owner_id, message_id, label, part_kind, "
+            f"generation, {', '.join(cells)}) VALUES ('dp_x', ?, 'msg_d', 'L', 'step', 1, "
+            f"{', '.join(cells.values())})"
+        )
+
+    sql = insert(defaults)
+    good = insert({k: baseline[k] for k in defaults})
     conn = sqlite3.connect(env.file)
     try:
         with pytest.raises(sqlite3.IntegrityError):

@@ -3,8 +3,8 @@
 A diagram run's message keeps the model's raw lines in ``content``; what the reader is shown comes
 from the rows stored as each part arrived (``ai_diagram_parts``) and the plate's title and links
 (``ai_messages.diagram_json``). DESIGN.md §4: a part is CITED (its quote is word for word in a
-passage the run read: an Anchor, ``supported``), NOT VERIFIED (near a passage: an Anchor, not
-supported; or found nowhere: no Anchor) or INFERRED (no quote), never silently uncited. Where a
+passage the run read: an Anchor), NEAR (near a passage: an Anchor too; or found nowhere: no
+Anchor) or INFERRED (no quote), never silently uncited. No verdict is stored (#351). Where a
 quote is found is ``quotes.py``'s; the locator of a cited part is derived from the parse, never
 stored.
 """
@@ -57,7 +57,7 @@ def part_wire(part: Mapping[str, Any], locators: evidence.PassageLocators | None
 
     Returns:
         The wire dict. ``cite`` is None for an inferred part (no quote); otherwise it carries the
-        model's quote, the Anchor (None when the quote was found nowhere) and ``supported``.
+        model's quote, the Anchor (None when the quote was found nowhere).
     """
     cite: dict[str, Any] | None = None
     quote = part["cite_quote"]
@@ -69,7 +69,6 @@ def part_wire(part: Mapping[str, Any], locators: evidence.PassageLocators | None
             "anchor": anchor,
             "locator": locators.locate(anchor) if anchor is not None and locators else None,
             "page_index": part["page_index"],
-            "supported": bool(part["supported"]),
         }
     return {
         "letter": part["letter"],
@@ -135,7 +134,6 @@ def stored_shape(part: DiagramPartIn) -> dict[str, Any]:
         "edge": list(part.edge),
         "cite_quote": part.quote,
         "anchor": None if part.anchor is None else dict(part.anchor),
-        "supported": part.supported,
         "page_index": part.page_index,
     }
 
@@ -228,17 +226,14 @@ class PlateBuilder:
             if letter in self.stored and letter not in after:
                 after.append(letter)
                 edge.append(label)
-        quote = block_id = anchor = page_index = supported = None
+        quote = block_id = anchor = page_index = None
         if part.cite is not None:
             quote = clean_quote(part.cite.quote)
             found = self.resolver.find(quote)
-            supported = found.verbatim
             anchor = self._anchor(found.block_id)
             if anchor is not None and found.block_id is not None and self.document is not None:
                 block_id = found.block_id
                 page_index = self.document.by_id[found.block_id].block.page_index
-            else:
-                supported = False  # an Anchor that could not be minted is not "cited"
         row = DiagramPartIn(
             part_id=self.new_id("dpt"),
             ordinal=ord(part.letter) - ord("A"),
@@ -249,7 +244,6 @@ class PlateBuilder:
             edge=edge,
             quote=quote,
             anchor=anchor,
-            supported=supported,
             generation=self.generation,
             block_id=block_id,
             page_index=page_index,
