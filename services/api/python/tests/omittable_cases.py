@@ -63,7 +63,10 @@ CASES: Final[dict[str, tuple[dict[str, Any], tuple[str, ...]]]] = {
         ("upgraded_anchor",),
     ),
     "ThreadCreate": ({"kind": "ask"}, ("anchor",)),
-    "FollowUp": ({"question": "And that?"}, ("retry_of", "redraw_of")),
+    "FollowUp": (
+        {"question": "And that?"},
+        ("relevel_of", "retry_of", "redraw_of"),
+    ),
     # v0.2 S7a (#216): a diagram part's quote, as the agent sends it.
     "AgentCite": ({"quote": "queries and keys of dimension dk"}, ("page",)),
     "SseStatus": ({"phase": "tool"}, ("label", "attempt", "delay_ms")),
@@ -91,7 +94,6 @@ CASES: Final[dict[str, tuple[dict[str, Any], tuple[str, ...]]]] = {
             "marker": "b1",
             "page_index": 0,
             "anchor": capture_anchor(),
-            "supported": True,
         },
         ("locator",),
     ),
@@ -107,10 +109,12 @@ CASES: Final[dict[str, tuple[dict[str, Any], tuple[str, ...]]]] = {
             "generation": 1,
             "run": None,
             "citations": [],
+            "level": None,
+            "sibling_group": None,
             "created_at": "2026-09-26T05:00:00.000Z",
             "completed_at": None,
         },
-        ("coverage", "diagram"),
+        ("diagram",),
     ),
     # v0.2 S5a (#206): the notebook.
     "NotebookPageCreate": (

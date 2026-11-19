@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { buildExchanges } from './exchange';
 import { fromStored, mergeStored, type ThreadMessage } from './messages';
@@ -13,9 +13,8 @@ function live(message: Message, over: Partial<ThreadMessage> = {}): ThreadMessag
   return {
     ...fromStored(message, message.role === 'assistant' ? 'Explain this passage.' : ''),
     key: `live-${String(message.ordinal)}`,
-    // The SSE `citations` event has no locator and the live message no coverage.
+    // The SSE `citations` event has no locator.
     citations: message.citations.map(({ locator: _l, ...rest }) => rest),
-    coverage: null,
     createdAt: null,
     ...over,
   };
@@ -27,49 +26,9 @@ describe('mergeStored: the live stream and the stored thread', () => {
     const merged = mergeStored([shown], [ask1, answer1]);
     expect(merged.map((m) => m.key)).toEqual([`s:${ask1.message_id}`, 'live-1']);
     expect(merged[0]?.text).toBe('Explain this passage.');
-    expect(merged[1]?.coverage?.citations).toBe(11);
     expect(merged[1]?.createdAt).toBe(answer1.created_at);
-    // The markers on screen were drawn from the live citations: they are kept, so no tab changes
-    // under the reader (#252); the stored locators show the next time the thread is opened.
-    expect(merged[1]?.citations).toHaveLength(shown.citations.length);
-    merged[1]?.citations.forEach((c, i) => expect(c).toBe(shown.citations[i]));
-  });
-
-  it('the stored verdict reaches the live markers: "not verified" is never lost (#252)', () => {
-    const shown = live(answer1); // the live citations say supported: true
-    const verdicts = {
-      ...answer1,
-      citations: answer1.citations.map((c) => ({ ...c, supported: false })),
-    };
-    const merged = mergeStored([shown], [ask1, verdicts]);
-    // Same objects where nothing changed is not required; same passages, numbers and tabs are.
-    expect(merged[1]?.citations.map((c) => [c.citation_id, c.supported, c.locator])).toEqual(
-      shown.citations.map((c) => [c.citation_id, false, undefined]),
-    );
-    const before = buildExchanges([fromStored(ask1, ''), shown], null)[0]?.model;
-    const after = buildExchanges(merged, null)[0]?.model;
-    expect(before?.trace.map((r) => r.status)).toEqual(['cited', 'cited', 'cited', 'cited']);
-    expect(after?.trace.map((r) => [r.n, r.page, r.para, r.status])).toEqual(
-      before?.trace.map((r) => [r.n, r.page, r.para, 'not-verified']),
-    );
-    expect([...(after?.markers.values() ?? [])].every((m) => m.notVerified)).toBe(true);
-  });
-
-  it('warns in development, and only there, when the live and stored citations differ', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const shown = live(answer1);
-    const fewer = { ...answer1, citations: answer1.citations.slice(0, 2) };
-    mergeStored([shown], [ask1, fewer]);
-    expect(warn).not.toHaveBeenCalled();
-    vi.stubEnv('NODE_ENV', 'development');
-    const merged = mergeStored([shown], [ask1, fewer]);
-    expect(warn).toHaveBeenCalledTimes(1);
-    // The markers on screen still do not move.
-    expect(merged[1]?.citations.map((c) => c.citation_id)).toEqual(
-      shown.citations.map((c) => c.citation_id),
-    );
-    vi.unstubAllEnvs();
-    warn.mockRestore();
+    // The stored copy holds every citation the run minted, with its locator.
+    expect(merged[1]?.citations).toEqual(answer1.citations);
   });
 
   it('a settled answer that showed no citations live takes the stored ones (#252)', () => {
@@ -156,5 +115,97 @@ describe('mergeStored: a read that lands before the run event names the ids (rev
 
   it('keeps the stored generation, which the passage key is built from', () => {
     expect(fromStored(answer1, 'q').generation).toBe(answer1.generation);
+  });
+});
+
+describe('stored answers at other levels (v0.3)', () => {
+  const at = (over: Partial<Message>): Message => ({ ...answer1, ...over });
+  const rootMsg = at({
+    message_id: 'msg_r',
+    ordinal: 1,
+    level: 'familiar',
+    sibling_group: 'msg_r',
+  });
+  const expert = at({
+    message_id: 'msg_x',
+    ordinal: 2,
+    level: 'expert',
+    sibling_group: 'msg_r',
+    content: 'Expert.',
+  });
+  const simple = at({
+    message_id: 'msg_n',
+    ordinal: 3,
+    level: 'new',
+    sibling_group: 'msg_r',
+    content: 'Simple.',
+  });
+
+  it('keeps every level of a question: an answer followed by its sibling is not a replaced retry', () => {
+    const merged = mergeStored([], [ask1, rootMsg, expert, simple]);
+    expect(merged.map((m) => [m.role, m.level ?? null, m.siblingGroup ?? null])).toEqual([
+      ['user', null, null],
+      ['assistant', 'familiar', 'msg_r'],
+      ['assistant', 'expert', 'msg_r'],
+      ['assistant', 'new', 'msg_r'],
+    ]);
+  });
+
+  it('a retried sibling replaces the attempt it retried; a retried root still does too', () => {
+    const retry = at({
+      message_id: 'msg_x2',
+      ordinal: 3,
+      level: 'expert',
+      sibling_group: 'msg_r',
+      content: 'Expert again.',
+    });
+    const merged = mergeStored([], [ask1, rootMsg, expert, retry]);
+    expect(merged.filter((m) => m.role === 'assistant').map((m) => m.text)).toEqual([
+      rootMsg.content,
+      'Expert again.',
+    ]);
+    const rootRetry = at({
+      message_id: 'msg_r2',
+      ordinal: 2,
+      level: 'familiar',
+      sibling_group: 'msg_r2',
+      content: 'Retried.',
+    });
+    expect(
+      mergeStored([], [ask1, rootMsg, rootRetry])
+        .filter((m) => m.role === 'assistant')
+        .map((m) => m.text),
+    ).toEqual(['Retried.']);
+  });
+
+  it('keeps the level the reader asked for until the server names one (an older API sends none)', () => {
+    const liveSibling = live(expert, {
+      level: 'expert',
+      siblingGroup: 'msg_r',
+      messageId: 'msg_x',
+    });
+    const stored = { ...expert, level: null, sibling_group: null };
+    const merged = mergeStored([liveSibling], [ask1, rootMsg, stored as Message]);
+    const sib = merged.find((m) => m.messageId === 'msg_x');
+    expect(sib?.level).toBe('expert');
+    expect(sib?.siblingGroup).toBe('msg_r');
+  });
+
+  it('a reload rebuilds each level of a question from sibling_group: one exchange, one variant per level', () => {
+    const merged = mergeStored(
+      [],
+      [ask1, rootMsg, expert, simple, { ...ask2, ordinal: 4 }, { ...answer2, ordinal: 5 }],
+    );
+    const exchanges = buildExchanges(merged, null);
+    expect(exchanges).toHaveLength(2);
+    const first = exchanges[0];
+    expect(first?.answer?.messageId).toBe('msg_r');
+    expect(first?.variants.map((v) => [v.level, v.answer.messageId])).toEqual([
+      ['familiar', 'msg_r'],
+      ['expert', 'msg_x'],
+      ['new', 'msg_n'],
+    ]);
+    // An answer with no sibling carries its own id and stays a single level.
+    expect(exchanges[1]?.variants).toHaveLength(1);
   });
 });

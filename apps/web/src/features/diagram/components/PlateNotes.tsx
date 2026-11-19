@@ -19,7 +19,7 @@ import { EMPTY_PLATE, platePhase, stoppedPlateNote } from '../model/plate';
 import { CraftedOffer } from './CraftedOffer';
 import { PlateActions, WAITING } from './PlateActions';
 
-import type { ViewMessage } from '@/components/explain/useExplainActions';
+import type { ViewMessage } from '@/features/explain/model/state';
 
 /** Props for `PlateNotes`. */
 export interface PlateNotesProps {

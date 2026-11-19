@@ -125,6 +125,10 @@ function conditionalFields(schemaPath: string): string[] {
 }
 
 export type Kind = 'explain' | 'ask' | 'summary' | 'diagram' | 'topic' | 'glance';
+/** The reader's level an explain/ask answer is written for (v0.3, #339). */
+export type Level = 'new' | 'familiar' | 'expert';
+export const LEVELS: readonly Level[] = ['new', 'familiar', 'expert'];
+
 export type PromptVersion =
   'explain-v1' | 'ask-v1' | 'summary-v1' | 'diagram-v1' | 'topic-v1' | 'glance-v1';
 
@@ -165,6 +169,10 @@ export interface RunRequest {
   readonly question: string;
   readonly history: { readonly session_id: string; readonly entries: readonly unknown[] } | null;
   readonly limits: RunLimits;
+  /** v0.3: the level an explain/ask answer is written for; absent reads `familiar`. */
+  readonly level?: Level;
+  /** v0.3: end the answer with one ```check fence. The API decides; absent reads false. */
+  readonly check?: boolean;
 }
 
 /** The prompt each kind runs under. A request that pairs them otherwise is refused (S0 left it open). */

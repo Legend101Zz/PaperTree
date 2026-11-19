@@ -1,13 +1,14 @@
 /**
- * W3UI round 2 (#141): the safe Markdown subset, hostile input, chip punctuation, quote display,
- * canvas citation labels.
+ * W3UI round 2 (#141): the safe Markdown subset, hostile input, punctuation after a handle and
+ * quote display. Handles are never drawn inline (#340): they gather into the source line.
  */
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { RichText } from '@/components/explain/RichText';
 import type { Citation } from '@/lib/api/types';
 import { dehyphenate, parseMarkdown, plainText, truncateAtWord } from '@/lib/markdown';
+
+import { Answer } from './answer-render';
 
 const cite = (n: number, page = 0): Citation => ({
   citation_id: `cit_${String(n)}`,
@@ -15,14 +16,12 @@ const cite = (n: number, page = 0): Citation => ({
   marker: `b${String(n)}`,
   page_index: page,
   anchor: { id: 'a', doc: { paperId: 'p' }, selectors: [] } as never,
-  supported: true,
 });
 
 describe('markdown subset', () => {
   it('renders emphasis, strong, code, lists and paragraphs', () => {
     const { container } = render(
-      <RichText
-        citations={[]}
+      <Answer
         text={
           '**Lead-in.** It is *where* the _box_ goes, in `code`.\n\n- one\n- two\n\n1. first\n2. second'
         }
@@ -41,7 +40,7 @@ describe('markdown subset', () => {
   });
 
   it('keeps a single newline as a line break', () => {
-    const { container } = render(<RichText citations={[]} text={'line one\nline two'} />);
+    const { container } = render(<Answer text={'line one\nline two'} />);
     expect(container.querySelectorAll('p br')).toHaveLength(1);
   });
 
@@ -56,7 +55,7 @@ describe('markdown subset', () => {
     '_ _ __ ** * `',
     '`<script>`',
   ])('never renders raw HTML or a link: %s', (hostile) => {
-    const { container } = render(<RichText citations={[]} text={hostile} />);
+    const { container } = render(<Answer text={hostile} />);
     expect(container.querySelector('script, img, a, b, iframe')).toBeNull();
     expect(container.innerHTML).not.toMatch(/<(script|img|a |b>)/);
     if (hostile.includes('javascript:')) {
@@ -71,48 +70,33 @@ describe('markdown subset', () => {
     expect(() => parseMarkdown(text)).not.toThrow();
   });
 
-  it('keeps [bN] chips working inside lists and bold', () => {
+  it('gathers [bN] handles inside lists and bold into one source line, drawing none inline', () => {
     const { container } = render(
-      <RichText citations={[cite(1), cite(2, 3)]} text={'- **Idea** [b1]\n- second [b2]'} />,
+      <Answer citations={[cite(1), cite(2, 3)]} text={'- **Idea** [b1]\n- second [b2]'} />,
     );
-    const chips = container.querySelectorAll('li .pt-chip');
-    expect(chips).toHaveLength(2);
-    expect(chips[1]?.textContent).toBe('p. 4');
-    expect(container.textContent).not.toContain('[b');
+    expect(container.querySelectorAll('li')).toHaveLength(2);
+    expect(container.querySelector('.pt-chip, .pt-marker')).toBeNull();
+    expect(container.querySelector('.pt-source')?.textContent).toBe('From the paper: p. 1 · p. 4');
+    expect(container.querySelector('li')?.textContent).toBe('Idea');
+    expect(container.querySelector('.pt-ai-slip__text')?.textContent).not.toContain('[b');
   });
 
-  it('glues the full stop to the chip in one unbreakable run', () => {
+  it('keeps the full stop where the handle was, with nothing in its place', () => {
     const { container } = render(
-      <RichText citations={[cite(1)]} text="uses specialized sensors [b1]." />,
+      <Answer citations={[cite(1)]} text="uses specialized sensors [b1]." />,
     );
-    const run = container.querySelector('.pt-cite-run');
-    expect(run?.textContent).toBe('p. 1.');
-    expect(run?.querySelector('.pt-chip')).not.toBeNull();
-    expect(container.querySelector('p')?.lastChild).toBe(run);
-  });
-
-  it('shows a canvas citation as a page label, never as [bN]', () => {
-    const { container } = render(
-      <RichText
-        citeAs="label"
-        citations={[cite(1, 0)]}
-        text="Classes [b1], names [b9] too [b1, b9]."
-      />,
+    expect(container.querySelector('.pt-ai-slip__text')?.textContent).toBe(
+      'uses specialized sensors.',
     );
-    expect(container.querySelectorAll('.pt-cite-label')).toHaveLength(2);
-    expect(container.querySelector('button')).toBeNull();
-    expect(container.textContent).not.toMatch(/\[b\d/);
   });
 
   it('strips handles when the message has no citations', () => {
-    const { container } = render(
-      <RichText citeAs="label" citations={[]} text="Classes [b1], names." />,
-    );
+    const { container } = render(<Answer text="Classes [b1], names." />);
     expect(container.textContent).toBe('Classes, names.');
   });
 
   it('hides unclosed markers while streaming', () => {
-    const { container } = render(<RichText streaming citations={[]} text="This is **bold" />);
+    const { container } = render(<Answer status="streaming" text="This is **bold" />);
     expect(container.textContent).toBe('This is bold');
   });
 
@@ -159,9 +143,7 @@ describe('underscore identifiers and answer hyphens', () => {
   });
 
   it('joins PDF hyphen breaks inside an answer body', () => {
-    const { container } = render(
-      <RichText citations={[]} text="Models per- form well and re- gression works." />,
-    );
+    const { container } = render(<Answer text="Models per- form well and re- gression works." />);
     expect(container.textContent).toBe('Models perform well and regression works.');
   });
 });

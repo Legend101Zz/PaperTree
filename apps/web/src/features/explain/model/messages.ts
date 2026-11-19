@@ -1,12 +1,12 @@
 /**
  * A thread's messages as the panel holds them, and the merge of the live stream with the stored
  * thread (#202). While an answer streams, the live state is the truth; once it settles, the stored
- * detail (coverage, usage, times, the verdicts) replaces it under the SAME key, so nothing remounts,
- * flickers or appears twice; the markers keep the live citations they were drawn from (#252). Pure; the controller (`useExplainActions`) owns the state, `useThreads` the reads.
+ * detail (usage, times, citations) replaces it under the SAME key, so nothing remounts, flickers or
+ * appears twice. Pure; the controller (`useExplainActions`) owns the state, `useThreads` the reads.
  */
 import type { Failure } from '@/components/explain/errors';
 import type { PlateView } from '@/features/diagram';
-import type { Citation, Message, MessageCoverage, RunSummary } from '@/lib/api/types';
+import type { AnswerLevel, Citation, Message, RunSummary } from '@/lib/api/types';
 
 /** A message's lifecycle, as the wire spells it. */
 export type MessageStatus = 'streaming' | 'complete' | 'partial' | 'error' | 'aborted';
@@ -32,8 +32,6 @@ export interface ThreadMessage {
   readonly question: string;
   /** ISO time: the server's `created_at` once stored, the moment it was asked until then. */
   readonly createdAt: string | null;
-  /** The server's coverage of a stored answer; null while live. */
-  readonly coverage: MessageCoverage | null;
   /** The parse generation of the run (the `run` event's, or the stored message's); null until known. */
   readonly generation: number | null;
   /**
@@ -44,12 +42,26 @@ export interface ThreadMessage {
   readonly refusal?: Failure | null;
   /**
    * Stopped in this session and its stored copy (with the citations the server minted for what
-   * arrived) has not landed yet: drawn as while streaming, so nothing is classed uncited and then
-   * moved (#204).
+   * arrived) has not landed yet: drawn as while streaming, so no paragraph is called general
+   * knowledge and then changed (#204).
    */
   readonly awaitingStored?: boolean;
   /** A diagram answer's plate (#217): built from its events, or read back; absent on any other. */
   readonly diagram?: PlateView | null;
+  /** The level the answer was written at (v0.3); absent or null on an older answer (= familiar). */
+  readonly level?: AnswerLevel | null;
+  /**
+   * The server's `sibling_group` of an answer: the id of the FIRST answer to its question. Answers
+   * that share it are the same question at other levels (the first carries its own id), so the
+   * exchange keeps every level it has fetched and a level switch asks for nothing twice. Null on a
+   * user turn; on a live answer, set only on a sibling (the first learns it from the stored read).
+   */
+  readonly siblingGroup?: string | null;
+  /**
+   * A quick ask (a go-deeper chip, a level switch): the panel skips the long thinking pause for it
+   * and shows the answer as it is written (#349). Live only.
+   */
+  readonly quick?: boolean;
   /** A Redraw's plate: the plate it redraws (`redraw_of`), so a refused Redraw is sent again as one. */
   readonly redrawOf?: string | null;
 }
@@ -96,10 +108,29 @@ export function fromStored(message: Message, question: string): ThreadMessage {
     usage: message.run,
     question,
     createdAt: message.created_at,
-    coverage: message.coverage ?? null,
     generation: message.generation,
     diagram: message.diagram === undefined ? null : { ...message.diagram, notes: [] },
+    level: message.level ?? null,
+    siblingGroup: message.sibling_group,
   };
+}
+
+/**
+ * Whether `next` is another level of the question `message` answers, not a retry of `message`: it
+ * is a re-levelled answer (its `sibling_group` is another answer's id, not its own) and is not the
+ * same level of the same group as `message` (a retried sibling replaces the attempt it retried).
+ *
+ * @param message A stored answer.
+ * @param next The stored message right after it.
+ * @returns True when both stay.
+ */
+function isSiblingOf(message: Message, next: Message): boolean {
+  if (next.sibling_group == null || next.sibling_group === next.message_id) return false;
+  const retried =
+    message.sibling_group !== message.message_id &&
+    next.sibling_group === message.sibling_group &&
+    (next.level ?? null) === (message.level ?? null);
+  return !retried;
 }
 
 /**
@@ -120,7 +151,10 @@ function shownStored(stored: readonly Message[]): ThreadMessage[] {
       out.push(fromStored(message, ''));
       return;
     }
-    if (ordered[i + 1]?.role === 'assistant') return;
+    // An answer followed by another is replaced (a retry), unless the next is a sibling of this
+    // one at another level: a re-levelled answer keeps the answers it is a sibling of.
+    const next = ordered[i + 1];
+    if (next?.role === 'assistant' && !isSiblingOf(message, next)) return;
     out.push(fromStored(message, ask));
   });
   return out;
@@ -136,46 +170,19 @@ function shownStored(stored: readonly Message[]): ThreadMessage[] {
  * @param stored The same message from the server.
  * @returns The message to keep.
  */
-/**
- * The citations a settled answer keeps. The markers on screen were drawn from the live ones: keep
- * those objects, so no marker, number or tab changes under the reader (#252), but take each one's
- * verdict (`supported`) from the stored record, matched by `citation_id`, so a "not verified" is
- * never lost (it may appear after `done`: that is the honest direction). The stored locators (a
- * finer "¶") show the next time the thread is opened. An answer with no live citations (stopped
- * before they came) takes the stored ones.
- *
- * @param live The citations the markers were drawn from.
- * @param stored The stored copy's citations.
- * @returns The citations to keep.
- */
-function shownCitations(
-  live: readonly Citation[],
-  stored: readonly Citation[],
-): readonly Citation[] {
-  if (live.length === 0) return stored;
-  const byId = new Map(stored.map((c) => [c.citation_id, c] as const));
-  const same = byId.size === live.length && live.every((c) => byId.has(c.citation_id));
-  if (!same && process.env.NODE_ENV === 'development') {
-    // Unreachable on today's write path (the API persists, then sends, the same rows); say so if
-    // it ever happens, since the readout (stored coverage) and the markers (live) would disagree.
-    console.warn('explain: the live and stored citations of an answer differ', {
-      live: live.map((c) => c.citation_id),
-      stored: stored.map((c) => c.citation_id),
-    });
-  }
-  return live.map((c) => {
-    const verdict = byId.get(c.citation_id)?.supported;
-    return verdict === undefined || verdict === c.supported ? c : { ...c, supported: verdict };
-  });
-}
-
 function settle(live: ThreadMessage, stored: ThreadMessage): ThreadMessage {
   if (live.status === 'streaming' || stored.status === 'streaming') return live;
   return {
     ...stored,
     key: live.key,
-    citations: shownCitations(live.citations, stored.citations),
+    // The stored copy holds every citation the run minted; one stopped before they arrived has
+    // only the live ones.
+    citations: stored.citations.length === 0 ? live.citations : stored.citations,
     stopped: live.stopped,
+    // What the reader asked for stands until the server says otherwise (an older API has no level).
+    level: stored.level ?? live.level ?? null,
+    siblingGroup: stored.siblingGroup ?? live.siblingGroup ?? null,
+    ...(live.quick === true ? { quick: true } : {}),
     refusal: live.refusal ?? null,
     awaitingStored: false,
     // What the run said while drawing (a skipped line, a dropped arrow) is not stored: keep it.

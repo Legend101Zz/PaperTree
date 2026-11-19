@@ -1,14 +1,12 @@
 'use client';
 
 /**
- * The phone notebook (S5e, #210, frame 08c): the page read as a stack, ask → answer → trace, then
+ * The phone notebook (S5e, #210, frame 08c): the page read as a stack, ask → answer, then
  * the person's own things. The call slip and the AI slip are the page's exchange (collapsed, "Read
- * the whole answer"); the trace is one 44 px row per quote card ("cited 5×"), each opening its
- * passage in the paper; "Your ink · view only" shows the strokes cropped and never takes a pointer;
+ * the whole answer"); "Your ink · view only" shows the strokes cropped and never takes a pointer;
  * stickies and typed notes are editable in place (Courier Prime). Nothing here moves anything on
  * the page: the tablet and the desktop place things, the phone reads and types.
  */
-import { TraceList } from '@papertree/ui';
 import Link from 'next/link';
 import { memo, useId, useMemo } from 'react';
 
@@ -17,7 +15,7 @@ import { InkLayer } from './InkLayer';
 import { NoteItem } from './NoteItem';
 import { PAGE_TITLE_ID } from '../hooks/focus';
 import { templatePaint } from '../model/layout';
-import { inkCrop, phoneNotes, phoneTrace } from '../model/phone';
+import { inkCrop, phoneNotes } from '../model/phone';
 
 import './phone.css';
 
@@ -67,10 +65,6 @@ function InkStrip({ strokes }: { readonly strokes: readonly Stroke[] }): ReactNo
 /** The phone's stack view of one notebook page. */
 export const PhoneStack = memo(function PhoneStack(props: PhoneStackProps): ReactNode {
   const { exchange, items } = props;
-  const trace = useMemo(
-    () => phoneTrace(items, exchange.layout, exchange.answer?.citations ?? []),
-    [items, exchange.layout, exchange.answer],
-  );
   const all = props.draft === null ? items : [...items, props.draft];
   const { stickies, notes } = phoneNotes(all);
   const note = (n: StickyItem | TextItem): ReactNode => (
@@ -103,16 +97,6 @@ export const PhoneStack = memo(function PhoneStack(props: PhoneStackProps): Reac
           exchange={exchange}
           onFocusAnchor={props.onFocusAnchor}
           phone
-        />
-      )}
-      {trace.length === 0 ? null : (
-        <TraceList
-          rows={trace.map((t) => t.row)}
-          layout="touch"
-          onShowInPaper={(n) => {
-            const hit = trace.find((t) => t.row.n === n);
-            if (hit !== undefined) props.onFocusAnchor(hit.item.anchor);
-          }}
         />
       )}
       <div className="pt-nb-stack__mine">

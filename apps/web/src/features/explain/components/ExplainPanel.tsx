@@ -18,9 +18,8 @@ import { useThreads } from '../hooks/useThreads';
 import { ThreadMenu } from './ThreadMenu';
 import { ThreadView } from './ThreadView';
 
-import type { ExplainController } from '@/components/explain/useExplainActions';
-import type { FlashSource } from '@/components/reader/actions';
-import type { PassageMarker } from '../model/exchange';
+import type { ExplainController } from '@/features/explain/model/controller';
+import type { PaperSource } from '../model/exchange';
 import type { Anchor } from '@papertree/anchoring';
 
 /** Props for `ExplainPanel`. */
@@ -77,32 +76,18 @@ function OpenPanel({ controller, desktop, detent, setDetent, asideRef }: OpenPan
 
   // On a phone the sheet covers the page: lower it so the flashed passage is in view, and tell the
   // reader the peek still covers the window's foot, so a passage behind it scrolls up (#205).
-  const onShow = useCallback(
-    (marker: PassageMarker) => {
-      if (!desktop) setDetent('peek');
-      const { n, page, para, notVerified } = marker;
-      actions.focusAnchor(marker.citation.anchor, {
-        flash: true,
-        from: { n, page, para, notVerified },
-        ...(desktop ? {} : { bottomInset: SHEET_PEEK_PX }),
-      });
-    },
-    [actions, desktop, setDetent],
-  );
-
-  // A diagram part's flash (#217): the margin tab names the part it came from. On a phone the
-  // peek covers the window's foot, as for a marker (#205).
   const onFlash = useCallback(
-    (anchor: Anchor, from: FlashSource) => {
+    (anchor: Anchor) => {
       if (!desktop) setDetent('peek');
       actions.focusAnchor(anchor, {
         flash: true,
-        from,
         ...(desktop ? {} : { bottomInset: SHEET_PEEK_PX }),
       });
     },
     [actions, desktop, setDetent],
   );
+  // A page link under a paragraph or a bullet flashes the passage it stands for.
+  const onShow = useCallback((source: PaperSource) => onFlash(source.citation.anchor), [onFlash]);
 
   const inSummary = state.view === 'summary';
   // ONE button that swaps its words: the same element stays focused across the swap, so Esc

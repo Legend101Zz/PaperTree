@@ -49,7 +49,8 @@ def test_0013_carries_every_run_row_fk_cascade_and_index(tmp_path: Path) -> None
     conn.close()
     assert all(before.values()), "every table held rows before"
 
-    with open_database(file) as db:
+    # Only 0013: later migrations (0014, 0015) have their own tests.
+    with open_database(file, migrations_through(13, tmp_path / "m13")) as db:
         result = db.migrate()
         assert result.applied == (13,)
         assert [path.name for path in result.backups] == ["old.sqlite.pre-0013.bak"]
@@ -113,6 +114,10 @@ def test_a_fresh_database_gets_a_strict_paper_glance_and_no_backup(tmp_path: Pat
     try:
         strict = {r[1]: r[5] for r in conn.execute("PRAGMA table_list")}
         assert strict["paper_glance"] == 1 and strict["ai_runs"] == 1
+        # After every later migration, the run-kind CHECK still names every kind.
+        ddl = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'ai_runs'").fetchone()[0]
+        for kind in ("explain", "ask", "summary", "diagram", "topic", "glance"):
+            assert f"'{kind}'" in ddl, kind
     finally:
         conn.close()
 

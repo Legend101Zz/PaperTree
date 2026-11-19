@@ -2,7 +2,7 @@
 
 /**
  * The engraved plate's drawing (frame 07c): hairline boxes on the slot grid, hatched shadows from an
- * SVG `<pattern>`, letter circles, arrows and feedback links, each part's passage marker. It is a
+ * SVG `<pattern>`, letter circles, arrows and feedback links. It is a
  * picture of the key beside it, so it is hidden from assistive tech (the key is the accessible
  * content, ADR-004 §2.9); a pointer tap on a part does what its key row does.
  */
@@ -12,7 +12,6 @@ import { mathToPlain } from '@/lib/markdown';
 
 import { cut, fitLabel } from '../model/fit';
 import { GRID, type PlateLayout, type Route, type Slot } from '../model/layout';
-import { verdictOf } from '../model/plate';
 
 import type { DiagramPart } from '@/lib/api/types';
 
@@ -20,8 +19,6 @@ import type { DiagramPart } from '@/lib/api/types';
 export interface PlateDrawingProps {
   readonly layout: PlateLayout;
   readonly parts: ReadonlyMap<string, DiagramPart>;
-  /** The passage number of a part's marker, or null when it has none (inferred, not found). */
-  readonly numberOf: (part: DiagramPart) => number | null;
   /** The letter lit from the key (hover, focus) or by a tap. */
   readonly lit: string | null;
   readonly onPart: (letter: string) => void;
@@ -61,53 +58,24 @@ function Letter({ slot, faint = false }: { slot: Slot; faint?: boolean }): React
 interface PartBoxProps {
   readonly slot: Slot;
   readonly part: DiagramPart;
-  readonly n: number | null;
   readonly lit: boolean;
   readonly hatch: string;
   readonly onPart: (letter: string) => void;
 }
 
-/** The caption a box carries under its label when it is not grounded word for word. */
-const CAPTION: Partial<Record<ReturnType<typeof verdictOf>, string>> = {
-  inferred: 'inferred, no passage',
-  'not-verified': 'not verified',
-};
-
-/**
- * A part's marker: the passage number on a solid square when cited, on a dashed open one when
- * not verified, and "?" there when the quote was found nowhere; none for an inferred part.
- */
-function Mark({ x, y, n, verdict }: { x: number; y: number; n: number | null; verdict: string }) {
-  if (verdict === 'inferred' || (verdict === 'cited' && n === null)) return null;
-  return (
-    <g className="pt-plate__mark" data-not-verified={verdict === 'not-verified'}>
-      <rect x={x - 8} y={y - 8} width={16} height={16} rx={2} />
-      <text x={x} y={y + 4} textAnchor="middle">
-        {n ?? '?'}
-      </text>
-    </g>
-  );
-}
-
-function PartBox({ slot, part, n, lit, hatch, onPart }: PartBoxProps): ReactNode {
-  const verdict = verdictOf(part);
-  // Only a cited part stands on the page: the others are drawn lighter, never more solid (S3).
-  const caption = CAPTION[verdict];
+function PartBox({ slot, part, lit, hatch, onPart }: PartBoxProps): ReactNode {
   const { x, y, w, h } = slot;
-  const label = fitLabel(mathToPlain(part.label), w - 20, caption === undefined ? 2 : 1);
+  const label = fitLabel(mathToPlain(part.label), w - 20, 2);
   const two = label.lines.length === 2;
   return (
     <g
       className="pt-plate__part"
       data-part={part.letter}
       data-kind={part.kind}
-      data-verdict={verdict}
       data-lit={lit}
       onClick={() => onPart(part.letter)}
     >
-      {caption === undefined ? (
-        <rect x={x + 5} y={y + 5} width={w} height={h} fill={`url(#${hatch})`} />
-      ) : null}
+      <rect x={x + 5} y={y + 5} width={w} height={h} fill={`url(#${hatch})`} />
       <rect
         className="pt-plate__box"
         x={x}
@@ -123,7 +91,7 @@ function PartBox({ slot, part, n, lit, hatch, onPart }: PartBoxProps): ReactNode
       <text
         className="pt-plate__label"
         x={x + w / 2}
-        y={caption === undefined ? y + h / 2 + (two ? -2 : 5) : y + 19}
+        y={y + h / 2 + (two ? -2 : 5)}
         textAnchor="middle"
         fontSize={label.size}
       >
@@ -133,25 +101,13 @@ function PartBox({ slot, part, n, lit, hatch, onPart }: PartBoxProps): ReactNode
           </tspan>
         ))}
       </text>
-      {caption === undefined ? null : (
-        <text className="pt-plate__caption" x={x + w / 2} y={y + 36} textAnchor="middle">
-          {caption}
-        </text>
-      )}
-      <Mark x={x + w} y={y} n={n} verdict={verdict} />
       <Letter slot={slot} />
     </g>
   );
 }
 
 /** The plate's picture, at the grid's size, scaling down with its column. */
-export function PlateDrawing({
-  layout,
-  parts,
-  numberOf,
-  lit,
-  onPart,
-}: PlateDrawingProps): ReactNode {
+export function PlateDrawing({ layout, parts, lit, onPart }: PlateDrawingProps): ReactNode {
   const hatch = `pt-hatch-${useId().replace(/:/g, '')}`;
   return (
     <svg
@@ -191,7 +147,6 @@ export function PlateDrawing({
             key={slot.letter}
             slot={slot}
             part={part}
-            n={numberOf(part)}
             lit={lit === slot.letter}
             hatch={hatch}
             onPart={onPart}

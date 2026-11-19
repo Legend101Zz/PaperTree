@@ -52,8 +52,7 @@ import type { BBox } from '@papertree/document-ir';
 
 import { sendToCanvas } from '@/components/canvas/sendToCanvas';
 import { useFocusFromCanvas } from '@/components/canvas/useFocusFromCanvas';
-import { ExplainPanel } from '@/components/explain';
-import { useExplainActions } from '@/components/explain/useExplainActions';
+import { ExplainPanel, useExplainActions } from '@/components/explain';
 import {
   ReaderActionsProvider,
   type FocusOptions,
@@ -587,10 +586,8 @@ export function ReaderWorkspace({ paper: given }: ReaderWorkspaceProps) {
         key: `${anchor.id}:${String(Date.now())}`,
         pageIndex: paint.pageIndex,
         polygons: paint.polygons,
-        extent,
         phase: scrollMs > 0 ? 'scroll' : 'flash',
         scrollMs,
-        ...(opts?.from === undefined ? {} : { from: opts.from }),
       });
     },
     [doc, requestScroll],

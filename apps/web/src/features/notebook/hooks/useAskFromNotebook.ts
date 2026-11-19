@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { askDraft, hasAsk, takeAsk, withoutAsk } from '../model/askHandoff';
 
-import type { ExplainController } from '@/components/explain/useExplainActions';
+import type { ExplainController } from '@/features/explain/model/controller';
 import type { AskStorage } from '../model/askHandoff';
 
 /** What the reader says once beside the panel. */

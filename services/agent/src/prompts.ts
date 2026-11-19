@@ -10,6 +10,7 @@
  */
 import {
   DIAGRAM_LIMITS,
+  type Level,
   type PromptVersion,
   type RunRequest,
   type SeedPassage,
@@ -77,9 +78,9 @@ export function markBlock(text: string, datamark: string): string {
 /** Who the reader is and what the run must do, per prompt version. */
 const TASK: Record<PromptVersion, string> = {
   'explain-v1':
-    'The reader selected a passage and wants it explained: what it says and why it matters in the ' +
-    'paper. The first passage below holds the selection.',
-  'ask-v1': 'The reader asked a question about the paper. Answer it.',
+    'The reader selected a passage and wants it explained like a tutor would. The first passage ' +
+    'below holds the selection.',
+  'ask-v1': 'The reader asked a question about the paper. Answer it like a tutor would.',
   'summary-v1':
     'Summarise the whole paper from the digest below (the abstract, the opening of each section, ' +
     'the conclusion): write from it.',
@@ -116,6 +117,22 @@ function toolRule(request: RunRequest, tools: string): string {
 }
 
 /**
+ * The part line of the diagram NDJSON, shared by a diagram run and an answer's inline ```diagram
+ * fence (answer.ts reads both with diagram.ts): the description is written once.
+ */
+function diagramParts(maxParts: number, cite: string): string {
+  const { label, text } = DIAGRAM_LIMITS;
+  return (
+    `then at most ${String(maxParts)} parts in reading order: {"t":"part","label":"<a short ` +
+    `descriptive word or phrase, at most ${String(label.max)} characters, never a single ` +
+    `letter>","text":"<one line, at most ${String(text.max)} characters>",` +
+    '"kind":"input|step|output|concept","after":["A"],"cite":' +
+    cite +
+    '}'
+  );
+}
+
+/**
  * The NDJSON diagram contract (v0.2 S7a; ADR-004 §2.9): lines the agent validates one by one
  * (diagram.ts). The Nth part line IS letter N, an arrow may come only from an earlier part, and
  * the host clips over-long text, so none of that needs saying twice. `cite` is required and
@@ -126,15 +143,12 @@ function toolRule(request: RunRequest, tools: string): string {
 function diagramRules(request: RunRequest): string {
   // The limits are the contract's (run-events.schema.json, `DIAGRAM_LIMITS`): one place, never a
   // second copy here that could drift from what the reader and the API enforce.
-  const { title, label, text, quote } = DIAGRAM_LIMITS;
+  const { title, quote } = DIAGRAM_LIMITS;
   return [
     dataRule(request),
     'Answer with lines of JSON, one object per line, and nothing else (no prose, no code fence):',
     `{"t":"plate","title":"<the figure's name, at most ${String(title.max)} characters>"}`,
-    `then at most 12 parts in reading order: {"t":"part","label":"<a short descriptive word or ` +
-      `phrase, at most ${String(label.max)} characters, never a single letter>","text":"<one line, at ` +
-      `most ${String(text.max)} characters>","kind":"input|step|output|concept","after":["A"],` +
-      '"cite":{"quote":"<words copied from one passage>"}}',
+    diagramParts(12, '{"quote":"<words copied from one passage>"}'),
     'The parts are lettered by order, A for the first and so on: count, do not write the letter. ' +
       '"after" lists the earlier parts (at most 3; [] for none) with an arrow into this one; an ' +
       'optional "edge" labels each arrow. For an arrow back to an earlier part, add ' +
@@ -200,16 +214,53 @@ function readingRules(request: RunRequest): string {
         toolRule(request, 'get_outline, get_section'),
     ].join('\n');
   }
+  return answerRules(request);
+}
+
+const LEVEL_GUIDE: Record<Level, string> = {
+  new: 'The reader is new to this: define every term, use an everyday analogy; 180-260 words.',
+  familiar: 'The reader knows the basics: skip prerequisites; 120-200 words.',
+  expert: 'The reader is an expert: exact and terse; 100-180 words.',
+};
+
+const CHECK_EXAMPLE = [
+  '```check',
+  'prompt: If $F(x) = 0$, the block outputs ___.',
+  'accept: x | the input',
+  'right: Right. $0 + x = x$.',
+  'hint: Put 0 in place of $F(x)$.',
+  '```',
+].join('\n');
+
+/** The explain / ask / follow-up answer: a tutor's, in the v0.3 shape (#339; spec §1). */
+function answerRules(request: RunRequest): string {
+  const level = request.level ?? 'familiar';
+  const second = level === 'expert' ? '## The trade-off' : '## In plain words';
+  const secondHint =
+    level === 'expert' ? 'what it buys, what it costs' : 'an analogy, the jargon defined';
   return [
     dataRule(request),
-    'Write for a smart reader who is not a specialist: plain words, short paragraphs, no ' +
-      'preamble. Ground what you say about the paper in the passages and tool results; if the ' +
-      'paper does not say it, say so.',
-    'Cite the passage a point rests on by its handle in square brackets, [b3] or [b1, b4]: at most ' +
-      'once per sentence, only when it helps the reader find it, and only handles that appear in ' +
+    `Answer like a tutor, in plain words. Background and ` +
+      `examples beyond the paper are welcome: the passages are a start, not a fence. ${LEVEL_GUIDE[level]}`,
+    `Markdown, exactly these headings, no preamble: ## TL;DR (one or two sentences), ${second} ` +
+      `(${secondHint}), ## How it works (step by step), ## In the paper (what the paper says).`,
+    'Maths in $…$ (inline, variables too: $x$) and $$…$$ (display).',
+    'Cite the passage a sentence rests on by its handle in square brackets, [b3] or [b1, b4]: at ' +
+      'most once per sentence, only where it rests on the paper, and only handles that appear in ' +
       'this prompt or a tool result.',
-    'Example: "The block learns only the change it must make to its input, F(x) = H(x) − x [b1]."',
-    toolRule(request, 'get_outline, get_section, get_passage, search_passages'),
+    'Only if a picture helps, one ```diagram fence in "## How it works", the diagram lines: ' +
+      '{"t":"plate","title":"<name>"} then at most 8 {"t":"part","label":"<words, never a ' +
+      'letter>","text":"<one line>","kind":"input|step|output|concept","after":["A"],"cite":null} ' +
+      '(lettered by order).',
+    request.check === true
+      ? `End with one fence of exactly these keys (accept: fills separated by |):\n${CHECK_EXAMPLE}`
+      : 'No ```check fence.',
+    'Answer from the passages below and the conversation first; use a tool only if the question ' +
+      'needs a part of the paper that is not there. ' +
+      toolRule(request, 'get_outline, get_section, get_passage, search_passages'),
+    `Example: "## TL;DR\nA residual block adds its input back.\n${second}\nLike editing a ` +
+      'draft.\n## How it works\nIt outputs $y = F(x) + x$.\n## In the paper\nDeeper plain nets ' +
+      'train worse [b7]."',
   ].join('\n');
 }
 

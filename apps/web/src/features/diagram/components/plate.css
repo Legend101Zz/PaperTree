@@ -171,17 +171,6 @@
   stroke: var(--pt-ink);
 }
 
-.pt-plate__part[data-verdict='inferred'] .pt-plate__box {
-  stroke-width: 1.5;
-  stroke-dasharray: 5 3;
-}
-
-/* Not verified: a dotted edge and a "?" or dashed marker, never the inferred dash (S3). */
-.pt-plate__part[data-verdict='not-verified'] .pt-plate__box {
-  stroke-width: 1.5;
-  stroke-dasharray: 1.5 2.5;
-}
-
 .pt-plate__rule {
   fill: none;
   stroke: var(--pt-ink);
@@ -203,31 +192,6 @@
   font-style: italic;
 }
 
-.pt-plate__caption {
-  font: 700 12.5px var(--pt-font-label);
-  letter-spacing: 0.06em;
-  fill: var(--pt-ink);
-}
-
-.pt-plate__mark rect {
-  fill: var(--pt-tab);
-}
-
-.pt-plate__mark text {
-  font: 700 11px var(--pt-font-you);
-  fill: var(--pt-on-tab);
-}
-
-.pt-plate__mark[data-not-verified='true'] rect {
-  fill: var(--pt-ai-slip);
-  stroke: var(--pt-tab);
-  stroke-dasharray: 2 2;
-}
-
-.pt-plate__mark[data-not-verified='true'] text {
-  fill: var(--pt-nv-ink);
-}
-
 /* Lit (from the key, or tapped): navy ring and the lit wash, the letter filled navy. */
 .pt-plate__part[data-lit='true'] .pt-plate__box {
   stroke: var(--pt-focus);
@@ -239,14 +203,12 @@
   pointer-events: none;
 }
 
-.pt-plate__part[data-lit='true'] .pt-plate__mark rect,
 .pt-plate__part[data-lit='true'] .pt-plate__letter circle {
   fill: var(--pt-focus);
   stroke: var(--pt-focus);
 }
 
-.pt-plate__part[data-lit='true'] .pt-plate__letter text,
-.pt-plate__part[data-lit='true'] .pt-plate__mark text {
+.pt-plate__part[data-lit='true'] .pt-plate__letter text {
   fill: var(--pt-page);
 }
 
@@ -278,6 +240,18 @@
 
 .pt-plate-key__part,
 .pt-plate-key__row[data-gap],
+.pt-plate-key__caption {
+  font: 700 12.5px / 18px var(--pt-font-label);
+  letter-spacing: 0.04em;
+  color: var(--pt-ink);
+}
+
+/* "From the paper: p. 4": the same quiet line as under an answer paragraph (#340). */
+.pt-plate-key__source {
+  font: 13.5px / 19px var(--pt-font-ai);
+  color: var(--pt-ink-muted);
+}
+
 .pt-plate-key__row[data-ghost] {
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr);
@@ -325,20 +299,12 @@
   color: var(--pt-ink-2);
 }
 
-.pt-plate-key__where {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-
 .pt-plate-key__label {
   margin-inline-end: auto;
   font: 700 14.5px / 20px var(--pt-font-ai);
   color: var(--pt-ink);
 }
 
-.pt-plate-key__quote,
 .pt-plate-key__ai {
   /* No hung quotation mark here: the two-line clamp would clip it. */
   text-indent: 0;
@@ -353,12 +319,6 @@
 .pt-plate-key__ai {
   font: 13.5px / 19px var(--pt-font-ai);
   color: var(--pt-ink-2);
-}
-
-.pt-plate-key__caption {
-  font: 700 12.5px / 18px var(--pt-font-label);
-  letter-spacing: 0.04em;
-  color: var(--pt-ink);
 }
 
 .pt-plate-key__row[data-ghost] {

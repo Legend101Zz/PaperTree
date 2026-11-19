@@ -70,25 +70,27 @@ test.describe('v0.2 S7b: a stored plate in the explain panel → tap a part → 
     await expect(panel.locator('[data-plate-phase="complete"]')).toBeVisible({ timeout: 60_000 });
     await expect(panel.locator('.pt-plate-key [data-letter]')).toHaveCount(6);
     await expect(panel.locator('[data-plate-readout]')).toHaveText(
-      '6 parts · 5 cited · drawn by AI from p. 4',
+      '6 parts · drawn by AI from p. 4',
     );
-    await expect(panel.locator('[data-letter="F"]')).toContainText('Inferred, no passage');
+    // A part that came from a passage has one quiet page; the one that did not has none (#340).
+    await expect(panel.locator('.pt-plate-key__source')).toHaveCount(5);
+    await expect(panel.locator('[data-letter="F"] .pt-plate-key__source')).toHaveCount(0);
     await expect(panel.locator('[data-usage-line]')).toContainText('(estimate)');
     const text = (await panel.innerText()).replace(/\s+/g, ' ');
     expect(text).not.toMatch(/\bmsg_|\bthr_|\brun_|\bblk_|\{"/);
-    expect(text).not.toMatch(/\bverified\b(?<!not verified)|fact-checked|\baccurate\b/i);
+    expect(text).not.toMatch(/\bverified\b|fact-checked|\baccurate\b|\bgrounded\b|Stands on/i);
     await page.screenshot({ path: shot('v02-plate-01-stored-1440.png') });
 
-    // ── tap part B: its passage flashes, the margin tab names the part ──
+    // ── tap part B: its passage flashes (no margin tab) ──
     await panel.getByRole('button', { name: /^Part B:/ }).click();
     // The outline is painted in `flash` (1.7 s) and STAYS in `linger` until the reader's next action
     // (`reader/flash`), so the spec matches both: on a CI runner whose main thread is busy painting
     // page 4 the first paint can land at the very end of the 1.7 s `flash` phase, and a selector
     // pinned to `data-flash="true"` then never matches again (`boundingBox` waited out the 10 min
-    // test timeout). The margin tab below still says which part the flash came from.
+    // test timeout).
     const flash = page.locator('svg [data-flash] polygon.pt-flash');
-    await expect(flash.first()).toBeVisible();
-    await expect(page.locator('[data-flash-tab]')).toContainText('from part B');
+    await expect(flash.first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-flash-tab], .pt-flash-tab')).toHaveCount(0);
     // The page is on screen once the scroll has settled: poll the box, never sleep a fixed 500 ms.
     await expect
       .poll(async () => {
@@ -122,7 +124,10 @@ test.describe('v0.2 S7b: a stored plate in the explain panel → tap a part → 
     await page.goto(`/paper/${paperId}/board`);
     const card = page.locator('[data-plate-mini="6"]');
     await expect(card).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByText('6 parts · 5 cited')).toBeVisible();
+    // The card counts its parts and claims nothing about how well they are backed (no verdicts).
+    const node = page.locator('.react-flow__node-diagram');
+    await expect(node).toContainText('6 parts');
+    await expect(node).not.toContainText(/cited|verified|supported/i);
     await expect(page.getByText('Scaled dot-product attention').first()).toBeVisible();
     await page.screenshot({ path: shot('v02-plate-03-board-1440.png') });
     await context.close();
