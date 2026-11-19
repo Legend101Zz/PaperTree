@@ -245,6 +245,7 @@ export function useBranchBoard(
       streams: ask.streams,
       reports: view.reports,
       send: ask.send,
+      sending: ask.sending,
       quick: ask.quick,
       keepNote: ask.keepNote,
       retry: ask.retry,
@@ -256,6 +257,7 @@ export function useBranchBoard(
       stage,
     }),
     [
+      ask.sending,
       view.tree,
       view.layout,
       view.draft,

@@ -67,8 +67,9 @@ export function AskBox(): ReactNode {
   });
   const down = branchDir === 'down';
   const valid = isValidQuestion(draft.text);
+  const sending = branch.sending === true;
   const submit = (): void => {
-    if (valid) void branch.send(draft);
+    if (valid && !sending) void branch.send(draft);
   };
   const onKey = (event: KeyboardEvent<HTMLInputElement>): void => {
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -153,6 +154,7 @@ export function AskBox(): ReactNode {
           placeholder={placeholder}
           value={draft.text}
           maxLength={2000}
+          readOnly={sending}
           onChange={(event) => control.setText(event.target.value)}
           onKeyDown={onKey}
         />
@@ -162,7 +164,7 @@ export function AskBox(): ReactNode {
           <button
             type="button"
             className="pt-btn pt-btn--primary pt-ask__send"
-            aria-disabled={!valid}
+            aria-disabled={!valid || sending}
             onClick={submit}
           >
             Follow up <kbd aria-hidden="true">Enter</kbd>
@@ -171,7 +173,7 @@ export function AskBox(): ReactNode {
           <button
             type="button"
             className="pt-btn pt-btn--primary pt-ask__send"
-            aria-disabled={!valid}
+            aria-disabled={!valid || sending}
             onClick={submit}
           >
             Ask <kbd aria-hidden="true">Enter</kbd>

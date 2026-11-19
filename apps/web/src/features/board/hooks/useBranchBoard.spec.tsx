@@ -393,6 +393,52 @@ describe('asking from the Uses line', () => {
     });
   });
 
+  it('Enter twice sends one ask: the second is ignored until the node event (#343 review)', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    api.ask.mockImplementation(async function* () {
+      await gate; // the server has not answered with the card yet
+      yield { event: 'node', data: node({ id: 'new', parent: 'a', branch: 'right' }) } as SseEvent;
+      yield {
+        event: 'done',
+        data: { status: 'complete', error: null, message_id: 'm' },
+      } as SseEvent;
+    });
+    const { result } = await mount(tree());
+    act(() => result.current.branch.control.openAsk('a'));
+    act(() => result.current.branch.control.setText('why?'));
+    const draft = result.current.branch.view.draft!;
+    let first: Promise<boolean> = Promise.resolve(false);
+    let second: Promise<boolean> = Promise.resolve(true);
+    act(() => {
+      first = result.current.branch.ask.send(draft);
+      second = result.current.branch.ask.send(draft);
+    });
+    expect(await second).toBe(false);
+    expect(api.ask).toHaveBeenCalledTimes(1);
+    expect(result.current.branch.ask.sending).toBe(true);
+    await act(async () => {
+      release();
+      await first;
+    });
+    expect(result.current.branch.ask.sending).toBe(false);
+    expect(api.ask).toHaveBeenCalledTimes(1);
+  });
+
+  it('a refused ask lets the reader send again', async () => {
+    api.ask.mockImplementation(() => {
+      throw new Error('offline');
+    });
+    const { result } = await mount(tree());
+    act(() => result.current.branch.control.openAsk('a'));
+    act(() => result.current.branch.control.setText('why?'));
+    const draft = result.current.branch.view.draft!;
+    await act(() => result.current.branch.ask.send(draft));
+    expect(result.current.branch.ask.sending).toBe(false);
+    await act(() => result.current.branch.ask.send(draft));
+    expect(api.ask).toHaveBeenCalledTimes(2);
+  });
+
   it('on done the card takes the STORED final text (the agent tidied it) before any span is taken (#343 review)', async () => {
     const streamedText = 'Intro.\n```diagram\nbox: a\n```\nBody **bold** words.';
     const storedText = 'Intro.\nBody **bold** words.';

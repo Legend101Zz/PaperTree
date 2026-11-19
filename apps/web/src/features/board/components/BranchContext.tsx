@@ -27,6 +27,8 @@ export interface BranchActions {
   readonly streams: ReadonlyMap<string, AnswerStream>;
   readonly reports: CardReports;
   readonly send: (draft: Draft) => Promise<boolean>;
+  /** True while an ask is on its way and its card does not exist yet: the box ignores a second send. */
+  readonly sending?: boolean;
   readonly quick: (parentId: string, span: ParentSpan, quick: QuickAsk) => Promise<boolean>;
   readonly keepNote: (parentId: string, span: ParentSpan) => Promise<void>;
   readonly retry: (nodeId: string) => Promise<boolean>;

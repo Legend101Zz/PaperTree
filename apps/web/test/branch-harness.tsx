@@ -95,6 +95,7 @@ export function branchBoard(
     },
     ask: {
       streams: new Map(),
+      sending: false,
       send: actions.send,
       quick: actions.quick,
       keepNote: actions.keepNote,

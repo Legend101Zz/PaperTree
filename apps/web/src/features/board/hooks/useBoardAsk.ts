@@ -55,6 +55,11 @@ export interface BoardAsk {
   readonly streams: ReadonlyMap<string, AnswerStream>;
   /** Sends the ask box. Resolves once the answer card exists (or the ask was refused). */
   readonly send: (draft: Draft) => Promise<boolean>;
+  /**
+   * True from the moment an ask is sent until its `node` event arrives (the card exists and the
+   * box has closed) or it is refused. Another ask in that gap is ignored: Enter twice is one ask.
+   */
+  readonly sending: boolean;
   /** A quick ask from words: no box, no thinking pause. */
   readonly quick: (parentId: string, span: ParentSpan, quick: QuickAsk) => Promise<boolean>;
   /** Keep as note: a note child on the words. */
@@ -103,6 +108,12 @@ export function useBoardAsk(
   } = store;
   const [streams, setStreams] = useState<ReadonlyMap<string, AnswerStream>>(new Map());
   const aborts = useRef(new Map<string, AbortController>());
+  const [sending, setSendingState] = useState(false);
+  const sendingRef = useRef(false);
+  const setSending = useCallback((on: boolean) => {
+    sendingRef.current = on;
+    setSendingState(on);
+  }, []);
   const treeRef = useRef(tree);
   treeRef.current = tree;
   const branchedRef = useRef(onBranched);
@@ -188,6 +199,15 @@ export function useBoardAsk(
     ): Promise<boolean> => {
       const boardId = boardRef.current?.board_id;
       if (boardId === undefined) return false;
+      // One ask at a time until the card exists: a second Enter must not send a second ask.
+      if (sendingRef.current) return false;
+      setSending(true);
+      let holding = true;
+      const release = (): void => {
+        if (!holding) return;
+        holding = false;
+        setSending(false);
+      };
       const controller = new AbortController();
       let id: string | null = null;
       let written = '';
@@ -198,6 +218,7 @@ export function useBoardAsk(
           if (event.event === 'node') {
             const node = event.data;
             id = node.node_id;
+            release();
             aborts.current.set(id, controller);
             adopt(node);
             branched(node);
@@ -261,6 +282,7 @@ export function useBoardAsk(
         });
         return true;
       } finally {
+        release();
         if (id !== null) {
           aborts.current.delete(id);
           // What arrived is the card's text for now; the stored copy replaces it below.
@@ -274,7 +296,18 @@ export function useBoardAsk(
         }
       }
     },
-    [adopt, aliveRef, boardRef, branched, control, mergeData, patchStream, setNotice, settle],
+    [
+      adopt,
+      aliveRef,
+      boardRef,
+      branched,
+      control,
+      mergeData,
+      patchStream,
+      setNotice,
+      setSending,
+      settle,
+    ],
   );
 
   const send = useCallback(
@@ -412,5 +445,5 @@ export function useBoardAsk(
     }
   }, [aliveRef, boardRef, forgetRow, mergeData, reload, setNotice, versionRef]);
 
-  return { streams, send, quick, retry, keepNote, stop, fold, tidy };
+  return { streams, sending, send, quick, retry, keepNote, stop, fold, tidy };
 }
