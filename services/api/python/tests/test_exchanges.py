@@ -1,8 +1,6 @@
-"""#201 (S4a): the thread list's ``ask`` / ``last_status``, citation ``locator``, ``coverage``.
+"""#201 (S4a): the thread list's ``ask`` / ``last_status`` and citation ``locator``.
 
-* pure units for ``ask_excerpt`` and ``message_coverage``;
-* a GOLDEN coverage test on the real stored Attention answer
-  (``data/attention_explain_answer.json``, copied from the demo database);
+* pure units for ``ask_excerpt``;
 * locator goldens on the committed Attention parse AND, corpus-gated (skips loudly), on a fresh
   real parse of the corpus PDF: the four frame-04 tabs ``p.1 ¶1 Abstract``, ``p.2 ¶2/¶3/¶4``;
 * the routes: ask, truncation, last_status, owner isolation, and a stored answer read back.
@@ -10,8 +8,6 @@
 
 from __future__ import annotations
 
-import json
-import re
 import sqlite3
 import tempfile
 import uuid
@@ -29,16 +25,14 @@ from papertree_api.evidence import (
     DocumentCache,
     PassageLocators,
     load_index,
-    passage_key,
     section_display_title,
 )
-from papertree_api.exchanges import answer_paragraphs, ask_excerpt, message_coverage
+from papertree_api.exchanges import ask_excerpt
 from papertree_api.schemas import Message, Thread
 from papertree_api.worker import run as run_worker
 from papertree_db import PaperTreeDb
 from papertree_retrieval import PaperIndexCache
 
-DATA = Path(__file__).resolve().parent / "data"
 CORPUS = Path(__file__).resolve().parents[4] / "research" / "benchmarks" / "corpus"
 ATTENTION_PDF = CORPUS / "attention-is-all-you-need.pdf"
 requires_attention_pdf = pytest.mark.skipif(
@@ -75,73 +69,6 @@ def test_ask_excerpt_cuts_on_a_word_boundary_within_160_characters() -> None:
     assert ask_excerpt("x" * 160) == "x" * 160  # exactly the limit is not cut
     long_word = ask_excerpt("y" * 400)
     assert long_word == "y" * 159 + "…"
-
-
-# ── message_coverage ─────────────────────────────────────────────────────────────────────────
-
-
-def test_coverage_counts_handles_paragraphs_and_skips_a_bare_heading() -> None:
-    content = "# Summary\n\nOne [b1, b2].\n\nTwo [b1].\n\nNo claim here."
-    assert answer_paragraphs(content) == ["One [b1, b2].", "Two [b1].", "No claim here."]
-    coverage = message_coverage(
-        content, [("b1", "g1:a", True), ("b2", "g1:b", False), ("b3", "g1:a", None)]
-    )
-    assert coverage == {
-        "passages": 2,
-        "citations": 3,
-        "unresolved_markers": 0,
-        "paragraphs": 3,
-        "uncited_paragraphs": [2],
-        "not_verified": 1,
-    }
-
-
-def test_a_dropped_handle_is_unresolved_not_a_citation() -> None:
-    """A hallucinated ``[b99]`` has no stored row (the run dropped it): never a citation."""
-    coverage = message_coverage(
-        "A [b1]. B [b1, b99].\n\nC [b99].", [("b1", "g1:x", True), ("b2", "g1:y", None)]
-    )
-    assert (coverage["citations"], coverage["unresolved_markers"]) == (2, 2)
-    assert coverage["uncited_paragraphs"] == []  # the paragraph holds a marker, resolved or not
-    assert coverage["not_verified"] == 0, "supported=None (never checked) is not 'not verified'"
-
-
-def test_the_paragraph_rule_is_exactly_blank_line_split_minus_bare_headings() -> None:
-    text = "## H\n\n**Bold head**\n\n- a [b1]\n- b\n   \nlast"
-    assert answer_paragraphs(text) == ["**Bold head**", "- a [b1]\n- b", "last"]
-    assert answer_paragraphs("") == []
-
-
-def test_coverage_of_an_answer_with_no_markers() -> None:
-    assert message_coverage("Plain.", []) == {
-        "passages": 0,
-        "citations": 0,
-        "unresolved_markers": 0,
-        "paragraphs": 1,
-        "uncited_paragraphs": [0],
-        "not_verified": 0,
-    }
-
-
-def test_coverage_of_the_real_stored_attention_answer() -> None:
-    """Golden: the real explain answer of the demo database (see the fixture's ``_source``)."""
-    stored = json.loads((DATA / "attention_explain_answer.json").read_text(encoding="utf-8"))
-    citations = [
-        (c["marker"], passage_key(c["generation"], c["block_id"]), c["supported"])
-        for c in stored["citations"]
-    ]
-    coverage = message_coverage(stored["content"], citations)
-    assert [c["marker"] for c in stored["citations"]] == ["b1", "b6", "b7", "b8"]
-    assert coverage["citations"] == 11 and coverage["unresolved_markers"] == 0
-    assert coverage["passages"] == 4
-    assert coverage["paragraphs"] == 5
-    assert coverage["uncited_paragraphs"] == [4]
-    assert coverage["not_verified"] == sum(
-        1 for c in stored["citations"] if c["supported"] is False
-    )
-    # "cited 5× / once / 2× / 3×": per handle occurrences, in order of first use.
-    handles = re.findall(r"b\d+", " ".join(re.findall(r"\[(b\d+(?:, b\d+)*)\]", stored["content"])))
-    assert [handles.count(m) for m in ("b1", "b6", "b7", "b8")] == [5, 1, 2, 3]
 
 
 # ── passage locators ─────────────────────────────────────────────────────────────────────────
@@ -465,7 +392,7 @@ def test_another_users_threads_never_appear_in_the_list(tmp_path: Path) -> None:
         assert len(h.client.get(f"/papers/{paper_id}/threads", headers=auth(alice)).json()) == 1
 
 
-def test_a_stored_answer_reads_back_with_locators_and_coverage(tmp_path: Path) -> None:
+def test_a_stored_answer_reads_back_with_locators_and_no_verdict(tmp_path: Path) -> None:
     with ai_harness(tmp_path, Script("explain-ok")) as h:
         token, paper_id = alice_with_paper(h)
         run = events(read_sse(explain(h, token, paper_id, fixture_anchor()))[0], "run")[0]
@@ -473,7 +400,7 @@ def test_a_stored_answer_reads_back_with_locators_and_coverage(tmp_path: Path) -
             f"/papers/{paper_id}/threads/{run['thread_id']}", headers=auth(token)
         ).json()
         user, answer = detail["messages"]
-        assert "coverage" not in user and all("locator" not in c for c in user["citations"])
+        assert all("locator" not in c for c in user["citations"])
         assert answer["citations"], "the replay cites the seed"
         for citation in answer["citations"]:
             locator = citation["locator"]
@@ -481,11 +408,9 @@ def test_a_stored_answer_reads_back_with_locators_and_coverage(tmp_path: Path) -
             assert locator["page_index"] == citation["page_index"]
             assert locator["para_index"] is None or locator["para_index"] >= 1
         assert contract_errors(answer, "api/threads.schema.json", "Message", Message) == []
-        coverage = answer["coverage"]
-        assert coverage["passages"] == len(
-            {c["locator"]["passage_key"] for c in answer["citations"]}
-        )
-        assert coverage["paragraphs"] >= 1 and coverage["not_verified"] >= 0
+        # #340/#341: no coverage readout and no per-citation verdict on the wire.
+        assert "coverage" not in answer and "coverage" not in user
+        assert all("supported" not in c for c in answer["citations"])
 
 
 def test_a_parse_that_cannot_be_loaded_degrades_to_page_only_citations(
@@ -507,4 +432,4 @@ def test_a_parse_that_cannot_be_loaded_degrades_to_page_only_citations(
         assert response.status_code == 200
         answer = response.json()["messages"][1]
         assert answer["citations"] and all("locator" not in c for c in answer["citations"])
-        assert answer["coverage"]["passages"] >= 1, "coverage falls back to the anchor's block"
+        assert all(c["page_index"] >= 0 for c in answer["citations"]), "the page still reads"

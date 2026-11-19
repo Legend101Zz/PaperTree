@@ -281,27 +281,17 @@
         "anchor": {
           "$ref": "#/$defs/AnchorV1"
         },
-        "supported": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "locator": {
           "$ref": "#/$defs/PassageLocator"
         }
       },
-      "required": ["citation_id", "ordinal", "marker", "page_index", "anchor", "supported"],
+      "required": ["citation_id", "ordinal", "marker", "page_index", "anchor"],
       "title": "Citation",
       "type": "object"
     },
     "DiagramCite": {
       "additionalProperties": false,
-      "description": "Where a part's quote was found. `supported` true: verbatim in the Anchor's block (\"cited\");\nfalse: there with differences, or nowhere at all (`anchor` null), \"not verified\".",
+      "description": "Where a part's quote was found: the Anchor of the block it came from (null when the quote\nwas found nowhere). The plate shows only its page; it carries no verdict (#340).",
       "properties": {
         "citation_id": {
           "anyOf": [
@@ -347,12 +337,9 @@
               "type": "null"
             }
           ]
-        },
-        "supported": {
-          "type": "boolean"
         }
       },
-      "required": ["citation_id", "quote", "anchor", "locator", "page_index", "supported"],
+      "required": ["citation_id", "quote", "anchor", "locator", "page_index"],
       "title": "DiagramCite",
       "type": "object"
     },
@@ -512,9 +499,6 @@
           },
           "type": "array"
         },
-        "coverage": {
-          "$ref": "#/$defs/MessageCoverage"
-        },
         "diagram": {
           "$ref": "#/$defs/MessageDiagram"
         },
@@ -549,49 +533,6 @@
         "completed_at"
       ],
       "title": "Message",
-      "type": "object"
-    },
-    "MessageCoverage": {
-      "additionalProperties": false,
-      "description": "How much of an assistant answer is cited (#201); counted by `exchanges.message_coverage`.",
-      "properties": {
-        "passages": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "citations": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "unresolved_markers": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "paragraphs": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "uncited_paragraphs": {
-          "items": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        },
-        "not_verified": {
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "passages",
-        "citations",
-        "unresolved_markers",
-        "paragraphs",
-        "uncited_paragraphs",
-        "not_verified"
-      ],
-      "title": "MessageCoverage",
       "type": "object"
     },
     "MessageDiagram": {

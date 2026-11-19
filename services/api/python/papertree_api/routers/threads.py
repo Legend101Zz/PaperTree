@@ -54,7 +54,7 @@ from ..deps import (
     SettingsDep,
 )
 from ..errors import ApiError, ErrorEnvelope
-from ..exchanges import ask_excerpt, message_coverage
+from ..exchanges import ask_excerpt
 from ..logging import log_event
 from ..schemas import (
     DIAGRAM_QUESTION,
@@ -505,30 +505,11 @@ def _citation_wire(c: dict[str, Any], locators: evidence.PassageLocators | None)
         "marker": c["marker"],
         "page_index": c["page_index"],
         "anchor": c["anchor"],
-        "supported": c["supported"],
     }
     locator = locators.locate(c["anchor"]) if locators is not None else None
     if locator is not None:
         item["locator"] = locator
     return item
-
-
-def _coverage_of(row: dict[str, Any], cited: list[dict[str, Any]]) -> dict[str, Any]:
-    """``MessageCoverage`` of an assistant row. A citation without a locator (its parse could not
-    be loaded) still has a passage key, built from its Anchor the way the locator builds it."""
-    keys = [
-        (
-            c["marker"],
-            c["locator"]["passage_key"]
-            if "locator" in c
-            else evidence.passage_key(
-                int(row["generation"]), evidence.anchor_block_id(c["anchor"]) or str(c["marker"])
-            ),
-            c["supported"],
-        )
-        for c in cited
-    ]
-    return message_coverage(row["content"], keys)
 
 
 def message_wire(
@@ -540,9 +521,8 @@ def message_wire(
 ) -> dict[str, Any]:
     """One stored message as the wire shape. ``locators`` (the parse of the message's generation,
     None when that parse can no longer be loaded) adds each citation's ``locator``; an assistant
-    message that is complete or partial also gets its ``coverage`` (#201). ``parts`` (a diagram
-    thread's assistant message only, possibly empty) makes it a plate: ``diagram`` instead of
-    ``coverage``, which counts prose paragraphs and has none to count here."""
+    ``parts`` (a diagram thread's assistant message only, possibly empty) makes it a plate:
+    ``diagram``. There is no coverage readout (#341)."""
     status, error_code = row["status"], row["error_code"]
     if status == "streaming" and not _run_is_live(run):
         # An answer whose run can no longer finish (the API process stopped mid-stream, so no
@@ -568,8 +548,6 @@ def message_wire(
     }
     if parts is not None:
         wire["diagram"] = diagrams.diagram_wire(row["diagram"], status, parts, locators)
-    elif row["role"] == "assistant" and status in ("complete", "partial"):
-        wire["coverage"] = _coverage_of(row, cited)
     return wire
 
 

@@ -152,7 +152,10 @@ def test_explain_streams_the_contract_and_persists_the_whole_turn(tmp_path: Path
             assert wire["anchor"]["targetKind"] == "citation"
             assert wire["anchor"]["doc"]["pdfSha256"] == source_hash
             assert wire["anchor"]["doc"]["textStreamId"] == f"api/{paper_id}/g1/0.1.0"
-            assert wire["supported"] is False, "YOLO's text is not in resnet's blocks"
+            assert "supported" not in wire, "no grounding verdict reaches the reader (#340)"
+            assert row_["supported"] == 0, (
+                "the verdict is still stored: YOLO's text is not resnet's"
+            )
         usage = events(frames, "usage")[0]
         assert usage["run_id"] == run["run_id"] and usage["input_tokens"] == totals["input"]
 
@@ -176,7 +179,9 @@ def _first_sentence(context: RunContext) -> str:
     return text.split(". ")[0].rstrip(".")
 
 
-def test_grounding_flags_the_fabrication_and_not_the_quote(tmp_path: Path) -> None:
+def test_grounding_flags_the_fabrication_and_not_the_quote_in_the_stored_rows(
+    tmp_path: Path,
+) -> None:
     def answer(context: RunContext) -> str:
         quote, other = context.seen[0], context.seen[1]
         return (
@@ -187,8 +192,9 @@ def test_grounding_flags_the_fabrication_and_not_the_quote(tmp_path: Path) -> No
     with ai_harness(tmp_path, Script("explain-ok", final_text=answer)) as h:
         token, paper_id = alice_with_paper(h)
         frames, _ = read_sse(explain(h, token, paper_id, paragraph_anchor()))
-        by_marker = {c["marker"]: c["supported"] for c in events(frames, "citations")[0]["items"]}
-        assert by_marker == {"b1": True, "b2": False}
+        items = events(frames, "citations")[0]["items"]
+        assert [c["marker"] for c in items] == ["b1", "b2"]
+        assert all("supported" not in c for c in items)
         assert [bool(r["supported"]) for r in h.rows("SELECT supported FROM ai_citations")] == [
             True,
             False,
@@ -200,6 +206,7 @@ def test_grounding_flags_the_fabrication_and_not_the_quote(tmp_path: Path) -> No
         shown = json.dumps([f.data for f in frames if f.event != "text"]) + detail.text
         for reason_text in ("threshold", "content words", "Lexical overlap", "cited blocks"):
             assert reason_text not in shown
+        assert '"supported"' not in shown and '"coverage"' not in shown
 
 
 def _farthest(context: RunContext, sentence: str) -> str:
@@ -237,12 +244,13 @@ def test_a_marker_after_the_full_stop_is_checked_against_the_sentence_before_it(
         token, paper_id = alice_with_paper(h)
         for run, quote_supported in enumerate((True, False)):
             # Run 1: the quote's sentence cites its block. Run 2: the FABRICATION cites the
-            # quote's block, so that chip must NOT read supported.
+            # quote's block, so that citation must NOT be stored supported.
             frames, _ = read_sse(explain(h, token, paper_id, paragraph_anchor()))
             quote, other = shown[run]
             expected = {quote: quote_supported, other: False}
             items = events(frames, "citations")[0]["items"]
-            assert {c["marker"]: c["supported"] for c in items} == expected
+            assert {c["marker"] for c in items} == set(expected)
+            assert all("supported" not in c for c in items)
             message_id = events(frames, "done")[0]["message_id"]
             stored = h.rows(
                 "SELECT marker, supported FROM ai_citations WHERE message_id = ?", message_id
@@ -264,7 +272,11 @@ def test_a_claim_is_checked_only_against_the_blocks_it_cites(tmp_path: Path) -> 
     with ai_harness(tmp_path, Script("explain-ok", final_text=answer)) as h:
         token, paper_id = alice_with_paper(h)
         frames, _ = read_sse(explain(h, token, paper_id, paragraph_anchor()))
-        by_marker = {c["marker"]: c["supported"] for c in events(frames, "citations")[0]["items"]}
+        message_id = events(frames, "done")[0]["message_id"]
+        stored = h.rows(
+            "SELECT marker, supported FROM ai_citations WHERE message_id = ?", message_id
+        )
+        by_marker = {r["marker"]: bool(r["supported"]) for r in stored}
         assert by_marker == {shown["quote"]: True, shown["other"]: False}
         # Both were issued to this run: the other block was shown, it is just not what b1 says.
         handles = {r["handle"] for r in h.rows("SELECT handle FROM ai_run_handles")}
