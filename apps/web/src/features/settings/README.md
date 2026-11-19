@@ -19,3 +19,8 @@ reader never sees a daylight flash on load. Without JavaScript the stylesheet st
   `test/theme.spec.tsx`).
 - `hooks/useTheme.ts`: persistence, the OS listener for System, and painting `<html>`.
 - `components/ThemeSwitch.tsx`: the segmented switch.
+- `model/page.ts`, `hooks/usePage.ts`, `components/PageSwitch.tsx` (#345): the paper's page, **Auto · Light · Sepia ·
+  Dark**. Auto follows the room; an explicit page overrides it. `localStorage["papertree.page"]` → `usePage` (mounted
+  by the reader's header) → `<html data-pt-page>`, which the page tokens in `@papertree/ui/styles.css` key on;
+  `useResolvedPage` reads it back for components that only need to know (the figure mats). `NO_FLASH_SCRIPT` sets it
+  before paint too. Tested in `test/page-colour.spec.tsx`.

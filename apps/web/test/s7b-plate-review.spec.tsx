@@ -1,6 +1,7 @@
 /**
  * s7b-plate-review — the plate's review fixes (#217): a Stop before the first part is the reader's
- * and says so on every path (Stop, switching threads, closing the panel), never a server failure or
+ * and says so on every path (Stop, switching threads, closing the panel; a Redraw's, since the
+ * reader no longer starts a first plate, #339), never a server failure or
  * "kept" with nothing kept; a part not verified near a passage is said and drawn as such; the key
  * says everything the drawing does; a keyboard Stop hands focus to Retry and is announced.
  */
@@ -14,14 +15,17 @@ import { plateFrames } from './fixtures/diagram-plate';
 import { stubDesktop } from './s6-harness';
 import { jsonResponse, sseResponse } from './s6-support';
 import {
+  BAD_THREAD,
+  exchange,
   focusAnchor,
   keyRows,
   mount,
+  mountRedrawing,
   PAPER,
+  redrawStoppedEmpty,
   routes,
   storedWith,
   THREAD,
-  withPart,
 } from './s7b-support';
 
 import type { DiagramPart } from '@/lib/api/types';
@@ -36,10 +40,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const THINKING = plateFrames('diagram-plate').slice(0, 2); // run, status: nothing drawn yet
+/** The Redraw's run, as the bad run's frames re-addressed to the stored thread. */
+const redrawFrames = () =>
+  plateFrames('diagram-plate-bad').map((f) => f.replaceAll(BAD_THREAD, THREAD));
+const THINKING = redrawFrames().slice(0, 2); // run, status: nothing drawn yet
 const SERVER_FAILURE = /went wrong on the server|What arrived is kept|parts that arrived are kept/;
-/** What the server keeps for a plate stopped before its first part. */
-const stoppedEmpty = () => storedWith(() => [], 'aborted');
+/** What the server keeps for a Redraw stopped before its first part. */
+const stoppedEmpty = redrawStoppedEmpty;
 
 const hatched = (part: Element): boolean =>
   Array.from(part.querySelectorAll('rect')).some((r) => r.getAttribute('fill')?.startsWith('url('));
@@ -48,25 +55,24 @@ function panelText(): string {
   return screen.getByRole('complementary', { name: 'Explain' }).textContent ?? '';
 }
 
-describe('Stop before the first part (review B2)', () => {
+describe('Stop a Redraw before its first part (review B2)', () => {
   it('Stop while "Thinking…": "Stopped before any part arrived.", then and after the stored read', async () => {
     const { calls } = routes(
       (signal) => sseResponse(THINKING, { hold: true, signal }),
       stoppedEmpty(),
     );
-    mount();
-    const panel = await screen.findByRole('complementary', { name: 'Explain' });
+    const panel = await mountRedrawing();
     await within(panel).findByText(/Thinking/);
     fireEvent.click(within(panel).getByRole('button', { name: 'Stop' }));
     const note = await within(panel).findByText('Stopped before any part arrived.');
     expect(note.getAttribute('role')).toBe('status');
     expect(panelText()).not.toMatch(SERVER_FAILURE);
-    expect(panel.querySelector('.pt-plate, .pt-plate-answer')).toBeNull(); // no plate, no model line
+    expect(exchange(panel, 1).querySelector('.pt-plate, .pt-plate-answer')).toBeNull(); // no plate, no model line
     // The stored copy lands (status `aborted`, no part): the same honest note.
     await waitFor(() =>
       expect(
         calls.filter((c) => c.path === `/papers/${PAPER}/threads/${THREAD}`).length,
-      ).toBeGreaterThan(0),
+      ).toBeGreaterThan(1),
     );
     await act(async () => new Promise((settle) => setTimeout(settle, 50)));
     expect(within(panel).getByText('Stopped before any part arrived.')).toBeTruthy();
@@ -75,8 +81,7 @@ describe('Stop before the first part (review B2)', () => {
 
   it('switching threads mid-draw, then back: the stored plate says it stopped before any part', async () => {
     routes((signal) => sseResponse(THINKING, { hold: true, signal }), stoppedEmpty());
-    mount();
-    const panel = await screen.findByRole('complementary', { name: 'Explain' });
+    const panel = await mountRedrawing();
     await within(panel).findByText(/Thinking/);
     fireEvent.click(screen.getByRole('button', { name: 'switch away' }));
     fireEvent.click(screen.getByRole('button', { name: 'switch back' }));
@@ -86,8 +91,7 @@ describe('Stop before the first part (review B2)', () => {
 
   it('closing the panel mid-draw, then opening it: the same note, no failure', async () => {
     routes((signal) => sseResponse(THINKING, { hold: true, signal }), stoppedEmpty());
-    mount();
-    const panel = await screen.findByRole('complementary', { name: 'Explain' });
+    const panel = await mountRedrawing();
     await within(panel).findByText(/Thinking/);
     fireEvent.click(within(panel).getByRole('button', { name: 'Close explain panel' }));
     await waitFor(() =>
@@ -102,11 +106,9 @@ describe('Stop before the first part (review B2)', () => {
 
 describe('a keyboard Stop (review S5)', () => {
   it('hands focus to Redraw and announces the stopped plate', async () => {
-    const frames = plateFrames('diagram-plate');
-    routes((signal) => sseResponse(frames.slice(0, 5), { hold: true, signal }));
-    mount();
-    const panel = await screen.findByRole('complementary', { name: 'Explain' });
-    await waitFor(() => expect(keyRows()).toHaveLength(1));
+    routes((signal) => sseResponse(redrawFrames().slice(0, 5), { hold: true, signal }));
+    const panel = await mountRedrawing();
+    await waitFor(() => expect(keyRows(exchange(panel, 1))).toHaveLength(1));
     const stop = within(panel).getByRole('button', { name: 'Stop' });
     stop.focus();
     fireEvent.click(stop);
@@ -120,7 +122,7 @@ describe('a keyboard Stop (review S5)', () => {
 /** Part A found near its passage, not word for word: it has an Anchor and so a page, like any other. */
 describe('a part found near its passage (#340)', () => {
   it('shows only its quiet page: no marker, tab, caption or verdict, and the quote is not shown', async () => {
-    routes((signal) => sseResponse(plateFrames('diagram-plate'), { signal }));
+    routes();
     mount();
     const panel = await screen.findByRole('complementary', { name: 'Explain' });
     await waitFor(() =>
@@ -141,13 +143,13 @@ describe('a part found near its passage (#340)', () => {
   });
 
   it('a quote found nowhere has no page and no mark in the drawing, and keeps its hatched shadow', async () => {
-    routes((signal) => sseResponse(plateFrames('diagram-plate-bad'), { signal }));
-    mount();
-    const panel = await screen.findByRole('complementary', { name: 'Explain' });
+    routes();
+    const panel = await mountRedrawing();
+    const second = exchange(panel, 1);
     await waitFor(() =>
-      expect(panel.querySelector('[data-plate-phase="complete"]')).not.toBeNull(),
+      expect(second.querySelector('[data-plate-phase="complete"]')).not.toBeNull(),
     );
-    const c = panel.querySelector('[data-part="C"]') as Element;
+    const c = second.querySelector('[data-part="C"]') as Element;
     expect(c.querySelector('.pt-plate__mark, .pt-plate__caption')).toBeNull();
     expect(hatched(c)).toBe(true);
     expect(hatched(panel.querySelector('[data-part="A"]') as Element)).toBe(true);
@@ -156,7 +158,7 @@ describe('a part found near its passage (#340)', () => {
 
 describe('the key says everything the drawing does (review S2)', () => {
   it('names each row by its own words: the label, the AI’s line, its page, the arrows', async () => {
-    routes((signal) => sseResponse(plateFrames('diagram-plate'), { signal }));
+    routes();
     mount();
     const panel = await screen.findByRole('complementary', { name: 'Explain' });
     await waitFor(() =>
@@ -197,7 +199,7 @@ describe('the key says everything the drawing does (review S2)', () => {
 });
 
 describe('a refused Retry says why (B1, S4d refusal fields)', () => {
-  it('a failed first plate whose Retry is refused shows the refusal, not the old failure', async () => {
+  it('a Redraw that failed, whose Retry is refused, shows the refusal, not the old failure', async () => {
     let n = 0;
     routes(() => {
       n += 1;
@@ -205,8 +207,7 @@ describe('a refused Retry says why (B1, S4d refusal fields)', () => {
         ? jsonResponse(503, { detail: 'down', code: 'agent_unavailable', retryable: true })
         : jsonResponse(409, { detail: 'busy', code: 'busy', retryable: true });
     });
-    mount();
-    const panel = await screen.findByRole('complementary', { name: 'Explain' });
+    const panel = await mountRedrawing();
     const first = await within(panel).findByRole('alert');
     expect(first.getAttribute('data-error-code')).toBe('agent_unavailable');
     expect(panel.querySelector('.pt-exchange__not-sent')?.textContent).toBe('not sent');
