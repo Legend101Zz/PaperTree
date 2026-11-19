@@ -35,7 +35,7 @@ def test_the_selected_block_comes_first_and_the_budget_holds() -> None:
     seed = build_seed(index, [selected])
     assert seed.passages[0].block_id == selected
     assert seed.passages[0].stage is Stage.SELECTION and not seed.passages[0].truncated
-    assert seed.total_tokens <= SEED_BUDGET_TOKENS == 3000
+    assert seed.total_tokens <= SEED_BUDGET_TOKENS == 1500
     assert seed.total_tokens == sum(p.tokens for p in seed.passages)
     assert len(seed.passages) > 1, "the ladder added context around the selection"
     assert all(p.text.strip() for p in seed.passages), "a textless block (a figure) is skipped"
@@ -108,4 +108,4 @@ def test_on_resnet_the_seed_opens_with_the_selection_not_the_front_matter() -> N
     )
     assert seed.passages[0].block_id == selected
     assert types[0] == "paragraph" and "title" not in types[:1] and "author" not in types[:1]
-    assert seed.total_tokens <= 3000
+    assert seed.total_tokens <= 1500

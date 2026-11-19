@@ -3,7 +3,7 @@ r"""Character-level neutralisation of untrusted document text — two passes, in
 This module owns exactly two questions, and nothing else in the package re-asks them:
 which characters are deleted, and which sequences are replaced by a space. It is the
 first two steps of `research/synthesis-13-memory.md` §13.6(a)'s four-step pipeline; steps
-3 and 4 (datamark stripping, datamark interleaving) live in `untrusted.py` because they
+3 and 4 (datamark stripping, marking the block's boundaries) live in `untrusted.py` because they
 need a per-request secret and these two do not.
 
 WHY THE ORDER IS FIXED, AND WHAT ACTUALLY BREAKS WHEN IT IS REVERSED
@@ -43,10 +43,10 @@ WHY ENTITIES ARE STRIPPED AT ALL
 
 WHAT IS DELIBERATELY *NOT* STRIPPED, EACH WITH ITS REASON
   - `\t`, `\n`, `\r` and every Unicode whitespace character (U+00A0, U+2028, U+2029, …).
-    They are whitespace, and whitespace is the datamark's insertion point: leaving them in
-    means a line break inside a hostile paragraph becomes one more place the token appears.
-    Python's `re` matches U+2028/U+2029/U+00A0 with `\s` on `str` patterns, which is what
-    `untrusted.py` relies on.
+    They are whitespace, and `untrusted.py` collapses every whitespace run to one space so the
+    text between its marker lines is a single line: a line break inside a hostile paragraph
+    cannot fake a line of its own. Python's `re` matches U+2028/U+2029/U+00A0 with `\s` on `str`
+    patterns, which is what `untrusted.py` relies on.
   - Entity-shaped sequences with NO trailing semicolon (`&lt` with no `;`). HTML5's error
     recovery decodes a named subset of those, so this is a real residual and it is stated
     rather than papered over. It is not closed here because the closing rule — strip `&`
@@ -166,9 +166,9 @@ def strip_tagish(text: str) -> str:
     """Replaces markup-shaped sequences with a space.
 
     A space, not the empty string, for two reasons. `a<b>c` collapsing to `abc` invents a
-    word the author did not write. And the space becomes a whitespace gap, which means the
-    datamark step in `untrusted.py` then plants a token at exactly the position where an
-    attacker put markup — the neutralisation leaves a visible mark instead of a hole.
+    word the author did not write. And the space stays a visible gap in the text
+    (`untrusted.py` collapses it to one space), where an attacker put markup — the
+    neutralisation leaves a mark instead of a hole.
     """
     return TAGISH.sub(" ", text)
 

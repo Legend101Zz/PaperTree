@@ -242,7 +242,7 @@ def test_search_renders_headed_datamarked_blocks_and_issues_handles(
         assert [h for h, _ in blocks] == body["handles"] == ["b1", "b2", "b3", "b4"]
         assert text.count("<untrusted_document ") == text.count("</untrusted_document>") == 4
         assert 'block_id="b1"' in text and "blk_" not in text, "handles, never block ids"
-        assert DATAMARK in text and text.count(DATAMARK) > 20
+        assert text.count(DATAMARK) == 2 * 4, "an opening and a closing marker line per block"
         handles = t.handles()
         first = load_fixture("resnet-cvpr-2col")
         by_id = {b["block_id"]: b for b in first["blocks"]}
