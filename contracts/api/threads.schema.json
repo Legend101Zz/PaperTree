@@ -424,11 +424,20 @@
     },
     "FollowUp": {
       "additionalProperties": false,
-      "description": "`POST /papers/{id}/threads/{tid}/messages`.",
+      "description": "`POST /papers/{id}/threads/{tid}/messages`. `question` is required except on a relevel\n(`relevel_of`), which re-asks the stored question and ignores one if sent.",
       "properties": {
         "question": {
+          "default": "",
           "maxLength": 2000,
-          "minLength": 1,
+          "type": "string"
+        },
+        "level": {
+          "default": "familiar",
+          "enum": ["new", "familiar", "expert"],
+          "type": "string"
+        },
+        "relevel_of": {
+          "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$",
           "type": "string"
         },
         "retry_of": {
@@ -440,7 +449,6 @@
           "type": "string"
         }
       },
-      "required": ["question"],
       "title": "FollowUp",
       "type": "object"
     },
@@ -499,6 +507,27 @@
           },
           "type": "array"
         },
+        "level": {
+          "anyOf": [
+            {
+              "enum": ["new", "familiar", "expert"],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sibling_group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "diagram": {
           "$ref": "#/$defs/MessageDiagram"
         },
@@ -529,6 +558,8 @@
         "generation",
         "run",
         "citations",
+        "level",
+        "sibling_group",
         "created_at",
         "completed_at"
       ],
@@ -1124,6 +1155,11 @@
           "default": "Explain this passage.",
           "maxLength": 2000,
           "minLength": 1,
+          "type": "string"
+        },
+        "level": {
+          "default": "familiar",
+          "enum": ["new", "familiar", "expert"],
           "type": "string"
         }
       },

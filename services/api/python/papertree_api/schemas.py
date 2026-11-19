@@ -775,6 +775,8 @@ class ResolutionsPut(Wire):
 
 MessageStatus = Literal["streaming", "complete", "partial", "error", "aborted"]
 ThreadKind = Literal["explain", "ask", "diagram"]
+#: The reader's level an explain/ask answer is written for (v0.3, #339; 0014).
+AnswerLevel = Literal["new", "familiar", "expert"]
 RunKind = Literal["explain", "ask", "summary", "diagram", "topic"]
 DoneStatus = Literal["complete", "partial", "error", "aborted"]
 
@@ -897,6 +899,13 @@ class Message(Wire):
     generation: Generation
     run: RunSummary | None
     citations: list[Citation]
+    #: The level an assistant answer of an `explain` or `ask` thread was written at (an answer
+    #: stored before v0.3 reads `familiar`); null on a user message and on a diagram answer.
+    level: AnswerLevel | None
+    #: Assistant messages only (null on a user message): the `message_id` of the FIRST answer to
+    #: the question this one answers. Answers that share it are siblings, one per level
+    #: (`FollowUp.relevel_of`); an answer with no sibling carries its own `message_id`.
+    sibling_group: str | None
     #: Only on an assistant message of a `diagram` thread; `content` keeps the raw lines.
     diagram: MessageDiagram | None = omittable()
     created_at: WireTime
@@ -936,6 +945,8 @@ class ThreadCreate(Wire):
     kind: ThreadKind
     anchor: AnchorV1In | None = omittable(validate_default=True)
     question: str = Field(default=DEFAULT_QUESTION, min_length=1, max_length=2000)
+    #: The level the first answer is written for (stored on the answer). Ignored by a `diagram`.
+    level: AnswerLevel = "familiar"
 
     @field_validator("anchor", mode="after")
     @classmethod
@@ -948,14 +959,26 @@ class ThreadCreate(Wire):
 
 
 class FollowUp(Wire):
-    """`POST /papers/{id}/threads/{tid}/messages`."""
+    """`POST /papers/{id}/threads/{tid}/messages`. `question` is required except on a relevel
+    (`relevel_of`), which re-asks the stored question and ignores one if sent."""
 
-    question: str = Field(min_length=1, max_length=2000)
+    question: str = Field(default="", max_length=2000)
+    #: The level this answer is written for (stored on the answer). Ignored on a diagram thread.
+    level: AnswerLevel = "familiar"
+    #: Change level: an assistant answer of this thread (finished, any level) to answer AGAIN, to
+    #: the same question, at `level`. It appends a sibling answer and no user turn.
+    relevel_of: str | None = omittable(pattern=server_id("msg"))
     #: Re-run a failed assistant message instead of appending a new user turn.
     retry_of: str | None = omittable(pattern=server_id("msg"))
     #: Redraw: a diagram answer of this thread (finished, in any state) to draw again. Required on
     #: a `diagram` thread, refused on any other; it appends a new turn, never replaces one.
     redraw_of: str | None = omittable(pattern=server_id("msg"))
+
+    @model_validator(mode="after")
+    def _question_unless_relevel(self) -> Self:
+        if self.question == "" and self.relevel_of is None:
+            raise PydanticCustomError("string_too_short", "String should have at least 1 character")
+        return self
 
 
 # ── §2.6 browser-facing SSE events (the `data` of each `event:`) ─────────────────────────────
@@ -1545,6 +1568,10 @@ class AgentRunRequest(Wire):
     question: str = Field(min_length=1, max_length=2000)
     history: AgentHistory | None
     limits: AgentLimits
+    #: v0.3 (#339): the level an explain/ask answer is written for, and whether it ends with a
+    #: ```check fence (the API decides: contracts.md §2.5). Both are optional on the agent's side.
+    level: AnswerLevel = "familiar"
+    check: bool = False
 
     @field_validator("seed", mode="after")
     @classmethod
