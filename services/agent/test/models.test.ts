@@ -178,7 +178,7 @@ const policy: ModelPolicy = readPolicy({
 const passage = (handle: string): ToolAnswer => ({
   status: 200,
   body: {
-    text: `[${handle}] (p. 3 · 2.1. Design · paragraph)\n<paper_text channel="paper" trust="untrusted">\n^7f3a91c2 text ^7f3a91c2\n</paper_text>`,
+    text: `[${handle}] (p. 3 · 2.1. Design · paragraph)\n<paper_text channel="paper" trust="untrusted">\n^7f3a91c2\ntext\n^7f3a91c2\n</paper_text>`,
     handles: [handle],
   },
 });

@@ -5,7 +5,7 @@ the promoted generation (the anchor's own ``BlockSelector`` when the capture was
 the blocks its ``ShapeSelector`` quads overlap; else the blocks containing its quote), expanded by
 ``papertree_retrieval.build_seed`` — the selected blocks FIRST, then the structure-aware ladder —
 under at most 3,000 estimated tokens OF WHAT IS SENT: each passage's DATAMARKED text is what the
-budget is spent on (``papertree_prompts``' measured 2.6x marking cost; see ``seed.py``). Handles
+budget is spent on (marking is two marker lines per passage since #339; see ``seed.py``). Handles
 ``b1…`` are then assigned first-seen and persisted to ``ai_run_handles`` by the caller.
 
 THE BLOCK TEXT THE MODEL READS. Every block, in a seed passage or a tool response, is the block's

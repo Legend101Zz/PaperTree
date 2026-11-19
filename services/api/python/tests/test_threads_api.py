@@ -93,7 +93,12 @@ def test_explain_streams_the_contract_and_persists_the_whole_turn(tmp_path: Path
         assert seed["quote"] == next(
             s["exact"] for s in anchor["selectors"] if s["type"] == "TextQuoteSelector"
         )
-        assert all(request["datamark"] in p["text"] for p in seed["passages"])
+        assert all(
+            p["text"].startswith(request["datamark"] + "\n")
+            and p["text"].endswith("\n" + request["datamark"])
+            and p["text"].count(request["datamark"]) == 2
+            for p in seed["passages"]
+        ), "each seed passage sits between two marker lines, not marked word by word"
         assert "blk_" not in json.dumps(request), "the model is shown handles, never block ids"
         agent_headers = h.fake.headers[0]
         assert agent_headers["x-papertree-agent-secret"] == SECRET

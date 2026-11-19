@@ -111,10 +111,22 @@ export const SKIPPED = {
   title: 'Kept the first title of the plate',
   full: `The plate holds ${String(MAX_PARTS)} parts; the rest were left out`,
   link: 'Skipped an arrow between parts that are not on the plate',
+  letter: 'Skipped a part whose label was a single letter',
+  relabelled: "Used a part's text as its label, because its label was a single letter",
   missing: 'dropped an arrow from a part that was not drawn',
   ahead: 'dropped an arrow from a part that does not come before it',
   after: 'Skipped what came after the end of the plate',
 } as const;
+
+/**
+ * A label that is one letter or digit ("A", "x", "3") names nothing: the reader sees a figure of
+ * lettered boxes. Flash did exactly that when the prompt's example label was "x" (audit P5, #339),
+ * putting the real name in `text`. The plate letters are the host's (A, B, ...), so a model-written
+ * one adds nothing.
+ */
+export function isSingleLetterLabel(label: string): boolean {
+  return codePoints(label) === 1 && /^[\p{L}\p{N}]$/u.test(label);
+}
 
 /** True when `line` is one valid diagram line (it proves a held message is the answer, run.ts). */
 export function isDiagramLine(line: string): boolean {
@@ -240,6 +252,16 @@ export class PlateReader {
   private part(line: z.infer<typeof PartLine>): void {
     const index = this.written++; // this line's place in the model's count
     if (this.placed >= MAX_PARTS) return this.status(SKIPPED.full, true);
+    // A single-letter label is repaired from the part's own text when it has one (the label the
+    // model meant went there), and otherwise the part is skipped like any line that does not fit:
+    // it still took its letter in the model's count (`index` above), so arrows stay on their parts.
+    let { label, text } = line;
+    if (isSingleLetterLabel(label)) {
+      if (text === '') return this.status(SKIPPED.letter);
+      label = clip(text, DIAGRAM_LIMITS.label.max, true);
+      text = '';
+      this.status(SKIPPED.relabelled, true);
+    }
     const letter = LETTERS.charAt(this.placed);
     const after: string[] = [];
     const edge: Array<string | null> = [];
@@ -261,8 +283,8 @@ export class PlateReader {
       name: 'part',
       data: {
         letter,
-        label: line.label,
-        text: line.text,
+        label,
+        text,
         kind: line.kind,
         after,
         edge,

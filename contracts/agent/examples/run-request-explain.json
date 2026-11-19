@@ -21,12 +21,12 @@
       {
         "handle": "b1",
         "label": "p. 1 · Abstract · paragraph",
-        "text": "^7f3a91c2 We ^7f3a91c2 present ^7f3a91c2 YOLO, ^7f3a91c2 a ^7f3a91c2 new ^7f3a91c2 approach ^7f3a91c2 to ^7f3a91c2 object ^7f3a91c2 detection. ^7f3a91c2 Prior ^7f3a91c2 work ^7f3a91c2 on ^7f3a91c2 object ^7f3a91c2 detection ^7f3a91c2 repurposes ^7f3a91c2 classifiers ^7f3a91c2 to ^7f3a91c2 perform ^7f3a91c2 detection. ^7f3a91c2 Instead, ^7f3a91c2 we ^7f3a91c2 frame ^7f3a91c2 object ^7f3a91c2 detection ^7f3a91c2 as ^7f3a91c2 a ^7f3a91c2 regression ^7f3a91c2 problem ^7f3a91c2 to ^7f3a91c2 spatially ^7f3a91c2 separated ^7f3a91c2 bounding ^7f3a91c2 boxes ^7f3a91c2 and ^7f3a91c2 associated ^7f3a91c2 class ^7f3a91c2 probabilities. ^7f3a91c2 A ^7f3a91c2 single ^7f3a91c2 neural ^7f3a91c2 network ^7f3a91c2 predicts ^7f3a91c2 bounding ^7f3a91c2 boxes ^7f3a91c2 and ^7f3a91c2 class ^7f3a91c2 probabilities ^7f3a91c2 directly ^7f3a91c2 from ^7f3a91c2 full ^7f3a91c2 images ^7f3a91c2 in ^7f3a91c2 one ^7f3a91c2 evaluation. ^7f3a91c2"
+        "text": "^7f3a91c2\nWe present YOLO, a new approach to object detection. Prior work on object detection repurposes classifiers to perform detection. Instead, we frame object detection as a regression problem to spatially separated bounding boxes and associated class probabilities. A single neural network predicts bounding boxes and class probabilities directly from full images in one evaluation.\n^7f3a91c2"
       },
       {
         "handle": "b2",
         "label": "p. 1 · 1. Introduction · paragraph",
-        "text": "^7f3a91c2 Current ^7f3a91c2 detection ^7f3a91c2 systems ^7f3a91c2 repurpose ^7f3a91c2 classifiers ^7f3a91c2 to ^7f3a91c2 perform ^7f3a91c2 detection. ^7f3a91c2 More ^7f3a91c2 recent ^7f3a91c2 approaches ^7f3a91c2 like ^7f3a91c2 R-CNN ^7f3a91c2 use ^7f3a91c2 region ^7f3a91c2 proposal ^7f3a91c2 methods ^7f3a91c2 to ^7f3a91c2 first ^7f3a91c2 generate ^7f3a91c2 potential ^7f3a91c2 bounding ^7f3a91c2 boxes ^7f3a91c2 in ^7f3a91c2 an ^7f3a91c2 image ^7f3a91c2 and ^7f3a91c2 then ^7f3a91c2 run ^7f3a91c2 a ^7f3a91c2 classifier ^7f3a91c2 on ^7f3a91c2 these ^7f3a91c2 proposed ^7f3a91c2 boxes. ^7f3a91c2"
+        "text": "^7f3a91c2\nCurrent detection systems repurpose classifiers to perform detection. More recent approaches like R-CNN use region proposal methods to first generate potential bounding boxes in an image and then run a classifier on these proposed boxes.\n^7f3a91c2"
       }
     ]
   },
